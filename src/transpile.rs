@@ -12,10 +12,6 @@ pub fn emit(program: &Program) -> Result<String, String> {
     Ok(t.out)
 }
 
-// `#[allow(dead_code)]` is temporary scaffolding: `funcs`/`classes`/`variants`/
-// `variant_fields` are populated by `collect` but not *read* until call dispatch (Task 4)
-// and match binding (Task 6). Removed once every field is consumed.
-#[allow(dead_code)]
 struct Transpiler {
     funcs: HashSet<String>,
     classes: HashSet<String>,
@@ -25,6 +21,12 @@ struct Transpiler {
     indent: usize,
     locals: Vec<HashSet<String>>,
     cur_class_fields: Option<HashSet<String>>,
+}
+
+/// Where a `match` expression's arm values flow: a `return` or an assignment to `$name`.
+enum MatchTarget {
+    Return,
+    Assign(String),
 }
 
 impl Transpiler {
@@ -231,6 +233,15 @@ impl Transpiler {
 
     fn emit_stmt(&mut self, s: &Stmt) -> Result<(), String> {
         match s {
+            // `match` is handled at statement granularity (return / var-decl-init position).
+            // These specific arms must precede the generic VarDecl/Return arms.
+            Stmt::Return { value: Some(Expr::Match { scrutinee, arms, .. }), .. } => {
+                self.emit_match(scrutinee, arms, MatchTarget::Return)?;
+            }
+            Stmt::VarDecl { name, init: Expr::Match { scrutinee, arms, .. }, .. } => {
+                self.declare(name);
+                self.emit_match(scrutinee, arms, MatchTarget::Assign(name.clone()))?;
+            }
             Stmt::VarDecl { name, init, .. } => {
                 let e = self.emit_expr(init)?;
                 self.declare(name);
@@ -392,6 +403,62 @@ impl Transpiler {
         Err("transpile error: bad member call".into())
     }
 
+    /// Emit a `match` as an ordered `instanceof` chain. Each arm yields its body either as
+    /// `return …;` or `$target = …;` depending on `target`. Payload vars bind positionally
+    /// from the subclass's promoted props. A non-exhaustive chain ends with a defensive
+    /// `throw` (the checker already guarantees exhaustiveness).
+    fn emit_match(&mut self, scrutinee: &Expr, arms: &[MatchArm], target: MatchTarget)
+        -> Result<(), String>
+    {
+        let subj = self.emit_expr(scrutinee)?;
+        let yield_stmt = |t: &MatchTarget, body: &str| match t {
+            MatchTarget::Return => format!("return {body};"),
+            MatchTarget::Assign(v) => format!("${v} = {body};"),
+        };
+        let mut has_catch_all = false;
+        for arm in arms {
+            match &arm.pattern {
+                Pattern::Variant { name: vname, fields: pats, .. } => {
+                    let props = self.variant_fields.get(vname).cloned().unwrap_or_default();
+                    self.push_scope();
+                    let mut binds = String::new();
+                    for (i, fp) in pats.iter().enumerate() {
+                        let bind_name = match fp {
+                            Pattern::Binding { name, .. } => name,
+                            _ => return Err(
+                                "transpile error: only simple variable patterns are supported in match payloads".into()),
+                        };
+                        let prop = props.get(i).ok_or("transpile error: variant pattern arity mismatch")?;
+                        binds.push_str(&format!("${bind_name} = {subj}->{prop}; "));
+                        self.declare(bind_name);
+                    }
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!("if ({subj} instanceof {vname}) {{ {binds}{} }}", yield_stmt(&target, &body)));
+                    self.pop_scope();
+                }
+                Pattern::Wildcard(_) => {
+                    has_catch_all = true;
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!("{{ {} }}", yield_stmt(&target, &body)));
+                }
+                Pattern::Binding { name, .. } => {
+                    // bare identifier arm binds the whole scrutinee (catch-all)
+                    has_catch_all = true;
+                    self.push_scope();
+                    self.declare(name);
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!("{{ ${name} = {subj}; {} }}", yield_stmt(&target, &body)));
+                    self.pop_scope();
+                }
+                _ => return Err("transpile error: literal patterns in match are not yet supported".into()),
+            }
+        }
+        if !has_catch_all {
+            self.line("throw new \\UnhandledMatchError();");
+        }
+        Ok(())
+    }
+
     fn binop(op: &BinaryOp) -> &'static str {
         use BinaryOp::*;
         match op {
@@ -459,6 +526,11 @@ mod tests {
         let tokens = lex(src).expect("lex");
         let prog = Parser::new(tokens).parse_program().expect("parse");
         emit(&prog).expect("emit")
+    }
+
+    fn parse_only(src: &str) -> crate::ast::Program {
+        let tokens = lex(src).expect("lex");
+        Parser::new(tokens).parse_program().expect("parse")
     }
 
     #[test]
@@ -569,5 +641,49 @@ mod tests {
         );
         assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
         assert!(out.contains("$g->greet()"), "{out}");
+    }
+
+    #[test]
+    fn match_in_return_emits_instanceof_chain() {
+        let out = php(&format!(
+            "{SHAPE} function area(Shape s) -> float {{ \
+               return match s {{ Circle(r) => 3.14159 * r * r, Rect(w, h) => w * h, }}; }}"
+        ));
+        assert!(out.contains("if ($s instanceof Circle) {"), "{out}");
+        assert!(out.contains("$r = $s->radius;"), "{out}"); // positional: r <- field 0 (radius)
+        assert!(out.contains("return 3.14159 * $r * $r;"), "{out}");
+        assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
+        assert!(out.contains("$w = $s->w;") && out.contains("$h = $s->h;"), "{out}");
+        assert!(out.contains("throw new \\UnhandledMatchError();"), "{out}");
+    }
+
+    #[test]
+    fn match_in_var_decl_assigns_in_each_arm() {
+        let out = php(&format!(
+            "{SHAPE} function f(Shape s) -> float {{ \
+               float a = match s {{ Circle(r) => r, Rect(w, h) => w, }}; return a; }}"
+        ));
+        assert!(out.contains("if ($s instanceof Circle) { $r = $s->radius; $a = $r; }"), "{out}");
+        assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
+    }
+
+    #[test]
+    fn wildcard_arm_has_no_trailing_throw() {
+        let out = php(&format!(
+            "{SHAPE} function area(Shape s) -> float {{ \
+               return match s {{ Circle(r) => r, _ => 0.0, }}; }}"
+        ));
+        assert!(!out.contains("UnhandledMatchError"), "{out}");
+    }
+
+    #[test]
+    fn match_in_expression_position_errors_cleanly() {
+        // match as a call argument is an unsupported expression position.
+        let prog = parse_only(&format!(
+            "{SHAPE} function f(Shape s) -> float {{ \
+               float a = id(match s {{ Circle(r) => r, Rect(w, h) => w, }}); return a; }}"
+        ));
+        let err = emit(&prog).unwrap_err();
+        assert!(err.contains("match in this position is not yet supported"), "{err}");
     }
 }
