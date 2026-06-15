@@ -113,6 +113,110 @@ pub enum Expr {
     },
 }
 
+/// A function/method parameter: `Type name`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Param {
+    pub ty: Type,
+    pub name: String,
+    pub span: Span,
+}
+
+/// Visibility / binding modifiers on class members and promoted constructor params.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Modifier {
+    Public,
+    Private,
+    Protected,
+    Const,
+    Final,
+}
+
+/// A constructor parameter, which may carry promotion modifiers
+/// (`constructor(private string name)`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtorParam {
+    pub modifiers: Vec<Modifier>,
+    pub ty: Type,
+    pub name: String,
+    pub span: Span,
+}
+
+/// Statements — appear inside function/method bodies.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Stmt {
+    /// `Type name = expr;`
+    VarDecl { ty: Type, name: String, init: Expr, span: Span },
+    /// `return;` or `return expr;`
+    Return { value: Option<Expr>, span: Span },
+    /// `if (cond) { .. } [else { .. } | else if ..]` — else-branch is a block (an
+    /// `else if` chain is stored as a single-statement block wrapping a nested `If`).
+    If { cond: Expr, then_block: Vec<Stmt>, else_block: Option<Vec<Stmt>>, span: Span },
+    /// `for (Type name in iter) { .. }`
+    For { ty: Type, name: String, iter: Expr, body: Vec<Stmt>, span: Span },
+    /// `{ .. }`
+    Block(Vec<Stmt>, Span),
+    /// `expr;`
+    Expr(Expr, Span),
+}
+
+/// A function or method declaration. `modifiers` is empty for a free (top-level) function.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDecl {
+    pub modifiers: Vec<Modifier>,
+    pub name: String,
+    pub params: Vec<Param>,
+    pub ret: Option<Type>,
+    pub body: Vec<Stmt>,
+    pub span: Span,
+}
+
+/// One variant of an enum, with optional associated data fields (`Circle(float radius)`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumVariant {
+    pub name: String,
+    pub fields: Vec<Param>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumDecl {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+    pub span: Span,
+}
+
+/// A member of a class.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClassMember {
+    Field { modifiers: Vec<Modifier>, ty: Type, name: String, span: Span },
+    Constructor { params: Vec<CtorParam>, body: Vec<Stmt>, span: Span },
+    Method(FunctionDecl),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassDecl {
+    pub name: String,
+    pub members: Vec<ClassMember>,
+    pub span: Span,
+}
+
+/// A top-level item in a program.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Item {
+    /// `import a.b.c;`
+    Import { path: Vec<String>, span: Span },
+    Function(FunctionDecl),
+    Enum(EnumDecl),
+    Class(ClassDecl),
+}
+
+/// A whole parsed program.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Program {
+    pub items: Vec<Item>,
+    pub span: Span,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,6 +253,44 @@ mod tests {
                 assert_eq!(fields.len(), 1);
             }
             _ => panic!("expected Variant"),
+        }
+    }
+
+    #[test]
+    fn builds_var_decl_stmt() {
+        let s = Stmt::VarDecl {
+            ty: Type::Named { name: "int".into(), args: vec![], span: sp() },
+            name: "n".into(),
+            init: Expr::Int(5, sp()),
+            span: sp(),
+        };
+        match s {
+            Stmt::VarDecl { name, .. } => assert_eq!(name, "n"),
+            _ => panic!("expected VarDecl"),
+        }
+    }
+
+    #[test]
+    fn builds_function_item() {
+        let f = FunctionDecl {
+            modifiers: vec![Modifier::Private],
+            name: "area".into(),
+            params: vec![Param {
+                ty: Type::Named { name: "Shape".into(), args: vec![], span: sp() },
+                name: "s".into(),
+                span: sp(),
+            }],
+            ret: Some(Type::Named { name: "float".into(), args: vec![], span: sp() }),
+            body: vec![],
+            span: sp(),
+        };
+        match Item::Function(f) {
+            Item::Function(d) => {
+                assert_eq!(d.name, "area");
+                assert_eq!(d.params.len(), 1);
+                assert!(d.ret.is_some());
+            }
+            _ => panic!("expected Function item"),
         }
     }
 }
