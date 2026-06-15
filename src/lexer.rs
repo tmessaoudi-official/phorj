@@ -36,7 +36,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn scan_number(&mut self, start: usize, line: u32, col: u32) -> Token {
+    fn scan_number(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
         while matches!(self.peek(), Some(b) if b.is_ascii_digit()) { self.bump(); }
         let mut is_float = false;
         if self.peek() == Some(b'.') && matches!(self.peek2(), Some(d) if d.is_ascii_digit()) {
@@ -46,11 +46,18 @@ impl<'a> Lexer<'a> {
         }
         let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
         let kind = if is_float {
-            TokenKind::Float(text.parse().unwrap())
+            let f: f64 = text.parse().map_err(|_| LexError {
+                message: "float literal out of range".into(), line, col })?;
+            if !f.is_finite() {
+                return Err(LexError { message: "float literal out of range".into(), line, col });
+            }
+            TokenKind::Float(f)
         } else {
-            TokenKind::Int(text.parse().unwrap())
+            let i: i64 = text.parse().map_err(|_| LexError {
+                message: "integer literal out of range".into(), line, col })?;
+            TokenKind::Int(i)
         };
-        Token { kind, span: Span { start, len: self.pos - start, line, col } }
+        Ok(Token { kind, span: Span { start, len: self.pos - start, line, col } })
     }
 
     fn skip_line_comment(&mut self) {
@@ -138,7 +145,7 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 }
 
                 if b.is_ascii_digit() {
-                    let t = lx.scan_number(start, line, col);
+                    let t = lx.scan_number(start, line, col)?;
                     out.push(t);
                     continue;
                 }
@@ -243,6 +250,30 @@ mod tests {
         use TokenKind::*;
         assert_eq!(kinds("0 42 1000"), vec![Int(0), Int(42), Int(1000), Eof]);
         assert_eq!(kinds("3.5 0.5"), vec![Float(3.5), Float(0.5), Eof]);
+    }
+
+    #[test]
+    fn leading_zero_int_collapses() {
+        // M1: leading zeros are absorbed by i64 parsing — `007` lexes to Int(7).
+        assert_eq!(kinds("007"), vec![TokenKind::Int(7), TokenKind::Eof]);
+    }
+
+    #[test]
+    fn integer_overflow_is_error_not_panic() {
+        // 26-digit literal exceeds i64::MAX; must yield LexError, never panic.
+        let err = lex("99999999999999999999999999").unwrap_err();
+        assert!(err.message.contains("out of range"), "got: {}", err.message);
+        assert_eq!(err.line, 1);
+        assert_eq!(err.col, 1);
+    }
+
+    #[test]
+    fn float_overflow_is_error_not_panic() {
+        // The lexer's float grammar is digits '.' digits (no exponent), so we use a
+        // literal whose integer part exceeds f64::MAX (~1.8e308) to force inf.
+        let huge = format!("{}.0", "9".repeat(320));
+        let err = lex(&huge).unwrap_err();
+        assert!(err.message.contains("out of range"), "got: {}", err.message);
     }
 
     #[test]
