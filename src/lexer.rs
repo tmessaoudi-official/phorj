@@ -35,6 +35,23 @@ impl<'a> Lexer<'a> {
             if b == b' ' || b == b'\t' || b == b'\r' || b == b'\n' { self.bump(); } else { break; }
         }
     }
+
+    fn scan_number(&mut self, start: usize, line: u32, col: u32) -> Token {
+        while matches!(self.peek(), Some(b) if b.is_ascii_digit()) { self.bump(); }
+        let mut is_float = false;
+        if self.peek() == Some(b'.') && matches!(self.peek2(), Some(d) if d.is_ascii_digit()) {
+            is_float = true;
+            self.bump(); // consume '.'
+            while matches!(self.peek(), Some(b) if b.is_ascii_digit()) { self.bump(); }
+        }
+        let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
+        let kind = if is_float {
+            TokenKind::Float(text.parse().unwrap())
+        } else {
+            TokenKind::Int(text.parse().unwrap())
+        };
+        Token { kind, span: Span { start, len: self.pos - start, line, col } }
+    }
 }
 
 pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
@@ -49,6 +66,12 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 return Ok(out);
             }
             Some(b) => {
+                if b.is_ascii_digit() {
+                    let t = lx.scan_number(start, line, col);
+                    out.push(t);
+                    continue;
+                }
+
                 // two-char operators take priority
                 let two = |k: TokenKind| Token { kind: k, span: Span { start, len: 2, line, col } };
                 let p2 = lx.peek2();
@@ -136,5 +159,12 @@ mod tests {
             kinds("== != <= >= -> => |> && ||"),
             vec![EqEq, NotEq, Le, Ge, Arrow, FatArrow, Pipe, AndAnd, OrOr, Eof]
         );
+    }
+
+    #[test]
+    fn number_literals() {
+        use TokenKind::*;
+        assert_eq!(kinds("0 42 1000"), vec![Int(0), Int(42), Int(1000), Eof]);
+        assert_eq!(kinds("3.14 0.5"), vec![Float(3.14), Float(0.5), Eof]);
     }
 }
