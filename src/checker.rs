@@ -664,8 +664,102 @@ impl Checker {
             self.pop_scope();
         }
     }
-    fn check_match(&mut self, _s: &crate::ast::Expr, _a: &[crate::ast::MatchArm], span: Span) -> Ty {
-        self.err(span, "match not yet supported") // implemented in Task 8
+    fn check_match(&mut self, scrutinee: &crate::ast::Expr, arms: &[crate::ast::MatchArm], span: Span) -> Ty {
+        use crate::ast::Pattern;
+        let scrut = self.check_expr(scrutinee);
+
+        let mut result: Option<Ty> = None;
+        let mut covered: Vec<String> = Vec::new();
+        let mut has_catch_all = false;
+
+        for arm in arms {
+            if matches!(arm.pattern, Pattern::Wildcard(_) | Pattern::Binding { .. }) {
+                has_catch_all = true;
+            }
+            if let Pattern::Variant { name, .. } = &arm.pattern {
+                covered.push(name.clone());
+            }
+            // each arm gets its own scope for pattern bindings
+            self.push_scope();
+            self.check_pattern(&arm.pattern, &scrut);
+            let body_ty = self.check_expr(&arm.body);
+            self.pop_scope();
+
+            match &result {
+                None => result = Some(body_ty),
+                Some(first) => {
+                    if !Ty::assignable(&body_ty, first) && !Ty::assignable(first, &body_ty) {
+                        self.err(span, format!("match arms must share one type; found `{first}` and `{body_ty}`"));
+                    }
+                }
+            }
+        }
+
+        // exhaustiveness
+        if !has_catch_all {
+            match &scrut {
+                Ty::Named(enum_name) if self.enums.contains_key(enum_name) => {
+                    let all: Vec<String> = self.enums[enum_name].variants.keys().cloned().collect();
+                    let missing: Vec<String> = all.into_iter().filter(|v| !covered.contains(v)).collect();
+                    if !missing.is_empty() {
+                        self.err(span, format!("non-exhaustive match: missing {}", missing.join(", ")));
+                    }
+                }
+                Ty::Error => {}
+                _ => {
+                    self.err(span, "non-exhaustive match: add a `_` wildcard arm for non-enum scrutinees");
+                }
+            }
+        }
+
+        result.unwrap_or(Ty::Error)
+    }
+
+    /// Check a pattern against the scrutinee type, declaring its bindings into the
+    /// current scope.
+    fn check_pattern(&mut self, pat: &crate::ast::Pattern, scrut: &Ty) {
+        use crate::ast::Pattern;
+        match pat {
+            Pattern::Wildcard(_) => {}
+            Pattern::Binding { name, .. } => self.declare(name, scrut.clone()),
+            Pattern::Int(_, span) => self.expect_prim(scrut, &Ty::Int, *span),
+            Pattern::Float(_, span) => self.expect_prim(scrut, &Ty::Float, *span),
+            Pattern::Str(_, span) => self.expect_prim(scrut, &Ty::String, *span),
+            Pattern::Bool(_, span) => self.expect_prim(scrut, &Ty::Bool, *span),
+            Pattern::Null(span) => {
+                self.err(*span, "null patterns / optionals are not yet supported in M1");
+            }
+            Pattern::Variant { name, fields, span } => {
+                let enum_name = match scrut {
+                    Ty::Named(n) if self.enums.contains_key(n) => n.clone(),
+                    Ty::Error => return,
+                    other => {
+                        self.err(*span, format!("variant pattern `{name}` requires an enum scrutinee, found `{other}`"));
+                        return;
+                    }
+                };
+                let field_tys = match self.enums[&enum_name].variants.get(name) {
+                    Some(f) => f.clone(),
+                    None => {
+                        self.err(*span, format!("enum `{enum_name}` has no variant `{name}`"));
+                        return;
+                    }
+                };
+                if field_tys.len() != fields.len() {
+                    self.err(*span, format!("variant `{name}` expects {} field(s), found {}", field_tys.len(), fields.len()));
+                    return;
+                }
+                for (fp, ft) in fields.iter().zip(field_tys) {
+                    self.check_pattern(fp, &ft);
+                }
+            }
+        }
+    }
+
+    fn expect_prim(&mut self, scrut: &Ty, want: &Ty, span: Span) {
+        if *scrut != Ty::Error && scrut != want {
+            self.err(span, format!("pattern of type `{want}` cannot match scrutinee of type `{scrut}`"));
+        }
     }
 }
 
@@ -919,5 +1013,63 @@ mod tests {
         let src = "class C { private int n; constructor(int n) {} } function main() { C c = C(1); string s = \"{c}\"; }";
         let errs = errors_of(src);
         assert!(errs.iter().any(|e| e.message.contains("cannot be interpolated")), "{errs:?}");
+    }
+
+    #[test]
+    fn match_over_enum_is_typed_and_exhaustive() {
+        let src = format!(
+            "{SHAPE} function area(Shape s) -> float {{ \
+               return match s {{ Circle(r) => 3.14 * r * r, Rect(w, h) => w * h, }}; }}"
+        );
+        assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
+    }
+
+    #[test]
+    fn non_exhaustive_match_errors() {
+        let src = format!(
+            "{SHAPE} function area(Shape s) -> float {{ \
+               return match s {{ Circle(r) => 3.14 * r * r, }}; }}"
+        );
+        let errs = errors_of(&src);
+        assert!(errs.iter().any(|e| e.message.contains("non-exhaustive") && e.message.contains("Rect")), "{errs:?}");
+    }
+
+    #[test]
+    fn wildcard_makes_match_exhaustive() {
+        let src = format!(
+            "{SHAPE} function area(Shape s) -> float {{ \
+               return match s {{ Circle(r) => r, _ => 0.0, }}; }}"
+        );
+        assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
+    }
+
+    #[test]
+    fn match_arm_type_mismatch_errors() {
+        let src = format!(
+            "{SHAPE} function f(Shape s) -> float {{ \
+               return match s {{ Circle(r) => r, Rect(w, h) => true, }}; }}"
+        );
+        let errs = errors_of(&src);
+        assert!(errs.iter().any(|e| e.message.contains("match arms")), "{errs:?}");
+    }
+
+    #[test]
+    fn variant_pattern_arity_checked() {
+        let src = format!(
+            "{SHAPE} function f(Shape s) -> float {{ \
+               return match s {{ Circle(r, x) => r, Rect(w, h) => w, }}; }}"
+        );
+        let errs = errors_of(&src);
+        assert!(errs.iter().any(|e| e.message.contains("expects 1 field")), "{errs:?}");
+    }
+
+    #[test]
+    fn unknown_variant_pattern_errors() {
+        let src = format!(
+            "{SHAPE} function f(Shape s) -> float {{ \
+               return match s {{ Circle(r) => r, Triangle(x) => x, Rect(w,h) => w, }}; }}"
+        );
+        let errs = errors_of(&src);
+        assert!(errs.iter().any(|e| e.message.contains("no variant `Triangle`")), "{errs:?}");
     }
 }
