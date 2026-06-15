@@ -442,8 +442,39 @@ impl Checker {
     }
 
     // ---- stubs replaced in later tasks ----
-    fn check_str(&mut self, _parts: &[crate::ast::StrPart]) -> Ty {
-        Ty::String // refined in Task 7
+    fn check_str(&mut self, parts: &[crate::ast::StrPart]) -> Ty {
+        use crate::ast::StrPart;
+        for part in parts {
+            if let StrPart::Expr(e) = part {
+                let t = self.check_expr(e);
+                let ok = matches!(t, Ty::Int | Ty::Float | Ty::Bool | Ty::String | Ty::Error);
+                if !ok {
+                    let sp = Self::expr_span(e);
+                    self.err(sp, format!("type `{t}` cannot be interpolated into a string (only primitives auto-stringify in M1)"));
+                }
+            }
+        }
+        Ty::String
+    }
+
+    /// The source span of an expression (used to position errors precisely).
+    fn expr_span(e: &crate::ast::Expr) -> Span {
+        use crate::ast::Expr;
+        match e {
+            Expr::Int(_, s)
+            | Expr::Float(_, s)
+            | Expr::Bool(_, s)
+            | Expr::Str(_, s)
+            | Expr::Ident(_, s)
+            | Expr::List(_, s) => *s,
+            Expr::Null(s) | Expr::This(s) => *s,
+            Expr::Unary { span, .. }
+            | Expr::Binary { span, .. }
+            | Expr::Call { span, .. }
+            | Expr::Member { span, .. }
+            | Expr::Index { span, .. }
+            | Expr::Match { span, .. } => *span,
+        }
     }
     fn check_list(&mut self, elems: &[crate::ast::Expr], span: Span) -> Ty {
         if elems.is_empty() {
@@ -875,5 +906,18 @@ mod tests {
     fn this_outside_method_errors() {
         let errs = errors_of("function main() { string s = this; }");
         assert!(errs.iter().any(|e| e.message.contains("`this`")), "{errs:?}");
+    }
+
+    #[test]
+    fn interpolation_allows_primitives() {
+        assert!(errors_of("function main() { float x = 1.5; string s = \"v = {x}\"; }").is_empty());
+        assert!(errors_of("function main() { int n = 3; string s = \"n = {n}\"; }").is_empty());
+    }
+
+    #[test]
+    fn interpolation_rejects_objects() {
+        let src = "class C { private int n; constructor(int n) {} } function main() { C c = C(1); string s = \"{c}\"; }";
+        let errs = errors_of(src);
+        assert!(errs.iter().any(|e| e.message.contains("cannot be interpolated")), "{errs:?}");
     }
 }
