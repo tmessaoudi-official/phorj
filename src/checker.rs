@@ -139,7 +139,7 @@ impl Checker {
         for item in &program.items {
             match item {
                 Item::Function(f) => self.collect_function(f),
-                Item::Enum(_) => {} // Task 5
+                Item::Enum(e) => self.collect_enum(e),
                 Item::Class(_) => {} // Task 6
                 Item::Import { .. } => {} // module resolution deferred; prelude covers println
             }
@@ -157,6 +157,21 @@ impl Checker {
             None => Ty::Unit,
         };
         self.funcs.insert(f.name.clone(), FnSig { params, ret });
+    }
+
+    fn collect_enum(&mut self, e: &crate::ast::EnumDecl) {
+        if self.enums.contains_key(&e.name) || self.classes.contains_key(&e.name) {
+            self.err(e.span, format!("type `{}` is already defined", e.name));
+            return;
+        }
+        // Register the name first so variant field types can reference the enum itself.
+        self.enums.insert(e.name.clone(), EnumInfo { variants: HashMap::new() });
+        let mut variants = HashMap::new();
+        for v in &e.variants {
+            let fields = v.fields.iter().map(|p| self.resolve_type(&p.ty)).collect();
+            variants.insert(v.name.clone(), fields);
+        }
+        self.enums.get_mut(&e.name).unwrap().variants = variants;
     }
 
     /// Phase 2 — check every function/method body.
@@ -360,12 +375,35 @@ impl Checker {
     fn check_str(&mut self, _parts: &[crate::ast::StrPart]) -> Ty {
         Ty::String // refined in Task 7
     }
-    fn check_list(&mut self, _elems: &[crate::ast::Expr], span: Span) -> Ty {
-        let _ = span;
-        Ty::Error // implemented in Task 5
+    fn check_list(&mut self, elems: &[crate::ast::Expr], span: Span) -> Ty {
+        if elems.is_empty() {
+            // empty list element type cannot be inferred without an expected type;
+            // the §6 sample has no empty list (YAGNI to thread expected types now).
+            return self.err(span, "cannot infer element type of empty list literal");
+        }
+        let first = self.check_expr(&elems[0]);
+        for e in &elems[1..] {
+            let t = self.check_expr(e);
+            if !Ty::assignable(&t, &first) && !Ty::assignable(&first, &t) {
+                self.err(span, format!("list elements must share one type; found `{first}` and `{t}`"));
+            }
+        }
+        Ty::List(Box::new(first))
     }
-    fn check_index(&mut self, _o: &crate::ast::Expr, _i: &crate::ast::Expr, span: Span) -> Ty {
-        self.err(span, "indexing is not yet supported in M1") // refined in Task 5
+    fn check_index(&mut self, object: &crate::ast::Expr, index: &crate::ast::Expr, span: Span) -> Ty {
+        let obj = self.check_expr(object);
+        let idx = self.check_expr(index);
+        match obj {
+            Ty::List(elem) => {
+                if !Ty::assignable(&idx, &Ty::Int) {
+                    self.err(span, format!("list index must be `int`, found `{idx}`"));
+                }
+                *elem
+            }
+            Ty::Map(..) => self.err(span, "Map indexing is not yet supported in M1"),
+            Ty::Error => Ty::Error,
+            other => self.err(span, format!("type `{other}` cannot be indexed")),
+        }
     }
     fn check_call(&mut self, callee: &crate::ast::Expr, args: &[crate::ast::Expr], span: Span) -> Ty {
         use crate::ast::Expr;
@@ -421,11 +459,22 @@ impl Checker {
     /// Returns `Some(ret)` if `name` is an enum variant or class constructor.
     fn try_variant_or_class_call(
         &mut self,
-        _name: &str,
-        _args: &[crate::ast::Expr],
-        _span: Span,
+        name: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
     ) -> Option<Ty> {
-        None // enum variants: Task 5; class constructors: Task 6
+        // enum variant constructor: find the (unique) enum that owns this variant name
+        let owner = self
+            .enums
+            .iter()
+            .find(|(_, info)| info.variants.contains_key(name))
+            .map(|(enum_name, info)| (enum_name.clone(), info.variants[name].clone()));
+        if let Some((enum_name, fields)) = owner {
+            self.check_args(name, &fields, args, span);
+            return Some(Ty::Named(enum_name));
+        }
+        // class constructors are layered in by Task 6
+        None
     }
 
     fn check_method_call(
@@ -440,8 +489,28 @@ impl Checker {
     fn check_member(&mut self, _o: &crate::ast::Expr, _n: &str, span: Span) -> Ty {
         self.err(span, "member access not yet supported") // implemented in Task 6
     }
-    fn check_for(&mut self, _stmt: &crate::ast::Stmt) {
-        // implemented in Task 5
+    fn check_for(&mut self, stmt: &crate::ast::Stmt) {
+        if let crate::ast::Stmt::For { ty, name, iter, body, span } = stmt {
+            let declared = self.resolve_type(ty);
+            let iter_ty = self.check_expr(iter);
+            let elem = match iter_ty {
+                Ty::List(e) => *e,
+                Ty::Error => Ty::Error,
+                other => {
+                    self.err(*span, format!("`for`-`in` requires a List, found `{other}`"));
+                    Ty::Error
+                }
+            };
+            if !Ty::assignable(&elem, &declared) {
+                self.err(*span, format!("loop variable `{name}` declared `{declared}` but iterating `{elem}`"));
+            }
+            self.push_scope();
+            self.declare(name, declared);
+            for s in body {
+                self.check_stmt(s);
+            }
+            self.pop_scope();
+        }
     }
     fn check_match(&mut self, _s: &crate::ast::Expr, _a: &[crate::ast::MatchArm], span: Span) -> Ty {
         self.err(span, "match not yet supported") // implemented in Task 8
@@ -598,5 +667,52 @@ mod tests {
     #[test]
     fn println_accepts_string() {
         assert!(errors_of(r#"function main() { println("hi"); }"#).is_empty());
+    }
+
+    const SHAPE: &str = "enum Shape { Circle(float radius), Rect(float w, float h), }";
+
+    #[test]
+    fn variant_constructor_returns_enum() {
+        let src = format!("{SHAPE} function main() {{ Shape s = Circle(2.0); }}");
+        assert!(errors_of(&src).is_empty());
+    }
+
+    #[test]
+    fn variant_constructor_arg_type_checked() {
+        let src = format!("{SHAPE} function main() {{ Shape s = Circle(true); }}");
+        let errs = errors_of(&src);
+        assert!(errs.iter().any(|e| e.message.contains("argument 1")), "{errs:?}");
+    }
+
+    #[test]
+    fn list_literal_unifies_elements() {
+        let src = format!("{SHAPE} function main() {{ List<Shape> xs = [Circle(1.0), Rect(2.0, 3.0)]; }}");
+        assert!(errors_of(&src).is_empty());
+    }
+
+    #[test]
+    fn list_literal_mixed_elements_error() {
+        let errs = errors_of("function main() { List<int> xs = [1, true]; }");
+        assert!(errs.iter().any(|e| e.message.contains("list elements")), "{errs:?}");
+    }
+
+    #[test]
+    fn for_in_binds_element_type() {
+        let src = format!(
+            "{SHAPE} function area(Shape s) -> float {{ return 0.0; }} \
+             function main() {{ List<Shape> xs = [Circle(1.0)]; for (Shape s in xs) {{ float a = area(s); }} }}"
+        );
+        assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
+    }
+
+    #[test]
+    fn for_in_requires_list() {
+        let errs = errors_of("function main() { for (int i in 5) { } }");
+        assert!(errs.iter().any(|e| e.message.contains("`for`-`in` requires a List")), "{errs:?}");
+    }
+
+    #[test]
+    fn list_indexing_yields_element() {
+        assert!(errors_of("function main() { List<int> xs = [1, 2]; int y = xs[0]; }").is_empty());
     }
 }
