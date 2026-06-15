@@ -20,6 +20,16 @@ Design frozen: `docs/specs/2026-06-15-m2-bytecode-vm-design.md`. Bytecode compil
 VM + mark-sweep GC over the current language surface; tree-walker kept as a differential
 oracle. Language enrichment = M3; single-binary bundling = M2.5.
 
+## M2.5+ — Ecosystem — 🔲 PLANNED
+
+Full ecosystem strategy + ROI-ranked roadmap frozen in
+`docs/specs/2026-06-15-ecosystem-roadmap-design.md`: two backends (native VM + optional
+PHP-transpile) behind clean pluggable traits; PHP backend as a bootstrap-ecosystem lever;
+M3 language enrichment → M4 extension API + stdlib → M5 modules + git-based packages → M6
+concurrency (uncolored `spawn`+channels) + native HTTP server + Postgres → M7 tooling/
+connectors → M8 PHP→Phorge migration tool. Rejected: live PHP transpile, PHP C-ext FFI,
+dynamic `.so` plugins.
+
 ## v2 — Native + systems — 🔲 FUTURE
 
 Native-AOT, ownership/no-GC, sized-int perf.
