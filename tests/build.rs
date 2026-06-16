@@ -1,0 +1,83 @@
+//! M2.5 Phase 1: `phorge build` produces a self-executing binary whose output is byte-identical to
+//! `phorge runvm` on the same program (the parity spine extended to the distribution layer).
+use std::process::Command;
+
+const BIN: &str = env!("CARGO_BIN_EXE_phorge");
+
+#[test]
+fn built_binary_matches_runvm() {
+    let prog = "examples/realworld/ledger.phg";
+    let out_bin = std::env::temp_dir().join(format!("phorge_built_{}", std::process::id()));
+    let _ = std::fs::remove_file(&out_bin);
+
+    let build = Command::new(BIN)
+        .args(["build", prog, "-o", out_bin.to_str().unwrap()])
+        .output()
+        .expect("spawn build");
+    assert!(
+        build.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+
+    let produced = Command::new(&out_bin).output().expect("run built binary");
+    let expected = Command::new(BIN)
+        .args(["runvm", prog])
+        .output()
+        .expect("spawn runvm");
+    let _ = std::fs::remove_file(&out_bin);
+
+    assert!(produced.status.success(), "built binary exited non-zero");
+    assert_eq!(
+        produced.stdout, expected.stdout,
+        "built binary output diverged from runvm"
+    );
+}
+
+#[test]
+fn built_binary_ignores_argv_runs_embedded() {
+    // v1 limitation: the embedded program ignores argv. Passing args must not change behavior.
+    let prog = "examples/hello.phg";
+    let out_bin = std::env::temp_dir().join(format!("phorge_built_argv_{}", std::process::id()));
+    let _ = std::fs::remove_file(&out_bin);
+    let build = Command::new(BIN)
+        .args(["build", prog, "-o", out_bin.to_str().unwrap()])
+        .output()
+        .expect("spawn build");
+    assert!(build.status.success());
+    let with_args = Command::new(&out_bin)
+        .args(["run", "ignored", "--whatever"])
+        .output()
+        .expect("run built");
+    let _ = std::fs::remove_file(&out_bin);
+    assert_eq!(
+        String::from_utf8_lossy(&with_args.stdout),
+        "Hello, Phorge!\n"
+    );
+}
+
+#[test]
+fn build_rejects_ill_typed_program() {
+    let bad = std::env::temp_dir().join(format!("phorge_bad_{}.phg", std::process::id()));
+    std::fs::write(&bad, "function main() { int x = \"no\"; }").unwrap();
+    let out_bin = std::env::temp_dir().join(format!("phorge_bad_out_{}", std::process::id()));
+    let _ = std::fs::remove_file(&out_bin);
+    let build = Command::new(BIN)
+        .args([
+            "build",
+            bad.to_str().unwrap(),
+            "-o",
+            out_bin.to_str().unwrap(),
+        ])
+        .output()
+        .expect("spawn build");
+    let _ = std::fs::remove_file(&bad);
+    // Assert BEFORE cleanup: a meaningful "no binary emitted" check must observe the real state.
+    assert_eq!(build.status.code(), Some(1), "ill-typed build must fail");
+    assert!(String::from_utf8_lossy(&build.stderr).contains("type error"));
+    assert!(
+        !out_bin.exists(),
+        "no binary should be emitted on validation failure"
+    );
+    let _ = std::fs::remove_file(&out_bin);
+}
