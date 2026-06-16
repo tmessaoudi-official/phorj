@@ -1,0 +1,42 @@
+import std.io;
+
+// A library catalogue. Note zero-payload variants (`Available`, `Lost`) are
+// *constructed* with call form — `Available()` — but matched bare.
+
+enum Availability {
+    Available,
+    Borrowed(string by),
+    Lost,
+}
+
+class Book {
+    constructor(private string title, private Availability status) {}
+
+    function title_of() -> string { return title; }
+    function status_of() -> Availability { return status; }
+}
+
+function describe(Availability a) -> string {
+    return match a {
+        Available()  => "available",
+        Borrowed(by) => "borrowed by {by}",
+        Lost()       => "lost",
+    };
+}
+
+// Late fee: 25 cents per day (float arithmetic).
+function fee(float days) -> float {
+    return days * 0.25;
+}
+
+function main() {
+    List<Book> shelf = [
+        Book("The Rust Book", Available()),
+        Book("Crafting Interpreters", Borrowed("Ada")),
+        Book("SICP", Lost()),
+    ];
+    for (Book b in shelf) {
+        println("{b.title_of()}: {describe(b.status_of())}");
+    }
+    println("late fee for 3.0 days = {fee(3.0)}c");
+}

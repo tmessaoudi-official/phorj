@@ -20,7 +20,9 @@ call form `V()`, and state evolves by fresh bindings/recursion (no reassignment,
 **Hard constraints baked into every program (verified 2026-06-16):**
 - No reassignment, no field mutation, no list indexing/destructuring → accumulate via recursion on
   a counter or chain fresh bindings; `for…in` is for side effects (`println`) only.
-- Zero-payload enum variant construction needs `()`: `Defend()`, not `Defend`.
+- Zero-payload enum variants need call form `V()` **both** to construct AND as a match pattern:
+  `Defend()`, not `Defend`. Bare `Defend =>` in a match is a *catch-all binding* (silent logic bug
+  — both backends agree on wrong output, so the glob test won't catch it). Always `Defend() =>`.
 - Only builtin is `println(string)`. Excluded (checker-rejected): `null`, `T?`, `Map`/`Set` values,
   `|>`, exceptions, traits, overloading, sized ints, `decimal`, real imports. `is` omitted (it is a
   deep-`==` alias).
@@ -508,7 +510,7 @@ enum Json {
 
 function show(Json j) -> string {
     return match j {
-        JNull    => "null",
+        JNull()  => "null",
         JBool(b) => "bool {b}",
         JNum(n)  => "num {n}",
         JStr(s)  => "str {s}",

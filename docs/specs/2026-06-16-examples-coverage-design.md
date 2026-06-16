@@ -48,9 +48,12 @@ Empirically confirmed against the built binary on both backends:
 overloading, sized ints, `decimal`, real `import` resolution.
 
 **Two sharp edges baked into the examples:**
-1. **Zero-payload enum variants must be constructed with call form** — `Defend()`, not bare
-   `Defend` (a bare variant name is parsed as an identifier and fails: "unknown identifier"). Match
-   arms (`Defend => …`) work as written. Every example obeys this.
+1. **Zero-payload enum variants must use call form `V()` everywhere — construction *and* match
+   patterns.** As an expression, bare `Defend` is parsed as an identifier and fails ("unknown
+   identifier"); `Defend()` constructs it. As a **match pattern**, bare `Defend =>` is parsed as a
+   *catch-all binding* (it silently swallows every scrutinee — a logic bug both backends agree on,
+   so the differential test cannot catch it); `Defend() =>` is the variant pattern. Every example
+   uses `V()` in both positions.
 2. **`is` is omitted.** It is implemented as deep value-equality (`l.eq_val(&r)`) — a confusing
    alias for `==` — so featuring it would mislead. Excluded by choice.
 

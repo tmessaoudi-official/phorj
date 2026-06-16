@@ -1,0 +1,57 @@
+import std.io;
+
+// A bank ledger. Phorge values are immutable, so `apply` returns a *new* Account
+// rather than mutating in place — state evolves by binding fresh names.
+
+enum Tx {
+    Deposit(int cents),
+    Withdraw(int cents),
+    Transfer(int cents, string to),
+}
+
+class Account {
+    constructor(private string owner, private int cents) {}
+
+    function owner_name() -> string { return owner; }
+    function balance() -> int { return cents; }
+
+    function apply(Tx t) -> Account {
+        return match t {
+            Deposit(c)      => Account(owner, cents + c),
+            Withdraw(c)     => Account(owner, cents - c),
+            Transfer(c, to) => Account(owner, cents - c),
+        };
+    }
+}
+
+function describe(Tx t) -> string {
+    return match t {
+        Deposit(c)      => "deposit {c}c",
+        Withdraw(c)     => "withdraw {c}c",
+        Transfer(c, to) => "transfer {c}c to {to}",
+    };
+}
+
+// Recursive integer compound interest: 5% per year, floored (no list folding needed).
+function grow(int cents, int years) -> int {
+    if (years <= 0) {
+        return cents;
+    }
+    return grow(cents + cents * 5 / 100, years - 1);
+}
+
+function main() {
+    Account a0 = Account("Ada", 1000);
+    Account a1 = a0.apply(Deposit(500));
+    Account a2 = a1.apply(Withdraw(200));
+    Account a3 = a2.apply(Transfer(100, "Bob"));
+
+    println("{a3.owner_name()} balance = {a3.balance()}c");
+
+    List<Tx> log = [Deposit(500), Withdraw(200), Transfer(100, "Bob")];
+    for (Tx t in log) {
+        println(describe(t));
+    }
+
+    println("1000c after 3y at 5% = {grow(1000, 3)}c");
+}

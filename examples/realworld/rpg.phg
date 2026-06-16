@@ -1,0 +1,44 @@
+import std.io;
+
+// A turn-based RPG. Characters are immutable: `act` returns a new Character.
+
+enum Action {
+    Attack(int dmg),
+    Heal(int hp),
+    Defend,
+}
+
+class Character {
+    constructor(private string name, private int hp) {}
+
+    function name_of() -> string { return name; }
+    function hp_of() -> int { return hp; }
+
+    function act(Action a) -> Character {
+        return match a {
+            Attack(d) => Character(name, hp - d),
+            Heal(h)   => Character(name, hp + h),
+            Defend()  => Character(name, hp),
+        };
+    }
+}
+
+function resolve(Action a) -> string {
+    return match a {
+        Attack(d) => "attacks for {d}",
+        Heal(h)   => "heals {h}",
+        Defend()  => "defends",
+    };
+}
+
+function main() {
+    Character hero = Character("Hero", 30);
+    Character hurt = hero.act(Attack(12));
+    Character healed = hurt.act(Heal(5));
+    println("{healed.name_of()} hp = {healed.hp_of()}");
+
+    List<Action> turns = [Attack(12), Heal(5), Defend()];
+    for (Action a in turns) {
+        println(resolve(a));
+    }
+}
