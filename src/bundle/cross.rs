@@ -169,9 +169,58 @@ pub fn build_all(input_path: &str, src: &str, _out_path: Option<&str>) -> Result
     Ok(report)
 }
 
-/// Cross-compile a phorge stub for `target` via cargo-zigbuild; cached. Wired in C4.
+/// Cross-compile a phorge stub for `target` via cargo-zigbuild, caching it under the phorge-hash key.
+/// The stub is a phorge binary with NO embedded section (embedded_source -> None -> normal CLI).
 pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
-    Err(format!("cross-build for {target} not yet implemented (C4)"))
+    let phorge =
+        std::env::current_exe().map_err(|e| format!("cannot locate phorge binary: {e}"))?;
+    let phorge_bytes =
+        std::fs::read(&phorge).map_err(|e| format!("cannot read phorge binary: {e}"))?;
+    let dir = cache_dir(&phorge_bytes)
+        .ok_or_else(|| "cannot resolve cache dir (no HOME/XDG_CACHE_HOME)".to_string())?;
+    let cached = dir.join(target).join(output_name("phorge", target));
+    if cached.is_file() {
+        return Ok(cached);
+    }
+    // Cache miss → cross-compile from source. A distributed (sourceless) phorge has no Cargo.toml and
+    // cannot self-cross-build until Phase 3's prebuilt-stub download (design §4 / decision P2-9).
+    if !std::path::Path::new("Cargo.toml").is_file() {
+        return Err(format!(
+            "cross-building for '{target}' needs a phorge source checkout (no Cargo.toml in the \
+             working directory); run from the phorge source tree, or wait for Phase 3's prebuilt \
+             stub download. The host build (no --target) works without source."
+        ));
+    }
+    // --cap-lints=warn so target-specific lints don't trip the deny gate; --bin phorge pins the one
+    // intended binary (future-proof against added [[bin]] targets).
+    let status = std::process::Command::new("cargo-zigbuild")
+        .args(["build", "--release", "--bin", "phorge", "--target", target])
+        .env("RUSTFLAGS", "--cap-lints=warn")
+        .status()
+        .map_err(|e| {
+            format!("cannot run cargo-zigbuild (install it: cargo install --locked cargo-zigbuild): {e}")
+        })?;
+    if !status.success() {
+        return Err(format!(
+            "cargo-zigbuild failed for {target} (status {status})"
+        ));
+    }
+    let built = std::path::PathBuf::from("target")
+        .join(target)
+        .join("release")
+        .join(output_name("phorge", target));
+    if !built.is_file() {
+        return Err(format!(
+            "cargo-zigbuild produced no binary at {}",
+            built.display()
+        ));
+    }
+    let parent = cached
+        .parent()
+        .ok_or_else(|| "cache path has no parent".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("cannot create cache dir: {e}"))?;
+    std::fs::copy(&built, &cached).map_err(|e| format!("cannot cache stub: {e}"))?;
+    Ok(cached)
 }
 
 /// FNV-1a-64 of a byte slice — a cache-key identity hash (NOT a security hash). std-only, ~10 lines.
