@@ -1,3 +1,7 @@
+//! Token kinds + `Span` (byte range plus line/col), produced by the lexer and consumed by the
+//! parser. `Span` is the single source of source-position truth threaded into
+//! `diagnostic::Diagnostic` for every front-end stage.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: usize, // byte offset into source

@@ -50,16 +50,16 @@ impl CallScopes {
             scopes: vec![HashMap::new()],
         }
     }
-    fn push(&mut self) {
+    fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
     }
-    fn pop(&mut self) {
+    fn pop_scope(&mut self) {
         self.scopes.pop();
     }
     fn declare(&mut self, name: &str, v: Value) {
         self.scopes
             .last_mut()
-            .expect("frame always has a base scope")
+            .expect("scope stack always has a base scope")
             .insert(name.to_string(), v);
     }
     fn lookup(&self, name: &str) -> Option<&Value> {
@@ -173,9 +173,9 @@ impl Interp {
     }
 
     fn exec_scoped(&mut self, stmts: &[Stmt]) -> R<()> {
-        self.frame.push();
+        self.frame.push_scope();
         let r = self.exec_stmts(stmts);
-        self.frame.pop();
+        self.frame.pop_scope();
         r
     }
 
@@ -215,10 +215,10 @@ impl Interp {
                     other => return rt(format!("cannot iterate over {}", other.type_name())),
                 };
                 for item in items {
-                    self.frame.push();
+                    self.frame.push_scope();
                     self.frame.declare(name, item);
                     let r = self.exec_stmts(body);
-                    self.frame.pop();
+                    self.frame.pop_scope();
                     r?;
                 }
                 Ok(())
@@ -489,12 +489,12 @@ impl Interp {
         for arm in arms {
             let mut bindings = Vec::new();
             if match_pattern(&arm.pattern, &value, &mut bindings) {
-                self.frame.push();
+                self.frame.push_scope();
                 for (n, v) in bindings {
                     self.frame.declare(&n, v);
                 }
                 let r = self.eval(&arm.body);
-                self.frame.pop();
+                self.frame.pop_scope();
                 return r;
             }
         }

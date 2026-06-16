@@ -1,3 +1,7 @@
+//! Hand-written lexer: source `&str` → `Vec<Token>`. Iterative (no recursion), so unlike the
+//! parser/checker it never contributes to the recursion-depth budget those stages guard. Faults
+//! surface as a unified `diagnostic::Diagnostic` (`Stage::Lex`) carrying line/col.
+
 use crate::diagnostic::{Diagnostic, Stage};
 use crate::token::{Span, Token, TokenKind};
 
