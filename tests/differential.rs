@@ -305,21 +305,37 @@ fn p4c_programs_match_between_backends() {
     }
 }
 
-#[test]
-fn examples_match_between_backends() {
-    // `examples/hello.phg` (P2), `examples/fib.phg` (P3 recursion), and `examples/grades.phg`
-    // (P4: enums + `match` + a class with a method) all run identically on both backends now.
-    agree(
-        r#"import std.io;
+/// Recursively collect every `*.phg` under `dir`.
+fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).expect("read_dir examples/") {
+        let path = entry.expect("examples dir entry").path();
+        if path.is_dir() {
+            collect_phg(&path, out);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("phg") {
+            out.push(path);
+        }
+    }
+}
 
-function main() {
-    println("Hello, Phorge!");
-}"#,
+/// Every runnable example under `examples/` must produce byte-identical stdout on both backends.
+/// Globbing (not an explicit list) means a newly-added example is gated with no test edit — the
+/// "add examples as we go" contract (`docs/specs/2026-06-16-examples-coverage-design.md`).
+#[test]
+fn all_examples_match_between_backends() {
+    let mut files = Vec::new();
+    collect_phg(std::path::Path::new("examples"), &mut files);
+    files.sort();
+    assert!(
+        files.len() >= 3,
+        "expected at least the seed examples, found {}",
+        files.len()
     );
-    let fib = std::fs::read_to_string("examples/fib.phg").expect("read examples/fib.phg");
-    agree(&fib);
-    let grades = std::fs::read_to_string("examples/grades.phg").expect("read examples/grades.phg");
-    agree(&grades);
+    for path in &files {
+        eprintln!("differential: {}", path.display()); // names the file if agree() panics
+        let src = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        agree(&src);
+    }
 }
 
 /// M2 Wave 4: class-aware operand types. Each program type-checks and runs on the interpreter, but
