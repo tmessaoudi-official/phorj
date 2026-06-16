@@ -1,0 +1,55 @@
+# Known Issues & Limitations
+
+Phorge is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
+**deliberate scope boundaries** — features that are *planned* (see [ROADMAP.md](ROADMAP.md)) rather
+than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
+parse error, non-zero exit) — never a crash.
+
+## Language features not yet implemented
+
+These are designed but not in the current surface; using them produces a clean compile-time error,
+not a panic:
+
+- Indexing (`xs[i]`)
+- `Map` / `Set` / tuples
+- Null safety / optionals (`T?`, `null`)
+- The pipe operator (`|>`) and the `is` operator
+- Exceptions (try / catch / throw)
+- Mutation (reassignment and field writes) — Phorge is immutable-by-default today
+- Method/function overloading, traits, operator overloading, property accessors
+- Sized integers / `decimal`, `const`/`final` enforcement
+- Real `import` resolution (the `import` line is accepted but not yet a module system)
+- `match` outside return / variable-declaration-initializer position
+
+## `phorge build` limitations (M2.5, in progress)
+
+- **macOS targets are rejected.** The Mach-O/fat section *reader* ships and is tested, but producing a
+  signed macOS *stub* is deferred to Phase 3. An apple/darwin `--target` errors with a clear message
+  rather than emitting a broken binary.
+- **Cross-builds need a source checkout.** `--target`/`--all` compile a stub from source via
+  `cargo-zigbuild`, so they must run from a phorge source tree. A *distributed* (sourceless) phorge
+  can still do a **host** build (it reuses the running binary as the stub) but not a cross build until
+  the Phase 3 prebuilt-stub registry lands.
+- **Built binaries ignore argv and always exit 0.** A standalone built binary runs its embedded
+  program; command-line arguments passed to it are currently ignored. (`--version`/`--help` are
+  features of the `phorge` CLI itself, not of built binaries.)
+- **aarch64 / Windows artifacts aren't executed in CI here.** They're validated by an object-section
+  round-trip; native execution is verified for the host-runnable `x86_64-musl` target.
+
+## Behavioral quirks
+
+- **Runtime errors inside string interpolation report line 1.** A fault raised within a `"{ … }"`
+  interpolation is reported at line 1 because the interpolation sub-lexer resets position. (VM errors
+  carry an accurate line; the interpreter's runtime errors generally do not carry one.)
+- **Recursion is depth-limited.** Recursion runs on a fixed-size (256 MB) worker stack with explicit
+  depth caps (`src/limits.rs`); extremely deep recursion faults cleanly rather than overflowing the
+  native stack.
+- **Zero-payload enum variants need call form.** A nullary variant `V` must be written `V()` both to
+  construct **and** in a `match` pattern. A bare `V =>` arm is parsed as a catch-all *binding*, not a
+  variant match — so it silently matches everything. Always use `V()` in patterns for nullary
+  variants.
+
+## Reporting
+
+Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.
+Please report it (see [SUPPORT.md](SUPPORT.md); for security, [SECURITY.md](SECURITY.md)).

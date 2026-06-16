@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use Phorge in your research or work, please cite it as below."
+title: "Phorge"
+abstract: >-
+  A small, statically-typed, PHP-inspired programming language implemented in Rust (std-only,
+  zero external crates). Runs on two byte-identical backends — a tree-walking interpreter and a
+  bytecode stack VM — transpiles to PHP, and compiles to standalone native executables.
+type: software
+authors:
+  - family-names: "Messaoudi"
+    given-names: "Takieddine"
+    alias: "tmessaoudi-official"
+repository-code: "https://github.com/tmessaoudi-official/phorge"
+url: "https://github.com/tmessaoudi-official/phorge"
+license:
+  - MIT
+  - Apache-2.0
+keywords:
+  - programming-language
+  - compiler
+  - interpreter
+  - bytecode-vm
+  - rust
+  - php
+  - transpiler
+  - static-typing
