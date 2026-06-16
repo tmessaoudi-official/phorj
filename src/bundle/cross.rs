@@ -4,10 +4,12 @@ use crate::bundle::{encode_container, section::ELF_PE_SECTION};
 use std::path::PathBuf;
 
 /// Copy `stub` to `out` with the phorge payload added as the ELF/PE `.phorge` section, then mark it
-/// executable on unix. Format-aware (F5): `--set-section-flags noload,readonly` is proven on ELF but
-/// unreliable on PE/COFF, and is cosmetic for our reader (find_section reads raw file bytes via the
-/// section's file offset, never the loaded image), so the flags are applied only to ELF; PE embeds
-/// with `--add-section` alone. (Mach-O embedding — `__PHORGE,__source` — lands with macOS support.)
+/// executable on unix. `--set-section-flags noload,readonly` is applied on **both** ELF and PE: it is
+/// *required* on PE/COFF — without it, `llvm-objcopy --add-section` writes a section header with **zero
+/// raw data**, so the program would never be found (verified by
+/// `tests/build.rs::cross_windows_section_round_trips`; the earlier "skip flags on PE" attempt was the
+/// bug). It is the proven Phase-1 behavior on ELF. (Mach-O embedding — `__PHORGE,__source` — needs its
+/// own handling and lands with macOS support.)
 pub(crate) fn embed_section(
     stub: &std::path::Path,
     out: &std::path::Path,
@@ -17,22 +19,16 @@ pub(crate) fn embed_section(
     std::fs::write(&payload, encode_container(src.as_bytes()))
         .map_err(|e| format!("cannot write payload: {e}"))?;
     let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
-    let is_elf = std::fs::read(stub)
-        .ok()
-        .map(|b| b.starts_with(&[0x7F, b'E', b'L', b'F']))
-        .unwrap_or(false);
-    let mut cmd = std::process::Command::new(&objcopy);
-    cmd.args([
-        "--add-section",
-        &format!("{ELF_PE_SECTION}={}", payload.display()),
-    ]);
-    if is_elf {
-        cmd.args([
+    let status = std::process::Command::new(&objcopy)
+        .args([
+            "--add-section",
+            &format!("{ELF_PE_SECTION}={}", payload.display()),
             "--set-section-flags",
             &format!("{ELF_PE_SECTION}=noload,readonly"),
-        ]);
-    }
-    let status = cmd.arg(stub).arg(out).status();
+        ])
+        .arg(stub)
+        .arg(out)
+        .status();
     let _ = std::fs::remove_file(&payload);
     match status {
         Ok(s) if s.success() => {}

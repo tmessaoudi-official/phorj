@@ -1,8 +1,93 @@
-//! M2.5 Phase 1: `phorge build` produces a self-executing binary whose output is byte-identical to
+//! M2.5: `phorge build` produces a self-executing binary whose output is byte-identical to
 //! `phorge runvm` on the same program (the parity spine extended to the distribution layer).
+//! Phase 1 = host; Phase 2 adds cross-target parity (toolchain-gated, graceful skip).
 use std::process::Command;
 
 const BIN: &str = env!("CARGO_BIN_EXE_phorge");
+
+/// Skip-aware: true iff cargo-zigbuild and the given rustup target are both available.
+fn cross_toolchain_ready(target: &str) -> bool {
+    let zb = Command::new("cargo-zigbuild").arg("--version").output();
+    if !matches!(zb, Ok(o) if o.status.success()) {
+        eprintln!("skipping: cargo-zigbuild unavailable");
+        return false;
+    }
+    let tl = Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output();
+    let ok = matches!(&tl, Ok(o) if String::from_utf8_lossy(&o.stdout).lines().any(|l| l.trim() == target));
+    if !ok {
+        eprintln!("skipping: rustup target {target} not installed");
+    }
+    ok
+}
+
+#[test]
+fn cross_musl_binary_matches_runvm() {
+    // Tier 3 — native execution: x86_64-musl runs on this x86_64-linux box.
+    let target = "x86_64-unknown-linux-musl";
+    if !cross_toolchain_ready(target) {
+        return;
+    }
+    let src = "examples/guide/operators.phg";
+    let out = std::env::temp_dir().join("phorge-musl-parity");
+    let built = Command::new(BIN)
+        .args(["build", src, "--target", target, "-o"])
+        .arg(&out)
+        .output()
+        .expect("build");
+    assert!(
+        built.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let ran = Command::new(&out).output().expect("run musl binary");
+    let runvm = Command::new(BIN)
+        .args(["runvm", src])
+        .output()
+        .expect("runvm");
+    let _ = std::fs::remove_file(&out);
+    assert_eq!(ran.stdout, runvm.stdout, "musl binary output != runvm");
+}
+
+#[test]
+fn cross_windows_section_round_trips() {
+    // Tier 2 — dump round-trip: the windows .exe can't execute here; verify its embedded section.
+    let target = "x86_64-pc-windows-gnu";
+    if !cross_toolchain_ready(target) {
+        return;
+    }
+    let src = "examples/guide/operators.phg";
+    let out = std::env::temp_dir().join("phorge-win-parity.exe");
+    let built = Command::new(BIN)
+        .args(["build", src, "--target", target, "-o"])
+        .arg(&out)
+        .output()
+        .expect("build");
+    assert!(
+        built.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    // Dump the .phorge section back out and confirm it decodes to the original source.
+    let dumped = std::env::temp_dir().join("phorge-win-section.bin");
+    let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+    let st = Command::new(objcopy)
+        .args(["--dump-section"])
+        .arg(format!(".phorge={}", dumped.display()))
+        .arg(&out)
+        .status()
+        .expect("objcopy dump");
+    assert!(st.success());
+    let section = std::fs::read(&dumped).expect("read dumped section");
+    let expected = std::fs::read_to_string(src).expect("read src");
+    assert_eq!(
+        phorge::bundle::container::decode_container(&section).as_deref(),
+        Some(expected.as_bytes())
+    );
+    let _ = std::fs::remove_file(&out);
+    let _ = std::fs::remove_file(&dumped);
+}
 
 #[test]
 fn built_binary_matches_runvm() {
