@@ -182,6 +182,10 @@ const ERR_PROGRAMS: &[&str] = &[
     r#"function main() { int z = 0; println("{1 / z}"); }"#,
     // modulo by zero
     r#"function main() { int z = 0; println("{1 % z}"); }"#,
+    // unbounded recursion: trips the shared `MAX_CALL_DEPTH` guard on both backends.
+    // Before Task 0.3 the interpreter recursed on the native stack and SIGABRTed (exit 134)
+    // while the VM cleanly reported "stack overflow" — a parity divergence in the fault path.
+    r#"function rec(int n) -> int { return rec(n) + 1; } function main() { println("{rec(0)}"); }"#,
 ];
 
 #[test]

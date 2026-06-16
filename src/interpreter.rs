@@ -75,11 +75,29 @@ pub struct Interp {
     frame: Frame,
     this: Option<Value>,
     out: String,
+    /// Live call-frame depth, checked against [`crate::value::MAX_CALL_DEPTH`] in `run_call`.
+    /// Converts unbounded recursion into a clean `"stack overflow"` fault instead of a native
+    /// stack abort — and uses the *same* limit as the VM, keeping the backends parity-identical.
+    depth: usize,
 }
 
 /// Run a whole program: collect declarations, locate `main`, call it, and return
 /// the captured stdout buffer (the Plan 6 CLI prints it to real stdout).
 pub fn interpret(program: &Program) -> Result<String, RuntimeError> {
+    // The tree-walker recurses on the native Rust stack, so deep recursion would overflow it
+    // (SIGABRT) long before `MAX_CALL_DEPTH`. Run the work on a thread with a generous stack so
+    // the depth guard in `run_call` — not a native abort — is what stops unbounded recursion.
+    std::thread::scope(|s| {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024 * 1024)
+            .spawn_scoped(s, || interpret_inner(program))
+            .expect("spawn interpreter thread")
+            .join()
+            .expect("interpreter thread panicked")
+    })
+}
+
+fn interpret_inner(program: &Program) -> Result<String, RuntimeError> {
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
@@ -87,6 +105,7 @@ pub fn interpret(program: &Program) -> Result<String, RuntimeError> {
         frame: Frame::new(),
         this: None,
         out: String::new(),
+        depth: 0,
     };
     interp.collect(program);
     let main = match interp.funcs.get("main") {
@@ -136,6 +155,13 @@ impl Interp {
         args: Vec<Value>,
         this: Option<Value>,
     ) -> R<Value> {
+        // Mirror the VM's frame cap: past the shared limit, fault cleanly instead of letting
+        // native recursion abort the process. Checked before incrementing, so the guard path
+        // leaves `depth` untouched and every non-guard exit below decrements exactly once.
+        if self.depth >= crate::value::MAX_CALL_DEPTH {
+            return rt("stack overflow");
+        }
+        self.depth += 1;
         let saved_frame = std::mem::replace(&mut self.frame, Frame::new());
         let saved_this = std::mem::replace(&mut self.this, this);
         for (n, a) in names.iter().zip(args) {
@@ -144,6 +170,7 @@ impl Interp {
         let result = self.exec_stmts(body);
         self.frame = saved_frame;
         self.this = saved_this;
+        self.depth -= 1;
         match result {
             Ok(()) => Ok(Value::Unit),
             Err(Signal::Return(v)) => Ok(v),

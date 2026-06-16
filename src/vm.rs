@@ -7,11 +7,11 @@
 //! error parity with `cmd_run`.
 
 use crate::chunk::{BytecodeProgram, Op};
-use crate::value::Value;
+use crate::value::{Value, MAX_CALL_DEPTH};
 
-/// Cap on call-frame depth. Exceeding it is a clean `"stack overflow"` runtime error rather
-/// than an OOM/abort (decision P3-4). Generous — real recursion is far shallower.
-const MAX_FRAMES: usize = 64 * 1024;
+// Call-frame depth is capped by the shared `value::MAX_CALL_DEPTH` (same limit the interpreter
+// enforces, keeping the backends parity-identical). Exceeding it is a clean `"stack overflow"`
+// runtime error rather than an OOM/abort (decision P3-4).
 
 /// A live call frame: which function, the instruction pointer into its chunk, and the index
 /// in the value stack where this frame's locals window begins (decision P3-1).
@@ -224,7 +224,7 @@ impl<'a> Vm<'a> {
                 }
 
                 Op::Call(idx) => {
-                    if self.frames.len() >= MAX_FRAMES {
+                    if self.frames.len() >= MAX_CALL_DEPTH {
                         return Err("stack overflow".to_string());
                     }
                     let arity = self.program.functions[idx].arity;
