@@ -26,6 +26,18 @@ fn main() {
     }
 
     let args: Vec<String> = std::env::args().collect();
+    // Global flags (before subcommand dispatch): -h/--help and -v/--version print and exit 0.
+    match args.get(1).map(String::as_str) {
+        Some("-h" | "--help") => {
+            print!("{}", cli::help_text());
+            return;
+        }
+        Some("-v" | "--version") => {
+            println!("{}", cli::version_line());
+            return;
+        }
+        _ => {}
+    }
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "bench" | "build"),

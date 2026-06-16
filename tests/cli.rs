@@ -23,6 +23,34 @@ fn no_arguments_is_usage_error_exit_2() {
 }
 
 #[test]
+fn version_flag_prints_version_exit_0() {
+    for flag in ["--version", "-v"] {
+        let out = Command::new(BIN).arg(flag).output().expect("spawn phorge");
+        assert!(out.status.success(), "{flag} exit {:?}", out.status.code());
+        let s = String::from_utf8_lossy(&out.stdout);
+        assert!(s.starts_with("phorge "), "{flag} stdout: {s}");
+        assert!(
+            s.trim().ends_with(env!("CARGO_PKG_VERSION")),
+            "{flag} stdout: {s}"
+        );
+    }
+}
+
+#[test]
+fn help_flag_prints_usage_exit_0() {
+    for flag in ["--help", "-h"] {
+        let out = Command::new(BIN).arg(flag).output().expect("spawn phorge");
+        assert!(out.status.success(), "{flag} exit {:?}", out.status.code());
+        let s = String::from_utf8_lossy(&out.stdout);
+        assert!(s.contains("usage:"), "{flag} stdout: {s}");
+        assert!(
+            s.contains("run") && s.contains("build"),
+            "{flag} stdout: {s}"
+        );
+    }
+}
+
+#[test]
 fn missing_file_is_error_exit_1() {
     let out = Command::new(BIN)
         .args(["run", "tests/fixtures/does_not_exist.phg"])

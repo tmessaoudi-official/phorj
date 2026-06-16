@@ -13,6 +13,38 @@ use crate::lexer::lex;
 use crate::parser::Parser;
 use crate::vm::Vm;
 
+/// The `--version` line: `phorge <version>` (from `CARGO_PKG_VERSION`).
+pub fn version_line() -> String {
+    format!("phorge {}", env!("CARGO_PKG_VERSION"))
+}
+
+/// The `--help` text: version banner + commands + source forms + options.
+pub fn help_text() -> String {
+    format!(
+        "{version}\n\
+         usage:\n  \
+         phorge <command> <source> [options]\n\n\
+         commands:\n  \
+         run        interpret the program (tree-walking)\n  \
+         runvm      run the program on the bytecode VM\n  \
+         check      type-check only\n  \
+         parse      print the AST\n  \
+         lex        print the token stream\n  \
+         transpile  emit PHP\n  \
+         bench      benchmark run vs runvm\n  \
+         build      compile to a standalone executable (-o <out>)\n\n\
+         source:\n  \
+         <file>     read the program from a file\n  \
+         -          read the program from stdin\n  \
+         -e <code>  run an inline program (alias: --eval)\n  \
+         --         treat the next argument as a file path (even if it starts with '-')\n\n\
+         options:\n  \
+         -h, --help     print this help and exit\n  \
+         -v, --version  print the version and exit\n",
+        version = version_line()
+    )
+}
+
 /// Run a pipeline closure on a worker thread with a large (256 MB) stack. The lexer is iterative,
 /// but the parser, checker, compiler, and tree-walking interpreter all recurse on the native stack
 /// in proportion to expression/call nesting. A generous, *known* stack makes the explicit depth
