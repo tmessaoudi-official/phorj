@@ -68,7 +68,7 @@ enrichment = M3; single-binary bundling = M2.5.
 > slot-indexed field layout (P5 Phase B) stays **bench-gated and unopened** — after P5a the object
 > path is within ~15% of the scalar baseline, so field access no longer dominates.
 
-## M2.5 — Standalone executables (`phorge build`) — 🔨 IN PROGRESS (Phase 1 complete)
+## M2.5 — Standalone executables (`phorge build`) — 🔨 IN PROGRESS (Phases 1–2 complete; Phase 3 next)
 
 Single-binary bundling: `phorge build foo.phg` → a standalone executable that runs `foo.phg` on the
 VM with no Phorge install. Design (advisor-reviewed twice): payload = a **named section** (`.phorge`
@@ -86,9 +86,17 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
   `cli::cmd_build` (copy `current_exe` + `llvm-objcopy --add-section .phorge=…`), and `tests/build.rs`
   (built binary byte-identical to `runvm`). This is the **4th backend** the Rule-of-Three note below
   anticipated — still a free-function path, no `Backend` trait yet.
-- **Phase 2 🔲** — cross-targets via zig as the C/linker driver; PE (Windows) + Mach-O (macOS)
-  reader arms added to `bundle.rs`; per-target stub fetch+cache (cache key **must** include the
-  phorge binary hash, else a stale stub runs an old VM and breaks the parity spine).
+- **Phase 2 ✅ (2026-06-17)** — cross-OS builds via `cargo-zigbuild` (zig as the C/linker driver):
+  `bundle.rs` split into a `bundle/` module + hand-rolled std-only **PE/COFF**, **Mach-O 64**, and
+  **fat/universal** section readers (checked arithmetic, EV-7) behind a magic-sniffing `find_section`;
+  `phorge build --target/--all` with a per-target stub cache keyed on the phorge binary's FNV-1a-64
+  hash (stale stub → cache miss, protecting the parity spine). Targets: Linux `x86_64-musl`,
+  `aarch64-{gnu,musl}`, `x86_64-pc-windows-gnu`. Cross-parity gated by `tests/build.rs` (musl native
+  exec + real windows-PE round-trip). macOS reader ships + is fixture-tested; the Mac *stub* (signing)
+  is deferred to Phase 3, and apple/darwin `--target` is rejected with a clear message. Spec/plan:
+  `docs/specs/2026-06-16-m2.5-phase2-cross-os-design.md`, `docs/plans/2026-06-16-m2.5-phase2-cross-os.md`.
+  **Gotcha (verified):** `llvm-objcopy --add-section` on **PE** needs `--set-section-flags
+  …=noload,readonly` or it writes a zero-data section; the flags are applied unconditionally (ELF + PE).
 - **Phase 3 🔲** — CI stub registry; final-artifact signing/notarization (opt-in `--sign`),
   Windows Authenticode + macOS codesign/notarize via `rcodesign` from Linux.
 

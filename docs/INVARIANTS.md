@@ -21,6 +21,12 @@ central correctness contract.
   hook must keep dispatching through `cmd_runvm` (never `cmd_run`) and must not transform the source
   before execution — otherwise the distribution layer silently drifts off the spine while the
   differential suite (which never builds a binary) stays green.
+  - **Cross-targets (Phase 2):** the surface now spans cross-built binaries. The stub-cache key is the
+    **FNV-1a-64 of the running phorge binary's bytes**, so a rebuilt phorge ⇒ cache miss ⇒ fresh stub —
+    a stale stub can never embed your source into an *old* VM. Cross-parity is gated by
+    `cross_musl_binary_matches_runvm` (native exec) and `cross_windows_section_round_trips` (PE section
+    round-trip). The object-file section readers (ELF/PE/Mach-O/fat) honor **EV-7**: every offset uses
+    checked arithmetic, and malformed/adversarial images return `None`, never a panic or OOB read.
 
 ## 2. The interpreter is the reference oracle
 When the VM and the interpreter disagree, the **interpreter is right by definition** — it is the

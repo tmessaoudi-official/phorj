@@ -71,19 +71,31 @@ example (and any added later) is byte-identity-gated automatically; `examples/RE
 living surface showcase. **Gotcha:** zero-payload enum variants need call form `V()` both to
 construct AND in a `match` pattern (bare `V =>` is a silent catch-all binding).
 
-**M2.5 `phorge build` (standalone executables) — Phase 1 COMPLETE**
-(`docs/specs/2026-06-16-m2.5-phorge-build-design.md`, `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`):
-`phorge build foo.phg` produces a standalone host (`x86_64-linux-gnu`) executable that runs on the VM
-with no Phorge install — `src/bundle.rs` embeds the program **source** in a `.phorge` ELF section
-(versioned CRC-guarded container + hand-rolled, zero-dep ELF64 reader), and `main()` self-detects +
-runs the payload at startup. `tests/build.rs` extends the parity spine to distribution (built binary
-byte-identical to `runvm`). v1 limits: host-only, argv ignored, no custom exit code, source
-recoverable. The design is the same section+container mechanism as the cross-OS end state.
+**M2.5 `phorge build` (standalone executables) — Phases 1 & 2 COMPLETE** (released as **v0.4.0**).
+Phase 1 (host `x86_64-linux-gnu`): `phorge build foo.phg` embeds the program **source** in a `.phorge`
+section (versioned CRC-guarded container + hand-rolled ELF64 reader); `main()` self-detects + runs it
+on the VM. Phase 2 (`docs/plans/2026-06-16-m2.5-phase2-cross-os.md`): `src/bundle.rs` split into a
+`bundle/` module — `container`, per-format readers `elf`/`pe`/`macho` (thin + fat), a magic-sniffing
+`section::find_section`, and a `cross` orchestrator — plus `phorge build --target/--all` cross-compiling
+stubs via **cargo-zigbuild** (zig linker) for Linux `x86_64-musl`/`aarch64-{gnu,musl}` +
+`x86_64-pc-windows-gnu`, cached under an **FNV-1a-64 of the phorge binary's bytes**. All readers honor
+EV-7 (checked arithmetic, `None` on bad input). macOS reader ships + fixture-tested; apple `--target`
+is **rejected** (Mac stub deferred to Phase 3). `tests/build.rs` gates cross-parity (musl native exec +
+real windows-PE round-trip). **Hard-won gotcha (verified):** `llvm-objcopy --add-section` on **PE**
+needs `--set-section-flags …=noload,readonly` or it writes a zero-data section — applied unconditionally
+for ELF + PE (a prior "skip on PE" attempt was the bug; only the real-binary windows test caught it).
 
-**Next (locked sequence): M2.5 Phase 2** — cross-targets via zig (the C/linker driver) + PE/Mach-O
-reader arms in `bundle.rs` + per-target stub fetch/cache (cache key **must** include the phorge
-binary hash); then **Phase 3** (CI stub registry + signing/notarization, `rcodesign` from Linux);
-then **M3** (grow the language: indexing, Map/Set, null/optionals, `|>`, exceptions, mutation —
+**CLI UX (v0.4.0):** global `-v`/`--version`, `-h`/`--help`; run-family source forms `<file>` | `-`
+(stdin) | `-e`/`--eval <code>` (inline) | `--` (literal path). `cli::resolve_source` is the pure,
+tested resolver; built binaries still ignore argv (run their embedded program).
+
+**Docs:** a full OSS doc set landed at v0.4.0 (README rewrite, dual **MIT OR Apache-2.0**, CONTRIBUTING,
+CODE_OF_CONDUCT, SECURITY, ROADMAP, VISION, FEATURES, KNOWN_ISSUES, THIRD-PARTY-NOTICES, CITATION.cff,
+`.github/` templates). See **`ROADMAP.md`** / **`VISION.md`** for the forward plan.
+
+**Next (locked sequence): M2.5 Phase 3** — CI stub registry (distributed phorge cross-builds without a
+source checkout) + opt-in `--sign` (Windows Authenticode + macOS codesign/notarize via `rcodesign` from
+Linux); then **M3** (grow the language: indexing, Map/Set, null/optionals, `|>`, exceptions, mutation —
 mutation finally motivates the real tracing GC).
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing

@@ -6,30 +6,46 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### M2.5 Phase 2 (in progress)
-
-- `src/bundle.rs` split into a `bundle/` module: `container` (CRC-guarded payload, verbatim), per-format
-  readers `elf`/`pe`/`macho` (thin + fat), a magic-sniffing `section::find_section` dispatcher, and a
-  `cross` orchestration module (FNV-1a-64 + phorge-hash-keyed stub-cache path so far).
-- Hand-rolled, std-only **PE/COFF**, **Mach-O 64**, and **fat/universal** section readers with checked
-  arithmetic (EV-7: adversarial input → `None`, never a panic) + synthetic-fixture tests; wired into
-  `find_section` so a produced binary self-reads its own object format.
-- _Remaining:_ `phorge build --target/--all` cross-compile via cargo-zigbuild, the stub cache, and the
-  toolchain-gated cross-parity tests.
+_Next: M2.5 Phase 3 (CI stub registry so a distributed phorge can cross-build without source; opt-in
+`--sign` for Windows Authenticode + macOS codesign/notarize via `rcodesign`), then M3 language
+enrichment (indexing, `Map`/`Set`, optionals, `|>`, exceptions, mutation + a tracing GC)._
 
 ## [0.4.0] — 2026-06-17
 
-CLI UX. The `phorge` binary now supports the conventional flags and flexible program input:
+The first fully-documented release: CLI UX, cross-OS standalone builds, and a complete OSS doc set.
 
-- `-v` / `--version` — print `phorge <version>` and exit.
-- `-h` / `--help` — print a full usage banner (commands + source forms + options) and exit.
-- Program source for run-family commands (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`bench`):
-  `<file>` | `-` (read from **stdin**) | `-e <code>` / `--eval <code>` (run **inline** source) |
-  `--` (treat the next arg as a file path even if it starts with `-`).
+### CLI UX
 
-Also lands the internal M2.5 Phase 2 `bundle/` refactor + object-format readers (above, no user-facing
-cross-build yet). `build` remains host-only and file-based. Built standalone binaries are unchanged:
-they run their embedded program and ignore argv.
+- `-v` / `--version` — print `phorge <version>` and exit; `-h` / `--help` — full usage banner.
+- Flexible program source for the run-family commands
+  (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`bench`): `<file>` | `-` (read from **stdin**) |
+  `-e <code>` / `--eval <code>` (run **inline** source) | `--` (next arg is a path even if it starts
+  with `-`).
+
+### M2.5 Phase 2 — cross-OS standalone builds
+
+- `phorge build --target <triple>` / `--all` cross-compiles a runtime stub via
+  [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) (zig as the linker) and embeds the
+  program as a named object-file section. Targets: `x86_64-unknown-linux-musl`,
+  `aarch64-unknown-linux-{gnu,musl}`, `x86_64-pc-windows-gnu`.
+- `src/bundle.rs` → a `bundle/` module: CRC-guarded `container`, per-format readers `elf`/`pe`/`macho`
+  (thin + fat), a magic-sniffing `section::find_section` dispatcher, and a `cross` orchestrator. The
+  hand-rolled, std-only **PE/COFF**, **Mach-O 64**, and **fat/universal** readers use checked arithmetic
+  (EV-7: adversarial input → `None`, never a panic) so a produced binary self-reads its own format.
+- Stub cache keyed on an FNV-1a-64 of the phorge binary's own bytes (a rebuilt phorge invalidates stale
+  stubs, protecting the parity spine). Precise "missing rustup target" / "needs a source checkout"
+  errors. apple/darwin targets are rejected with a clear message (macOS stub deferred to Phase 3; the
+  Mach-O reader ships and is tested). `--sign` reserved for Phase 3.
+- Cross-parity tests (toolchain-gated): `x86_64-musl` native-execution parity vs `runvm`, and a real
+  windows-PE section round-trip.
+
+### Documentation
+
+- Full OSS project doc set: rewritten README, dual **MIT OR Apache-2.0** license, CONTRIBUTING,
+  CODE_OF_CONDUCT, SECURITY, SUPPORT, GOVERNANCE, AUTHORS, ROADMAP, VISION, FEATURES, KNOWN_ISSUES,
+  THIRD-PARTY-NOTICES, CITATION.cff, `.editorconfig`, and `.github/` templates.
+
+Built standalone binaries are unchanged: they run their embedded program and ignore argv.
 
 ## [0.3.0] — 2026-06-16
 
