@@ -1034,7 +1034,11 @@ impl<'a> Compiler<'a> {
                 // scratch local (the `$match`-scrutinee trick), test it against `null`; if null,
                 // evaluate `b` and overwrite the slot with it. No new `Op` (decision S2-OPS).
                 self.expr(lhs)?; // [a] — a lands in the scratch slot
-                let slot = self.add_local("$coalesce", CTy::Other);
+                                 // The scratch slot is `a`'s frame-relative position (top of stack), NOT
+                                 // `locals.len()`: live transients (e.g. earlier interpolation segments) may sit
+                                 // below it, so `add_local`'s index would be wrong. Mirrors `compile_match`'s
+                                 // `m_slot = self.height - 1`. Addressed numerically by Get/SetLocal — no `Local` entry.
+                let slot = self.height - 1;
                 self.emit(Op::GetLocal(slot), line); // [a, a]
                 self.emit_const(Value::Null, line); // [a, a, null]
                 self.emit(Op::Eq, line); // [a, bool]
@@ -1044,7 +1048,6 @@ impl<'a> Compiler<'a> {
                 self.emit(Op::SetLocal(slot), line); // [b] — overwrite the slot with b
                 self.patch_jump(keep); // keep-path arrives with [a]; both leave one value at `slot`
                 self.height = h_merge;
-                self.locals.pop(); // unregister the scratch; the result stays on the stack
                 return Ok(());
             }
             _ => {}
@@ -1183,7 +1186,10 @@ impl<'a> Compiler<'a> {
         access: impl FnOnce(&mut Self) -> Result<(), String>,
     ) -> Result<(), String> {
         self.expr(object)?; // [.., recv]
-        let slot = self.add_local("$safe", CTy::Other);
+                            // `recv`'s frame-relative slot (top of stack), NOT `locals.len()`: live transients (earlier
+                            // interpolation segments, an enclosing `??`'s lhs, …) may sit below it. Mirrors
+                            // `compile_match`'s `m_slot = self.height - 1`; addressed numerically, no `Local` entry.
+        let slot = self.height - 1;
         self.emit(Op::GetLocal(slot), line); // [.., recv, recv]
         self.emit_const(Value::Null, line); // [.., recv, recv, null]
         self.emit(Op::Eq, line); // [.., recv, bool]
@@ -1194,25 +1200,25 @@ impl<'a> Compiler<'a> {
         access(self)?; // [.., recv] -> [.., member]
         self.patch_jump(to_end);
         self.height = h; // both paths converge here with one value at the receiver's slot
-        self.locals.pop(); // unregister $safe; the result stays on the stack
         Ok(())
     }
 
     /// `inner!` checked force-unwrap (M3 S2.5). Evaluate the inner; a non-consuming null-test keeps
     /// the value when present, else raises `Op::Fault(ForceUnwrapNull)` — byte-identical to the
     /// interpreter's `"force-unwrap of null"` fault. No new `Op` (the fault op is the generalized
-    /// `MatchFail`). The scratch slot's `CTy` is the inner type so `o! + 1` still specializes.
+    /// `MatchFail`). `o! + 1` still specializes because `ctype(Force)` resolves the result's type.
     fn compile_force(&mut self, inner: &Expr, line: u32) -> Result<(), String> {
         self.expr(inner)?; // [opt] — stays as the result when non-null
-        let inner_cty = self.ctype(inner).unwrap_or(CTy::Other);
-        let slot = self.add_local("$force", inner_cty);
+                           // `opt`'s frame-relative slot (top of stack), NOT `locals.len()`: transients may sit below
+                           // it (e.g. `"{a!} {b!}"`). Mirrors `compile_match`. `ctype(Force)` handles operand typing of
+                           // the *result*, so the scratch needs no `CTy`. Addressed numerically, no `Local` entry.
+        let slot = self.height - 1;
         self.emit(Op::GetLocal(slot), line); // [opt, opt]
         self.emit_const(Value::Null, line); // [opt, opt, null]
         self.emit(Op::Eq, line); // [opt, opt == null]
         let ok = self.emit_jump(Op::JumpIfFalse(0), line); // [opt]; non-null → keep, skip the fault
         self.emit(Op::Fault(FaultMsg::ForceUnwrapNull), line); // null → clean fault (terminal)
         self.patch_jump(ok);
-        self.locals.pop(); // unregister $force; the unwrapped value stays on the stack
         Ok(())
     }
 

@@ -629,6 +629,33 @@ fn s2_force_unwrap_null_faults_identically() {
 }
 
 #[test]
+fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
+    // Regression: two `??`/`?.`/`!` in one expression. Each stashes its receiver in a scratch slot;
+    // that slot is the receiver's frame position (`height-1`), so live transients from an earlier
+    // segment must not shift it. The interpreter is the oracle; the VM must match (not fault).
+    let two_coalesce =
+        "function main() { int? a = 5; int? b = null; println(\"{a ?? -1} {b ?? -1}\"); }";
+    assert_eq!(cmd_run(two_coalesce).as_deref(), Ok("5 -1\n"));
+    agree(two_coalesce);
+
+    let two_force = "function main() { int? a = 1; int? b = 2; println(\"{a!} {b!}\"); }";
+    assert_eq!(cmd_run(two_force).as_deref(), Ok("1 2\n"));
+    agree(two_force);
+
+    let cls = "class Box { constructor(private int v) {} function get() -> int { return v; } }";
+    let two_safe = cls.to_string()
+        + " function main() { Box? a = Box(7); Box? b = null; println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
+    assert_eq!(cmd_run(&two_safe).as_deref(), Ok("7 -1\n"));
+    agree(&two_safe);
+
+    // Mixed + nested: a coalesce whose default is itself a safe-access-coalesce, beside a force.
+    let mixed = cls.to_string()
+        + " function main() { Box? a = null; int? b = 9; println(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
+    assert_eq!(cmd_run(&mixed).as_deref(), Ok("9 9\n"));
+    agree(&mixed);
+}
+
+#[test]
 fn s2_match_over_optional_is_byte_identical() {
     // `match opt { null => …, v => … }`: the null arm fires on null, the binding arm narrows `v` to
     // the non-null inner `int` (used here as an arithmetic operand — guards the operand-type gap).
