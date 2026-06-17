@@ -301,14 +301,23 @@ impl Transpiler {
             },
             Stmt::If {
                 cond,
+                bind,
                 then_block,
                 else_block,
                 ..
             } => {
                 let c = self.emit_expr(cond)?;
-                self.line(&format!("if ({c}) {{"));
+                // `if (var x = opt)` → PHP `if (($x = <scrutinee>) !== null)`: the assignment-in-
+                // condition binds `$x` and the `!== null` test mirrors the optional narrowing.
+                match bind {
+                    Some(name) => self.line(&format!("if ((${name} = {c}) !== null) {{")),
+                    None => self.line(&format!("if ({c}) {{")),
+                }
                 self.indent += 1;
                 self.push_scope();
+                if let Some(name) = bind {
+                    self.declare(name);
+                }
                 for st in then_block {
                     self.emit_stmt(st)?;
                 }

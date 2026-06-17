@@ -199,11 +199,27 @@ impl Interp {
             }
             Stmt::If {
                 cond,
+                bind,
                 then_block,
                 else_block,
                 ..
             } => {
-                if as_bool(&self.eval(cond)?)? {
+                if let Some(name) = bind {
+                    // `if (var name = cond)`: evaluate the optional; run the then-block with `name`
+                    // bound to the (non-null) value only when present, else the else-block.
+                    let v = self.eval(cond)?;
+                    if !matches!(v, Value::Null) {
+                        self.frame.push_scope();
+                        self.frame.declare(name, v);
+                        let r = self.exec_stmts(then_block);
+                        self.frame.pop_scope();
+                        r
+                    } else if let Some(eb) = else_block {
+                        self.exec_scoped(eb)
+                    } else {
+                        Ok(())
+                    }
+                } else if as_bool(&self.eval(cond)?)? {
                     self.exec_scoped(then_block)
                 } else if let Some(eb) = else_block {
                     self.exec_scoped(eb)

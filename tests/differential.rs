@@ -580,3 +580,23 @@ fn s2_safe_access_is_byte_identical() {
     assert_eq!(cmd_run(&sc).as_deref(), Ok("-1\n"));
     agree(&sc);
 }
+
+#[test]
+fn s2_if_let_is_byte_identical() {
+    // `if (var x = opt)`: the then-branch runs (with `x` bound to the non-null inner) only when the
+    // optional is present; otherwise the else-branch runs.
+    let present =
+        "function main() { int? o = 5; if (var x = o) { println(\"got {x}\"); } else { println(\"none\"); } }";
+    assert_eq!(cmd_run(present).as_deref(), Ok("got 5\n"));
+    agree(present);
+    let absent =
+        "function main() { int? o = null; if (var x = o) { println(\"got {x}\"); } else { println(\"none\"); } }";
+    assert_eq!(cmd_run(absent).as_deref(), Ok("none\n"));
+    agree(absent);
+    // The smart-cast inner is a real arithmetic operand: `x + 1` must specialize identically on both
+    // backends (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
+    let arith =
+        "function main() { int? o = 41; if (var x = o) { println(\"{x + 1}\"); } else { println(\"none\"); } }";
+    assert_eq!(cmd_run(arith).as_deref(), Ok("42\n"));
+    agree(arith);
+}

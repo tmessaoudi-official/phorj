@@ -614,6 +614,16 @@ impl Parser {
         let sp = self.peek_span();
         self.expect(&TokenKind::If, "'if'")?;
         self.expect(&TokenKind::LParen, "'(' after 'if'")?;
+        // `if (var name = scrutinee)` binds the non-null inner of an optional scrutinee inside the
+        // then-block (M3 S2.4). `var` is a keyword that cannot begin a normal condition expression,
+        // so seeing it right after `(` unambiguously selects the if-let form.
+        let bind = if self.eat(&TokenKind::Var) {
+            let name = self.expect_ident("a binding name after 'var'")?;
+            self.expect(&TokenKind::Eq, "'=' in 'if (var name = …)'")?;
+            Some(name)
+        } else {
+            None
+        };
         let cond = self.parse_expr()?;
         self.expect(&TokenKind::RParen, "')' after if condition")?;
         let then_block = self.parse_block()?;
@@ -629,6 +639,7 @@ impl Parser {
         };
         Ok(Stmt::If {
             cond,
+            bind,
             then_block,
             else_block,
             span: sp,
@@ -1388,6 +1399,27 @@ mod tests {
                 assert_eq!(eb.len(), 1);
                 assert!(matches!(eb[0], Stmt::If { .. }));
             }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_if_let_binding() {
+        // `if (var x = e)` carries the bound name; the condition expr is the scrutinee.
+        match stmt("if (var x = o) { return 1; } else { return 2; }") {
+            Stmt::If {
+                bind: Some(name),
+                else_block: Some(eb),
+                ..
+            } => {
+                assert_eq!(name, "x");
+                assert_eq!(eb.len(), 1);
+            }
+            other => panic!("got {other:?}"),
+        }
+        // a plain condition has no binding
+        match stmt("if (a) { return 1; }") {
+            Stmt::If { bind: None, .. } => {}
             other => panic!("got {other:?}"),
         }
     }

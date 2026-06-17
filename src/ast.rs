@@ -196,8 +196,12 @@ pub enum Stmt {
     Return { value: Option<Expr>, span: Span },
     /// `if (cond) { .. } [else { .. } | else if ..]` — else-branch is a block (an
     /// `else if` chain is stored as a single-statement block wrapping a nested `If`).
+    ///
+    /// `bind` is `Some(name)` for the `if (var name = cond)` form (M3 S2.4): `cond` is the optional
+    /// scrutinee, and `name` is smart-cast to the non-optional inner `T` inside `then_block` only.
     If {
         cond: Expr,
+        bind: Option<String>,
         then_block: Vec<Stmt>,
         else_block: Option<Vec<Stmt>>,
         span: Span,

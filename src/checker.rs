@@ -496,15 +496,36 @@ impl Checker {
             }
             Stmt::If {
                 cond,
+                bind,
                 then_block,
                 else_block,
                 span,
             } => {
                 let c = self.check_expr(cond);
-                if !Ty::assignable(&c, &Ty::Bool) {
-                    self.err(*span, format!("`if` condition must be `bool`, found `{c}`"));
+                if let Some(name) = bind {
+                    // `if (var name = cond)`: the scrutinee must be optional; inside the then-block
+                    // `name` is smart-cast to the non-optional inner `T` (and only there). The else
+                    // block sees neither `name` nor any narrowing.
+                    let inner = match &c {
+                        Ty::Optional(i) => (**i).clone(),
+                        Ty::Error => Ty::Error,
+                        other => self.err_coded(
+                            *span,
+                            format!("`if (var {name} = …)` requires an optional `T?` scrutinee, found `{other}`"),
+                            "E-IF-LET-TYPE",
+                            Some("if-let narrows an optional to its non-null inner; the scrutinee is already non-optional".into()),
+                        ),
+                    };
+                    self.push_scope();
+                    self.declare(name, inner);
+                    self.check_block(then_block);
+                    self.pop_scope();
+                } else {
+                    if !Ty::assignable(&c, &Ty::Bool) {
+                        self.err(*span, format!("`if` condition must be `bool`, found `{c}`"));
+                    }
+                    self.check_block(then_block);
                 }
-                self.check_block(then_block);
                 if let Some(eb) = else_block {
                     self.check_block(eb);
                 }
@@ -1345,11 +1366,13 @@ pub fn expand_aliases(program: &Program) -> Program {
             },
             Stmt::If {
                 cond,
+                bind,
                 then_block,
                 else_block,
                 span,
             } => Stmt::If {
                 cond: cond.clone(),
+                bind: bind.clone(),
                 then_block: then_block.iter().map(|s| rstmt(s, a)).collect(),
                 else_block: else_block
                     .as_ref()
@@ -1472,6 +1495,32 @@ mod tests {
         assert!(
             e2.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
             "got {e2:?}"
+        );
+    }
+
+    #[test]
+    fn if_let_binding_and_smart_cast() {
+        // smart-cast: inside the then-block, the bound name is the non-optional inner `T`
+        assert!(
+            errors_of("function main() { int? o = 5; if (var x = o) { int y = x; } }").is_empty()
+        );
+        // the binding is NOT in scope in the else block
+        let e1 = errors_of("function main() { int? o = 5; if (var x = o) {} else { int y = x; } }");
+        assert!(
+            e1.iter().any(|d| d.code == Some("E-UNKNOWN-IDENT")),
+            "got {e1:?}"
+        );
+        // the binding is NOT in scope after the if
+        let e2 = errors_of("function main() { int? o = 5; if (var x = o) {} int y = x; }");
+        assert!(
+            e2.iter().any(|d| d.code == Some("E-UNKNOWN-IDENT")),
+            "got {e2:?}"
+        );
+        // the scrutinee must be optional — binding a non-optional is `E-IF-LET-TYPE`
+        let e3 = errors_of("function main() { int n = 5; if (var x = n) {} }");
+        assert!(
+            e3.iter().any(|d| d.code == Some("E-IF-LET-TYPE")),
+            "got {e3:?}"
         );
     }
 

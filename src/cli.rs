@@ -169,6 +169,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              `?.` for null-safe access (the whole access yields `null` when the receiver is null),\n\
              or first narrow the optional with `if (var x = opt) { … }` or `opt!` (checked).\n"
         }
+        "E-IF-LET-TYPE" => {
+            "E-IF-LET-TYPE — `if (var x = …)` was given a non-optional scrutinee.\n\n\
+             The if-let form narrows an optional `T?` to its non-null inner `T`, binding it inside\n\
+             the then-block. A scrutinee that is already non-optional has nothing to narrow — use a\n\
+             plain `if (cond)` for a boolean test, or make the scrutinee a `T?`.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -179,7 +185,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE)"
+             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE)"
         )
     })
 }

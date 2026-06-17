@@ -519,7 +519,11 @@ fn resolve_cty(ty: &Type) -> CTy {
             "bool" | "string" | "void" | "Map" | "Set" => CTy::Other,
             other => CTy::Class(other.to_string()),
         },
-        Type::Optional { .. } => CTy::Other,
+        // An optional carries its inner's `CTy` (not `Other`): once narrowed (if-let, `??`, `?.`,
+        // `match`) the value is the inner `T`, so `if (var x = opt) { x + 1 }` specializes. The
+        // checker forbids using a bare `T?` as an operand, so tagging the optional local with the
+        // inner `CTy` never mis-specializes an un-narrowed access (M3 S2.4).
+        Type::Optional { inner, .. } => resolve_cty(inner),
         // `var` carries no annotation; operand inference reads the initializer expression instead.
         Type::Infer(_) => CTy::Other,
     }
@@ -825,10 +829,17 @@ impl<'a> Compiler<'a> {
             }
             Stmt::If {
                 cond,
+                bind,
                 then_block,
                 else_block,
                 span,
-            } => self.compile_if(cond, then_block, else_block.as_deref(), span.line),
+            } => self.compile_if(
+                cond,
+                bind.as_deref(),
+                then_block,
+                else_block.as_deref(),
+                span.line,
+            ),
             Stmt::For {
                 ty,
                 name,
@@ -1186,10 +1197,14 @@ impl<'a> Compiler<'a> {
     fn compile_if(
         &mut self,
         cond: &Expr,
+        bind: Option<&str>,
         then_block: &[Stmt],
         else_block: Option<&[Stmt]>,
         line: u32,
     ) -> Result<(), String> {
+        if let Some(name) = bind {
+            return self.compile_if_let(name, cond, then_block, else_block, line);
+        }
         self.expr(cond)?;
         let else_jump = self.emit_jump(Op::JumpIfFalse(0), line); // pops cond
         self.begin_scope();
@@ -1207,6 +1222,46 @@ impl<'a> Compiler<'a> {
             self.end_scope(line);
         }
         self.patch_jump(end_jump);
+        Ok(())
+    }
+
+    /// `if (var name = cond)` (M3 S2.4). The scrutinee value lands in a scoped local that *is* the
+    /// binding `name` (its `CTy` is the optional's inner type so `name + 1` still specializes); a
+    /// non-consuming null-test (`GetLocal; Const null; Ne`) selects the branch. No new `Op` — the
+    /// scrutinee slot persists across both arms and is popped by the enclosing `end_scope`. The
+    /// checker forbids referencing `name` in the else block, so leaving it registered is harmless.
+    fn compile_if_let(
+        &mut self,
+        name: &str,
+        cond: &Expr,
+        then_block: &[Stmt],
+        else_block: Option<&[Stmt]>,
+        line: u32,
+    ) -> Result<(), String> {
+        self.begin_scope();
+        self.expr(cond)?; // [opt] — this slot becomes the binding `name`
+        let inner_cty = self.ctype(cond).unwrap_or(CTy::Other);
+        let slot = self.add_local(name, inner_cty);
+        self.emit(Op::GetLocal(slot), line); // [opt, opt]
+        self.emit_const(Value::Null, line); // [opt, opt, null]
+        self.emit(Op::Ne, line); // [opt, opt != null]
+        let else_jump = self.emit_jump(Op::JumpIfFalse(0), line); // pops bool → [opt]; jump if null
+        self.begin_scope();
+        for s in then_block {
+            self.stmt(s)?;
+        }
+        self.end_scope(line);
+        let end_jump = self.emit_jump(Op::Jump(0), line);
+        self.patch_jump(else_jump);
+        if let Some(eb) = else_block {
+            self.begin_scope();
+            for s in eb {
+                self.stmt(s)?;
+            }
+            self.end_scope(line);
+        }
+        self.patch_jump(end_jump);
+        self.end_scope(line); // pops the scrutinee slot (`name`) — both arms converge with [opt] live
         Ok(())
     }
 

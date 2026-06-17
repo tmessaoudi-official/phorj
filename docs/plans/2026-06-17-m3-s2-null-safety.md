@@ -31,6 +31,12 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
   set, not the `Value` set. `??`/`?.` use a temp local for the non-consuming null-test (no `Dup` op).
 - [2026-06-17] AGREED: `opt!`/OOB faults are the two transpile-divergent points — excluded by the
   differential harness (fault cases) and documented in `KNOWN_ISSUES.md`, not parity breaks.
+- [2026-06-17] AGREED (Task 4 refinement): `Stmt::If.bind: Option<String>` REUSING `cond` as the
+  scrutinee — NOT the plan's `Option<(String, Box<Expr>)>` (avoids storing the scrutinee twice).
+- [2026-06-17] AGREED (Task 4): `resolve_cty(Type::Optional{inner})` now resolves to the inner's
+  `CTy` (was `Other`), so an if-let binding's `x + 1` specializes; checker-safe because a bare `T?`
+  is never an arithmetic/member/index operand (all narrowing sites produce the inner). No new `Op`:
+  if-let lowers to `GetLocal; Const null; Ne; JumpIfFalse` with the scrutinee slot as the binding.
 
 ---
 
@@ -38,7 +44,9 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
 - [x] Task 1 — foundation (`Value::Null`, `Ty::Optional`/`Ty::Null`, non-null discipline) — `4ab9e36`
 - [x] Task 2 — `??` null-coalesce (scratch-local lowering, no new `Op`) — `35b2b23`
 - [x] Task 3 — `?.` safe access (nullsafe field + method, short-circuit, `E-OPT-USE`) — `f6266b2`
-- [ ] Task 4 — `if (var x = opt)` · Task 5 — `opt!` · Task 6 — `match` over `T?` · Task 7 — example + docs
+- [x] Task 4 — `if (var x = opt)` binding + smart-cast (`bind: Option<String>`, `resolve_cty`
+  optional→inner, no new `Op`, `E-IF-LET-TYPE`, PHP round-trip) — committed below
+- [ ] Task 5 — `opt!` · Task 6 — `match` over `T?` · Task 7 — example + docs
 
 ## File Structure
 
