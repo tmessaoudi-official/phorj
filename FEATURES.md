@@ -37,7 +37,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 |---|---|---|
 | Tree-walking interpreter (reference semantics) | ✅ | `phorge run` |
 | Bytecode compiler + stack VM (byte-identical) | ✅ | `phorge runvm` |
-| Backend benchmark (median-of-N, identity-gated) | ✅ | `phorge bench` |
+| Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phorge bench` |
+| Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phorge disasm` |
 | Phorge → PHP transpiler (runs under real PHP) | ✅ | `phorge transpile` |
 | Type-check / parse / lex inspection | ✅ | `phorge check` / `parse` / `lex` |
 | `--version` / `--help` | ✅ | `phorge -v` / `-h` |

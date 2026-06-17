@@ -43,7 +43,8 @@ limits in `limits.rs`, not Rust's ambient stack, bound recursion (invariant #6).
 | `value.rs` | `Value` + single-sourced arith/compare kernels (both backends) |
 | `diagnostic.rs` | unified `Diagnostic { stage, message, line, col }` |
 | `limits.rs` | recursion/nesting caps + numeric-width policy |
-| `cli.rs` / `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`bench`) + thin dispatcher |
+| `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `bench` |
+| `cli.rs` / `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`) + thin dispatcher |
 
 ## Two `Frame`s — not the same thing
 `vm::Frame` is a reified call record (`{func, ip, slot_base}`) on an explicit frame stack — the

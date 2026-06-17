@@ -89,6 +89,15 @@ for ELF + PE (a prior "skip on PE" attempt was the bug; only the real-binary win
 (stdin) | `-e`/`--eval <code>` (inline) | `--` (literal path). `cli::resolve_source` is the pure,
 tested resolver; built binaries still ignore argv (run their embedded program).
 
+**Profiling & introspection (v0.4.0):** `phorge bench` now reports **memory** (cold-execution
+peak-RSS growth + process `VmHWM`/`VmRSS`) beside its timing, via a std-only **Linux** `/proc`
+sampler (`src/mem.rs` — `/proc/self/status` + `clear_refs`=5 peak reset; non-Linux prints
+"unavailable"). Per-phase/sequential per-backend RSS is *deliberately not* reported — it reads ~0
+after the 101× timing loop warms the allocator (glibc rarely returns freed pages). `phorge disasm
+<source>` dumps the compiled bytecode (per-function listings via `Op` `Debug` + a `_`-fall-through
+annotator, so no second match surface to drift; plus enum/class/method descriptor tables).
+Showcase: `examples/bench/workload.phg` (+ its README), auto byte-identity-gated like every example.
+
 **Docs:** a full OSS doc set landed at v0.4.0 (README rewrite, dual **MIT OR Apache-2.0**, CONTRIBUTING,
 CODE_OF_CONDUCT, SECURITY, ROADMAP, VISION, FEATURES, KNOWN_ISSUES, THIRD-PARTY-NOTICES, CITATION.cff,
 `.github/` templates). See **`ROADMAP.md`** / **`VISION.md`** for the forward plan.
