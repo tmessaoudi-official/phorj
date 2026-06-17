@@ -348,6 +348,14 @@ fn bench_report(src: &str, iters: usize) -> Result<String, String> {
         let prog = parse_checked(src)?;
         let program = compile(&prog).map_err(|e| e.to_string())?;
 
+        // Cold memory probe — measured *first*, before the parity gate and timing loops warm the
+        // allocator. Peak-RSS growth is only meaningful from a cold heap: once glibc has mapped
+        // pages it almost never returns them to the OS, so a post-warmup or sequential
+        // per-backend figure reads ~0 and misleads. One honest cold-run number, plus the process
+        // peak below, is the defensible memory signal (full per-backend attribution would need a
+        // fresh process per backend — out of scope here).
+        let cold_alloc = peak_growth_of(|| interpret(&prog).map_err(|e| e.to_string()))?;
+
         // Output-identity gate: comparing the speed of two backends that *disagree* is
         // meaningless. This is the differential harness's parity contract, enforced here at run
         // time before any timing — if it ever fails, the divergence (not the timing) is the news.
@@ -408,33 +416,24 @@ fn bench_report(src: &str, iters: usize) -> Result<String, String> {
         out.push_str(&verdict);
         out.push('\n');
 
-        // Memory: per-phase peak-RSS growth (Linux only). Measured in its own single-run pass after
-        // timing — peak memory is deterministic, so it needn't share the median loop.
-        let front_mem = peak_growth_of(|| parse_checked(src))?;
-        let comp_mem = peak_growth_of(|| compile(&prog).map_err(|e| e.to_string()))?;
-        let tw_mem = peak_growth_of(|| interpret(&prog).map_err(|e| e.to_string()))?;
-        let vm_mem = peak_growth_of(|| Vm::new(&program).run().map_err(|e| e.to_string()))?;
-
-        out.push_str("\nmemory — peak RSS growth per phase");
-        if front_mem.is_none() {
-            out.push_str(" (unavailable on this platform — requires Linux /proc)\n");
-        } else {
-            out.push('\n');
-            out.push_str(&format!("  parse+check   {}\n", fmt_kb(front_mem)));
-            out.push_str(&format!("  compile       {}\n", fmt_kb(comp_mem)));
-            out.push_str(&format!("  tree-walk run {}\n", fmt_kb(tw_mem)));
-            out.push_str(&format!("  vm run        {}\n", fmt_kb(vm_mem)));
-            out.push_str(&format!(
-                "  process now   {} resident, {} lifetime peak\n",
-                fmt_kb(mem::current_rss_kb()),
-                fmt_kb(mem::peak_rss_kb())
-            ));
-            if let (Some(t), Some(v)) = (tw_mem, vm_mem) {
-                let lighter = if v <= t { "vm" } else { "tree-walk" };
+        // Memory (Linux /proc). The cold-run growth (captured before any warmup) is the workload's
+        // own resident footprint for one execution; the process figures are the bench process's
+        // lifetime high-water mark and current resident set.
+        match cold_alloc {
+            None => out.push_str("\nmemory: unavailable on this platform (requires Linux /proc)\n"),
+            Some(g) => {
+                out.push_str("\nmemory\n");
                 out.push_str(&format!(
-                    "  memory verdict: {lighter} run grew less ({} tree-walk vs {} vm)\n",
-                    fmt_kb(Some(t)),
-                    fmt_kb(Some(v))
+                    "  cold run      +{} RSS  (one tree-walk execution from a cold heap)\n",
+                    fmt_kb(Some(g))
+                ));
+                out.push_str(&format!(
+                    "  process peak  {}  (VmHWM)\n",
+                    fmt_kb(mem::peak_rss_kb())
+                ));
+                out.push_str(&format!(
+                    "  resident now  {}  (VmRSS)\n",
+                    fmt_kb(mem::current_rss_kb())
                 ));
             }
         }
