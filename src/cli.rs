@@ -10,6 +10,7 @@ use crate::checker::check;
 use crate::compiler::compile;
 use crate::interpreter::interpret;
 use crate::lexer::lex;
+use crate::mem;
 use crate::parser::Parser;
 use crate::vm::Vm;
 
@@ -227,6 +228,35 @@ fn fmt_dur(d: Duration) -> String {
     }
 }
 
+/// Peak resident-memory *growth* (KiB) a single run of `f` causes: rewind the kernel high-water
+/// mark, sample the current RSS, run `f` once, then read the new peak and subtract the baseline.
+/// Resetting the mark per phase makes the number baseline-independent, so the tree-walker and VM
+/// stay comparable even though they execute sequentially in one process (and glibc rarely returns
+/// freed pages to the OS, so a lifetime peak would unfairly charge each later phase for the
+/// earlier ones). `None` when `/proc` is unavailable (non-Linux). One run is enough — peak memory
+/// is deterministic, so there's nothing to median. Propagates a faulting program's error.
+fn peak_growth_of<T>(mut f: impl FnMut() -> Result<T, String>) -> Result<Option<u64>, String> {
+    mem::reset_peak_rss();
+    let before = mem::current_rss_kb();
+    f()?;
+    let peak = mem::peak_rss_kb();
+    // `saturating_sub`: if the peak somehow reads below the baseline (sampling race), report 0
+    // growth rather than underflowing.
+    Ok(match (before, peak) {
+        (Some(b), Some(p)) => Some(p.saturating_sub(b)),
+        _ => None,
+    })
+}
+
+/// Render an optional KiB measurement adaptively (`KiB` / `MiB`), or `n/a` when unavailable.
+fn fmt_kb(kb: Option<u64>) -> String {
+    match kb {
+        None => "n/a".to_string(),
+        Some(k) if k < 1024 => format!("{k} KiB"),
+        Some(k) => format!("{:.2} MiB", k as f64 / 1024.0),
+    }
+}
+
 /// The bench engine (separated from [`cmd_bench`] so tests can pass a small `iters`). Runs on the
 /// deep-stack worker like every other pipeline command.
 fn bench_report(src: &str, iters: usize) -> Result<String, String> {
@@ -293,6 +323,37 @@ fn bench_report(src: &str, iters: usize) -> Result<String, String> {
         out.push_str(&format!("  vm run        {}\n\n", fmt_dur(vm)));
         out.push_str(&verdict);
         out.push('\n');
+
+        // Memory: per-phase peak-RSS growth (Linux only). Measured in its own single-run pass after
+        // timing — peak memory is deterministic, so it needn't share the median loop.
+        let front_mem = peak_growth_of(|| parse_checked(src))?;
+        let comp_mem = peak_growth_of(|| compile(&prog).map_err(|e| e.to_string()))?;
+        let tw_mem = peak_growth_of(|| interpret(&prog).map_err(|e| e.to_string()))?;
+        let vm_mem = peak_growth_of(|| Vm::new(&program).run().map_err(|e| e.to_string()))?;
+
+        out.push_str("\nmemory — peak RSS growth per phase");
+        if front_mem.is_none() {
+            out.push_str(" (unavailable on this platform — requires Linux /proc)\n");
+        } else {
+            out.push('\n');
+            out.push_str(&format!("  parse+check   {}\n", fmt_kb(front_mem)));
+            out.push_str(&format!("  compile       {}\n", fmt_kb(comp_mem)));
+            out.push_str(&format!("  tree-walk run {}\n", fmt_kb(tw_mem)));
+            out.push_str(&format!("  vm run        {}\n", fmt_kb(vm_mem)));
+            out.push_str(&format!(
+                "  process now   {} resident, {} lifetime peak\n",
+                fmt_kb(mem::current_rss_kb()),
+                fmt_kb(mem::peak_rss_kb())
+            ));
+            if let (Some(t), Some(v)) = (tw_mem, vm_mem) {
+                let lighter = if v <= t { "vm" } else { "tree-walk" };
+                out.push_str(&format!(
+                    "  memory verdict: {lighter} run grew less ({} tree-walk vs {} vm)\n",
+                    fmt_kb(Some(t)),
+                    fmt_kb(Some(v))
+                ));
+            }
+        }
         Ok(out)
     })
 }
@@ -492,6 +553,16 @@ function main() {
         assert!(out.contains("verdict:"), "{out}");
         // Output is "42\n" = 3 bytes — the report states the byte count it asserted identical.
         assert!(out.contains("3 bytes"), "{out}");
+    }
+
+    #[test]
+    fn bench_reports_a_memory_section() {
+        // Beyond timing, the report carries a memory block. The header is printed unconditionally
+        // (the per-phase numbers are present on Linux, "unavailable" elsewhere), so asserting the
+        // header keeps the test platform-independent.
+        let src = r#"function main() { println("hi"); }"#;
+        let out = bench_report(src, 5).expect("bench");
+        assert!(out.contains("memory"), "{out}");
     }
 
     #[test]
