@@ -27,6 +27,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |
+| `cli/demo.phg` | the **`phorge` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
 
 ## Coverage matrix (the runnable surface)
 
@@ -45,6 +46,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `println(string)` (the only builtin) | every example |
 | Phorge → PHP transpile | `transpile/demo` |
 | standalone executable (`phorge build`) | `build/app` |
+| CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
 
 ## Two sharp edges
 
