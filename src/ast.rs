@@ -16,6 +16,9 @@ pub enum Type {
     },
     /// `T?`
     Optional { inner: Box<Type>, span: Span },
+    /// `var` — placeholder for an inferred local binding type (resolved by the checker from the
+    /// initializer, erased everywhere else). Only valid as a `Stmt::VarDecl` type.
+    Infer(Span),
 }
 
 /// Patterns in `match` arms.

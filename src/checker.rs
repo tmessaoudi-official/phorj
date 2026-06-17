@@ -74,6 +74,12 @@ impl Checker {
             Type::Optional { span, .. } => {
                 self.err(*span, "optional types are not yet supported in M1")
             }
+            // `var` is intercepted in `check_stmt`; reaching here means it was written somewhere it
+            // is not allowed (a parameter, field, or return type).
+            Type::Infer(span) => self.err(
+                *span,
+                "`var` type inference is only valid for a local variable declaration",
+            ),
             Type::Named { name, args, span } => match name.as_str() {
                 "int" => self.no_args(name, args, *span, Ty::Int),
                 "float" => self.no_args(name, args, *span, Ty::Float),
@@ -366,11 +372,22 @@ impl Checker {
                 init,
                 span,
             } => {
-                let declared = self.resolve_type(ty);
                 let actual = self.check_expr(init);
-                if !Ty::assignable(&actual, &declared) {
-                    self.err(*span, format!("expected `{declared}`, found `{actual}`"));
-                }
+                let declared = match ty {
+                    crate::ast::Type::Infer(_) => {
+                        // `var`: the binding takes the initializer's type. If the init itself
+                        // failed to check (`Ty::Error` — e.g. `var x = null;`, rejected at the
+                        // init), propagate the error without emitting a second diagnostic.
+                        actual.clone()
+                    }
+                    _ => {
+                        let declared = self.resolve_type(ty);
+                        if !Ty::assignable(&actual, &declared) {
+                            self.err(*span, format!("expected `{declared}`, found `{actual}`"));
+                        }
+                        declared
+                    }
+                };
                 self.declare(name, declared);
             }
             Stmt::Return { value, span } => {
@@ -975,6 +992,28 @@ mod tests {
     #[test]
     fn empty_program_checks_ok() {
         assert!(errors_of("").is_empty());
+    }
+
+    #[test]
+    fn var_infers_init_type_and_catches_later_misuse() {
+        // `var x = 5` infers int; using it where a string is required is then a type error.
+        let errs = errors_of("function main() { var x = 5; string y = x; }");
+        assert!(
+            errs.iter()
+                .any(|e| e.message.contains("expected `string`, found `int`")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn var_infers_and_well_typed_use_is_clean() {
+        assert!(errors_of("function main() { var x = 5; int y = x; }").is_empty());
+    }
+
+    #[test]
+    fn var_from_null_is_rejected() {
+        // `null` has no inferable element type in M1 (optionals arrive in S2).
+        assert!(!errors_of("function main() { var x = null; }").is_empty());
     }
 
     #[test]

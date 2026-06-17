@@ -768,4 +768,11 @@ function main() {
     fn help_for_unknown_command_falls_back_to_top_level() {
         assert_eq!(help_for("bogus"), help_text());
     }
+
+    #[test]
+    fn var_transpiles_to_plain_php_assignment() {
+        // `var` is erased; PHP locals are untyped, so it emits a bare `$x = …;`.
+        let php = cmd_transpile("function main() { var x = 1; println(\"{x}\"); }").unwrap();
+        assert!(php.contains("$x = 1;"), "{php}");
+    }
 }

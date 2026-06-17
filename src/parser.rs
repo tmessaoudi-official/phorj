@@ -510,8 +510,25 @@ impl Parser {
                 let body = self.parse_block()?;
                 Ok(Stmt::Block(body, sp))
             }
+            TokenKind::Var => self.parse_var_inferred(),
             _ => self.parse_var_decl_or_expr_stmt(),
         }
+    }
+
+    /// `var name = expr;` — the binding type is inferred from `expr` by the checker.
+    fn parse_var_inferred(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::Var, "'var'")?;
+        let name = self.expect_ident("a variable name after 'var'")?;
+        self.expect(&TokenKind::Eq, "'=' after 'var <name>'")?;
+        let init = self.parse_expr()?;
+        self.expect(&TokenKind::Semicolon, "';' after variable declaration")?;
+        Ok(Stmt::VarDecl {
+            ty: Type::Infer(sp),
+            name,
+            init,
+            span: sp,
+        })
     }
 
     /// `{ stmt* }` — consumes both braces, returns the inner statements.

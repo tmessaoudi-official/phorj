@@ -510,6 +510,8 @@ fn resolve_cty(ty: &Type) -> CTy {
             other => CTy::Class(other.to_string()),
         },
         Type::Optional { .. } => CTy::Other,
+        // `var` carries no annotation; operand inference reads the initializer expression instead.
+        Type::Infer(_) => CTy::Other,
     }
 }
 
@@ -713,6 +715,12 @@ impl<'a> Compiler<'a> {
             },
             Expr::Unary { expr, .. } => self.ctype(expr),
             Expr::Binary { lhs, .. } => self.ctype(lhs),
+            // A `match` value's type is its arms' shared type (checker-guaranteed); infer it from
+            // the first arm's body so `var x = match … { … }` specializes like an explicit local.
+            Expr::Match { arms, .. } => match arms.first() {
+                Some(arm) => self.ctype(&arm.body),
+                None => Ok(CTy::Other),
+            },
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }
@@ -736,7 +744,15 @@ impl<'a> Compiler<'a> {
         match s {
             Stmt::VarDecl { ty, name, init, .. } => {
                 self.expr(init)?; // value stays on the stack as the new local's slot
-                self.add_local(name, resolve_cty(ty));
+                                  // `var` carries no annotation — derive the local's `CTy` from the initializer so
+                                  // later arithmetic on it still specializes (AddI/AddF). `ctype` is total over
+                                  // checker-valid initializers here; fall back to `Other` defensively so a `var`
+                                  // never makes a program the interpreter accepts fail to compile (parity spine).
+                let local_ty = match ty {
+                    Type::Infer(_) => self.ctype(init).unwrap_or(CTy::Other),
+                    _ => resolve_cty(ty),
+                };
+                self.add_local(name, local_ty);
                 Ok(())
             }
             Stmt::Expr(e, span) => {

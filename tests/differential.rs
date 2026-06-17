@@ -116,6 +116,44 @@ fn p2_programs_match_between_backends() {
     }
 }
 
+/// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
+/// so both backends must run a `var` program byte-identically.
+#[test]
+fn s0_var_inference_is_byte_identical() {
+    agree(
+        r#"function main() {
+            var x = 21;
+            var s = "n=";
+            println("{s}{x + x}");
+        }"#,
+    );
+}
+
+/// `var` whose initializer is a call result and a `match` value — both must specialize arithmetic
+/// identically (the compiler infers the local's `CTy` from the initializer, not an annotation).
+#[test]
+fn s0_var_inference_from_call_and_match_inits() {
+    agree(
+        r#"function dbl(int n) -> int { return n * 2; }
+        function main() {
+            var a = dbl(10);
+            var b = match a { 20 => 100, n => n };
+            println("{a + b}");
+        }"#,
+    );
+}
+
+/// M3 S0.3 — a `type` alias is compile-time-only (erased); resolving params/returns through it
+/// must not change runtime behavior on either backend.
+#[test]
+fn s0_type_alias_is_byte_identical() {
+    agree(
+        r#"type Count = int;
+        function tally(Count n) -> Count { return n + 1; }
+        function main() { println("{tally(41)}"); }"#,
+    );
+}
+
 /// P3 surface: user function calls, recursion, mutual recursion, void functions, returns in
 /// branches, nested calls, float-returning functions, and calls as statements. Each must run
 /// identically on both backends.
