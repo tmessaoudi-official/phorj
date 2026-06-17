@@ -257,3 +257,37 @@ fn runvm_runtime_error_exits_1() {
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("runtime error"));
 }
+
+#[test]
+fn per_command_help_prints_examples_exit_0() {
+    for cmd in [
+        "run",
+        "runvm",
+        "check",
+        "parse",
+        "lex",
+        "transpile",
+        "disasm",
+        "bench",
+        "build",
+    ] {
+        let out = Command::new(BIN)
+            .args([cmd, "--help"])
+            .output()
+            .expect("spawn phorge");
+        assert!(
+            out.status.success(),
+            "{cmd} --help exit {:?}",
+            out.status.code()
+        );
+        let s = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            s.contains("examples:"),
+            "{cmd} --help missing examples:\n{s}"
+        );
+        assert!(
+            s.contains(cmd),
+            "{cmd} --help missing the command name:\n{s}"
+        );
+    }
+}

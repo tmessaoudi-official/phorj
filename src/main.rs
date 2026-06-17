@@ -48,6 +48,11 @@ fn main() {
             exit(2);
         }
     };
+    // Per-command help: `phorge <cmd> -h|--help` prints command-specific help and exits 0.
+    if args[2..].iter().any(|a| a == "-h" || a == "--help") {
+        print!("{}", cli::help_for(cmd));
+        return;
+    }
     // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C). It
     // consumes an optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra
     // argument is a usage error (exit 2) — never a silent default-named build.

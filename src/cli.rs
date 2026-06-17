@@ -48,6 +48,80 @@ pub fn help_text() -> String {
     )
 }
 
+/// Per-command help: a one-line description, the source/flag forms, and 1–2 worked examples.
+/// An unknown command falls back to the top-level [`help_text`].
+pub fn help_for(cmd: &str) -> String {
+    let body = match cmd {
+        "run" => {
+            "run — interpret the program with the tree-walking interpreter.\n\n\
+                  usage:\n  phorge run <file | - | -e code> [--]\n\n\
+                  examples:\n  \
+                  phorge run hello.phg\n  \
+                  phorge run -e 'function main() { println(\"hi\"); }'\n  \
+                  echo 'function main(){println(\"hi\");}' | phorge run -\n"
+        }
+        "runvm" => {
+            "runvm — run the program on the bytecode VM (byte-identical to `run`).\n\n\
+                    usage:\n  phorge runvm <file | - | -e code>\n\n\
+                    examples:\n  \
+                    phorge runvm hello.phg\n  \
+                    phorge runvm -e 'function main() { println(\"{2 + 2}\"); }'\n"
+        }
+        "check" => {
+            "check — type-check only; print OK or the type errors, run nothing.\n\n\
+                    usage:\n  phorge check <file | - | -e code>\n\n\
+                    examples:\n  \
+                    phorge check src.phg\n"
+        }
+        "parse" => {
+            "parse — print the parsed AST (no type-check).\n\n\
+                    usage:\n  phorge parse <file | - | -e code>\n\n\
+                    examples:\n  \
+                    phorge parse src.phg\n"
+        }
+        "lex" => {
+            "lex — print the token stream with positions.\n\n\
+                  usage:\n  phorge lex <file | - | -e code>\n\n\
+                  examples:\n  \
+                  phorge lex -e 'var x = 1;'\n"
+        }
+        "transpile" => {
+            "transpile — emit idiomatic PHP for the program.\n\n\
+                        usage:\n  phorge transpile <file | - | -e code>\n\n\
+                        examples:\n  \
+                        phorge transpile src.phg\n"
+        }
+        "disasm" => {
+            "disasm — print the compiled bytecode the VM will execute.\n\n\
+                     usage:\n  phorge disasm <file | - | -e code>\n\n\
+                     examples:\n  \
+                     phorge disasm -e 'function main() { int x = 1 + 2; }'\n"
+        }
+        "bench" => {
+            "bench — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\
+                    usage:\n  phorge bench <file | - | -e code>\n\n\
+                    examples:\n  \
+                    phorge bench examples/bench/workload.phg\n"
+        }
+        "build" => {
+            "build — compile to a standalone executable (embeds the program source).\n\n\
+                    usage:\n  phorge build <file> [-o out] [--target triple | --all]\n\n\
+                    examples:\n  \
+                    phorge build app.phg\n  \
+                    phorge build app.phg -o dist/app\n  \
+                    phorge build app.phg --target x86_64-unknown-linux-musl\n"
+        }
+        "explain" => {
+            "explain — print the explanation for a diagnostic code.\n\n\
+                      usage:\n  phorge explain <CODE>\n\n\
+                      examples:\n  \
+                      phorge explain E-UNKNOWN-IDENT\n"
+        }
+        _ => return help_text(),
+    };
+    format!("{}\n{body}", version_line())
+}
+
 /// Where a command reads its program from, resolved from the args after the subcommand.
 #[derive(Debug, PartialEq, Eq)]
 pub enum SourceSpec {
@@ -681,5 +755,17 @@ function main() {
         // The public entry runs the default-N path end to end (smoke test of `cmd_bench`).
         let out = cmd_bench(r#"function main() { println("hi"); }"#).expect("bench");
         assert!(out.starts_with("phorge bench — median of 101"), "{out}");
+    }
+
+    #[test]
+    fn help_for_known_command_has_examples_and_name() {
+        let h = help_for("run");
+        assert!(h.contains("examples:"), "{h}");
+        assert!(h.contains("phorge run"), "{h}");
+    }
+
+    #[test]
+    fn help_for_unknown_command_falls_back_to_top_level() {
+        assert_eq!(help_for("bogus"), help_text());
     }
 }
