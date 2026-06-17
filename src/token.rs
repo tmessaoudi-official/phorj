@@ -51,6 +51,7 @@ pub enum TokenKind {
     Comma,
     Colon,
     Question,
+    QuestionQuestion, // `??` null-coalesce
     Arrow,
     FatArrow,
     Pipe,

@@ -381,6 +381,10 @@ impl Transpiler {
                 }
                 let l = self.emit_expr(lhs)?;
                 let r = self.emit_expr(rhs)?;
+                if matches!(op, BinaryOp::Coalesce) {
+                    // `??` binds loosely in PHP; parenthesize to preserve grouping.
+                    return Ok(format!("({l} ?? {r})"));
+                }
                 Ok(format!("{l} {} {r}", Self::binop(op)))
             }
             Expr::List(items, _) => {
@@ -585,6 +589,8 @@ impl Transpiler {
             Ge => ">=",
             And => "&&",
             Or => "||",
+            // `??` is parenthesized at the call site, so it never reaches `binop()`.
+            Coalesce => unreachable!("Coalesce handled before binop()"),
             Is | Pipe => unreachable!("Is/Pipe handled before binop()"),
         }
     }

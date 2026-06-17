@@ -383,6 +383,15 @@ impl Interp {
                 _ => Ok(Value::Bool(as_bool(&self.eval(rhs)?)?)),
             };
         }
+        if matches!(op, Coalesce) {
+            // `a ?? b`: evaluate `b` only when `a` is null (short-circuit).
+            let l = self.eval(lhs)?;
+            return if matches!(l, Value::Null) {
+                self.eval(rhs)
+            } else {
+                Ok(l)
+            };
+        }
         let l = self.eval(lhs)?;
         let r = self.eval(rhs)?;
         match op {
@@ -392,7 +401,7 @@ impl Interp {
             Is => Ok(Value::Bool(l.eq_val(&r))),
             Lt | Gt | Le | Ge => compare(op, l, r),
             Pipe => rt("the `|>` pipe operator is not yet supported in M1"),
-            And | Or => unreachable!("handled above"),
+            And | Or | Coalesce => unreachable!("handled above"),
         }
     }
 

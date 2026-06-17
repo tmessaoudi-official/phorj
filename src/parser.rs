@@ -114,20 +114,21 @@ impl Parser {
         use TokenKind as T;
         Some(match kind {
             T::Pipe => (1, BinaryOp::Pipe),
-            T::OrOr => (2, BinaryOp::Or),
-            T::AndAnd => (3, BinaryOp::And),
-            T::EqEq => (4, BinaryOp::Eq),
-            T::NotEq => (4, BinaryOp::NotEq),
-            T::Is => (4, BinaryOp::Is),
-            T::Lt => (5, BinaryOp::Lt),
-            T::Gt => (5, BinaryOp::Gt),
-            T::Le => (5, BinaryOp::Le),
-            T::Ge => (5, BinaryOp::Ge),
-            T::Plus => (6, BinaryOp::Add),
-            T::Minus => (6, BinaryOp::Sub),
-            T::Star => (7, BinaryOp::Mul),
-            T::Slash => (7, BinaryOp::Div),
-            T::Percent => (7, BinaryOp::Rem),
+            T::QuestionQuestion => (2, BinaryOp::Coalesce),
+            T::OrOr => (3, BinaryOp::Or),
+            T::AndAnd => (4, BinaryOp::And),
+            T::EqEq => (5, BinaryOp::Eq),
+            T::NotEq => (5, BinaryOp::NotEq),
+            T::Is => (5, BinaryOp::Is),
+            T::Lt => (6, BinaryOp::Lt),
+            T::Gt => (6, BinaryOp::Gt),
+            T::Le => (6, BinaryOp::Le),
+            T::Ge => (6, BinaryOp::Ge),
+            T::Plus => (7, BinaryOp::Add),
+            T::Minus => (7, BinaryOp::Sub),
+            T::Star => (8, BinaryOp::Mul),
+            T::Slash => (8, BinaryOp::Div),
+            T::Percent => (8, BinaryOp::Rem),
             _ => return None,
         })
     }
@@ -980,6 +981,7 @@ mod tests {
                     BinaryOp::And => "&&",
                     BinaryOp::Or => "||",
                     BinaryOp::Pipe => "|>",
+                    BinaryOp::Coalesce => "??",
                 };
                 format!("({o} {} {})", sexpr(lhs), sexpr(rhs))
             }
@@ -1074,6 +1076,9 @@ mod tests {
         // pipe is the lowest: `a + b |> f` == `(a + b) |> f`
         assert_eq!(sexpr(&expr("a + b |> f")), "(|> (+ a b) f)");
         assert_eq!(sexpr(&expr("a is b")), "(is a b)");
+        assert_eq!(sexpr(&expr("a ?? b")), "(?? a b)");
+        // `??` binds looser than `||`: `a || b ?? c` is `(a || b) ?? c`
+        assert_eq!(sexpr(&expr("a || b ?? c")), "(?? (|| a b) c)");
     }
 
     #[test]

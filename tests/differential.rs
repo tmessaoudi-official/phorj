@@ -548,3 +548,15 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
     assert_eq!(cmd_run(src).as_deref(), Ok("optionals ok\n"));
     agree(src); // run ≡ runvm
 }
+
+#[test]
+fn s2_coalesce_is_byte_identical() {
+    // `??`: a null lhs falls through to the default; a present value is kept.
+    let src = "function main() { int? x = null; println(\"{x ?? 7}\"); int? y = 9; println(\"{y ?? 0}\"); }";
+    assert_eq!(cmd_run(src).as_deref(), Ok("7\n9\n"));
+    agree(src);
+    // Short-circuit: the default (a printing call) must not run when the lhs is non-null.
+    let sc = "function side() -> int { println(\"SIDE\"); return 0; } function main() { int? y = 9; println(\"{y ?? side()}\"); }";
+    assert_eq!(cmd_run(sc).as_deref(), Ok("9\n"));
+    agree(sc);
+}

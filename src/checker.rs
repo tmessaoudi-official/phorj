@@ -668,6 +668,30 @@ impl Checker {
                 Ty::Bool
             }
             BinaryOp::Is => Ty::Bool,
+            BinaryOp::Coalesce => {
+                match &l {
+                    Ty::Error => Ty::Error,
+                    Ty::Null => r.clone(), // `null ?? b` is always `b`
+                    Ty::Optional(inner) => {
+                        let inner = (**inner).clone();
+                        if Ty::assignable(&r, &inner) {
+                            inner // `a ?? b` yields the unwrapped `T` when the default is a `T`
+                        } else {
+                            if !Ty::assignable(&r, &Ty::Optional(Box::new(inner.clone()))) {
+                                self.err(
+                                span,
+                                format!("`??` default of type `{r}` is not compatible with `{inner}?`"),
+                            );
+                            }
+                            Ty::Optional(Box::new(inner)) // both sides optional → stays `T?`
+                        }
+                    }
+                    other => self.err(
+                        span,
+                        format!("left operand of `??` must be optional, found `{other}`"),
+                    ),
+                }
+            }
             BinaryOp::Pipe => self.err(span, "the pipe operator `|>` is not yet supported in M1"),
         }
     }
@@ -1375,6 +1399,15 @@ mod tests {
             e2.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
             "got {e2:?}"
         );
+    }
+
+    #[test]
+    fn coalesce_typing() {
+        // `T? ?? T` and `null ?? T` both yield the non-optional `T`.
+        assert!(errors_of("function main() { int? x = null; int y = x ?? 3; }").is_empty());
+        assert!(errors_of("function main() { int y = null ?? 3; }").is_empty());
+        // `??` on a non-optional left operand is a misuse.
+        assert!(!errors_of("function main() { int a = 1; int y = a ?? 3; }").is_empty());
     }
 
     #[test]

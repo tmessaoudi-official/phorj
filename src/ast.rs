@@ -81,6 +81,8 @@ pub enum BinaryOp {
     And,
     Or,
     Pipe,
+    /// `??` null-coalesce (M3 S2).
+    Coalesce,
 }
 
 /// Expressions.

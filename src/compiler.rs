@@ -1000,6 +1000,24 @@ impl<'a> Compiler<'a> {
                 self.patch_jump(l_end);
                 return Ok(());
             }
+            Coalesce => {
+                // `a ?? b`: keep `a` unless it is null, without re-evaluating it. Stash `a` in a
+                // scratch local (the `$match`-scrutinee trick), test it against `null`; if null,
+                // evaluate `b` and overwrite the slot with it. No new `Op` (decision S2-OPS).
+                self.expr(lhs)?; // [a] — a lands in the scratch slot
+                let slot = self.add_local("$coalesce", CTy::Other);
+                self.emit(Op::GetLocal(slot), line); // [a, a]
+                self.emit_const(Value::Null, line); // [a, a, null]
+                self.emit(Op::Eq, line); // [a, bool]
+                let keep = self.emit_jump(Op::JumpIfFalse(0), line); // [a]; jump if a != null
+                let h_merge = self.height;
+                self.expr(rhs)?; // [a, b]
+                self.emit(Op::SetLocal(slot), line); // [b] — overwrite the slot with b
+                self.patch_jump(keep); // keep-path arrives with [a]; both leave one value at `slot`
+                self.height = h_merge;
+                self.locals.pop(); // unregister the scratch; the result stays on the stack
+                return Ok(());
+            }
             _ => {}
         }
         // Strict ops: evaluate both, then emit.
@@ -1048,7 +1066,7 @@ impl<'a> Compiler<'a> {
                 );
             }
             Pipe => return Err("the `|>` pipe operator is not supported (M1 surface)".into()),
-            And | Or => unreachable!("handled above"),
+            And | Or | Coalesce => unreachable!("handled above"),
         }
         Ok(())
     }
