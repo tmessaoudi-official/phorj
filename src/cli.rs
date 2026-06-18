@@ -248,6 +248,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              flags every `!` so you can prefer a total alternative — `??` (default value), `?.`\n\
              (safe access), or `if (var x = opt) { … }` (narrow) — where null is a real possibility.\n"
         }
+        "E-LAMBDA-THIS" => {
+            "E-LAMBDA-THIS — a lambda references `this`.\n\n\
+             A lambda cannot capture `this` directly yet: capturing the receiver would extend its\n\
+             lifetime past the method call in ways the value-capture model does not yet model.\n\
+             Workaround: bind `var self = this;` before the lambda and capture `self` instead.\n"
+        }
         "E-VENDOR-MISSING" => {
             "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\
              Dependencies resolve offline from the committed `vendor/` tree — Phorge never fetches on\n\
@@ -276,7 +282,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS)"
         )
     })
 }
@@ -1157,6 +1163,16 @@ function main() { console.println("hi"); }"#);
         assert!(np.contains("package main"), "{np}");
         let rp = explain_text("E-RESERVED-PACKAGE").expect("E-RESERVED-PACKAGE has an explanation");
         assert!(rp.contains("standard library"), "{rp}");
+    }
+
+    #[test]
+    fn explain_covers_lambda_this_code() {
+        // The M3 S3 lambda `this`-rejection diagnostic is self-documenting via `phg explain`.
+        let body = explain_text("E-LAMBDA-THIS").expect("E-LAMBDA-THIS has an explanation");
+        assert!(
+            body.contains("`this`") && body.contains("var self = this"),
+            "{body}"
+        );
     }
 
     #[test]

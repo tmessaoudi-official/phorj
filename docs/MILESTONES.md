@@ -108,6 +108,21 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
 - `examples/bench/workload.phg` (+ `examples/bench/README.md`) is the profiling showcase, auto
   byte-identity-gated like every example.
 
+## M3 — Language enrichment — 🔨 IN PROGRESS
+
+Slice-by-slice language growth under the transpile contract **Phorge : PHP :: TypeScript : JavaScript**
+(every feature maps to idiomatic PHP; PHP-absent features are compile-time-only and erased). Shipped so
+far: **S0** (developer experience — `var` inference, `type` aliases, sharp caret diagnostics + stable
+codes, `phg explain`), **S1** (ergonomics — indexing `xs[i]`, integer ranges `a..b`/`a..=b`, expression
+`if`), **S2** (null-safety — `T?`, `??`, `?.`, checked `opt!`, if-let binding, `match` over `T?`, the
+warning channel), and **S3 Track A** (lambdas — expression + statement body — first-class function
+values, and the pipe operator `|>`). Cross-cutting: stdlib **Track B** Waves 1–2
+(`core.console`/`math`/`text`/`file`, namespaced natives) and **Track D** (`phg bench --vs-php`). All
+slices are byte-identical on `run`/`runvm` and round-trip through real PHP. The live slice-by-slice
+status + forward plan live in `CLAUDE.md` (Active plan) and `CHANGELOG.md`; design specs are under
+`docs/specs/2026-06-17-m3-*` and `docs/specs/2026-06-18-m3-*`. Modules/packages and web capabilities were
+promoted to their own milestones (M5 — ✅ closed; M6 — in progress).
+
 ## M2.5+ — Ecosystem — 🔲 PLANNED
 
 Full ecosystem strategy + ROI-ranked roadmap frozen in

@@ -151,7 +151,7 @@ All line references are [Verified: read 2026-06-18].
 - **F15 — `resolve_type`** (checker.rs:159–166) maps `Type::Function { params, ret }` →
   `Ty::Function(resolved_params, Box::new(resolved_ret))`, recursing through nested function types.
   This makes a higher-order parameter (`(int) -> int f`), a function-returning return type, and a
-  `var f: (int) -> int` annotation all resolve.
+  `(int) -> int f` typed local declaration all resolve.
 - **F17 — `expand_aliases`** (checker.rs:1421, the recursive `Type` walker at 1440–1455) gains a
   `Type::Function { params, ret }` arm that recursively expands aliases inside the params and return.
   Required so `type Mapper = (int) -> int;` and a function type containing an alias (`(MyAlias) ->
@@ -232,7 +232,7 @@ for named calls — including `x |> namedFn` (lowered to `namedFn(x)`), which st
 **`CTy`** (compiler.rs:29–56): add `CTy::Fn { params: Vec<CTy>, ret: Box<CTy> }`. Two derivation paths
 must both produce it (F16): `ctype(Expr::Lambda)` → `CTy::Fn` and `ctype` of a bare named-fn ident →
 `CTy::Fn` (the **inferred** path); **`resolve_cty(Type::Function)` → `CTy::Fn`** (compiler.rs:514–528,
-the **annotated** path, for `var f: (int)->int = …` / a function-typed param). Then `ctype(Call)` where
+the **annotated** path, for `(int)->int f = …` / a function-typed param). Then `ctype(Call)` where
 the callee is `CTy::Fn` → `*ret`, so `f(3) + 1` specializes to `AddI` (invariant #9).
 
 ### 4.7 Interpreter — `src/interpreter.rs`

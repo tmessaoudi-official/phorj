@@ -286,9 +286,26 @@ run/runvm/**real PHP**. **Two transpile gotchas found + in KNOWN_ISSUES:** (1) `
 CLI binary was renamed `phorge` → `phg`** (`70ea75d`; package/lib/`PHORGE_*`/`.phorge` section/`phorge.toml`
 stay `phorge` — ripgrep model). See [[binary-renamed-to-phg]].
 
-**Deferred:** **Track A** (S3 lambdas + pipe `|>`), which also unblocks `core.list`/`core.json`
-(`map`/`filter`/`reduce`) and the M6 router's middleware/closure-route layer — sequenced after the web spike
-per the developer's "spike now, before Track A" choice. **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`)
+**M3 S3 Track A — lambdas + first-class functions + pipe `|>` — COMPLETE**
+(`docs/specs/2026-06-18-m3-s3-lambdas-pipe-design.md`, plan `docs/plans/2026-06-18-m3-s3-lambdas-pipe.md`;
+subagent-driven, 8 tasks T1–T8 + a first-class-fn parity fix). Landed: `Ty::Function`/`Type::Function`,
+`Expr::Lambda` + `LambdaBody::{Expr,Block}`, `ast::free_vars`, `Value::Closure`, `CTy::Fn`, and **two new
+VM ops** `Op::MakeClosure`/`Op::CallValue` (extend the three coupled matches). **Expression-body**
+`fn(int x) => e` (return inferred) and **statement-body** `fn(int x) -> int { … }` (explicit `-> T`
+required; `E-LAMBDA-THIS` rejects a lambda that touches `this`); capture enclosing locals **by value**
+(immutable+acyclic heap ⇒ no GC). **First-class function values**: a bare named fn is a value
+(`twice(3, dbl)`) — on the VM a zero-capture `MakeClosure`, in PHP a first-class callable `dbl(...)`.
+**Pipe `|>`** is `x |> f ≡ f(x)`, left-assoc, **lowered to a `Call` in the parser** (no new Op; the four
+dead `BinaryOp::Pipe` stubs retired to `unreachable!`). Transpile targets: arrow fn / `function(){}use()`
+/ first-class callable / `(fn…)(args)` for a lambda-literal call target. Byte-identical run≡runvm +
+real-PHP; `examples/guide/lambdas-pipe.phg`. **Gotcha (caught by the example, fixed):** a named-fn ref as
+a *value* and a lambda *literal* in call position each diverged on one backend until fixed — the VM now
+compiles a named-fn ref to `MakeClosure` and the `stack_effect` `MakeClosure` discriminator range-checks
+this function's lambda indices (so a forward-referenced named fn doesn't panic); the transpiler emits
+`(<lambda>)(args)`. Deferrals (KNOWN_ISSUES): this-capture, cross-package fn *values*, block-body return
+inference, function-type variance, `core.list` map/filter/reduce. **Deferred next:** the rest of Track A's
+sugar where applicable + `core.list`/`core.json` (need `List<T>`-generic natives) and the M6 router's
+middleware/closure-route layer. **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`)
 — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing

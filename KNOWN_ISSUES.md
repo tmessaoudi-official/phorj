@@ -11,12 +11,37 @@ These are designed but not in the current surface; using them produces a clean c
 not a panic:
 
 - `Map` / `Set` / tuples
-- The pipe operator (`|>`) and the `is` operator
+- The `is` operator
 - Exceptions (try / catch / throw)
 - Mutation (reassignment and field writes) — Phorge is immutable-by-default today
 - Method/function overloading, traits, operator overloading, property accessors
 - Sized integers / `decimal`, `const`/`final` enforcement
 - `match` outside return / variable-declaration-initializer position
+
+## Lambdas & first-class functions (M3 S3) — deferred refinements
+
+Lambdas (expression + statement body), higher-order functions, first-class named-function
+references, and the pipe operator `|>` all ship in M3 S3 and are byte-identical on `run`/`runvm`
+and round-trip through real PHP. These refinements are deliberately deferred (each rejected cleanly
+or simply unavailable, never a crash):
+
+- **A lambda cannot reference `this`** — rejected with `E-LAMBDA-THIS` (`phg explain E-LAMBDA-THIS`).
+  Workaround: `var self = this;` before the lambda, then capture `self`.
+- **Lambdas and first-class function references are supported in `package main` (and single-file
+  programs), not yet inside library (non-`main`) packages.** The M5 loader's name-mangling pass
+  rewrites *call sites*, but not a bare function reference used as a *value* nor the body of a lambda,
+  so a same-package call inside a lambda body — or a bare named-fn value — declared in a dotted
+  library package is not rewritten to its mangled target. In practice this is rejected cleanly
+  (`E-UNKNOWN-IDENT`); avoid lambdas / function values in library packages this slice (the guide
+  example and every `package main` program are unaffected). Loader-resolving lambda bodies and
+  fn-value references is a follow-up. Qualified / cross-package function *values* (passing
+  `acme.util.compute` itself, vs. *calling* it) are likewise deferred — call them directly.
+- **Statement-body lambdas require an explicit `-> T`** — the return type of a block-body lambda is
+  not inferred (expression-body lambdas infer it from the expression). This is by design this slice.
+- **Function-type assignability is exact structural equality** — no parameter/return variance
+  (`(int) -> int` is not assignable to `(int) -> int?` etc.).
+- **`core.list` higher-order helpers (`map`/`filter`/`reduce`) are not yet available** — they await
+  the `List<T>`-generic native signatures; lambdas can already be passed to *user* functions today.
 
 ## Git dependencies (M5 S3)
 

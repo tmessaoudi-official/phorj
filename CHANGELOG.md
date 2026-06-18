@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M3 S3 (Track A) — lambdas, first-class functions, and the pipe operator
+
+- **Lambdas / closures.** `fn(int x) => x * 2` (expression body, return type inferred) and
+  `fn(int x) -> int { … }` (statement body, explicit `-> T` required, `E-LAMBDA-THIS` if it touches
+  `this`). Free enclosing locals are captured **by value** (the heap is immutable + acyclic, so no GC
+  is needed). New surfaces: `Ty::Function` / `Type::Function`, `Expr::Lambda` + `LambdaBody`,
+  `ast::free_vars`, `Value::Closure`, `CTy::Fn`, and two VM ops `Op::MakeClosure` / `Op::CallValue`.
+- **First-class function values.** A bare named function is a value — `twice(3, dbl)` passes `dbl`
+  itself; the function type is `(int) -> int`. On the VM a named-fn reference compiles to a
+  zero-capture `MakeClosure`; the transpiler emits a PHP first-class callable `dbl(...)`.
+- **Pipe operator `|>`.** `x |> f ≡ f(x)`, left-associative, **lowered to a plain call in the
+  parser** (no new `Op`, no new backend semantics; the four dead `BinaryOp::Pipe` stubs are retired
+  to `unreachable!`). `5 |> dbl |> inc` is `inc(dbl(5))`; `1 + 2 |> dbl` is `dbl(1 + 2)`.
+- **Transpile targets** (Phorge : PHP :: TypeScript : JavaScript): expression lambda → arrow fn
+  `fn($x) => …`; statement lambda → `function($x) use ($cap) { … }` (by-value `use`); named-fn ref →
+  first-class callable; a lambda literal in call position → `(fn(…) => …)(args)`.
+- All byte-identical on `run`/`runvm` and round-tripped through real PHP 8.6. Example:
+  `examples/guide/lambdas-pipe.phg`. Deferred refinements (this-capture, cross-package value refs,
+  block-body return inference, function-type variance, `core.list` map/filter/reduce) are recorded in
+  `KNOWN_ISSUES.md`.
+
 ### M6 slices W2–W4 — routing, the serve runtime, and `phg serve`
 
 - **W2 — static router (pure Phorge, no new feature).** A data-driven `List<Route>` table is scanned

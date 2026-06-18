@@ -27,9 +27,11 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Indexing `xs[i]` | ✅ | bounds-checked; out-of-range → clean runtime fault, never a panic |
 | Integer ranges `a..b` / `a..=b` | ✅ | materialize to `List<int>`; mainly `for (int i in 0..n)` |
 | Expression `if` | ✅ | `var x = if (c) { 1 } else { 2 };` (value position; `else` required) |
+| Lambdas / closures | ✅ | `fn(int x) => x * 2` (expression body) and `fn(int x) -> int { … }` (statement body, `-> T` required); capture enclosing locals by value |
+| First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) -> int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
 | `Map` / `Set` / tuples | 🔲 M3 | |
 | Null safety / optionals (`T?`) | ✅ | `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; non-optional `T` is never null (compile-time) |
-| Pipe operator `\|>` | 🔲 M3 | |
+| Pipe operator `\|>` | ✅ | `x \|> f ≡ f(x)`; left-associative, lowered to a call in the parser; transpiles to a plain PHP call |
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |
