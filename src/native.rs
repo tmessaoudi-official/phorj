@@ -184,6 +184,166 @@ fn math_natives() -> Vec<NativeFn> {
     ]
 }
 
+// ---- core.text ----------------------------------------------------------------------------------
+// String natives, all concrete-typed. Each erases to a PHP string builtin (D-L9). ASCII-oriented to
+// stay byte-identical with PHP: `len` is the *byte* length (PHP `strlen`), and `upper`/`lower` are
+// ASCII-case (PHP `strtoupper`/`strtolower`), so multi-byte text could differ between the Rust
+// backends and PHP — examples use ASCII. The run↔runvm spine is always byte-identical (both Rust).
+
+fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Int(s.len() as i64)),
+        _ => Err("text.len expects (string)".into()),
+    }
+}
+fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase())),
+        _ => Err("text.upper expects (string)".into()),
+    }
+}
+fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase())),
+        _ => Err("text.lower expects (string)".into()),
+    }
+}
+fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.trim().to_string())),
+        _ => Err("text.trim expects (string)".into()),
+    }
+}
+fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(sub)] => Ok(Value::Bool(s.contains(sub.as_str()))),
+        _ => Err("text.contains expects (string, string)".into()),
+    }
+}
+fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(sep)] => {
+            let parts: Vec<Value> = s
+                .split(sep.as_str())
+                .map(|p| Value::Str(p.into()))
+                .collect();
+            Ok(Value::List(std::rc::Rc::new(parts)))
+        }
+        _ => Err("text.split expects (string, string)".into()),
+    }
+}
+fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(items), Value::Str(sep)] => {
+            let mut parts: Vec<String> = Vec::with_capacity(items.len());
+            for it in items.iter() {
+                match it {
+                    Value::Str(s) => parts.push(s.clone()),
+                    other => {
+                        return Err(format!(
+                            "text.join expects List<string>, found element of type {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::Str(parts.join(sep)))
+        }
+        _ => Err("text.join expects (List<string>, string)".into()),
+    }
+}
+fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(from), Value::Str(to)] => {
+            Ok(Value::Str(s.replace(from.as_str(), to.as_str())))
+        }
+        _ => Err("text.replace expects (string, string, string)".into()),
+    }
+}
+
+/// The `core.text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
+/// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
+/// reorder accordingly so the erasure matches Phorge's `(subject, …)` argument order.
+fn text_natives() -> Vec<NativeFn> {
+    let s = || Ty::String;
+    vec![
+        NativeFn {
+            module: "core.text",
+            name: "len",
+            params: vec![s()],
+            ret: Ty::Int,
+            eval: text_len,
+            php: |a| format!("strlen({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "upper",
+            params: vec![s()],
+            ret: Ty::String,
+            eval: text_upper,
+            php: |a| format!("strtoupper({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "lower",
+            params: vec![s()],
+            ret: Ty::String,
+            eval: text_lower,
+            php: |a| format!("strtolower({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "trim",
+            params: vec![s()],
+            ret: Ty::String,
+            eval: text_trim,
+            php: |a| format!("trim({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "contains",
+            params: vec![s(), s()],
+            ret: Ty::Bool,
+            eval: text_contains,
+            php: |a| format!("str_contains({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "split",
+            params: vec![s(), s()],
+            ret: Ty::List(Box::new(Ty::String)),
+            eval: text_split,
+            // PHP `explode(separator, string)` — separator first.
+            php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "join",
+            params: vec![Ty::List(Box::new(Ty::String)), s()],
+            ret: Ty::String,
+            eval: text_join,
+            // PHP `implode(glue, array)` — glue first.
+            php: |a| format!("implode({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "replace",
+            params: vec![s(), s(), s()],
+            ret: Ty::String,
+            eval: text_replace,
+            // PHP `str_replace(search, replace, subject)`.
+            php: |a| {
+                format!(
+                    "str_replace({}, {}, {})",
+                    parg(a, 1),
+                    parg(a, 2),
+                    parg(a, 0)
+                )
+            },
+        },
+    ]
+}
+
 /// Construct the native table once. Order is load-bearing: [`CONSOLE_PRINTLN`] pins slot 0; every
 /// other native is resolved by `(module, name)` (or leaf+name) at compile time, so appended order is
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
@@ -202,6 +362,7 @@ fn build() -> Vec<NativeFn> {
         },
     }];
     registry.extend(math_natives());
+    registry.extend(text_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
@@ -339,6 +500,89 @@ mod tests {
         assert_eq!(
             (registry()[index_of("core.math", "min").unwrap()].php)(&["$a".into(), "$b".into()]),
             "min($a, $b)"
+        );
+    }
+
+    #[test]
+    fn text_natives_eval_and_emit() {
+        let mut o = String::new();
+        assert!(matches!(
+            text_len(&[Value::Str("hello".into())], &mut o),
+            Ok(Value::Int(5))
+        ));
+        assert!(
+            matches!(text_upper(&[Value::Str("aB".into())], &mut o), Ok(Value::Str(s)) if s == "AB")
+        );
+        assert!(
+            matches!(text_lower(&[Value::Str("aB".into())], &mut o), Ok(Value::Str(s)) if s == "ab")
+        );
+        assert!(
+            matches!(text_trim(&[Value::Str("  hi  ".into())], &mut o), Ok(Value::Str(s)) if s == "hi")
+        );
+        assert!(matches!(
+            text_contains(
+                &[Value::Str("hello".into()), Value::Str("ell".into())],
+                &mut o
+            ),
+            Ok(Value::Bool(true))
+        ));
+        assert!(matches!(
+            text_contains(
+                &[Value::Str("hello".into()), Value::Str("z".into())],
+                &mut o
+            ),
+            Ok(Value::Bool(false))
+        ));
+        assert!(
+            matches!(text_replace(&[Value::Str("a-b-c".into()), Value::Str("-".into()), Value::Str("_".into())], &mut o), Ok(Value::Str(s)) if s == "a_b_c")
+        );
+        // split → List<string>, then join back is the inverse
+        let parts = text_split(
+            &[Value::Str("a,b,c".into()), Value::Str(",".into())],
+            &mut o,
+        )
+        .unwrap();
+        match &parts {
+            Value::List(xs) => assert_eq!(xs.len(), 3),
+            other => panic!("split returned {other:?}"),
+        }
+        let joined = text_join(&[parts, Value::Str("|".into())], &mut o).unwrap();
+        assert!(matches!(joined, Value::Str(s) if s == "a|b|c"));
+        // join rejects a non-string element cleanly
+        assert!(text_join(
+            &[
+                Value::List(std::rc::Rc::new(vec![Value::Int(1)])),
+                Value::Str(",".into())
+            ],
+            &mut o
+        )
+        .is_err());
+        // PHP arg-order reordering (the sharp edge): explode/implode separator-first, str_replace search-first
+        assert_eq!(
+            (registry()[index_of("core.text", "split").unwrap()].php)(&[
+                "$s".into(),
+                "\",\"".into()
+            ]),
+            "explode(\",\", $s)"
+        );
+        assert_eq!(
+            (registry()[index_of("core.text", "join").unwrap()].php)(&[
+                "$xs".into(),
+                "\"-\"".into()
+            ]),
+            "implode(\"-\", $xs)"
+        );
+        assert_eq!(
+            (registry()[index_of("core.text", "replace").unwrap()].php)(&[
+                "$s".into(),
+                "$a".into(),
+                "$b".into()
+            ]),
+            "str_replace($a, $b, $s)"
+        );
+        assert_eq!(
+            index_of_by_leaf("text", "len"),
+            index_of("core.text", "len")
         );
     }
 
