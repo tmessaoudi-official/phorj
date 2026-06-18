@@ -650,14 +650,12 @@ impl<'a> Compiler<'a> {
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
             Op::Return | Op::Fault(_) => 0,
             // MakeClosure(idx): pops `n_captures` capture values, pushes one `Value::Closure`.
-            // Lambda sub-functions start at base_fn_idx+1; named-fn MakeClosure refs have 0 captures.
+            // Lambdas compiled by THIS function occupy [base+1, base+1+lambda_n_captures.len()).
+            // Any other index is a named-function reference (never a closure → 0 captures).
             Op::MakeClosure(idx) => {
-                let n = if *idx > self.base_fn_idx {
-                    // lambda index within this function's extra_functions vec: (idx - base - 1)
-                    self.lambda_n_captures
-                        .get(idx - self.base_fn_idx - 1)
-                        .copied()
-                        .expect("lambda n_captures entry must exist for a lambda-index MakeClosure")
+                let lo = self.base_fn_idx + 1;
+                let n = if *idx >= lo && *idx < lo + self.lambda_n_captures.len() {
+                    self.lambda_n_captures[idx - lo]
                 } else {
                     0 // named function ref — no captures
                 };
@@ -960,6 +958,11 @@ impl<'a> Compiler<'a> {
                     let idx = self.field_name_index(name)?;
                     self.emit(Op::GetLocal(this), sp.line);
                     self.emit(Op::GetField(idx), sp.line);
+                } else if let Some(idx) = self.fns.get(name).map(|m| m.index) {
+                    // Bare named-function reference in value position → a zero-capture closure.
+                    // Read the index from the immutable `self.fns` borrow into a local before
+                    // calling `self.emit` (which needs `&mut self`).
+                    self.emit(Op::MakeClosure(idx), sp.line);
                 } else {
                     return Err(format!("undefined variable `{name}`"));
                 }

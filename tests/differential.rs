@@ -966,3 +966,18 @@ fn pipe_agrees() {
     // precedence: `1 + 2 |> dbl` == dbl(1+2) == 6
     agree("import core.console; function dbl(int x)->int{return x*2;} function main(){ console.println(\"{1 + 2 |> dbl}\"); }");
 }
+
+#[test]
+fn named_fn_ref_as_value_agrees() {
+    // named fn defined BEFORE use
+    agree("import core.console; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} function main(){ console.println(\"{twice(2, dbl)}\"); }"); // 8
+                                                                                                                                                                                           // named fn defined AFTER use (forward reference)
+    agree("import core.console; function apply(int x,(int)->int f)->int{return f(x);} function callsLater(int n)->int{ return apply(n, bump); } function bump(int x)->int{return x+5;} function main(){ console.println(\"{callsLater(10)}\"); }");
+    // 15
+}
+
+#[test]
+fn transpiles_lambda_literal_call_target() {
+    let php = transpile_ok("package main; import core.console; function main(){ console.println(\"{3 |> fn(int v) => v + 100}\"); }");
+    assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
+}

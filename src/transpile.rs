@@ -709,6 +709,11 @@ impl Transpiler {
         if let Expr::Member { .. } = callee {
             return self.emit_member_call(callee, args);
         }
+        if let Expr::Lambda { .. } = callee {
+            let f = self.emit_expr(callee)?;
+            let argv = self.emit_args(args)?;
+            return Ok(format!("({f})({argv})"));
+        }
         Err("transpile error: unsupported call target".into())
     }
 
