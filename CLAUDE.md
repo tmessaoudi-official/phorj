@@ -258,9 +258,26 @@ in `phorge.lock` are the real values for the committed source. **Deferred (KNOWN
 transitive deps (a dep's own `[require]`); `phorge build` stays single-file (won't merge `vendor/`).
 421 tests green.
 
-**NEXT: Track A** (S3 lambdas + pipe `|>`), which also unblocks the deferred `core.list`/`core.json`
-(`map`/`filter`/`reduce`). **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`) —
-`docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
+**M6 WEB CAPABILITIES — design-locked + spike in progress** (research
+`docs/plans/2026-06-18-m6-web-capabilities-research.md`, design `docs/specs/2026-06-18-m6-web-design.md`).
+4 parallel research agents (raw in `docs/research/m6/raw/`) + a 30/8 3C gate converged on: **the portable
+unit is `handle(Request) -> Response` at the VALUE level** (PSR-7/15 — the socket/superglobal bridge is
+runtime glue, NOT transpiled 1:1; only `handle` round-trips); **Shape A** (pure-Phorge `Request`/`Response`
+classes) is the ONE public API ("do both?" resolved to one-API/evolving-engine — a native header map is a
+later invisible optimization, not a 2nd API); **single-threaded is FORCED** by the `Rc`-shared heap (`Value`
+isn't `Send`), real concurrency = M6 green-threads under an unchanged contract; socket quarantined in a future
+`src/serve.rs` behind a `Transport` trait, tested outside `differential.rs`. Build order (tasks #16–#20):
+**W0 bytes → W1 handler(Shape A) → W2 static router → W3 `src/serve.rs`+Transport → W4 `phorge serve` CLI +
+PHP front-controller + docs**. **M6 W0 COMPLETE** (`446bcb9`, `docs/specs/2026-06-18-m6-w0-bytes-design.md`):
+`bytes` primitive + `b"…"` literals (`\xHH`) + `core.bytes` interop (`from_string`/`to_string`→`string?`/`len`
+byte-count/`concat`/`slice` clamped) — **no new `Op`** (literal via `Op::Const`, interop via `Op::CallNative`,
+`==` via `Op::Eq`); erases to PHP `string`; `examples/guide/bytes.phg` byte-identical on run/runvm/**real PHP**.
+W1 (handler model) is next.
+
+**Deferred:** **Track A** (S3 lambdas + pipe `|>`), which also unblocks `core.list`/`core.json`
+(`map`/`filter`/`reduce`) and the M6 router's middleware/closure-route layer — sequenced after the web spike
+per the developer's "spike now, before Track A" choice. **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`)
+— `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and
