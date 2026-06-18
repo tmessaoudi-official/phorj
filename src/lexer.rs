@@ -299,6 +299,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
     use TokenKind::*;
     Some(match s {
         "function" => Function,
+        "fn" => Fn,
         "class" => Class,
         "enum" => Enum,
         "constructor" => Constructor,
@@ -628,6 +629,14 @@ mod tests {
         assert_eq!(kinds("is"), vec![Is, Eof]);
         // still an ident when part of a longer word
         assert_eq!(kinds("island"), vec![Ident("island".into()), Eof]);
+    }
+
+    #[test]
+    fn fn_is_a_reserved_keyword() {
+        use TokenKind::*;
+        assert_eq!(kinds("fn"), vec![Fn, Eof]);
+        // contextual sanity: `fn (` still lexes as the keyword then a paren
+        assert_eq!(kinds("fn ("), vec![Fn, LParen, Eof]);
     }
 
     #[test]
