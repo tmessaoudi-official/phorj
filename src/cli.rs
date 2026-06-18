@@ -37,6 +37,7 @@ pub fn help_text() -> String {
          bench      benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
          vendor     fetch [require] git deps into an offline vendor/ (writes phorge.lock)\n  \
+         serve      serve the program over HTTP (calls respond(bytes) -> bytes per request)\n  \
          explain    explain a diagnostic code (e.g. phg explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
@@ -133,6 +134,18 @@ pub fn help_for(cmd: &str) -> String {
                      examples:\n  \
                      phg vendor\n  \
                      phg vendor path/to/project\n"
+        }
+        "serve" => {
+            "serve — serve the program over HTTP/1.1 on a single thread.\n\n\
+                    The program must define `respond(bytes) -> bytes`: the runtime frames each\n\
+                    incoming request, calls `respond` (where the program's own `parse_request` /\n\
+                    router / `serialize_response` live — all pure Phorge), and writes the bytes back\n\
+                    (`Connection: close`, one request per connection). A request fault degrades to a\n\
+                    500; a malformed request is the program's concern (→ a 400 from `respond`).\n\n\
+                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080]\n\n\
+                    examples:\n  \
+                    phg serve examples/web/server.phg\n  \
+                    phg serve app.phg --addr 0.0.0.0:3000\n"
         }
         _ => return help_text(),
     };
@@ -433,6 +446,18 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
     on_deep_stack(|| {
         let checked = check_and_expand(prog, diag_src)?;
         crate::transpile::emit(&checked)
+    })
+}
+
+/// `serve` on an already-loaded program (M6 W4): type-check, then run the blocking HTTP serve loop
+/// ([`crate::serve::serve_tcp`]) until the process is killed. Runs on the 256 MB deep-stack worker so
+/// the interpreter's `MAX_CALL_DEPTH` guard has the same headroom `run`/`runvm` rely on (the
+/// per-request `call_named` walks the native stack). Returns only on a bind/socket error.
+pub fn serve_program(prog: &Program, diag_src: &str, addr: &str) -> Result<String, String> {
+    on_deep_stack(|| {
+        let checked = check_and_expand(prog, diag_src)?;
+        crate::serve::serve_tcp(&checked, addr).map_err(|e| format!("serve: {e}"))?;
+        Ok(String::new())
     })
 }
 

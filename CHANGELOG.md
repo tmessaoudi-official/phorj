@@ -6,6 +6,38 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M6 slices W2–W4 — routing, the serve runtime, and `phg serve`
+
+- **W2 — static router (pure Phorge, no new feature).** A data-driven `List<Route>` table is scanned
+  linearly for an exact `(method, path)` match, yielding a `Handler` enum tag dispatched by an
+  exhaustive `match` to named handler functions; a method-sensitive 404 fallback. Routing is fully
+  expressible with today's enums + classes + lists + `match`, so it is byte-identical on `run`/`runvm`
+  and round-trips through real PHP. Example: `examples/web/router.phg`.
+- **W3 — the serve runtime (`src/serve.rs`), the determinism quarantine.** The one module holding
+  sockets + wall-clock non-determinism, deliberately **outside** `tests/differential.rs`. A `Transport`
+  trait (`recv`/`send`) seams the loop from the world; `TcpTransport` is the real single-threaded
+  socket (`Connection: close`, CRLFCRLF + `Content-Length` framing capped at 8 MiB, EV-7 no-panic).
+  `serve()` routes each raw buffer through the program's single entry `respond(bytes) -> bytes`,
+  degrading a request fault to a 500. **Single-threaded by force** — the `Rc`-shared heap makes runtime
+  values non-`Send`, so a thread pool is impossible; true concurrency awaits M6 green-threads under the
+  unchanged contract.
+- **`interpreter::call_named(program, name, args)`** — invoke a named top-level function with a
+  constructed argument (reuses `run_call`). The interpreter is the reference backend and `run ≡ runvm`
+  guarantees the VM would agree, so a VM `call_named` (no return-value capture today) is deferred. No
+  new `Op`, no new `Value` variant.
+- **W4 — `phg serve <file> [--addr 127.0.0.1:8080]`.** Loads the program project-aware (like `run`),
+  type-checks it, then runs the blocking HTTP serve loop on the 256 MB deep-stack worker (so the
+  interpreter's `MAX_CALL_DEPTH` guard has the same headroom `run`/`runvm` rely on). Per-command
+  `--help` with worked examples. Built binaries still ignore argv.
+- **PHP bridge (`php -S`).** `examples/web/server.php` is a hand-written front-controller that builds a
+  `Request` from PHP superglobals and calls the *transpiled* `handle(Request) -> Response` — the same
+  value unit `phg serve` calls natively. The superglobal↔`Request` adapter is runtime glue, not
+  transpiled (mirroring `src/serve.rs`). Documented end-to-end in `examples/web/README.md`.
+- **Example** `examples/web/server.phg` — the full served app (W1 parse/serialize + W2 routing + the
+  `respond` entry + `handle`); its `main()` exercises `respond` on canned `b"…"` requests so it stays
+  byte-identical on `run`/`runvm` + real PHP. **Conformance** for the socket path lives in
+  `tests/serve.rs` (an in-memory `FixtureTransport`, outside the byte-identity spine).
+
 ### M6 slice W1 — the HTTP handler model (`handle(Request) -> Response`, pure Phorge)
 
 - **The portable handler contract** — `Request`/`Response` are ordinary Phorge classes and

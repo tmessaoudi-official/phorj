@@ -35,6 +35,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `cli/demo.phg` | the **`phg` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
 | `web/handler.phg` | the **M6 W1 HTTP handler model** — `Request`/`Response` classes, `parse_request`/`serialize_response` in pure Phorge, `handle(Request) -> Response`; `bytes` bodies, `req.header(name)` lookup, `bytes.find` + `text.split_once`. No socket yet (that's W3's `phg serve`) |
 | `web/router.phg` | the **M6 W2 static router** — a data-driven `List<Route>` table, linear exact-match `(method, path)` scan → a `Handler` enum tag, dispatched by exhaustive `match` to named handler functions; method-sensitive 404 fallback. Pure Phorge (no new feature); path params + middleware deferred (Track A / generics) |
+| `web/server.phg` | the **M6 W4 served app** — W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes` that **`phg serve`** runs over a real socket. `web/server.php` is the **`php -S`** front-controller bridge (both call the same `handle(Request) -> Response`) — see `web/README.md` |
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
 | `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
 
@@ -60,6 +61,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `core.bytes`: `find` (→ `int?`); `core.text`: `split_once` (→ `List<string>`) | `web/handler` |
 | HTTP handler model: `Request`/`Response`, `parse_request`/`serialize_response`, `handle()` | `web/handler` |
 | static HTTP router: `List<Route>` table, exact `(method, path)` match → `Handler` enum + exhaustive dispatch | `web/router` |
+| HTTP serve runtime: `phg serve` (native socket) + `php -S` front-controller, one `respond(bytes) -> bytes` entry | `web/server` |
 | Phorge → PHP transpile | `transpile/demo` |
 | standalone executable (`phg build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |

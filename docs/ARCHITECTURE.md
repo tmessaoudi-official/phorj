@@ -45,7 +45,8 @@ limits in `limits.rs`, not Rust's ambient stack, bound recursion (invariant #6).
 | `diagnostic.rs` | unified `Diagnostic { stage, message, line, col }` |
 | `limits.rs` | recursion/nesting caps + numeric-width policy |
 | `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `bench` |
-| `cli.rs` / `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`) + thin dispatcher |
+| `serve.rs` | M6 HTTP serve runtime — `Transport` seam + `TcpTransport`; the determinism quarantine (outside `tests/differential.rs`, covered by `tests/serve.rs`) |
+| `cli.rs` / `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
 
 ## Two `Frame`s — not the same thing
 `vm::Frame` is a reified call record (`{func, ip, slot_base}`) on an explicit frame stack — the

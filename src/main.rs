@@ -1,5 +1,5 @@
-//! Phorge CLI: `phg <run|runvm|check|parse|lex|transpile|disasm|bench> <file>`. Thin dispatcher
-//! over the testable `phorge::cli` module.
+//! Phorge CLI: `phg <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|serve|explain>
+//! <file>`. Thin dispatcher over the testable `phorge::cli` module.
 #![forbid(unsafe_code)]
 
 use std::process::exit;
@@ -7,7 +7,7 @@ use std::process::exit;
 use phorge::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|explain> \
+    "usage: phg <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|serve|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -42,7 +42,7 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "disasm" | "bench"
-            | "build" | "vendor" | "explain"),
+            | "build" | "vendor" | "serve" | "explain"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -155,6 +155,54 @@ fn main() {
             cli::cmd_build(file, &src, out)
         };
         match res {
+            Ok(text) => {
+                print!("{text}");
+                return;
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        }
+    }
+    // `serve <file> [--addr ADDR]` runs the blocking HTTP server. The program is loaded
+    // project-aware (like `run`) and must define `respond(bytes) -> bytes`. The loop runs until the
+    // process is killed; only a bind/socket error returns (exit 1). Default addr 127.0.0.1:8080.
+    if cmd == "serve" {
+        let mut file: Option<&str> = None;
+        let mut addr = "127.0.0.1:8080";
+        let mut i = 2;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--addr" => {
+                    addr = args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("{USAGE}");
+                        exit(2);
+                    });
+                    i += 2;
+                }
+                a if !a.starts_with('-') && file.is_none() => {
+                    file = Some(a);
+                    i += 1;
+                }
+                _ => {
+                    eprintln!("{USAGE}");
+                    exit(2);
+                }
+            }
+        }
+        let file = file.unwrap_or_else(|| {
+            eprintln!("usage: phg serve <file> [--addr 127.0.0.1:8080]");
+            exit(2);
+        });
+        let unit = match loader::load(std::path::Path::new(file)) {
+            Ok(u) => u,
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        };
+        match cli::serve_program(&unit.program, &unit.diag_src, addr) {
             Ok(text) => {
                 print!("{text}");
                 return;
