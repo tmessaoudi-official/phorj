@@ -382,6 +382,60 @@ impl<'a> Vm<'a> {
                     slot_base,
                 });
             }
+
+            // --- M3 S3: lambda closures ---
+
+            // Pop `functions[idx].n_captures` capture values from the stack and build a
+            // `Value::Closure(ClosureData::Byte { func: idx, captures })`.
+            Op::MakeClosure(idx) => {
+                let n_captures = self.program.functions[idx].n_captures;
+                let captures = self.split_off(n_captures);
+                self.stack
+                    .push(Value::Closure(Rc::new(crate::value::ClosureData::Byte {
+                        func: idx,
+                        captures,
+                    })));
+            }
+
+            // Call a first-class closure value. Stack before: `[.. closure arg0 arg1 ..]`.
+            // The new frame layout is `[caps.., arg0, arg1, ..]` — captures are prepended
+            // so `GetLocal(0)` is the first capture and `GetLocal(n_captures)` is the first arg,
+            // matching the frame layout the compiler emits inside the lambda body.
+            Op::CallValue(argc) => {
+                if self.frames.len() >= MAX_CALL_DEPTH {
+                    return Err("stack overflow".to_string());
+                }
+                // Pop the `argc` args (in source order: last pushed = last arg).
+                let args = self.split_off(argc);
+                // Pop the closure itself (below the args on the stack before split_off).
+                let closure = self.pop();
+                let (func_idx, captures) = match closure {
+                    Value::Closure(cd) => match cd.as_ref().clone() {
+                        crate::value::ClosureData::Byte { func, captures } => (func, captures),
+                        _ => return Err("expected a bytecode closure".to_string()),
+                    },
+                    v => return Err(format!("cannot call {} as a function", v.type_name())),
+                };
+                // Verify arity: the function expects `n_captures + n_params` args in total;
+                // the caller supplies `argc` args (the captures are prepended by CallValue).
+                let func_arity = self.program.functions[func_idx].arity;
+                let n_captures = self.program.functions[func_idx].n_captures;
+                let n_params = func_arity - n_captures;
+                if argc != n_params {
+                    return Err(format!(
+                        "wrong number of arguments: expected {n_params}, got {argc}"
+                    ));
+                }
+                // Push captures then args as the new frame's locals window.
+                let slot_base = self.stack.len();
+                self.stack.extend(captures);
+                self.stack.extend(args);
+                self.frames.push(Frame {
+                    func: func_idx,
+                    ip: 0,
+                    slot_base,
+                });
+            }
         }
         Ok(Flow::Next)
     }
@@ -514,6 +568,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk,
             }],
             main: 0,
@@ -732,11 +787,13 @@ mod tests {
                 Function {
                     name: "main".into(),
                     arity: 0,
+                    n_captures: 0,
                     chunk: m,
                 },
                 Function {
                     name: "f".into(),
                     arity: 1,
+                    n_captures: 0,
                     chunk: f,
                 },
             ],
@@ -771,6 +828,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -800,6 +858,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -840,6 +899,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -868,6 +928,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,

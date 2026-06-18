@@ -609,4 +609,80 @@ mod tests {
             _ => panic!("expected Function item"),
         }
     }
+
+    // --- F1: free_vars unit tests (M3 S3 Task 4) ---
+
+    /// Build a bare `Expr::Ident` (no span needed beyond a dummy one).
+    fn ident(name: &str) -> Expr {
+        Expr::Ident(name.to_string(), sp())
+    }
+
+    /// Build a `Param` with a dummy int type.
+    fn int_param(name: &str) -> Param {
+        Param {
+            ty: Type::Named {
+                name: "int".into(),
+                args: vec![],
+                span: sp(),
+            },
+            name: name.to_string(),
+            span: sp(),
+        }
+    }
+
+    #[test]
+    fn free_vars_no_captures() {
+        // `fn(int x) => x` — `x` is a param, no free vars.
+        let body = LambdaBody::Expr(Box::new(ident("x")));
+        assert_eq!(free_vars(&[int_param("x")], &body), Vec::<String>::new());
+    }
+
+    #[test]
+    fn free_vars_simple_capture() {
+        // `fn(int x) => x + a` — `a` is free.
+        let body = LambdaBody::Expr(Box::new(Expr::Binary {
+            op: BinaryOp::Add,
+            lhs: Box::new(ident("x")),
+            rhs: Box::new(ident("a")),
+            span: sp(),
+        }));
+        assert_eq!(free_vars(&[int_param("x")], &body), vec!["a".to_string()]);
+    }
+
+    #[test]
+    fn free_vars_two_captures_sorted() {
+        // `fn(int x) => x + a + b` — `a` and `b` are free; result is sorted.
+        let inner = Expr::Binary {
+            op: BinaryOp::Add,
+            lhs: Box::new(ident("x")),
+            rhs: Box::new(ident("a")),
+            span: sp(),
+        };
+        let body = LambdaBody::Expr(Box::new(Expr::Binary {
+            op: BinaryOp::Add,
+            lhs: Box::new(inner),
+            rhs: Box::new(ident("b")),
+            span: sp(),
+        }));
+        let got = free_vars(&[int_param("x")], &body);
+        assert_eq!(got, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn free_vars_inner_var_not_captured() {
+        // `fn(int x) { var y = x; return y; }` — `y` is bound inside, `x` is a param.
+        let body = LambdaBody::Block(vec![
+            Stmt::VarDecl {
+                ty: Type::Infer(sp()),
+                name: "y".to_string(),
+                init: ident("x"),
+                span: sp(),
+            },
+            Stmt::Return {
+                value: Some(ident("y")),
+                span: sp(),
+            },
+        ]);
+        assert_eq!(free_vars(&[int_param("x")], &body), Vec::<String>::new());
+    }
 }

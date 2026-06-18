@@ -16,8 +16,8 @@
 //! M1 surface. Enums, instances, and lists are value-native `Value` (no heap; P4-1).
 
 use crate::ast::{
-    BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, MatchArm, Modifier,
-    Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+    free_vars, BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, LambdaBody,
+    MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
 use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, FaultMsg, Function, Op};
 use crate::diagnostic::Diagnostic;
@@ -103,6 +103,15 @@ struct Compiler<'a> {
     /// Function arities, indexed parallel to `BytecodeProgram.functions` — lets `stack_effect`
     /// account for `Op::Call` (which pops `arity` args and pushes one result).
     arities: &'a [usize],
+    /// Lambda sub-functions accumulated while compiling this function's body. Drained into the
+    /// program's top-level `functions` array after the enclosing function is compiled.
+    extra_functions: Vec<Function>,
+    /// The table index of the *first* function in `extra_functions` (= `program.functions.len()`
+    /// at the time this compiler was created). Lambda indices are `>= base_fn_idx`.
+    base_fn_idx: usize,
+    /// `n_captures` for each lambda in `extra_functions` (parallel array, same index).
+    /// `stack_effect(MakeClosure(idx))` reads `lambda_n_captures[idx - base_fn_idx]`.
+    lambda_n_captures: Vec<usize>,
     /// Variant name → its descriptor metadata (construction + pattern dispatch).
     variants: &'a HashMap<String, VariantMeta>,
     /// The shared enum-descriptor table — `stack_effect` reads `MakeEnum`'s payload arity from it.
@@ -294,6 +303,9 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     let empty_fields: HashMap<String, CTy> = HashMap::new();
     let mut functions = Vec::with_capacity(next_idx);
     for f in &order {
+        // Lambda sub-functions compiled inside this body will be appended starting at
+        // `functions.len()` (the current length, before any extras are pushed).
+        let base = functions.len();
         let mut c = Compiler::new(
             &fns,
             &arities,
@@ -305,6 +317,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &empty_fields,
             &class_field_ctys,
             &method_rets,
+            base,
         );
         for p in &f.params {
             c.add_local(&p.name, resolve_cty(&p.ty));
@@ -319,11 +332,15 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         functions.push(Function {
             name: f.name.clone(),
             arity: f.params.len(),
+            n_captures: 0, // named free functions are never constructed as closures
             chunk: c.chunk,
         });
+        // Drain any lambda sub-functions emitted during this body's compilation.
+        functions.extend(c.extra_functions);
     }
     for (ci, cd) in class_decls.iter().enumerate() {
-        functions.push(compile_constructor(
+        let base = functions.len();
+        let (f, extras) = compile_constructor(
             cd,
             ci,
             &fns,
@@ -336,11 +353,15 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &class_field_ctys[&cd.name],
             &class_field_ctys,
             &method_rets,
-        )?);
+            base,
+        )?;
+        functions.push(f);
+        functions.extend(extras);
     }
     for (ci, f) in &methods_to_compile {
         let class_name = &class_decls[*ci].name;
-        functions.push(compile_method(
+        let base = functions.len();
+        let (func, extras) = compile_method(
             class_name,
             f,
             &fns,
@@ -353,7 +374,10 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &class_field_ctys[class_name],
             &class_field_ctys,
             &method_rets,
-        )?);
+            base,
+        )?;
+        functions.push(func);
+        functions.extend(extras);
     }
 
     Ok(BytecodeProgram {
@@ -408,7 +432,8 @@ fn compile_constructor<'a>(
     field_tags: &'a HashMap<String, CTy>,
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
-) -> Result<Function, String> {
+    base_fn_idx: usize,
+) -> Result<(Function, Vec<Function>), String> {
     let (params, body) = ctor_parts(c);
     let line = c.span.line;
     let mut comp = Compiler::new(
@@ -422,6 +447,7 @@ fn compile_constructor<'a>(
         field_tags,
         class_field_ctys,
         method_rets,
+        base_fn_idx,
     );
     comp.cur_class = Some(c.name.clone()); // `this` resolves to this class (ctype)
     for p in params {
@@ -450,11 +476,15 @@ fn compile_constructor<'a>(
     }
     comp.emit(Op::GetLocal(inst_slot), line);
     comp.emit(Op::Return, line);
-    Ok(Function {
-        name: format!("{}::new", c.name),
-        arity: params.len(),
-        chunk: comp.chunk,
-    })
+    Ok((
+        Function {
+            name: format!("{}::new", c.name),
+            arity: params.len(),
+            n_captures: 0, // constructors are never closures
+            chunk: comp.chunk,
+        },
+        comp.extra_functions,
+    ))
 }
 
 /// Compile one instance method as a function (decision P4-6). Layout: slot 0 is the receiver
@@ -475,7 +505,8 @@ fn compile_method<'a>(
     field_tags: &'a HashMap<String, CTy>,
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
-) -> Result<Function, String> {
+    base_fn_idx: usize,
+) -> Result<(Function, Vec<Function>), String> {
     let mut comp = Compiler::new(
         fns,
         arities,
@@ -487,6 +518,7 @@ fn compile_method<'a>(
         field_tags,
         class_field_ctys,
         method_rets,
+        base_fn_idx,
     );
     comp.cur_class = Some(class_name.to_string()); // `this` resolves to this class (ctype)
     comp.add_local("$this", CTy::Other); // slot 0 = receiver
@@ -501,11 +533,15 @@ fn compile_method<'a>(
     }
     comp.emit_const(Value::Unit, last_line);
     comp.emit(Op::Return, last_line);
-    Ok(Function {
-        name: format!("{class_name}::{}", f.name),
-        arity: 1 + f.params.len(),
-        chunk: comp.chunk,
-    })
+    Ok((
+        Function {
+            name: format!("{class_name}::{}", f.name),
+            arity: 1 + f.params.len(),
+            n_captures: 0, // methods are never closures
+            chunk: comp.chunk,
+        },
+        comp.extra_functions,
+    ))
 }
 
 /// Resolve a declared type annotation into the compiler's class-aware `CTy` (M2 Wave 4), derived
@@ -555,6 +591,7 @@ impl<'a> Compiler<'a> {
         field_tags: &'a HashMap<String, CTy>,
         class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
         method_rets: &'a HashMap<(String, String), CTy>,
+        base_fn_idx: usize,
     ) -> Self {
         Compiler {
             chunk: Chunk::new(),
@@ -562,6 +599,9 @@ impl<'a> Compiler<'a> {
             scope_depth: 0,
             fns,
             arities,
+            extra_functions: Vec::new(),
+            base_fn_idx,
+            lambda_n_captures: Vec::new(),
             variants,
             enum_descs,
             classes,
@@ -609,6 +649,22 @@ impl<'a> Compiler<'a> {
             Op::CallMethod(_, argc) => -(*argc as isize),
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
             Op::Return | Op::Fault(_) => 0,
+            // MakeClosure(idx): pops `n_captures` capture values, pushes one `Value::Closure`.
+            // Lambda sub-functions start at base_fn_idx+1; named-fn MakeClosure refs have 0 captures.
+            Op::MakeClosure(idx) => {
+                let n = if *idx > self.base_fn_idx {
+                    // lambda index within this function's extra_functions vec: (idx - base - 1)
+                    self.lambda_n_captures
+                        .get(idx - self.base_fn_idx - 1)
+                        .copied()
+                        .unwrap_or(0)
+                } else {
+                    0 // named function ref — no captures
+                };
+                1 - n as isize
+            }
+            // CallValue(argc): pops `argc` args + 1 closure, pushes 1 result → 1 - argc.
+            Op::CallValue(argc) => 1 - *argc as isize,
         }
     }
 
@@ -738,6 +794,12 @@ impl<'a> Compiler<'a> {
                         Ok(CTy::Class(name.clone())) // a constructor returns its instance
                     } else if self.variants.contains_key(name) {
                         Ok(CTy::Other) // an enum value: not numeric, not a class we track fields of
+                    } else if let Some(slot) = self.resolve_local(name) {
+                        // A function-value local (lambda): the call result is the lambda's ret type.
+                        match &self.locals[slot].ty {
+                            CTy::Fn { ret, .. } => Ok(*ret.clone()),
+                            _ => Err(format!("cannot infer numeric type of {e:?}")),
+                        }
                     } else {
                         Err(format!("cannot infer numeric type of {e:?}"))
                     }
@@ -770,10 +832,11 @@ impl<'a> Compiler<'a> {
             // Both `if` branches share a type (checker-guaranteed); infer it from the then-branch so
             // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
             Expr::If { then_expr, .. } => self.ctype(then_expr),
-            // A lambda is a function value — not a numeric operand; VM support lands in Task 4.
-            Expr::Lambda { .. } => Ok(CTy::Fn {
-                params: Vec::new(),
-                ret: Box::new(CTy::Other),
+            // A lambda's compile-time type reflects its declared params and return type so that
+            // a `var f = fn(int x) => x + 1` local later resolves calls on `f` to `CallValue`.
+            Expr::Lambda { params, ret, .. } => Ok(CTy::Fn {
+                params: params.iter().map(|p| resolve_cty(&p.ty)).collect(),
+                ret: Box::new(ret.as_ref().map_or(CTy::Other, resolve_cty)),
             }),
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
@@ -991,15 +1054,12 @@ impl<'a> Compiler<'a> {
                 self.expr(else_expr)?;
                 self.patch_jump(end_j);
             }
-            // Lambda VM support lands in Task 4; the compiler does not yet lower lambdas.
-            // The checker prevents a lambda from reaching `runvm` via a `agree()` test that
-            // would require the VM to handle it — no such test exists until Task 4.
-            Expr::Lambda { span, .. } => {
-                return Err(format!(
-                    "lambda expressions are not yet supported by the VM (M3 S3 Task 4) [line {}]",
-                    span.line
-                ));
-            }
+            Expr::Lambda {
+                params,
+                body,
+                ret,
+                span,
+            } => self.compile_lambda(params, body, ret.as_ref(), span.line)?,
         }
         Ok(())
     }
@@ -1141,6 +1201,40 @@ impl<'a> Compiler<'a> {
                 self.emit(Op::Call(meta.index), line);
                 return Ok(());
             }
+            // A local variable with a function type (lambda or named-fn ref): push the closure
+            // first (by its local slot), then the args, then dispatch with `CallValue`.
+            if let Some(slot) = self.resolve_local(name) {
+                if matches!(self.locals[slot].ty, CTy::Fn { .. }) {
+                    self.emit(Op::GetLocal(slot), line); // push the closure value
+                    for a in args {
+                        self.expr(a)?;
+                    }
+                    self.emit(Op::CallValue(args.len()), line);
+                    return Ok(());
+                }
+            }
+            // A match-arm binding with a function type (lambda passed as an argument).
+            if let Some((slot, path)) = self.resolve_binding(name) {
+                if matches!(
+                    self.match_bindings
+                        .iter()
+                        .rev()
+                        .find(|b| b.name == *name)
+                        .map(|b| &b.ty),
+                    Some(CTy::Fn { .. })
+                ) {
+                    // Re-extract the closure from its binding path.
+                    self.emit(Op::GetLocal(slot), line);
+                    for i in path {
+                        self.emit(Op::GetEnumField(i), line);
+                    }
+                    for a in args {
+                        self.expr(a)?;
+                    }
+                    self.emit(Op::CallValue(args.len()), line);
+                    return Ok(());
+                }
+            }
             // An enum variant constructor: `Variant(args)` (or a bare `Variant`, args empty).
             // The checker has already verified arity, so push the payload and tag it (P4-3).
             if let Some(meta) = self.variants.get(name) {
@@ -1257,6 +1351,119 @@ impl<'a> Compiler<'a> {
         let ok = self.emit_jump(Op::JumpIfFalse(0), line); // [opt]; non-null → keep, skip the fault
         self.emit(Op::Fault(FaultMsg::ForceUnwrapNull), line); // null → clean fault (terminal)
         self.patch_jump(ok);
+        Ok(())
+    }
+
+    /// Compile a `fn(params) => body` expression-body lambda (M3 S3 Task 4).
+    ///
+    /// Layout:
+    ///   - Compute the lambda's free variables (sorted, deterministic — invariant #8).
+    ///   - Filter out names that resolve to top-level functions (not captures).
+    ///   - For each capture: emit `GetLocal(slot)` to push it onto the stack.
+    ///   - Build a sub-`Function` with layout `[captures.., params..]`.
+    ///     * The sub-compiler's locals start with the captures (in free-var order),
+    ///       then the declared params — matching the frame layout `CallValue` sets up.
+    ///   - Append the sub-`Function` to `self.extra_functions` and record its `n_captures`.
+    ///   - Emit `Op::MakeClosure(fn_idx)` which pops the captures and pushes a `Value::Closure`.
+    fn compile_lambda(
+        &mut self,
+        params: &[Param],
+        body: &LambdaBody,
+        _ret: Option<&Type>,
+        line: u32,
+    ) -> Result<(), String> {
+        // 1. Compute free variables of the lambda body.
+        let all_free = free_vars(params, body);
+        // 2. Filter to only variables that resolve to a local in the *enclosing* scope
+        //    (names that are top-level functions are resolved statically at call time and
+        //    don't need to be captured — `compile_call` handles them via `Op::Call`).
+        let captures: Vec<(usize, String)> = all_free
+            .into_iter()
+            .filter_map(|name| {
+                // Only capture locals; top-level functions, variants, and classes are not.
+                self.resolve_local(&name)
+                    .filter(|_| !self.fns.contains_key(&name))
+                    .map(|slot| (slot, name))
+            })
+            .collect();
+        let n_captures = captures.len();
+
+        // 3. Build the sub-function's index in the global table.
+        //    The enclosing function occupies `base_fn_idx`; lambdas follow it starting at
+        //    `base_fn_idx + 1`.  Each successive lambda shifts by one, hence `+ 1 + len`.
+        let fn_idx = self.base_fn_idx + 1 + self.extra_functions.len();
+
+        // 4. Build a sub-compiler for the lambda body.
+        //    The sub-compiler's `base_fn_idx` is one past the lambda itself, so any nested
+        //    lambdas inside the body get indices starting at `fn_idx + 1`.
+        let sub_base = fn_idx + 1;
+        let empty_fields: HashMap<String, CTy> = HashMap::new();
+        // A lambda body cannot reference `this` or bare fields (checker enforces E-LAMBDA-THIS),
+        // so we create the sub-compiler without field scope or a class context.
+        let mut sub = Compiler::new(
+            self.fns,
+            self.arities,
+            self.variants,
+            self.enum_descs,
+            self.classes,
+            self.class_descs,
+            self.names_index,
+            &empty_fields,
+            self.class_field_ctys,
+            self.method_rets,
+            sub_base,
+        );
+
+        // 5. Seed the sub-compiler's locals: captures first, then params.
+        //    Frame layout expected by `Op::CallValue`: [caps.., args..]
+        for (_, cap_name) in &captures {
+            // The capture's type comes from the enclosing scope's local.
+            let slot = self
+                .resolve_local(cap_name)
+                .expect("capture must resolve in enclosing scope");
+            let ty = self.locals[slot].ty.clone();
+            sub.add_local(cap_name, ty);
+        }
+        for p in params {
+            sub.add_local(&p.name, resolve_cty(&p.ty));
+        }
+        sub.height = sub.locals.len();
+
+        // 6. Compile the body. Expression-body: evaluate + explicit Return.
+        match body {
+            LambdaBody::Expr(e) => {
+                sub.expr(e)?;
+                sub.emit(Op::Return, line);
+            }
+            LambdaBody::Block(stmts) => {
+                for s in stmts {
+                    sub.stmt(s)?;
+                }
+                sub.emit_const(Value::Unit, line);
+                sub.emit(Op::Return, line);
+            }
+        }
+
+        // 7. Collect any nested lambdas compiled inside the sub-compiler.
+        let mut nested_extras = sub.extra_functions;
+
+        // 8. Build the sub-function and append it to our own extra_functions.
+        let lambda_fn = Function {
+            name: format!("<lambda@{line}>"),
+            arity: n_captures + params.len(),
+            n_captures,
+            chunk: sub.chunk,
+        };
+        self.extra_functions.push(lambda_fn);
+        self.lambda_n_captures.push(n_captures);
+        // Drain nested extras: their indices follow this lambda in the table.
+        self.extra_functions.append(&mut nested_extras);
+
+        // 9. Push capture values onto the stack (enclosing scope), then emit MakeClosure.
+        for (slot, _) in &captures {
+            self.emit(Op::GetLocal(*slot), line);
+        }
+        self.emit(Op::MakeClosure(fn_idx), line);
         Ok(())
     }
 

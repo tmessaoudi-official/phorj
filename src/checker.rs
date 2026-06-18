@@ -985,7 +985,17 @@ impl Checker {
     ) -> Ty {
         use crate::ast::Expr;
         match callee {
-            Expr::Ident(name, _) => self.check_named_call(name, args, span),
+            Expr::Ident(name, _) => {
+                // If the name is a local (or a `match`-arm binding) with function type, treat it
+                // as a function-value call rather than a named-function call — the latter only
+                // looks in `self.funcs` (top-level declarations) and would report "unknown
+                // function `name`" for a lambda-typed local (M3 S3 Task 4).
+                if let Some(Ty::Function(param_tys, ret_ty)) = self.lookup(name) {
+                    self.check_args("<lambda>", &param_tys, args, span);
+                    return *ret_ty;
+                }
+                self.check_named_call(name, args, span)
+            }
             Expr::Member {
                 object, name, safe, ..
             } => {

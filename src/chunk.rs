@@ -161,6 +161,16 @@ pub enum Op {
     /// (decision P4-6). Method existence is checker-enforced; the resolution-miss fault is a
     /// defensive backstop (byte-identical to the interpreter).
     CallMethod(usize, usize),
+    /// Build a `Value::Closure` from `functions[idx]`: pop the top `functions[idx].n_captures`
+    /// values (captures, in sorted order — invariant #8), then push the closure. For a named
+    /// function reference (0 captures), nothing is popped. (M3 S3, Task 4.)
+    MakeClosure(usize),
+    /// Call a first-class function value: pop `argc` args (source order, top is the last),
+    /// pop the `Value::Closure` beneath them, push captures then args into the new frame's slot
+    /// window (layout `[caps.., args..]` mirrors the sub-compiler's `[caps, params]` ordering),
+    /// and open a frame. Carries no static table index, so — like `GetEnumField` — it needs no
+    /// `validate` arm. (M3 S3, Task 4.)
+    CallValue(usize),
 }
 
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
@@ -209,10 +219,16 @@ impl Chunk {
 
 /// A compiled function: name, parameter count, and its own bytecode chunk. Each function
 /// owns its chunk so its jump targets and constant pool are self-contained (decision P3-1).
+/// `n_captures` is the number of captured values that `Op::MakeClosure` pops from the enclosing
+/// frame before constructing the closure; it is 0 for named free functions, constructors, and
+/// methods (they are never constructed via `MakeClosure` with captures).
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
     pub arity: usize,
+    /// Number of captured values this closure pops off the enclosing stack at construction time
+    /// (`Op::MakeClosure`). Always 0 for named functions, constructors, and methods.
+    pub n_captures: usize,
     pub chunk: Chunk,
 }
 
@@ -308,6 +324,11 @@ impl BytecodeProgram {
                     Op::Jump(t) | Op::JumpIfFalse(t) if *t > code_len => Some(format!(
                         "jump target {t} out of range (code len {code_len})"
                     )),
+                    // `MakeClosure` carries a function-table index (must be in range). `CallValue`
+                    // carries only an arg count (no table index) — no validate arm needed.
+                    Op::MakeClosure(idx) if *idx >= nfns => Some(format!(
+                        "closure target {idx} out of range ({nfns} functions)"
+                    )),
                     _ => None,
                 };
                 if let Some(what) = problem {
@@ -387,6 +408,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -407,6 +429,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -429,6 +452,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -459,6 +483,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -480,6 +505,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -500,6 +526,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c2,
             }],
             main: 0,
@@ -520,6 +547,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,
@@ -539,6 +567,7 @@ mod tests {
             functions: vec![Function {
                 name: "main".into(),
                 arity: 0,
+                n_captures: 0,
                 chunk: c,
             }],
             main: 0,

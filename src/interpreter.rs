@@ -628,7 +628,9 @@ impl Interp {
                 self.run_call(&names, &f.body, args, None)
             }
             ClosureData::Byte { .. } => {
-                unreachable!("VM-only Byte closure reached the interpreter")
+                // A VM-compiled closure that somehow ended up in the tree-walker is a compiler
+                // bug — surface a clean runtime error rather than panicking.
+                rt("internal error: VM closure reached the tree-walking interpreter")
             }
         }
     }

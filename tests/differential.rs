@@ -887,3 +887,27 @@ fn s2_match_over_optional_is_byte_identical() {
     assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("-1\n8\n"));
     agree(src);
 }
+
+// ── M3 S3: lambdas ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn lambdas_agree() {
+    // Basic lambda var call
+    agree("import core.console; function main() { var d = fn(int x) => x*2; console.println(\"{d(5)}\"); }");
+    // Lambda capturing TWO enclosing vars (slot-ordering trigger — invariant #8)
+    agree("import core.console; function main() { var a=10; var b=100; var f=fn(int x)=>x+a+b; console.println(\"{f(1)}\"); }");
+    // Higher-order user function (lambda passed as argument)
+    agree("import core.console; function twice(int x,(int)->int f)->int{return f(f(x));} function main(){ console.println(\"{twice(3, fn(int n)=>n+1)}\"); }");
+    // Lambda call inside string interpolation (height-sensitive — F13)
+    agree("import core.console; function main(){ var inc=fn(int x)=>x+1; console.println(\"{inc(1)} {inc(2)}\"); }");
+    // Lambda call inside a match arm (height-sensitive — F13)
+    agree("import core.console; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } function main(){ console.println(\"{pick(A(), fn(int x)=>x*10)}\"); }");
+    // Zero-param lambda
+    agree("import core.console; function main(){ var greet=fn()=>42; console.println(\"{greet()}\"); }");
+}
+
+#[test]
+fn lambda_call_errors_agree() {
+    // Arity mismatch: lambda expects 1 arg, called with 2
+    agree_err("import core.console; function main(){ var f=fn(int x)=>x; console.println(\"{f(1,2)}\"); }");
+}
