@@ -523,8 +523,8 @@ impl Transpiler {
                 Ok(format!("{sym}{inner}"))
             }
             Expr::Binary { op, lhs, rhs, .. } => {
-                if matches!(op, BinaryOp::Is | BinaryOp::Pipe) {
-                    return Err("transpile error: `is`/`|>` operators are not yet supported".into());
+                if matches!(op, BinaryOp::Is) {
+                    return Err("transpile error: `is` operator is not yet supported".into());
                 }
                 let l = self.emit_expr(lhs)?;
                 let r = self.emit_expr(rhs)?;
@@ -859,7 +859,8 @@ impl Transpiler {
             Or => "||",
             // `??` is parenthesized at the call site, so it never reaches `binop()`.
             Coalesce => unreachable!("Coalesce handled before binop()"),
-            Is | Pipe => unreachable!("Is/Pipe handled before binop()"),
+            Is => unreachable!("Is handled before binop()"),
+            Pipe => unreachable!("`|>` is lowered to a call in the parser"),
         }
     }
 

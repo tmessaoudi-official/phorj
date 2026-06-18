@@ -145,11 +145,23 @@ impl Parser {
             let sp = self.peek_span();
             self.advance(); // consume the operator
             let rhs = self.parse_binary(bp + 1)?;
-            lhs = Expr::Binary {
-                op,
-                lhs: Box::new(lhs),
-                rhs: Box::new(rhs),
-                span: sp,
+            lhs = if matches!(op, BinaryOp::Pipe) {
+                // `lhs |> rhs` is syntactic sugar for `rhs(lhs)` — lower to a Call in the
+                // parser so all four backends see an ordinary function call. `BinaryOp::Pipe`
+                // is never placed in an `Expr::Binary` node; the precedence-table entry at
+                // `infix_op` is kept to drive the precedence-climbing loop.
+                Expr::Call {
+                    callee: Box::new(rhs),
+                    args: vec![lhs],
+                    span: sp,
+                }
+            } else {
+                Expr::Binary {
+                    op,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                    span: sp,
+                }
             };
         }
         Ok(lhs)
@@ -1202,9 +1214,9 @@ mod tests {
         assert_eq!(sexpr(&expr("a && b || c")), "(|| (&& a b) c)");
         assert_eq!(sexpr(&expr("-a + b")), "(+ (- a) b)");
         assert_eq!(sexpr(&expr("!a && b")), "(&& (! a) b)");
-        assert_eq!(sexpr(&expr("x |> f")), "(|> x f)");
+        assert_eq!(sexpr(&expr("x |> f")), "f(x)");
         // pipe is the lowest: `a + b |> f` == `(a + b) |> f`
-        assert_eq!(sexpr(&expr("a + b |> f")), "(|> (+ a b) f)");
+        assert_eq!(sexpr(&expr("a + b |> f")), "f((+ a b))");
         assert_eq!(sexpr(&expr("a is b")), "(is a b)");
         assert_eq!(sexpr(&expr("a ?? b")), "(?? a b)");
         // `??` binds looser than `||`: `a || b ?? c` is `(a || b) ?? c`

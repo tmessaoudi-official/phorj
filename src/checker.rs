@@ -786,7 +786,7 @@ impl Checker {
                     ),
                 }
             }
-            BinaryOp::Pipe => self.err(span, "the pipe operator `|>` is not yet supported in M1"),
+            BinaryOp::Pipe => unreachable!("`|>` is lowered to a call in the parser"),
         }
     }
 

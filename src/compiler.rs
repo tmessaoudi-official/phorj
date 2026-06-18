@@ -1186,7 +1186,7 @@ impl<'a> Compiler<'a> {
                     line,
                 );
             }
-            Pipe => return Err("the `|>` pipe operator is not supported (M1 surface)".into()),
+            Pipe => unreachable!("`|>` is lowered to a call in the parser"),
             And | Or | Coalesce => unreachable!("handled above"),
         }
         Ok(())
@@ -1300,6 +1300,22 @@ impl<'a> Compiler<'a> {
             }
             let idx = self.field_name_index(name)?;
             self.emit(Op::CallMethod(idx, args.len()), line);
+            return Ok(());
+        }
+        // Inline lambda call: `(fn(int x) => x+1)(3)` or (after pipe lowering) `3 |> fn(int v) =>
+        // v+10`. Compile the lambda expression to push a closure, then push args, then dispatch.
+        if let Expr::Lambda {
+            params,
+            body,
+            ret,
+            span,
+        } = callee
+        {
+            self.compile_lambda(params, body, ret.as_ref(), span.line)?;
+            for a in args {
+                self.expr(a)?;
+            }
+            self.emit(Op::CallValue(args.len()), line);
             return Ok(());
         }
         Err("unsupported call target".into())

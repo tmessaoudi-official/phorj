@@ -511,7 +511,7 @@ impl Interp {
             NotEq => Ok(Value::Bool(!l.eq_val(&r))),
             Is => Ok(Value::Bool(l.eq_val(&r))),
             Lt | Gt | Le | Ge => compare(op, l, r),
-            Pipe => rt("the `|>` pipe operator is not yet supported in M1"),
+            Pipe => unreachable!("`|>` is lowered to a call in the parser"),
             And | Or | Coalesce => unreachable!("handled above"),
         }
     }

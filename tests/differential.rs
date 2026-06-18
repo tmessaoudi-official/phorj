@@ -956,3 +956,13 @@ fn transpiles_statement_lambda_with_use_clause() {
         "{php}"
     );
 }
+
+#[test]
+fn pipe_agrees() {
+    // `5 |> dbl |> inc` == inc(dbl(5)) == 11 (left-associative)
+    agree("import core.console; function dbl(int x)->int{return x*2;} function inc(int x)->int{return x+1;} function main(){ console.println(\"{5 |> dbl |> inc}\"); }");
+    // inline lambda on the right: `3 |> fn(int v) => v + 10` == 13
+    agree("import core.console; function main(){ var add=fn(int a,int b)->int{return a+b;}; console.println(\"{3 |> fn(int v) => v + 10}\"); }");
+    // precedence: `1 + 2 |> dbl` == dbl(1+2) == 6
+    agree("import core.console; function dbl(int x)->int{return x*2;} function main(){ console.println(\"{1 + 2 |> dbl}\"); }");
+}
