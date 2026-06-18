@@ -167,18 +167,26 @@ function reason_phrase(int s) -> string {
 - `examples/web/README.md` (the live-server walkthrough) is W4, not W1 — W1 ships the `.phg` + an
   `examples/README.md` index/coverage row.
 
-## 7. Open decisions — confirm before build
+## 7. Design-lock (2026-06-18) — confirmed, build under TDD
 
-- **D1 — body type.** Recommend **HONEST-LITE: body is `bytes`** + add `bytes.find`. (Alt: HONEST
-  = also add `text.split_once` for `:`-in-value-robust headers; MINIMAL = `string` body, zero natives.)
-- **D2 — header representation.** Recommend **`List<string>` raw lines + `req.header(name)` accessor**
-  (no `Header` class for the spike; it arrives with S3/`core.list`). Matches the one-API design-lock.
-- **D3 — `withHeader`.** Recommend **drop for W1** (handler builds headers in one `Response(...)`
-  literal; `withHeader`/copy-on-write returns with `core.list`).
-- **D4 — fixture.** Recommend **in-source `b"…"` literal with `\x0d\x0a`** (not a committed `.http`
-  file) — deterministic + dogfoods W0.
-- **D5 — spike header constraint.** Header values are **`:`-free** (plain `text.split(":")`); Host:port
-  / Date headers need `text.split_once` (deferred unless D1=HONEST). Documented in KNOWN_ISSUES.
+- **D1 — body type = HONEST.** Body is **`bytes`**, and W1 adds **both** new natives:
+  `bytes.find(bytes, bytes) -> int?` (head/body boundary) **and** `text.split_once(string, string) ->
+  List<string>` (robust `Name: value` split — handles `:` in values like `Host:port`/`Date`). No
+  spike colon-free constraint. Both are `Op::CallNative` — **no new `Op`**.
+- **D2 — header representation = `List<string>` raw lines + `req.header(name)` accessor.** No `Header`
+  class for the spike (the method-call API is the one public surface; a typed `Header` value type
+  arrives with S3/`core.list`).
+- **D3 — `withHeader` dropped for W1.** The handler builds headers in one `Response(...)` literal;
+  copy-on-write `withHeader` returns with `core.list` (S3).
+- **D4 — fixture = in-source `b"…"` literal** with `\x0d\x0a` CRLF (not a committed `.http` file) —
+  deterministic, dodges git autocrlf, dogfoods W0.
+- **D5 — removed.** `text.split_once` (D1) makes header parsing robust; no colon-free constraint.
+
+**New native surfaces to add in W1** (registry entries in `src/native.rs`, four-backend-generic path):
+| native | sig | Rust eval | PHP erasure |
+|---|---|---|---|
+| `bytes.find(h, n)` | `bytes, bytes -> int?` | byte-window search → `Option<usize>`; **`find(h, b"")` = 0** | `((($p=strpos($h,$n))===false)?null:$p)` |
+| `text.split_once(s, sep)` | `string, string -> List<string>` | split on first `sep` → `[head, tail]` (1 elem if absent) | `explode($sep, $s, 2)` |
 
 ## 8. Invariants honored
 
