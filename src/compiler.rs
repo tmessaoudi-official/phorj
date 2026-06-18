@@ -657,7 +657,7 @@ impl<'a> Compiler<'a> {
                     self.lambda_n_captures
                         .get(idx - self.base_fn_idx - 1)
                         .copied()
-                        .unwrap_or(0)
+                        .expect("lambda n_captures entry must exist for a lambda-index MakeClosure")
                 } else {
                     0 // named function ref — no captures
                 };
