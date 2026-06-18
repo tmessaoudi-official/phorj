@@ -362,6 +362,14 @@ fn parse_checked(src: &str) -> Result<Program, String> {
     check_and_expand(&prog, src)
 }
 
+/// Public lex + parse + check of a single source string into a checked, alias-expanded `Program`.
+/// Exposes the private [`parse_checked`] pipeline for callers that need a ready-to-run program from
+/// inline source — e.g. `tests/serve.rs`, which builds a serve program then drives it through
+/// [`crate::serve::serve`] over an in-memory transport.
+pub fn parse_checked_program(src: &str) -> Result<Program, String> {
+    parse_checked(src)
+}
+
 /// `run`: lex -> parse -> check (gate) -> interpret -> captured stdout.
 pub fn cmd_run(src: &str) -> Result<String, String> {
     on_deep_stack(|| {

@@ -112,6 +112,47 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
     }
 }
 
+/// Call a single named top-level function with pre-built `args`, returning its value plus the
+/// captured stdout. The serve runtime (M6 W3, `crate::serve`) uses this to invoke
+/// `respond(bytes) -> bytes` once per request — the one entry the socket bridge needs. The
+/// interpreter is the reference backend; `run` ≡ `runvm` (the differential harness) guarantees the
+/// VM would compute identical bytes, so the spike does not need a VM `call_named` (deferred — the
+/// VM has no return-value capture today). Mirrors [`interpret`] exactly, but enters an arbitrary
+/// named function with caller-supplied arguments instead of an argument-less `main`.
+pub fn call_named(
+    program: &Program,
+    name: &str,
+    args: Vec<Value>,
+) -> Result<(Value, String), Diagnostic> {
+    let mut interp = Interp {
+        funcs: HashMap::new(),
+        classes: HashMap::new(),
+        variants: HashMap::new(),
+        frame: CallScopes::new(),
+        this: None,
+        out: String::new(),
+        depth: 0,
+    };
+    interp.collect(program);
+    let f = match interp.funcs.get(name) {
+        Some(f) => f.clone(),
+        None => return Err(Diagnostic::runtime(format!("no `{name}` function"))),
+    };
+    if f.params.len() != args.len() {
+        return Err(Diagnostic::runtime(format!(
+            "`{name}` expects {} argument(s), got {}",
+            f.params.len(),
+            args.len()
+        )));
+    }
+    let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
+    match interp.run_call(&names, &f.body, args, None) {
+        Ok(v) => Ok((v, interp.out)),
+        Err(Signal::Return(v)) => Ok((v, interp.out)),
+        Err(Signal::Runtime(e)) => Err(e),
+    }
+}
+
 impl Interp {
     fn collect(&mut self, program: &Program) {
         for item in &program.items {

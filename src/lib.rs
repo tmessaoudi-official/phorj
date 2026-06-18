@@ -18,6 +18,7 @@ pub mod manifest;
 pub mod mem;
 pub mod native;
 pub mod parser;
+pub mod serve;
 pub mod token;
 pub mod transpile;
 pub mod types;
