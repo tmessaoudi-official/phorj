@@ -183,9 +183,20 @@ exact-match router added to the spike; Shape A is the one API; spike lands befor
 | **Static exact-match router** (`(method,"/path")->namedHandler`) | nothing — named fns + string match | **spike W2** |
 | `phg serve` single-threaded + `tests/serve.rs` + PHP front-controller README | nothing | **spike W3–W4** |
 | `core.http` as a real **library package** (not `package main`) | M5 cross-package-types follow-up (E-PKG-TYPE) | post-spike |
-| Map-based headers + **path params `/users/{id}`** | M3 **S4** (Map surface syntax) | later — "the rest" |
+| Map-based headers + **path params `/users/{id}`** | **parallel two-list iteration** (list length / generics) — NOT just Map (see note) | later — "the rest" |
 | **Middleware + closure routes** (`app.get("/p", req => …)`) | M3 **S3** lambdas (Track A) | later — "the rest" |
 | Multi-threaded / concurrent serving | M6 green-thread runtime | M6 proper |
+
+> **Path-param blocker — corrected (2026-06-18, post-W1, [Verified]).** The original "gated on S4 Map"
+> was directionally right but named the wrong blocker. Decomposed: (a) param **storage** is NOT blocked —
+> the W1 `List<string>`+`req.header(name)` pattern generalizes to `params: List<string>` "name=value" lines
+> + `req.param(name) -> string?`, no `Map` needed; (b) param **matching** (`/users/{id}` vs `/users/42`)
+> requires walking the pattern/path segment lists **in lockstep**, which needs a loop counter (mutation —
+> M3-deferred) or `for (i in 0..len(segs))` (**list length — unavailable**: `core.list` is blocked because
+> `Ty` has no type variable, so a generic `List<T> -> int` is inexpressible; `Op::Index` exists but there is
+> no `Op::Len`). So the real gate is **`core.list`/generics (or mutation)**, which S3/S4 deliver. **W2
+> decision (re-confirmed 2026-06-18):** build the **static exact-match router now**; params layer on with
+> `core.list`/generics, closures/middleware with S3 lambdas — neither changes the `handle` contract.
 
 ## 9. Examples (examples-ship-with-features mandate)
 
