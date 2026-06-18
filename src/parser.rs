@@ -2,7 +2,7 @@
 
 use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FunctionDecl, Item,
-    MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+    LambdaBody, MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
 use crate::diagnostic::{Diagnostic, Stage};
 use crate::limits::MAX_NEST_DEPTH;
@@ -337,6 +337,34 @@ impl Parser {
                 }
                 self.expect(&TokenKind::RBracket, "']' to close list literal")?;
                 Ok(Expr::List(items, sp))
+            }
+            // Lambda expression: `fn(int x, int y) -> int => x + y` (expression body only;
+            // statement-body lambdas land in S3 Task 6).
+            TokenKind::Fn => {
+                self.advance(); // consume 'fn'
+                self.expect(&TokenKind::LParen, "'(' after 'fn'")?;
+                let params = self.parse_params()?;
+                self.expect(&TokenKind::RParen, "')' to close lambda parameters")?;
+                // Optional return-type annotation before `=>`.
+                let ret = if self.eat(&TokenKind::Arrow) {
+                    Some(self.parse_type()?)
+                } else {
+                    None
+                };
+                // Only expression bodies (`=>`) are supported in this task;
+                // statement bodies (`{ … }`) land in Task 6.
+                if !self.eat(&TokenKind::FatArrow) {
+                    return Err(self.error(
+                        "'=>' and an expression (statement-body lambdas land in S3 Task 6)",
+                    ));
+                }
+                let body = LambdaBody::Expr(Box::new(self.parse_expr()?));
+                Ok(Expr::Lambda {
+                    params,
+                    ret,
+                    body,
+                    span: sp,
+                })
             }
             _ => Err(self.error("an expression")),
         }
@@ -1086,6 +1114,14 @@ mod tests {
                 format!("{}({})", sexpr(callee), a.join(", "))
             }
             Expr::Index { object, index, .. } => format!("{}[{}]", sexpr(object), sexpr(index)),
+            Expr::Lambda { params, body, .. } => {
+                let ps: Vec<&str> = params.iter().map(|p| p.name.as_str()).collect();
+                let body_str = match body {
+                    LambdaBody::Expr(e) => sexpr(e),
+                    LambdaBody::Block(_) => "<block>".into(),
+                };
+                format!("(lambda ({}) {})", ps.join(" "), body_str)
+            }
             other => format!("{other:?}"),
         }
     }

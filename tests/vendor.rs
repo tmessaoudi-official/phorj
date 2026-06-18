@@ -48,8 +48,23 @@ impl Drop for TempDir {
 fn git(args: &[&str], cwd: &Path) -> String {
     let out = Command::new("git")
         // Config flags must precede the subcommand; keep commits deterministic and independent of
-        // the host's git config.
-        .args(["-c", "user.email=test@phorge", "-c", "user.name=test"])
+        // the host's git config.  `core.hooksPath=/dev/null` prevents the Phorge pre-commit hook
+        // (which runs `cargo test` + `cargo fmt`) from triggering inside these temp-dir fixtures,
+        // where there is no Cargo.toml — without this, commits inside a git worktree environment
+        // inherit the parent repository's `core.hooksPath` and the hook fails.
+        // Clearing `GIT_DIR` and `GIT_WORK_TREE` ensures git does not accidentally inherit the
+        // parent worktree's git directory when run from inside a worktree pre-commit hook.
+        .args([
+            "-c",
+            "user.email=test@phorge",
+            "-c",
+            "user.name=test",
+            "-c",
+            "core.hooksPath=/dev/null",
+        ])
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
         .args(args)
         .current_dir(cwd)
         .output()

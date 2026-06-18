@@ -6,11 +6,11 @@
 use std::collections::HashMap;
 
 use crate::ast::{
-    BinaryOp, ClassDecl, ClassMember, Expr, FunctionDecl, Item, MatchArm, Modifier, Pattern,
-    Program, Stmt, StrPart, UnaryOp,
+    BinaryOp, ClassDecl, ClassMember, Expr, FunctionDecl, Item, LambdaBody, MatchArm, Modifier,
+    Param, Pattern, Program, Stmt, StrPart, UnaryOp,
 };
 use crate::diagnostic::Diagnostic;
-use crate::value::{EnumVal, Instance, Value};
+use crate::value::{ClosureData, EnumVal, Instance, Value};
 use std::rc::Rc;
 
 /// Non-local control flow threaded through `Result::Err` (EV-3). The runtime fault carries a
@@ -400,6 +400,31 @@ impl Interp {
                     self.eval(else_expr)
                 }
             }
+            // Capture the free variables from the current scope and package them with the lambda
+            // syntax tree into a `Value::Closure(Tree)`.  Names that resolve to a global function,
+            // class, or variant are NOT captured (they are available globally at call time).
+            Expr::Lambda {
+                params, ret, body, ..
+            } => {
+                let free = crate::ast::free_vars(params, body);
+                let env: Vec<(String, Value)> = free
+                    .into_iter()
+                    .filter(|name| {
+                        // Skip names that are global declarations — they are always reachable at
+                        // call time and must not be captured as a snapshot value.
+                        !self.funcs.contains_key(name.as_str())
+                            && !self.classes.contains_key(name.as_str())
+                            && !self.variants.contains_key(name.as_str())
+                    })
+                    .filter_map(|name| self.frame.lookup(&name).map(|v| (name, v.clone())))
+                    .collect();
+                Ok(Value::Closure(Rc::new(ClosureData::Tree {
+                    params: params.clone(),
+                    ret: ret.clone(),
+                    body: body.clone(),
+                    env,
+                })))
+            }
         }
     }
 
@@ -412,6 +437,14 @@ impl Interp {
             if let Some(v) = inst.fields.get(name) {
                 return Ok(v.clone());
             }
+        }
+        // A4: bare named-function reference in value position (e.g. passing `f` to a higher-order
+        // function that takes `(int)->int`).  The checker already verified the type; the interpreter
+        // wraps it in a `Named` closure so `eval_call` can dispatch it uniformly.
+        if self.funcs.contains_key(name) {
+            return Ok(Value::Closure(Rc::new(ClosureData::Named(
+                name.to_string(),
+            ))));
         }
         rt(format!("undefined variable `{name}`"))
     }
@@ -547,9 +580,99 @@ impl Interp {
             if self.classes.contains_key(name) {
                 return self.construct(name, argv);
             }
+            // The name might be a local variable holding a closure value (e.g. `var f = fn…`).
+            if let Some(Value::Closure(rc)) = self.frame.lookup(name).cloned() {
+                return self.call_closure(rc, argv);
+            }
             return rt(format!("`{name}` is not a function, variant, or class"));
         }
-        rt("unsupported call target")
+        // Generic callee: evaluate the callee expression and dispatch on the resulting value.  This
+        // path handles complex callee expressions (e.g. a method returning a closure).  Callee is
+        // evaluated first (matching normal evaluation order), then arguments.
+        let callee_val = self.eval(callee)?;
+        let argv = self.eval_args(args)?;
+        match callee_val {
+            Value::Closure(rc) => self.call_closure(rc, argv),
+            other => rt(format!("cannot call a value of type {}", other.type_name())),
+        }
+    }
+
+    /// Execute a closure value with the supplied arguments.
+    fn call_closure(&mut self, closure: Rc<ClosureData>, args: Vec<Value>) -> R<Value> {
+        match &*closure {
+            ClosureData::Tree {
+                params, body, env, ..
+            } => {
+                if args.len() != params.len() {
+                    return rt(format!(
+                        "lambda expects {} arg(s), got {}",
+                        params.len(),
+                        args.len()
+                    ));
+                }
+                self.call_tree_closure(params, body, env, args)
+            }
+            ClosureData::Named(name) => {
+                let f = match self.funcs.get(name).cloned() {
+                    Some(f) => f,
+                    None => return rt(format!("function `{name}` not found")),
+                };
+                if args.len() != f.params.len() {
+                    return rt(format!(
+                        "`{name}` expects {} args, got {}",
+                        f.params.len(),
+                        args.len()
+                    ));
+                }
+                let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
+                self.run_call(&names, &f.body, args, None)
+            }
+            ClosureData::Byte { .. } => {
+                unreachable!("VM-only Byte closure reached the interpreter")
+            }
+        }
+    }
+
+    /// Core tree-closure call: saves the current frame, populates captured env + params,
+    /// runs the body, then restores the frame.  `this` is always `None` for lambdas.
+    fn call_tree_closure(
+        &mut self,
+        params: &[Param],
+        body: &LambdaBody,
+        env: &[(String, Value)],
+        args: Vec<Value>,
+    ) -> R<Value> {
+        if self.depth >= crate::limits::MAX_CALL_DEPTH {
+            return rt("stack overflow");
+        }
+        self.depth += 1;
+        let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
+        let saved_this = self.this.take();
+        // Inject captured environment first so params can shadow captures of the same name.
+        for (k, v) in env {
+            self.frame.declare(k, v.clone());
+        }
+        for (p, a) in params.iter().zip(args) {
+            self.frame.declare(&p.name, a);
+        }
+        let result = match body {
+            // Expression body: the evaluated result IS the return value.
+            LambdaBody::Expr(e) => self.eval(e),
+            LambdaBody::Block(stmts) => {
+                // Statement-body lambdas land in Task 6; for now the parser rejects them, but the
+                // enum variant exists.  Guard here so a future `Byte` path can't hit it silently.
+                let r = self.exec_stmts(stmts);
+                match r {
+                    Ok(()) => Ok(Value::Unit),
+                    Err(Signal::Return(v)) => Ok(v),
+                    Err(other) => Err(other),
+                }
+            }
+        };
+        self.frame = saved_frame;
+        self.this = saved_this;
+        self.depth -= 1;
+        result
     }
 
     fn eval_args(&mut self, args: &[Expr]) -> R<Vec<Value>> {
@@ -994,6 +1117,70 @@ function main() { console.println("{9223372036854775807 + 1}"); }"#;
     fn missing_main_is_runtime_error() {
         let e = run(r#"function other() {}"#).unwrap_err();
         assert!(e.message.contains("main"), "{}", e.message);
+    }
+
+    // ---- lambda tests (M3 S3, Task 3 — interpreter-only) ----
+
+    /// Lex + parse + type-check `src`; return the error diagnostics (empty = well-typed).
+    /// Auto-prepends `package main;` if absent. Used to test checker rejections without
+    /// running the interpreter.
+    fn check_errs(src: &str) -> Vec<crate::diagnostic::Diagnostic> {
+        let src = with_pkg(src);
+        let tokens = lex(&src).expect("lex ok");
+        let prog = Parser::new(tokens).parse_program().expect("parse ok");
+        match crate::checker::check(&prog) {
+            Ok(_warnings) => Vec::new(),
+            Err(e) => e,
+        }
+    }
+
+    #[test]
+    fn lambda_value_call_interpreter() {
+        let out = out(r#"package main;
+import core.console;
+function main() {
+    var double = fn(int x) => x * 2;
+    console.println("{double(5)}");
+}"#);
+        assert_eq!(out, "10\n");
+    }
+
+    #[test]
+    fn lambda_captures_two_vars_interpreter() {
+        let out = out(r#"package main;
+import core.console;
+function main() {
+    var a = 10;
+    var b = 100;
+    var f = fn(int x) => x + a + b;
+    console.println("{f(1)}");
+}"#);
+        assert_eq!(out, "111\n");
+    }
+
+    #[test]
+    fn higher_order_user_function_interpreter() {
+        let out = out(r#"package main;
+import core.console;
+function twice(int x, (int) -> int f) -> int { return f(f(x)); }
+function main() {
+    console.println("{twice(3, fn(int n) => n + 1)}");
+}"#);
+        assert_eq!(out, "5\n");
+    }
+
+    #[test]
+    fn lambda_cannot_reference_this() {
+        let errs = check_errs(
+            r#"package main;
+class C { constructor(public int x) {}
+  function method() -> (int) -> int { return fn(int n) => n + this.x; } }
+function main() { }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.message.contains("`this`")),
+            "{errs:?}"
+        );
     }
 
     #[test]

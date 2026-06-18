@@ -113,8 +113,18 @@ pub fn vendor(project: &Project) -> Result<String, String> {
 
 /// Run `git` with `args` (optionally in `cwd`), returning stdout on success. Any non-zero exit or a
 /// missing `git` binary is a clean error — never a panic.
+///
+/// Git env vars (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_COMMON_DIR`) are cleared so
+/// that `phg vendor` works correctly when invoked from inside a git worktree (e.g. from a
+/// pre-commit hook where git sets these vars to point at the parent repo's worktree).  Without
+/// this, `git clone` would try to reuse the caller's working tree instead of the destination.
 fn git(args: &[&str], cwd: Option<&Path>) -> Result<String, String> {
     let mut cmd = Command::new("git");
+    cmd.env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_OBJECT_DIRECTORY");
     cmd.args(args);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);

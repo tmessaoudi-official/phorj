@@ -599,6 +599,11 @@ impl Transpiler {
                 let e = self.emit_expr(else_expr)?;
                 Ok(format!("({c} ? {t} : {e})"))
             }
+            // Lambda transpilation to PHP closures lands in Task 5 (transpiler).
+            Expr::Lambda { .. } => Err(
+                "transpile error: lambda expressions are not yet supported (M3 S3 Task 5)"
+                    .to_string(),
+            ),
         }
     }
 

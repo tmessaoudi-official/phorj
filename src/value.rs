@@ -29,6 +29,32 @@ pub enum Value {
     Set(HashSet<HKey>),
     Instance(Rc<Instance>),
     Enum(Rc<EnumVal>),
+    /// A first-class function value: either a tree-walking closure (interpreter),
+    /// a bare named-function reference, or a VM bytecode closure (Task 4).
+    Closure(Rc<ClosureData>),
+}
+
+/// The data of a first-class function value (M3 S3, Task 3).
+///
+/// - `Tree`: an expression-body lambda captured from the tree-walking interpreter.
+/// - `Named`: a bare named-function reference (the name is resolved at call time).
+/// - `Byte`: a bytecode closure constructed by the VM in Task 4; constructing it in the
+///   interpreter is a bug — any such path panics with `unreachable!`.
+#[derive(Debug, Clone)]
+pub enum ClosureData {
+    Tree {
+        params: Vec<crate::ast::Param>,
+        ret: Option<crate::ast::Type>,
+        body: crate::ast::LambdaBody,
+        env: Vec<(String, Value)>,
+    },
+    Named(String),
+    /// Bytecode closure — constructed by the VM (Task 4). The interpreter never constructs
+    /// this variant; encountering it at runtime is a bug (`unreachable!`).
+    Byte {
+        func: usize,
+        captures: Vec<Value>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +96,7 @@ impl Value {
             Value::Set(_) => "set",
             Value::Instance(_) => "instance",
             Value::Enum(_) => "enum",
+            Value::Closure(_) => "function",
         }
     }
 
@@ -83,6 +110,9 @@ impl Value {
             Value::Bool(b) => Some(b.to_string()),
             Value::Str(s) => Some(s.clone()),
             Value::Unit => Some("unit".to_string()),
+            // Functions cannot be displayed (the checker forbids interpolating a function
+            // value; this arm is only reached through the fallback `_ => None` path — EV-7).
+            Value::Closure(_) => None,
             _ => None,
         }
     }
@@ -115,6 +145,9 @@ impl Value {
                         .all(|(k, v)| b.fields.get(k).is_some_and(|bv| v.eq_val(bv)))
             }
             (Null, Null) => true,
+            // Functions are not comparable — the checker forbids `==`/`!=` on function
+            // types; this arm is a defensive fallback (EV-7, well-typed programs never reach it).
+            (Closure(_), _) | (_, Closure(_)) => false,
             _ => false,
         }
     }

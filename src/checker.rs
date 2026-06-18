@@ -621,6 +621,14 @@ impl Checker {
             Expr::Ident(name, span) => match self.lookup(name) {
                 Some(t) => t,
                 None => {
+                    // A4: bare named-function reference in value position — `fn_name` where
+                    // `fn_name` is a top-level function, not a local. Return its function type so
+                    // it can be passed as a first-class argument or stored in a variable.
+                    if let Some(sig) = self.funcs.get(name) {
+                        let param_tys = sig.params.clone();
+                        let ret_ty = sig.ret.clone();
+                        return Ty::Function(param_tys, Box::new(ret_ty));
+                    }
                     let cands = self.in_scope_names();
                     let hint = self
                         .nearest_name(name, &cands)
@@ -667,6 +675,12 @@ impl Checker {
                 else_expr,
                 span,
             } => self.check_if_expr(cond, then_expr, else_expr, *span),
+            Expr::Lambda {
+                params,
+                ret,
+                body,
+                span,
+            } => self.check_lambda(params, ret, body, *span),
         }
     }
 
@@ -812,7 +826,8 @@ impl Checker {
             | Expr::Force { span, .. }
             | Expr::Match { span, .. }
             | Expr::Range { span, .. }
-            | Expr::If { span, .. } => *span,
+            | Expr::If { span, .. }
+            | Expr::Lambda { span, .. } => *span,
         }
     }
     fn check_list(&mut self, elems: &[crate::ast::Expr], span: Span) -> Ty {
@@ -897,6 +912,71 @@ impl Checker {
             t
         }
     }
+
+    /// Type-check a lambda expression (M3 S3, Task 3). Returns `Ty::Function(params, ret)`.
+    ///
+    /// The checker rejects a lambda that references `this` (F8 / `E-LAMBDA-THIS`): capturing
+    /// `this` would create a run↔runvm divergence (the interpreter's `this` vs. the VM's slot 0).
+    /// Workaround: `var self = this;` before the lambda captures the value explicitly.
+    fn check_lambda(
+        &mut self,
+        params: &[crate::ast::Param],
+        ret: &Option<crate::ast::Type>,
+        body: &crate::ast::LambdaBody,
+        span: Span,
+    ) -> Ty {
+        use crate::ast::LambdaBody;
+        // F8: reject any lambda that directly references `this` inside its body.
+        if lambda_uses_this(body) {
+            self.err_coded(
+                span,
+                "a lambda cannot reference `this` yet",
+                "E-LAMBDA-THIS",
+                Some("bind `var self = this;` before the lambda and capture `self` instead".into()),
+            );
+        }
+        let param_tys: Vec<Ty> = params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+        // Save and replace the current return type (a lambda has its own return scope).
+        let saved_ret = std::mem::replace(&mut self.cur_ret, Ty::Error);
+        self.push_scope();
+        for p in params {
+            let pty = self.resolve_type(&p.ty);
+            self.declare(&p.name, pty, p.span);
+        }
+        let ret_ty = match body {
+            LambdaBody::Expr(e) => {
+                let inferred = self.check_expr(e);
+                if let Some(rt) = ret {
+                    let declared = self.resolve_type(rt);
+                    if !Ty::assignable(&inferred, &declared) {
+                        self.err_assign(span, &inferred, &declared);
+                    }
+                    declared
+                } else {
+                    inferred
+                }
+            }
+            LambdaBody::Block(_) => {
+                // Block-body lambdas land in Task 6; require an explicit `-> T` annotation.
+                match ret {
+                    Some(rt) => {
+                        let declared = self.resolve_type(rt);
+                        self.cur_ret = declared.clone();
+                        // (Task 6 will check the block stmts here)
+                        declared
+                    }
+                    None => self.err(
+                        span,
+                        "a statement-body lambda requires an explicit `-> T` return type",
+                    ),
+                }
+            }
+        };
+        self.pop_scope();
+        self.cur_ret = saved_ret;
+        Ty::Function(param_tys, Box::new(ret_ty))
+    }
+
     fn check_call(
         &mut self,
         callee: &crate::ast::Expr,
@@ -926,11 +1006,35 @@ impl Checker {
                 self.check_method_call(object, name, args, *safe, span)
             }
             other => {
-                for a in args {
-                    self.check_expr(a);
+                // Evaluate the callee to see if it is a function value (closure or named-fn ref).
+                let callee_ty = self.check_expr(other);
+                match callee_ty {
+                    Ty::Function(param_tys, ret_ty) => {
+                        self.check_args("<lambda>", &param_tys, args, span);
+                        *ret_ty
+                    }
+                    Ty::Optional(inner) if matches!(*inner, Ty::Function(..)) => {
+                        for a in args {
+                            self.check_expr(a);
+                        }
+                        self.err(
+                            span,
+                            "not callable — the function value is optional; unwrap it first with `??` or `if (var …)`",
+                        )
+                    }
+                    Ty::Error => {
+                        for a in args {
+                            self.check_expr(a);
+                        }
+                        Ty::Error
+                    }
+                    _ => {
+                        for a in args {
+                            self.check_expr(a);
+                        }
+                        self.err(span, "expression is not callable")
+                    }
                 }
-                let _ = other;
-                self.err(span, "expression is not callable")
             }
         }
     }
@@ -1353,6 +1457,69 @@ impl Checker {
                 format!("pattern of type `{want}` cannot match scrutinee of type `{scrut}`"),
             );
         }
+    }
+}
+
+/// Returns `true` if the lambda body directly references `this` (F8 / `E-LAMBDA-THIS`).
+/// Does NOT recurse into nested lambdas (they would be a separate `E-LAMBDA-THIS` site).
+fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
+    use crate::ast::{Expr, LambdaBody, Stmt};
+    fn in_expr(e: &Expr) -> bool {
+        match e {
+            Expr::This(_) => true,
+            Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Bool(..)
+            | Expr::Null(..)
+            | Expr::Bytes(..)
+            | Expr::Ident(..) => false,
+            Expr::Str(parts, _) => parts.iter().any(|p| match p {
+                crate::ast::StrPart::Expr(inner) => in_expr(inner),
+                _ => false,
+            }),
+            Expr::List(items, _) => items.iter().any(in_expr),
+            Expr::Unary { expr, .. } => in_expr(expr),
+            Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
+            Expr::Call { callee, args, .. } => in_expr(callee) || args.iter().any(in_expr),
+            Expr::Member { object, .. } => in_expr(object),
+            Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),
+            Expr::Force { inner, .. } => in_expr(inner),
+            Expr::Match {
+                scrutinee, arms, ..
+            } => in_expr(scrutinee) || arms.iter().any(|a| in_expr(&a.body)),
+            Expr::Range { start, end, .. } => in_expr(start) || in_expr(end),
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => in_expr(cond) || in_expr(then_expr) || in_expr(else_expr),
+            // Nested lambdas: do not recurse — `this` in a nested lambda is a separate error site.
+            Expr::Lambda { .. } => false,
+        }
+    }
+    fn in_stmts(stmts: &[Stmt]) -> bool {
+        stmts.iter().any(|s| match s {
+            Stmt::VarDecl { init, .. } => in_expr(init),
+            Stmt::Return { value, .. } => value.as_ref().is_some_and(in_expr),
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                ..
+            } => {
+                in_expr(cond)
+                    || in_stmts(then_block)
+                    || else_block.as_ref().is_some_and(|eb| in_stmts(eb))
+            }
+            Stmt::For { iter, body, .. } => in_expr(iter) || in_stmts(body),
+            Stmt::Block(stmts, _) => in_stmts(stmts),
+            Stmt::Expr(e, _) => in_expr(e),
+        })
+    }
+    match body {
+        LambdaBody::Expr(e) => in_expr(e),
+        LambdaBody::Block(stmts) => in_stmts(stmts),
     }
 }
 

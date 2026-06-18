@@ -770,6 +770,11 @@ impl<'a> Compiler<'a> {
             // Both `if` branches share a type (checker-guaranteed); infer it from the then-branch so
             // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
             Expr::If { then_expr, .. } => self.ctype(then_expr),
+            // A lambda is a function value — not a numeric operand; VM support lands in Task 4.
+            Expr::Lambda { .. } => Ok(CTy::Fn {
+                params: Vec::new(),
+                ret: Box::new(CTy::Other),
+            }),
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }
@@ -985,6 +990,15 @@ impl<'a> Compiler<'a> {
                 self.height = h_merge; // else path starts at the merge height
                 self.expr(else_expr)?;
                 self.patch_jump(end_j);
+            }
+            // Lambda VM support lands in Task 4; the compiler does not yet lower lambdas.
+            // The checker prevents a lambda from reaching `runvm` via a `agree()` test that
+            // would require the VM to handle it — no such test exists until Task 4.
+            Expr::Lambda { span, .. } => {
+                return Err(format!(
+                    "lambda expressions are not yet supported by the VM (M3 S3 Task 4) [line {}]",
+                    span.line
+                ));
             }
         }
         Ok(())
