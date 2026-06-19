@@ -21,6 +21,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::bundle::cross::fnv1a_64;
 use crate::lock::{Lock, LockEntry};
@@ -239,14 +240,22 @@ fn path_str(p: &Path) -> Result<&str, String> {
         .ok_or_else(|| format!("path is not valid UTF-8: {}", p.display()))
 }
 
-/// A process-unique temp directory name for a clone (the dep name slashes flattened). Not created
-/// here — `git clone` creates it.
+/// A call-unique temp directory name for a clone (the dep name slashes flattened). Not created here
+/// — `git clone` creates it. The name carries BOTH the pid (unique across processes) AND a
+/// process-local atomic counter (unique across calls within one process): vendoring the *same* dep
+/// concurrently — e.g. two integration tests in one parallel `cargo test` process — must not target
+/// the same path, or the second `git clone` fails on a non-empty destination.
 fn unique_temp_dir(dep_name: &str) -> PathBuf {
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let unique = N.fetch_add(1, Ordering::Relaxed);
     let safe: String = dep_name
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect();
-    std::env::temp_dir().join(format!("phorge_vendor_{}_{safe}", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "phorge_vendor_{}_{unique}_{safe}",
+        std::process::id()
+    ))
 }
 
 /// Removes a temp clone directory on drop (best-effort), so a clone is cleaned up even on an early
@@ -255,5 +264,19 @@ struct TempDirGuard(PathBuf);
 impl Drop for TempDirGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unique_temp_dir;
+
+    /// Two clones of the SAME dependency within one process must target distinct paths — otherwise
+    /// parallel `cargo test` (one process, shared pid) races on `git clone` into a non-empty dir.
+    #[test]
+    fn unique_temp_dir_is_call_unique() {
+        let a = unique_temp_dir("acme/greet");
+        let b = unique_temp_dir("acme/greet");
+        assert_ne!(a, b, "same-dep clone dirs must differ per call");
     }
 }
