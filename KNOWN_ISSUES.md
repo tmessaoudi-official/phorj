@@ -85,12 +85,15 @@ or simply unavailable, never a crash):
   construct **and** in a `match` pattern. A bare `V =>` arm is parsed as a catch-all *binding*, not a
   variant match — so it silently matches everything. Always use `V()` in patterns for nullary
   variants.
-- **Transpiled ranges differ from Phorge for an empty/reversed range.** A Phorge range `a..b` with
-  `a >= b` is *empty*; the emitted PHP uses `range($a, $b - 1)`, and PHP's `range()` *descends* when
-  the start exceeds the end rather than yielding `[]`. This is a transpile-only caveat — the Phorge
-  backends (`run`/`runvm`) treat an empty range as empty and stay byte-identical; only the
-  PHP-transpiled output diverges, and only for empty/reversed ranges. Use ascending, non-empty ranges
-  when round-tripping through PHP. (Parallel to the indexing-OOB transpile note.)
+- **A few constructs are not yet transpiled (oracle-deferred to M11).** The transpiler still rejects
+  *literal* `match` patterns (`0 => …`, `"a" => …`), expression-position `match`, and the `is`
+  operator — all run fine on `run`/`runvm` but emit `transpile error: … not yet supported`. The M7
+  PHP oracle (`tests/differential.rs`: `all_examples_transpile_and_match_php`) **loudly skips** any
+  example that hits one of these (it logs `DEFER <file>` and a count), so the gap is visible, not
+  silent. `examples/guide/enums-match.phg` is the one currently-deferred example. As M11 implements
+  each construct the deferral disappears and the example auto-enrolls in the oracle. (The
+  empty/reversed-range and integer-division transpile divergences that used to live here were **fixed
+  in M7**, when the oracle began executing the transpiled PHP of every example.)
 - **Irrational `float` values render with more digits on the Phorge backends than in transpiled PHP.**
   The Phorge backends stringify a `float` with Rust's shortest-round-trip formatting (e.g.
   `sqrt(2.0)` → `1.4142135623730951`), while the transpiled PHP relies on PHP's default `echo`

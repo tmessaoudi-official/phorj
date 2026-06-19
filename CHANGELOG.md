@@ -6,6 +6,46 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M7 — Correctness Closure (the third backend leg, enforced)
+
+The transpiler→PHP backend is now inside the automated correctness loop. Previously
+`tests/differential.rs` gated only `run ≡ runvm`; the transpiled PHP was never executed, so
+transpiler→PHP divergences shipped silently — including inside examples advertising three-way
+byte-identity.
+
+- **PHP oracle (closes P0-ROOT).** `tests/differential.rs` gains `all_examples_transpile_and_match_php`
+  and `all_example_projects_transpile_and_match_php`: every runnable example/project is transpiled,
+  executed by a real `php`, and its stdout asserted byte-identical to the interpreter's (⇒ all three
+  backends identical, since `run ≡ runvm` is already gated). **Fails-not-skips:** `PHORGE_REQUIRE_PHP=1`
+  makes a missing `php` a test **failure** (CI mode); unset, it skips *loudly* (logged), never a silent
+  green. `PHORGE_PHP=<path>` overrides the binary. Examples using a not-yet-transpiled construct are
+  loudly deferred (logged `DEFER`, counted), not silently passed. The two narrow self-skipping PHP
+  round-trip tests in `tests/cli.rs` (and their if-let/opt!/match-optional siblings — five in all) are
+  removed, subsumed by the oracle.
+- **P0-1 — integer division.** `7 / 2` now transpiles to `__phorge_div(7, 2)` (a runtime helper:
+  `is_int($a)&&is_int($b) ? intdiv : /`), matching Phorge's truncate-toward-zero integer `/`. PHP's
+  always-float `/` previously made `7/2` print `3.5` instead of `3`, live in `operators.phg`.
+- **P0-4 — float modulo.** `5.5 % 2.0` transpiles to `__phorge_rem(…)` (`is_int…? % : fmod`), matching
+  Phorge's `fmod`-style float `%`. PHP's integer `%` previously printed `1` instead of `1.5`.
+- **P0-3 — bool interpolation.** An interpolated value is coerced via `__phorge_str` (`is_bool ?
+  "true"/"false" : (string)$v`), mirroring `Value::as_display`. PHP's bool-in-string previously printed
+  `1`/`` (empty) instead of `true`/`false`, live in `control-flow.phg`/`operators.phg`.
+- **P0-2 — operand grouping.** Compound operands of unary/binary ops are now parenthesized
+  (`a - (b - c)` → `$a - ($b - $c)`, `!(a && b)` → `!($a && $b)`), so PHP precedence can't
+  re-associate them.
+- **QW-13 — empty/reversed ranges.** Ranges transpile through `__phorge_range($a, $b, $inclusive)`,
+  which yields `[]` for an empty/reversed range (PHP's bare `range()` descends). The KNOWN_ISSUES
+  caveat is removed.
+- **P1-#9 — large ranges fault cleanly.** A range wider than the new single-sourced
+  `value::MAX_RANGE_LEN` (10M) now faults `"range too large"` (classified `FaultKind::RangeTooLarge`,
+  `agree_err`-gated on both backends) instead of OOM-aborting (exit 101). Length is computed with
+  `checked_sub` (EV-7). `value::build_range` single-sources the size-guarded materialization for both
+  backends.
+
+The four P0 fixes use runtime PHP helpers (mirroring Phorge's type-driven value kernels) rather than a
+transpiler-side static type resolver — no duplicated operand-type inference, no inference-completeness
+risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
+
 ### M3 S3 (Track A) — lambdas, first-class functions, and the pipe operator
 
 - **Lambdas / closures.** `fn(int x) => x * 2` (expression body, return type inferred) and

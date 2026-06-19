@@ -28,9 +28,12 @@ Scope and limits:
 
 ## Toolchain & gate
 
-`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 332 tests green, clippy clean (pedantic off).
-The differential harness (`tests/differential.rs`) is the correctness spine — `run` and `runvm`
-must stay byte-identical. Adding an `Op` variant requires extending three exhaustive matches in
+`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: ~453 tests green, clippy clean (pedantic off).
+The differential harness (`tests/differential.rs`) is the correctness spine — `run`, `runvm`, **and
+(since M7) the transpiled PHP** must stay byte-identical. The M7 **PHP oracle** there transpiles every
+example/project, runs it under a real `php`, and asserts stdout matches the interpreter; run the full
+gate with `PHORGE_REQUIRE_PHP=1` so a missing `php` **fails** (not skips). `PHORGE_PHP=<path>`
+overrides the binary. Adding an `Op` variant requires extending three exhaustive matches in
 the same commit: `src/vm.rs` `exec_op`, `src/chunk.rs` `BytecodeProgram::validate`, and
 `src/compiler.rs` `stack_effect`. `phg bench <file>` measures the two backends (median-of-N,
 output-identity gated) — run it for a before/after number before any perf change.
