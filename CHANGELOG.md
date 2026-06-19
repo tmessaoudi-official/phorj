@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M9 — Engineering Hygiene (CI enforcement)
+
+- **GitHub Actions CI (`.github/workflows/ci.yml`) — locks in M7.** A `gate` job runs the same three
+  checks as the local pre-commit hook (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
+  `cargo test`) on the toolchain pinned in `rust-toolchain.toml`, and sets `PHORGE_REQUIRE_PHP=1` (with
+  `php` installed via `setup-php`) so the M7 PHP oracle in `tests/differential.rs` **fails** rather than
+  skips if transpiled PHP diverges from the interpreter/VM. A `cross-build` job installs Zig +
+  `cargo-zigbuild` + the four Phase-2 cross targets + `llvm-objcopy` (from `llvm-tools-preview`, via
+  `PHORGE_OBJCOPY`) and runs `tests/build.rs` for real (x86_64-musl native exec + windows-gnu PE
+  round-trip), plus an aarch64-gnu/musl compile smoke. This makes CONTRIBUTING.md's "CI runs the same
+  gate" true (no workflow existed before).
+
 ### M7 — Correctness Closure (the third backend leg, enforced)
 
 The transpiler→PHP backend is now inside the automated correctness loop. Previously

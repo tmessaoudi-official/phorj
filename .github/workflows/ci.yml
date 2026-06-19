@@ -1,0 +1,116 @@
+name: CI
+
+# Locks in the M7 correctness closure. The `gate` job runs the SAME three checks as the local
+# pre-commit hook (scripts/git-hooks/pre-commit) — fmt + clippy(-D warnings) + the full test
+# suite — and additionally sets PHORGE_REQUIRE_PHP=1 so the PHP oracle in tests/differential.rs
+# FAILS (never silently skips) if transpiled PHP diverges from the interpreter/VM. The
+# `cross-build` job exercises `phg build --target` parity across the four Phase-2 cross targets.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# A newer push to the same ref cancels the in-flight run — saves CI minutes on rapid iteration.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    name: gate (fmt + clippy + test + PHP oracle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rustup honours rust-toolchain.toml (channel 1.96.0 + rustfmt + clippy components).
+      # `rustup show` installs that pinned toolchain and its components on first use, so the
+      # CI lints are byte-for-byte the ones a local commit faces — no floating-stable drift.
+      - name: Install pinned Rust toolchain
+        run: rustup show
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+
+      # The PHP oracle needs a real `php`. Transpiled output uses only core functions
+      # (intdiv / fmod / range / strpos / explode / echo), so a stock 8.4 build suffices.
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
+
+      # PHORGE_REQUIRE_PHP=1 turns a missing or non-working php into a test FAILURE — this is the
+      # enforcement CI adds on top of the local hook (which runs the oracle only when php happens
+      # to be on PATH). This line is what "locks in" M7.
+      - name: cargo test (PHP oracle enforced)
+        env:
+          PHORGE_REQUIRE_PHP: '1'
+        run: cargo test
+
+  cross-build:
+    name: cross-build (phg build --target parity)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
+
+      - name: Add cross targets
+        run: >
+          rustup target add
+          x86_64-unknown-linux-musl
+          aarch64-unknown-linux-gnu
+          aarch64-unknown-linux-musl
+          x86_64-pc-windows-gnu
+
+      # llvm-objcopy embeds the `.phorge` section into the cross-built stub (src/bundle/cross.rs).
+      # The toolchain's llvm-tools-preview ships a version-matched copy; PHORGE_OBJCOPY points the
+      # build at it (the binary is not on PATH under that name otherwise).
+      - name: Install llvm-objcopy (llvm-tools-preview)
+        run: |
+          rustup component add llvm-tools-preview
+          OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
+          test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
+          echo "PHORGE_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+
+      - name: Install cargo-zigbuild
+        run: cargo install --locked cargo-zigbuild
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+
+      # build.rs already exercises x86_64-musl (native exec) and windows-gnu (PE round-trip).
+      # This smoke covers the two aarch64 targets it does not run, so a broken aarch64 build still
+      # surfaces. --cap-lints=warn mirrors cross.rs so target-specific lints don't trip the deny gate.
+      - name: cargo zigbuild (aarch64 cross smoke)
+        env:
+          RUSTFLAGS: --cap-lints=warn
+        run: |
+          for t in aarch64-unknown-linux-gnu aarch64-unknown-linux-musl; do
+            echo "::group::zigbuild $t"
+            cargo zigbuild --release --bin phg --target "$t"
+            echo "::endgroup::"
+          done
+
+      # The real cross-parity tests: now that cargo-zigbuild, the targets, and llvm-objcopy are all
+      # present, tests/build.rs executes (instead of skipping) the musl native-exec and windows PE
+      # round-trip assertions.
+      - name: cargo test --test build (cross parity)
+        run: cargo test --test build

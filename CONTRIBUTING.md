@@ -28,7 +28,11 @@ cargo clippy --all-targets   # zero warnings — warnings are DENIED in the mani
 cargo fmt --check            # formatting matches rustfmt
 ```
 
-A pre-commit hook enforces this. CI runs the same gate. A change is not done until all three are
+A pre-commit hook (`scripts/git-hooks/pre-commit`) enforces this locally. GitHub Actions runs the
+same gate on every push and PR (`.github/workflows/ci.yml`), additionally setting
+`PHORGE_REQUIRE_PHP=1` so the PHP oracle in `tests/differential.rs` *fails* — never silently
+skips — if transpiled PHP diverges from the interpreter/VM. A second CI job exercises
+`phg build --target` cross-compilation parity. A change is not done until all three checks are
 clean. There is no `unsafe` in this crate — `#![forbid(unsafe_code)]` is set crate-wide and must stay.
 
 ## Test-driven by default

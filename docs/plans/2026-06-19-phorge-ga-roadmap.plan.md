@@ -116,7 +116,7 @@ wrong numbers, they produce PHP fatals.
 **Goal:** Make the project safe to evolve and honest to read — CI enforcement, the descriptor table that dissolves the 3-coupled-match, single-sourced parity surfaces, and a full doc-SSOT sync.
 
 **Exit criteria**
-- [ ] GitHub Actions CI exists: fmt + clippy + test, a PHP job (`PHORGE_REQUIRE_PHP=1`, fails not skips), a zig cross-build job; pin read from `rust-toolchain.toml`.
+- [x] GitHub Actions CI exists: fmt + clippy + test, a PHP job (`PHORGE_REQUIRE_PHP=1`, fails not skips), a zig cross-build job; pin read from `rust-toolchain.toml`. — `.github/workflows/ci.yml` (`gate` + `cross-build` jobs); the encoded gate verified green locally (453 tests, oracle enforced, fmt+clippy clean) before commit. *(Observed green on a real GitHub run pending first push.)*
 - [ ] ADRs written for the 5 load-bearing decisions (no shared run↔VM IR; erasure-not-monomorphization; Rc-not-GC; single-file brace-namespace PHP; offline-only vendor).
 - [ ] Op descriptor table (`Op::meta()` / `OpInfo`) dissolves the 3-coupled-match; `chunk::validate` is **exhaustive** (no `_ => None` fall-through).
 - [ ] Single-sourced: runtime fault strings (`faults`/`FaultMsg`), lambda capture-filter (`is_capturable`), native call-head resolution (`resolve_call_head`).
@@ -128,7 +128,7 @@ wrong numbers, they produce PHP fatals.
 
 | ID | Finding | file:line | Effort |
 |----|---------|-----------|--------|
-| Theme / I-07/I-29 / VB2/VJ-§1 / forge-H1 / G-19 / P1-#20 | No CI exists though CONTRIBUTING claims it; silent-green on missing toolchains | `.github/workflows/` (absent), `CONTRIBUTING.md:31` | Quick |
+| Theme / I-07/I-29 / VB2/VJ-§1 / forge-H1 / G-19 / P1-#20 | ✅ **DONE** — CI added (`.github/workflows/ci.yml`); `PHORGE_REQUIRE_PHP=1` enforces the oracle (fails, not skips); CONTRIBUTING claim now true | `.github/workflows/ci.yml`, `CONTRIBUTING.md` | Quick |
 | QW-15 / P1-#16 / forge-A2/C2/C6/D3 / I-36 | `chunk::validate` `_ => None` lets a new index/count Op skip its EV-7 bounds check | `src/chunk.rs:303-332` | Quick |
 | Theme / I-36/I-20 / VC-§7/VE-C2 / forge-A1/A2/D7/G1/B1/D3/C6 / S-24 | 3-backend evolution tax → `Op::meta()`/`OpInfo` descriptor table + exhaustive `validate` | `src/{vm,compiler,chunk}.rs` | Low-Med |
 | Theme / I-10 / forge-A1/B1 / P1-#22 | Fault strings hand-written twice + capture-filter duplicated 3-way | `src/interpreter.rs` ↔ `src/vm.rs`; `interpreter.rs:415-417` ↔ `transpile.rs:621-623` | Med |

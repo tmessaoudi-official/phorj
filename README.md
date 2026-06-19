@@ -1,5 +1,7 @@
 # Phorge
 
+[![CI](https://github.com/tmessaoudi-official/phorge/actions/workflows/ci.yml/badge.svg)](https://github.com/tmessaoudi-official/phorge/actions/workflows/ci.yml)
+
 **A small, statically-typed, PHP-inspired programming language — implemented in Rust, std-only, with
 zero external crates.**
 
