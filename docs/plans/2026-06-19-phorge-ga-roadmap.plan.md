@@ -13,6 +13,7 @@
 - [2026-06-19] AGREED: **M7 (correctness closure) is non-negotiably first** — the PHP oracle is the keystone of the correctness story and every later transpiler feature needs it to not regress.
 - [2026-06-19] AGREED: **M10 generics (`Ty::Var` + erasure-first) is the keystone unblock** — one type-system primitive gates `core.list`, `core.json`, `Map`/`Set`/tuples, router path-params, and function-type variance.
 - [2026-06-19] AGREED: the report-only review findings now become the **GA backlog**; this file is the working tracker, executed milestone-by-milestone.
+- [2026-06-19] AGREED: **spec M7 first, then build** (developer chose the spec-driven path for the first milestone) — write a detailed M7 implementation spec/plan (PHP-oracle design, CI-`php` availability strategy, per-P0-fix test list, divergence-class regression matrix) for review BEFORE writing code. Next action after compact = author the M7 spec.
 
 ---
 
