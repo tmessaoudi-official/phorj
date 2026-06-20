@@ -49,7 +49,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phg bench` |
 | Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phg disasm` |
 | Phorge → PHP transpiler (runs under real PHP) | ✅ | `phg transpile` |
-| Type-check / parse / lex inspection | ✅ | `phg check` / `parse` / `lex` |
+| Type-check / parse / lex inspection | ✅ | `phg check` / `parse` / `lex`; `phg check --json` emits machine-readable diagnostics (stage/severity/message/line/col/code/hint) for editors/LSP |
 | `--version` / `--help`, plus per-command help with examples | ✅ | `phg -v` / `-h` / `phg <cmd> --help` |
 | Sharp diagnostics: caret-underlined span, did-you-mean hints, stable codes | ✅ | front-end errors |
 | Diagnostic dictionary (look up a code) | ✅ | `phg explain <CODE>` |

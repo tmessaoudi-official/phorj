@@ -71,9 +71,13 @@ pub fn help_for(cmd: &str) -> String {
         }
         "check" => {
             "check — type-check only; print OK or the type errors, run nothing.\n\n\
-                    usage:\n  phg check <file | - | -e code>\n\n\
+                    usage:\n  phg check [--json] <file | - | -e code>\n\n\
+                    flags:\n  \
+                    --json   emit diagnostics as a JSON array (stage/severity/message/line/col/\n           \
+                    code/hint) to stdout for editors/LSP; exit 0 if clean, 1 if errors\n\n\
                     examples:\n  \
-                    phg check src.phg\n"
+                    phg check src.phg\n  \
+                    phg check --json src.phg\n"
         }
         "parse" => {
             "parse — print the parsed AST (no type-check).\n\n\
@@ -470,6 +474,19 @@ pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         check_and_expand(prog, diag_src)?;
         Ok("OK (type-checks clean)\n".to_string())
+    })
+}
+
+/// `check --json` on an already-loaded program: machine-readable diagnostics for editor / LSP
+/// integration (the seam `diagnostic.rs` calls out). Returns the JSON array (errors then warnings; see
+/// [`crate::diagnostic::diagnostics_json`]) and whether any *error* was present, so the caller prints
+/// the array to **stdout** and exits 0 (clean / warnings only) or 1 (errors) — `check`'s exit
+/// semantics, but the array is always the output and nothing goes to stderr. Positions ride on each
+/// diagnostic, so no `diag_src` is needed.
+pub fn check_json_program(prog: &Program) -> (String, bool) {
+    on_deep_stack(|| match crate::checker::check_resolutions(prog) {
+        Ok((warnings, _html)) => (crate::diagnostic::diagnostics_json(&[], &warnings), false),
+        Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),
     })
 }
 

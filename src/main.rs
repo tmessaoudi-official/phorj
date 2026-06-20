@@ -216,9 +216,11 @@ fn main() {
     // `bench` accepts an optional `--vs-php` flag (transpile + median-time the PHP backend too).
     // Strip it before source resolution so it isn't mistaken for a file/flag.
     let bench_vs_php = cmd == "bench" && args[2..].iter().any(|a| a == "--vs-php");
+    // `check --json` emits machine-readable diagnostics (LSP foothold) instead of the "OK" text.
+    let check_json = cmd == "check" && args[2..].iter().any(|a| a == "--json");
     let rest: Vec<String> = args[2..]
         .iter()
-        .filter(|a| a.as_str() != "--vs-php")
+        .filter(|a| a.as_str() != "--vs-php" && a.as_str() != "--json")
         .cloned()
         .collect();
     // run/runvm/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
@@ -245,6 +247,12 @@ fn main() {
         match cmd {
             "run" => cli::run_program(&unit.program, &unit.diag_src),
             "runvm" => cli::runvm_program(&unit.program, &unit.diag_src),
+            "check" if check_json => {
+                // JSON diagnostics go to stdout regardless; exit 0 (clean) or 1 (errors present).
+                let (json, had_errors) = cli::check_json_program(&unit.program);
+                print!("{json}");
+                exit(i32::from(had_errors));
+            }
             "check" => cli::check_program(&unit.program, &unit.diag_src),
             "transpile" => cli::transpile_program(&unit.program, &unit.diag_src),
             _ => unreachable!("matched above"),

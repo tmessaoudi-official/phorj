@@ -70,6 +70,39 @@ fn check_clean_fixture_exits_0() {
 }
 
 #[test]
+fn check_json_clean_emits_empty_array_exit_0() {
+    let out = Command::new(BIN)
+        .args(["check", "--json", "tests/fixtures/sample.phg"])
+        .output()
+        .expect("spawn phg");
+    assert!(out.status.success());
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "[]\n");
+}
+
+#[test]
+fn check_json_error_emits_diagnostic_array_exit_1_no_stderr() {
+    let out = Command::new(BIN)
+        .args([
+            "check",
+            "--json",
+            "-e",
+            "package main; function main(){ var x = nope; }",
+        ])
+        .output()
+        .expect("spawn phg");
+    // Errors → exit 1, but the JSON array is on stdout (parseable) and nothing on stderr.
+    assert_eq!(out.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.starts_with('['), "{stdout}");
+    assert!(stdout.contains("\"severity\":\"error\""), "{stdout}");
+    assert!(stdout.contains("\"code\":\"E-UNKNOWN-IDENT\""), "{stdout}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).is_empty(),
+        "stderr should be empty in --json mode"
+    );
+}
+
+#[test]
 fn transpile_sample_exits_0_with_php() {
     let out = Command::new(BIN)
         .args(["transpile", "tests/fixtures/sample.phg"])

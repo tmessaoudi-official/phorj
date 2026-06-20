@@ -43,4 +43,10 @@ Act on / re-run the 2026-06-19 review reports (sleuth/inspect/gaps/forge) agains
 tree, or run a fresh pass. Hardening, not features.
 
 ## Formal Plan
-Track 1 is in flight (Phase 5). Tracks 2–4 planned above; each gets a refined plan at its turn.
+- **Track 1 — DONE** (`9ca5a47`, pre-commit OK): macro-monomorphized per-tag natives, byte-identical
+  run/runvm/PHP, docs + memory updated.
+- **Track 2 — DONE**: `phg check --json` — std-only diagnostics serializer on `Diagnostic`
+  (`diagnostic.rs`), `cli::check_json_program`, `--json` wired in `main.rs` (stdout + exit 0/1),
+  unit + 2 CLI tests, FEATURES/CHANGELOG/`--help` updated. Gate green (FMT/CLIPPY 0, tests pass).
+- **Track 3 — next** (namespace reshape, slice 1: manifest `name` → `module`).
+- Track 4 planned above; refined at its turn.

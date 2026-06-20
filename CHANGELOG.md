@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Tooling — `phg check --json` (machine-readable diagnostics, LSP foothold)
+
+- **`phg check --json`** emits the checker's diagnostics as a single-line JSON array to stdout (the
+  seam `src/diagnostic.rs` always intended): each object carries `stage`/`severity`/`message`/
+  `line`/`col`/`code`/`hint` (`code`/`hint` are `null` when absent), errors first then warnings.
+  Exit 0 when clean (or warnings only), 1 when any error is present — but the array is always the
+  output and nothing goes to stderr, so an editor/LSP can parse it unconditionally. Serializer is
+  std-only (RFC-8259 escaping, no serde) on the existing `Diagnostic` type — no backend touched, no
+  byte-identity surface. Plain `phg check` is unchanged.
+
 ### core.html — typed auto-escaping HTML (Waves 1–3: escape kernel + element builders + `html"…"` sugar)
 
 - **Named per-tag helpers (Option 1).** A curated common HTML5 tag set — `html.div`/`html.p`/`html.a`/

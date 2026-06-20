@@ -131,6 +131,28 @@ impl Diagnostic {
     pub fn compile(message: impl Into<String>) -> Self {
         Self::new(Stage::Compile, message, 0, 0)
     }
+
+    /// Serialize this diagnostic as one JSON object with the given `severity` (`"error"` /
+    /// `"warning"`). The shape is stable for machine consumers (editors / a future LSP, the seam this
+    /// module's docs call out): every object carries `stage`/`severity`/`message`/`line`/`col` plus
+    /// `code`/`hint` (JSON `null` when absent). `line`/`col` are 1-based; `0` means "unknown" (the
+    /// interpreter and compiler track no position) — emitted verbatim so consumers can detect it.
+    fn to_json(&self, severity: &str) -> String {
+        let code = self
+            .code
+            .map_or_else(|| "null".to_string(), |c| format!("\"{}\"", json_escape(c)));
+        let hint = self
+            .hint
+            .as_ref()
+            .map_or_else(|| "null".to_string(), |h| format!("\"{}\"", json_escape(h)));
+        format!(
+            "{{\"stage\":\"{}\",\"severity\":\"{severity}\",\"message\":\"{}\",\"line\":{},\"col\":{},\"code\":{code},\"hint\":{hint}}}",
+            self.stage.label(),
+            json_escape(&self.message),
+            self.line,
+            self.col,
+        )
+    }
 }
 
 impl fmt::Display for Diagnostic {
@@ -150,6 +172,37 @@ impl fmt::Display for Diagnostic {
     }
 }
 
+/// JSON-escape a string per RFC 8259 (std-only — no serde): the two mandatory escapes (`"`, `\`),
+/// the common control shorthands, and a `\uXXXX` fallback for any other C0 control char. Phorge
+/// strings are valid UTF-8, so non-ASCII passes through unescaped (legal in JSON).
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Serialize errors + warnings into one JSON array on a single line (errors first, then warnings),
+/// terminated by a newline. The `check --json` output (M3 / LSP foothold) — a stable, parseable shape
+/// (see [`Diagnostic::to_json`]). No diagnostics ⇒ `[]`.
+pub fn diagnostics_json(errors: &[Diagnostic], warnings: &[Diagnostic]) -> String {
+    let objs: Vec<String> = errors
+        .iter()
+        .map(|d| d.to_json("error"))
+        .chain(warnings.iter().map(|d| d.to_json("warning")))
+        .collect();
+    format!("[{}]\n", objs.join(","))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,6 +215,29 @@ mod tests {
         assert_eq!(d.to_string(), "parse error at 3:7: expected ';'");
         let t = Diagnostic::new(Stage::Type, "type mismatch", 10, 2);
         assert_eq!(t.to_string(), "type error at 10:2: type mismatch");
+    }
+
+    #[test]
+    fn json_serialization_is_stable_and_escaped() {
+        // A clean program → empty array (with the trailing newline `print!` carries).
+        assert_eq!(diagnostics_json(&[], &[]), "[]\n");
+        // Error object: stable field shape; code present, hint null.
+        let e = Diagnostic::new(Stage::Type, "type mismatch", 3, 5).with_code("E-TYPE");
+        assert_eq!(
+            diagnostics_json(std::slice::from_ref(&e), &[]),
+            "[{\"stage\":\"type\",\"severity\":\"error\",\"message\":\"type mismatch\",\"line\":3,\"col\":5,\"code\":\"E-TYPE\",\"hint\":null}]\n"
+        );
+        // Special chars in a message are escaped (so the array stays valid JSON); a warning carries
+        // severity "warning" and a present hint.
+        let w = Diagnostic::new(Stage::Type, "bad \"x\"\n\\tab", 0, 0).with_hint("use `y`");
+        let json = diagnostics_json(&[], std::slice::from_ref(&w));
+        assert!(json.contains("\"severity\":\"warning\""), "{json}");
+        assert!(json.contains("bad \\\"x\\\"\\n\\\\tab"), "{json}");
+        assert!(json.contains("\"hint\":\"use `y`\""), "{json}");
+        assert!(json.contains("\"code\":null"), "{json}");
+        // Errors are serialized before warnings.
+        let both = diagnostics_json(std::slice::from_ref(&e), std::slice::from_ref(&w));
+        assert!(both.find("\"error\"").unwrap() < both.find("\"warning\"").unwrap());
     }
 
     #[test]
