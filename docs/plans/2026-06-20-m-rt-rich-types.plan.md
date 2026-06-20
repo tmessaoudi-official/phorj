@@ -210,6 +210,10 @@
   all three codes. Docs synced (FEATURES/KNOWN_ISSUES/CHANGELOG/examples/README/CLAUDE.md). Deferred to
   KNOWN_ISSUES: enum-in-union, intersection/negative-flow narrowing, common-member access on a raw union,
   whole-union optional. **NEXT: S5 intersections `A&B`.**
+- [2026-06-20] AGREED (S5 pace): **design first, then stop for review** (developer chose "S5, design
+  first" over autonomous-implement, mirroring the S4 flow). Produce the S5 intersection-types design
+  spec; do not implement until the open decisions are resolved. Spec:
+  `docs/specs/2026-06-20-s5-intersection-types-design.md`.
 
 ## Formal Plan
 
