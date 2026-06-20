@@ -78,4 +78,68 @@ tree, or run a fresh pass. Hardening, not features.
   - Slice 3: entry `package main` → `package Main`.
   - Slice 4: types in libraries (lift `E-PKG-TYPE` + cross-package type mangling + namespaced PHP +
     D5b type-vs-leaf guard).
-- Track 4 planned above; refined at its turn.
+- **Track 4 — Review pass — DONE** (background Workflow `wjq47kit9`, 26 agents, 14 dims,
+  adversarially verified). Report (NOT committed — public repo, live vuln detail):
+  `~/.claude/projects/-stack-projects-phorge/reviews/2026-06-20-ga-readiness-review.md`.
+  Verdict: **NOT GA-ready but close**; spine held in every test; all weakness in non-spine
+  M5/M6 modules. Drives the GA punch-list below.
+
+## GA Readiness — punch-list (target: taggable 1.0; user: "everything to GA-taggable")
+
+Code state: master `012e8cc` (slice 1 `ce588e3`, slice 2a `5d60346`, README `012e8cc`).
+
+### GA blockers B1-B4 + serve tests — DONE (done inline on master, 2026-06-20)
+
+All four hard blockers + the serve test gaps closed inline on the correct base (no worktree, after
+the stale-base abort lesson). Two commits, both green through the full pre-commit gate (PHP oracle
+included):
+- **B1+B2** (`fix(security): close phg vendor git arg-injection + path traversal`): `vendor.rs`
+  `--`/`protocol.ext.allow=never` + reject leading-`-`/`ext::`/`file::` (file:// still allowed);
+  `manifest.rs` `validate_path_component` for dep.name + source (reject `..`/absolute/bad-char),
+  re-checked at vendor + loader join sites. New unit tests; `file://` integration still green.
+- **B3+B4+P1-d** (`fix(security): make phg serve DoS-resilient …`): resilient accept loop +
+  consecutive-error circuit breaker (B3); per-conn read/write timeout + `--timeout` (B4);
+  `read_http_request` → `&mut impl Read` + 10 framing unit tests + un-ignored `tcp_smoke` (P1-d);
+  P1-e 500-degradation tests. **Bonus root-cause fix:** the O(n²) whole-buffer terminator re-scan
+  (CPU-DoS on a large no-terminator request) → scans only new bytes. SECURITY.md + `--help` updated.
+- **LESSON (kept):** do not trust `isolation: worktree` to branch from current master — verify the
+  base, or run inline / via a non-worktree subagent on master.
+
+### Foreground (parent): finish the reshape
+- **Slice 2b — NEXT**: `E-PKG-CASE` PascalCase package/folder segments — **exempt reserved `core`
+  root + `main` entry** (entry rename is slice 3). Touches `src/checker.rs` (casing pass already there
+  from 2a — add segment check), `src/loader.rs` (folder=path is case-sensitive), example project
+  folders (`examples/project/*/src/acme/...` → `.../Acme/...`) + `package` decls, and the inline
+  fixtures in `tests/project.rs`/`tests/loader.rs`/`tests/vendor.rs` (`package acme.util;` +
+  `src/acme/util/` → `package Acme.Util;` + `src/Acme/Util/`). Imports of user packages → PascalCase;
+  `core.*` imports + native module paths stay lowercase (reserved). Avoid editing the exact
+  `loader.rs` dep.name-validation region the blocker subagent (B2) touches — cherry-pick first or
+  resolve on merge.
+- **Slice 3**: entry `package main` → `package Main` (mechanical once 2b lands; drop the `main` exemption).
+- **Slice 4**: types in libraries — lift `E-PKG-TYPE`, cross-package type mangling, namespaced PHP for
+  classes/enums, D5b type-vs-leaf guard. (The only real new *capability*; rest is rename.)
+
+### Then: remaining GA P1/P2 punch-list (fan out)
+- **P1-a** float honesty: KNOWN_ISSUES claim that exactly-representable floats render byte-identically
+  is FALSE (PHP sci-notation). At minimum correct the claim; ideally fix `__phorge_str`/`println`
+  float formatting (positional shortest-round-trip). Spine unaffected. `src/transpile.rs:251`,
+  `src/native.rs:963`.
+- **P1-b** transpiler rejects literal/expression `match` + `is` (M11 gap): complete the arms OR
+  down-scope the README "transpile the whole language" claim. `src/transpile.rs:579,638,915`.
+- **P1-c** ext-policy denylist scan (no PHP needed): drive every `NativeFn.php` + transpile every
+  example, assert no `mb_|ctype_|iconv|...` token; gate in CI. `src/native.rs:533`.
+- **P1-f** fuzz/no-panic harness for EV-7 (std-only LCG + grammar-shaped bytes through
+  lex/parse/check/run/runvm, assert no panic). `tests/`.
+- **P1-g** structure loader diagnostics (`Result<Unit, Vec<Diagnostic>>`, route `check --json` through
+  loader) before the `--json` shape freezes at 1.0. `src/loader.rs`, `src/cli.rs`.
+- **P2 cluster** (transpiler fidelity): `==`/`!=` → strict `===`/`!==` + `__phorge_eq`; `trim`/`upper`/
+  `lower` ASCII-only parity; per-call-site scratch names; `println` via `__phorge_str`; a per-native
+  PHP-mapping differential test; `core.file` no-sandbox doc + read size cap; built-binary exit status;
+  serve eager `respond` validation; leaf-resolution parity hole (`index_of_by_leaf`).
+- **P3**: vendor `&rev[..12]` char-boundary; `overflow-checks` profile; stale "M1"/comment cleanup;
+  diagnostic code coverage + explain-coverage enforcement test.
+
+### Benchmarking (user priority — perf story)
+- Current `phg bench --vs-php` is vs a **debug** PHP build → not a credible "faster than PHP" claim.
+  Build/point at an **optimized** PHP (opcache, NTS release) and run **multiple** workloads before
+  any public perf assertion. README already hedged ("early", "sample workload").
