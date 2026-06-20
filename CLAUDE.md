@@ -367,11 +367,34 @@ lowercase **user**-package leaf. Codemod `tools/core_rename*.py` retained. *Pend
 **Developer decisions (2026-06-20, post-S7a):** generics reach = **ALL** (methods + generic types/classes
 too); `core.list` map/filter/reduce = **higher-order native** (`NativeEval::HigherOrder` + backend
 closure-invoker + re-entrant `vm.run_until`/`call_closure_value`, no new Op, → array_map/filter/reduce);
-sequence = Core rename✓ → **S7b** → generics-all. **Next: S7b** — `Core.List` (map/filter/reduce via the
-HOF native + reverse/sum), `Set` (Value::Set + construction native + contains/size), Map keys/values/has/
-size; no-callback ops are `Ty::Param`-sig natives unified in `check_native_call`. Then generics-all
-(methods → `Box<T>`) → S4 unions → S5 → S6 → S8. Locked decisions + slice order live in the plan's
-Decisions Log; full design `~/.claude/plans/misty-honking-lynx.md`. See [[m-rt-progress]] memory.
+sequence = Core rename✓ → **S7b** → generics-all → S4 unions → S5 → S6 → S8.
+
+**S7b IN PROGRESS (2 of 3 sub-slices done):**
+- **S7b-1 DONE (`1a5e72e`):** generic-typed native-call path (`check_native_call` routes through
+  `check_generic_call` when the native sig has a `Ty::Param`; helper `ty_has_param`) + `Core.Map`
+  keys/values/has/size + `Core.List` reverse/sum. A native's `Ty::Param` is registry-only, never erased,
+  but safe: the compiler types a native call by *expression shape* (→`CTy::Other`) and the transpiler
+  emits via the `php` closure, so no type var reaches a backend. No new Op/Value. `guide/collections-query.phg`.
+- **S7b-2 DONE (`81bf98c`):** `Set<T>` via `Core.Set` of/contains/size; realigned `Value::Set`
+  `HashSet<HKey>` → insertion-ordered `Rc<Vec<HKey>>` (Map discipline, R1) + `value::build_set` kernel +
+  order-independent `eq_val` Set arm. Erases to deduped PHP array. `guide/sets.phg`. 431 lib tests.
+- **S7b-3 NEXT:** `Core.List` map/filter/reduce via Option-B `NativeEval::HigherOrder` (eval enum +
+  backend closure-invoker + re-entrant VM `run_until`/`call_closure_value`). No new Op. The hard one.
+
+**Developer next-step intent (2026-06-20):** do **S7b-3 then generics-all**, AND keep brainstorming
+the **E-PKG-TYPE lift / cross-package types** (the prerequisite that unblocks selective type import).
+
+**SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec
+`docs/specs/2026-06-20-selective-type-import-design.md`): **`import type Pkg.Path.TypeName [as A];`** for
+user/library types only → bare type name; FQN PHP emission; built-ins stay import-free (so
+`import Core.List.List` is intentionally NOT a thing — `List<T>` is a primitive); functions stay
+Go-qualified; no wildcard (PHP has no `use A\*`). Erasure-style (checker+loader). **Gated on E-PKG-TYPE
+lift** (part of generics-all). Clarified: brace-namespace PHP output is forced (single-file multi-pkg +
+global bootstrap; PHP needs braces to mix global+namespaced; semicolon form would need 1-file-per-pkg +
+PSR-4 which can't autoload free fns).
+
+Locked decisions + slice order live in the plan's Decisions Log; full M-RT design
+`~/.claude/plans/misty-honking-lynx.md`. See [[m-rt-progress]] memory.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and
