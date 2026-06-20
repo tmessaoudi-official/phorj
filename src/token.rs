@@ -63,6 +63,10 @@ pub enum TokenKind {
     Arrow,
     FatArrow,
     Pipe,
+    /// A lone `|` — the union-type separator `A | B` (M-RT S4). Distinct from `|>` (`Pipe`) and
+    /// `||` (`OrOr`); the lexer's two-char dispatch claims those first, so a bare `|` falls through
+    /// to this single-char token.
+    Bar,
     LParen,
     RParen,
     LBrace,

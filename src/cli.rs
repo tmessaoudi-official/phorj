@@ -357,6 +357,28 @@ pub fn explain_text(code: &str) -> Option<String> {
              `interface A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
              method set. Break the cycle so every interface's `extends` chain bottoms out.\n"
         }
+        "E-UNION-MEMBER" => {
+            "E-UNION-MEMBER — a union member is not an allowed type.\n\n\
+             A union `A | B` (M-RT S4) may combine classes, interfaces, and primitives\n\
+             (`int | string`). Enum members, optional `T?` members, and function-typed members are not\n\
+             supported this slice — an enum is already a closed sum (match its variants directly), and\n\
+             optional/function members complicate the PHP `A|B` emission. Replace the member, or model\n\
+             the case differently.\n"
+        }
+        "E-UNION-ARITY" => {
+            "E-UNION-ARITY — a union needs two or more distinct types.\n\n\
+             `A | A` (or any union whose members are all the same after normalization) collapses to a\n\
+             single type, so it is not a union. Give the union at least two distinct members, or use the\n\
+             single type directly.\n"
+        }
+        "E-MATCH-TYPE" => {
+            "E-MATCH-TYPE — a `match` type pattern is invalid.\n\n\
+             A type pattern (`Circle c => …`, M-RT S4) matches when the scrutinee is an instance of the\n\
+             named **class or interface** — the same runtime test as `instanceof`. The name must be a\n\
+             declared class or interface (not an enum — match an enum's variants directly), and a type\n\
+             pattern is allowed only at the **top level** of a match arm, not nested inside a variant\n\
+             pattern. Use it to match over a union scrutinee.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -367,7 +389,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE)"
         )
     })
 }

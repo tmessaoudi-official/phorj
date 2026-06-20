@@ -852,7 +852,7 @@ impl Interp {
         let value = self.eval(scrutinee)?;
         for arm in arms {
             let mut bindings = Vec::new();
-            if match_pattern(&arm.pattern, &value, &mut bindings) {
+            if match_pattern(&arm.pattern, &value, &self.class_implements, &mut bindings) {
                 self.frame.push_scope();
                 for (n, v) in bindings {
                     self.frame.declare(&n, v);
@@ -926,10 +926,16 @@ fn compare(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     Ok(Value::Bool(res))
 }
 
-/// Try to match `pat` against `value`, pushing any bindings. Returns whether it
-/// matched. (Free function: no interpreter state needed.)
+/// Try to match `pat` against `value`, pushing any bindings. Returns whether it matched. `implements`
+/// is the shared `class_implements` table (needed by a type pattern to test an interface RHS — the
+/// same data the `instanceof` evaluation uses, so the two can't diverge).
 #[allow(clippy::float_cmp)] // intentional: literal float patterns match exactly
-fn match_pattern(pat: &Pattern, value: &Value, out: &mut Vec<(String, Value)>) -> bool {
+fn match_pattern(
+    pat: &Pattern,
+    value: &Value,
+    implements: &std::collections::BTreeMap<String, Vec<String>>,
+    out: &mut Vec<(String, Value)>,
+) -> bool {
     match pat {
         Pattern::Wildcard(_) => true,
         Pattern::Binding { name, .. } => {
@@ -947,10 +953,28 @@ fn match_pattern(pat: &Pattern, value: &Value, out: &mut Vec<(String, Value)>) -
                     return fields
                         .iter()
                         .zip(&ev.payload)
-                        .all(|(fp, fv)| match_pattern(fp, fv, out));
+                        .all(|(fp, fv)| match_pattern(fp, fv, implements, out));
                 }
             }
             false
+        }
+        // M-RT S4 type pattern: matches iff `value` is an instance whose class equals `type_name` or
+        // implements interface `type_name` — exactly the `instanceof` test (`eval` arm above), so the
+        // backends agree. Binds the matched value (if a binder is present).
+        Pattern::Type {
+            type_name, binding, ..
+        } => {
+            let is = matches!(value, Value::Instance(inst)
+                if inst.class == *type_name
+                    || implements
+                        .get(&inst.class)
+                        .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
+            if is {
+                if let Some(name) = binding {
+                    out.push((name.clone(), value.clone()));
+                }
+            }
+            is
         }
     }
 }

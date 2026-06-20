@@ -379,6 +379,19 @@ impl Transpiler {
                 "List" | "Map" | "Set" => "array".into(),
                 other => php_type_ref(other), // enum / class / interface name (FQN if cross-package)
             },
+            // A union → PHP 8.0 native `A|B` (M-RT S4). Members emit via the same `emit_type`, so a
+            // cross-package member would carry its FQN; dedup defensively (the checker already
+            // guarantees ≥2 distinct members). `int|int` can't occur in a well-typed program.
+            Type::Union(members, _) => {
+                let mut parts: Vec<String> = Vec::new();
+                for m in members {
+                    let p = Self::emit_type(m);
+                    if !parts.contains(&p) {
+                        parts.push(p);
+                    }
+                }
+                parts.join("|")
+            }
             // A function-typed parameter/return erases to PHP `\Closure` (M3 S3).
             Type::Function { .. } => "\\Closure".into(),
             // An erased generic type parameter (M-RT S7) → PHP `mixed` (the runtime is untyped; the
@@ -1145,6 +1158,28 @@ impl Transpiler {
                         "{cond_kw} ({subj} === {b}) {{ {} }}",
                         yield_stmt(&target, &body)
                     ));
+                    first = false;
+                }
+                // M-RT S4 type pattern → a PHP `instanceof` guard, binding the narrowed value. The
+                // type name uses `php_type_ref` (FQN if cross-package), mirroring `Expr::InstanceOf`.
+                Pattern::Type {
+                    type_name, binding, ..
+                } => {
+                    self.push_scope();
+                    let bind = match binding {
+                        Some(name) => {
+                            self.declare(name);
+                            format!("${name} = {subj}; ")
+                        }
+                        None => String::new(),
+                    };
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!(
+                        "{cond_kw} ({subj} instanceof {}) {{ {bind}{} }}",
+                        php_type_ref(type_name),
+                        yield_stmt(&target, &body)
+                    ));
+                    self.pop_scope();
                     first = false;
                 }
             }

@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — union types `A | B` + match-over-union (Rich Types, M-RT S4)
+
+- **Union types:** `A | B | C` is a value that is *one of* several types — the open-composition
+  counterpart to a closed `enum`. Members may be classes, interfaces, and primitives (`int | string`),
+  and a value of any member flows into a union-typed slot (`Circle` → `Circle | Square`). A union is
+  **normalized** (`Ty::union_of`: flatten nested, dedupe, canonical-sort by `Display`), so `A | B` and
+  `B | A` are the same type. Lexes a lone `|` to a new `TokenKind::Bar` (distinct from `|>`/`||`);
+  transpiles to PHP 8.0 native `A|B`. Byte-identical `run ≡ runvm ≡ real PHP`
+  (new `examples/guide/unions.phg`).
+- **match-over-union via type patterns:** `match s { Circle c => …, Square sq => … }` matches each arm
+  by a runtime type test, binding the narrowed instance — **exhaustive over the union's member set**
+  like an enum match. This is the one new pattern kind (`Pattern::Type`), threaded through the parser
+  (disambiguated as two identifiers in pattern position — `Circle c`; a lone `Circle =>` stays a
+  catch-all binding), checker (binding + narrowing + exhaustiveness), and all four backends. It reuses
+  the S1 `instanceof` machinery — **no new `Op`** (the interpreter threads `class_implements`; the
+  compiler emits load-path + `Op::IsInstance` + `JumpIfFalse`; the transpiler emits a PHP `instanceof`
+  guard). `instanceof` narrowing now also accepts a union operand. Type patterns are top-level-only
+  (nesting in a variant payload is a clean `E-MATCH-TYPE`). New codes: `E-UNION-MEMBER` (enum/optional/
+  function members rejected), `E-UNION-ARITY` (a union needs ≥2 distinct members), `E-MATCH-TYPE`; all
+  carry `phg explain` entries. **Deferred:** enum members in a union, intersection/negative-flow
+  narrowing, common-member access on a raw union, whole-union optional `(A|B)?` (see KNOWN_ISSUES).
+
 ### Added — erased generics `<T>` on classes (Rich Types, M-RT generics-all)
 
 - **Generic types/classes:** a class may declare type parameters after its name —

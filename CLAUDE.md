@@ -431,7 +431,30 @@ only; inference-only construction (no `Box<int>(7)`); invariant, no bounds, no g
 limitation (KNOWN_ISSUES):** a generic-typed *result* erases to `mixed` (`CTy::Other`), so it is not a
 specialized arithmetic operand — `id(7) + 1` / `box.get() + 1` runs on the interpreter but the VM rejects
 it (`run`↔`runvm` mismatch); bind to a typed local first. Applies to all erased generics (pre-existing
-since S7a). **NEXT (M-RT slice order): S4 unions `A|B`** → S5 intersections → S6 `extends` → S8 traits.
+since S7a).
+
+**M-RT S4 — union types `A|B` + match-over-union — COMPLETE** (design
+`docs/specs/2026-06-20-s4-union-types-design.md`; developer chose "one big S4" = unions *and*
+match-over-union together, autonomous). A union value is *one of* several types — classes, interfaces,
+or **primitives** (`int|string`); a value of any member flows into a union-typed slot. Lexes a lone
+`|` to a new **`TokenKind::Bar`** (`|>`/`||` claimed first); `parse_type` parses a single atom then
+loops on `Bar`. `Ty::Union(Vec<Ty>)` is **normalized** (`Ty::union_of`: flatten/dedupe/canonical-sort
+by `Display`; a 1-member collapse *is* that member → `E-UNION-ARITY`). Assignability is member-in /
+subset-in / all-members-out (threaded through `assignable_with`). Reach a member two ways: **`instanceof`
+narrowing** (now accepts a union operand) or **match-over-union type patterns**
+(`match s { Circle c => … }`) — the one new pattern kind **`Pattern::Type`**, exhaustive over the member
+set like an enum match, **reusing the S1 `Op::IsInstance` (NO new `Op`, no `Value` change)**: the
+interpreter threads `class_implements` into `match_pattern`; the compiler `emit_pattern_test` emits
+load-path + `IsInstance` + `JumpIfFalse`; the transpiler emits a PHP `instanceof` guard. Parser
+disambiguates a type pattern as two idents (`Circle c`); a lone `Circle =>` stays a catch-all binding
+(footgun preserved). `expect_prim` relaxed so literal patterns match a primitive-union scrutinee
+(`match code { 0 => …, "ok" => … }`). Transpiles to PHP 8.0 `A|B`. Byte-identical run≡runvm≡**real PHP**
+(`examples/guide/unions.phg`); 461 lib + differential PHP oracle + 53 integration green. New codes
+`E-UNION-MEMBER`/`E-UNION-ARITY`/`E-MATCH-TYPE` (+ `phg explain`). Scope: `package main` only; union
+members are classes/interfaces/primitives (enum/optional/function members rejected). **Deferred**
+(KNOWN_ISSUES): enum-in-union, intersection/negative-flow narrowing, common-member access on a raw
+union, whole-union optional `(A|B)?`, type pattern nested in a variant payload. **NEXT (M-RT slice
+order): S5 intersections `A&B`** → S6 `extends` (final-by-default) → S8 traits.
 
 **SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec
 `docs/specs/2026-06-20-selective-type-import-design.md`): **`import type Pkg.Path.TypeName [as A];`** for

@@ -604,6 +604,9 @@ fn resolve_cty(ty: &Type) -> CTy {
             params: params.iter().map(resolve_cty).collect(),
             ret: Box::new(resolve_cty(ret)),
         },
+        // A union value is not a specialized arithmetic operand (M-RT S4); after `instanceof`/type-
+        // pattern narrowing the *narrowed local* carries the concrete `CTy`, not the union local.
+        Type::Union(..) => CTy::Other,
     }
 }
 
@@ -1788,6 +1791,14 @@ impl<'a> Compiler<'a> {
                     self.emit_pattern_test(fp, m_slot, &sub, skips, line)?;
                 }
             }
+            // M-RT S4 type pattern: the arm matches iff the sub-value is an instance of `type_name`
+            // — the SAME runtime test as `instanceof`, reusing `Op::IsInstance` (no new op). Mirrors
+            // the Variant flow: load the value, test, skip on a false result.
+            Pattern::Type { type_name, .. } => {
+                self.emit_load_path(m_slot, path, line);
+                self.emit(Op::IsInstance(type_name.clone()), line);
+                skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
+            }
         }
         Ok(())
     }
@@ -1846,7 +1857,19 @@ impl<'a> Compiler<'a> {
                     self.register_bindings(fp, m_slot, &sub, ty)?;
                 }
             }
-            _ => {} // wildcard / literals bind nothing
+            // M-RT S4 type pattern: bind the matched value (the whole sub-value at `path`) as the
+            // narrowed class, so `binding.field` resolves (the Wave-4 class-aware operand path).
+            Pattern::Type {
+                type_name,
+                binding: Some(name),
+                ..
+            } => self.match_bindings.push(MatchBinding {
+                name: name.clone(),
+                match_slot: m_slot,
+                path: path.to_vec(),
+                ty: CTy::Class(type_name.clone()),
+            }),
+            _ => {} // wildcard / literals / `Type _` bind nothing
         }
         Ok(())
     }

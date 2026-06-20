@@ -199,6 +199,52 @@ impl Checker {
         use crate::ast::Type;
         match ty {
             Type::Optional { inner, .. } => Ty::Optional(Box::new(self.resolve_type(inner))),
+            Type::Union(members, span) => {
+                // M-RT S4: resolve each member, validate its kind (classes/interfaces/primitives
+                // only — enums/optionals/functions are rejected so the PHP `A|B` emission and the
+                // instanceof-based match stay sound), then normalize. A degenerate union that
+                // collapses to one member after dedupe is `E-UNION-ARITY`.
+                let resolved: Vec<Ty> = members.iter().map(|m| self.resolve_type(m)).collect();
+                for ty in &resolved {
+                    let ok = match ty {
+                        Ty::Int
+                        | Ty::Float
+                        | Ty::Bool
+                        | Ty::String
+                        | Ty::Bytes
+                        | Ty::Html
+                        | Ty::Attr
+                        | Ty::Error => true,
+                        Ty::Named(n, _) => {
+                            self.classes.contains_key(n) || self.interfaces.contains_key(n)
+                        }
+                        _ => false,
+                    };
+                    if !ok {
+                        self.err_coded(
+                            *span,
+                            format!(
+                                "union member `{ty}` is not allowed — members must be classes, interfaces, or primitives"
+                            ),
+                            "E-UNION-MEMBER",
+                            Some(
+                                "enum, optional `T?`, and function members are not supported in a union this slice".into(),
+                            ),
+                        );
+                    }
+                }
+                let norm = Ty::union_of(resolved);
+                if !matches!(norm, Ty::Union(_) | Ty::Error) {
+                    // ≥2 source members collapsed to one (`A | A`): a union needs ≥2 distinct types.
+                    self.err_coded(
+                        *span,
+                        "a union needs two or more distinct types".to_string(),
+                        "E-UNION-ARITY",
+                        None,
+                    );
+                }
+                norm
+            }
             Type::Function { params, ret, .. } => Ty::Function(
                 params.iter().map(|p| self.resolve_type(p)).collect(),
                 Box::new(self.resolve_type(ret)),
@@ -1538,8 +1584,8 @@ impl Checker {
         match &v {
             // A poisoned operand already reported its own error; still type the test as `bool`.
             Ty::Error => {}
-            // A class instance is the meaningful left operand.
-            Ty::Named(..) => {}
+            // A class instance — or a union of them (M-RT S4) — is the meaningful left operand.
+            Ty::Named(..) | Ty::Union(..) => {}
             other => {
                 self.err_coded(
                     span,
@@ -2439,6 +2485,9 @@ impl Checker {
 
         let mut result: Option<Ty> = None;
         let mut covered: Vec<String> = Vec::new();
+        // Type-pattern coverage for match-over-union exhaustiveness (M-RT S4): the class/interface
+        // names matched by `Circle c =>` arms.
+        let mut covered_types: Vec<String> = Vec::new();
         let mut has_catch_all = false;
         // Once a `null` arm has matched, a later catch-all binding over a `T?` scrutinee sees only
         // the non-null inner — the smart-cast that makes `match opt { null => …, v => … }` bind
@@ -2451,6 +2500,9 @@ impl Checker {
             }
             if let Pattern::Variant { name, .. } = &arm.pattern {
                 covered.push(name.clone());
+            }
+            if let Pattern::Type { type_name, .. } = &arm.pattern {
+                covered_types.push(type_name.clone());
             }
             // The type a catch-all binding sees: narrowed to the inner `T` when a preceding `null`
             // arm already handled absence; otherwise the scrutinee type unchanged.
@@ -2493,6 +2545,28 @@ impl Checker {
                     // `variants` is a HashMap, so `keys()` order is nondeterministic — sort the
                     // missing list so the error message is stable across runs (otherwise it's an
                     // intermittent test/diff hazard).
+                    missing.sort();
+                    if !missing.is_empty() {
+                        self.err(
+                            span,
+                            format!("non-exhaustive match: missing {}", missing.join(", ")),
+                        );
+                    }
+                }
+                // Match-over-union exhaustiveness (M-RT S4): every nominal member must be covered by a
+                // type pattern naming it OR a covering supertype/interface. A primitive member can't be
+                // type-matched, so a union containing one always needs a `_` (reported as missing).
+                Ty::Union(members) => {
+                    let mut missing: Vec<String> = members
+                        .iter()
+                        .filter(|m| match m {
+                            Ty::Named(n, _) => !covered_types
+                                .iter()
+                                .any(|t| t == n || self.is_subtype(n, t)),
+                            _ => true,
+                        })
+                        .map(std::string::ToString::to_string)
+                        .collect();
                     missing.sort();
                     if !missing.is_empty() {
                         self.err(
@@ -2564,14 +2638,72 @@ impl Checker {
                     return;
                 }
                 for (fp, ft) in fields.iter().zip(field_tys) {
+                    // A type pattern nested in a variant field (`Wrapper(Circle c)`) is rejected this
+                    // slice (M-RT S4): the transpiler only emits simple variable bindings for variant
+                    // payloads, so allowing it would diverge from `run`/`runvm`. A clean rejection
+                    // keeps all three backends agreeing (the byte-identity spine). Type patterns are
+                    // top-level-only — that is the match-over-union surface.
+                    if let Pattern::Type {
+                        type_name, span, ..
+                    } = fp
+                    {
+                        self.err_coded(
+                            *span,
+                            format!(
+                                "type pattern `{type_name}` is only allowed at the top level of a match arm, not inside a variant pattern"
+                            ),
+                            "E-MATCH-TYPE",
+                            Some("match the variant first, then `instanceof`/`match` its payload".into()),
+                        );
+                    }
                     self.check_pattern(fp, &ft);
+                }
+            }
+            Pattern::Type {
+                type_name,
+                binding,
+                span,
+            } => {
+                // M-RT S4 type pattern: the type must be a class or interface (the runtime test is
+                // `instanceof`, which is class/interface-only — an enum value is never an instance).
+                let known =
+                    self.classes.contains_key(type_name) || self.interfaces.contains_key(type_name);
+                if !known && !matches!(scrut, Ty::Error) {
+                    let hint = if self.enums.contains_key(type_name) {
+                        "an enum is a closed sum — match its variants directly, not via a type pattern"
+                    } else {
+                        "a type pattern matches a class or interface (as in a union scrutinee)"
+                    };
+                    self.err_coded(
+                        *span,
+                        format!("type pattern `{type_name}` must name a class or interface"),
+                        "E-MATCH-TYPE",
+                        Some(hint.into()),
+                    );
+                }
+                // Bind the narrowed value as the named type. A generic class carries erased (poison)
+                // arguments — `instanceof` keeps no type arguments at runtime, so its generic members
+                // read as `mixed`, mirroring the if/instanceof smart-cast (M-RT generics-all).
+                if let Some(name) = binding {
+                    let arity = self
+                        .classes
+                        .get(type_name)
+                        .map_or(0, |c| c.type_params.len());
+                    let args = vec![Ty::Error; arity];
+                    self.declare(name, Ty::Named(type_name.clone(), args), *span);
                 }
             }
         }
     }
 
     fn expect_prim(&mut self, scrut: &Ty, want: &Ty, span: Span) {
-        if *scrut != Ty::Error && scrut != want {
+        // A literal pattern matches when the scrutinee *is* that primitive, or is a union that
+        // *contains* it (M-RT S4): `match code { 0 => …, "ok" => … }` over `int | string` is well
+        // typed (the runtime/transpiler match by value, so a non-member literal simply never fires).
+        let ok = *scrut == Ty::Error
+            || scrut == want
+            || matches!(scrut, Ty::Union(members) if members.contains(want));
+        if !ok {
             self.err(
                 span,
                 format!("pattern of type `{want}` cannot match scrutinee of type `{scrut}`"),
@@ -3119,6 +3251,11 @@ pub fn erase_generics(program: Program) -> Program {
                 ret: Box::new(rty(ret, params)),
                 span: *span,
             },
+            // A union erases each member (a type-param member becomes `Type::Erased`); the union
+            // itself is structural and survives to the backend (M-RT S4).
+            Type::Union(members, span) => {
+                Type::Union(members.iter().map(|m| rty(m, params)).collect(), *span)
+            }
             Type::Infer(s) => Type::Infer(*s),
             Type::Erased(s) => Type::Erased(*s),
         }
@@ -3454,6 +3591,10 @@ pub fn expand_aliases(program: &Program) -> Program {
                 ret: Box::new(rt(ret, a, depth + 1)),
                 span: *span,
             },
+            // A union expands each member (an alias used as a member dealiases here), M-RT S4.
+            Type::Union(members, span) => {
+                Type::Union(members.iter().map(|m| rt(m, a, depth + 1)).collect(), *span)
+            }
             Type::Infer(s) => Type::Infer(*s),
             Type::Erased(s) => Type::Erased(*s),
         }
@@ -3805,6 +3946,131 @@ mod tests {
              function main() { Box<int> b = Box(7); int x = b.get(); }",
         );
         assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    // --- M-RT S4: union types + match-over-union ---
+
+    const SHAPES: &str = "class Circle { constructor(public int radius) {} } \
+        class Square { constructor(public int side) {} } \
+        class Triangle { constructor(public int base) {} }";
+
+    #[test]
+    fn union_param_accepts_each_member() {
+        let ok = errors_of(&format!(
+            "{SHAPES} function f(Circle | Square s) {{}} \
+             function main() {{ f(Circle(1)); f(Square(2)); }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn union_param_rejects_non_member() {
+        let bad = errors_of(&format!(
+            "{SHAPES} function f(Circle | Square s) {{}} \
+             function main() {{ f(Triangle(3)); }}"
+        ));
+        assert!(
+            !bad.is_empty(),
+            "expected a type error passing a non-member"
+        );
+    }
+
+    #[test]
+    fn match_over_union_exhaustive_ok() {
+        let ok = errors_of(&format!(
+            "{SHAPES} function area(Circle | Square s) -> int {{ \
+               return match s {{ Circle c => c.radius, Square sq => sq.side }}; }} \
+             function main() {{ int a = area(Circle(2)); }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn match_over_union_non_exhaustive_lists_missing() {
+        let bad = errors_of(&format!(
+            "{SHAPES} function area(Circle | Square s) -> int {{ \
+               return match s {{ Circle c => c.radius }}; }} \
+             function main() {{}}"
+        ));
+        assert!(
+            bad.iter()
+                .any(|e| e.message.contains("non-exhaustive") && e.message.contains("Square")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn union_rejects_enum_member() {
+        let bad = errors_of(&format!(
+            "{SHAPES} enum Color {{ Red, Green }} function f(Circle | Color x) {{}} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-UNION-MEMBER")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn union_arity_collapse_is_error() {
+        let bad = errors_of(&format!(
+            "{SHAPES} function f(Circle | Circle x) {{}} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-UNION-ARITY")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn type_pattern_must_name_a_class_or_interface() {
+        let bad = errors_of(&format!(
+            "{SHAPES} function f(Circle | Square s) -> int {{ \
+               return match s {{ Circle c => c.radius, Nope n => 0 }}; }} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-MATCH-TYPE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn instanceof_narrows_a_union_operand() {
+        let ok = errors_of(&format!(
+            "{SHAPES} function f(Circle | Square s) -> int {{ \
+               if (s instanceof Circle) {{ return s.radius; }} return 0; }} function main() {{}}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn primitive_union_literal_match_ok() {
+        let ok = errors_of(
+            "function classify(int | string code) -> string { \
+               return match code { 0 => \"zero\", \"ok\" => \"okay\", _ => \"other\" }; } \
+             function main() { string s = classify(0); }",
+        );
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn primitive_union_accepts_int_and_string() {
+        let ok = errors_of("function f(int | string x) {} function main() { f(1); f(\"a\"); }");
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn type_pattern_nested_in_variant_is_rejected() {
+        // A type pattern is top-level-only; nesting it in a variant payload would diverge from the
+        // transpiler (which emits only simple payload bindings), so the checker rejects it.
+        let bad = errors_of(&format!(
+            "{SHAPES} enum Wrap {{ One(Circle inner) }} \
+             function f(Wrap w) -> int {{ return match w {{ One(Circle c) => c.radius }}; }} \
+             function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-MATCH-TYPE")),
+            "{bad:?}"
+        );
     }
 
     #[test]

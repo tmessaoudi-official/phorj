@@ -16,9 +16,17 @@ not a panic:
   `reduce` (a closure run from a native, M-RT S7b-3) — all ship in M-RT S7b (see the *Maps*/*Generic
   natives* notes below). Set union/intersection and map iteration build on that path next. `Map<K,V>`
   literals + `m[k]` indexing ship in M-RT S3 — see the *Maps* note below.
-- `instanceof` against **unions or intersections** (class operands ship in M-RT S1 and interface
-  operands in M-RT S2 — see *Behavioral quirks* below; testing against unions/intersections lands
-  with those features in later M-RT slices)
+- ~~`instanceof` against a **union**~~ — **now supported** (M-RT S4): a union-typed value is a valid
+  `instanceof` left operand, and `if (s instanceof Circle)` narrows it. `instanceof` against an
+  **intersection** is still pending (intersections are a later M-RT slice).
+- **Union types (M-RT S4) — deferred corners** (each rejected cleanly, never a panic): **enum members**
+  in a union (`Color | Circle` → `E-UNION-MEMBER`; an enum is already a closed sum — match its variants
+  directly), **optional/function members** (`E-UNION-MEMBER`), a **type pattern nested in a variant
+  payload** (`Wrapper(Circle c)` → `E-MATCH-TYPE`; type patterns are top-level-only), **negative/flow
+  narrowing** (after `if (s instanceof Circle)` the else-branch does not narrow `s` to the remaining
+  members), **common-member access on a raw union** (`(A|B).foo()` without narrowing — narrow first),
+  and the **whole-union optional** `(A|B)?` (`?` is postfix on a single member; `A | B?` parses as
+  `A | (B?)`). Use `T?` for nullability.
 - ~~interfaces/classes/enums in a library (non-`main`) package~~ — **now supported** (M-RT
   cross-package types): a library package exports types, consumed via `import type Pkg.Path.Type [as
   A]`; `E-PKG-TYPE` is retired. Remaining limits: the **module-qualified** type form (`import

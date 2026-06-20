@@ -182,6 +182,34 @@
 - [2026-06-20] AGREED (S4 pace): **design first, then stop for review** (developer chose "S4, design
   first" over autonomous-implement). Produce the S4 union-types design spec; do not implement until
   approved. Spec: `docs/specs/2026-06-20-s4-union-types-design.md`.
+- [2026-06-20] AGREED (S4 scope + pace, post-review — D1/D2/D3 resolved): **D1 = allow primitive union
+  members** (`int | string`, PHP/TS-idiomatic). **D2 = ONE BIG S4** — ship union types *and*
+  match-over-union together (the new `Pattern::Type` across parser + checker + all four backends), not
+  the smaller S4a-only split. **D3 = fully autonomous** (`_AUTONOMOUS_3C=1`). Implementation decisions
+  locked at build time: (a) lone `|` lexes to a new `TokenKind::Bar` (distinct from `|>`/`Pipe` and
+  `||`/`OrOr`); `parse_type` parses a single atom then loops on `Bar`. (b) `Ty::Union(Vec<Ty>)` is
+  **normalized** (flatten nested, dedupe, canonical sort by `Display`; a 1-member collapse *is* that
+  member). (c) **match-over-union reuses the S1 `Op::IsInstance` — NO new `Op`, no `Value` change**; a
+  `Pattern::Type { type_name, binding: Option<String> }` lowers to a per-arm `instanceof` test
+  (interpreter `match_pattern` threads `class_implements`; compiler `emit_pattern_test` emits load-path
+  + `IsInstance` + `JumpIfFalse`; transpiler emits `$x instanceof T { $b = $x; … }`). (d) parser
+  disambiguates a type pattern as `PascalCaseIdent lowercaseIdent`/`Ident _` (two idents in pattern
+  position); a lone `Circle =>` stays the existing catch-all `Binding` (documented footgun, preserved).
+  (e) **union members = classes | interfaces | primitives only** for v1 — enum members deferred
+  (instanceof is class/interface-only; an enum is already a closed sum — `E-UNION-MEMBER`); optional/
+  function members rejected too. (f) exhaustiveness over a union covers every nominal member (directly
+  or via a covering supertype/interface); a primitive member or any uncovered member ⇒ needs a `_`.
+  New codes: `E-UNION-ARITY`, `E-UNION-MEMBER`, `E-MATCH-TYPE`.
+- [2026-06-20] AGREED (S4 — DONE; **S4 COMPLETE**): union types `A|B` + match-over-union landed exactly
+  as scoped above. Lone `|` → `TokenKind::Bar`; `Type::Union`/`Ty::Union` (normalized via `Ty::union_of`);
+  `Pattern::Type` threaded through parser/checker/interpreter/compiler/transpiler reusing
+  `Op::IsInstance` (**no new `Op`, no `Value` change**); `instanceof` accepts a union operand; `expect_prim`
+  relaxed for primitive-union literal arms; nested-in-variant type patterns rejected (`E-MATCH-TYPE`) to
+  preserve the byte-identity spine. Byte-identical run≡runvm≡real PHP (`examples/guide/unions.phg`);
+  461 lib + PHP-oracle differential + 53 integration green; clippy + fmt clean; `phg explain` entries for
+  all three codes. Docs synced (FEATURES/KNOWN_ISSUES/CHANGELOG/examples/README/CLAUDE.md). Deferred to
+  KNOWN_ISSUES: enum-in-union, intersection/negative-flow narrowing, common-member access on a raw union,
+  whole-union optional. **NEXT: S5 intersections `A&B`.**
 
 ## Formal Plan
 

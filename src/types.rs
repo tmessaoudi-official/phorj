@@ -49,6 +49,14 @@ pub enum Ty {
     /// for a param into `Type::Erased`), so the interpreter/compiler/transpiler never see it — the
     /// same "compile-time-only, expanded out" discipline as `type` aliases and `html"…"`.
     Param(String),
+    /// A union of two or more distinct types — `A | B | C` (M-RT S4). **Normalized**: members are
+    /// flattened (no nested unions), deduplicated, and sorted into a canonical order (by `Display`),
+    /// so `A | B` and `B | A` are the *same* `Ty` and assignability is order-independent. A union that
+    /// would collapse to a single member *is* that member (built via [`Ty::union_of`]). Members are
+    /// classes/interfaces/primitives (the checker rejects enum/optional/function members). Erased to
+    /// PHP 8.0 `A|B`; the backends never see a union as a runtime *value* shape (a value is always a
+    /// concrete instance/primitive) — the annotation gates only the checker and the PHP signature.
+    Union(Vec<Ty>),
     /// Poison type: a failed sub-expression yields this. Assignable both ways so a
     /// single error does not cascade into many.
     Error,
@@ -66,6 +74,37 @@ impl Ty {
         // No nominal subtyping by default; callers with a class/interface table use
         // [`Ty::assignable_with`] to supply one (M-RT S2).
         Ty::assignable_with(from, to, &|_, _| false)
+    }
+
+    /// Build a normalized union from `members` (M-RT S4): flatten nested unions, dedupe (preserving
+    /// the equality used everywhere else), then sort into a canonical order by `Display` so member
+    /// order never affects identity or assignability. A 0-member input yields `Error`; a 1-member
+    /// input (after dedupe) *is* that member (so `A | A` ≡ `A`, and the checker treats that collapse
+    /// as the `E-UNION-ARITY` degenerate case).
+    pub fn union_of(members: Vec<Ty>) -> Ty {
+        let mut flat: Vec<Ty> = Vec::new();
+        for m in members {
+            match m {
+                Ty::Union(inner) => {
+                    for i in inner {
+                        if !flat.contains(&i) {
+                            flat.push(i);
+                        }
+                    }
+                }
+                other => {
+                    if !flat.contains(&other) {
+                        flat.push(other);
+                    }
+                }
+            }
+        }
+        flat.sort_by_key(std::string::ToString::to_string);
+        match flat.len() {
+            0 => Ty::Error,
+            1 => flat.into_iter().next().expect("len checked == 1"),
+            _ => Ty::Union(flat),
+        }
     }
 
     /// Like [`Ty::assignable`] but consults a nominal-subtyping oracle for two named types:
@@ -86,6 +125,14 @@ impl Ty {
             // `U? -> T?` when `U -> T`; a non-optional `T -> T?` (covariant widening).
             (Ty::Optional(f), Ty::Optional(t)) => Ty::assignable_with(f, t, subtype),
             (other, Ty::Optional(t)) => Ty::assignable_with(other, t, subtype),
+            // Union types (M-RT S4). Into a union: every member of a union `from` must fit, else a
+            // non-union `from` need only fit *some* member (subset-in / member-in). Out of a union to
+            // a non-union `to`: every member must fit `to` (so `A|B -> I` holds when both implement
+            // interface `I`). Checked before the nominal/`_` arms so a union on either side is handled
+            // by structure, not equality.
+            (Ty::Union(fs), Ty::Union(_)) => fs.iter().all(|f| Ty::assignable_with(f, to, subtype)),
+            (_, Ty::Union(ts)) => ts.iter().any(|t| Ty::assignable_with(from, t, subtype)),
+            (Ty::Union(fs), _) => fs.iter().all(|f| Ty::assignable_with(f, to, subtype)),
             // Function types are exact-match only — no co/contra-variance (spec A6).
             (Ty::Function(fp, fr), Ty::Function(tp, tr)) => {
                 fp.len() == tp.len() && fp.iter().zip(tp.iter()).all(|(a, b)| a == b) && fr == tr
@@ -133,6 +180,14 @@ impl fmt::Display for Ty {
             Ty::Optional(e) => write!(f, "{e}?"),
             Ty::Null => write!(f, "null"),
             Ty::Param(n) => write!(f, "{n}"),
+            Ty::Union(members) => {
+                let m = members
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                write!(f, "{m}")
+            }
             Ty::Error => write!(f, "<error>"),
             Ty::Function(params, ret) => {
                 let ps = params
@@ -235,6 +290,48 @@ mod tests {
             &Ty::List(Box::new(Ty::Param("T".into()))),
             &Ty::List(Box::new(Ty::Param("T".into())))
         ));
+    }
+
+    #[test]
+    fn union_of_normalizes() {
+        // Flatten nested, dedupe, canonical-sort by Display; a 1-member collapse is that member.
+        let a = Ty::Named("A".into(), vec![]);
+        let b = Ty::Named("B".into(), vec![]);
+        // B | A | B  →  A | B  (sorted, deduped)
+        let u = Ty::union_of(vec![b.clone(), a.clone(), b.clone()]);
+        assert_eq!(u.to_string(), "A | B");
+        // nested unions flatten: (A | B) | C  →  A | B | C
+        let c = Ty::Named("C".into(), vec![]);
+        let nested = Ty::union_of(vec![u.clone(), c]);
+        assert_eq!(nested.to_string(), "A | B | C");
+        // collapse: A | A  ≡  A (not a Union)
+        assert_eq!(Ty::union_of(vec![a.clone(), a.clone()]), a);
+        // order-independence: A | B == B | A
+        assert_eq!(
+            Ty::union_of(vec![a.clone(), b.clone()]),
+            Ty::union_of(vec![b, a])
+        );
+    }
+
+    #[test]
+    fn union_assignability_member_in_and_all_out() {
+        let a = Ty::Named("A".into(), vec![]);
+        let b = Ty::Named("B".into(), vec![]);
+        let c = Ty::Named("C".into(), vec![]);
+        let ab = Ty::union_of(vec![a.clone(), b.clone()]);
+        // member-in: a non-union fits the union iff it equals some member.
+        assert!(Ty::assignable(&a, &ab));
+        assert!(Ty::assignable(&b, &ab));
+        assert!(!Ty::assignable(&c, &ab)); // C is not A or B
+                                           // subset-in: a union fits a wider union.
+        let abc = Ty::union_of(vec![a.clone(), b.clone(), c.clone()]);
+        assert!(Ty::assignable(&ab, &abc)); // {A,B} ⊆ {A,B,C}
+        assert!(!Ty::assignable(&abc, &ab)); // {A,B,C} ⊄ {A,B}
+                                             // all-members-out: A|B fits a non-union only if every member does — here only via the oracle.
+        let speaker = Ty::Named("Speaker".into(), vec![]);
+        let oracle = |x: &str, t: &str| t == "Speaker" && (x == "A" || x == "B");
+        assert!(Ty::assignable_with(&ab, &speaker, &oracle)); // both implement Speaker
+        assert!(!Ty::assignable_with(&ab, &speaker, &|_, _| false)); // without the edge, no
     }
 
     #[test]

@@ -1,0 +1,73 @@
+// Union types `A | B | C` — the open-composition counterpart to a closed `enum` (M-RT S4).
+//
+// A union value is *one of* several types. Members may be classes, interfaces, or primitives, and a
+// value of any member flows into a union-typed slot (`Circle` → `Circle | Square | Triangle`). You
+// reach a member's data two ways:
+//   • match-over-union with **type patterns** — `match s { Circle c => … }` (exhaustive over the
+//     member set, like an enum match), each arm binding the narrowed value;
+//   • `instanceof` narrowing in an `if` — `if (s instanceof Circle) { … s.radius … }`.
+// Primitive unions (`int | string`) accept either type and match by literal value. Transpiles to
+// PHP 8.0 native `A|B`.
+package main;
+import Core.Console;
+
+class Circle {
+    constructor(public int radius) {}
+}
+
+class Square {
+    constructor(public int side) {}
+}
+
+class Triangle {
+    constructor(public int base, public int height) {}
+}
+
+// match-over-union: one arm per member, each binding the narrowed instance. Exhaustive — no `_`
+// needed, exactly like an enum match.
+function area(Circle | Square | Triangle s) -> int {
+    return match s {
+        Circle c => c.radius * c.radius,
+        Square sq => sq.side * sq.side,
+        Triangle t => t.base * t.height,
+    };
+}
+
+// instanceof narrowing on a union operand: each `if` smart-casts `s` to the tested class in its body.
+function name(Circle | Square | Triangle s) -> string {
+    if (s instanceof Circle) {
+        return "circle r={s.radius}";
+    }
+    if (s instanceof Square) {
+        return "square s={s.side}";
+    }
+    return "triangle";
+}
+
+// A primitive union accepts either type; literal patterns match by value, with a `_` for the rest.
+function classify(int | string code) -> string {
+    return match code {
+        0 => "zero",
+        "ok" => "okay",
+        _ => "other",
+    };
+}
+
+function main() {
+    Circle c = Circle(2);
+    Square s = Square(3);
+    Triangle t = Triangle(4, 3);
+
+    Console.println("area circle = {area(c)}");     // 4
+    Console.println("area square = {area(s)}");     // 9
+    Console.println("area triangle = {area(t)}");   // 12
+
+    Console.println(name(c));                        // circle r=2
+    Console.println(name(s));                        // square s=3
+    Console.println(name(t));                        // triangle
+
+    string okay = classify("ok");
+    Console.println("classify 0 = {classify(0)}"); // zero
+    Console.println("classify ok = {okay}");        // okay
+    Console.println("classify 7 = {classify(7)}"); // other
+}

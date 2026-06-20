@@ -1,8 +1,12 @@
 # S4 — Union Types `A | B` — Design
 
-> Status: **DESIGN — not implemented** (developer chose "design first, then review"). The next M-RT
-> slice after generics-all (CLOSED, `169c259`). Depends on S1 (`instanceof` + narrowing) and S2
-> (interfaces + nominal subtyping). Transpile target: PHP 8.0 **native union types** (`A|B`).
+> Status: **IMPLEMENTED — S4 COMPLETE** (developer chose "one big S4" post-review: unions **and**
+> match-over-union together, autonomous). Shipped scope diverges from §2's recommended S4a-only split:
+> the new `Pattern::Type` (match-over-union) landed in the same slice, reusing `Op::IsInstance` (no new
+> `Op`). D1 = primitives allowed; member kinds = classes/interfaces/primitives (enum members deferred,
+> not just nominal-only as §10/D1's alternative). See `CHANGELOG.md` and the plan's Decisions Log for
+> the as-built summary. Depends on S1 (`instanceof` + narrowing) and S2 (interfaces + nominal
+> subtyping). Transpile target: PHP 8.0 **native union types** (`A|B`).
 
 ## 1. Goal
 

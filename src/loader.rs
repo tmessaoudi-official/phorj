@@ -426,6 +426,11 @@ fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
             ret: Box::new(resolve_type(ret, ctx)),
             span: *span,
         },
+        // A union resolves each member (a cross-package member name mangles like anywhere else), M-RT S4.
+        Type::Union(members, span) => Type::Union(
+            members.iter().map(|m| resolve_type(m, ctx)).collect(),
+            *span,
+        ),
         Type::Infer(s) => Type::Infer(*s),
         Type::Erased(s) => Type::Erased(*s),
     }

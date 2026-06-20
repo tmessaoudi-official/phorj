@@ -44,7 +44,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Erased generics `<T>` on methods | ✅ | `class U { function id<T>(T x) -> T … }`, inferred from the call's arguments; reuses the free-function machinery, erases identically (M-RT generics-all) |
 | Generic types/classes (`Box<T>`) | ✅ | `class Box<T> { … }`, `class Pair<A, B> { … }`; the type parameter is inferred at construction (`Box(7)` ⇒ `Box<int>`) and recovered at every use site (`Box(7).get()` is `int`); no monomorphization — `<T>` erases to PHP `mixed` before any backend, an instance carries no runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`) (M-RT generics-all) |
 | Cross-package types — `import type Pkg.Path.Type [as A]` | ✅ | a library package exports a `class`/`enum`/`interface`; another imports it by its terminal name; nominal subtyping, `instanceof`, enum `match` all cross-package; erases to namespaced PHP FQNs (`E-PKG-TYPE` retired) (M-RT) |
-| Unions `A\|B`, intersections `A&B`, class `extends`, traits | 🚧 M-RT | the Rich Types milestone — `instanceof` (S1), interfaces (S2), `Map` (S3), generics (S7) and generic methods shipped; these are later slices |
+| Union types `A \| B` + match-over-union | ✅ | `A \| B \| C` of classes/interfaces/primitives (`int \| string`); a value of any member flows in; reach a member via `instanceof` narrowing or **type patterns** `match s { Circle c => … }` (exhaustive over the member set, no new `Op` — reuses `Op::IsInstance`); transpiles to PHP 8.0 `A\|B` (M-RT S4) |
+| Intersections `A&B`, class `extends`, traits | 🚧 M-RT | the Rich Types milestone — `instanceof` (S1), interfaces (S2), `Map` (S3), generics (S7), generic methods, generic classes, and unions (S4) shipped; these are later slices |
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |

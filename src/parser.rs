@@ -432,8 +432,26 @@ impl Parser {
         }
     }
 
-    /// Parse a type annotation: `Name`, `Name<T, U>`, `T?`, or `(T, U) -> R`.
+    /// Parse a type annotation: `Name`, `Name<T, U>`, `T?`, `(T, U) -> R`, or a union `A | B | C`
+    /// (M-RT S4). A single atom is returned unchanged (so a non-union program's AST is byte-identical);
+    /// `?` binds to its immediate member (`A | B?` ≡ `A | (B?)`).
     pub fn parse_type(&mut self) -> Result<Type, Diagnostic> {
+        let sp = self.peek_span();
+        let first = self.parse_type_atom()?;
+        if !self.check(&TokenKind::Bar) {
+            return Ok(first);
+        }
+        let mut members = vec![first];
+        while self.eat(&TokenKind::Bar) {
+            members.push(self.parse_type_atom()?);
+        }
+        Ok(Type::Union(members, sp))
+    }
+
+    /// Parse a single (non-union) type: `Name`, `Name<T, U>`, `T?`, or `(T, U) -> R`. Type arguments
+    /// and function params recurse through [`Self::parse_type`], so a union nests inside them
+    /// (`List<A | B>`, `(A | B) -> C`).
+    fn parse_type_atom(&mut self) -> Result<Type, Diagnostic> {
         let sp = self.peek_span();
         // Leading `(` introduces a function type: `(int, string) -> bool`.
         if self.eat(&TokenKind::LParen) {
@@ -606,6 +624,17 @@ impl Parser {
                     Ok(Pattern::Variant {
                         name,
                         fields,
+                        span: sp,
+                    })
+                } else if let TokenKind::Ident(binder) = self.peek().clone() {
+                    // A second identifier in pattern position makes this a **type pattern** for
+                    // match-over-union (`Circle c`, M-RT S4): `name` is the type, `binder` the bound
+                    // variable (`_` binds nothing). A lone `name =>` keeps the catch-all `Binding`.
+                    self.advance();
+                    let binding = if binder == "_" { None } else { Some(binder) };
+                    Ok(Pattern::Type {
+                        type_name: name,
+                        binding,
                         span: sp,
                     })
                 } else {
@@ -1217,6 +1246,43 @@ mod tests {
     /// Helper: parse `src` as a single statement.
     fn stmt(src: &str) -> Stmt {
         parser(src).parse_stmt().expect("parse ok")
+    }
+
+    #[test]
+    fn parse_type_union_and_single() {
+        // A union of three; a single type is returned unchanged (no wrapping).
+        match ty("A | B | C") {
+            Type::Union(members, _) => assert_eq!(members.len(), 3),
+            other => panic!("expected union, got {other:?}"),
+        }
+        assert!(matches!(ty("A"), Type::Named { .. }));
+        // `?` binds to its immediate member: `A | B?` ≡ `A | (B?)`.
+        match ty("A | B?") {
+            Type::Union(m, _) => assert!(matches!(m[1], Type::Optional { .. })),
+            other => panic!("expected union, got {other:?}"),
+        }
+        // a union nests inside a generic argument.
+        assert!(matches!(ty("List<A | B>"), Type::Named { .. }));
+    }
+
+    #[test]
+    fn parse_type_pattern_vs_binding() {
+        match pat("Circle c") {
+            Pattern::Type {
+                type_name, binding, ..
+            } => {
+                assert_eq!(type_name, "Circle");
+                assert_eq!(binding.as_deref(), Some("c"));
+            }
+            other => panic!("expected type pattern, got {other:?}"),
+        }
+        // `Type _` binds nothing.
+        assert!(matches!(
+            pat("Circle _"),
+            Pattern::Type { binding: None, .. }
+        ));
+        // a lone ident stays a catch-all Binding (the documented footgun, preserved).
+        assert!(matches!(pat("Circle"), Pattern::Binding { .. }));
     }
 
     /// Helper: parse `src` as a top-level item.

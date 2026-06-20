@@ -16,6 +16,11 @@ pub enum Type {
     },
     /// `T?`
     Optional { inner: Box<Type>, span: Span },
+    /// `A | B | C` — a union type (M-RT S4): a value that is *one of* several nominal/primitive types,
+    /// the open-composition counterpart to a closed `enum`. Members are in source order here; the
+    /// checker normalizes (flatten/dedupe/canonical-sort) into `Ty::Union`. Members are restricted to
+    /// classes, interfaces, and primitives (`E-UNION-MEMBER`); transpiles to PHP 8.0 `A|B`.
+    Union(Vec<Type>, Span),
     /// `var` — placeholder for an inferred local binding type (resolved by the checker from the
     /// initializer, erased everywhere else). Only valid as a `Stmt::VarDecl` type.
     Infer(Span),
@@ -53,6 +58,16 @@ pub enum Pattern {
     Variant {
         name: String,
         fields: Vec<Pattern>,
+        span: Span,
+    },
+    /// `Circle c` / `Square _` — a **type pattern** for match-over-union (M-RT S4): matches when the
+    /// scrutinee is an instance of `type_name` (a class or interface — the same runtime test as
+    /// `instanceof`, reusing `Op::IsInstance`), binding it (narrowed to `type_name`) as `binding` for
+    /// the arm body. `binding` is `None` for `Type _`. Parsed as two identifiers in pattern position
+    /// (`PascalCaseHead lowercaseBinder`); a lone `Circle =>` stays a catch-all `Binding`.
+    Type {
+        type_name: String,
+        binding: Option<String>,
         span: Span,
     },
 }
@@ -445,6 +460,13 @@ fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet
             for f in fields {
                 collect_pattern_bindings(f, bound);
             }
+        }
+        // A type pattern (`Circle c`, M-RT S4) binds its `binding` (if any) for the arm body.
+        Pattern::Type {
+            binding: Some(name),
+            ..
+        } => {
+            bound.insert(name.clone());
         }
         _ => {}
     }

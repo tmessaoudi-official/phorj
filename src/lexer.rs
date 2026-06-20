@@ -547,6 +547,9 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     b'>' => Some(TokenKind::Gt),
                     b'=' => Some(TokenKind::Eq),
                     b'!' => Some(TokenKind::Bang),
+                    // A lone `|` is the union-type separator (`A | B`, M-RT S4). `|>` and `||` are
+                    // claimed by the two-char dispatch above, so reaching here means a single `|`.
+                    b'|' => Some(TokenKind::Bar),
                     _ => None,
                 };
                 match kind {
