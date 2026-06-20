@@ -79,7 +79,6 @@ pub enum BinaryOp {
     Rem,
     Eq,
     NotEq,
-    Is,
     Lt,
     Gt,
     Le,
@@ -115,6 +114,16 @@ pub enum Expr {
         op: BinaryOp,
         lhs: Box<Expr>,
         rhs: Box<Expr>,
+        span: Span,
+    },
+    /// `value instanceof TypeName` — a runtime type test (M-RT S1). The right operand is a class
+    /// *type name* parsed as a type (not an expression), so this is a dedicated variant rather than a
+    /// `BinaryOp`. It evaluates to `bool`; in `if (x instanceof C) { … }` the checker smart-casts `x`
+    /// to `C` inside the then-block. Transpiles to PHP `$value instanceof TypeName`. (Replaces the
+    /// retired value-equality `is` stub.)
+    InstanceOf {
+        value: Box<Expr>,
+        type_name: String,
         span: Span,
     },
     /// `callee(args)` — also covers `Circle(2.0)` constructor calls
@@ -245,6 +254,7 @@ fn collect_free_expr(
             collect_free_expr(lhs, bound, found);
             collect_free_expr(rhs, bound, found);
         }
+        Expr::InstanceOf { value, .. } => collect_free_expr(value, bound, found),
         Expr::Call { callee, args, .. } => {
             collect_free_expr(callee, bound, found);
             for a in args {

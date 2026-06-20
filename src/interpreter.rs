@@ -314,6 +314,18 @@ impl Interp {
             }
             Expr::Unary { op, expr, .. } => self.eval_unary(*op, expr),
             Expr::Binary { op, lhs, rhs, .. } => self.eval_binary(*op, lhs, rhs),
+            Expr::InstanceOf {
+                value, type_name, ..
+            } => {
+                // Runtime type test (M-RT S1): true iff `value` is an instance whose class equals
+                // `type_name`. A non-instance value is `false` (never a fault) — matching PHP's
+                // `instanceof`. The class name is single-sourced on `Value::Instance` (P4-4), so all
+                // three backends agree.
+                let v = self.eval(value)?;
+                Ok(Value::Bool(
+                    matches!(&v, Value::Instance(inst) if inst.class == *type_name),
+                ))
+            }
             Expr::Call { callee, args, .. } => self.eval_call(callee, args),
             Expr::Member {
                 object, name, safe, ..
@@ -512,7 +524,6 @@ impl Interp {
             Add | Sub | Mul | Div | Rem => arith(op, l, r),
             Eq => Ok(Value::Bool(l.eq_val(&r))),
             NotEq => Ok(Value::Bool(!l.eq_val(&r))),
-            Is => Ok(Value::Bool(l.eq_val(&r))),
             Lt | Gt | Le | Ge => compare(op, l, r),
             Pipe => unreachable!("`|>` is lowered to a call in the parser"),
             And | Or | Coalesce => unreachable!("handled above"),

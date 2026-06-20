@@ -11,8 +11,9 @@ These are designed but not in the current surface; using them produces a clean c
 not a panic:
 
 - `Map` / `Set` / tuples
-- The `is` operator **as a type test** (today it merely aliases value-equality `==` — see *Behavioral
-  quirks* below; a real `instanceof`-style `is` is a future feature)
+- `instanceof` against **interfaces, unions, or intersections** (the class-instance type test ships
+  in M-RT S1 — see *Behavioral quirks* below; testing against those richer types lands with the
+  features themselves in later M-RT slices)
 - Exceptions (try / catch / throw)
 - Mutation (reassignment and field writes) — Phorge is immutable-by-default today
 - Method/function overloading, traits, operator overloading, property accessors
@@ -114,12 +115,16 @@ or simply unavailable, never a crash):
   construct **and** in a `match` pattern. A bare `V =>` arm is parsed as a catch-all *binding*, not a
   variant match — so it silently matches everything. Always use `V()` in patterns for nullary
   variants.
-- **The `is` operator is value-equality today, not a type test.** `a is b` parses and evaluates as
-  `a == b` (the interpreter implements it as value equality), so it is currently a redundant synonym
-  for `==`. It is **not** a type-membership test: `x is SomeType` fails to type-check
-  (`E-UNKNOWN-IDENT`) because the right-hand side is parsed as a *value*, not a type. A real
-  `instanceof`-style `is` (parse RHS as a type, narrow in the checker, emit `$x instanceof T`) is a
-  future language feature, not just a transpiler gap; the transpiler rejects `is` until then. *(Literal
+- **`instanceof` is the type-test operator (M-RT S1); the value-equality `is` alias is retired.**
+  `value instanceof ClassName` parses (the right operand is a class *type name*, not an expression),
+  evaluates to `bool` on `run`/`runvm`, and transpiles to PHP `$value instanceof ClassName` —
+  byte-identical across all three backends (see `guide/instanceof.phg`). Inside
+  `if (x instanceof C) { … }` the checker smart-casts `x` to `C` in the then-block. Two scope notes
+  for this first slice: (1) the right operand must be a **class** — interface / union / intersection
+  tests arrive with those features in later M-RT slices; (2) because Phorge has no subtyping yet, a
+  class value's static type already equals its runtime type, so the test is most *useful* once
+  interfaces/unions land (today it can only ever compare a concrete class to a concrete class). The
+  old `is` keyword is gone — `is` is now an ordinary identifier. *(Literal
   `match` patterns and expression-position `match` — previously listed here as transpile gaps — were
   **completed in M11**: both now transpile and are PHP-oracle byte-identity-gated, so
   `examples/guide/enums-match.phg` and `examples/guide/match-expr.phg` are enrolled in the oracle, not

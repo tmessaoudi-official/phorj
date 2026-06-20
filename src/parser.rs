@@ -119,7 +119,6 @@ impl Parser {
             T::AndAnd => (4, BinaryOp::And),
             T::EqEq => (5, BinaryOp::Eq),
             T::NotEq => (5, BinaryOp::NotEq),
-            T::Is => (5, BinaryOp::Is),
             T::Lt => (6, BinaryOp::Lt),
             T::Gt => (6, BinaryOp::Gt),
             T::Le => (6, BinaryOp::Le),
@@ -138,7 +137,30 @@ impl Parser {
     /// so the right operand is parsed with `bp + 1`.
     fn parse_binary(&mut self, min_bp: u8) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_unary()?;
-        while let Some((bp, op)) = Self::infix_op(self.peek()) {
+        loop {
+            // `instanceof` is a type test at precedence 5 (like `==`), but its right operand is a
+            // *type name*, not an expression — so it is parsed here rather than via `infix_op`. The
+            // left operand and result type (`bool`) are validated by the checker (M-RT S1).
+            if matches!(self.peek(), TokenKind::Instanceof) && 5 >= min_bp {
+                let sp = self.peek_span();
+                self.advance(); // consume `instanceof`
+                let type_name = match self.peek().clone() {
+                    TokenKind::Ident(n) => {
+                        self.advance();
+                        n
+                    }
+                    _ => return Err(self.error("a class name after `instanceof`")),
+                };
+                lhs = Expr::InstanceOf {
+                    value: Box::new(lhs),
+                    type_name,
+                    span: sp,
+                };
+                continue;
+            }
+            let Some((bp, op)) = Self::infix_op(self.peek()) else {
+                break;
+            };
             if bp < min_bp {
                 break;
             }
@@ -1107,7 +1129,6 @@ mod tests {
                     BinaryOp::Rem => "%",
                     BinaryOp::Eq => "==",
                     BinaryOp::NotEq => "!=",
-                    BinaryOp::Is => "is",
                     BinaryOp::Lt => "<",
                     BinaryOp::Gt => ">",
                     BinaryOp::Le => "<=",
@@ -1140,6 +1161,9 @@ mod tests {
                 };
                 format!("(lambda ({}) {})", ps.join(" "), body_str)
             }
+            Expr::InstanceOf {
+                value, type_name, ..
+            } => format!("(instanceof {} {type_name})", sexpr(value)),
             other => format!("{other:?}"),
         }
     }
@@ -1224,7 +1248,7 @@ mod tests {
         assert_eq!(sexpr(&expr("x |> f")), "f(x)");
         // pipe is the lowest: `a + b |> f` == `(a + b) |> f`
         assert_eq!(sexpr(&expr("a + b |> f")), "f((+ a b))");
-        assert_eq!(sexpr(&expr("a is b")), "(is a b)");
+        assert_eq!(sexpr(&expr("a instanceof Foo")), "(instanceof a Foo)");
         assert_eq!(sexpr(&expr("a ?? b")), "(?? a b)");
         // `??` binds looser than `||`: `a || b ?? c` is `(a || b) ?? c`
         assert_eq!(sexpr(&expr("a || b ?? c")), "(?? (|| a b) c)");

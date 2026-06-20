@@ -171,6 +171,12 @@ pub enum Op {
     /// and open a frame. Carries no static table index, so — like `GetEnumField` — it needs no
     /// `validate` arm. (M3 S3, Task 4.)
     CallValue(usize),
+    /// Pop the top value and push a `Bool`: whether it is a `Value::Instance` whose class equals the
+    /// carried class name (`value instanceof TypeName`, M-RT S1). A non-instance value is `false`,
+    /// never a fault — matching the interpreter and PHP's `instanceof`. The class name is carried
+    /// inline (like `Fault(FaultMsg)`), not via a pool index, so — like `MakeRange`/`Fault` — it
+    /// needs no `validate` arm.
+    IsInstance(String),
 }
 
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
@@ -368,7 +374,9 @@ impl BytecodeProgram {
                     | Op::Return
                     | Op::GetEnumField(_)
                     | Op::Fault(_)
-                    | Op::CallValue(_) => None,
+                    | Op::CallValue(_)
+                    // Carries the class name inline (like `Fault`), not a pool index.
+                    | Op::IsInstance(_) => None,
                 };
                 if let Some(what) = problem {
                     return Err(format!(

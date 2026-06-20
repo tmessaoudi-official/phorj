@@ -381,7 +381,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "false" => False,
         "null" => Null,
         "new" => New,
-        "is" => Is,
+        "instanceof" => Instanceof,
         "var" => Var,
         "type" => TypeKw,
         _ => return None,
@@ -695,9 +695,11 @@ mod tests {
     }
 
     #[test]
-    fn is_keyword_is_recognized() {
+    fn instanceof_keyword_is_recognized() {
         use TokenKind::*;
-        assert_eq!(kinds("is"), vec![Is, Eof]);
+        // `instanceof` is the type-test keyword (M-RT S1); the retired `is` is now a plain ident.
+        assert_eq!(kinds("instanceof"), vec![Instanceof, Eof]);
+        assert_eq!(kinds("is"), vec![Ident("is".into()), Eof]);
         // still an ident when part of a longer word
         assert_eq!(kinds("island"), vec![Ident("island".into()), Eof]);
     }

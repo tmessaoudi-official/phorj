@@ -620,9 +620,6 @@ impl Transpiler {
                 Ok(format!("{sym}{inner}"))
             }
             Expr::Binary { op, lhs, rhs, .. } => {
-                if matches!(op, BinaryOp::Is) {
-                    return Err("transpile error: `is` operator is not yet supported".into());
-                }
                 let l = self.emit_expr(lhs)?;
                 let r = self.emit_expr(rhs)?;
                 let bs = if self.namespaced { "\\" } else { "" };
@@ -647,6 +644,17 @@ impl Transpiler {
                 let l = Self::paren_if_compound(lhs, l);
                 let r = Self::paren_if_compound(rhs, r);
                 Ok(format!("{l} {} {r}", Self::binop(op)))
+            }
+            // `value instanceof TypeName` → PHP `$value instanceof TypeName` (M-RT S1). The operand
+            // is parenthesized if compound (PHP `instanceof` binds tighter than `!`/`&&`), and the
+            // class name is emitted bare — single-package programs are flat, and a cross-package type
+            // is rejected upstream (E-PKG-TYPE) until a later slice.
+            Expr::InstanceOf {
+                value, type_name, ..
+            } => {
+                let v = self.emit_expr(value)?;
+                let v = Self::paren_if_compound(value, v);
+                Ok(format!("{v} instanceof {type_name}"))
             }
             Expr::List(items, _) => {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
@@ -1098,7 +1106,6 @@ impl Transpiler {
             Or => "||",
             // `??` is parenthesized at the call site, so it never reaches `binop()`.
             Coalesce => unreachable!("Coalesce handled before binop()"),
-            Is => unreachable!("Is handled before binop()"),
             Pipe => unreachable!("`|>` is lowered to a call in the parser"),
         }
     }

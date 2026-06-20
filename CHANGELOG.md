@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `instanceof` type test, retiring the `is` stub (Rich Types milestone, M-RT S1)
+
+- **`value instanceof ClassName`** is now a real runtime type test that evaluates to `bool` on
+  `run`/`runvm` and transpiles to PHP `$value instanceof ClassName` — byte-identical across all three
+  backends (verified against real PHP). The right operand is parsed as a class *type name* (not an
+  expression), so it is a dedicated `Expr::InstanceOf` node, not a `BinaryOp`. The VM uses one new
+  `Op::IsInstance(String)` (carries the class name inline, like `Op::Fault` — no name-pool entry,
+  extends the three coupled `Op` matches).
+- **Smart-cast narrowing:** inside `if (x instanceof C) { … }`, the checker narrows `x` to `C` in the
+  then-block (reusing the if-let scope mechanism), so member access through it type-checks.
+- **The value-equality `is` alias is retired.** `is` is no longer a keyword (it is now an ordinary
+  identifier); the old `BinaryOp::Is` (which merely aliased `==` and the transpiler rejected) is gone.
+  This closes the GA blocker where `is` parsed and type-checked but could not transpile.
+- New `examples/guide/instanceof.phg` (oracle-gated). Scope notes (KNOWN_ISSUES): the operand is a
+  **class** today (interface/union/intersection tests arrive with those features in later M-RT
+  slices), and with no subtyping yet the test compares a concrete class to a concrete class.
+
 ### Added / Fixed — `match` transpiler completion + an Assign-position correctness fix (GA P1-b, M11)
 
 - **Literal-pattern `match` now transpiles.** `0 => …` / `"a" => …` / `true => …` / `1.5 => …` arms
@@ -22,10 +39,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   the throw ran unconditionally. The chain is now `if/elseif/else`, so exactly one arm runs and the
   throw is the terminal `else` — correct for both positions. (The `run`/`runvm` backends were always
   correct; this was a transpile-leg bug.)
-- **Honesty:** KNOWN_ISSUES corrected — the `is` operator is **value-equality today (a synonym for
-  `==`), not a type test**; `x is SomeType` fails to type-check. A real `instanceof`-style `is` is a
-  future feature, so the transpiler still rejects `is`. (The earlier claim that all three constructs
-  "run fine, only transpile rejects" was inaccurate for `is`.)
+- **Honesty:** KNOWN_ISSUES corrected — at P1-b the `is` operator was **value-equality (a synonym for
+  `==`), not a type test**, and the transpiler rejected it. (The earlier claim that all three
+  constructs "run fine, only transpile rejects" was inaccurate for `is`.) *This was superseded almost
+  immediately by M-RT S1 above, which retired `is` and shipped a real `instanceof` type test.*
 
 ### Fixed — transpiled `float` now byte-identical to the Rust backends (GA P1-a)
 

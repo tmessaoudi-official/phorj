@@ -26,6 +26,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/inference.phg` | `var` local type inference + `type` aliases (M3 S0) |
 | `guide/ergonomics.phg` | indexing `xs[i]`, integer ranges `0..n` / `0..=n`, expression `if` (M3 S1) |
 | `guide/null-safety.phg` | optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` (M3 S2) |
+| `guide/instanceof.phg` | the `instanceof` runtime type test (`value instanceof ClassName` → `bool`) + smart-cast narrowing inside `if`; transpiles to PHP `instanceof` (Rich Types M-RT S1) |
 | `guide/lambdas-pipe.phg` | lambdas (expression + statement body), higher-order functions, first-class named-fn references, the pipe operator `\|>` (M3 S3 Track A) |
 | `guide/math.phg` | the `core.math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |
@@ -58,6 +59,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | string interpolation `"{expr}"` | `guide/strings`, every example |
 | indexing `xs[i]`, ranges `0..n` / `0..=n`, expression `if` | `guide/ergonomics` |
 | null safety: `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` | `guide/null-safety` |
+| type test `instanceof` (class operand) + `if`-narrowing, transpiles to PHP `instanceof` | `guide/instanceof` |
 | lambdas (expr + stmt body), higher-order fns, first-class named-fn refs, pipe `\|>` | `guide/lambdas-pipe` |
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `console.println(string)` (after `import core.console;`) | every example |

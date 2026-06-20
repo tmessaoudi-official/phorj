@@ -657,7 +657,8 @@ impl<'a> Compiler<'a> {
             Op::Call(idx) => 1 - self.arities[*idx] as isize,
             Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
             Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
-            Op::GetField(_) => 0, // pop instance, push field value
+            Op::GetField(_) => 0,   // pop instance, push field value
+            Op::IsInstance(_) => 0, // pop value, push bool
             // Pops the receiver + `argc` args, pushes one result.
             Op::CallMethod(_, argc) => -(*argc as isize),
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
@@ -836,6 +837,9 @@ impl<'a> Compiler<'a> {
             },
             Expr::Unary { expr, .. } => self.ctype(expr),
             Expr::Binary { lhs, .. } => self.ctype(lhs),
+            // `value instanceof C` is a `bool` — never an arithmetic operand, but a `var b = …`
+            // initializer reads `ctype`, so resolve it to `Other` rather than erroring.
+            Expr::InstanceOf { .. } => Ok(CTy::Other),
             // `inner!` unwraps `T?` to `T`; its operand type is the inner's (so `o! + 1` specializes
             // — `resolve_cty(Optional)` already yields the inner `CTy`). M3 S2.5.
             Expr::Force { inner, .. } => self.ctype(inner),
@@ -1002,6 +1006,17 @@ impl<'a> Compiler<'a> {
                 }
             }
             Expr::Binary { op, lhs, rhs, span } => self.compile_binary(*op, lhs, rhs, span.line)?,
+            Expr::InstanceOf {
+                value,
+                type_name,
+                span,
+            } => {
+                // Push the value, then a single `IsInstance` op carrying the class name inline pops
+                // it and pushes a `Bool` (M-RT S1). The class name lives in the op (like `Fault`), so
+                // no name-pool entry is needed and the runtime predicate matches the interpreter.
+                self.expr(value)?;
+                self.emit(Op::IsInstance(type_name.clone()), span.line);
+            }
             Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
             Expr::Null(sp) => self.emit_const(Value::Null, sp.line),
             Expr::This(sp) => match self.this_slot {
@@ -1189,7 +1204,7 @@ impl<'a> Compiler<'a> {
                 };
                 self.emit(emit, line);
             }
-            Eq | Is => {
+            Eq => {
                 self.expr(lhs)?;
                 self.expr(rhs)?;
                 self.emit(Op::Eq, line);

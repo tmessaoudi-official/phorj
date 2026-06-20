@@ -1,0 +1,34 @@
+// `instanceof` — the runtime type-test operator (M-RT S1).
+//
+// `value instanceof ClassName` evaluates to a `bool`: true exactly when `value` is an instance of
+// that class, false otherwise (never a fault — even for a value of an unrelated type). It replaces
+// the old value-equality `is` alias. Inside an `if (x instanceof C) { … }`, the checker smart-casts
+// `x` to `C` in the then-block, so member access through it type-checks.
+package main;
+import core.console;
+
+class Circle {
+    constructor(public int radius) {}
+}
+
+class Square {
+    constructor(public int side) {}
+}
+
+// `c` is already a `Circle`, so the test is true and the smart-cast lets us read `c.radius`.
+function describe(Circle c) -> string {
+    if (c instanceof Circle) {
+        return "circle r={c.radius}";
+    }
+    return "not a circle";
+}
+
+function main() {
+    Circle c = Circle(2);
+    Square s = Square(3);
+
+    console.println("{c instanceof Circle}"); // true  — c is a Circle
+    console.println("{c instanceof Square}");  // false — a Circle is not a Square
+    console.println("{s instanceof Square}");  // true  — s is a Square
+    console.println(describe(c));              // circle r=2
+}

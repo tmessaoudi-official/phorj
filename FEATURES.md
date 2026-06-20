@@ -34,6 +34,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | `Map` / `Set` / tuples | 🔲 M3 | |
 | Null safety / optionals (`T?`) | ✅ | `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; non-optional `T` is never null (compile-time) |
 | Pipe operator `\|>` | ✅ | `x \|> f ≡ f(x)`; left-associative, lowered to a call in the parser; transpiles to a plain PHP call |
+| Type test `instanceof` | ✅ | `value instanceof ClassName` → `bool`; smart-casts the operand inside `if (x instanceof C)`; transpiles to PHP `instanceof` (M-RT S1; class operands today — interface/union tests land with those features) |
+| Interfaces, unions `A\|B`, intersections `A&B`, generics `<T>`, `extends` | 🚧 M-RT | the Rich Types milestone — `instanceof` is its first slice |
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |

@@ -568,6 +568,7 @@ impl Checker {
                 self.check_expr_casing(lhs);
                 self.check_expr_casing(rhs);
             }
+            Expr::InstanceOf { value, .. } => self.check_expr_casing(value),
             Expr::Call { callee, args, .. } => {
                 self.check_expr_casing(callee);
                 for a in args {
@@ -814,7 +815,28 @@ impl Checker {
                     if !Ty::assignable(&c, &Ty::Bool) {
                         self.err(*span, format!("`if` condition must be `bool`, found `{c}`"));
                     }
-                    self.check_block(then_block);
+                    // instanceof smart-cast (M-RT S1): inside the then-block, a local tested by
+                    // `if (x instanceof C)` is narrowed to `C`, so member access through it
+                    // type-checks. Reuses the if-let scope mechanism (push_scope + declare). Only a
+                    // bare-identifier operand against a known class narrows.
+                    let mut narrowed = false;
+                    if let crate::ast::Expr::InstanceOf {
+                        value, type_name, ..
+                    } = cond
+                    {
+                        if let crate::ast::Expr::Ident(name, _) = &**value {
+                            if self.classes.contains_key(type_name) {
+                                self.push_scope();
+                                self.declare(name, Ty::Named(type_name.clone()), *span);
+                                self.check_block(then_block);
+                                self.pop_scope();
+                                narrowed = true;
+                            }
+                        }
+                    }
+                    if !narrowed {
+                        self.check_block(then_block);
+                    }
                 }
                 if let Some(eb) = else_block {
                     self.check_block(eb);
@@ -886,6 +908,11 @@ impl Checker {
             Expr::List(elems, span) => self.check_list(elems, *span), // Task 5
             Expr::Unary { op, expr, span } => self.check_unary(*op, expr, *span),
             Expr::Binary { op, lhs, rhs, span } => self.check_binary(*op, lhs, rhs, *span),
+            Expr::InstanceOf {
+                value,
+                type_name,
+                span,
+            } => self.check_instanceof(value, type_name, *span),
             Expr::Call { callee, args, span } => self.check_call(callee, args, *span), // Task 4
             Expr::Member {
                 object,
@@ -959,8 +986,7 @@ impl Checker {
                 | BinaryOp::Le
                 | BinaryOp::Ge
                 | BinaryOp::And
-                | BinaryOp::Or
-                | BinaryOp::Is => Ty::Bool,
+                | BinaryOp::Or => Ty::Bool,
                 _ => Ty::Error,
             };
         }
@@ -1000,7 +1026,6 @@ impl Checker {
                 }
                 Ty::Bool
             }
-            BinaryOp::Is => Ty::Bool,
             BinaryOp::Coalesce => {
                 match &l {
                     Ty::Error => Ty::Error,
@@ -1027,6 +1052,37 @@ impl Checker {
             }
             BinaryOp::Pipe => unreachable!("`|>` is lowered to a call in the parser"),
         }
+    }
+
+    /// `value instanceof TypeName` (M-RT S1): a runtime type test that always yields `bool`. The
+    /// right operand must name a known class; the left operand must be a class instance (a
+    /// `Ty::Named`). The smart-cast that narrows the operand inside an `if` then-block lives in
+    /// `check_stmt`'s `Stmt::If` arm (it needs the surrounding block), not here.
+    fn check_instanceof(&mut self, value: &crate::ast::Expr, type_name: &str, span: Span) -> Ty {
+        let v = self.check_expr(value);
+        if !self.classes.contains_key(type_name) {
+            return self.err_coded(
+                span,
+                format!("`instanceof` requires a class name on the right, found `{type_name}`"),
+                "E-INSTANCEOF-TYPE",
+                Some("only a declared class can be tested with `instanceof`".into()),
+            );
+        }
+        match &v {
+            // A poisoned operand already reported its own error; still type the test as `bool`.
+            Ty::Error => {}
+            // A class instance is the meaningful left operand.
+            Ty::Named(_) => {}
+            other => {
+                self.err_coded(
+                    span,
+                    format!("`instanceof` left operand must be a class instance, found `{other}`"),
+                    "E-INSTANCEOF-TYPE",
+                    Some("`instanceof` tests whether a class instance is of a given class".into()),
+                );
+            }
+        }
+        Ty::Bool
     }
 
     // ---- stubs replaced in later tasks ----
@@ -1153,6 +1209,7 @@ impl Checker {
             Expr::Null(s) | Expr::This(s) => *s,
             Expr::Unary { span, .. }
             | Expr::Binary { span, .. }
+            | Expr::InstanceOf { span, .. }
             | Expr::Call { span, .. }
             | Expr::Member { span, .. }
             | Expr::Index { span, .. }
@@ -1844,6 +1901,7 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
             Expr::List(items, _) => items.iter().any(in_expr),
             Expr::Unary { expr, .. } => in_expr(expr),
             Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
+            Expr::InstanceOf { value, .. } => in_expr(value),
             Expr::Call { callee, args, .. } => in_expr(callee) || args.iter().any(in_expr),
             Expr::Member { object, .. } => in_expr(object),
             Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),

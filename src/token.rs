@@ -44,7 +44,7 @@ pub enum TokenKind {
     False,
     Null,
     New,
-    Is,
+    Instanceof,
     Var,
     TypeKw,
     // punctuation / operators

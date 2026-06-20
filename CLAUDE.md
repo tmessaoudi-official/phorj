@@ -311,6 +311,18 @@ sugar where applicable + `core.list`/`core.json` (need `List<T>`-generic natives
 middleware/closure-route layer. **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`)
 — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
+**M-RT (Rich Types) is the active milestone** (approved plan
+`docs/plans/2026-06-20-m-rt-rich-types.plan.md`): a TypeScript-grade type system mapped to PHP
+8.0/8.1 — slices **S1 `instanceof`** → S2 interfaces+`implements` → S3 Map/Set → S4 unions `A|B` →
+S5 intersections `A&B` → S6 `extends` (`final`-by-default) → S7 erased generics `<T>` → S8 traits.
+Each slice ships independently green + byte-identical (`run≡runvm≡real PHP`) with a guide example.
+**S1 COMPLETE:** real `instanceof` type test (`value instanceof ClassName` → `bool`, smart-cast
+narrowing in `if`, transpiles to PHP `instanceof`) replacing the retired value-equality `is` stub;
+one new `Op::IsInstance(String)` (carries the name inline, no pool entry); `is` is no longer a
+keyword. `examples/guide/instanceof.phg`. Class operands only this slice (interface/union/intersection
+tests land with those features). Locked design decisions + slice order live in the plan's Decisions
+Log; the full design is `~/.claude/plans/misty-honking-lynx.md`.
+
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and
 **`docs/ARCHITECTURE.md`** (pipeline + module map). `CHANGELOG.md` tracks milestone progress.

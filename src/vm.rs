@@ -350,6 +350,14 @@ impl<'a> Vm<'a> {
                     v => return Err(format!("cannot read `.{name}` on {}", v.type_name())),
                 }
             }
+            Op::IsInstance(name) => {
+                // `value instanceof name` (M-RT S1): true iff the popped value is an instance whose
+                // class equals `name`. A non-instance is `false`, never a fault — byte-identical to
+                // the interpreter (`Expr::InstanceOf`) and PHP's `instanceof`.
+                let v = self.pop();
+                let is = matches!(&v, Value::Instance(inst) if inst.class == name);
+                self.stack.push(Value::Bool(is));
+            }
 
             // --- P4c: methods + `this` ---
             Op::CallMethod(name_idx, argc) => {
