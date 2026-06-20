@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added / Fixed — `match` transpiler completion + an Assign-position correctness fix (GA P1-b, M11)
+
+- **Literal-pattern `match` now transpiles.** `0 => …` / `"a" => …` / `true => …` / `1.5 => …` arms
+  emit a strict `=== <literal>` guard, mirroring the interpreter's exact value match. This enrolls
+  `examples/guide/enums-match.phg` in the PHP oracle (previously `DEFER`'d).
+- **Expression-position `match` now transpiles.** A `match` used as a sub-expression (operand, call
+  argument, interpolation) lowers to an immediately-invoked PHP closure wrapping the *same* if-chain
+  the statement form emits — one lowering, no divergence. Enclosing locals are captured by value via
+  `use(…)` (Phorge values are immutable, so by-value is exact); `$this` auto-binds in method closures.
+  New `examples/guide/match-expr.phg` (oracle-gated).
+- **Fixed: `var x = match …` could throw `UnhandledMatchError` in transpiled PHP.** `emit_match`
+  previously emitted independent `if`s plus an unconditional defensive `throw`; that only
+  short-circuited in `return` position. In assign (var-decl-init) position the arms fell through and
+  the throw ran unconditionally. The chain is now `if/elseif/else`, so exactly one arm runs and the
+  throw is the terminal `else` — correct for both positions. (The `run`/`runvm` backends were always
+  correct; this was a transpile-leg bug.)
+- **Honesty:** KNOWN_ISSUES corrected — the `is` operator is **value-equality today (a synonym for
+  `==`), not a type test**; `x is SomeType` fails to type-check. A real `instanceof`-style `is` is a
+  future feature, so the transpiler still rejects `is`. (The earlier claim that all three constructs
+  "run fine, only transpile rejects" was inaccurate for `is`.)
+
 ### Fixed — transpiled `float` now byte-identical to the Rust backends (GA P1-a)
 
 - A finite `float` rendered through the transpiler previously diverged from `run`/`runvm`: PHP's

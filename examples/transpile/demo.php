@@ -14,8 +14,8 @@ class Named {
 }
 function area(Shape $s): float {
     if ($s instanceof Circle) { $r = $s->r; return (3.14159 * $r) * $r; }
-    if ($s instanceof Square) { $side = $s->side; return $side * $side; }
-    throw new \UnhandledMatchError();
+    elseif ($s instanceof Square) { $side = $s->side; return $side * $side; }
+    else { throw new \UnhandledMatchError(); }
 }
 function main(): void {
     $n = new Named("demo");

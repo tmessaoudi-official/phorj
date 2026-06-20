@@ -21,6 +21,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances |
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
+| `guide/match-expr.phg` | `match` in expression position (operand / call argument) + literal patterns; transpiles to an IIFE (M11) |
 | `guide/strings.phg` | string interpolation |
 | `guide/inference.phg` | `var` local type inference + `type` aliases (M3 S0) |
 | `guide/ergonomics.phg` | indexing `xs[i]`, integer ranges `0..n` / `0..=n`, expression `if` (M3 S1) |
@@ -53,6 +54,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `List<T>` literals, nesting, iteration | `guide/collections`, all `realworld/*` |
 | classes: ctor promotion, fields, methods, `this`, field reads, composition | `guide/classes`, `ledger`, `rpg`, `grades` |
 | enums (payload **and** zero-payload via `V()`) + exhaustive `match` | `guide/enums-match`, all `realworld/*`, `grades` |
+| `match` literal patterns + expression-position `match` (transpiles, oracle-gated) | `guide/enums-match`, `guide/match-expr` |
 | string interpolation `"{expr}"` | `guide/strings`, every example |
 | indexing `xs[i]`, ranges `0..n` / `0..=n`, expression `if` | `guide/ergonomics` |
 | null safety: `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` | `guide/null-safety` |

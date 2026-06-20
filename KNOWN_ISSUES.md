@@ -11,7 +11,8 @@ These are designed but not in the current surface; using them produces a clean c
 not a panic:
 
 - `Map` / `Set` / tuples
-- The `is` operator
+- The `is` operator **as a type test** (today it merely aliases value-equality `==` — see *Behavioral
+  quirks* below; a real `instanceof`-style `is` is a future feature)
 - Exceptions (try / catch / throw)
 - Mutation (reassignment and field writes) — Phorge is immutable-by-default today
 - Method/function overloading, traits, operator overloading, property accessors
@@ -113,15 +114,17 @@ or simply unavailable, never a crash):
   construct **and** in a `match` pattern. A bare `V =>` arm is parsed as a catch-all *binding*, not a
   variant match — so it silently matches everything. Always use `V()` in patterns for nullary
   variants.
-- **A few constructs are not yet transpiled (oracle-deferred to M11).** The transpiler still rejects
-  *literal* `match` patterns (`0 => …`, `"a" => …`), expression-position `match`, and the `is`
-  operator — all run fine on `run`/`runvm` but emit `transpile error: … not yet supported`. The M7
-  PHP oracle (`tests/differential.rs`: `all_examples_transpile_and_match_php`) **loudly skips** any
-  example that hits one of these (it logs `DEFER <file>` and a count), so the gap is visible, not
-  silent. `examples/guide/enums-match.phg` is the one currently-deferred example. As M11 implements
-  each construct the deferral disappears and the example auto-enrolls in the oracle. (The
-  empty/reversed-range and integer-division transpile divergences that used to live here were **fixed
-  in M7**, when the oracle began executing the transpiled PHP of every example.)
+- **The `is` operator is value-equality today, not a type test.** `a is b` parses and evaluates as
+  `a == b` (the interpreter implements it as value equality), so it is currently a redundant synonym
+  for `==`. It is **not** a type-membership test: `x is SomeType` fails to type-check
+  (`E-UNKNOWN-IDENT`) because the right-hand side is parsed as a *value*, not a type. A real
+  `instanceof`-style `is` (parse RHS as a type, narrow in the checker, emit `$x instanceof T`) is a
+  future language feature, not just a transpiler gap; the transpiler rejects `is` until then. *(Literal
+  `match` patterns and expression-position `match` — previously listed here as transpile gaps — were
+  **completed in M11**: both now transpile and are PHP-oracle byte-identity-gated, so
+  `examples/guide/enums-match.phg` and `examples/guide/match-expr.phg` are enrolled in the oracle, not
+  deferred. The empty/reversed-range and integer-division transpile divergences were fixed earlier in
+  M7.)*
 - **Float division by zero diverges in the fault domain (transpile target).** A finite `float` now
   renders **byte-identically** across all three backends — the transpiler's `__phorge_float` runtime
   helper reproduces Rust's shortest-round-trip, always-positional `f64` Display exactly (so

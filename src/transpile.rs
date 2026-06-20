@@ -1,7 +1,7 @@
 //! Phorge → PHP transpiler. Walks the untyped AST (the same AST the evaluator walks)
 //! and emits runnable PHP 8.x source. Entry point: [`emit`].
 use crate::ast::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Transpile a parsed program to PHP source. Returns the PHP text, or a
 /// `transpile error: …` message for an unsupported construct.
@@ -678,9 +678,33 @@ impl Transpiler {
                 let bs = if self.namespaced { "\\" } else { "" };
                 Ok(format!("{bs}__phorge_unwrap({v})"))
             }
-            // Implemented in Task 6:
-            Expr::Match { .. } => {
-                Err("transpile error: match in this position is not yet supported".into())
+            // Expression-position `match` (M11): wrap the SAME if-chain `emit_match` produces in
+            // statement position inside an immediately-invoked closure, so both positions share one
+            // lowering and cannot diverge. Over-capture every enclosing local by value via `use(…)`
+            // — Phorge values are immutable, so by-value capture is exact; pattern-bound payload vars
+            // are declared *inside* the closure and so are intentionally excluded. A regular closure
+            // auto-binds `$this`, so a match inside a method keeps working.
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                let captures: BTreeSet<String> = self.locals.iter().flatten().cloned().collect();
+                let use_clause = if captures.is_empty() {
+                    String::new()
+                } else {
+                    let names: Vec<String> = captures.iter().map(|n| format!("${n}")).collect();
+                    format!(" use ({})", names.join(", "))
+                };
+                // Render the if-chain into a temporary buffer (one indent level deep), then splice it
+                // into the closure body. Save/restore `out` and `indent` so the surrounding emission
+                // is untouched.
+                let saved_out = std::mem::take(&mut self.out);
+                let saved_indent = self.indent;
+                self.indent = 1;
+                let chain = self.emit_match(scrutinee, arms, MatchTarget::Return);
+                let body = std::mem::replace(&mut self.out, saved_out);
+                self.indent = saved_indent;
+                chain?;
+                Ok(format!("(function(){use_clause} {{\n{body}}})()"))
             }
             // `__phorge_range` reproduces Phorge's range semantics under PHP: an empty/reversed range
             // (`start > hi`) yields `[]`, where PHP's bare `range()` would *descend* (QW-13 — formerly
@@ -898,8 +922,18 @@ impl Transpiler {
             MatchTarget::Return => format!("return {body};"),
             MatchTarget::Assign(v) => format!("${v} = {body};"),
         };
+        // Emit one `if (…) {…} elseif (…) {…} … else {…}` chain so exactly one arm runs. Earlier
+        // this was a sequence of independent `if`s, which only short-circuited in `Return` position
+        // (the `return` exits before the next `if`). In `Assign` position the arms fall through and
+        // every subsequent `if` — and the defensive `throw` — was reached unconditionally; chaining
+        // with `elseif`/`else` is correct for both targets. A catch-all (`_` / bare binding) is the
+        // terminal `else`; otherwise a defensive `else { throw }` closes the (checker-exhaustive) set.
+        let mut first = true;
         let mut has_catch_all = false;
         for arm in arms {
+            // `if` for the first conditional arm, `elseif` thereafter; a catch-all uses `else` (or a
+            // bare block when it is itself the first/only arm, since a leading `else` is invalid PHP).
+            let cond_kw = if first { "if" } else { "elseif" };
             match &arm.pattern {
                 Pattern::Variant {
                     name: vname,
@@ -923,15 +957,18 @@ impl Transpiler {
                     }
                     let body = self.emit_expr(&arm.body)?;
                     self.line(&format!(
-                        "if ({subj} instanceof {vname}) {{ {binds}{} }}",
+                        "{cond_kw} ({subj} instanceof {vname}) {{ {binds}{} }}",
                         yield_stmt(&target, &body)
                     ));
                     self.pop_scope();
+                    first = false;
                 }
                 Pattern::Wildcard(_) => {
                     has_catch_all = true;
                     let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!("{{ {} }}", yield_stmt(&target, &body)));
+                    let else_kw = if first { "" } else { "else " };
+                    self.line(&format!("{else_kw}{{ {} }}", yield_stmt(&target, &body)));
+                    first = false;
                 }
                 Pattern::Binding { name, .. } => {
                     // bare identifier arm binds the whole scrutinee (catch-all)
@@ -939,31 +976,70 @@ impl Transpiler {
                     self.push_scope();
                     self.declare(name);
                     let body = self.emit_expr(&arm.body)?;
+                    let else_kw = if first { "" } else { "else " };
                     self.line(&format!(
-                        "{{ ${name} = {subj}; {} }}",
+                        "{else_kw}{{ ${name} = {subj}; {} }}",
                         yield_stmt(&target, &body)
                     ));
                     self.pop_scope();
+                    first = false;
                 }
-                // `null` arm over an optional scrutinee (M3 S2.6) → a `=== null` guard. Correct in
-                // return position (the first matching arm exits); see the sequential-`if` model used
-                // by the variant arms above.
+                // `null` arm over an optional scrutinee (M3 S2.6) → a `=== null` guard.
                 Pattern::Null(_) => {
                     let body = self.emit_expr(&arm.body)?;
                     self.line(&format!(
-                        "if ({subj} === null) {{ {} }}",
+                        "{cond_kw} ({subj} === null) {{ {} }}",
                         yield_stmt(&target, &body)
                     ));
+                    first = false;
                 }
-                _ => {
-                    return Err(
-                        "transpile error: literal patterns in match are not yet supported".into(),
-                    )
+                // Literal patterns (M11) — a `=== <literal>` guard, mirroring the interpreter's
+                // exact value match (`match_pattern`: `v == n` / `v == x` / `v == s` / `v == b`).
+                // PHP `===` is strict (type + value), so the branch taken is byte-identical.
+                Pattern::Int(n, _) => {
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!(
+                        "{cond_kw} ({subj} === {n}) {{ {} }}",
+                        yield_stmt(&target, &body)
+                    ));
+                    first = false;
+                }
+                Pattern::Float(x, _) => {
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!(
+                        "{cond_kw} ({subj} === {x:?}) {{ {} }}",
+                        yield_stmt(&target, &body)
+                    ));
+                    first = false;
+                }
+                Pattern::Str(s, _) => {
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!(
+                        "{cond_kw} ({subj} === \"{}\") {{ {} }}",
+                        php_escape(s),
+                        yield_stmt(&target, &body)
+                    ));
+                    first = false;
+                }
+                Pattern::Bool(b, _) => {
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!(
+                        "{cond_kw} ({subj} === {b}) {{ {} }}",
+                        yield_stmt(&target, &body)
+                    ));
+                    first = false;
                 }
             }
         }
         if !has_catch_all {
-            self.line("throw new \\UnhandledMatchError();");
+            // Defensive terminal arm: the checker guarantees exhaustiveness, so this is unreachable
+            // in well-typed programs — but as the chain's `else` it must never fall through to the
+            // assignment/return below it (the former independent-`if` form let it run unconditionally
+            // in `Assign` position). `first` is only still true for an arm-less match (checker-forbidden).
+            let else_kw = if first { "" } else { "else " };
+            self.line(&format!(
+                "{else_kw}{{ throw new \\UnhandledMatchError(); }}"
+            ));
         }
         Ok(())
     }
@@ -1231,6 +1307,34 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
     }
 
     #[test]
+    fn literal_match_emits_strict_eq_elseif_chain() {
+        // Literal patterns → `=== <lit>` guards. The arms must be `if/elseif/else`-chained (not
+        // independent `if`s) so an assign-position match doesn't fall through to the defensive throw.
+        let out = php(
+            "function sign(int n) -> string { string s = match n { 0 => \"z\", 1 => \"one\", x => \"other\" }; return s; }",
+        );
+        assert!(out.contains("if ($n === 0) { $s = \"z\"; }"), "{out}");
+        assert!(out.contains("elseif ($n === 1) { $s = \"one\"; }"), "{out}");
+        assert!(out.contains("else { $x = $n; $s = \"other\"; }"), "{out}");
+        // No unconditional throw stranded after the assign chain.
+        assert!(!out.contains("$s = \"other\"; }\n    throw"), "{out}");
+    }
+
+    #[test]
+    fn expression_position_match_emits_iife() {
+        // A `match` used as a sub-expression wraps the shared if-chain in an immediately-invoked
+        // closure, capturing enclosing locals by value via `use(...)`.
+        let out = php(
+            "function f(int n) -> int { int base = 5; int r = (match n { 0 => 10, x => x }) + base; return r; }",
+        );
+        // Over-captures every enclosing local by value (both `$base` and the param `$n`).
+        assert!(out.contains("(function() use ($base, $n) {"), "{out}");
+        assert!(out.contains("if ($n === 0) { return 10; }"), "{out}");
+        assert!(out.contains("else { $x = $n; return $x; }"), "{out}");
+        assert!(out.contains("})()"), "{out}");
+    }
+
+    #[test]
     fn println_becomes_echo() {
         let out = php("import core.console; function main() { console.println(\"hi\"); }");
         assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
@@ -1370,17 +1474,24 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
     }
 
     #[test]
-    fn match_in_expression_position_errors_cleanly() {
-        // match as a call argument is an unsupported expression position.
+    fn match_as_call_argument_emits_iife() {
+        // `match` as a call argument is expression position (M11): it lowers to an immediately-invoked
+        // closure wrapping the same variant if-chain, with payload bindings declared inside the closure.
         let prog = parse_only(&format!(
             "{SHAPE} function f(Shape s) -> float {{ \
                float a = id(match s {{ Circle(r) => r, Rect(w, h) => w, }}); return a; }}"
         ));
-        let err = emit(&prog).unwrap_err();
+        let out = emit(&prog).expect("expression-position match transpiles");
+        assert!(out.contains("id((function() use ($s) {"), "{out}");
         assert!(
-            err.contains("match in this position is not yet supported"),
-            "{err}"
+            out.contains("if ($s instanceof Circle) { $r = $s->radius; return $r; }"),
+            "{out}"
         );
+        assert!(
+            out.contains("elseif ($s instanceof Rect) { $w = $s->w; $h = $s->h; return $w; }"),
+            "{out}"
+        );
+        assert!(out.contains("})())"), "{out}");
     }
 
     // ── M3 S3 Task 5: expression lambdas + named-fn references ──────────────
