@@ -23,8 +23,15 @@ pub enum Ty {
     /// and vice versa. core.html Wave 2 (the builders).
     Attr,
     Unit,
-    /// A nominal enum or class type, by name.
-    Named(String),
+    /// A nominal enum, interface, or class type, by name, with type arguments. `args` is empty for a
+    /// non-generic nominal (every enum/interface, and a non-generic class) — so the common case is
+    /// `Ty::Named(name, vec![])`. A generic class instance carries its inferred arguments
+    /// (`Box<int>` ⇒ `Ty::Named("Box", [Int])`, M-RT generics-all): construction infers them by
+    /// unifying the constructor parameters against the call's arguments, and member access substitutes
+    /// the class's type parameters → these arguments. The arguments are **erased before any backend**
+    /// (a class's own `<T>`-typed members become `Type::Erased`; a use-site `Box<int>` annotation
+    /// keeps its args but the backends ignore them — `resolve_cty`/`emit_type` key on the name only).
+    Named(String, Vec<Ty>),
     List(Box<Ty>),
     Map(Box<Ty>, Box<Ty>),
     Set(Box<Ty>),
@@ -83,9 +90,11 @@ impl Ty {
             (Ty::Function(fp, fr), Ty::Function(tp, tr)) => {
                 fp.len() == tp.len() && fp.iter().zip(tp.iter()).all(|(a, b)| a == b) && fr == tr
             }
-            // Nominal types: equal, or `from` is a subtype of `to` (class→interface, interface→
-            // parent interface). A `T?` never widens to a non-optional `T` — handled above.
-            (Ty::Named(a), Ty::Named(b)) => a == b || subtype(a, b),
+            // Nominal types: a subtype edge (class→interface, interface→parent interface) by name, or
+            // the same head with **invariant** type arguments (matching `List`/`Map`/`Set`: `Box<int>`
+            // is not a `Box<float>`). A non-generic nominal has empty args on both sides, so this
+            // reduces to the name check. A `T?` never widens to a non-optional `T` — handled above.
+            (Ty::Named(a, aa), Ty::Named(b, ba)) => subtype(a, b) || (a == b && aa == ba),
             // A type parameter is opaque inside its generic body: assignable only to the same
             // parameter (by name), with no coercion to/from any concrete type. Call sites do not
             // reach here — they unify the parameter away first (M-RT S7).
@@ -106,7 +115,18 @@ impl fmt::Display for Ty {
             Ty::Html => write!(f, "Html"),
             Ty::Attr => write!(f, "Attr"),
             Ty::Unit => write!(f, "unit"),
-            Ty::Named(n) => write!(f, "{n}"),
+            Ty::Named(n, args) => {
+                if args.is_empty() {
+                    write!(f, "{n}")
+                } else {
+                    let a = args
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    write!(f, "{n}<{a}>")
+                }
+            }
             Ty::List(e) => write!(f, "List<{e}>"),
             Ty::Map(k, v) => write!(f, "Map<{k}, {v}>"),
             Ty::Set(e) => write!(f, "Set<{e}>"),
@@ -176,9 +196,25 @@ mod tests {
     #[test]
     fn display_renders_generics() {
         assert_eq!(
-            Ty::List(Box::new(Ty::Named("Shape".into()))).to_string(),
+            Ty::List(Box::new(Ty::Named("Shape".into(), vec![]))).to_string(),
             "List<Shape>"
         );
+    }
+
+    #[test]
+    fn named_type_arguments_are_invariant() {
+        // A generic class instance carries its arguments (M-RT generics-all). Display shows them, and
+        // assignability is invariant on the arguments (matching List/Map/Set) — `Box<int>` is not a
+        // `Box<float>` — while a non-generic nominal (empty args) reduces to the plain name check.
+        let box_int = Ty::Named("Box".into(), vec![Ty::Int]);
+        let box_int2 = Ty::Named("Box".into(), vec![Ty::Int]);
+        let box_float = Ty::Named("Box".into(), vec![Ty::Float]);
+        assert_eq!(box_int.to_string(), "Box<int>");
+        assert!(Ty::assignable(&box_int, &box_int2)); // same head + same args
+        assert!(!Ty::assignable(&box_int, &box_float)); // invariant in the argument
+        let plain = Ty::Named("Dog".into(), vec![]);
+        assert!(Ty::assignable(&plain, &Ty::Named("Dog".into(), vec![])));
+        assert!(!Ty::assignable(&plain, &Ty::Named("Cat".into(), vec![])));
     }
 
     #[test]

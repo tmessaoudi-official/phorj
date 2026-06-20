@@ -413,8 +413,25 @@ emits references as absolute FQNs. **No new `Op`/`Value`**; single-package outpu
 type import is now implemented**. `examples/project/shapes/` (cross-package class+interface+enum)
 byte-identical run≡runvm≡**real PHP**; 437 lib + both project oracles + 12 project tests (4 new
 `E-TYPE-IMPORT-*` + the lift) green.
-**NEXT sub-slice: generic types/classes `Box<T>`** (the last generics-all piece; layers on cross-package
-types for free since a generic library type erases `<T>` before the loader's type resolution).
+**Sub-slice 3 — generic types/classes `Box<T>` — COMPLETE; GENERICS-ALL is now CLOSED** (design
+`docs/specs/2026-06-20-generic-types-classes-design.md`). The TypeScript model — **reified in the
+checker, erased in the backend**: `class Box<T>`/`class Pair<A, B>`; the type parameter is inferred at
+construction by unifying the ctor params against the call's args (`Box(7)` ⇒ `Box<int>`) and recovered
+at every use site by substituting the class params with the instance's args (`Box(7).get()` is `int`;
+`string s = Box(7).get()` is a type error). `Ty::Named` now carries type arguments
+(`Ty::Named(String, Vec<Ty>)` — 14 sites, 2 files, `Ty` is checker-only); `assignable`/`unify`/
+`apply_subst`/`ty_has_param` descend them (invariant). `erase_generics` rewrites a generic class's own
+`<T>`-typed members (field/ctor/methods) to `Type::Erased` (→ PHP `mixed`); an instance carries no
+runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`). **Zero backend changes** —
+`resolve_cty`/`emit_type` already key a class on its name and drop args, so the byte-identity spine is
+safe by construction (front-end-only). **No new `Op`, no `Value` change.** `examples/guide/generic-types.phg`
+byte-identical run≡runvm≡**real PHP**; 446 lib + differential PHP oracle + 53 integration green.
+New diagnostic reuse `E-GENERIC-PARAM` (method type param shadowing a class one). Scope: `package main`
+only; inference-only construction (no `Box<int>(7)`); invariant, no bounds, no generic enums. **Verified
+limitation (KNOWN_ISSUES):** a generic-typed *result* erases to `mixed` (`CTy::Other`), so it is not a
+specialized arithmetic operand — `id(7) + 1` / `box.get() + 1` runs on the interpreter but the VM rejects
+it (`run`↔`runvm` mismatch); bind to a typed local first. Applies to all erased generics (pre-existing
+since S7a). **NEXT (M-RT slice order): S4 unions `A|B`** → S5 intersections → S6 `extends` → S8 traits.
 
 **SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec
 `docs/specs/2026-06-20-selective-type-import-design.md`): **`import type Pkg.Path.TypeName [as A];`** for

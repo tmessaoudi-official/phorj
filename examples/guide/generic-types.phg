@@ -1,0 +1,59 @@
+// Generic types / classes (M-RT generics-all) — TypeScript-style `<T>` on a *class*.
+//
+// A class can declare type parameters after its name: `class Box<T>`, `class Pair<A, B>`. The
+// parameter is in scope across the whole class — the field, the constructor, and every method. It is
+// **inferred at construction** from the constructor arguments (`Box(7)` ⇒ `Box<int>`) and recovered
+// at each use site (`Box(7).get()` is `int`; assigning it to a `string` would be a type error). As
+// with generic functions and methods there is **no monomorphization**: after type-checking every
+// type parameter is *erased* (a `T` field becomes a plain runtime value / PHP `mixed`), so the
+// interpreter, the bytecode VM, and the transpiled PHP all run identical, type-variable-free code —
+// byte-for-byte identical output. An instance carries no type argument at runtime: `instanceof
+// Box<int>` is just `instanceof Box`.
+
+package main;
+
+import Core.Console;
+
+// A one-field generic container. `T` flows through the promoted constructor field and the methods.
+class Box<T> {
+  constructor(private T value) {}
+
+  // Returns the stored value at whatever concrete type the box was constructed with.
+  function get() -> T {
+    return this.value;
+  }
+
+  // A method *taking* a `T`: the parameter is checked at the instance's concrete type, so
+  // `Box(7).orElse(0)` type-checks but `Box(7).orElse("x")` would not.
+  function orElse(T fallback) -> T {
+    return this.value;
+  }
+}
+
+// Two type parameters, inferred independently from the two constructor arguments.
+class Pair<A, B> {
+  constructor(private A first, private B second) {}
+  function left() -> A {
+    return this.first;
+  }
+  function right() -> B {
+    return this.second;
+  }
+}
+
+function main() {
+  var bi = Box(7); // Box<int>  — T inferred from `7`
+  int x = bi.get(); // int
+  int y = bi.orElse(0); // int — the T-typed parameter accepts an int
+
+  var bs = Box("phorge"); // Box<string>
+  string s = bs.get(); // string
+
+  var p = Pair(1, "one"); // Pair<int, string> — A=int, B=string
+  int a = p.left();
+  string b = p.right();
+
+  Console.println("box int: {x} {y}");
+  Console.println("box str: {s}");
+  Console.println("pair: {a} {b}");
+}

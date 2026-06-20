@@ -30,6 +30,11 @@ struct ClassInfo {
     methods: HashMap<String, FnSig>,
     /// constructor parameter types, for `ClassName(args)` calls
     ctor: Vec<Ty>,
+    /// Generic type parameters this class declares (`["T"]` for `class Box<T>`). Empty for a
+    /// non-generic class. When non-empty, `fields`/`ctor`/`methods` may contain `Ty::Param`
+    /// occurrences: construction unifies the ctor against the arguments to bind them, and member
+    /// access substitutes them with the instance's type arguments (M-RT generics-all).
+    type_params: Vec<String>,
 }
 
 /// An interface's own method signatures plus its declared parent interfaces (`extends`). The
@@ -78,6 +83,10 @@ pub struct Checker {
     /// being looked up as an alias/enum/class. Set around each generic function and cleared after;
     /// empty for everything else (M-RT S7).
     active_type_params: Vec<String>,
+    /// Type parameters of the generic *class* whose body is currently being checked (`["T"]` for a
+    /// method/constructor inside `class Box<T>`). Unioned with the method's own `type_params` so a
+    /// method body sees both. Empty for free functions and non-generic classes (M-RT generics-all).
+    cur_class_type_params: Vec<String>,
 }
 
 impl Checker {
@@ -99,6 +108,7 @@ impl Checker {
             imports: HashMap::new(),
             html_resolutions: HashMap::new(),
             active_type_params: Vec::new(),
+            cur_class_type_params: Vec::new(),
         }
     }
 
@@ -251,11 +261,28 @@ impl Checker {
                         let ty = self.resolve_type(&aliased);
                         self.alias_stack.pop();
                         ty
-                    } else if self.enums.contains_key(other)
-                        || self.classes.contains_key(other)
-                        || self.interfaces.contains_key(other)
+                    } else if self.enums.contains_key(other) || self.interfaces.contains_key(other)
                     {
-                        Ty::Named(other.to_string())
+                        // Enums and interfaces take no type arguments this slice (generic enums/
+                        // interfaces are deferred — M-RT generics-all).
+                        self.no_args(other, args, *span, Ty::Named(other.to_string(), Vec::new()))
+                    } else if let Some(arity) = self.classes.get(other).map(|c| c.type_params.len())
+                    {
+                        // A class. A generic class requires exactly its declared number of type
+                        // arguments (`Box<int>`); a non-generic class takes none (M-RT generics-all).
+                        if args.len() != arity {
+                            let plural = if arity == 1 { "" } else { "s" };
+                            self.err(
+                                *span,
+                                format!(
+                                    "type `{other}` expects {arity} type argument{plural}, got {}",
+                                    args.len()
+                                ),
+                            )
+                        } else {
+                            let resolved = args.iter().map(|a| self.resolve_type(a)).collect();
+                            Ty::Named(other.to_string(), resolved)
+                        }
                     } else {
                         self.err_coded(
                             *span,
@@ -649,19 +676,26 @@ impl Checker {
             self.err(c.span, format!("type `{}` is already defined", c.name));
             return;
         }
-        // Register the name first so members can reference the class type itself.
+        // Register the name + type parameters first so members can reference the class type itself
+        // (including a self-referential `Box<T> next` field) with correct arity (M-RT generics-all).
+        self.validate_type_params(&c.type_params, c.span);
         self.classes.insert(
             c.name.clone(),
             ClassInfo {
                 fields: HashMap::new(),
                 methods: HashMap::new(),
                 ctor: Vec::new(),
+                type_params: c.type_params.clone(),
             },
         );
         use crate::ast::Modifier;
         let mut fields = HashMap::new();
         let mut methods = HashMap::new();
         let mut ctor = Vec::new();
+        // The class's type parameters are in scope while resolving every member signature (fields,
+        // constructor, methods), so a bare `T` resolves to `Ty::Param("T")` (M-RT generics-all). A
+        // generic method adds its own parameters on top.
+        let class_tp = &c.type_params;
         // Promoted ctor params (carrying a visibility modifier) also become fields,
         // matching the evaluator's runtime promotion (EV-4). Deferred to after the
         // member loop via `or_insert` so an explicit `Field` decl of the same name
@@ -670,12 +704,15 @@ impl Checker {
         for m in &c.members {
             match m {
                 ClassMember::Field { ty, name, .. } => {
+                    self.active_type_params = class_tp.clone();
                     let fty = self.resolve_type(ty);
+                    self.active_type_params.clear();
                     fields.insert(name.clone(), fty);
                 }
                 ClassMember::Constructor { params, .. } => {
                     // Resolve each param type once; reuse for both the ctor signature
                     // and field promotion to avoid duplicate "unknown type" errors.
+                    self.active_type_params = class_tp.clone();
                     ctor = params
                         .iter()
                         .map(|p| {
@@ -691,14 +728,31 @@ impl Checker {
                             ty
                         })
                         .collect();
+                    self.active_type_params.clear();
                 }
                 ClassMember::Method(f) => {
-                    // Generic methods reuse the free-fn machinery (M-RT generics-all): with the
-                    // method's `type_params` in scope, a bare `T` resolves to `Ty::Param("T")`, the
-                    // sig is stored with its type params, and `check_method_call` routes a generic
-                    // call through `check_generic_call`. Erased before any backend by `erase_generics`.
+                    // A method reuses the free-fn machinery (M-RT generics-all): with the class's
+                    // type parameters AND the method's own in scope, a bare `T`/`U` resolves to
+                    // `Ty::Param`; class params are substituted with the instance's type arguments at
+                    // the call site, method params unified from the call's arguments. A method param
+                    // that shadows a class param is rejected so composition stays unambiguous. Erased
+                    // before any backend by `erase_generics`.
                     self.validate_type_params(&f.type_params, f.span);
-                    self.active_type_params = f.type_params.clone();
+                    for tp in &f.type_params {
+                        if class_tp.iter().any(|c| c == tp) {
+                            self.err_coded(
+                                f.span,
+                                format!(
+                                    "method type parameter `{tp}` shadows the class type parameter `{tp}`"
+                                ),
+                                "E-GENERIC-PARAM",
+                                Some("rename the method's type parameter".into()),
+                            );
+                        }
+                    }
+                    let mut active = class_tp.clone();
+                    active.extend(f.type_params.iter().cloned());
+                    self.active_type_params = active;
                     let p = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
                     let ret = match &f.ret {
                         Some(t) => self.resolve_type(t),
@@ -755,11 +809,18 @@ impl Checker {
                 Item::Function(f) => self.check_function(f),
                 Item::Class(c) => {
                     let prev = self.cur_class.replace(c.name.clone());
+                    // The class's type parameters are in scope across every method/constructor body
+                    // (unioned with a method's own in `check_function`), so a body referencing `T`
+                    // type-checks (M-RT generics-all). Empty for a non-generic class.
+                    let prev_tp =
+                        std::mem::replace(&mut self.cur_class_type_params, c.type_params.clone());
                     for m in &c.members {
                         match m {
                             ClassMember::Method(f) => self.check_function(f),
                             ClassMember::Constructor { params, body, .. } => {
                                 let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
+                                // class type params in scope for any `T` annotation in the body
+                                self.active_type_params = c.type_params.clone();
                                 self.push_scope();
                                 // constructor params are in scope inside its body
                                 let ctor = self
@@ -774,11 +835,13 @@ impl Checker {
                                     self.check_stmt(s);
                                 }
                                 self.pop_scope();
+                                self.active_type_params.clear();
                                 self.cur_ret = prev_ret;
                             }
                             ClassMember::Field { .. } => {}
                         }
                     }
+                    self.cur_class_type_params = prev_tp;
                     self.cur_class = prev;
                 }
                 // Interface method signatures have no body to check (the conformance/graph
@@ -805,6 +868,10 @@ impl Checker {
                 Item::Function(f) => self.check_fn_casing(f),
                 Item::Class(c) => {
                     self.want_type_case(&c.name, c.span);
+                    // Generic class type parameters are type names — PascalCase (M-RT generics-all).
+                    for tp in &c.type_params {
+                        self.want_type_case(tp, c.span);
+                    }
                     for m in &c.members {
                         match m {
                             ClassMember::Field { name, span, .. } => {
@@ -1024,7 +1091,11 @@ impl Checker {
     /// type parameters are made active for the whole body so `T`-typed params/locals resolve to
     /// `Ty::Param` (M-RT S7). Functions never nest, so a flat set + clear is sufficient.
     fn check_function(&mut self, f: &crate::ast::FunctionDecl) {
-        self.active_type_params = f.type_params.clone();
+        // A method of a generic class sees both the class's type parameters and its own (M-RT
+        // generics-all); `cur_class_type_params` is empty for free functions and non-generic classes.
+        let mut active = self.cur_class_type_params.clone();
+        active.extend(f.type_params.iter().cloned());
+        self.active_type_params = active;
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
             None => Ty::Unit,
@@ -1201,7 +1272,16 @@ impl Checker {
                                 || self.interfaces.contains_key(type_name)
                             {
                                 self.push_scope();
-                                self.declare(name, Ty::Named(type_name.clone()), *span);
+                                // `instanceof` carries no type arguments at runtime (`instanceof
+                                // Box<int>` ≡ `instanceof Box`), so a narrowed generic class instance
+                                // has erased (poison) type arguments — its generic members read as
+                                // `mixed` (M-RT generics-all).
+                                let arity = self
+                                    .classes
+                                    .get(type_name)
+                                    .map_or(0, |c| c.type_params.len());
+                                let args = vec![Ty::Error; arity];
+                                self.declare(name, Ty::Named(type_name.clone(), args), *span);
                                 self.check_block(then_block);
                                 self.pop_scope();
                                 narrowed = true;
@@ -1276,7 +1356,17 @@ impl Checker {
                 }
             },
             Expr::This(span) => match &self.cur_class {
-                Some(c) => Ty::Named(c.clone()),
+                // Inside a generic class body, `this` carries the class's own type parameters as
+                // opaque `Ty::Param`s, so `this.value` (a `T` field) types as `T` and member access
+                // substitutes identically (M-RT generics-all). Empty args for a non-generic class.
+                Some(c) => {
+                    let args = self
+                        .cur_class_type_params
+                        .iter()
+                        .map(|p| Ty::Param(p.clone()))
+                        .collect();
+                    Ty::Named(c.clone(), args)
+                }
                 None => self.err(*span, "`this` is only valid inside a method"),
             },
             Expr::List(elems, span) => self.check_list(elems, *span), // Task 5
@@ -1449,7 +1539,7 @@ impl Checker {
             // A poisoned operand already reported its own error; still type the test as `bool`.
             Ty::Error => {}
             // A class instance is the meaningful left operand.
-            Ty::Named(_) => {}
+            Ty::Named(..) => {}
             other => {
                 self.err_coded(
                     span,
@@ -1962,6 +2052,12 @@ impl Checker {
                     && dp.iter().zip(ap).all(|(d, a)| self.unify(d, a, theta))
                     && self.unify(dr, ar, theta)
             }
+            // Two generic class instances with the same head — unify their arguments so a generic
+            // function over a generic class (`function unwrap<T>(Box<T> b) -> T`) binds `T` from a
+            // `Box<int>` argument (M-RT generics-all). Different heads fall through to assignability.
+            (Ty::Named(dn, da), Ty::Named(an, aa)) if dn == an && da.len() == aa.len() => {
+                da.iter().zip(aa).all(|(d, a)| self.unify(d, a, theta))
+            }
             // No type parameter at this position — ordinary assignability (actual → declared).
             (d, a) => self.ty_assignable(a, d),
         }
@@ -2052,13 +2148,52 @@ impl Checker {
             .map(|(enum_name, info)| (enum_name.clone(), info.variants[name].clone()));
         if let Some((enum_name, fields)) = owner {
             self.check_args(name, &fields, args, span);
-            return Some(Ty::Named(enum_name));
+            return Some(Ty::Named(enum_name, Vec::new()));
         }
         // class constructor: `ClassName(args)`
         if let Some(info) = self.classes.get(name) {
             let ctor = info.ctor.clone();
-            self.check_args(name, &ctor, args, span);
-            return Some(Ty::Named(name.to_string()));
+            let type_params = info.type_params.clone();
+            if type_params.is_empty() {
+                self.check_args(name, &ctor, args, span);
+                return Some(Ty::Named(name.to_string(), Vec::new()));
+            }
+            // A generic class: infer its type arguments from the constructor call (M-RT generics-all),
+            // the same first-binding-wins unifier as a generic function. A parameter the constructor
+            // does not mention stays un-inferred and defaults to `Ty::Error` (permissive).
+            if ctor.len() != args.len() {
+                self.err(
+                    span,
+                    format!(
+                        "`{name}` expects {} argument(s), found {}",
+                        ctor.len(),
+                        args.len()
+                    ),
+                );
+                for a in args {
+                    self.check_expr(a);
+                }
+                return Some(Ty::Named(
+                    name.to_string(),
+                    vec![Ty::Error; type_params.len()],
+                ));
+            }
+            let mut theta: HashMap<String, Ty> = HashMap::new();
+            for (param, arg) in ctor.iter().zip(args) {
+                let at = self.check_arg(arg, param);
+                if !self.unify(param, &at, &mut theta) {
+                    let want = apply_subst(param, &theta);
+                    self.err(
+                        span,
+                        format!("`{name}` constructor expects `{want}`, found `{at}`"),
+                    );
+                }
+            }
+            let inst_args = type_params
+                .iter()
+                .map(|p| theta.get(p).cloned().unwrap_or(Ty::Error))
+                .collect();
+            return Some(Ty::Named(name.to_string(), inst_args));
         }
         None
     }
@@ -2097,7 +2232,7 @@ impl Checker {
             other => other.clone(),
         };
         let ret = match base {
-            Ty::Named(cls) => {
+            Ty::Named(cls, cargs) => {
                 // A class method, or — when `cls` is an interface (M-RT S2) — an interface method
                 // from its flattened (own + `extends`) signature set. Interface-typed receivers
                 // dispatch polymorphically at runtime through the concrete class, so only the static
@@ -2117,19 +2252,23 @@ impl Checker {
                             None
                         }
                     });
+                // Substitute the *class* type parameters with this instance's type arguments
+                // (`Box<int>` ⇒ `{T → int}`), so a method returning/taking `T` is checked at the
+                // concrete type (M-RT generics-all). Empty for a non-generic class/interface, so this
+                // is the identity in the common case. Any *method-level* `<U>` that survives is then
+                // inferred from the call's arguments below.
+                let theta = self.class_subst(&cls, &cargs);
                 match sig {
-                    // A generic method (its signature still carries `Ty::Param`) infers its type
-                    // arguments from the call's arguments via the same first-binding-wins unifier as
-                    // a generic free function / native (M-RT generics-all). Interface methods are
-                    // never generic this slice, so an interface receiver always takes the plain path.
-                    Some((params, ret))
-                        if params.iter().any(ty_has_param) || ty_has_param(&ret) =>
-                    {
-                        self.check_generic_call(name, &params, &ret, args, span)
-                    }
                     Some((params, ret)) => {
-                        self.check_args(name, &params, args, span);
-                        ret
+                        let params: Vec<Ty> =
+                            params.iter().map(|p| apply_subst(p, &theta)).collect();
+                        let ret = apply_subst(&ret, &theta);
+                        if params.iter().any(ty_has_param) || ty_has_param(&ret) {
+                            self.check_generic_call(name, &params, &ret, args, span)
+                        } else {
+                            self.check_args(name, &params, args, span);
+                            ret
+                        }
                     }
                     None => {
                         for a in args {
@@ -2173,13 +2312,16 @@ impl Checker {
             other => other.clone(),
         };
         let field_ty = match base {
-            Ty::Named(cls) => {
+            Ty::Named(cls, cargs) => {
                 let found = self
                     .classes
                     .get(&cls)
                     .and_then(|info| info.fields.get(name).cloned());
                 match found {
-                    Some(t) => t,
+                    // Substitute the class type parameters with the instance's type arguments, so a
+                    // `T` field reads at the concrete type (`Box<int>().value : int`) — identity for a
+                    // non-generic class (M-RT generics-all).
+                    Some(t) => apply_subst(&t, &self.class_subst(&cls, &cargs)),
                     None => self.err(span, format!("type `{cls}` has no field `{name}`")),
                 }
             }
@@ -2190,6 +2332,22 @@ impl Checker {
             Self::opt_wrap(field_ty)
         } else {
             field_ty
+        }
+    }
+
+    /// Build the substitution mapping a generic class's type parameters to a concrete instance's type
+    /// arguments — `{T → int}` for a `Box<int>` receiver (M-RT generics-all). Empty (the identity
+    /// substitution) for a non-generic class or any non-class name, so member/method access on a
+    /// non-generic type is unchanged. `zip` tolerates an arity mismatch defensively.
+    fn class_subst(&self, cls: &str, cargs: &[Ty]) -> HashMap<String, Ty> {
+        match self.classes.get(cls) {
+            Some(info) => info
+                .type_params
+                .iter()
+                .cloned()
+                .zip(cargs.iter().cloned())
+                .collect(),
+            None => HashMap::new(),
         }
     }
     /// `opt!` checked force-unwrap (M3 S2.5): `T?` → `T`. Every use is linted (`W-FORCE-UNWRAP`) to
@@ -2328,7 +2486,7 @@ impl Checker {
         // exhaustiveness
         if !has_catch_all {
             match &scrut {
-                Ty::Named(enum_name) if self.enums.contains_key(enum_name) => {
+                Ty::Named(enum_name, _) if self.enums.contains_key(enum_name) => {
                     let all: Vec<String> = self.enums[enum_name].variants.keys().cloned().collect();
                     let mut missing: Vec<String> =
                         all.into_iter().filter(|v| !covered.contains(v)).collect();
@@ -2380,7 +2538,7 @@ impl Checker {
             }
             Pattern::Variant { name, fields, span } => {
                 let enum_name = match scrut {
-                    Ty::Named(n) if self.enums.contains_key(n) => n.clone(),
+                    Ty::Named(n, _) if self.enums.contains_key(n) => n.clone(),
                     Ty::Error => return,
                     other => {
                         self.err(*span, format!("variant pattern `{name}` requires an enum scrutinee, found `{other}`"));
@@ -2627,6 +2785,12 @@ fn apply_subst(ty: &Ty, theta: &HashMap<String, Ty>) -> Ty {
             ps.iter().map(|p| apply_subst(p, theta)).collect(),
             Box::new(apply_subst(r, theta)),
         ),
+        // A generic class instance type carries its arguments — substitute through them so a
+        // `Box<T>` return / field resolves to `Box<int>` (M-RT generics-all).
+        Ty::Named(n, args) => Ty::Named(
+            n.clone(),
+            args.iter().map(|a| apply_subst(a, theta)).collect(),
+        ),
         other => other.clone(),
     }
 }
@@ -2640,6 +2804,7 @@ fn ty_has_param(ty: &Ty) -> bool {
         Ty::List(e) | Ty::Set(e) | Ty::Optional(e) => ty_has_param(e),
         Ty::Map(k, v) => ty_has_param(k) || ty_has_param(v),
         Ty::Function(ps, r) => ps.iter().any(ty_has_param) || ty_has_param(r),
+        Ty::Named(_, args) => args.iter().any(ty_has_param),
         _ => false,
     }
 }
@@ -2965,6 +3130,14 @@ pub fn erase_generics(program: Program) -> Program {
             span: p.span,
         }
     }
+    fn rctorparam(p: &crate::ast::CtorParam, params: &Params) -> crate::ast::CtorParam {
+        crate::ast::CtorParam {
+            modifiers: p.modifiers.clone(),
+            ty: rty(&p.ty, params),
+            name: p.name.clone(),
+            span: p.span,
+        }
+    }
     fn rparts(parts: &[StrPart], params: &Params) -> Vec<StrPart> {
         parts
             .iter()
@@ -3169,32 +3342,64 @@ pub fn erase_generics(program: Program) -> Program {
                     span: f.span,
                 })
             }
-            // A class with at least one generic method (M-RT generics-all): erase each generic
-            // method's `<T>` and rewrite its signature + body, exactly as for a generic free
-            // function. Non-generic members (and classes with no generic method) pass through
-            // untouched, so a non-generic program is returned byte-for-byte.
-            Item::Class(c) if c.members.iter().any(member_is_generic) => {
+            // A generic class (class-level `<T>`) and/or a class with a generic method (M-RT
+            // generics-all): erase the class's type parameters across *every* member (field types,
+            // constructor parameters, method signatures + bodies) and each generic method's own
+            // `<U>`, then clear all type-parameter lists. The class's `<T>`-typed members become PHP
+            // `mixed`; the class declaration itself stays (just non-generic). A class with neither
+            // class-level params nor a generic method is returned untouched by the `other` arm, so a
+            // non-generic program is byte-for-byte the pre-generics AST.
+            Item::Class(c)
+                if !c.type_params.is_empty() || c.members.iter().any(member_is_generic) =>
+            {
+                let class_params: Vec<&str> = c.type_params.iter().map(String::as_str).collect();
                 let members = c
                     .members
                     .into_iter()
                     .map(|m| match m {
-                        ClassMember::Method(f) if !f.type_params.is_empty() => {
-                            let params: Params = f.type_params.iter().map(String::as_str).collect();
+                        ClassMember::Method(f) => {
+                            // erase the class's params *and* this method's own
+                            let mut set: Params = class_params.iter().copied().collect();
+                            for tp in &f.type_params {
+                                set.insert(tp.as_str());
+                            }
                             ClassMember::Method(FunctionDecl {
                                 modifiers: f.modifiers.clone(),
                                 name: f.name.clone(),
                                 type_params: Vec::new(), // erased
-                                params: f.params.iter().map(|p| rparam(p, &params)).collect(),
-                                ret: f.ret.as_ref().map(|t| rty(t, &params)),
-                                body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
+                                params: f.params.iter().map(|p| rparam(p, &set)).collect(),
+                                ret: f.ret.as_ref().map(|t| rty(t, &set)),
+                                body: f.body.iter().map(|s| rstmt(s, &set)).collect(),
                                 span: f.span,
                             })
                         }
-                        other => other,
+                        ClassMember::Field {
+                            modifiers,
+                            ty,
+                            name,
+                            span,
+                        } => {
+                            let set: Params = class_params.iter().copied().collect();
+                            ClassMember::Field {
+                                modifiers,
+                                ty: rty(&ty, &set),
+                                name,
+                                span,
+                            }
+                        }
+                        ClassMember::Constructor { params, body, span } => {
+                            let set: Params = class_params.iter().copied().collect();
+                            ClassMember::Constructor {
+                                params: params.iter().map(|p| rctorparam(p, &set)).collect(),
+                                body: body.iter().map(|s| rstmt(s, &set)).collect(),
+                                span,
+                            }
+                        }
                     })
                     .collect();
                 Item::Class(ClassDecl {
                     name: c.name,
+                    type_params: Vec::new(), // erased
                     implements: c.implements,
                     members,
                     span: c.span,
@@ -3357,6 +3562,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             Item::Function(f) => Some(Item::Function(rfunc(f, &aliases))),
             Item::Class(c) => Some(Item::Class(ClassDecl {
                 name: c.name.clone(),
+                type_params: c.type_params.clone(),
                 implements: c.implements.clone(),
                 members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
                 span: c.span,
@@ -3543,6 +3749,115 @@ mod tests {
     fn generic_method_param_must_be_pascalcase() {
         let e = errors_of("class U { function f<t>(t x) -> t { return x; } } function main() {}");
         assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
+    }
+
+    // --- M-RT generics-all: generic *types* / classes ---
+
+    #[test]
+    fn generic_class_construction_infers_and_substitutes() {
+        // `Box(7)` infers T=int; `get()` returns int; a two-parameter `Pair<A, B>` binds each
+        // parameter independently from its constructor argument.
+        let ok = errors_of(
+            "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
+             class Pair<A, B> { constructor(private A first, private B second) {} \
+                function left() -> A { return this.first; } function right() -> B { return this.second; } } \
+             function main() { var b = Box(7); int x = b.get(); \
+                var p = Pair(1, \"s\"); int l = p.left(); string r = p.right(); }",
+        );
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_class_result_is_substituted() {
+        // `Box(7).get()` is int; binding it to a string is an error — proving use-site reification
+        // (the instance carries `T=int`, recovered at the member access), not an abstract/mixed result.
+        let bad = errors_of(
+            "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
+             function main() { var b = Box(7); string s = b.get(); }",
+        );
+        assert!(!bad.is_empty(), "expected a type error, got none");
+    }
+
+    #[test]
+    fn generic_class_method_param_substituted() {
+        // A method *taking* a `T` rejects a wrong-typed argument at the instance's concrete type.
+        let bad = errors_of(
+            "class Box<T> { constructor(private T value) {} function orElse(T f) -> T { return this.value; } } \
+             function main() { var b = Box(7); int y = b.orElse(\"x\"); }",
+        );
+        assert!(!bad.is_empty(), "expected an argument type error, got none");
+    }
+
+    #[test]
+    fn generic_class_annotation_arity_checked() {
+        // A bare `Box` annotation (no type argument) on a generic class is an arity error.
+        let bad = errors_of(
+            "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
+             function main() { Box b = Box(7); }",
+        );
+        assert!(!bad.is_empty(), "expected an arity error, got none");
+    }
+
+    #[test]
+    fn generic_class_explicit_type_argument_ok() {
+        let ok = errors_of(
+            "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
+             function main() { Box<int> b = Box(7); int x = b.get(); }",
+        );
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_class_param_must_be_pascalcase() {
+        let e = errors_of(
+            "class Box<t> { constructor(private t value) {} } function main() { var b = Box(7); }",
+        );
+        assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
+    }
+
+    #[test]
+    fn method_type_param_shadowing_class_param_rejected() {
+        let e = errors_of(
+            "class Box<T> { constructor(private T value) {} function id<T>(T x) -> T { return x; } } \
+             function main() { var b = Box(7); }",
+        );
+        assert!(
+            e.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
+            "got {e:?}"
+        );
+    }
+
+    #[test]
+    fn erase_generics_strips_class_type_params() {
+        use crate::ast::{ClassMember, Item, Type};
+        let p = prog(
+            "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } function main() {}",
+        );
+        let e = erase_generics(p);
+        let c = e
+            .items
+            .iter()
+            .find_map(|it| match it {
+                Item::Class(c) if c.name == "Box" => Some(c),
+                _ => None,
+            })
+            .expect("class Box present");
+        assert!(c.type_params.is_empty(), "class type params not erased");
+        for m in &c.members {
+            match m {
+                ClassMember::Constructor { params, .. } => assert!(
+                    matches!(params[0].ty, Type::Erased(_)),
+                    "ctor param not erased: {:?}",
+                    params[0].ty
+                ),
+                ClassMember::Method(f) if f.name == "get" => assert!(
+                    matches!(f.ret, Some(Type::Erased(_))),
+                    "method ret not erased: {:?}",
+                    f.ret
+                ),
+                _ => {}
+            }
+        }
     }
 
     #[test]

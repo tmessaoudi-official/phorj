@@ -33,17 +33,30 @@ not a panic:
 
 ## Generics (M-RT S7) — deferred refinements
 
-Erased generics ship for **free functions and class methods**: `function id<T>(T x) -> T` and
-`class U { function id<T>(T x) -> T … }`, inferred at the call site, byte-identical
-`run ≡ runvm ≡ real PHP` (see `examples/guide/generics.phg`, `examples/guide/generic-methods.phg`).
-There is no monomorphization — type parameters are erased to PHP `mixed` before any backend. These
+Erased generics ship for **free functions, class methods, and classes**: `function id<T>(T x) -> T`,
+`class U { function id<T>(T x) -> T … }`, and `class Box<T> { … }` / `class Pair<A, B> { … }`,
+inferred at the call site / at construction, byte-identical `run ≡ runvm ≡ real PHP` (see
+`examples/guide/generics.phg`, `generic-methods.phg`, `generic-types.phg`). There is no
+monomorphization — type parameters are erased to PHP `mixed` before any backend; a generic class
+instance carries no runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`). These
 refinements are deliberately deferred (each rejected cleanly or simply unavailable, never a crash):
 
+- **A generic-typed *result* is not a specialized arithmetic operand.** Because a `T` erases to PHP
+  `mixed`, the bytecode compiler types any generic-function/method/field result as the opaque
+  `CTy::Other`, which is not a numeric operand. So `id(7) + 1` (or `box.get() + 1`) type-checks (the
+  checker reifies the result as `int`) and runs on the interpreter, but the VM rejects it with
+  *"`id` does not return a numeric type"* — a `run`↔`runvm` mismatch. Bind the result to a typed local
+  first (`int n = id(7); n + 1`), which the examples do. [Verified: `id(7) + 1` → `run` prints `8`,
+  `runvm` errors.] Fixing this needs the compiler to thread reified generic result types (deferred).
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
-- **Generic types/classes/enums** (`class Box<T>`) are not yet supported — the type parameter list is
-  a function/method feature for now (the next generics-all sub-slice). (Cross-package *monomorphic*
-  types already ship — `E-PKG-TYPE` is lifted; generic types layer on top.)
+- **Cross-package generic *library* types** are not validated this slice — a generic class is
+  `package main`-only (the loader leaves a class type parameter unchanged and erasure removes it, so it
+  may happen to work, but it is untested). Cross-package *monomorphic* types ship (`E-PKG-TYPE` lifted).
+- **Explicit type arguments at construction** (`Box<int>(7)`) are not parsed — the type argument is
+  inferred from the constructor arguments. An explicit *annotation* (`Box<int> b = Box(7)`) does work.
+- **Generic *enums*** (`enum Opt<T>`) are not supported — the type-parameter list is a
+  function/method/class feature for now.
 - **A generic function used as a first-class *value*** (`var f = id;` then `f(x)`) is not supported —
   call a generic function directly so the call site can infer its type parameters. (A monomorphic
   named function as a value already works — M3 S3.)

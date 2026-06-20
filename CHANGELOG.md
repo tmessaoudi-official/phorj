@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — erased generics `<T>` on classes (Rich Types, M-RT generics-all)
+
+- **Generic types/classes:** a class may declare type parameters after its name —
+  `class Box<T> { … }`, `class Pair<A, B> { … }` — used in its field, constructor, and method
+  signatures. The parameter is **inferred at construction** from the constructor arguments
+  (`Box(7)` ⇒ `Box<int>`) and **recovered at every use site** (`Box(7).get()` is `int`; a method
+  taking a `T` checks its argument at the instance's concrete type). Byte-identical
+  `run ≡ runvm ≡ real PHP` (new `examples/guide/generic-types.phg`). This completes generics-all.
+- **The TypeScript model — reified in the checker, erased in the backend.** `Ty::Named` now carries
+  type arguments (`Ty::Named(String, Vec<Ty>)`): construction unifies the constructor parameters
+  against the call's arguments to bind them, and member access substitutes the class's type parameters
+  with the instance's arguments — full use-site precision (`string s = Box(7).get()` is a type error).
+  After checking, `erase_generics` rewrites a generic class's own `<T>`-typed members (fields,
+  constructor, methods) to `Type::Erased`, so the field becomes PHP `mixed` and an instance carries no
+  runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`). **No new `Op`, no `Value` change,
+  and zero backend changes** — `resolve_cty`/`emit_type` already key a class type on its name and
+  ignore arguments, so the byte-identity spine is safe by construction (a front-end-only slice). New
+  diagnostic reuse: `E-GENERIC-PARAM` (a method type parameter shadowing a class one). Scope:
+  `package main` only (cross-package generic library types deferred); inference-only construction (no
+  `Box<int>(7)`); invariant, no bounds, no generic enums.
+
 ### Added — cross-package types: `import type` (Rich Types, M-RT)
 
 - **The `E-PKG-TYPE` gate is retired.** A library (non-`main`) package may now declare a

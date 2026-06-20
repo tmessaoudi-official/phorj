@@ -157,6 +157,28 @@
   three at once" over classes-first). New diagnostics `E-TYPE-IMPORT-{UNKNOWN,CONFLICT,BUILTIN,SHADOW}`;
   `E-PKG-TYPE` retired. One new `examples/project/<name>/` exercising a cross-package class+enum+interface,
   byte-identical run≡runvm≡real PHP.
+- [2026-06-20] AGREED (generics-all sub-slice 2 — cross-package types — DONE, `82dd9df`): the E-PKG-TYPE
+  lift shipped (terminal `import type a.b.C [as D]`, all three kinds, namespaced PHP FQNs). Next = the
+  last generics-all piece, **generic types/classes `Box<T>`**.
+- [2026-06-20] AGREED (generics-all sub-slice 3 — generic types/classes `Box<T>` — design locked,
+  `docs/specs/2026-06-20-generic-types-classes-design.md`): **reified-in-checker, erased-in-backend**
+  (the TS model). Give `Ty::Named` type arguments (`Ty::Named(String, Vec<Ty>)` — 14 sites, 2 files;
+  `Ty` is checker-only). `Box(7)` infers `T=int` by unifying ctor params against args → `Ty::Named("Box",
+  [Int])`; member access substitutes `{T→Int}` into the field/method type → full use-site precision
+  (`string s = Box(7).get()` is a type error). The **backends need zero changes** — `resolve_cty`/
+  `emit_type` already drop a class `Named`'s args, and `erase_generics` rewrites a generic class's own
+  `<T>`-typed members to `Type::Erased` (→ `CTy::Other`/PHP `mixed`); so the byte-identity spine is safe
+  by construction (front-end-only slice: parser + checker + erasure). **No new `Op`, no `Value` change.**
+  Scope: `package main` only (cross-package generic library types deferred); inference-only construction
+  (no `Box<int>(7)`); invariant, no bounds, no generic enums/interfaces. Method-on-generic-class composes
+  (class θ first, then method-level `<U>` via the existing unifier); a method type param shadowing a class
+  one is `E-GENERIC-PARAM`.
+- [2026-06-20] AGREED (generics-all sub-slice 3 — generic types/classes — DONE; **generics-all CLOSED**):
+  shipped exactly as designed — `Ty::Named` carries type args, reified-in-checker/erased-in-backend, zero
+  backend changes, `examples/guide/generic-types.phg` byte-identical run≡runvm≡real PHP. 446 lib +
+  differential PHP oracle + 53 integration green; clippy + fmt clean. Verified limitation documented in
+  KNOWN_ISSUES (a generic result is not an arithmetic operand — `id(7)+1` runs on the interpreter but the
+  VM rejects it; pre-existing since S7a). **NEXT M-RT slice: S4 unions `A|B`.**
 
 ## Formal Plan
 

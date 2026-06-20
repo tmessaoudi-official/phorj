@@ -567,6 +567,12 @@ pub enum ClassMember {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDecl {
     pub name: String,
+    /// Generic type parameters, in declaration order — `["T"]` for `class Box<T>`, `["A", "B"]` for
+    /// `class Pair<A, B>` (M-RT generics-all). Empty for a non-generic class — the common case. While
+    /// checking the class, a bare type name in this set resolves to `Ty::Param`; a generic instance's
+    /// arguments are inferred at construction and these parameters are **erased** (rewritten to
+    /// `Type::Erased` across every member) before any backend runs.
+    pub type_params: Vec<String>,
     /// Interfaces this class declares it implements (`class Dog implements Speaker, Named`). The
     /// checker (`E-IFACE-IMPL`/`E-IFACE-UNIMPL`/`E-IFACE-SIG`) validates each name resolves to an
     /// interface and the class provides every method of it and its `extends` chain (M-RT S2).

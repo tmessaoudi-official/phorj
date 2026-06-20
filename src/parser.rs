@@ -1025,6 +1025,9 @@ impl Parser {
     fn parse_class(&mut self, sp: Span) -> Result<ClassDecl, Diagnostic> {
         self.expect(&TokenKind::Class, "'class'")?;
         let name = self.expect_ident("a class name")?;
+        // Optional generic parameter list `<T, U>` immediately after the class name (M-RT
+        // generics-all), before `implements` — `class Box<T> implements Cloneable { … }`.
+        let type_params = self.parse_type_params()?;
         let implements = if self.eat(&TokenKind::Implements) {
             self.parse_name_list("an interface name after 'implements'")?
         } else {
@@ -1038,6 +1041,7 @@ impl Parser {
         self.expect(&TokenKind::RBrace, "'}' to close class")?;
         Ok(ClassDecl {
             name,
+            type_params,
             implements,
             members,
             span: sp,
