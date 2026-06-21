@@ -96,13 +96,31 @@ impl<'a> Vm<'a> {
                 Ok(Flow::Next) => {}
                 Ok(Flow::Done) => return Ok(self.out),
                 Err(msg) => {
-                    let line = self.program.functions[func]
-                        .chunk
-                        .lines
-                        .get(ip)
-                        .copied()
-                        .unwrap_or(0);
-                    return Err(Diagnostic::runtime_at_line(msg, line));
+                    // Walk the live call stack innermost → outermost. Each frame's line is the source
+                    // line of the op it is paused on: the faulting op for the top frame, the pending
+                    // `Call` for the rest. `Frame.ip` was pre-incremented before `exec_op`, so `ip - 1`
+                    // is that op. `file` is filled later by the loader source map (Task 4).
+                    let frames: Vec<crate::diagnostic::Frame> = self
+                        .frames
+                        .iter()
+                        .rev()
+                        .map(|fr| {
+                            let fline = self.program.functions[fr.func]
+                                .chunk
+                                .lines
+                                .get(fr.ip.saturating_sub(1))
+                                .copied()
+                                .unwrap_or(0);
+                            crate::diagnostic::Frame {
+                                function: self.program.functions[fr.func].name.clone(),
+                                file: None,
+                                line: fline,
+                                col: 0,
+                            }
+                        })
+                        .collect();
+                    let line = frames.first().map_or(0, |f| f.line);
+                    return Err(Diagnostic::runtime_at_line(msg, line).with_frames(frames));
                 }
             }
         }
@@ -721,6 +739,27 @@ mod tests {
     use super::*;
     use crate::chunk::{BytecodeProgram, Chunk, Function, Op};
     use crate::value::Value;
+
+    /// Compile a loose program through the real front-end (loader → check → compile) for tests that
+    /// need a faithful `BytecodeProgram` rather than a hand-built one.
+    fn compile_source(src: &str) -> BytecodeProgram {
+        let unit = crate::loader::load_loose_src(src).unwrap();
+        let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();
+        crate::compiler::compile(&checked).unwrap()
+    }
+
+    #[test]
+    fn vm_fault_carries_call_stack() {
+        let program = compile_source(
+            "package main;\n\
+             function f() -> int { var xs = [1]; return xs[5]; }\n\
+             function main() { var r = f(); }",
+        );
+        let err = Vm::new(&program).run().unwrap_err();
+        assert_eq!(err.frames.len(), 2, "callee + main: {:?}", err.frames);
+        assert_eq!(err.frames[0].function, "f");
+        assert_eq!(err.frames[1].function, "main");
+    }
 
     /// Emit the standard function terminator: push `Unit`, then `Return` (P3-7).
     fn term(c: &mut Chunk) {
