@@ -641,6 +641,18 @@ fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             inner: Box::new(resolve_expr(*inner, ctx)),
             span,
         },
+        Expr::CloneWith {
+            object,
+            fields,
+            span,
+        } => Expr::CloneWith {
+            object: Box::new(resolve_expr(*object, ctx)),
+            fields: fields
+                .into_iter()
+                .map(|(n, e)| (n, resolve_expr(e, ctx)))
+                .collect(),
+            span,
+        },
         Expr::List(items, span) => Expr::List(
             items.into_iter().map(|e| resolve_expr(e, ctx)).collect(),
             span,

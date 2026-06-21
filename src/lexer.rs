@@ -391,6 +391,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "extends" => Extends,
         "var" => Var,
         "mutable" => Mutable,
+        "with" => With,
         "type" => TypeKw,
         _ => return None,
     })
@@ -792,6 +793,16 @@ mod tests {
         );
         // still idents when embedded in a longer word
         assert_eq!(kinds("interfaces"), vec![Ident("interfaces".into()), Eof]);
+    }
+
+    #[test]
+    fn with_keyword_is_recognized() {
+        use TokenKind::*;
+        // M-mut.4a `clone with` operator keyword.
+        assert_eq!(kinds("with"), vec![With, Eof]);
+        // still an ident embedded in a longer word.
+        assert_eq!(kinds("within"), vec![Ident("within".into()), Eof]);
+        assert_eq!(kinds("withdraw"), vec![Ident("withdraw".into()), Eof]);
     }
 
     #[test]

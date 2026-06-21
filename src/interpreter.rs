@@ -559,6 +559,29 @@ impl Interp {
                     Ok(v)
                 }
             }
+            Expr::CloneWith { object, fields, .. } => {
+                // `obj with { f = e }` (M-mut.4a): a fresh instance copying `obj`'s fields with the
+                // named ones overridden — the constructor is NOT run. The source `Rc` is untouched
+                // (we clone its field map), so other bindings to `obj` still see the old values.
+                let base = match self.eval(object)? {
+                    Value::Instance(rc) => rc,
+                    other => {
+                        return rt(format!(
+                            "`with` requires a class instance, got {}",
+                            other.type_name()
+                        ))
+                    }
+                };
+                let mut new_fields = base.fields.clone();
+                for (name, e) in fields {
+                    let v = self.eval(e)?;
+                    new_fields.insert(name.clone(), v);
+                }
+                Ok(Value::Instance(Rc::new(Instance {
+                    class: base.class.clone(),
+                    fields: new_fields,
+                })))
+            }
             Expr::Match {
                 scrutinee, arms, ..
             } => self.eval_match(scrutinee, arms),

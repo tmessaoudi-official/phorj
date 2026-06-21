@@ -54,6 +54,7 @@ pub enum TokenKind {
     Extends,
     Var,
     Mutable,
+    With,
     TypeKw,
     // punctuation / operators
     Dot,

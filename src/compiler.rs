@@ -898,6 +898,8 @@ impl<'a> Compiler<'a> {
             // `inner!` unwraps `T?` to `T`; its operand type is the inner's (so `o! + 1` specializes
             // — `resolve_cty(Optional)` already yields the inner `CTy`). M3 S2.5.
             Expr::Force { inner, .. } => self.ctype(inner),
+            // `obj with { … }` yields a fresh instance of `obj`'s class — same compile-type as `obj`.
+            Expr::CloneWith { object, .. } => self.ctype(object),
             // A `match` value's type is its arms' shared type (checker-guaranteed); infer it from
             // the first arm's body so `var x = match … { … }` specializes like an explicit local.
             Expr::Match { arms, .. } => match arms.first() {
@@ -1162,6 +1164,11 @@ impl<'a> Compiler<'a> {
                 self.emit(Op::Index, span.line);
             }
             Expr::Force { inner, span } => self.compile_force(inner, span.line)?,
+            Expr::CloneWith {
+                object,
+                fields,
+                span,
+            } => self.compile_clone_with(object, fields, span.line)?,
             Expr::Match {
                 scrutinee,
                 arms,
@@ -1512,6 +1519,43 @@ impl<'a> Compiler<'a> {
         let ok = self.emit_jump(Op::JumpIfFalse(0), line); // [opt]; non-null → keep, skip the fault
         self.emit(Op::Fault(FaultMsg::ForceUnwrapNull), line); // null → clean fault (terminal)
         self.patch_jump(ok);
+        Ok(())
+    }
+
+    /// `obj with { f = e, … }` (M-mut.4a). Reconstruct a fresh instance: evaluate `obj` into a
+    /// scratch slot, then push each descriptor field in order — the override expr if named, else a
+    /// `GetField` re-read of the source — and `MakeInstance` (which runs **no** constructor body,
+    /// Fork 2 = B). Collapse the new instance over the scratch slot so the expression leaves one
+    /// value. No new `Op`. The checker proved `obj` is a concrete class and the names are its fields.
+    fn compile_clone_with(
+        &mut self,
+        object: &Expr,
+        fields: &[(String, Expr)],
+        line: u32,
+    ) -> Result<(), String> {
+        let class = match self.ctype(object)? {
+            CTy::Class(name) => name,
+            _ => return Err("`with` requires a class instance".into()),
+        };
+        let desc_idx = self
+            .class_descs
+            .iter()
+            .position(|d| d.class == class)
+            .ok_or_else(|| format!("unknown class `{class}` in `with`"))?;
+        let field_names = self.class_descs[desc_idx].fields.clone();
+        self.expr(object)?; // [.., src]
+        let src_slot = self.height - 1; // numeric scratch (transients may sit below), like `compile_match`
+        for fname in &field_names {
+            if let Some((_, e)) = fields.iter().find(|(n, _)| n == fname) {
+                self.expr(e)?; // [.., override]
+            } else {
+                self.emit(Op::GetLocal(src_slot), line); // [.., src]
+                let idx = self.field_name_index(fname)?;
+                self.emit(Op::GetField(idx), line); // [.., src.field]
+            }
+        }
+        self.emit(Op::MakeInstance(desc_idx), line); // pops the fields → [.., src, newInstance]
+        self.emit(Op::SetLocal(src_slot), line); // collapse newInstance over the scratch → [.., newInstance]
         Ok(())
     }
 

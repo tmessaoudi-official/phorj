@@ -1183,6 +1183,12 @@ impl Checker {
                 self.check_expr_casing(index);
             }
             Expr::Force { inner, .. } => self.check_expr_casing(inner),
+            Expr::CloneWith { object, fields, .. } => {
+                self.check_expr_casing(object);
+                for (_, e) in fields {
+                    self.check_expr_casing(e);
+                }
+            }
             Expr::Match {
                 scrutinee, arms, ..
             } => {
@@ -1676,6 +1682,11 @@ impl Checker {
                 span,
             } => self.check_index(object, index, *span), // Task 5
             Expr::Force { inner, span } => self.check_force(inner, *span),
+            Expr::CloneWith {
+                object,
+                fields,
+                span,
+            } => self.check_clone_with(object, fields, *span),
             Expr::Match {
                 scrutinee,
                 arms,
@@ -1972,6 +1983,7 @@ impl Checker {
             | Expr::Range { span, .. }
             | Expr::If { span, .. }
             | Expr::Lambda { span, .. }
+            | Expr::CloneWith { span, .. }
             | Expr::Html(_, span) => *span,
         }
     }
@@ -2724,6 +2736,59 @@ impl Checker {
             None => HashMap::new(),
         }
     }
+    /// `obj with { f = e, … }` (M-mut.4a): `obj` must be a concrete class; each overridden name must
+    /// be one of its fields and each value assignable to that field's type. The result type is the
+    /// class itself (a fresh instance). Codes `E-WITH-NONCLASS`/`E-WITH-FIELD`/`E-WITH-TYPE`.
+    fn check_clone_with(
+        &mut self,
+        object: &crate::ast::Expr,
+        fields: &[(String, crate::ast::Expr)],
+        span: Span,
+    ) -> Ty {
+        let obj_ty = self.check_expr(object);
+        // Always check the override value expressions (surface nested errors regardless).
+        let value_tys: Vec<Ty> = fields.iter().map(|(_, e)| self.check_expr(e)).collect();
+        let class = match &obj_ty {
+            Ty::Error => return Ty::Error,
+            Ty::Named(name, _) if self.classes.contains_key(name) => name.clone(),
+            other => {
+                return self.err_coded(
+                    span,
+                    format!("`with` requires a class instance, found `{other}`"),
+                    "E-WITH-NONCLASS",
+                    Some(
+                        "`with` produces a copy of a class instance with some fields replaced"
+                            .into(),
+                    ),
+                );
+            }
+        };
+        // Snapshot the class's field types (clone to drop the borrow before `err_coded` needs &mut).
+        let field_tys = self.classes[&class].fields.clone();
+        for ((name, _), vty) in fields.iter().zip(value_tys.iter()) {
+            match field_tys.get(name) {
+                None => {
+                    self.err_coded(
+                        Self::expr_span(object),
+                        format!("`{class}` has no field `{name}` to set in `with`"),
+                        "E-WITH-FIELD",
+                        None,
+                    );
+                }
+                Some(fty) => {
+                    if !self.ty_assignable(vty, fty) {
+                        self.err_coded(
+                            span,
+                            format!("cannot set `{name}: {fty}` to `{vty}` in `with`"),
+                            "E-WITH-TYPE",
+                            None,
+                        );
+                    }
+                }
+            }
+        }
+        obj_ty
+    }
     /// `opt!` checked force-unwrap (M3 S2.5): `T?` → `T`. Every use is linted (`W-FORCE-UNWRAP`) to
     /// nudge toward `??`/`?.`/if-let; force-unwrapping a non-optional is `E-OPT-UNWRAP`.
     fn check_force(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
@@ -3126,6 +3191,9 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
             Expr::Member { object, .. } => in_expr(object),
             Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),
             Expr::Force { inner, .. } => in_expr(inner),
+            Expr::CloneWith { object, fields, .. } => {
+                in_expr(object) || fields.iter().any(|(_, e)| in_expr(e))
+            }
             Expr::Match {
                 scrutinee, arms, ..
             } => in_expr(scrutinee) || arms.iter().any(|a| in_expr(&a.body)),
@@ -3513,6 +3581,15 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 },
                 span,
             },
+            Expr::CloneWith {
+                object,
+                fields,
+                span,
+            } => Expr::CloneWith {
+                object: Box::new(rexpr(*object, h)),
+                fields: fields.into_iter().map(|(n, e)| (n, rexpr(e, h))).collect(),
+                span,
+            },
             // leaves carry no nested expression: Int / Float / Bool / Null / Bytes / Ident / This
             leaf => leaf,
         }
@@ -3848,6 +3925,18 @@ pub fn erase_generics(program: Program) -> Program {
                 cond: Box::new(rexpr(cond, params)),
                 then_expr: Box::new(rexpr(then_expr, params)),
                 else_expr: Box::new(rexpr(else_expr, params)),
+                span: *span,
+            },
+            Expr::CloneWith {
+                object,
+                fields,
+                span,
+            } => Expr::CloneWith {
+                object: Box::new(rexpr(object, params)),
+                fields: fields
+                    .iter()
+                    .map(|(n, e)| (n.clone(), rexpr(e, params)))
+                    .collect(),
                 span: *span,
             },
             // leaves carry no type and no nested expression: Int / Float / Bool / Null / Bytes /
@@ -6028,6 +6117,43 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
             "function main() { mutable int i = 0; while (i < 9) { i += 1; if (i == 3) { break; } } }"
         )
         .is_empty());
+    }
+
+    // ---- M-mut.4a: clone with ----
+
+    #[test]
+    fn clone_with_valid_is_ok() {
+        let src = "class P { constructor(public int x, public int y) {} } \
+                   function main() { P p = P(1, 2); P q = p with { x = 9 }; }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn clone_with_unknown_field_is_error() {
+        let src = "class P { constructor(public int x) {} } \
+                   function main() { P p = P(1); P q = p with { z = 9 }; }";
+        let bad = errors_of(src);
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-WITH-FIELD")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn clone_with_type_mismatch_is_error() {
+        let src = "class P { constructor(public int x) {} } \
+                   function main() { P p = P(1); P q = p with { x = \"s\" }; }";
+        let bad = errors_of(src);
+        assert!(bad.iter().any(|e| e.code == Some("E-WITH-TYPE")), "{bad:?}");
+    }
+
+    #[test]
+    fn clone_with_on_non_class_is_error() {
+        let bad = errors_of("function main() { int n = 5; int m = n with { x = 1 }; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-WITH-NONCLASS")),
+            "{bad:?}"
+        );
     }
 
     #[test]

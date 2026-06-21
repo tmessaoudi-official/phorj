@@ -905,6 +905,21 @@ impl Transpiler {
                 let bs = if self.namespaced { "\\" } else { "" };
                 Ok(format!("{bs}__phorge_unwrap({v})"))
             }
+            // `obj with { f = e }` → PHP 8.5 `clone($obj, ['f' => e, …])`: a fresh instance with the
+            // named fields overridden and the constructor bypassed — byte-identical to the backends
+            // (M-mut.4a). An empty override list is just `clone($obj)`.
+            Expr::CloneWith { object, fields, .. } => {
+                let o = self.emit_expr(object)?;
+                if fields.is_empty() {
+                    return Ok(format!("clone({o})"));
+                }
+                let mut pairs = Vec::with_capacity(fields.len());
+                for (name, e) in fields {
+                    let v = self.emit_expr(e)?;
+                    pairs.push(format!("'{name}' => {v}"));
+                }
+                Ok(format!("clone({o}, [{}])", pairs.join(", ")))
+            }
             // Expression-position `match` (M11): wrap the SAME if-chain `emit_match` produces in
             // statement position inside an immediately-invoked closure, so both positions share one
             // lowering and cannot diverge. Over-capture every enclosing local by value via `use(…)`

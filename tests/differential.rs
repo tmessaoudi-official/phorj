@@ -1013,6 +1013,18 @@ fn mutation_compound_assign_agrees() {
 }
 
 #[test]
+fn mutation_clone_with_agrees() {
+    // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 7, y = 8 }; Console.println(\"{q.x} {q.y}\"); }"); // 7 8
+                                                                                                                                                                                             // A method works on the cloned instance (the clone is a real instance; the ctor was not re-run).
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} function sum() -> int { return this.x + this.y; } } function main(){ P p = P(1, 2); P q = p with { x = 10 }; Console.println(\"{q.sum()}\"); }"); // 12
+                                                                                                                                                                                                                                       // The override value may reference the source's own fields.
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(3, 4); P q = p with { x = p.x + p.y }; Console.println(\"{q.x} {q.y}\"); }");
+    // 7 4
+}
+
+#[test]
 fn mutation_condition_loops_agree() {
     // M-mut.3: while / do-while / C-for / while-let / break / continue, byte-identical on both.
     // Plain while accumulator.

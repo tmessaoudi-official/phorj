@@ -281,6 +281,28 @@ impl Parser {
                         span: sp,
                     };
                 }
+                // `obj with { f = e, … }` — functional update (M-mut.4a). Postfix, so it binds to the
+                // immediately-preceding expression; the brace block is unambiguous in expr position.
+                TokenKind::With => {
+                    self.advance();
+                    self.expect(&TokenKind::LBrace, "'{' after 'with'")?;
+                    let mut fields = Vec::new();
+                    while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+                        let name = self.expect_ident("a field name in `with { … }`")?;
+                        self.expect(&TokenKind::Eq, "'=' after a `with` field name")?;
+                        let value = self.parse_expr()?;
+                        fields.push((name, value));
+                        if !self.eat(&TokenKind::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect(&TokenKind::RBrace, "'}' to close `with { … }`")?;
+                    e = Expr::CloneWith {
+                        object: Box::new(e),
+                        fields,
+                        span: sp,
+                    };
+                }
                 _ => break,
             }
         }
@@ -2178,6 +2200,24 @@ mod tests {
                 }
                 other => panic!("{src}: expected Assign, got {other:?}"),
             }
+        }
+    }
+
+    #[test]
+    fn parses_clone_with() {
+        match expr("p with { x = 9, y = 10 }") {
+            Expr::CloneWith { object, fields, .. } => {
+                assert!(matches!(*object, Expr::Ident(ref n, _) if n == "p"));
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].0, "x");
+                assert_eq!(fields[1].0, "y");
+            }
+            other => panic!("got {other:?}"),
+        }
+        // empty override list parses.
+        match expr("p with { }") {
+            Expr::CloneWith { fields, .. } => assert!(fields.is_empty()),
+            other => panic!("got {other:?}"),
         }
     }
 

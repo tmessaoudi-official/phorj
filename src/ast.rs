@@ -217,6 +217,15 @@ pub enum Expr {
         body: LambdaBody,
         span: Span,
     },
+    /// `obj with { field = expr, … }` — a functional update (M-mut.4a, Fork 2 = B): a fresh instance
+    /// copying `object`'s fields with the named ones overridden, **bypassing the constructor**.
+    /// `object` must be a concrete class; `fields` names a subset of its (promoted) fields. Lowers to
+    /// the existing `Op::MakeInstance` (no new `Op`); transpiles to PHP `clone($obj, ['f' => …])`.
+    CloneWith {
+        object: Box<Expr>,
+        fields: Vec<(String, Expr)>,
+        span: Span,
+    },
     /// `html"<h1>{name}</h1>"` — a typed HTML literal (core.html Wave 3). The parser captures it as
     /// interpolation `parts` (literal chunks + `{expr}` holes, exactly like [`Expr::Str`]); the
     /// **checker** resolves each hole by type (an `Html` hole embeds as-is, a `string`/primitive hole
@@ -358,6 +367,12 @@ fn collect_free_expr(
             collect_free_expr(index, bound, found);
         }
         Expr::Force { inner, .. } => collect_free_expr(inner, bound, found),
+        Expr::CloneWith { object, fields, .. } => {
+            collect_free_expr(object, bound, found);
+            for (_, e) in fields {
+                collect_free_expr(e, bound, found);
+            }
+        }
         Expr::Match {
             scrutinee, arms, ..
         } => {
