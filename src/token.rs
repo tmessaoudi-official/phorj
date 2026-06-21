@@ -93,6 +93,16 @@ pub enum TokenKind {
     Percent,
     AndAnd,
     OrOr,
+    // compound-assignment + increment/decrement (M-mut.2). Each desugars in the parser into the
+    // `Stmt::Assign` from M-mut.1 (`x += e` ⟶ `x = x + e`), so no backend learns a new form.
+    PlusEq,             // `+=`
+    MinusEq,            // `-=`
+    StarEq,             // `*=`
+    SlashEq,            // `/=`  (routes through __phorge_div on transpile, via BinaryOp::Div)
+    PercentEq,          // `%=`  (routes through __phorge_rem on transpile, via BinaryOp::Rem)
+    PlusPlus,           // `++`  (statement form `x++` only)
+    MinusMinus,         // `--`  (statement form `x--` only)
+    QuestionQuestionEq, // `??=` null-coalesce-assign (three-char; longest-match ahead of `??`)
     Eof,
 }
 

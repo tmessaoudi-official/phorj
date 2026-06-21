@@ -1,0 +1,54 @@
+package main;
+import Core.Console;
+
+// M-mut.2 — compound assignment, increment/decrement, and null-coalesce-assign.
+// Every form below is pure SUGAR: `x op= e` lowers to `x = x op e`, `x++` to `x = x + 1`,
+// `x ??= e` to `x = x ?? e`. They reuse the M-mut.1 reassignment, so a target must be `mutable`.
+
+function main() {
+    // The five arithmetic compound operators.
+    mutable int x = 10;
+    x += 5; // 15
+    x -= 3; // 12
+    x *= 2; // 24
+    Console.println("after + - * : {x}");
+
+    // Integer `/=` is truncating integer division (NOT float): 24 / 5 = 4.
+    x /= 5;
+    Console.println("after /= 5 : {x}"); // 4
+
+    // `%=` follows the dividend's sign (like PHP): -7 % 3 = -1, 7 % -3 = 1.
+    mutable int neg = 0 - 7;
+    neg %= 3;
+    mutable int pos = 7;
+    pos %= 0 - 3;
+    Console.println("modulo signs : {neg} {pos}"); // -1 1
+
+    // Statement-form increment / decrement.
+    mutable int n = 0;
+    n++;
+    n++;
+    n++;
+    n--;
+    Console.println("counter : {n}"); // 2
+
+    // `??=` assigns only when the optional is currently null.
+    mutable int? a = null;
+    a ??= 7; // a was null → becomes 7
+    mutable int? b = 3;
+    b ??= 9; // b was set → unchanged
+    Console.println("coalesce-assign : {a ?? -1} {b ?? -1}"); // 7 3
+
+    // Two-binding scalar observe: a compound op on `copy` must not touch `base` (value-copy).
+    int base = 5;
+    mutable int copy = base;
+    copy += 100;
+    Console.println("value-copy : {base} {copy}"); // 5 105
+
+    // Compound assignment as a loop accumulator.
+    mutable int sum = 0;
+    for (int i in 1..=5) {
+        sum += i;
+    }
+    Console.println("sum 1..=5 : {sum}"); // 15
+}

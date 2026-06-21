@@ -894,6 +894,47 @@ impl Parser {
                 span: sp,
             });
         }
+        // Compound assignment `x op= e` ⟶ `x = x op e` (M-mut.2). Desugars to the same
+        // `Stmt::Assign`, so the checker/backends/transpiler need no new arm; `/=`/`%=` inherit
+        // the `__phorge_div`/`__phorge_rem` routing of `BinaryOp::Div`/`Rem` (F7). Synthesized
+        // nodes carry the statement span; the real target keeps its own span for diagnostics.
+        if let Some(op) = compound_op(self.peek()) {
+            self.advance();
+            let rhs = self.parse_expr()?;
+            self.expect(&TokenKind::Semicolon, "';' after compound assignment")?;
+            let value = Expr::Binary {
+                op,
+                lhs: Box::new(expr.clone()),
+                rhs: Box::new(rhs),
+                span: sp,
+            };
+            return Ok(Stmt::Assign {
+                target: expr,
+                value,
+                span: sp,
+            });
+        }
+        // Statement-form increment / decrement `x++;` / `x--;` ⟶ `x = x + 1` / `x = x - 1`.
+        if matches!(self.peek(), TokenKind::PlusPlus | TokenKind::MinusMinus) {
+            let op = if matches!(self.peek(), TokenKind::PlusPlus) {
+                BinaryOp::Add
+            } else {
+                BinaryOp::Sub
+            };
+            self.advance();
+            self.expect(&TokenKind::Semicolon, "';' after '++' or '--'")?;
+            let value = Expr::Binary {
+                op,
+                lhs: Box::new(expr.clone()),
+                rhs: Box::new(Expr::Int(1, sp)),
+                span: sp,
+            };
+            return Ok(Stmt::Assign {
+                target: expr,
+                value,
+                span: sp,
+            });
+        }
         self.expect(&TokenKind::Semicolon, "';' after expression statement")?;
         Ok(Stmt::Expr(expr, sp))
     }
@@ -1271,6 +1312,21 @@ impl Parser {
         }
         Ok(params)
     }
+}
+
+/// Map a compound-assignment operator token to the `BinaryOp` it desugars to (M-mut.2).
+/// `x op= e` lowers to `x = x op e`; `??=` lowers to `x = x ?? e` (`Coalesce`). Returns `None`
+/// for any non-compound token so the caller falls through to a plain expression statement.
+fn compound_op(k: &TokenKind) -> Option<BinaryOp> {
+    Some(match k {
+        TokenKind::PlusEq => BinaryOp::Add,
+        TokenKind::MinusEq => BinaryOp::Sub,
+        TokenKind::StarEq => BinaryOp::Mul,
+        TokenKind::SlashEq => BinaryOp::Div,
+        TokenKind::PercentEq => BinaryOp::Rem,
+        TokenKind::QuestionQuestionEq => BinaryOp::Coalesce,
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
@@ -1885,6 +1941,56 @@ mod tests {
                 assert!(matches!(target, Expr::Ident(ref n, _) if n == "x"));
             }
             other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_compound_assign_desugars_to_binary() {
+        use crate::ast::BinaryOp;
+        // `x += 1;` ⟶ `x = x + 1` (M-mut.2): target is `x`, value is `x + 1`.
+        for (src, want) in [
+            ("x += 1;", BinaryOp::Add),
+            ("x -= 1;", BinaryOp::Sub),
+            ("x *= 2;", BinaryOp::Mul),
+            ("x /= 2;", BinaryOp::Div),
+            ("x %= 2;", BinaryOp::Rem),
+            ("x ??= 0;", BinaryOp::Coalesce),
+        ] {
+            match stmt(src) {
+                Stmt::Assign { target, value, .. } => {
+                    assert!(matches!(target, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                    match value {
+                        Expr::Binary { op, lhs, .. } => {
+                            assert_eq!(op, want, "{src}");
+                            assert!(matches!(*lhs, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                        }
+                        other => panic!("{src}: expected Binary value, got {other:?}"),
+                    }
+                }
+                other => panic!("{src}: expected Assign, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn parses_increment_decrement_statements() {
+        use crate::ast::BinaryOp;
+        // `x++;` ⟶ `x = x + 1`; `x--;` ⟶ `x = x - 1` (statement form).
+        for (src, want) in [("x++;", BinaryOp::Add), ("x--;", BinaryOp::Sub)] {
+            match stmt(src) {
+                Stmt::Assign { target, value, .. } => {
+                    assert!(matches!(target, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                    match value {
+                        Expr::Binary { op, lhs, rhs, .. } => {
+                            assert_eq!(op, want, "{src}");
+                            assert!(matches!(*lhs, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                            assert!(matches!(*rhs, Expr::Int(1, _)), "{src}");
+                        }
+                        other => panic!("{src}: expected Binary value, got {other:?}"),
+                    }
+                }
+                other => panic!("{src}: expected Assign, got {other:?}"),
+            }
         }
     }
 

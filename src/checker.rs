@@ -5689,4 +5689,57 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
                      if (d instanceof Dog) { d = Dog(); } }";
         assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
     }
+
+    // ---- M-mut.2: compound-assign + ++/-- + ??= (desugar reuses the M-mut.1 Assign arm) ----
+
+    #[test]
+    fn compound_assign_on_mutable_is_ok() {
+        for op in ["+=", "-=", "*=", "/=", "%="] {
+            let src = format!("function main() {{ mutable int x = 6; x {op} 2; }}");
+            assert!(errors_of(&src).is_empty(), "{op}: {:?}", errors_of(&src));
+        }
+    }
+
+    #[test]
+    fn compound_assign_on_immutable_is_error() {
+        // The desugar `x += 1` ⟶ `x = x + 1` inherits the immutability check.
+        let bad = errors_of("function main() { int x = 1; x += 1; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn increment_on_immutable_is_error() {
+        let bad = errors_of("function main() { int x = 1; x++; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn increment_on_unknown_is_error() {
+        let bad = errors_of("function main() { y++; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-UNKNOWN")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn coalesce_assign_on_optional_is_ok() {
+        // `x ??= 0` ⟶ `x = x ?? 0`: assigning the non-null `int` back into the `int?` slot is fine.
+        assert!(
+            errors_of("function main() { mutable int? x = null; x ??= 0; }").is_empty(),
+            "{:?}",
+            errors_of("function main() { mutable int? x = null; x ??= 0; }")
+        );
+    }
+
+    #[test]
+    fn increment_on_mutable_is_ok() {
+        assert!(errors_of("function main() { mutable int x = 0; x++; x--; }").is_empty());
+    }
 }

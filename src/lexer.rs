@@ -486,6 +486,24 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     continue;
                 }
 
+                // `??=` (3) null-coalesce-assign — longest-match ahead of the two-char `??`,
+                // mirroring the `..=`/`..` range block above (M-mut.2).
+                if b == b'?' && lx.peek2() == Some(b'?') && lx.peek3() == Some(b'=') {
+                    for _ in 0..3 {
+                        lx.bump();
+                    }
+                    out.push(Token {
+                        kind: TokenKind::QuestionQuestionEq,
+                        span: Span {
+                            start,
+                            len: 3,
+                            line,
+                            col,
+                        },
+                    });
+                    continue;
+                }
+
                 // two-char operators take priority
                 let two = |k: TokenKind| Token {
                     kind: k,
@@ -509,6 +527,15 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     (b'|', Some(b'|')) => Some(TokenKind::OrOr),
                     (b'?', Some(b'?')) => Some(TokenKind::QuestionQuestion),
                     (b'?', Some(b'.')) => Some(TokenKind::QuestionDot),
+                    // compound-assign + increment/decrement (M-mut.2). `-=`/`--`/`->` and
+                    // `/=` (not a `//`/`/*` comment, handled earlier) all reach here distinctly.
+                    (b'+', Some(b'=')) => Some(TokenKind::PlusEq),
+                    (b'-', Some(b'=')) => Some(TokenKind::MinusEq),
+                    (b'*', Some(b'=')) => Some(TokenKind::StarEq),
+                    (b'/', Some(b'=')) => Some(TokenKind::SlashEq),
+                    (b'%', Some(b'=')) => Some(TokenKind::PercentEq),
+                    (b'+', Some(b'+')) => Some(TokenKind::PlusPlus),
+                    (b'-', Some(b'-')) => Some(TokenKind::MinusMinus),
                     _ => None,
                 };
                 if let Some(k) = matched_two {
@@ -626,6 +653,35 @@ mod tests {
         assert_eq!(
             kinds("== != <= >= -> => |> && ||"),
             vec![EqEq, NotEq, Le, Ge, Arrow, FatArrow, Pipe, AndAnd, OrOr, Eof]
+        );
+    }
+
+    #[test]
+    fn compound_assign_and_incdec_operators() {
+        use TokenKind::*;
+        // M-mut.2: the five `op=`, `??=`, and `++`/`--`.
+        assert_eq!(
+            kinds("+= -= *= /= %= ??= ++ --"),
+            vec![
+                PlusEq,
+                MinusEq,
+                StarEq,
+                SlashEq,
+                PercentEq,
+                QuestionQuestionEq,
+                PlusPlus,
+                MinusMinus,
+                Eof
+            ]
+        );
+        // `??=` (3) is longest-match ahead of `??` (2): `??` alone still lexes as QuestionQuestion.
+        assert_eq!(kinds("??"), vec![QuestionQuestion, Eof]);
+        // `-=` / `--` / `->` coexist (distinct second byte).
+        assert_eq!(kinds("-> -- -="), vec![Arrow, MinusMinus, MinusEq, Eof]);
+        // `/=` is not a comment start (`//`, `/*`): it lexes as SlashEq.
+        assert_eq!(
+            kinds("a /= 2"),
+            vec![Ident("a".into()), SlashEq, Int(2), Eof]
         );
     }
 

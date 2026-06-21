@@ -991,6 +991,28 @@ fn mutation_reassign_agrees() {
 }
 
 #[test]
+fn mutation_compound_assign_agrees() {
+    // M-mut.2: compound-assign + ++/-- + ??= desugar to `Stmt::Assign`, byte-identical on both.
+    // The five op= forms as accumulators.
+    agree("import Core.Console; function main(){ mutable int x = 10; x += 5; x -= 3; x *= 2; Console.println(\"{x}\"); }"); // 24
+                                                                                                                            // Integer `/=` routes through the intdiv kernel (F7): 24 / 5 = 4 (truncating), NOT float 4.8.
+    agree("import Core.Console; function main(){ mutable int x = 24; x /= 5; Console.println(\"{x}\"); }"); // 4
+                                                                                                            // `%=` with a NEGATIVE dividend — PHP's sign-follows-dividend (spec §8 #3): -7 % 3 = -1.
+    agree("import Core.Console; function main(){ mutable int x = 0 - 7; x %= 3; Console.println(\"{x}\"); }"); // -1
+                                                                                                               // `%=` positive dividend, negative divisor: 7 % -3 = 1 (sign follows dividend).
+    agree("import Core.Console; function main(){ mutable int x = 7; x %= 0 - 3; Console.println(\"{x}\"); }"); // 1
+                                                                                                               // `??=` on an optional: assigns only when null.
+    agree("import Core.Console; function main(){ mutable int? a = null; a ??= 7; mutable int? b = 3; b ??= 9; Console.println(\"{a ?? -1} {b ?? -1}\"); }"); // 7 3
+                                                                                                                                                             // Statement `++`/`--` counter.
+    agree("import Core.Console; function main(){ mutable int n = 0; n++; n++; n++; n--; Console.println(\"{n}\"); }"); // 2
+                                                                                                                       // Two-binding SCALAR observe (F13): a compound op on `b` must not touch `a` (value-copy).
+    agree("import Core.Console; function main(){ int a = 5; mutable int b = a; b += 100; Console.println(\"{a} {b}\"); }"); // 5 105
+                                                                                                                            // Compound-assign inside a loop accumulator.
+    agree("import Core.Console; function main(){ mutable int sum = 0; for (int i in 1..=5) { sum += i; } Console.println(\"{sum}\"); }");
+    // 15
+}
+
+#[test]
 fn named_fn_ref_as_value_agrees() {
     // named fn defined BEFORE use
     agree("import Core.Console; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} function main(){ Console.println(\"{twice(2, dbl)}\"); }"); // 8
