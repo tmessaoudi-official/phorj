@@ -37,6 +37,13 @@ We were locking the **mutation / modifier model**. State:
   **The unanswered AskUserQuestion was:** "Confirm this modifier model?" (options: confirm / keep
   final+readonly too / refine). **On resume: re-present and get that confirmation, then continue.**
 
+> **UPDATE 2026-06-21 (mutation milestone underway):** all four mutation forks resolved + modifier model
+> confirmed (see "Mutation milestone — LOCKED decisions" below); design spec
+> `docs/specs/2026-06-21-mutation-milestone-design.md`. **M-mut.1 (mutable locals + reassignment) is COMPLETE**
+> — committed `2652ae7`+`1371e66`, byte-identical run≡runvm≡real PHP, 487 lib tests green
+> (plan `docs/plans/2026-06-21-m-mut.1-mutable-locals.plan.md`). **NEXT: M-mut.2** (compound-assign `+=`/`-=`/
+> `*=`/`/=`/`%=` + `++`/`--` + `??=`, Tier-1 pure desugar, no new Op, no GC).
+
 After the modifier model is confirmed, the remaining to-dos before full autonomous GA work begin:
 1. Produce the **"gates to bypass for full autonomy"** summary the developer explicitly asked for
    (see Autonomy Contract below — most is already decided; just needs stating + any setup).
