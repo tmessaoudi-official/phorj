@@ -92,6 +92,45 @@ milestones (mutation+tracing-GC, exceptions + Result, Json/Any, runtime attribut
 PHP→Phorge migration M8), each **byte-identical `run≡runvm≡real PHP`**, documented, example-gated. Nothing
 missing vs PHP, plus the beyond-PHP wins.
 
+## Mutation milestone — LOCKED decisions (2026-06-21, post-research)
+
+Research: 5-track workflow `wf_e87dd08d-c75` → `docs/research/mutation/SYNTHESIS.md` (committed `5af66d9`).
+All forks decided by the developer via batched ask-human:
+
+- **[2026-06-21] AGREED — Spine (Fork 1 = A): PHP-faithful shared-mutable OBJECTS.** Instances are
+  reference/handle types (PHP/Java semantics); `List`/`Map`/`Set`/`Bytes` are copy-on-write VALUE types.
+  This is FORCED-correct by the M7 PHP oracle (objects alias-then-mutate observably in real PHP) + Invariant
+  #1. Value-semantics-objects (Track 1/2) rejected: elegant but fails the oracle / needs a no-PHP-analog
+  linearity checker (PL-maximalism the philosophy flags). Coexistence preserved: `clone with` + `inout` give
+  the value-update style additively.
+- **[2026-06-21] AGREED — GC: NO tracing GC.** `Rc`/`Drop` for everything; an **instance-only cycle
+  collector** is the single deferrable FINAL slice (M-mut.6). Collections can't cycle (value types) → GC-free.
+  ~70% of the mutation surface (locals, `+=`, `++`, `??=`, loops, element-set, clone-with) ships with ZERO GC.
+- **[2026-06-21] AGREED — Fork 2: `clone with` BYPASSES the constructor** (PHP 8.5 `clone with` / C# record
+  target). `with` is total + fast. Invariant-revalidation deferred to a future `requires`/refinement feature.
+- **[2026-06-21] AGREED — Fork 3: collector deferred to per-process + per-request reclaim** (HHVM model);
+  build a trial-deletion `Gc<T>` only if a hard long-lived-cycle requirement appears outside `serve`.
+- **[2026-06-21] AGREED — Fork 4: method params + `for..in` loop vars are immutable-by-default** (`mutable`
+  opt-in); the loop var is scoped to the loop body (drops PHP's foreach-var-persists quirk).
+- **[2026-06-21] AGREED — Modifier model CONFIRMED** (the originally-paused question; not a genuine fork —
+  Kotlin/Swift/C# converge): four orthogonal axes — Mutability (immutable→`mutable`), Const
+  (`const NAME = <const-expr>`), Association (instance→`static`), Extensibility (closed→`open`). **`final`
+  and `readonly` DROPPED as value modifiers** (subsumed by immutable-default; `final`-for-inheritance becomes
+  the default + `open` opt-in). `mutable` is a **binding** modifier (on `VarDecl`/field), never a type
+  modifier (avoids the `mutable T`/`T` explosion across `T?`/`A|B`/`A&B`/`List<T>`/generics). `open` gates on
+  `extends` (S6) — reserve/parse now, enforce at S6.
+- **[2026-06-21] AGREED — slice sequence (Tier 1 = no new Op, no GC; Tier 2 = interior mutation):**
+  M-mut.1 mutable locals + reassignment (modifier model lands here) → M-mut.2 compound-assign + `++`/`--` +
+  `??=` → M-mut.3 condition loops (`while`/do-while/C-for + while-let) → M-mut.4 `clone with` + get-hooks →
+  **[GC boundary — all above GC-free]** → M-mut.5 value-type element set `xs[i]=e`/`m[k]=e` (still no GC) →
+  M-mut.6 shared-mutable instance fields + the cycle collector (`eq_val` cycle-safe is the P0 prereq) →
+  M-mut.7 `static mutable` + set-hooks.
+- **P0 prerequisites before object→object mutation ships:** `eq_val` must become cycle-safe (visited
+  `Rc::ptr_eq` set); the mutation kernels (`list_set`/`map_set`/`set_field`) single-sourced in `value.rs`;
+  every mutation primitive ships a **two-binding observe-after-mutate** PHP-gated differential example
+  (`agree`/`agree_err` compare only the two Rust backends — only the PHP oracle + a 2-binding test catches a
+  value/handle slip). New Ops budget: `SetField` + `SetIndex` + `Dup` (+ `Get/SetStatic` only for M-mut.7).
+
 ## Locked design decisions (this session, post-review)
 
 - **Mutation: immutable-by-default + explicit `mutable`** (ACCEPTED). Keyword `mutable`. Modifier model
