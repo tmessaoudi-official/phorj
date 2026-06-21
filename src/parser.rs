@@ -734,6 +734,20 @@ impl Parser {
             TokenKind::Return => self.parse_return(),
             TokenKind::If => self.parse_if(),
             TokenKind::For => self.parse_for(),
+            TokenKind::While => self.parse_while(),
+            TokenKind::Do => self.parse_do_while(),
+            TokenKind::Break => {
+                let sp = self.peek_span();
+                self.advance();
+                self.expect(&TokenKind::Semicolon, "';' after 'break'")?;
+                Ok(Stmt::Break(sp))
+            }
+            TokenKind::Continue => {
+                let sp = self.peek_span();
+                self.advance();
+                self.expect(&TokenKind::Semicolon, "';' after 'continue'")?;
+                Ok(Stmt::Continue(sp))
+            }
             TokenKind::LBrace => {
                 let sp = self.peek_span();
                 let body = self.parse_block()?;
@@ -846,11 +860,16 @@ impl Parser {
         })
     }
 
-    /// `for (Type name in iter) BLOCK`
+    /// `for (Type name in iter) BLOCK` (for-in) **or** C-style `for (init; cond; step) BLOCK`. The
+    /// two are disambiguated by scanning the header at paren/bracket-depth 0: whichever of `in` /
+    /// `;` appears first decides (a for-in header has no `;`; a C-for header has no top-level `in`).
     fn parse_for(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.expect(&TokenKind::For, "'for'")?;
         self.expect(&TokenKind::LParen, "'(' after 'for'")?;
+        if self.for_header_is_classic() {
+            return self.parse_cfor_rest(sp);
+        }
         let ty = self.parse_type()?;
         let name = self.expect_ident("a loop variable name")?;
         self.expect(&TokenKind::In, "'in' in for-loop header")?;
@@ -862,6 +881,173 @@ impl Parser {
             name,
             iter,
             body,
+            span: sp,
+        })
+    }
+
+    /// Scan the for-header tokens (from just after the opening `(`) at paren/bracket depth 0: a
+    /// top-level `;` means a C-`for`, a top-level `in` means a for-`in`. Neither `;` nor `in`
+    /// appears inside balanced `()`/`[]` of a well-formed header, so depth tracking is exact.
+    fn for_header_is_classic(&self) -> bool {
+        let mut depth: i32 = 0;
+        let mut i = self.pos;
+        while i < self.tokens.len() {
+            match &self.tokens[i].kind {
+                TokenKind::LParen | TokenKind::LBracket => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket => {
+                    if depth == 0 {
+                        return false; // header's closing `)` — no `;`/`in` seen → treat as for-in
+                    }
+                    depth -= 1;
+                }
+                TokenKind::Semicolon if depth == 0 => return true,
+                TokenKind::In if depth == 0 => return false,
+                TokenKind::Eof => return false,
+                _ => {}
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Parse the rest of a C-`for` header (the opening `(` already consumed) and its body:
+    /// `init; cond; step) BLOCK`. Each clause is optional. `init`/`step` are clause-statements
+    /// (decl / assignment / expression, no trailing `;`); `cond` is an expression.
+    fn parse_cfor_rest(&mut self, sp: Span) -> Result<Stmt, Diagnostic> {
+        let init = if self.check(&TokenKind::Semicolon) {
+            None
+        } else {
+            Some(Box::new(self.parse_for_clause_stmt()?))
+        };
+        self.expect(&TokenKind::Semicolon, "';' after for-loop init")?;
+        let cond = if self.check(&TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.parse_expr()?)
+        };
+        self.expect(&TokenKind::Semicolon, "';' after for-loop condition")?;
+        let step = if self.check(&TokenKind::RParen) {
+            None
+        } else {
+            Some(Box::new(self.parse_for_clause_stmt()?))
+        };
+        self.expect(&TokenKind::RParen, "')' after for-loop step")?;
+        let body = self.parse_block()?;
+        Ok(Stmt::CFor {
+            init,
+            cond,
+            step,
+            body,
+            span: sp,
+        })
+    }
+
+    /// A C-`for` init/step clause: a `[mutable] [var|Type] name = expr` declaration, an
+    /// assignment / compound-assignment / `++`/`--`, or a bare expression — **without** a trailing
+    /// `;` (the header separator is consumed by the caller).
+    fn parse_for_clause_stmt(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        if self.eat(&TokenKind::Mutable) {
+            let (ty, name) = if self.eat(&TokenKind::Var) {
+                (
+                    Type::Infer(sp),
+                    self.expect_ident("a variable name after 'mutable var'")?,
+                )
+            } else {
+                let ty = self.parse_type()?;
+                (
+                    ty,
+                    self.expect_ident("a variable name after 'mutable <type>'")?,
+                )
+            };
+            self.expect(&TokenKind::Eq, "'=' in for-loop init")?;
+            let init = self.parse_expr()?;
+            return Ok(Stmt::VarDecl {
+                ty,
+                name,
+                init,
+                mutable: true,
+                span: sp,
+            });
+        }
+        if self.eat(&TokenKind::Var) {
+            let name = self.expect_ident("a variable name after 'var'")?;
+            self.expect(&TokenKind::Eq, "'=' after 'var <name>'")?;
+            let init = self.parse_expr()?;
+            return Ok(Stmt::VarDecl {
+                ty: Type::Infer(sp),
+                name,
+                init,
+                mutable: false,
+                span: sp,
+            });
+        }
+        if let Some((ty, name)) = self.try_var_decl_header() {
+            let init = self.parse_expr()?;
+            return Ok(Stmt::VarDecl {
+                ty,
+                name,
+                init,
+                mutable: false,
+                span: sp,
+            });
+        }
+        let expr = self.parse_expr()?;
+        self.finish_assign_or_expr(expr, sp)
+    }
+
+    /// `while (cond) BLOCK` or while-let `while (var name = opt) BLOCK`. The while-let form is
+    /// desugared here into `while (true) { if (var name = opt) { BODY } else { break; } }`, reusing
+    /// the if-let lowering and `break` — so no backend learns a while-let-specific shape (M-mut.3).
+    fn parse_while(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::While, "'while'")?;
+        self.expect(&TokenKind::LParen, "'(' after 'while'")?;
+        if self.eat(&TokenKind::Var) {
+            let name = self.expect_ident("a binding name after 'var'")?;
+            self.expect(&TokenKind::Eq, "'=' in 'while (var name = …)'")?;
+            let cond = self.parse_expr()?;
+            self.expect(&TokenKind::RParen, "')' after while condition")?;
+            let body = self.parse_block()?;
+            let if_let = Stmt::If {
+                cond,
+                bind: Some(name),
+                then_block: body,
+                else_block: Some(vec![Stmt::Break(sp)]),
+                span: sp,
+            };
+            return Ok(Stmt::While {
+                cond: Expr::Bool(true, sp),
+                body: vec![if_let],
+                post_cond: false,
+                span: sp,
+            });
+        }
+        let cond = self.parse_expr()?;
+        self.expect(&TokenKind::RParen, "')' after while condition")?;
+        let body = self.parse_block()?;
+        Ok(Stmt::While {
+            cond,
+            body,
+            post_cond: false,
+            span: sp,
+        })
+    }
+
+    /// `do BLOCK while (cond);` — the body runs once before the first test. No while-let form.
+    fn parse_do_while(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::Do, "'do'")?;
+        let body = self.parse_block()?;
+        self.expect(&TokenKind::While, "'while' after 'do { … }'")?;
+        self.expect(&TokenKind::LParen, "'(' after 'while'")?;
+        let cond = self.parse_expr()?;
+        self.expect(&TokenKind::RParen, "')' after do-while condition")?;
+        self.expect(&TokenKind::Semicolon, "';' after 'do { … } while (…)'")?;
+        Ok(Stmt::While {
+            cond,
+            body,
+            post_cond: true,
             span: sp,
         })
     }
@@ -883,25 +1069,29 @@ impl Parser {
             });
         }
         let expr = self.parse_expr()?;
-        // Reassignment: `<lvalue> = expr;` (M-mut.1). The header try above already failed (the LHS
-        // is not a `Type name =` declaration), so a `=` here is assignment, not a var-decl.
+        let stmt = self.finish_assign_or_expr(expr, sp)?;
+        self.expect(&TokenKind::Semicolon, "';' after statement")?;
+        Ok(stmt)
+    }
+
+    /// Given an already-parsed lvalue/expression, parse an optional assignment tail and return the
+    /// resulting statement — a plain reassignment (`= e`), a compound assignment (`op= e` / `??=`,
+    /// desugared to `x = x op e`, M-mut.2), a statement increment/decrement (`++`/`--`), or a bare
+    /// `Stmt::Expr` if no tail follows. Does **not** consume a terminator, so it is shared by the
+    /// statement parser (which then expects `;`) and the C-`for` clause parser (terminated by `;`
+    /// or `)`). `/=`/`%=` inherit `__phorge_div`/`__phorge_rem` via `BinaryOp::Div`/`Rem` (F7).
+    fn finish_assign_or_expr(&mut self, expr: Expr, sp: Span) -> Result<Stmt, Diagnostic> {
         if self.eat(&TokenKind::Eq) {
             let value = self.parse_expr()?;
-            self.expect(&TokenKind::Semicolon, "';' after assignment")?;
             return Ok(Stmt::Assign {
                 target: expr,
                 value,
                 span: sp,
             });
         }
-        // Compound assignment `x op= e` ⟶ `x = x op e` (M-mut.2). Desugars to the same
-        // `Stmt::Assign`, so the checker/backends/transpiler need no new arm; `/=`/`%=` inherit
-        // the `__phorge_div`/`__phorge_rem` routing of `BinaryOp::Div`/`Rem` (F7). Synthesized
-        // nodes carry the statement span; the real target keeps its own span for diagnostics.
         if let Some(op) = compound_op(self.peek()) {
             self.advance();
             let rhs = self.parse_expr()?;
-            self.expect(&TokenKind::Semicolon, "';' after compound assignment")?;
             let value = Expr::Binary {
                 op,
                 lhs: Box::new(expr.clone()),
@@ -914,7 +1104,6 @@ impl Parser {
                 span: sp,
             });
         }
-        // Statement-form increment / decrement `x++;` / `x--;` ⟶ `x = x + 1` / `x = x - 1`.
         if matches!(self.peek(), TokenKind::PlusPlus | TokenKind::MinusMinus) {
             let op = if matches!(self.peek(), TokenKind::PlusPlus) {
                 BinaryOp::Add
@@ -922,7 +1111,6 @@ impl Parser {
                 BinaryOp::Sub
             };
             self.advance();
-            self.expect(&TokenKind::Semicolon, "';' after '++' or '--'")?;
             let value = Expr::Binary {
                 op,
                 lhs: Box::new(expr.clone()),
@@ -935,7 +1123,6 @@ impl Parser {
                 span: sp,
             });
         }
-        self.expect(&TokenKind::Semicolon, "';' after expression statement")?;
         Ok(Stmt::Expr(expr, sp))
     }
 
@@ -1991,6 +2178,96 @@ mod tests {
                 }
                 other => panic!("{src}: expected Assign, got {other:?}"),
             }
+        }
+    }
+
+    #[test]
+    fn parses_while_and_do_while() {
+        match stmt("while (x < 3) { x = x + 1; }") {
+            Stmt::While {
+                post_cond, body, ..
+            } => {
+                assert!(!post_cond);
+                assert_eq!(body.len(), 1);
+            }
+            other => panic!("got {other:?}"),
+        }
+        match stmt("do { x = x + 1; } while (x < 3);") {
+            Stmt::While { post_cond, .. } => assert!(post_cond),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_while_let_desugars_to_while_true_if_let() {
+        // `while (var v = opt) { B }` ⟶ `while (true) { if (var v = opt) { B } else { break; } }`.
+        match stmt("while (var v = opt) { use(v); }") {
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                ..
+            } => {
+                assert!(!post_cond);
+                assert!(matches!(cond, Expr::Bool(true, _)));
+                assert_eq!(body.len(), 1);
+                match &body[0] {
+                    Stmt::If {
+                        bind: Some(n),
+                        else_block: Some(eb),
+                        ..
+                    } => {
+                        assert_eq!(n, "v");
+                        assert!(matches!(eb.as_slice(), [Stmt::Break(_)]));
+                    }
+                    other => panic!("expected if-let, got {other:?}"),
+                }
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_break_and_continue() {
+        assert!(matches!(stmt("break;"), Stmt::Break(_)));
+        assert!(matches!(stmt("continue;"), Stmt::Continue(_)));
+    }
+
+    #[test]
+    fn parses_c_style_for() {
+        // Full C-for with all three clauses.
+        match stmt("for (mutable int i = 0; i < n; i++) { use(i); }") {
+            Stmt::CFor {
+                init: Some(init),
+                cond: Some(_),
+                step: Some(step),
+                body,
+                ..
+            } => {
+                assert!(matches!(*init, Stmt::VarDecl { mutable: true, .. }));
+                assert!(matches!(*step, Stmt::Assign { .. })); // i++ desugars to Assign
+                assert_eq!(body.len(), 1);
+            }
+            other => panic!("got {other:?}"),
+        }
+        // All clauses empty: `for (;;)`.
+        match stmt("for (;;) { x = 1; }") {
+            Stmt::CFor {
+                init: None,
+                cond: None,
+                step: None,
+                ..
+            } => {}
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn for_in_still_parses_as_for_in() {
+        // The disambiguation must not regress the existing range/list for-in form.
+        match stmt("for (int i in 0..3) { use(i); }") {
+            Stmt::For { name, .. } => assert_eq!(name, "i"),
+            other => panic!("got {other:?}"),
         }
     }
 

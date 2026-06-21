@@ -572,6 +572,32 @@ fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
             body: resolve_block(body, ctx),
             span,
         },
+        Stmt::While {
+            cond,
+            body,
+            post_cond,
+            span,
+        } => Stmt::While {
+            cond: resolve_expr(cond, ctx),
+            body: resolve_block(body, ctx),
+            post_cond,
+            span,
+        },
+        Stmt::CFor {
+            init,
+            cond,
+            step,
+            body,
+            span,
+        } => Stmt::CFor {
+            init: init.map(|s| Box::new(resolve_stmt(*s, ctx))),
+            cond: cond.map(|e| resolve_expr(e, ctx)),
+            step: step.map(|s| Box::new(resolve_stmt(*s, ctx))),
+            body: resolve_block(body, ctx),
+            span,
+        },
+        Stmt::Break(span) => Stmt::Break(span),
+        Stmt::Continue(span) => Stmt::Continue(span),
         Stmt::Block(stmts, span) => Stmt::Block(resolve_block(stmts, ctx), span),
         Stmt::Expr(e, span) => Stmt::Expr(resolve_expr(e, ctx), span),
     }

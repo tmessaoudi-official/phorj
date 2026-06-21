@@ -1013,6 +1013,30 @@ fn mutation_compound_assign_agrees() {
 }
 
 #[test]
+fn mutation_condition_loops_agree() {
+    // M-mut.3: while / do-while / C-for / while-let / break / continue, byte-identical on both.
+    // Plain while accumulator.
+    agree("import Core.Console; function main(){ mutable int i = 0; mutable int s = 0; while (i < 4) { s += i; i += 1; } Console.println(\"{s}\"); }"); // 6
+                                                                                                                                                        // do-while runs the body once even when the condition is false up front.
+    agree("import Core.Console; function main(){ mutable int n = 10; do { Console.println(\"once\"); n += 1; } while (n < 5); }");
+    // continue skips, break stops.
+    agree("import Core.Console; function main(){ mutable int i = 0; mutable int hit = 0; while (true) { i += 1; if (i == 2) { continue; } if (i >= 5) { break; } hit += 1; } Console.println(\"{hit}\"); }"); // i=1,3,4 → 3
+                                                                                                                                                                                                              // C-style for with continue + break.
+    agree("import Core.Console; function main(){ mutable int sum = 0; for (mutable int k = 0; k < 6; k++) { if (k == 1) { continue; } if (k == 5) { break; } sum += k; } Console.println(\"{sum}\"); }"); // 0+2+3+4=9
+                                                                                                                                                                                                          // Nested C-for: an inner break exits only the inner loop.
+    agree("import Core.Console; function main(){ mutable int t = 0; for (mutable int a = 0; a < 3; a += 1) { for (mutable int b = 0; b < 9; b += 1) { if (b == 2) { break; } t += 1; } } Console.println(\"{t}\"); }"); // 3*2=6
+                                                                                                                                                                                                                        // while-let drains an optional.
+    agree("import Core.Console; function main(){ mutable int? o = 7; while (var v = o) { Console.println(\"{v}\"); o = null; } Console.println(\"done\"); }");
+    // break inside a for-in (the existing range loop) exits it.
+    agree("import Core.Console; function main(){ mutable int last = 0; for (int x in 1..=10) { if (x == 4) { break; } last = x; } Console.println(\"{last}\"); }"); // 3
+                                                                                                                                                                    // continue inside a for-in skips one iteration.
+    agree("import Core.Console; function main(){ mutable int s = 0; for (int x in 1..=5) { if (x == 3) { continue; } s += x; } Console.println(\"{s}\"); }"); // 1+2+4+5=12
+                                                                                                                                                              // for(;;) terminated by break.
+    agree("import Core.Console; function main(){ mutable int c = 0; for (;;) { c += 1; if (c == 3) { break; } } Console.println(\"{c}\"); }");
+    // 3
+}
+
+#[test]
 fn named_fn_ref_as_value_agrees() {
     // named fn defined BEFORE use
     agree("import Core.Console; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} function main(){ Console.println(\"{twice(2, dbl)}\"); }"); // 8

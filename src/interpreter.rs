@@ -19,6 +19,10 @@ use std::rc::Rc;
 /// runtime faults.
 enum Signal {
     Return(Value),
+    /// `break;` — unwinds to the innermost loop, which catches it and stops (M-mut.3).
+    Break,
+    /// `continue;` — unwinds to the innermost loop, which catches it and starts the next iteration.
+    Continue,
     Runtime(Diagnostic),
 }
 
@@ -36,6 +40,7 @@ fn signal_msg(sig: Signal) -> String {
     match sig {
         Signal::Runtime(d) => d.message,
         Signal::Return(_) => "internal error: closure return escaped".to_string(),
+        Signal::Break | Signal::Continue => "internal error: loop control escaped".to_string(),
     }
 }
 
@@ -138,6 +143,11 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         Ok(_) => Ok(interp.out),
         Err(Signal::Return(_)) => Ok(interp.out),
         Err(Signal::Runtime(e)) => Err(e),
+        // Checker-unreachable: `break`/`continue` are rejected outside a loop and caught by their
+        // enclosing loop, so they never escape `main`'s body. Defensive (EV-7 parity).
+        Err(Signal::Break | Signal::Continue) => {
+            Err(Diagnostic::runtime("internal error: loop control escaped"))
+        }
     }
 }
 
@@ -180,6 +190,9 @@ pub fn call_named(
         Ok(v) => Ok((v, interp.out)),
         Err(Signal::Return(v)) => Ok((v, interp.out)),
         Err(Signal::Runtime(e)) => Err(e),
+        Err(Signal::Break | Signal::Continue) => {
+            Err(Diagnostic::runtime("internal error: loop control escaped"))
+        }
     }
 }
 
@@ -327,16 +340,113 @@ impl Interp {
                     self.frame.declare(name, item.clone());
                     let r = self.exec_stmts(body);
                     self.frame.pop_scope();
-                    r?;
+                    match r {
+                        Ok(()) => {}
+                        Err(Signal::Break) => break,
+                        Err(Signal::Continue) => continue,
+                        Err(other) => return Err(other),
+                    }
                 }
                 Ok(())
             }
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                ..
+            } => self.exec_while(cond, body, *post_cond),
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                ..
+            } => self.exec_cfor(init.as_deref(), cond.as_ref(), step.as_deref(), body),
+            Stmt::Break(_) => Err(Signal::Break),
+            Stmt::Continue(_) => Err(Signal::Continue),
             Stmt::Block(stmts, _) => self.exec_scoped(stmts),
             Stmt::Expr(e, _) => {
                 self.eval(e)?;
                 Ok(())
             }
         }
+    }
+
+    /// `while (cond) { .. }` / `do { .. } while (cond);` (M-mut.3). Each iteration runs the body in
+    /// its own scope; a `Signal::Break` stops the loop, `Continue` proceeds to the next test, both
+    /// consumed here. while-let is desugared by the parser, so it arrives as a plain `while (true)`.
+    fn exec_while(&mut self, cond: &Expr, body: &[Stmt], post_cond: bool) -> R<()> {
+        // do-while runs the body once before the first test; a plain while tests first.
+        if post_cond {
+            loop {
+                self.frame.push_scope();
+                let r = self.exec_stmts(body);
+                self.frame.pop_scope();
+                match r {
+                    Ok(()) | Err(Signal::Continue) => {}
+                    Err(Signal::Break) => break,
+                    Err(other) => return Err(other),
+                }
+                if !as_bool(&self.eval(cond)?)? {
+                    break;
+                }
+            }
+            return Ok(());
+        }
+        while as_bool(&self.eval(cond)?)? {
+            self.frame.push_scope();
+            let r = self.exec_stmts(body);
+            self.frame.pop_scope();
+            match r {
+                Ok(()) | Err(Signal::Continue) => {}
+                Err(Signal::Break) => break,
+                Err(other) => return Err(other),
+            }
+        }
+        Ok(())
+    }
+
+    /// C-style `for (init; cond; step) { body }` (M-mut.3). `init`'s binding lives in the loop's own
+    /// scope (popped on exit); `continue` skips to `step`, `break` exits.
+    fn exec_cfor(
+        &mut self,
+        init: Option<&Stmt>,
+        cond: Option<&Expr>,
+        step: Option<&Stmt>,
+        body: &[Stmt],
+    ) -> R<()> {
+        self.frame.push_scope();
+        let mut result = match init {
+            Some(s) => self.exec_stmt(s),
+            None => Ok(()),
+        };
+        if result.is_ok() {
+            result = self.cfor_loop(cond, step, body);
+        }
+        self.frame.pop_scope();
+        result
+    }
+
+    fn cfor_loop(&mut self, cond: Option<&Expr>, step: Option<&Stmt>, body: &[Stmt]) -> R<()> {
+        loop {
+            if let Some(c) = cond {
+                if !as_bool(&self.eval(c)?)? {
+                    break;
+                }
+            }
+            self.frame.push_scope();
+            let r = self.exec_stmts(body);
+            self.frame.pop_scope();
+            match r {
+                Ok(()) | Err(Signal::Continue) => {}
+                Err(Signal::Break) => break,
+                Err(other) => return Err(other),
+            }
+            if let Some(s) = step {
+                self.exec_stmt(s)?;
+            }
+        }
+        Ok(())
     }
 
     fn eval(&mut self, e: &Expr) -> R<Value> {

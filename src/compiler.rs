@@ -161,6 +161,18 @@ struct Compiler<'a> {
     /// correct slot even mid-expression. Reset to `locals.len()` at each statement boundary and
     /// fixed at `&&`/`||`/`match` control-flow merges; otherwise maintained by `emit`.
     height: usize,
+    /// Stack of enclosing loops (M-mut.3). `break`/`continue` emit a placeholder `Jump` recorded in
+    /// the innermost frame and patched to the loop's exit / continue target at loop end (the
+    /// `ctor_return_jumps` backpatch model). `body_base` is the `locals.len()` both forms pop down
+    /// to (dropping body-scope locals while keeping the loop's own locals live). No new `Op` (F5).
+    loop_frames: Vec<LoopFrame>,
+}
+
+/// One enclosing loop's break/continue backpatch state (M-mut.3).
+struct LoopFrame {
+    break_jumps: Vec<usize>,
+    continue_jumps: Vec<usize>,
+    body_base: usize,
 }
 
 /// Compile a whole program: a pre-pass indexes every top-level function (so calls — including
@@ -653,6 +665,7 @@ impl<'a> Compiler<'a> {
             match_bindings: Vec::new(),
             height: 0,
             ctor_return_jumps: None,
+            loop_frames: Vec::new(),
         }
     }
 
@@ -726,6 +739,12 @@ impl<'a> Compiler<'a> {
     /// Patch a previously-emitted forward jump to point at the current code position.
     fn patch_jump(&mut self, idx: usize) {
         let target = self.here();
+        self.patch_jump_to(idx, target);
+    }
+
+    /// Patch a previously-emitted jump to an explicit absolute target — used for `continue`
+    /// back-edges (a known earlier position) where the target is not `here()` (M-mut.3).
+    fn patch_jump_to(&mut self, idx: usize, target: usize) {
         self.chunk.code[idx] = match self.chunk.code[idx] {
             Op::Jump(_) => Op::Jump(target),
             Op::JumpIfFalse(_) => Op::JumpIfFalse(target),
@@ -1007,6 +1026,27 @@ impl<'a> Compiler<'a> {
                 body,
                 span,
             } => self.compile_for(name, resolve_cty(ty), iter, body, span.line),
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                span,
+            } => self.compile_while(cond, body, *post_cond, span.line),
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                span,
+            } => self.compile_cfor(
+                init.as_deref(),
+                cond.as_ref(),
+                step.as_deref(),
+                body,
+                span.line,
+            ),
+            Stmt::Break(span) => self.compile_break_continue(true, span.line),
+            Stmt::Continue(span) => self.compile_break_continue(false, span.line),
         }
     }
 
@@ -1676,6 +1716,10 @@ impl<'a> Compiler<'a> {
         self.emit_const(Value::Int(0), line); // [list, 0]
         let s_idx = self.add_local("$for_idx", CTy::Int);
 
+        // break/continue pop down to here (just `$for_list`+`$for_idx` live): a `break` lands at the
+        // exit (where `end_scope` drops those two), a `continue` at the index-increment — both after
+        // the loop variable has been dropped, so the pop count covers the loop var + any body locals.
+        let body_base = self.locals.len();
         let loop_start = self.here();
         self.emit(Op::GetLocal(s_idx), line);
         self.emit(Op::GetLocal(s_list), line);
@@ -1688,16 +1732,26 @@ impl<'a> Compiler<'a> {
         self.emit(Op::Index, line); // [elem]
         self.add_local(name, elem_ty); // elem becomes the loop variable
 
+        self.loop_frames.push(LoopFrame {
+            break_jumps: Vec::new(),
+            continue_jumps: Vec::new(),
+            body_base,
+        });
         self.begin_scope(); // body's own locals get cleaned each iteration
         for s in body {
             self.stmt(s)?;
         }
         self.end_scope(line);
+        let frame = self.loop_frames.pop().expect("for loop frame");
 
         self.emit(Op::Pop, line); // drop the loop variable
         self.locals.pop(); // unregister `name`
 
-        // idx = idx + 1
+        // idx = idx + 1 — also the `continue` target (loop var already dropped above).
+        let cont_target = self.here();
+        for j in &frame.continue_jumps {
+            self.patch_jump_to(*j, cont_target);
+        }
         self.emit(Op::GetLocal(s_idx), line);
         self.emit_const(Value::Int(1), line);
         self.emit(Op::AddI, line);
@@ -1705,7 +1759,157 @@ impl<'a> Compiler<'a> {
         self.emit(Op::Jump(loop_start), line);
 
         self.patch_jump(exit_jump);
+        for j in &frame.break_jumps {
+            self.patch_jump(*j);
+        }
         self.end_scope(line); // pops $for_idx, $for_list
+        Ok(())
+    }
+
+    /// `while (cond) { .. }` / `do { .. } while (cond);` (M-mut.3). Lowers to a `JumpIfFalse`-guarded
+    /// back-edge — no new loop opcode (F5). A loop frame collects `break`/`continue` jumps; `break`
+    /// targets the exit, `continue` the condition re-test (the loop top for `while`, the bottom test
+    /// for `do-while`). `body_base` is the locals depth both forms pop down to.
+    fn compile_while(
+        &mut self,
+        cond: &Expr,
+        body: &[Stmt],
+        post_cond: bool,
+        line: u32,
+    ) -> Result<(), String> {
+        self.begin_scope();
+        let body_base = self.locals.len();
+        if post_cond {
+            // do-while: body first, condition (and the continue target) at the bottom.
+            let loop_start = self.here();
+            self.loop_frames.push(LoopFrame {
+                break_jumps: Vec::new(),
+                continue_jumps: Vec::new(),
+                body_base,
+            });
+            self.begin_scope();
+            for s in body {
+                self.stmt(s)?;
+            }
+            self.end_scope(line);
+            let frame = self.loop_frames.pop().expect("do-while loop frame");
+
+            let cont_target = self.here();
+            for j in &frame.continue_jumps {
+                self.patch_jump_to(*j, cont_target);
+            }
+            self.expr(cond)?; // [cond]
+            let exit_jump = self.emit_jump(Op::JumpIfFalse(0), line); // false → exit
+            self.emit(Op::Jump(loop_start), line); // true → loop again
+            self.patch_jump(exit_jump);
+            for j in &frame.break_jumps {
+                self.patch_jump(*j);
+            }
+        } else {
+            // while: condition (and the continue target) at the top.
+            let loop_start = self.here();
+            self.expr(cond)?; // [cond]
+            let exit_jump = self.emit_jump(Op::JumpIfFalse(0), line); // pops cond
+            self.loop_frames.push(LoopFrame {
+                break_jumps: Vec::new(),
+                continue_jumps: Vec::new(),
+                body_base,
+            });
+            self.begin_scope();
+            for s in body {
+                self.stmt(s)?;
+            }
+            self.end_scope(line);
+            let frame = self.loop_frames.pop().expect("while loop frame");
+
+            self.emit(Op::Jump(loop_start), line);
+            self.patch_jump(exit_jump);
+            for j in &frame.break_jumps {
+                self.patch_jump(*j);
+            }
+            for j in &frame.continue_jumps {
+                self.patch_jump_to(*j, loop_start);
+            }
+        }
+        self.end_scope(line);
+        Ok(())
+    }
+
+    /// C-style `for (init; cond; step) { body }` (M-mut.3). `init`'s binding lives in the loop's own
+    /// scope; `continue` jumps to `step`, `break` to the exit. Same jump back-edge as `compile_while`.
+    fn compile_cfor(
+        &mut self,
+        init: Option<&Stmt>,
+        cond: Option<&Expr>,
+        step: Option<&Stmt>,
+        body: &[Stmt],
+        line: u32,
+    ) -> Result<(), String> {
+        self.begin_scope();
+        if let Some(s) = init {
+            self.stmt(s)?;
+        }
+        // break/continue pop down to here (init's local stays live; the exit's `end_scope` drops it).
+        let body_base = self.locals.len();
+        let loop_start = self.here();
+        let exit_jump = if let Some(c) = cond {
+            self.expr(c)?;
+            Some(self.emit_jump(Op::JumpIfFalse(0), line))
+        } else {
+            None // `for (init;;step)` — no condition, loop until `break`
+        };
+        self.loop_frames.push(LoopFrame {
+            break_jumps: Vec::new(),
+            continue_jumps: Vec::new(),
+            body_base,
+        });
+        self.begin_scope();
+        for s in body {
+            self.stmt(s)?;
+        }
+        self.end_scope(line);
+        let frame = self.loop_frames.pop().expect("c-for loop frame");
+
+        // `continue` lands at the step (run the step, then re-test).
+        let cont_target = self.here();
+        for j in &frame.continue_jumps {
+            self.patch_jump_to(*j, cont_target);
+        }
+        if let Some(s) = step {
+            self.stmt(s)?;
+        }
+        self.emit(Op::Jump(loop_start), line);
+
+        if let Some(e) = exit_jump {
+            self.patch_jump(e);
+        }
+        for j in &frame.break_jumps {
+            self.patch_jump(*j);
+        }
+        self.end_scope(line); // pops init's local
+        Ok(())
+    }
+
+    /// Emit a `break` (`is_break`) or `continue`: pop every body-scope local back down to the
+    /// innermost loop's `body_base`, then a placeholder `Jump` recorded in the loop frame for the
+    /// loop to patch (exit for `break`, continue-target for `continue`). No new `Op` (F5). The
+    /// checker rejects break/continue outside a loop, so the frame is always present.
+    fn compile_break_continue(&mut self, is_break: bool, line: u32) -> Result<(), String> {
+        let body_base = self
+            .loop_frames
+            .last()
+            .map(|f| f.body_base)
+            .ok_or("`break`/`continue` outside a loop")?;
+        for _ in 0..(self.locals.len() - body_base) {
+            self.emit(Op::Pop, line);
+        }
+        let j = self.emit_jump(Op::Jump(0), line);
+        let frame = self.loop_frames.last_mut().expect("loop frame present");
+        if is_break {
+            frame.break_jumps.push(j);
+        } else {
+            frame.continue_jumps.push(j);
+        }
         Ok(())
     }
 

@@ -67,6 +67,9 @@ pub struct Checker {
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
     depth: usize,
+    /// number of enclosing loops being checked (M-mut.3). `break`/`continue` are valid only when
+    /// this is `> 0` (`E-BREAK-OUTSIDE-LOOP`/`E-CONTINUE-OUTSIDE-LOOP`).
+    loop_depth: u32,
     /// `type Name = Type;` aliases, stored as raw AST types and expanded in `resolve_type`.
     aliases: HashMap<String, crate::ast::Type>,
     /// alias names currently being expanded — detects `type A = B; type B = A;` cycles.
@@ -105,6 +108,7 @@ impl Checker {
             cur_ret: Ty::Unit,
             cur_class: None,
             depth: 0,
+            loop_depth: 0,
             aliases: HashMap::new(),
             alias_stack: Vec::new(),
             imports: HashMap::new(),
@@ -1091,6 +1095,33 @@ impl Checker {
                     self.check_stmt_casing(st);
                 }
             }
+            Stmt::While { cond, body, .. } => {
+                self.check_expr_casing(cond);
+                for st in body {
+                    self.check_stmt_casing(st);
+                }
+            }
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                ..
+            } => {
+                if let Some(s) = init {
+                    self.check_stmt_casing(s);
+                }
+                if let Some(c) = cond {
+                    self.check_expr_casing(c);
+                }
+                if let Some(s) = step {
+                    self.check_stmt_casing(s);
+                }
+                for st in body {
+                    self.check_stmt_casing(st);
+                }
+            }
+            Stmt::Break(_) | Stmt::Continue(_) => {}
             Stmt::Block(stmts, _) => {
                 for st in stmts {
                     self.check_stmt_casing(st);
@@ -1513,6 +1544,44 @@ impl Checker {
                 }
             }
             Stmt::For { .. } => self.check_for(stmt), // implemented in Task 5
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                span,
+            } => self.check_while(cond, body, *post_cond, *span),
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                ..
+            } => self.check_cfor(init.as_deref(), cond.as_ref(), step.as_deref(), body),
+            Stmt::Break(span) => {
+                if self.loop_depth == 0 {
+                    self.err_coded(
+                        *span,
+                        "`break` outside a loop",
+                        "E-BREAK-OUTSIDE-LOOP",
+                        Some(
+                            "`break` may only appear inside a `for`/`while`/`do-while` loop".into(),
+                        ),
+                    );
+                }
+            }
+            Stmt::Continue(span) => {
+                if self.loop_depth == 0 {
+                    self.err_coded(
+                        *span,
+                        "`continue` outside a loop",
+                        "E-CONTINUE-OUTSIDE-LOOP",
+                        Some(
+                            "`continue` may only appear inside a `for`/`while`/`do-while` loop"
+                                .into(),
+                        ),
+                    );
+                }
+            }
             Stmt::Block(stmts, _) => self.check_block(stmts),
             Stmt::Expr(e, _) => {
                 self.check_expr(e);
@@ -2727,11 +2796,71 @@ impl Checker {
             }
             self.push_scope();
             self.declare(name, declared, *span);
+            self.loop_depth += 1;
             for s in body {
                 self.check_stmt(s);
             }
+            self.loop_depth -= 1;
             self.pop_scope();
         }
+    }
+
+    /// `while (cond) { .. }` / `do { .. } while (cond);` (M-mut.3). The condition must be `bool` and
+    /// is checked in the loop's *outer* scope (the body's own bindings are not visible to it — true
+    /// for do-while too, matching the interpreter's scope-pop-before-retest).
+    fn check_while(
+        &mut self,
+        cond: &crate::ast::Expr,
+        body: &[crate::ast::Stmt],
+        _post_cond: bool,
+        span: Span,
+    ) {
+        let ct = self.check_expr(cond);
+        if !self.ty_assignable(&ct, &Ty::Bool) {
+            self.err(span, format!("loop condition must be `bool`, found `{ct}`"));
+        }
+        self.push_scope();
+        self.loop_depth += 1;
+        for s in body {
+            self.check_stmt(s);
+        }
+        self.loop_depth -= 1;
+        self.pop_scope();
+    }
+
+    /// C-style `for (init; cond; step) { .. }` (M-mut.3). `init`'s binding lives in the loop's own
+    /// scope and is visible to `cond`/`step`/`body`; `cond` (if present) must be `bool`.
+    fn check_cfor(
+        &mut self,
+        init: Option<&crate::ast::Stmt>,
+        cond: Option<&crate::ast::Expr>,
+        step: Option<&crate::ast::Stmt>,
+        body: &[crate::ast::Stmt],
+    ) {
+        self.push_scope();
+        if let Some(s) = init {
+            self.check_stmt(s);
+        }
+        if let Some(c) = cond {
+            let ct = self.check_expr(c);
+            if !self.ty_assignable(&ct, &Ty::Bool) {
+                self.err(
+                    Self::expr_span(c),
+                    format!("loop condition must be `bool`, found `{ct}`"),
+                );
+            }
+        }
+        // `step` runs each iteration (not the loop body) but is checked once; a bare `break`/
+        // `continue` in `step` is nonsensical, so it is NOT inside the loop-depth bump.
+        if let Some(s) = step {
+            self.check_stmt(s);
+        }
+        self.loop_depth += 1;
+        for s in body {
+            self.check_stmt(s);
+        }
+        self.loop_depth -= 1;
+        self.pop_scope();
     }
     fn check_match(
         &mut self,
@@ -3026,6 +3155,23 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
                     || else_block.as_ref().is_some_and(|eb| in_stmts(eb))
             }
             Stmt::For { iter, body, .. } => in_expr(iter) || in_stmts(body),
+            Stmt::While { cond, body, .. } => in_expr(cond) || in_stmts(body),
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                ..
+            } => {
+                init.as_deref()
+                    .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
+                    || cond.as_ref().is_some_and(in_expr)
+                    || step
+                        .as_deref()
+                        .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
+                    || in_stmts(body)
+            }
+            Stmt::Break(_) | Stmt::Continue(_) => false,
             Stmt::Assign { target, value, .. } => in_expr(target) || in_expr(value),
             Stmt::Block(stmts, _) => in_stmts(stmts),
             Stmt::Expr(e, _) => in_expr(e),
@@ -3426,6 +3572,32 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 body: rblock(body, h),
                 span,
             },
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                span,
+            } => Stmt::While {
+                cond: rexpr(cond, h),
+                body: rblock(body, h),
+                post_cond,
+                span,
+            },
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                span,
+            } => Stmt::CFor {
+                init: init.map(|s| Box::new(rstmt(*s, h))),
+                cond: cond.map(|e| rexpr(e, h)),
+                step: step.map(|s| Box::new(rstmt(*s, h))),
+                body: rblock(body, h),
+                span,
+            },
+            Stmt::Break(span) => Stmt::Break(span),
+            Stmt::Continue(span) => Stmt::Continue(span),
             Stmt::Block(stmts, span) => Stmt::Block(rblock(stmts, h), span),
             Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, h), span),
         }
@@ -3739,6 +3911,32 @@ pub fn erase_generics(program: Program) -> Program {
                 body: body.iter().map(|s| rstmt(s, params)).collect(),
                 span: *span,
             },
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                span,
+            } => Stmt::While {
+                cond: rexpr(cond, params),
+                body: body.iter().map(|s| rstmt(s, params)).collect(),
+                post_cond: *post_cond,
+                span: *span,
+            },
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                span,
+            } => Stmt::CFor {
+                init: init.as_ref().map(|s| Box::new(rstmt(s, params))),
+                cond: cond.as_ref().map(|e| rexpr(e, params)),
+                step: step.as_ref().map(|s| Box::new(rstmt(s, params))),
+                body: body.iter().map(|s| rstmt(s, params)).collect(),
+                span: *span,
+            },
+            Stmt::Break(span) => Stmt::Break(*span),
+            Stmt::Continue(span) => Stmt::Continue(*span),
             Stmt::Block(stmts, span) => {
                 Stmt::Block(stmts.iter().map(|s| rstmt(s, params)).collect(), *span)
             }
@@ -3940,11 +4138,39 @@ pub fn expand_aliases(program: &Program) -> Program {
                     .map(|b| b.iter().map(|s| rstmt(s, a)).collect()),
                 span: *span,
             },
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                span,
+            } => Stmt::While {
+                cond: cond.clone(),
+                body: body.iter().map(|s| rstmt(s, a)).collect(),
+                post_cond: *post_cond,
+                span: *span,
+            },
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                span,
+            } => Stmt::CFor {
+                init: init.as_ref().map(|s| Box::new(rstmt(s, a))),
+                cond: cond.clone(),
+                step: step.as_ref().map(|s| Box::new(rstmt(s, a))),
+                body: body.iter().map(|s| rstmt(s, a)).collect(),
+                span: *span,
+            },
             Stmt::Block(stmts, span) => {
                 Stmt::Block(stmts.iter().map(|s| rstmt(s, a)).collect(), *span)
             }
-            // Assign carries only exprs (no types this pass rewrites) — clone verbatim.
-            Stmt::Return { .. } | Stmt::Expr(..) | Stmt::Assign { .. } => s.clone(),
+            // Assign/break/continue carry only exprs or nothing (no types this pass rewrites).
+            Stmt::Return { .. }
+            | Stmt::Expr(..)
+            | Stmt::Assign { .. }
+            | Stmt::Break(_)
+            | Stmt::Continue(_) => s.clone(),
         }
     }
     fn rfunc(f: &FunctionDecl, a: &Aliases) -> FunctionDecl {
@@ -5741,5 +5967,75 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
     #[test]
     fn increment_on_mutable_is_ok() {
         assert!(errors_of("function main() { mutable int x = 0; x++; x--; }").is_empty());
+    }
+
+    // ---- M-mut.3: condition loops + break/continue ----
+
+    #[test]
+    fn while_loop_is_ok() {
+        assert!(
+            errors_of("function main() { mutable int i = 0; while (i < 3) { i += 1; } }")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn while_condition_must_be_bool() {
+        let bad = errors_of("function main() { while (1) { } }");
+        assert!(!bad.is_empty(), "expected a non-bool-condition error");
+    }
+
+    #[test]
+    fn c_for_is_ok() {
+        assert!(errors_of(
+            "import Core.Console; function main() { for (mutable int i = 0; i < 3; i++) { Console.println(\"{i}\"); } }"
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn c_for_immutable_counter_step_is_error() {
+        // The counter is reassigned by the step, so it must be `mutable` (immutable-by-default).
+        let bad = errors_of("function main() { for (int i = 0; i < 3; i++) { } }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn break_outside_loop_is_error() {
+        let bad = errors_of("function main() { break; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-BREAK-OUTSIDE-LOOP")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn continue_outside_loop_is_error() {
+        let bad = errors_of("function main() { continue; }");
+        assert!(
+            bad.iter()
+                .any(|e| e.code == Some("E-CONTINUE-OUTSIDE-LOOP")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn break_inside_loop_is_ok() {
+        assert!(errors_of(
+            "function main() { mutable int i = 0; while (i < 9) { i += 1; if (i == 3) { break; } } }"
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn while_let_binds_inner_in_body() {
+        // while-let narrows the optional to its non-null inner inside the body (desugars to if-let).
+        assert!(errors_of(
+            "import Core.Console; function main() { mutable int? o = 5; while (var v = o) { Console.println(\"{v}\"); o = null; } }"
+        )
+        .is_empty());
     }
 }

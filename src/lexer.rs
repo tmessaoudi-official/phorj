@@ -372,6 +372,10 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "if" => If,
         "else" => Else,
         "for" => For,
+        "while" => While,
+        "do" => Do,
+        "break" => Break,
+        "continue" => Continue,
         "in" => In,
         "match" => Match,
         "import" => Import,
@@ -788,6 +792,19 @@ mod tests {
         );
         // still idents when embedded in a longer word
         assert_eq!(kinds("interfaces"), vec![Ident("interfaces".into()), Eof]);
+    }
+
+    #[test]
+    fn loop_keywords_are_recognized() {
+        use TokenKind::*;
+        // M-mut.3 condition-loop keywords.
+        assert_eq!(
+            kinds("while do break continue"),
+            vec![While, Do, Break, Continue, Eof]
+        );
+        // still idents when embedded in a longer word
+        assert_eq!(kinds("breakfast"), vec![Ident("breakfast".into()), Eof]);
+        assert_eq!(kinds("doer"), vec![Ident("doer".into()), Eof]);
     }
 
     #[test]

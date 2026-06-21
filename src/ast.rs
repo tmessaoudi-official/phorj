@@ -450,6 +450,32 @@ fn collect_free_stmt(
             loop_bound.insert(name.clone());
             collect_free_block(body, &mut loop_bound, found);
         }
+        Stmt::While { cond, body, .. } => {
+            collect_free_expr(cond, bound, found);
+            let mut loop_bound = bound.clone();
+            collect_free_block(body, &mut loop_bound, found);
+        }
+        Stmt::CFor {
+            init,
+            cond,
+            step,
+            body,
+            ..
+        } => {
+            // `init` declares into the loop's own scope; `cond`/`step`/`body` see those bindings.
+            let mut loop_bound = bound.clone();
+            if let Some(s) = init {
+                collect_free_stmt(s, &mut loop_bound, found);
+            }
+            if let Some(c) = cond {
+                collect_free_expr(c, &mut loop_bound, found);
+            }
+            if let Some(s) = step {
+                collect_free_stmt(s, &mut loop_bound, found);
+            }
+            collect_free_block(body, &mut loop_bound, found);
+        }
+        Stmt::Break(_) | Stmt::Continue(_) => {}
         Stmt::Block(stmts, _) => {
             let mut inner = bound.clone();
             collect_free_block(stmts, &mut inner, found);
@@ -557,6 +583,31 @@ pub enum Stmt {
         body: Vec<Stmt>,
         span: Span,
     },
+    /// A condition loop (M-mut.3): `while (cond) { .. }` (`post_cond = false`) or
+    /// `do { .. } while (cond);` (`post_cond = true` — the body runs once before the first test).
+    /// Lowers to existing `Jump`/`JumpIfFalse` back-edges (F5) — no new loop opcode. while-let
+    /// (`while (var x = opt) { .. }`) is desugared by the parser into `while (true) { if (var x = opt)
+    /// { .. } else { break; } }`, reusing the if-let lowering, so it needs no representation here.
+    While {
+        cond: Expr,
+        body: Vec<Stmt>,
+        post_cond: bool,
+        span: Span,
+    },
+    /// C-style `for (init; cond; step) { .. }` (M-mut.3). Each clause is optional (`for (;;) {}` is
+    /// an infinite loop); `init`/`step` are statements (a `VarDecl`/`Assign`/`Expr`), `cond` an
+    /// expression. Lowers to the same jump back-edge as `While` with `step` at the continue target.
+    CFor {
+        init: Option<Box<Stmt>>,
+        cond: Option<Expr>,
+        step: Option<Box<Stmt>>,
+        body: Vec<Stmt>,
+        span: Span,
+    },
+    /// `break;` — exit the innermost enclosing loop (M-mut.3).
+    Break(Span),
+    /// `continue;` — skip to the next iteration of the innermost enclosing loop (M-mut.3).
+    Continue(Span),
     /// `{ .. }`
     Block(Vec<Stmt>, Span),
     /// `expr;`
