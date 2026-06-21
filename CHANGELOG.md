@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — stack traces & beautiful fault reporting (error-handling slice 1)
+
+An uncaught runtime fault now reports a **call stack** instead of a bare message — innermost frame
+first, each with `function` + `line` (and `file:line` in a multi-file project), plus the source line of
+the fault. Identical on both backends: the VM walks its live call frames, the interpreter keeps a
+logical `trace_stack` that mirrors them, and a `run ≡ runvm` **trace-parity** test enforces byte-equal
+output. The fault line is backfilled from the innermost frame, so the tree-walker now reports a line
+too (the old interpreter/VM asymmetry is gone).
+
+- **CLI:** `phg run`/`phg runvm` render the message, the offending source line, and the frame list.
+- **Web:** `phg serve --dev` returns a styled HTML 500 page (fault + stack + request context, every
+  value `Core.Html`-escaped). **Production returns a bare generic 500** — no trace/source/message leak.
+- Front-end-only with respect to correctness: program stdout is unchanged, `FaultKind` classification
+  is preserved, and the M7 PHP oracle is unaffected (traces ride on stderr). No new `Op`.
+- See `examples/errors/README.md`. Catching faults (`try`/`catch` vs `Result`) is a later slice.
+
 ### Changed — `phg check` reports whole-project scope
 
 `phg check` on a project now reports the scope it validated — e.g. *"OK — whole project type-checks

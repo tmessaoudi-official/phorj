@@ -156,6 +156,16 @@ Codes `E-VIS-PRIVATE`/`E-VIS-INTERNAL` (with `phg explain`); example `examples/p
 Design `docs/specs/2026-06-21-visibility-modifiers-design.md`. Deferred (KNOWN_ISSUES): visibility on
 `type` aliases / `import` re-exports; member-level `Modifier` visibility stays PHP-only-enforced.
 
+## Error handling & stack traces — 🔨 Slice 1 (reporting) IN PROGRESS (2026-06-21)
+
+Two slices (developer-chosen, traces first). **Slice 1 — fault reporting — mostly shipped:** uncaught
+runtime faults render a call stack (frames + `file:line`, source line) identically on `run`/`runvm`
+(VM frame-walk + interpreter `trace_stack`, `run ≡ runvm` trace-parity test), in the CLI and a
+`phg serve --dev` HTML 500 page (prod = bare 500, no leak). Front-end-only: stdout unchanged,
+`FaultKind` preserved, oracle unaffected, no new `Op`. Spec
+`docs/specs/2026-06-21-stack-traces-and-fault-reporting-design.md`. **Slice 2 — a *catchable* error
+model** (`try`/`catch` vs `Result<T, E>`) — separate design, later.
+
 ## M5 — Modules & packages — ✅ COMPLETE (2026-06-18)
 
 Go-shaped, `src/`-rooted project model: **mandatory `package` declarations** (`package main` = runnable

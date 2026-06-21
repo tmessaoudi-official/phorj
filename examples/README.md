@@ -103,6 +103,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | multi-file projects: packages, folder = path, cross-package imports + aliasing, namespaced PHP | `project/tempconv` |
 | git dependencies: `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` | `project/withdeps` |
 | declaration visibility: `public`/`internal`/`private` (file ⊂ package ⊂ public), loader-enforced | `project/visibility` |
+| runtime stack traces + fault reporting (CLI + `phg serve --dev` web page) | `errors/` (walkthrough) |
 
 ## Three sharp edges
 

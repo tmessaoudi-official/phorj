@@ -51,13 +51,15 @@
   (`d6a7230`); Task 3 interpreter `trace_stack` (`6cc563c`); **Task 5 trace-parity** — `run≡runvm`
   byte-identical traces, line backfilled from the innermost frame (`7a424ca`). 689 tests green.
   Frame names mirror the VM's compiled `Function.name` (`main`/`Class::method`/`Class::new`/`$set`).
-- **REMAINING (resume here):** Task 4 (loader per-function file attribution + source map on `Unit`,
-  and switch `run_program`/`runvm_program` from `.to_string()` to `.render(src)` so frames/caret reach
-  the user); Task 6 (`phg serve --dev` web error page, prod bare-500); Task 7 (CLI color/caret wiring);
-  Task 8 (docs + `examples/errors/` walkthrough). Plan: `docs/plans/2026-06-21-stack-traces-impl.plan.md`.
-- **Known gap to wire in Task 4:** frames are built but the CLI fault path still maps via `to_string()`
-  (Display) — so a *user* running `phg run` sees the header but NOT yet the frame list; that lands when
-  Task 4 switches the mapping to `render()`.
+- **Task 4 DONE** (`a6e72fa`): `Unit.sources`+`fn_files` + `attribute_frames`; `run_program`/
+  `runvm_program` take `&Unit` and `render()` the fault (frames+caret reach the user; free fns + `main`
+  get `file:line`).
+- **Task 6 DONE** (`29b8b26`): `phg serve --dev` HTML error page (fault+stack+request, `Core.Html`
+  escaping); production stays a bare 500 (no leak).
+- **Task 7 SKIPPED** — Phorge diagnostics are plain (no ANSI anywhere); coloring only the trace would
+  be inconsistent and coloring all diagnostics is out of scope. Deferred as polish (KNOWN_ISSUES).
+- **Task 8 DONE:** `examples/errors/README.md` walkthrough + index; CHANGELOG / KNOWN_ISSUES /
+  MILESTONES updated. **SLICE 1 COMPLETE** — 690 tests green. Slice 2 (catchable model) next.
 
 ## Formal Plan
 Slice-1 implementation plan: **`docs/plans/2026-06-21-stack-traces-impl.plan.md`** — 8 tasks, TDD:

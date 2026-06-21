@@ -10,6 +10,14 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
+- **Stack traces — slice 1 (reporting) shipped; deferrals:** (1) catching/handling faults — a
+  `try`/`catch` or `Result<T, E>` model — is a separate later slice; this slice only *reports* faults
+  that abort. (2) Method/constructor/closure frames show `line`-only (no `file:line`) — their frame
+  names are backend-synthesized, not in the loader's function→file map; free functions + `main` get
+  full `file:line`. (3) Frame lines are statement-granularity, so a fault inside a multi-line
+  expression may report the statement's start line. (4) Trace text is intentionally uncolored
+  (matches Phorge's plain-diagnostic convention). (5) No "cause chain" (needs the slice-2 error model).
+
 - **Declaration visibility** (`public`/`internal`/`private`) ships for top-level declarations, but a
   few related cases are deliberately deferred: a visibility keyword **on a `type` alias**
   (`private type X = …` is a parse error — aliases are file-local and erased, so they cannot re-export
