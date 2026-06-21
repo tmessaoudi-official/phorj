@@ -4529,6 +4529,7 @@ pub fn erase_generics(program: Program) -> Program {
                 let params: Params = f.type_params.iter().map(String::as_str).collect();
                 Item::Function(FunctionDecl {
                     modifiers: f.modifiers.clone(),
+                    vis: f.vis,
                     name: f.name.clone(),
                     type_params: Vec::new(), // erased
                     params: f.params.iter().map(|p| rparam(p, &params)).collect(),
@@ -4560,6 +4561,7 @@ pub fn erase_generics(program: Program) -> Program {
                             }
                             ClassMember::Method(FunctionDecl {
                                 modifiers: f.modifiers.clone(),
+                                vis: f.vis,
                                 name: f.name.clone(),
                                 type_params: Vec::new(), // erased
                                 params: f.params.iter().map(|p| rparam(p, &set)).collect(),
@@ -4615,6 +4617,7 @@ pub fn erase_generics(program: Program) -> Program {
                     })
                     .collect();
                 Item::Class(ClassDecl {
+                    vis: c.vis,
                     name: c.name,
                     type_params: Vec::new(), // erased
                     implements: c.implements,
@@ -4771,6 +4774,7 @@ pub fn expand_aliases(program: &Program) -> Program {
     fn rfunc(f: &FunctionDecl, a: &Aliases) -> FunctionDecl {
         FunctionDecl {
             modifiers: f.modifiers.clone(),
+            vis: f.vis,
             name: f.name.clone(),
             type_params: f.type_params.clone(),
             params: f.params.iter().map(|p| rparam(p, a)).collect(),
@@ -4845,6 +4849,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             Item::Import { .. } => Some(item.clone()),
             Item::Function(f) => Some(Item::Function(rfunc(f, &aliases))),
             Item::Class(c) => Some(Item::Class(ClassDecl {
+                vis: c.vis,
                 name: c.name.clone(),
                 type_params: c.type_params.clone(),
                 implements: c.implements.clone(),
@@ -4852,12 +4857,14 @@ pub fn expand_aliases(program: &Program) -> Program {
                 span: c.span,
             })),
             Item::Interface(i) => Some(Item::Interface(InterfaceDecl {
+                vis: i.vis,
                 name: i.name.clone(),
                 extends: i.extends.clone(),
                 methods: i.methods.iter().map(|m| rfunc(m, &aliases)).collect(),
                 span: i.span,
             })),
             Item::Enum(e) => Some(Item::Enum(EnumDecl {
+                vis: e.vis,
                 name: e.name.clone(),
                 variants: e
                     .variants

@@ -17,7 +17,7 @@
 
 use crate::ast::{
     free_vars, BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, LambdaBody,
-    MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+    MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp, Visibility,
 };
 use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, FaultMsg, Function, Op};
 use crate::diagnostic::Diagnostic;
@@ -372,6 +372,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                         ci,
                         FunctionDecl {
                             modifiers: Vec::new(),
+                            vis: Visibility::Public,
                             name: format!("{name}$get"),
                             type_params: Vec::new(),
                             params: Vec::new(),
@@ -389,6 +390,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                         ci,
                         FunctionDecl {
                             modifiers: Vec::new(),
+                            vis: Visibility::Public,
                             name: format!("{name}$set"),
                             type_params: Vec::new(),
                             params: vec![p.clone()],

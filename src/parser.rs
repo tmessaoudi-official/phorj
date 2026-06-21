@@ -3,6 +3,7 @@
 use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FunctionDecl, Item,
     LambdaBody, MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+    Visibility,
 };
 use crate::diagnostic::{Diagnostic, Stage};
 use crate::limits::MAX_NEST_DEPTH;
@@ -1273,6 +1274,7 @@ impl Parser {
         let body = self.parse_block()?;
         Ok(FunctionDecl {
             modifiers,
+            vis: Visibility::Public,
             name,
             type_params,
             params,
@@ -1348,6 +1350,7 @@ impl Parser {
         }
         self.expect(&TokenKind::RBrace, "'}' to close enum")?;
         Ok(EnumDecl {
+            vis: Visibility::Public,
             name,
             variants,
             span: sp,
@@ -1373,6 +1376,7 @@ impl Parser {
         }
         self.expect(&TokenKind::RBrace, "'}' to close class")?;
         Ok(ClassDecl {
+            vis: Visibility::Public,
             name,
             type_params,
             implements,
@@ -1415,6 +1419,7 @@ impl Parser {
             )?;
             methods.push(FunctionDecl {
                 modifiers: Vec::new(),
+                vis: Visibility::Public,
                 name: mname,
                 type_params: Vec::new(),
                 params,
@@ -1425,6 +1430,7 @@ impl Parser {
         }
         self.expect(&TokenKind::RBrace, "'}' to close interface")?;
         Ok(crate::ast::InterfaceDecl {
+            vis: Visibility::Public,
             name,
             extends,
             methods,

@@ -552,6 +552,19 @@ pub enum Modifier {
     Static,
 }
 
+/// Declaration-level visibility on a top-level item (visibility modifiers). A NEW axis, distinct from
+/// the member-level `Modifier::{Public,Private,Protected}`. Ordered so `vis >= Visibility::Internal`
+/// reads as "at least package-visible": `Private` (this file only) < `Internal` (this package) <
+/// `Public` (cross-package; the default). Enforced entirely in the loader; never read by a backend
+/// (PHP has no file/package-private declarations), so it is "erased" simply by being ignored
+/// downstream — the byte-identity spine is safe by construction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Visibility {
+    Private,
+    Internal,
+    Public,
+}
+
 /// A constructor parameter, which may carry promotion modifiers
 /// (`constructor(private string name)`).
 #[derive(Debug, Clone, PartialEq)]
@@ -641,6 +654,9 @@ pub enum Stmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDecl {
     pub modifiers: Vec<Modifier>,
+    /// Declaration-level visibility. Meaningful only for a free (top-level) function; a method or an
+    /// interface method signature carries `Visibility::Public` and the loader never checks it.
+    pub vis: Visibility,
     pub name: String,
     /// Generic type parameters, in declaration order — `["T", "U"]` for
     /// `function pair<T, U>(T a, U b) -> …` (M-RT S7). Empty for a non-generic function. A type
@@ -663,6 +679,8 @@ pub struct EnumVariant {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDecl {
+    /// Declaration-level visibility (default `Public`). Loader-enforced; see [`Visibility`].
+    pub vis: Visibility,
     pub name: String,
     pub variants: Vec<EnumVariant>,
     pub span: Span,
@@ -711,6 +729,8 @@ pub enum ClassMember {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDecl {
+    /// Declaration-level visibility (default `Public`). Loader-enforced; see [`Visibility`].
+    pub vis: Visibility,
     pub name: String,
     /// Generic type parameters, in declaration order — `["T"]` for `class Box<T>`, `["A", "B"]` for
     /// `class Pair<A, B>` (M-RT generics-all). Empty for a non-generic class — the common case. While
@@ -733,6 +753,8 @@ pub struct ClassDecl {
 /// `instanceof` table and (the transpiler) for emitting a PHP `interface`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InterfaceDecl {
+    /// Declaration-level visibility (default `Public`). Loader-enforced; see [`Visibility`].
+    pub vis: Visibility,
     pub name: String,
     /// Parent interfaces (`interface Animal extends Speaker, Named`) — flattened transitively.
     pub extends: Vec<String>,
@@ -851,6 +873,7 @@ mod tests {
     fn builds_function_item() {
         let f = FunctionDecl {
             modifiers: vec![Modifier::Private],
+            vis: Visibility::Public,
             name: "area".into(),
             type_params: vec![],
             params: vec![Param {
