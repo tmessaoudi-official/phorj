@@ -43,6 +43,16 @@ We were locking the **mutation / modifier model**. State:
 > — committed `2652ae7`+`1371e66`, byte-identical run≡runvm≡real PHP, 487 lib tests green
 > (plan `docs/plans/2026-06-21-m-mut.1-mutable-locals.plan.md`). **NEXT: M-mut.2** (compound-assign `+=`/`-=`/
 > `*=`/`/=`/`%=` + `++`/`--` + `??=`, Tier-1 pure desugar, no new Op, no GC).
+>
+> **DEVELOPER DIRECTIVE 2026-06-21 (post-M-mut.1, pre-compact):** build **ALL remaining mutation slices
+> (M-mut.2 → M-mut.7) AUTONOMOUSLY** — no per-slice checkpoints. For each slice: design (reuse the locked
+> spec §4–§7) → TDD implement → byte-identical `run≡runvm≡real PHP` (`PHORGE_REQUIRE_PHP=1`) → guide example
+> + README → commit green (clippy+fmt clean). Honor the autonomy contract: STOP only on a genuine
+> craftsmanship fork with no clear answer (decide+document+continue when the answer is clear) or a
+> destructive/deny-listed op. Do NOT push. The open-question real-PHP checks in design spec §8 are resolved
+> *during* the relevant slice (M-mut.2 owns `++` at PHP_INT_MAX + `%=` negative signs; M-mut.4 owns clone-with
+> + hooks; etc.). After M-mut.7 the milestone closes (update CLAUDE.md milestone section + MILESTONES.md).
+> **Per-slice plan files** go in `docs/plans/2026-06-21-m-mut.N-*.plan.md` (sentinel = `repo`).
 
 After the modifier model is confirmed, the remaining to-dos before full autonomous GA work begin:
 1. Produce the **"gates to bypass for full autonomy"** summary the developer explicitly asked for
