@@ -23,6 +23,13 @@ pub enum Ty {
     /// and vice versa. core.html Wave 2 (the builders).
     Attr,
     Unit,
+    /// The **bottom type** (M-RT totality cluster): the type of an expression that never produces a
+    /// value because control never returns from it — an infinite loop, or a call to a `-> never`
+    /// function. Inhabited by nothing, so it is a subtype of *every* `T` (a `never` expression may
+    /// stand wherever any type is expected — vacuously), while nothing but `never` is assignable *to*
+    /// `never`. A `-> never` function is checker-verified to diverge on all paths; transpiles to PHP
+    /// 8.1 native `never`. (When `throw` lands in M-faults Slice 2 it becomes another `never` producer.)
+    Never,
     /// A nominal enum, interface, or class type, by name, with type arguments. `args` is empty for a
     /// non-generic nominal (every enum/interface, and a non-generic class) — so the common case is
     /// `Ty::Named(name, vec![])`. A generic class instance carries its inferred arguments
@@ -194,6 +201,11 @@ impl Ty {
             // parameter (by name), with no coercion to/from any concrete type. Call sites do not
             // reach here — they unify the parameter away first (M-RT S7).
             (Ty::Param(a), Ty::Param(b)) => a == b,
+            // `never` is the bottom type: it flows into *any* slot (a value that never exists can
+            // vacuously stand for any `T`). Placed late so the Optional/Union/Intersection arms above
+            // recurse a `never` into them first (`never -> T?` bottoms out here); nothing is assignable
+            // *to* `never` except `never` itself, which the final `from == to` arm already covers.
+            (Ty::Never, _) => true,
             _ => from == to,
         }
     }
@@ -210,6 +222,7 @@ impl fmt::Display for Ty {
             Ty::Html => write!(f, "Html"),
             Ty::Attr => write!(f, "Attr"),
             Ty::Unit => write!(f, "unit"),
+            Ty::Never => write!(f, "never"),
             Ty::Named(n, args) => {
                 if args.is_empty() {
                     write!(f, "{n}")
@@ -285,6 +298,18 @@ mod tests {
         assert!(!Ty::assignable(&Ty::String, &Ty::Html)); // untrusted text can't become HTML
         assert!(!Ty::assignable(&Ty::Html, &Ty::String)); // and HTML must be explicitly rendered out
         assert_eq!(Ty::Html.to_string(), "Html");
+    }
+
+    #[test]
+    fn never_is_the_bottom_type() {
+        // `never` flows into any slot (subtype of every T), but nothing flows into `never`.
+        assert!(Ty::assignable(&Ty::Never, &Ty::Int));
+        assert!(Ty::assignable(&Ty::Never, &Ty::String));
+        assert!(Ty::assignable(&Ty::Never, &Ty::Optional(Box::new(Ty::Int)))); // never -> T? must win over the Null arms
+        assert!(Ty::assignable(&Ty::Never, &Ty::Never));
+        assert!(!Ty::assignable(&Ty::Int, &Ty::Never));
+        assert!(!Ty::assignable(&Ty::Null, &Ty::Never));
+        assert_eq!(Ty::Never.to_string(), "never");
     }
 
     #[test]

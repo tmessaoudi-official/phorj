@@ -1,0 +1,51 @@
+// Totality — return-on-all-paths, the `never` bottom type, and dead-code lints (M-RT totality cluster).
+//
+// A function whose return type carries a value must `return` (or diverge) on EVERY path — Phorge
+// rejects a typed function that can fall off the end (`E-MISSING-RETURN`), closing the type system's
+// #1 soundness leak. `never` is the bottom type: a `-> never` function is verified to never return
+// (today, via an infinite loop). Unreachable code after a `return`, and a `match` arm after a
+// catch-all, are flagged as non-fatal warnings. All of this is checker-only — it transpiles 1:1 to
+// PHP (`never` → PHP 8.1 native `never`) and runs byte-identically on both backends.
+package main;
+
+import Core.Console;
+
+// Every branch returns — total over all paths (an `if`/`else if`/`else` chain).
+function classify(int score) -> string {
+    if (score >= 90) {
+        return "A";
+    } else if (score >= 60) {
+        return "pass";
+    } else {
+        return "fail";
+    }
+}
+
+// An expression `if` in value position returns via BOTH arms — also total.
+function larger(int a, int b) -> int {
+    return if (a > b) { a } else { b };
+}
+
+// A `match` that returns on every arm is total (the arms are exhaustive over `int` via `_`).
+function sign(int n) -> string {
+    return match n {
+        0 => "zero",
+        _ => if (n > 0) { "positive" } else { "negative" },
+    };
+}
+
+// The bottom type: a `-> never` function provably diverges, so it never returns a value. Declared to
+// showcase the type (and its PHP `: never` hint); never called, so the program still terminates.
+function spinForever() -> never {
+    while (true) {}
+}
+
+function main() {
+    Console.println(classify(95));
+    Console.println(classify(75));
+    Console.println(classify(40));
+    Console.println("larger = {larger(3, 8)}");
+    Console.println(sign(0));
+    Console.println(sign(7));
+    Console.println(sign(-2));
+}

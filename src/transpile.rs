@@ -388,6 +388,9 @@ impl Transpiler {
                 // `Html` and `Attr` are render-ready text — both erase to `string`. The escaping
                 // boundary lives in the `core.html` natives, not the type (see core.html design spec).
                 "Html" | "Attr" => "string".into(),
+                // The bottom type → PHP 8.1 native `never` (M-RT totality cluster). Valid only in
+                // return position, which is where a `-> never` function uses it.
+                "never" => "never".into(),
                 "List" | "Map" | "Set" => "array".into(),
                 other => php_type_ref(other), // enum / class / interface name (FQN if cross-package)
             },

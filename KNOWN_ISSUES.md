@@ -93,6 +93,28 @@ an explicit non-goal, never a panic):
   transpile to PHP `public` (Phorge does not enforce field visibility at runtime; `readonly`/`final`
   emission is not done — immutable fields are already write-prevented by the checker).
 
+## Totality cluster (M-RT) — deferred refinements
+
+Return-on-all-paths (`E-MISSING-RETURN`), the `never` bottom type, and the `W-UNREACHABLE` /
+`W-MATCH-UNREACHABLE` dead-code lints ship and are byte-identical `run ≡ runvm ≡ real PHP` (see
+`examples/guide/totality.phg`). The termination analysis is deliberately **structural and
+conservative** — it claims divergence only for shapes it can prove, so it never rejects a function
+that does return on every path. The corners below are deferred (each is sound, never a crash):
+
+- **`never` is only usefully inhabited by infinite loops today.** A `-> never` function must diverge;
+  the only divergence producers in the current language are an infinite loop (`while (true) {}` /
+  `for (;;) {}`) and a call to another `never` function. The natural producer — `throw`/`panic` — lands
+  with the error model (**M-faults Slice 2**), at which point `never` lights up fully. The type, its
+  PHP `never` emission, and the divergence analysis are wired correctly ahead of that.
+- **`expr_is_never` recognises only free-function `never`-calls.** A method or closure call that
+  returns `never` is not yet treated as a divergence point (it needs receiver typing in the structural
+  pass). Workaround: none needed — the only effect is a possible (over-strict) `E-MISSING-RETURN` after
+  such a call, not unsoundness; in practice no shipped code hits it.
+- **No flow-typing beyond structural termination.** An exhaustive `match` *statement* (not in `return`
+  position) whose every arm diverges is not recognised as divergent, and a `break`/`continue` inside a
+  conditionally-true loop is analysed only for the `while (true)`-with-no-`break` shape. Restructure to
+  a trailing `return` if the checker asks for one.
+
 ## Generics (M-RT S7) — deferred refinements
 
 Erased generics ship for **free functions, class methods, and classes**: `function id<T>(T x) -> T`,

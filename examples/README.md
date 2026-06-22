@@ -45,6 +45,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/higher-order.phg` | **higher-order `Core.List` natives** — `map`/`filter`/`reduce` taking a closure argument (run once per element on either backend via one shared native body); inline lambdas, a captured local, and a composed filter→map→reduce pipeline; generic, erases to PHP `array_map`/`array_values(array_filter(…))`/`array_reduce` (Rich Types M-RT S7b-3) |
 | `guide/unions.phg` | union types `A \| B \| C` (classes, interfaces, primitives); a value of any member flows into a union-typed slot; reach a member via **match-over-union** type patterns (`match s { Circle c => … }`, exhaustive) or `instanceof` narrowing; a primitive `int \| string` union matched by literal value; transpiles to PHP 8.0 `A\|B` (Rich Types M-RT S4) |
 | `guide/intersections.phg` | intersection types `A & B` (interfaces plus at most one class); a value satisfying all members flows in, and **every member's methods are in scope** without narrowing; an `A & B` value also flows out to a single member; `&` binds tighter than `\|`; transpiles to PHP 8.1 `A&B` (Rich Types M-RT S5) |
+| `guide/totality.phg` | **return-on-all-paths** — a typed function must `return`/diverge on every path (else `E-MISSING-RETURN`); the **`never`** bottom type (a `-> never` function provably diverges, → PHP 8.1 `never`); dead code after `return` (`W-UNREACHABLE`) and a `match` arm after a catch-all (`W-MATCH-UNREACHABLE`) are warned (Rich Types M-RT totality cluster) |
 | `guide/lambdas-pipe.phg` | lambdas (expression + statement body), higher-order functions, first-class named-fn references, the pipe operator `\|>` (M3 S3 Track A) |
 | `guide/math.phg` | the `Core.Math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |
@@ -86,6 +87,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | erased generics `<T>` on methods, then classes (`Box<T>`/`Pair<A, B>`, inferred at construction) | `guide/generic-methods`, `guide/generic-types` |
 | generic stdlib natives: `Core.List` `reverse`/`sum`, `Core.Map` `keys`/`values`/`has`/`size` | `guide/collections-query` |
 | `Set<T>`: `Core.Set` `of`/`contains`/`size` (insertion-ordered, deduped) | `guide/sets` |
+| totality: return-on-all-paths (`E-MISSING-RETURN`), the `never` bottom type, dead-code lints (`W-UNREACHABLE`/`W-MATCH-UNREACHABLE`) | `guide/totality` |
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `Console.println(string)` (after `import Core.Console;`) | every example |
 | `Core.Math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |

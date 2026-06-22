@@ -467,6 +467,33 @@ pub fn explain_text(code: &str) -> Option<String> {
              lone class for fields). None of them declares the named method or field. Check the name, or\n\
              add it to one of the intersection's members.\n"
         }
+        "E-MISSING-RETURN" => {
+            "E-MISSING-RETURN — a function does not return a value on every path.\n\n\
+             A function whose declared return type carries a value (`-> int`, `-> Shape`, …) must\n\
+             `return` (or diverge) on *every* control-flow path. The classic leak is an `if` with no\n\
+             `else`: the false branch falls through to the end. Add a trailing `return`, give the `if`\n\
+             an `else` that also returns, or diverge (an infinite loop / a `-> never` call). Functions\n\
+             with no return annotation return `unit` and are exempt.\n"
+        }
+        "E-NEVER-RETURN" => {
+            "E-NEVER-RETURN — a `-> never` function can return normally.\n\n\
+             `never` is the bottom type: a function annotated `-> never` promises it never returns —\n\
+             it must diverge on every path (today, an infinite loop or a call to another `never`\n\
+             function; once `throw` lands, also by throwing). This body can fall through and return.\n\
+             Make it diverge, or drop the `never` return type.\n"
+        }
+        "W-UNREACHABLE" => {
+            "W-UNREACHABLE — a statement can never be reached (warning).\n\n\
+             A preceding statement always returns or diverges (a `return`, an infinite loop, or a call\n\
+             to a `-> never` function), so the flagged statement is dead code. This is a non-fatal\n\
+             lint — remove the unreachable statements. It never blocks the build.\n"
+        }
+        "W-MATCH-UNREACHABLE" => {
+            "W-MATCH-UNREACHABLE — a `match` arm can never be reached (warning).\n\n\
+             Either an earlier arm is a catch-all (`_` or a bare identifier binding, which matches\n\
+             everything) so later arms are dead, or this arm duplicates an earlier literal/variant/type\n\
+             pattern. Reorder so the catch-all is last, or remove the duplicate. Non-fatal lint.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -1382,6 +1409,20 @@ function main() { Console.println("hi"); }"#);
         // The M3 Wave 1 shadowing diagnostic is self-documenting via `phg explain`.
         let body = explain_text("E-SHADOW-IMPORT").expect("E-SHADOW-IMPORT has an explanation");
         assert!(body.contains("module qualifier"), "{body}");
+    }
+
+    #[test]
+    fn explain_covers_totality_codes() {
+        // The M-RT totality cluster diagnostics are self-documenting via `phg explain`.
+        for code in [
+            "E-MISSING-RETURN",
+            "E-NEVER-RETURN",
+            "W-UNREACHABLE",
+            "W-MATCH-UNREACHABLE",
+        ] {
+            let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
+            assert!(body.starts_with(code), "{body}");
+        }
     }
 
     #[test]

@@ -378,6 +378,9 @@ impl Checker {
                 "bool" => self.no_args(name, args, *span, Ty::Bool),
                 "string" => self.no_args(name, args, *span, Ty::String),
                 "bytes" => self.no_args(name, args, *span, Ty::Bytes),
+                // The bottom type (M-RT totality cluster): a `-> never` function never returns. Only
+                // meaningful in return position, but resolvable anywhere a type name appears.
+                "never" => self.no_args(name, args, *span, Ty::Never),
                 "Html" => self.no_args(name, args, *span, Ty::Html),
                 "Attr" => self.no_args(name, args, *span, Ty::Attr),
                 "List" => Ty::List(Box::new(self.one_arg(name, args, *span))),
@@ -1108,9 +1111,7 @@ impl Checker {
                                 for (p, t) in params.iter().zip(ctor) {
                                     self.declare(&p.name, t, p.span);
                                 }
-                                for s in body {
-                                    self.check_stmt(s);
-                                }
+                                self.check_body(body);
                                 self.pop_scope();
                                 self.active_type_params.clear();
                                 self.cur_ret = prev_ret;
@@ -1157,9 +1158,7 @@ impl Checker {
                                     // Bind `v` at the hook's type so the body checks consistently
                                     // even when the declared parameter type mismatched.
                                     self.declare(&p.name, hook_ty.clone(), p.span);
-                                    for s in body {
-                                        self.check_stmt(s);
-                                    }
+                                    self.check_body(body);
                                     self.pop_scope();
                                     self.cur_ret = prev_ret;
                                 }
@@ -1473,18 +1472,19 @@ impl Checker {
             Some(t) => self.resolve_type(t),
             None => Ty::Unit,
         };
-        let prev_ret = std::mem::replace(&mut self.cur_ret, ret);
+        let prev_ret = std::mem::replace(&mut self.cur_ret, ret.clone());
         self.push_scope();
         for p in &f.params {
             let pty = self.resolve_type(&p.ty);
             self.declare(&p.name, pty, p.span);
         }
-        for s in &f.body {
-            self.check_stmt(s);
-        }
+        self.check_body(&f.body);
         self.pop_scope();
         self.cur_ret = prev_ret;
         self.active_type_params.clear();
+        // Totality: a non-`unit` function must return (or diverge) on every path (M-RT totality
+        // cluster). Run after the body walk so all signatures are visible to the divergence analysis.
+        self.check_return_totality(&ret, &f.body, f.span);
     }
 
     // ---- scopes ----
@@ -1560,13 +1560,162 @@ impl Checker {
         None
     }
 
+    // ---- totality: structural termination analysis (M-RT totality cluster) ----
+    // Conservatively answers "does control definitely never fall through this block / statement?".
+    // Drives return-on-all-paths (`E-MISSING-RETURN`/`E-NEVER-RETURN`) and the `W-UNREACHABLE` lint.
+    // Soundness direction: returns `true` only for shapes that *provably* diverge — a false `true`
+    // would silently suppress a real missing-return error, so it never over-claims.
+
+    /// A block diverges iff *any* of its statements diverges (everything after a diverging statement
+    /// is dead, so the block as a whole never falls through).
+    fn block_terminates(&self, stmts: &[crate::ast::Stmt]) -> bool {
+        stmts.iter().any(|s| self.stmt_terminates(s))
+    }
+
+    fn stmt_terminates(&self, s: &crate::ast::Stmt) -> bool {
+        use crate::ast::Stmt;
+        match s {
+            Stmt::Return { .. } => true,
+            Stmt::Block(b, _) => self.block_terminates(b),
+            Stmt::If {
+                then_block,
+                else_block: Some(eb),
+                ..
+            } => self.block_terminates(then_block) && self.block_terminates(eb),
+            // An `if` with no `else` always has a path (the false branch) that falls through.
+            Stmt::If {
+                else_block: None, ..
+            } => false,
+            // A condition loop diverges only when it cannot exit: an always-true condition with no
+            // `break` bound to it. A `do { … } while (…)` additionally diverges when its body diverges
+            // on the guaranteed first iteration. A plain `while`/`for` body may run zero times, so a
+            // diverging body alone does NOT make the loop diverge.
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                ..
+            } => {
+                (*post_cond && self.block_terminates(body))
+                    || (is_true_lit(cond) && !breaks_this_loop(body))
+            }
+            Stmt::CFor { cond, body, .. } => {
+                let cond_always = match cond {
+                    None => true,
+                    Some(c) => is_true_lit(c),
+                };
+                cond_always && !breaks_this_loop(body)
+            }
+            // `for (T x in iter)` always terminates over a finite list — never a divergence source.
+            Stmt::Expr(e, _) => self.expr_is_never(e),
+            _ => false,
+        }
+    }
+
+    /// Whether an expression has the bottom type `never` — recognised *without* re-checking (emits no
+    /// diagnostics): a call to a free function whose signature returns `never`, or an `if`/`match`
+    /// expression every arm of which is itself `never`. Method/closure `never`-returns are deferred
+    /// (need receiver typing) — see the design's KNOWN_ISSUES.
+    fn expr_is_never(&self, e: &crate::ast::Expr) -> bool {
+        use crate::ast::Expr;
+        match e {
+            Expr::Call { callee, .. } => {
+                if let Expr::Ident(name, _) = &**callee {
+                    self.funcs.get(name).is_some_and(|s| s.ret == Ty::Never)
+                } else {
+                    false
+                }
+            }
+            Expr::If {
+                then_expr,
+                else_expr,
+                ..
+            } => self.expr_is_never(then_expr) && self.expr_is_never(else_expr),
+            Expr::Match { arms, .. } => {
+                !arms.is_empty() && arms.iter().all(|a| self.expr_is_never(&a.body))
+            }
+            _ => false,
+        }
+    }
+
+    /// Return-on-all-paths gate (M-RT totality cluster). A function whose declared return type carries
+    /// a value must return (or diverge) on every path; `never` is the inverse — it must provably
+    /// diverge. `unit` (the no-annotation default) and `<error>` (poison) are exempt.
+    fn check_return_totality(&mut self, ret: &Ty, body: &[crate::ast::Stmt], span: Span) {
+        match ret {
+            Ty::Unit | Ty::Error => {}
+            Ty::Never => {
+                if !self.block_terminates(body) {
+                    self.err_coded(
+                        span,
+                        "a `never` function must never return, but this body can fall through",
+                        "E-NEVER-RETURN",
+                        Some("a `-> never` function must diverge on every path (e.g. an infinite loop); drop the `never` return type if it can return normally".into()),
+                    );
+                }
+            }
+            _ => {
+                if !self.block_terminates(body) {
+                    self.err_coded(
+                        span,
+                        format!("function does not return `{ret}` on all paths"),
+                        "E-MISSING-RETURN",
+                        Some("add a `return` (or diverge) on every path — e.g. an `if` without an `else` leaves the false branch falling through".into()),
+                    );
+                }
+            }
+        }
+    }
+
     // ---- statements ----
+
+    /// Check a statement sequence in the *current* scope (no scope push), flagging the first
+    /// unreachable statement after a diverging one (`W-UNREACHABLE`, once per dead region). Used for
+    /// function, constructor, and `set`-hook bodies; `check_block` wraps it in a fresh scope for
+    /// nested `{ … }` blocks.
+    fn check_body(&mut self, stmts: &[crate::ast::Stmt]) {
+        let mut dead = false;
+        let mut warned = false;
+        for s in stmts {
+            if dead && !warned {
+                self.warn_coded(
+                    Self::stmt_span(s),
+                    "unreachable code: control never reaches this statement",
+                    "W-UNREACHABLE",
+                    Some(
+                        "a preceding statement always returns or diverges; remove the dead code"
+                            .into(),
+                    ),
+                );
+                warned = true;
+            }
+            self.check_stmt(s);
+            if self.stmt_terminates(s) {
+                dead = true;
+            }
+        }
+    }
+
     fn check_block(&mut self, stmts: &[crate::ast::Stmt]) {
         self.push_scope();
-        for s in stmts {
-            self.check_stmt(s);
-        }
+        self.check_body(stmts);
         self.pop_scope();
+    }
+
+    fn stmt_span(s: &crate::ast::Stmt) -> Span {
+        use crate::ast::Stmt;
+        match s {
+            Stmt::VarDecl { span, .. }
+            | Stmt::Assign { span, .. }
+            | Stmt::Return { span, .. }
+            | Stmt::If { span, .. }
+            | Stmt::For { span, .. }
+            | Stmt::While { span, .. }
+            | Stmt::CFor { span, .. }
+            | Stmt::Expr(_, span)
+            | Stmt::Block(_, span) => *span,
+            Stmt::Break(span) | Stmt::Continue(span) => *span,
+        }
     }
 
     fn check_stmt(&mut self, stmt: &crate::ast::Stmt) {
@@ -3420,10 +3569,39 @@ impl Checker {
         // the non-null inner — the smart-cast that makes `match opt { null => …, v => … }` bind
         // `v: T` (M3 S2.6 / S1.4). Tracks whether a prior arm covered `null`.
         let mut null_seen = false;
+        // Reachability lints (W-MATCH-UNREACHABLE): an arm after a catch-all, or a duplicate
+        // literal/variant/type arm, can never match. `catch_all_seen`/`seen_keys` reflect *prior*
+        // arms only (updated at the end of each iteration), so the offending arm — not the first
+        // good one — is flagged.
+        let mut catch_all_seen = false;
+        let mut seen_keys: Vec<String> = Vec::new();
 
         for arm in arms {
+            if catch_all_seen {
+                self.warn_coded(
+                    arm.span,
+                    "unreachable match arm: a previous arm already matches everything",
+                    "W-MATCH-UNREACHABLE",
+                    Some(
+                        "a `_` or bare-identifier arm is a catch-all; arms after it never run"
+                            .into(),
+                    ),
+                );
+            } else if let Some(key) = match_arm_key(&arm.pattern) {
+                if seen_keys.contains(&key) {
+                    self.warn_coded(
+                        arm.span,
+                        "unreachable match arm: a previous arm already covers this pattern",
+                        "W-MATCH-UNREACHABLE",
+                        Some("remove the duplicate arm".into()),
+                    );
+                } else {
+                    seen_keys.push(key);
+                }
+            }
             if matches!(arm.pattern, Pattern::Wildcard(_) | Pattern::Binding { .. }) {
                 has_catch_all = true;
+                catch_all_seen = true;
             }
             if let Pattern::Variant { name, .. } = &arm.pattern {
                 covered.push(name.clone());
@@ -3889,6 +4067,49 @@ fn ty_has_param(ty: &Ty) -> bool {
     }
 }
 
+/// Whether an expression is the literal `true` — the only condition an always-running loop can carry
+/// for the structural termination analysis (M-RT totality cluster). Anything else (a variable, a
+/// comparison) might be false, so the loop might exit and is not treated as divergent.
+fn is_true_lit(e: &crate::ast::Expr) -> bool {
+    matches!(e, crate::ast::Expr::Bool(true, _))
+}
+
+/// Whether `stmts` contains a `break` bound to the *current* loop. Descends into `if`/`block` (a
+/// `break` there still targets the enclosing loop) but NOT into nested `while`/`for`/`do` loops (their
+/// `break`s bind to them). `match` arms are expressions and carry no `break`.
+fn breaks_this_loop(stmts: &[crate::ast::Stmt]) -> bool {
+    use crate::ast::Stmt;
+    stmts.iter().any(|s| match s {
+        Stmt::Break(_) => true,
+        Stmt::Block(b, _) => breaks_this_loop(b),
+        Stmt::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            breaks_this_loop(then_block)
+                || else_block.as_ref().is_some_and(|eb| breaks_this_loop(eb))
+        }
+        _ => false,
+    })
+}
+
+/// A stable identity for a `match` pattern, for duplicate-arm detection (`W-MATCH-UNREACHABLE`).
+/// `None` for patterns that should not be deduplicated: `float` (equality is fuzzy) and the
+/// catch-alls (`_`/bare binding, handled separately as a catch-all).
+fn match_arm_key(p: &crate::ast::Pattern) -> Option<String> {
+    use crate::ast::Pattern;
+    match p {
+        Pattern::Int(v, _) => Some(format!("i{v}")),
+        Pattern::Str(s, _) => Some(format!("s{s}")),
+        Pattern::Bool(b, _) => Some(format!("b{b}")),
+        Pattern::Null(_) => Some("null".to_string()),
+        Pattern::Variant { name, .. } => Some(format!("v{name}")),
+        Pattern::Type { type_name, .. } => Some(format!("t{type_name}")),
+        Pattern::Float(_, _) | Pattern::Wildcard(_) | Pattern::Binding { .. } => None,
+    }
+}
+
 fn is_builtin_type_name(name: &str) -> bool {
     matches!(
         name,
@@ -3897,6 +4118,7 @@ fn is_builtin_type_name(name: &str) -> bool {
             | "bool"
             | "string"
             | "bytes"
+            | "never"
             | "Html"
             | "Attr"
             | "List"
@@ -6876,6 +7098,173 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
         assert!(
             bad.iter().any(|e| e.code == Some("E-STATIC-UNKNOWN")),
             "{bad:?}"
+        );
+    }
+
+    // --- M-RT totality cluster ---
+
+    #[test]
+    fn never_resolves_as_a_return_type() {
+        // A `-> never` function that diverges (infinite loop) type-checks clean.
+        let src = "function spin() -> never { while (true) {} } function main() {}";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn never_is_a_reserved_builtin_type_name() {
+        // Aliasing `never` is rejected exactly like aliasing `int`.
+        let bad = errors_of("type never = int; function main() {}");
+        assert!(
+            bad.iter()
+                .any(|e| e.message.contains("built-in type `never`")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn typed_fn_falling_off_the_end_is_error() {
+        let bad = errors_of("function f() -> int { } function main() {}");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-MISSING-RETURN")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn if_both_branches_return_is_total() {
+        let src = "function f(int x) -> int { if (x > 0) { return 1; } else { return 2; } } \
+                   function main() {}";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn if_without_else_falls_through() {
+        let bad =
+            errors_of("function f(int x) -> int { if (x > 0) { return 1; } } function main() {}");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-MISSING-RETURN")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn if_no_else_then_trailing_return_is_total() {
+        let src = "function f(int x) -> int { if (x > 0) { return 1; } return 2; } \
+                   function main() {}";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn infinite_loop_tail_is_total() {
+        // No explicit return, but `while (true) {}` with no break never falls through.
+        let src = "function f() -> int { while (true) {} } function main() {}";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn while_true_with_break_still_needs_return() {
+        let bad = errors_of("function f() -> int { while (true) { break; } } function main() {}");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-MISSING-RETURN")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn never_fn_that_can_return_is_error() {
+        // A `-> never` body that falls through (could return normally) is rejected.
+        let bad = errors_of("function f() -> never { } function main() {}");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-NEVER-RETURN")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn calling_a_never_fn_diverges() {
+        // An expression statement calling a `-> never` function terminates the block, so the
+        // enclosing `-> int` function needs no further return.
+        let src = "function spin() -> never { while (true) {} } \
+                   function f() -> int { spin(); } function main() {}";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn unit_fn_needs_no_return() {
+        let src =
+            "import Core.Console; function f() { Console.println(\"hi\"); } function main() {}";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn return_match_is_total() {
+        let src = "enum E { A(), B() } \
+                   function f(E e) -> int { return match e { A() => 1, B() => 2 }; } \
+                   function main() {}";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn code_after_return_warns_unreachable_once() {
+        let src = "import Core.Console; \
+                   function f() -> int { return 1; Console.println(\"x\"); Console.println(\"y\"); } \
+                   function main() {}";
+        let warns = warnings_of(src);
+        let n = warns
+            .iter()
+            .filter(|w| w.code == Some("W-UNREACHABLE"))
+            .count();
+        assert_eq!(n, 1, "exactly one dead-region warning: {warns:?}");
+    }
+
+    #[test]
+    fn clean_function_has_no_unreachable_warning() {
+        let src = "function f() -> int { return 1; } function main() {}";
+        assert!(
+            warnings_of(src)
+                .iter()
+                .all(|w| w.code != Some("W-UNREACHABLE")),
+            "{:?}",
+            warnings_of(src)
+        );
+    }
+
+    #[test]
+    fn match_arm_after_catch_all_warns() {
+        let src = "function f(int x) -> int { return match x { _ => 0, 1 => 9 }; } \
+                   function main() {}";
+        assert!(
+            warnings_of(src)
+                .iter()
+                .any(|w| w.code == Some("W-MATCH-UNREACHABLE")),
+            "{:?}",
+            warnings_of(src)
+        );
+    }
+
+    #[test]
+    fn duplicate_match_literal_arm_warns() {
+        let src = "function f(int x) -> int { return match x { 1 => 1, 1 => 2, _ => 0 }; } \
+                   function main() {}";
+        assert!(
+            warnings_of(src)
+                .iter()
+                .any(|w| w.code == Some("W-MATCH-UNREACHABLE")),
+            "{:?}",
+            warnings_of(src)
+        );
+    }
+
+    #[test]
+    fn exhaustive_distinct_match_has_no_unreachable_warning() {
+        let src = "function f(int x) -> int { return match x { 1 => 1, 2 => 2, _ => 0 }; } \
+                   function main() {}";
+        assert!(
+            warnings_of(src)
+                .iter()
+                .all(|w| w.code != Some("W-MATCH-UNREACHABLE")),
+            "{:?}",
+            warnings_of(src)
         );
     }
 }

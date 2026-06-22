@@ -479,6 +479,27 @@ codes `E-INTERSECT-MEMBER`/`-MULTI-CLASS`/`-ARITY`/`-SIG`/`-NO-MEMBER` (+ `phg e
 with an intersection *right side*, optional/function members, whole-intersection optional `(A & B)?`, no
 match-over-intersection (not a sum type).
 
+**M-RT TOTALITY CLUSTER — COMPLETE** (design `docs/specs/2026-06-22-totality-cluster-design.md`, plan
+`docs/plans/2026-06-22-totality-cluster.plan.md`; fully autonomous, all 4 sub-features in one slice).
+Closed the type system's #1 soundness leak — a `-> T` (value-carrying) function must now `return`/diverge
+on **every** path (`E-MISSING-RETURN`); falling off the end was previously silently accepted. Four
+front-end-only features, **no new `Op`, no `Value` change**, byte-identical `run≡runvm≡real PHP`: (1)
+**return-on-all-paths** via a conservative structural `block_terminates`/`stmt_terminates` engine
+(`return` / both-branch `if` / infinite `while(true)`/`for(;;)` with no `break` / a `never`-typed expr
+statement diverge); (2) **`never`** bottom type (`Ty::Never`, subtype of every `T` via a late
+`(Ty::Never,_)=>true` `assignable_with` arm, nothing assignable *to* it) — a `-> never` fn is verified to
+diverge (`E-NEVER-RETURN`), resolves via the primitive arm + reserved in `is_builtin_type_name`,
+transpiles to PHP 8.1 native `never`; (3) **`W-UNREACHABLE`** (code after a diverging stmt — one warning
+per dead region, via the new `check_body` that all fn/ctor/`set`-hook bodies route through, `check_block`
+= scope+`check_body`); (4) **`W-MATCH-UNREACHABLE`** (arm after a catch-all, or duplicate
+literal/variant/type arm — folded into `check_match`'s existing arm loop, `match_arm_key` for dedupe).
+Both `W-*` ride the warning channel (stderr, never gating); all 4 codes self-document via `phg explain`.
+`examples/guide/totality.phg`. **Phase-0 scan clean** — no shipped example or inline-test typed function
+fell off the end (the leak existed but valid code never exploited it). 600 lib + PHP-oracle differential
++ integration green; clippy + fmt clean. **NEXT (per audit): method overloading** (lowers to one
+dispatching PHP method; revisits S5's `E-INTERSECT-SIG`) → S6 `extends`/abstract/LSB → S8 traits;
+generic enums (`Result`/`Option`) + error-model Slice 2 (`throws`/`Result`/faults) in parallel.
+
 **ROADMAP-COMPLETENESS AUDIT DELIVERED + decisions locked (2026-06-22)** — a one-shot 20-track (A–S+V)
 multi-agent gap review (41 agents, 555 candidates → 290 adopt/187 defer/81 reject). **SSOT:
 `docs/specs/2026-06-21-php-parity-and-beyond.md`** (master triage table + per-milestone rollup + top-10

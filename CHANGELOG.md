@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — totality cluster (M-RT): return-on-all-paths, `never`, dead-code lints
+
+Closed the type system's #1 soundness leak: a function whose declared return type carries a value now
+must `return` (or diverge) on **every** path — falling off the end is `E-MISSING-RETURN`. Four
+front-end-only sub-features, all byte-identical `run ≡ runvm ≡ real PHP` (see
+`examples/guide/totality.phg`):
+
+- **Return-on-all-paths** (`E-MISSING-RETURN`), driven by a conservative structural termination
+  analysis (`return` / both-branch `if` / infinite loop / `never`-call diverge).
+- **`never`** — the bottom type (`Ty::Never`): a subtype of every `T`, inhabited by nothing. A
+  `-> never` function is verified to diverge (`E-NEVER-RETURN` otherwise). Transpiles to PHP 8.1
+  native `never`.
+- **`W-UNREACHABLE`** — a non-fatal lint for a statement after a `return`/diverging statement.
+- **`W-MATCH-UNREACHABLE`** — a non-fatal lint for a `match` arm after a catch-all, or a duplicate
+  literal/variant/type arm.
+
+No new `Op`, no `Value` change: `never` erases to a PHP return hint and is otherwise checker-only; the
+`E-*` errors reject before any backend runs; the `W-*` lints ride the existing warning channel (stderr,
+never gating). All four codes are self-documenting via `phg explain`.
+
 ### Added — stack traces & beautiful fault reporting (error-handling slice 1)
 
 An uncaught runtime fault now reports a **call stack** instead of a bare message — innermost frame
