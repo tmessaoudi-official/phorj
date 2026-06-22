@@ -1257,10 +1257,22 @@ impl Parser {
         // Optional leading declaration visibility (visibility modifiers): at most one of
         // public/internal/private. Absent ⇒ the default `Visibility::Public`.
         let vis = self.parse_decl_visibility()?;
-        // Optional `open` extensibility prefix (M-RT S6) — applies only to a class.
-        let is_open = self.eat(&TokenKind::Open);
-        if is_open && !self.check(&TokenKind::Class) {
-            return Err(self.error("only a class can be declared `open`"));
+        // Optional `open`/`abstract` class prefixes (M-RT S6/S6b), in any order. Both apply only to a
+        // class; `abstract` implies extensibility (an abstract class exists to be subclassed), so it
+        // also marks the class `open`.
+        let mut is_open = false;
+        let mut is_abstract = false;
+        loop {
+            if self.eat(&TokenKind::Open) {
+                is_open = true;
+            } else if self.eat(&TokenKind::Abstract) {
+                is_abstract = true;
+            } else {
+                break;
+            }
+        }
+        if (is_open || is_abstract) && !self.check(&TokenKind::Class) {
+            return Err(self.error("only a class can be declared `open` or `abstract`"));
         }
         let item = match self.peek() {
             TokenKind::Import => {
@@ -1277,7 +1289,9 @@ impl Parser {
             }
             TokenKind::Function => Item::Function(self.parse_function(Vec::new(), sp)?),
             TokenKind::Enum => Item::Enum(self.parse_enum(sp)?),
-            TokenKind::Class => Item::Class(self.parse_class(sp, is_open)?),
+            TokenKind::Class => {
+                Item::Class(self.parse_class(sp, is_open || is_abstract, is_abstract)?)
+            }
             TokenKind::Interface => Item::Interface(self.parse_interface(sp)?),
             TokenKind::Package => {
                 return Err(self.error(
@@ -1406,7 +1420,17 @@ impl Parser {
         } else {
             Vec::new()
         };
-        let body = self.parse_block()?;
+        // M-RT S6b: an `abstract` method is a bodyless signature terminated by `;` (a concrete
+        // subclass supplies the body). Every other method/function parses a block.
+        let body = if modifiers.contains(&Modifier::Abstract) {
+            self.expect(
+                &TokenKind::Semicolon,
+                "';' after an abstract method signature",
+            )?;
+            Vec::new()
+        } else {
+            self.parse_block()?
+        };
         Ok(FunctionDecl {
             modifiers,
             vis: Visibility::Public,
@@ -1499,7 +1523,12 @@ impl Parser {
 
     /// `[open] class Name<T> [extends A, B] [implements I1, I2] { member* }` — assumes current token
     /// is `class`. The `open` flag is parsed at the item level (`parse_item`) and threaded in.
-    fn parse_class(&mut self, sp: Span, open: bool) -> Result<ClassDecl, Diagnostic> {
+    fn parse_class(
+        &mut self,
+        sp: Span,
+        open: bool,
+        is_abstract: bool,
+    ) -> Result<ClassDecl, Diagnostic> {
         self.expect(&TokenKind::Class, "'class'")?;
         let name = self.expect_ident("a class name")?;
         // Optional generic parameter list `<T, U>` immediately after the class name (M-RT
@@ -1539,6 +1568,7 @@ impl Parser {
             extends,
             implements,
             open,
+            is_abstract,
             resolutions,
             members,
             span: sp,
@@ -1778,6 +1808,8 @@ impl Parser {
                 TokenKind::Mutable => Modifier::Mutable,
                 // `static` class field (M-mut.7) — class-level state.
                 TokenKind::Static => Modifier::Static,
+                // `abstract` method (M-RT S6b) — bodyless, implicitly `open`.
+                TokenKind::Abstract => Modifier::Abstract,
                 _ => break,
             };
             self.advance();

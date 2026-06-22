@@ -312,6 +312,32 @@ function main() {
     );
 }
 
+/// M-RT S6b.3 — abstract classes. A concrete method on an `abstract class` (`describe`) calls an
+/// `abstract` method (`area`); on a concrete subclass instance, dispatch resolves `area` to the
+/// subclass's implementation (the template-method pattern). Both backends must agree, including
+/// through a base-typed binding.
+#[test]
+fn s6b_abstract_template_method_is_byte_identical() {
+    agree(
+        r#"import Core.Console;
+abstract class Shape {
+    abstract function area() -> int;
+    function describe() -> string { return "area={this.area()}"; }
+}
+class Square extends Shape {
+    constructor(public int side) {}
+    function area() -> int { return this.side * this.side; }
+}
+function main() {
+    Square s = Square(3);
+    Console.println("{s.area()}");
+    Console.println(s.describe()); // describe() dispatches to Square.area()
+    Shape sh = s;
+    Console.println(sh.describe());
+}"#,
+    );
+}
+
 /// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
 /// so both backends must run a `var` program byte-identically.
 #[test]

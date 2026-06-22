@@ -66,6 +66,9 @@ struct ClassInfo {
     /// occurrences: construction unifies the ctor against the arguments to bind them, and member
     /// access substitutes them with the instance's type arguments (M-RT generics-all).
     type_params: Vec<String>,
+    /// `abstract class` (M-RT S6b) — not instantiable (`E-ABSTRACT-INSTANTIATE`); may carry abstract
+    /// (bodyless) methods a concrete subclass must implement.
+    is_abstract: bool,
 }
 
 /// A property hook's declared type and which accessors it provides (M-mut.7b).
@@ -722,7 +725,9 @@ impl Checker {
             if let Item::Class(c) = item {
                 for m in &c.members {
                     if let crate::ast::ClassMember::Method(f) = m {
-                        let is_open = f.modifiers.contains(&crate::ast::Modifier::Open);
+                        // An `abstract` method is implicitly `open` (it exists to be implemented).
+                        let is_open = f.modifiers.contains(&crate::ast::Modifier::Open)
+                            || f.modifiers.contains(&crate::ast::Modifier::Abstract);
                         method_open
                             .entry((c.name.clone(), f.name.clone()))
                             .and_modify(|v| *v = *v || is_open)
@@ -770,7 +775,7 @@ impl Checker {
         // resolver returns every name a class inherits from ≥2 distinct parents without a `use`/
         // `rename`/`exclude` clause (or own override) to disambiguate. A clean program produces an
         // empty list; the backends then dispatch through the same resolved table.
-        let (_origins, conflicts) = crate::ast::class_method_origins(program);
+        let (origins, conflicts) = crate::ast::class_method_origins(program);
         for (class, name, span) in conflicts {
             self.err_coded(
                 span,
@@ -783,6 +788,73 @@ impl Checker {
                      both, `exclude P.{name}` to drop one, or override `function {name}(…)` in `{class}`"
                 )),
             );
+        }
+
+        // M-RT S6b: abstract-method bookkeeping. `abstract_methods[(class, name)]` is set when a class
+        // declares a bodyless `abstract function name`; `E-OPEN-STATIC` rejects a method that is both
+        // `open` and `static` (statics are not virtual, so overridability is meaningless).
+        let mut abstract_methods: std::collections::HashSet<(String, String)> =
+            std::collections::HashSet::new();
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                for m in &c.members {
+                    if let crate::ast::ClassMember::Method(f) = m {
+                        if f.modifiers.contains(&crate::ast::Modifier::Abstract) {
+                            abstract_methods.insert((c.name.clone(), f.name.clone()));
+                        }
+                        if f.modifiers.contains(&crate::ast::Modifier::Open)
+                            && f.modifiers.contains(&crate::ast::Modifier::Static)
+                        {
+                            self.err_coded(
+                                f.span,
+                                format!("method `{}` is both `open` and `static`", f.name),
+                                "E-OPEN-STATIC",
+                                Some(
+                                    "static methods are not virtual; drop `open` or `static`"
+                                        .into(),
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        // M-RT S6b: a concrete class must implement every abstract method it declares or inherits. The
+        // shared dispatch table resolves each callable name to the body it runs; if that body is still
+        // an abstract signature on a *non-abstract* class, the method is unimplemented. This one check
+        // covers both "a concrete class declares an abstract method" (origin is itself) and "a concrete
+        // subclass fails to override an inherited abstract method" (origin is an ancestor).
+        if !abstract_methods.is_empty() {
+            for item in &program.items {
+                if let Item::Class(c) = item {
+                    if c.is_abstract {
+                        continue; // an abstract class may carry unimplemented abstract methods
+                    }
+                    let mut reported: std::collections::BTreeSet<&str> =
+                        std::collections::BTreeSet::new();
+                    for ((cls, name), (oc, om)) in &origins {
+                        if cls != &c.name {
+                            continue;
+                        }
+                        if abstract_methods.contains(&(oc.clone(), om.clone()))
+                            && reported.insert(name.as_str())
+                        {
+                            self.err_coded(
+                                c.span,
+                                format!(
+                                    "class `{}` must implement abstract method `{name}` from `{oc}`",
+                                    c.name
+                                ),
+                                "E-ABSTRACT-UNIMPL",
+                                Some(format!(
+                                    "provide `function {name}(…)` in `{}`, or declare `{}` `abstract`",
+                                    c.name, c.name
+                                )),
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         // `extends` targets must be interfaces; detect cycles.
@@ -1366,6 +1438,7 @@ impl Checker {
                 hooks: HashMap::new(),
                 ctor: Vec::new(),
                 type_params: c.type_params.clone(),
+                is_abstract: c.is_abstract,
             },
         );
         use crate::ast::Modifier;
@@ -2035,7 +2108,10 @@ impl Checker {
         self.active_type_params.clear();
         // Totality: a non-`unit` function must return (or diverge) on every path (M-RT totality
         // cluster). Run after the body walk so all signatures are visible to the divergence analysis.
-        self.check_return_totality(&ret, &f.body, f.span);
+        // An `abstract` method (M-RT S6b) is a bodyless signature — exempt, like an interface method.
+        if !f.modifiers.contains(&crate::ast::Modifier::Abstract) {
+            self.check_return_totality(&ret, &f.body, f.span);
+        }
     }
 
     // ---- scopes ----
@@ -3684,6 +3760,19 @@ impl Checker {
         if let Some(info) = self.classes.get(name) {
             let ctor = info.ctor.clone();
             let type_params = info.type_params.clone();
+            let is_abstract = info.is_abstract;
+            // M-RT S6b: an abstract class has unimplemented methods and cannot be instantiated.
+            if is_abstract {
+                self.err_coded(
+                    span,
+                    format!("cannot instantiate abstract class `{name}`"),
+                    "E-ABSTRACT-INSTANTIATE",
+                    Some(format!(
+                        "`{name}` is `abstract`; instantiate a concrete subclass that implements its \
+                         abstract methods"
+                    )),
+                );
+            }
             if type_params.is_empty() {
                 self.check_args(name, &ctor, args, span);
                 return Some(Ty::Named(name.to_string(), Vec::new()));
@@ -5993,6 +6082,7 @@ pub fn erase_generics(program: Program) -> Program {
                     extends: c.extends,
                     implements: c.implements,
                     open: c.open,
+                    is_abstract: c.is_abstract,
                     resolutions: c.resolutions,
                     members,
                     span: c.span,
@@ -6276,6 +6366,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                 extends: c.extends.clone(),
                 implements: c.implements.clone(),
                 open: c.open,
+                is_abstract: c.is_abstract,
                 resolutions: c.resolutions.clone(),
                 members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
                 span: c.span,
@@ -6420,6 +6511,70 @@ mod tests {
              class Dog extends Animal { function kind() -> string { return \"d\"; } }",
         );
         assert!(errs.is_empty(), "got {errs:?}");
+    }
+
+    #[test]
+    fn instantiating_an_abstract_class_errors() {
+        // S6b.3: an abstract class cannot be constructed.
+        let errs = errors_of(
+            "abstract class Shape { abstract function area() -> int; } \
+             function main() { Shape s = Shape(); }",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.code == Some("E-ABSTRACT-INSTANTIATE")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn concrete_subclass_missing_abstract_impl_errors() {
+        // S6b.3: a non-abstract subclass must implement every inherited abstract method.
+        let errs = errors_of(
+            "abstract class Shape { abstract function area() -> int; } \
+             class Blob extends Shape {}",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-ABSTRACT-UNIMPL")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn abstract_method_in_concrete_class_errors() {
+        // S6b.3: a non-abstract class may not itself declare an abstract method (same check, origin is
+        // the class itself).
+        let errs = errors_of("class Shape { abstract function area() -> int; }");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-ABSTRACT-UNIMPL")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn concrete_subclass_implementing_abstract_is_ok() {
+        // S6b.3: providing the body satisfies the abstract contract — no error.
+        let errs = errors_of(
+            "abstract class Shape { abstract function area() -> int; } \
+             class Square extends Shape { constructor(public int side) {} \
+                 function area() -> int { return this.side * this.side; } }",
+        );
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e.code, Some("E-ABSTRACT-UNIMPL") | Some("E-OVERRIDE-FINAL"))),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn open_static_method_errors() {
+        // S6b.3: a method cannot be both `open` and `static` (statics are not virtual).
+        let errs = errors_of("class C { open static function f() -> int { return 1; } }");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-OPEN-STATIC")),
+            "got {errs:?}"
+        );
     }
 
     #[test]

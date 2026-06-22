@@ -437,6 +437,24 @@ pub fn explain_text(code: &str) -> Option<String> {
              `exclude P.m` (drop one), or override by declaring `function m(…)` in C. A diamond where\n\
              both arms reach the *same* declaring method auto-merges and is never a conflict.\n"
         }
+        "E-ABSTRACT-INSTANTIATE" => {
+            "E-ABSTRACT-INSTANTIATE — an abstract class cannot be instantiated.\n\n\
+             An `abstract class` (M-RT S6b) may have bodyless `abstract function` methods, so it has no\n\
+             complete behavior to construct. Instantiate a concrete subclass that implements every\n\
+             abstract method instead.\n"
+        }
+        "E-ABSTRACT-UNIMPL" => {
+            "E-ABSTRACT-UNIMPL — a concrete class leaves an abstract method unimplemented.\n\n\
+             A non-`abstract` class must provide a body for every `abstract` method it declares or\n\
+             inherits. Implement the method (`function name(…) { … }`), or declare the class itself\n\
+             `abstract` so a further subclass implements it.\n"
+        }
+        "E-OPEN-STATIC" => {
+            "E-OPEN-STATIC — a method is both `open` and `static`.\n\n\
+             Static methods are resolved by name, not by an instance's runtime class, so they are not\n\
+             virtual and cannot be overridden. Drop `open` (the method stays callable) or drop `static`\n\
+             (the method becomes a normal, overridable instance method).\n"
+        }
         "E-OVERRIDE-FINAL" => {
             "E-OVERRIDE-FINAL — a method overrides a non-`open` ancestor method.\n\n\
              Methods are final-by-default (M-RT S6): a subclass may only redefine a parent method that\n\

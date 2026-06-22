@@ -31,6 +31,11 @@ pub enum TokenKind {
     /// method is `open function` to allow override. Final-by-default everywhere else, so the `final`
     /// keyword is retired (redundant). Mirrors the `mutable`/immutable-default house rule.
     Open,
+    /// `abstract` — a class with unimplemented methods (M-RT S6b). An `abstract class` cannot be
+    /// instantiated (`E-ABSTRACT-INSTANTIATE`) and may declare bodyless `abstract function` methods a
+    /// concrete subclass must implement (`E-ABSTRACT-UNIMPL`); an abstract method is implicitly `open`.
+    /// Abstract implies extensible (sets `open`).
+    Abstract,
     Public,
     Private,
     Protected,

@@ -845,6 +845,10 @@ pub enum Modifier {
     /// accessed as `ClassName.field`. The Association axis of the modifier model. Transpiles to a PHP
     /// `static` property.
     Static,
+    /// `abstract` on a method (M-RT S6b) — a bodyless signature a concrete subclass must implement.
+    /// Implicitly `open` (overridable). Legal only in an `abstract class`; the transpiler emits a PHP
+    /// `abstract function …;`.
+    Abstract,
 }
 
 /// Declaration-level visibility on a top-level item (visibility modifiers). A NEW axis, distinct from
@@ -1085,6 +1089,10 @@ pub struct ClassDecl {
     /// non-`open` class is a leaf (`E-EXTEND-FINAL` if a subclass names it). The transpiler emits a
     /// PHP `final class` for a non-`open` class. The extensibility opt-in, orthogonal to `vis`.
     pub open: bool,
+    /// `abstract class` (M-RT S6b) — cannot be instantiated (`E-ABSTRACT-INSTANTIATE`); may declare
+    /// `abstract` (bodyless) methods that a concrete subclass must implement (`E-ABSTRACT-UNIMPL`).
+    /// Abstract implies extensible, so the parser also sets `open` for an abstract class.
+    pub is_abstract: bool,
     /// Explicit multi-inheritance resolution clauses (M-RT S6b), declared in the class body before/among
     /// members: `use P.m` (pick `P`'s `m` for the colliding name), `rename P.m as n` (rebind `P`'s `m`
     /// under a fresh name `n`, removing it from the collision), `exclude P.m` (drop `P`'s `m`). Empty
