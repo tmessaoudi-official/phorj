@@ -457,9 +457,9 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-INTERSECT-SIG" => {
             "E-INTERSECT-SIG — intersection members share a method with conflicting signatures.\n\n\
              Two members of `A & B` declare the same method with different parameter or return types.\n\
-             Phorge has no overloading, so a class has exactly one such method — it cannot satisfy both\n\
-             members at once, making the intersection uninhabited. Align the shared method's signature\n\
-             across the members (or drop one).\n"
+             A class satisfying the intersection would need that one method to conform to both — which\n\
+             the current overload-agnostic intersection check cannot verify — so the intersection is\n\
+             rejected. Align the shared method's signature across the members (or drop one).\n"
         }
         "E-INTERSECT-NO-MEMBER" => {
             "E-INTERSECT-NO-MEMBER — a member access on an intersection resolves to nothing.\n\n\

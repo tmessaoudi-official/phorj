@@ -273,7 +273,7 @@ See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design s
 | S7 | erased generics `<T>` (+ unblock `core.list` **and** full Map/Set: keys/has/size/contains/map/filter, **plus Set itself**) — **reordered to follow S3** | no (erase) | **S7a DONE** (generics core: `Ty::Param` + `<T>` on free functions + call-site unify + `erase_generics` pass; 424 lib + PHP-oracle differential incl. `guide/generics.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP). **S7b** (Set + Map/Set query ops + `core.list`) = next |
 | S4 | union `A\|B` + match-over-union exhaustiveness | no | **DONE** (`08b7b12`; `Ty::Union` + `Pattern::Type` reusing `Op::IsInstance`; `guide/unions.phg` byte-identical run≡runvm≡PHP) |
 | S5 | intersection `A&B` (requires S2) | no | **DONE** (`Ty::Intersection` + `intersection_of` + dual assignability + member-access search; ≤1 class + N interfaces; `E-INTERSECT-*`; `guide/intersections.phg` byte-identical run≡runvm≡PHP; 474 lib + oracle + 53 integration green) |
-| — | **method overloading** (inserted 2026-06-21, NEXT) — `foo(int)`/`foo(string)` → one dispatching PHP method | no (lower) | pending |
+| — | **method overloading** (inserted 2026-06-21) — `foo(int)`/`foo(string)`, DYNAMIC multiple dispatch → one PHP `is_*`/`instanceof` dispatcher | `Op::CallOverload` | **DONE** (`b45b1de`→`2054e87`; free fns + methods; byte-identical run≡runvm≡real PHP; `guide/overloading.phg`; `E-OVERLOAD-*`; plan `docs/plans/2026-06-22-method-overloading.plan.md`) |
 | S6 | `extends` (final-by-default, `override`) | no (flatten) | pending |
 | S8 | traits/mixins | no (flatten) | pending |
 

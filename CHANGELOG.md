@@ -6,6 +6,35 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — method & function overloading: dynamic multiple dispatch (M-RT)
+
+Several free functions or class methods may share a name with distinct parameter signatures. Phorge
+overloading is **dynamic multiple dispatch**: the *runtime* types of the arguments select the
+most-specific matching overload — identically in the interpreter, the VM, and the transpiled PHP, so
+a program runs byte-identically on all three (`examples/guide/overloading.phg`). This is the
+spine-safe, surprise-free realization of overloading (no Java-style static-supertype footgun) and
+matches what a PHP developer hand-writes (`if (is_int($x)) … elseif (is_string($x)) …`).
+
+- **Selection** lives in `src/dispatch.rs` (shared by both backends): a `ParamKind` runtime summary
+  of each parameter type, and `select_overload` (most-specific-wins). A class subtype beats its
+  supertype; primitives are disjoint. An ambiguous (cross-cutting multi-argument) or unmatched call
+  is a clean, byte-identical runtime fault.
+- **One new `Op::CallOverload(set_id, argc)`** for overloaded free-function calls; overloaded
+  *methods* reuse `Op::CallMethod` (no second new op) via a `method_overloads` table. Both consult a
+  shared `overloads` dispatch table on `BytecodeProgram`.
+- **Checker** treats a name as an overload *set* (`E-OVERLOAD-RETURN` — all overloads share a return
+  type; `E-OVERLOAD-DUPLICATE` — no two identical signatures; `E-OVERLOAD-GENERIC` — a generic
+  declaration can't be overloaded; `E-OVERLOAD-NO-MATCH`; `E-OVERLOAD-FN-VALUE` — an overloaded
+  function has no single first-class value). All self-document via `phg explain`.
+- **Transpile**: each overload body emits under a mangled `<name>__ovl_<i>`; one PHP dispatcher under
+  the original name selects with an `is_*`/`instanceof` chain, branches ordered most-specific-first.
+
+Scope: free functions + class methods. **Deferred** (KNOWN_ISSUES): overloaded constructors; a union
+return type; compile-time ambiguity detection (today an ambiguous call faults at runtime); generic
+overloads; and two PHP-erasure limits — overloads differing only by `string`-vs-`bytes` or among
+`List`/`Map`/`Set` can't be told apart in PHP (both erase to `string`/`array`), and an ambiguous call
+faults in the backends while the PHP chain would take the first match (faulting input only).
+
 ### Added — error model Slice 2c: exception cause chains (M-faults)
 
 Closes the M-faults exception tier. A conventional **`cause` field of type `Error?`** on an `Error`

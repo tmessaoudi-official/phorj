@@ -168,6 +168,34 @@ that does return on every path. The corners below are deferred (each is sound, n
   conditionally-true loop is analysed only for the `while (true)`-with-no-`break` shape. Restructure to
   a trailing `return` if the checker asks for one.
 
+## Method & function overloading (M-RT) — deferred refinements
+
+Dynamic multiple dispatch over free functions and class methods ships and is byte-identical
+`run ≡ runvm ≡ real PHP` (`examples/guide/overloading.phg`). Deliberate deferrals:
+
+- **Overloaded constructors** are not supported (PHP cannot overload a constructor either; Phorge has
+  constructor promotion and — when it lands — default arguments). Overload a static factory method.
+- **A single return type is required** across an overload set (`E-OVERLOAD-RETURN`). A union-of-returns
+  result type is a future relaxation; today differing returns are rejected (use a generic function when
+  the return co-varies parametrically with the argument).
+- **Generic overloads** are rejected (`E-OVERLOAD-GENERIC`): a generic declaration must be the sole one
+  of its name. A first-class *value* of an overloaded function is also rejected (`E-OVERLOAD-FN-VALUE`)
+  — call it directly or wrap the intended overload in a lambda.
+- **Ambiguity is detected at runtime, not compile time.** A cross-cutting multi-argument overload set
+  with no unique most-specific match for some call faults cleanly *when that call runs*
+  (`ambiguous overloaded call to …`, byte-identical on both backends). A compile-time ambiguity check
+  is a future refinement; identical signatures are already rejected at declaration
+  (`E-OVERLOAD-DUPLICATE`).
+- **Two PHP-erasure limits** (the transpile target cannot distinguish what the Phorge backends can):
+  overloads that differ *only* by `string`-vs-`bytes`, or *only* among `List`/`Map`/`Set`, are
+  indistinguishable in PHP (both erase to `string` / `array`) — avoid such pairs in transpiled code;
+  and on a genuinely *ambiguous* call the Phorge backends fault while the emitted PHP `if`-chain takes
+  the first matching branch (a transpile-only divergence on faulting input — a runnable example, which
+  must produce identical `Ok` output, never exercises it).
+- **Overload × intersection types**: the S5 `E-INTERSECT-SIG` agreement check uses the first overload
+  as the representative when an intersection member's method is itself overloaded — a full
+  overload-aware intersection check is a follow-up.
+
 ## Generics (M-RT S7) — deferred refinements
 
 Erased generics ship for **free functions, class methods, classes, and enums**: `function id<T>(T x)

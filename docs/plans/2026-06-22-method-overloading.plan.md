@@ -73,6 +73,18 @@ and computes the call's result type (the shared return); the backends select the
   overloads), README row, CHANGELOG, KNOWN_ISSUES (deferrals: constructors, union-return, compile-time
   ambiguity detection, generic overloads), plan + memory; revisit S5 `E-INTERSECT-SIG` note.
 
+## Status — COMPLETE
+
+All four tasks landed (`b45b1de` T1 · `34e45c1` T2a · `de5cc2c` T2b · `2054e87` T3+example · this
+commit T4 docs). Dynamic multiple dispatch over free functions **and** class methods, byte-identical
+`run ≡ runvm ≡ real PHP 8.4` (`examples/guide/overloading.phg`), exactly one new `Op::CallOverload`
+(methods reuse `CallMethod` via a `method_overloads` table). Codes `E-OVERLOAD-RETURN`/`-DUPLICATE`/
+`-GENERIC`/`-NO-MATCH`/`-FN-VALUE` self-document via `phg explain`. 769 tests + PHP-oracle differential
+green; clippy + fmt clean. Deferrals captured in KNOWN_ISSUES (constructors, union-return, compile-time
+ambiguity detection, generic overloads, the two PHP-erasure limits, overload×intersection). **S5
+`E-INTERSECT-SIG` revisited** — its explain text no longer claims "Phorge has no overloading"; a full
+overload-aware intersection-agreement check remains a follow-up.
+
 ## Acceptance
 Byte-identical `run ≡ runvm ≡ real PHP 8.4` for `examples/guide/overloading.phg`; full suite + clippy +
 fmt green on the PHP-8.4 floor; exactly one new `Op`; `phg explain` documents every new code.
