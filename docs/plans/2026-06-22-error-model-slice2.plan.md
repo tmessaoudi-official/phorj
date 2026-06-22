@@ -28,6 +28,38 @@ then writing-plans.
   on the bare root), **catch broad**; **`main()` may not throw** (`E-UNCAUGHT-THROW`); `throws A | B`
   reuses S4 unions. `?` is type-directed: throws-call → propagate throw; `Result` value → unwrap/early-Err.
 
+### Decisions Log (2b plan-shaping — 2026-06-22, AskUserQuestion)
+- AGREED: **`finally` lands in 2b**, with `try`/`catch` (not deferred to 2c). Rationale: the spec's
+  headline example shows `finally` beside `try`/`catch`; splitting would ship `errors.phg` without it
+  and re-open the totality `try`-engine + the unwind-path codegen twice. The unwind path is exactly the
+  codegen 2b already writes, so doing it together is *less* total work. **2c shrinks to cause-chain +
+  imported-PHP catch bridge.**
+- AGREED: **throw-across-a-higher-order-native boundary is handled in 2b** (a closure passed to
+  `Core.List.map`/`filter`/`reduce` that throws, caught by an outer `try`). Mechanism (chosen to avoid
+  changing the `ClosureInvoker`/`NativeEval` signatures): a **`pending_throw: Option<Value>` side-channel
+  + a reserved sentinel fault body** — the re-entrant invoker stashes the thrown `Value` and returns the
+  sentinel through the existing `Result<_, String>` channel; the native propagates it unchanged; the
+  `CallNative` op site reconstructs a `Throw` and unwinds via the handler stack. Native code is untouched.
+- AGREED: **both multi-catch forms ship in 2b** — (1) **multiple sequential clauses**
+  `catch (X e) { … } catch (Y e) { … }`, each its own binding/scope/body (the baseline — `catches:
+  Vec<CatchClause>`); (2) **union-in-one-clause** `catch (X | Y e) { … }`, `e` typed as the S4 union.
+  Both lower to a per-clause `IsInstance`→`JumpIfFalse` chain over the landed thrown value (reuses M-RT
+  S1 `Op::IsInstance`); re-throw if none match.
+- AGREED: a **catch clause shadowed by an earlier broader/duplicate clause** in the same `try` is a
+  **`W-CATCH-UNREACHABLE`** warning (not a hard error, not silent) — exact parallel to the totality
+  cluster's `W-MATCH-UNREACHABLE`/`W-UNREACHABLE`; rides the non-gating warning channel, self-documents
+  via `phg explain`. (Java errors here; PHP is silent — Phorge picks the legible-but-non-blocking middle,
+  consistent with its existing dead-code lints.)
+- PINNED: **3 new `Op` variants** — `Op::Throw`, `Op::PushHandler(usize)`, `Op::PopHandler`
+  (`PushHandler`/`PopHandler` are one handler *mechanism*; `Throw` is the second). Each extends the three
+  coupled matches (`vm.rs` `exec_op` + `chunk.rs` `validate` + `compiler.rs` `stack_effect`) in one commit.
+- PINNED: **`?`-throws mode is front-end-only — no backend codegen.** A `?` on a `throws`-call is a
+  checker propagation *marker*; since the call's own `Op::Throw` already unwinds, the lowering is just the
+  bare call. The checker **erases the throws-mode `Propagate` node to its inner expr before any backend**
+  (same "expand out before backends" discipline as type aliases / generics / `html"…"`), so the backends
+  only ever see a `Propagate` in *Result* mode — 2a's lowering is untouched, zero backend change for
+  throws-`?`.
+
 ## Status
 - **PHASE 2a — COMPLETE** (`46c8d2a` `?` propagation, `f35ff6c` fault intrinsics). `Result` `?` +
   `panic`/`todo`/`unreachable`/`assert`, no new `Op` (`?` reuses MatchTag/GetEnumField/Return; intrinsics
@@ -151,25 +183,199 @@ clean; **no new `Op`**. → review checkpoint, then write the detailed 2b plan.
 
 ---
 
-### PHASE 2b — exceptions (control-flow core, ≈2 new `Op`s) — OUTLINE (detailed plan written after 2a)
-Core `Error` base type (built-in interface → PHP class `extends \Exception`); `throws E` declaration +
-call-site enforcement (`E-THROW-UNDECLARED`/`E-CALL-UNHANDLED`/`E-UNCAUGHT-THROW`/`E-THROWS-TOO-BROAD`);
-`throw` (`never`); `try`/`catch` (native unwinding — interpreter `Throw(Value)` vs `Fault(msg)` signal
-split; VM `Op::Throw` + a handler push/pop mechanism, full `Op`-coupling); `?` extended to the
-throws-call mode; PHP `try/catch` 1:1 + bare-call `?`; totality engine extended for `try`.
-`examples/guide/errors.phg`. *Detailed task breakdown authored at the 2a→2b checkpoint.*
+### PHASE 2b — exceptions (control-flow core, **3 new `Op`s**) — DETAILED
 
-### PHASE 2c — finally + cause-chain + imported-PHP catch bridge — OUTLINE
-`finally` (compiler-emitted on normal + unwinding paths; totality: terminates iff body+catches do);
-exception cause-chain (`A-fault-cause-chain`, hung off the `Error` base); catching PHP-thrown exceptions
-across the interop boundary. *Detailed task breakdown authored at the 2b→2c checkpoint.*
+Headline landing: built-in `Error` base, `throws E` declaration + enforcement, `throw`,
+`try`/`catch`/`finally` (native unwinding), `?`-throws mode, throw-across-native, PHP exception mapping.
+Decisions for this phase are pinned in the **Decisions Log (2b plan-shaping)** above — read it first.
+
+**New surface (all phase-2b):**
+- Keywords: `throw` `try` `catch` `finally` `throws`.
+- AST: `Stmt::Throw { value: Expr, span }`; `Stmt::Try { body: Vec<Stmt>, catches: Vec<CatchClause>,
+  finally_block: Option<Vec<Stmt>>, span }`; `pub struct CatchClause { ty: Type, name: String, body:
+  Vec<Stmt>, span }` (`ty` may be a union `Type` for `catch (A | B e)`); `FunctionDecl.throws: Vec<Type>`.
+- Built-in `Error` interface (one method `message() -> string`) → PHP base `\Exception` (`.message()` ⇒
+  `getMessage()`); a throwing class is `class P implements Error` ⇒ PHP `class P extends \Exception`.
+- Checker error codes: `E-THROW-UNDECLARED`, `E-CALL-UNHANDLED`, `E-UNCAUGHT-THROW`,
+  `E-THROWS-TOO-BROAD`, `E-CATCH-TYPE` (catch type not `<: Error`); warning `W-CATCH-UNREACHABLE`.
+  (`E-PROPAGATE-CONTEXT`/`-ERR` from 2a are extended to the throws mode.)
+- VM: `enum VmError { Throw(Value), Fault(String) }` (`From<String>`=`Fault`); `Op::Throw`,
+  `Op::PushHandler(usize)`, `Op::PopHandler`; `handlers: Vec<Handler>` + `pending_throw: Option<Value>`.
+
+**TDD discipline (every task):** add the failing checker/interpreter/differential test first, watch it
+fail, implement, watch it pass. Each task ends green under the full gate; the byte-identity differential
+case for a task only lands once *both* backends for that behavior exist (staged so untouched arms are
+never exercised → green between commits, the same trick 2a used).
+
+---
+
+**Task 2b.1 — keywords + AST + parser + exhaustive-match stubs (one commit).**
+- `src/token.rs`/`src/lexer.rs`: add the five keywords. Parser tests assert `throw`/`try`/etc. tokenize.
+- `src/ast.rs`: add `Stmt::Throw`, `Stmt::Try`, `pub struct CatchClause`, `FunctionDecl.throws`
+  (default `vec![]` at every construction site — grep `FunctionDecl {`). Extend `ast::stmt_*`
+  helpers and `collect_free_*` for the two new statements (a `Try` introduces the catch binding into its
+  catch body's free-var scope).
+- `src/parser.rs`: `parse_throws()` after the `-> Ret` clause (`throws T (| T)*`, reuse `parse_type`);
+  `parse_statement` arms for `throw expr;` and `try { } catch (Type name) { } … [finally { }]` (≥1 catch
+  **or** a finally required — a bare `try {}` is `E`-… handled in checker, but the parser accepts
+  `try`+(catch+|finally)). A `catch (A | B e)` parses `ty` via the existing union `parse_type`.
+- **Stub** the new `Stmt`/`throws` arms in every exhaustive match so the crate compiles:
+  `src/checker.rs`, `src/interpreter.rs`, `src/compiler.rs`, `src/transpile.rs`, `src/loader.rs`
+  (`resolve_*`). Stubs are `unreachable!("2b: throw/try not yet lowered")` / no-op rebuilds — **never hit**
+  because no program/example uses the surface yet, so the full suite stays green.
+- Parser unit tests: `parses_throw_stmt`, `parses_try_catch_finally`, `parses_multi_catch`,
+  `parses_union_catch`, `parses_fn_throws_clause`. Run the gate. **Commit** (`feat: parse throw/try/catch/finally + throws clause`).
+
+**Task 2b.2 — built-in `Error` base type (checker + transpile).**
+- Register a built-in `Error` interface (method `message() -> string`) in the checker's type universe;
+  reserve the name in `is_builtin_type_name` (cannot be user-shadowed). A class may `implements Error`
+  through the existing `implements` machinery; `instanceof Error` works for free (S1/S2).
+- Transpile: a class `implements Error` emits PHP `extends \Exception` (not `implements`); the built-in
+  `Error` itself emits nothing (it's `\Throwable`/`\Exception`). `.message()` on an `Error`-typed value ⇒
+  `->getMessage()`. **Message-collision wrinkle (resolve here, with a test):** a throwing class with a
+  promoted `string message` field must route construction through `parent::__construct($message)` so PHP's
+  `getMessage()` returns it — do **not** emit a colliding `public $message`. Differential: a class
+  `implements Error` constructed + `.message()` read prints byte-identical on run/runvm/**real PHP**.
+- Checker tests: `class implements Error` accepted; `instanceof Error`; `Error` name reserved
+  (`E`-shadow). Run gate. **Commit** (`feat: built-in Error base type (-> PHP \Exception)`).
+
+**Task 2b.3 — checker: `throws` enforcement + `?`-throws + catch typing + totality (front-end, no backend).**
+- Track the enclosing fn's declared throws-set: add `cur_throws: Vec<Ty>` to the checker, saved/restored
+  exactly like `cur_ret` (the fn-body checking sites at `checker.rs:1130/1505/2523`). A type is
+  *discharged* if it is `<:` some member of `cur_throws` (reuse `assignable_with`/the union subtype path).
+- **Enforcement:**
+  - `throw e` (`e: E`, `E <: Error` else `E-CATCH-TYPE`-sibling `E-THROW-TYPE`): `E` must be discharged in
+    context (declared-throws **or** inside a `try` whose catches cover it) else `E-THROW-UNDECLARED`.
+  - Calling a `throws E` fn: `E` must be discharged via propagation (`?` + enclosing `throws`), or be
+    inside a covering `try` — else `E-CALL-UNHANDLED`.
+  - `main()` may not declare `throws`; any throw reaching it uncaught ⇒ `E-UNCAUGHT-THROW`.
+  - A `throws` declaration naming the bare `Error` root ⇒ `E-THROWS-TOO-BROAD` (declare specific). A
+    `catch (Error e)` is allowed (catch broad).
+- **`?` typing — extend the 2a `Expr::Propagate` arm:** if the operand is a `throws`-call → result is the
+  call's return `T`, and the call's `E` must be discharged (declared-throws/`?`); **erase the node to its
+  inner expr** (record it for the post-check erase pass — `?`-throws has no backend codegen, Decisions
+  Log). If the operand is a `Result<T,E>` → the 2a path (unchanged). Neither ⇒ `E-PROPAGATE-CONTEXT`.
+- **Catch typing:** each `CatchClause.ty` must be `<: Error` (`E-CATCH-TYPE`); bind `name: ty` in the
+  catch body scope (smart-cast: inside the body `name` *is* `ty`); a clause whose `ty` is `<:` an earlier
+  clause's `ty` (or equal) ⇒ **`W-CATCH-UNREACHABLE`** (push to the warning channel; one per shadowed
+  clause). A `catch (A | B e)` types `e` as the S4 union `A | B`.
+- **Totality:** extend `block_terminates`/`stmt_terminates` (totality cluster) with a `Stmt::Try` arm — a
+  `try` terminates iff its body **and** every catch terminate, **and** (if present) `finally` does not
+  fall through. `throw` is `never`-typed (a `throw` statement diverges — its expr is `never`).
+- Erase pass: in `checker::erase_*` (the chokepoint that already erases aliases/generics), unwrap every
+  throws-mode `Expr::Propagate` to its inner expr. (Result-mode `Propagate` is left for the backends.)
+- Checker tests (programs that *fail in the checker* never reach the stubbed backends, so this is green):
+  each new code + `W-CATCH-UNREACHABLE` + `?`-throws discharge + catch union typing + `try` totality
+  (a `try` whose arms all `throw`/`return` satisfies a `-> T` tail). `phg explain` for each code.
+  Run gate. **Commit** (`feat: throws enforcement + ?-throws + catch typing + try totality (checker)`).
+
+**Task 2b.4 — interpreter: native unwinding (`Signal::Throw` + try/catch/finally + native side-channel).**
+- `src/interpreter.rs`: add `Signal::Throw(Value)`. `Stmt::Throw` ⇒ `Err(Signal::Throw(v))`. `Stmt::Try`:
+  run `body`; on `Err(Signal::Throw(v))` walk `catches` in order, first whose `ty` matches `v` by
+  `instanceof` (reuse the S1/S2 `class_implements` oracle + union membership) binds `name=v` and runs its
+  body; if none match, the `Throw` re-propagates. **`finally` runs on every exit edge** (normal, caught,
+  re-propagated, and a `Return`/`Break`/`Continue` escaping the try) — implement by running the finally
+  block in all arms before returning the arm's result. `Signal::Fault`-equivalent (`Signal::Runtime`)
+  **passes straight through** every catch (panics uncatchable) — only `Signal::Throw` is caught.
+- **Native boundary (Decisions Log):** the higher-order invoker (`call_closure`) currently maps a
+  `Signal` to a `String` via `signal_msg`. Extend: on `Signal::Throw(v)`, stash `v` in
+  `self.pending_throw` and return the reserved sentinel body `__phorge_throw__`; everywhere a native call
+  returns `Err(msg)` with `msg == SENTINEL && self.pending_throw.is_some()`, rebuild
+  `Err(Signal::Throw(self.pending_throw.take()))`. So a `throw` inside a `Core.List.map` closure unwinds
+  to an outer `try`.
+- Interpreter-targeted unit tests (call `interpret` directly — VM still stubbed, so **no differential
+  case yet**): caught exception returns the catch value; uncaught (in a non-`main` helper, caught in
+  `main`) works; `finally` runs on normal + exceptional exit; a `panic` is **not** caught by a
+  surrounding `catch`; `throw` inside `map` caught outside. Run gate. **Commit**
+  (`feat: interpreter native unwinding — try/catch/finally + throw-across-native`).
+
+**Task 2b.5 — VM: 3 new `Op`s + handler stack + compiler codegen (run ≡ runvm).**
+- `src/chunk.rs`: add `Op::Throw`, `Op::PushHandler(usize)`, `Op::PopHandler`. `validate`:
+  `PushHandler(addr)` bounds-checks `addr` against the enclosing function's code length (the only one
+  carrying an index; `Throw`/`PopHandler` carry none — no `validate` arm, like `MakeRange`/`Fault`).
+- `src/vm.rs`: `enum VmError { Throw(Value), Fault(String) }` + `impl From<String>`; change `exec_op`,
+  `run`, `run_until`, `call_closure_value` error types to `VmError` (the `From` makes existing `?` sites
+  auto-wrap as `Fault`; convert the explicit `return Err(format!…)` sites — the compiler lists them).
+  Add `handlers: Vec<Handler>` (`struct Handler { catch_ip: usize, frame_depth: usize, stack_height:
+  usize }`) + `pending_throw: Option<Value>`.
+  - `Op::PushHandler(addr)` ⇒ push `Handler { catch_ip: addr, frame_depth: self.frames.len(),
+    stack_height: self.stack.len() }`. `Op::PopHandler` ⇒ pop the top handler.
+  - `Op::Throw` ⇒ pop value, `return Err(VmError::Throw(v))`.
+  - **Unwind (shared helper used by both `run` and `run_until`):** on `Err(VmError::Throw(v))`, if a
+    handler exists *at or above* the loop's floor: pop frames to `handler.frame_depth`, truncate stack to
+    `handler.stack_height`, pop the handler, push `v`, set the landed frame's `ip = handler.catch_ip`,
+    continue. If the nearest handler is **below** `run_until`'s `target_depth` (the throw escapes a native
+    closure), stash `v` in `pending_throw` and return the sentinel `Err(VmError::Fault(SENTINEL))` so the
+    native propagates it; the `CallNative` op site rebuilds `VmError::Throw(pending_throw.take())`.
+    A `Throw` with **no** handler anywhere is a defensive backstop (the checker's `E-UNCAUGHT-THROW`
+    guarantees `main` can't leak one) — surface as an uncaught-fault `Diagnostic`.
+  - `do_return`/normal frame exit must drop handlers whose `frame_depth >= frames.len()` after the pop.
+- `src/compiler.rs` (`compile_stmt` + `stack_effect`):
+  - `stack_effect`: `Throw` = `-1`, `PushHandler` = `0`, `PopHandler` = `0`. The catch landing pushes the
+    thrown value (`+1`) — modeled at the landing-pad height, like a `match` scrutinee.
+  - `Stmt::Throw(e)` ⇒ compile `e`, emit `Op::Throw`.
+  - `Stmt::Try` ⇒ emit `PushHandler(catch_lp)`; compile `body`; emit `PopHandler`; **emit `finally`
+    inline**; `Jump(end)`. At `catch_lp` (thrown value on stack): for each clause emit `IsInstance(ty)` (a
+    union clause = OR-chain of `IsInstance` per member) → `JumpIfFalse(next_clause)` → bind (store to the
+    clause's local slot) → compile clause body → **emit `finally` inline** → `Jump(end)`. After the last
+    clause's no-match fall-through: **emit `finally` inline** → `Op::Throw` (re-throw the value still on
+    stack). `end:` is past everything.
+  - **finally-before-transfer:** maintain a compiler `finally_stack` (active enclosing finally blocks).
+    `Stmt::Return`/`Break`/`Continue` emitted while inside a try-with-finally first emits the pending
+    finally block(s) between the current point and the target, *then* the transfer op. (Tracks
+    try-finally nesting relative to the target loop/fn.)
+- First **differential** cases (now run ≡ runvm): caught exception value + path; `finally` ordering on
+  normal/caught/rethrow; `return`/`break`/`continue` through a `finally`; throw-across-`map` caught
+  outside; nested try; multiple + union catch dispatch; `panic` bypasses `catch`. Run gate. **Commit**
+  (`feat: VM native unwinding — Op::Throw/PushHandler/PopHandler + finally codegen`).
+
+**Task 2b.6 — transpile + PHP-oracle parity (run ≡ runvm ≡ real PHP).**
+- `src/transpile.rs`: `Stmt::Throw` ⇒ `throw $e;`; `Stmt::Try` ⇒ PHP `try { } catch (\Type $e) { } …
+  [finally { }]` 1:1 (multiple clauses 1:1; a union clause ⇒ PHP 8 `catch (A | B $e)`); `throws`
+  declaration ⇒ erased (optionally a `@throws` docblock — skip for byte-identity simplicity). `?`-throws
+  is already erased to the bare call by the checker (Task 2b.3) ⇒ nothing special here. `Error` mapping
+  per Task 2b.2.
+- Drive the **full differential under `PHORGE_REQUIRE_PHP=1`** so the PHP leg *fails* (not skips):
+  every 2b.5 case must match **real PHP** too. Resolve any divergence (most likely the `\Exception`
+  message wiring + catch-clause FQN `\` prefixing for `package main` global classes). Run gate.
+  **Commit** (`feat: transpile throw/try/catch/finally -> PHP exceptions (3-way byte-identical)`).
+
+**Task 2b.7 — example + docs.**
+- `examples/guide/errors.phg`: a runnable program (must produce identical `Ok` output) exercising
+  `throws`/`throw`, `try`/multiple `catch (X e) catch (Y e)`/`catch (A | B e)`/`finally`, and `?`-throws
+  propagation — all caught so the program completes normally and prints deterministic lines. (Panics
+  **cannot** be in a runnable example — documented in prose + KNOWN_ISSUES.)
+- `examples/README.md` row + coverage-matrix line. `KNOWN_ISSUES.md`: panics uncatchable-by-design;
+  cross-native throw **now supported**; multi-type catch supported; `finally`-returns-value not supported.
+  `CHANGELOG.md` + `docs/MILESTONES.md` + `CLAUDE.md` M-faults paragraph + `error-model-slice2-progress`
+  + `m-rt-progress` memory. `phg explain` covers all new codes (test like 2a's `explain_covers_*`).
+  Full gate `PHORGE_REQUIRE_PHP=1`. **Commit** (`feat(examples): errors.phg guide + 2b docs`).
+
+**Phase 2b acceptance:** `throws`/`throw`/`try`/`catch`/`finally`/`?`-throws byte-identical
+run≡runvm≡real PHP (incl. throw-across-native, multiple + union catch, finally on every edge); all new
+codes + `W-CATCH-UNREACHABLE` self-document via `phg explain`; totality engine handles `try`; full suite
+green; clippy+fmt clean; **exactly 3 new `Op`s**, each with the three coupled matches. → review
+checkpoint, then write the detailed 2c plan.
+
+### PHASE 2c — cause-chain + imported-PHP catch bridge — OUTLINE
+(`finally` moved **into 2b** per the plan-shaping Decisions Log.) Remaining 2c scope: exception
+cause-chain (`A-fault-cause-chain`, hung off the `Error` base — a `cause: Error?` + `.cause()`,
+transpiling to `\Exception`'s `$previous`/`getPrevious()`); catching PHP-thrown exceptions across the
+interop boundary (the imported-PHP `catch` bridge). *Detailed task breakdown authored at the 2b→2c
+checkpoint.*
 
 ## Self-review (plan vs spec)
 - Spec §2 surface (`throws`/`try`/`catch`/`finally`/`?`/panics) → 2a covers `?`(Result)+panics; 2b
-  covers `throws`/`throw`/`try`/`catch`+`?`(throws); 2c covers `finally`. ✓ full coverage across phases.
-- Spec §3 enforcement + `Error` base → 2b. §4 backends: 2a is front-end/no-Op (matches "value tier +
-  panics"); §4.3 VM Ops → 2b. §5 testing/examples → per-phase acceptance + guide examples. ✓
-- Placeholder scan: 2b/2c are *intentionally* outlines (skill scope-check: one detailed plan per
-  subsystem, written when its turn comes) — not lazy TBDs; 2a has concrete files/steps/tests. ✓
-- Type/name consistency: `Expr::Propagate`, `FaultKind::Panic`, `__phorge_try`, the `E-*` codes are used
-  consistently between the plan and spec. ✓
+  covers `throws`/`throw`/`try`/`catch`/**`finally`**+`?`(throws); 2c covers cause-chain + PHP bridge.
+  ✓ full coverage across phases (finally pulled forward into 2b per Decisions Log).
+- Spec §3 enforcement + `Error` base → 2b.2/2b.3. §4 backends: 2a front-end/no-Op; §4.2 interpreter
+  `Throw` split → 2b.4; §4.3 VM Ops (**pinned at 3**) → 2b.5; §4.4 PHP map → 2b.6; §4.5 totality → 2b.3.
+  §5 testing/examples → per-task TDD + 2b.7 guide example. ✓
+- Spec §7 non-goals: multi-type single catch is **adopted into 2b** (was "TBD at plan time" → developer
+  chose Option 2 + multiple clauses; resolved). `finally`-returns-value still a non-goal. ✓
+- Placeholder scan: 2b is fully detailed (concrete files/steps/tests/codes); 2c is an intentional outline
+  (skill scope-check: one detailed plan per subsystem, written at its checkpoint). ✓
+- Type/name consistency: `Expr::Propagate` (2a, reused), `Stmt::Throw`/`Stmt::Try`/`CatchClause`,
+  `FunctionDecl.throws`/`cur_throws`, `VmError`/`Handler`/`pending_throw`, `Op::Throw`/`PushHandler`/
+  `PopHandler`, the `E-*`/`W-CATCH-UNREACHABLE` codes — consistent across plan + spec + Decisions Log. ✓
+- Op-coupling: 2b.5 names the three coupled matches (`exec_op`+`validate`+`stack_effect`) in one commit. ✓
