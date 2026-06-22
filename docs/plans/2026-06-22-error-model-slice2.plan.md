@@ -75,8 +75,13 @@ then writing-plans.
   reuse `Op::Fault` via new data-carrying `FaultMsg` variants). Byte-identical `run≡runvm≡real PHP`;
   600 lib + PHP-oracle differential + 64 integration green; 5 new codes self-document via `phg explain`.
   `examples/guide/result.phg`. **NEXT: review checkpoint → author the detailed 2b plan (exceptions).**
-- **PHASE 2b — NOT STARTED** (outline below): core `Error` base, `throws E` + enforcement, `throw`,
-  `try`/`catch`, `?`-throws mode, native VM unwinding (≈2 new Ops), PHP exception mapping.
+- **PHASE 2b — IN PROGRESS.** **2b.1 DONE** (`cee1f5c`): keywords + AST (`Stmt::Throw`/`Stmt::Try`/
+  `CatchClause`/`FunctionDecl.throws`) + parser + all exhaustive-match arms (structural passes real,
+  semantic backends stubbed). **2b.2 DONE** (`459f080`): built-in `Error` marker interface (seeded +
+  reserved) → PHP `extends \Exception`; promoted `message` untyped + `parent::__construct`; value
+  construct+read byte-identical run/runvm/real PHP. **NEXT: 2b.3** (checker: `throws` enforcement +
+  `?`-throws erasure + catch coverage/W-CATCH-UNREACHABLE + `try` totality) → 2b.4 interpreter → 2b.5 VM
+  (3 Ops + finally, the agreed review checkpoint) → 2b.6 transpile parity → 2b.7 example+docs.
 - **PHASE 2c — NOT STARTED**: `finally` + cause-chain + imported-PHP catch bridge.
 
 ## Decisions Log (execution refinements)
