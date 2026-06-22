@@ -156,15 +156,28 @@ Codes `E-VIS-PRIVATE`/`E-VIS-INTERNAL` (with `phg explain`); example `examples/p
 Design `docs/specs/2026-06-21-visibility-modifiers-design.md`. Deferred (KNOWN_ISSUES): visibility on
 `type` aliases / `import` re-exports; member-level `Modifier` visibility stays PHP-only-enforced.
 
-## Error handling & stack traces — 🔨 Slice 1 (reporting) IN PROGRESS (2026-06-21)
+## Error handling & stack traces — 🔨 Slice 1 ✅ COMPLETE (2026-06-21); Slice 2 designed
 
-Two slices (developer-chosen, traces first). **Slice 1 — fault reporting — mostly shipped:** uncaught
+Two slices (developer-chosen, traces first). **Slice 1 — fault reporting — ✅ COMPLETE:** uncaught
 runtime faults render a call stack (frames + `file:line`, source line) identically on `run`/`runvm`
 (VM frame-walk + interpreter `trace_stack`, `run ≡ runvm` trace-parity test), in the CLI and a
 `phg serve --dev` HTML 500 page (prod = bare 500, no leak). Front-end-only: stdout unchanged,
 `FaultKind` preserved, oracle unaffected, no new `Op`. Spec
-`docs/specs/2026-06-21-stack-traces-and-fault-reporting-design.md`. **Slice 2 — a *catchable* error
-model** (`try`/`catch` vs `Result<T, E>`) — separate design, later.
+`docs/specs/2026-06-21-stack-traces-and-fault-reporting-design.md`. Deferred: method/ctor/closure
+frames are line-only (Slice 1.1); fault cause-chain (needs the catchable model).
+
+**Slice 2 — the catchable error model — DECIDED 2026-06-22 (locked), not yet built.** Three tiers,
+one enforced-failure principle: **(1) enforced typed `throws E`** — the fix to PHP's *unchecked*
+`@throws` docblock (checker-enforced at the call site, `?`-propagable, **specific type required** — no
+`throws Exception` swallow), transpiles to **idiomatic PHP exceptions**; the PHP-familiar *default*
+surface. **(2) `Result<T, E>`** — error-as-value (functional, `match`/`?`), transpiles to a PHP value;
+rides generic enums. **(3) unchecked faults/panics** — programmer bugs (index-OOB, force-unwrap-null)
+crash with a Slice-1 stack trace, never declared up the chain (the explicit fix to Java's
+checked-everything mistake). `throws` is front-end-only (erases before the backends ⇒ byte-identity
+safe, no new `Op`); `try/catch` discharges the `throws` surface and the imported-PHP interop bridge.
+Examples use PascalCase packages (`package Main;`, `import Core.Console;`). Folds in the fault
+cause-chain and the test runner's `assertFaults`. Detailed rationale + examples in
+`docs/specs/2026-06-21-php-parity-and-beyond.md` §2.1.
 
 ## M5 — Modules & packages — ✅ COMPLETE (2026-06-18)
 
@@ -210,6 +223,32 @@ stdlib breadth (`core.list`/`json`, `Map`/`Set`) → **M12** release automation 
 > **As-built note:** no `Backend` trait exists — the three pipelines (`cmd_run`/`cmd_runvm`/`cmd_transpile`)
 > are free functions dispatched by a string `match` in `src/main.rs`, deferred to the 4th backend
 > (`phg build`) per the Rule of Three ([ADR-0001](adr/0001-no-shared-run-vm-ir.md)).
+
+## Roadmap-completeness audit — ✅ DELIVERED (2026-06-22)
+
+A one-shot 20-track (A–S + V) multi-agent gap review (41 agents) enumerated every gap vs PHP 8.0–8.4
+parity, beyond-PHP capability, DX/tooling, correctness, security, stdlib, numerics, i18n, testing,
+perf, build, observability, docs, and governance — the "stop finding gaps ad hoc" deliverable.
+**555 candidates → 290 adopt · 187 defer · 81 reject.** SSOT:
+**`docs/specs/2026-06-21-php-parity-and-beyond.md`** (deduplicated master triage table + per-milestone
+rollup + top-10 spine + reject-list-with-reasons + 10 cross-track themes); raw per-track reports under
+`docs/research/roadmap-completeness/`. Forward plan + new milestones folded into
+[`ROADMAP.md`](../ROADMAP.md).
+
+**Locked decisions (2026-06-22):**
+
+1. **M-RT sequence:** totality cluster (return-totality + `never` + unreachable-after-return) **first**
+   — the #1 soundness leak — *then* method overloading → `extends`/`abstract`/LSB (S6) → traits (S8);
+   generic enums + the pattern cluster in parallel.
+2. **Error model (Slice 2):** three tiers — enforced typed `throws E` (default) + `Result<T,E>` (value)
+   + unchecked faults (bugs). See the error-handling section above.
+3. **New milestones created:** M4 (stdlib charter), M-NUM (decimal/money + numerics), M-TIME (date/time),
+   M-text (i18n core), M-Test (test framework), M-perf (VM opt behind a regression gate), M-Batteries
+   (impure stdlib on the quarantine seam), M8.5 (interop / `.d.phg`), M13 (editions, post-1.0).
+4. **Namespace PascalCase reshape** (audit-missed, now tracked): `package Main`, `E-PKG-CASE`
+   (PascalCase package/folder segments, **enforced incl. vendor**; PHP/Composer deps case-mapped to
+   PSR-4 at the importer boundary), manifest `name → module`, lift `E-PKG-TYPE` — a breaking codemod,
+   design `docs/specs/2026-06-20-package-namespace-reshape-design.md`, pending build.
 
 ## v2 — Native + systems — 🔲 FUTURE
 

@@ -70,7 +70,25 @@
   long multi-agent effort, better fresh) unless the developer says run-now. State is saved so it
   resumes as the first post-compaction action.
 
+- [2026-06-22] EXECUTED: the workflow ran (41 agents, 20/20 tracks, no drops) → 555 candidates
+  (290 adopt / 187 defer / 81 reject). SSOT written to `docs/specs/2026-06-21-php-parity-and-beyond.md`;
+  raw per-track reports under `docs/research/roadmap-completeness/raw/`.
+- [2026-06-22] AGREED (batched triage, all developer-confirmed):
+  1. **Error model (theme 1 / Slice 2):** three tiers — enforced typed `throws E` (PHP-familiar
+     *default*, fixes PHP's unchecked `@throws`, → PHP exceptions) + `Result<T,E>` (value surface) +
+     unchecked faults/panics for bugs (the fix to Java's checked-everything mistake). Both checked tiers
+     typed + checker-enforced + `?`-composable; `throws` erases before backends (no new `Op`).
+     Developer's addition over the bare "Result-first" recommendation; challenged (Java-checked-exception
+     failures) and reconciled via the three-tier model.
+  2. **M-RT order:** totality cluster (return-totality + `never` + unreachable-after-return) lands
+     **before** method overloading (was previously "overloading next").
+  3. **New milestones approved:** M4, M-NUM, M-TIME, M-text, M-Test, M-perf, M-Batteries, M8.5, M13.
+  4. **Write-back scope:** full restructure into ROADMAP.md + MILESTONES.md (spec stays detailed SSOT).
+  5. **PascalCase packages enforced everywhere incl. vendor** (PHP/Composer deps case-mapped at the
+     importer boundary); the namespace reshape added as a tracked roadmap item (audit had missed it).
+
 ## Formal Plan
-<!-- author the workflow script at run time; see METHOD above. Each track → parallel researchers →
-     completeness-critic loop → batched ask-human triage → write-back to ROADMAP.md/MILESTONES.md +
-     the consolidated spec. -->
+<!-- DONE 2026-06-22: workflow authored + run; batched triage resolved; written back to
+     ROADMAP.md / docs/MILESTONES.md + the consolidated spec. Method as designed: 20 parallel research
+     tracks → per-track completeness-critic → synthesis → batched ask-human triage → write-back. -->
+**STATUS: COMPLETE — audit delivered, decisions locked, written back (2026-06-22).**

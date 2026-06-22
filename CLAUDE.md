@@ -479,11 +479,27 @@ codes `E-INTERSECT-MEMBER`/`-MULTI-CLASS`/`-ARITY`/`-SIG`/`-NO-MEMBER` (+ `phg e
 with an intersection *right side*, optional/function members, whole-intersection optional `(A & B)?`, no
 match-over-intersection (not a sum type).
 
-**OVERLOADING confirmed for M-RT, sequenced NEXT (right after S5)** (developer decision, 2026-06-21):
-method overloading (`foo(int)` / `foo(string)` as distinct signatures) lowers at compile time to **one
-dispatching PHP method** (PHP forbids same-name redeclaration) — the TypeScript-over-JavaScript
-relationship the transpile contract is built for. When it lands, S5's `E-INTERSECT-SIG` rule is
-revisited. **NEXT (M-RT slice order): overloading → S6 `extends` (final-by-default) → S8 traits.**
+**ROADMAP-COMPLETENESS AUDIT DELIVERED + decisions locked (2026-06-22)** — a one-shot 20-track (A–S+V)
+multi-agent gap review (41 agents, 555 candidates → 290 adopt/187 defer/81 reject). **SSOT:
+`docs/specs/2026-06-21-php-parity-and-beyond.md`** (master triage table + per-milestone rollup + top-10
+spine + reject-list + 10 themes); raw under `docs/research/roadmap-completeness/`; written back into
+`ROADMAP.md` + `docs/MILESTONES.md`; full Decisions Log in
+`docs/plans/2026-06-21-roadmap-completeness-review.plan.md`. **Locked:** (1) **M-RT order — totality
+cluster FIRST** (return-on-all-paths + `never` + unreachable-after-return + dup-match-arm: the #1
+soundness leak, front-end-only, no new `Op`) **then overloading → S6 `extends`(final-default)/`abstract`/LSB
+→ S8 traits**; generic enums (`Result`/`Option`, rides `erase_generics`) + the pattern cluster (guards,
+destructuring, flow-narrow) in parallel. (2) **Error model (M-faults Slice 2) = three tiers**: enforced
+typed **`throws E`** (PHP-familiar default, fixes PHP's unchecked `@throws`, → PHP exceptions; specific
+type required, `?`-propagable, erases pre-backend = no new `Op`) + **`Result<T,E>`** (value surface) +
+**unchecked faults/panics** for bugs (Slice-1 stack trace, never declared up-chain — the fix to Java's
+checked-everything mistake); `try/catch` discharges `throws` + the imported-PHP bridge. (3) **New
+milestones:** M4 (stdlib charter) · M-NUM (decimal/money) · M-TIME · M-text · M-Test · M-perf ·
+M-Batteries · M8.5 (interop/`.d.phg`) · M13 (editions, post-1.0). (4) **PascalCase packages enforced
+everywhere incl. vendor** (PHP/Composer deps case-mapped at the importer boundary) — the namespace
+reshape (`package Main`, `E-PKG-CASE`, manifest `name → module`, lift `E-PKG-TYPE`) is now a tracked
+breaking-codemod milestone (`docs/specs/2026-06-20-package-namespace-reshape-design.md`). Method
+overloading lowers to **one dispatching PHP method**; when it lands S5's `E-INTERSECT-SIG` is revisited.
+**Examples + new package code use PascalCase** (`package Main;`, `import Core.Console;`).
 
 **SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec
 `docs/specs/2026-06-20-selective-type-import-design.md`): **`import type Pkg.Path.TypeName [as A];`** for

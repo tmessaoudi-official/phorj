@@ -1,510 +1,664 @@
-# Phorge PHP-Parity & Beyond — Feature Review
+# PHP Parity & Beyond — The Definitive Roadmap-Completeness Audit
 
-**Date:** 2026-06-21 · **Baseline:** M-RT S5 (commit `e73cab9`) · **Status:** Review deliverable, verdicts pending batched ask-human approval (see Decision Log).
+**Date:** 2026-06-21 (consolidated 2026-06-22) · **Status:** Designed — synthesis of a 20-track
+multi-agent gap review. Nothing here is implemented by this document; it is the SSOT the developer
+feeds into `ROADMAP.md` / `docs/MILESTONES.md` / `docs/specs/` so gaps stop being discovered ad hoc.
 
-## Purpose
+## 1. Purpose & the philosophy lens
 
-This is the canonical, deduplicated catalogue of every PHP language/stdlib feature (plus a curated set of beyond-PHP design ideas from Rust, Swift, Scala, Kotlin, Go, Gleam, OCaml, Elm, C#, Python and TypeScript) measured against Phorge's current surface. Each row carries a verdict (adopt / phorge-already-better / defer / reject), a ROI estimate, transpile feasibility, and a rationale. It exists to (a) prove Phorge's coverage of PHP is honest and complete, (b) surface the highest-leverage features to build next, and (c) record which features are deliberately out of scope and *why*.
+This is the **definitive gap audit** of Phorge against (a) PHP 8.0–8.4 parity, (b) beyond-PHP
+"upgrade" capability, (c) developer-experience / tooling / ecosystem maturity expected of a 1.0
+language, and (d) the cross-cutting correctness, security, stdlib, numerics, i18n, testing, perf,
+build/deploy, observability, docs, governance, and competitive-positioning surfaces. It replaces the
+earlier Track-A/B-only `php-parity-and-beyond.md` with the merged output of **20 research tracks (A–S,
+V)**, each independently completeness-critic'd against the shipped state (`FEATURES.md`,
+`KNOWN_ISSUES.md`, `docs/MILESTONES.md`, `ROADMAP.md`, `src/`).
 
-## The byte-identical-transpile constraint (the gate every "adopt" must pass)
+Every candidate is judged by the **Phorge philosophy** — *a pragmatic, legible, provably-correct
+upgrade of PHP; the relationship TypeScript has to JavaScript.* Familiarity-first IS the adoption
+strategy. Phorge removes **surprises**, never **capability**. Every feature must map to idiomatic PHP
+(PHP-absent features are compile-time-only and erased before the backends, preserving the
+`run ≡ runvm ≡ real PHP` byte-identity spine). The filter is **"what is the most PHP-familiar, legible,
+pragmatic form of this?"** — not "what is the most powerful?". PL-theory maximalism that doesn't earn
+its surprise budget is rejected; a great gap is one a PHP dev immediately understands and that makes
+their code **provably safer or clearer**.
 
-Phorge's correctness spine is **`run` ≡ `runvm` ≡ real PHP** — byte-identical stdout, enforced by a PHP oracle (`tests/differential.rs`, `PHORGE_REQUIRE_PHP=1`). Therefore **every "adopt" verdict is bound by two hard constraints**:
+**Verdict vocabulary.** `kind`: `port` (a PHP feature we lack) / `new` (beyond-PHP) / `map` (concept
+maps to a shipped feature or is a transpile-emission/doc refinement) / `omit` (PHP capability
+deliberately reshaped). `rec`: **adopt** / **defer** (real, sequenced later) / **reject** (would add
+surprise, break the spine, or is PL-theory vanity). `fit`: strong / ok / weak.
 
-1. **Deterministic PHP lowering.** The feature must lower to PHP whose output is identical to both Phorge backends. Anything non-deterministic — wall-clock reads, RNG, network, shell-out, hash/iteration-order instability, async scheduling, GC-timing-dependent destruction — is **low-feasibility / reject or defer-behind-a-fixture-seam**, regardless of how useful it is.
-2. **Std-only, zero external Rust crates.** No `regex`, `syn`/`quote`, `chrono`, bignum, or `im`/`rpds` crates. A feature that *needs* an external crate is reject/defer unless a hand-rolled std-only implementation is realistic.
+## 2. Master triage table (deduplicated across all 20 tracks)
 
-A secondary oracle constraint: the PHP leg runs under **`php -n`**, so **tier-2 extensions (mbstring, intl, bcmath, gmp) are ABSENT**. Any feature whose deterministic PHP target requires a tier-2 extension is reject/defer under the current extension policy (`docs/specs/2026-06-19-extension-policy-design.md`).
+Items that surfaced in multiple tracks are **merged into a single canonical row** with the
+cross-listing noted. The canonical ID is kept; the duplicate IDs from other tracks are listed in
+*Cross-listed* so nothing is double-counted.
 
-## Legend
+### 2.1 Error handling, control flow, totality
 
-| Column | Values | Meaning |
-|---|---|---|
-| **Verdict** | `adopt` | Worth building; passes the byte-identical + std-only gate. |
-| | `phorge-already-better` | Phorge already has it, usually in a sounder form than PHP. |
-| | `defer` | Worth having but blocked on a prerequisite (mutation+GC, exceptions, generics-as-values, traits/extends, core.json, an iterator protocol, etc.). |
-| | `reject` | Out of scope by design — breaks an invariant (determinism, immutability, no-reflection, no-coercion) or has no clean PHP target. |
-| **ROI** | `high` / `medium` / `low` | Estimated value-to-cost of building it now. |
-| **Transpile** | `yes` | Deterministic 1:1 (or near) PHP lowering exists. |
-| | `partial` | Lowers deterministically only for a subset, or needs a helper/fixture seam. |
-| | `no` | No deterministic PHP target. |
+> **DECIDED 2026-06-22 (developer, locked).** The error model is **three tiers**, one enforced-failure
+> principle: **(1) `throws E`** — an enforced, *typed* exception declaration (the fix to PHP's
+> unchecked `@throws` docblock), checker-enforced at the call site, `?`-propagable, **specific error
+> type required** (no bare `throws Exception` swallow), transpiles to **idiomatic PHP exceptions**;
+> this is the PHP-familiar *default* surface. **(2) `Result<T, E>`** — error-as-value (functional,
+> `match`/`?`), transpiles to a PHP value; for data-flow / `?`-chain code. **(3) unchecked faults /
+> panics** — programmer bugs / invariant violations (index-OOB, force-unwrap-null) that *crash* with a
+> stack trace (Slice 1), never declared up the call chain (this is the explicit fix to Java's
+> "everything is checked" mistake). Both checked tiers are typed + checker-enforced + `?`-composable;
+> `throws` erases before the backends (front-end-only ⇒ byte-identity-safe, no new `Op`). `try/catch`
+> handles the `throws` surface and the imported-PHP interop bridge. Supersedes the bare "Result-first"
+> framing of `B-result`/`A-exceptions` below — they are now the value/exception surfaces of one model.
 
-Evidence grades on the *recommendations* (Executive Summary, re-sequencing) follow CLAUDE.md Rule 18: **[Verified]** (confirmed against the dataset / project surface), **[Inferred]** (consistent with stated mechanisms), **[Speculative]** (design judgment).
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| A-exceptions | A | try/catch/finally/throw + exception types | port | strong | adopt | M3 error-slice-2 | L | D-faults-catch, H-result-error-model, E-trycatch-bridge, O-assert-fault(rel) |
+| B-result | B,V | First-class `Result<T,E>` + `?` propagation (Result-first; try/catch as PHP-interop bridge) | new | strong | adopt | M3 error-slice-2 | L | A-result-type, V-result-error-model, L-result-type |
+| B-qmark-opt | B | `?` propagation over optionals (ships today, no prereq) | new | strong | adopt | M-RT (now) | S | — |
+| H-return-totality | H | Return-on-all-paths (missing-return) check — the #1 soundness leak | port | strong | adopt | M-RT (next) | M | H-faultkind-parity-totality |
+| H-never-type | H | `never` / non-returning return type | port | strong | adopt | M-RT | S | — |
+| H-unreachable-after-return | H | Dead-code-after-terminator diagnostic | port | strong | adopt | M-RT (w/ totality) | S | C-unused-local(rel) |
+| H-match-arm-overlap | H | Duplicate / unreachable `match` arm diagnostic | new | ok | adopt | M-RT | S | — |
+| D-match-position | D,H | `match` in arbitrary expression position | port | strong | **SHIPPED** (M11) | — | — | H-match-position |
+| B-intrinsics | B | `assert`/`unreachable`/`todo`/`panic` correctness intrinsics | new | ok | adopt | M3 (front-end) | S | L-assert-panic, Q-assert, O-assert-stmt |
+| B-labeled-break | B,A,V | `break`/`continue` (bare shipped; optionally-labeled `break N`) | port | strong | adopt | M3 (control-flow) | S | A-labeled-loop, A-goto(legit part), V-swift-guard-ergonomics(rel) |
+| B-let-else | B,V | let-else / bind-or-diverge (`guard let`) | new | strong | adopt | M-RT (w/ null-safety) | S | V-swift-guard-ergonomics |
+| O-contracts | O,B | Design-by-contract `requires`/`ensures`/invariant | new | ok | defer | post-GA / contract slice | M | B-contracts |
+| A-fault-cause-chain | D | Fault cause chain (needs error model) | port | ok | defer | M11 (w/ slice-2) | M | D-fault-cause-chain |
+
+### 2.2 OO, classes, types (M-RT track)
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| D-overloading | A,D | Method/ctor overloading → one dispatching PHP method | port | strong | adopt | M-RT (next slice) | M | — |
+| D-extends | A,D | Class `extends` (single inheritance, final-by-default) | port | strong | adopt | M-RT S6 | M | A-final-default |
+| A-abstract | A | `abstract` classes & methods | port | strong | adopt | M-RT S6 | M | — |
+| A-lsb | A | Late static binding (`static::`, `new static`) | port | ok | adopt | M-RT S6 | M | — |
+| A-override-attr | A | `#[\Override]` correctness marker | port | strong | adopt | M-RT S6 | S | — |
+| D-traits | A,D | Traits / mixins | port | strong | adopt | M-RT S8 | L | — |
+| A-class-const | A | Class constants (typed, interface consts, final) | port | strong | adopt | M-RT | M | A-const-expr (shared evaluator) |
+| A-const-expr | A | Top-level `const` + constant expressions | port | strong | adopt | M-RT / M11 | S | A-class-const |
+| A-magic-stringable | A | `__toString` (Stringable) | port | strong | adopt | M-RT | S | A-arrayaccess(rel), J-string-coerce-interp |
+| A-magic-invoke | A | `__invoke` (callable objects) | port | strong | adopt | M-RT | S | — |
+| A-magic-clone | A | `__clone` hook for `clone`/`with` | port | ok | adopt | M-mut follow-up | S | — |
+| A-readonly | A,D | `readonly` properties & classes (transpile-emit) | map | ok | adopt | M-RT | S | D-readonly-final-emit |
+| A-asym-vis | A | Asymmetric member visibility `private(set)` | port | ok | adopt | M-RT | M | D-member-visibility |
+| A-backed-enums | A | Backed enums + `from`/`tryFrom`/`cases` | port | strong | adopt | M-RT | M | — |
+| A-enum-methods | A | Enum methods + enum-implements-interface + enum consts | port | strong | adopt | M-RT | M | — |
+| B-genenums | B,D | Generic enums `enum Result<T,E>`/`Option<T>` | port | strong | adopt | M-RT (generics follow-up) | M | D-generic-enums |
+| B-sealed | B,H | Sealed/closed hierarchies → exhaustive match over subclasses | new | strong | adopt | M-RT (post-S6) | M | H-sealed-exhaustive |
+| B-newtype | B,K,V | Opaque newtypes / refinement-with-smart-constructor | new | strong | adopt | M-RT or dedicated slice | M | K-secrets-type(⊂), V (refinement) |
+| A-iterators | A,B,J | Iterator/IteratorAggregate + `foreach` over user types | port | strong | adopt | M11 | M | B-iter-protocol, J-iter-protocol, L-iteration-protocol |
+| A-arrayaccess | A | ArrayAccess / Countable SPL interfaces | port | ok | adopt | M11 | M | — |
+| A-named-tuples | A,B | `list()` / array destructuring + minimal tuple type | port | ok | adopt | M3 | M | B-tuples, B-list-destr |
+| D-generic-iface-methods | D | Generic interface methods | port | ok | defer | M-RT generics follow-up | M | — |
+| D-generic-crosspkg-types | D | Cross-package generic library types | port | ok | defer | M5 follow-up | M | — |
+| D-generic-fn-value | D | Generic fn as a first-class value | port | ok | defer | M-RT generics follow-up | M | — |
+| B-bounds | B | Generic bounds `<T: Comparable>` | new | ok | defer | post-M-RT | M | D-bounds-variance(part) |
+| A-anon-class | A | Anonymous classes `new class { … }` | omit | ok | defer | post-M-RT | M | — |
+| A-attributes | A | User attributes `#[Attr]` + reflection read | port | ok | defer | post-M-RT | L | — |
+| A-magic-dynamic | A | `__get`/`__set`/`__call`/`__callStatic` | omit | weak | **reject** | — | M | — |
+| A-destruct | A | `__destruct` destructor (no deterministic finalization) | omit | weak | **reject** | — | M | — |
+| A-references | A | Reference params/assignment `&$x` | omit | weak | **reject** | — | M | — |
+| B-variance | B | Declared variance (in/out) | new | weak | **reject** | — | M | D-fn-type-variance, D-bounds-variance(part) |
+| D-vis-on-alias-import | D | Visibility keyword on alias / import re-export | port | weak | **reject** | — | S | — |
+
+### 2.3 Pattern matching & narrowing
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| B-guards | B | Match guards (`Circle c if c.r > 0 =>`) | new | strong | adopt | M-RT (post-S4) | S | — |
+| B-orpat | B | Or-patterns (`A \| B =>`) | new | strong | adopt | M-RT (post-S4) | S | — |
+| B-payload-destr | B | Enum/variant payload destructuring in arms | new | strong | adopt | M-RT (post-S4) | M | — |
+| B-struct-destr | B | Structural destructuring (nested fields) | new | strong | adopt | M-RT (post-S4) | M | — |
+| B-range-pat | B | Range/literal patterns (`1..=5 =>`) | new | strong | adopt | M-RT (post-S4) | S | — |
+| B-at-bind | B | `@`-bindings (bind whole value while destructuring) | new | ok | adopt | M-RT (w/ guards) | S | — |
+| B-flow-narrow | B,H,V | Negative/else-branch flow narrowing + union exhaustiveness | new | strong | adopt | M-RT (S4 follow-up) | M | H-instanceof-else-narrow, D-union-flow-narrow |
+| V-equality-refinement | V | Equality `==`/`!=` narrowing (TS discriminated narrowing) | new | strong | adopt | M-RT | M | — |
+| D-instanceof-intersect-rhs | D | `instanceof (A & B)` right side (lower to `&&`) | port | strong | adopt | M-RT S5 follow-up | S | — |
+| H-exhaustive-bool-int | H | Exhaustiveness for bool/finite match without `_` | new | ok | defer | M-RT | S | — |
+| D-type-pattern-nested | D | Type pattern nested in a variant payload | port | ok | defer | M-RT unions follow-up | M | — |
+| D-union-common-member | D | Common-member access on a raw union | port | ok | defer | M-RT unions follow-up | M | — |
+| V-discriminated-unions | V | Literal-tag field on a union of classes | map | ok | defer | M-RT / post | M | — |
+| D-whole-union-optional | D | `(A\|B)?` / `(A & B)?` whole-union/intersection optional | port | weak | **reject** | — | M | — |
+| B-active-pat | B | Active/view patterns (F#-style) | new | weak | **reject** | — | M | — |
+
+### 2.4 Call convention, operators, syntax ergonomics
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| A-named-args | A,E | Named arguments `f(name: val)` | port | strong | adopt | M3 / M8-prereq | M | E-named-args |
+| A-default-args | A | Default parameter values | port | strong | adopt | M3 | S | — |
+| A-variadics | A,E | Variadics `...$xs` + spread `...` | port | strong | adopt | M3 / M8-prereq | M | E-variadics |
+| A-new-in-init | A | `new` in default-arg / const initializers | port | ok | defer | with A-default-args (M3) | S | — |
+| C-numsep | C,A,N | Numeric separators `1_000_000` (+ inside hex/bin) | port | strong | adopt | M3 ergonomics | S | A-numeric-sep, N-numeric-literals, C-numsep-bases |
+| C-int-base | C,N | Integer base literals `0x1F`/`0b1010`/`0o17` | port | strong | adopt | M3 ergonomics | S | N-numeric-literals |
+| N-float-exponent | N | Float exponent notation (`1e6`, `2.5e-3`) | port | strong | adopt | M-NUM | S | — |
+| M-unicode-escape | M | `\u{1F600}` codepoint escape in string literals | port | strong | adopt | M-text S1 | S | — |
+| M-string-escapes | M | Complete `\0`/`\e`/`\f`/`\v`/octal escape set | port | ok | defer | M-text S2 | S | — |
+| J-string-concat | J | String concatenation operator (PHP `.`) | port | strong | adopt | M-RT | S | — |
+| J-spaceship | J,A | Spaceship `<=>` three-way compare | port | strong | adopt | M-RT | S | A-spaceship |
+| N-intdiv | N | Integer-division `intdiv`/`divmod` semantics + doc | port | strong | adopt | M-NUM | S | — |
+| N-int-conv | N | Explicit numeric conversions (`toFloat`/`toInt`) | port | strong | adopt | M-NUM | S | — |
+| A-heredoc | A,E | Heredoc / nowdoc multi-line strings | map | ok | adopt | M3 | S | E-heredoc-nowdoc-import |
+| J-pow-operator | J,N | Exponentiation operator `**` | port | ok | defer | M11 / M-NUM | S | N-pow-operator |
+| J-bitwise-ops | J,N | Bitwise/shift `& \| ^ << >> ~` (token-collision w/ type ops) | port | weak | defer | M11 / M-NUM-2 | M | N-bitwise-ops |
+| J-compound-assign-types | J | Compound-assign result-type rules (`+=`/`??=`/`++`) | port | ok | defer | M-RT | S | — |
+| A-strict-types | A | `declare(strict_types=1)` (already strict; emit it) | map | strong | defer | transpile-emit only | S | — |
+| A-cast-ops | A | `(int)`/`(string)` cast operators | map | ok | **reject** | — (named conv fns) | S | — |
+| A-switch | A | C-style `switch`/`case` (fall-through footgun) | map | strong | **reject** | — (`match` covers) | S | — |
+| A-isset-empty | A | `isset`/`empty`/`unset` dynamic predicates | map | weak | **reject** | — (`?`/`??`/if-let) | S | — |
+| A-ternary-elvis | A | Ternary `c?a:b` + Elvis `a?:b` | map | ok | defer | — (expr-if/`??` cover) | S | — |
+| A-nullsafe-chain-call | A | Nullsafe method-chain (shipped as `?.`) | map | ok | defer | — (`?.` shipped) | S | — |
+| A-goto | A | `goto` / unstructured control flow | omit | weak | **reject** | — | S | — |
+| A-func-static | A | Function-`static` locals + `global` | omit | weak | **reject** | — | S | — |
+| A-compact-extract | A | `compact`/`extract`/variable-variables `$$x` | omit | weak | **reject** | — | S | — |
+| J-op-overload | A,B,J,D | Operator overloading on user types | new | weak | **reject** | — | M/L | B-op-overload-derive, D-operator-overload |
+| B-derive | B | Derive-style attributes `#[derive(Eq/Show/Ord/Default)]` | new | strong | adopt | M11 / derive slice | L | — |
+| B-derive-json | B | `#[derive(Json)]` serialize | new | ok | defer | M11 (after core.json) | M | — |
+| V-elixir-pipe | V | Pipe into any arg position (`x \|> f(_, y)`) | new | ok | defer | M-RT / post | M | — |
+
+### 2.5 Semantics, numerics, business data
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| N-decimal | N | Typed `decimal` / money fixed-point primitive (headline) | port | strong | adopt | new M-NUM | L | H-decimal-money |
+| N-decimal-rounding | N | Explicit rounding modes for `decimal` | port | strong | adopt | M-NUM | M | — |
+| N-datetime-core | N,G | Immutable timezone-mandatory `DateTime`/`Instant` | port | strong | adopt | new M-TIME | L | G-datetime |
+| N-duration | N | Typed `Duration` | port | strong | adopt | M-TIME | M | — |
+| N-date-civil | N | Civil `Date`/`Time` (no-zone) | port | strong | adopt | M-TIME | M | — |
+| J-numeric-tower | J | int↔float coercion rule (auto-widen, documented) | port | strong | adopt | M-RT | M | — |
+| J-ordering-rules | J | Total ordering: string `<`, cross-type, enum/bool | port | strong | adopt | M-RT | M | J-eq-asymmetry |
+| J-sort-stability | J | Sort/`usort` semantics + stability + comparator contract | port | strong | adopt | M11 | M | J-nan-ordering |
+| J-float-eq-lint | J | Float `==` exactness lint (`W-FLOAT-EQ`) | new | strong | adopt | M-RT | S | — |
+| J-bool-coercion | J | Truthiness rule — enforced (doc the shipped `E-COND-NOT-BOOL`) | map | strong | adopt | M-RT | S | — |
+| J-unicode-model | J,M | `string`=UTF-8 byte-model contract + byte↔char bridge | port | strong | adopt | M11 / M-text S1 | M | M-encoding-contract, M-ascii-divergence |
+| N-int-width | N,J | Pin & document `int`=i64 vs PHP platform-width | omit | strong | adopt | M-NUM | S | J-int-width(doc), H-overflow-policy-doc |
+| N-float-predicates | N | `isNan`/`isFinite`/`isInfinite` + `NaN`/`Infinity` | port | strong | adopt | M-NUM | S | — |
+| N-bigint | N | Arbitrary-precision `BigInt` | port | ok | defer | M-NUM-2 | L | — |
+| N-money-currency | N | Composite `Money` (decimal + currency) | new | ok | defer | M-NUM-2 | M | — |
+| A-sized-int | A,I,N,H | Sized integers (`i8`…`i64`/`u*`) | new | ok | defer | v2 | L | I-sized-ints, N-sized-int, H-sized-int-overflow |
+| N-rational | N | Rational / fraction type | port | weak | **reject** | — | L | — |
+| N-percent | N | Percentage helper (userland) | new | weak | **reject** | — | M | — |
+| N-overflow-policy | N | Opt-in wrapping/saturating int ops | new | weak | defer | v2 | M | — |
+| D-identity-eq | J,D | Identity `===` (`Rc::ptr_eq`) | port | ok | defer | M-mut follow-up | S | J-identity-eq |
+| J-hash-contract | J | User-defined hash/key contract for Map/Set keys | port | ok | defer | M11 | M | — |
+| D-float-key | D | `float` map keys | omit | weak | **reject** | — | S | — |
+| D-map-bool-int-key-coerce | D | Map bool/int-string key coercion vs PHP | defer | weak | **reject** | — (caveat) | S | — |
+
+### 2.6 Mutation, build, packages (follow-ups to shipped milestones)
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| D-nested-place-store | D | Nested place-stores (`this.f[i]=e`, indexed field target) | port | strong | adopt | M-mut follow-up | M | D-field-set-intersection |
+| D-property-accessors-backed | D | Backed property hooks + static/iface/abstract hooks | port | ok | defer | M-mut follow-up | M | — |
+| D-cycle-collector | D,I | Cycle collector (mutation-created cycles) | port | ok | defer | M11-GC / v2 | L | — |
+| P-build-vendor | P,D | `phg build` merges `vendor/` + multi-package projects | port | strong | adopt | M2.5 P3 / M5 | M | D-build-vendor-merge |
+| P-build-argv | P,D,G | Built binaries pass argv + exit codes | port | strong | adopt | M2.5 P3 | S | D-build-argv, G-args(rel) |
+| P-stub-registry | P | M2.5 Phase 3a prebuilt cross-stub registry | port | strong | adopt | M2.5 P3a | L | — |
+| P-strip-meta | P | `--strip`/`--release`/`--debug` + size report | port | strong | adopt | M2.5 P3 | S | — |
+| D-build-transitive-deps | D | Transitive dependency resolution (`phg vendor`) | port | strong | adopt | M5 follow-up | M | — |
+| D-lambda-lib-pkg | D | Lambdas / fn-values in library packages | port | strong | adopt | M5 follow-up | M | D-crosspkg-fn-value |
+| D-transpile-php-builtin | D,E | `package main` fn-name vs PHP-builtin collision lint | port | strong | adopt | M8 | S | E-transpile-hazard-lint, D-transpile-private-field |
+| D-module-qualified-type | D | Module-qualified type form (`Geometry.Point`) | port | ok | defer | M5 follow-up | M | — |
+| NS-pascalcase-reshape | (pre-locked, audit-missed) | PascalCase package/folder reshape — `package Main`, `E-PKG-CASE`, manifest `name → module`, lift `E-PKG-TYPE`; **enforced incl. vendor** (PHP/Composer deps case-mapped at the importer boundary, not by exception); maps 1:1 to PHP PSR-4 namespaces | port | strong | adopt | new milestone (breaking codemod) | L | spec `2026-06-20-package-namespace-reshape-design.md` |
+| P-codesign | P | Code signing (Authenticode + macOS notarize) | port | ok | defer | M2.5 P3b | L | — |
+| P-macos-stub | P | macOS signed stub production | port | ok | defer | M2.5 P3b | M | D-build-macos-stub |
+| D-lambda-this | D | Lambda referencing `this` (`E-LAMBDA-THIS`) | port | ok | defer | M-RT / M3 follow-up | M | — |
+| D-lambda-block-infer | D | Statement-body lambda return inference | port | ok | defer | M3 follow-up | S | — |
+| P-build-bytecode | P | Bytecode (not source) payload in built binaries | defer | ok | defer | v2 | M | — |
+| P-pkg-registry | F,P | Hosted package registry (Packagist analogue) | new | weak | **reject** | v2+ | L | F-registry(defer) |
+| P-faas | P | Serverless/FaaS deploy adapters | map | weak | **reject** | — | L | — |
+
+### 2.7 Stdlib breadth & batteries
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| L-stdlib-charter | L,G,V | Written stdlib design charter (naming, arg-order, error-vs-optional, tiers, native-vs-`.phg`) | new | strong | adopt | M4 / M9 | S | G-stdlib-namespace, L-stdlib-impl-strategy, L-naming-fix, V-typed-stdlib-product |
+| L-list-breadth | A,G,L,N | `Core.List` breadth: query/slice/sort/HO-extras (`sort`/`contains`/`indexOf`/`slice`/`unique`/`find`/`any`/`all`/`zip`/`min`/`max`) | port | strong | adopt | M11 / M4 | M | A-corelist-breadth, G-list-more, G-list-predicates, L-list-*, N-numeric-minmax-breadth |
+| L-map-breadth | L,D | `Core.Map`: safe `get`/`getOr`, empty/builder, `insert`/`remove`/`merge`, `map`/`filter`, iteration | port | strong | adopt | M11 / M4 | M | D-empty-map-literal, D-map-iteration, L-map-access, L-map-transform |
+| L-set-algebra | L,D | `Core.Set`: union/intersection/difference/isSubset/add/remove | port | strong | adopt | M11 / M4 | M/S | D-set-union-intersect |
+| G-json | A,G,L | `Core.Json` encode (now, statically-typed) + decode (needs `Any`) | port | strong | adopt(encode)/defer(decode) | M11 | L | A-json-validate, L-json, L-json-encode, K-deser-safe, B-derive-json |
+| G-regex | G,L,M | `Core.Regex` (PCRE `/u`, restricted-subset dual-engine parity) | port | strong | adopt | M11 / M-text | L | L-regex, M-regex, K-redos-constraint |
+| L-convert | G,L,N,M | `Core.Convert`/parse: `Int.parse->int?`, `Float.parse->float?`, `toString` | port | strong | adopt | M11 / M4 / M-NUM | M | G-numfmt, N-numeric-parse |
+| L-text-breadth | A,G,L,M | `Core.Text` breadth: startsWith/endsWith/indexOf/substring/repeat/pad/reverse | port | strong | adopt | M11 / M4 / M-text S1 | M | G-text-more, M-text-breadth |
+| M-codepoint-len | M | Codepoint-aware length & iteration (`chars`/`charCount`) | port | strong | adopt | M-text S1 | M | M-codepoint-int, L-char-ops |
+| M-number-format | M,N,A | Non-locale `number_format` (thousands + fixed decimals) | port | strong | adopt | M-text S1 / M-NUM | S | N-num-format(tier1 part), L-numeric-format, A-sprintf(rel) |
+| M-ci-compare | M | ASCII case-insensitive compare/search | port | strong | adopt | M-text S1 | S | — |
+| A-sprintf | A,G,M | `sprintf`/`printf` checked-subset formatted output | port | strong | adopt | M11 | M | M-string-fmt(defer), L-numeric-format |
+| G-math-breadth | G,L,N | `Core.Math` breadth: `round`/`sign`/`clamp`/`gcd`/`log`/`exp`/trig/`PI`/`E`; float `abs`/`min`/`max` | port | strong | adopt | M11 / M-NUM | M/S | G-math-more, L-math-breadth |
+| G-console-io | A,G,L | `Core.Console` breadth: `print`/`eprintln`(stderr)/`readLine`/`exit` | port | strong | adopt | M11 / M4 | S | A-print-nonewline, L-console-io |
+| A-printf-debug | A,Q | `var_dump`/`var_export`-style structured dump (`Console.debug`/`inspect`) | new | ok | adopt | M11 | S | Q-debug-dump |
+| G-base64hex | G | `Core.Encoding` base64/hex (composes with `bytes`) | port | strong | adopt | M11 | S | — |
+| G-hash | G,K | `Core.Hash` deterministic digests (sha256/md5/crc32) | port | strong | adopt | M11 | M | K-crypto-stdlib(digest subset) |
+| G-path | G | `Core.Path` pure path manipulation (join/base/ext/dir) | port | strong | adopt | M11 | S | K-shell-path-safe(rel) |
+| G-url | G | `Core.Url` urlencode/decode + query-string + parseUrl | port | strong | adopt | M6+/M11 | M | — |
+| G-csv | G | `Core.Csv` parse/format rows | port | ok | adopt | new M-Batteries | M | — |
+| G-file-more | G | `Core.File` breadth: append/delete/copy/lines/tempFile/readBytes | port | ok | adopt | new M-Batteries | M | L-bytes-breadth |
+| G-dir | G | `Core.Dir` directory ops (list/make/exists/glob) | port | ok | adopt | new M-Batteries | M | — |
+| L-option-combinators | L | `Option`-style combinators over `T?` (no exceptions) | new | ok | adopt | M4 | S | — |
+| L-natives-introspect | L,P,F | `phg natives` / `--list-natives` discoverable stdlib | new | strong | adopt | M5 | S | — |
+| G-env | G,K,Q | `Core.Env` env/dotenv config (quarantined) | port | ok | adopt | new M-Batteries / M8 | M/S | K-env-config, Q-env-introspect |
+| G-args | G | `Core.Args` typed CLI arg parsing | port | strong | adopt | new M-Batteries | M | — |
+| G-random | G,K,O | `Core.Random` seedable CSPRNG (deterministic-under-test seam) | port | weak/strong | defer/adopt-seam | new M-Batteries / M8 | M | K-csprng, O-deterministic-seam |
+| G-datetime-now | N,G,Q | `Core.Time` clock `now()` (non-deterministic, quarantined) | map | weak | defer | M-TIME-2 / M6 | S | N-now-clock, Q-coretime |
+| N-tz-iana | N | IANA tz DB + DST conversions | port | ok | defer | M-TIME-2 / M6 | L | — |
+| G-uuid | G | `Core.Uuid` v4/v7 | port | weak | defer | new M-Batteries | S | — |
+| G-http-client | G | `Core.Http` outbound client (no std HTTP/TLS, non-det) | new | weak | defer | M6+ | L | — |
+| G-db | G,K | `Core.Db` PDO-equivalent (parameterized-only) | port | ok | defer | M6+ / `Core.Sql` | L | K-sql-prepared |
+| G-process | G,K | `Core.Process` spawn/exec (argv-array only) | port | weak | defer | new M-Batteries | M | K-shell-path-safe |
+| G-log | G,Q | `Core.Log` PSR-3 structured logging | port | ok | adopt | M11 | M | Q-corelog, Q-loglevel |
+| G-compress | G | `Core.Compress` gzip/zlib (no std DEFLATE) | port | weak | defer | new M-Batteries | M | — |
+| G-crypto-strong | G,K | password hashing / HMAC / constant-time compare | port | ok | adopt(subset)/defer | M8+M11 | M | K-crypto-stdlib, K-timing-safe-eq |
+| A-spl-ds | A | SPL data structures (map onto generics) | map | weak | defer | M11 | M | — |
+| A-streams | A | Stream wrappers / `fopen` resources | omit | weak | **reject** | — (M6 IO) | L | — |
+| L-lazy-seq | L | Lazy iterators / `Seq<T>` generator protocol | new | weak | **reject** | — | L | A-generators(defer), A-fibers(reject) |
+| A-generators | A | Generators / `yield` / `yield from` | port | ok | defer | M6 | L | — |
+| A-fibers | A | Fibers (stackful coroutines) | omit | weak | **reject** | — (M6 spawn) | L | — |
+
+### 2.8 Concurrency, web, security
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| B-concurrency | B,D | Structured concurrency: `spawn` + channels (green threads) | port | strong | defer | M6 | L | D-concurrency |
+| P-frontcontroller-gen | P | Generated PHP front-controller (`phg serve --emit-php`) | port | strong | adopt | M6 W4 | M | — |
+| P-phar | P | PHAR output target (`phg package --phar`) | port | strong | adopt | M6/M12 | M | — |
+| Q-serve-reqlog | Q | Structured request/access logging on `phg serve` | new | strong | adopt | M6 W4 | M | — |
+| Q-serve-health | Q | Health/readiness route helper for `serve` | new | strong | adopt | M6 W4 | S | — |
+| K-html-context-escape | K,D | Context-aware escaping (URL/JS/CSS) beyond text+attr | port | strong | adopt | M11 | M | D-html-url-css-script |
+| K-header-injection | K | `phg serve` response header-injection / smuggling guard | port | strong | adopt | M8 | S | — |
+| K-secrets-type | K | `#[SensitiveParameter]` + `Secret<T>` (trace redaction) | port | strong | adopt | M8 | S | (⊂ B-newtype) |
+| K-supply-chain-vendor-min | K | Vendor copy symlink-refusal (mostly shipped; residual) | port | strong | adopt | M8 (P2-#36) | S | — |
+| K-security-doc | K | First-class application-developer "Security model" doc | port | strong | adopt | M12 | S | K-int-overflow-story, K-hashdos-immunity, K-artifact-integrity |
+| K-fuzz-harness | K,H | Continuous fuzzing of lexer/parser/binary-readers (CI) | new | strong | adopt | M9 (planned M12) | M | H-ev7-fuzz |
+| K-sql-prepared | K,G | Parameterized-only SQL (no string-built SQL) | new | strong | defer | M6/M11 `Core.Sql` | L | G-db |
+| K-auth-csrf-session | K | Auth/CSRF/session helpers (web layer) | new | ok | defer | post-1.0 (M6) | L | K-csp-headers, Q-serve-metrics-ep(reject) |
+| K-redos-constraint | K | Lock ReDoS-safe constraint for future `Core.Regex` | new | ok | defer | M11 / post-1.0 | M | — |
+| K-file-capability | K | Root-jailed `Core.File` capability model | new | ok | defer | post-1.0 | L | — |
+| K-serve-handler-budget | K | Per-request wall-clock/step budget (busy-loop DoS) | new | ok | defer | post-1.0 (M6) | M | — |
+| K-dep-provenance | K | `phg vendor` SBOM-lite provenance (SHA + license) | new | ok | defer | M12 (w/ audit) | S | — |
+| K-audit-cmd | K | `phg audit` advisory check of vendored deps | new | strong | defer | M12 | M | — |
+| K-taint-tracking | K | Taint tracking (untrusted-string flow) | new | weak | **reject** | — | L | — |
+| B-async-await | B,V | async/await (colored functions) | new | weak | **reject** | — | L | V-async-await |
+| B-actors | B | Actor model / message-passing isolates | new | weak | **reject** | — | L | — |
+| B-effects | B,V | Algebraic effects / Roc-style platform-effects | new | weak | **reject** | — | L | V-roc-platform-effects |
+| B-reactive | B | Reactive primitives / signals | new | weak | **reject** | — | L | — |
+| Q-tracing-spans | Q | Distributed tracing / OTel spans | new | weak | **reject** | — | L | Q-metrics(defer), Q-serve-metrics-ep |
+| Q-panic-shutdown | Q | Crash capture: shutdown/uncaught-fault hook | port | ok | defer | post error-model | M | — |
+| Q-reflection | Q | Runtime reflection / introspection API | port | weak | defer | M-RT follow-up / v2 | L | Q-debug-trace |
+
+### 2.9 Tooling, testing, DX
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| C-fmt | C,F,V | `phg fmt` canonical formatter (gofmt model, no options) | new | strong | adopt | M7 / M12 | L | F-fmt, V-go-onboarding-tooling |
+| C-fmt-check | C | `phg fmt --check`/`--diff` CI gate | new | strong | adopt | M7 (w/ fmt) | S | — |
+| C-lsp | C,F | Language server (`phg lsp` on `check --json` seam) | new | strong | defer | M7 (planned M12) | L | F-lsp |
+| C-editor-clients | C,F | VSCode + PhpStorm thin clients | new | ok | defer | M7 (after lsp) | M | F-vscode, F-jetbrains |
+| O-test-runner | O,F | Built-in `phg test` runner + discovery | port | strong | adopt | new M-Test / M11 | L | F-test |
+| O-assert-lib | O | `Core.Test` typed assertion library | port | strong | adopt | M-Test | M | — |
+| O-deterministic-seam | O,G,K | Seedable `Core.Random` + injectable `Core.Time` (test seam) | new | strong | adopt | M-Test (prereq) | M | (= G-random/K-csprng seam) |
+| O-table-driven | O | Table-driven / parameterized tests | port | strong | adopt | M-Test | M | — |
+| O-fakes-traits | O | Fakes/stubs via interfaces (blessed pattern, doc) | map | strong | adopt | M-Test | S | — |
+| O-phpunit-bridge | O,E | Transpiled tests runnable under PHPUnit | map | ok | adopt | M-Test | S | E-phpunit-bridge |
+| O-fixtures | O | Setup/teardown fixtures (`setUp`/`tearDown`) | port | strong | adopt | M-Test | M | — |
+| O-test-selection | O | Test selection/filtering (`--filter`/tags) | port | strong | adopt | M-Test | S | — |
+| O-skip-focus | O | Skip/focus/pending tests | port | strong | adopt | M-Test | S | — |
+| O-assert-fault | O | `assertFaults`/`assertThrows` (runner catches fault) | port | strong | adopt | M-Test | M | — |
+| O-ci-report | O | Machine-readable test report (JUnit-XML/TAP) | port | ok | adopt | M-Test | S | — |
+| O-test-isolation | O | Per-test fresh-state guarantee (doc; static-mut caveat) | new | strong | adopt | M-Test | S | — |
+| C-new | C,F | `phg new` project scaffolder | port | strong | adopt | M5/M7 / M11 | S | F-scaffold |
+| C-init-config | C,F | `phg init` (manifest + .gitignore in-place) | port | ok | adopt | M5/M7 | S | F-scaffold |
+| F-add | F | `phg add` dependency add/resolve (consume side of vendor) | port | strong | adopt | M11 | M | — |
+| F-toolchain-pin | F,S | `phorge` version field in `phorge.toml` | port | strong | adopt | M11 | S | S-msrv-policy(rel) |
+| C-unused-import | C,H,F | Unused-import lint (`W-UNUSED-IMPORT`) | new | strong | adopt | M3/M8 warning channel | S | H-unused-binding-warn, F-lint |
+| C-unused-local | C,H,F | Unused-local / unreachable-code lint | new | strong | adopt | M3/M8 | M | H-unused-binding-warn, F-lint |
+| C-api-didyoumean | C | "did you mean" for stdlib/native APIs | port | strong | adopt | M3/M8 | S | — |
+| C-explain-fuzzy | C | `phg explain <typo>` did-you-mean for codes | port | strong | adopt | M3 | S | — |
+| C-explain-list | C,R | `phg explain --list` browse all codes | port | ok | adopt | M3 / M12 | S | R-error-index |
+| C-interp-line | C,D | Fix line=1 reporting inside `"{…}"` interpolation (bug) | map | strong | adopt | M3/M8 | M | D-interp-line1 |
+| D-trace-method-fileline | D,Q | Method/ctor/closure frames `file:line` (trace follow-up) | port | strong | adopt | M-faults Slice 1.1 | M | Q-trace-frames |
+| C-repl | C,F | `phg repl` interactive shell | new | ok | adopt | M7 (planned M12) | M | F-repl |
+| C-fix-it | C,F | Machine-applicable fix-its (`--fix`) | new | ok | defer | M7 (after fmt/lsp) | M | F-lint(--fix) |
+| C-doc-gen | C,F,R | `phg doc` API doc generator + doc-comments | new | ok | defer/adopt | M7 / M11 | L/M | F-doc, R-doc-comments, R-stdlib-apidoc |
+| C-doctest | C,O,R | Doctests (runnable `///` examples) | new | ok | defer | M7/M9 | M | O-doctest, R-doctest |
+| C-watch | C,F | `phg watch` / `check --watch` (std-only polling) | new | ok | defer/adopt | M7 / M12 | S | F-watch |
+| C-completions | C,F,P | Shell completions `phg completions <shell>` | new | ok | adopt | M7 / M12 | S | F-completions, P-shell-completion |
+| F-playground | F | Web playground (WASM, run+disasm+transpiled-PHP side-by-side) | new | strong | adopt | M12 | M | R-interactive-playground(defer) |
+| F-docsite | F,R | Rendered documentation site | new | ok | adopt | M12 | M | R-website(defer) |
+| F-citemplates | F | `phg`-aware CI templates (setup-phg action) | new | ok | adopt | M12 | S | — |
+| I-regress-gate | I | Perf-regression gate in CI (baseline + ratchet) | new | strong | adopt | M9 | M | I-bench-suite |
+| F-installer | F,P | One-line installer / `phgup` version manager | new | ok | defer | v1.1 | M | P-install-script, P-self-update |
+| F-debugger | F | Step debugger (Xdebug/DAP analogue) | port | ok | defer | v1.1+ | L | — |
+| F-profiler | F | Standalone profiler / flame output | port | weak | defer | v1.1+ | M | I-disasm-cost |
+| O-coverage | O,F | Code coverage instrumentation | new | ok | defer | M-Test+2 / M12 | L | F-coverage |
+| O-property | O | Property-based testing (`forAll`) | new | ok | defer | M-Test+1 | L | — |
+| O-snapshot | O | Snapshot / golden-file testing | new | ok | defer | M-Test+1 | M | — |
+| O-mock-reflection | O | Reflection-based mock framework | omit | weak | **reject** | — | — | — |
+| O-fuzz | O | `phg fuzz` user-code fuzzing | new | weak | defer | v2 | L | — |
+| O-mutation-testing | O | Mutation testing (Infection-style) | new | weak | defer | v2 | L | — |
+
+### 2.10 Performance (mostly invisible, spine-gated)
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| I-str-rc | I | `Rc`-share `Value::Str` (kill string deep-clone) | port | strong | adopt | M-perf | S | — |
+| I-isinstance-interned | I | Intern `Op::IsInstance(String)` to an index | port | strong | adopt | M-perf | S | — |
+| I-dispatch | I | Faster dispatch (no per-op `Op::clone`) | new | strong | adopt | M-perf | S | I-op-shrink |
+| I-constfold | I | Constant-folding compiler pass | new | strong | adopt | M-perf | M | — |
+| I-peephole | I | Peephole / dead-code-after-return elimination | new | strong | adopt | M-perf | M | — |
+| I-range-lazy | I | Lazy `for`-loop range (don't materialize `0..n`) | new | strong | adopt | M-perf | S | — |
+| I-cargo-profile | I | Release-profile tuning (`lto=fat`, `codegen-units=1`) | new | strong | adopt | M9 | S | — |
+| I-superinstr | I | Superinstructions (`GetLocal0`, `AddIConst`, fused cmp-jump) | new | strong | defer | M-perf | M | — |
+| I-inline-cache | I | Inline caches for method/field/native resolution | new | ok | defer | M-perf | L | — |
+| I-intern-symbols | I | Intern field/method/native names to symbol IDs | new | strong | defer | M-perf | M | — |
+| I-alloc-stack | I | Allocation reduction (stack reuse, small-vec, string arena) | new | ok | defer | M-perf | M | I-vm-stack-precap |
+| I-threaded-dispatch | I | Threaded/computed-goto dispatch (TCO-gated) | new | ok | defer | M-perf | M | — |
+| I-fn-inline | I | Function inlining (small/leaf) | new | ok | defer | v2 | L | — |
+| I-aot | I | Native AOT compilation | new | weak | defer | v2 | L | — |
+| I-ownership-nogc | I | Ownership model removing the GC (narrow the v2 goal, don't build) | new | weak | **reject** | — | L | — |
+| B-tco | B,I | Guaranteed TCO (breaks PHP-leg spine) | new | weak | **reject** | — | M | I-tco |
+| I-bench-php-real | I | `--vs-php` against OPcache+JIT release build | map | ok | defer | M9 | S | — |
+
+### 2.11 Interop & migration
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| E-importer-stageA | E,F | PHP→Phorge importer Stage A (round-trip own emitted PHP) | port | strong | adopt | M8 | L | F-migrate |
+| E-importer-stageB | E | PHP→Phorge importer Stage B (idiomatic typed PHP 8) | port | strong | adopt | M8 | L | — |
+| E-decl-files | E | Declaration-file equivalent (`.d.phg`/stub) for untyped deps | new | strong | adopt | new M8.5 (interop) | L | — |
+| E-call-composer | E | Call a Composer/PHP library (transpile-time only) | new | strong | adopt | M8.5 | M | — |
+| E-migration-report | E | Importer migration report (BETTER/SAME/REJECT verdicts) | new | strong | adopt | M8 | M | — |
+| E-incremental-codemod | E,V | Directory-at-a-time codemod CLI (`phg import ./legacy`) | new | strong | adopt | M8 | M | V-incremental-adoption, V-kotlin-interop-posture |
+| E-namespace-fqn-interop | E | Map PHP namespace/use ↔ Phorge package | map | strong | adopt | M8 | M | E-psr4-autoload-bridge(defer) |
+| E-strict-types-gate | E | `declare(strict_types=1)` as import-eligibility gate | map | strong | adopt | M8 | S | — |
+| E-phpdoc-harvest | E | Harvest PHPDoc `@param`/`@return`/`@template` on import | port | strong | adopt | M8 Stage B | M | — |
+| E-firstclass-callable-import | E | Map PHP first-class callable → Phorge fn value | map | strong | adopt | M8 Stage B | S | — |
+| E-php-version-target | E | `--php-target=8.1\|8.2\|8.3\|8.4` transpile floor | port | strong | adopt | M9/M12 | S | — |
+| E-mixed-project | E | Mixed `.php`+`.phg` in one project (`allowJs` analogue) | new | ok | defer | M8.5 | L | — |
+| E-raw-php-escape | E | Raw-PHP escape hatch (`php"…"`, transpile-only) | new | ok | defer | M8.5 | M | — |
+| E-union-to-enum | E | PHP `T\|U` import mapping (revisit now unions ship) | map | strong | defer | M8 | M | — |
+| E-composer-manifest-bridge | E | `phorge.toml` ↔ `composer.json` interop | map | ok | defer | M8.5 | M | — |
+| E-stub-distribution | E | Stub ecosystem repo + `phg stub get` (DefinitelyTyped) | new | ok | defer | post-M8.5 | L | — |
+| E-importer-stageC | E | Importer of dynamic PHP (eval/var-vars/`__call`) | omit | weak | **reject** | — | — | — |
+| E-php-ffi | E | Live PHP-engine FFI / embed PHP in the VM | omit | weak | **reject** | — | — | — |
+| E-gradual-checkjs | E | Per-file gradual/optional typing (`mixed` hole) | map | weak | **reject** | — | — | V-error-suppression-stance(inverse) |
+
+### 2.12 Docs, governance, competitive positioning
+
+| ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
+|----|-------|-------|------|-----|-----|-----------|--------|--------------|
+| R-langref | R | Formal language reference doc | port | strong | adopt | M12 | L | — |
+| R-tour | R | Guided tour / "the book" | new | strong | adopt | M12 | L | V-onboarding-first-hour |
+| R-migration | R,V | PHP→Phorge migration guide (human, concept-mapping) | new | strong | adopt | M12 | M | V-incremental-adoption(doc) |
+| R-transpile-contract-doc | R | "How Phorge maps to PHP" per-construct reference | new | strong | adopt | M12 | M | — |
+| R-explain-coverage | R | `phg explain` completeness + enforcement test | port | strong | adopt | M9 | S | — |
+| R-stdlib-apidoc | R,L | Generated `Core.*` API reference (from registry) | new | strong | adopt | M11 | M | L-stdlib-apidoc |
+| R-doc-comments | R | Phorge doc-comment syntax (`/** */`) + checker awareness | port | strong | adopt | M11 | M | — |
+| R-getting-started | R,V | 5-minute getting-started page | new | strong | adopt | M12 | S | V-onboarding-first-hour |
+| R-grammar-ref | R,S | Published formal grammar (EBNF) | port | ok | adopt | M12 | M | S-frozen-grammar |
+| R-cheatsheet | R | One-page syntax cheat sheet | new | strong | adopt | M12 | S | — |
+| R-faq-troubleshooting | R | FAQ / troubleshooting (CTy-trap, `V()`, shadow-import) | new | ok | adopt | M12 | S | — |
+| S-semver-policy | S,V | Documented semver + stability policy (lang + stdlib) | port | strong | adopt | GA-M12 | S | V-semver-deprecation-policy, R-stability-policy |
+| S-breaking-change-def | S | Explicit breaking-change definition (BC contract) | new | strong | adopt | GA-M12 | S | — |
+| S-deprecation-policy | S,V | Deprecation policy + `@deprecated`/`W-DEPRECATED` lint | port | strong | adopt | GA-M12 | M | V-semver-deprecation-policy |
+| S-frozen-grammar | S | Frozen versioned 1.0 grammar SSOT | port | strong | adopt | GA-M12 | M | R-grammar-ref |
+| S-release-automation | S,F,P | Release automation: tags + SHA-256 checksums | port | ok | adopt | GA-M12 | M | F-release, P-release-cmd, P-repro-builds |
+| S-changelog-discipline | S | Keep-a-Changelog → versioned release notes | map | strong | adopt | GA-M12 | S | S-upgrading-guide |
+| S-conformance-corpus | S | Frozen 1.0 conformance corpus (executable BC guardrail) | new | strong | adopt | GA-M12 | M | — |
+| S-diagnostic-code-stability | S | Diagnostic codes declared a stable API | new | strong | adopt | GA-M12 | S | — |
+| S-version-provenance | S | Embed git SHA + build metadata in `phg --version` | port | ok | adopt | GA-M12 | S | — |
+| S-zerodep-promise | S | Zero-runtime-dependency framed as a stability promise | map | strong | adopt | GA-M12 | S | — |
+| S-msrv-policy | S | Documented MSRV + bump policy | port | ok | adopt | GA-M12 | S | F-toolchain-pin |
+| S-version-binary-contract | S | `.phorge` container/bytecode compatibility contract | port | ok | adopt | GA-M12 | S | — |
+| V-differentiation-vs-php8 | V | Differentiation thesis vs PHP 8.x (+ perf-honesty clause) | new | strong | adopt | GA | S | V-perf-honesty-vs-php |
+| V-killer-app-domain | V | Named flagship domain (typed web backends) | new | strong | adopt | GA | M | — |
+| V-error-suppression-stance | V | Explicit "no `@`/`any`/authored-`mixed`" stance | new | strong | adopt | GA | S | — |
+| V-gleam-error-quality | V | Error-quality as a measured commitment (golden corpus) | new | strong | adopt | M12 | M | — |
+| V-naming-branding | V | Resolve the "Phorge" name collision (defer to pre-GA) | new | strong | defer | pre-GA | S | — |
+| S-editions | S,V | Rust-style editions mechanism (policy now, build post-1.0) | new | strong | defer | new M13 (post-1.0) | L | V-editions-stability |
+| S-rfc-process | S,V | Lightweight RFC / governance-evolution process | port | ok | defer | post-1.0 | M | V-community-governance, S-governance-evolution |
+| S-stdlib-stability-tiers | S | Per-API stability tiers (stable/experimental/internal) | new | ok | defer | M11 | M | — |
+| V-llm-codegen-affinity | V | Optimise surface for LLM-assisted authoring | new | ok | defer | post-GA | M | — |
+| V-corpus-driven-priorities | V | Real-corpus feature prioritisation | new | ok | defer | post-GA | M | V-benchmark-game-presence |
+| R-rustdoc-internal | R | Rustdoc on the compiler crate | new | weak | defer | v2 | M | — |
+| S-lts-backport | S | LTS / multi-line backport policy | port | weak | **reject** | — | M | — |
+| R-versioned-docs | R | Per-release doc snapshots | new | weak | **reject** | — | M | — |
+| R-i18n-docs | R | Localized / translated docs | omit | weak | **reject** | — | L | — |
+| R-video-tutorials | R | Video / screencast tutorials | new | weak | **reject** | — | M | — |
+| V-shapes-vs-records | V | Structural record/"shape" types (vs nominal classes) | new | weak | **reject** | — | L | — |
+
+## 3. Rollup by proposed milestone
+
+This is the section that feeds `ROADMAP.md` / `docs/MILESTONES.md`. Items are listed under their
+*primary* proposed milestone; cross-milestone items appear under the earliest.
+
+### M-RT (Rich Types — active) — the immediate language work
+- **Next slice:** D-overloading (confirmed next), then S6 (D-extends + A-abstract + A-lsb +
+  A-override-attr + A-final-default + D-const-final-enforce), then S8 (D-traits).
+- **Totality cluster (land before/with overloading):** H-return-totality, H-never-type,
+  H-unreachable-after-return, H-match-arm-overlap.
+- **Generics follow-up:** B-genenums → B-result + B-qmark-opt; D-generic-iface-methods,
+  D-generic-fn-value, D-generic-enums (= B-genenums).
+- **Pattern cluster (post-S4):** B-guards, B-orpat, B-payload-destr, B-struct-destr, B-range-pat,
+  B-at-bind, B-flow-narrow (+ V-equality-refinement), D-instanceof-intersect-rhs, B-sealed (post-S6).
+- **Class surface:** A-class-const + A-const-expr, A-magic-stringable, A-magic-invoke, A-backed-enums,
+  A-enum-methods, A-readonly, A-asym-vis, B-newtype, A-iterators (also M11).
+- **Semantics:** J-numeric-tower, J-ordering-rules, J-spaceship, J-float-eq-lint, J-bool-coercion(doc),
+  J-string-concat.
+- **Ergonomics (M3):** A-named-args, A-default-args, A-variadics, A-named-tuples, C-numsep, C-int-base,
+  A-heredoc, B-labeled-break, B-let-else, B-intrinsics.
+
+### M-faults (error handling)
+- **Slice 1.1:** D-trace-method-fileline, C-interp-line / D-interp-line1.
+- **Slice 2 (the big one, ~L):** A-exceptions **and** B-result decided together — *Result-first,
+  try/catch as the PHP-interop bridge*; A-fault-cause-chain folds in.
+
+### M5 follow-ups
+- D-build-transitive-deps, D-lambda-lib-pkg / D-crosspkg-fn-value, D-module-qualified-type,
+  C-new / C-init-config.
+
+### M2.5 Phase 3 (build/deploy)
+- P-stub-registry (3a, fully spec'd), P-build-vendor, P-build-argv, P-strip-meta;
+  P-codesign / P-macos-stub (3b, credential-gated, defer).
+
+### M6 (web/concurrency)
+- B-concurrency (spawn+channels), P-frontcontroller-gen, P-phar, Q-serve-reqlog, Q-serve-health,
+  G-url. Deferred web-security: K-auth-csrf-session, K-serve-handler-budget.
+
+### M8 / M8.5 (interop & migration)
+- **M8:** E-importer-stageA/B, E-migration-report, E-incremental-codemod, E-namespace-fqn-interop,
+  E-strict-types-gate, E-phpdoc-harvest, E-firstclass-callable-import, D-transpile-php-builtin
+  (W-PHP-BUILTIN-NAME), K-header-injection, K-secrets-type, K-supply-chain-vendor-min, G-crypto digests.
+- **New M8.5 (interop):** E-decl-files (headline), E-call-composer; defer E-mixed-project,
+  E-raw-php-escape, E-composer-manifest-bridge.
+
+### M9 (engineering hygiene / CI)
+- I-regress-gate + I-bench-suite, I-cargo-profile, K-fuzz-harness / H-ev7-fuzz, R-explain-coverage,
+  H-overflow-policy-doc, H-checker-invariant-audit, C-unused-import / C-unused-local (warning channel),
+  E-php-version-target, R-doctest discipline.
+
+### M11 (stdlib breadth) + new M4 (stdlib charter)
+- **Charter first (M4/M9):** L-stdlib-charter (naming/arg-order/error-discipline/native-vs-`.phg`/tiers).
+- **Collections:** L-list-breadth, L-map-breadth, L-set-algebra, A-iterators / J-iter-protocol,
+  L-option-combinators, A-printf-debug.
+- **Modules:** G-json (encode now / decode w/ `Any`), G-regex, L-convert, A-sprintf, G-hash,
+  G-base64hex, G-path, G-console-io, G-log / Q-corelog, G-math-breadth.
+- **API docs / discoverability:** R-stdlib-apidoc, R-doc-comments, L-natives-introspect, F-add,
+  F-toolchain-pin. (Note: D-match-position already shipped — sync KNOWN_ISSUES line 65.)
+
+### M7 / M12 (tooling & docs) — decompose the single "Editor/LSP, formatter" bullet
+- **Sequence:** M7.1 `phg fmt` (+ `--check`) → M7.2 `phg repl`/`phg new`/`phg init`/`phg completions`
+  → M7.3 LSP core (on `check --json`) → M7.4 editor clients → M7.5 `phg doc`/doctests.
+- **M12 release/docs:** R-langref, R-tour, R-migration, R-transpile-contract-doc, R-cheatsheet,
+  R-getting-started, R-faq-troubleshooting, R-grammar-ref/S-frozen-grammar, F-playground, F-docsite,
+  F-citemplates, S-release-automation, K-audit-cmd, K-dep-provenance.
+
+### GA-M12 (governance/stability — all cheap docs)
+- S-semver-policy, S-breaking-change-def, S-deprecation-policy, S-changelog-discipline,
+  S-conformance-corpus, S-diagnostic-code-stability, S-version-provenance, S-zerodep-promise,
+  S-msrv-policy, S-version-binary-contract, V-differentiation-vs-php8 (+ perf-honesty),
+  V-error-suppression-stance, V-killer-app-domain, V-gleam-error-quality, K-security-doc.
+
+### New dedicated milestones to create
+- **M-NUM** (numerics): N-decimal + N-decimal-rounding, N-numeric-parse, N-math-breadth, N-int-conv,
+  N-int-width, N-float-predicates, N-numeric-literals, N-float-exponent, N-intdiv. Defers: N-bigint,
+  N-money-currency (M-NUM-2).
+- **M-TIME** (date/time): N-datetime-core, N-duration, N-date-civil. Defers: N-tz-iana, N-now-clock (M-TIME-2/M6).
+- **M-text** (i18n core): M-codepoint-len, M-encoding-contract/J-unicode-model, M-text-breadth, M-regex,
+  M-unicode-escape, M-ascii-divergence, M-number-format, M-codepoint-int, M-ci-compare.
+  Defers (Unicode-data, S2/S3): M-normalization, M-unicode-case, M-grapheme, M-segmentation.
+- **M-Test** (testing): O-test-runner, O-assert-lib, O-deterministic-seam, O-table-driven,
+  O-fakes-traits, O-phpunit-bridge, O-fixtures, O-test-selection, O-skip-focus, O-assert-fault,
+  O-ci-report, O-test-isolation. Defers: O-property/O-snapshot/O-coverage; v2: O-fuzz/O-mutation.
+- **M-perf** (optimization, behind I-regress-gate): I-str-rc, I-isinstance-interned, I-dispatch,
+  I-constfold, I-peephole, I-range-lazy. Deferred: I-superinstr, I-inline-cache, I-intern-symbols,
+  I-alloc-stack, I-op-shrink, I-threaded-dispatch.
+- **M-Batteries** (impure stdlib, quarantined): G-env, G-args, G-file-more, G-dir, G-csv, G-random,
+  G-uuid (defer). Could be folded into M11 if the charter's quarantine tier is clear.
+
+### v2 (native / systems)
+- A-sized-int, N-sized-int, I-aot, I-fn-inline, D-cycle-collector (or M11-GC), N-overflow-policy,
+  P-build-bytecode. Narrow (do not build): I-ownership-nogc.
+
+### Post-1.0 / new M13 (governance evolution)
+- S-editions / V-editions-stability (policy at GA, build at M13), S-rfc-process, S-feature-gating,
+  S-stdlib-stability-tiers, V-llm-codegen-affinity, V-corpus-driven-priorities, F-installer,
+  F-debugger, F-profiler.
+
+## 4. Top adopt candidates (highest-value, strong-fit, low-regret)
+
+The shortlist the developer should treat as the immediate spine. All are strong-fit, map cleanly to
+idiomatic PHP, and most are front-end-only (zero byte-identity risk).
+
+1. **H-return-totality + H-never-type** — closes the *single most important soundness leak* found in
+   the whole audit (a `-> T` function can fall off the end, leak `unit`, and detonate at runtime with
+   *different* fault messages on each backend). Front-end-only, M effort, the headline correctness win.
+   Land before overloading (more paths to reason about).
+2. **B-genenums → B-result + B-qmark-opt** — the single highest-leverage *capability* unlock: generic
+   enums convert `Result`, true `Option<T>`, and generic ADT containers from three deferred rows into
+   shipped features, riding `erase_generics` with no new `Op`. `?` over optionals ships *today*.
+3. **A-exceptions / B-result error model (Result-first, try/catch as bridge)** — the largest
+   user-visible PHP-parity hole, already roadmapped as fault-slice-2. The competitive evidence (Rust,
+   Gleam, Swift) and the philosophy both favour Result-primary with try/catch as the interop concession.
+4. **D-overloading → D-extends/A-abstract/A-lsb → D-traits** — the owed M-RT OO slices; daily PHP OO
+   building blocks, each lowering to idiomatic PHP (overloading → one dispatching method).
+5. **Pattern cluster: B-guards, B-payload-destr, B-flow-narrow (+ V-equality-refinement)** — makes
+   ADTs *ergonomic* and the union/narrowing story *total*; the defining TS/Rust capability a PHP-from-TS
+   migrant expects. All front-end, no new `Op`.
+6. **N-decimal (+ rounding)** — the headline *business* feature: makes float-for-currency a compile
+   error, fixing the largest class of real-world PHP money bugs; maps to `brick/math` BigDecimal.
+7. **L-list-breadth / L-map-breadth / L-set-algebra (+ L-stdlib-charter first)** — the everyday
+   `array_*` muscle-memory surface; reuses the proven generic + HigherOrder-native path, no new `Op`,
+   gated by a written charter so the stdlib reads as designed, not accreted.
+8. **C-fmt (gofmt model) + C-numsep/C-int-base + C-unused-import/local lints** — the DX trio a
+   PHP/TS/Go dev expects on day one; the formatter ends bikeshedding before a community exists, the
+   literal/separator lexer wins are pure legibility, the lints ride the existing warning channel.
+9. **G-json (encode now) + L-convert (`Int.parse->int?`) + G-console-io (`print`/`eprintln`)** — the
+   batteries that turn demos into real programs; encode needs no `Any`, parse gives the *safe* number
+   conversion PHP never had.
+10. **The GA governance doc-bundle** (S-semver-policy, S-breaking-change-def, S-conformance-corpus,
+    S-diagnostic-code-stability, V-differentiation-vs-php8 + perf-honesty, V-error-suppression-stance,
+    K-security-doc) — near-zero effort, GA-blocking, and the answer to "why not just use PHP 8.4?".
+
+## 5. Recommended reject / omit (with reasons)
+
+Each fails the philosophy: it adds a *surprise*, breaks the byte-identity/determinism spine, has no
+idiomatic PHP target, or is PL-theory maximalism that doesn't earn its budget.
+
+**Dynamic-PHP footguns (defeat static checking — the exact surprise Phorge removes):**
+A-magic-dynamic (`__get`/`__set`/`__call`), A-compact-extract (`compact`/`extract`/`$$x`),
+A-func-static (function-`static` + `global`), A-isset-empty (truthiness predicates),
+A-references (`&$x` aliasing — contradicts the value/handle split), A-cast-ops (`(int)` coercion),
+A-switch (fall-through footgun — `match` covers it).
+
+**No deterministic PHP target / breaks the spine:**
+J-op-overload / B-op-overload-derive (hidden `$a->__add($b)` action-at-a-distance — derived
+`equals`/`compareTo` methods cover the pragmatic slice), B-tco / I-tco (PHP has no TCO → a recursive
+program that succeeds under TCO fails under transpiled PHP), B-async-await (coloured functions
+contradict uncoloured `spawn`), B-effects / V-roc-platform-effects (continuation capture, no PHP
+lowering), B-reactive (hidden mutation graphs), A-destruct (`Rc`/`Drop` has no deterministic
+finalization — cycles leak until exit).
+
+**Cannot honor zero-dep + `php -n` oracle:**
+M-collation, M-transliterate (need ICU data; no tier-1 PHP approximation). Other ICU-locale features
+(M-num-fmt/M-date-fmt/M-msg-catalog) *defer* to a tier-3 extension policy rather than reject.
+
+**PL-theory maximalism (overruns the surprise budget for a PHP audience):**
+B-refinement (solver-backed liquid types — newtypes cover the pragmatic slice), B-units (niche;
+newtypes cover it), B-typestate (linear/affine typing), B-gadts / B-variance (HKT/declared variance —
+erased generics are invariant by design), B-macros (open proc-macros break std-only + the spine —
+the *closed* `B-derive` channel is the answer), L-lazy-seq / A-fibers (generators/coroutines fight the
+eager-array transpile target), I-ownership-nogc (Rust-style borrow checker — narrow the v2 goal to "a
+cycle collector if needed", don't build), V-shapes-vs-records (structural types clash with nominal
+identity), O-mock-reflection (reflection mocking — interface fakes are the legible answer),
+K-taint-tracking (flow analysis strictly dominated by by-construction `Secret`/`Html`/parameterized-SQL),
+Q-tracing-spans / Q-serve-metrics-ep (heavyweight ecosystem machinery, not PHP-core idioms).
+
+**Reverses a deliberate decision / over-scoped for single-dev pre-1.0:**
+P-pkg-registry (M5 chose git+vendor+offline — ADR-0005), P-faas (vendor glue), S-lts-backport
+(multi-line maintenance contradicts "latest only"), E-php-ffi (drags the dynamic PHP runtime in),
+E-importer-stageC (dynamic PHP is un-importable into a closed no-`eval` language),
+E-gradual-checkjs (gradual typing punches a hole in the static spine — decl-files + import is the
+Phorge answer), R-versioned-docs / R-i18n-docs / R-video-tutorials (premature for a pre-1.0 single-dev
+project).
+
+**Clean-rejected corners (parser/purism for a form already expressible):**
+D-whole-union-optional (`(A|B)?` — `T?` covers it), D-float-key / D-map-bool-int-key-coerce (Phorge's
+distinct-keys behaviour is *more* correct), N-rational / N-percent (userland on `decimal`),
+D-vis-on-alias-import (aliases are file-local + erased), B-active-pat (obscure for a PHP audience —
+guards deliver the practical subset).
+
+## 6. Cross-track themes (the big recurring ideas, merged across tracks)
+
+These are the patterns that surfaced in 3+ tracks and should be treated as *programmes*, not
+scattered rows:
+
+1. **The error model is the keystone fork (A, B, D, E, H, L, O, V).** `try/catch` vs `Result<T,E>` is
+   the single most-cross-referenced decision. Synthesis verdict: **Result-first** (the legibility apex
+   — errors visible in the type, riding generic enums), with **try/catch as the PHP-interop bridge**
+   (imported PHP throws). It unblocks A-fault-cause-chain, O-assert-fault, and the fault-trace work.
+2. **Generics-all isn't done until enums are generic (B, D, L).** B-genenums is the lynchpin under
+   `Result`/`Option`/`core.json`'s `Any`/typed-container stdlib; the `id(7)+1` operand gap
+   (D-generic-result-operand) is the matching *backend* keystone (M10). Both ride `erase_generics`.
+3. **Narrowing completeness is the "provably-correct upgrade" made concrete (B, H, J, V).** Else-branch
+   flow narrowing + union exhaustiveness + equality refinement + sealed hierarchies are one coherent
+   programme that turns Phorge's type system from "checks types" into "proves totality" — the defining
+   TS capability a migrant expects. Pair with H-return-totality.
+4. **The stdlib must become a *product*, not an accretion (A, G, L, R, V).** A written charter
+   (naming, subject-first arg-order, optional-for-absence vs fault-for-programmer-error, determinism
+   tiers, native-vs-`.phg` policy) precedes the breadth push; collection breadth + a generated API
+   reference (from the registry, single-sourced) is the most-cross-referenced *legibility* win and the
+   "Hack HSL was the killer feature" lesson.
+5. **Determinism quarantine is the universal mechanism for impure batteries (G, K, N, O, Q).**
+   Random, time/clock, env, network, process, logging-to-stderr all break the byte-identity spine the
+   same way URL/network did — the M6 `Transport`/quarantine precedent (excluded from
+   `differential.rs`, seedable/injectable seam) is the single design pattern that unblocks all of them.
+   The same seam that quarantines them also makes user tests deterministic (O-deterministic-seam).
+6. **Lexer-only ergonomics are free wins repeatedly missed (A, C, M, N).** Numeric separators, hex/bin/
+   octal int literals, float exponent notation, `\u{…}` escapes — all front-end-only, byte-identical by
+   construction, pure familiarity, currently *parse errors a PHP dev hits on line one*. Ship as one M3
+   ergonomics slice.
+7. **Tooling-as-adoption-lever, currently one undifferentiated ROADMAP bullet (C, F, O, P, R, V).**
+   The "M7 — Editor/LSP, formatter" line collapses fmt → repl/scaffold/completions → LSP → editor
+   clients → doc-gen into one box; it must be *sequenced* (fmt first, it de-risks the AST-printer the
+   LSP rename/fix later needs). The `phg test` runner is the biggest missing ecosystem table-stake.
+8. **Governance/stability is cheap docs, GA-blocking, and a genuine PHP *upgrade* (R, S, V).** Semver +
+   breaking-change definition + a *frozen conformance corpus* (Phorge can state BC *provably* via the
+   byte-identity spine — PHP can't) + stable diagnostic codes + a zero-dep promise + an honest
+   differentiation-vs-PHP-8.4 statement (don't claim speed). Editions are the long-term jewel but the
+   *policy* (not the implementation) is the GA sliver; build editions post-1.0.
+9. **Incremental adoption is the whole thesis and is currently implicit (E, V).** The TypeScript-beat-
+   Hack lesson: the import direction (`.d.phg` decl-files, codemod, migration report, mixed projects)
+   and the Phorge→PHP deploy direction (generated front-controller, PHAR, `--php-target` floor) must be
+   first-class, tested, documented workflows — not aspirational single bullets.
+10. **A cluster of KNOWN_ISSUES "deferred corners" are really one mechanism each (D, H, J).** The union
+    follow-ups (flow-narrow, common-member, nested-type-pattern), the mutation corners (nested
+    place-store, intersection field-set), and the transpile hazards (builtin-name collision,
+    external-private-field, non-finite-float) each root to a single shared fix — bundle them rather than
+    track ~12 independent rows.
 
 ---
 
-## Executive Summary
-
-**Total feature rows reviewed:** 646 (deduplicated across 5 research tracks and multiple passes).
-
-**Counts by verdict:**
-
-| Verdict | Count |
-|---|---:|
-| `adopt` | 195 |
-| `phorge-already-better` | 115 |
-| `defer` | 196 |
-| `reject` | 140 |
-| **Total** | **646** |
-
-*(Counts are computed from the dataset's `verdict` field; the same feature catalogued under multiple research tracks contributes one row per track, matching the 646-row corpus — these are deliberate cross-track duplicates that corroborate one verdict, not contradictions. The verdict distribution is stable across duplicates.)* — [Verified: tallied from the provided `verdict` values]
-
-**Headline findings** — [Inferred from the verdict + roi + transpile fields]:
-
-- Phorge's coverage of PHP is strong: 115 rows are *already in Phorge, usually in a sounder form* (mandatory static typing, exhaustive match, `T?` non-null guarantee, payload-carrying ADT enums, typed `==`, the package model, first-class functions, `|>`, range operator, Elm-grade diagnostics).
-- The two largest *honest gaps* both have clean deterministic lowerings and no prerequisite: **regex/PCRE** (the single biggest stdlib omission, tier-1 safe) and **sprintf-style formatting** (gated only on variadics).
-- A cluster of cheap, deterministic, front-end-only wins (numeric literal forms, destructuring/match patterns, named+default args, derive-style attributes) would close most remaining PHP-parity perception gaps without touching the runtime.
-- The big *defers* all trace to four known milestones: mutation+tracing-GC (compound assigns, `++`/`--`, static/global state, `while`/`do-while`/`for`, `clone`-with, property set-hooks), exceptions (`try`/`catch`/`finally`, `throw`, Throwable hierarchy), generics-as-values / a `Json`/`Any` type (`core.json`, `derive(Json)`), and class `extends`/traits (abstract, LSB, `#[\Override]`).
-- The *rejects* are principled and consistent: dynamic/reflective features (`eval`, `__get`/`__set`, runtime reflection, dynamic const fetch, `define()`), coercion footguns (loose `==`, `empty()`, cast operators, word-form `and`/`or`), aliasing/mutation (`&` references, `global`, `static` locals), and non-determinism (backticks, `@`, clock reads, RNG, async).
-
-### Top 10 highest-ROI `adopt` candidates (ranked)
-
-1. **Regular expressions / PCRE** (`Core.Regex` match/replace/split/quote) — the single biggest stdlib hole in a text-oriented language; PCRE is tier-1 (oracle-safe under `php -n`); deterministic. Caveat: byte-identity spine needs a **std-only Rust matcher** (the `regex` crate is forbidden) — a hand-rolled subset is the real cost. *[Verified: dataset flags it "BIGGEST single omission", roi=high, tier-1 safe; the std-only build is the gating effort]*
-2. **sprintf/printf format specifiers** (`Core.Text.format`) — closes the width/precision/padding/alignment gap that interpolation can't express; lowers 1:1 to PHP `sprintf` (pin `%F`/`LC_NUMERIC=C` for float determinism). Gated only on variadics (#3). *[Verified: roi=high, transpile=yes, deterministic]*
-3. **Variadic parameters `...args`** — foundational enabler for sprintf, multi-arg `println`, `max(list)`; transpiles to PHP `...$args`; deterministic, no mutation. *[Verified: roi=high, "foundational ENABLER"]*
-4. **Default + named arguments (together)** — table-stakes ergonomics; pure compile-time reorder/fill against the known signature → positional on Phorge backends, native on PHP. Often *replaces* the need for method overloading (one fn with optional params vs N signatures), so it should be weighed alongside the locked overloading slice. *[Verified: roi=high, transpile=yes, front-end-only]*
-5. **Enum/variant payload destructuring + match guards + or-patterns** — the obvious next step after S4 type patterns; front-end lowering over existing branch ops (`IsInstance`+`JumpIfFalse`), **no new `Op`**; a guarded arm must be treated as non-covering for exhaustiveness (Rust rule). *[Verified: roi=high cluster, reuses S4 machinery]*
-6. **Sorting (`Core.List.sort`/`sortBy`)** — rides the existing `NativeEval::HigherOrder` re-entrant-VM path; Rust `sort_by` is stable matching PHP 8 stable sort → byte-identical; comparator returns the spaceship int. *[Verified: roi=high, reuses higher-order machinery, stable=identical]*
-7. **`Result<T,E>` + `?` operator** — the principled no-exceptions recoverable-error story; `Result` is a 2-variant enum (deferred until generic enums), but `?` over **optionals** ships now with no prerequisite (lowers to match-and-return). The exceptions-vs-Result fork resolves Result-first. *[Verified: roi=high; `?`-over-optionals has no prereq, full Result deferred behind generic enums]*
-8. **Derive-style compile-time attributes (`#[derive(Eq/Show/Ord/Default)]`)** — the expand-before-backends discipline Phorge already uses (aliases, `erase_generics`, `resolve_html`); generated code is ordinary deterministic PHP, **no runtime reflection**. The native-fit attribute model. *[Verified: roi=high cluster, matches existing erase discipline]*
-9. **Class constants + module-level `const`** — compile-time constant folding → inline on Phorge backends, emit PHP `const`; immutable, deterministic, a natural fit for a function-heavy namespaced language. *[Verified: roi=high, "fits the model perfectly"]*
-10. **`list()`/array destructuring + spread (`[...$a]`, call-site `f(...$args)`)** — pure desugaring to indexed binds / list-concat; binds-not-mutation so it fits immutability; pairs with variadics. *[Verified: roi=high, deterministic, fits immutable model]*
-
-Honorable mentions (high-ROI, not in the top 10 only for sequencing): **`foreach` over Map/Set** (Map rep is already insertion-ordered → `foreach($m as $k=>$v)`), **opaque newtypes / refinement-with-smart-constructor** (the purest fit for the erasure discipline — erases like `Core.Html`), **numeric literal forms** (hex/binary/exponent + `1_000_000` separators — cheapest wins in the corpus), **debug `inspect`/dump** (via a Phorge-canonical format, not PHP `var_export`, to sidestep the format-match), **bitwise operators** (pure-int, deterministic, needed for bytes/protocol work in M6).
-
----
-
-## Matrix
-
-Each section is sorted: `adopt` (high → medium → low ROI) → `phorge-already-better` → `defer` → `reject`.
-
-### Track 1 — PHP Core Language
-
-| Feature | In PHP? — how | In Phorge? — how | Relationship | Verdict | ROI | Transpile | Notes |
-|---|---|---|---|---|---|---|---|
-| Variadic params `...$args` | collects trailing args into array, type-hintable | absent (fixed arity) | php-only | adopt | high | yes | `...args: List<T>` + arity relax + list spread at call sites; deterministic, std-only. |
-| Default parameter values | constant-expr defaults | absent (every param supplied) | php-only | adopt | high | yes | Emit PHP defaults; fill at call site on Phorge backends. Keep to const exprs for determinism. |
-| Class constants + const expressions | `const FOO=1`; interface consts | absent | php-only | adopt | high | yes | Compile-time fold → PHP `const`; inline on Phorge backends. Immutable, deterministic. |
-| `list()`/array destructuring (positional/keyed/nested/foreach) | `[$a,$b]=$arr`, keyed, nested, in foreach | absent (must index) | php-only | adopt | high | yes | Pure desugar to indexed binds; emit PHP `[$a,$b]=`. Binds, no mutation. |
-| Single polymorphic `array()` vs split List/Map/Set | one ordered-map for list/dict/set | three typed collections | different | adopt¹ | high | yes | ¹ Central design fork — verdict is **keep the split** (the row is tagged better below); recorded here as the load-bearing decision. |
-| `foreach` over Map/Set (k=>v) | `foreach ($arr as $k=>$v)` | for..in over List; Map/Set iteration R1-deferred | php-only | adopt | high | yes | Map rep already insertion-ordered → `foreach($m as $k=>$v)`, deterministic. |
-| `match` expression | strict `===`, value position, no fall-through | exhaustive over enums AND unions, arm binding, null narrowing | different | phorge-already-better | low | yes | PHP match is value-equality only; Phorge does ADT + type-pattern exhaustiveness at compile time. |
-| Enum/variant payload destructuring in match arms | absent | binds payload as whole value, no field extraction | both-absent | adopt | high | yes | Front-end lowering (bind then read); no new Op; obvious next step after S4. |
-| Pure & backed enums | flat enums, methods, `cases()`/`from()` | single+multi-payload ADTs, exhaustive match | different | phorge-already-better | low | yes | Phorge enums are full ADTs; `from()`/`tryFrom()` convenience is the one PHP nicety (covered separately). |
-| Constructor property promotion | promoted ctor params (8.0) | ctor promotion (M2 P4b) | same | phorge-already-better | high | yes | Phorge has it and is immutable-by-default. |
-| Interfaces + implements | nominal, multiple implements, interface extends | M-RT S2: nominal subtyping, polymorphic dispatch | same | phorge-already-better | low | yes | Exact-signature checked; cross-package interface members work in intersections. |
-| Union types A\|B | union types (8.0) | S4 unions + exhaustive match-over-union | same | phorge-already-better | high | yes | Phorge unions are exhaustively checked; PHP unions are not. |
-| Pure intersection types A&B | intersection types (8.1) | S5 (interfaces + ≤1 class) | same | phorge-already-better | high | yes | Member access over intersection + instanceof operand + require-agreement sig checks. |
-| Param type declarations | optional type hints | mandatory static types | different | phorge-already-better | low | yes | Phorge is stricter; transpiles to PHP type hints. |
-| `readonly` properties / classes | retrofit immutability | whole heap immutable by construction | php-only | phorge-already-better | low | yes | `readonly` is Phorge's default; transpiler could emit it to signal intent. |
-| `__construct` | constructor | only ctor, with promotion | same | phorge-already-better | low | yes | Single ctor form with mandatory promotion. |
-| Static methods | `Class::method()` | absent (instance methods + free fns) | php-only | adopt | medium | yes | Pure dispatch, no state → PHP static function, deterministic. |
-| Visibility (public/protected/private) | three levels | fields effectively public | php-only | adopt | medium | yes | Compile-time access check; emit PHP modifiers; closes a real W1 divergence. Asymmetric visibility deferred (needs mutation). |
-| `__toString` | object→string coercion | absent | php-only | adopt | medium | yes | A `toString()` recognized by checker → PHP `__toString`; call when non-primitive flows into interpolation. |
-| `$object::class` | `$obj::class` (8.0) | absent | php-only | adopt | medium | yes | Transpiles to `$obj::class`; needs a class-name string value decision. |
-| Heredoc / Nowdoc | interpolated / literal multi-line | strings already multi-line + interpolated | different | phorge-already-better | low | yes | Only gap is a raw (no-interpolation) string literal → trivial lexer add → PHP nowdoc/single-quote. |
-| `never` return type | always-diverges (8.1) | clean-fault model | php-only | adopt | medium | yes | Annotation for always-faulting fn improves exhaustiveness; → PHP `never`. |
-| `declare(strict_types=1)` | opt-in strict scalars | always strictly typed | different | phorge-already-better | high | yes | No weak mode to opt out of; transpiler emits `declare(strict_types=1)`. |
-| Enumerations (8.1) | no per-case payload | payload ADTs + exhaustive match | same | phorge-already-better | high | yes | Phorge enums carry data; PHP enums cannot. |
-| `if`/`elseif`/`else` | standard | if/else + expression-if | same | phorge-already-better | high | yes | Phorge's expression-if is a value → PHP ternary. |
-| `switch` | fall-through + loose `==` | exhaustive `match` | different | phorge-already-better | high | yes | `match` is the strictly superior replacement; no fall-through, exhaustive. |
-| `return` | value from function | present | same | phorge-already-better | low | yes | No gap. |
-| `echo` (multi-arg) / `print` | output constructs | `Console.println` namespaced native | same | phorge-already-better | low | yes | Namespaced, typed, explicit-import; → PHP `echo`. |
-| `isset()` | set-and-not-null test | `T?` non-null guarantee + if-let | different | phorge-already-better | high | yes | A non-optional `T` is statically never null; isset unnecessary. |
-| Sealed / closed type hierarchies | absent | exhaustive over enums + explicit unions | both-absent | adopt | high | yes | Sealing lets `match` be exhaustive over a NAMED hierarchy; reuses `Op::IsInstance`, no new Op. |
-| `abstract` classes/methods | non-instantiable, subclass implements | absent (interfaces exist) | php-only | defer | medium | yes | Gated on roadmapped S6 class-extends. |
-| Class `extends` (single inheritance) | parent::, override | absent | php-only | defer | medium | yes | Roadmapped S6 (final-by-default). |
-| Traits (insteadof/as) | horizontal reuse | absent | php-only | defer | medium | yes | Roadmapped S8; conflict-resolution syntax is the open question. |
-| `final` keyword | cannot extend/override | final-by-default chosen | php-only | defer | low | partial | Only matters once inheritance exists (S6). |
-| Late static binding (`static::`) | runtime-class resolution | absent | php-only | defer | low | partial | Double-gated: static methods AND inheritance (S6). |
-| Covariance / contravariance | covariant returns, contravariant params | exact-match only | php-only | defer | low | partial | Gated on S6 + a variance design. |
-| Property hooks (get/set) | computed/intercepted access (8.4) | absent | php-only | defer | medium | partial | get-hooks immutability-OK (could land sooner); set-hooks need mutation/GC. |
-| Generators / `yield` / `yield from` | lazy iterators | absent | php-only | defer | medium | partial | Finite cases modelable as eager List now; true lazy needs coroutine machinery. |
-| Fibers | suspendable coroutines (8.1) | single-threaded forced (Rc heap) | php-only | defer | low | partial | Heavy prerequisite: concurrency/green-threads milestone (M6). Reconciled to defer (not reject). |
-| `try`/`catch`/`finally` | exception handling | clean-fault model, un-catchable | php-only | defer | high | yes | The gating next-big-feature; Result-first recommended, try/catch as PHP-interop bridge. |
-| Multi-catch (`catch A\|B`) | one handler, unrelated types | absent | php-only | defer | medium | yes | Rides on try/catch; reuses S4 union machinery. |
-| Throwable/Error/Exception hierarchy | class hierarchy | internal FaultKind, not a value | php-only | defer | high | yes | Prerequisite of try/catch; needs classes-as-throwable-values. |
-| `throw` as expression | `?? throw` (8.0) | `opt!` faults but can't throw a value | php-only | defer | medium | yes | Rides on the exception value model. |
-| Static (mutable) properties | shared class state | absent | php-only | defer | low | partial | Needs mutation+tracing-GC. |
-| `null`/`false`/`true` standalone types | literal types (8.2) | null via optionals; no literal true/false | different | adopt | low | yes | `true`/`false` are cheap singletons → PHP literal types. |
-| `void` return annotation | `void` (7.1) | implicit unit | php-only | adopt | low | yes | Explicit `void`/Unit annotation → PHP `void`; clarity win. |
-| `self` type hint | self/parent/static | partially implied | php-only | adopt | low | yes | `self` return type adoptable now; parent/static need extends (defer). |
-| `while` loop | `while(cond){}` | absent (for..in only) | php-only | defer | medium | partial | Useful condition-loop needs mutation to advance the condition. |
-| `do-while` loop | `do{}while();` | absent | php-only | defer | low | partial | Same mutation dependency as while. |
-| Classic C-for `for(init;cond;step)` | three-clause | for..in over ranges | php-only | phorge-already-better | low | yes | Range for..in covers the counted 90% bounds-safe; arbitrary-step C-for defers behind mutation. |
-| `break`/`continue` | loop control | absent (no loops yet) | php-only | adopt | medium | yes | Plain break/continue over for..in additive; gate alongside while/do-while. |
-| `break N`/`continue N` | numeric-level | absent | php-only | reject | low | yes | Multi-level numeric break is a readability footgun; prefer function extraction / labels. |
-| Labelled break / loops | absent in PHP | absent | both-absent | adopt | low | yes | Reads better than `break N`; → PHP `break N`. Low ROI nicety. |
-| `exit`/`die` | terminate | absent | php-only | adopt | low | yes | A clean `Process.exit(code)` → PHP `exit`; the bare `or die()` idiom rejected. |
-| Type casts `(int)`/`(string)`/… | lossy juggling | absent | php-only | reject | medium | partial | Loose-cast operator rejected; adopt narrow checked conversion FUNCTIONS instead (`Int.parse(string)->int?`). |
-| `clone` | shallow copy + `__clone` | absent | php-only | defer | low | partial | No-op on immutable values; meaningful only with mutation. |
-| Clone-with (`clone with [...]`) | functional update (8.5) | absent | php-only | defer | medium | yes | Functional copy-with-changes is very Phorge-aligned; needs a clone-with construct. |
-| `??=` null-coalesce assign | assign if null | absent (no reassignment) | php-only | defer | medium | yes | Blocked on mutation; → PHP `??=` once locals reassignable. |
-| Compound assigns `+= -= *= /= %=` | arithmetic compound | absent | php-only | defer | medium | yes | All blocked on mutation; transpile 1:1 once mutation lands. |
-| `++`/`--` increment/decrement | pre/post, on strings | absent | php-only | defer | medium | partial | Blocked on mutation; PHP string-increment is a quirk NOT to replicate. |
-| Hexadecimal literal `0x1A` | `0x`/`0X` prefix | absent | php-only | adopt | medium | yes | Pure lexer change; PHP accepts `0x1A` → passthrough. |
-| Binary literal `0b1010` | `0b`/`0B` | absent | php-only | adopt | medium | yes | Lexer-only, value-identical. |
-| Numeric separator `1_000_000` | underscores (7.4) | absent | php-only | adopt | high | yes | Scanner strips `_`; cheapest high-ROI win; works on all bases. |
-| Float exponent `1e3` | all versions | partial/unverified | php-only | adopt | medium | yes | Standard float lexing; confirm exponent already parses before treating as new. |
-| Octal `0o14` prefix | (8.1); reject legacy bare-0 | absent | php-only | adopt | low | yes | Adopt explicit `0o`; reject legacy bare-0 octal (PHP's own footgun). |
-| Unicode escape `\u{1F600}` | double-quoted (7.0) | absent | php-only | adopt | medium | partial | Lexer emits UTF-8; → PHP `\u{}`. Clean with the bytes/string model. |
-| Magic const `__LINE__` | compile-time line | absent | php-only | adopt | medium | yes | Compile-time int from AST → PHP `__LINE__`; useful for diagnostics. |
-| Magic const `__FUNCTION__`/`__METHOD__`/`__CLASS__` | compile-time names | absent | php-only | adopt | low | yes | All compile-time strings from AST → same PHP magic constant. |
-| Magic const `__NAMESPACE__` | current namespace | absent | php-only | adopt | low | yes | Maps to current `package` / mangled FQN. |
-| Magic const `__FILE__`/`__DIR__` | absolute path | absent | php-only | defer | low | partial | Path is environment-dependent → breaks byte-identity; gate behind canonical-path normalization. |
-| Magic const `__TRAIT__`/`__PROPERTY__` | trait / 8.4 hooks | absent | php-only | defer | low | yes | Blocked on traits (S8) / property hooks. |
-| `const` (module-level named constant) | compile-time, ns-scoped | absent (locals + class consts only) | php-only | adopt | medium | yes | → PHP namespaced `const`. Natural for a function-heavy namespaced language. |
-| `callable` type hint | opaque | structural `(T)->R` | different | phorge-already-better | medium | yes | Phorge's function type is more precise; erases to PHP `\Closure`. |
-| `iterable` type hint | array\|Traversable (7.1) | absent | php-only | defer | low | partial | Waits on a user iterator protocol. |
-| `object` (top object type) | (7.2) | absent | php-only | defer/reject | low | partial | Weakens static typing; low value pre-reflection. |
-| Nullable `?T` (prefix) | runtime-nullable (7.1) | postfix `T?` + compile-time non-null | different | phorge-already-better | low | yes | Phorge's `T?` gives a guarantee PHP's `?T` lacks. |
-| Typed properties (7.4) | opt-in | always typed | different | phorge-already-better | low | yes | Mandatory not opt-in. |
-| User-definable iterator protocol | Iterator / IteratorAggregate | for..in over built-ins only | php-only | defer | high | partial | Eager "return a List" form deterministic now; stateful cursor needs mutation. |
-| Namespace + use / group use | `use A\{B,C}`, `\` separator | mandatory package, Go-qualified, strict folder=path | different | phorge-already-better | high | yes | Stricter and sounder ("nothing in the wind"); → PHP namespaces. |
-| `array_find`/`array_any`/`array_all` (8.4) | predicate-based | map/filter/reduce present | same | adopt | high | yes | Additive over the higher-order-native path; → PHP 8.4 (polyfill <8.4). |
-| `array_first`/`array_last` (8.5) | first/last value | absent | php-only | adopt | medium | yes | Trivial natives returning `T?` (better than bare null); → `array_first`/`array_last`. |
-| `references` (`&`) / aliasing | `$b = &$a` | absent by design | php-only | reject | low | no | Aliasing breaks the immutable+acyclic heap. |
-| `global` keyword | import a global | absent ("nothing in the wind") | php-only | reject | low | no | Mutable global state; off-design. |
-| `static` local variables | persists across calls | absent | php-only | reject | low | no | Per-call mutable state; breaks referential transparency. |
-| `goto` / labels | restricted goto | absent | php-only | reject | low | partial | Unstructured control flow fights the analyzable IR. |
-| `__halt_compiler()` | trailing binary data | absent (`phg build` instead) | php-only | reject | low | no | Superseded by `phg build` (embedded `.phorge` section). |
-| `declare(ticks=N)` | tick handler | absent | php-only | reject | low | no | Runtime hook, non-deterministic. |
-| Anonymous classes | inline one-off classes | absent | php-only | reject | low | partial | Cuts against mandatory-package, named-types model. |
-| `__destruct` | on destruction | absent (Rc/Drop) | php-only | reject | low | no | Destruction timing non-deterministic → breaks spine. |
-| `__invoke` | callable object | absent (first-class fns) | php-only | reject | low | partial | Superseded by first-class functions. |
-| `__get`/`__set`/`__isset`/`__unset` | dynamic property interception | absent | php-only | reject | low | no | Needs mutation + dynamic shapes vs typed immutable fields. |
-| `__call`/`__callStatic` | dynamic method interception | absent | php-only | reject | low | no | Dynamic dispatch defeats the static checker. |
-| `__clone` | customize clone | absent | php-only | reject | low | no | Meaningless on immutable values. |
-| `__debugInfo`/`__set_state` | var_dump/var_export hooks | absent | php-only | reject | low | partial | Tooling-specific; no deterministic transpile need. |
-| `empty()` | falsy test | explicit comparisons | php-only | reject | low | yes | Conflates 0/'0'/''/[]/null — notorious footgun. |
-| `unset()` | destroy a variable | absent | php-only | reject | low | no | Conflicts with immutable+acyclic heap. |
-| `eval()` | execute a string | absent | php-only | reject | low | no | Breaks determinism + spine + security. |
-| `require`/`include`/`*_once` | runtime file inclusion | static package/import | php-only | reject | low | no | `import` is strictly better (compile-time, no scope pollution). |
-| Alternative syntax (`endif`/`endforeach`) | template colon syntax | absent | php-only | reject | low | yes | Template-era PHP-ism; zero value in a brace language. |
-| `WeakMap` | weak refs (8.0) | absent | php-only | reject | low | no | Needs mutation + weak refs + GC. |
-| Distinct `char` type | none (1-len string) | string + bytes | both-absent | reject | low | no | No idiomatic PHP target; grapheme needs mbstring (oracle-absent). |
-| Unicode codepoint/grapheme ops (mb_*/intl) | mbstring / intl | byte-only | php-only | reject | low | no | Tier-2 extensions ABSENT under `php -n` oracle. |
-| BigInt / arbitrary precision | GMP / BcMath\Number | checked i64 (clean overflow fault) | php-only | reject/defer | low | no | Ext breaks `php -n` + std-only; checked-int already beats silent overflow. |
-| Integer overflow (checked vs silent float-promote) | silent promotion to float | checked → clean fault | different | phorge-already-better | low | yes | Deliberate correctness choice; transpile helper fault-matches (M7 pattern). |
-| `define()` runtime/dynamic constant | `define($name,$val)` | absent | php-only | reject | low | no | Dynamic name construction; `const` covers the legitimate use. |
-| Dynamic class const fetch `C::{$name}` | (8.3) | absent | php-only | reject | low | no | Dynamic name resolution breaks static typing. |
-| Runtime reflection (get_class/method_exists/…) | full Reflection API | compile-time instanceof + smart-cast | php-only | reject | low | partial | Dynamic-typing-adjacent; instanceof/exhaustive-match is the principled answer. |
-| Doc-comment metadata (PHPDoc `@param`) | comment convention | real static types + attributes | php-only | reject | low | partial | Redundant with the type system; structured metadata is the attributes track. |
-
-### Track 2 — PHP Operators (Complete Set)
-
-| Feature | In PHP? — how | In Phorge? — how | Relationship | Verdict | ROI | Transpile | Notes |
-|---|---|---|---|---|---|---|---|
-| Spaceship `<=>` | three-way, −1/0/1 | absent | php-only | adopt | medium | yes | Deterministic 1:1; pairs with a future `Core.List.sort` comparator; reuses `compare_ord`. |
-| Bitwise `&` `\|` `^` `~` `<<` `>>` | integer bitwise | absent (`&`/`\|` claimed by intersection/union types) | php-only | adopt | medium | yes | Pure-int, deterministic, 1:1 PHP; needed for bytes/protocol (M6). Parser disambiguates value-vs-type position. |
-| Boolean XOR | `xor` / `^` on bools | absent (`a != b`) | php-only | adopt | low | yes | Minor convenience; already expressible as `a != b`. |
-| Exponentiation `**` | right-assoc | absent (`Core.Math.pow`) | php-only | adopt | low | yes | Pure sugar over existing `pow`; → PHP `**`. Low ROI. |
-| Arithmetic `+ - * / %` | silent coercion / juggling | checked, numeric-only `+` | different | phorge-already-better | high | yes | `+` is numeric-only (no concat/array-union); checked-overflow faults; runtime helpers keep byte-identity. |
-| Loose `==`/`!=`/`<>` | type juggling | typed structural `==` | different | phorge-already-better | high | yes | One safe `==`; transpiles to PHP `===` to preserve identity. |
-| Relational `< <= > >=` | with juggling | typed | same | phorge-already-better | high | yes | Applied only to compatible typed operands. |
-| Logical `&& \|\| !` | short-circuit | bool-typed, lowered via branch ops | different | phorge-already-better | high | yes | Same semantics; no truthiness coercion. |
-| `??` null-coalesce | null/unset fallback | type-driven over `T?` | different | phorge-already-better | high | yes | Compile-time non-null; PHP's also swallows undefined keys. |
-| `?->` nullsafe | short-circuit member access | `?.` | same | phorge-already-better | high | yes | Result type is itself optional; → PHP `?->`. |
-| Force-unwrap `opt!` | absent (no non-null type) | checked + `W-FORCE-UNWRAP` lint | phorge-only | phorge-already-better | high | yes | Genuine advantage over PHP's nullable-everywhere. |
-| Pipe `\|>` | (8.5), single-param | lowered to a Call, any target | same | phorge-already-better | high | yes | Phorge shipped first and is more general than PHP 8.5's restriction. |
-| Ternary `?:` / Elvis `?:` | full + short-form | expression-if + `??` | different | phorge-already-better | medium | yes | Expression-if (mandatory else) → PHP ternary; avoids `?:` truthiness coercion. |
-| String concat `.` / `.=` | concat (coerces) | interpolation / `Core.Text.join` | different | phorge-already-better | medium | yes | Avoids `+`-vs-`.` ambiguity; `.=` needs mutation anyway. |
-| Index `[]` subscript | missing key warns+null | polymorphic List/Map, clean faults | same | phorge-already-better | high | yes | Faults cleanly on OOB/missing-key vs PHP silent null+warning. |
-| `new` instantiation | `new Class(args)` | call-form `Class(args)` | different | phorge-already-better | medium | yes | Cleaner, fewer keywords; → PHP `new`. |
-| Member access `->`/`::` | instance / static | `.` ; module-qualified for statics | different | phorge-already-better | high | yes | One accessor; → PHP `->` / `::`. |
-| Range `a..b` / `a..=b` | none (range() fn only) | `Op::MakeRange` → List\<int\> | phorge-only | phorge-already-better | high | yes | Phorge has a range OPERATOR; → PHP `range()`. |
-| First-class callable `f(...)` | (8.1) | bare named-fn is a value | different | phorge-already-better | high | yes | No `(...)` ceremony; → PHP first-class callable. |
-| Collection comparison `==` | order-insensitive assoc | typed structural (Set eq order-independent) | same | phorge-already-better | medium | yes | One `==` suffices; shipped for List/Map/Set. |
-| Compound assigns `+= … **= .= &= …` | full family | absent | php-only | defer | medium | yes | Entire family gated on mutation+GC; `.=` also needs concat (rejected). |
-| `??=` | assign if null | absent | php-only | defer | medium | yes | Mutation-dependent. |
-| Bitwise compound `&= \|= ^= <<= >>=` | compound bitwise | absent | php-only | defer | low | yes | Gated on mutation. |
-| `++`/`--` | pre/post, on strings | absent | php-only | defer | low | partial | Mutation-dependent; reject string-increment sub-behavior. |
-| `clone` / clone-with | `clone $o`; `clone with` (8.5) | absent | php-only | defer | low | yes | No-op on immutable heap; revisit with mutation. |
-| `$obj::class` | (8.0) | absent | php-only | defer | low | yes | Reflection-adjacent; low ROI until attributes. |
-| Array union `+` | left keys win | absent | php-only | reject | low | yes | Operator-overloading-by-fiat; a Core merge native is idiomatic. |
-| Array unpacking `...` (string keys) | (8.1) | absent | php-only | adopt/defer | medium | partial | Useful for literals + call sites; needs a variadic/rest design first; → PHP `...`. |
-| `===` / `!==` strict | (because `==` loose) | absent (`==` already strict) | php-only | reject | low | yes | Redundant; Phorge `==` transpiles to PHP `===`. |
-| Word-form `and`/`or`/`xor` | low-precedence | absent | php-only | reject | low | yes | Known precedence footgun. |
-| Error-suppression `@` | suppress warnings | absent | php-only | reject | low | no | Hides errors; conflicts with clean-fault model. |
-| Execution backticks `` `cmd` `` | shell execution | absent | php-only | reject | low | no | Non-deterministic + security hazard; a future explicit `Core.Process` native, never an operator. |
-| Reference operator `&` | aliasing | absent | php-only | reject | low | no | Aliasing/shared-mutable conflicts with the immutable heap. |
-| `yield` / `yield from` | generators | absent | php-only | defer | medium | partial | Needs suspension machinery; → PHP generators. |
-| `throw` (expression) | (8.0) | clean faults | php-only | defer | medium | yes | Needs the exception value model. |
-| `print` (construct) | returns 1 | `Console.println` | different | phorge-already-better | low | yes | Explicit namespaced native; the returns-1 quirk intentionally absent. |
-| Cast operators `(int)`/… | lossy juggling | conversion functions | php-only | reject | low | partial | Cast-operator form breaks the no-coercion invariant. |
-| `instanceof` | class/interface | S1 with smart-cast, accepts union/intersection | different | phorge-already-better | high | yes | Adds smart-cast narrowing beyond PHP; → PHP `instanceof`. |
-| BcMath\Number (operator-overloaded objects) | + − * / etc. (8.4) | absent | php-only | defer | medium | partial | Real operator-overloading precedent; a `Core.Decimal` would be its first client; bignum is std-only-hard. |
-
-### Track 3 — Per-Version RFC Catalogue (PHP 7.0–8.5)
-
-| Feature | In PHP? — how | In Phorge? — how | Relationship | Verdict | ROI | Transpile | Notes |
-|---|---|---|---|---|---|---|---|
-| Scalar type declarations (7.0) | coercive/strict hints | static types by default | different | phorge-already-better | high | yes | Statically-typed-by-default with a checker. |
-| Return type declarations (7.0) | `: T` | `-> T` mandatory on stmt-body | same | phorge-already-better | medium | yes | `-> T` → PHP `: T`. |
-| `??` (7.0) | yes | S2 | same | phorge-already-better | low | yes | Shipped with compile-time null-safety. |
-| Group use (7.0) | `use ns\{A,B as C}` | per-import import | different | adopt | low | yes | Brace-grouped imports are pure sugar over existing import. |
-| `intdiv()` (7.0) | because `/` floats | int `/` already exact + checked | different | phorge-already-better | low | yes | A `Core.Math.intdiv` trivial if wanted. |
-| Nullable `?T` (7.1) | runtime-nullable | `T?` compile-time non-null | different | phorge-already-better | high | yes | TS-style strictNullChecks vs PHP runtime-nullable. |
-| `void` (7.1) | yes | implicit unit | different | adopt | low | yes | A void/Unit annotation → PHP `: void`. |
-| Symmetric destructuring `[$a,$b]=` (7.1) | yes | absent | php-only | adopt | medium | yes | → PHP `[$a,$b]=`; pairs with match destructuring. |
-| `Closure::fromCallable` (7.1) | yes | first-class fn values | different | phorge-already-better | low | yes | First-class fn values native (S3). |
-| Arrow functions (7.4) | by-value capture | `fn(x)=>e` capture by value | same | phorge-already-better | medium | yes | Direct analogue; → PHP arrow fn. |
-| Spread in array literals `[...$a]` (7.4) | yes | absent | php-only | adopt | medium | yes | List-spread → PHP `[...$a]`; ties to argument unpacking. |
-| First-class callable `f(...)` (8.1) | yes | yes | same | phorge-already-better | high | yes | Shipped (S3); → PHP `f(...)`. |
-| Named arguments `f(name: x)` (8.0) | yes | absent | php-only | adopt | medium | yes | Pure compile-time reorder/fill; → PHP named args. |
-| Saner numeric-string `==` (8.0) | `0 == "foo"` now false | no loose `==` | different | phorge-already-better | low | yes | Whole footgun class structurally absent. |
-| `never` (8.1) | yes | clean-fault model | php-only | adopt | low | yes | → PHP `never`; improves exhaustiveness. |
-| Octal `0o` (8.1) | yes | absent | php-only | adopt | low | yes | Pure lexer; → PHP `0o` or decimal. |
-| Numeric separators `1_000_000` (7.4) | yes | absent | php-only | adopt | medium | yes | Lexer strips `_`; high readability. |
-| RoundingMode enum (8.4) | round() modes | absent | php-only | adopt | low | yes | `Core.Math.round(x,mode)` → PHP `round()`+RoundingMode (const for <8.4). |
-| `array_find`/`any`/`all`/`find_key` (8.4) | predicates | map/filter/reduce | php-only | adopt | medium | yes | Trivial in the existing higher-order mold; → PHP 8.4. |
-| Casts in const expressions (8.5) | `(int)0.3` | absent | php-only | adopt | low | yes | Compile-time cast folding; deterministic. |
-| Readonly properties (8.1) | opt-in | immutable-by-default | same | phorge-already-better | high | yes | Readonly is the default. |
-| Readonly classes (8.2) | `readonly class` | whole-class immutability default | same | phorge-already-better | high | yes | Default. |
-| DNF types `(A&B)\|C` (8.2) | DNF | `&` binds tighter than `\|` since S5 | same | phorge-already-better | low | yes | Already expressible; verify normalization emits 8.2-valid DNF. |
-| Deprecated dynamic properties (8.2) | now error | no dynamic properties | different | phorge-already-better | low | yes | The whole bug class is structurally absent. |
-| `static` return type / LSB (8.0) | yes | absent | php-only | defer | low | yes | Needs extends + LSB (S6). |
-| Stringable (auto from `__toString`) (8.0) | yes | absent | php-only | defer | low | partial | Needs a toString/display convention; pairs with derive(Show). |
-| Trailing comma in param lists (8.0) | allowed | absent | php-only | adopt | low | yes | Trivial parser tolerance; PHP accepts both forms. |
-| `new` in initializers (8.1) | default/attr args | absent | php-only | defer | low | yes | Needs CTFE of construction. |
-| Named args after unpacking (8.1) | `f(...$a, named:x)` | absent | php-only | adopt/defer | low | yes | Rides on named-args adoption. |
-| `false`/`true` standalone types (8.2) | literal types | absent | php-only | defer | low | yes | Pairs with future refinement/literal types. |
-| Final class constants (8.1) | yes | absent | php-only | defer | low | yes | `final` only matters with inheritance (S6). |
-| Typed class constants (8.3) | yes | absent | php-only | defer | medium | yes | No class constants yet; deterministic once a design lands. |
-| `#[\Override]` (8.3) | compiler-verified | absent | php-only | adopt/defer | medium | yes | Compile-checkable once S6 extends lands; → PHP `#[\Override]`. |
-| Readonly amendments (clone reinit) (8.3) | yes | absent | php-only | defer | medium | yes | Needs clone + controlled re-init. |
-| `json_validate()` (8.3) | yes | absent | php-only | defer | medium | yes | Land with core.json (needs dynamic Json/Any). |
-| Asymmetric visibility `private(set)` (8.4) | controlled mutability | absent | php-only | reject/defer | low | partial | The point is a writable-but-restricted property; moot under immutability. |
-| Lazy objects (8.4) | newLazyGhost/Proxy | absent | php-only | reject | low | no | Reflection-driven deferred init; needs mutation + reflection. |
-| `#[\Deprecated]` (8.4) | engine warns | warning channel exists | php-only | adopt/defer | medium | yes | Compile-time `W-DEPRECATED` lint + PHP `#[\Deprecated]`. |
-| `new X()->m()` without parens (8.4) | yes | absent | php-only | adopt | medium | yes | Pure parser/precedence ergonomics; deterministic. |
-| `request_parse_body()` (8.4) | RFC1867 | absent | php-only | reject | low | no | SAPI/superglobal runtime; out of the value-level M6 contract. |
-| Identical symbols across ns blocks (8.4) | symbol reuse | loader mangles per-package FQNs | phorge-only | phorge-already-better | low | yes | Per-package mangling already isolates symbols. |
-| Implicit-nullable deprecation (8.4) | `T $x=null` needs `?T` | non-null enforced | different | phorge-already-better | low/medium | yes | Validates Phorge's optional/non-null split. |
-| Closures in const expressions (8.5) | yes | absent | php-only | defer | low | yes | Needs CTFE of closures. |
-| `#[\NoDiscard]` (8.5) | must-use return | absent | php-only | defer | medium | yes | `W-UNUSED-RESULT` via warning channel once attributes land. |
-| Clone-with (8.5) | functional update | absent | php-only | defer | high | yes | The idiomatic way to "change" an immutable value; high ROI when unblocked. |
-| Final property promotion (8.5) | yes | promoted fields already immutable | different | phorge-already-better | low | yes | Already immutable. |
-| Constant arrays via `define()` (7.0) | runtime registration | absent | php-only | reject | low | no | `define()` is dynamic; use `const`. |
-| `Closure::call()` (7.0) | rebind scope | no this-capture | php-only | reject | low | no | Dynamic scope rebinding conflicts with by-value capture. |
-| Negative string offsets `s[-2]` (7.1) | yes | absent (bounds-checked) | php-only | reject | low | partial | Clashes with bounds-checked index + clean fault. |
-| Covariant returns / contravariant params (7.4) | yes | exact-match | different | defer | low | yes | Deferred in S3/S5 KNOWN_ISSUES; needs subtyping-aware sig checks. |
-| Weak refs / preloading / OPcache (7.4) | VM internals | absent | php-only | reject | low | no | No transpile target; conflicts with Rc model. |
-| Random extension (8.2) | Randomizer | absent | php-only | reject | low | no | Non-deterministic. |
-| Dynamic class const fetch (8.3) | `C::{$name}` | absent | php-only | reject | low | no | Dynamic name resolution. |
-| Static var initializers (8.3) | arbitrary expr | absent | php-only | reject | low | no | Static mutable locals conflict with immutability. |
-| Anonymous readonly classes (8.3) | yes | absent | php-only | defer | low | yes | Blocked on anon classes. |
-| `final` on trait methods (8.3) | yes | absent | php-only | defer | low | yes | Blocked on traits. |
-| INI fallback `${VAR:-default}` (8.3) | php.ini | absent | php-only | reject | low | no | Engine-config, not a language feature. |
-
-### Track 4 — Attributes & Metadata
-
-| Feature | In PHP? — how | In Phorge? — how | Relationship | Verdict | ROI | Transpile | Notes |
-|---|---|---|---|---|---|---|---|
-| Attribute concept `#[Attr]` | structured declaration metadata (8.0) | absent | php-only | adopt | high | yes | **Anchor.** Adopt as an INERT PASSTHROUGH channel + compile-time DERIVE; checker validates placement, transpiler re-emits literal PHP `#[...]`. |
-| Architecture fork: compile-time-consumed vs reflection-consumed | runtime reflection | absent | different | adopt | high | yes/partial | Adopt the derive/codegen channel (native fit) + inert passthrough; **reject** the runtime-reflection reader. |
-| Inert (passthrough) attribute channel | attrs inert until reflected | absent | different | adopt | high | yes | Go-struct-tag / `@Retention(SOURCE-re-emitted)` model; byte-identity trivially holds (Phorge runtime ignores it). |
-| `#[derive(Eq/PartialEq)]` structural equality | absent | absent | both-absent | adopt | high | yes | Checker expands field-wise eq into AST before backends → plain PHP method; deterministic, std-only. |
-| `#[derive(Show/Display)]` toString | manual `__toString` | absent | both-absent | adopt | high | yes | Synthesize toString from fields → PHP method; also the clean answer to the var_dump gap. |
-| Compile-time source generation (C# SourceGen / Swift macros / APT / KSP) | absent | checker passes do AST codegen | both-absent | adopt | high | yes | Validates the closed-derive direction; generated code is ordinary, deterministic, std-only. |
-| Rust `#[derive(...)]` (reference model) | absent | absent | both-absent | adopt | high | yes | The reference for the compile-time-consumed mechanism. |
-| Go struct tags (erased inert metadata) | PHP attrs (loosely) | absent | both-absent | adopt | high | yes | Cleanest model for the erasure discipline; maps 1:1 to inert passthrough. |
-| Routing attributes `#[Route(...)]` | Symfony reflection | absent | php-only | adopt | high | yes | Pure passthrough; Symfony consumes at cache-warm; Phorge runtime never reads it. |
-| Validation attributes `#[Assert\…]` | Symfony Validator | absent | php-only | adopt | high | yes | Passthrough, or (better long-term) derive-style generated `validate()`. |
-| ORM mapping `#[ORM\Entity/Column]` | Doctrine reflection | absent | php-only | adopt¹ | high | yes | ¹ As passthrough only; namespaced attribute names need backslash-qualified parsing. (Conflicts with the no-DB rejection elsewhere — passthrough emits, Phorge has no ORM semantics.) |
-| `#[derive(Ord/Compare)]` ordering | manual usort | absent | both-absent | adopt | medium | yes | Field-lexicographic compare → PHP `<=>`; pairs with future sort. |
-| `#[derive(Default)]` default ctor | absent | absent | both-absent | adopt | medium | yes | Default constructor from field types; composes with promotion. |
-| Attribute syntax + target restriction + IS_REPEATABLE | TARGET_* bitmask | absent | php-only | adopt | medium | yes | Compile-time placement validation (E-code) + passthrough; start with per-attr allow-lists. |
-| `#[\Deprecated]` (8.4) | engine warns | warning channel | php-only | adopt | medium | yes | Dual-mode: emit `W-DEPRECATED` + pass through PHP `#[\Deprecated]`. |
-| `#[\NoDiscard]` (8.5) | must-use return | absent | php-only | adopt | medium | yes | Checked: emit `W-NODISCARD` when result dropped + re-emit PHP. |
-| `#[SensitiveParameter]` (8.2) | redact from traces | absent | php-only | adopt | low | yes | Pure passthrough on a parameter target. |
-| Attributes on parameters | per-param reflection | absent | php-only | adopt | medium | yes | Parser accepts `#[...]` in param position; re-emit in the PHP slot. |
-| Java/C# retention (`@Retention`) | SOURCE/CLASS/RUNTIME | absent | different | adopt | medium | yes/partial | The channel-selector concept (derive-erased vs passthrough), not user-facing syntax. |
-| DI attributes `#[Required]/#[Autowire]` | Symfony DI reflection | absent | php-only | defer | low/medium | partial | Passthrough works; DI is a PHP-framework runtime concern Phorge doesn't model. |
-| Test-discovery `#[Test]/#[DataProvider]` | PHPUnit reflection | absent | php-only | adopt/reject | medium | yes/no | Passthrough lets PHPUnit test Phorge output; Phorge's own harness is the Rust oracle. |
-| `#[\Override]` (8.3) | compiler-checked | absent | php-only | defer | medium | yes | Blocked on S6 extends; then a CHECKED attribute. |
-| Attributes on enum cases | per-case metadata | absent | php-only | defer | low | partial | Passthrough deterministic; Phorge-side consumption needs reflection (rejected). |
-| `#[derive(Hash)]` | absent | HKey internal | both-absent | defer | low | partial | Only matters once class instances are valid Map/Set keys. |
-| `#[derive(Json)]` serialize/deserialize | manual jsonSerialize | absent | both-absent | defer | high | partial | Blocked on core.json (needs dynamic Json/Any). Serialize-only could land sooner. |
-| Phantom/marker attributes (Annotated-style) | analyzer markers | absent | both-absent | defer | low | partial | Overlaps refinement/newtype types; better solved there. |
-| Swift property wrappers | ≈ property hooks | absent | both-absent | defer | low | partial | Overlaps roadmapped property hooks; set-hook needs mutation. |
-| Reflection-based consumption (getAttributes/newInstance) | runtime reflection | absent | php-only | reject | low | no | No runtime reflection in Phorge; non-deterministic; the dividing line. |
-| User-defined / open proc-macros (syn/quote) | absent | absent | both-absent | reject | low | no | Arbitrary compile-time code → non-determinism + external crates; ship closed derive instead. |
-| Decorator-as-transform (Python/TS `@decorator`) | absent | absent | both-absent | reject | low | no | Runtime wrapper/replace; conflicts with static/immutable model; no PHP target. |
-| Python `typing.Annotated[T, meta]` | ≈ attrs | absent | php-only | reject | low | partial | Specific form has no PHP type-position target; concept covered by passthrough. |
-| TS decorators + reflect-metadata | runtime wrappers + polyfill | absent | both-absent | reject | low | partial | Runtime-wrapper half breaks the static model; metadata half duplicates passthrough. |
-| Scala 3 macros | metaprogramming runtime | absent | both-absent | reject | low | partial | Over-scoped for std-only; derive covers 90%. |
-| `@-bindings` (bind whole value while destructuring) | absent | absent | both-absent | adopt | medium | partial | `x @ 1..=5` — small front-end desugar; companion to match guards. |
-
-### Track 5 — Beyond PHP, High-ROI
-
-| Feature | In PHP? — how | In Phorge? — how | Relationship | Verdict | ROI | Transpile | Notes |
-|---|---|---|---|---|---|---|---|
-| Match guards (if-conditions in patterns) | absent | absent | both-absent | adopt | high | yes | Top pick. Lowers to existing branch ops; no new Op; a guarded arm is non-covering for exhaustiveness. |
-| `Result<T,E>` + `?` propagation | absent (exceptions) | clean faults + optionals, no Result | both-absent | adopt | high | yes/partial | `?` over optionals ships now; full `Result` deferred behind generic enums. The no-exceptions answer. |
-| Structural destructuring in match arms (nested ADT/class fields) | partial (list()) | binds single payload | different | adopt | high | yes | `Wrap(Point{x,y})` → field reads + binds; obvious next step after S4. |
-| Or-patterns `A(x) \| B(x) =>` | absent | single-pattern arms | both-absent | adopt | high | yes | Lowers to ‖-joined tests; binding-consistency is a front-end check. |
-| Opaque types / nominal newtypes | absent | transparent `type` aliases only | different | adopt | high | yes | `type UserId = opaque int;` checked nominally, ERASED to PHP int — exactly the `Core.Html` discipline. |
-| Refinement / newtype-with-smart-constructor | absent | absent | both-absent | adopt | high/medium | yes | Opaque type + `make(s)->T?` validator (fits no-exceptions). Flow-sensitive refinement deferred (research-grade). |
-| let-else / guard-let | absent | if-let exists (S2) | different | adopt | high | yes | The dual of S1.4 if-let; lowers to `if(!cond){<diverge>}`; no new Op. while-let deferred (needs mutation/iterator). |
-| Gleam-style `use` (callback-flattening) | absent | lambdas + first-class fns (S3) | both-absent | adopt | high/medium | yes | Parse-time CPS rewrite → nested closures; restrict to non-this contexts (E-LAMBDA-THIS). Best with Result. |
-| Default + named arguments (together) | defaults + named (8.0) | neither | php-only | adopt | high | yes | Table-stakes ergonomics; compile-time reorder/fill; often replaces overloading. |
-| Inspect / debug-print (var_dump/print_r/var_export) | yes | only `Console.println` | php-only | adopt | high/medium | yes/partial | A Phorge-canonical `Core.Debug.dump` on both backends (NOT mirroring var_export) sidesteps format-match; cycles impossible (acyclic heap). |
-| Derive-style codegen (`#[derive]`) | absent (attrs don't codegen) | absent | both-absent | adopt | high/medium | yes | Expand-before-backends discipline; deterministic, std-only. (Cross-listed with attributes track.) |
-| Sealed / closed type hierarchies | absent | exhaustive over enums + unions | both-absent | adopt | high/medium | yes | Reuses S1 `Op::IsInstance`; PHP `instanceof` cascade; mostly sugar over S4. |
-| Range patterns `0..=9 =>` | absent | range expressions exist | different | adopt | medium | yes | Lowers to a `lo<=x && x<=hi` guard; subsumed by match guards. |
-| List / slice patterns `[first, ..rest]` | partial (list()) | absent | different | adopt | medium | yes | Length check + indexed reads (reuses `Op::Index`); pairs with destructuring. |
-| `const fn` / CTFE (minimal const-fold) | partial (const-expr) | absent | different | adopt | medium | partial | Fold pure const-expressions to PHP literals; evaluator = pure interpreter subset. Adopt minimal; defer arbitrary const fn. |
-| Design by Contract (requires/ensures) | absent (assert only) | clean-fault target | both-absent | adopt | medium | yes | `requires(cond)` → fault-emitting guard; fits the fault model now. Invariants need mutation → defer. |
-| Pipeline-first / data-last stdlib | absent | has `\|>` but data-FIRST natives | different | adopt | medium | yes | **Latent footgun:** `xs \|> List.map(f)` is wrong-arity today. Reshape Core.List/Map signatures data-last; PHP emission unaffected. |
-| Labelled tuples / structural records | absent (arrays) | nominal only | both-absent | adopt/defer | medium | yes | `{x:int,y:int}` lowers to a PHP array; **tension** with the nominal spine — keep lean (anonymous records) or defer. |
-| Immutable-by-default | absent (readonly opt-in) | core invariant | phorge-only | phorge-already-better | high | yes | Foundational win; flip side blocks while-let/TCO/loop-accumulators. |
-| String-interpolation typing (type-directed holes) | untyped | `html"…"` + checked `"{e}"` | phorge-only | phorge-already-better | medium/low | yes | Already shipped (Core.Html); ahead of PHP and most langs. |
-| Exhaustive-everything (compile-time) | runtime UnhandledMatchError | compile-time exhaustive over enums/unions/optionals | phorge-only | phorge-already-better | low | yes | Already on the compile-time side. |
-| Exhaustive ADTs with associated data | backed/pure enums only | payload ADTs | phorge-only | phorge-already-better | low | yes | Strictly more expressive than PHP enums. |
-| Better error messages (Elm-style) | terse | caret spans + did-you-mean + `phg explain` | phorge-only | phorge-already-better | high/low | yes | Already Elm/Rust-grade; remaining work is coverage polish. |
-| `while-let` | absent | absent | both-absent | defer | medium | partial | Needs a mutating source (iterator/mutation); over a range degenerates to for..in. |
-| do-notation / monadic sugar | absent | partial (`?.`/`??`/`opt!`/`\|>`) | both-absent | defer | medium | partial | Presumes a `Result` type; unblock after Result lands. |
-| Effect / exception tracking in types | absent | absent | both-absent | defer | low | partial | Lightweight throws-marker subset feasible (erased); full algebraic effects → reject (continuations). |
-| Pattern binding everywhere (var/params/for) | partial (list()) | partial | different | defer | medium | yes | Blocked on tuples/records. |
-| Opaque return types (impl Trait) | absent | interface return covers ~80% | both-absent | defer/reject | low | yes | Low marginal value; no monomorphization where it pays off. |
-| Type classes / trait-bounds | absent | absent (overloading is the locked path) | both-absent | defer | medium | yes | The principled alternative to overloading; large design (coherence). Recorded so the lock is informed. |
-| Bounded / constrained generics (`where T: I`) | absent | erased generics, no bounds | both-absent | adopt | high | yes | Checked then erased (same S7a discipline); zero backend change; PHP stays `mixed`. |
-| Immutable persistent collections (HAMT/RRB) | absent (flat COW) | flat `Rc<Vec>` | different | defer | low/medium | yes | Internal perf only, invisible to the spine; premature — no functional-update op to optimize yet; std-only HAMT is real effort. |
-| General operator overloading (Add trait) | BcMath\Number only (8.4) | absent | different | defer | medium | yes/partial | `a+b → a.add(b)`; interacts with the CTy-operand trap; in tension with explicit-over-implicit. Revisit after method overloading. |
-| Tail-call optimization guarantee | absent | MAX_CALL_DEPTH guard | both-absent | reject | low | no | PHP has no TCO → transpiled PHP overflows where Phorge succeeds → breaks the spine. A `@tailrec` lint is the safe sliver. |
-| Structured concurrency / async-await | Fibers (8.1) | single-threaded forced | both-absent | reject | low | no | Async scheduling non-deterministic → breaks the spine by construction; M6 green-threads is the roadmapped contract-preserving path. |
-| Structural records (shape-based typing) | nominal | nominal | both-absent | reject | low | no | Fights the nominal spine; no clean PHP target. A nominal record with derived structural equality is the compromise. |
-| Ownership-lite / borrow hints | absent | absent | both-absent | reject | low | no | Non-problem under the immutable heap; no PHP target. |
-| Polymorphic (structural) variants | absent | nominal enums/unions | both-absent | reject | low | no/partial | No idiomatic PHP target; cuts against the nominal model. |
-| Gradual / optional typing (any/mixed) | native dynamic | absent by design | php-only | reject | low | partial | Punches a hole in the static + byte-identity story; PHP already IS the gradual target. |
-| Declarative / hygienic macros (`macro_rules!`) | absent | absent | both-absent | defer | low/medium | yes | Expand-then-transpile fits the existing discipline; large investment; derive covers the common need. |
-| Capability-passing / effect handlers as values | absent (ambient superglobals) | "nothing in the wind" aligned | both-absent | defer | low/medium | partial | Capability-as-value transpiles (a parameter); runtime ENFORCEMENT needs effect typing. |
-
----
-
-## Track-overlap note (regex, sprintf, date/time, enum-API)
-
-Several high-value features recur across tracks (PHP-core Pass-4, operators Pass-3, beyond). They are consolidated here so the verdict is unmistakable:
-
-- **Regex/PCRE** — `adopt`/high; tier-1 oracle-safe; **the std-only Rust matcher is the gating cost** (one row grades it `defer`/high precisely because the `regex` crate is forbidden — reconcile to *adopt with a hand-rolled subset, full PCRE deferred*).
-- **sprintf/`Core.Text.format`** — `adopt`/high; gated on variadics; pin `%F`/`LC_NUMERIC=C` for float determinism.
-- **String builders** (`str_pad`/`str_repeat`/`substr`) + **`number_format`** — `adopt`; tier-1, byte-based (no mbstring); 4-arg explicit `number_format` only (reject the locale-default 1-arg).
-- **Sorting** (`sort`/`sortBy`) — `adopt`/high; stable, reuses higher-order machinery.
-- **Array/Map breadth** (slice/merge/unique/flip/column/chunk/find/any/all) — `adopt`; additive natives.
-- **Math breadth** — integer/exact ops `adopt`; transcendentals `adopt` but example-gated to exact values (irrational-float Rust-vs-PHP-14-digit divergence, KNOWN_ISSUES); RNG `reject`.
-- **Date/Time** — *pure* arithmetic/format over an explicit (UTC/`gmdate`) timestamp `adopt`/`defer`; **clock reads `reject`** (non-deterministic — the URL/network deferral logic).
-- **JSON** (`core.json`) — `defer`/high; needs a dynamic `Json`/`Any` type.
-- **Enum behavioral API** — the blanket "enums phorge-already-better" verdict hid real gaps: **methods on enum cases**, **enums implementing interfaces**, **`cases()`/`tryFrom()`** are all `adopt` (backed-enum form is the prerequisite for `from`/`tryFrom`).
-
----
-
-## Decision Log
-
-> Batched ask-human verdicts recorded here. Each entry: `[YYYY-MM-DD] DECIDED: <feature/cluster> → <verdict> (rationale / sequencing note)`.
-
-### Batch 1 — directional forks (2026-06-21)
-- `[2026-06-21] DECIDED: ship-now ergonomics "Wave A" → sequence BEFORE / interleaved with method overloading` (insert as an "S5.5 ergonomics" slice; default+named args lands before overloading is finalized so the overloading design accounts for it — overloading may shrink/reshape as a result, but stays on the roadmap).
-- `[2026-06-21] DECIDED: Regex/PCRE → adopt, reduced std-only subset FIRST, full PCRE later` (hand-rolled matcher covering literals/classes/anchors/quantifiers/groups as `Core.Regex`; full PCRE deferred; `regex` crate stays forbidden).
-- `[2026-06-21] DECIDED: recoverable errors → BOTH eventually (Result + exceptions)` (build `Result<T,E>` + `?` for in-language flow AND try/catch/throw for PHP interop; sequencing of the two decided later; `?`-over-optionals can ship now, full `Result` waits on generic enums).
-
-### Batch 2 — Wave A core (2026-06-21)
-- `[2026-06-21] DECIDED: function ergonomics → adopt as ONE slice` (variadics + default+named args + call-site spread + list-destructuring together; first ergonomics slice).
-- `[2026-06-21] DECIDED: sprintf / Core.Text.format → adopt, immediately after variadics` (highest-ROI stdlib win once the enabler exists; pin `%F`/`LC_NUMERIC=C`).
-- `[2026-06-21] DECIDED: let-else AND break/continue → adopt NOW` (both; let-else completes S2 null-safety; break/continue over the existing `for..in` — while/do-while loops remain mutation-gated and deferred).
-- `[2026-06-21] DECIDED: constants → adopt in Wave A` (module-level `const` AND class constants; compile-time fold → PHP `const`; unblocks typed class constants later).
-
-### Batch 3 — patterns, operators, literals (2026-06-21)
-- `[2026-06-21] DECIDED: pattern cluster → adopt as ONE slice` (match guards + payload/struct destructuring + or-patterns + range patterns + list/slice patterns + @-bindings; reuses S4 IsInstance+branch ops, NO new Op; guarded-arm-non-covering exhaustiveness rule).
-- `[2026-06-21] DECIDED: operators → adopt ALL THREE` (spaceship `<=>` + bitwise `& | ^ ~ << >>` + exponent `**`; parser disambiguates bitwise from union/intersection type positions).
-- `[2026-06-21] DECIDED: literal forms → adopt the lexer batch` (hex/binary/octal `0o`/numeric separators/unicode escapes + compile-time magic constants; REJECT legacy bare-0 octal footgun).
-
-### Batch 4 — collections & stdlib breadth (2026-06-21)
-- `[2026-06-21] DECIDED: collections breadth → adopt as a stdlib-breadth wave` (sort/sortBy + array/Map breadth slice/merge/unique/flip/chunk/find/any/all + first/last→`T?`; all on the existing `NativeEval::HigherOrder` path; bundle with the formatting wave).
-- `[2026-06-21] DECIDED: foreach over Map/Set → adopt NOW` (the insertion-ordered Map/Set rep makes iteration deterministic + byte-identical; lifts the R1 deferral).
-- `[2026-06-21] DECIDED: pipeline-first stdlib reshape → DO IT NOW` (reshape Core.List/Map natives data-LAST to fix the `xs |> List.map(f)` wrong-arity footgun while the stdlib is small; PHP emission unaffected; will touch existing call sites/examples).
-- `[2026-06-21] DECIDED: JSON → PRIORITIZE the dynamic Json/Any type design as a near-term milestone` (so `core.json` AND `derive(Json)` unblock sooner; this is an upgrade from "defer indefinitely". Serialize-only could be an interim partial step).
-
-### Batch 5 — attributes & metaprogramming (2026-06-21)
-- `[2026-06-21] DECIDED: attributes → FULL PHP-PARITY runtime reflection (incl. dynamic class scanning)` (CORRECTION of the initial inert-passthrough/derive-only proposal, which the developer rightly rejected: "the big ROI of attributes is the runtime effect, to decorate classes"). The runtime-consumed decorate-and-read pattern (Route/ORM/Validate/DI) is the headline. Feasibility: attributes on statically-known types are compile-time-fixed → deterministic → byte-identity-safe; transpiles to PHP `ReflectionClass::getAttributes()->newInstance()`. **Determinism discipline:** Phorge programs are closed (no eval/dynamic require) so the class set is fully known at compile time — even "all classes bearing `@X`" is deterministic, requiring only a CANONICAL iteration order (declaration-order or sorted-FQN, same discipline as the existing sorted `class_implements`) applied identically in both backends + emitted PHP; attribute construction args must be const-expressions. The ONE rejected sliver: `new $runtimeString()` from non-deterministic input. Inert passthrough + closed derive come along as the cheap sub-channels.
-- `[2026-06-21] DECIDED: attributes milestone timing → AFTER the OOP slices (S6 extends / S8 traits)` (attributes decorate classes/methods/properties — richest once inheritance + traits exist; passthrough + derive available earlier).
-- `[2026-06-21] DECIDED: derive set → ALL FOUR together (Eq/PartialEq, Show/Display, Ord/Compare, Default)` (expand-before-backends codegen → ordinary deterministic PHP; Show doubles as the structured-debug answer).
-- `[2026-06-21] DECIDED: structured debug → adopt Core.Debug.dump (Phorge-canonical format)` (identical across run/runvm; NOT mirroring PHP var_export byte-for-byte; cycles impossible on the acyclic heap; pairs with derive(Show)).
-
-### Batch 6 — beyond-PHP differentiators (2026-06-21)
-- `[2026-06-21] DECIDED: opaque newtypes + flow refinement → adopt BOTH (full story)` (`type UserId = opaque int;` nominal + erased like Core.Html; `make(s)->T?` smart-constructors; AND flow-sensitive refinement narrowing — the larger design accepted, not just the opaque-wrapper subset).
-- `[2026-06-21] DECIDED: sealed hierarchies + bounded generics → adopt BOTH` (sealed = exhaustive match over a named hierarchy, reuses S1 IsInstance; bounds `where T: I` checked-then-erased per the S7a discipline, zero backend change, PHP stays `mixed`).
-- `[2026-06-21] DECIDED: Gleam-style use + do-notation → adopt BOTH, after Result lands` (callback-flattening CPS sugar restricted to non-this contexts; do-notation presumes Result; sequence both post-Result).
-
-### Batch 7 — reject re-categorization + familiarity principle (2026-06-21)
-- `[2026-06-21] DECIDED: milestone-bound defers → ACCEPTED` (mutation+GC, exceptions, concurrency buckets stay tied to their milestones; not pulled forward; Result+? remains the primary recoverable-error channel ahead of exceptions).
-- `[2026-06-21] PRINCIPLE: "familiar to PHP developers; KEEP or UPGRADE unless removal has a solid, specific reason."` (Developer overruled the original ~56-item reject bucket: "I don't see a valid reason to reject — this should be familiar with PHP, only with upgrades and reasonable removal with solid reason.") The reject bucket is re-categorized into three groups (below); **this Decision Log supersedes the inline matrix "reject" verdicts** wherever they conflict — the matrix rows will be reconciled to match.
-- `[2026-06-21] PRINCIPLE: MAXIMAL FAMILIARITY` (Developer: "I want maximum familiarity with the new things we will propose in Phorge — like multi-inheritance and overloading etc."). Where a safe form exists, KEEP the familiar PHP syntax rather than only a renamed function — e.g. evaluate keeping the `(int)x` cast *syntax* mapped to a checked conversion. The new Phorge-original features (overloading, inheritance/composition) must also be made to feel PHP-familiar.
-- `[2026-06-21] FLAG (revisit at the traits slice): multi-inheritance` — developer named it explicitly. PHP's familiar multi-inheritance substitute is **traits/mixins** (the prior D-L3 decision rejected raw MI in favor of traits+interfaces). Re-open at the S8 traits slice whether traits should provide ergonomic, PHP-familiar multiple-inheritance-like composition.
-
-#### Reject re-categorization (the three groups)
-
-**Group 1 — KEPT, upgraded (familiar capability stays; only the unsafe form changes — NOT a removal):**
-`==`/`!=` (kept; only PHP's loose juggling dropped — `0=="foo"` footgun; `===` semantics become the default `==`), type conversions (kept via `Int.parse(s)->int?`; under MAXIMAL-FAMILIARITY also evaluate keeping the `(int)x` *syntax* mapped to a checked conversion), `echo`/`print`→`Console.println`, `require`/`include`→static `import`, `__invoke`→first-class functions, array-`+`-union→explicit merge native.
-
-**Group 2 — DEFER to a milestone (reclassified out of "reject"):**
-- *Mutation+GC milestone:* `global`, `static` locals, `unset`, `WeakMap`, static mutable properties.
-- *Reflection/attributes milestone* (consistency fix — Batch 5 adopted FULL reflection): `get_class`/`method_exists`/Reflection API, `$obj::class`, the byte-safe subset of dynamic const fetch → become that milestone's compile-time-enumerated, canonically-ordered, deterministic queries.
-- *Extension-policy tier-3:* `mb_*`/`intl` unicode/grapheme, distinct `char` type (absent only under the `php -n` oracle).
-- *Future std-only natives:* `Core.BigInt` (arbitrary precision), `Core.Process` (shell — a native, never a backtick operator), seedable `Core.Random` / injected `Core.Time` (deterministic behind a seam).
-- *Reconsider toward adopt:* anonymous classes (familiar + useful for one-off impls) → defer, not reject.
-
-**Group 3 — GENUINELY REMOVED (~12 items, each documented WHY + the kept capability):**
-
-| Removed | Why (solid reason) | Capability preserved via |
-|---|---|---|
-| `eval()` | runtime string execution → no static checking, no determinism, security hole | (none — intentionally absent) |
-| `&` references / aliasing | breaks the immutable + acyclic heap that the no-tracing-GC design rests on | immutable values + `clone`-with (later) |
-| `__destruct` | destruction timing non-deterministic under `Rc`/`Drop` → breaks the byte-identity spine | — |
-| `__get`/`__set`/`__call`/`__callStatic` magic | untyped dynamic shapes defeat the static type checker (Phorge's core promise) | typed **property hooks** (PHP 8.4, roadmapped) |
-| `@` error suppression | silently hides errors — directly conflicts with the clean-fault / no-hidden-failure model | explicit error handling / `Result` |
-| `empty()` | defined purely by multi-type coercion (`0`/`'0'`/`''`/`[]`/`null`/`false`) — the ambiguity *is* the bug | explicit comparisons |
-| word-form `and`/`or`/`xor` | documented precedence footgun (`$a = true and false`) | `&&` / `\|\|` |
-| `break N` / `continue N` | multi-level numeric jump is a maintenance footgun | **labelled** break/continue (adopted) |
-| `goto` / labels | unstructured control flow, fights the analyzable IR (PHP discourages it too) | structured control flow |
-| `define()` (dynamic string name) | runtime string-named constant is statically unverifiable | `const` (and `Core.*` registries) |
-| `endif`/`endforeach`/`:` template syntax | template-era PHP-ism, zero value in a brace language | braces |
-| legacy bare-`0` octal (`0755`) | PHP's own footgun, already superseded | `0o` prefix |
-
-> Net effect: the genuine-removal list shrank from ~56 to ~12; the corpus verdict counts shift accordingly (many former `reject` rows become `phorge-already-better`/Group-1, `defer`/Group-2, or `adopt`). The matrix tables will be reconciled to these groups; until then, **this Decision Log is authoritative.**
-
----
-
-## Proposed slice re-sequencing (recommendation only)
-
-The locked M-RT order is **method overloading → S6 `extends` (final-by-default) → S8 traits**, with the broader roadmap holding **exceptions**, **mutation+tracing-GC**, **concurrency (M6 green-threads)**, and **attributes** as separate milestones. Given the adopt-high candidates, here is where each best fits. This is a recommendation; nothing is decided until the Decision Log records it.
-
-**A. Ship-now front-end wave (no prerequisite, deterministic, std-only) — insert as a "M-RT S5.5 ergonomics" slice *before or interleaved with* method overloading:**
-
-1. **Default + named arguments** — [Inferred] this should land *before* overloading is finalized: one function with optional/named params eliminates many overload pairs, so the overloading design should be made with this on the table (the dataset repeatedly notes "defaults often REPLACE the need for overloading"). Pure compile-time reorder/fill.
-2. **Variadics → then sprintf/`Core.Text.format`** — [Verified] variadics is the stated enabler; sprintf is the highest-ROI stdlib gap that becomes trivial once it exists.
-3. **Pattern cluster: match guards + payload/struct destructuring + or-patterns (+ range/list patterns)** — [Verified] all reuse S4's `IsInstance`+branch ops, **no new `Op`**, and are the natural continuation of the just-shipped S4 type patterns. Land as one slice. Guarded-arm-non-covering exhaustiveness rule is the one subtlety.
-4. **Numeric literal forms + `1_000_000` separators + `\u{}`** — [Verified] cheapest wins in the corpus; pure lexer; batch them.
-5. **`let-else`** — [Verified] completes the S2 null-safety story; lowers to existing if-let + diverge.
-6. **Module-level `const` + class constants** — [Verified] compile-time fold; natural for a function-heavy namespaced language.
-7. **Pipeline-first stdlib reshape** — [Inferred] fix the latent `|>` data-first footgun while the higher-order stdlib is still small; pure stdlib reshape, PHP emission unaffected.
-
-**B. Regex** — [Verified] the single biggest gap, but the **std-only Rust matcher is real effort**; sequence it as its own focused slice (a reduced literal/glob matcher could land first, full PCRE later). Independent of A and of the locked OOP order.
-
-**C. Sorting + array/Map/Math breadth** — [Verified] rides the existing `NativeEval::HigherOrder` re-entrant-VM path; can land anytime, ideally bundled with the formatting wave for a coherent "stdlib breadth" release.
-
-**D. Attributes milestone** — [Verified] adopt the **inert passthrough + closed-derive** model (reject runtime reflection). Sequence the **derive set (`Eq`/`Show`/`Ord`/`Default`)** early (it's the expand-before-backends discipline Phorge already runs) and the **passthrough channel** (Route/Validation/Deprecated) alongside or after — both are deterministic and unblock real PHP-framework interop. `derive(Json)` waits on core.json.
-
-**E. Tied to the locked OOP slices:**
-- With **method overloading**: revisit `E-INTERSECT-SIG`; weigh **default args** (A1) and **type-classes/trait-bounds** (the principled alternative) as recorded context. [Inferred]
-- With **S6 `extends`**: unblock `abstract`, `final`, late-static-binding, `static::`, covariance, `#[\Override]`, `static` return type. [Verified — all dataset-tagged as gated on S6]
-- With **S8 traits**: unblock trait constants, `final` trait methods, `__TRAIT__`. [Verified]
-
-**F. Tied to deferred milestones (do NOT pull forward):**
-- **Mutation+tracing-GC**: compound assigns, `++`/`--`, `??=`, `while`/`do-while`/C-for, static/global state, `clone`-with, property set-hooks, while-let, persistent collections. [Verified]
-- **Exceptions**: `try`/`catch`/`finally`, `throw`, Throwable hierarchy, multi-catch — but **`Result<T,E>` + `?` is the recommended primary recoverable-error channel** (Result-first; try/catch as a thin PHP-interop bridge). [Verified — the fork is explicitly resolved Result-first across multiple rows]
-- **Generics-as-values / `Json`/`Any` type**: `core.json`, `json_validate`, `derive(Json)`, `serialize`. [Verified]
-- **Concurrency (M6 green-threads)**: Fibers, generators, async — reject async-as-language-feature; the green-thread runtime preserves the byte-identical contract. [Verified]
-
-**G. Opaque newtypes / refinement** — [Inferred] high-leverage and a genuine beyond-PHP differentiator that fits the erasure discipline (erases like `Core.Html`); could slot into wave A as an upgrade of transparent `type` aliases to nominal opaque wrappers, with flow-sensitive refinement explicitly deferred.
-
-**Recommended overall sequence:** wave A (ergonomics, ship-now) ∥ C (stdlib breadth) → B (regex, focused) → D (attributes: derive then passthrough) → keep E/F bound to their milestones, with **method overloading still next per the lock, but informed by default-args (A1)**.
+*Status note (per developer standard): GA ~72% · Global ~58% — this audit is the "stop finding gaps
+ad hoc" deliverable; the needle moves most by locking the error-model fork (theme 1) and the M-RT
+totality + generic-enums spine (themes 2–3) into the active plan. Both percentages are [Speculative].*
