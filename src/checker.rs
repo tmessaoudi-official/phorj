@@ -714,14 +714,10 @@ impl Checker {
         // that name with at least one `open` overload.
         let mut method_open: std::collections::HashMap<(String, String), bool> =
             std::collections::HashMap::new();
-        let parents_map: std::collections::HashMap<&str, &[String]> = program
-            .items
-            .iter()
-            .filter_map(|it| match it {
-                Item::Class(c) => Some((c.name.as_str(), c.extends.as_slice())),
-                _ => None,
-            })
-            .collect();
+        // Shared method-resolution order (nearest-first BFS over *every* parent) — the same table the
+        // backends dispatch through, so the override check sees the exact ancestor a call would (M-RT
+        // S6b: multi-parent, not just the first-parent chain).
+        let mro = crate::ast::class_mro(program);
         for item in &program.items {
             if let Item::Class(c) = item {
                 for m in &c.members {
@@ -746,13 +742,8 @@ impl Checker {
                     if !checked.insert(f.name.as_str()) {
                         continue; // one diagnostic per overridden name
                     }
-                    // Nearest ancestor (first-parent chain this slice) that declares this name.
-                    let mut cur = c.extends.first().cloned();
-                    let mut seen = std::collections::HashSet::new();
-                    while let Some(anc) = cur {
-                        if !seen.insert(anc.clone()) {
-                            break;
-                        }
+                    // Nearest ancestor (across every parent, nearest-first) that declares this name.
+                    for anc in mro.get(&c.name).into_iter().flatten() {
                         if let Some(&open) = method_open.get(&(anc.clone(), f.name.clone())) {
                             if !open {
                                 self.err_coded(
@@ -770,9 +761,6 @@ impl Checker {
                             }
                             break; // the nearest declaration decides
                         }
-                        cur = parents_map
-                            .get(anc.as_str())
-                            .and_then(|ps| ps.first().cloned());
                     }
                 }
             }
@@ -6411,6 +6399,22 @@ mod tests {
              class Dog extends Animal { function kind() -> string { return \"d\"; } }",
         );
         assert!(errs.is_empty(), "got {errs:?}");
+    }
+
+    #[test]
+    fn overriding_a_final_method_of_the_second_parent_errors() {
+        // S6b.1: override-finality is checked against *every* parent, not just the first. `Flyer.move`
+        // (the second parent) is final-by-default; `Duck` redefining it is E-OVERRIDE-FINAL even
+        // though the first parent has no such method.
+        let errs = errors_of(
+            "open class Swimmer { open function dive() -> string { return \"d\"; } } \
+             open class Flyer { function move() -> string { return \"f\"; } } \
+             class Duck extends Swimmer, Flyer { function move() -> string { return \"m\"; } }",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-OVERRIDE-FINAL")),
+            "got {errs:?}"
+        );
     }
 
     // --- M-RT S7: erased generics ---

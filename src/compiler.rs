@@ -517,41 +517,21 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         next_idx += 1;
     }
 
-    // M-RT S6: inherit method-table entries from ancestor classes. A class that does not declare a
-    // method of a given name uses the nearest ancestor's already-registered body (same fn index), so
+    // M-RT S6/S6b: inherit method-table entries from ancestor classes. A class that does not declare
+    // a method of a given name uses the nearest ancestor's already-registered body (same fn index), so
     // the VM's `CallMethod` resolves an inherited method exactly like the interpreter's parent-chain
     // walk. No new functions are compiled — these are table aliases; own/nearer entries already win.
+    // The ancestor order is the **shared** `ast::class_mro` (nearest-first BFS over every parent), the
+    // same table the interpreter's `call_method` walks — so the two backends can never disagree on
+    // which ancestor a multi-parent method is inherited from.
     {
-        let parents: HashMap<&str, &[String]> = class_decls
-            .iter()
-            .map(|c| (c.name.as_str(), c.extends.as_slice()))
-            .collect();
-        // Ancestors of `name`, nearest-first, transitive, cycle-safe.
-        fn ancestors(name: &str, parents: &HashMap<&str, &[String]>) -> Vec<String> {
-            let mut out = Vec::new();
-            let mut seen = std::collections::HashSet::new();
-            let mut queue: Vec<String> =
-                parents.get(name).map(|ps| ps.to_vec()).unwrap_or_default();
-            let mut i = 0;
-            while i < queue.len() {
-                let p = queue[i].clone();
-                i += 1;
-                if !seen.insert(p.clone()) {
-                    continue;
-                }
-                out.push(p.clone());
-                if let Some(gps) = parents.get(p.as_str()) {
-                    queue.extend(gps.iter().cloned());
-                }
-            }
-            out
-        }
+        let mro = crate::ast::class_mro(program);
         let class_names: Vec<String> = class_decls.iter().map(|c| c.name.clone()).collect();
         for cname in &class_names {
-            for anc in ancestors(cname, &parents) {
+            for anc in mro.get(cname).into_iter().flatten() {
                 let anc_methods: Vec<String> = methods
                     .keys()
-                    .filter(|(cl, _)| cl == &anc)
+                    .filter(|(cl, _)| cl == anc)
                     .map(|(_, m)| m.clone())
                     .collect();
                 for mname in anc_methods {

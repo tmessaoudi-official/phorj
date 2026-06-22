@@ -226,6 +226,52 @@ function main() {
     );
 }
 
+/// M-RT S6b.1 — multi-parent composition. A method declared on the *second* parent must dispatch on
+/// both backends (the latent trap: the interpreter walked only the first-parent chain while the
+/// compiler BFS-flattened every parent — so `d.soar()` faulted on `run` but resolved on `runvm`). A
+/// non-overridden method from the first parent and a diamond shared-base method (auto-merged because
+/// both arms reach the *same* declaring method) must also resolve identically.
+#[test]
+fn s6b_multi_parent_dispatch_is_byte_identical() {
+    agree(
+        r#"import Core.Console;
+open class Swimmer {
+    open function move() -> string { return "swims"; }
+    function wet() -> string { return "wet"; }
+}
+open class Flyer {
+    open function soar() -> string { return "soars"; }
+}
+class Duck extends Swimmer, Flyer {}
+function main() {
+    Duck d = Duck();
+    Console.println(d.move()); // first parent
+    Console.println(d.soar()); // SECOND parent — the latent divergence
+    Console.println(d.wet());  // inherited, non-overridden
+}"#,
+    );
+}
+
+/// M-RT S6b.1 — diamond shared base. `Mid` reaches `Base.tag()` through both `Left` and `Right`;
+/// because both arms resolve to the *same* declaring method, it auto-merges (no conflict) and
+/// dispatches identically on both backends. A subtype flows into any ancestor-typed binding.
+#[test]
+fn s6b_diamond_shared_base_is_byte_identical() {
+    agree(
+        r#"import Core.Console;
+open class Base { open function tag() -> string { return "base"; } }
+open class Left extends Base {}
+open class Right extends Base {}
+class Mid extends Left, Right {}
+function main() {
+    Mid m = Mid();
+    Console.println(m.tag());
+    Base b = m;
+    Console.println(b.tag());
+}"#,
+    );
+}
+
 /// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
 /// so both backends must run a `var` program byte-identically.
 #[test]

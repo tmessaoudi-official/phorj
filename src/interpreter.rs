@@ -150,6 +150,10 @@ pub struct Interp {
     /// runtime test never diverges (M-RT S2). Interfaces themselves are erased: there are no
     /// interface values, only this lookup.
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
+    /// Per-class method-resolution order (nearest-first ancestor list, excluding self), built once via
+    /// [`crate::ast::class_mro`] and shared with the compiler's pre-flatten so `call_method` resolves
+    /// an inherited method to the *same* ancestor the VM's flat method table does (M-RT S6b).
+    class_mro: std::collections::BTreeMap<String, Vec<String>>,
     /// variant name -> (enum name, arity)
     variants: HashMap<String, (String, usize)>,
     /// Program-lifetime `static` field storage (M-mut.7), keyed by `(class, field)`. Seeded once at
@@ -186,6 +190,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         funcs: HashMap::new(),
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
+        class_mro: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
         frame: CallScopes::new(),
@@ -256,6 +261,7 @@ pub fn call_named(
         funcs: HashMap::new(),
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
+        class_mro: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
         frame: CallScopes::new(),
@@ -351,6 +357,10 @@ impl Interp {
         }
         // The single shared interface table (same algorithm as the checker + VM, no divergence).
         self.class_implements = crate::ast::class_implements(program);
+        // The single shared method-resolution order (M-RT S6b): `call_method` walks `[class] ++ mro`
+        // so a multi-parent method resolves to the same ancestor the compiler pre-flattens into the
+        // VM's table.
+        self.class_mro = crate::ast::class_mro(program);
     }
 
     /// Run a callable body in a fresh frame: bind `args` to `names` in the base
@@ -1389,20 +1399,20 @@ impl Interp {
             Value::Instance(inst) => inst,
             other => return rt(format!("cannot call `.{name}()` on {}", other.type_name())),
         };
-        // M-RT S6: walk the class and its ancestors (nearest-first) to the first class that declares
-        // a method of this name. A child's own method shadows an inherited one (override); a method
-        // found only on an ancestor dispatches there. The compiler pre-flattens the same lookup into
-        // the VM's `methods` table, so `run`/`runvm` resolve to the same body. (Single inheritance
-        // this slice — the first parent; multi-parent precedence lands in S6b.)
+        // M-RT S6/S6b: resolve the method against the class's method-resolution order — the class
+        // itself, then its ancestors nearest-first (BFS over *every* parent, not just the first), via
+        // the shared `class_mro` table. The first class that declares a method of this name wins (a
+        // child's own method overrides an inherited one; a diamond shared base is visited once). The
+        // compiler pre-flattens the identical lookup into the VM's `methods` table, so `run`/`runvm`
+        // resolve to the same body.
         let candidates: Vec<FunctionDecl> = {
-            let mut cur = inst.class.clone();
-            let mut seen = std::collections::HashSet::new();
-            loop {
-                if !seen.insert(cur.clone()) {
-                    break Vec::new();
-                }
+            let mro = self.class_mro.get(&inst.class);
+            let chain =
+                std::iter::once(inst.class.clone()).chain(mro.into_iter().flatten().cloned());
+            let mut found = Vec::new();
+            for cur in chain {
                 let Some(class) = self.classes.get(&cur) else {
-                    break Vec::new();
+                    continue;
                 };
                 let here: Vec<FunctionDecl> = class
                     .members
@@ -1413,13 +1423,11 @@ impl Interp {
                     })
                     .collect();
                 if !here.is_empty() {
-                    break here;
-                }
-                match class.extends.first() {
-                    Some(p) => cur = p.clone(),
-                    None => break Vec::new(),
+                    found = here;
+                    break;
                 }
             }
+            found
         };
         let f = match candidates.len() {
             0 => return rt(format!("no method `{name}` on `{}`", inst.class)),

@@ -385,6 +385,48 @@ pub fn class_supertypes(program: &Program) -> std::collections::BTreeMap<String,
     out
 }
 
+/// Method-resolution order for every class: `class_mro[c]` is `c`'s ancestor classes in
+/// **nearest-first breadth-first** order (direct parents in `extends` order, then their parents, …),
+/// excluding `c` itself. Cycle-safe via a visited set. This is the **single source of dispatch
+/// precedence** consumed by both the interpreter's `call_method` parent walk and the compiler's
+/// method-table pre-flatten (M-RT S6b), so the two backends can never disagree on *which* ancestor a
+/// method is inherited from. A method is resolved by scanning `[c] ++ class_mro[c]` and taking the
+/// first class that declares it (so a nearer declaration overrides a farther one); a diamond shared
+/// base is visited once, auto-merging when both arms reach the same declaring method.
+pub fn class_mro(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
+    use std::collections::{BTreeMap, HashSet};
+    let parents: BTreeMap<&str, &[String]> = program
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Class(c) => Some((c.name.as_str(), c.extends.as_slice())),
+            _ => None,
+        })
+        .collect();
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            let mut order = Vec::new();
+            let mut seen: HashSet<String> = HashSet::new();
+            let mut queue: Vec<String> = c.extends.clone();
+            let mut i = 0;
+            while i < queue.len() {
+                let p = queue[i].clone();
+                i += 1;
+                if !seen.insert(p.clone()) {
+                    continue;
+                }
+                order.push(p.clone());
+                if let Some(gps) = parents.get(p.as_str()) {
+                    queue.extend(gps.iter().cloned());
+                }
+            }
+            out.insert(c.name.clone(), order);
+        }
+    }
+    out
+}
+
 fn collect_free_expr(
     e: &Expr,
     bound: &mut std::collections::HashSet<String>,
