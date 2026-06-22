@@ -568,11 +568,37 @@ impl<'a> Vm<'a> {
                 // Dynamic dispatch off the receiver's runtime class. Method existence is
                 // checker-enforced, so the miss is a defensive backstop (interpreter parity).
                 let key = (class, mname);
-                let func = *self
-                    .program
-                    .methods
-                    .get(&key)
-                    .ok_or_else(|| format!("no method `{}` on `{}`", key.1, key.0))?;
+                // M-RT overloading: an overloaded method selects among its set by the argument values
+                // (the receiver is at `slot_base`, the `argc` args at `slot_base + 1 ..`) — the same
+                // selector the interpreter's `call_method` runs. A single method stays on the direct path.
+                let func = if let Some(&set_id) = self.program.method_overloads.get(&key) {
+                    let set = &self.program.overloads[set_id];
+                    let cands: Vec<Vec<crate::dispatch::ParamKind>> =
+                        set.iter().map(|(k, _)| k.clone()).collect();
+                    let args = &self.stack[slot_base + 1..slot_base + 1 + argc];
+                    match crate::dispatch::select_overload(
+                        &cands,
+                        args,
+                        &self.program.class_implements,
+                    ) {
+                        Ok(pos) => set[pos].1,
+                        Err(crate::dispatch::SelectErr::Ambiguous) => {
+                            return Err(format!("ambiguous overloaded call to `{}`", key.1))
+                        }
+                        Err(crate::dispatch::SelectErr::NoMatch) => {
+                            return Err(format!(
+                                "no overload of `{}` matches the argument types",
+                                key.1
+                            ))
+                        }
+                    }
+                } else {
+                    *self
+                        .program
+                        .methods
+                        .get(&key)
+                        .ok_or_else(|| format!("no method `{}` on `{}`", key.1, key.0))?
+                };
                 self.frames.push(Frame {
                     func,
                     ip: 0,
@@ -957,6 +983,7 @@ mod tests {
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         Vm::new(&program).run().map_err(|d| d.to_string())
     }
@@ -1186,6 +1213,7 @@ mod tests {
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
     }
@@ -1227,6 +1255,7 @@ mod tests {
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
     }
@@ -1267,6 +1296,7 @@ mod tests {
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
     }
@@ -1303,6 +1333,7 @@ mod tests {
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "3\n");
     }
@@ -1335,6 +1366,7 @@ mod tests {
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         let err = Vm::new(&program).run().unwrap_err().to_string();
         assert!(err.contains("no field `tag` on `Empty`"), "{err}");

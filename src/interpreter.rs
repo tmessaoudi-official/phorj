@@ -1393,13 +1393,42 @@ impl Interp {
             Some(c) => c,
             None => return rt(format!("unknown class `{}`", inst.class)),
         };
-        let method = class.members.iter().find_map(|m| match m {
-            ClassMember::Method(f) if f.name == name => Some(f.clone()),
-            _ => None,
-        });
-        let f = match method {
-            Some(f) => f,
-            None => return rt(format!("no method `{name}` on `{}`", inst.class)),
+        // M-RT overloading: a class may declare several methods of one name. Gather them and, when
+        // there is more than one, select the most-specific by the runtime argument values — the same
+        // `dispatch::select_overload` the VM's `CallMethod` runs, so `run`/`runvm` pick the same body.
+        let candidates: Vec<&FunctionDecl> = class
+            .members
+            .iter()
+            .filter_map(|m| match m {
+                ClassMember::Method(f) if f.name == name => Some(f),
+                _ => None,
+            })
+            .collect();
+        let f = match candidates.len() {
+            0 => return rt(format!("no method `{name}` on `{}`", inst.class)),
+            1 => candidates[0].clone(),
+            _ => {
+                let kinds: Vec<Vec<crate::dispatch::ParamKind>> = candidates
+                    .iter()
+                    .map(|f| {
+                        f.params
+                            .iter()
+                            .map(|p| crate::dispatch::param_kind(&p.ty))
+                            .collect()
+                    })
+                    .collect();
+                match crate::dispatch::select_overload(&kinds, &args, &self.class_implements) {
+                    Ok(i) => candidates[i].clone(),
+                    Err(crate::dispatch::SelectErr::Ambiguous) => {
+                        return rt(format!("ambiguous overloaded call to `{name}`"))
+                    }
+                    Err(crate::dispatch::SelectErr::NoMatch) => {
+                        return rt(format!(
+                            "no overload of `{name}` matches the argument types"
+                        ))
+                    }
+                }
+            }
         };
         if args.len() != f.params.len() {
             return rt(format!(

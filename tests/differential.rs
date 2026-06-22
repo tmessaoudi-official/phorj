@@ -1226,6 +1226,23 @@ fn overloaded_free_functions_agree() {
 }
 
 #[test]
+fn overloaded_methods_agree() {
+    // M-RT overloading on class methods: the receiver's runtime argument types select the overload,
+    // identically on both backends (the `this` receiver is excluded from the dispatch).
+    agree("import Core.Console; \
+           interface Shape {} \
+           class Circle implements Shape { constructor(public int r) {} } \
+           class Printer { \
+             constructor(public string tag) {} \
+             function show(int n)->string { return \"{this.tag}/int:{n}\"; } \
+             function show(string s)->string { return \"{this.tag}/str:{s}\"; } \
+             function show(Circle c)->string { return \"{this.tag}/circle:{c.r}\"; } \
+           } \
+           function main(){ Printer p=Printer(\"P\"); \
+             Console.println(p.show(7)); Console.println(p.show(\"hi\")); Console.println(p.show(Circle(3))); }");
+}
+
+#[test]
 fn ambiguous_overloaded_call_faults_on_both_backends() {
     // A multi-argument cross-cutting overload set with no unique most-specific match for the call is
     // a clean runtime fault — and the SAME fault on both backends (byte-identical message → same

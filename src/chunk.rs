@@ -352,10 +352,15 @@ pub struct BytecodeProgram {
     /// `Op::GetStatic`/`Op::SetStatic`.
     pub static_inits: Vec<Value>,
     /// Overload dispatch tables (M-RT method/function overloading), indexed by the set id an
-    /// `Op::CallOverload` carries. Each entry pairs an overload's parameter kinds with the function
-    /// index to call; `dispatch::select_overload` picks the most-specific match at runtime. Empty in
-    /// the overwhelmingly common no-overloads program.
+    /// `Op::CallOverload` carries (free functions) or a `method_overloads` value (methods). Each entry
+    /// pairs an overload's parameter kinds with the function index to call; `dispatch::select_overload`
+    /// picks the most-specific match at runtime. Empty in the common no-overloads program.
     pub overloads: Vec<crate::dispatch::OverloadSet>,
+    /// `(class, method)` → an index into [`Self::overloads`], for the overloaded methods only (M-RT).
+    /// `Op::CallMethod` consults this after resolving the receiver's class: present ⇒ dynamic-dispatch
+    /// over the set by the argument values; absent ⇒ the single-method `methods` entry. Empty in the
+    /// common program.
+    pub method_overloads: HashMap<(String, String), usize>,
 }
 
 impl BytecodeProgram {
@@ -579,6 +584,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert_eq!(prog.validate(), Ok(()));
     }
@@ -603,6 +609,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("invalid bytecode"), "{err}");
@@ -629,6 +636,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(prog.validate().unwrap_err().contains("call target 7"));
 
@@ -642,6 +650,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(bad_main.validate().unwrap_err().contains("main index 0"));
     }
@@ -666,6 +675,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("enum descriptor index 3"), "{err}");
@@ -691,6 +701,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(prog
             .validate()
@@ -715,6 +726,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
 
@@ -737,6 +749,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(prog3.validate().unwrap_err().contains("field-name index 7"));
 
@@ -759,6 +772,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(prog4.validate().unwrap_err().contains("static index 2"));
     }
@@ -783,6 +797,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(prog.validate().unwrap_err().contains("native index 9999"));
     }
@@ -810,6 +825,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("closure target 4"), "{err}");
@@ -840,6 +856,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert!(prog.validate().is_ok());
     }
@@ -863,6 +880,7 @@ mod tests {
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
             overloads: Vec::new(),
+            method_overloads: std::collections::HashMap::new(),
         };
         assert_eq!(prog.functions[prog.main].name, "main");
         assert_eq!(prog.functions[0].arity, 0);

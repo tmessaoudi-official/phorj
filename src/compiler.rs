@@ -466,6 +466,9 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     let mut method_rets: HashMap<(String, String), CTy> = HashMap::new();
     let mut methods_to_compile: Vec<(usize, &FunctionDecl)> = Vec::new();
     let mut next_idx = nfree + nclasses;
+    // M-RT overloading: per (class, method), every overload's `(ParamKinds, fn index)` in declaration
+    // order. Pairs with more than one become method overload sets (built after the loop).
+    let mut method_order: HashMap<(String, String), crate::dispatch::OverloadSet> = HashMap::new();
     for (ci, c) in class_decls.iter().enumerate() {
         for m in &c.members {
             if let ClassMember::Method(f) = m {
@@ -474,9 +477,30 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                     (c.name.clone(), f.name.clone()),
                     f.ret.as_ref().map_or(CTy::Other, resolve_cty),
                 );
+                let kinds = f
+                    .params
+                    .iter()
+                    .map(|p| crate::dispatch::param_kind(&p.ty))
+                    .collect();
+                method_order
+                    .entry((c.name.clone(), f.name.clone()))
+                    .or_default()
+                    .push((kinds, next_idx));
                 methods_to_compile.push((ci, f));
                 next_idx += 1;
             }
+        }
+    }
+    // Methods of one name on one class become a dispatch set in the shared `overloads` table; the
+    // runtime `CallMethod` consults `method_overloads` (keyed by the receiver's class + method name)
+    // and selects exactly like a free-function `CallOverload`. Single-method names stay on the direct
+    // `methods` path — byte-identical to pre-overloading output.
+    let mut method_overloads: HashMap<(String, String), usize> = HashMap::new();
+    for (key, set) in method_order {
+        if set.len() > 1 {
+            let set_id = overloads.len();
+            overloads.push(set);
+            method_overloads.insert(key, set_id);
         }
     }
     // Register the synthetic hook methods after the real ones — same dispatch table, same compile
@@ -609,6 +633,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         class_implements: crate::ast::class_implements(program),
         static_inits,
         overloads,
+        method_overloads,
     })
 }
 
