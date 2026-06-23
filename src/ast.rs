@@ -707,6 +707,36 @@ pub fn class_field_conflicts(program: &Program) -> Vec<(String, String, Span)> {
     ctx.conflicts
 }
 
+/// The constructor a `ClassName(args)` call uses (M-RT S6c.2a): the class's **own** constructor if it
+/// declares one, else — for **single** inheritance — its nearest ancestor's (walking the one-parent
+/// chain). Returns `(declaring_class, params, body)`. `None` when neither the class nor (via a
+/// single-parent chain) any ancestor declares a constructor, or when the class has **multiple** parents
+/// and no own constructor — multi-parent orchestration is S6c.2b; a child that declares its *own*
+/// constructor under inheritance is the deferred case (it returns its own ctor, parents un-chained).
+///
+/// This is the single source of the inherited-ctor decision: the checker reads it for the construction
+/// signature and the compiler for the instance descriptor + synthetic ctor body. The interpreter
+/// mirrors the same own-else-single-parent walk over its `ClassDecl` map.
+pub fn effective_ctor<'a>(
+    program: &'a Program,
+    class: &str,
+) -> Option<(&'a str, &'a [CtorParam], &'a [Stmt])> {
+    let decl = program.items.iter().find_map(|it| match it {
+        Item::Class(c) if c.name == class => Some(c),
+        _ => None,
+    })?;
+    if let Some((p, b)) = decl.members.iter().find_map(|m| match m {
+        ClassMember::Constructor { params, body, .. } => Some((&params[..], &body[..])),
+        _ => None,
+    }) {
+        return Some((&decl.name, p, b));
+    }
+    if decl.extends.len() == 1 {
+        return effective_ctor(program, &decl.extends[0]);
+    }
+    None
+}
+
 fn collect_free_expr(
     e: &Expr,
     bound: &mut std::collections::HashSet<String>,

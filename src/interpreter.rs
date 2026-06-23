@@ -7,8 +7,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::ast::{
-    BinaryOp, ClassDecl, ClassMember, Expr, FunctionDecl, Item, LambdaBody, MatchArm, Modifier,
-    Param, Pattern, Program, Stmt, StrPart, UnaryOp,
+    BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, LambdaBody, MatchArm,
+    Modifier, Param, Pattern, Program, Stmt, StrPart, UnaryOp,
 };
 use crate::diagnostic::Diagnostic;
 use crate::value::{ClosureData, EnumVal, Instance, Value};
@@ -1336,19 +1336,40 @@ impl Interp {
         Ok(out)
     }
 
+    /// The constructor `class_name` uses (M-RT S6c.2a): its own if declared, else — for **single**
+    /// inheritance — its nearest ancestor's (walking the one-parent chain). Mirrors
+    /// `ast::effective_ctor`; returns `None` when no own/inherited ctor applies (no parent, ≥2 parents
+    /// with no own ctor, or no ancestor declares one). A `(params, body)` clone so `construct` can run
+    /// it with the instance live.
+    fn effective_ctor_parts(&self, class_name: &str) -> Option<(Vec<CtorParam>, Vec<Stmt>)> {
+        let class = self.classes.get(class_name)?;
+        if let Some(parts) = class.members.iter().find_map(|m| match m {
+            ClassMember::Constructor { params, body, .. } => Some((params.clone(), body.clone())),
+            _ => None,
+        }) {
+            return Some(parts);
+        }
+        let parent = if class.extends.len() == 1 {
+            Some(class.extends[0].clone())
+        } else {
+            None
+        };
+        parent.and_then(|p| self.effective_ctor_parts(&p))
+    }
+
     /// Construct a class instance. Applies constructor *promotion* at runtime
     /// (EV-4): each promoted ctor param (carrying a visibility modifier) becomes a
     /// field. Required for the §6 empty-body constructor to populate `name`.
     fn construct(&mut self, class_name: &str, args: Vec<Value>) -> R<Value> {
-        let class = self
-            .classes
-            .get(class_name)
-            .cloned()
-            .expect("caller checked the class exists");
-        let ctor = class.members.iter().find_map(|m| match m {
-            ClassMember::Constructor { params, body, .. } => Some((params.clone(), body.clone())),
-            _ => None,
-        });
+        debug_assert!(
+            self.classes.contains_key(class_name),
+            "caller checked the class exists"
+        );
+        // M-RT S6c.2a: a no-own-ctor class runs its *inherited* (single-parent) constructor — the
+        // own-else-nearest-single-parent walk mirrored from `ast::effective_ctor` (and PHP's native
+        // ctor inheritance / the compiler's effective-ctor). The promoted params set fields on a
+        // `class_name` instance, so `Greeter("Ada")` populates the inherited `name`.
+        let ctor = self.effective_ctor_parts(class_name);
         let mut inst = Instance {
             class: class_name.to_string(),
             fields: RefCell::new(HashMap::new()),

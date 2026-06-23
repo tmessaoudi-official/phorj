@@ -59,8 +59,13 @@ struct ClassInfo {
     /// writable (`has_set`): reading a `!has_get` hook is `E-HOOK-NO-GET`, writing a `!has_set` one
     /// is `E-HOOK-NO-SET`. A member read/write resolves a hook here before the instance-field path.
     hooks: HashMap<String, HookInfo>,
-    /// constructor parameter types, for `ClassName(args)` calls
+    /// constructor parameter types, for `ClassName(args)` calls. For a class with no own constructor
+    /// under single inheritance (M-RT S6c.2a), this is the *inherited* parent constructor's signature.
     ctor: Vec<Ty>,
+    /// Whether the class declares its **own** constructor (vs. inheriting one). Distinguishes a class
+    /// with a zero-arg ctor from one with no ctor at all (both leave `ctor` empty) — `merge_inherited`
+    /// inherits a single parent's `ctor` only into a class that has none of its own (M-RT S6c.2a).
+    has_ctor: bool,
     /// Generic type parameters this class declares (`["T"]` for `class Box<T>`). Empty for a
     /// non-generic class. When non-empty, `fields`/`ctor`/`methods` may contain `Ty::Param`
     /// occurrences: construction unifies the ctor against the arguments to bind them, and member
@@ -1048,6 +1053,15 @@ impl Checker {
             for (k, v) in &parent_info.hooks {
                 child.hooks.entry(k.clone()).or_insert_with(|| v.clone());
             }
+            // M-RT S6c.2a: a single-parent class with no own constructor inherits the parent's
+            // constructor signature for `ClassName(args)` type-checking (mirrors PHP's native ctor
+            // inheritance + the interpreter's parent-chain walk + the compiler's effective-ctor). The
+            // parent's `ctor` is already its *effective* signature (parents merged first), so a chain
+            // of no-own-ctor classes propagates it. Multi-parent (`ps.len() > 1`) is S6c.2b; a class
+            // declaring its own ctor keeps it (the deferred parent-forwarding case).
+            if ps.len() == 1 && !child.has_ctor {
+                child.ctor = parent_info.ctor.clone();
+            }
         }
     }
 
@@ -1481,6 +1495,7 @@ impl Checker {
                 methods: HashMap::new(),
                 hooks: HashMap::new(),
                 ctor: Vec::new(),
+                has_ctor: false,
                 type_params: c.type_params.clone(),
                 is_abstract: c.is_abstract,
             },
@@ -1694,6 +1709,10 @@ impl Checker {
         info.static_mut = static_mut;
         info.methods = methods;
         info.hooks = hooks;
+        info.has_ctor = c
+            .members
+            .iter()
+            .any(|m| matches!(m, ClassMember::Constructor { .. }));
         info.ctor = ctor;
     }
 

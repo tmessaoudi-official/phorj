@@ -372,6 +372,83 @@ class Mid extends Left, Right {}"#,
     );
 }
 
+/// Assert both backends AND real PHP all produce exactly `expected` for `src`. A construction test
+/// needs this stronger check than `agree` — a shared *failure* (e.g. a checker rejection) makes a bare
+/// `agree` pass vacuously (both backends "agree" on the error). Auto-prepends `package Main;`.
+fn agree_out_php(src: &str, expected: &str, label: &str) {
+    let src = with_pkg(src);
+    let tree = cmd_run(&src);
+    let vm = cmd_runvm(&src);
+    assert_eq!(
+        tree, vm,
+        "run vs runvm for {label}:\n  run={tree:?}\n  runvm={vm:?}"
+    );
+    let out = tree.unwrap_or_else(|e| panic!("{label}: program errored on `run`: {e}"));
+    assert_eq!(out, expected, "interpreter output for {label}");
+    if let Some(php) = php_or_gate(label) {
+        let php_src = cli::cmd_transpile(&src).expect("transpile ok");
+        let got = run_php(&php, &php_src, label);
+        assert_eq!(
+            got, expected,
+            "PHP ≠ expected for {label}\n--- php ---\n{php_src}"
+        );
+    }
+}
+
+/// M-RT S6c.2a — single-parent constructor inheritance. A subclass with **no own constructor**
+/// inherits its parent's: `Greeter("Ada")` runs the inherited ctor (promoting `name`) on a `Greeter`
+/// instance. PHP inherits the ctor natively; the interpreter walks the parent chain and the compiler
+/// uses the inherited ctor for the instance descriptor — all three must agree on the *output*.
+#[test]
+fn s6c_single_parent_ctor_inheritance_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Console;
+open class Named { constructor(public string name) {} }
+class Greeter extends Named {}
+function main() {
+    Greeter g = Greeter("Ada");
+    Console.println(g.name);
+}"#,
+        "Ada\n",
+        "s6c_single_parent_ctor_inheritance",
+    );
+}
+
+/// M-RT S6c.2a — a parent constructor with a *body* (not just promotion) runs identically through the
+/// child, and the inheritance chains through multiple no-own-ctor levels.
+#[test]
+fn s6c_inherited_ctor_body_and_chain_are_byte_identical() {
+    // parent ctor body sets a non-promoted field; child inherits it
+    agree_out_php(
+        r#"import Core.Console;
+open class Counter {
+    mutable int n;
+    constructor(int start) { this.n = start; }
+    function value() -> int { return this.n; }
+}
+class Tally extends Counter {}
+function main() {
+    Tally t = Tally(7);
+    Console.println("{t.value()}");
+}"#,
+        "7\n",
+        "s6c_inherited_ctor_body",
+    );
+    // a two-level chain: Mid and Leaf both have no own ctor, inherit Root's
+    agree_out_php(
+        r#"import Core.Console;
+open class Root { constructor(public int id) {} }
+open class Mid extends Root {}
+class Leaf extends Mid {}
+function main() {
+    Leaf l = Leaf(42);
+    Console.println("{l.id}");
+}"#,
+        "42\n",
+        "s6c_inherited_ctor_chain",
+    );
+}
+
 /// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
 /// so both backends must run a `var` program byte-identically.
 #[test]

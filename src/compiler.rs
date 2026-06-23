@@ -323,7 +323,11 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     };
     for (ci, c) in class_decls.iter().enumerate() {
         classes.insert(c.name.clone(), nfree + ci);
-        let (params, _) = ctor_parts(c);
+        // M-RT S6c.2a: a no-own-ctor class's instance descriptor uses its *inherited* (single-parent)
+        // constructor's promoted fields, so a `MakeInstance` for it populates the same fields the
+        // interpreter promotes through the parent chain. `effective_ctor` is the shared decision.
+        let params: &[CtorParam] =
+            crate::ast::effective_ctor(program, &c.name).map_or(&[] as &[CtorParam], |(_, p, _)| p);
         let mut fields: Vec<String> = Vec::new();
         let mut tags: HashMap<String, CTy> = HashMap::new();
         for p in params {
@@ -556,7 +560,9 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     // `CallMethod`, whose arg count is in the op, so their arity entries are for completeness).
     let mut arities: Vec<usize> = order.iter().map(|f| f.params.len()).collect();
     for c in &class_decls {
-        arities.push(ctor_parts(c).0.len());
+        // M-RT S6c.2a: the synthetic ctor's arity is the *effective* (own-or-single-parent-inherited)
+        // constructor's, matching `compile_constructor`'s param count.
+        arities.push(crate::ast::effective_ctor(program, &c.name).map_or(0, |(_, p, _)| p.len()));
     }
     for (_, f) in &methods_to_compile {
         arities.push(1 + f.params.len());
@@ -610,6 +616,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     for (ci, cd) in class_decls.iter().enumerate() {
         let base = next_idx + lambdas.len();
         let (f, extras) = compile_constructor(
+            program,
             cd,
             ci,
             &fns,
@@ -671,17 +678,6 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     })
 }
 
-/// The constructor's `(params, body)`, or `(&[], &[])` for a class with no explicit constructor
-/// (which still builds an empty instance — interpreter parity).
-fn ctor_parts(c: &ClassDecl) -> (&[CtorParam], &[Stmt]) {
-    for m in &c.members {
-        if let ClassMember::Constructor { params, body, .. } = m {
-            return (params, body);
-        }
-    }
-    (&[], &[])
-}
-
 /// A ctor param is *promoted* to a field iff it carries a visibility modifier (matching
 /// `interpreter::construct` / the checker's promotion rule).
 /// Extract the literal text of a string-literal expression (one `StrPart::Literal`). The checker
@@ -712,6 +708,7 @@ fn is_promoted(p: &CtorParam) -> bool {
 /// the result: the promoted instance is always returned.
 #[allow(clippy::too_many_arguments)]
 fn compile_constructor<'a>(
+    program: &Program,
     c: &ClassDecl,
     desc_idx: usize,
     fns: &'a HashMap<String, FnMeta>,
@@ -727,7 +724,11 @@ fn compile_constructor<'a>(
     method_rets: &'a HashMap<(String, String), CTy>,
     base_fn_idx: usize,
 ) -> Result<(Function, Vec<Function>), String> {
-    let (params, body) = ctor_parts(c);
+    // M-RT S6c.2a: a no-own-ctor class compiles its *inherited* (single-parent) constructor — the same
+    // params + body PHP would inherit and the interpreter walks the parent chain to find. The synthetic
+    // function stays `<Class>::new` and `MakeInstance(desc_idx)` builds a *this*-class instance.
+    let (params, body): (&[CtorParam], &[Stmt]) =
+        crate::ast::effective_ctor(program, &c.name).map_or((&[], &[]), |(_, p, b)| (p, b));
     let line = c.span.line;
     let mut comp = Compiler::new(
         fns,

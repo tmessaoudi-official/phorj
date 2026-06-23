@@ -38,7 +38,32 @@
   type-checked-then-VM-`unknown field` (a real break the vacuous `agree()` had masked; caught by the
   rename PHP-oracle test). **Deferred to S6c:** type/`instanceof` references to a *decomposed ancestor*
   rewriting to its interface form (full subtyping across the lattice); MI field/constructor composition.
-- **S6c — NOT STARTED** (field/ctor composition + diamond + full subtyping/`instanceof` across the lattice).
+- **S6c — IN PROGRESS** (field/ctor composition + diamond + full subtyping/`instanceof` across the lattice).
+  - **S6c.1 COMPLETE** (`5a78e0c`): `ast::class_field_conflicts` (field analog of `class_method_origins`,
+    minus resolution clauses — PHP has no `insteadof` for properties) → `E-MI-FIELD-CONFLICT` on a
+    same-named instance field inherited from ≥2 distinct origins; diamond-shared field auto-merges (dedup
+    by declaring origin). Self-documented via `phg explain`. 800 tests green on the PHP-8.4 floor.
+
+### S6c.2 Decisions Log
+
+- [2026-06-23] AGREED (Claude recommended, developer delegated "what do you recommend + continue"):
+  **constructor model = Option A (implicit synthesized orchestrating constructor)**, scoped to the
+  *no-own-constructor* case. A class with parents and **no own ctor** gets a synthesized constructor whose
+  params are the parents' ctor params concatenated in `extends`-list (linearization) order, and whose body
+  promotes each parent's promoted params + runs each parent's ctor body, in order. Built as a **front-end
+  synthesis pass** (synthesize a real `ClassMember::Constructor` before any backend, like
+  `erase_generics`/`expand_aliases`) ⇒ **no new `Op`, no `Value` change**, byte-identical by construction.
+  - **Rejected — Option B (explicit per-parent init call, e.g. `Named(n)`):** the natural spelling
+    *collides with construction* (`Named(n)` already builds a `Named`), and `super`/`parent` is not
+    tokenized (S6b: "the language has no super/parent construct"). B is the right *future ergonomic layer*
+    but needs its own syntax-design slice; it becomes the additive follow-up for the deferred case below.
+  - **Rejected — Option C (promotion-only strict):** strictly dominated by A (same deferral, but C can't
+    run parent ctor bodies and needs a restriction diagnostic A doesn't).
+  - **Deferred → KNOWN_ISSUES:** a child declaring **its own** constructor *under inheritance* (single or
+    multi) — there is no `super`/parent-forwarding mechanism yet, so it can't initialize inherited state.
+    This is exactly the case B solves; punted to the B follow-up. S6c.2 ships the no-own-ctor orchestrator.
+  - **De-risked by S6c.1:** cross-parent same-named promoted fields are already `E-MI-FIELD-CONFLICT`, so
+    the concatenated synthesized params carry distinct field names (bounds the "implicit positional" critique).
 
 ## Sub-slice S6a — single `extends` + override + the `open`/`final` model
 
