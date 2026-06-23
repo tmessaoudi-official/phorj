@@ -94,6 +94,28 @@ function speak(Carrier c) -> string {
     };
 }
 
+class User {
+    constructor(public string name, public int age) {}
+}
+
+function lookup(int id) -> User? {
+    if (id == 1) { return User("Ada", 36); }
+    if (id == 2) { return User("Bob", 15); }
+    return null;
+}
+
+// if-let `when` guard (S5.3): bind an optional AND test a condition on the bound value in one
+// header. The then-branch runs only when the bind succeeds AND the guard holds; the else runs
+// otherwise (bind failed, or guard false). The guard can be a compound condition over the binding.
+// (`when` is contextual; this desugars to a nested `if` inside the bind's scope — no new VM op.)
+function greet(int id) -> string {
+    if (var u = lookup(id) when u.age >= 18 && u.name != "") {
+        return "welcome {u.name}";
+    } else {
+        return "denied";
+    }
+}
+
 function main() {
     Console.println(classify(Code(503)));
     Console.println(classify(Code(404)));
@@ -112,4 +134,9 @@ function main() {
     // nested type pattern in a variant payload
     Console.println(speak(Holds(Cat("Tom"))));
     Console.println(speak(Holds(Dog("Rex"))));
+
+    // if-let with a `when` guard
+    Console.println(greet(1));  // Ada, 36 → welcome
+    Console.println(greet(2));  // Bob, 15 → guard false → denied
+    Console.println(greet(3));  // null → bind fails → denied
 }

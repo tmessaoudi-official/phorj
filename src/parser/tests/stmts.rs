@@ -372,6 +372,34 @@ fn parses_if_let_binding() {
 }
 
 #[test]
+fn parses_if_let_when_guard_desugars_to_nested_if() {
+    // `if (var u = e when g) THEN else ELSE` desugars (S5.3) to
+    // `if (var u = e) { if (g) THEN else ELSE } else ELSE` — no `Stmt::If.guard` field. The outer
+    // keeps the binding; its then-block is the single nested `if` over the guard.
+    match stmt("if (var u = lookup() when u.active) { return 1; } else { return 2; }") {
+        Stmt::If {
+            bind: Some(name),
+            then_block,
+            else_block: Some(_),
+            ..
+        } => {
+            assert_eq!(name, "u");
+            assert_eq!(
+                then_block.len(),
+                1,
+                "then-block is the single nested guard if"
+            );
+            assert!(
+                matches!(&then_block[0], Stmt::If { bind: None, .. }),
+                "nested guard if: {:?}",
+                then_block[0]
+            );
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
 fn parses_for_in() {
     match stmt("for (Shape s in shapes) { Console.println(s); }") {
         Stmt::For {

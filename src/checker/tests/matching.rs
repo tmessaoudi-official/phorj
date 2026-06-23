@@ -253,6 +253,31 @@ fn flow_narrowing_else_and_negation() {
 }
 
 #[test]
+fn if_let_when_guard() {
+    const U: &str = "class User { constructor(public string name, public int age) {} }";
+
+    // The guard reads the bound (narrowed, non-null) variable and must be boolean — a compound
+    // guard over the binding type-checks.
+    let ok = format!(
+        "{U} function f(User? o) -> int {{ \
+             if (var u = o when u.age >= 18 && u.name != \"\") {{ return u.age; }} return 0; }}"
+    );
+    assert!(errors_of(&ok).is_empty(), "{:?}", errors_of(&ok));
+
+    // A non-boolean guard is rejected (it becomes the desugared nested `if`'s condition).
+    let bad = format!(
+        "{U} function f(User? o) -> int {{ if (var u = o when u.name) {{ return u.age; }} return 0; }}"
+    );
+    assert!(
+        errors_of(&bad)
+            .iter()
+            .any(|d| d.message.contains("condition must be `bool`")),
+        "{:?}",
+        errors_of(&bad)
+    );
+}
+
+#[test]
 fn flow_narrowing_early_return() {
     const CS: &str = "class Circle { constructor(public float r) {} } \
                       class Square { constructor(public float side) {} }";

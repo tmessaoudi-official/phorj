@@ -2387,6 +2387,36 @@ function main() {
     );
 }
 
+/// Pattern cluster S5.3 — if-let `when` guard. `if (var u = e when g)` binds an optional and tests a
+/// condition on the binding in one header; the then-branch runs only when the bind succeeds AND the
+/// guard holds. Parser-desugared to a nested `if` (no new `Op`). run ≡ runvm ≡ real PHP.
+#[test]
+fn if_let_when_guard_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+class User { constructor(public string name, public int age) {} }
+function lookup(int id) -> User? {
+    if (id == 1) { return User(\"Ada\", 36); }
+    if (id == 2) { return User(\"Bob\", 15); }
+    return null;
+}
+function greet(int id) -> string {
+    if (var u = lookup(id) when u.age >= 18 && u.name != \"\") {
+        return \"welcome {u.name}\";
+    } else {
+        return \"denied\";
+    }
+}
+function main() {
+    Console.println(greet(1));
+    Console.println(greet(2));
+    Console.println(greet(3));
+}",
+        "welcome Ada\ndenied\ndenied\n",
+        "if_let_when_guard",
+    );
+}
+
 /// Pattern cluster S5.3-T3 — early-return flow-narrowing. After a diverging guard
 /// `if (!(s instanceof Circle)) { return … }`, the rest of the function sees `s : Circle`. Narrowing
 /// is checker-only — this confirms a program relying on it runs byte-identically.

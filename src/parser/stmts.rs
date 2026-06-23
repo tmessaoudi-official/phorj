@@ -164,6 +164,19 @@ impl Parser {
             None
         };
         let cond = self.parse_expr()?;
+        // An if-let `when` guard (pattern cluster S5.3): `if (var x = e when <cond>)`. Contextual
+        // `when`, recognized only in the if-let form (after the binding). It is desugared below into a
+        // nested `if (<guard>)` inside the bind's then-block (where `x` is in scope), so the AST gains
+        // no `Stmt::If.guard` field and every backend is untouched. A `when` in a plain `if` is not
+        // recognized (it would fail the `)` expectation) — use `&&` for a plain compound condition.
+        let guard = if bind.is_some()
+            && matches!(self.peek(), TokenKind::Ident(k) if k.as_str() == "when")
+        {
+            self.advance();
+            Some(self.parse_expr()?)
+        } else {
+            None
+        };
         self.expect(&TokenKind::RParen, "')' after if condition")?;
         let then_block = self.parse_block()?;
         let else_block = if self.eat(&TokenKind::Else) {
@@ -176,6 +189,26 @@ impl Parser {
         } else {
             None
         };
+        if let Some(g) = guard {
+            // if-let-guard desugar: `if (var x = e when g) THEN [else ELSE]` becomes
+            // `if (var x = e) { if (g) THEN [else ELSE] } [else ELSE]`. The guard `g` is checked in
+            // the then-scope (where `x` is the narrowed non-null binding); the else branch runs when
+            // the bind fails OR the guard is false (the else block is shared by both, hence cloned).
+            let inner = Stmt::If {
+                cond: g,
+                bind: None,
+                then_block,
+                else_block: else_block.clone(),
+                span: sp,
+            };
+            return Ok(Stmt::If {
+                cond,
+                bind,
+                then_block: vec![inner],
+                else_block,
+                span: sp,
+            });
+        }
         Ok(Stmt::If {
             cond,
             bind,
