@@ -87,8 +87,7 @@ not a panic:
   (an intersection is not a sum type).
 - **Union types (M-RT S4) — deferred corners** (each rejected cleanly, never a panic): **enum members**
   in a union (`Color | Circle` → `E-UNION-MEMBER`; an enum is already a closed sum — match its variants
-  directly), **optional/function members** (`E-UNION-MEMBER`), a **type pattern nested in a variant
-  payload** (`Wrapper(Circle c)` → `E-MATCH-TYPE`; type patterns are top-level-only), **negative/flow
+  directly), **optional/function members** (`E-UNION-MEMBER`), **negative/flow
   narrowing** (after `if (s instanceof Circle)` the else-branch does not narrow `s` to the remaining
   members), **common-member access on a raw union** (`(A|B).foo()` without narrowing — narrow first),
   and the **whole-union optional** `(A|B)?` (`?` is postfix on a single member; `A | B?` parses as

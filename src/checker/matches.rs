@@ -64,12 +64,20 @@ impl Checker {
                 has_catch_all = true;
                 catch_all_seen = true;
             }
-            if let Pattern::Variant { name, .. } = &arm.pattern {
-                if unguarded {
+            if let Pattern::Variant { name, fields, .. } = &arm.pattern {
+                // A variant arm discharges its variant's coverage only when its payload is
+                // *irrefutable* (every field is a wildcard/binding). A refutable payload — a nested
+                // type/struct/literal pattern (S5.2-T2) that can fail to match a value of the payload
+                // type — may fall through, so `Wrapper(Circle c)` alone does NOT cover `Wrapper`; an
+                // unguarded `Wrapper(_)`/`_` fallback is still required (mirrors the guard rule, and
+                // closes the pre-existing literal-payload soundness gap, e.g. `Some(0)` alone).
+                if unguarded && fields.iter().all(is_irrefutable) {
                     covered.push(name.clone());
-                } else {
+                } else if !unguarded {
                     guarded_shapes.push(name.clone());
                 }
+                // else: unguarded but a refutable payload — neither covered nor a guarded shape; a
+                // plain "non-exhaustive: missing <variant>" fires unless a fallback also covers it.
             }
             // A type pattern (`Circle c`) and a struct pattern (`Circle { r }`) are both `instanceof`
             // tests over a union member, so both discharge that member's coverage (S5.2).
@@ -265,24 +273,11 @@ impl Checker {
                     return;
                 }
                 for (fp, ft) in fields.iter().zip(field_tys) {
-                    // A type pattern nested in a variant field (`Wrapper(Circle c)`) is rejected this
-                    // slice (M-RT S4): the transpiler only emits simple variable bindings for variant
-                    // payloads, so allowing it would diverge from `run`/`runvm`. A clean rejection
-                    // keeps all three backends agreeing (the byte-identity spine). Type patterns are
-                    // top-level-only — that is the match-over-union surface.
-                    if let Pattern::Type {
-                        type_name, span, ..
-                    } = fp
-                    {
-                        self.err_coded(
-                            *span,
-                            format!(
-                                "type pattern `{type_name}` is only allowed at the top level of a match arm, not inside a variant pattern"
-                            ),
-                            "E-MATCH-TYPE",
-                            Some("match the variant first, then `instanceof`/`match` its payload".into()),
-                        );
-                    }
+                    // A nested pattern in a variant field (`Wrapper(Circle c)`, S5.2-T2) is checked
+                    // recursively against the field's type — type patterns, struct patterns and
+                    // literals are all allowed here now (every backend recurses variant fields). The
+                    // exhaustiveness consequence — a refutable payload no longer discharges the
+                    // variant's coverage — is handled by `is_irrefutable` in `check_match`.
                     self.check_pattern(fp, &ft);
                 }
             }

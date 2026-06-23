@@ -174,6 +174,45 @@ fn struct_destructuring_patterns() {
 }
 
 #[test]
+fn nested_type_pattern_in_variant_payload() {
+    const SETUP: &str = "interface Shape {} \
+         class Circle implements Shape { constructor(public float r) {} } \
+         class Square implements Shape { constructor(public float side) {} } \
+         enum Boxed { W(Shape inner) }";
+
+    // A nested type pattern in a variant payload (`W(Circle c)`) type-checks and binds the narrowed
+    // class (so `c.r` resolves). A refutable payload needs a `_` fallback to be exhaustive.
+    let ok = format!(
+        "{SETUP} function f(Boxed b) -> float {{ return match b {{ \
+             W(Circle c) => c.r, W(Square s) => s.side, _ => 0.0, }}; }}"
+    );
+    assert!(errors_of(&ok).is_empty(), "{:?}", errors_of(&ok));
+
+    // Without a fallback the variant is not discharged by its refutable arms — non-exhaustive.
+    let no_fallback = format!(
+        "{SETUP} function f(Boxed b) -> float {{ return match b {{ \
+             W(Circle c) => c.r, W(Square s) => s.side, }}; }}"
+    );
+    assert!(
+        errors_of(&no_fallback)
+            .iter()
+            .any(|d| d.message.contains("non-exhaustive") && d.message.contains('W')),
+        "{:?}",
+        errors_of(&no_fallback)
+    );
+
+    // Two distinct refined payloads are NOT flagged as duplicate/unreachable arms (the false
+    // positive S5.2-T2 fixed in `match_arm_key`).
+    assert!(
+        !errors_of(&ok)
+            .iter()
+            .any(|d| d.code == Some("W-MATCH-UNREACHABLE")),
+        "{:?}",
+        errors_of(&ok)
+    );
+}
+
+#[test]
 fn match_arm_guards() {
     // A guarded arm plus an unguarded fallback for the same shape is exhaustive and type-checks.
     let ok = format!(

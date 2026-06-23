@@ -117,16 +117,29 @@ fn primitive_union_accepts_int_and_string() {
 }
 
 #[test]
-fn type_pattern_nested_in_variant_is_rejected() {
-    // A type pattern is top-level-only; nesting it in a variant payload would diverge from the
-    // transpiler (which emits only simple payload bindings), so the checker rejects it.
+fn type_pattern_nested_in_variant_is_accepted() {
+    // S5.2-T2: a type pattern nested in a variant payload is now allowed (every backend recurses
+    // variant fields). It is refutable, so it does not discharge the variant's coverage — an
+    // irrefutable fallback (here a bare `One(other)`) is required for exhaustiveness.
+    let ok = errors_of(&format!(
+        "{SHAPES} enum Wrap {{ One(Circle inner) }} \
+             function f(Wrap w) -> int {{ return match w {{ One(Circle c) => c.radius, One(o) => 0 }}; }} \
+             function main() {{}}"
+    ));
+    assert!(
+        !ok.iter().any(|e| e.code == Some("E-MATCH-TYPE")),
+        "no longer rejected: {ok:?}"
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+
+    // Without the fallback the refutable arm leaves `One` undischarged — non-exhaustive.
     let bad = errors_of(&format!(
         "{SHAPES} enum Wrap {{ One(Circle inner) }} \
              function f(Wrap w) -> int {{ return match w {{ One(Circle c) => c.radius }}; }} \
              function main() {{}}"
     ));
     assert!(
-        bad.iter().any(|e| e.code == Some("E-MATCH-TYPE")),
+        bad.iter().any(|e| e.message.contains("non-exhaustive")),
         "{bad:?}"
     );
 }

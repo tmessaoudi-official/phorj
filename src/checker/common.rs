@@ -258,6 +258,15 @@ pub(super) fn breaks_this_loop(stmts: &[crate::ast::Stmt]) -> bool {
     })
 }
 
+/// Whether a pattern matches *every* value of its static type — it can never fall through. Only a
+/// wildcard or plain binding qualifies; a literal, variant, type or struct pattern is a runtime test
+/// that can fail. Drives both `match_arm_key` (a refined payload isn't a plain duplicate) and the
+/// variant exhaustiveness rule in `check_match` (a refutable payload doesn't discharge coverage).
+pub(super) fn is_irrefutable(pat: &crate::ast::Pattern) -> bool {
+    use crate::ast::Pattern;
+    matches!(pat, Pattern::Wildcard(_) | Pattern::Binding { .. })
+}
+
 /// A stable identity for a `match` pattern, for duplicate-arm detection (`W-MATCH-UNREACHABLE`).
 /// `None` for patterns that should not be deduplicated: `float` (equality is fuzzy) and the
 /// catch-alls (`_`/bare binding, handled separately as a catch-all).
@@ -268,12 +277,22 @@ pub(super) fn match_arm_key(p: &crate::ast::Pattern) -> Option<String> {
         Pattern::Str(s, _) => Some(format!("s{s}")),
         Pattern::Bool(b, _) => Some(format!("b{b}")),
         Pattern::Null(_) => Some("null".to_string()),
-        Pattern::Variant { name, .. } => Some(format!("v{name}")),
-        // A struct pattern is an `instanceof` test like a type pattern, so it shares the `t` keyspace:
-        // `Point { x }` and `Point p` both match any `Point`, so a later one is an unreachable dup.
-        Pattern::Type { type_name, .. } | Pattern::Struct { type_name, .. } => {
-            Some(format!("t{type_name}"))
+        // A variant arm is a duplicate of an earlier one only when both have an *irrefutable* payload
+        // (every field a wildcard/binding) — `Some(x)` after `Some(y)` is unreachable, but `Some(0)`
+        // and `Some(1)`, or `W(Circle c)` and `W(Square s)` (S5.2-T2), are distinct refinements and
+        // must not be flagged. A refined payload yields no dedup key.
+        Pattern::Variant { name, fields, .. } if fields.iter().all(is_irrefutable) => {
+            Some(format!("v{name}"))
         }
+        Pattern::Variant { .. } => None,
+        // A type pattern, and a struct pattern with an all-binding payload, share the `t` keyspace:
+        // `Point { x }` and `Point p` both match any `Point`, so a later one is an unreachable dup. A
+        // struct pattern with a refined field (`Point { x: 0 }`) is not a plain duplicate.
+        Pattern::Type { type_name, .. } => Some(format!("t{type_name}")),
+        Pattern::Struct {
+            type_name, fields, ..
+        } if fields.iter().all(|f| is_irrefutable(&f.pat)) => Some(format!("t{type_name}")),
+        Pattern::Struct { .. } => None,
         Pattern::Float(_, _) | Pattern::Wildcard(_) | Pattern::Binding { .. } => None,
     }
 }

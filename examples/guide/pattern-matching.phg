@@ -69,6 +69,31 @@ function originSum(Line l) -> int {
     };
 }
 
+interface Animal {}
+
+class Cat implements Animal {
+    constructor(public string name) {}
+}
+
+class Dog implements Animal {
+    constructor(public string name) {}
+}
+
+enum Carrier {
+    Holds(Animal a)
+}
+
+// Nested type pattern inside a variant payload (S5.2): match the variant, then narrow its payload to
+// a concrete class in one pattern. A refutable payload (`Holds(Cat c)`) does not discharge the
+// `Holds` variant, so a `Holds(other)` binding (irrefutable) is the fallback.
+function speak(Carrier c) -> string {
+    return match c {
+        Holds(Cat cat) => "meow from {cat.name}",
+        Holds(Dog dog) => "woof from {dog.name}",
+        Holds(other) => "...",
+    };
+}
+
 function main() {
     Console.println(classify(Code(503)));
     Console.println(classify(Code(404)));
@@ -83,4 +108,8 @@ function main() {
     float aq = areaOf(Square(4.0));
     int d = originSum(Line(Point(1, 2), Point(10, 20)));
     Console.println("areaOf circle = {ac}, square = {aq}, origin sum = {d}");
+
+    // nested type pattern in a variant payload
+    Console.println(speak(Holds(Cat("Tom"))));
+    Console.println(speak(Holds(Dog("Rex"))));
 }
