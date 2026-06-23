@@ -103,16 +103,24 @@ not a panic:
 - Sized integers / `decimal`, `const`/`final` enforcement
 - `match` outside return / variable-declaration-initializer position
 
-## Pattern cluster (M-RT S5.1) — deferred refinements
+## Pattern cluster (M-RT S5.1 / S5.2) — deferred refinements
 - **Match-arm guards ship** (`pat when <cond> => …`, contextual `when`, byte-identical, no new `Op`).
   **if-let / while-let guards** (`if (var u = opt when u.active)`) are **deferred to a follow-up**:
   the match-arm machinery doesn't apply (the binding is statement-level, not an arm), so it needs
   either a new `Stmt::If.guard` field threaded through ~18 construction/consumer sites (incl. the
   `rewrite_*`/loader AST-rebuild passes) or a synthetic-local desugar — disproportionate to its
   marginal value. Workaround today: bind, then test inside the block (`if (var u = opt) { if (u.active) … }`).
-- Struct/class field destructuring (`Point { x, y }`), nested type-patterns in payloads
-  (`Wrapper(Circle c)`), and flow-narrowing (negative/else, early-return, post-match, equality) are the
-  later S5.2 / S5.3 sub-slices of this milestone (see the union/narrowing deferral rows above).
+- **Struct destructuring ships** (S5.2: shorthand `Point { x, y }`, rename `Point { x: px }`, full
+  nesting, plus nested type patterns in variant payloads `W(Circle c)`). Deferred corners:
+  (1) a struct pattern reads instance fields by name, so it assumes **initialized fields** — fine for
+  the universal case (promoted ctor params, always populated); destructuring a declared-but-uninitialized
+  explicit field is unsupported (the interpreter treats an absent field as a no-match while the VM's
+  `GetField` faults — a narrow run↔runvm asymmetry only for the binding-bound-but-unused case). (2) A
+  refutable nested pattern never discharges its variant/struct's exhaustiveness, even when it is in
+  fact total over a concrete payload type (`W(Circle c)` on a `Circle`-typed payload still needs a
+  fallback) — the checker doesn't prove payload-subtype totality. (3) Struct patterns on **generic
+  classes** bind fields at their declared (un-substituted) type. (4) Flow-narrowing (negative/else,
+  early-return, post-match, equality) is the remaining **S5.3** sub-slice.
 
 ## Mutation milestone — deferred corners
 

@@ -81,6 +81,17 @@
 > a negative count (EV-7). Examples `text.phg`/`math.phg`/`collections.phg` extended + README coverage rows;
 > bool results rendered via expression-`if` (PHP echoes a bool as `1`/`""`, not `true`/`false`). 835 tests
 > green, byte-identical run≡runvm≡real PHP 8.4. **NEXT: S5.2 struct/nested destructuring → S5.3 (+if-let).**
+> [2026-06-23] PROGRESS: **S5.2 struct/nested destructuring COMPLETE** (3 commits). **T1** (`5d20a8f`):
+> `Pattern::Struct { type_name, fields: Vec<FieldPat> }` — shorthand/rename/full-nesting; reuses
+> `Op::IsInstance` + field reads (no new `Op`); compiler `path` generalized to `PathSeg { Enum | Field }`;
+> transpiler `classify_pattern` made recursive (`tests: Vec<String>`). Codes E-STRUCT-PAT-TYPE /
+> E-STRUCT-FIELD-UNKNOWN / E-PATTERN-DUP-BIND (+ `phg explain`). **T2** (`0fff128`): nested type patterns
+> in variant payloads (`W(Circle c)`) un-rejected; soundness via `is_irrefutable` (a refutable payload
+> doesn't discharge variant coverage — also closed the pre-existing `Some(0)`-alone gap; `match_arm_key`
+> no longer false-dups refined payloads). **T3** (this commit): KNOWN_ISSUES struct deferrals (uninit
+> fields, conservative payload totality, generic-class struct patterns). All byte-identical
+> run≡runvm≡real PHP 8.4; `examples/guide/pattern-matching.phg` covers struct + payload nesting. 841
+> tests green. **NEXT: S5.3 flow-narrowing engine (+ folded-in if-let `when` guards).**
 
 ## Formal Plan
 
