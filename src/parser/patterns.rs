@@ -56,6 +56,13 @@ impl Parser {
                         span: sp,
                     })
                 } else if let TokenKind::Ident(binder) = self.peek().clone() {
+                    // The contextual guard keyword `when` is never a type-pattern binder — leave it
+                    // for the enclosing match arm so `Circle when c => …` reads as a guard, not a
+                    // binding named `when`. (A bare `Circle` stays a catch-all `Binding`, the
+                    // documented footgun; use `Circle c` / `Circle _` for the type test.)
+                    if binder == "when" {
+                        return Ok(Pattern::Binding { name, span: sp });
+                    }
                     // A second identifier in pattern position makes this a **type pattern** for
                     // match-over-union (`Circle c`, M-RT S4): `name` is the type, `binder` the bound
                     // variable (`_` binds nothing). A lone `name =>` keeps the catch-all `Binding`.

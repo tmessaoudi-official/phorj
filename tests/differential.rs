@@ -2252,3 +2252,53 @@ function main() { Console.println(Person().hello()); }",
         "s8_trait_abstract_requirement",
     );
 }
+
+/// Pattern cluster S5.1 — match-arm guards over an enum: multiple arms share a shape with different
+/// `when` conditions (first-match-wins, fall-through on a false guard), and a guard does arithmetic
+/// on the bound payload (`n + 1` — the CTy-operand path must specialize identically on the VM).
+#[test]
+fn match_arm_guards_enum_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+enum Code { Num(int n) }
+function classify(Code c) -> string {
+    return match c {
+        Num(n) when n + 1 > 500 => \"server\",
+        Num(n) when n >= 400 => \"client\",
+        Num(n) => \"other ({n})\",
+    };
+}
+function main() {
+    Console.println(classify(Num(503)));
+    Console.println(classify(Num(404)));
+    Console.println(classify(Num(200)));
+}",
+        "server\nclient\nother (200)\n",
+        "match_arm_guards_enum",
+    );
+}
+
+/// Pattern cluster S5.1 — guards on type-patterns over a union, with a field access in the guard
+/// (`c.r > 1.0`). A guarded `Circle` arm and an unguarded `Circle` fallback make the match exhaustive.
+#[test]
+fn match_arm_guards_union_type_pattern_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+class Circle { constructor(public float r) {} }
+class Square { constructor(public float side) {} }
+function describe(Circle | Square sh) -> string {
+    return match sh {
+        Circle c when c.r > 1.0 => \"big circle\",
+        Circle c => \"small circle\",
+        Square s => \"square\",
+    };
+}
+function main() {
+    Console.println(describe(Circle(2.0)));
+    Console.println(describe(Circle(0.5)));
+    Console.println(describe(Square(3.0)));
+}",
+        "big circle\nsmall circle\nsquare\n",
+        "match_arm_guards_union",
+    );
+}

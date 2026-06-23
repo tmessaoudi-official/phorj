@@ -28,8 +28,14 @@ impl Checker {
         // good one — is flagged.
         let mut catch_all_seen = false;
         let mut seen_keys: Vec<String> = Vec::new();
+        // Shapes (variant/type names) that appear on a guarded arm but never on an unguarded one —
+        // used to attach the `E-MATCH-GUARD-EXHAUST` hint when a guard leaves a shape undischarged.
+        let mut guarded_shapes: Vec<String> = Vec::new();
 
         for arm in arms {
+            // A guarded arm (`pat when cond =>`) may fall through, so it does NOT discharge its
+            // shape for exhaustiveness, become a catch-all, or count as a duplicate/unreachable.
+            let unguarded = arm.guard.is_none();
             if catch_all_seen {
                 self.warn_coded(
                     arm.span,
@@ -40,27 +46,37 @@ impl Checker {
                             .into(),
                     ),
                 );
-            } else if let Some(key) = match_arm_key(&arm.pattern) {
-                if seen_keys.contains(&key) {
-                    self.warn_coded(
-                        arm.span,
-                        "unreachable match arm: a previous arm already covers this pattern",
-                        "W-MATCH-UNREACHABLE",
-                        Some("remove the duplicate arm".into()),
-                    );
-                } else {
-                    seen_keys.push(key);
+            } else if unguarded {
+                if let Some(key) = match_arm_key(&arm.pattern) {
+                    if seen_keys.contains(&key) {
+                        self.warn_coded(
+                            arm.span,
+                            "unreachable match arm: a previous arm already covers this pattern",
+                            "W-MATCH-UNREACHABLE",
+                            Some("remove the duplicate arm".into()),
+                        );
+                    } else {
+                        seen_keys.push(key);
+                    }
                 }
             }
-            if matches!(arm.pattern, Pattern::Wildcard(_) | Pattern::Binding { .. }) {
+            if unguarded && matches!(arm.pattern, Pattern::Wildcard(_) | Pattern::Binding { .. }) {
                 has_catch_all = true;
                 catch_all_seen = true;
             }
             if let Pattern::Variant { name, .. } = &arm.pattern {
-                covered.push(name.clone());
+                if unguarded {
+                    covered.push(name.clone());
+                } else {
+                    guarded_shapes.push(name.clone());
+                }
             }
             if let Pattern::Type { type_name, .. } = &arm.pattern {
-                covered_types.push(type_name.clone());
+                if unguarded {
+                    covered_types.push(type_name.clone());
+                } else {
+                    guarded_shapes.push(type_name.clone());
+                }
             }
             // The type a catch-all binding sees: narrowed to the inner `T` when a preceding `null`
             // arm already handled absence; otherwise the scrutinee type unchanged.
@@ -71,9 +87,22 @@ impl Checker {
             // each arm gets its own scope for pattern bindings
             self.push_scope();
             self.check_pattern(&arm.pattern, &arm_scrut);
+            // An arm guard is typed in the arm's scope (its pattern bindings are visible) and must
+            // be boolean. A guard never changes the arm's result type.
+            if let Some(g) = &arm.guard {
+                let gt = self.check_expr(g);
+                if !matches!(gt, Ty::Bool | Ty::Error) {
+                    self.err_coded(
+                        Self::expr_span(g),
+                        format!("match guard must be `bool`, found `{gt}`"),
+                        "E-GUARD-TYPE",
+                        Some("a `when` guard is a boolean condition".into()),
+                    );
+                }
+            }
             let body_ty = self.check_expr(&arm.body);
             self.pop_scope();
-            if matches!(arm.pattern, Pattern::Null(_)) {
+            if unguarded && matches!(arm.pattern, Pattern::Null(_)) {
                 null_seen = true;
             }
 
@@ -105,10 +134,25 @@ impl Checker {
                     // intermittent test/diff hazard).
                     missing.sort();
                     if !missing.is_empty() {
-                        self.err(
-                            span,
-                            format!("non-exhaustive match: missing {}", missing.join(", ")),
-                        );
+                        if missing.iter().any(|m| guarded_shapes.contains(m)) {
+                            self.err_coded(
+                                span,
+                                format!(
+                                    "non-exhaustive match: missing {} (covered only by guarded arms)",
+                                    missing.join(", ")
+                                ),
+                                "E-MATCH-GUARD-EXHAUST",
+                                Some(
+                                    "a `when`-guarded arm may fall through; add an unguarded arm for that shape"
+                                        .into(),
+                                ),
+                            );
+                        } else {
+                            self.err(
+                                span,
+                                format!("non-exhaustive match: missing {}", missing.join(", ")),
+                            );
+                        }
                     }
                 }
                 // Match-over-union exhaustiveness (M-RT S4): every nominal member must be covered by a
@@ -127,10 +171,25 @@ impl Checker {
                         .collect();
                     missing.sort();
                     if !missing.is_empty() {
-                        self.err(
-                            span,
-                            format!("non-exhaustive match: missing {}", missing.join(", ")),
-                        );
+                        if missing.iter().any(|m| guarded_shapes.contains(m)) {
+                            self.err_coded(
+                                span,
+                                format!(
+                                    "non-exhaustive match: missing {} (covered only by guarded arms)",
+                                    missing.join(", ")
+                                ),
+                                "E-MATCH-GUARD-EXHAUST",
+                                Some(
+                                    "a `when`-guarded arm may fall through; add an unguarded arm for that shape"
+                                        .into(),
+                                ),
+                            );
+                        } else {
+                            self.err(
+                                span,
+                                format!("non-exhaustive match: missing {}", missing.join(", ")),
+                            );
+                        }
                     }
                 }
                 Ty::Error => {}

@@ -184,6 +184,7 @@ pub fn erase_generics(program: Program) -> Program {
                     .iter()
                     .map(|a| MatchArm {
                         pattern: a.pattern.clone(),
+                        guard: a.guard.as_ref().map(|g| rexpr(g, params)),
                         body: rexpr(&a.body, params),
                         span: a.span,
                     })

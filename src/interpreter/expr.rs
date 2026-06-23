@@ -338,6 +338,21 @@ impl Interp {
                 for (n, v) in bindings {
                     self.frame.declare(&n, v);
                 }
+                // An arm guard runs with the pattern's bindings in scope; a false guard falls
+                // through to the next arm (discarding this arm's bindings first).
+                if let Some(g) = &arm.guard {
+                    match self.eval(g).and_then(|v| as_bool(&v)) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            self.frame.pop_scope();
+                            continue;
+                        }
+                        Err(e) => {
+                            self.frame.pop_scope();
+                            return Err(e);
+                        }
+                    }
+                }
                 let r = self.eval(&arm.body);
                 self.frame.pop_scope();
                 return r;

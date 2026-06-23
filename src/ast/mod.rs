@@ -96,6 +96,10 @@ pub enum StrPart {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub pattern: Pattern,
+    /// Optional arm guard (`pattern when <cond> => …`). The arm matches only when the pattern
+    /// matches AND the guard evaluates true; a false guard falls through to the next arm. `None`
+    /// for an unguarded arm. A guarded arm does not discharge its shape for exhaustiveness.
+    pub guard: Option<Expr>,
     pub body: Expr,
     pub span: Span,
 }

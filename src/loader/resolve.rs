@@ -360,6 +360,7 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
                 .into_iter()
                 .map(|a| MatchArm {
                     pattern: a.pattern,
+                    guard: a.guard.map(|g| resolve_expr(g, ctx)),
                     body: resolve_expr(a.body, ctx),
                     span: a.span,
                 })

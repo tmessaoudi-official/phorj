@@ -36,3 +36,18 @@ fn parses_patterns() {
         other => panic!("got {other:?}"),
     }
 }
+
+#[test]
+fn parses_match_arm_guards() {
+    // A contextual `when` after the arm pattern attaches an optional guard. An arm with no
+    // `when` parses exactly as before (guard = None).
+    match expr("match s { Circle c when c.r > 0.0 => 1, Circle c => 0, _ => -1 }") {
+        Expr::Match { arms, .. } => {
+            assert_eq!(arms.len(), 3);
+            assert!(arms[0].guard.is_some(), "first arm has a when-guard");
+            assert!(arms[1].guard.is_none(), "second arm is unguarded");
+            assert!(arms[2].guard.is_none(), "catch-all is unguarded");
+        }
+        other => panic!("got {other:?}"),
+    }
+}

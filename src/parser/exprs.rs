@@ -462,10 +462,19 @@ impl Parser {
         while !self.check(&TokenKind::RBrace) {
             let arm_sp = self.peek_span();
             let pattern = self.parse_pattern()?;
+            // Optional arm guard: a contextual `when <cond>` between the pattern and `=>`.
+            // `when` is recognized only here (and in if/while-let) — a normal identifier elsewhere.
+            let guard = if matches!(self.peek(), TokenKind::Ident(k) if k.as_str() == "when") {
+                self.advance();
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
             self.expect(&TokenKind::FatArrow, "'=>' after match pattern")?;
             let body = self.parse_expr()?;
             arms.push(MatchArm {
                 pattern,
+                guard,
                 body,
                 span: arm_sp,
             });

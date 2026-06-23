@@ -27,129 +27,112 @@ impl Transpiler {
         let mut first = true;
         let mut has_catch_all = false;
         for arm in arms {
-            // `if` for the first conditional arm, `elseif` thereafter; a catch-all uses `else` (or a
-            // bare block when it is itself the first/only arm, since a leading `else` is invalid PHP).
+            // `if` for the first conditional arm, `elseif` thereafter; an unguarded catch-all uses
+            // `else` (or a bare block when first, since a leading `else` is invalid PHP). A `when`
+            // guard turns even a `_`/binding arm conditional (it may fall through).
             let cond_kw = if first { "if" } else { "elseif" };
-            match &arm.pattern {
+            self.push_scope();
+            // Classify the pattern into a boolean `test` (None = matches unconditionally) and the
+            // bindings it introduces, as `(var, access-expr)` pairs. `php_type_ref`/`type_pos_ref`
+            // and the `===`/`instanceof` forms below are unchanged from the pre-guard emission.
+            let (test, binds): (Option<String>, Vec<(String, String)>) = match &arm.pattern {
+                Pattern::Wildcard(_) => (None, Vec::new()),
+                Pattern::Binding { name, .. } => (None, vec![(name.clone(), subj.clone())]),
+                // `null` arm over an optional scrutinee (M3 S2.6) → a strict `=== null` test.
+                Pattern::Null(_) => (Some(format!("{subj} === null")), Vec::new()),
+                // Literal patterns (M11) — a strict `=== <literal>` test (type + value), mirroring
+                // the interpreter's exact value match so the branch taken is byte-identical.
+                Pattern::Int(n, _) => (Some(format!("{subj} === {n}")), Vec::new()),
+                Pattern::Float(x, _) => (Some(format!("{subj} === {x:?}")), Vec::new()),
+                Pattern::Str(s, _) => (
+                    Some(format!("{subj} === \"{}\"", php_escape(s))),
+                    Vec::new(),
+                ),
+                Pattern::Bool(b, _) => (Some(format!("{subj} === {b}")), Vec::new()),
+                // M-RT S4 type pattern → an `instanceof` test, binding the narrowed value. M-RT
+                // S6c.3: a decomposed-MI ancestor tests `I<name>` via `type_pos_ref`.
+                Pattern::Type {
+                    type_name, binding, ..
+                } => {
+                    let tref = self.type_pos_ref(type_name);
+                    let binds = match binding {
+                        Some(name) => vec![(name.clone(), subj.clone())],
+                        None => Vec::new(),
+                    };
+                    (Some(format!("{subj} instanceof {tref}")), binds)
+                }
                 Pattern::Variant {
                     name: vname,
                     fields: pats,
                     ..
                 } => {
                     let props = self.variant_fields.get(vname).cloned().unwrap_or_default();
-                    self.push_scope();
-                    let mut binds = String::new();
+                    let mut binds = Vec::new();
                     for (i, fp) in pats.iter().enumerate() {
                         let bind_name = match fp {
-                            Pattern::Binding { name, .. } => name,
+                            Pattern::Binding { name, .. } => name.clone(),
                             _ => return Err(
                                 "transpile error: only simple variable patterns are supported in match payloads".into()),
                         };
                         let prop = props
                             .get(i)
                             .ok_or("transpile error: variant pattern arity mismatch")?;
-                        binds.push_str(&format!("${bind_name} = {subj}->{prop}; "));
-                        self.declare(bind_name);
+                        binds.push((bind_name, format!("{subj}->{prop}")));
                     }
                     let vref = self.variant_ref(vname);
-                    let body = self.emit_expr(&arm.body)?;
+                    (Some(format!("{subj} instanceof {vref}")), binds)
+                }
+            };
+            // Declare the bindings so the guard and body can reference them.
+            for (name, _) in &binds {
+                self.declare(name);
+            }
+            let guard = match &arm.guard {
+                Some(g) => Some(self.emit_expr(g)?),
+                None => None,
+            };
+            let body = self.emit_expr(&arm.body)?;
+            let yield_s = yield_stmt(&target, &body);
+            match guard {
+                // Guarded arm: never a catch-all. The guard needs its bindings live, so the binds
+                // move into the condition as always-true assignment conjuncts (`(($x = E) || true)`,
+                // safe for any value incl. falsy), ahead of the parenthesized guard. The body carries
+                // no binds — the condition already assigned them (PHP vars are function-scoped).
+                Some(g) => {
+                    let mut parts: Vec<String> = Vec::new();
+                    if let Some(t) = &test {
+                        parts.push(t.clone());
+                    }
+                    for (name, access) in &binds {
+                        let lhs = format!("${name}");
+                        parts.push(format!("(({lhs} = {access}) || true)"));
+                    }
+                    parts.push(format!("({g})"));
                     self.line(&format!(
-                        "{cond_kw} ({subj} instanceof {vref}) {{ {binds}{} }}",
-                        yield_stmt(&target, &body)
+                        "{cond_kw} ({}) {{ {yield_s} }}",
+                        parts.join(" && ")
                     ));
-                    self.pop_scope();
-                    first = false;
                 }
-                Pattern::Wildcard(_) => {
-                    has_catch_all = true;
-                    let body = self.emit_expr(&arm.body)?;
-                    let else_kw = if first { "" } else { "else " };
-                    self.line(&format!("{else_kw}{{ {} }}", yield_stmt(&target, &body)));
-                    first = false;
-                }
-                Pattern::Binding { name, .. } => {
-                    // bare identifier arm binds the whole scrutinee (catch-all)
-                    has_catch_all = true;
-                    self.push_scope();
-                    self.declare(name);
-                    let body = self.emit_expr(&arm.body)?;
-                    let else_kw = if first { "" } else { "else " };
-                    self.line(&format!(
-                        "{else_kw}{{ ${name} = {subj}; {} }}",
-                        yield_stmt(&target, &body)
-                    ));
-                    self.pop_scope();
-                    first = false;
-                }
-                // `null` arm over an optional scrutinee (M3 S2.6) → a `=== null` guard.
-                Pattern::Null(_) => {
-                    let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!(
-                        "{cond_kw} ({subj} === null) {{ {} }}",
-                        yield_stmt(&target, &body)
-                    ));
-                    first = false;
-                }
-                // Literal patterns (M11) — a `=== <literal>` guard, mirroring the interpreter's
-                // exact value match (`match_pattern`: `v == n` / `v == x` / `v == s` / `v == b`).
-                // PHP `===` is strict (type + value), so the branch taken is byte-identical.
-                Pattern::Int(n, _) => {
-                    let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!(
-                        "{cond_kw} ({subj} === {n}) {{ {} }}",
-                        yield_stmt(&target, &body)
-                    ));
-                    first = false;
-                }
-                Pattern::Float(x, _) => {
-                    let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!(
-                        "{cond_kw} ({subj} === {x:?}) {{ {} }}",
-                        yield_stmt(&target, &body)
-                    ));
-                    first = false;
-                }
-                Pattern::Str(s, _) => {
-                    let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!(
-                        "{cond_kw} ({subj} === \"{}\") {{ {} }}",
-                        php_escape(s),
-                        yield_stmt(&target, &body)
-                    ));
-                    first = false;
-                }
-                Pattern::Bool(b, _) => {
-                    let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!(
-                        "{cond_kw} ({subj} === {b}) {{ {} }}",
-                        yield_stmt(&target, &body)
-                    ));
-                    first = false;
-                }
-                // M-RT S4 type pattern → a PHP `instanceof` guard, binding the narrowed value. The
-                // type name uses `php_type_ref` (FQN if cross-package), mirroring `Expr::InstanceOf`.
-                Pattern::Type {
-                    type_name, binding, ..
-                } => {
-                    self.push_scope();
-                    let bind = match binding {
-                        Some(name) => {
-                            self.declare(name);
-                            format!("${name} = {subj}; ")
+                // Unguarded arm: byte-identical to the pre-guard emission.
+                None => {
+                    let body_binds: String = binds
+                        .iter()
+                        .map(|(name, access)| format!("${name} = {access}; "))
+                        .collect();
+                    match &test {
+                        None => {
+                            has_catch_all = true;
+                            let else_kw = if first { "" } else { "else " };
+                            self.line(&format!("{else_kw}{{ {body_binds}{yield_s} }}"));
                         }
-                        None => String::new(),
-                    };
-                    let body = self.emit_expr(&arm.body)?;
-                    // M-RT S6c.3: a match type-pattern against a decomposed MI ancestor tests `I<name>`.
-                    let tref = self.type_pos_ref(type_name);
-                    self.line(&format!(
-                        "{cond_kw} ({subj} instanceof {tref}) {{ {bind}{} }}",
-                        yield_stmt(&target, &body)
-                    ));
-                    self.pop_scope();
-                    first = false;
+                        Some(t) => {
+                            self.line(&format!("{cond_kw} ({t}) {{ {body_binds}{yield_s} }}"));
+                        }
+                    }
                 }
             }
+            self.pop_scope();
+            first = false;
         }
         if !has_catch_all {
             // Defensive terminal arm: the checker guarantees exhaustiveness, so this is unreachable

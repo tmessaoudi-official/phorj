@@ -112,3 +112,33 @@ fn unknown_variant_pattern_errors() {
         "{errs:?}"
     );
 }
+
+#[test]
+fn match_arm_guards() {
+    // A guarded arm plus an unguarded fallback for the same shape is exhaustive and type-checks.
+    let ok = format!(
+        "{SHAPE} function f(Shape s) -> float {{ return match s {{ \
+             Circle(r) when r > 0.0 => r, Circle(r) => 0.0, Rect(w, h) => w * h, }}; }}"
+    );
+    assert!(errors_of(&ok).is_empty(), "{:?}", errors_of(&ok));
+
+    // A shape covered ONLY by a guarded arm (no unguarded fallback) is non-exhaustive — the guard
+    // may fall through — and is reported with the E-MATCH-GUARD-EXHAUST code.
+    let guarded_only = format!(
+        "{SHAPE} function f(Shape s) -> float {{ return match s {{ \
+             Circle(r) when r > 0.0 => r, Rect(w, h) => w * h, }}; }}"
+    );
+    let e = errors_of(&guarded_only);
+    assert!(
+        e.iter().any(|d| d.code == Some("E-MATCH-GUARD-EXHAUST")),
+        "{e:?}"
+    );
+
+    // A non-boolean guard is rejected with E-GUARD-TYPE.
+    let bad_guard = format!(
+        "{SHAPE} function f(Shape s) -> float {{ return match s {{ \
+             Circle(r) when r => r, Circle(r) => 0.0, Rect(w, h) => w * h, }}; }}"
+    );
+    let e2 = errors_of(&bad_guard);
+    assert!(e2.iter().any(|d| d.code == Some("E-GUARD-TYPE")), "{e2:?}");
+}

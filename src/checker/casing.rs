@@ -264,6 +264,9 @@ impl Checker {
             } => {
                 self.check_expr_casing(scrutinee);
                 for arm in arms {
+                    if let Some(g) = &arm.guard {
+                        self.check_expr_casing(g);
+                    }
                     self.check_expr_casing(&arm.body);
                 }
             }

@@ -86,9 +86,12 @@ fn collect_free_expr(
         } => {
             collect_free_expr(scrutinee, bound, found);
             for arm in arms {
-                // arm-pattern bindings are in scope for the arm body only
+                // arm-pattern bindings are in scope for the arm guard and body only
                 let mut arm_bound = bound.clone();
                 collect_pattern_bindings(&arm.pattern, &mut arm_bound);
+                if let Some(g) = &arm.guard {
+                    collect_free_expr(g, &mut arm_bound, found);
+                }
                 collect_free_expr(&arm.body, &mut arm_bound, found);
             }
         }

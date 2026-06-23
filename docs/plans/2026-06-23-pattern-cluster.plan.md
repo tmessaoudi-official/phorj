@@ -38,6 +38,12 @@
   asymmetry/surprise; and struct patterns are single-type tests, so nesting adds **no new exhaustiveness
   surface** (only binding + nested-`instanceof` lowering, which earns its own build sub-slice).
 
+> [2026-06-23] AGREED: **execution = Inline, task-by-task** (executing-plans), with a checkpoint after
+> each sub-slice (S5.1, S5.2, S5.3) for review. Chosen over subagent-driven: the 12 tasks are tightly
+> sequential, contend on the same core files (`checker/matches.rs` + the three backends' match arms), and
+> S5.3-T6 edits `CLAUDE.md` (subagent-blocked) — so the parallelism that would justify subagents is absent.
+> Per-task commits, gate-green each time.
+
 ## Formal Plan
 
 > **For agentic workers:** implement task-by-task. Each task is independently testable and ends with a

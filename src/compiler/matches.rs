@@ -28,6 +28,13 @@ impl Compiler<'_> {
             self.emit_pattern_test(&arm.pattern, m_slot, &[], &mut skips, line)?;
             let n_before = self.match_bindings.len();
             self.register_bindings(&arm.pattern, m_slot, &[], scrut_cty.clone())?;
+            // An arm guard runs after binding (its bindings are live); a false guard skips to the
+            // next arm exactly like a pattern mismatch — its `JumpIfFalse` joins `skips`. `JumpIfFalse`
+            // pops the bool, so `emit`'s stack_effect leaves height at the arm-relative base.
+            if let Some(g) = &arm.guard {
+                self.expr(g)?; // -> [.., scrutinee, bool]
+                skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
+            }
             self.expr(&arm.body)?; // -> [.., scrutinee, result]
             self.match_bindings.truncate(n_before);
             end_jumps.push(self.emit_jump(Op::Jump(0), line));

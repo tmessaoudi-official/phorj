@@ -102,6 +102,7 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                     .into_iter()
                     .map(|a| MatchArm {
                         pattern: a.pattern,
+                        guard: a.guard.map(|g| rexpr(g, h)),
                         body: rexpr(a.body, h),
                         span: a.span,
                     })
