@@ -1,0 +1,391 @@
+//! Parser tests — stmts (M-Decomp W3.1b, mirrors the source clusters).
+
+use super::support::*;
+
+#[test]
+fn parses_return_stmt() {
+    assert!(matches!(stmt("return;"), Stmt::Return { value: None, .. }));
+    match stmt("return 1 + 2;") {
+        Stmt::Return {
+            value: Some(Expr::Binary { .. }),
+            ..
+        } => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_expr_stmt() {
+    match stmt("Console.println(x);") {
+        Stmt::Expr(Expr::Call { .. }, _) => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_block_stmt() {
+    match stmt("{ return; return 1; }") {
+        Stmt::Block(body, _) => assert_eq!(body.len(), 2),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_throw_stmt() {
+    match stmt("throw ParseError(\"x\");") {
+        Stmt::Throw {
+            value: Expr::Call { .. },
+            ..
+        } => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_try_catch_finally() {
+    match stmt("try { f(); } catch (ParseError e) { g(); } finally { h(); }") {
+        Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            ..
+        } => {
+            assert_eq!(body.len(), 1);
+            assert_eq!(catches.len(), 1);
+            assert_eq!(catches[0].name, "e");
+            assert!(matches!(&catches[0].ty, Type::Named { name, .. } if name == "ParseError"));
+            assert!(finally_block.is_some());
+        }
+        other => panic!("got {other:?}"),
+    }
+    // A finally-only try (no catch) is allowed.
+    assert!(matches!(
+        stmt("try { f(); } finally { h(); }"),
+        Stmt::Try {
+            catches,
+            finally_block: Some(_),
+            ..
+        } if catches.is_empty()
+    ));
+    // A bare `try {}` with neither catch nor finally is a parse error.
+    assert!(parser("try { f(); }").parse_stmt().is_err());
+}
+
+#[test]
+fn parses_multi_catch() {
+    match stmt("try { f(); } catch (A a) { x(); } catch (B b) { y(); }") {
+        Stmt::Try {
+            catches,
+            finally_block,
+            ..
+        } => {
+            assert_eq!(catches.len(), 2);
+            assert_eq!(catches[0].name, "a");
+            assert_eq!(catches[1].name, "b");
+            assert!(finally_block.is_none());
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_union_catch() {
+    match stmt("try { f(); } catch (A | B e) { x(); }") {
+        Stmt::Try { catches, .. } => {
+            assert_eq!(catches.len(), 1);
+            assert_eq!(catches[0].name, "e");
+            assert!(matches!(&catches[0].ty, Type::Union(members, _) if members.len() == 2));
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_var_decl_stmt() {
+    match stmt("int n = 5;") {
+        Stmt::VarDecl { ty, name, init, .. } => {
+            assert!(matches!(ty, Type::Named { ref name, .. } if name == "int"));
+            assert_eq!(name, "n");
+            assert!(matches!(init, Expr::Int(5, _)));
+        }
+        other => panic!("got {other:?}"),
+    }
+    // generic-typed var-decl must not be mistaken for comparison
+    match stmt("List<Shape> shapes = items;") {
+        Stmt::VarDecl { name, .. } => assert_eq!(name, "shapes"),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_mutable_typed_var_decl() {
+    match stmt("mutable int x = 1;") {
+        Stmt::VarDecl { name, mutable, .. } => {
+            assert!(mutable);
+            assert_eq!(name, "x");
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_mutable_inferred_var_decl() {
+    match stmt("mutable var x = 1;") {
+        Stmt::VarDecl { name, mutable, .. } => {
+            assert!(mutable);
+            assert_eq!(name, "x");
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn plain_var_decl_is_not_mutable() {
+    match stmt("int x = 1;") {
+        Stmt::VarDecl { mutable, .. } => assert!(!mutable),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_reassignment() {
+    match stmt("x = 2;") {
+        Stmt::Assign { target, .. } => {
+            assert!(matches!(target, Expr::Ident(ref n, _) if n == "x"));
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_compound_assign_desugars_to_binary() {
+    use crate::ast::BinaryOp;
+    // `x += 1;` ⟶ `x = x + 1` (M-mut.2): target is `x`, value is `x + 1`.
+    for (src, want) in [
+        ("x += 1;", BinaryOp::Add),
+        ("x -= 1;", BinaryOp::Sub),
+        ("x *= 2;", BinaryOp::Mul),
+        ("x /= 2;", BinaryOp::Div),
+        ("x %= 2;", BinaryOp::Rem),
+        ("x ??= 0;", BinaryOp::Coalesce),
+    ] {
+        match stmt(src) {
+            Stmt::Assign { target, value, .. } => {
+                assert!(matches!(target, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                match value {
+                    Expr::Binary { op, lhs, .. } => {
+                        assert_eq!(op, want, "{src}");
+                        assert!(matches!(*lhs, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                    }
+                    other => panic!("{src}: expected Binary value, got {other:?}"),
+                }
+            }
+            other => panic!("{src}: expected Assign, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn parses_increment_decrement_statements() {
+    use crate::ast::BinaryOp;
+    // `x++;` ⟶ `x = x + 1`; `x--;` ⟶ `x = x - 1` (statement form).
+    for (src, want) in [("x++;", BinaryOp::Add), ("x--;", BinaryOp::Sub)] {
+        match stmt(src) {
+            Stmt::Assign { target, value, .. } => {
+                assert!(matches!(target, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                match value {
+                    Expr::Binary { op, lhs, rhs, .. } => {
+                        assert_eq!(op, want, "{src}");
+                        assert!(matches!(*lhs, Expr::Ident(ref n, _) if n == "x"), "{src}");
+                        assert!(matches!(*rhs, Expr::Int(1, _)), "{src}");
+                    }
+                    other => panic!("{src}: expected Binary value, got {other:?}"),
+                }
+            }
+            other => panic!("{src}: expected Assign, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn parses_clone_with() {
+    match expr("p with { x = 9, y = 10 }") {
+        Expr::CloneWith { object, fields, .. } => {
+            assert!(matches!(*object, Expr::Ident(ref n, _) if n == "p"));
+            assert_eq!(fields.len(), 2);
+            assert_eq!(fields[0].0, "x");
+            assert_eq!(fields[1].0, "y");
+        }
+        other => panic!("got {other:?}"),
+    }
+    // empty override list parses.
+    match expr("p with { }") {
+        Expr::CloneWith { fields, .. } => assert!(fields.is_empty()),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_while_and_do_while() {
+    match stmt("while (x < 3) { x = x + 1; }") {
+        Stmt::While {
+            post_cond, body, ..
+        } => {
+            assert!(!post_cond);
+            assert_eq!(body.len(), 1);
+        }
+        other => panic!("got {other:?}"),
+    }
+    match stmt("do { x = x + 1; } while (x < 3);") {
+        Stmt::While { post_cond, .. } => assert!(post_cond),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_while_let_desugars_to_while_true_if_let() {
+    // `while (var v = opt) { B }` ⟶ `while (true) { if (var v = opt) { B } else { break; } }`.
+    match stmt("while (var v = opt) { use(v); }") {
+        Stmt::While {
+            cond,
+            body,
+            post_cond,
+            ..
+        } => {
+            assert!(!post_cond);
+            assert!(matches!(cond, Expr::Bool(true, _)));
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::If {
+                    bind: Some(n),
+                    else_block: Some(eb),
+                    ..
+                } => {
+                    assert_eq!(n, "v");
+                    assert!(matches!(eb.as_slice(), [Stmt::Break(_)]));
+                }
+                other => panic!("expected if-let, got {other:?}"),
+            }
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_break_and_continue() {
+    assert!(matches!(stmt("break;"), Stmt::Break(_)));
+    assert!(matches!(stmt("continue;"), Stmt::Continue(_)));
+}
+
+#[test]
+fn parses_c_style_for() {
+    // Full C-for with all three clauses.
+    match stmt("for (mutable int i = 0; i < n; i++) { use(i); }") {
+        Stmt::CFor {
+            init: Some(init),
+            cond: Some(_),
+            step: Some(step),
+            body,
+            ..
+        } => {
+            assert!(matches!(*init, Stmt::VarDecl { mutable: true, .. }));
+            assert!(matches!(*step, Stmt::Assign { .. })); // i++ desugars to Assign
+            assert_eq!(body.len(), 1);
+        }
+        other => panic!("got {other:?}"),
+    }
+    // All clauses empty: `for (;;)`.
+    match stmt("for (;;) { x = 1; }") {
+        Stmt::CFor {
+            init: None,
+            cond: None,
+            step: None,
+            ..
+        } => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn for_in_still_parses_as_for_in() {
+    // The disambiguation must not regress the existing range/list for-in form.
+    match stmt("for (int i in 0..3) { use(i); }") {
+        Stmt::For { name, .. } => assert_eq!(name, "i"),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_if_else() {
+    match stmt("if (a) { return 1; } else { return 2; }") {
+        Stmt::If {
+            then_block,
+            else_block: Some(eb),
+            ..
+        } => {
+            assert_eq!(then_block.len(), 1);
+            assert_eq!(eb.len(), 1);
+        }
+        other => panic!("got {other:?}"),
+    }
+    match stmt("if (a) { return 1; }") {
+        Stmt::If {
+            else_block: None, ..
+        } => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_else_if_chain() {
+    match stmt("if (a) { return 1; } else if (b) { return 2; }") {
+        Stmt::If {
+            else_block: Some(eb),
+            ..
+        } => {
+            assert_eq!(eb.len(), 1);
+            assert!(matches!(eb[0], Stmt::If { .. }));
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_if_let_binding() {
+    // `if (var x = e)` carries the bound name; the condition expr is the scrutinee.
+    match stmt("if (var x = o) { return 1; } else { return 2; }") {
+        Stmt::If {
+            bind: Some(name),
+            else_block: Some(eb),
+            ..
+        } => {
+            assert_eq!(name, "x");
+            assert_eq!(eb.len(), 1);
+        }
+        other => panic!("got {other:?}"),
+    }
+    // a plain condition has no binding
+    match stmt("if (a) { return 1; }") {
+        Stmt::If { bind: None, .. } => {}
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_for_in() {
+    match stmt("for (Shape s in shapes) { Console.println(s); }") {
+        Stmt::For {
+            ty,
+            name,
+            iter,
+            body,
+            ..
+        } => {
+            assert!(matches!(ty, Type::Named { ref name, .. } if name == "Shape"));
+            assert_eq!(name, "s");
+            assert!(matches!(iter, Expr::Ident(ref n, _) if n == "shapes"));
+            assert_eq!(body.len(), 1);
+        }
+        other => panic!("got {other:?}"),
+    }
+}
