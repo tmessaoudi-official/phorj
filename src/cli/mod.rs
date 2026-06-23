@@ -235,6 +235,15 @@ fn lex_parse(src: &str) -> Result<Program, String> {
         .map_err(|e| e.render(src))
 }
 
+/// Public lex + parse of a single source string into an **unchecked** `Program` (no type-check, no
+/// alias/generic expansion). Exposes the private [`lex_parse`] for callers that want to run the
+/// type-checker themselves and surface its diagnostics without aborting — e.g. the WASM playground,
+/// which feeds the parsed program to [`check_json_program`] to render errors *and* warnings rather
+/// than the fatal first-error string [`parse_checked`] produces. A syntax error still returns `Err`.
+pub fn parse_program(src: &str) -> Result<Program, String> {
+    lex_parse(src)
+}
+
 /// Type-check + de-alias an already-parsed program (the gate, minus lex/parse). De-aliases so every
 /// backend sees alias-free types (aliases are front-end sugar; the checker validated them, including
 /// cycles + built-in shadowing). Non-fatal warnings (the lint channel, M3 S2.5) render to stderr and

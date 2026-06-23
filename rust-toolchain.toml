@@ -6,3 +6,6 @@
 [toolchain]
 channel = "1.96.0"
 components = ["rustfmt", "clippy"]
+# The WASM playground member builds for this target; rustup installs it automatically in CI. Local
+# native builds/tests ignore it (the core crate and `phg` bin never target wasm).
+targets = ["wasm32-unknown-unknown"]
