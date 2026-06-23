@@ -338,6 +338,40 @@ function main() {
     );
 }
 
+/// M-RT S6c.1 — field collision. A same-named instance field declared independently on two parents
+/// (promoted ctor params here) has no PHP `insteadof` for properties, so it is `E-MI-FIELD-CONFLICT`
+/// unless the child redeclares it. The checker must flag it (the previous silent first-parent-wins
+/// merge masked the clash).
+#[test]
+fn s6c_field_conflict_rejected() {
+    let errs = check_errs(
+        r#"open class Swimmer { constructor(public int depth) {} }
+open class Flyer { constructor(public int depth) {} }
+class Duck extends Swimmer, Flyer {}"#,
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-MI-FIELD-CONFLICT")),
+        "two parents declaring `depth` must be E-MI-FIELD-CONFLICT, got: {errs:?}"
+    );
+}
+
+/// M-RT S6c.1 — a diamond-shared field auto-merges (no conflict): `id` reaches `Mid` through both
+/// `Left` and `Right`, but both arms resolve to the *same* declaring origin (`Base`), so it dedups
+/// exactly like a diamond-shared method. No `E-MI-FIELD-CONFLICT`.
+#[test]
+fn s6c_diamond_shared_field_is_not_a_conflict() {
+    let errs = check_errs(
+        r#"open class Base { constructor(public int id) {} }
+open class Left extends Base {}
+open class Right extends Base {}
+class Mid extends Left, Right {}"#,
+    );
+    assert!(
+        !errs.iter().any(|e| e.code == Some("E-MI-FIELD-CONFLICT")),
+        "a diamond-shared field must auto-merge (no conflict), got: {errs:?}"
+    );
+}
+
 /// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
 /// so both backends must run a `var` program byte-identically.
 #[test]

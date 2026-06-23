@@ -818,6 +818,22 @@ impl Checker {
             );
         }
 
+        // M-RT S6c.1: a same-named instance field inherited from ≥2 distinct parents is
+        // `E-MI-FIELD-CONFLICT`. PHP has no `insteadof` for properties, so unlike a method collision
+        // it can be resolved *only* by the child redeclaring the field (or renaming it in a parent).
+        // A diamond-shared field (both arms reach the same declaring class) auto-merges, like methods.
+        for (class, name, span) in crate::ast::class_field_conflicts(program) {
+            self.err_coded(
+                span,
+                format!("field `{name}` is inherited from more than one parent of class `{class}`"),
+                "E-MI-FIELD-CONFLICT",
+                Some(format!(
+                    "PHP has no `insteadof` for properties — redeclare `{name}` in `{class}` (or \
+                     rename it in a parent) to resolve the collision"
+                )),
+            );
+        }
+
         // M-RT S6b: abstract-method bookkeeping. `abstract_methods[(class, name)]` is set when a class
         // declares a bodyless `abstract function name`; `E-OPEN-STATIC` rejects a method that is both
         // `open` and `static` (statics are not virtual, so overridability is meaningless).

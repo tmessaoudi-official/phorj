@@ -587,6 +587,126 @@ pub fn class_method_origins(
     (out, ctx.conflicts)
 }
 
+/// M-RT S6c — instance-field collision detection, the field analog of [`class_method_origins`].
+/// Returns every `(class, field, class_span)` where a class inherits a same-named instance field from
+/// **two or more distinct declaring origins** without redeclaring it — the checker reports each as
+/// `E-MI-FIELD-CONFLICT`. Unlike methods there are no resolution clauses (PHP has no `insteadof` for
+/// properties), so a child can resolve a collision only by redeclaring the field itself.
+///
+/// "Instance field" = an explicit non-`static` `Field` member plus every promoted constructor
+/// parameter (one carrying a `public`/`private`/`protected` modifier — these become fields, EV-4).
+/// A diamond auto-merges exactly like a shared method: a field reached through two arms that resolve
+/// to the *same* declaring class dedups (no conflict). Static fields are out of scope this slice.
+pub fn class_field_conflicts(program: &Program) -> Vec<(String, String, Span)> {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    struct Ctx {
+        decl: BTreeMap<String, BTreeSet<String>>,
+        extends: BTreeMap<String, Vec<String>>,
+        spans: BTreeMap<String, Span>,
+        memo: BTreeMap<String, BTreeMap<String, String>>,
+        conflicts: Vec<(String, String, Span)>,
+        in_progress: BTreeSet<String>,
+    }
+
+    impl Ctx {
+        /// Resolve `c`'s flat instance-field table: each field name → its single declaring origin
+        /// class. Own fields win (redeclare); a name arriving from ≥2 distinct origins is recorded as
+        /// a conflict (a deterministic pick still lands in the table so the build can continue).
+        fn resolve(&mut self, c: &str) -> BTreeMap<String, String> {
+            if let Some(m) = self.memo.get(c) {
+                return m.clone();
+            }
+            if !self.in_progress.insert(c.to_string()) {
+                return BTreeMap::new(); // `extends` cycle — `E-MI-CYCLE` reported elsewhere
+            }
+            let mut map: BTreeMap<String, String> = BTreeMap::new();
+            // Own fields win over anything inherited (the child redeclaring resolves a collision).
+            if let Some(fs) = self.decl.get(c).cloned() {
+                for f in fs {
+                    map.insert(f, c.to_string());
+                }
+            }
+            // Gather each direct parent's resolved fields, tracking the true declaring origin so a
+            // diamond dedups by origin.
+            let mut contrib: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+            for p in self.extends.get(c).cloned().unwrap_or_default() {
+                for (name, origin) in self.resolve(&p) {
+                    if map.contains_key(&name) {
+                        continue; // redeclared by C itself
+                    }
+                    contrib.entry(name).or_default().insert(origin);
+                }
+            }
+            for (name, origins) in contrib {
+                if map.contains_key(&name) {
+                    continue;
+                }
+                let mut it = origins.into_iter();
+                if let Some(first) = it.next() {
+                    if it.next().is_some() {
+                        let span = self.spans.get(c).copied().unwrap_or(Span {
+                            start: 0,
+                            len: 0,
+                            line: 1,
+                            col: 1,
+                        });
+                        self.conflicts.push((c.to_string(), name.clone(), span));
+                    }
+                    map.insert(name, first); // deterministic pick (sorted-first)
+                }
+            }
+            self.in_progress.remove(c);
+            self.memo.insert(c.to_string(), map.clone());
+            map
+        }
+    }
+
+    let mut ctx = Ctx {
+        decl: BTreeMap::new(),
+        extends: BTreeMap::new(),
+        spans: BTreeMap::new(),
+        memo: BTreeMap::new(),
+        conflicts: Vec::new(),
+        in_progress: BTreeSet::new(),
+    };
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            let mut fs = BTreeSet::new();
+            for m in &c.members {
+                match m {
+                    ClassMember::Field {
+                        name, modifiers, ..
+                    } if !modifiers.contains(&Modifier::Static) => {
+                        fs.insert(name.clone());
+                    }
+                    ClassMember::Constructor { params, .. } => {
+                        for p in params {
+                            if p.modifiers.iter().any(|m| {
+                                matches!(
+                                    m,
+                                    Modifier::Public | Modifier::Private | Modifier::Protected
+                                )
+                            }) {
+                                fs.insert(p.name.clone());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            ctx.decl.insert(c.name.clone(), fs);
+            ctx.extends.insert(c.name.clone(), c.extends.clone());
+            ctx.spans.insert(c.name.clone(), c.span);
+        }
+    }
+    let names: Vec<String> = ctx.extends.keys().cloned().collect();
+    for n in &names {
+        ctx.resolve(n);
+    }
+    ctx.conflicts
+}
+
 fn collect_free_expr(
     e: &Expr,
     bound: &mut std::collections::HashSet<String>,

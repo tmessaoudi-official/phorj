@@ -447,6 +447,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              `exclude P.m` (drop one), or override by declaring `function m(…)` in C. A diamond where\n\
              both arms reach the *same* declaring method auto-merges and is never a conflict.\n"
         }
+        "E-MI-FIELD-CONFLICT" => {
+            "E-MI-FIELD-CONFLICT — a field is inherited from more than one parent.\n\n\
+             Under multiple inheritance (`class C extends A, B`, M-RT S6c), if two parents each declare\n\
+             an instance field of the same name Phorge will not silently pick one. Unlike a method\n\
+             collision there are no `use`/`rename`/`exclude` clauses — PHP has no `insteadof` for\n\
+             properties. Resolve it by redeclaring the field in C (or renaming it in a parent). A\n\
+             diamond where both arms reach the *same* declaring field auto-merges and is never a\n\
+             conflict.\n"
+        }
         "E-ABSTRACT-INSTANTIATE" => {
             "E-ABSTRACT-INSTANTIATE — an abstract class cannot be instantiated.\n\n\
              An `abstract class` (M-RT S6b) may have bodyless `abstract function` methods, so it has no\n\
@@ -1635,6 +1644,17 @@ function main() { Console.println("hi"); }"#);
         assert!(p.contains("`private`") && p.contains(".phg"), "{p}");
         let i = explain_text("E-VIS-INTERNAL").expect("E-VIS-INTERNAL has an explanation");
         assert!(i.contains("`internal`") && i.contains("package"), "{i}");
+    }
+
+    #[test]
+    fn explain_covers_mi_field_conflict_code() {
+        // The M-RT S6c.1 field-collision diagnostic is self-documenting via `phg explain`.
+        let body =
+            explain_text("E-MI-FIELD-CONFLICT").expect("E-MI-FIELD-CONFLICT has an explanation");
+        assert!(
+            body.contains("insteadof") && body.contains("redeclar"),
+            "{body}"
+        );
     }
 
     #[test]
