@@ -448,6 +448,42 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             }
         }
     }
+    // M-RT S8: a `use`d trait's `static` field becomes a PER-USING-CLASS copy (PHP `use` semantics) —
+    // each using class gets its own slot keyed `(class, field)`. The trait synthetic's own
+    // `(trait, field)` entry from the loop above is inert (a trait is never a static holder at runtime).
+    for it in &program.items {
+        let Item::Class(c) = it else { continue };
+        for u in &c.uses {
+            for t in &program.items {
+                let Item::Trait(td) = t else { continue };
+                if td.name != u.name {
+                    continue;
+                }
+                for m in &td.members {
+                    if let ClassMember::Field {
+                        modifiers,
+                        name,
+                        ty,
+                        init,
+                        ..
+                    } = m
+                    {
+                        if modifiers.contains(&Modifier::Static) {
+                            statics_index.insert(
+                                (c.name.clone(), name.clone()),
+                                (static_inits.len(), resolve_cty(ty)),
+                            );
+                            let v = init
+                                .as_ref()
+                                .and_then(crate::value::const_literal)
+                                .unwrap_or(Value::Unit);
+                            static_inits.push(v);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Methods follow the constructors in the index space; build the dispatch table — and the
     // `(class, method) → return type` table `ctype` reads for a method-call result — in lockstep.

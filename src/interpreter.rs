@@ -379,6 +379,36 @@ impl Interp {
                 Item::TypeAlias { .. } => {}
             }
         }
+        // M-RT S8: seed a `use`d trait's `static` field as a per-using-class copy (PHP `use` semantics)
+        // — keyed `(class, field)`, mirroring the compiler's per-using-class slot.
+        for it in &program.items {
+            let Item::Class(c) = it else { continue };
+            for u in &c.uses {
+                for t in &program.items {
+                    let Item::Trait(td) = t else { continue };
+                    if td.name != u.name {
+                        continue;
+                    }
+                    for m in &td.members {
+                        if let crate::ast::ClassMember::Field {
+                            modifiers,
+                            name,
+                            init,
+                            ..
+                        } = m
+                        {
+                            if modifiers.contains(&crate::ast::Modifier::Static) {
+                                let v = init
+                                    .as_ref()
+                                    .and_then(crate::value::const_literal)
+                                    .unwrap_or(Value::Unit);
+                                self.statics.insert((c.name.clone(), name.clone()), v);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // The single shared runtime subtype oracle (M-RT S6c.3): parent classes AND interfaces, so
         // `instanceof`/match-patterns/overload-subtyping see a class ancestor too. Same algorithm as the
         // VM (the BytecodeProgram builds the identical table), no divergence.

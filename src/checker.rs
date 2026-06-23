@@ -1119,6 +1119,17 @@ impl Checker {
                 for (k, v) in &tinfo.methods {
                     child.methods.entry(k.clone()).or_insert_with(|| v.clone());
                 }
+                // M-RT S8: a `use`d trait's `static` field becomes a per-using-class copy — each using
+                // class gets its own `ClassName.field` (PHP `use` semantics). Merge it into the class's
+                // static table so `C.field` type-checks; the backends seed a distinct slot per class.
+                for (k, v) in &tinfo.statics {
+                    if !child.statics.contains_key(k) {
+                        child.statics.insert(k.clone(), v.clone());
+                        if tinfo.static_mut.contains(k) {
+                            child.static_mut.insert(k.clone());
+                        }
+                    }
+                }
             }
         }
     }

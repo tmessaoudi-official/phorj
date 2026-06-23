@@ -2142,6 +2142,49 @@ function main() { Console.println(Crier().greet()); }",
 }
 
 #[test]
+fn s8_trait_mutable_field_is_byte_identical() {
+    // M-RT S8 T2: a trait carries `mutable` instance state; the using class sets it in its ctor and a
+    // trait method mutates it. Field access is by name, so the flattened field works on both backends.
+    agree_out_php(
+        "import Core.Console;
+trait Counter { mutable int n; function bump() { this.n = this.n + 1; } function read() -> int { return this.n; } }
+class C { use Counter; constructor() { this.n = 0; } }
+function main() { C c = C(); c.bump(); c.bump(); c.bump(); Console.println(\"{c.read()}\"); }",
+        "3\n",
+        "s8_trait_mutable_field",
+    );
+}
+
+#[test]
+fn s8_trait_static_is_per_using_class_copy() {
+    // M-RT S8 T2: a trait `static` field is a PER-USING-CLASS copy (PHP `use` semantics) — each class
+    // gets its own `Class.field`. Byte-identical across backends and real PHP.
+    agree_out_php(
+        "import Core.Console;
+trait Counted { static mutable int total = 0; }
+class E { use Counted; }
+class F { use Counted; }
+function main() { E.total = 5; F.total = 9; Console.println(\"{E.total} {F.total}\"); }",
+        "5 9\n",
+        "s8_trait_static_per_class",
+    );
+}
+
+#[test]
+fn s8_trait_private_method_is_byte_identical() {
+    // M-RT S8 T2: a `private` trait method is flattened with its visibility and callable by a sibling
+    // trait method; the transpiler emits it `private` inside the native trait.
+    agree_out_php(
+        "import Core.Console;
+trait Loud { private function amp(string s) -> string { return \"{s}!\"; } function shout(string s) -> string { return this.amp(s); } }
+class C { use Loud; }
+function main() { Console.println(C().shout(\"hi\")); }",
+        "hi!\n",
+        "s8_trait_private_method",
+    );
+}
+
+#[test]
 fn s8_trait_abstract_requirement_satisfied_is_byte_identical() {
     // A trait may *require* a method (abstract); a using class that provides it composes cleanly, and a
     // trait method calling the requirement dispatches to the class's implementation on both backends.
