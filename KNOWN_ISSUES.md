@@ -87,11 +87,21 @@ not a panic:
   (an intersection is not a sum type).
 - **Union types (M-RT S4) — deferred corners** (each rejected cleanly, never a panic): **enum members**
   in a union (`Color | Circle` → `E-UNION-MEMBER`; an enum is already a closed sum — match its variants
-  directly), **optional/function members** (`E-UNION-MEMBER`), **negative/flow
-  narrowing** (after `if (s instanceof Circle)` the else-branch does not narrow `s` to the remaining
-  members), **common-member access on a raw union** (`(A|B).foo()` without narrowing — narrow first),
+  directly), **optional/function members** (`E-UNION-MEMBER`),
+  **common-member access on a raw union** (`(A|B).foo()` without narrowing — narrow first),
   and the **whole-union optional** `(A|B)?` (`?` is postfix on a single member; `A | B?` parses as
-  `A | (B?)`). Use `T?` for nullability.
+  `A | (B?)`). Use `T?` for nullability. (Else/negative flow-narrowing now *does* narrow the else-branch
+  — see the flow-narrowing row below.)
+- **Flow-narrowing (M-RT pattern cluster S5.3) — what narrows and what doesn't.** Narrows: `if (x
+  instanceof T)` (then → `T`, else → the remaining union members), `!(…)` / `&&` (true side) / `||`
+  (false side) composing those, and an **early-return guard** (`if (!(x instanceof T)) { return … }`
+  narrows the rest of the block). **Not narrowed** (deferred): the *true* side of `a || b` (a
+  disjunction implies no single fact); **common-member access on a raw union** without narrowing;
+  **`x == null` / equality-literal refinement** — Phorge rejects comparing an optional/union to a
+  literal (`T? == null`, `int|string == "ok"`), so there is no such narrowing source (use if-let /
+  `??` / match-over-optional / match-over-union instead); **post-match scrutinee narrowing** — a
+  `match` is an expression and its arms are expressions (no statement-match with diverging arms), so
+  there is no fall-through to narrow. **while-let `when` guards** are not implemented (if-let only).
 - ~~interfaces/classes/enums in a library (non-`main`) package~~ — **now supported** (M-RT
   cross-package types): a library package exports types, consumed via `import type Pkg.Path.Type [as
   A]`; `E-PKG-TYPE` is retired. Remaining limits: the **module-qualified** type form (`import

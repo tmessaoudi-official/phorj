@@ -519,11 +519,24 @@ the shared subtype oracle and is deferred.
 S6 inheritance (single + multiple, final-by-default, abstract) → **S8 traits** (`trait`/`use` horizontal
 reuse — methods/state/constructors/abstract-requirements/property-hooks; reuse not a type; native PHP
 `trait`/`use`; design `docs/specs/2026-06-23-m-rt-s8-traits-design.md`). Error-model Slice 2
-(`throws`/`Result`/faults) also CLOSED. **NEXT (developer-chosen, 2026-06-23): the codebase
-decomposition milestone** — behavior-preserving cohesion-based `mod/` splits of the whale files
-(checker.rs ~9.7k first), byte-identity-gated, NO OOP/SOLID dogma, preserve exhaustive-match coupling;
-needs its own research + brainstorm (see memory `decomposition-milestone`). Central open question:
-by-phase sub-split vs by-construct thin-dispatcher.
+(`throws`/`Result`/faults) also CLOSED. **M-Decomp (codebase decomposition) CLOSED 2026-06-23** — the
+whale files split into cohesion `mod/` clusters, byte-identity-gated (see [[decomposition-milestone]]).
+
+**PATTERN CLUSTER + PRIMITIVES SWEEP — ✅ COMPLETE (2026-06-23)** (plan
+`docs/plans/2026-06-23-pattern-cluster.plan.md`, design `…-pattern-cluster-design.md`). Front-end-only
+(no new `Op`, no `Value` change), byte-identical `run≡runvm≡real PHP 8.4`. **S5.1** match-arm guards
+(`pat when <cond> =>`, contextual `when`, `E-MATCH-GUARD-EXHAUST`/`E-GUARD-TYPE`). **S5.2** struct
+destructuring (`Pattern::Struct` — shorthand/rename/full-nesting, reuses `Op::IsInstance`; compiler
+`PathSeg{Enum|Field}` mixes enum-payload + named-field steps) + nested type patterns in variant payloads
+(`W(Circle c)`; `is_irrefutable` stops a refutable payload from falsely discharging coverage — also
+closed the `Some(0)`-alone gap; `E-STRUCT-PAT-TYPE`/`-FIELD-UNKNOWN`/`E-PATTERN-DUP-BIND`). **S5.3**
+flow-narrowing (`narrow_from_condition`: `instanceof` then/else→remaining-union-members, `!`/`&&`/`||`
+composition, early-return guards narrow the rest of a block) + **if-let `when` guards** (parser-desugar
+to a nested `if`, no `Stmt::If.guard` field). **Primitives:** number literals (`0x`/`0b`/`0o`/`_`/`1e3`),
+bitwise `& | ^ ~ << >>` (`>>`=two `Gt`), `Console.print`, byte-safe stdlib (`Text.startsWith`/`endsWith`/
+`repeat`, `Math.round`, `List.length`). Deferred (KNOWN_ISSUES): `||`-true-side / equality-literal /
+`== null` / post-match narrowing (Phorge rejects those comparisons or has no statement-match), while-let
+guards; optional-return/generic-ordering natives → M4. See [[pattern-cluster-and-primitives]].
 
 **ROADMAP-COMPLETENESS AUDIT DELIVERED + decisions locked (2026-06-22)** — a one-shot 20-track (A–S+V)
 multi-agent gap review (41 agents, 555 candidates → 290 adopt/187 defer/81 reject). **SSOT:

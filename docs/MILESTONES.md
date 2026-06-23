@@ -151,6 +151,27 @@ Behavior-preserving, cohesion-based split of the whale source files into per-mod
   `checker/tests/` (integration tests through `check()`), **by construct** for `parser/tests/`. Backend
   test files (< 460 lines) kept flat.
 
+## M-RT pattern cluster + primitives sweep — ✅ COMPLETE (2026-06-23)
+
+Post-M-RT language ergonomics, front-end-only (no new `Op`, no `Value` change), byte-identical
+`run ≡ runvm ≡ real PHP 8.4`. Plan `docs/plans/2026-06-23-pattern-cluster.plan.md`,
+example `examples/guide/pattern-matching.phg`.
+
+- **S5.1 match-arm guards** — `pat when <cond> => …` (contextual `when`); guarded arms don't discharge
+  exhaustiveness (`E-MATCH-GUARD-EXHAUST`); `E-GUARD-TYPE`.
+- **S5.2 struct destructuring** — `Pattern::Struct` (shorthand/rename/full-nesting, reuses
+  `Op::IsInstance` + field reads; compiler `PathSeg` mixes enum-payload and named-field steps) + nested
+  type patterns in variant payloads (`W(Circle c)`); refutable payloads no longer falsely discharge a
+  variant's coverage (`is_irrefutable`). Codes `E-STRUCT-PAT-TYPE`/`-FIELD-UNKNOWN`/`E-PATTERN-DUP-BIND`.
+- **S5.3 flow-narrowing** — `narrow_from_condition`: `instanceof` then/else (else → remaining union
+  members), `!`/`&&`/`||` composition, early-return guards narrow the rest of a block; plus **if-let
+  `when` guards** (parser-desugar, no `Stmt::If.guard` field). Deferred (KNOWN_ISSUES): `||`-true-side,
+  equality/literal refinement and `== null` (Phorge rejects those comparisons), post-match narrowing
+  (match is an expression), while-let guards.
+- **Primitives sweep** — number-literal formats (`0x`/`0b`/`0o`/`_`/`1e3`), bitwise `& | ^ ~ << >>`
+  (int-only; `>>` = two `Gt`), `Console.print`, byte-safe stdlib (`Text.startsWith`/`endsWith`/`repeat`,
+  `Math.round`, `List.length`). M4 holds the optional-return/generic-ordering natives (`parseInt`, sort…).
+
 ## M-mut — In-place mutation — ✅ FEATURE-COMPLETE (2026-06-21)
 
 Phorge began as a pure single-assignment language (no assignment statement); the mutation milestone

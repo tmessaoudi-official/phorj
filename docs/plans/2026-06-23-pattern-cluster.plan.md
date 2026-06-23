@@ -92,6 +92,25 @@
 > fields, conservative payload totality, generic-class struct patterns). All byte-identical
 > run≡runvm≡real PHP 8.4; `examples/guide/pattern-matching.phg` covers struct + payload nesting. 841
 > tests green. **NEXT: S5.3 flow-narrowing engine (+ folded-in if-let `when` guards).**
+> [2026-06-23] PROGRESS: **S5.3 flow-narrowing COMPLETE — pattern cluster CLOSED** (5 commits). **T1**
+> (`1570559`): extracted `narrow_from_condition(cond, polarity)` + `check_block_narrowed`
+> (behavior-preserving). **T2** (`dc0df61`): else/negative — negative `instanceof` narrows a union to
+> its remaining members, `!`/`&&`/`||` composition; else-block installs the false-polarity narrowing.
+> **T3** (`6726f1a`): early-return guards (`if (!(x instanceof T)) { return … }` narrows the rest of the
+> block via `check_body` + `block_terminates`). **if-let `when` guards** (`905bdeb`): parser-desugar of
+> `if (var x = e when g)` to a nested `if` — NO `Stmt::If.guard` field, no backend change (closes the
+> deferred S5.1-T2). **T4/T5 NOT APPLICABLE** (verified): statement-`match` with diverging arms doesn't
+> exist (arms are expressions) and Phorge rejects `T? == null` / `int|string == "ok"` (cross-type
+> comparison), so post-match and equality/literal refinement have no expressible source — documented in
+> KNOWN_ISSUES. **T6** (this commit): example flow-narrowing + if-let-guard sections, README, KNOWN_ISSUES,
+> CHANGELOG, MILESTONES, CLAUDE.md; binary rebuilt. All byte-identical run≡runvm≡real PHP 8.4; **848 tests
+> green, clippy+fmt clean. THE PATTERN CLUSTER MILESTONE IS COMPLETE.**
+
+## Status
+
+**STATUS: Committed — pattern cluster (S5.1/S5.2/S5.3) + primitives sweep COMPLETE.** Commits this
+milestone: `869b407`..`905bdeb` (+ this T6 docs commit). 848 tests green, byte-identical
+`run≡runvm≡real PHP 8.4`, clippy + fmt clean. Unpushed.
 
 ## Formal Plan
 

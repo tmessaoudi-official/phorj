@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Pattern cluster (M-RT S5) + primitives sweep
+
+Post-M-RT language-ergonomics, front-end-only (no new `Op`, no `Value` change), byte-identical
+`run ≡ runvm ≡ real PHP 8.4`. Plan `docs/plans/2026-06-23-pattern-cluster.plan.md`.
+
+- **Match-arm guards** (S5.1): `pat when <cond> => …` (contextual `when`); a guarded arm does not
+  discharge its shape for exhaustiveness (`E-MATCH-GUARD-EXHAUST`); non-bool guard `E-GUARD-TYPE`.
+- **Struct destructuring** (S5.2): `Pattern::Struct` — shorthand `Point { x, y }`, rename
+  `Point { x: px }`, full nesting `Line { from: Point { x, y }, to }`; reuses `Op::IsInstance` + field
+  reads. Plus **nested type patterns in variant payloads** (`W(Circle c)`); a refutable payload no
+  longer falsely discharges exhaustiveness (also closed the `Some(0)`-alone gap). Codes
+  `E-STRUCT-PAT-TYPE` / `E-STRUCT-FIELD-UNKNOWN` / `E-PATTERN-DUP-BIND`.
+- **Flow-narrowing** (S5.3): `narrow_from_condition` — `instanceof` then/else (else narrows a union to
+  its remaining members), `!`/`&&`/`||` composition, and **early-return guards** narrow the rest of a
+  block. Checker-only. Plus **if-let `when` guards** (`if (var x = e when g)`), parser-desugared to a
+  nested `if` (no `Stmt::If.guard` field).
+- **Primitives sweep**: number-literal formats (`0xFF`/`0b1010`/`0o17`/`1_000`/`1e3`), bitwise
+  `& | ^ ~ << >>` (int-only; `>>` is two adjacent `Gt`, never a token), `Console.print` (no newline),
+  and a byte-safe stdlib subset (`Text.startsWith`/`endsWith`/`repeat`, `Math.round`, `List.length`).
+
 ### Changed — M-Decomp: behavior-preserving codebase decomposition
 
 The whale source files were split into cohesion sub-modules — **zero behavior change** (the

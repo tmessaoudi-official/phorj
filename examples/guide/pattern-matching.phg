@@ -94,6 +94,15 @@ function speak(Carrier c) -> string {
     };
 }
 
+// Flow-narrowing (S5.3): an early-return guard narrows the rest of the function. After
+// `if (!(sh instanceof Circle)) { return … }`, `sh` is a `Circle` for the remaining code — no cast,
+// no nested block. (Also: an `if (x instanceof T) {…} else {…}` narrows `x` to the remaining union
+// member in the else-branch.) Narrowing is a compile-time check — the runtime is unchanged.
+function radiusOrZero(Circle | Square sh) -> float {
+    if (!(sh instanceof Circle)) { return 0.0; }
+    return sh.r;
+}
+
 class User {
     constructor(public string name, public int age) {}
 }
@@ -139,4 +148,9 @@ function main() {
     Console.println(greet(1));  // Ada, 36 → welcome
     Console.println(greet(2));  // Bob, 15 → guard false → denied
     Console.println(greet(3));  // null → bind fails → denied
+
+    // flow-narrowing (early-return guard)
+    float r = radiusOrZero(Circle(3.0));
+    float z = radiusOrZero(Square(5.0));
+    Console.println("r={r} z={z}");
 }
