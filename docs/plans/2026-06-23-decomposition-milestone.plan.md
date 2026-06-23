@@ -142,13 +142,41 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
 tests mirror source. Gate each wave: build → fmt → clippy --all-targets → `PHORGE_REQUIRE_PHP=1` test.
 
 **NEXT (in order):**
-- (follow-up) cli per-submodule test split (bench/explain tests → sealed children) — deferred, low value.
-- W1.3 checker self-contained rewrites (`rewrite_html`/`rewrite_generics`/`rewrite_alias`) + stateless
-  helpers (`common.rs`) — pure-fn extractions, ~1436 lines out of the whale.
-- **W2 checker impl split (6769→~330 mod.rs + 10 cluster files)** — the headline; LARGE, warrants focused
-  context. Per the checker-map raw report's cluster table + tests split alongside.
-- W3 parser/loader/ast/lexer · W4 backends (compiler/transpile/interpreter/vm — coupled trio stays whole)
-  · W5 close (binary rebuild, ARCHITECTURE/CHANGELOG/MILESTONES).
+
+**W2 — checker impl-cluster split (`checker/mod.rs` 5678 → ~330 core + cluster files). THE headline.**
+Mechanism (validated by W1.1/W1.3 — NO widening needed):
+- The whole `impl Checker { … }` is ONE block, lines **177–5324** (unchanged by W0/W1.3 — those touched
+  ≥5328). Method doc comments sit INSIDE the impl above each `fn`.
+- For each cluster, cut its contiguous methods out of the big impl and paste into `checker/<cluster>.rs`
+  as `use super::*;\n\nimpl Checker {\n <methods>\n}`. **No `pub` changes**: child modules of `checker`
+  see `Checker`'s private fields AND private methods (struct defined in the parent module → fields/
+  methods visible to all descendants). Verified by the bundle/ + native/ precedents.
+- **DOC-BOUNDARY RULE (the gotcha that bit 3×):** start each method range at its leading `///` block,
+  not the `fn` line; end at the line before the NEXT method's `///`. Otherwise a dangling/mis-attached
+  doc → build error or wrong docs.
+- Cluster map + exact ORIGINAL line ranges in `docs/research/decomposition/raw/checker-map.md` §1
+  (still valid for 177–5324): `resolve` 303–585 · `collect` 586–1672 · `throws` 1400–1527 · `program`
+  1922–2100+2425–2703 · `casing` 2101–2424 · `stmt` 2704–3038+loops · `expr` 3039–3665 · `calls`
+  3666–4477 · `assign` 4478–4956 · `matches` 5053–5327. (Ranges interleave — cut bottom-up / re-grep
+  each boundary live, don't trust stale numbers after the first cut.) Keep in `mod.rs`: struct+24 fields
+  (12–176), info structs, `new`, diagnostic ctors (`err`/`err_coded`/`warn_coded`/`err_assign`), scope
+  prims (`push_scope`/`declare`/`lookup`…), and the entry fns `run_checker`/`check`/`check_resolutions`
+  (5432–5467, pass-orchestration stays in one obvious place). Stateless free helpers 5468–5660
+  (`levenshtein`/`is_camel`/`apply_subst`/`ty_has_param`/`is_builtin_type_name`…) → `checker/common.rs`
+  as `pub(super) fn` (consumed by clusters via `use super::common::*` or `super::`).
+- **Each exhaustive `match` stays whole in its method** (lands in exactly one cluster — they're already
+  separate methods; see checker-map §3). Verify post-split: a dummy `Item`/`Stmt`/`Expr` variant still
+  fails to compile.
+- **Tests:** split the giant `checker/tests.rs` (~3016 lines) into per-cluster sealed child files
+  alongside (the W1.1b pattern) — OR, simpler first pass, keep one `checker/tests.rs` (it goes through
+  the public `check()`/`prog()`, so it needs no per-cluster split for access) and refine later. Decide
+  at execution; the access works either way (tests are children of `checker`).
+- Gate every 1–2 clusters: build → fmt → clippy --all-targets → `PHORGE_REQUIRE_PHP=1` test → commit.
+
+**Then:** W3 parser/loader/ast/lexer · W4 backends (compiler/transpile/interpreter/vm — the coupled
+`Op` trio `exec_op`/`validate`/`stack_effect` stays whole, `self.height` discipline, `emit_stmt`
+guard-arm order) · W5 close (rebuild release binary, update ARCHITECTURE/CHANGELOG/MILESTONES).
+- (follow-up, low value) cli per-submodule test split (bench/explain → sealed children).
 
 ### Rollback
 Each wave is one commit on `master`; a regressing wave is reverted with `git revert <sha>` (clean,
