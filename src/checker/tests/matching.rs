@@ -253,6 +253,31 @@ fn flow_narrowing_else_and_negation() {
 }
 
 #[test]
+fn flow_narrowing_early_return() {
+    const CS: &str = "class Circle { constructor(public float r) {} } \
+                      class Square { constructor(public float side) {} }";
+
+    // Early-return guard: after `if (!(s instanceof Circle)) { return … }` the rest of the block
+    // sees `s : Circle`, so `s.r` type-checks without an explicit narrowing block.
+    let ok = format!(
+        "{CS} function f(Circle | Square s) -> float {{ \
+             if (!(s instanceof Circle)) {{ return s.side; }} return s.r; }}"
+    );
+    assert!(errors_of(&ok).is_empty(), "{:?}", errors_of(&ok));
+
+    // A non-diverging guard does NOT narrow the rest of the block: the then-branch falls through, so
+    // `s` is still the full union after the `if` — `s.r` (a Circle-only field) is an error.
+    let bad = format!(
+        "{CS} function f(Circle | Square s) -> float {{ \
+             if (!(s instanceof Circle)) {{ float ignore = 1.0; }} return s.r; }}"
+    );
+    assert!(
+        !errors_of(&bad).is_empty(),
+        "a non-diverging guard must not narrow the rest of the block"
+    );
+}
+
+#[test]
 fn match_arm_guards() {
     // A guarded arm plus an unguarded fallback for the same shape is exhaustive and type-checks.
     let ok = format!(

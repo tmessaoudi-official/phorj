@@ -370,10 +370,38 @@ impl Checker {
                 warned = true;
             }
             self.check_stmt(s);
+            // Early-return narrowing (S5.3-T3): a guard `if (cond) { <diverges> }` means `cond` is
+            // FALSE for every statement after it in this block — so install the false-polarity
+            // narrowings into the current scope (they persist to the block's end, then pop with it).
+            // Sound regardless of an `else`: reaching past a diverging then-block implies `cond` false.
+            for (name, ty) in self.guard_if_narrowings(s) {
+                let m = self.lookup_binding(&name).map(|(_, m)| m).unwrap_or(false);
+                self.declare_binding(&name, ty, m, Self::stmt_span(s));
+            }
             if self.stmt_terminates(s) {
                 dead = true;
             }
         }
+    }
+
+    /// The narrowings a *guard* statement imposes on the rest of its block: an `if (cond) { … }` (no
+    /// if-let binding) whose then-block diverges (`return`/`throw`/…) leaves `cond` false on the
+    /// fall-through path, so the rest of the block sees the `polarity = false` narrowing (S5.3-T3).
+    /// Empty for any other statement.
+    fn guard_if_narrowings(&self, s: &crate::ast::Stmt) -> Vec<(String, Ty)> {
+        use crate::ast::Stmt;
+        if let Stmt::If {
+            cond,
+            bind: None,
+            then_block,
+            ..
+        } = s
+        {
+            if self.block_terminates(then_block) {
+                return self.narrow_from_condition(cond, false);
+            }
+        }
+        Vec::new()
     }
 
     pub(super) fn check_block(&mut self, stmts: &[crate::ast::Stmt]) {
