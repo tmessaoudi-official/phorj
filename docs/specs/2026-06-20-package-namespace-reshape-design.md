@@ -1,9 +1,13 @@
 # Package / Namespace Reshape — Design Spec
 
-> **Status:** ✅ Design locked (decisions ratified in a 2026-06-20 brainstorm); 🚧 **in progress** —
-> **slice 1 (manifest `name` → `module`, §5.1) is DONE**; slices 2–4 pending. This is a sizeable,
-> breaking, milestone-scale reshape (touches lexer, parser, checker, loader, transpiler, every `.phg`
-> file, the stdlib, fixtures, and docs).
+> **Status:** ✅ **COMPLETE** (2026-06-23). All four slices landed: slice 1 (manifest `name` →
+> `module`, §5.1); slice 2a (identifier casing `E-NAME-CASE`/`E-TYPE-CASE`); **slice 2b (package +
+> import + alias segment casing `E-PKG-CASE`, `0aa5a90`)**; **slice 3 (entry `package main` → `Main`,
+> `15a5745`)**; slice 4 (library types / `E-PKG-TYPE` lifted, shipped earlier with generics-all). All
+> examples + projects + fixtures migrated to PascalCase (distributable coordinates — manifest `module`,
+> `[require]` keys, vendor dirs, lockfile `name` — stay lowercase, concept C); the reshape is
+> output-preserving (`pascal()` already mapped segments) so `run≡runvm≡real PHP 8.4` stayed byte-
+> identical throughout. 796 tests green.
 > **Date:** 2026-06-20 · **Code state at spec time:** master `8676d1d` (core.html Wave 3), tree clean.
 > **Decider:** the developer (each decision below was an explicit, adversarially-challenged choice).
 > **Supersedes / extends:** `docs/specs/2026-06-18-m3-namespace-system-design.md` (the original

@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — package/namespace reshape COMPLETE: PascalCase everywhere + `package Main` (slices 2b + 3)
+
+The package model's casing reshape is finished (design `docs/specs/2026-06-20-package-namespace-reshape-design.md`).
+
+- **`E-PKG-CASE`** — package-declaration segments, import path segments, and import `as` aliases must be
+  PascalCase (`package Acme.StringUtil;`, `import Acme.StringUtil as Strutil;`), joining the existing
+  `E-NAME-CASE`/`E-TYPE-CASE` casing family. This makes the source→PHP-namespace mapping 1:1 with no
+  casing transform (`Acme.Convert` ⇒ `Acme\Convert`). The reserved roots `Main` and `Core` are already
+  PascalCase; an empty package stays `E-NO-PACKAGE` (no double-report). `phg explain E-PKG-CASE` added.
+- **Reserved entry `package main` → `package Main`** — casing-consistent (spec D2); the entry *function*
+  `main()` stays camelCase (a value identifier).
+- **Migration**: every example, multi-file project, vendored dependency, and test fixture moved to
+  PascalCase packages/folders. Distributable coordinates (manifest `module`, `[require]` keys, vendor
+  directories, lockfile `name`) stay lowercase — concept C, separate from the namespace.
+- **Output-preserving** (the loader's `pascal()` already PascalCased segments for PHP), so
+  `run≡runvm≡real PHP 8.4` stayed byte-identical throughout; the differential harness was the safety net.
+- Earlier slices: slice 1 (manifest `module`), slice 2a (identifier casing), slice 4 (library types /
+  `E-PKG-TYPE` lifted) had already landed. **The reshape is now closed.**
+
 ### Added — multiple inheritance: `extends A, B` with explicit resolution (M-RT S6b)
 
 A class may inherit from several parents at once (`class C extends A, B`). Cross-parent method
