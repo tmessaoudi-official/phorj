@@ -86,7 +86,7 @@ collision is then a clean `E-…` rather than a silent flip.
 Like generics / `type` aliases / `html"…"`, this resolves **before any backend**:
 
 - **Checker**: `resolve_type` consults a per-file *type-import map* (bare name → `(package, Type)`),
-  in addition to the local `package main` classes, so a bare `Point` resolves to the right package's
+  in addition to the local `package Main` classes, so a bare `Point` resolves to the right package's
   type. New diagnostics: `E-TYPE-IMPORT-CONFLICT` (two terminal imports binding the same bare name —
   must alias), `E-TYPE-IMPORT-SHADOW` (bare name collides with a local type or a module qualifier),
   `E-TYPE-IMPORT-UNKNOWN` (no such exported type in that package).
@@ -110,7 +110,7 @@ That is exactly analogous to Go's qualifier being erased, and it keeps the trans
 
 - Two `import type` binding the same bare name from different packages → `E-TYPE-IMPORT-CONFLICT`
   (alias one). PHP would fatal identically ("cannot use … as … — name already in use").
-- Terminal bare name == a `package main` local type → `E-TYPE-IMPORT-SHADOW`.
+- Terminal bare name == a `package Main` local type → `E-TYPE-IMPORT-SHADOW`.
 - Terminal bare name == a module-import qualifier → `E-TYPE-IMPORT-SHADOW` (keep the two import kinds
   disjoint, like the existing `E-SHADOW-IMPORT` discipline).
 - `import type` naming a built-in (`Int`, `List`, …) → `E-TYPE-IMPORT-BUILTIN` (built-ins are

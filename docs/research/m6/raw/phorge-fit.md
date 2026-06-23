@@ -15,7 +15,7 @@
   (VM) on the same source and `assert_eq!`s their `Result` structurally
   (`tests/differential.rs:28-36`); `agree_err` classifies *failures* by semantic `FaultKind`
   (body substring, prefix-independent) so both backends must fault the *same way*
-  (`tests/differential.rs:71-109`). Both prepend `package main;` via `with_pkg`
+  (`tests/differential.rs:71-109`). Both prepend `package Main;` via `with_pkg`
   (`tests/differential.rs:20-26`) — M5 made every file packaged.
 - **Single-file examples** are glob-discovered, not listed: `collect_phg` walks `examples/`
   recursively (`tests/differential.rs:539-551`) and `all_examples_match_between_backends`
@@ -28,7 +28,7 @@
   excluded by manifest presence (not by name). A project added later is auto-excluded.
 - **Multi-file projects** are gated separately by `all_example_projects_match_between_backends`
   (`tests/differential.rs:631-659`): `collect_projects` finds every `phorge.toml` root
-  (`:554-565`), `find_main_phg` locates the `package main` entry (`:569-592`), then it loads via
+  (`:554-565`), `find_main_phg` locates the `package Main` entry (`:569-592`), then it loads via
   `loader::load` and gates `run_program` ≡ `runvm_program` (`:644-657`), again with an explicit
   `run.is_ok()` (`:647-651`).
 
@@ -98,7 +98,7 @@ transpile-time PHP erasure). The table is built once in `build()` (`:421-446`), 
    + methods are in the spine, `tests/differential.rs:438-531`). **No new `Value` variant, no new
    `Ty`.** The blocker noted in the M5 prose — that library packages "export functions only"
    (`E-PKG-TYPE`, `src/cli.rs:194-199`) — means cross-package *types* aren't done yet; until that
-   follow-up lands, the http types live in `package main` or are stdlib-builtin classes.
+   follow-up lands, the http types live in `package Main` or are stdlib-builtin classes.
 2. **Construction/parsing/accessor natives.** `parse_request(bytes) -> Request?`,
    `response_text(status, body) -> Response`, header getters, etc. *could* be natives — but a native's
    `eval` returns a `Value`, and constructing a `Value::Instance` of a user class from Rust is awkward

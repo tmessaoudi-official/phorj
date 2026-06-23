@@ -83,10 +83,10 @@ or a thin runner — recognizable to any PHP developer. Strong fit: it makes cod
 the core promise.
 
 **F-scaffold — Project scaffolder `phg new` / `phg init` (M11, S).** Phorge's package model is
-*mandatory* (`package main`, `phorge.toml`, strict folder=path) — stricter than PHP by choice — which
+*mandatory* (`package Main`, `phorge.toml`, strict folder=path) — stricter than PHP by choice — which
 means a new project currently requires hand-writing a manifest and the correct directory layout from
 memory. A `phg new <name>` (fresh tree) / `phg init` (in-place) that emits a valid `phorge.toml`,
-`src/` root, and a runnable `package main` removes real onboarding friction that the strictness
+`src/` root, and a runnable `package Main` removes real onboarding friction that the strictness
 *creates*. Direct analogue: `composer init` / `symfony new`. Tiny effort, high first-five-minutes
 payoff; strong fit.
 

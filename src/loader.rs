@@ -6,7 +6,7 @@
 //! - **Project mode** — a `phorge.toml` found by walking up from the entry ([`crate::manifest`])
 //!   marks the project root. Every `.phg` under the source root is parsed, its package is validated
 //!   against its location (**folder = package**, Go's model — `src/acme/util/*.phg` ⇒ `package
-//!   acme.util`; `package main` is folder-exempt and may live anywhere). A resolution pass then
+//!   acme.util`; `package Main` is folder-exempt and may live anywhere). A resolution pass then
 //!   mangles every non-`main` definition to a globally-unique name (`acme.util` + `compute` ⇒
 //!   `Acme\Util\compute`) and rewrites call sites — same-package bare calls and qualified user calls
 //!   (`util.compute(x)`, via the per-file import map) become bare calls on the mangled name; native
@@ -15,7 +15,7 @@
 //!   compiler/VM are unchanged (run==runvm is structural); only the transpiler de-mangles the
 //!   `\`-bearing names back into PHP `namespace` blocks. A single-package program has no mangled
 //!   names, so it is byte-identical to the pre-S2c output.
-//! - **Loose-script mode** — no manifest above the entry. Only `package main;` is legal (a dotted
+//! - **Loose-script mode** — no manifest above the entry. Only `package Main;` is legal (a dotted
 //!   library package requires a project); folder = path is suspended.
 //!
 //! Enforcement and resolution live here (path-aware), never in the type checker, so
@@ -170,7 +170,7 @@ pub fn load(entry: &Path) -> Result<Unit, String> {
 }
 
 /// Load a loose-mode program from source text (the `-e`/stdin path, and any single file with no
-/// project above it). Enforces the reserved `package main;` — a dotted package needs a project.
+/// project above it). Enforces the reserved `package Main;` — a dotted package needs a project.
 pub fn load_loose_src(src: &str) -> Result<Unit, String> {
     let program = parse_one(src)?;
     enforce_loose_main(&program)?;
@@ -188,7 +188,7 @@ pub fn load_loose_src(src: &str) -> Result<Unit, String> {
 ///
 /// 1. Parse + folder=path-validate each file; reject library-package types (S2c namespaces
 ///    *functions* only). Build the global function symbol table — `(package, name)` ⇒ a globally
-///    unique **mangled** name (`acme.util` + `compute` ⇒ `Acme\Util\compute`); `package main` defs
+///    unique **mangled** name (`acme.util` + `compute` ⇒ `Acme\Util\compute`); `package Main` defs
 ///    keep their bare name (the auto-invoked entry + single-file byte-identity).
 /// 2. Per file, rewrite call sites against that file's package + import map: a same-package bare
 ///    call becomes the mangled target (a no-op for `main`); a qualified user call `util.compute(x)`
@@ -202,7 +202,7 @@ pub fn load_loose_src(src: &str) -> Result<Unit, String> {
 fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     // Each source carries the folder=path root it is validated against (the project's source root
     // for first-party files; each dependency's own `vendor/<name>/` root for vendored files) and a
-    // `vendored` flag (a vendored package must be a library — never `package main`).
+    // `vendored` flag (a vendored package must be a library — never `package Main`).
     let vendor_root = project.root.join("vendor");
     let mut sources: Vec<Source> = Vec::new();
     for f in collect_phg(&project.source_root)? {
@@ -265,9 +265,9 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         src_map.insert(file.clone(), src.clone());
         let prog = parse_at(file, &src)?;
         validate_folder_path(&prog, file, &src_entry.root)?;
-        if src_entry.vendored && (prog.package.is_empty() || prog.package == ["main"]) {
+        if src_entry.vendored && (prog.package.is_empty() || prog.package == ["Main"]) {
             return Err(format!(
-                "{}: a vendored dependency is a library and cannot declare `package main` \
+                "{}: a vendored dependency is a library and cannot declare `package Main` \
                  (it would collide with the consumer's entry) [E-VENDOR-MAIN]",
                 file.display()
             ));
@@ -331,7 +331,7 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     let mut merged_items: Vec<Item> = Vec::new();
     // The merged unit runs as the entry's package (normally `main`); its span anchors any
     // program-level diagnostic.
-    let mut unit_package: Vec<String> = vec!["main".to_string()];
+    let mut unit_package: Vec<String> = vec!["Main".to_string()];
     let mut unit_span = Span {
         start: 0,
         len: 0,
@@ -381,7 +381,7 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
 }
 
 /// One source file in a project load, paired with the folder=path root it validates against and
-/// whether it came from the vendor tree (a vendored file must be a library — never `package main`).
+/// whether it came from the vendor tree (a vendored file must be a library — never `package Main`).
 struct Source {
     file: PathBuf,
     root: PathBuf,
@@ -405,12 +405,12 @@ impl Source {
     }
 }
 
-/// The globally-unique name for a top-level definition. `package main` (and the malformed empty
+/// The globally-unique name for a top-level definition. `package Main` (and the malformed empty
 /// package) keep the bare name — so the entry stays byte-identical to a single-file program; any
 /// other package is mangled to a PHP-FQN-shaped key (`acme.util` + `compute` ⇒ `Acme\Util\compute`),
 /// which the transpiler later splits back into a `namespace Acme\Util` block.
 fn mangle(package: &[String], name: &str) -> String {
-    if package.is_empty() || package == ["main"] {
+    if package.is_empty() || package == ["Main"] {
         return name.to_string();
     }
     let ns = package
@@ -472,7 +472,7 @@ fn build_type_imports(
     user_imports: &HashMap<String, Vec<String>>,
     file: &Path,
 ) -> Result<HashMap<String, String>, String> {
-    // The file's own type names (collide → SHADOW). A `package main` file's types are its locals.
+    // The file's own type names (collide → SHADOW). A `package Main` file's types are its locals.
     let local_types: std::collections::HashSet<&str> = prog
         .items
         .iter()
@@ -578,7 +578,7 @@ struct ResolveCtx<'a> {
     violations: RefCell<Vec<String>>,
 }
 
-/// Resolve a type *name* to its mangled FQN, or `None` if it is a local (`package main`) type or a
+/// Resolve a type *name* to its mangled FQN, or `None` if it is a local (`package Main`) type or a
 /// built-in (left bare). A terminal `import type` binding wins; otherwise a same-package sibling type
 /// (a library type referencing another type in its own package).
 fn resolve_type_ref(name: &str, ctx: &ResolveCtx) -> Option<String> {
@@ -640,7 +640,7 @@ fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
 }
 
 /// Rewrite one top-level item: rename a function to its mangled global name and resolve its body;
-/// resolve a class's method/constructor bodies (a class is always `package main` — library types
+/// resolve a class's method/constructor bodies (a class is always `package Main` — library types
 /// are rejected upstream). Enums/imports/aliases have no call sites to rewrite.
 fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
     match item {
@@ -1104,29 +1104,29 @@ fn parse_at(path: &Path, src: &str) -> Result<Program, String> {
     parse_one(src).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// In loose mode, only the reserved `package main;` runs. An empty package is left to the checker
+/// In loose mode, only the reserved `package Main;` runs. An empty package is left to the checker
 /// (`E-NO-PACKAGE`) so the error is not double-reported.
 fn enforce_loose_main(prog: &Program) -> Result<(), String> {
-    if prog.package.is_empty() || prog.package == ["main"] {
+    if prog.package.is_empty() || prog.package == ["Main"] {
         return Ok(());
     }
     Err(format!(
-        "package `{}` requires a phorge.toml project; only `package main` runs as a loose script \
-         (add a phorge.toml above the source root, or declare `package main`)",
+        "package `{}` requires a phorge.toml project; only `package Main` runs as a loose script \
+         (add a phorge.toml above the source root, or declare `package Main`)",
         prog.package.join(".")
     ))
 }
 
 /// Validate a file's package against its on-disk location: directory under the source root = the
-/// dotted package (folder = path). `package main` is exempt (runnable anywhere); an empty package
+/// dotted package (folder = path). `package Main` is exempt (runnable anywhere); an empty package
 /// is left to the checker.
 fn validate_folder_path(prog: &Program, file: &Path, source_root: &Path) -> Result<(), String> {
-    if prog.package.is_empty() || prog.package == ["main"] {
+    if prog.package.is_empty() || prog.package == ["Main"] {
         return Ok(());
     }
     let Some(rel) = relative_under(file, source_root) else {
         return Err(format!(
-            "{}: package `{}` lives outside the source root `{}` — only `package main` may live \
+            "{}: package `{}` lives outside the source root `{}` — only `package Main` may live \
              outside it [E-PKG-PATH]",
             file.display(),
             prog.package.join("."),
@@ -1252,9 +1252,9 @@ mod tests {
 
     #[test]
     fn loose_main_is_accepted() {
-        let u = load_loose_src("package main;\nfunction main() {}").unwrap();
-        assert_eq!(u.program.package, ["main"]);
-        assert_eq!(u.diag_src, "package main;\nfunction main() {}");
+        let u = load_loose_src("package Main;\nfunction main() {}").unwrap();
+        assert_eq!(u.program.package, ["Main"]);
+        assert_eq!(u.diag_src, "package Main;\nfunction main() {}");
     }
 
     #[test]
@@ -1278,14 +1278,14 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nfunction main() {}\nfunction local() {}",
+            "package Main;\nfunction main() {}\nfunction local() {}",
         );
         tmp.write(
             "src/acme/util/parse.phg",
             "package acme.util;\nfunction parse() {}",
         );
         let u = load(&entry).unwrap();
-        assert_eq!(u.program.package, ["main"]);
+        assert_eq!(u.program.package, ["Main"]);
         // Items from both files are merged into one flat program.
         assert!(
             u.program.items.len() >= 3,
@@ -1301,7 +1301,7 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nfunction main() {}\nclass C {}",
+            "package Main;\nfunction main() {}\nclass C {}",
         );
         tmp.write(
             "src/acme/util/parse.phg",
@@ -1320,7 +1320,7 @@ mod tests {
 
     #[test]
     fn loose_load_has_no_stats() {
-        let u = load_loose_src("package main;\nfunction main() {}").unwrap();
+        let u = load_loose_src("package Main;\nfunction main() {}").unwrap();
         assert!(u.stats.is_none(), "loose mode reports no project stats");
     }
 
@@ -1329,16 +1329,16 @@ mod tests {
         let tmp = TempDir::new();
         tmp.write("phorge.toml", "module = \"acme/app\"");
         // main lives at the project root, outside src/ — allowed.
-        let entry = tmp.write("main.phg", "package main;\nfunction main() {}");
+        let entry = tmp.write("main.phg", "package Main;\nfunction main() {}");
         let u = load(&entry).unwrap();
-        assert_eq!(u.program.package, ["main"]);
+        assert_eq!(u.program.package, ["Main"]);
     }
 
     #[test]
     fn folder_path_mismatch_is_rejected() {
         let tmp = TempDir::new();
         tmp.write("phorge.toml", "module = \"acme/app\"");
-        let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
+        let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
         // File sits in src/acme/util but declares the wrong package.
         tmp.write(
             "src/acme/util/parse.phg",
@@ -1353,7 +1353,7 @@ mod tests {
     fn non_main_directly_in_source_root_is_rejected() {
         let tmp = TempDir::new();
         tmp.write("phorge.toml", "module = \"acme/app\"");
-        let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
+        let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
         tmp.write("src/loose.phg", "package app;\nfunction f() {}");
         let err = load(&entry).unwrap_err();
         assert!(
@@ -1366,7 +1366,7 @@ mod tests {
     fn library_package_outside_source_root_is_rejected() {
         let tmp = TempDir::new();
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
-        tmp.write("src/main.phg", "package main;\nfunction main() {}");
+        tmp.write("src/main.phg", "package Main;\nfunction main() {}");
         // A dotted package living outside the source root entirely.
         tmp.write("lib/parse.phg", "package acme.util;\nfunction parse() {}");
         // Run it as the entry so it is loaded even though it is not under src/.
@@ -1385,7 +1385,7 @@ mod tests {
     fn duplicate_function_in_package_is_rejected() {
         let tmp = TempDir::new();
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
-        let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
+        let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
         // Two files in the same package each define `f` — collides after the flat merge.
         tmp.write("src/acme/util/a.phg", "package acme.util;\nfunction f() {}");
         tmp.write("src/acme/util/b.phg", "package acme.util;\nfunction f() {}");
@@ -1401,11 +1401,11 @@ mod tests {
             "phorge.toml",
             "module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/lib\" = { git = \"u\", tag = \"v1\" }",
         );
-        let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
-        // A vendored library must not declare `package main` (it would collide with the entry).
+        let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
+        // A vendored library must not declare `package Main` (it would collide with the entry).
         tmp.write(
             "vendor/acme/lib/oops.phg",
-            "package main;\nfunction stray() {}",
+            "package Main;\nfunction stray() {}",
         );
         let err = load(&entry).unwrap_err();
         assert!(err.contains("E-VENDOR-MAIN"), "got: {err}");
@@ -1419,7 +1419,7 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nimport type acme.geo.Hidden;\nfunction main() { Hidden h = Hidden(); }",
+            "package Main;\nimport type acme.geo.Hidden;\nfunction main() { Hidden h = Hidden(); }",
         );
         tmp.write(
             "src/acme/geo/geo.phg",
@@ -1435,7 +1435,7 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nimport type acme.geo.Shown;\nfunction main() { Shown s = Shown(); }",
+            "package Main;\nimport type acme.geo.Shown;\nfunction main() { Shown s = Shown(); }",
         );
         tmp.write(
             "src/acme/geo/geo.phg",
@@ -1450,12 +1450,12 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nfunction main() { Helper h = Helper(); }",
+            "package Main;\nfunction main() { Helper h = Helper(); }",
         );
-        // A second `package main` file (folder-exempt at root) declaring a file-private type.
+        // A second `package Main` file (folder-exempt at root) declaring a file-private type.
         tmp.write(
             "src/helper.phg",
-            "package main;\nprivate class Helper { constructor() {} }",
+            "package Main;\nprivate class Helper { constructor() {} }",
         );
         let err = load(&entry).unwrap_err();
         assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
@@ -1467,11 +1467,11 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nfunction main() { Helper h = Helper(); }",
+            "package Main;\nfunction main() { Helper h = Helper(); }",
         );
         tmp.write(
             "src/helper.phg",
-            "package main;\ninternal class Helper { constructor() {} }",
+            "package Main;\ninternal class Helper { constructor() {} }",
         );
         assert!(load(&entry).is_ok());
     }
@@ -1482,11 +1482,11 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nfunction main() -> int { return helper(); }",
+            "package Main;\nfunction main() -> int { return helper(); }",
         );
         tmp.write(
             "src/helper.phg",
-            "package main;\nprivate function helper() -> int { return 1; }",
+            "package Main;\nprivate function helper() -> int { return 1; }",
         );
         let err = load(&entry).unwrap_err();
         assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
@@ -1498,7 +1498,7 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nimport acme.util;\nfunction main() -> int { return util.secret(); }",
+            "package Main;\nimport acme.util;\nfunction main() -> int { return util.secret(); }",
         );
         tmp.write(
             "src/acme/util/util.phg",
@@ -1514,7 +1514,7 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\nimport acme.util;\nfunction main() -> int { return util.shown(); }",
+            "package Main;\nimport acme.util;\nfunction main() -> int { return util.shown(); }",
         );
         tmp.write(
             "src/acme/util/util.phg",
@@ -1532,11 +1532,11 @@ mod tests {
         tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
-            "package main;\ntype H = Helper;\nfunction main() { H h = Helper(); }",
+            "package Main;\ntype H = Helper;\nfunction main() { H h = Helper(); }",
         );
         tmp.write(
             "src/helper.phg",
-            "package main;\nprivate class Helper { constructor() {} }",
+            "package Main;\nprivate class Helper { constructor() {} }",
         );
         let err = load(&entry).unwrap_err();
         assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");

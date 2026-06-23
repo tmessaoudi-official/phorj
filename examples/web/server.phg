@@ -1,4 +1,4 @@
-package main;
+package Main;
 
 // M6 W4 — the served application: the full pure-Phorge web pipe `phg serve` runs.
 //

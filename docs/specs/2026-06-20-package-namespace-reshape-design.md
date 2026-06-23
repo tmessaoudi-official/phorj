@@ -24,7 +24,7 @@ overloading **four distinct concepts**:
 | **A** | lexical **namespace qualifier** (prefixes names → PHP `namespace`) | the keyword |
 | **B** | **source-grouping unit** (folder = path, dir-mapped) | the keyword |
 | **C** | **distributable / dependency unit** (git dep, `vendor/`, manifest) | `phorge.toml` `name` |
-| **D** | **runnable-entry marker** | `package main` |
+| **D** | **runnable-entry marker** | `package Main` |
 
 The mature-language lesson is that **nobody uses one word for A+B+C**: Go splits `package` (A+B) +
 `module` (C); Rust splits `mod` (A) + `crate` (B+C). And the languages that *enforce folder=path*
@@ -52,7 +52,7 @@ keyword is correct, not dishonest. The real wart (the word `package` colliding w
 **`module`** (Go's `go.mod` split — `package` = code unit, `module` = distributable).
 
 ### D2 — Runnable entry is `package Main;` (PascalCase-consistent)
-Diverges from Go's iconic lowercase `package main`, but obeys the one casing rule (D5) uniformly —
+Diverges from Go's iconic lowercase `package Main`, but obeys the one casing rule (D5) uniformly —
 no lowercase exception.
 
 ### D3 — Library packages MAY declare types (lift `E-PKG-TYPE`)
@@ -106,7 +106,7 @@ These follow the Go-shaped model; override at build time if desired.
 
 ## 4. Migration impact (why this is milestone-scale)
 
-Breaking, wide-blast: rename keyword usages + entry (`package main` → `package Main`) + PascalCase
+Breaking, wide-blast: rename keyword usages + entry (`package Main` → `package Main`) + PascalCase
 **every** package segment and its folder, across all examples and multi-file projects; PascalCase
 all type names and camelCase all functions/vars in every `.phg`, fixture, and inline test program;
 **migrate the shipped stdlib API** to camelCase (`split_once`→`splitOnce`, `bool_attr`→`boolAttr`,

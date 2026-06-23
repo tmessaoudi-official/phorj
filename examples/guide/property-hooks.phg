@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M-mut.7b — property hooks: a member that looks like a field but runs code on read (`get`) and/or

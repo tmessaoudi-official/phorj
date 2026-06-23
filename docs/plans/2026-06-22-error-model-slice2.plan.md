@@ -408,7 +408,7 @@ never exercised → green between commits, the same trick 2a used).
   per Task 2b.2.
 - Drive the **full differential under `PHORGE_REQUIRE_PHP=1`** so the PHP leg *fails* (not skips):
   every 2b.5 case must match **real PHP** too. Resolve any divergence (most likely the `\Exception`
-  message wiring + catch-clause FQN `\` prefixing for `package main` global classes). Run gate.
+  message wiring + catch-clause FQN `\` prefixing for `package Main` global classes). Run gate.
   **Commit** (`feat: transpile throw/try/catch/finally -> PHP exceptions (3-way byte-identical)`).
 
 **Task 2b.7 — example + docs.**

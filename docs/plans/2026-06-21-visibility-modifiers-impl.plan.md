@@ -92,7 +92,7 @@ git add src/ && git commit -m "feat(ast): Visibility enum + vis field on top-lev
 ```rust
 #[test]
 fn parses_private_class_visibility() {
-    let prog = parse_program_str("package main;\nprivate class P {}");
+    let prog = parse_program_str("package Main;\nprivate class P {}");
     match &prog.items[0] {
         Item::Class(c) => assert_eq!(c.vis, Visibility::Private),
         other => panic!("expected class, got {other:?}"),
@@ -101,7 +101,7 @@ fn parses_private_class_visibility() {
 
 #[test]
 fn parses_internal_function_visibility() {
-    let prog = parse_program_str("package main;\ninternal function f() {}");
+    let prog = parse_program_str("package Main;\ninternal function f() {}");
     match &prog.items[0] {
         Item::Function(f) => assert_eq!(f.vis, Visibility::Internal),
         other => panic!("expected function, got {other:?}"),
@@ -110,7 +110,7 @@ fn parses_internal_function_visibility() {
 
 #[test]
 fn bare_decl_defaults_to_public() {
-    let prog = parse_program_str("package main;\nclass C {}");
+    let prog = parse_program_str("package Main;\nclass C {}");
     match &prog.items[0] {
         Item::Class(c) => assert_eq!(c.vis, Visibility::Public),
         other => panic!("expected class, got {other:?}"),
@@ -119,7 +119,7 @@ fn bare_decl_defaults_to_public() {
 
 #[test]
 fn explicit_public_enum_parses() {
-    let prog = parse_program_str("package main;\npublic enum E { A() }");
+    let prog = parse_program_str("package Main;\npublic enum E { A() }");
     match &prog.items[0] {
         Item::Enum(e) => assert_eq!(e.vis, Visibility::Public),
         other => panic!("expected enum, got {other:?}"),
@@ -128,7 +128,7 @@ fn explicit_public_enum_parses() {
 
 #[test]
 fn conflicting_visibility_prefix_is_rejected() {
-    let err = parse_program_err("package main;\npublic private class C {}");
+    let err = parse_program_err("package Main;\npublic private class C {}");
     assert!(err.contains("a single visibility"), "got: {err}");
 }
 ```
@@ -222,7 +222,7 @@ fn import_type_of_internal_library_type_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport type acme.geo.Hidden;\nfunction main() { Hidden h = Hidden(); }",
+        "package Main;\nimport type acme.geo.Hidden;\nfunction main() { Hidden h = Hidden(); }",
     );
     tmp.write(
         "src/acme/geo/geo.phg",
@@ -238,7 +238,7 @@ fn import_type_of_public_library_type_is_allowed() {
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport type acme.geo.Shown;\nfunction main() { Shown s = Shown(); }",
+        "package Main;\nimport type acme.geo.Shown;\nfunction main() { Shown s = Shown(); }",
     );
     tmp.write(
         "src/acme/geo/geo.phg",
@@ -389,10 +389,10 @@ fn private_type_referenced_from_sibling_file_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nfunction main() { Helper h = Helper(); }",
+        "package Main;\nfunction main() { Helper h = Helper(); }",
     );
-    tmp.write("src/helper.phg", "package main;\nprivate class Helper { constructor() {} }");
-    // NOTE: a non-main file directly in src/ is rejected; both files here are `package main`,
+    tmp.write("src/helper.phg", "package Main;\nprivate class Helper { constructor() {} }");
+    // NOTE: a non-main file directly in src/ is rejected; both files here are `package Main`,
     // and main is folder-exempt — so put the sibling at the root with the entry instead:
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
@@ -402,13 +402,13 @@ fn private_type_referenced_from_sibling_file_is_rejected() {
 fn internal_type_referenced_from_sibling_file_is_allowed() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
-    let entry = tmp.write("src/main.phg", "package main;\nfunction main() { Helper h = Helper(); }");
-    tmp.write("main2.phg", "package main;\ninternal class Helper { constructor() {} }");
+    let entry = tmp.write("src/main.phg", "package Main;\nfunction main() { Helper h = Helper(); }");
+    tmp.write("main2.phg", "package Main;\ninternal class Helper { constructor() {} }");
     assert!(load(&tmp.path().join("src/main.phg")).is_ok());
 }
 ```
 
-NOTE on layout: `package main` files are folder-exempt and may sit at the root; two `package main` files (entry under `src/`, sibling at root) is the cleanest multi-file-same-package setup — mirror `project_main_is_folder_exempt_at_root`. Adjust the `private` test's sibling to a root-level `main2.phg` (`package main;`) the same way as the `internal` test so the only variable under test is `private` vs `internal`.
+NOTE on layout: `package Main` files are folder-exempt and may sit at the root; two `package Main` files (entry under `src/`, sibling at root) is the cleanest multi-file-same-package setup — mirror `project_main_is_folder_exempt_at_root`. Adjust the `private` test's sibling to a root-level `main2.phg` (`package Main;`) the same way as the `internal` test so the only variable under test is `private` vs `internal`.
 
 - [ ] **Step 2: Run to verify failure.**
 
@@ -472,8 +472,8 @@ git add src/ && git commit -m "feat(loader): file-scoped private type enforcemen
 fn private_function_called_from_sibling_file_is_rejected() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
-    let entry = tmp.write("src/main.phg", "package main;\nfunction main() -> int { return helper(); }");
-    tmp.write("helper.phg", "package main;\nprivate function helper() -> int { return 1; }");
+    let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> int { return helper(); }");
+    tmp.write("helper.phg", "package Main;\nprivate function helper() -> int { return 1; }");
     let err = load(&tmp.path().join("src/main.phg")).unwrap_err();
     assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
 }
@@ -484,7 +484,7 @@ fn internal_function_called_cross_package_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport acme.util;\nfunction main() -> int { return util.secret(); }",
+        "package Main;\nimport acme.util;\nfunction main() -> int { return util.secret(); }",
     );
     tmp.write("src/acme/util/util.phg", "package acme.util;\ninternal function secret() -> int { return 7; }");
     let err = load(&entry).unwrap_err();
@@ -497,7 +497,7 @@ fn public_function_called_cross_package_is_allowed() {
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport acme.util;\nfunction main() -> int { return util.shown(); }",
+        "package Main;\nimport acme.util;\nfunction main() -> int { return util.shown(); }",
     );
     tmp.write("src/acme/util/util.phg", "package acme.util;\npublic function shown() -> int { return 7; }");
     assert!(load(&entry).is_ok());
@@ -599,9 +599,9 @@ fn type_alias_does_not_launder_private_type() {
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\ntype H = Helper;\nfunction main() { H h = Helper(); }",
+        "package Main;\ntype H = Helper;\nfunction main() { H h = Helper(); }",
     );
-    tmp.write("main2.phg", "package main;\nprivate class Helper { constructor() {} }");
+    tmp.write("main2.phg", "package Main;\nprivate class Helper { constructor() {} }");
     // Either the direct `Helper()` ctor call is already caught (E-VIS-PRIVATE), in which case the
     // alias adds nothing; assert the violation still fires.
     let err = load(&tmp.path().join("src/main.phg")).unwrap_err();
@@ -689,7 +689,7 @@ private function clamp(int n) -> int {
 
 `src/main.phg` — different package; may use only the `public` type:
 ```phorge
-package main;
+package Main;
 
 import Core.Console;
 import type acme.shapes.Rect; // public — OK across packages

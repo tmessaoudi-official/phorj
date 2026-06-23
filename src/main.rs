@@ -245,7 +245,7 @@ fn main() {
         .collect();
     // run/runvm/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
     // project loader — a phorge.toml walk-up triggers multi-file merge + folder=path validation;
-    // otherwise loose mode (single file, `package main` only). `-e`/stdin are always loose. parse,
+    // otherwise loose mode (single file, `package Main` only). `-e`/stdin are always loose. parse,
     // lex, disasm, and bench keep the single-file string path (they dump/measure one source).
     let result = if matches!(cmd, "run" | "runvm" | "check" | "transpile") {
         let unit = match cli::resolve_source(&rest) {

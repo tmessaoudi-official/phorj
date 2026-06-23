@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // A focused profiling workload for `phg bench` and `phg disasm`. It mixes the two cost

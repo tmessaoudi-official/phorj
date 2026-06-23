@@ -198,7 +198,7 @@ cross-listing noted. The canonical ID is kept; the duplicate IDs from other trac
 | P-strip-meta | P | `--strip`/`--release`/`--debug` + size report | port | strong | adopt | M2.5 P3 | S | — |
 | D-build-transitive-deps | D | Transitive dependency resolution (`phg vendor`) | port | strong | adopt | M5 follow-up | M | — |
 | D-lambda-lib-pkg | D | Lambdas / fn-values in library packages | port | strong | adopt | M5 follow-up | M | D-crosspkg-fn-value |
-| D-transpile-php-builtin | D,E | `package main` fn-name vs PHP-builtin collision lint | port | strong | adopt | M8 | S | E-transpile-hazard-lint, D-transpile-private-field |
+| D-transpile-php-builtin | D,E | `package Main` fn-name vs PHP-builtin collision lint | port | strong | adopt | M8 | S | E-transpile-hazard-lint, D-transpile-private-field |
 | D-module-qualified-type | D | Module-qualified type form (`Geometry.Point`) | port | ok | defer | M5 follow-up | M | — |
 | NS-pascalcase-reshape | (pre-locked, audit-missed) | PascalCase package/folder reshape — `package Main`, `E-PKG-CASE`, manifest `name → module`, lift `E-PKG-TYPE`; **enforced incl. vendor** (PHP/Composer deps case-mapped at the importer boundary, not by exception); maps 1:1 to PHP PSR-4 namespaces | port | strong | adopt | new milestone (breaking codemod) | L | spec `2026-06-20-package-namespace-reshape-design.md` |
 | P-codesign | P | Code signing (Authenticode + macOS notarize) | port | ok | defer | M2.5 P3b | L | — |

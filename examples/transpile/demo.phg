@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // This program is also in the byte-identity sweep. `phg transpile` turns it into

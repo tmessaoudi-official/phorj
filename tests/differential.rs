@@ -13,7 +13,7 @@ use phorge::{cli, loader};
 use std::process::Command;
 
 /// Type-check `src`; return the error diagnostics (empty = well-typed). Auto-prepends
-/// `package main;` if absent. Used to test checker rejections without running a backend.
+/// `package Main;` if absent. Used to test checker rejections without running a backend.
 fn check_errs(src: &str) -> Vec<phorge::diagnostic::Diagnostic> {
     let src = with_pkg(src);
     let tokens = phorge::lexer::lex(&src).expect("lex ok");
@@ -27,7 +27,7 @@ fn check_errs(src: &str) -> Vec<phorge::diagnostic::Diagnostic> {
 }
 
 /// Transpile `src` to PHP; panics if the program fails to type-check or transpile.
-/// Auto-prepends `package main;` if absent.
+/// Auto-prepends `package Main;` if absent.
 fn transpile_ok(src: &str) -> String {
     let src = with_pkg(src);
     cli::cmd_transpile(&src).expect("transpile ok")
@@ -36,14 +36,14 @@ fn transpile_ok(src: &str) -> String {
 /// Assert the two backends agree on success output. Compares `Result` values structurally
 /// (never `.expect()`): in release builds an unchecked-arithmetic divergence surfaces as an
 /// `Err` rather than a panic, and a structural compare reports it as a clean mismatch.
-/// Prepend the reserved `package main;` (M5 S1: every file is packaged, never inferred) to a test
+/// Prepend the reserved `package Main;` (M5 S1: every file is packaged, never inferred) to a test
 /// program that doesn't already declare one. Done on a single leading segment with no newline so
 /// line numbers are preserved — fault diagnostics that assert a line stay valid.
 fn with_pkg(src: &str) -> String {
     if src.trim_start().starts_with("package ") {
         src.to_string()
     } else {
-        format!("package main; {src}")
+        format!("package Main; {src}")
     }
 }
 
@@ -740,7 +740,7 @@ fn collect_projects(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-/// The `package main` entry of a project: the (single) file named `main.phg` under the project root.
+/// The `package Main` entry of a project: the (single) file named `main.phg` under the project root.
 /// Examples follow the convention `src/main.phg`, but this walks so a project may place it anywhere.
 fn find_main_phg(project_dir: &std::path::Path) -> std::path::PathBuf {
     fn walk(dir: &std::path::Path) -> Option<std::path::PathBuf> {
@@ -1096,7 +1096,7 @@ fn statement_body_lambda_agrees() {
 
 #[test]
 fn statement_body_lambda_needs_return_type() {
-    let errs = check_errs("package main; function main(){ var f = fn(int x) { return x; }; }");
+    let errs = check_errs("package Main; function main(){ var f = fn(int x) { return x; }; }");
     assert!(
         errs.iter().any(|e| e.message.contains("explicit `-> T`")),
         "{errs:?}"
@@ -1105,7 +1105,7 @@ fn statement_body_lambda_needs_return_type() {
 
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
-    let php = transpile_ok("package main; import Core.Console; function main(){ var base=100; var f = fn(int x) -> int { return x + base; }; Console.println(\"{f(3)}\"); }");
+    let php = transpile_ok("package Main; import Core.Console; function main(){ var base=100; var f = fn(int x) -> int { return x + base; }; Console.println(\"{f(3)}\"); }");
     assert!(
         php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
         "{php}"
@@ -1285,7 +1285,7 @@ fn named_fn_ref_as_value_agrees() {
 
 #[test]
 fn transpiles_lambda_literal_call_target() {
-    let php = transpile_ok("package main; import Core.Console; function main(){ Console.println(\"{3 |> fn(int v) => v + 100}\"); }");
+    let php = transpile_ok("package Main; import Core.Console; function main(){ Console.println(\"{3 |> fn(int v) => v + 100}\"); }");
     assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
 }
 
@@ -1315,7 +1315,7 @@ fn higher_order_native_closure_fault_agrees() {
 
 #[test]
 fn transpiles_higher_order_natives() {
-    let php = transpile_ok("package main; import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x*2); var e=List.filter(d, fn(int x)=>x>2); Console.println(\"{List.reduce(e, 0, fn(int a,int x)=>a+x)}\"); }");
+    let php = transpile_ok("package Main; import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x*2); var e=List.filter(d, fn(int x)=>x>2); Console.println(\"{List.reduce(e, 0, fn(int a,int x)=>a+x)}\"); }");
     assert!(php.contains("array_map(fn($x) => $x * 2,"), "{php}");
     assert!(php.contains("array_values(array_filter("), "{php}");
     assert!(php.contains("array_reduce("), "{php}");
@@ -1399,7 +1399,7 @@ fn ambiguous_overloaded_call_faults_on_both_backends() {
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.
-    let php = transpile_ok("package main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main(){ var u=U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
+    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main(){ var u=U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
     assert!(php.contains("function id(mixed $x): mixed"), "{php}");
     assert!(
         php.contains("function applyTwice(mixed $x, \\Closure $f): mixed"),
@@ -1472,7 +1472,7 @@ fn transpiles_html_literal_to_kernel_calls() {
     // The desugaring targets only Wave-1/2 natives, so the PHP is the kernel emission: literal
     // chunks as strings, a string hole through htmlspecialchars(ENT_QUOTES), all joined by implode.
     let php = transpile_ok(
-        r#"package main; import Core.Console; import Core.Html; function main(){ var n="x"; Console.println(Html.render(html"<h1>{n}</h1>")); }"#,
+        r#"package Main; import Core.Console; import Core.Html; function main(){ var n="x"; Console.println(Html.render(html"<h1>{n}</h1>")); }"#,
     );
     assert!(php.contains("implode('', ["), "{php}");
     assert!(
@@ -1507,7 +1507,7 @@ fn named_tag_helpers_agree() {
 fn transpiles_named_tag_to_baked_php() {
     // A named tag erases to the same baked closure the kernel uses, with the tag compiled in (no $t).
     let php = transpile_ok(
-        r#"package main; import Core.Console; import Core.Html; function main(){ Console.println(Html.render(Html.div([],[Html.text("x")]))); }"#,
+        r#"package Main; import Core.Console; import Core.Html; function main(){ Console.println(Html.render(Html.div([],[Html.text("x")]))); }"#,
     );
     assert!(php.contains("'<div'"), "{php}");
     assert!(php.contains("'</div>'"), "{php}");
@@ -1687,7 +1687,7 @@ fn all_example_projects_transpile_and_match_php() {
 fn m7_emitter_uses_correctness_helpers() {
     // P0-1 (int `/` ⇒ intdiv) + P0-4 (`%` ⇒ type-driven) route through runtime helpers, not bare ops.
     let div = transpile_ok(
-        "package main; import Core.Console; function main(){ Console.println(\"{7 / 2}\"); Console.println(\"{5 % 2}\"); }",
+        "package Main; import Core.Console; function main(){ Console.println(\"{7 / 2}\"); Console.println(\"{5 % 2}\"); }",
     );
     assert!(div.contains("__phorge_div(7, 2)"), "{div}");
     assert!(div.contains("__phorge_rem(5, 2)"), "{div}");
@@ -1701,7 +1701,7 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-3: an interpolated value is coerced via __phorge_str (bool ⇒ "true"/"false").
     let b = transpile_ok(
-        "package main; import Core.Console; function main(){ Console.println(\"{1 < 2}\"); }",
+        "package Main; import Core.Console; function main(){ Console.println(\"{1 < 2}\"); }",
     );
     assert!(
         b.contains("__phorge_str(") && b.contains("\"true\" : \"false\""),
@@ -1709,13 +1709,13 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-2: a compound operand keeps its grouping parens (no PHP re-association).
     let p = transpile_ok(
-        "package main; import Core.Console; function main(){ int a=1; int b=2; int c=3; Console.println(\"{a - (b - c)}\"); Console.println(\"{!(a < b)}\"); }",
+        "package Main; import Core.Console; function main(){ int a=1; int b=2; int c=3; Console.println(\"{a - (b - c)}\"); Console.println(\"{!(a < b)}\"); }",
     );
     assert!(p.contains("$a - ($b - $c)"), "{p}");
     assert!(p.contains("!($a < $b)"), "{p}");
     // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorge ⇒ []).
     let r = transpile_ok(
-        "package main; import Core.Console; function main(){ for (int i in 5..2) { Console.println(\"{i}\"); } }",
+        "package Main; import Core.Console; function main(){ for (int i in 5..2) { Console.println(\"{i}\"); } }",
     );
     assert!(r.contains("__phorge_range(5, 2, false)"), "{r}");
 }

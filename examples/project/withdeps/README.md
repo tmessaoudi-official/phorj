@@ -11,7 +11,7 @@ withdeps/
 ├── phorge.toml                     # name + [require] git dependency
 ├── phorge.lock                     # resolved commit SHA + content hash (generated)
 ├── src/
-│   └── main.phg                    # package main — imports & calls acme.strutil
+│   └── main.phg                    # package Main — imports & calls acme.strutil
 └── vendor/                         # committed offline dependency tree (generated)
     └── acme/strutil/               #   vendor/<vendor>/<package>/ — this dep's own root
         └── acme/strutil/
@@ -63,7 +63,7 @@ zero network, the same determinism rule that defers URL/network features to M6.
   model). The `git` URL is a documented coordinate; its source is right here, so the example runs
   with no network. `rev` and `hash` in `phorge.lock` are the real values for the vendored source.
 - **A dependency is a library:** it exports dotted packages (here `package acme.strutil;`), never
-  `package main` — that is reserved for the consuming program's entry.
+  `package Main` — that is reserved for the consuming program's entry.
 - **Transpiled PHP:** the vendored package becomes a `namespace Acme\Strutil { … }` block in the
   emitted single-file PHP, called as `\Acme\Strutil\banner(...)` — and runs under stock `php`.
 - **Not yet:** transitive dependencies (a dependency's own `[require]`) are resolved in a follow-up;

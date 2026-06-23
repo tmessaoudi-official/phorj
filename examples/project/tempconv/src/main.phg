@@ -1,7 +1,7 @@
-package main;
+package Main;
 
 // A multi-file Phorge project (M5). Every file declares a `package`; the runnable entry is the
-// reserved `package main`. Library code lives in dotted packages whose folder must match the path
+// reserved `package Main`. Library code lives in dotted packages whose folder must match the path
 // (folder = path): `acme.convert` is `src/acme/convert/`, `acme.label` is `src/acme/label/`.
 //
 // Cross-package functions are imported by their package, then called *leaf-qualified* (Go's

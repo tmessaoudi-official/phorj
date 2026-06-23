@@ -207,7 +207,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-NO-PACKAGE" => {
             "E-NO-PACKAGE — a file has no `package` declaration.\n\n\
              Everything is namespaced (\"nothing in the wind\"): every file must declare its package\n\
-             as its first line, never inferred. A runnable program declares `package main;` (the\n\
+             as its first line, never inferred. A runnable program declares `package Main;` (the\n\
              reserved entry); library code declares a dotted path like `package app.util;`.\n"
         }
         "E-RESERVED-PACKAGE" => {
@@ -219,13 +219,13 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-PKG-PATH" => {
             "E-PKG-PATH — a file's `package` does not match its location.\n\n\
              In a project, the directory under the source root IS the package (folder = path, Go's\n\
-             model): `src/app/util/*.phg` must declare `package app.util;`. `package main;` is exempt\n\
+             model): `src/app/util/*.phg` must declare `package app.util;`. `package Main;` is exempt\n\
              (runnable anywhere). Move the file, or fix its package to match the directory.\n"
         }
         "E-PKG-TYPE" => {
             "E-PKG-TYPE — a class/enum was declared in a library (non-`main`) package.\n\n\
              M5 S2c namespaces *functions* across packages; cross-package types are a later slice.\n\
-             A library package may export functions only — move the `class`/`enum` to `package main;`\n\
+             A library package may export functions only — move the `class`/`enum` to `package Main;`\n\
              for now, or await the M5 type-namespacing follow-up.\n"
         }
         "E-SHADOW-IMPORT" => {
@@ -342,9 +342,9 @@ pub fn explain_text(code: &str) -> Option<String> {
              pinned tag/rev into `vendor/` and write `phorge.lock`, then commit both.\n"
         }
         "E-VENDOR-MAIN" => {
-            "E-VENDOR-MAIN — a vendored dependency declared `package main`.\n\n\
+            "E-VENDOR-MAIN — a vendored dependency declared `package Main`.\n\n\
              A dependency is a library: it exports dotted packages (e.g. `package acme.strutil;`),\n\
-             never the reserved `package main` (which would collide with the consuming program's\n\
+             never the reserved `package Main` (which would collide with the consuming program's\n\
              entry). Fix the dependency to use a dotted package, or remove the stray `main` File.\n"
         }
         "E-DUP-DEF" => {
@@ -847,7 +847,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
 }
 
 /// `transpile` on an already-loaded program (emit PHP). Multi-namespace emission for a multi-package
-/// project is S2c; S2b emits the existing flat form (correct for `package main` / single-package).
+/// project is S2c; S2b emits the existing flat form (correct for `package Main` / single-package).
 pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(prog, diag_src)?;
@@ -1304,18 +1304,18 @@ fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result<String, St
 mod tests {
     use super::*;
 
-    /// Prepend the reserved `package main;` (M5 S1: every file is packaged, never inferred) unless
+    /// Prepend the reserved `package Main;` (M5 S1: every file is packaged, never inferred) unless
     /// already declared, so the CLI command tests need no per-case package boilerplate. The segment
     /// carries no newline, so line numbers in fault diagnostics are preserved.
     fn wp(src: &str) -> String {
         if src.trim_start().starts_with("package ") {
             src.to_string()
         } else {
-            format!("package main; {src}")
+            format!("package Main; {src}")
         }
     }
 
-    const SAMPLE: &str = r#"package main;
+    const SAMPLE: &str = r#"package Main;
 import Core.Console;
 
 enum Shape {
@@ -1613,7 +1613,7 @@ function main() { Console.println("hi"); }"#);
     fn explain_covers_m5_package_codes() {
         // The M5 S1 package diagnostics are self-documenting via `phg explain`.
         let np = explain_text("E-NO-PACKAGE").expect("E-NO-PACKAGE has an explanation");
-        assert!(np.contains("package main"), "{np}");
+        assert!(np.contains("package Main"), "{np}");
         let rp = explain_text("E-RESERVED-PACKAGE").expect("E-RESERVED-PACKAGE has an explanation");
         assert!(rp.contains("standard library"), "{rp}");
     }

@@ -3,7 +3,7 @@ use phorge::lexer::lex;
 use phorge::parser::Parser;
 
 /// The complete sample program from the design spec (§6), verbatim.
-const SAMPLE: &str = r#"package main;
+const SAMPLE: &str = r#"package Main;
 import Core.Console;
 
 enum Shape {

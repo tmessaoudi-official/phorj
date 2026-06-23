@@ -160,11 +160,11 @@ All line references are [Verified: read 2026-06-18].
   `Type::Function` arm is therefore: `resolve_type`, `expand_aliases` (checker), `resolve_cty`,
   `emit_type` (compiler/transpiler).
 - **F14 — first-class named refs vs. the M5 loader.** The S2c loader mangles cross-package + qualified
-  *calls* but a value-position `Ident` (`var f = myFn;`) is not a call. In `package main` (the example
+  *calls* but a value-position `Ident` (`var f = myFn;`) is not a call. In `package Main` (the example
   + all inline tests) names are unmangled, so A4 works directly. **Task-time check:** confirm a
   same-package bare named-fn ref inside a *library* (non-`main`) package resolves correctly after the
   loader pass; if the loader doesn't rewrite value-position idents, restrict A4 first-class refs to
-  `package main` this slice (record in KNOWN_ISSUES). Piping into a named fn is unaffected (it lowers
+  `package Main` this slice (record in KNOWN_ISSUES). Piping into a named fn is unaffected (it lowers
   to a call).
 - **Pipe** — no checker code (it is a `Call` after parsing).
 

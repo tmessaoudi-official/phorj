@@ -56,7 +56,7 @@ struct Transpiler {
     variant_fields: HashMap<String, Vec<String>>,
     /// An enum variant's PHP namespace (`namespace_of` of the — possibly mangled — enum name), so a
     /// cross-package variant is constructed and `instanceof`-tested as a fully-qualified class
-    /// (`new \Acme\Geometry\Circle(…)`). A `package main` (bare) enum maps to `Main` ⇒ bare emission.
+    /// (`new \Acme\Geometry\Circle(…)`). A `package Main` (bare) enum maps to `Main` ⇒ bare emission.
     variant_ns: HashMap<String, String>,
     out: String,
     indent: usize,
@@ -2245,13 +2245,13 @@ mod tests {
     }
 
     fn parse_only(src: &str) -> crate::ast::Program {
-        // Auto-prepend the reserved `package main;` (M5 S1, line-preserving) unless declared, so
+        // Auto-prepend the reserved `package Main;` (M5 S1, line-preserving) unless declared, so
         // transpiler tests need no per-case edit. The transpiler ignores the package in S1 (flat
         // emission); brace-namespaces for non-`main` packages land in S2c.
         let src = if src.trim_start().starts_with("package ") {
             src.to_string()
         } else {
-            format!("package main; {src}")
+            format!("package Main; {src}")
         };
         let tokens = lex(&src).expect("lex");
         Parser::new(tokens).parse_program().expect("parse")
@@ -2597,13 +2597,13 @@ function main() { for (int i in 1..=3) { Console.println("{i}"); } }"#);
 
     #[test]
     fn transpiles_expression_lambda_to_arrow_fn() {
-        let php_out = php("package main; import Core.Console; function main(){ var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
+        let php_out = php("package Main; import Core.Console; function main(){ var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
         assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
     }
 
     #[test]
     fn transpiles_named_fn_reference() {
-        let php_out = php("package main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main(){ apply(1, inc); }");
+        let php_out = php("package Main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main(){ apply(1, inc); }");
         assert!(
             php_out.contains("inc(...)"),
             "first-class callable: {php_out}"

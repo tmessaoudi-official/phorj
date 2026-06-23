@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M-mut.4a — `obj with { field = value, … }`: a functional update that produces a FRESH instance

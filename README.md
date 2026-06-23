@@ -18,7 +18,7 @@ ahead of PHP on a sample workload — with rigorous, comprehensive benchmarks a 
 the road to GA.
 
 ```phorge
-package main;
+package Main;
 import Core.Console;
 
 enum Shape {
@@ -104,10 +104,10 @@ chmod +x phg-*-linux-x86_64-musl
 $ phg run examples/hello.phg
 Hello, Phorge!
 
-$ echo 'package main; import Core.Console; function main() { Console.println("{1 + 2}"); }' | phg run -
+$ echo 'package Main; import Core.Console; function main() { Console.println("{1 + 2}"); }' | phg run -
 3
 
-$ phg run -e 'package main; import Core.Console; function main() { Console.println("inline!"); }'
+$ phg run -e 'package Main; import Core.Console; function main() { Console.println("inline!"); }'
 inline!
 ```
 

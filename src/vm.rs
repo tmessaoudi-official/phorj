@@ -926,7 +926,7 @@ mod tests {
     #[test]
     fn vm_fault_carries_call_stack() {
         let program = compile_source(
-            "package main;\n\
+            "package Main;\n\
              function f() -> int { var xs = [1]; return xs[5]; }\n\
              function main() { var r = f(); }",
         );
@@ -940,10 +940,10 @@ mod tests {
     fn run_and_runvm_traces_match() {
         // The slice-1 invariant: a fault yields byte-identical trace text on both backends.
         for src in [
-            "package main;\n\
+            "package Main;\n\
              function g() -> int { var xs = [1]; return xs[9]; }\n\
              function main() { var r = g(); }",
-            "package main;\nfunction main() { var x = 1 / 0; }",
+            "package Main;\nfunction main() { var x = 1 / 0; }",
         ] {
             let unit = crate::loader::load_loose_src(src).unwrap();
             let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();

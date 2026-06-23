@@ -7,7 +7,7 @@
 // method runs the *subclass's* override.
 //
 // (Constructors and inherited fields land in a later slice; this guide stays field-free.)
-package main;
+package Main;
 
 import Core.Console;
 

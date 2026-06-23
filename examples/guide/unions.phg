@@ -8,7 +8,7 @@
 //   • `instanceof` narrowing in an `if` — `if (s instanceof Circle) { … s.radius … }`.
 // Primitive unions (`int | string`) accept either type and match by literal value. Transpiles to
 // PHP 8.0 native `A|B`.
-package main;
+package Main;
 import Core.Console;
 
 class Circle {

@@ -228,7 +228,7 @@ absent (the hazards live only as prose caveats in KNOWN_ISSUES).
 
 - **E-transpile-hazard-lint (M9/M12, S).** The exact mirror of `E-php-version-target` and the strongest
   newly-found item by leverage. The *deploy* direction already has documented foot-guns that only exist
-  on the PHP leg: a `package main` function named `serialize`/`strlen`/`header` collides with a PHP
+  on the PHP leg: a `package Main` function named `serialize`/`strlen`/`header` collides with a PHP
   builtin; an externally-read `private` promoted field throws under PHP; a non-finite float diverges
   (all three are KNOWN_ISSUES prose, caught today only by the example author or the PHP oracle). A
   `phg transpile --lint` / checker warning channel (`W-PHP-BUILTIN-NAME`, `W-PHP-PRIVATE-EXTERNAL`)

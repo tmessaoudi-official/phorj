@@ -2881,7 +2881,7 @@ mod tests {
     use crate::vm::Vm;
 
     /// Compile + run a program on the VM, returning captured output. Auto-prepends the reserved
-    /// `package main;` (M5 S1, line-preserving) so existing test programs need no per-case edit.
+    /// `package Main;` (M5 S1, line-preserving) so existing test programs need no per-case edit.
     fn run(src: &str) -> Result<String, String> {
         let src = with_pkg(src);
         let tokens = lex(&src).expect("lex ok");
@@ -2894,7 +2894,7 @@ mod tests {
         if src.trim_start().starts_with("package ") {
             src.to_string()
         } else {
-            format!("package main; {src}")
+            format!("package Main; {src}")
         }
     }
 

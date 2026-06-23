@@ -85,7 +85,7 @@ returned byte-for-byte.
 
 ## 6. Scope / deferrals (→ KNOWN_ISSUES)
 
-- **`package main` only** this slice (mirrors S2 interfaces shipping main-first). Cross-package
+- **`package Main` only** this slice (mirrors S2 interfaces shipping main-first). Cross-package
   generic *library* types are not validated/supported yet (the loader leaves a class type param `T`
   unchanged and erasure removes it, so it may "work", but it is untested — deferred).
 - No **explicit type arguments at construction** (`Box<int>(7)`) — inference only.

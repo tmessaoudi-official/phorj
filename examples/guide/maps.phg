@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M-RT S3 "Map foundation": `Map<K, V>` literals `[k => v]` and indexing `m[k]`.

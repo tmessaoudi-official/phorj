@@ -84,7 +84,7 @@ hand-rolled) behind a new `--json` flag on the `check` command. LSP foothold.
 
 ## Track 3 — Namespace reshape (spec `docs/specs/2026-06-20-package-namespace-reshape-design.md`)
 Milestone-scale, breaking. Build order (each slice independently green):
-1. Manifest `name` → `module`. 2. PascalCase enforce + codemod (`E-PKG-CASE`). 3. `package main` →
+1. Manifest `name` → `module`. 2. PascalCase enforce + codemod (`E-PKG-CASE`). 3. `package Main` →
 `package Main`. 4. Types in libraries (lift `E-PKG-TYPE` + cross-package type mangling).
 - Scoped + planned in detail when Tracks 1–2 land (re-read the spec at that point).
 
@@ -114,7 +114,7 @@ tree, or run a fresh pass. Hardening, not features.
       fixtures, inline test programs, docs. Package declarations stay lowercase here.
     - **2b**: `E-PKG-CASE` (PascalCase package/folder segments) — exempt reserved `core` root +
       `main` entry; rename example project folders + test fixtures to match folder=path.
-  - Slice 3: entry `package main` → `package Main`.
+  - Slice 3: entry `package Main` → `package Main`.
   - Slice 4: types in libraries (lift `E-PKG-TYPE` + cross-package type mangling + namespaced PHP +
     D5b type-vs-leaf guard).
 - **Track 4 — Review pass — DONE** (background Workflow `wjq47kit9`, 26 agents, 14 dims,
@@ -154,7 +154,7 @@ included):
   `core.*` imports + native module paths stay lowercase (reserved). Avoid editing the exact
   `loader.rs` dep.name-validation region the blocker subagent (B2) touches — cherry-pick first or
   resolve on merge.
-- **Slice 3**: entry `package main` → `package Main` (mechanical once 2b lands; drop the `main` exemption).
+- **Slice 3**: entry `package Main` → `package Main` (mechanical once 2b lands; drop the `main` exemption).
 - **Slice 4**: types in libraries — lift `E-PKG-TYPE`, cross-package type mangling, namespaced PHP for
   classes/enums, D5b type-vs-leaf guard. (The only real new *capability*; rest is rename.)
 

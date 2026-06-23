@@ -3,7 +3,7 @@
 > **Status:** IMPLEMENTED 2026-06-18 (design-locked §7, then built). `bytes.find` + `text.split_once`
 > natives + `examples/web/handler.phg` (Request/Response/parse_request/serialize_response/handle) all
 > landed; byte-identical on `run`/`runvm` + **real PHP**. Two transpile gotchas surfaced + documented
-> in KNOWN_ISSUES (PHP-builtin name collision for `package main` fns; `private` fields aren't externally
+> in KNOWN_ISSUES (PHP-builtin name collision for `package Main` fns; `private` fields aren't externally
 > readable in transpiled PHP — externally-read fields are `public`).
 > Parent: `docs/specs/2026-06-18-m6-web-design.md` §2/§3/§10 (W1 = the pure `handle(Request)->Response`
 > slice, in-spine, Shape A). Predecessor: `docs/specs/2026-06-18-m6-w0-bytes-design.md` (the `bytes`
@@ -63,7 +63,7 @@ raw `bytes` slice. The handler decodes the body on demand via `bytes.to_string(r
 ## 3. The shapes (HONEST-LITE)
 
 ```phorge
-package main;                 // E-PKG-TYPE blocks a core.http library today (parent §8)
+package Main;                 // E-PKG-TYPE blocks a core.http library today (parent §8)
 import core.console;
 import core.bytes;
 import core.text;

@@ -8,7 +8,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 
 | Example | What it shows |
 |---|---|
-| `hello.phg` | the minimal program — `package main;` + `import Core.Console;` + `Console.println` |
+| `hello.phg` | the minimal program — `package Main;` + `import Core.Console;` + `Console.println` |
 | `fib.phg` | recursion, `for…in`, `List<int>` |
 | `grades.phg` | enums + `match`, a class with a method, `List`, `for…in` |
 | `realworld/ledger.phg` | bank accounts: classes + methods + `this`, payload enum + `match`, recursion (compound interest), integer-cents arithmetic, immutability (`apply` returns a fresh `Account`) |
@@ -69,7 +69,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `web/server.phg` | the **M6 W4 served app** — W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes` that **`phg serve`** runs over a real socket. `web/server.php` is the **`php -S`** front-controller bridge (both call the same `handle(Request) -> Response`) — see `web/README.md` |
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
 | `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
-| `project/shapes/` | **cross-package types** (M-RT) — a library package (`acme.geometry`) exports a `class` + `interface` + `enum`, consumed from `package main` via `import type acme.geometry.Point;`; nominal subtyping, `instanceof`, and enum `match` all cross-package; erases to namespaced PHP (`new \Acme\Geometry\Rect(…)`) |
+| `project/shapes/` | **cross-package types** (M-RT) — a library package (`acme.geometry`) exports a `class` + `interface` + `enum`, consumed from `package Main` via `import type acme.geometry.Point;`; nominal subtyping, `instanceof`, and enum `match` all cross-package; erases to namespaced PHP (`new \Acme\Geometry\Rect(…)`) |
 | `project/visibility/` | **declaration visibility** (visibility modifiers) — `public` / `internal` / `private` on top-level declarations; a `public` class crosses packages, an `internal` helper crosses files within its package, a `private` helper stays file-local; loader-enforced, erased from PHP — see `project/visibility/README.md` |
 
 ## Coverage matrix (the runnable surface)
@@ -118,9 +118,9 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 
 ## Three sharp edges
 
-- **Every file declares a package (M5 S1) — `package main;` is the runnable entry.** Nothing lives
+- **Every file declares a package (M5 S1) — `package Main;` is the runnable entry.** Nothing lives
   "in the wind": each file's first line is a `package` declaration, never inferred. A runnable program
-  uses the reserved `package main;` (every example here starts with it); `core` is reserved for the
+  uses the reserved `package Main;` (every example here starts with it); `core` is reserved for the
   stdlib. Dotted library packages (`package acme.convert;`) + strict folder=path + cross-package
   imports are now **shipped** — see `project/tempconv/` and `project/README.md`.
 - **Zero-payload enum variants use call form `V()` everywhere** — to construct (`Defend()`) *and* in

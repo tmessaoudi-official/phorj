@@ -5,7 +5,7 @@
 //
 // Elements are the hashable subset (int / bool / string). The example uses int and string sets;
 // dedup matches PHP `array_unique(..., SORT_STRING)` for homogeneous element types.
-package main;
+package Main;
 
 import Core.Console;
 import Core.Set;

@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M3 S1 "core ergonomics": list indexing, integer ranges, and expression `if`.

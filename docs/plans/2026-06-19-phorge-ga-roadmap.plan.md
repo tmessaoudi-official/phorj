@@ -89,7 +89,7 @@ M8) because it is a `run≡runvm` value-correctness divergence and needs the sam
 | QW-1 / P1-#6 / S-04 / I-01 / VG-§3 | `git clone`/`checkout` lack `--` → option/code-exec injection | `src/vendor.rs:51-52` | Quick |
 | QW-2 / P1-#7 / I-02 | Path traversal via dependency `name` → rm/write outside project | `src/vendor.rs:65`, `src/loader.rs:110-123` | Quick |
 | P1-#8 / S-05 / I-20 / VG-§2/VJ-§4 | Panicking handler aborts whole server (no `catch_unwind`; worker re-panics) | `src/serve.rs:34-66`, `src/cli.rs:351` | Quick |
-| P1-#12 / I-04 / G-10 / forge-G3 | `package main` free-fn names collide with PHP builtins (`Cannot redeclare`) | `src/checker.rs`, KNOWN_ISSUES:108-113 | Med |
+| P1-#12 / I-04 / G-10 / forge-G3 | `package Main` free-fn names collide with PHP builtins (`Cannot redeclare`) | `src/checker.rs`, KNOWN_ISSUES:108-113 | Med |
 | P1-#13 / I-04 / G-11 / forge-G3 | Externally-read promoted fields must be `public` (PHP visibility) | `src/checker.rs`, KNOWN_ISSUES:114-120 | Med |
 | P2-#26 / S-10 / VJ-3 | Cross-stub cache served by path-existence + non-atomic `fs::copy` | `src/bundle/cross.rs:176-179,217` | Quick |
 | P2-#27 / S-11 / VJ-3 | Vendor swap removes live dep before renaming (crash window) | `src/vendor.rs:63-103` | Quick |

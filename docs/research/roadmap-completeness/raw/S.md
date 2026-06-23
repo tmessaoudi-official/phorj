@@ -16,7 +16,7 @@ at `0.4.0` with no published-release machinery (`cargo dist`/tags/checksums). Th
 
 The single highest-leverage gap, judged through the philosophy, is a **Rust-style editions mechanism**
 — because Phorge is pre-1.0 and *still reshaping its own syntax weekly* (the namespace reshape, the
-`package main` → `package Main` rename, stdlib PascalCase migration are all live breaking codemods).
+`package Main` → `package Main` rename, stdlib PascalCase migration are all live breaking codemods).
 Editions are the one governance primitive that lets a language keep evolving syntax *without a churn of
 broken code*, and they map cleanly to Phorge's existing front-end-erasure discipline (an edition is a
 front-end flag, the backends see one lowered tree). They are also a genuine **upgrade over PHP** —
@@ -189,7 +189,7 @@ domain:
 - **S-upgrading-guide** — `S-changelog-discipline` cuts versioned changelog sections; PHP additionally
   ships a dedicated `UPGRADING` file per release that is *only* the breaking changes + the migration
   steps for each. A PHP dev expects that artifact by name. For a language that is *still doing breaking
-  codemods weekly* (the namespace reshape, `package main`→`package Main`, stdlib PascalCase), a
+  codemods weekly* (the namespace reshape, `package Main`→`package Main`, stdlib PascalCase), a
   dedicated migration-notes file — even pre-1.0 — is the honest companion to the BC contract and the
   natural home for "here's the codemod" notes. Strong familiarity fit, S effort, complements rather
   than duplicates the changelog. [Verified: no `UPGRADING.md` in repo root; breaking reshapes are

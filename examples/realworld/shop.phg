@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // A shopping cart with per-item discounts.

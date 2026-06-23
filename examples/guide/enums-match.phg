@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // Variant patterns (with bindings) over a payload + zero-payload enum.

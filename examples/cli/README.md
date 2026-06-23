@@ -8,8 +8,8 @@ byte-identity sweep). Run `phg <command> --help` for per-command help with worke
 
 ```bash
 phg run demo.phg                                              # a file
-echo 'package main; import Core.Console; function main() { Console.println("from stdin"); }' | phg run -   # stdin
-phg run -e 'package main; import Core.Console; function main() { Console.println("inline program"); }'     # inline
+echo 'package Main; import Core.Console; function main() { Console.println("from stdin"); }' | phg run -   # stdin
+phg run -e 'package Main; import Core.Console; function main() { Console.println("inline program"); }'     # inline
 ```
 
 ```
@@ -62,9 +62,9 @@ Front-end errors carry a caret-underlined span, a stable code, and a did-you-mea
 name is in scope:
 
 ```
-$ phg run -e 'package main; import Core.Console; function main() { int count = 1; int y = conut + 1; Console.println("{y}"); }'
+$ phg run -e 'package Main; import Core.Console; function main() { int count = 1; int y = conut + 1; Console.println("{y}"); }'
 type error at 1:77: unknown identifier `conut`
-package main; import Core.Console; function main() { int count = 1; int y = conut + 1; Console.println("{y}"); }
+package Main; import Core.Console; function main() { int count = 1; int y = conut + 1; Console.println("{y}"); }
                                                                             ^
   [E-UNKNOWN-IDENT]
   hint: did you mean `count`?
@@ -86,13 +86,13 @@ the current class's fields. ...
 Phorge never panics on input — runtime faults are clean, one-line errors with exit code 1:
 
 ```
-$ phg run   -e 'package main; function main() { int a = 10; int b = 0; int x = a / b; }'
+$ phg run   -e 'package Main; function main() { int a = 10; int b = 0; int x = a / b; }'
 runtime error: division by zero
 
-$ phg runvm -e 'package main; function main() { int a = 10; int b = 0; int x = a / b; }'
+$ phg runvm -e 'package Main; function main() { int a = 10; int b = 0; int x = a / b; }'
 runtime error at 1: division by zero
 
-$ phg run   -e 'package main; function main() { List<int> xs = [1, 2]; int v = xs[5]; }'
+$ phg run   -e 'package Main; function main() { List<int> xs = [1, 2]; int v = xs[5]; }'
 runtime error: list index out of range
 ```
 

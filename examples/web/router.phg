@@ -1,4 +1,4 @@
-package main;
+package Main;
 
 // M6 W2 — a static, exact-match HTTP router, written in pure Phorge.
 //

@@ -10,7 +10,7 @@ type params are erased pre-backend).
   recommended enums-first because Error-model Slice 2's `Result<T,E>` IS a generic enum → enums unblock
   it; lowest-risk/highest-leverage; closes a standing KNOWN_ISSUES deferral). Developer: "Yes — build it,
   fully autonomous."
-- [2026-06-22] AGREED: scope mirrors generic classes — `package main` only; inference-only construction
+- [2026-06-22] AGREED: scope mirrors generic classes — `package Main` only; inference-only construction
   (no `Option<int>(…)` explicit-arg construction); invariant; no bounds; un-inferred params default to
   `Ty::Error` (permissive, like generic-class ctors). Generic *enum methods* N/A (enums have no methods).
 

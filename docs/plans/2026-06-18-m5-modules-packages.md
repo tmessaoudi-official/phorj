@@ -17,11 +17,11 @@
 - [2026-06-18] AGREED (syntax): `package app.util;` at file top — dotted, leading keyword,
   semicolon-terminated (matches existing `import a.b.c;`). Emits PHP `namespace App\Util;` (PascalCased
   segments). `core.*` reserved as a user package root (rejected like a built-in type name).
-- [2026-06-18] AGREED (escape hatch): reserved **`package main;`** is the executable entry (Go model) —
+- [2026-06-18] AGREED (escape hatch): reserved **`package Main;`** is the executable entry (Go model) —
   pairs with the existing `fn main()` convention; **not inferred**. Non-`main` packages → folder=path
-  enforced; `package main` → runnable entry.
+  enforced; `package Main` → runnable entry.
 - [2026-06-18] AGREED (mandatory everywhere, NO exceptions): every file declares a package, **never
-  inferred** — including `-e`/stdin one-liners (they must write `package main;` explicitly). Purest
+  inferred** — including `-e`/stdin one-liners (they must write `package Main;` explicitly). Purest
   "nothing in the wind". Accepts the one-liner ceremony cost.
 - [2026-06-18] CONTEXT (verified): the byte-identity spine (`tests/differential.rs`
   `all_examples_match_between_backends`) globs `examples/**/*.phg` and runs ONE file at a time via
@@ -64,7 +64,7 @@
   - **`phg vendor` is idempotent without a blanket wipe** (Rule 8): removes only the dep subtrees it
     owns, then repopulates; **network only here**, never on run/check/transpile.
   - New guards: **`E-DUP-DEF`** (duplicate `(package,name)` in the merge — was a latent silent overwrite
-    since S2c, made fatal now) and a **rejection of `package main` inside `vendor/`** (a lib dep is
+    since S2c, made fatal now) and a **rejection of `package Main` inside `vendor/`** (a lib dep is
     functions-only; a vendored `main` would collide with the consumer entry).
   - **Tests** (`tests/vendor.rs`) exercise the fetch path against a **`file://` local-git fixture**
     (offline, deterministic — `git` 2.54 present). The shipped example commits its `vendor/` +
@@ -87,14 +87,14 @@
 - [2026-06-18] AGREED (S2c architecture): **loader-side resolution + name-mangling**, NOT backend-aware
   resolution. The loader (path-aware, runs before checker/backends) rewrites each file's calls using
   that file's import map, mangling every **non-`main`** top-level def to a PHP-FQN-shaped global key
-  (`compute` in `acme.util` ⇒ `Acme\Util\compute`); `package main` defs stay unmangled (auto-invoke +
+  (`compute` in `acme.util` ⇒ `Acme\Util\compute`); `package Main` defs stay unmangled (auto-invoke +
   single-file byte-identity). Native `core.*` calls are left untouched (classified by import-path root).
   Checker/interpreter/compiler/VM consume the rewritten flat AST **unchanged** ⇒ run==runvm structurally
   guaranteed. Only the **transpiler** changes: mangled names present ⇒ group into `namespace Acme\Util {}`
   brace-blocks + nameless `\Main\main()` bootstrap (M5-7); no mangled names ⇒ today's flat path
   (byte-identical to `demo.php`). 3C gate: full 30/8.
 - [2026-06-18] AGREED (S2b approach): **directory = package** (Go's model — `src/acme/util/*.phg` all
-  declare `package acme.util`; multiple files per package dir; `package main` folder-exempt, runnable
+  declare `package acme.util`; multiple files per package dir; `package Main` folder-exempt, runnable
   anywhere). **Flat AST merge** (parse each project file → merge `items` into one `Program`; backends
   see a bigger flat set, byte-safe). Enforcement (folder=path `E-PKG-PATH` + loose-mode `main`-only)
   lives in a new **path-aware `src/loader.rs`**, never in `check()` (so `cmd_run(src)`, the differential
@@ -114,11 +114,11 @@
   `\App\Util\parse($x)` (M5-8/M5-9). Resolution in all four backends = S2c.
 - O-5 PHP emission → **single-file brace-namespaces** + nameless bootstrap block; runs with bare
   `php out.php`, no Composer/autoloader (M5-7, §4). Resolves the PSR-4-can't-autoload-functions nuance.
-- O-6 Harness → **project-aware differential** (S2d): single-file `package main` examples keep the glob;
+- O-6 Harness → **project-aware differential** (S2d): single-file `package Main` examples keep the glob;
   multi-file projects discovered + run by entry.
 - O-7 vendor/git → **pinned tag/rev + `phorge.lock` (SHA) + committed `vendor/` auto-used offline**
   (M5-10, S3). Examples resolve offline only — never network (determinism gate, like M6 URL deferral).
-- O-8 Migration → **S1 slice**: `package main;` into ~25 examples + ~200 inline programs (mechanical,
+- O-8 Migration → **S1 slice**: `package Main;` into ~25 examples + ~200 inline programs (mechanical,
   Wave-1-migrator pattern; distinguish program literals from help/prose strings).
 - O-9 Aliasing → `import a.b as c;` for leaf collisions — lands with user packages (S2c).
 
@@ -131,7 +131,7 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   `E-RESERVED-PACKAGE` (+ `explain`). Transpiler **ignores** the package in S1 (flat PHP unchanged) —
   brace-namespace emission + loose-mode `main`-only enforcement deferred to S2 (folder=path needs the
   project model). Migrated 24 examples + `sample.phg` + all inline/integration test programs to
-  `package main;` (test helpers auto-prepend, line-preserving); fixed pre-existing Wave-1 `README.md`
+  `package Main;` (test helpers auto-prepend, line-preserving); fixed pre-existing Wave-1 `README.md`
   drift (`import std.io;` + bare `println`).
 - [x] **S2a — manifest + source root + project detection** — DONE (2026-06-18). `src/manifest.rs`:
   std-only TOML-subset parser → `Manifest`/`Dependency`/`Pin`, Composer vocabulary (`name =
@@ -144,7 +144,7 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   `load(entry)`/`load_loose_src(src)` → `Unit { program, diag_src }`. Project mode walks up to
   `phorge.toml`, parses every `.phg` under the source root, validates folder=path (`E-PKG-PATH`;
   directory=package Go-model, `main` folder-exempt), merges items flat. Loose mode enforces
-  `package main`-only. Enforcement path-aware (in the loader, never `check()`) → `cmd_run(&str)` +
+  `package Main`-only. Enforcement path-aware (in the loader, never `check()`) → `cmd_run(&str)` +
   differential untouched. `cli::{run,runvm,check,transpile}_program` consume the loaded program;
   `main.rs` routes `<file>` for run/runvm/check/transpile through the loader, keeps `-e`/stdin/parse/
   lex/disasm/bench/build on the string path. Flat-merge interim: cross-file calls resolve unqualified;
@@ -176,7 +176,7 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   crash-safe, **network only here**). `loader::load_project` merges vendored packages like first-party
   libraries (mangle/resolve before any backend ⇒ run≡runvm structural; transpiler de-mangles to
   `namespace`); offline-only — `run`/`check`/`transpile` never fetch (`E-VENDOR-MISSING` if a
-  `[require]` dep isn't vendored). Guards: `E-VENDOR-MAIN` (vendored `package main`), `E-DUP-DEF`
+  `[require]` dep isn't vendored). Guards: `E-VENDOR-MAIN` (vendored `package Main`), `E-DUP-DEF`
   (duplicate `(package,name)` — was a silent overwrite). CLI: `cmd_vendor`, dispatch/USAGE/help,
   3 `explain` codes. Example `examples/project/withdeps/` (vendored `acme/strutil`) ships committed
   `vendor/` + `phorge.lock`, byte-identical on run/runvm + real PHP. `tests/vendor.rs` drives the git

@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M-mut.5 — value-type element set: `xs[i] = e` (list) and `m[k] = e` (map). Lists and maps are

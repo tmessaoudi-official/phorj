@@ -184,7 +184,7 @@ impl Project {
     /// Walk up from `start` (a file or directory) looking for a `phorge.toml`. The first
     /// one found marks the project root. Returns `Ok(None)` when none is found before the
     /// filesystem root — that is *loose-script mode* (folder=path suspended; only
-    /// `package main;` is legal, enforced in a later slice). Returns `Err` only when a
+    /// `package Main;` is legal, enforced in a later slice). Returns `Err` only when a
     /// found manifest is unreadable or malformed.
     pub fn detect(start: &Path) -> Result<Option<Project>, String> {
         let mut cur: &Path = if start.is_dir() {
@@ -646,7 +646,7 @@ mod tests {
         let nested = tmp.path().join("nowhere");
         std::fs::create_dir_all(&nested).unwrap();
         let file = nested.join("script.phg");
-        std::fs::write(&file, "package main;").unwrap();
+        std::fs::write(&file, "package Main;").unwrap();
         // No phorge.toml anywhere under the temp dir → loose-script mode.
         assert_eq!(Project::detect(&file).unwrap(), None);
     }

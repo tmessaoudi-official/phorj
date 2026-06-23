@@ -32,7 +32,7 @@
   - The **portable unit is `handle(Request) -> Response` at the VALUE level**, not raw bytes (PSR-7/15
     insight: handler portable, SAPI bridge not). Parsing wire-bytes→Request is *runtime glue* (Phorge
     socket-side vs PHP superglobal-side) — NOT transpiled 1:1; only `handle` round-trips.
-  - **Request/Response shape (recommended): Shape A — pure-Phorge classes** (in `package main` for the
+  - **Request/Response shape (recommended): Shape A — pure-Phorge classes** (in `package Main` for the
     spike; a `core.http` *library* awaits the M5 cross-package-types follow-up, E-PKG-TYPE). Headers as
     `List<Header>` + `header(k):string?` linear scan (no Map surface until S4); composes with S2 `??`.
     Needs ZERO new language features — M1 classes + S1 list/range + S2 optionals + `core.text`.

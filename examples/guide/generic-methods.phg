@@ -7,7 +7,7 @@
 // (PHP `mixed`), so the interpreter, the bytecode VM, and the transpiled PHP run identical code —
 // byte-for-byte identical output.
 
-package main;
+package Main;
 
 import Core.Console;
 

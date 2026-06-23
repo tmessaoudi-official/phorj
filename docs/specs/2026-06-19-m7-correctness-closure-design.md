@@ -53,7 +53,7 @@ the value-correctness edges adjacent to it.
 **Non-Goals (explicit)**
 - **Not** introducing a transpiler-side static type system (that's M10 `Ty::Var`). P0-1/3/4 use
   runtime helpers precisely to avoid pulling type inference forward.
-- **Not** fixing the `package main` PHP-builtin-name collision (P1-#12) or promoted-field visibility
+- **Not** fixing the `package Main` PHP-builtin-name collision (P1-#12) or promoted-field visibility
   (P1-#13) — those are PHP *fatals*, not wrong numbers, and are front-end lints scheduled for **M8**.
 - **Not** building GitHub Actions CI — that's **M9**; M7 ships the test + the `PHORGE_REQUIRE_PHP`
   contract, M9 wires CI to *set* it (the seam is documented in §3.4).

@@ -127,7 +127,7 @@ git add src/diagnostic.rs && git commit -m "feat(diagnostic): Frame + frames fie
 ```rust
 #[test]
 fn vm_fault_carries_call_stack() {
-    let src = "package main;\nfunction f() -> int { var xs = [1]; return xs[5]; }\nfunction main() { var _ = f(); }";
+    let src = "package Main;\nfunction f() -> int { var xs = [1]; return xs[5]; }\nfunction main() { var _ = f(); }";
     let program = compile(&crate::cli::check_and_expand_for_test(src)).unwrap(); // use the module's existing compile helper
     let err = Vm::new(&program).run().unwrap_err();
     assert_eq!(err.frames.len(), 2, "callee + main");
@@ -197,7 +197,7 @@ git add src/vm.rs src/chunk.rs src/compiler.rs && git commit -m "feat(vm): attac
 ```rust
 #[test]
 fn interpreter_fault_carries_call_stack() {
-    let err = run("package main;\nfunction f() -> int { var xs = [1]; return xs[5]; }\nfunction main() { var _ = f(); }").unwrap_err();
+    let err = run("package Main;\nfunction f() -> int { var xs = [1]; return xs[5]; }\nfunction main() { var _ = f(); }").unwrap_err();
     assert_eq!(err.frames.len(), 2, "callee + main");
     assert_eq!(err.frames[0].function, "f");
     assert_eq!(err.frames[1].function, "main");
@@ -262,7 +262,7 @@ git add src/interpreter.rs && git commit -m "feat(interpreter): trace_stack — 
 fn unit_records_fn_files_and_sources() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
-    let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
+    let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
     tmp.write("src/acme/util/u.phg", "package acme.util;\nfunction parse() {}");
     let u = load(&entry).unwrap();
     assert!(u.fn_files.contains_key("main"), "main attributed");
@@ -299,8 +299,8 @@ git add src/loader.rs src/main.rs src/vm.rs src/interpreter.rs && git commit -m 
 #[test]
 fn run_and_runvm_traces_are_identical() {
     let faults = [
-        "package main;\nfunction g() -> int { var xs = [1]; return xs[9]; }\nfunction main() { var _ = g(); }",
-        "package main;\nfunction main() { var x = 1 / 0; }",
+        "package Main;\nfunction g() -> int { var xs = [1]; return xs[9]; }\nfunction main() { var _ = g(); }",
+        "package Main;\nfunction main() { var x = 1 / 0; }",
     ];
     for src in faults {
         let unit = loader::load_loose_src(src).unwrap();

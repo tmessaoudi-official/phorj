@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // Functions in Phorge: typed parameters and a return type.

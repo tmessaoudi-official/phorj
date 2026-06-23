@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M-mut.7 — `static` class fields: program-lifetime state that belongs to the class, not to any one

@@ -143,7 +143,7 @@ variant constructor; a new `enum_subst` substitutes them at a `match`; `erase_ge
 `Item::Enum` arm that rewrites a `<T>` payload to `Type::Erased` (PHP `mixed`) and clears the parameter
 list before any backend. **No new `Op`, no `Value` change** — `Ty::Named` type arguments are checker-only
 and the parameter list is erased pre-backend, so the byte-identity spine is safe by construction. Scope
-mirrors generic classes: `package main` only, inference-only construction, invariant, no bounds, no
+mirrors generic classes: `package Main` only, inference-only construction, invariant, no bounds, no
 generic enum methods. Reuses `E-GENERIC-PARAM`; **GENERICS-ALL now covers functions, methods, classes,
 and enums.**
 
@@ -300,7 +300,7 @@ and backed/static/interface/abstract property hooks.
   and zero backend changes** — `resolve_cty`/`emit_type` already key a class type on its name and
   ignore arguments, so the byte-identity spine is safe by construction (a front-end-only slice). New
   diagnostic reuse: `E-GENERIC-PARAM` (a method type parameter shadowing a class one). Scope:
-  `package main` only (cross-package generic library types deferred); inference-only construction (no
+  `package Main` only (cross-package generic library types deferred); inference-only construction (no
   `Box<int>(7)`); invariant, no bounds, no generic enums.
 
 ### Added — cross-package types: `import type` (Rich Types, M-RT)
@@ -310,7 +310,7 @@ and backed/static/interface/abstract property hooks.
   **`import type acme.geometry.Point [as Pt];`** form (binds a bare type name; functions still use the
   Go-qualified `pkg.fn()` form; built-ins like `List` stay import-free). Nominal subtyping,
   `instanceof`, and enum `match` all work across packages. New example `examples/project/shapes/`
-  (a library `class` + `interface` + `enum` consumed from `package main`), byte-identical
+  (a library `class` + `interface` + `enum` consumed from `package Main`), byte-identical
   `run ≡ runvm ≡ real PHP`.
 - **Mechanism — the cross-package *function* mangle/resolve pass, extended to types.** The loader
   gains a `types` symbol table (`(package, Type) ⇒ Acme\Geometry\Point`) and a per-file type-import
@@ -391,7 +391,7 @@ and backed/static/interface/abstract property hooks.
   and the native registry; byte-identical `run ≡ runvm ≡ real PHP` preserved (the namespace is a
   compile-time organizing layer — natives still erase to flat PHP builtins). *Consequence:* a stdlib
   qualifier (PascalCase) can no longer be shadowed by a camelCase local, so `E-SHADOW-IMPORT` now only
-  bites a lowercase **user**-package leaf. (The broader reshape — `package main` → `package Main`,
+  bites a lowercase **user**-package leaf. (The broader reshape — `package Main` → `package Main`,
   user-package-segment casing enforcement, manifest `name`→`module` — remains pending.)
 
 ### Added — erased generics `<T>` on free functions (Rich Types milestone, M-RT S7)
@@ -458,7 +458,7 @@ and backed/static/interface/abstract property hooks.
   PHP` (verified). New `examples/guide/interfaces.phg` (oracle-gated). New diagnostics
   `E-IFACE-IMPL` / `E-IFACE-UNIMPL` / `E-IFACE-SIG` / `E-IFACE-CYCLE` (+ the missing `E-INSTANCEOF-TYPE`
   explain entry, backfilled from S1) are in `phg explain`. Scope this slice: interfaces are
-  `package main`-only (`E-PKG-TYPE`), and method signatures match exactly (no variance yet).
+  `package Main`-only (`E-PKG-TYPE`), and method signatures match exactly (no variance yet).
 
 ### Added — `instanceof` type test, retiring the `is` stub (Rich Types milestone, M-RT S1)
 
@@ -801,7 +801,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   first-party library packages (mangle + resolve before any backend runs ⇒ `run` ≡ `runvm`
   structural; the transpiler de-mangles into `namespace …` blocks). `run`/`check`/`transpile`
   **never fetch** — they read the committed `vendor/`. New guards: `E-VENDOR-MISSING` (a `[require]`
-  dep not vendored), `E-VENDOR-MAIN` (a vendored `package main`), `E-DUP-DEF` (a duplicate
+  dep not vendored), `E-VENDOR-MAIN` (a vendored `package Main`), `E-DUP-DEF` (a duplicate
   `(package, name)` after the merge — previously a silent overwrite).
 - **Example** — `examples/project/withdeps/` (a project consuming a vendored `acme/strutil` library):
   ships its committed `vendor/` + `phorge.lock`; the project-aware differential harness loads it
@@ -831,7 +831,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 
 - **Cross-package calls resolve** — `import acme.util;` then `util.compute(x)` now works across files.
   A new resolution pass in the loader (`src/loader.rs`) mangles every non-`main` definition to a
-  globally-unique name (`acme.util` + `compute` ⇒ `Acme\Util\compute`; `package main` defs stay bare),
+  globally-unique name (`acme.util` + `compute` ⇒ `Acme\Util\compute`; `package Main` defs stay bare),
   then rewrites call sites against each file's package + import map: same-package bare calls and
   qualified user calls become bare calls on the mangled name. Native `core.*` calls are untouched.
 - **Import aliasing** — `import a.b as c;` binds the call-site leaf `c` (AST `Item::Import.alias`,
@@ -857,8 +857,8 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   multi-file-merged `Program` + the source text for diagnostics). **Project mode**: a `phorge.toml`
   found by walking up marks the root; every `.phg` under the source root is parsed, validated against
   its location (**folder = package**, Go's model — `src/acme/util/*.phg` ⇒ `package acme.util`;
-  `package main` is folder-exempt), and all items are merged into one flat program. **Loose mode** (no
-  manifest above): only `package main;` runs — a dotted library package requires a project.
+  `package Main` is folder-exempt), and all items are merged into one flat program. **Loose mode** (no
+  manifest above): only `package Main;` runs — a dotted library package requires a project.
 - **`E-PKG-PATH`** — a file whose package does not match its directory under the source root, a dotted
   package sitting directly in the source root, or a non-`main` package living outside the source root.
 - **Byte-identity preserved** — enforcement is path-aware and lives in the loader, never in the type
@@ -870,7 +870,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 - **Flat-merge interim** — until S2c, the merged items share one flat namespace, so a cross-file call
   resolves **unqualified**; qualified cross-package calls (`util.parse(x)`) + one-brace-block-per-package
   PHP emission + import aliasing are S2c. `transpile` of a multi-*package* project therefore emits flat
-  PHP for now (correct for `package main` / single-package). Multi-file type-error diagnostics omit the
+  PHP for now (correct for `package Main` / single-package). Multi-file type-error diagnostics omit the
   source-line caret (no single aligned source). The `examples/project/` showcase ships at S2d.
 - 12 new tests (9 `loader` unit + 3 `tests/project.rs` integration, incl. a multi-file project running
   byte-identically on both backends).
@@ -899,17 +899,17 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 ### M5 slice S1 — package declaration (project-model foundation)
 
 - **Mandatory `package` declaration** — every file declares its package as the first line, never
-  inferred (`package app.util;`). The reserved **`package main;`** is the runnable entry (Go's model;
+  inferred (`package app.util;`). The reserved **`package Main;`** is the runnable entry (Go's model;
   pairs with `fn main()`); `core` is reserved for the standard library. New checker codes
   `E-NO-PACKAGE` / `E-RESERVED-PACKAGE` (both `phg explain`-documented). The parser captures the
   path on `Program.package`; a `package` after any item is a parse error (it must be first).
 - **Byte-identity preserved** — S1 is front-end only: the interpreter, VM, and transpiler ignore the
-  package (flat PHP emission unchanged — `package main` → no namespace), so `run`/`runvm` and the PHP
+  package (flat PHP emission unchanged — `package Main` → no namespace), so `run`/`runvm` and the PHP
   round-trip stay byte-identical. Multi-file projects, strict folder=path, cross-package imports, and
   brace-namespace PHP emission arrive in later M5 slices
   (`docs/specs/2026-06-18-m5-project-model-design.md`).
-- All 24 examples + every test program migrated to `package main;`; the minimal program is now
-  `package main;` + `import Core.Console;` + `Console.println`. (Also fixed pre-existing Wave-1 doc
+- All 24 examples + every test program migrated to `package Main;`; the minimal program is now
+  `package Main;` + `import Core.Console;` + `Console.println`. (Also fixed pre-existing Wave-1 doc
   drift: `README.md` showed `import std.io;` + bare `println`.)
 
 ### M3 slice S0 — developer experience

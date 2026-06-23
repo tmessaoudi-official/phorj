@@ -183,7 +183,7 @@ cause-chain and the test runner's `assertFaults`. Detailed rationale + examples 
 
 ## M5 — Modules & packages — ✅ COMPLETE (2026-06-18)
 
-Go-shaped, `src/`-rooted project model: **mandatory `package` declarations** (`package main` = runnable
+Go-shaped, `src/`-rooted project model: **mandatory `package` declarations** (`package Main` = runnable
 entry), `phorge.toml` manifests (Composer *vocabulary* in a TOML container — `[require]`, git deps pinned by
 tag/rev), strict folder = package path, **single-file brace-namespace PHP emission** (no Composer/autoloader
 — [ADR-0004](adr/0004-single-file-brace-namespace-php.md)), cross-package qualified calls via a loader-side

@@ -4,7 +4,7 @@
 // that class, false otherwise (never a fault — even for a value of an unrelated type). It replaces
 // the old value-equality `is` alias. Inside an `if (x instanceof C) { … }`, the checker smart-casts
 // `x` to `C` in the then-block, so member access through it type-checks.
-package main;
+package Main;
 import Core.Console;
 
 class Circle {

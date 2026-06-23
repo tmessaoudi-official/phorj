@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // `match` in EXPRESSION position (M11) — usable as a sub-expression, not only as a whole

@@ -33,7 +33,7 @@ spine, PHP 8.6 round-trip.
   `cargo fmt --check`, `cargo build --release` all clean. `PATH=/stack/tools/cargo/bin:$PATH`.
 - **Capture by value (A5):** `free_vars` (sorted, invariant #8) is the single source of capture order
   for the VM slots, the interpreter env, and the PHP `use()` list.
-- **Mandatory `package main;` (M5 S1):** every program/example starts with `package main;`; the
+- **Mandatory `package Main;` (M5 S1):** every program/example starts with `package Main;`; the
   differential harness `with_pkg` auto-prepends it for inline snippets.
 - **Git autonomy (project rule):** commit each green task with a `feat:`/`test:`/`docs:` message, no
   `Co-Authored-By` line.
@@ -170,10 +170,10 @@ In `src/parser.rs` tests (mirroring existing `parse_type` tests):
 #[test]
 fn parses_function_type_annotation() {
     // a function-typed parameter must parse
-    let item = parse_one_item("package main; function apply(int x, (int) -> int f) -> int { return x; }");
+    let item = parse_one_item("package Main; function apply(int x, (int) -> int f) -> int { return x; }");
     assert!(item.is_ok(), "function-typed param should parse: {item:?}");
     // nested + zero-arg
-    assert!(parse_one_item("package main; function f() -> () -> int { }").is_ok());
+    assert!(parse_one_item("package Main; function f() -> () -> int { }").is_ok());
 }
 ```
 In `src/checker.rs` tests:
@@ -181,7 +181,7 @@ In `src/checker.rs` tests:
 #[test]
 fn function_typed_binding_rejects_non_function() {
     // var f : (int)->int = 5;  -> int not assignable to a function type
-    let errs = check_errs("package main; function main() { var f: (int) -> int = 5; }");
+    let errs = check_errs("package Main; function main() { var f: (int) -> int = 5; }");
     assert!(errs.iter().any(|e| e.message.contains("(int) -> int")), "{errs:?}");
 }
 ```
@@ -309,7 +309,7 @@ In `src/interpreter.rs` tests (use the existing run helper, here `run_ok`):
 ```rust
 #[test]
 fn lambda_value_call_interpreter() {
-    let out = run_ok(r#"package main;
+    let out = run_ok(r#"package Main;
 import core.console;
 function main() {
     var double = fn(int x) => x * 2;
@@ -320,7 +320,7 @@ function main() {
 
 #[test]
 fn lambda_captures_two_vars_interpreter() {
-    let out = run_ok(r#"package main;
+    let out = run_ok(r#"package Main;
 import core.console;
 function main() {
     var a = 10;
@@ -333,7 +333,7 @@ function main() {
 
 #[test]
 fn higher_order_user_function_interpreter() {
-    let out = run_ok(r#"package main;
+    let out = run_ok(r#"package Main;
 import core.console;
 function twice(int x, (int) -> int f) -> int { return f(f(x)); }
 function main() {
@@ -346,7 +346,7 @@ And a checker-rejection test:
 ```rust
 #[test]
 fn lambda_cannot_reference_this() {
-    let errs = check_errs(r#"package main;
+    let errs = check_errs(r#"package Main;
 class C { constructor(public int x) {}
   method() -> (int) -> int { return fn(int n) => n + this.x; } }
 function main() { }"#);
@@ -559,7 +559,7 @@ fn lambda_call_errors_agree() {
     agree_err("import core.console; function main(){ var f=fn(int x)=>x; console.println(\"{f(1,2)}\"); }"); // arity
 }
 ```
-(The harness's `with_pkg` auto-prepends `package main;`.)
+(The harness's `with_pkg` auto-prepends `package Main;`.)
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -657,13 +657,13 @@ git commit -m "feat(vm): expression-body lambdas on the VM — MakeClosure/CallV
 ```rust
 #[test]
 fn transpiles_expression_lambda_to_arrow_fn() {
-    let php = transpile_ok("package main; import core.console; function main(){ var d = fn(int x) => x*2; console.println(\"{d(5)}\"); }");
+    let php = transpile_ok("package Main; import core.console; function main(){ var d = fn(int x) => x*2; console.println(\"{d(5)}\"); }");
     assert!(php.contains("fn($x) => $x * 2"), "{php}");
 }
 
 #[test]
 fn transpiles_named_fn_reference() {
-    let php = transpile_ok("package main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main(){ apply(1, inc); }");
+    let php = transpile_ok("package Main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main(){ apply(1, inc); }");
     assert!(php.contains("inc(...)"), "first-class callable: {php}");
 }
 ```
@@ -695,7 +695,7 @@ Run:
 ```bash
 PATH=/stack/tools/cargo/bin:$PATH cargo test transpiles_expression_lambda transpiles_named_fn
 cat > /tmp/lam.phg <<'EOF'
-package main;
+package Main;
 import core.console;
 function twice(int x, (int) -> int f) -> int { return f(f(x)); }
 function main() { console.println("{twice(3, fn(int n) => n + 1)}"); }
@@ -739,12 +739,12 @@ fn statement_body_lambda_agrees() {
 }
 #[test]
 fn statement_body_lambda_needs_return_type() {
-    let errs = check_errs("package main; function main(){ var f = fn(int x) { return x; }; }");
+    let errs = check_errs("package Main; function main(){ var f = fn(int x) { return x; }; }");
     assert!(errs.iter().any(|e| e.message.contains("explicit `-> T`")), "{errs:?}");
 }
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
-    let php = transpile_ok("package main; import core.console; function main(){ var base=100; var f = fn(int x) -> int { return x + base; }; console.println(\"{f(3)}\"); }");
+    let php = transpile_ok("package Main; import core.console; function main(){ var base=100; var f = fn(int x) -> int { return x + base; }; console.println(\"{f(3)}\"); }");
     assert!(php.contains("function($x) use ($base)") && php.contains("return $x + $base"), "{php}");
 }
 ```
@@ -895,7 +895,7 @@ git commit -m "feat(lang): pipe operator |> (parser-lowered to a call), retire d
 - [ ] **Step 1: Write the guide example** `examples/guide/lambdas-pipe.phg`
 
 ```
-package main;
+package Main;
 import core.console;
 
 function dbl(int x) -> int { return x * 2; }
@@ -967,8 +967,8 @@ git commit -m "docs(lang): lambdas+pipe guide example + FEATURES/CHANGELOG/KNOWN
 
 Before closing S3, confirm a same-package bare named-fn ref inside a *library* (non-`main`) package
 resolves after the M5 loader pass (write a tiny two-package fixture, or reason from the loader's
-call-only rewrite). If it does **not** resolve, restrict A4 first-class refs to `package main` this
-slice and record the restriction in `KNOWN_ISSUES.md` (the guide example uses `package main`, so it is
+call-only rewrite). If it does **not** resolve, restrict A4 first-class refs to `package Main` this
+slice and record the restriction in `KNOWN_ISSUES.md` (the guide example uses `package Main`, so it is
 unaffected either way).
 
 ---

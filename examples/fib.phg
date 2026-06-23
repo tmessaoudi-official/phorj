@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // Recursion: classic Fibonacci. Phorge is immutable (no reassignment), so the

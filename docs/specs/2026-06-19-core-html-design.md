@@ -128,14 +128,14 @@ escaping boundaries.
 
 **Named convenience set (Wave 2)** — thin wrappers, each one `html.el`/`html.void_el` with the tag
 baked: `div p span a h1 h2 h3 ul ol li table tr td section header footer nav button label` +
-void `br img input hr`. These are *Phorge `package main` functions in the `core.html` module's own
+void `br img input hr`. These are *Phorge `package Main` functions in the `core.html` module's own
 `.phg`? No* — they are native registry entries (consistent with the rest of `core.*`), so they erase
 the same way and need no stdlib-in-Phorge bootstrapping.
 
 ### 4.1 Worked example (kernel + builders)
 
 ```phorge
-package main;
+package Main;
 import core.html;
 import core.console;
 

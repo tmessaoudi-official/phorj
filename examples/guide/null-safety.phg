@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over

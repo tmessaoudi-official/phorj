@@ -111,7 +111,7 @@ fn vendor_fetches_and_loads_offline() {
     );
     let entry = consumer.write(
         "src/main.phg",
-        "package main;\nimport Core.Console;\nimport acme.greet;\n\
+        "package Main;\nimport Core.Console;\nimport acme.greet;\n\
          function main() { Console.println(greet.hi(\"phorge\")); }\n",
     );
 
@@ -177,7 +177,7 @@ fn missing_vendor_is_rejected() {
         "phorge.toml",
         "module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = { git = \"file:///nonexistent\", tag = \"v1.0.0\" }\n",
     );
-    let entry = consumer.write("src/main.phg", "package main;\nfunction main() {}\n");
+    let entry = consumer.write("src/main.phg", "package Main;\nfunction main() {}\n");
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-VENDOR-MISSING"), "got: {err}");
 }

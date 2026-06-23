@@ -15,7 +15,7 @@ project root and asserts `run` ≡ `runvm` (and that it runs at all).
 tempconv/
 ├── phorge.toml                     # module = "acme/tempconv", source = "src"
 └── src/
-    ├── main.phg                    # package main   — the runnable entry
+    ├── main.phg                    # package Main   — the runnable entry
     └── acme/
         ├── convert/                # package acme.convert  (folder = path)
         │   ├── temp.phg            #   cToF(c) = scale(c) + 32
@@ -24,7 +24,7 @@ tempconv/
             └── label.phg           #   tag(name, v) -> "{name} = {v}F"
 ```
 
-Run it (the CLI walks up to `phorge.toml`, loads the whole project, and runs `package main`):
+Run it (the CLI walks up to `phorge.toml`, loads the whole project, and runs `package Main`):
 
 ```console
 $ phg run examples/project/tempconv/src/main.phg
@@ -40,7 +40,7 @@ boiling = 212F
 
 1. **Mandatory packages + folder = path.** Each file's first line is a `package` declaration, never
    inferred. A dotted library package must live in the matching directory under the source root:
-   `package acme.convert;` ⇒ `src/acme/convert/`. The reserved `package main;` is the runnable entry
+   `package acme.convert;` ⇒ `src/acme/convert/`. The reserved `package Main;` is the runnable entry
    and is folder-exempt. A mismatch is a load error (`E-PKG-PATH`).
 2. **Cross-package qualified calls + aliasing.** `main` imports a package and calls its functions
    *leaf-qualified* — `import acme.convert;` then `convert.cToF(0)` (Go's `import "fmt"` →

@@ -1,4 +1,4 @@
-package main;
+package Main;
 
 // M6 W1 — the portable HTTP handler model, written in pure Phorge: `handle(Request) -> Response`.
 //

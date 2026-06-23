@@ -169,12 +169,12 @@ target per `(class, member)`. Therefore:
 
 ## Scope (S6) and deferrals (→ KNOWN_ISSUES)
 
-**In scope:** `package main` classes; single-parent fast path; multi-parent compose with explicit
+**In scope:** `package Main` classes; single-parent fast path; multi-parent compose with explicit
 resolution; `open`/`final`; `abstract`; field/ctor/diamond composition; subtyping/`instanceof`.
 
 **Deferred:**
 - Cooperative `super` / C3 linearization (Model 3) — future gated milestone, after S8 traits.
-- Cross-package MI parents (S6 is `package main`-only, mirroring earlier slices).
+- Cross-package MI parents (S6 is `package Main`-only, mirroring earlier slices).
 - The Scala accessor-lowering trick for field collisions (start strict instead).
 - Generic-class MI parents (`class C<T> extends Box<T>`), generic-method override variance.
 - Method-signature **variance** on override (S6 requires exact-match or covariant-return; contravariant

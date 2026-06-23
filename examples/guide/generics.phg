@@ -6,7 +6,7 @@
 // value), so the interpreter, the bytecode VM, and the transpiled PHP all run the exact same
 // type-variable-free code — byte-for-byte identical output.
 
-package main;
+package Main;
 
 import Core.Console;
 

@@ -38,7 +38,7 @@ Three candidate shapes were evaluated (see `docs/research/m6/raw/phorge-fit.md` 
 Shape A** — `Request`/`Response` are ordinary Phorge `class`es, parser/serializer written in Phorge.
 
 ```phorge
-package main;            // spike: types live in package main (see §8 — E-PKG-TYPE blocks a core.http library today)
+package Main;            // spike: types live in package Main (see §8 — E-PKG-TYPE blocks a core.http library today)
 import core.console;
 import core.text;
 
@@ -76,7 +76,7 @@ function handle(Request req) -> Response {
   stdlib path; classes already produce `Value::Instance`).
 
 **Accepted costs (spike-scoped):** headers are `List<Header>` with O(n) lookup (Map at S4 fixes
-ergonomics, not correctness); the types live in `package main` until cross-package types land (§8);
+ergonomics, not correctness); the types live in `package Main` until cross-package types land (§8);
 bodies are UTF-8 `string` and examples stay ASCII (the `core.text`↔PHP round-trip constraint).
 
 *Rejected:* **Shape B** (native-backed `core.http` accessors — `http.method(req)`, etc.) works as a
@@ -182,7 +182,7 @@ exact-match router added to the spike; Shape A is the one API; spike lands befor
 | Pure `handle(Request)->Response` + parser + serializer (Shape A) | nothing — ships on today's language | **spike W1** |
 | **Static exact-match router** (`(method,"/path")->namedHandler`) | nothing — named fns + string match | **spike W2** |
 | `phg serve` single-threaded + `tests/serve.rs` + PHP front-controller README | nothing | **spike W3–W4** |
-| `core.http` as a real **library package** (not `package main`) | M5 cross-package-types follow-up (E-PKG-TYPE) | post-spike |
+| `core.http` as a real **library package** (not `package Main`) | M5 cross-package-types follow-up (E-PKG-TYPE) | post-spike |
 | Map-based headers + **path params `/users/{id}`** | **parallel two-list iteration** (list length / generics) — NOT just Map (see note) | later — "the rest" |
 | **Middleware + closure routes** (`app.get("/p", req => …)`) | M3 **S3** lambdas (Track A) | later — "the rest" |
 | Multi-threaded / concurrent serving | M6 green-thread runtime | M6 proper |

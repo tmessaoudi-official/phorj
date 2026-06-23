@@ -1,4 +1,4 @@
-package main;
+package Main;
 
 // Cross-package TYPES (M-RT): a library package's class / interface / enum, used here via the
 // terminal `import type Pkg.Path.TypeName;` form. Each binds a bare type name (`Shape`, `Rect`,

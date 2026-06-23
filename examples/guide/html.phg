@@ -1,4 +1,4 @@
-package main;
+package Main;
 
 // Core.Html — typed, auto-escaping HTML.
 // `Html` and `Attr` are DISTINCT types from `string`: untrusted text only reaches

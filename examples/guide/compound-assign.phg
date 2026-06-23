@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // M-mut.2 — compound assignment, increment/decrement, and null-coalesce-assign.

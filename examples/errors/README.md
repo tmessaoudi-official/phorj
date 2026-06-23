@@ -9,7 +9,7 @@ shipped as a globbed `.phg`.
 This program faults two calls deep:
 
 ```phorge
-package main;
+package Main;
 
 function f() -> int {
   var xs = [1];

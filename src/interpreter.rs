@@ -1656,7 +1656,7 @@ mod tests {
     use crate::parser::Parser;
 
     /// Lex + parse + interpret; return captured stdout or the runtime error. Auto-prepends the
-    /// reserved `package main;` (M5 S1) so existing test programs need no per-case edit; the
+    /// reserved `package Main;` (M5 S1) so existing test programs need no per-case edit; the
     /// segment carries no newline, preserving line numbers.
     fn run(src: &str) -> Result<String, Diagnostic> {
         let src = with_pkg(src);
@@ -1680,7 +1680,7 @@ mod tests {
         if src.trim_start().starts_with("package ") {
             src.to_string()
         } else {
-            format!("package main; {src}")
+            format!("package Main; {src}")
         }
     }
 
@@ -1911,7 +1911,7 @@ function main() { Console.println("{9223372036854775807 + 1}"); }"#;
     // ---- lambda tests (M3 S3, Task 3 — interpreter-only) ----
 
     /// Lex + parse + type-check `src`; return the error diagnostics (empty = well-typed).
-    /// Auto-prepends `package main;` if absent. Used to test checker rejections without
+    /// Auto-prepends `package Main;` if absent. Used to test checker rejections without
     /// running the interpreter.
     fn check_errs(src: &str) -> Vec<crate::diagnostic::Diagnostic> {
         let src = with_pkg(src);
@@ -1925,7 +1925,7 @@ function main() { Console.println("{9223372036854775807 + 1}"); }"#;
 
     #[test]
     fn lambda_value_call_interpreter() {
-        let out = out(r#"package main;
+        let out = out(r#"package Main;
 import Core.Console;
 function main() {
     var double = fn(int x) => x * 2;
@@ -1936,7 +1936,7 @@ function main() {
 
     #[test]
     fn lambda_captures_two_vars_interpreter() {
-        let out = out(r#"package main;
+        let out = out(r#"package Main;
 import Core.Console;
 function main() {
     var a = 10;
@@ -1949,7 +1949,7 @@ function main() {
 
     #[test]
     fn higher_order_user_function_interpreter() {
-        let out = out(r#"package main;
+        let out = out(r#"package Main;
 import Core.Console;
 function twice(int x, (int) -> int f) -> int { return f(f(x)); }
 function main() {
@@ -1961,7 +1961,7 @@ function main() {
     #[test]
     fn lambda_cannot_reference_this() {
         let errs = check_errs(
-            r#"package main;
+            r#"package Main;
 class C { constructor(public int x) {}
   function method() -> (int) -> int { return fn(int n) => n + this.x; } }
 function main() { }"#,

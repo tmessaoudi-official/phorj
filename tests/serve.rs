@@ -14,9 +14,9 @@ use phorge::value::Value;
 
 /// A small but complete serve program: W1-style parse/serialize + a 2-route dispatch + the single
 /// `respond(bytes) -> bytes` entry (malformed → 400, all in pure Phorge). `main` keeps it a valid
-/// `package main` entry, but the tests call `respond`/`serve`, never `main`.
+/// `package Main` entry, but the tests call `respond`/`serve`, never `main`.
 const SERVE_PROGRAM: &str = r#"
-package main;
+package Main;
 import Core.Console;
 import Core.Bytes;
 import Core.Text;
@@ -233,7 +233,7 @@ fn unrecoverable_listener_eventually_stops() {
 #[test]
 fn respond_fault_degrades_to_500_and_loop_continues() {
     let prog = checked(
-        "package main;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
+        "package Main;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
     );
     let req = b"GET / HTTP/1.1\r\n\r\n".to_vec();
     let mut fx = FixtureTransport::new(vec![req.clone(), req]);
@@ -256,7 +256,7 @@ fn respond_fault_degrades_to_500_and_loop_continues() {
 /// trusts the return type — it checks the actual value).
 #[test]
 fn respond_non_bytes_return_degrades_to_500() {
-    let prog = checked("package main;\nfunction respond(bytes raw) -> int { return 7; }\n");
+    let prog = checked("package Main;\nfunction respond(bytes raw) -> int { return 7; }\n");
     let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()]);
     serve(&prog, &mut fx, false).expect("loop completes");
     assert_eq!(fx.sent.len(), 1);

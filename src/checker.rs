@@ -1693,16 +1693,16 @@ impl Checker {
         if program.package.is_empty() {
             self.err_coded(
                 program.span,
-                "every file must declare a package (e.g. `package main;`) as its first line",
+                "every file must declare a package (e.g. `package Main;`) as its first line",
                 "E-NO-PACKAGE",
-                Some("add `package main;` at the top of the file".into()),
+                Some("add `package Main;` at the top of the file".into()),
             );
         } else if program.package[0] == "Core" {
             self.err_coded(
                 program.span,
                 "`Core` is a reserved package root (the standard library)",
                 "E-RESERVED-PACKAGE",
-                Some("use a different root, e.g. `package app;`".into()),
+                Some("use a different root, e.g. `package App;`".into()),
             );
         }
         for item in &program.items {
@@ -4052,7 +4052,7 @@ impl Checker {
             Ty::Named(cls, cargs) => {
                 // A property hook (M-mut.7b) is resolved before a stored field: `o.name` runs its
                 // `get`. Reading a hook with no `get` (write-only) is `E-HOOK-NO-GET`. A hook is not
-                // generic (`package main` only), so no substitution applies to its type.
+                // generic (`package Main` only), so no substitution applies to its type.
                 if let Some(h) = self.classes.get(&cls).and_then(|info| info.hooks.get(name)) {
                     let (hty, has_get) = (h.ty.clone(), h.has_get);
                     if !has_get {
@@ -6438,14 +6438,14 @@ mod tests {
     use crate::parser::Parser;
 
     /// Lex + parse `src` into a Program, panicking on lex/parse failure (tests here only care
-    /// about type-checking). Auto-prepends the reserved `package main;` (M5 S1, line-preserving)
+    /// about type-checking). Auto-prepends the reserved `package Main;` (M5 S1, line-preserving)
     /// unless the source already declares a package, so existing checker tests need no per-case
     /// edit. Use [`prog_raw`] when a test must exercise the package rules themselves.
     fn prog(src: &str) -> Program {
         let src = if src.trim_start().starts_with("package ") {
             src.to_string()
         } else {
-            format!("package main; {src}")
+            format!("package Main; {src}")
         };
         prog_raw(&src)
     }
@@ -7692,7 +7692,7 @@ mod tests {
         );
         // A well-formed user package (and the reserved `main`) type-check cleanly.
         assert!(check(&prog_raw("package app.util; function main() {}")).is_ok());
-        assert!(check(&prog_raw("package main; function main() {}")).is_ok());
+        assert!(check(&prog_raw("package Main; function main() {}")).is_ok());
     }
 
     #[test]
@@ -8273,7 +8273,7 @@ function main() { Console.println(42); }"#,
         // unified at the call site exactly like a generic free function — its `Ty::Param` resolves to
         // the concrete argument types, so a well-typed program type-checks clean (M-RT S7b).
         assert!(errors_of(
-            r#"package main;
+            r#"package Main;
 import Core.Console;
 import Core.List;
 import Core.Map;
@@ -8296,7 +8296,7 @@ function main() {
         // `Map.has(Map<string,int>, K)` unifies `K = string` from the receiver, so an `int` key is a
         // type error — the unifier propagates the binding across arguments.
         let errs = errors_of(
-            r#"package main;
+            r#"package Main;
 import Core.Map;
 function main() {
     var ages = ["a" => 10];

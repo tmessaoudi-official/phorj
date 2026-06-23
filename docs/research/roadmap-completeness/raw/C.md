@@ -83,7 +83,7 @@ value for learning/exploration is high and it is genuinely M effort.
 **C-new / C-init-config — Scaffolding.** `phg new <name>` (a `phorge.toml` + `src/main.phg` + `.gitignore`
 skeleton) and `phg init` (add a manifest to an existing dir) are the Go/Cargo affordance a packaged language
 needs — and Phorge made packaging *mandatory* (M5), so the friction of hand-writing `phorge.toml` +
-`package main;` + folder=path is real for newcomers. Both are S, ride the existing manifest writer, and
+`package Main;` + folder=path is real for newcomers. Both are S, ride the existing manifest writer, and
 directly serve adoption. Fits cleanly alongside M5's project model or in the M7 tooling slice.
 
 **C-api-didyoumean — "did you mean" for stdlib/native APIs.** The checker already suggests the nearest

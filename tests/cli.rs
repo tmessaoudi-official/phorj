@@ -86,7 +86,7 @@ fn check_json_error_emits_diagnostic_array_exit_1_no_stderr() {
             "check",
             "--json",
             "-e",
-            "package main; function main(){ var x = nope; }",
+            "package Main; function main(){ var x = nope; }",
         ])
         .output()
         .expect("spawn phg");
@@ -149,7 +149,7 @@ fn run_reads_program_from_stdin() {
         .take()
         .unwrap()
         .write_all(
-            br#"package main;
+            br#"package Main;
 import Core.Console;
 function main() { Console.println("{1 + 2}"); }"#,
         )
@@ -166,7 +166,7 @@ fn run_eval_inline_code() {
             .args([
                 "run",
                 flag,
-                r#"package main;
+                r#"package Main;
 import Core.Console;
 function main() { Console.println("{2 * 3}"); }"#,
             ])
@@ -181,7 +181,7 @@ function main() { Console.println("{2 * 3}"); }"#,
 fn run_double_dash_then_path_is_a_file() {
     let path = write_temp(
         "dashdash",
-        r#"package main;
+        r#"package Main;
 import Core.Console;
 function main() { Console.println("ok"); }"#,
     );
@@ -225,7 +225,7 @@ fn lex_subcommand_dumps_tokens_exit_0() {
 fn transpile_ill_typed_exits_1_with_type_error() {
     let path = write_temp(
         "ill_typed",
-        r#"package main; function main() { int x = "no"; }"#,
+        r#"package Main; function main() { int x = "no"; }"#,
     );
     let out = Command::new(BIN)
         .args(["transpile", path.to_str().unwrap()])
@@ -240,7 +240,7 @@ fn transpile_ill_typed_exits_1_with_type_error() {
 fn run_runtime_error_exits_1() {
     let path = write_temp(
         "runtime_err",
-        r#"package main;
+        r#"package Main;
 import Core.Console;
 function main() { Console.println("{1 / 0}"); }"#,
     );
@@ -257,7 +257,7 @@ function main() { Console.println("{1 / 0}"); }"#,
 fn runvm_simple_program_exits_0() {
     let path = write_temp(
         "runvm_ok",
-        r#"package main;
+        r#"package Main;
 import Core.Console;
 function main() { Console.println("{1 + 1}"); }"#,
     );
@@ -274,7 +274,7 @@ function main() { Console.println("{1 + 1}"); }"#,
 fn runvm_runtime_error_exits_1() {
     let path = write_temp(
         "runvm_rt",
-        r#"package main;
+        r#"package Main;
 import Core.Console;
 function main() { Console.println("{1 / 0}"); }"#,
     );

@@ -31,7 +31,7 @@
   result into `BytecodeProgram.class_implements`. (c) nominal subtyping (class → interface it
   implements) threads through `Ty::assignable_with(from,to,&subtype_oracle)`; the old
   `Ty::assignable` is `assignable_with(_,_,|_,_|false)` — keeps the single chokepoint. (d) interfaces
-  are **`package main`-only** this slice (E-PKG-TYPE extended to reject library interfaces), matching
+  are **`package Main`-only** this slice (E-PKG-TYPE extended to reject library interfaces), matching
   the S2c class/enum restriction. (e) interface-typed receivers dispatch via interface method sigs
   (flattened through `extends`); narrowing `if (x instanceof I)` reuses the S1 push_scope+declare. New
   codes: `E-IFACE-IMPL` (unknown name in `implements`), `E-IFACE-UNIMPL`/`E-IFACE-SIG` (conformance),
@@ -108,7 +108,7 @@
 - [2026-06-20] AGREED (Core-rename scope): this slice renames the **stdlib namespace only** — `core.*`
   → `Core.*` with PascalCase leaf modules (`Core.Console`/`Core.Math`/`Core.Text`/`Core.File`/
   `Core.Bytes`/`Core.Html`; function names stay camelCase), reserve `Core` as the package root, sweep
-  every `.phg`/fixture/inline-test/doc. The broader namespace reshape (`package main` → `package Main`,
+  every `.phg`/fixture/inline-test/doc. The broader namespace reshape (`package Main` → `package Main`,
   `E-PKG-CASE` on user package segments, manifest `name`→`module`, lifting `E-PKG-TYPE`) stays pending.
 
 - [2026-06-20] AGREED (generics-all pace + sub-slicing): proceed **fully autonomously**
@@ -169,7 +169,7 @@
   `emit_type` already drop a class `Named`'s args, and `erase_generics` rewrites a generic class's own
   `<T>`-typed members to `Type::Erased` (→ `CTy::Other`/PHP `mixed`); so the byte-identity spine is safe
   by construction (front-end-only slice: parser + checker + erasure). **No new `Op`, no `Value` change.**
-  Scope: `package main` only (cross-package generic library types deferred); inference-only construction
+  Scope: `package Main` only (cross-package generic library types deferred); inference-only construction
   (no `Box<int>(7)`); invariant, no bounds, no generic enums/interfaces. Method-on-generic-class composes
   (class θ first, then method-level `<U>` via the existing unifier); a method type param shadowing a class
   one is `E-GENERIC-PARAM`.

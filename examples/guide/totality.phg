@@ -6,7 +6,7 @@
 // (today, via an infinite loop). Unreachable code after a `return`, and a `match` arm after a
 // catch-all, are flagged as non-fatal warnings. All of this is checker-only — it transpiles 1:1 to
 // PHP (`never` → PHP 8.1 native `never`) and runs byte-identically on both backends.
-package main;
+package Main;
 
 import Core.Console;
 

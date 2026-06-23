@@ -1885,7 +1885,7 @@ mod tests {
 
     #[test]
     fn parses_private_class_visibility() {
-        match &prog("package main;\nprivate class P {}").items[0] {
+        match &prog("package Main;\nprivate class P {}").items[0] {
             Item::Class(c) => assert_eq!(c.vis, Visibility::Private),
             other => panic!("expected class, got {other:?}"),
         }
@@ -1893,7 +1893,7 @@ mod tests {
 
     #[test]
     fn parses_internal_function_visibility() {
-        match &prog("package main;\ninternal function f() {}").items[0] {
+        match &prog("package Main;\ninternal function f() {}").items[0] {
             Item::Function(f) => assert_eq!(f.vis, Visibility::Internal),
             other => panic!("expected function, got {other:?}"),
         }
@@ -1901,11 +1901,11 @@ mod tests {
 
     #[test]
     fn parses_internal_enum_and_interface_visibility() {
-        match &prog("package main;\ninternal enum E { A() }").items[0] {
+        match &prog("package Main;\ninternal enum E { A() }").items[0] {
             Item::Enum(e) => assert_eq!(e.vis, Visibility::Internal),
             other => panic!("expected enum, got {other:?}"),
         }
-        match &prog("package main;\nprivate interface I { function m() -> int; }").items[0] {
+        match &prog("package Main;\nprivate interface I { function m() -> int; }").items[0] {
             Item::Interface(i) => assert_eq!(i.vis, Visibility::Private),
             other => panic!("expected interface, got {other:?}"),
         }
@@ -1913,7 +1913,7 @@ mod tests {
 
     #[test]
     fn bare_decl_defaults_to_public() {
-        match &prog("package main;\nclass C {}").items[0] {
+        match &prog("package Main;\nclass C {}").items[0] {
             Item::Class(c) => assert_eq!(c.vis, Visibility::Public),
             other => panic!("expected class, got {other:?}"),
         }
@@ -1921,7 +1921,7 @@ mod tests {
 
     #[test]
     fn explicit_public_enum_parses() {
-        match &prog("package main;\npublic enum E { A() }").items[0] {
+        match &prog("package Main;\npublic enum E { A() }").items[0] {
             Item::Enum(e) => assert_eq!(e.vis, Visibility::Public),
             other => panic!("expected enum, got {other:?}"),
         }
@@ -1929,13 +1929,13 @@ mod tests {
 
     #[test]
     fn conflicting_visibility_prefix_is_rejected() {
-        let err = prog_err("package main;\npublic private class C {}");
+        let err = prog_err("package Main;\npublic private class C {}");
         assert!(err.contains("a single visibility"), "got: {err}");
     }
 
     #[test]
     fn visibility_on_import_is_rejected() {
-        let err = prog_err("package main;\nprivate import Core.Console;");
+        let err = prog_err("package Main;\nprivate import Core.Console;");
         assert!(err.contains("cannot carry a visibility"), "got: {err}");
     }
 
@@ -2568,7 +2568,7 @@ mod tests {
     #[test]
     fn parses_fn_throws_clause() {
         // Single declared exception type.
-        match &prog("package main;\nfunction f() -> int throws ParseError { return 1; }").items[0] {
+        match &prog("package Main;\nfunction f() -> int throws ParseError { return 1; }").items[0] {
             Item::Function(f) => {
                 assert_eq!(f.throws.len(), 1);
                 assert!(matches!(&f.throws[0], Type::Named { name, .. } if name == "ParseError"));
@@ -2576,7 +2576,7 @@ mod tests {
             other => panic!("expected function, got {other:?}"),
         }
         // `throws A | B` captures the whole union as one `Type::Union`.
-        match &prog("package main;\nfunction g() throws A | B { return; }").items[0] {
+        match &prog("package Main;\nfunction g() throws A | B { return; }").items[0] {
             Item::Function(f) => {
                 assert_eq!(f.throws.len(), 1);
                 assert!(matches!(&f.throws[0], Type::Union(members, _) if members.len() == 2));
@@ -2584,7 +2584,7 @@ mod tests {
             other => panic!("expected function, got {other:?}"),
         }
         // No throws clause ⇒ empty.
-        match &prog("package main;\nfunction h() {}").items[0] {
+        match &prog("package Main;\nfunction h() {}").items[0] {
             Item::Function(f) => assert!(f.throws.is_empty()),
             other => panic!("expected function, got {other:?}"),
         }
@@ -3041,7 +3041,7 @@ mod tests {
     #[test]
     fn parses_open_class_with_single_extends() {
         // S6a.2: `open` class prefix + a single `extends` parent.
-        let p = prog("package main;\nopen class Animal {}\nclass Dog extends Animal {}");
+        let p = prog("package Main;\nopen class Animal {}\nclass Dog extends Animal {}");
         let animal = match &p.items[0] {
             Item::Class(c) => c,
             o => panic!("item 0: {o:?}"),
@@ -3059,7 +3059,7 @@ mod tests {
     #[test]
     fn open_prefix_on_a_non_class_is_an_error() {
         // S6a.2: `open` only applies to classes.
-        let msg = prog_err("package main;\nopen function f() {}");
+        let msg = prog_err("package Main;\nopen function f() {}");
         assert!(msg.contains("only a class"), "got: {msg}");
     }
 
@@ -3215,14 +3215,14 @@ mod tests {
     fn parses_function_type_annotation() {
         // a function-typed parameter must parse
         let result =
-            parser("package main; function apply(int x, (int) -> int f) -> int { return x; }")
+            parser("package Main; function apply(int x, (int) -> int f) -> int { return x; }")
                 .parse_program();
         assert!(
             result.is_ok(),
             "function-typed param should parse: {result:?}"
         );
         // nested + zero-arg
-        let result2 = parser("package main; function f() -> () -> int { }").parse_program();
+        let result2 = parser("package Main; function f() -> () -> int { }").parse_program();
         assert!(
             result2.is_ok(),
             "zero-arg function type should parse: {result2:?}"

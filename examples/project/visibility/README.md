@@ -23,7 +23,7 @@ byte-identity spine is unaffected.
 
 ```
 src/
-  main.phg                  package main      — imports the public Rect across packages
+  main.phg                  package Main      — imports the public Rect across packages
   acme/shapes/shapes.phg    package acme.shapes — public class Rect; internal fn scale
   acme/shapes/helpers.phg   package acme.shapes — internal fn factor; private fn clamp
 ```

@@ -1,4 +1,4 @@
-package main;
+package Main;
 
 // M6 W0 — the `bytes` type: raw octet sequences distinct from UTF-8 `string`.
 // `b"…"` literals (with `\xHH`), and the `Core.Bytes` interop module.

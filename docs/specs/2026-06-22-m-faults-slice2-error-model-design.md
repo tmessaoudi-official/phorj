@@ -30,7 +30,7 @@ Both checked tiers (1, 2) are typed, checker-enforced, and `?`-composable. **Har
 ## 2. Surface syntax (Section A)
 
 ```phorge
-package main;
+package Main;
 import Core.Console;
 
 // Tier 1 — a typed, enforced exception. `ParseError` is a subtype of the core `Error` base.

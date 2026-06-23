@@ -18,7 +18,7 @@ package acme.geometry;
 class Point { constructor(public int x, public int y) {} function sumXY() -> int { return this.x + this.y; } }
 
 // src/main.phg
-package main;
+package Main;
 import type acme.geometry.Point;          // binds bare `Point` → Acme\Geometry\Point
 import Core.Console;
 function main() {
@@ -52,7 +52,7 @@ The cross-package *function* machinery (verified map) is exactly the template:
 | Transpiler de-mangle | functions bucketed by `namespace_of`; bare→`Main` | **same bucketing** — a mangled class/enum/interface lands in its `namespace Acme\Geometry { … }`; references emit the FQN `\Acme\Geometry\Point` |
 | Runtime | n/a (names are just strings) | `Value::Instance{class}` / `Value::Enum{name}` carry the **mangled** string on both backends — already string-keyed, so interpreter/VM "just work" if names are consistently mangled |
 
-**Key invariant (byte-identity):** a single-`package main` program produces **no `\` names** (mangle is
+**Key invariant (byte-identity):** a single-`package Main` program produces **no `\` names** (mangle is
 identity for `main`), so the transpiler's flat path runs and output is byte-for-byte the pre-lift result.
 Cross-package types only change output for genuinely multi-package programs.
 
@@ -72,7 +72,7 @@ Cross-package types only change output for genuinely multi-package programs.
 ## 4. Loader changes (`src/loader.rs`)
 
 1. **Retire `reject_library_types`** (lines 277–299) — delete the `E-PKG-TYPE` gate. (Keep a narrower
-   guard: a `package main` type is still entry-local; a library `package main` is already `E-VENDOR-MAIN`.)
+   guard: a `package Main` type is still entry-local; a library `package Main` is already `E-VENDOR-MAIN`.)
 2. **Pass 1 — type symbol table.** Alongside `defined`, build
    `types: HashMap<(String,String), String>` mapping `(pkg_dotted, type_name) → mangle(pkg, type_name)`
    for every `Item::{Class,Enum,Interface}` in a **non-main** package (a `main` type stays bare, so it
@@ -84,14 +84,14 @@ Cross-package types only change output for genuinely multi-package programs.
    - `E-TYPE-IMPORT-UNKNOWN` — the `(pkg, type)` is not in the `types` table (no such exported type).
    - `E-TYPE-IMPORT-CONFLICT` — two `import type` bind the same bare name (must `as`-alias one).
    - `E-TYPE-IMPORT-BUILTIN` — leaf is a built-in (`Int`/`List`/`Map`/`Set`/…); built-ins are import-free.
-   - `E-TYPE-IMPORT-SHADOW` — bare name collides with a `package main` local type **or** a module-import
+   - `E-TYPE-IMPORT-SHADOW` — bare name collides with a `package Main` local type **or** a module-import
      qualifier (keep import kinds disjoint, the `E-SHADOW-IMPORT` discipline).
 4. **Pass 2 — type-reference rewrite.** Extend the resolve pass (currently `resolve_item`/`resolve_call`,
    which rewrite **call exprs only**) to also rewrite **type names**. A new `resolve_type_name(name, ctx)`:
    - If `name` is in the file's `type_import_map` → its mangled FQN.
    - Else if `(ctx.package, name)` is in `types` (a **same-library-package** sibling type) → its mangled
      FQN. (So a library type referencing its own package's sibling type resolves too.)
-   - Else unchanged (a `package main` local type, or a built-in, stays bare).
+   - Else unchanged (a `package Main` local type, or a built-in, stays bare).
    Apply it everywhere a type name lives — this is the **bulk of the work** and the main risk surface:
    - **Type annotations** in `Type::Named{name}`: params, returns, fields, ctor params, `var`/`for` decls,
      `(T)->T` function types, lambda param/return types. (Recurse through `Type` like `erase_generics`'s
@@ -118,14 +118,14 @@ arm looks up the (already-mangled) name and finds it. **So the checker needs lit
   table post-merge).
 - **`E-PKG-TYPE` in the checker?** The map shows the rejection is loader-only; verify no checker-side
   copy. (The checker's `E-PKG-TYPE` mention, if any, is the per-file `check()` path used by `-e`/stdin —
-  those are single-`package main`, so unaffected.)
+  those are single-`package Main`, so unaffected.)
 
 ## 6. Transpiler changes (`src/transpile.rs`)
 
 The function de-mangling already buckets by `namespace_of`. Extend the **type** path:
 1. **Bucketing** (`emit_program_namespaced`, lines 183–193): currently *all* enums/classes/interfaces go
    to `Main`. Change to `namespace_of(&type_name)` — a mangled `Acme\Geometry\Point` → bucket
-   `Acme\Geometry`; a bare `Point` (package main) → `Main`. The class/enum/interface is emitted with its
+   `Acme\Geometry`; a bare `Point` (package Main) → `Main`. The class/enum/interface is emitted with its
    **last segment** name inside its namespace block (reuse `last_segment`).
 2. **Type references at use sites** emit the **FQN** `\Acme\Geometry\Point` (adopted §4.4 — uniform with
    functions, no `use` pass). Touch the emit points: `new \Acme\Geometry\Point(...)`, a typed param/return
@@ -151,7 +151,7 @@ function mangling already relies on. **No new `Op`, no `Value` change.**
 
 - **Example** (byte-identity-gated, project-aware harness): a new `examples/project/<name>/` two-package
   project — a library package exporting a `class` (and an `enum`) consumed via `import type` from
-  `package main`; runs identically on `run`/`runvm`/**real PHP 8.6**. Mirrors `examples/project/tempconv`.
+  `package Main`; runs identically on `run`/`runvm`/**real PHP 8.6**. Mirrors `examples/project/tempconv`.
 - **Differential**: project-aware harness already globs `examples/project/*/`; the new project is gated
   automatically. Add focused loader tests for each new diagnostic (UNKNOWN/CONFLICT/BUILTIN/SHADOW) and a
   cross-package `instanceof` + method-call agreement case.

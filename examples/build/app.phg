@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 // A self-contained program built into a standalone executable with `phg build`.

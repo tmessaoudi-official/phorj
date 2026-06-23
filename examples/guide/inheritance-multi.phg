@@ -11,7 +11,7 @@
 //
 // (Inherited fields and constructors across multiple parents land in a later slice; this guide stays
 // field-free, like the single-inheritance guide.)
-package main;
+package Main;
 
 import Core.Console;
 

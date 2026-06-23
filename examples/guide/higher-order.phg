@@ -7,7 +7,7 @@
 //
 // Results are shown via `List.sum` and indexing — PHP cannot `echo` an array directly, so no example
 // prints a whole list. Integer arithmetic only (PHP's float `/` never enters).
-package main;
+package Main;
 
 import Core.Console;
 import Core.List;

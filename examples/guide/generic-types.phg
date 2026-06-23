@@ -10,7 +10,7 @@
 // byte-for-byte identical output. An instance carries no type argument at runtime: `instanceof
 // Box<int>` is just `instanceof Box`.
 
-package main;
+package Main;
 
 import Core.Console;
 

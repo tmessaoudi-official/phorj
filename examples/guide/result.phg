@@ -11,7 +11,7 @@
 // directly; transpiled to PHP it lowers to `$t = f(); if ($t instanceof Err) return $t; $x = $t->value;`
 // — byte-identical output on `run`, `runvm`, and real PHP.
 
-package main;
+package Main;
 
 import Core.Console;
 

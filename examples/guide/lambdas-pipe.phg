@@ -1,4 +1,4 @@
-package main;
+package Main;
 import Core.Console;
 
 function dbl(int x) -> int { return x * 2; }

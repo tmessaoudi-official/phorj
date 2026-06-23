@@ -58,7 +58,7 @@ remove a surprise or close a `run`↔`runvm`/PHP divergence; a handful are hones
 | D-html-all-tags | Named helper for every HTML tag (vs curated set + `el`) | map | weak | reject | — | S |
 | D-interp-line1 | Faults inside `"{…}"` interpolation report line 1 (caret wrong) | port | strong | adopt | M-faults Slice 1.1 | M |
 | D-interp-nested-quotes | Nested quotes in interpolation (`"{m["k"]}"`) end string early | defer | ok | defer | M-faults / lexer | M |
-| D-transpile-php-builtin | `package main` fn names collide with PHP builtins (transpile) | port | strong | adopt | M8 | S |
+| D-transpile-php-builtin | `package Main` fn names collide with PHP builtins (transpile) | port | strong | adopt | M8 | S |
 | D-transpile-private-field | Externally-read fields must be `public` (PHP enforces `private`) | port | ok | defer | M-RT (with member-vis) | S |
 | D-transpile-float-divzero | Non-finite float `/0` → PHP `DivisionByZeroError` (fault-domain) | defer | weak | reject | — | S |
 | D-transpile-optbang-msg | `opt!`-on-null transpiles to a different fault message | defer | weak | reject | — | S |
@@ -131,7 +131,7 @@ context-specific escapers (URL-encode, CSS, JSON-in-script) — strong fit with 
 line 1 with the caret at column 1 — a wrong diagnostic, the opposite of the "sharp caret" S0.4 promise.
 Front-end-only fix (sub-lexer position threading), squarely in the fault-reporting follow-up. Adopt.
 
-**D-transpile-php-builtin — `package main` fn-name/PHP-builtin collisions.** A `package main` function
+**D-transpile-php-builtin — `package Main` fn-name/PHP-builtin collisions.** A `package Main` function
 named `serialize`/`strlen`/`header` transpiles to a global PHP fn and fails to redeclare — a real
 transpile-target footgun the M8 hardening slot should catch with a checker warning/error (e.g.
 `W-PHP-BUILTIN-NAME`). Small, high-value: it turns a confusing PHP-side failure into a clear Phorge-side
@@ -149,7 +149,7 @@ propagating its exit code) is expected behavior. Adopt in the M2.5 Phase 3 polis
 is the planned, PHP-pragmatic concurrency story (no async/await colouring surprise). Strong fit; adopt in
 its milestone.
 
-**D-lambda-lib-pkg — lambdas / fn-values in library packages.** Lambdas work in `package main` but a
+**D-lambda-lib-pkg — lambdas / fn-values in library packages.** Lambdas work in `package Main` but a
 fn-value or lambda body in a dotted library package isn't rewritten by the loader's mangling pass and
 rejects cleanly. This is an arbitrary surprise (the same lambda works in `main` but not in a package) —
 closing it is a loader follow-up that makes the language uniform. Adopt as an M5 follow-up.

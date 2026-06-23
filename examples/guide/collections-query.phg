@@ -6,7 +6,7 @@
 // Map keys here are plain (non-numeric) strings: PHP arrays coerce integer-like string keys and
 // bools to int keys, so `Map.keys` over such a map would render differently under PHP (KNOWN_ISSUES);
 // plain string keys are kept verbatim. Integer arithmetic only (PHP's float `/` never enters).
-package main;
+package Main;
 
 import Core.Console;
 import Core.List;

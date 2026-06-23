@@ -4,7 +4,7 @@
 // once. A parameter typed `Drawable & Named` accepts only a value whose class implements BOTH
 // interfaces — and inside, BOTH interfaces' methods are in scope on it. Members are interfaces (plus
 // at most one concrete class — a value has exactly one class). Transpiles 1:1 to PHP 8.1 `A&B`.
-package main;
+package Main;
 
 import Core.Console;
 
