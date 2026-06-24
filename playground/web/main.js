@@ -79,22 +79,23 @@ const callJson = (op, arg) =>
 // the user first runs with "Run PHP" enabled. NOTE: this CDN import is the one integration point
 // not exercised by the Rust test suite; pin a specific version once validated on first deploy.
 const PHP_WASM_URL = "https://cdn.jsdelivr.net/npm/php-wasm/PhpWeb.mjs";
-let phpPromise = null;
+let PhpWebClass = null; // the imported class is cached; the PHP *instance* is not — see runPhp
 
-async function getPhp() {
-  if (!phpPromise) {
-    phpPromise = (async () => {
-      const { PhpWeb } = await import(PHP_WASM_URL);
-      const php = new PhpWeb();
-      await php.binary; // wait for the wasm binary to be fetched/instantiated
-      return php;
-    })();
+async function loadPhpWeb() {
+  if (!PhpWebClass) {
+    ({ PhpWeb: PhpWebClass } = await import(PHP_WASM_URL));
   }
-  return phpPromise;
+  return PhpWebClass;
 }
 
+// A PhpWeb instance keeps a PERSISTENT PHP runtime across run() calls, so re-running the program
+// re-declares its global `function main()` -> "Cannot redeclare function main()". Use a FRESH instance
+// per run for a clean global scope. (php.refresh() could reset one shared instance instead, but a fresh
+// instance is correctness-certain regardless of php-wasm API specifics; the wasm binary stays cached.)
 async function runPhp(code) {
-  const php = await getPhp();
+  const PhpWeb = await loadPhpWeb();
+  const php = new PhpWeb();
+  await php.binary; // wait for this instance's wasm to be instantiated
   let out = "";
   const collect = (e) => (e.detail || []).forEach((s) => (out += s));
   php.addEventListener("output", collect);
