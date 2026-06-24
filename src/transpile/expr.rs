@@ -352,6 +352,11 @@ impl Transpiler {
         match op {
             Sub => "-",
             Mul => "*",
+            // `**` power: PHP's native `**` is also right-associative and binds tighter than unary
+            // minus, but the caller parenthesizes compound operands (`paren_if_compound`), so the
+            // emitted `(a) ** (b)` preserves Phorge's grouping exactly. PHP `**` returns `int` for
+            // int operands / `float` for floats — matching the type-directed Phorge result.
+            Pow => "**",
             // `+`, `/`, `%` are routed through `__phorge_add`/`__phorge_div`/`__phorge_rem` before
             // binop() (`+` is string-concat-overloaded, P0-1/P0-4 for the others).
             Add => unreachable!("Add handled via __phorge_add before binop()"),

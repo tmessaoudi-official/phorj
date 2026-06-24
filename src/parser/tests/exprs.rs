@@ -48,6 +48,10 @@ fn precedence_and_associativity() {
     assert_eq!(sexpr(&expr("x |> f")), "f(x)");
     // pipe is the lowest: `a + b |> f` == `(a + b) |> f`
     assert_eq!(sexpr(&expr("a + b |> f")), "f((+ a b))");
+    // `**` binds tighter than `*` and is right-associative (PHP-identical).
+    assert_eq!(sexpr(&expr("2 ** 3 ** 2")), "(** 2 (** 3 2))"); // right-assoc
+    assert_eq!(sexpr(&expr("2 * 3 ** 2")), "(* 2 (** 3 2))"); // ** tighter than *
+    assert_eq!(sexpr(&expr("-a ** 2")), "(** (- a) 2)"); // unary parsed before **
     assert_eq!(sexpr(&expr("a instanceof Foo")), "(instanceof a Foo)");
     assert_eq!(sexpr(&expr("a ?? b")), "(?? a b)");
     // `??` binds looser than `||`: `a || b ?? c` is `(a || b) ?? c`

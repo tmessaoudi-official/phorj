@@ -27,6 +27,22 @@ fn arithmetic_mixing_int_float_errors() {
 }
 
 #[test]
+fn power_operator_is_type_directed() {
+    // `int ** int` → int, `float ** float` → float (both accepted).
+    assert!(errors_of("function main() -> void { int x = 2 ** 10; }").is_empty());
+    assert!(errors_of("function main() -> void { float x = 2.0 ** 3.0; }").is_empty());
+    // Mixed / non-numeric operands are rejected — `**` never coerces or concatenates.
+    let errs = errors_of("function main() -> void { var x = 2 ** 3.0; }");
+    assert!(
+        errs.iter().any(|e| e
+            .message
+            .contains("`**` requires matching int or float operands")),
+        "{errs:?}"
+    );
+    assert!(!errors_of("function main() -> void { var x = \"a\" ** \"b\"; }").is_empty());
+}
+
+#[test]
 fn bitwise_requires_int_operands() {
     // int & int → int (accepted, used as an int).
     assert!(

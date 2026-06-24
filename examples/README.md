@@ -15,7 +15,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `realworld/library.phg` | catalogue: zero-payload + payload variants, `match`, a class, `List` + `for`, float arithmetic |
 | `realworld/shop.phg` | cart + discounts: enum + `match`, class composition, recursion (bulk pricing), integer arithmetic |
 | `realworld/rpg.phg` | turn-based combat: enum + `match`, class + methods + `this`, `List` + `for`, immutable state evolution |
-| `guide/operators.phg` | arithmetic, comparison, logical, unary operators; `bool` |
+| `guide/operators.phg` | arithmetic, comparison, logical, unary operators; `**` power (type-directed, right-assoc) + `Math.ipow`; `bool` |
 | `guide/control-flow.phg` | `if`/`else`, `for…in`, recursion, mutual recursion |
 | `guide/functions.phg` | functions: typed params, return types, a no-return function, composition, a `List<int>`-returning function |
 | `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances, `List.length` |

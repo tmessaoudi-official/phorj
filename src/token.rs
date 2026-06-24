@@ -140,6 +140,8 @@ pub enum TokenKind {
     Plus,
     Minus,
     Star,
+    /// `**` power operator (Phase 1 operators slice). Right-associative, binds tighter than `*`.
+    StarStar,
     Slash,
     Percent,
     AndAnd,

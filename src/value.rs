@@ -361,6 +361,10 @@ pub const FAULT_MOD_ZERO: &str = "modulo by zero";
 pub const FAULT_INT_OVERFLOW: &str = "integer overflow";
 /// Canonical fault body for a bitwise shift by a negative count (PHP throws `ArithmeticError`).
 pub const FAULT_NEGATIVE_SHIFT: &str = "bit shift by negative number";
+/// Canonical fault body for `int ** int` with a negative exponent. A negative exponent yields a
+/// fractional result, which cannot be the typed `int` the `**` operator promises — so it faults
+/// rather than silently widening to `float` (PHP's `2 ** -1 == 0.5`). Use `float**float` for that.
+pub const FAULT_NEGATIVE_EXPONENT: &str = "negative exponent";
 
 /// Checked integer addition; overflow is a clean fault, never a panic (EV-7).
 pub fn int_add(a: i64, b: i64) -> Result<i64, String> {
@@ -455,6 +459,25 @@ pub fn float_div(a: f64, b: f64) -> f64 {
 pub fn float_rem(a: f64, b: f64) -> f64 {
     a % b
 }
+/// Checked integer power `base ** exp` (Phase 1 operators slice). A negative exponent faults
+/// ([`FAULT_NEGATIVE_EXPONENT`] — the result can't be a typed `int`); overflow (incl. an exponent
+/// too large to fit `u32`) is a clean [`FAULT_INT_OVERFLOW`], never a panic (EV-7). Single-sourced:
+/// both the interpreter's `**` arm and the `Core.Math.ipow` native call this, so `run`/`runvm`
+/// compute and fault identically. PHP's `**`/`pow` return `int` for the same non-negative,
+/// non-overflowing domain, keeping the transpiled output byte-identical there.
+pub fn int_pow(base: i64, exp: i64) -> Result<i64, String> {
+    if exp < 0 {
+        return Err(FAULT_NEGATIVE_EXPONENT.to_string());
+    }
+    let e = u32::try_from(exp).map_err(|_| FAULT_INT_OVERFLOW.to_string())?;
+    base.checked_pow(e)
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+/// Float power `base ** exp` (Phase 1 operators slice). Floats never fault — NaN/inf are valid
+/// `f64`. `powf` is C `pow` (matching PHP's `**`/`pow` on floats). Single-sourced with `Core.Math.pow`.
+pub fn float_pow(base: f64, exp: f64) -> f64 {
+    base.powf(exp)
+}
 
 /// Maximum number of elements a range literal may materialize before faulting (P1-#9). An unbounded
 /// `0..n` would otherwise allocate an arbitrarily large `Vec` and abort the process (OOM, exit 101)
@@ -505,6 +528,26 @@ pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn int_pow_normal_negative_and_overflow() {
+        // Normal non-negative powers.
+        assert_eq!(int_pow(2, 10), Ok(1024));
+        assert_eq!(int_pow(5, 0), Ok(1)); // anything ** 0 == 1
+        assert_eq!(int_pow(7, 1), Ok(7));
+        assert_eq!(int_pow(-2, 3), Ok(-8)); // negative base, odd exponent
+                                            // A negative exponent can't be a typed `int` → clean fault (EV-7), never a panic.
+        assert_eq!(int_pow(2, -1), Err(FAULT_NEGATIVE_EXPONENT.to_string()));
+        // Overflow is a clean fault, both for an overflowing result and a huge exponent.
+        assert_eq!(int_pow(2, 63), Err(FAULT_INT_OVERFLOW.to_string()));
+        assert_eq!(int_pow(2, i64::MAX), Err(FAULT_INT_OVERFLOW.to_string()));
+    }
+
+    #[test]
+    fn float_pow_matches_powf() {
+        assert_eq!(float_pow(3.0, 2.0), 9.0);
+        assert_eq!(float_pow(2.0, 10.0), 1024.0);
+    }
 
     #[test]
     fn build_map_dedups_first_position_last_value() {

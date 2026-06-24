@@ -138,6 +138,9 @@ pub enum BinaryOp {
     Add,
     Sub,
     Mul,
+    /// `**` power (Phase 1 operators slice). Type-directed (`int**int→int`, `float**float→float`);
+    /// no dedicated `Op` — the compiler lowers it to `Op::CallNative` (`Core.Math.ipow`/`pow`).
+    Pow,
     Div,
     Rem,
     Eq,

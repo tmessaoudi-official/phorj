@@ -806,6 +806,9 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     (b'+', Some(b'=')) => Some(TokenKind::PlusEq),
                     (b'-', Some(b'=')) => Some(TokenKind::MinusEq),
                     (b'*', Some(b'=')) => Some(TokenKind::StarEq),
+                    // `**` power operator (Phase 1 operators slice). Distinct p2 from `*=`, so order
+                    // is irrelevant; `**=` (power-assign) is out of scope and lexes as `StarStar` `Eq`.
+                    (b'*', Some(b'*')) => Some(TokenKind::StarStar),
                     (b'/', Some(b'=')) => Some(TokenKind::SlashEq),
                     (b'%', Some(b'=')) => Some(TokenKind::PercentEq),
                     (b'+', Some(b'+')) => Some(TokenKind::PlusPlus),

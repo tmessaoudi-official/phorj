@@ -25,6 +25,17 @@ fn math_natives_eval_and_emit() {
     ));
     // EV-7: abs of i64::MIN faults, never panics
     assert!(math_abs(&[Value::Int(i64::MIN)], &mut out).is_err());
+    // `ipow` is the integer-power native (the `**` twin); single-sourced with `value::int_pow`, so
+    // a negative exponent faults rather than widening to a float.
+    assert!(matches!(
+        math_ipow(&[Value::Int(2), Value::Int(10)], &mut out),
+        Ok(Value::Int(1024))
+    ));
+    assert!(math_ipow(&[Value::Int(2), Value::Int(-1)], &mut out).is_err());
+    assert_eq!(
+        (registry()[index_of("Core.Math", "ipow").unwrap()].php)(&["5".into(), "2".into()]),
+        "pow(5, 2)"
+    );
     // resolvable by both index forms + PHP erasure to the same-named builtin
     let i = index_of("Core.Math", "pow").expect("pow registered");
     assert_eq!(index_of_by_leaf("Math", "pow"), Some(i));

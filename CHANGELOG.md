@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `**` power operator + `Math.ipow` (Phase 1 operators slice)
+
+`2 ** 10`, `2.0 ** 3.0`, `Math.ipow(5, 2)`. The `**` operator is **type-directed** (`int ** int → int`,
+`float ** float → float`), **right-associative**, and binds tighter than `* / %` — PHP-identical.
+Byte-identical `run ≡ runvm ≡ real PHP 8.5`; **no new `Op`/`Value`**.
+
+- **Lowering:** the compiler lowers `**` to an `Op::CallNative` to `Core.Math.ipow`/`pow` (resolved at
+  compile time — no `import Core.Math` needed). Both the interpreter's `**` arm and the native call the
+  single-sourced `value::int_pow`/`float_pow` kernels, so the two Rust backends compute and fault
+  identically. The transpiler emits PHP's native `**` (compound operands parenthesized, so `-a ** 2` is
+  `(-$a) ** 2` = `(-a)**2`, matching Phorge rather than PHP's default `**`-before-unary-minus).
+- **Semantics:** integer power is overflow-checked; a negative exponent faults (`negative exponent`)
+  rather than widening to a float — use `float ** float` for fractional powers. `Math.ipow(int, int) ->
+  int` is the named, value-level twin (`Math.pow` stays the float power). `examples/guide/operators.phg`.
+
 ### Changed — mandatory `new` for construction (Feature C, breaking)
 
 Every class instantiation and enum-variant construction now **requires** `new`: `new Counter()`,

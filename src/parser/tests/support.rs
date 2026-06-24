@@ -67,6 +67,7 @@ pub(super) fn sexpr(e: &Expr) -> String {
                 BinaryOp::Add => "+",
                 BinaryOp::Sub => "-",
                 BinaryOp::Mul => "*",
+                BinaryOp::Pow => "**",
                 BinaryOp::Div => "/",
                 BinaryOp::Rem => "%",
                 BinaryOp::Eq => "==",

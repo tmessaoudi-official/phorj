@@ -580,9 +580,10 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
                 Add => crate::value::int_add(a, b),
                 Sub => crate::value::int_sub(a, b),
                 Mul => crate::value::int_mul(a, b),
+                Pow => crate::value::int_pow(a, b),
                 Div => crate::value::int_div(a, b),
                 Rem => crate::value::int_rem(a, b),
-                _ => unreachable!("arith only called with +-*/%"),
+                _ => unreachable!("arith only called with +-*/%**"),
             };
             match v {
                 Ok(n) => Ok(Value::Int(n)),
@@ -594,9 +595,10 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
                 Add => crate::value::float_add(a, b),
                 Sub => crate::value::float_sub(a, b),
                 Mul => crate::value::float_mul(a, b),
+                Pow => crate::value::float_pow(a, b),
                 Div => crate::value::float_div(a, b),
                 Rem => crate::value::float_rem(a, b),
-                _ => unreachable!("arith only called with +-*/%"),
+                _ => unreachable!("arith only called with +-*/%**"),
             };
             Ok(Value::Float(v))
         }

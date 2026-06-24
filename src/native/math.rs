@@ -10,8 +10,16 @@ fn math_sqrt(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 fn math_pow(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Float(b), Value::Float(e)] => Ok(Value::Float(b.powf(*e))),
+        [Value::Float(b), Value::Float(e)] => Ok(Value::Float(crate::value::float_pow(*b, *e))),
         _ => Err("Math.pow expects (float, float)".into()),
+    }
+}
+fn math_ipow(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // Single-sourced with the interpreter's `int ** int` arm via `value::int_pow`: a negative
+        // exponent or overflow is a clean fault (EV-7), never a panic.
+        [Value::Int(b), Value::Int(e)] => crate::value::int_pow(*b, *e).map(Value::Int),
+        _ => Err("Math.ipow expects (int, int)".into()),
     }
 }
 fn math_floor(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -75,6 +83,18 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             params: vec![Ty::Float, Ty::Float],
             ret: Ty::Float,
             eval: NativeEval::Pure(math_pow),
+            php: |a| format!("pow({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            // `Math.ipow(int, int) -> int` — integer power as a value (the `**` operator's named twin,
+            // Phase 1 operators slice). PHP's `pow` returns an `int` for non-negative int args whose
+            // result fits, matching the kernel's safe domain; the negative/overflow cases fault in
+            // Phorge (never reached by a byte-identity example).
+            module: "Core.Math",
+            name: "ipow",
+            params: vec![Ty::Int, Ty::Int],
+            ret: Ty::Int,
+            eval: NativeEval::Pure(math_ipow),
             php: |a| format!("pow({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {

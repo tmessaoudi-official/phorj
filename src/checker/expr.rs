@@ -253,6 +253,20 @@ impl Checker {
                     self.err(span, format!("arithmetic requires matching int or float operands, found `{l}` and `{r}`"))
                 }
             }
+            // `**` power is type-directed like the other arithmetic ops but never concatenates:
+            // `int**int→int`, `float**float→float`, anything else is an error (no coercion).
+            BinaryOp::Pow => {
+                if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) {
+                    l
+                } else {
+                    self.err(
+                        span,
+                        format!(
+                            "`**` requires matching int or float operands, found `{l}` and `{r}`"
+                        ),
+                    )
+                }
+            }
             BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
                 if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) {
                     Ty::Bool

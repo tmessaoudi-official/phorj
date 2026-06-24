@@ -282,6 +282,22 @@ impl Compiler<'_> {
                 self.expr(rhs)?;
                 self.emit(Op::Concat(2), line);
             }
+            // `**` power has no dedicated `Op`: it lowers (type-directed) to a `Core.Math` native
+            // call — `ipow` for `int**int`, `pow` for `float**float` — keeping the no-new-Op
+            // invariant. The native dispatches into `value::int_pow`/`float_pow`, the *same* kernels
+            // the interpreter's `**` arm uses, so `run`/`runvm` compute and fault identically. The
+            // registry index is resolved at compile time, so no `import Core.Math` is required.
+            Pow => {
+                let leaf = match self.num_ty(lhs)? {
+                    NumTy::Int => "ipow",
+                    NumTy::Float => "pow",
+                };
+                let idx = crate::native::index_of("Core.Math", leaf)
+                    .expect("Core.Math.ipow/pow are registered natives");
+                self.expr(lhs)?;
+                self.expr(rhs)?;
+                self.emit(Op::CallNative(idx, 2), line);
+            }
             Add | Sub | Mul | Div | Rem => {
                 let nt = self.num_ty(lhs)?;
                 self.expr(lhs)?;

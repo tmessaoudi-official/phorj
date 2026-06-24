@@ -1,5 +1,6 @@
 package Main;
 import Core.Console;
+import Core.Math;
 
 // Arithmetic, comparison, logical, and unary operators.
 // Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).
@@ -24,4 +25,23 @@ function main() -> void {
     Console.println("or      = {(a < b) || (x > y)}");
     Console.println("not     = {!(a < b)}");
     Console.println("neg     = {-a}");
+
+    // `**` power. Type-directed: `int ** int` → int, `float ** float` → float.
+    var sq = 2 ** 10;                  // 1024
+    Console.println("2 ** 10        = {sq}");
+    // Right-associative (like PHP): 2 ** (3 ** 2) = 2 ** 9 = 512.
+    var ra = 2 ** 3 ** 2;
+    Console.println("2 ** 3 ** 2    = {ra}");
+    // Binds tighter than `*`: 2 * (10 ** 2) = 200.
+    var prec = 2 * 10 ** 2;
+    Console.println("2 * 10 ** 2    = {prec}");
+    // Unary minus is parsed before `**`, so this is (-7) ** 2 = 49 on every backend.
+    var negPow = -a ** 2;
+    Console.println("-a ** 2        = {negPow}");
+    // Float power (exact-representable result to stay byte-identical with PHP's echo).
+    var fp = 3.0 ** 2.0;               // 9.0
+    Console.println("3.0 ** 2.0     = {fp}");
+    // `Math.ipow` is the named, value-level twin of integer `**` (int ** int → int).
+    var ip = Math.ipow(5, 2);          // 25
+    Console.println("Math.ipow(5,2) = {ip}");
 }

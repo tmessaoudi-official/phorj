@@ -56,6 +56,9 @@ impl Parser {
             T::Star => (12, BinaryOp::Mul),
             T::Slash => (12, BinaryOp::Div),
             T::Percent => (12, BinaryOp::Rem),
+            // `**` power binds tighter than `* / %` and is **right-associative** (PHP-identical):
+            // `2 ** 3 ** 2` is `2 ** (3 ** 2)`. Right-assoc is applied in `parse_binary`.
+            T::StarStar => (13, BinaryOp::Pow),
             _ => return None,
         })
     }
@@ -113,7 +116,14 @@ impl Parser {
             }
             let sp = self.peek_span();
             self.advance(); // consume the operator
-            let rhs = self.parse_binary(bp + 1)?;
+                            // All binary operators are left-associative (`bp + 1`) except `**`, which is
+                            // right-associative (`bp`): `2 ** 3 ** 2` parses as `2 ** (3 ** 2)`, PHP-identical.
+            let right_bp = if matches!(op, BinaryOp::Pow) {
+                bp
+            } else {
+                bp + 1
+            };
+            let rhs = self.parse_binary(right_bp)?;
             lhs = if matches!(op, BinaryOp::Pipe) {
                 // `lhs |> rhs` is syntactic sugar for `rhs(lhs)` — lower to a Call in the
                 // parser so all four backends see an ordinary function call. `BinaryOp::Pipe`

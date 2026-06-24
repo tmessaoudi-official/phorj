@@ -329,7 +329,7 @@ impl Interp {
         let l = self.eval(lhs)?;
         let r = self.eval(rhs)?;
         match op {
-            Add | Sub | Mul | Div | Rem => arith(op, l, r),
+            Add | Sub | Mul | Pow | Div | Rem => arith(op, l, r),
             BitAnd | BitOr | BitXor | Shl | Shr => bitwise(op, l, r),
             Eq => Ok(Value::Bool(l.eq_val(&r))),
             NotEq => Ok(Value::Bool(!l.eq_val(&r))),
