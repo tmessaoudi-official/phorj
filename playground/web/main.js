@@ -6,7 +6,6 @@
 // agreement badge. Everything is client-side; nothing is sent to a server.
 
 import { EditorView, basicSetup } from "https://esm.sh/codemirror@6.0.1";
-import { EditorState } from "https://esm.sh/@codemirror/state@6.4.1";
 
 // --- DOM ---------------------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -15,8 +14,13 @@ const RUN_TIMEOUT_MS = 5000;
 // --- CodeMirror editor -------------------------------------------------------------------------
 let view;
 function initEditor(doc) {
+  // Pass doc + extensions directly so EditorView builds the EditorState with ITS OWN bundled
+  // @codemirror/state. Importing EditorState from a separate @codemirror/state copy created two
+  // instances → CM threw "Unrecognized extension value in extension set" and killed boot() (so the
+  // editor never mounted and the examples list never populated).
   view = new EditorView({
-    state: EditorState.create({ doc, extensions: [basicSetup] }),
+    doc,
+    extensions: [basicSetup],
     parent: $("editor-pane"),
   });
 }
