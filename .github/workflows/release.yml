@@ -1,0 +1,92 @@
+# Build the `phg` binary for Linux, Windows, and macOS and attach the archives to a GitHub Release.
+#
+# Native runners per OS (not cross-compilation): each target builds on its own platform, so the
+# binary is correctly linked — and it fills the macOS gap that `phg build --target` defers. Triggered
+# when a Release is published; `workflow_dispatch` also builds the archives and uploads them as run
+# artifacts (so the pipeline can be exercised without cutting a release).
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write # upload assets onto the release
+
+jobs:
+  build:
+    name: ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: phg-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: phg-windows-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset: phg-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: phg-macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the channel; add this matrix entry's target on top of it.
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      # --cap-lints=warn mirrors ci.yml's cross-build job: a platform-specific lint must not trip the
+      # core crate's `warnings = "deny"` gate on Windows/macOS where the native build is verified.
+      - name: Build phg
+        run: cargo build --release --bin phg --target ${{ matrix.target }}
+        env:
+          RUSTFLAGS: "--cap-lints=warn"
+
+      # Package: tar.gz on Unix, zip on Windows. Bundle the binary with the licenses + README so each
+      # archive is a self-contained distributable. `staging/` holds exactly what ships.
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          cp "target/${{ matrix.target }}/release/phg" staging/
+          strip staging/phg || true
+          cp LICENSE-MIT LICENSE-APACHE README.md staging/
+          tar -czf "${{ matrix.asset }}.tar.gz" -C staging .
+          ls -l "${{ matrix.asset }}.tar.gz"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/phg.exe" staging/
+          Copy-Item LICENSE-MIT, LICENSE-APACHE, README.md staging/
+          Compress-Archive -Path staging/* -DestinationPath "${{ matrix.asset }}.zip" -Force
+          Get-ChildItem "${{ matrix.asset }}.zip"
+
+      # Always keep the archive as a run artifact — lets workflow_dispatch verify the build with no release.
+      - name: Upload run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.asset }}.tar.gz
+            ${{ matrix.asset }}.zip
+          if-no-files-found: ignore
+
+      # On a published release, attach the archive to that release.
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.asset }}.tar.gz
+            ${{ matrix.asset }}.zip
