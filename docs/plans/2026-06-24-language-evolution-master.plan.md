@@ -107,3 +107,30 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   couldn't — `\{` and `\\{` collapse to the same bytes). Raw strings fall out of the same refactor
   (a single literal segment). String-slice part 1 (`+`, `\u{}`) shipped in `a0a3c95`.
 - **Introspection depth:** typeName+className+hierarchy+**member enumeration** (read-only).
+- **Mandatory `new` — EVERYWHERE (decided 2026-06-24).** `new ClassName(...)` AND `new Variant(...)`
+  for enum-variant construction (`new Some(7)`, `new Circle(2.0)`). The developer chose uniformity ("a
+  clean `new` everywhere") over my Option-1 rec (classes only) — accepted trade-off: no surface language
+  `new`s a sum-type variant, so it's a deliberate Phorge departure for one-rule simplicity. `new` is
+  currently a reserved-but-unhandled token. Breaking codemod (`Name(...)` → `new Name(...)` for every
+  class + enum-variant construction; needs the checker's type tables to tell construction from a plain
+  call). Lists/maps/sets/closures/primitives are literals/native — unaffected. Own design+plan pass.
+- **`const` class constants — ACTIVATE with visibility (decided 2026-06-24).** Currently vestigial
+  (reserved `Modifier::Const`, no semantics; parse-errors as a local, rejected as a class field). Make
+  it a real PHP-style class constant: `[vis] const TYPE NAME = <literal>;`, class-name-only access
+  (`C.MAX`), immutable, member-visibility (public default / `private` / `protected`). Compile-time
+  literal, inlined on the Rust backends (no new `Op`/`Value`), → PHP typed class const (`const int MAX
+  = 100;`, 8.3+; floor 8.5 ✓) accessed `C::MAX` (no `$`, unlike a static field's `C::$s`). Resolved
+  open points (developer accepted all recs): **inherited** (subclass accesses via its own name);
+  const-of-const **deferred** (literal-only v1); interface constants **deferred** (classes-only v1).
+- **Expression field initializers — instance + static (decided 2026-06-24).** Lifts PHP's
+  constant-expression-only restriction on property defaults (verified: PHP forbids call/method/closure/
+  static-read/`$this` in a default — "Constant expression contains invalid operations"). Phorge allows
+  ARBITRARY expressions + closures in field initializers, lowered to valid PHP: **instance** fields →
+  a constructor prelude (per-construction, declaration order); **static** fields → a one-time guarded
+  init in PHP (the harder case — developer chose to include statics). An initializer **may read `this`
+  and earlier-declared sibling fields** (declaration-order eval; reading a *later* field = error — the
+  forward-reference guard tames the half-constructed-object footgun the developer accepted). `const`
+  stays compile-time-literal (not part of this). Byte-identity via identical decl-order evaluation on
+  all three backends. Own design+plan.
+- **Build order: SPECS-FIRST for all three** (`new`, `const`, expression-initializers) before any
+  implementation — developer's call. Specs land for review, then plans, then build.
