@@ -55,7 +55,14 @@ so the work is checker + backends recognizing a const-modified field as a class 
 **Spec:** member-initializers §"Feature 2". No new `Op`/`Value`. Two steps: instance first (clean ctor
 lowering), then static (one-time guarded init — the riskier PHP-timing piece).
 
-### B-instance
+### B-instance ✅ DONE (`4873d45`)
+
+> Landed: checker lifts the init rejection + type-checks + forward-ref guard (`E-FIELD-INIT-FORWARD-REF`,
+> `E-FIELD-INIT-TYPE`; this-capture reuses `E-LAMBDA-THIS`); shared `ast::field_initializers` (own
+> initializers of the constructor PHP invokes — no auto-chain); interpreter `run_field_inits`, compiler
+> `SetField` in the synthetic ctor, transpiler ctor-prelude + synthesized `__construct`.
+> `examples/guide/field-init.phg` byte-identical run≡runvm≡PHP 8.5; 719 lib + 108 differential green.
+
 - **B1 — checker:** lift the "instance field cannot have an initializer" rejection for a plain
   (non-static, non-const) field. Type-check the initializer against the field type. **Declaration-order
   scope:** an initializer may reference `this` and **earlier-declared** instance fields; a reference to
