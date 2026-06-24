@@ -208,6 +208,30 @@ function renderDiagnostics(check) {
   $("diag-count").textContent = errs ? `(${errs})` : "";
 }
 
+// Append a backend (interpreter/VM) rejection to the diagnostics pane when the checker was clean —
+// otherwise a lowering rejection (not a checker diagnostic) leaves the tab empty under a "does not
+// compile" badge. A VM-only rejection is additionally flagged as a likely run≠runvm Phorge bug.
+function surfaceBackendRejection(check, run, vm) {
+  const checkClean = !(check && check.parseError) && !((check && check.diagnostics) || []).length;
+  if (!checkClean) return;
+  const msg = vm.error || run.error;
+  if (!msg) return;
+  const host = $("pane-diag");
+  host.querySelectorAll(".diag-empty").forEach((n) => n.remove());
+  const d = document.createElement("div");
+  d.className = "diag";
+  const sev = document.createElement("span");
+  sev.className = "sev-error";
+  sev.textContent = vm.error && !run.error ? "backend rejection (run≠runvm — likely a Phorge bug)" : "backend rejection";
+  const loc = document.createElement("span");
+  loc.className = "loc";
+  loc.textContent = " " + msg;
+  d.append(sev, loc);
+  host.appendChild(d);
+  const cur = $("diag-count").textContent;
+  $("diag-count").textContent = cur ? cur : "(1)";
+}
+
 async function showExplain(code) {
   $("explain-code").textContent = code;
   $("explain-body").textContent = "…";
@@ -235,9 +259,20 @@ function flashBadge(kind, text) {
 }
 
 function renderBadge(run, vm, phpOut, phpErr, phpEnabled) {
-  // Front-end rejection (type/syntax error) takes priority — nothing executed.
-  if (run.error || vm.error) {
-    flashBadge("err", "✗ Does not compile — see diagnostics.");
+  // A backend that REJECTS (front-end / lowering error) while the other does not — or both rejecting
+  // with different messages — is a run≠runvm divergence, a real Phorge bug. Checked BEFORE the
+  // generic "does not compile" so a VM-only lowering rejection isn't mislabelled. The error text is
+  // in the run / runvm panes (a VM-only rejection is NOT a checker diagnostic, so it won't be in the
+  // diagnostics tab — that mismatch was the reported bug).
+  const runRej = !!run.error;
+  const vmRej = !!vm.error;
+  if (runRej !== vmRej || (runRej && vmRej && run.error !== vm.error)) {
+    flashBadge("err", "❌ run ≠ runvm — one backend rejects, the other doesn't (a Phorge bug!) — see the run/runvm panes");
+    return;
+  }
+  // Both backends reject identically — a genuine front-end / lowering rejection.
+  if (runRej && vmRej) {
+    flashBadge("err", "✗ Does not compile — see the run / runvm panes (and diagnostics)");
     return;
   }
   const rustAgree = run.ok && vm.ok && run.stdout === vm.stdout;
@@ -287,6 +322,12 @@ async function runAll() {
     $("pane-run").textContent = paneText(run);
     $("pane-runvm").textContent = paneText(vm);
     $("pane-phpsrc").textContent = tr.ok ? tr.php : paneText(tr);
+
+    // If the program type-checks clean but a backend still REJECTS it (a compiler/VM lowering
+    // rejection, which is not a checker diagnostic), the diagnostics tab would otherwise look empty
+    // while the badge says "does not compile". Surface the backend rejection there so the tab the
+    // badge points at is never misleadingly blank.
+    surfaceBackendRejection(check, run, vm);
 
     let phpOut = null;
     let phpErr = null;
