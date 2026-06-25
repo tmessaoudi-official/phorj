@@ -1,6 +1,25 @@
 # Core.Reflect — Design (resolving the reflection-vs-erasure tension)
 
-> Status: **DESIGN — awaiting developer decisions** (the open questions at the end gate implementation).
+> ## ✅ DECISIONS LOCKED (developer, 2026-06-25)
+> - **Q1 `typeName` — REDESIGNED, no compromise (the developer pushed for precision; challenge upheld
+>   the spine).** `typeName(x)` is resolved by `x`'s **static type** at compile time: a **compile-time
+>   string literal** for value types (`int`/`float`/`bool`/`string`/**`bytes`**/`List`/`Map`/`Set`/enum
+>   — baked identically into all 3 backends, so PHP's erasure is never consulted) and a **runtime
+>   `get_class`** for objects (class/interface/union/intersection — handles polymorphism, and
+>   `get_class` ≡ the instance's class byte-identically). An optional `T?` lowers to a runtime null-branch
+>   (`null` → `"null"`, else the inner's rule). An **erased-generic** (`mixed`) static type degrades to
+>   the coarse `kind` (inherent — the type isn't known there). **This sidesteps Q3 (enum erasure) entirely**
+>   — enums emit a baked literal, never inspected in PHP. Mechanism: a checker pass recording a span-keyed
+>   substitution (reuses the UFCS/`rewrite_*` infra + the absolute-span fix). **No runtime tagging of
+>   collections** (rejected — would bloat every array + break interop).
+> - **Plus `Reflect.kind(x) -> string`** (the developer's "parent type" idea, as its own native): the
+>   **coarse** PHP-reproducible kind (`"array"` for List/Map/Set, `"string"` for bytes, `"object"`,
+>   `"int"`, …) via a `__phorge_kind` helper — byte-identical for *all* inputs.
+> - **Q5 — full set** (`className` + `typeName` + `kind` + the sorted enumeration natives).
+> - **Q2/Q3/Q4 — I resolve during build:** Q2 verify `get_class` matches the transpiled (possibly FQN)
+>   class name; Q3 sidestepped (literals); Q4 `fieldNames` via a transpiler-emitted per-class static list.
+>
+> Status: **APPROVED — implementing.** Original open-questions section retained below for context.
 > Origin: Phase 2 Slice 1 of `docs/specs/2026-06-24-introspection-strings-process-design.md`, parked
 > autonomously on 2026-06-25 as fork **F-006** (`docs/plans/2026-06-25-overnight-design-forks-review.plan.md`)
 > because the original spec's "byte-identical with PHP" claim is unachievable as written.

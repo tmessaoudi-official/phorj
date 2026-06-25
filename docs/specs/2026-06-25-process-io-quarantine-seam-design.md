@@ -1,6 +1,15 @@
 # Process I/O & the "impure native" quarantine seam — Design
 
-> Status: **DESIGN — awaiting developer decisions.** Origin: Phase 2 Slice 3 of
+> ## ✅ DECISIONS LOCKED (developer, 2026-06-25)
+> - **Q1 — `pure: bool` field on `NativeFn`** (default `true`; `Core.Env`/`Core.Process` set `false`).
+> - **Q2 — skip impure programs entirely** from the byte-identity differential; test them in a dedicated
+>   `tests/process.rs` with a controlled env + a `examples/process/` README walkthrough (not gated).
+> - **Q3/Q4/Q5 — my recommended defaults:** argv via a process-global set before run (b); `Env.all()`
+>   returns a **sorted** `Map` (by key); careful `--` terminator grammar in `cli::resolve_source`.
+>
+> Status: **APPROVED — implementing** (after Core.Reflect).
+>
+> Status (orig): **DESIGN — awaiting developer decisions.** Origin: Phase 2 Slice 3 of
 > `docs/specs/2026-06-24-introspection-strings-process-design.md`, parked autonomously 2026-06-25 as
 > fork **F-007**. This is "the M-Batteries kickoff" — it introduces the first natives whose results
 > depend on the *environment*, so it needs a seam that keeps them off the byte-identity differential.
