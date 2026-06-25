@@ -48,6 +48,19 @@ fn reflect_parents(args: &[Value], t: &ClassTables) -> Result<Value, String> {
     Ok(reflect_class_list(args, &t.parents))
 }
 
+/// `Reflect.methods(x) -> List<string>` — the (sorted) method names of `x`'s class, including
+/// inherited ones (the constructor and property hooks are excluded), or `[]` for a non-class value.
+fn reflect_methods(args: &[Value], t: &ClassTables) -> Result<Value, String> {
+    Ok(reflect_class_list(args, &t.methods))
+}
+
+/// `Reflect.fields(x) -> List<string>` — the (sorted) declared instance-field names of `x`'s class,
+/// including inherited and constructor-promoted ones (static/const members and virtual hooks
+/// excluded), or `[]` for a non-class value.
+fn reflect_fields(args: &[Value], t: &ClassTables) -> Result<Value, String> {
+    Ok(reflect_class_list(args, &t.fields))
+}
+
 /// `Reflect.kind(x) -> string` — the coarse, erasure-stable type tag. Mirrors the `__phorge_kind`
 /// PHP helper exactly (which checks `is_callable` before `is_object`, since a PHP closure is both).
 fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -176,6 +189,24 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Reflective(reflect_parents),
             php: |a| format!("__phorge_reflect_of({}, \"parents\")", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Reflect",
+            name: "methods",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            eval: NativeEval::Reflective(reflect_methods),
+            php: |a| format!("__phorge_reflect_of({}, \"methods\")", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Reflect",
+            name: "fields",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            eval: NativeEval::Reflective(reflect_fields),
+            php: |a| format!("__phorge_reflect_of({}, \"fields\")", parg(a, 0)),
         },
     ]
 }

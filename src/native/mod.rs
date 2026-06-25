@@ -113,11 +113,83 @@ impl ClassTables {
     /// so reflection can never disagree with `instanceof`. `methods`/`fields` are populated by their
     /// own slice.
     pub fn from_program(program: &crate::ast::Program) -> ClassTables {
+        use crate::ast::{ClassMember, Item, Modifier};
+        use std::collections::{BTreeMap, BTreeSet};
+        let parents = crate::ast::class_supertypes(program);
+        // Each class's OWN method / instance-field names (before inheritance).
+        let mut own_methods: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+        let mut own_fields: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+        let promoted = |m: &[Modifier]| {
+            m.iter().any(|x| {
+                matches!(
+                    x,
+                    Modifier::Public | Modifier::Private | Modifier::Protected
+                )
+            })
+        };
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                let methods = own_methods.entry(c.name.as_str()).or_default();
+                let fields = own_fields.entry(c.name.as_str()).or_default();
+                for m in &c.members {
+                    match m {
+                        ClassMember::Method(f) => {
+                            methods.insert(f.name.clone());
+                        }
+                        // Instance fields only: a `static`/`const` member is class-level, a hook is
+                        // virtual (no storage) — neither is an instance field.
+                        ClassMember::Field {
+                            modifiers, name, ..
+                        } => {
+                            if !modifiers.contains(&Modifier::Static)
+                                && !modifiers.contains(&Modifier::Const)
+                            {
+                                fields.insert(name.clone());
+                            }
+                        }
+                        // A constructor-promoted param (one carrying a visibility modifier) is a field.
+                        ClassMember::Constructor { params, .. } => {
+                            for p in params {
+                                if promoted(&p.modifiers) {
+                                    fields.insert(p.name.clone());
+                                }
+                            }
+                        }
+                        ClassMember::Hook { .. } => {}
+                    }
+                }
+            }
+        }
+        // Flatten with inheritance: a class's set is its own ∪ every ancestor's own (sorted, deduped).
+        fn flatten(
+            program: &crate::ast::Program,
+            parents: &BTreeMap<String, Vec<String>>,
+            own: &BTreeMap<&str, BTreeSet<String>>,
+        ) -> BTreeMap<String, Vec<String>> {
+            let mut out = BTreeMap::new();
+            for item in &program.items {
+                if let Item::Class(c) = item {
+                    let mut set: BTreeSet<String> =
+                        own.get(c.name.as_str()).cloned().unwrap_or_default();
+                    if let Some(anc) = parents.get(&c.name) {
+                        for a in anc {
+                            if let Some(o) = own.get(a.as_str()) {
+                                set.extend(o.iter().cloned());
+                            }
+                        }
+                    }
+                    out.insert(c.name.clone(), set.into_iter().collect());
+                }
+            }
+            out
+        }
+        let methods = flatten(program, &parents, &own_methods);
+        let fields = flatten(program, &parents, &own_fields);
         ClassTables {
             interfaces: crate::ast::class_implements(program),
-            parents: crate::ast::class_supertypes(program),
-            methods: std::collections::BTreeMap::new(),
-            fields: std::collections::BTreeMap::new(),
+            parents,
+            methods,
+            fields,
         }
     }
 }

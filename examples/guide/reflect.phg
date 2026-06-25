@@ -19,6 +19,7 @@ import Core.Text;
 
 class Point {
     constructor(public int x, public int y) {}
+    function sum() -> int { return x + y; }
 }
 
 enum Color {
@@ -91,4 +92,8 @@ function main() -> void {
     Console.println("parents    = {Text.join(Reflect.parents(w), \", \")}");
     // A non-class value has no interfaces/parents → empty lists.
     Console.println("int ifaces = [{Text.join(Reflect.interfaces(7), \", \")}]");
+
+    // methods / fields of an instance's class (sorted, incl. inherited + promoted ctor params).
+    Console.println("methods = {Text.join(Reflect.methods(p), \", \")}");
+    Console.println("fields  = {Text.join(Reflect.fields(p), \", \")}");
 }
