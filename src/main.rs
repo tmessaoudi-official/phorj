@@ -1,4 +1,4 @@
-//! Phorge CLI: `phg <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|serve|explain>
+//! Phorge CLI: `phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|explain>
 //! <file>`. Thin dispatcher over the testable `phorge::cli` module.
 #![forbid(unsafe_code)]
 
@@ -7,7 +7,7 @@ use std::process::exit;
 use phorge::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|serve|explain> \
+    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -65,8 +65,8 @@ fn main() {
     }
     let cmd = match args.get(1).map(String::as_str) {
         Some(
-            c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "disasm" | "bench"
-            | "build" | "vendor" | "serve" | "explain"),
+            c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "lift" | "disasm"
+            | "bench" | "build" | "vendor" | "serve" | "explain"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -327,6 +327,7 @@ fn main() {
         match cmd {
             "parse" => cli::cmd_parse(&src),
             "lex" => cli::cmd_lex(&src),
+            "lift" => cli::cmd_lift(&src),
             "disasm" => cli::cmd_disasm(&src),
             "bench" if bench_vs_php => cli::cmd_bench_vs_php(&src),
             "bench" => cli::cmd_bench(&src),

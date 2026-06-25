@@ -38,6 +38,7 @@ pub fn help_text() -> String {
          parse      print the AST\n  \
          lex        print the token stream\n  \
          transpile  emit PHP\n  \
+         lift       PHP -> a Phorge draft (review required; inverse of transpile)\n  \
          disasm     print the compiled bytecode\n  \
          bench      benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
@@ -102,6 +103,16 @@ pub fn help_for(cmd: &str) -> String {
                         usage:\n  phg transpile <file | - | -e code>\n\n\
                         examples:\n  \
                         phg transpile src.phg\n"
+        }
+        "lift" => {
+            "lift — read PHP, emit a Phorge **draft** (the inverse of transpile). Best-effort and\n       \
+                   REVIEW-REQUIRED: the output is a scaffold a human checks, prefixed `// lifted\n       \
+                   (verify)`. Anything outside the Tier-1 subset (e.g. an `array` type, a backed enum,\n       \
+                   string interpolation) is refused with a clear `lift …` error rather than guessed.\n\n\
+                   usage:\n  phg lift <file.php | - | -e code>\n\n\
+                   examples:\n  \
+                   phg lift legacy.php\n  \
+                   phg lift legacy.php > draft.phg\n"
         }
         "disasm" => {
             "disasm — print the compiled bytecode the VM will execute.\n\n\
@@ -461,6 +472,17 @@ pub fn cmd_lex(src: &str) -> Result<String, String> {
         out.push_str(&format!("{:?} @ {}:{}\n", t.kind, t.span.line, t.span.col));
     }
     Ok(out)
+}
+
+/// `lift`: read PHP source, emit a Phorge **draft** (the inverse of `transpile`). Best-effort and
+/// review-required — the output is prefixed with a `// lifted (verify)` banner so the contract is
+/// visible in the file itself. Anything outside the Tier-1 lift subset is a clear `lift …` error
+/// (never a silent guess). No `on_deep_stack`: the lift parser has its own depth guard.
+pub fn cmd_lift(src: &str) -> Result<String, String> {
+    let phorge = crate::lift::lifter::lift_source(src)?;
+    Ok(format!(
+        "// lifted (verify) — a best-effort PHP->Phorge draft; review before trusting it.\n{phorge}"
+    ))
 }
 
 /// `transpile`: lex -> parse -> check (gate) -> emit PHP source.

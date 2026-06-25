@@ -154,3 +154,12 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
     `$k=>$v`; elvis `?:`; assignment/inc-dec as a *sub-expression*; non-literal match arms.
   - **Test:** end-to-end PHP → L2 parse → L4 lift → L3 print → re-parse as Phorge (structural validity).
     Run-and-compare round-trip is L5 (deferred). Both slices isolated — zero spine contact.
+- [2026-06-26] **L3 + L4 COMPLETE** (`d1a074b` L3 printer + `bf08b1d` L4 lifter): the ↑ direction is
+  end-to-end for Tier-1. Detail in `2026-06-25-m-lift-php-to-phorge.plan.md`. 864 lib green.
+- [2026-06-26] **L6 design** (3C Full 30/8, converged): `phg lift <file.php>` CLI (string-source path,
+  NOT the loader) → `cmd_lift` prepends a `// lifted (verify)` header then `lift_source`; `lift` added to
+  USAGE/help_text/help_for/main.rs match+dispatch. `examples/lift/` = README walkthrough + `sample.php` +
+  GENERATED `sample.phg` (glob-gated → must pass run≡runvm≡real PHP; generate via `phg lift`, never
+  hand-write). Playground `lift_json` + `pg_lift` wasm wrapper + native test (lift_source uses no
+  `on_deep_stack` → direct-call model fits). **Web-UI button deferred** (needs PHP-input UX in main.js) —
+  the wrapper exposes the capability now.

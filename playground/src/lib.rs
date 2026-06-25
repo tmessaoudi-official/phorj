@@ -97,6 +97,18 @@ pub fn transpile_json(src: &str) -> String {
     .to_string()
 }
 
+/// `lift`: read PHP source, emit a Phorge **draft** (the inverse of `transpile`). Best-effort and
+/// review-required; anything outside the Tier-1 lift subset is a clear `error` rather than a guess.
+/// `lift_source` runs the L1→L2→L4→L3 pipeline on the calling stack (its own depth guard, no
+/// `on_deep_stack` worker), so it is browser-safe like the other wrappers.
+pub fn lift_json(php_src: &str) -> String {
+    match phorge::lift::lifter::lift_source(php_src) {
+        Ok(phorge) => json!({ "ok": true, "phorge": phorge, "error": Value::Null }),
+        Err(e) => json!({ "ok": false, "phorge": Value::Null, "error": e }),
+    }
+    .to_string()
+}
+
 /// `explain CODE`: the diagnostic-code help text, or a fallback for an unknown code.
 pub fn explain(code: &str) -> String {
     cli::explain_text(code).unwrap_or_else(|| format!("No explanation available for `{code}`."))
@@ -130,6 +142,12 @@ pub fn pg_runvm(src: &str) -> String {
 #[wasm_bindgen]
 pub fn pg_transpile(src: &str) -> String {
     transpile_json(src)
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn pg_lift(php_src: &str) -> String {
+    lift_json(php_src)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -232,5 +250,24 @@ mod tests {
         // A known code returns non-empty help; an unknown code returns the fallback.
         assert!(!explain("E-FORCE-UNWRAP").is_empty());
         assert!(explain("E-NOPE-NOT-A-CODE").contains("No explanation"));
+    }
+
+    #[test]
+    fn lift_php_emits_phorge_draft() {
+        let v = parse(&lift_json(
+            "<?php function add(int $a, int $b): int { return $a + $b; }",
+        ));
+        assert_eq!(v["ok"], json!(true));
+        let phg = v["phorge"].as_str().unwrap();
+        assert!(phg.contains("function add(int a, int b) -> int {"), "{phg}");
+        assert!(v["error"].is_null());
+    }
+
+    #[test]
+    fn lift_outside_tier1_reports_error_not_phorge() {
+        let v = parse(&lift_json("<?php function f(array $xs): void {}"));
+        assert_eq!(v["ok"], json!(false));
+        assert!(v["phorge"].is_null());
+        assert!(v["error"].as_str().unwrap().contains("`array` type"));
     }
 }

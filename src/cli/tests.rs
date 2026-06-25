@@ -188,6 +188,23 @@ fn cmd_transpile_rejects_ill_typed() {
 }
 
 #[test]
+fn cmd_lift_emits_annotated_phorge_draft() {
+    let phg =
+        cmd_lift("<?php function add(int $a, int $b): int { return $a + $b; }").expect("lift");
+    // The banner makes the review-required contract visible in the file.
+    assert!(phg.starts_with("// lifted (verify)"), "{phg}");
+    assert!(phg.contains("package Main;"), "{phg}");
+    assert!(phg.contains("function add(int a, int b) -> int {"), "{phg}");
+}
+
+#[test]
+fn cmd_lift_refuses_outside_tier1_loudly() {
+    // An `array` type has no faithful Phorge form yet — a clear lift error, not a guess.
+    let err = cmd_lift("<?php function f(array $xs): void {}").unwrap_err();
+    assert!(err.contains("`array` type"), "{err}");
+}
+
+#[test]
 fn runvm_matches_run_on_simple_program() {
     let src = wp(r#"import Core.Console;
 function main() -> void { int x = 21; Console.println("{x + x}"); }"#);

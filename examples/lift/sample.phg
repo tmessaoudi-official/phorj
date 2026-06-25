@@ -1,0 +1,19 @@
+// lifted (verify) — a best-effort PHP->Phorge draft; review before trusting it.
+package Main;
+
+import Core.Console;
+
+function greet(string name) -> string {
+    return ("Hello, " + name);
+}
+
+open class Counter {
+    constructor(private mutable int start) {}
+    public open function next() -> int {
+        return (this.start + 1);
+    }
+}
+
+function main() -> void {
+    Console.print(greet("Phorge"));
+}
