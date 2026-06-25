@@ -6,6 +6,10 @@ A free, zero-backend, browser playground for Phorge. Edit code on the left; on t
 byte-identical output (and a diff banner if they ever don't). Everything runs client-side; nothing is
 sent to a server.
 
+The **⬆ Lift PHP** button runs the inverse direction: it treats the editor contents as PHP and lifts
+them to a Phorge draft (the same engine as `phg lift`), opening the result with a `// lifted (verify)`
+banner — a best-effort, review-required scaffold for the Tier-1 PHP subset.
+
 It is auto-deployed to GitHub Pages on every push to `master`, so the live site always runs the latest
 `phg`.
 
