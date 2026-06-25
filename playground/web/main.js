@@ -374,7 +374,11 @@ function initExamples() {
 // --- boot --------------------------------------------------------------------------------------
 async function boot() {
   const examples = window.PHORGE_EXAMPLES || {};
-  let initialDoc = examples["hello (default)"] || "package Main;\n\nfunction main() {\n}\n";
+  // Fallback when examples.js hasn't populated the global (e.g. it failed to load). Must be VALID
+  // current Phorge — return types are mandatory — so the editor never boots a program that errors
+  // on the first run. Mirrors gen_examples.py's DEFAULT (keep the two in sync).
+  let initialDoc = examples["hello (default)"] ||
+    'package Main;\nimport Core.Console;\n\nfunction main() -> void {\n    List<string> who = ["world", "Phorge"];\n    for (string w in who) {\n        Console.println("Hello, {w}!");\n    }\n}\n';
   if (location.hash.length > 2) {
     try {
       const decoded = await decodeSource(location.hash.slice(1));
