@@ -16,11 +16,88 @@ pub struct PhpProgram {
     pub items: Vec<PhpItem>,
 }
 
-/// A top-level item. L2a covers functions and file-level statements; `Class`/`Enum` arrive in L2b.
+/// A top-level item.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PhpItem {
     Function(PhpFunction),
+    Class(PhpClass),
+    Enum(PhpEnum),
     Stmt(PhpStmt),
+}
+
+/// Member visibility (`public`/`private`/`protected`). A member with no explicit modifier defaults
+/// to `Public` (PHP's rule for methods; properties require a modifier or `var`, which we map here).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhpVisibility {
+    Public,
+    Private,
+    Protected,
+}
+
+/// A class declaration: `[abstract|final] class Name [extends P] [implements I, …] { members }`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhpClass {
+    pub name: String,
+    pub is_abstract: bool,
+    pub is_final: bool,
+    pub extends: Option<String>,
+    pub implements: Vec<String>,
+    pub members: Vec<PhpMember>,
+    pub line: usize,
+}
+
+/// A class member: a property, a method, or a class constant.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PhpMember {
+    Prop {
+        vis: PhpVisibility,
+        is_static: bool,
+        is_readonly: bool,
+        ty: Option<PhpType>,
+        name: String,
+        default: Option<PhpExpr>,
+    },
+    Method(PhpMethod),
+    /// `const NAME = value;`.
+    Const {
+        vis: PhpVisibility,
+        name: String,
+        value: PhpExpr,
+    },
+}
+
+/// A method: like a function plus visibility/static/abstract/final. `body == None` for an abstract
+/// method (`function f();`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhpMethod {
+    pub vis: PhpVisibility,
+    pub is_static: bool,
+    pub is_abstract: bool,
+    pub is_final: bool,
+    pub name: String,
+    pub params: Vec<PhpParam>,
+    pub ret: Option<PhpType>,
+    pub body: Option<Vec<PhpStmt>>,
+    pub line: usize,
+}
+
+/// A PHP 8.1 enum: `enum Name [: backing] [implements I, …] { case …; methods… }`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhpEnum {
+    pub name: String,
+    /// Backing type for a backed enum (`enum Suit: string`); `None` for a pure enum.
+    pub backing: Option<PhpType>,
+    pub implements: Vec<String>,
+    pub cases: Vec<PhpEnumCase>,
+    pub methods: Vec<PhpMethod>,
+    pub line: usize,
+}
+
+/// One enum case: `case Name;` or `case Name = value;` (backed).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PhpEnumCase {
+    pub name: String,
+    pub value: Option<PhpExpr>,
 }
 
 /// A typed top-level function: `function name(params): ret { body }`.
@@ -43,6 +120,9 @@ pub struct PhpParam {
     pub name: String,
     /// Default value (`= expr`), if any. Tier-1: a literal or simple constant expression.
     pub default: Option<PhpExpr>,
+    /// Constructor-promotion visibility: `Some(vis)` when a `__construct` param carries a
+    /// `public`/`private`/`protected` modifier (PHP 8.0 promoted property), else `None`.
+    pub promotion: Option<PhpVisibility>,
 }
 
 /// A PHP type hint. Tier-1 = a single name or a nullable single name. Union types (`A|B`) can't even

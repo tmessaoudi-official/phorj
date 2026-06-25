@@ -377,7 +377,8 @@ fn rejects_unsupported_keywords() {
         ("<?php switch ($x) {}", "`switch` is not supported"),
         ("<?php throw new E();", "`throw` is not supported"),
         ("<?php namespace App;", "`namespace` is not supported"),
-        ("<?php class C {}", "`class` is not supported"),
+        ("<?php interface I {}", "`interface` is not supported"),
+        ("<?php trait T {}", "`trait` is not supported"),
     ] {
         let e = perr(src);
         assert!(e.contains(frag), "for {src:?} got {e}");
@@ -405,6 +406,138 @@ fn rejects_array_append_and_dynamic_static() {
 #[test]
 fn rejects_invalid_assignment_target() {
     assert!(perr("<?php 1 = $x;").contains("invalid assignment target"));
+}
+
+// ── L2b: classes + enums ──
+
+fn class(src: &str) -> PhpClass {
+    match parse(src).items.into_iter().next().expect("one item") {
+        PhpItem::Class(c) => c,
+        other => panic!("expected a class, got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_class_with_props_methods_and_modifiers() {
+    let c = class(
+        "<?php class Account {\n\
+           private int $balance = 0;\n\
+           public static string $kind = \"basic\";\n\
+           const LIMIT = 1000;\n\
+           public function deposit(int $n): void { $this->balance += $n; }\n\
+           private function audit() {}\n\
+         }",
+    );
+    assert_eq!(c.name, "Account");
+    assert!(!c.is_abstract && !c.is_final);
+    assert_eq!(c.members.len(), 5);
+    let PhpMember::Prop {
+        vis,
+        is_static,
+        ty,
+        default,
+        ..
+    } = &c.members[0]
+    else {
+        panic!("first member should be a prop: {:?}", c.members[0]);
+    };
+    assert_eq!(*vis, PhpVisibility::Private);
+    assert!(!is_static);
+    assert_eq!(*ty, Some(PhpType::Named("int".into())));
+    assert_eq!(*default, Some(PhpExpr::Int(0)));
+    assert!(matches!(
+        &c.members[1],
+        PhpMember::Prop {
+            is_static: true,
+            vis: PhpVisibility::Public,
+            ..
+        }
+    ));
+    assert!(matches!(&c.members[2], PhpMember::Const { .. }));
+    assert!(matches!(
+        &c.members[3],
+        PhpMember::Method(m) if m.name == "deposit" && m.vis == PhpVisibility::Public
+    ));
+}
+
+#[test]
+fn parses_abstract_class_extends_implements_and_abstract_method() {
+    let c = class(
+        "<?php abstract class Shape extends Base implements Drawable, Named {\n\
+           abstract public function area(): float;\n\
+         }",
+    );
+    assert!(c.is_abstract);
+    assert_eq!(c.extends, Some("Base".into()));
+    assert_eq!(
+        c.implements,
+        vec!["Drawable".to_string(), "Named".to_string()]
+    );
+    let PhpMember::Method(m) = &c.members[0] else {
+        panic!()
+    };
+    assert!(m.is_abstract);
+    assert_eq!(m.body, None, "abstract method has no body");
+    assert_eq!(m.ret, Some(PhpType::Named("float".into())));
+}
+
+#[test]
+fn final_class_and_constructor_promotion() {
+    let c = class(
+        "<?php final class Point {\n\
+           public function __construct(public int $x, private readonly int $y = 0) {}\n\
+         }",
+    );
+    assert!(c.is_final);
+    let PhpMember::Method(m) = &c.members[0] else {
+        panic!()
+    };
+    assert_eq!(m.name, "__construct");
+    assert_eq!(m.params[0].promotion, Some(PhpVisibility::Public));
+    assert_eq!(m.params[1].promotion, Some(PhpVisibility::Private));
+    assert_eq!(m.params[1].default, Some(PhpExpr::Int(0)));
+}
+
+#[test]
+fn parses_backed_enum_with_cases_and_method() {
+    let p = parse(
+        "<?php enum Suit: string implements HasLabel {\n\
+           case Hearts = \"H\";\n\
+           case Spades = \"S\";\n\
+           public function label(): string { return \"suit\"; }\n\
+         }",
+    );
+    let PhpItem::Enum(e) = &p.items[0] else {
+        panic!("expected enum, got {:?}", p.items[0]);
+    };
+    assert_eq!(e.name, "Suit");
+    assert_eq!(e.backing, Some(PhpType::Named("string".into())));
+    assert_eq!(e.implements, vec!["HasLabel".to_string()]);
+    assert_eq!(e.cases.len(), 2);
+    assert_eq!(e.cases[0].name, "Hearts");
+    assert_eq!(e.cases[0].value, Some(PhpExpr::Str("H".into())));
+    assert_eq!(e.methods.len(), 1);
+    assert_eq!(e.methods[0].name, "label");
+}
+
+#[test]
+fn parses_pure_enum() {
+    let p = parse("<?php enum Dir { case Up; case Down; }");
+    let PhpItem::Enum(e) = &p.items[0] else {
+        panic!()
+    };
+    assert_eq!(e.backing, None);
+    assert_eq!(e.cases.len(), 2);
+    assert!(e.cases[0].value.is_none());
+}
+
+#[test]
+fn rejects_non_case_non_method_in_enum() {
+    let e = perr("<?php enum E { public int $x; }");
+    assert!(
+        e.contains("an enum may only contain cases and methods"),
+        "{e}"
+    );
 }
 
 #[test]
