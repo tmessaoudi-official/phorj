@@ -137,3 +137,20 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
   PHP parser + PHP AST is up. Full detail in `2026-06-25-m-lift-php-to-phorge.plan.md` Progress.
   840 lib tests green, clippy + fmt clean, isolated. **NEXT = L3** (Phorge `.phg` pretty-printer) → L4
   (lifter PHP-AST → Phorge-AST) → L5 (round-trip gate) → L6 (`phg lift` CLI + playground).
+- [2026-06-26] **L3 + L4 design locked** (3C Full 30/8, converged 8/8; PHP-is-the-floor — emit idiomatic
+  Phorge, never mirror warts; never silently guess):
+  - **L3** (`src/lift/printer.rs`): Phorge AST → `.phg` text, scoped to the **lifter-output subset**
+    (out-of-subset node → clear `Err`, not `phg fmt`-complete yet). Strings escaped; binaries
+    fully-parenthesized (re-parse-safe). Verified by round-trip (build AST → print → re-parse → AST-eq).
+  - **L4** (`src/lift/lifter.rs`): PHP-AST → Phorge-AST. `package Main;`; top-level stmts → synthesized
+    `main()` (only if present; PHP `main` + top-level code → lift-error). Lifted locals: 1st `$x=e` →
+    `mutable var x = e`, later → `x = e`. `.`→`+`, `===`/`!==`→`==`/`!=`. `echo e` → `Console.print(e)`
+    + auto `import Core.Console;` (non-string echo = verify-flagged). `foreach($a as $v)`→`for(var v in a)`.
+    array literal → `List`/`Map`; `__construct`→`Constructor` (promoted params→`CtorParam`); PHP
+    fields/promoted params → **`mutable`** (PHP fields are mutable), `readonly`→immutable; ternary→`Expr::If`,
+    `match`(literal arms,+default→`_`)→`Expr::Match`; `new C(a)`→`Expr::New`. Output annotated `// lifted (verify)`.
+  - **Loud lift-errors (Tier-2/no-equivalent, never guess):** `array` *type* annotation; instance-field
+    default (needs ctor synthesis); backed enums + enum methods (no Phorge equivalent); key-foreach
+    `$k=>$v`; elvis `?:`; assignment/inc-dec as a *sub-expression*; non-literal match arms.
+  - **Test:** end-to-end PHP → L2 parse → L4 lift → L3 print → re-parse as Phorge (structural validity).
+    Run-and-compare round-trip is L5 (deferred). Both slices isolated — zero spine contact.

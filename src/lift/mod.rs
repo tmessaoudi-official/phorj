@@ -13,9 +13,13 @@
 pub mod ast;
 pub mod lexer;
 pub mod parser;
+pub mod printer;
 
 #[cfg(test)]
 mod tests;
 
 #[cfg(test)]
 mod parser_tests;
+
+#[cfg(test)]
+mod printer_tests;
