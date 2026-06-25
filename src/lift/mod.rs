@@ -12,6 +12,7 @@
 
 pub mod ast;
 pub mod lexer;
+pub mod lifter;
 pub mod parser;
 pub mod printer;
 
@@ -23,3 +24,6 @@ mod parser_tests;
 
 #[cfg(test)]
 mod printer_tests;
+
+#[cfg(test)]
+mod lifter_tests;
