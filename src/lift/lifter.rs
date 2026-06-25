@@ -122,7 +122,7 @@ impl Lifter {
             name: f.name.clone(),
             type_params: Vec::new(),
             params,
-            ret: f.ret.as_ref().map(lift_type).transpose()?,
+            ret: lift_ret(&f.ret, Some(&f.body))?,
             throws: Vec::new(),
             body: self.lift_block(&f.body, &mut declared)?,
             span: SP,
@@ -250,7 +250,7 @@ impl Lifter {
             name: m.name.clone(),
             type_params: Vec::new(),
             params,
-            ret: m.ret.as_ref().map(lift_type).transpose()?,
+            ret: lift_ret(&m.ret, m.body.as_deref())?,
             throws: Vec::new(),
             body,
             span: SP,
@@ -690,6 +690,50 @@ fn lift_ctor_params(params: &[php::PhpParam]) -> Result<Vec<CtorParam>, String> 
         });
     }
     Ok(out)
+}
+
+/// Lift a function/method's declared return type (C-45). A PHP `: T` lifts directly. **No** hint is
+/// the trap: the old code emitted a Phorge function with no return type, which *parses* but fails the
+/// checker (Tier-1 requires explicit returns) — a silent non-compiling draft. Instead: if the body
+/// never returns a value, the function is provably `void` (a fact from the body, not a guess); if it
+/// returns a value we cannot infer the type, so reject loudly rather than emit invalid Phorge.
+fn lift_ret(
+    php_ret: &Option<php::PhpType>,
+    body: Option<&[php::PhpStmt]>,
+) -> Result<Option<Type>, String> {
+    match php_ret {
+        Some(t) => Ok(Some(lift_type(t)?)),
+        None => match body {
+            Some(b) if !body_has_value_return(b) => Ok(Some(named("void"))),
+            Some(_) => Err(
+                "lift: function has no return type but returns a value — add an explicit return type (Tier-2)"
+                    .into(),
+            ),
+            None => {
+                Err("lift: an abstract method with no return type needs an explicit one (Tier-2)".into())
+            }
+        },
+    }
+}
+
+/// Does any path in `body` `return` a *value* (`return expr;`)? Recurses through nested control flow
+/// and blocks. A bare `return;` (and `echo`/`break`/`continue`/expr statements) do not count.
+fn body_has_value_return(body: &[php::PhpStmt]) -> bool {
+    use php::PhpStmt::{Block, Echo, Expr, For, Foreach, If, Return, While};
+    body.iter().any(|s| match s {
+        Return(opt) => opt.is_some(),
+        If {
+            then, elifs, els, ..
+        } => {
+            body_has_value_return(then)
+                || elifs.iter().any(|(_, b)| body_has_value_return(b))
+                || els.as_deref().is_some_and(body_has_value_return)
+        }
+        While { body, .. } | For { body, .. } | Foreach { body, .. } | Block(body) => {
+            body_has_value_return(body)
+        }
+        Expr(_) | Echo(_) | php::PhpStmt::Break | php::PhpStmt::Continue => false,
+    })
 }
 
 fn lift_type(t: &php::PhpType) -> Result<Type, String> {

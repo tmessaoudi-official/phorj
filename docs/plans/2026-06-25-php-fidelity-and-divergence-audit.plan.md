@@ -292,6 +292,11 @@ A-61 (`instanceof` lowercase).
   `println`→`echo X, "\n"`; `php_escape_interp` minimal `$` escaping. 871 lib + 109 PHP-8.5 oracle
   byte-identical, clippy+fmt clean.
 - **Stream 3 — Lift enhancements:** C-1, C-5/6, C-45, C-46, C-47. Mostly independent (lift-printer also
-  changes in Stream 1 for the new syntax). Medium.
+  changes in Stream 1 for the new syntax). Medium. **In progress:**
+  - ✅ **C-45 IMPLEMENTED 2026-06-26** (`lift_ret` + `body_has_value_return` in lifter.rs): a PHP fn/
+    method with no return hint → `void` when the body never returns a value (provable), else loud
+    Tier-2 reject. Replaces the old silent non-compiling `ret: None`. Lift tests green.
+  - ⏳ Remaining: C-46 (instanceof), C-47 (bitwise) — lexer+AST+parser+lifter each; C-1 (interpolation),
+    C-5/6 (printer minimal-parens).
 
 STATUS: Designed — not yet implemented. Say go to plan/build a stream.

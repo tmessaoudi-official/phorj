@@ -33,6 +33,22 @@ fn lifts_typed_function() {
 }
 
 #[test]
+fn lifts_untyped_function_with_no_value_return_as_void() {
+    // C-45: a PHP function with no return hint and no value-returning `return` is provably `void`.
+    let out = lift(r#"<?php function greet(string $n) { echo "hi"; }"#);
+    assert!(out.contains("function greet(string n) -> void {"), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn refuses_untyped_function_that_returns_a_value() {
+    // C-45: no return hint but a value `return` — the type can't be inferred → loud reject (never
+    // emit a Phorge function with no return type, which would fail the checker silently).
+    let err = lift_err(r#"<?php function f() { return 5; }"#);
+    assert!(err.contains("no return type but returns a value"), "{err}");
+}
+
+#[test]
 fn top_level_code_becomes_main_with_console_import() {
     let out = lift(r#"<?php $x = 1; echo $x;"#);
     assert!(out.contains("import Core.Console;"), "{out}");
