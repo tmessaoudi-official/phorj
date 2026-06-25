@@ -753,6 +753,12 @@ impl PParser {
                 expr: Box::new(self.parse_unary()?),
             });
         }
+        if self.eat(&PTok::Tilde) {
+            return Ok(PhpExpr::Unary {
+                op: PhpUnOp::BitNot,
+                expr: Box::new(self.parse_unary()?),
+            });
+        }
         // Prefix increment/decrement.
         if self.at(&PTok::Inc) || self.at(&PTok::Dec) {
             let inc = self.at(&PTok::Inc);
@@ -825,6 +831,20 @@ impl PParser {
             } else {
                 break;
             }
+        }
+        // C-46: `value instanceof ClassName` — a single, non-associative trailing clause at the
+        // postfix level (binds tighter than the `!`/`-`/`~` unary layer above). A dynamic RHS
+        // (`$x instanceof $cls`) has no Phorge equivalent and is refused loudly.
+        if matches!(self.peek(), PTok::Ident(w) if w == "instanceof") {
+            self.advance();
+            if matches!(self.peek(), PTok::Var(_)) {
+                return Err(self.err("dynamic `instanceof $var` is Tier-2"));
+            }
+            let class = self.expect_ident("a class name after `instanceof`")?;
+            e = PhpExpr::InstanceOf {
+                value: Box::new(e),
+                class,
+            };
         }
         Ok(e)
     }
@@ -1004,26 +1024,32 @@ impl PParser {
 
 /// Left binding power + `PhpBinOp` for an infix operator token (the left-associative subset).
 /// `??`, ternary, and assignment are handled in their own recursive layers, so they are absent here.
-/// **PHP 8 precedence** (higher binds tighter): `* / %` (7) > `+ -` (6) > `.` (5) > comparison (4)
-/// > equality (3) > `&&` (2) > `||` (1).
+/// **PHP 8 precedence** (higher binds tighter): `* / %` (11) > `+ -` (10) > `<< >>` (9) > `.` (8) >
+/// comparison (7) > equality (6) > `&` (5) > `^` (4) > `|` (3) > `&&` (2) > `||` (1). (C-47 inserts
+/// the bitwise/shift levels; the prior ops keep their relative order.)
 fn infix_op(tok: &PTok) -> Option<(u8, PhpBinOp)> {
     Some(match tok {
         PTok::OrOr => (1, PhpBinOp::Or),
         PTok::AndAnd => (2, PhpBinOp::And),
-        PTok::EqEq => (3, PhpBinOp::Eq),
-        PTok::EqEqEq => (3, PhpBinOp::Identical),
-        PTok::NotEq => (3, PhpBinOp::NotEq),
-        PTok::NotEqEq => (3, PhpBinOp::NotIdentical),
-        PTok::Lt => (4, PhpBinOp::Lt),
-        PTok::Le => (4, PhpBinOp::Le),
-        PTok::Gt => (4, PhpBinOp::Gt),
-        PTok::Ge => (4, PhpBinOp::Ge),
-        PTok::Dot => (5, PhpBinOp::Concat),
-        PTok::Plus => (6, PhpBinOp::Add),
-        PTok::Minus => (6, PhpBinOp::Sub),
-        PTok::Star => (7, PhpBinOp::Mul),
-        PTok::Slash => (7, PhpBinOp::Div),
-        PTok::Percent => (7, PhpBinOp::Rem),
+        PTok::Bar => (3, PhpBinOp::BitOr),
+        PTok::Caret => (4, PhpBinOp::BitXor),
+        PTok::Amp => (5, PhpBinOp::BitAnd),
+        PTok::EqEq => (6, PhpBinOp::Eq),
+        PTok::EqEqEq => (6, PhpBinOp::Identical),
+        PTok::NotEq => (6, PhpBinOp::NotEq),
+        PTok::NotEqEq => (6, PhpBinOp::NotIdentical),
+        PTok::Lt => (7, PhpBinOp::Lt),
+        PTok::Le => (7, PhpBinOp::Le),
+        PTok::Gt => (7, PhpBinOp::Gt),
+        PTok::Ge => (7, PhpBinOp::Ge),
+        PTok::Dot => (8, PhpBinOp::Concat),
+        PTok::Shl => (9, PhpBinOp::Shl),
+        PTok::Shr => (9, PhpBinOp::Shr),
+        PTok::Plus => (10, PhpBinOp::Add),
+        PTok::Minus => (10, PhpBinOp::Sub),
+        PTok::Star => (11, PhpBinOp::Mul),
+        PTok::Slash => (11, PhpBinOp::Div),
+        PTok::Percent => (11, PhpBinOp::Rem),
         _ => return None,
     })
 }

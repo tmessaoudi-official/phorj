@@ -49,6 +49,37 @@ fn refuses_untyped_function_that_returns_a_value() {
 }
 
 #[test]
+fn lifts_instanceof() {
+    // C-46: PHP `instanceof` → Phorge's existing `instanceof` (static class name).
+    let out = lift(r#"<?php function f(Animal $x): bool { return $x instanceof Dog; }"#);
+    assert!(out.contains("x instanceof Dog"), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn refuses_dynamic_instanceof() {
+    // C-46: a dynamic RHS has no Phorge equivalent — loud reject.
+    let err =
+        lift_err(r#"<?php function f(Animal $x, Animal $y): bool { return $x instanceof $y; }"#);
+    assert!(err.contains("dynamic `instanceof"), "{err}");
+}
+
+#[test]
+fn lifts_bitwise_operators() {
+    // C-47: bitwise `& | ^ ~` and shifts `<< >>` map 1:1, at PHP precedence.
+    let out = lift(
+        r#"<?php function f(int $a, int $b): int { return ($a & $b) | ($a ^ $b) << 1 >> 1; }"#,
+    );
+    for op in ["&", "|", "^", "<<", ">>"] {
+        assert!(out.contains(op), "missing `{op}` in {out}");
+    }
+    assert_reparses(&out);
+    let not = lift(r#"<?php function g(int $a): int { return ~$a; }"#);
+    assert!(not.contains('~'), "{not}"); // printer parenthesizes: `~(a)` until C-5/6 lands
+    assert_reparses(&not);
+}
+
+#[test]
 fn top_level_code_becomes_main_with_console_import() {
     let out = lift(r#"<?php $x = 1; echo $x;"#);
     assert!(out.contains("import Core.Console;"), "{out}");

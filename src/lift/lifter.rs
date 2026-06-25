@@ -458,6 +458,7 @@ fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             op: match op {
                 php::PhpUnOp::Not => UnaryOp::Not,
                 php::PhpUnOp::Neg => UnaryOp::Neg,
+                php::PhpUnOp::BitNot => UnaryOp::BitNot,
             },
             expr: Box::new(lift_expr(expr)?),
             span: SP,
@@ -466,6 +467,12 @@ fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             op: lift_binop(*op)?,
             lhs: Box::new(lift_expr(left)?),
             rhs: Box::new(lift_expr(right)?),
+            span: SP,
+        },
+        // C-46: PHP `value instanceof ClassName` → Phorge's existing `instanceof` (M-RT S1).
+        php::PhpExpr::InstanceOf { value, class } => Expr::InstanceOf {
+            value: Box::new(lift_expr(value)?),
+            type_name: class.clone(),
             span: SP,
         },
         php::PhpExpr::Assign { .. }
@@ -774,6 +781,12 @@ fn lift_binop(op: php::PhpBinOp) -> Result<BinaryOp, String> {
         P::And => BinaryOp::And,
         P::Or => BinaryOp::Or,
         P::Coalesce => BinaryOp::Coalesce,
+        // C-47: bitwise / shift map 1:1 to Phorge's existing operators (PHP-identical int semantics).
+        P::BitAnd => BinaryOp::BitAnd,
+        P::BitOr => BinaryOp::BitOr,
+        P::BitXor => BinaryOp::BitXor,
+        P::Shl => BinaryOp::Shl,
+        P::Shr => BinaryOp::Shr,
     })
 }
 

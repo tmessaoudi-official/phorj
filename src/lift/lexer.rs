@@ -81,6 +81,13 @@ pub enum PTok {
     AndAnd,
     OrOr,
     Not,
+    /// Bitwise `&` `|` `^` `~` and shifts `<<` `>>` (C-47).
+    Amp,
+    Bar,
+    Caret,
+    Tilde,
+    Shl,
+    Shr,
     /// End of input.
     Eof,
 }
@@ -318,6 +325,8 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
             "/=" => Some(PTok::SlashEq),
             "%=" => Some(PTok::PercentEq),
             ".=" => Some(PTok::DotEq),
+            "<<" => Some(PTok::Shl),
+            ">>" => Some(PTok::Shr),
             _ => None,
         };
         if let Some(t) = two_tok {
@@ -346,6 +355,10 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
             '<' => PTok::Lt,
             '>' => PTok::Gt,
             '!' => PTok::Not,
+            '&' => PTok::Amp,
+            '|' => PTok::Bar,
+            '^' => PTok::Caret,
+            '~' => PTok::Tilde,
             _ => {
                 return Err(format!(
                     "lift lex error: unexpected character `{c}` (line {line})"

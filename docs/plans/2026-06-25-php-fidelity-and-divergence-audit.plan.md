@@ -296,7 +296,13 @@ A-61 (`instanceof` lowercase).
   - ✅ **C-45 IMPLEMENTED 2026-06-26** (`lift_ret` + `body_has_value_return` in lifter.rs): a PHP fn/
     method with no return hint → `void` when the body never returns a value (provable), else loud
     Tier-2 reject. Replaces the old silent non-compiling `ret: None`. Lift tests green.
-  - ⏳ Remaining: C-46 (instanceof), C-47 (bitwise) — lexer+AST+parser+lifter each; C-1 (interpolation),
-    C-5/6 (printer minimal-parens).
+  - ✅ **C-46 IMPLEMENTED 2026-06-26**: lift PHP `value instanceof ClassName` → Phorge `instanceof`
+    (M-RT S1). New `PhpExpr::InstanceOf`; handled at the postfix level (non-associative); dynamic
+    `instanceof $var` rejected loudly. Printer + Phorge backend already had `instanceof`.
+  - ✅ **C-47 IMPLEMENTED 2026-06-26**: lift bitwise `& | ^ ~ << >>`. New `PhpBinOp::{BitAnd,BitOr,
+    BitXor,Shl,Shr}` + `PhpUnOp::BitNot` + lexer tokens (`Amp/Bar/Caret/Tilde/Shl/Shr`); `infix_op`
+    renumbered to the full PHP-8 table (bitwise/shift levels inserted, prior ops keep relative order);
+    1:1 lifter mapping. The lift printer already covered all of these.
+  - ⏳ Remaining: C-1 (interpolation), C-5/6 (printer minimal-parens).
 
 STATUS: Designed — not yet implemented. Say go to plan/build a stream.

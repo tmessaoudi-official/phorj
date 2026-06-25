@@ -203,6 +203,12 @@ pub enum PhpExpr {
         left: Box<PhpExpr>,
         right: Box<PhpExpr>,
     },
+    /// `value instanceof ClassName` (C-46). `class` is a static type name (a dynamic
+    /// `$x instanceof $cls` has no Phorge equivalent and is rejected by the parser).
+    InstanceOf {
+        value: Box<PhpExpr>,
+        class: String,
+    },
     /// `target = value` (right-associative). `target` is a validated lvalue.
     Assign {
         target: Box<PhpExpr>,
@@ -319,6 +325,12 @@ pub enum PhpBinOp {
     Or,
     /// Null-coalesce `??`.
     Coalesce,
+    /// Bitwise `&` `|` `^` and shifts `<<` `>>` (C-47). Map 1:1 to Phorge's bitwise ops.
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
 }
 
 /// Prefix unary operators (Tier-1 subset).
@@ -328,4 +340,6 @@ pub enum PhpUnOp {
     Not,
     /// `-` (negation).
     Neg,
+    /// `~` bitwise NOT (C-47).
+    BitNot,
 }
