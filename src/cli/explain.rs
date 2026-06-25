@@ -636,6 +636,21 @@ pub fn explain_text(code: &str) -> Option<String> {
              inside that class and its subclasses. Make it `public` (the default) to read it elsewhere,\n\
              or access it from within the class hierarchy.\n"
         }
+        "E-FIELD-VISIBILITY" => {
+            "E-FIELD-VISIBILITY — a `private`/`protected` field was read or written from outside its scope.\n\n\
+             A `private` field is reachable only inside the declaring class; a `protected` field only\n\
+             inside that class and its subclasses (an un-annotated field is `public`). The check runs in\n\
+             the type-checker so every backend agrees — without it a `private` read would pass on the\n\
+             Phorge interpreter/VM but throw in the transpiled PHP. Add a public accessor method (e.g.\n\
+             `function valueOf() -> int { return this.value; }`), or declare the field `public`.\n"
+        }
+        "E-METHOD-VISIBILITY" => {
+            "E-METHOD-VISIBILITY — a `private`/`protected` method was called from outside its scope.\n\n\
+             A `private` method is callable only inside the declaring class; a `protected` method only\n\
+             inside that class and its subclasses (an un-annotated method is `public`). Enforced in the\n\
+             type-checker so the interpreter, VM, and transpiled PHP all reject the same call. Call it\n\
+             through a public method of the class, or make the method `public`.\n"
+        }
         "E-CONST-INSTANCE-ACCESS" => {
             "E-CONST-INSTANCE-ACCESS — a constant was read through an instance.\n\n\
              A `const` lives on the class, not the instance: read it as `ClassName.NAME`, never\n\
@@ -718,7 +733,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN)"
         )
     })
 }

@@ -1192,7 +1192,9 @@ fn s2_coalesce_is_byte_identical() {
 fn s2_safe_access_is_byte_identical() {
     // `?.` short-circuits to null on a null receiver (→ the `?? -1` default) and reads through when
     // the receiver is present. Field read and method call both go through `?.`.
-    let cls = "class Box { constructor(private int v) {} function vOf() -> int { return v; } function plus(int n) -> int { return v + n; } }";
+    // `v` is `public` so the `?.v` field-read case below is a legal external access (Wave 1.1
+    // visibility enforcement); the method cases read `v` internally regardless.
+    let cls = "class Box { constructor(public int v) {} function vOf() -> int { return v; } function plus(int n) -> int { return v + n; } }";
     let field = cls.to_string()
         + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.v) ?? -1}\"); Box? b = new Box(7); Console.println(\"{(b?.v) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));

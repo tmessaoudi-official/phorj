@@ -112,6 +112,15 @@ struct ClassInfo {
     /// `abstract class` (M-RT S6b) — not instantiable (`E-ABSTRACT-INSTANTIATE`); may carry abstract
     /// (bodyless) methods a concrete subclass must implement.
     is_abstract: bool,
+    /// Member visibility for instance fields (incl. promoted ctor params): field name → (vis, owner).
+    /// The owner is the *declaring* class, preserved through inheritance so a `private`/`protected`
+    /// access is checked against the real owner (mirrors [`ConstEntry`]). Enforced at the
+    /// instance-field read/write sites (Wave 1.1) so `run ≡ runvm ≡ transpiled PHP` — which enforces
+    /// visibility natively — all reject an out-of-scope access instead of diverging at runtime.
+    field_vis: HashMap<String, (MemberVis, String)>,
+    /// Member visibility for methods: method name → (vis, owner). Per-name (an overload set shares one
+    /// visibility — the first-declared overload's modifiers win). Enforced at the method-call site.
+    method_vis: HashMap<String, (MemberVis, String)>,
 }
 
 /// A property hook's declared type and which accessors it provides (M-mut.7b).

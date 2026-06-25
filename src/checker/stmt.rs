@@ -411,7 +411,16 @@ impl Checker {
                             .get(type_name)
                             .and_then(|i| i.fields.get(&f.field).cloned());
                         let resolved = match fty {
-                            Some(t) => apply_subst(&t, &subst),
+                            Some(t) => {
+                                // Wave 1.1: destructuring reads the field (→ PHP `$obj->field`), so an
+                                // out-of-scope `private`/`protected` field is rejected here too.
+                                let v = self
+                                    .classes
+                                    .get(type_name)
+                                    .and_then(|i| i.field_vis.get(&f.field).cloned());
+                                self.enforce_member_vis(v, &f.field, f.span, true);
+                                apply_subst(&t, &subst)
+                            }
                             // Only emit "no field" when the class is real and not already poisoned
                             // (avoids double-reporting against an upstream error).
                             None => {

@@ -313,6 +313,15 @@ fn explain_covers_totality_codes() {
 }
 
 #[test]
+fn explain_covers_member_visibility_codes() {
+    // Wave 1.1 member-visibility diagnostics self-document via `phg explain`.
+    for code in ["E-FIELD-VISIBILITY", "E-METHOD-VISIBILITY"] {
+        let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
+        assert!(body.starts_with(code), "{body}");
+    }
+}
+
+#[test]
 fn explain_covers_struct_pattern_codes() {
     // The pattern-cluster S5.2 struct-destructuring diagnostics self-document via `phg explain`.
     for code in [

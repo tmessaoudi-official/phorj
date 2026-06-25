@@ -258,7 +258,13 @@ impl Checker {
             return;
         }
         let fty = match self.classes[&class].fields.get(name).cloned() {
-            Some(t) => apply_subst(&t, &self.class_subst(&class, &cargs)),
+            Some(t) => {
+                // Wave 1.1: writing a `private`/`protected` field from outside its scope is rejected
+                // here too (PHP enforces visibility on writes — keep the backends in agreement).
+                let v = self.classes[&class].field_vis.get(name).cloned();
+                self.enforce_member_vis(v, name, span, true);
+                apply_subst(&t, &self.class_subst(&class, &cargs))
+            }
             None => {
                 self.err_coded(
                     span,
@@ -330,6 +336,11 @@ impl Checker {
                     );
                 }
                 Some(fty) => {
+                    // Wave 1.1: `with` lowers to PHP `clone($o, [...])`, which enforces visibility on
+                    // the overridden properties — so an out-of-scope override of a `private`/`protected`
+                    // field is rejected here too (sibling of the field-write hole).
+                    let v = self.classes[&class].field_vis.get(name).cloned();
+                    self.enforce_member_vis(v, name, span, true);
                     if !self.ty_assignable(vty, fty) {
                         self.err_coded(
                             span,

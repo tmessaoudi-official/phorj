@@ -40,7 +40,7 @@ clippy+fmt clean, no new `Op`/`Value` unless noted, one guide example.
 
 | Slice | Work | Notes |
 |---|---|---|
-| **W1.1** | **Member visibility enforcement** in the checker. Extend `MemberVis::of` usage from `const`-only to field reads/writes + method calls: Private→owner class only, Protected→owner+subtypes, Public→anywhere. New codes `E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY` (+ `phg explain`). | Front-end-only; closes the byte-identity hole. Phase-0 must scan all examples/tests for now-illegal external `private` access and fix (likely the promoted-field reads KNOWN_ISSUES flags). |
+| **W1.1 ✅** | **Member visibility enforcement** in the checker — **COMPLETE.** `ClassInfo` gains `field_vis`/`method_vis` (name → (vis, owner)), populated at collection (fields, promoted ctor params, methods), merged through inheritance (owner preserved for `extends`, re-owned to the using class for trait `use`). A shared `enforce_member_vis` helper (Private→owner, Protected→owner+subtypes) is wired into **six** external-access sites: instance-field read (`check_member`), field write (`check_field_assign`), **clone-with `obj with {…}`**, **let-destructuring** (`stmt.rs`), **match struct-patterns** (`matches.rs`), and method call (`check_method_call`). Codes `E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY` (+ `phg explain`). Example `examples/guide/member-visibility.phg` (legal accesses; rejected cases in README). 15 visibility tests + 933 gate green, byte-identical run≡runvm≡PHP 8.5. | Front-end-only, no new `Op`/`Value`. Phase-0 scan found NO example reads a private member externally (they use accessors); fixed two test fixtures that relied on the hole. **Verified (PHP 8.5):** `clone($o,[…])` AND `$obj->field` destructuring both throw on a private field — hence the clone-with + destructuring siblings. **Remaining narrow corners (documented in KNOWN_ISSUES, not yet enforced):** `private` *static* fields (`ClassName.field`) and intersection-typed-receiver members. |
 | **W1.2** | **MI-ancestor type references** (S6c): when a multi-parent class lowers to interface+trait, rewrite a Phorge type binding / `instanceof` for that ancestor to the interface form (`ISwimmer` not `Swimmer`). | KNOWN_ISSUES.md:24-44. Loader/transpiler rewrite, mirrors existing decomposition. |
 | **W1.3** | **Trait conflict resolution emission**: the checker already resolves `use P.m`/rename/exclude; emit PHP `insteadof`/`as` in the transpiled `use` block instead of a plain `use T;`. | KNOWN_ISSUES.md:46-59. Transpile-only. |
 | **W1.4** | **Coverage audit + triage** of the 24 documented transpile limitations: fix the fixable (above), and for the *inherent* fault-domain ones (float ÷0, `opt!` location) confirm they stay documented (the differential excludes faults by design). Produce a final "every shipped feature → transpile path" matrix. | Closes the ↓ direction. |
@@ -81,4 +81,9 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
 - The lift front-end (`src/lift/`) is wholly separate from the Phorge pipeline → unit-tested, not on the byte-identity oracle (except L5's round-trip).
 
 ## Status
-- [2026-06-25] Plan written; **awaiting go** before Wave 1 implementation (Large task — explicit approval gate).
+- [2026-06-25] Plan written + committed (`f3c3bc2`).
+- [2026-06-25] AGREED (developer): **proceed — Wave 1.1 (visibility enforcement) first** (my
+  recommendation: the one real byte-identity hole, cheap, de-risks the rest).
+- [2026-06-25] **W1.1 COMPLETE** — member visibility enforced across all six external-access sites;
+  three sibling holes (clone-with, let-destructuring, match struct-patterns) found by the blast-radius
+  convergence pass and closed. 933 gate green, clippy+fmt clean. **NEXT = W1.2** (MI-ancestor type refs).

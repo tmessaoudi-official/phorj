@@ -649,6 +649,13 @@ impl Checker {
                 let theta = self.class_subst(&cls, &cargs);
                 match sigs {
                     Some(sigs) => {
+                        // Wave 1.1: a `private`/`protected` method called from outside its scope is
+                        // rejected (interface methods have no `method_vis` entry ⇒ public ⇒ no-op).
+                        let v = self
+                            .classes
+                            .get(&cls)
+                            .and_then(|i| i.method_vis.get(name).cloned());
+                        self.enforce_member_vis(v, name, span, false);
                         let applied: Vec<(Vec<Ty>, Ty)> = sigs
                             .iter()
                             .map(|(ps, r)| {
@@ -874,8 +881,16 @@ impl Checker {
                 match found {
                     // Substitute the class type parameters with the instance's type arguments, so a
                     // `T` field reads at the concrete type (`Box<int>().value : int`) — identity for a
-                    // non-generic class (M-RT generics-all).
-                    Some(t) => apply_subst(&t, &self.class_subst(&cls, &cargs)),
+                    // non-generic class (M-RT generics-all). Wave 1.1: a `private`/`protected` field
+                    // read from outside its scope is rejected here (closing the run↔PHP hole).
+                    Some(t) => {
+                        let v = self
+                            .classes
+                            .get(&cls)
+                            .and_then(|i| i.field_vis.get(name).cloned());
+                        self.enforce_member_vis(v, name, span, true);
+                        apply_subst(&t, &self.class_subst(&cls, &cargs))
+                    }
                     // A `const` is class-name-only: reading it through an instance (`c.MAX`) is an
                     // error, with a hint pointing at the correct `ClassName.MAX` form (Feature A).
                     None if self
@@ -946,6 +961,51 @@ impl Checker {
                 .collect(),
             None => HashMap::new(),
         }
+    }
+
+    /// Enforce member visibility (Wave 1.1) at an instance-member access site. `entry` is the
+    /// member's `(visibility, declaring-owner)` (cloned out of the receiver class's `field_vis` /
+    /// `method_vis`); `None` ⇒ no recorded visibility ⇒ public by construction (e.g. an interface
+    /// method) ⇒ no-op. `private` is reachable only from inside the owner; `protected` from the owner
+    /// and its subclasses (`cur_class` is the enclosing class, `None` in a free function). Mirrors the
+    /// `const` check (`E-CONST-VISIBILITY`) so `run ≡ runvm ≡ transpiled PHP` all reject the same
+    /// out-of-scope access — closing the documented byte-identity hole. `is_field` picks the code.
+    pub(super) fn enforce_member_vis(
+        &mut self,
+        entry: Option<(MemberVis, String)>,
+        name: &str,
+        span: Span,
+        is_field: bool,
+    ) {
+        let Some((vis, owner)) = entry else { return };
+        if vis == MemberVis::Public {
+            return;
+        }
+        let cur = self.cur_class.clone();
+        let visible = match vis {
+            MemberVis::Public => true,
+            MemberVis::Private => cur.as_deref() == Some(owner.as_str()),
+            MemberVis::Protected => cur.as_deref().is_some_and(|c| self.is_subtype(c, &owner)),
+        };
+        if visible {
+            return;
+        }
+        let (kindword, code) = if is_field {
+            ("field", "E-FIELD-VISIBILITY")
+        } else {
+            ("method", "E-METHOD-VISIBILITY")
+        };
+        let (visword, scope) = if vis == MemberVis::Private {
+            ("private", format!("inside `{owner}`"))
+        } else {
+            ("protected", format!("inside `{owner}` and its subclasses"))
+        };
+        self.err_coded(
+            span,
+            format!("`{name}` is a {visword} {kindword} of `{owner}`"),
+            code,
+            Some(format!("it is accessible only {scope}")),
+        );
     }
 
     /// The substitution mapping a generic enum's type parameters to a scrutinee's type arguments

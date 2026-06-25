@@ -618,6 +618,21 @@ impl Checker {
                 for (k, v) in &tinfo.methods {
                     child.methods.entry(k.clone()).or_insert_with(|| v.clone());
                 }
+                // Wave 1.1: trait members flatten INTO the using class, so their visibility is
+                // re-owned to `cls` (PHP `use` semantics — a trait's `private` member is accessible
+                // from the using class, unlike an inherited `private` parent member). Own members win.
+                for (k, v) in &tinfo.field_vis {
+                    child
+                        .field_vis
+                        .entry(k.clone())
+                        .or_insert((v.0, cls.clone()));
+                }
+                for (k, v) in &tinfo.method_vis {
+                    child
+                        .method_vis
+                        .entry(k.clone())
+                        .or_insert((v.0, cls.clone()));
+                }
                 // M-RT S8: a `use`d trait's `static` field becomes a per-using-class copy — each using
                 // class gets its own `ClassName.field` (PHP `use` semantics). Merge it into the class's
                 // static table so `C.field` type-checks; the backends seed a distinct slot per class.
@@ -696,6 +711,21 @@ impl Checker {
             }
             for (k, v) in &parent_info.methods {
                 child.methods.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+            // Wave 1.1: inherit member visibility, **preserving the declaring owner** (like consts) —
+            // so an inherited `private` member is checked against the parent (not visible from the
+            // child, matching PHP) while a `protected` one is (the child is a subtype of the owner).
+            for (k, v) in &parent_info.field_vis {
+                child
+                    .field_vis
+                    .entry(k.clone())
+                    .or_insert_with(|| v.clone());
+            }
+            for (k, v) in &parent_info.method_vis {
+                child
+                    .method_vis
+                    .entry(k.clone())
+                    .or_insert_with(|| v.clone());
             }
             for (k, v) in &parent_info.hooks {
                 child.hooks.entry(k.clone()).or_insert_with(|| v.clone());
@@ -1018,10 +1048,16 @@ impl Checker {
                 has_ctor: false,
                 type_params: c.type_params.clone(),
                 is_abstract: c.is_abstract,
+                field_vis: HashMap::new(),
+                method_vis: HashMap::new(),
             },
         );
         use crate::ast::Modifier;
         let mut fields = HashMap::new();
+        // Member visibility (Wave 1.1): instance-field and method name → (vis, owner==this class).
+        // Inherited entries (with their original owner) are merged in by `merge_inherited`.
+        let mut field_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
+        let mut method_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut mutable_fields = std::collections::HashSet::new();
         let mut statics: HashMap<String, Ty> = HashMap::new();
         let mut consts: HashMap<String, ConstEntry> = HashMap::new();
@@ -1037,7 +1073,7 @@ impl Checker {
         // matching the evaluator's runtime promotion (EV-4). Deferred to after the
         // member loop via `or_insert` so an explicit `Field` decl of the same name
         // stays authoritative regardless of member order.
-        let mut promoted: Vec<(String, Ty)> = Vec::new();
+        let mut promoted: Vec<(String, Ty, MemberVis)> = Vec::new();
         for m in &c.members {
             match m {
                 ClassMember::Field {
@@ -1129,6 +1165,7 @@ impl Checker {
                         // its type + forward-reference are checked in `check_type_body`, where `this`
                         // and the field scope are live. Just record the field here.
                         fields.insert(name.clone(), fty);
+                        field_vis.insert(name.clone(), (MemberVis::of(modifiers), c.name.clone()));
                         if modifiers.contains(&Modifier::Mutable) {
                             mutable_fields.insert(name.clone());
                         }
@@ -1148,7 +1185,11 @@ impl Checker {
                                     Modifier::Public | Modifier::Private | Modifier::Protected
                                 )
                             }) {
-                                promoted.push((p.name.clone(), ty.clone()));
+                                promoted.push((
+                                    p.name.clone(),
+                                    ty.clone(),
+                                    MemberVis::of(&p.modifiers),
+                                ));
                                 // A `public mutable int x` promoted param yields a mutable field.
                                 if p.modifiers.contains(&Modifier::Mutable) {
                                     mutable_fields.insert(p.name.clone());
@@ -1202,6 +1243,10 @@ impl Checker {
                     let existing = methods.get(&f.name).cloned().unwrap_or_default();
                     self.validate_new_overload(&existing, &sig, &f.name, f.span, "method");
                     methods.entry(f.name.clone()).or_default().push(sig);
+                    // First-declared overload's visibility represents the method name (Wave 1.1).
+                    method_vis
+                        .entry(f.name.clone())
+                        .or_insert((MemberVis::of(&f.modifiers), c.name.clone()));
                 }
                 // A property hook (M-mut.7b): record its declared type and which accessors it
                 // provides. The body is type-checked in phase 2 (`check_program`), with `this` and
@@ -1232,8 +1277,9 @@ impl Checker {
             }
         }
         // Explicit field decls win: only insert a promoted field if not already declared.
-        for (name, ty) in promoted {
-            fields.entry(name).or_insert(ty);
+        for (name, ty, pvis) in promoted {
+            fields.entry(name.clone()).or_insert(ty);
+            field_vis.entry(name).or_insert((pvis, c.name.clone()));
         }
         // A property hook is virtual: its name must not also name a stored field, a static, or a
         // method (the read/write path resolves a hook before the field, so a collision would shadow
@@ -1253,6 +1299,8 @@ impl Checker {
         }
         let info = self.classes.get_mut(&c.name).unwrap();
         info.fields = fields;
+        info.field_vis = field_vis;
+        info.method_vis = method_vis;
         info.mutable_fields = mutable_fields;
         info.statics = statics;
         info.consts = consts;

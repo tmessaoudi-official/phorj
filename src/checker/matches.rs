@@ -359,7 +359,16 @@ impl Checker {
                         .get(type_name)
                         .and_then(|ci| ci.fields.get(&fp.field).cloned());
                     match fty {
-                        Some(t) => self.check_pattern(&fp.pat, &t),
+                        Some(t) => {
+                            // Wave 1.1: a struct pattern reads the field (→ PHP `$obj->field`), so an
+                            // out-of-scope `private`/`protected` field is rejected here too.
+                            let v = self
+                                .classes
+                                .get(type_name)
+                                .and_then(|ci| ci.field_vis.get(&fp.field).cloned());
+                            self.enforce_member_vis(v, &fp.field, *span, true);
+                            self.check_pattern(&fp.pat, &t);
+                        }
                         None if is_class => {
                             self.err_coded(
                                 *span,

@@ -61,10 +61,14 @@ not a panic:
 - **Declaration visibility** (`public`/`internal`/`private`) ships for top-level declarations, but a
   few related cases are deliberately deferred: a visibility keyword **on a `type` alias**
   (`private type X = …` is a parse error — aliases are file-local and erased, so they cannot re-export
-  a type across files anyway); a visibility keyword on an `import` re-export; and **member-level**
-  `Modifier` visibility (`private`/`protected` on fields/methods) remains *PHP-only-enforced* after
-  transpile (the Phorge backends don't enforce it) — declaration visibility is a separate, fully
-  Phorge-enforced axis.
+  a type across files anyway); and a visibility keyword on an `import` re-export. **Member-level**
+  `Modifier` visibility (`private`/`protected` on instance fields, promoted ctor params, and methods)
+  is now **checker-enforced** (Wave 1.1, `E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY`): an out-of-scope
+  read/write/call is rejected up front so `run ≡ runvm ≡ transpiled PHP` all agree. Remaining
+  *not-yet-enforced* corners (still PHP-only, narrower than before): a `private`/`protected` **static
+  field** read externally (`ClassName.field`), and a member reached through an **intersection-typed**
+  receiver. Both are rare and tracked for a follow-up; instance-field/method access — the documented
+  hole — is closed.
 
 - Tuples / map iteration, and `Set` union & intersection. The erased-generics *mechanism* ships in
   M-RT S7; the **generic stdlib natives** — `Core.Map` `keys`/`values`/`has`/`size`, `Core.List`
@@ -518,13 +522,15 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   backends are unaffected (everything is namespaced); only the PHP round-trip fails. Library packages
   are namespaced and immune. Pick non-builtin names for `package Main` functions intended to transpile
   (e.g. `serializeResponse`, not `serialize`).
-- **Externally-read fields must be `public`, not `private` (transpile target).** Phorge's
-  `run`/`runvm` do not enforce field visibility, so an external read `obj.field` of a `private`
-  constructor-promoted field works there — but the transpiled PHP enforces `private` and throws
-  `Cannot access private property`. Declare a field `public` in the constructor when it is read from
-  outside the class (a `private` field read only inside the class's own methods is fine). The
-  byte-identity-with-PHP convention used by the examples is: `public` for externally-read fields, or an
-  accessor method (`obj.field_of()`), which is always public.
+- **Member visibility is enforced (Wave 1.1 — was a byte-identity hole).** An external read/write of a
+  `private`/`protected` instance field (incl. a promoted ctor param), or an external call of a
+  `private`/`protected` method, is now a **compile error** (`E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY`)
+  — so `run`/`runvm`/transpiled PHP all reject it instead of the Phorge backends accepting what PHP
+  would throw on (`Cannot access private property`). Declare the member `public` (the default) when it
+  is accessed from outside, or expose it through a public accessor (`obj.valueOf()`). A `private` member
+  used only inside the declaring class — and a `protected` one inside that class or a subclass — is
+  fine. (Remaining narrower corners — `private` *static* fields and intersection-typed receivers — are
+  noted near the declaration-visibility entry above.)
 
 - **`Core.Reflect.traits` is not provided.** `Reflect.interfaces`/`parents`/`methods`/`fields` are
   available, but there is no `traits` enumeration native. A Phorge `trait`'s members are *folded into*
