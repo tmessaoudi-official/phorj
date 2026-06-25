@@ -60,3 +60,12 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
   subset, thin lifter, `// lifted (verify)` annotations; L5 round-trip optional this phase. Build
   L1 (PHP lexer) → L2 (Tier-1 parser) → L3 (Phorge pretty-printer) → L4 (thin lifter) → L6 (CLI +
   playground demo). Module lives at `src/lift/`.
+
+## Progress
+- [2026-06-25] **L1 COMPLETE** (`2f4ee27`): `src/lift/` module + std-only Tier-1 PHP lexer
+  (`src/lift/lexer.rs` — `PTok` enum, `lex_php`, `PTokenSpanned` with line tracking), 7 tests green.
+  Out-of-tier input (backtick, unterminated string/comment, bare `$`) → loud `lift lex error`,
+  never a guess. No backend touched.
+- **NEXT = L2** — Tier-1 PHP parser (`src/lift/parser.rs`): typed fn sigs, classes + typed props +
+  ctor promotion, `enum`, `match`, `if`/`for`/`foreach`/`while`, exprs, array literals → a PHP AST.
+  The dominant M-Lift slice.
