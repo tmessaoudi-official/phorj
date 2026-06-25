@@ -45,6 +45,15 @@ function main() -> void {
     Console.println("upper      = {name.upper()}"); // PHORGE
     Console.println("repeat     = {name.repeat(2)}"); // phorgephorge
 
+    // Null-safe UFCS (`?.`): short-circuits to null on a null receiver, otherwise applies the
+    // free/native fn to the unwrapped value (lowers to a `match` over the optional — no new `Op`).
+    string? maybe = "hi";
+    string shout = maybe?.upper() ?? "(none)";
+    Console.println("safe-some  = {shout}"); // HI
+    string? nothing = null;
+    string fallback = nothing?.upper() ?? "(none)";
+    Console.println("safe-null  = {fallback}"); // (none)
+
     // Method-first: `Boxed` declares `describe`, so this is a method call, not a UFCS rewrite.
     var b = new Boxed(9);
     Console.println("method     = {b.describe()}"); // boxed 9

@@ -28,7 +28,7 @@ were close, I favored the one that removes a surprise without removing capabilit
 | Fork | Decision | Action |
 |---|---|---|
 | **F-001** UFCS fallback mechanism | ✅ **Confirm as shipped** | none — stays as `0dc071c` |
-| **F-002** `?.` (safe-nav) UFCS | ✏️ **CHANGED → build now** | implement `x?.f(a)` UFCS (optional-peel + re-wrap) |
+| **F-002** `?.` (safe-nav) UFCS | ✏️ **CHANGED → build now** | ✅ **BUILT** — `x?.f(a)` lowers to `match x { null => null, r => f(r,a) }` (no new `Op`); byte-identical run≡runvm≡PHP 8.5 |
 | **F-003** number-receiver UFCS | ✅ **Confirm enabled** | none — works via F-001 |
 | **F-004** cross-package UFCS→user-fn | ✅ **Confirm deferral** | none — qualified calls stay the cross-package form |
 | **F-005** Slice 7 `Text.charAt`/`substring` | ✅ **Confirm deferral → M4/M-text** | none |
@@ -81,7 +81,10 @@ seam design spec. Then await developer review of the two specs before building R
   A `?.` call with no matching method keeps today's error. (KNOWN_ISSUES.)
 - **Byte-identity / Op impact:** none.
 - **Reversal cost if you change it:** low-medium (adds an optional-peel + re-wrap to the UFCS path).
-- **Status:** ⏳ AWAITING CONFIRMATION
+- **Status:** ✅ **BUILT (developer chose "build now")** — `x?.f(a)` desugars to `match x { null =>
+  null, __ufcs_recv => f(__ufcs_recv, a) }` (receiver evaluated once, null short-circuits to null). Reuses
+  match-over-optional → **no new `Op`/`Value`**; byte-identical run≡runvm≡real PHP 8.5
+  (`examples/guide/ufcs.phg` `safe-some`/`safe-null` rows + 2 checker unit tests).
 
 ### F-003 — number receivers (`int`/`float`) UFCS-to-`Core.Math` now *enabled* (consequence of F-001's general mechanism)
 - **Slice / context:** Slice 6 (UFCS).

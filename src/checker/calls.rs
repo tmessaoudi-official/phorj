@@ -2,6 +2,28 @@
 
 use super::*;
 
+/// How a UFCS member call was navigated (Slice 6 / F-002): a plain `.`, a `?.` on a genuinely nullable
+/// receiver (needs the null-safe `match` desugar), or a `?.` on a non-null receiver (rare — a plain call
+/// with an optional-typed result, matching `?.`-on-non-optional elsewhere).
+#[derive(Clone, Copy)]
+pub(super) enum UfcsNav {
+    Plain,
+    SafeNullable,
+    SafeNonNull,
+}
+
+/// The resolved UFCS call site handed to [`Checker::finish_ufcs`] — bundled so the finalizer stays
+/// within the argument-count budget. `leaf = None` ⇒ a free-function call; `Some(q)` ⇒ a `q.name(…)`
+/// native module call.
+pub(super) struct UfcsSite<'a> {
+    span: Span,
+    leaf: Option<&'a str>,
+    name: &'a str,
+    object: &'a crate::ast::Expr,
+    args: &'a [crate::ast::Expr],
+    nav: UfcsNav,
+}
+
 impl Checker {
     pub(super) fn check_call(
         &mut self,
@@ -576,6 +598,15 @@ impl Checker {
             Ty::Optional(inner) => (**inner).clone(),
             other => other.clone(),
         };
+        // How a UFCS fallback (if reached) was navigated — plain `.`, `?.` on a nullable receiver (the
+        // null-safe `match` desugar), or `?.` on a non-null receiver (F-002).
+        let ufcs_nav = if !safe {
+            UfcsNav::Plain
+        } else if matches!(obj, Ty::Optional(_) | Ty::Null) {
+            UfcsNav::SafeNullable
+        } else {
+            UfcsNav::SafeNonNull
+        };
         let ret = match base {
             Ty::Named(cls, cargs) => {
                 // A class method, or — when `cls` is an interface (M-RT S2) — an interface method
@@ -624,17 +655,17 @@ impl Checker {
                     }
                     None => {
                         // UFCS fallback (Slice 6): `inst.f(args)` with no method `f` may be the free
-                        // function / imported native `f(inst, args)`. Plain `.` only (`?.` deferred).
-                        if !safe {
-                            if let Some(ret) = self.try_ufcs(
-                                object,
-                                &Ty::Named(cls.clone(), cargs.clone()),
-                                name,
-                                args,
-                                span,
-                            ) {
-                                return ret;
-                            }
+                        // function / imported native `f(inst, args)`. `?.` desugars to a null-safe
+                        // `match` (F-002).
+                        if let Some(ret) = self.try_ufcs(
+                            object,
+                            &Ty::Named(cls.clone(), cargs.clone()),
+                            name,
+                            args,
+                            span,
+                            ufcs_nav,
+                        ) {
+                            return ret;
                         }
                         for a in args {
                             self.check_expr(a);
@@ -690,16 +721,15 @@ impl Checker {
                 match found {
                     Some(applied) => self.check_method_sigs(name, &applied, args, span),
                     None => {
-                        if !safe {
-                            if let Some(ret) = self.try_ufcs(
-                                object,
-                                &Ty::Intersection(members.clone()),
-                                name,
-                                args,
-                                span,
-                            ) {
-                                return ret;
-                            }
+                        if let Some(ret) = self.try_ufcs(
+                            object,
+                            &Ty::Intersection(members.clone()),
+                            name,
+                            args,
+                            span,
+                            ufcs_nav,
+                        ) {
+                            return ret;
                         }
                         for a in args {
                             self.check_expr(a);
@@ -719,12 +749,10 @@ impl Checker {
             Ty::Error => Ty::Error,
             other => {
                 // UFCS fallback (Slice 6): a member call on a primitive/container receiver (`xs.map(g)`,
-                // `s.upper()`) is `f(receiver, args)` — a free function or imported native. Plain `.`
-                // only; `?.` UFCS is deferred (F-002).
-                if !safe {
-                    if let Some(ret) = self.try_ufcs(object, &other, name, args, span) {
-                        return ret;
-                    }
+                // `s.upper()`) is `f(receiver, args)` — a free function or imported native. A `?.` call
+                // desugars to a null-safe `match` (F-002).
+                if let Some(ret) = self.try_ufcs(object, &other, name, args, span, ufcs_nav) {
+                    return ret;
                 }
                 for a in args {
                     self.check_expr(a);
@@ -947,6 +975,7 @@ impl Checker {
         name: &str,
         args: &[crate::ast::Expr],
         call_span: Span,
+        nav: UfcsNav,
     ) -> Option<Ty> {
         // (1) A user free function wins over any stdlib native of the same name. Single-overload only
         // this slice (overload-set + multi-package UFCS deferred — F-004); a non-fitting arity/first
@@ -959,8 +988,17 @@ impl Checker {
                 let sig = &sigs[0];
                 let ret =
                     self.check_ufcs_call(name, &sig.params, &sig.ret, recv_ty, args, call_span);
-                self.record_ufcs_call(call_span, None, name, object, args);
-                return Some(ret);
+                return Some(self.finish_ufcs(
+                    UfcsSite {
+                        span: call_span,
+                        leaf: None,
+                        name,
+                        object,
+                        args,
+                        nav,
+                    },
+                    ret,
+                ));
             }
         }
         // (2) An imported native `name` whose first parameter accepts the receiver. A native is
@@ -1002,8 +1040,17 @@ impl Checker {
             let n = &crate::native::registry()[idx];
             let label = format!("{leaf}.{name}");
             let ret = self.check_ufcs_call(&label, &n.params, &n.ret, recv_ty, args, call_span);
-            self.record_ufcs_call(call_span, Some(leaf), name, object, args);
-            return Some(ret);
+            return Some(self.finish_ufcs(
+                UfcsSite {
+                    span: call_span,
+                    leaf: Some(leaf),
+                    name,
+                    object,
+                    args,
+                    nav,
+                },
+                ret,
+            ));
         }
         None
     }
@@ -1061,39 +1108,78 @@ impl Checker {
         }
     }
 
-    /// Record the desugared UFCS call for [`rewrite_ufcs`], keyed by the enclosing `Call` node's
-    /// `Span.start` (each call site's `(` is at a unique byte offset). `leaf = None` ⇒ a free-function
-    /// call `name(object, args)`; `leaf = Some(q)` ⇒ a native module call `q.name(object, args)` (the
-    /// same AST shape the user would hand-write). The receiver and arguments are carried verbatim so
-    /// `rewrite_ufcs` re-walks them for nested UFCS (`xs.filter(p).map(g)`).
-    fn record_ufcs_call(
-        &mut self,
-        call_span: Span,
-        leaf: Option<&str>,
-        name: &str,
-        object: &crate::ast::Expr,
-        args: &[crate::ast::Expr],
-    ) {
-        use crate::ast::Expr;
-        let mut new_args = Vec::with_capacity(args.len() + 1);
-        new_args.push(object.clone());
-        new_args.extend(args.iter().cloned());
-        let callee = match leaf {
-            None => Expr::Ident(name.to_string(), call_span),
-            Some(q) => Expr::Member {
-                object: Box::new(Expr::Ident(q.to_string(), call_span)),
-                name: name.to_string(),
-                safe: false,
-                span: call_span,
-            },
-        };
-        self.ufcs_resolutions.insert(
-            call_span.start,
+    /// Record the desugared UFCS call for [`rewrite_ufcs`] (keyed by the enclosing `Call` node's
+    /// `Span.start` — each call site's `(` is at a unique byte offset) and return the call site's type.
+    /// `leaf = None` ⇒ a free-function call `name(object, args)`; `leaf = Some(q)` ⇒ a native module
+    /// call `q.name(object, args)` (the AST shape the user would hand-write). The receiver and arguments
+    /// are carried verbatim so `rewrite_ufcs` re-walks them for nested UFCS (`xs.filter(p).map(g)`).
+    ///
+    /// For a **null-safe** UFCS on a nullable receiver (`x?.f(a)`, F-002), the plain call would lose the
+    /// null short-circuit, so the substitution is instead `match x { null => null, r => f(r, a) }` — the
+    /// receiver is evaluated once, a `null` short-circuits to `null`, otherwise the unwrapped value is
+    /// passed. This reuses match-over-optional (no new `Op`; runs/transpiles on every backend), and the
+    /// call site's type is `opt_wrap(ret)`. A `?.` on a non-nullable receiver (rare) is a plain call
+    /// with an `opt_wrap`ped type, matching the existing `?.`-on-non-optional behavior.
+    fn finish_ufcs(&mut self, site: UfcsSite, ret: Ty) -> Ty {
+        use crate::ast::{Expr, MatchArm, Pattern};
+        let UfcsSite {
+            span: call_span,
+            leaf,
+            name,
+            object,
+            args,
+            nav,
+        } = site;
+        let build_call = |receiver: Expr| -> Expr {
+            let mut new_args = Vec::with_capacity(args.len() + 1);
+            new_args.push(receiver);
+            new_args.extend(args.iter().cloned());
+            let callee = match leaf {
+                None => Expr::Ident(name.to_string(), call_span),
+                Some(q) => Expr::Member {
+                    object: Box::new(Expr::Ident(q.to_string(), call_span)),
+                    name: name.to_string(),
+                    safe: false,
+                    span: call_span,
+                },
+            };
             Expr::Call {
                 callee: Box::new(callee),
                 args: new_args,
                 span: call_span,
-            },
-        );
+            }
+        };
+        let repl = if matches!(nav, UfcsNav::SafeNullable) {
+            let recv = Expr::Ident("__ufcs_recv".to_string(), call_span);
+            Expr::Match {
+                scrutinee: Box::new(object.clone()),
+                arms: vec![
+                    MatchArm {
+                        pattern: Pattern::Null(call_span),
+                        guard: None,
+                        body: Expr::Null(call_span),
+                        span: call_span,
+                    },
+                    MatchArm {
+                        pattern: Pattern::Binding {
+                            name: "__ufcs_recv".to_string(),
+                            span: call_span,
+                        },
+                        guard: None,
+                        body: build_call(recv),
+                        span: call_span,
+                    },
+                ],
+                span: call_span,
+            }
+        } else {
+            build_call(object.clone())
+        };
+        self.ufcs_resolutions.insert(call_span.start, repl);
+        if matches!(nav, UfcsNav::SafeNullable | UfcsNav::SafeNonNull) {
+            Self::opt_wrap(ret)
+        } else {
+            ret
+        }
     }
 }

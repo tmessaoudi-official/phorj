@@ -356,3 +356,27 @@ fn ufcs_arg_type_still_checked() {
         "{errs:?}"
     );
 }
+
+#[test]
+fn ufcs_safe_nav_on_optional() {
+    // `x?.f()` UFCS: a null-safe member call on an optional receiver resolves the native and
+    // yields an optional result (lowered to a `match` over the optional, F-002).
+    assert!(errors_of(
+        "import Core.Text; \
+         function main() -> void { string? s = \"hi\"; string u = s?.upper() ?? \"x\"; }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn ufcs_safe_nav_result_is_optional() {
+    // The `?.` UFCS result is optional, so binding it to a non-optional type without `??` is an error.
+    let errs = errors_of(
+        "import Core.Text; \
+         function main() -> void { string? s = \"hi\"; string u = s?.upper(); }",
+    );
+    assert!(
+        !errs.is_empty(),
+        "expected an optional-to-non-optional error"
+    );
+}
