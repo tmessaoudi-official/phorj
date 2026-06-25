@@ -23,6 +23,22 @@ were close, I favored the one that removes a surprise without removing capabilit
 
 ---
 
+## ✅ RESOLVED 2026-06-25 (developer, one-by-one via ask-human)
+
+| Fork | Decision | Action |
+|---|---|---|
+| **F-001** UFCS fallback mechanism | ✅ **Confirm as shipped** | none — stays as `0dc071c` |
+| **F-002** `?.` (safe-nav) UFCS | ✏️ **CHANGED → build now** | implement `x?.f(a)` UFCS (optional-peel + re-wrap) |
+| **F-003** number-receiver UFCS | ✅ **Confirm enabled** | none — works via F-001 |
+| **F-004** cross-package UFCS→user-fn | ✅ **Confirm deferral** | none — qualified calls stay the cross-package form |
+| **F-005** Slice 7 `Text.charAt`/`substring` | ✅ **Confirm deferral → M4/M-text** | none |
+| **F-006** Core.Reflect | ✅ **A — dedicated design pass** | write a Reflect design spec (reflection-vs-erasure); do NOT build yet |
+| **F-007** Process I/O | ✅ **Design pass first** | write a quarantine-seam design spec; do NOT build yet |
+
+**Build/write queue from these decisions:** (1) implement **F-002** `?.` UFCS (byte-identity-safe,
+extends `0dc071c`); (2) write the **F-006** Core.Reflect design spec; (3) write the **F-007** Process I/O
+seam design spec. Then await developer review of the two specs before building Reflect / Process I/O.
+
 ## Forks log
 
 ### F-001 — UFCS fallback also resolves stdlib natives (not just free functions)
