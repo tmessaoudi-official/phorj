@@ -1,0 +1,69 @@
+// A JSON API endpoint — `Core.Json` paired with the M6 `handle(Request) -> Response` value model.
+//
+// This is the portable, socket-free core of a web handler (the same shape `phg serve` drives over a
+// real socket in `server.phg`): a Request carries a JSON request body as `bytes`, `handle` parses it
+// with `Core.Json`, computes a result, and returns a Response whose body is a JSON document. Pure
+// value-in / value-out, so it runs byte-identically on `run` / `runvm` / real PHP.
+//
+// Endpoint contract: POST a JSON array of integers, get back `{"count": N, "sum": S}`; a non-array
+// body is `400 {"error": "expected a JSON array"}`; malformed JSON is `400 {"error": "invalid JSON"}`.
+package Main;
+import Core.Console;
+import Core.Bytes;
+import Core.Json;
+
+// Minimal request/response values (bodies are `bytes`, the HTTP octet contract from M6 W0).
+class Request {
+  constructor(public string path, public bytes body) {}
+}
+class Response {
+  constructor(public int status, public bytes body) {}
+}
+
+// Extract an integer from a JSON node (non-ints contribute 0 — a deliberately lenient sum).
+function intOf(Json j): int {
+  return match j {
+    Int(n) => n,
+    _ => 0,
+  };
+}
+
+// Summarize a JSON array into a small JSON object. Statements (the loop) live here, not in a `match`
+// arm — the arm just binds `items` and delegates.
+function summarize(List<Json> items): Json {
+  mutable int count = 0;
+  mutable int sum = 0;
+  for (Json x in items) {
+    count = count + 1;
+    sum = sum + intOf(x);
+  }
+  return new Obj(["count" => new Int(count), "sum" => new Int(sum)]);
+}
+
+function errorBody(string message): bytes {
+  return Bytes.fromString(Json.stringify(new Obj(["error" => new Str(message)])));
+}
+
+// The endpoint: parse the JSON request body, branch on its shape, return a JSON response.
+function handle(Request req): Response {
+  var parsed = Json.parse(Bytes.toString(req.body) ?? "");
+  if (var doc = parsed) {
+    return match doc {
+      Arr(items) => new Response(200, Bytes.fromString(Json.stringify(summarize(items)))),
+      _ => new Response(400, errorBody("expected a JSON array")),
+    };
+  }
+  return new Response(400, errorBody("invalid JSON"));
+}
+
+function show(Response resp): void {
+  Console.println("status: {resp.status}");
+  Console.println(Bytes.toString(resp.body) ?? "");
+}
+
+function main(): void {
+  show(handle(new Request("/sum", Bytes.fromString("[1, 2, 3, 4]"))));   // 200, count 4 / sum 10
+  show(handle(new Request("/sum", Bytes.fromString("[10, 20, 30]"))));   // 200, count 3 / sum 60
+  show(handle(new Request("/sum", Bytes.fromString("42"))));            // 400, not an array
+  show(handle(new Request("/sum", Bytes.fromString("[1, 2"))));          // 400, malformed
+}

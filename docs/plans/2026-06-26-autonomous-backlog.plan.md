@@ -64,4 +64,6 @@
 - [x] **1 Core.Json** — DONE (spec `docs/specs/2026-06-26-core-json-design.md`; Slice A reserved-variant
   mangling `305e331`; Slice B natives + injection + PHP helpers + `examples/guide/json.phg`). 917 lib +
   109 differential (PHP-8.5 oracle) green, clippy + fmt clean.
-- [ ] 2 web+JSON demo   [ ] 3 MILESTONES fix   [ ] 4 F-m   [ ] 5 parseInt/sort
+- [x] **2 web+JSON demo** — DONE (`examples/web/json-api.phg`: a `handle(Request) -> Response` JSON
+  endpoint pairing Core.Json + Core.Bytes + the M6 value model; byte-identical run/runvm/real PHP).
+- [ ] 3 MILESTONES fix   [ ] 4 F-m   [ ] 5 parseInt/sort

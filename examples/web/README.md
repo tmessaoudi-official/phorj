@@ -11,6 +11,7 @@ a real socket — one native, one PHP — and both call the *same* `handle`.
 | `router.phg` | **W2** — a static exact-match router: a `List<Route>` table + linear `(method, path)` scan → a `Handler` enum tag → exhaustive `match` dispatch. Pure Phorge, no new language feature. |
 | `server.phg` | **W4** — the full served app: W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes`. This is what `phg serve` runs. |
 | `server.php` | **W4** — the PHP front-controller bridge: builds a `Request` from PHP superglobals, calls the transpiled `handle`, emits the `Response`. Runnable under `php -S`. |
+| `json-api.phg` | **`Core.Json` + the handler model** — a JSON endpoint: POST a JSON array of ints to get `{"count": N, "sum": S}`; a non-array body or malformed JSON returns `400` with a JSON `{"error": …}`. Bodies are JSON-in-`bytes`; `handle` parses with `Core.Json.parse`, branches with `match`, and answers with `Core.Json.stringify`. Pure value-in/value-out, byte-identical run/runvm/real PHP. |
 
 ## Run it natively — `phg serve`
 
