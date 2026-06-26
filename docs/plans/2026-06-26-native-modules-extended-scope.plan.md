@@ -98,3 +98,24 @@ suite (assertions + `phg test` runner + seeded Faker + auto-mocker) is **mostly 
     deterministic-parallelism/async scheduler + reactive/FRP + the Tier-B mechanism & per-feature
     impurity calls + full HTTP/cache/DB Tier-B designs + the full testing suite) → a design SSOT under
     `docs/research/extended-modules/`.
+- [2026-06-26] AGREED (extended-modules SSOT cross-cutting validation, after reviewing
+  `docs/research/extended-modules/SSOT.md`):
+  - **D-H0 — APPROVE the project-harness fix:** extend `uses_impure_native` to BOTH project harnesses
+    (`all_example_projects_*`), gating on the post-load resolved native set (scan every `.phg` under the
+    root). This is **Phase-0 prerequisite #1** — it unblocks every Tier-B project walkthrough and reverts
+    6 Tier-B "determinism breaks" verdicts to sound. Until it lands: Tier-B examples are single-file flat.
+  - **D-PRNG — sub-2^63 shift-add PRNG:** build `Core.Random` so every intermediate stays < 2^63 (Rust
+    i64 == PHP signed-int, no float promotion, never `mt_rand`) → seeded random stays three-leg byte-
+    identical (Tier A). Pin a vetted <2^62 multiplier + a `mul_mod` Rust-vs-PHP parity fixture as the
+    lock gate. **Phase-0 prerequisite #2 (PR0).**
+  - **D-G1 — Transport/process-global, REJECT `NativeEval::Effectful`:** impurity lives OUTSIDE the
+    `eval` body (set-once-read like `PROCESS_ARGS`; the `serve.rs` `Transport` seam). No cross-surface
+    Effects plumbing.
+  - **D-Async-1 — ship the suspension-free subset now, defer the suspending core:** `Core.Parallel`
+    (map/forkJoin) + reactive A1 are Tier A now; `yield`/`await`/channels wait until a suspension
+    primitive is proven on all three legs. **Split live natives into `Core.AsyncLive`/`Core.Time`/
+    `Core.Net`** (so the module-granular quarantine fires on the clock import, not the scheduler).
+  - **Build order locked:** Phase 0 (H0 + PR0 Core.Random) → Phase 1 Tier A (Parallel → Stream → Faker
+    → Memo → HTTP-types → Test → Mock) → Phase 2 Tier B (Cache → Time/Net → HTTP-client → DB),
+    reconciled with the native-modules SSOT (its Sql builder gates Db; its Random = PR0). Per-slice
+    decisions (D-Stream/D-Test-Q1/D-Test-harness/D-Mock/D-Http/D-Cache/D-Db) resolved as each is built.

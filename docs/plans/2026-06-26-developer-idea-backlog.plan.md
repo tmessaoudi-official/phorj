@@ -45,6 +45,28 @@ keyed collections (Map, Set) — exactly `Array.length`/`String.length` vs `Map.
 `Bytes.len`/`Text.len` → `.length`; keep `Map`/`Set.size`. (Alt: unify everything to `length`.) Pre-1.0
 single-dev → hard rename, no alias; ~14 call sites + a codemod. Small, do-able now. **Decision: TBD.**
 
+## Batch 2 — soundness / enforcement gaps (2026-06-26)
+
+### E. `private`/`protected` constructor silently ignored [Verified]
+External `new Secret(42)` on a `private constructor` printed `42`. Root cause: `parser/items.rs:511`
+— "Modifiers preceding `constructor` are consumed and **dropped** (M1: constructors implicitly public)."
+So visibility on a constructor is parsed + discarded (worse than unenforced — it *looks* like it works).
+**Fix:** record constructor visibility + enforce at the `new` site (a 7th access surface beyond the six
+in [[member-visibility-six-access-sites]]); only same-class / static factory may call a private ctor.
+**Decision: TBD.**
+
+### F. The wider hunt — "what other rules should we enforce?"
+A "provably-correct PHP upgrade" must not accept-and-ignore a declared rule. Candidate gaps (hypotheses,
+to verify): abstract-class instantiation; extending a `final` class; generic invariance at assignment
+[Verified gap, KNOWN_ISSUES]; `const` local reassignment; definite-assignment of non-optional fields;
+immutable-field mutation via aliases; static-vs-instance access; private-method cross-class dispatch;
+interface signature variance; OTHER parsed-but-dropped modifiers (grep the `items.rs:511` smell).
+**Rec:** a focused **soundness-enforcement audit** (sweep parser for dropped/ignored constructs + probe
+each declared rule with a minimal program to see if it's enforced + grade severity + fix) → a findings
+report feeding fix slices.
+**Decision [2026-06-26]: E = FOLD into the audit (don't fix in isolation); F = RUN the soundness-enforcement
+audit workflow** → findings SSOT at `docs/research/soundness-audit/SSOT.md`, fixes batched into slices after.
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep
