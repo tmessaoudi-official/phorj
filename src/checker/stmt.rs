@@ -658,7 +658,6 @@ impl Checker {
             span,
         } = stmt
         {
-            let declared = self.resolve_type(ty);
             let iter_ty = self.check_expr(iter);
             let elem = match iter_ty {
                 Ty::List(e) => *e,
@@ -671,12 +670,20 @@ impl Checker {
                     Ty::Error
                 }
             };
-            if !self.ty_assignable(&elem, &declared) {
-                self.err(
-                    *span,
-                    format!("loop variable `{name}` declared `{declared}` but iterating `{elem}`"),
-                );
-            }
+            // A-6: an inferred binding (`foreach (xs as x)` desugars to `for (var x in xs)`) takes the
+            // element type directly; an explicit `for (T x in xs)` validates `T` against it.
+            let declared = if matches!(ty, crate::ast::Type::Infer(_)) {
+                elem.clone()
+            } else {
+                let d = self.resolve_type(ty);
+                if !self.ty_assignable(&elem, &d) {
+                    self.err(
+                        *span,
+                        format!("loop variable `{name}` declared `{d}` but iterating `{elem}`"),
+                    );
+                }
+                d
+            };
             self.push_scope();
             self.declare(name, declared, *span);
             self.loop_depth += 1;

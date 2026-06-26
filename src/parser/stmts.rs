@@ -32,6 +32,9 @@ impl Parser {
             TokenKind::Mutable => self.parse_mutable_var_decl(),
             TokenKind::Throw => self.parse_throw(),
             TokenKind::Try => self.parse_try(),
+            // A-6: `foreach` is a contextual keyword (like `as`/`when`) — only the `foreach (`
+            // statement-leading form is the loop; a bare `foreach` ident elsewhere is unaffected.
+            TokenKind::Ident(s) if s == "foreach" => self.parse_foreach(),
             _ => self.parse_var_decl_or_expr_stmt(),
         }
     }
@@ -346,6 +349,92 @@ impl Parser {
             body,
             span: sp,
         })
+    }
+
+    /// A-6: `foreach (EXPR as NAME [with int COUNTER]) BLOCK` — PHP-familiar iteration, kept
+    /// alongside the typed `for (T x in xs)` form. Desugars entirely to the existing for-in (with an
+    /// **inferred** element type, resolved by the checker) so the interpreter/VM/transpiler are
+    /// untouched; the for-in already emits idiomatic PHP `foreach`. An optional `with int i` counter
+    /// becomes a 0-based induction variable in an enclosing block, incremented at the end of each
+    /// iteration. (Key/value `as k => v` and destructure bindings are a documented follow-up — they
+    /// need iteration-model changes the value form does not.)
+    pub(super) fn parse_foreach(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.advance(); // `foreach` (contextual)
+        self.expect(&TokenKind::LParen, "'(' after 'foreach'")?;
+        let iter = self.parse_expr()?;
+        if !matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
+            return Err(self.error("'as' after the foreach iterable (e.g. `foreach (xs as x)`)"));
+        }
+        self.advance(); // `as`
+        if matches!(self.peek(), TokenKind::LBracket) || self.peek2_is_fat_arrow_binding() {
+            return Err(self.error(
+                "foreach key/value (`as k => v`) and destructure bindings are not supported yet — \
+                 use `foreach (xs as x)` (value form) or the typed `for (T x in xs)`",
+            ));
+        }
+        let name = self.expect_ident("a binding name after 'as'")?;
+        // Optional `with int COUNTER` — a 0-based auto-incrementing position counter.
+        let counter = if matches!(self.peek(), TokenKind::With) {
+            self.advance(); // `with`
+            let cty = self.parse_type()?;
+            if !matches!(&cty, Type::Named { name, args, .. } if name == "int" && args.is_empty()) {
+                return Err(
+                    self.error("the foreach counter must be typed `int` (e.g. `with int i`)")
+                );
+            }
+            Some(self.expect_ident("a counter name after 'with int'")?)
+        } else {
+            None
+        };
+        self.expect(&TokenKind::RParen, "')' after the foreach header")?;
+        let mut body = self.parse_block()?;
+        // With a counter, append `c = c + 1;` to the loop body and declare `c` in an enclosing block.
+        if let Some(c) = &counter {
+            body.push(Stmt::Assign {
+                target: Expr::Ident(c.clone(), sp),
+                value: Expr::Binary {
+                    op: BinaryOp::Add,
+                    lhs: Box::new(Expr::Ident(c.clone(), sp)),
+                    rhs: Box::new(Expr::Int(1, sp)),
+                    span: sp,
+                },
+                span: sp,
+            });
+        }
+        let loop_stmt = Stmt::For {
+            ty: Type::Infer(sp),
+            name,
+            iter,
+            body,
+            span: sp,
+        };
+        match counter {
+            None => Ok(loop_stmt),
+            Some(c) => Ok(Stmt::Block(
+                vec![
+                    Stmt::VarDecl {
+                        ty: Type::Named {
+                            name: "int".to_string(),
+                            args: Vec::new(),
+                            span: sp,
+                        },
+                        name: c,
+                        init: Expr::Int(0, sp),
+                        mutable: true,
+                        span: sp,
+                    },
+                    loop_stmt,
+                ],
+                sp,
+            )),
+        }
+    }
+
+    /// True if the tokens just after `as` look like a key/value binding `NAME =>` (so we can reject
+    /// it with a helpful message rather than misparsing). Peeks `Ident` then `=>`.
+    fn peek2_is_fat_arrow_binding(&self) -> bool {
+        matches!(self.peek(), TokenKind::Ident(_)) && matches!(self.peek2(), TokenKind::FatArrow)
     }
 
     /// Scan the for-header tokens (from just after the opening `(`) at paren/bracket depth 0: a

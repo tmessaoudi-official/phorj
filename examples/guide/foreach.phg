@@ -1,0 +1,34 @@
+package Main;
+import Core.Console;
+
+// A-6 — PHP-familiar `foreach (xs as x)` iteration, kept alongside Phorge's typed `for (T x in xs)`.
+// The element type is INFERRED from the iterable (no `var`/type needed), and an optional
+// `with int i` adds a 0-based position counter — the thing you'd otherwise hand-roll with a
+// separate `mutable int i = 0;`. Both forms desugar to the same for-in, so all three backends and
+// the transpiled PHP (`foreach ($xs as $x)`) stay byte-identical.
+
+function main(): void {
+    List<string> langs = ["Phorge", "PHP", "TypeScript"];
+
+    // Value form — `w` is inferred as `string` from `langs: List<string>`.
+    foreach (langs as w) {
+        Console.println("hello {w}");
+    }
+
+    // With a `with int i` position counter (0-based, auto-incrementing).
+    foreach (langs as name with int i) {
+        Console.println("{i} = {name}");
+    }
+
+    // A range source iterates inferred `int`s — same as `for (int n in 0..=3)`.
+    mutable int sum = 0;
+    foreach (1..=4 as n) {
+        sum = sum + n;
+    }
+    Console.println("sum 1..=4 = {sum}");
+
+    // The typed `for (T x in xs)` form still works, unchanged, side by side.
+    for (string lang in langs) {
+        Console.println("typed: {lang}");
+    }
+}

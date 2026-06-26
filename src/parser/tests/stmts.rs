@@ -474,3 +474,58 @@ fn plain_var_still_parses_after_destructure_dispatch() {
     // The `var` dispatcher must not mistake an ordinary binding for a destructure.
     assert!(matches!(stmt("var n = 5;"), Stmt::VarDecl { .. }));
 }
+
+// ── A-6: PHP `foreach (xs as x)` — value form (inferred element type) + `with int i` counter ──
+
+#[test]
+fn parses_foreach_value_form() {
+    // `foreach (xs as x) { … }` desugars to a for-in with an inferred element type.
+    match stmt("foreach (xs as x) { Console.println(\"{x}\"); }") {
+        Stmt::For { ty, name, .. } => {
+            assert!(
+                matches!(ty, Type::Infer(_)),
+                "expected inferred elem type, got {ty:?}"
+            );
+            assert_eq!(name, "x");
+        }
+        other => panic!("expected for-in, got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_foreach_with_counter() {
+    // `foreach (xs as x with int i) { … }` desugars to a Block: a counter VarDecl + a for-in whose
+    // body increments the counter.
+    match stmt("foreach (xs as x with int i) { Console.println(\"{x}\"); }") {
+        Stmt::Block(stmts, _) => {
+            assert!(
+                matches!(stmts[0], Stmt::VarDecl { mutable: true, .. }),
+                "counter decl"
+            );
+            assert!(matches!(stmts[1], Stmt::For { .. }), "the loop");
+        }
+        other => panic!("expected a desugared block, got {other:?}"),
+    }
+}
+
+#[test]
+fn foreach_counter_must_be_int() {
+    let e = parser("foreach (xs as x with string i) { f(); }")
+        .parse_stmt()
+        .unwrap_err()
+        .render("");
+    assert!(e.contains("counter must be typed `int`"), "{e}");
+}
+
+#[test]
+fn foreach_keyvalue_form_is_rejected_for_now() {
+    // `as k => v` is a documented follow-up (needs iteration-model changes); reject with guidance.
+    let e = parser("foreach (m as k => v) { f(); }")
+        .parse_stmt()
+        .unwrap_err()
+        .render("");
+    assert!(
+        e.contains("key/value") || e.contains("not supported yet"),
+        "{e}"
+    );
+}

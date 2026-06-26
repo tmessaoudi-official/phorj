@@ -17,6 +17,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `realworld/rpg.phg` | turn-based combat: enum + `match`, class + methods + `this`, `List` + `for`, immutable state evolution |
 | `guide/operators.phg` | arithmetic, comparison, logical, unary operators; `**` power (type-directed, right-assoc) + `Math.ipow`; `bool` |
 | `guide/control-flow.phg` | `if`/`else`, `for…in`, recursion, mutual recursion |
+| `guide/foreach.phg` | **PHP-familiar `foreach (xs as x)`** (A-6) — element type inferred from the iterable; optional `with int i` 0-based position counter; a range source (`1..=4 as n`); the typed `for (T x in xs)` form still works side by side. Desugars to for-in so all backends + the transpiled PHP `foreach` stay byte-identical; no new `Op` |
 | `guide/functions.phg` | functions: typed params, return types, a no-return function, composition, a `List<int>`-returning function |
 | `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances, `List.length` |
 | `guide/fixed-lists.phg` | **fixed-length lists `[T; N]`** (Phase 1 types slice) — a `List<T>` with a compile-time length: literal-length-checked init (`E-FIXEDLIST-LEN`), static literal-index bounds (`E-FIXEDLIST-BOUNDS`), assignable **to** `List<T>` (not the reverse), length-preserving element-set on a `mutable` one; no new `Op`/`Value` (erases to a PHP array, the length is compile-time-only) |
