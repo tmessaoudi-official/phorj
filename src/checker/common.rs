@@ -265,12 +265,72 @@ pub(super) fn is_builtin_type_name(name: &str) -> bool {
     )
 }
 
-/// Names that are reserved *in PHP* for a top-level symbol (free function / class / enum / interface /
-/// trait / type-alias) and would therefore transpile to invalid PHP. `var` is the case un-reserved as
-/// a Phorge value identifier (contextual keyword): legal as a variable / parameter / field / property /
-/// method name (→ PHP `$var` / `->var` / `->var()`), but a PHP parse error as `function var(){}` /
-/// `class var{}` (verified against PHP 8.5). The broader PHP-reserved set (`list`/`print`/`clone`/… —
-/// already usable Phorge identifiers) is a separate, pre-existing hardening item (KNOWN_ISSUES).
-pub(super) fn is_php_reserved_symbol_name(name: &str) -> bool {
-    name == "var"
+/// Whether `name` is reserved *in PHP* for a top-level symbol of the given `kind` ("function" /
+/// "class" / "enum" / "interface" / "trait" / "type alias") and would therefore transpile to invalid
+/// PHP. These are words that are usable Phorge value identifiers (not Phorge keywords — lexed as
+/// `Ident`) but a PHP parse error in the corresponding symbol position. The split is **kind-aware**
+/// (verified empirically against PHP 8.5): the type words `int`/`float`/`object`/… are legal as a PHP
+/// *function* name but illegal as a *class* name, so a `function int(){}` is fine while `class int{}`
+/// is not — guarding both uniformly would over-reject valid code. PHP names are case-insensitive, so
+/// the function/class sets compare case-folded; the contextual-keyword collision (`var` as a type
+/// alias) is exact. Methods are exempt (legal as `->var()`), so this is never consulted for them.
+pub(super) fn is_php_reserved_symbol_name(name: &str, kind: &str) -> bool {
+    // Illegal as a PHP *function* name (and, being keywords/constructs, also as a class name).
+    const FN_RESERVED: &[&str] = &[
+        "array",
+        "list",
+        "print",
+        "echo",
+        "unset",
+        "isset",
+        "empty",
+        "eval",
+        "exit",
+        "die",
+        "include",
+        "include_once",
+        "require",
+        "require_once",
+        "global",
+        "goto",
+        "clone",
+        "and",
+        "or",
+        "xor",
+        "yield",
+        "declare",
+        "namespace",
+        "use",
+        "switch",
+        "case",
+        "default",
+        "foreach",
+        "elseif",
+        "endif",
+        "endfor",
+        "endforeach",
+        "endwhile",
+        "endswitch",
+        "enddeclare",
+        "insteadof",
+        "callable",
+        "as",
+        "var",
+    ];
+    // Additionally illegal as a PHP *class* name: the type words + `readonly`.
+    const CLASS_EXTRA: &[&str] = &[
+        "readonly", "int", "float", "bool", "string", "void", "iterable", "object", "mixed",
+        "never", "self", "parent",
+    ];
+    let lower = name.to_ascii_lowercase();
+    match kind {
+        "function" => FN_RESERVED.contains(&lower.as_str()),
+        "class" | "enum" | "interface" | "trait" => {
+            FN_RESERVED.contains(&lower.as_str()) || CLASS_EXTRA.contains(&lower.as_str())
+        }
+        // A type alias erases before any backend (no PHP symbol), so the only hazard is the
+        // contextual-keyword collision: a `type var` would clash with `var x = …` inference. The
+        // built-in type words are already rejected by the alias arm (`cannot redefine built-in type`).
+        _ => name == "var",
+    }
 }

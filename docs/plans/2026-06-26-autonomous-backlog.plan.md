@@ -67,4 +67,7 @@
 - [x] **2 web+JSON demo** — DONE (`examples/web/json-api.phg`: a `handle(Request) -> Response` JSON
   endpoint pairing Core.Json + Core.Bytes + the M6 value model; byte-identical run/runvm/real PHP).
 - [x] **3 MILESTONES fix** — DONE (M6 section now reflects W0–W4 shipped + Core.Json layered on; deferrals listed).
-- [ ] 4 F-m   [ ] 5 parseInt/sort
+- [x] **4 F-m** — DONE (kind-aware `E-RESERVED-NAME`: function-illegal + class-extra PHP-reserved sets,
+  empirically verified vs PHP 8.5; `function int()` stays legal, `class int{}` rejected; no over-reject,
+  blast-radius clean).
+- [ ] 5 parseInt/sort

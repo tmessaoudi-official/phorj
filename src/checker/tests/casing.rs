@@ -58,6 +58,46 @@ fn var_rejected_as_symbol_name_allowed_as_value() {
 }
 
 #[test]
+fn php_reserved_words_rejected_as_symbol_names_kind_aware() {
+    // F-m: the general PHP-reserved-word guard. A Phorge identifier that is a *PHP* reserved word
+    // (but not a Phorge keyword) transpiles to invalid PHP when it names a symbol — reject it cleanly.
+    // Kind-aware (verified vs PHP 8.5): some words are illegal only as a *class* name, not a function.
+    for src in [
+        "package Main; function array() -> int { return 1; }", // illegal PHP function name
+        "package Main; function list() -> int { return 1; }",
+        "package Main; function print() -> int { return 1; }",
+        "package Main; class object {}", // type words: illegal as a class name
+        "package Main; class int {}",
+        "package Main; enum string { A() }",
+        "package Main; interface callable {}",
+    ] {
+        let e = errors_of_raw(src);
+        assert!(
+            e.iter().any(|d| d.code == Some("E-RESERVED-NAME")),
+            "{src} → got {e:?}"
+        );
+    }
+    // Case-insensitive (PHP class/function names are): `Object` is as illegal as `object`.
+    assert!(errors_of_raw("package Main; class Object {}")
+        .iter()
+        .any(|d| d.code == Some("E-RESERVED-NAME")));
+
+    // NOT over-rejected: a type word (`int`/`float`/…) is a legal PHP *function* name, so a function
+    // named `int` is fine; only the class position is illegal.
+    assert!(
+        !errors_of_raw("package Main; function int() -> int { return 1; }")
+            .iter()
+            .any(|d| d.code == Some("E-RESERVED-NAME")),
+        "`int` is a legal PHP function name — must not be rejected"
+    );
+    // And an ordinary symbol name is never flagged.
+    assert!(check(&prog_raw(
+        "package Main; class Widget {} function helper() -> int { return 1; }"
+    ))
+    .is_ok());
+}
+
+#[test]
 fn package_and_import_segments_must_be_pascalcase() {
     // Reshape slice 2b: a lowercase package segment is rejected (E-PKG-CASE).
     let e = errors_of_raw("package app.util; function main() -> void {}");

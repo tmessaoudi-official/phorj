@@ -32,6 +32,17 @@ emitting an invalid `final class Int`. Transpiler-only (the backends address a v
 name), so stdout byte-identity is untouched; reusable for any enum and load-bearing for the clean
 `Core.Json` variant API. `examples/guide/enum-reserved-variants.phg`.
 
+### Changed — `E-RESERVED-NAME` now guards the full PHP-reserved-word set (F-m)
+
+The reserved-symbol-name check (previously `var`-only) now rejects every PHP-reserved word that is a
+usable Phorge identifier but would transpile to an invalid PHP symbol — turning a latent PHP-oracle
+parse error into a clean Phorge diagnostic. **Kind-aware** (empirically verified vs PHP 8.5): a
+`function` is checked against the function-illegal set (`var`/`list`/`print`/`array`/`unset`/`empty`/
+`eval`/`echo`/`clone`/`callable`/…), a `class`/`enum`/`interface`/`trait` additionally against the
+type words (`int`/`float`/`bool`/`string`/`object`/`readonly`/…) — so a `function int()` stays legal
+(legal PHP function name) while `class int {}` is rejected. All remain usable as value / parameter /
+field / method names. `phg explain E-RESERVED-NAME`.
+
 ### Changed — `var` is now a contextual keyword
 
 `var` was a hard-reserved keyword, so it could not be used as an identifier — naming a parameter,

@@ -10,16 +10,18 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- **PHP-reserved identifiers as symbol names — only `var` is guarded.** Phorge and PHP have different
-  keyword sets, so a Phorge identifier that is a *PHP* reserved word transpiles to invalid PHP when it
-  names a symbol (a free `function`/`class`/`enum`/`interface`/`trait`/`type`). `var` is now handled:
-  it is a contextual keyword usable as a value/parameter/field/method name but rejected as a symbol
-  name (`E-RESERVED-NAME`). The **general** set (`list`/`print`/`clone`/`array`/`unset`/`empty`/… —
-  none of which are Phorge keywords, so they are already usable identifiers today) is **not yet
-  guarded**: naming a function `list` would emit `function list(){}` and fail at the PHP oracle rather
-  than with a Phorge diagnostic. A single shared PHP-reserved-word guard (extending the `var` check) is
-  a planned hardening item. The byte-identity oracle still catches any such program — it just reports a
-  PHP parse error instead of a clean `E-RESERVED-NAME`.
+- **PHP-reserved identifiers as symbol names — now guarded (F-m, kind-aware).** Phorge and PHP have
+  different keyword sets, so a Phorge identifier that is a *PHP* reserved word would transpile to
+  invalid PHP when it names a symbol (a free `function`/`class`/`enum`/`interface`/`trait`/`type`).
+  `is_php_reserved_symbol_name(name, kind)` now rejects the full empirically-verified set with a clean
+  **`E-RESERVED-NAME`**: the function-illegal words (`var`/`list`/`print`/`array`/`unset`/`empty`/
+  `eval`/`echo`/`clone`/`callable`/… — verified vs PHP 8.5) for a `function`, plus the type words
+  (`int`/`float`/`bool`/`string`/`object`/`readonly`/… — legal PHP function names but illegal class
+  names) for a `class`/`enum`/`interface`/`trait`. All remain usable as value/parameter/field/method
+  names (legal PHP `$list` / `->list()`). A *type alias* only guards `var` (the contextual-keyword
+  collision); the built-in type words are already rejected by the alias arm. **Deferred corner:** a
+  *method* named after a word PHP forbids as a method (none in the function/class sets are — PHP
+  semi-reserves allow method names) is not specially handled; no known case.
 
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
   `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)

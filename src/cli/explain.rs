@@ -51,13 +51,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              `package app;` or `package app.util;`.\n"
         }
         "E-RESERVED-NAME" => {
-            "E-RESERVED-NAME — a function / class / enum / interface / trait / type was named `var`.\n\n\
-             `var` is a *contextual* keyword in Phorge: it is the inference-binding keyword only at a\n\
-             declaration start (`var x = …`), and an ordinary identifier everywhere else — so it is\n\
-             fine as a variable, parameter, field, property, or method name (it maps to a legal PHP\n\
-             `$var` / `->var` / `->var()`). But PHP reserves `var` for a *symbol* name: a free\n\
-             `function var()` or `class var {}` is a PHP parse error, so Phorge rejects `var` there.\n\
-             Rename the function/class/type (the value/parameter/field/method name can stay `var`).\n"
+            "E-RESERVED-NAME — a function / class / enum / interface / trait / type was named with a\n\
+             word PHP reserves for that symbol position (e.g. `var`, `list`, `print`, `array`, `int`).\n\n\
+             These words are perfectly good Phorge *value* identifiers — a variable, parameter, field,\n\
+             property, or method may be named `var` / `list` / `int` (they map to a legal PHP `$list`\n\
+             / `->list()`). But PHP rejects them as a *symbol* name: `function list()` or `class int {}`\n\
+             is a PHP parse error, so Phorge rejects them there rather than emitting invalid PHP. The\n\
+             check is kind-aware — the type words (`int`/`float`/`object`/…) are legal PHP *function*\n\
+             names but illegal as *class* names. Rename the function/class/type (the value/parameter/\n\
+             field/method name can keep the word).\n"
         }
         "E-PKG-PATH" => {
             "E-PKG-PATH — a file's `package` does not match its location.\n\n\

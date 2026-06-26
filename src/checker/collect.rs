@@ -11,13 +11,15 @@ impl Checker {
         use crate::ast::Item;
         self.imports = crate::native::import_map(&program.items);
         for item in &program.items {
-            // `var` is a PHP reserved word in symbol positions (a free function / class / enum /
-            // interface / trait / type-alias). It is a usable Phorge value identifier (param / field /
-            // local / property / method) but naming a *symbol* `var` would transpile to invalid PHP, so
-            // reject it here with a clear diagnostic rather than letting the PHP oracle fail. Methods
-            // are collected inside `collect_class` (a class body), so they are exempt.
+            // PHP reserves a set of words in symbol positions (a free function / class / enum /
+            // interface / trait / type-alias). Several are usable Phorge value identifiers (param /
+            // field / local / property / method — e.g. `var`, `list`, `print`, `int`) but naming a
+            // *symbol* with one would transpile to invalid PHP, so reject it here with a clear
+            // diagnostic (kind-aware — `int` is a legal PHP function name but not a class name) rather
+            // than letting the PHP oracle fail. Methods are collected inside `collect_class` (a class
+            // body), so they are exempt (legal as `->list()` / `->var()`).
             if let Some((name, span, kind)) = reserved_symbol_decl(item) {
-                if is_php_reserved_symbol_name(name) {
+                if is_php_reserved_symbol_name(name, kind) {
                     self.err_coded(
                         span,
                         format!("`{name}` is a reserved word in PHP and cannot name a {kind}"),
