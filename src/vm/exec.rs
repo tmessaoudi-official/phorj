@@ -59,6 +59,23 @@ impl<'a> Vm<'a> {
                 self.stack.push(Value::Float(crate::value::float_rem(a, b)));
             }
 
+            // Decimal `+ - *` (M-NUM S1): pop two raw values (a `Decimal`, or a mixed `Decimal`/`Int`)
+            // and dispatch into the single-sourced kernels — the interpreter's `arith` calls the SAME
+            // functions, so the exact-result + i128-overflow-fault path is byte-identical (the same
+            // discipline as the int/float ops). The kernel widens an `Int` operand to scale 0.
+            Op::AddD => {
+                let (a, b) = self.pop2();
+                self.stack.push(crate::value::decimal_add(&a, &b)?);
+            }
+            Op::SubD => {
+                let (a, b) = self.pop2();
+                self.stack.push(crate::value::decimal_sub(&a, &b)?);
+            }
+            Op::MulD => {
+                let (a, b) = self.pop2();
+                self.stack.push(crate::value::decimal_mul(&a, &b)?);
+            }
+
             // Bitwise ops on ints (primitives P2) — shared `value::*` kernels (interpreter parity).
             Op::BitAnd => {
                 let (a, b) = self.pop2_int()?;
@@ -86,6 +103,10 @@ impl<'a> Vm<'a> {
                 // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
                 Value::Int(n) => self.push_i(crate::value::int_neg(n))?,
                 Value::Float(x) => self.stack.push(Value::Float(-x)),
+                // `decimal` negation via the shared kernel (M-NUM S1): checked, never `-0`.
+                Value::Decimal { unscaled, scale } => {
+                    self.stack.push(crate::value::decimal_neg(unscaled, scale)?);
+                }
                 v => return Err(format!("cannot negate {}", v.type_name())),
             },
             Op::Not => match self.pop() {

@@ -466,6 +466,11 @@ impl Printer {
         match e {
             Expr::Int(n, _) => Ok(n.to_string()),
             Expr::Float(f, _) => Ok(format!("{f:?}")),
+            // A `decimal` literal prints back as its rendered value + the `d` suffix (M-NUM S1) — the
+            // round-trip-faithful surface form (`19.99d`).
+            Expr::Decimal {
+                unscaled, scale, ..
+            } => Ok(format!("{}d", crate::value::fmt_decimal(*unscaled, *scale))),
             Expr::Bool(b, _) => Ok(b.to_string()),
             Expr::Null(_) => Ok("null".to_string()),
             Expr::Str(parts, _) => self.str_lit(parts),
@@ -642,6 +647,9 @@ impl Printer {
             Pattern::Binding { name, .. } => Ok(name.clone()),
             Pattern::Int(n, _) => Ok(n.to_string()),
             Pattern::Float(f, _) => Ok(format!("{f:?}")),
+            Pattern::Decimal {
+                unscaled, scale, ..
+            } => Ok(format!("{}d", crate::value::fmt_decimal(*unscaled, *scale))),
             Pattern::Str(s, _) => Ok(format!("\"{}\"", escape_str(s))),
             Pattern::Bool(b, _) => Ok(b.to_string()),
             Pattern::Null(_) => Ok("null".to_string()),

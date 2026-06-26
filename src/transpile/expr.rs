@@ -7,6 +7,12 @@ impl Transpiler {
         match e {
             Expr::Int(n, _) => Ok(n.to_string()),
             Expr::Float(x, _) => Ok(format!("{x:?}")), // 12.0 -> "12.0"
+            // A `decimal` literal `19.99d` → a PHP string literal `"19.99"` (BCMath operates on
+            // strings; M-NUM S1). The rendered form carries exactly `scale` fractional digits, so a
+            // `(string)`-of a BCMath result of the same value is identical (the byte-identity contract).
+            Expr::Decimal { unscaled, scale, .. } => {
+                Ok(format!("\"{}\"", crate::value::fmt_decimal(*unscaled, *scale)))
+            }
             Expr::Bool(b, _) => Ok(if *b { "true".into() } else { "false".into() }),
             Expr::Ident(name, _) => Ok(self.resolve_ident(name)),
             Expr::This(_) => Ok("$this".into()),
@@ -25,6 +31,45 @@ impl Transpiler {
                 let l = self.emit_expr(lhs)?;
                 let r = self.emit_expr(rhs)?;
                 let bs = if self.namespaced { "\\" } else { "" };
+                // Decimal `+ - *` (M-NUM S1): route to the BCMath `__phorge_dec_*` helpers, which
+                // derive each operand's scale at PHP-runtime, compute the result scale (add/sub = max,
+                // mul = sum), call `bcadd`/`bcsub`/`bcmul`, then bounds-check the result against i128
+                // range and `throw` the same `decimal overflow` fault as the Rust kernels. A mixed
+                // `decimal op int` stringifies the int operand first (a decimal is a PHP string; the
+                // int isn't). Checked FIRST (before the `+`/`-`/`*` native-operator paths below), since
+                // a decimal operand's kind is neither `Str` nor `Int`/`Float`, so those would
+                // mis-route it. Detected when EITHER operand's kind is `Decimal`.
+                if matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul) {
+                    let (lk, rk) = (self.expr_kind(lhs), self.expr_kind(rhs));
+                    if lk == OpKind::Decimal || rk == OpKind::Decimal {
+                        let ls = if lk == OpKind::Decimal {
+                            l.clone()
+                        } else {
+                            format!("(string)({l})")
+                        };
+                        let rs = if rk == OpKind::Decimal {
+                            r.clone()
+                        } else {
+                            format!("(string)({r})")
+                        };
+                        let helper = match op {
+                            BinaryOp::Add => {
+                                self.uses_dec_add = true;
+                                "__phorge_dec_add"
+                            }
+                            BinaryOp::Sub => {
+                                self.uses_dec_sub = true;
+                                "__phorge_dec_sub"
+                            }
+                            BinaryOp::Mul => {
+                                self.uses_dec_mul = true;
+                                "__phorge_dec_mul"
+                            }
+                            _ => unreachable!("matched Add/Sub/Mul above"),
+                        };
+                        return Ok(format!("{bs}{helper}({ls}, {rs})"));
+                    }
+                }
                 // T6: `/`, `%`, `+` are type-driven in Phorge (PHP's `/` is always float, `%` always
                 // integer, `+` numeric-only with `.` for concat). When the operand kind is statically
                 // known (`expr_kind`), emit the native PHP operator directly; otherwise fall back to
@@ -427,7 +472,9 @@ impl Transpiler {
     fn coerce_hole_concat(&mut self, e: &Expr, code: String) -> String {
         let bs = if self.namespaced { "\\" } else { "" };
         match self.expr_kind(e) {
-            OpKind::Str => Self::paren_if_compound(e, code),
+            // A `decimal` value is already a PHP string (its rendered form) — concatenate it directly,
+            // exactly like a `string` (M-NUM S1). `as_display` of a `Value::Decimal` is the same form.
+            OpKind::Str | OpKind::Decimal => Self::paren_if_compound(e, code),
             OpKind::Int => format!("(string){}", Self::paren_if_compound(e, code)),
             OpKind::Bool => format!(
                 "({} ? \"true\" : \"false\")",

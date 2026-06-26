@@ -8,6 +8,18 @@ impl Compiler<'_> {
         match e {
             Expr::Int(n, sp) => self.emit_const(Value::Int(*n), sp.line),
             Expr::Float(x, sp) => self.emit_const(Value::Float(*x), sp.line),
+            // A `decimal` literal rides the constant pool like float/bytes — no new Op (M-NUM S1).
+            Expr::Decimal {
+                unscaled,
+                scale,
+                span,
+            } => self.emit_const(
+                Value::Decimal {
+                    unscaled: *unscaled,
+                    scale: *scale,
+                },
+                span.line,
+            ),
             Expr::Bool(b, sp) => self.emit_const(Value::Bool(*b), sp.line),
             Expr::Str(parts, sp) => self.compile_str(parts, sp.line)?,
             Expr::Bytes(b, sp) => {
@@ -316,6 +328,8 @@ impl Compiler<'_> {
                 let leaf = match self.num_ty(lhs)? {
                     NumTy::Int => "ipow",
                     NumTy::Float => "pow",
+                    // `decimal ** _` is rejected by the checker (decimal supports only `+ - *`).
+                    NumTy::Decimal => unreachable!("decimal `**` rejected by checker"),
                 };
                 let idx = crate::native::index_of("Core.Math", leaf)
                     .expect("Core.Math.ipow/pow are registered natives");
@@ -324,20 +338,36 @@ impl Compiler<'_> {
                 self.emit(Op::CallNative(idx, 2), line);
             }
             Add | Sub | Mul | Div | Rem => {
-                let nt = self.num_ty(lhs)?;
+                // `decimal` arithmetic (M-NUM S1): emit `AddD/SubD/MulD` when EITHER operand is
+                // decimal (`decimal ⊕ int` widens the int in the value kernel) — `num_ty(lhs)` alone
+                // would mis-classify `int * decimal`. The checker rejects decimal `/`/`%` this slice,
+                // so only `Add/Sub/Mul` reach the decimal path. Probe both operands; a probe that errs
+                // (a genuinely unresolvable operand) falls through to the int/float path's error.
+                let lhs_dec = matches!(self.ctype(lhs), Ok(CTy::Decimal));
+                let rhs_dec = matches!(self.ctype(rhs), Ok(CTy::Decimal));
+                let nt = if lhs_dec || rhs_dec {
+                    NumTy::Decimal
+                } else {
+                    self.num_ty(lhs)?
+                };
                 self.expr(lhs)?;
                 self.expr(rhs)?;
                 let emit = match (op, nt) {
                     (Add, NumTy::Int) => Op::AddI,
                     (Add, NumTy::Float) => Op::AddF,
+                    (Add, NumTy::Decimal) => Op::AddD,
                     (Sub, NumTy::Int) => Op::SubI,
                     (Sub, NumTy::Float) => Op::SubF,
+                    (Sub, NumTy::Decimal) => Op::SubD,
                     (Mul, NumTy::Int) => Op::MulI,
                     (Mul, NumTy::Float) => Op::MulF,
+                    (Mul, NumTy::Decimal) => Op::MulD,
                     (Div, NumTy::Int) => Op::DivI,
                     (Div, NumTy::Float) => Op::DivF,
                     (Rem, NumTy::Int) => Op::RemI,
                     (Rem, NumTy::Float) => Op::RemF,
+                    // Decimal `/`/`%` is rejected by the checker (S2), so it never reaches here.
+                    (Div | Rem, NumTy::Decimal) => unreachable!("decimal /,% rejected by checker"),
                     _ => unreachable!("arithmetic op set"),
                 };
                 self.emit(emit, line);

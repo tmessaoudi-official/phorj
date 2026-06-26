@@ -610,6 +610,26 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
             };
             Ok(Value::Float(v))
         }
+        // `decimal` arithmetic (M-NUM S1): `+ - *` over a decimal — including a mixed `decimal`/`int`
+        // pair (the kernel widens the int to scale 0) — dispatches into the single-sourced
+        // `value::decimal_*` kernels the VM's `AddD/SubD/MulD` ops also call, so the exact result and
+        // the i128-overflow fault are byte-identical. The checker rejects decimal `/`/`%` (S2), so
+        // only `Add/Sub/Mul` reach here; a stray `Div/Rem` is a checker-unreachable defensive error.
+        (l @ Value::Decimal { .. }, r) | (l, r @ Value::Decimal { .. })
+            if matches!(r, Value::Decimal { .. } | Value::Int(_))
+                && matches!(l, Value::Decimal { .. } | Value::Int(_)) =>
+        {
+            let res = match op {
+                Add => crate::value::decimal_add(&l, &r),
+                Sub => crate::value::decimal_sub(&l, &r),
+                Mul => crate::value::decimal_mul(&l, &r),
+                _ => return rt("decimal `/` and `%` are not available yet (M-NUM S2)"),
+            };
+            match res {
+                Ok(v) => Ok(v),
+                Err(msg) => rt(msg),
+            }
+        }
         // `string + string` → concatenation (Phase 1 string slice). The checker guarantees `+` is
         // the only op and both sides are `string`; the VM lowers this to `Op::Concat(2)`, whose
         // two-`Str` result is exactly `a + b`, so the backends stay byte-identical.
@@ -688,6 +708,14 @@ fn match_pattern(
         }
         Pattern::Int(n, _) => matches!(value, Value::Int(v) if v == n),
         Pattern::Float(x, _) => matches!(value, Value::Float(v) if v == x),
+        // A decimal literal pattern matches numerically (scale-insensitive, like `==`): `1.5d` matches
+        // a `1.50d` scrutinee. Reuse the value-equality kernel via a fresh `Value::Decimal` (M-NUM S1).
+        Pattern::Decimal {
+            unscaled, scale, ..
+        } => value.eq_val(&Value::Decimal {
+            unscaled: *unscaled,
+            scale: *scale,
+        }),
         Pattern::Str(s, _) => matches!(value, Value::Str(v) if v == s),
         Pattern::Bool(b, _) => matches!(value, Value::Bool(v) if v == b),
         Pattern::Null(_) => matches!(value, Value::Null), // M3 S2.6: `null` arm over a `T?`

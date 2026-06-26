@@ -19,6 +19,7 @@ impl Checker {
                     let ok = match ty {
                         Ty::Int
                         | Ty::Float
+                        | Ty::Decimal
                         | Ty::Bool
                         | Ty::String
                         | Ty::Bytes
@@ -169,6 +170,7 @@ impl Checker {
             Type::Named { name, args, span } => match name.as_str() {
                 "int" => self.no_args(name, args, *span, Ty::Int),
                 "float" => self.no_args(name, args, *span, Ty::Float),
+                "decimal" => self.no_args(name, args, *span, Ty::Decimal),
                 "bool" => self.no_args(name, args, *span, Ty::Bool),
                 "string" => self.no_args(name, args, *span, Ty::String),
                 "bytes" => self.no_args(name, args, *span, Ty::Bytes),
@@ -196,8 +198,7 @@ impl Checker {
                     let v = self.resolve_type(&args[1]);
                     Ty::Map(Box::new(k), Box::new(v))
                 }
-                "decimal" | "double" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32"
-                | "u64" => self.err(
+                "double" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => self.err(
                     *span,
                     format!("the numeric type `{name}` is not yet supported in M1"),
                 ),

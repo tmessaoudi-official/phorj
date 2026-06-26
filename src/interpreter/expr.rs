@@ -7,6 +7,12 @@ impl Interp {
         match e {
             Expr::Int(n, _) => Ok(Value::Int(*n)),
             Expr::Float(x, _) => Ok(Value::Float(*x)),
+            Expr::Decimal {
+                unscaled, scale, ..
+            } => Ok(Value::Decimal {
+                unscaled: *unscaled,
+                scale: *scale,
+            }),
             Expr::Bool(b, _) => Ok(Value::Bool(*b)),
             Expr::Null(_) => Ok(Value::Null),
             Expr::Str(parts, _) => self.eval_str(parts),
@@ -326,6 +332,13 @@ impl Interp {
                 Err(msg) => rt(msg),
             },
             (UnaryOp::Neg, Value::Float(x)) => Ok(Value::Float(-x)),
+            (UnaryOp::Neg, Value::Decimal { unscaled, scale }) => {
+                // Negate via the shared kernel (checked — `i128::MIN` faults, never `-0` in render).
+                match crate::value::decimal_neg(unscaled, scale) {
+                    Ok(v) => Ok(v),
+                    Err(msg) => rt(msg),
+                }
+            }
             (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
             (UnaryOp::BitNot, Value::Int(n)) => Ok(Value::Int(crate::value::int_bitnot(n))),
             (op, v) => rt(format!("cannot apply {op:?} to {}", v.type_name())),

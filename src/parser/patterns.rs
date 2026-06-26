@@ -15,6 +15,14 @@ impl Parser {
                 self.advance();
                 Ok(Pattern::Float(f, sp))
             }
+            TokenKind::Decimal(unscaled, scale) => {
+                self.advance();
+                Ok(Pattern::Decimal {
+                    unscaled,
+                    scale,
+                    span: sp,
+                })
+            }
             TokenKind::Str(segs) => {
                 self.advance();
                 // A string pattern must be a plain literal — interpolation makes no sense in a

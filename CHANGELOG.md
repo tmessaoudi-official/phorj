@@ -6,6 +6,38 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the `decimal` primitive (M-NUM S1)
+
+An exact fixed-point **`decimal`** scalar primitive for money/fixed-point math — making
+float-for-currency a *compile choice*, not a silent bug. Representation is `i128` fixed-point
+(`Value::Decimal { unscaled, scale }`, value = `unscaled × 10^(-scale)`), std-only and covering all
+realistic money. Surface:
+
+- **Literals `19.99d`** — a numeric literal immediately followed by `d`; the scale comes from the
+  literal **text** (`1.50d` ⇒ scale 2, `1.500d` ⇒ scale 3, `100d` ⇒ scale 0). An exponent (`1e3d`)
+  is rejected and an i128-overflowing literal is a compile-time error — both `E-DECIMAL-LITERAL`.
+- **`Decimal.of(string) -> decimal?`** (`import Core.Decimal;`) — parse the same grammar at runtime,
+  `null` on malformed/overflow (composes with `??`).
+- **`+ - *`** — exact, single-sourced in `value::decimal_add/sub/mul`: add/sub align to `max` scale,
+  mul sums scales; any i128 overflow (incl. alignment) is a clean `"decimal overflow"` fault. Mixed
+  **`decimal ⊕ int`** (either order) widens the int to a scale-0 decimal and stays `decimal`. A
+  `decimal ⊕ float` mix is rejected (`E-DECIMAL-FLOAT-MIX`) — the bug this primitive exists to
+  prevent. `/` and `%` are deferred to S2 (division + rounding).
+- **Comparison / equality** — numeric, **scale-insensitive** (`1.50d == 1.5d` is true; `decimal`
+  compares with `decimal` or `int`).
+- **Unary `-`**, scale-padded rendering (`{1999,2}` → `"19.99"`, never `-0`).
+
+Implementation: the literal rides the constant pool (**no new `Value`-kind/`Op` for it**); the VM
+gains three type-specialized ops `AddD`/`SubD`/`MulD` (the three coupled matches — `chunk.rs`
+`Op`+`validate`, `vm/exec.rs`, `compiler` emit). Compiler gains `NumTy::Decimal`/`CTy::Decimal` so a
+decimal-valued field/map/method-result operand specializes on the VM. Transpiles to **BCMath**
+(verified available under `php -n`): a literal → a PHP string, `emit_type(decimal)` → `string`,
+arithmetic → gated `__phorge_dec_add/_sub/_mul` helpers that derive operand scales at runtime, call
+`bcadd`/`bcsub`/`bcmul` with the rule's scale, then bounds-check the result against i128 range and
+`throw` the same fault as Rust. `Decimal.of` → a gated `__phorge_dec_of` (tier-1 PCRE). Byte-identical
+`run ≡ runvm ≡ real PHP 8.5`; `examples/guide/decimals.phg`;
+`phg explain E-DECIMAL-FLOAT-MIX`/`E-DECIMAL-LITERAL`.
+
 ### Added — default parameter values + `Text.parseFloat` (M4)
 
 A PHP-familiar language feature: a trailing parameter may declare a literal **default value**

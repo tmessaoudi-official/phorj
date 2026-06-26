@@ -35,6 +35,21 @@ not a panic:
   `inf`/`nan` are **rejected by design** in both strict and permissive modes (byte-identity — PHP's
   cast can't produce them).
 
+- **`decimal` primitive (M-NUM S1) — shipped corners + deferrals.** The exact fixed-point `decimal`
+  ships with `19.99d` literals, `Decimal.of(string) -> decimal?`, `+ - *`, scale-insensitive
+  comparison/equality, unary `-`, and BCMath transpile. Deferrals: (1) **`/` and `%` (division +
+  rounding) are deferred to M-NUM S2** — a `decimal /`/`%` is a clean compile error this slice (the
+  result scale + rounding mode is a deliberate, explicit choice, not a default). (2) **i128 overflow is
+  a runtime fault, not a compile error** — an exact `+ - *` result (or a scale alignment) that leaves
+  the `i128` range faults `"decimal overflow"` (byte-identical on `run`/`runvm` and in the emitted
+  BCMath, which bounds-checks the result against i128 range and `throw`s the same body). Because every
+  shipped example must produce identical *Ok* output, the fault is **not** a runnable example — it is
+  exercised by the kernel unit tests (`value::decimal_overflow_is_a_clean_fault`); a program that
+  overflows simply faults identically on all three backends. (3) **No `decimal`↔`float` coercion** — by
+  design (`E-DECIMAL-FLOAT-MIX`); the only operator-level widen is `decimal ⊕ int`. (4) **No
+  arbitrary-precision decimal / `BigInt` / `Money`+currency** — those are M-NUM-2 (they share a
+  hand-rolled bignum core); the i128 range (~10^36 at scale 2) covers all realistic money.
+
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
   `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)
   for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as
@@ -161,7 +176,7 @@ not a panic:
   separate pending slice.
 - Exceptions (try / catch / throw)
 - Method/function overloading, traits, operator overloading, property accessors
-- Sized integers / `decimal`, `const`/`final` enforcement
+- Sized integers (`i8`..`u64`), `const`/`final` enforcement (the `decimal` primitive now ships — M-NUM S1)
 - `match` outside return / variable-declaration-initializer position
 
 ## Pattern cluster (M-RT S5.1 / S5.2) — deferred refinements

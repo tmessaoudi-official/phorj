@@ -246,6 +246,7 @@ impl Checker {
         match e {
             Expr::Int(..)
             | Expr::Float(..)
+            | Expr::Decimal { .. }
             | Expr::Bool(..)
             | Expr::Null(..)
             | Expr::Bytes(..)

@@ -549,3 +549,39 @@ fn text_block_unterminated_errors() {
         e.message
     );
 }
+
+#[test]
+fn decimal_literal_suffix_preserves_scale() {
+    use TokenKind::*;
+    // The `d` suffix → a decimal token; the scale is the count of fractional digits (text-parsed).
+    assert_eq!(kinds("19.99d"), vec![Decimal(1999, 2), Eof]);
+    assert_eq!(kinds("1.500d"), vec![Decimal(1500, 3), Eof]);
+    assert_eq!(kinds("100d"), vec![Decimal(100, 0), Eof]);
+    assert_eq!(kinds("0d"), vec![Decimal(0, 0), Eof]);
+    // underscores are stripped in a source literal.
+    assert_eq!(kinds("1_000.50d"), vec![Decimal(100050, 2), Eof]);
+}
+
+#[test]
+fn decimal_d_not_eaten_when_identifier_continues() {
+    use TokenKind::*;
+    // `3days` is `3` then the identifier `days`, NOT a decimal — the `d` is followed by `ays`.
+    assert_eq!(kinds("3days"), vec![Int(3), Ident("days".into()), Eof]);
+    // `3d` IS a decimal (the `d` is the suffix, nothing continues it).
+    assert_eq!(kinds("3d"), vec![Decimal(3, 0), Eof]);
+}
+
+#[test]
+fn decimal_exponent_is_rejected() {
+    // `1e3d` — an exponent on a decimal literal is out of scope this slice (M-NUM S1).
+    let e = lex("1e3d").unwrap_err();
+    assert!(e.message.contains("exponent"), "{}", e.message);
+}
+
+#[test]
+fn decimal_literal_overflow_is_a_lex_error() {
+    // A literal whose unscaled value exceeds i128 is a compile-time error (not a runtime fault).
+    let big = format!("{}d", "9".repeat(40));
+    let e = lex(&big).unwrap_err();
+    assert!(e.message.contains("out of range"), "{}", e.message);
+}

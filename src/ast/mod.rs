@@ -75,6 +75,13 @@ pub enum Pattern {
     },
     Int(i64, Span),
     Float(f64, Span),
+    /// A `decimal` literal pattern — `19.99d` in a `match` arm (M-NUM S1). Matches numerically
+    /// (scale-insensitive, like `==`): `1.5d` matches a scrutinee of `1.50d`.
+    Decimal {
+        unscaled: i128,
+        scale: u8,
+        span: Span,
+    },
     Str(String, Span),
     Bool(bool, Span),
     Null(Span),
@@ -178,6 +185,15 @@ pub enum BinaryOp {
 pub enum Expr {
     Int(i64, Span),
     Float(f64, Span),
+    /// A `decimal` literal — `19.99d` (M-NUM S1). `unscaled`/`scale` are parsed from the literal
+    /// **text** so trailing zeros set the scale (`1.50d` ⇒ `{1999? no — 150}, scale 2`; `1.500d` ⇒
+    /// scale 3; `100d` ⇒ scale 0). Value = `unscaled × 10^(-scale)`. A literal whose digits overflow
+    /// i128 is a lex/parse error (`E-DECIMAL-LITERAL`), known at compile time.
+    Decimal {
+        unscaled: i128,
+        scale: u8,
+        span: Span,
+    },
     Bool(bool, Span),
     Null(Span),
     /// String literal as interpolation parts; a plain string is a single `Literal` part.

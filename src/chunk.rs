@@ -93,6 +93,13 @@ pub enum Op {
     MulF,
     DivF,
     RemF,
+    // Exact `decimal` arithmetic (M-NUM S1) — `+ - *` only (`/`/`%` deferred to S2). Each pops two
+    // values (a `Decimal`, or a mixed `Decimal`/`Int` — the int widens to scale 0 in the kernel) and
+    // pushes the exact `Decimal` result, or a clean `"decimal overflow"` fault on any i128 overflow.
+    // Dispatch into the single-sourced `value::decimal_add/sub/mul` kernels (interpreter parity).
+    AddD,
+    SubD,
+    MulD,
     // Bitwise ops on `int` operands (primitives P2; the checker guarantees int operands). Shifts
     // fault on a negative count, yield 0 / sign-fill for a count ≥ 64.
     BitAnd,
@@ -480,6 +487,9 @@ impl BytecodeProgram {
                     | Op::MulF
                     | Op::DivF
                     | Op::RemF
+                    | Op::AddD
+                    | Op::SubD
+                    | Op::MulD
                     | Op::BitAnd
                     | Op::BitOr
                     | Op::BitXor

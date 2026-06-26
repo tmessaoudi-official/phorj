@@ -6,6 +6,12 @@ use std::fmt;
 pub enum Ty {
     Int,
     Float,
+    /// An exact fixed-point **`decimal`** (M-NUM S1) — money/fixed-point math without float error. A
+    /// distinct primitive: **no implicit `decimal`↔`float` coercion** (mixing float into money is the
+    /// bug this prevents — `E-DECIMAL-FLOAT-MIX`). The one ergonomic edge is operator-level: `decimal`
+    /// `+ - *` `int` widens the int to a scale-0 decimal. Transpiles to a PHP `string` (BCMath's
+    /// carrier); rides `Value::Decimal { i128, u8 }` at runtime.
+    Decimal,
     Bool,
     String,
     /// A sequence of raw octets (not UTF-8). Converts to/from `string` only via `core.bytes`.
@@ -245,6 +251,7 @@ impl fmt::Display for Ty {
         match self {
             Ty::Int => write!(f, "int"),
             Ty::Float => write!(f, "float"),
+            Ty::Decimal => write!(f, "decimal"),
             Ty::Bool => write!(f, "bool"),
             Ty::String => write!(f, "string"),
             Ty::Bytes => write!(f, "bytes"),

@@ -27,6 +27,9 @@ enum OpKind {
     Str,
     Int,
     Float,
+    /// `decimal` (M-NUM S1). A decimal operand routes `+ - *` to the `__phorge_dec_*` BCMath helpers
+    /// (exact + i128-bounds-checked), and a decimal value erases to a PHP `string` for display.
+    Decimal,
     Bool,
     /// A value of a user-defined class/enum/interface, carrying its name so a field read resolves
     /// through `class_field_kinds` (T6b). Never an arithmetic/display operand itself.
@@ -46,6 +49,7 @@ fn opkind_of_ty(ty: &crate::types::Ty) -> OpKind {
     match ty {
         Ty::Int => OpKind::Int,
         Ty::Float => OpKind::Float,
+        Ty::Decimal => OpKind::Decimal,
         Ty::String => OpKind::Str,
         Ty::Bool => OpKind::Bool,
         Ty::List(e) => OpKind::List(Box::new(opkind_of_ty(e))),
@@ -63,6 +67,7 @@ fn kind_of_type(ty: &Type) -> OpKind {
         Type::Named { name, args, .. } => match name.as_str() {
             "int" => OpKind::Int,
             "float" => OpKind::Float,
+            "decimal" => OpKind::Decimal,
             "string" => OpKind::Str,
             "bool" => OpKind::Bool,
             // Containers carry their element kinds so an index read resolves as an operand (T6d).
@@ -234,6 +239,17 @@ struct Transpiler {
     /// Set when `Core.Text.parseFloat` is emitted — defines `__phorge_parse_float`, which gates the
     /// float grammar (strict / permissive, rejecting inf/nan) then casts, mirroring the Rust kernel.
     uses_text_parse_float: bool,
+    /// Set when a `decimal` `+`/`-`/`*` (or `Decimal.of`) is emitted — each defines its BCMath
+    /// `__phorge_dec_*` helper once per file (M-NUM S1). The helpers derive operand scales at runtime,
+    /// compute the result scale (add/sub = max, mul = sum), call `bcadd`/`bcsub`/`bcmul`, then
+    /// bounds-check the result against i128 range and `throw` the same `decimal overflow` fault as the
+    /// Rust kernels — so the PHP leg matches `run`/`runvm` byte-for-byte (incl. the overflow fault).
+    uses_dec_add: bool,
+    uses_dec_sub: bool,
+    uses_dec_mul: bool,
+    /// Set when `Decimal.of(s)` is emitted — defines `__phorge_dec_of`, validating the literal grammar
+    /// (a tier-1 PCRE — NOT mbstring) + i128 range, returning the normalized decimal string or `null`.
+    uses_dec_of: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -416,6 +432,10 @@ impl Transpiler {
             uses_list_index_of: false,
             uses_text_index_of: false,
             uses_text_parse_float: false,
+            uses_dec_add: false,
+            uses_dec_sub: false,
+            uses_dec_mul: false,
+            uses_dec_of: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }
@@ -509,6 +529,7 @@ impl Transpiler {
         match e {
             Expr::Int(..) => OpKind::Int,
             Expr::Float(..) => OpKind::Float,
+            Expr::Decimal { .. } => OpKind::Decimal,
             Expr::Str(..) => OpKind::Str,
             Expr::Bool(..) => OpKind::Bool,
             Expr::Ident(name, _) => {
@@ -534,6 +555,11 @@ impl Transpiler {
                     let (l, r) = (self.expr_kind(lhs), self.expr_kind(rhs));
                     if matches!(op, BinaryOp::Add) && (l == OpKind::Str || r == OpKind::Str) {
                         OpKind::Str
+                    } else if l == OpKind::Decimal || r == OpKind::Decimal {
+                        // `decimal ⊕ {decimal,int}` stays decimal (M-NUM S1); the PHP carrier is a
+                        // string, but the operand *kind* is `Decimal` so a nested `(a * b) + c`
+                        // routes every level through the `__phorge_dec_*` helpers.
+                        OpKind::Decimal
                     } else if l == OpKind::Float || r == OpKind::Float {
                         OpKind::Float
                     } else if l == OpKind::Int || r == OpKind::Int {

@@ -1454,6 +1454,7 @@ fn literal_ty(e: &crate::ast::Expr) -> Option<Ty> {
     match e {
         Expr::Int(..) => Some(Ty::Int),
         Expr::Float(..) => Some(Ty::Float),
+        Expr::Decimal { .. } => Some(Ty::Decimal),
         Expr::Bool(..) => Some(Ty::Bool),
         Expr::Bytes(..) => Some(Ty::Bytes),
         Expr::Null(_) => Some(Ty::Null),

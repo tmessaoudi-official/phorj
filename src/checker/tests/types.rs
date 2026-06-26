@@ -136,11 +136,15 @@ fn unknown_type_in_var_decl_errors() {
 }
 
 #[test]
-fn decimal_type_is_deferred_corner() {
+fn decimal_type_is_a_real_primitive() {
+    // M-NUM S1: `decimal` is now a first-class primitive (no longer the deferred-corner stub). A
+    // decimal literal flows into a decimal slot; a bare `int` does NOT (the int-widen is operator-
+    // level only, never assignment-level — keeping the type wall honest).
+    assert!(errors_of("function main() -> void { decimal d = 19.99d; }").is_empty());
     let errs = errors_of("function main() -> void { decimal d = 0; }");
     assert!(
         errs.iter()
-            .any(|e| e.message.contains("decimal") && e.message.contains("not yet supported")),
+            .any(|e| e.message.contains("expected `decimal`")),
         "{errs:?}"
     );
 }

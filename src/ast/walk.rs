@@ -37,7 +37,12 @@ fn collect_free_expr(
             }
         }
         Expr::This(_) => {} // `this` is never captured (E-LAMBDA-THIS rejects it at check time)
-        Expr::Int(..) | Expr::Float(..) | Expr::Bool(..) | Expr::Null(..) | Expr::Bytes(..) => {}
+        Expr::Int(..)
+        | Expr::Float(..)
+        | Expr::Decimal { .. }
+        | Expr::Bool(..)
+        | Expr::Null(..)
+        | Expr::Bytes(..) => {}
         Expr::Str(parts, _) | Expr::Html(parts, _) => {
             for part in parts {
                 if let StrPart::Expr(inner) = part {
@@ -269,6 +274,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             Expr::This(_) => true,
             Expr::Int(..)
             | Expr::Float(..)
+            | Expr::Decimal { .. }
             | Expr::Bool(..)
             | Expr::Null(..)
             | Expr::Bytes(..)

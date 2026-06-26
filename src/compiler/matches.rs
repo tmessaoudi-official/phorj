@@ -68,6 +68,20 @@ impl Compiler<'_> {
             Pattern::Float(x, _) => {
                 self.emit_literal_test(m_slot, path, Value::Float(*x), skips, line);
             }
+            // A decimal literal pattern is an `Op::Eq` against the literal value — `eq_val` defines
+            // numeric, scale-insensitive decimal equality, so it matches the interpreter (M-NUM S1).
+            Pattern::Decimal {
+                unscaled, scale, ..
+            } => self.emit_literal_test(
+                m_slot,
+                path,
+                Value::Decimal {
+                    unscaled: *unscaled,
+                    scale: *scale,
+                },
+                skips,
+                line,
+            ),
             Pattern::Str(s, _) => {
                 self.emit_literal_test(m_slot, path, Value::Str(s.clone()), skips, line);
             }

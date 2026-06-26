@@ -275,6 +275,14 @@ impl<'a> Vm<'a> {
         Ok((a, b))
     }
 
+    /// Pop two raw values in operand order: returns `(lhs, rhs)` for `lhs OP rhs`. Used by the decimal
+    /// ops (M-NUM S1), whose kernel coerces a mixed `Decimal`/`Int` pair itself (no per-type pop).
+    fn pop2(&mut self) -> (Value, Value) {
+        let b = self.pop();
+        let a = self.pop();
+        (a, b)
+    }
+
     fn pop_int(&mut self) -> Result<i64, String> {
         match self.pop() {
             Value::Int(n) => Ok(n),

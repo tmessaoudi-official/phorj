@@ -157,6 +157,10 @@ impl Transpiler {
                         if nat.module == "Core.Convert" && nat.name == "toString" {
                             self.uses_str = true;
                         }
+                        // `Decimal.of` erases to the gated `__phorge_dec_of` helper (M-NUM S1).
+                        if nat.module == "Core.Decimal" && nat.name == "of" {
+                            self.uses_dec_of = true;
+                        }
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).

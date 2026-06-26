@@ -210,6 +210,19 @@ pub(super) fn match_arm_key(p: &crate::ast::Pattern) -> Option<String> {
     use crate::ast::Pattern;
     match p {
         Pattern::Int(v, _) => Some(format!("i{v}")),
+        // A decimal pattern dedups by its *numeric* value (scale-insensitive, like `==`): `1.5d` and
+        // `1.50d` are the same value, so they share a key. Normalize by stripping trailing zeros from
+        // the unscaled value while decrementing the scale, yielding a canonical `(unscaled, scale)`.
+        Pattern::Decimal {
+            unscaled, scale, ..
+        } => {
+            let (mut u, mut s) = (*unscaled, *scale);
+            while s > 0 && u % 10 == 0 {
+                u /= 10;
+                s -= 1;
+            }
+            Some(format!("d{u}e{s}"))
+        }
         Pattern::Str(s, _) => Some(format!("s{s}")),
         Pattern::Bool(b, _) => Some(format!("b{b}")),
         Pattern::Null(_) => Some("null".to_string()),

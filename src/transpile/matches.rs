@@ -51,8 +51,14 @@ impl Transpiler {
                     }
                     catch_all_binding = Some(name);
                 }
-                // Variant/type/struct → `instanceof` path (T2/the if-chain).
-                Pattern::Variant { .. } | Pattern::Type { .. } | Pattern::Struct { .. } => {
+                // Variant/type/struct → `instanceof` path (T2/the if-chain). A decimal pattern is
+                // scale-insensitive numeric equality (`1.5d` matches `1.50d`), which a PHP `switch`
+                // (strict-ish `===` over its cases) would NOT honor — so route it to the if-chain,
+                // which emits an explicit loose `==` test (M-NUM S1).
+                Pattern::Variant { .. }
+                | Pattern::Type { .. }
+                | Pattern::Struct { .. }
+                | Pattern::Decimal { .. } => {
                     return Ok(None);
                 }
             }
@@ -281,6 +287,19 @@ impl Transpiler {
             // interpreter's exact value match so the branch taken is byte-identical.
             Pattern::Int(n, _) => (vec![format!("{subj} === {n}")], Vec::new()),
             Pattern::Float(x, _) => (vec![format!("{subj} === {x:?}")], Vec::new()),
+            // A decimal pattern is scale-insensitive numeric equality (`1.5d` matches `1.50d`). A
+            // decimal value is a PHP string; PHP's LOOSE `==` on two numeric strings compares them
+            // numerically (`"1.5" == "1.50"` is true), exactly mirroring the `eq_val` decimal arm the
+            // interpreter/VM use — so `==` (not `===`) is the byte-identity-correct test here.
+            Pattern::Decimal {
+                unscaled, scale, ..
+            } => (
+                vec![format!(
+                    "{subj} == \"{}\"",
+                    crate::value::fmt_decimal(*unscaled, *scale)
+                )],
+                Vec::new(),
+            ),
             Pattern::Str(s, _) => (
                 vec![format!("{subj} === \"{}\"", php_escape(s))],
                 Vec::new(),

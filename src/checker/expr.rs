@@ -27,6 +27,7 @@ impl Checker {
         match expr {
             Expr::Int(_, _) => Ty::Int,
             Expr::Float(_, _) => Ty::Float,
+            Expr::Decimal { .. } => Ty::Decimal,
             Expr::Bool(_, _) => Ty::Bool,
             Expr::Null(_) => Ty::Null,
             Expr::Str(parts, _) => self.check_str(parts), // Task 7
@@ -208,10 +209,10 @@ impl Checker {
             return Ty::Error;
         }
         match op {
-            UnaryOp::Neg if t == Ty::Int || t == Ty::Float => t,
+            UnaryOp::Neg if t == Ty::Int || t == Ty::Float || t == Ty::Decimal => t,
             UnaryOp::Neg => self.err(
                 span,
-                format!("unary `-` requires int or float, found `{t}`"),
+                format!("unary `-` requires int, float, or decimal, found `{t}`"),
             ),
             UnaryOp::Not if t == Ty::Bool => Ty::Bool,
             UnaryOp::Not => self.err(span, format!("unary `!` requires `bool`, found `{t}`")),
@@ -249,6 +250,41 @@ impl Checker {
             // (the typed system kills JS's `"1" + 1` footgun). Only `+` concatenates; `-`/`*`/`/`/`%`
             // remain numeric-only.
             BinaryOp::Add if l == Ty::String && r == Ty::String => Ty::String,
+            // `decimal` arithmetic (M-NUM S1). `+ - *` over decimals is exact and yields `decimal`;
+            // `decimal ⊕ int` (either order) widens the int and stays `decimal` — the one ergonomic
+            // coercion (qty math). `/` and `%` on a decimal are deferred to S2, so they fall through to
+            // the error path. A `decimal ⊕ float` mix is the bug this primitive prevents
+            // (`E-DECIMAL-FLOAT-MIX`). Checked before the int/float arm so a decimal operand never
+            // reaches the matching-int-or-float test.
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul
+                if l == Ty::Decimal || r == Ty::Decimal =>
+            {
+                let other = if l == Ty::Decimal { &r } else { &l };
+                match other {
+                    Ty::Decimal | Ty::Int => Ty::Decimal,
+                    Ty::Float => self.err_coded(
+                        span,
+                        "cannot mix `decimal` and `float` in arithmetic — they are distinct types"
+                            .to_string(),
+                        "E-DECIMAL-FLOAT-MIX",
+                        Some(
+                            "convert explicitly (a `float` literal `1.5` and a `decimal` `1.50d` are \
+                             different); keep money math in `decimal`"
+                                .into(),
+                        ),
+                    ),
+                    _ => self.err(
+                        span,
+                        format!("`decimal` arithmetic requires a `decimal` or `int` operand, found `{l}` and `{r}`"),
+                    ),
+                }
+            }
+            BinaryOp::Div | BinaryOp::Rem if l == Ty::Decimal || r == Ty::Decimal => self.err(
+                span,
+                "`decimal` division (`/`, `%`) is not available yet — it lands in M-NUM S2 (with \
+                 explicit rounding)"
+                    .to_string(),
+            ),
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => {
                 if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) {
                     l
@@ -273,7 +309,22 @@ impl Checker {
                 }
             }
             BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) {
+                // `decimal` compares against `decimal` or `int` (numeric, scale-insensitive); same
+                // operand rule as decimal arithmetic, a `float` mix is `E-DECIMAL-FLOAT-MIX`.
+                let dec_ok = (l == Ty::Decimal && (r == Ty::Decimal || r == Ty::Int))
+                    || (r == Ty::Decimal && l == Ty::Int);
+                if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) || dec_ok {
+                    Ty::Bool
+                } else if l == Ty::Decimal || r == Ty::Decimal {
+                    self.err_coded(
+                        span,
+                        format!(
+                            "cannot compare `decimal` with `{}`",
+                            if l == Ty::Decimal { &r } else { &l }
+                        ),
+                        "E-DECIMAL-FLOAT-MIX",
+                        Some("compare a `decimal` only with another `decimal` or an `int`".into()),
+                    );
                     Ty::Bool
                 } else {
                     self.err(span, format!("comparison requires matching int or float operands, found `{l}` and `{r}`"));
@@ -281,7 +332,11 @@ impl Checker {
                 }
             }
             BinaryOp::Eq | BinaryOp::NotEq => {
-                if l != r {
+                // `decimal == int` (either order) is numeric equality (the operator-level int-widen);
+                // every other cross-type pairing still requires explicit conversion.
+                let dec_int =
+                    (l == Ty::Decimal && r == Ty::Int) || (l == Ty::Int && r == Ty::Decimal);
+                if l != r && !dec_int {
                     self.err(
                         span,
                         format!(
@@ -466,7 +521,10 @@ impl Checker {
         for part in parts {
             if let StrPart::Expr(e) = part {
                 let t = self.check_expr(e);
-                let ok = matches!(t, Ty::Int | Ty::Float | Ty::Bool | Ty::String | Ty::Error);
+                let ok = matches!(
+                    t,
+                    Ty::Int | Ty::Float | Ty::Decimal | Ty::Bool | Ty::String | Ty::Error
+                );
                 if !ok {
                     let sp = Self::expr_span(e);
                     self.err(sp, format!("type `{t}` cannot be interpolated into a string (only primitives auto-stringify in M1)"));
@@ -583,7 +641,8 @@ impl Checker {
             | Expr::List(_, s)
             | Expr::Map(_, s) => *s,
             Expr::Null(s) | Expr::This(s) => *s,
-            Expr::Unary { span, .. }
+            Expr::Decimal { span, .. }
+            | Expr::Unary { span, .. }
             | Expr::Binary { span, .. }
             | Expr::InstanceOf { span, .. }
             | Expr::Cast { span, .. }

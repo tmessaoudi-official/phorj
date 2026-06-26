@@ -418,6 +418,77 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // --- Decimal (BCMath) helpers (M-NUM S1). Each mirrors the Rust `value::decimal_*` kernel:
+        // derive operand scales from the strings, compute the result scale (add/sub = max, mul = sum),
+        // call the matching `bc*` with that scale, then bounds-check the result's unscaled magnitude
+        // against i128 range and `throw` the same `decimal overflow` body the Rust backends fault with
+        // (the `agree_err` oracle classifies by body substring). BCMath is tier-1 (works under `php -n`).
+        if self.uses_dec_add || self.uses_dec_sub || self.uses_dec_mul {
+            // Scale of a BCMath decimal string = digits after the dot (0 if none). Matches the Rust
+            // kernel deriving scale from `(unscaled, scale)`; a `bc*` result is always normalized.
+            self.line("function __phorge_dec_scale($x) {");
+            self.indent += 1;
+            self.line("$p = strpos($x, '.');");
+            self.line("return $p === false ? 0 : strlen($x) - $p - 1;");
+            self.indent -= 1;
+            self.line("}");
+            // Fault if the result's unscaled magnitude leaves signed-i128 range, byte-identically to
+            // the Rust `checked_*` overflow. The unscaled magnitude is the result digits with the dot
+            // and sign removed; compared against i128::MAX (2^127 - 1) via `bccomp` (string-exact).
+            self.line("function __phorge_dec_check($r) {");
+            self.indent += 1;
+            self.line("$digits = str_replace(['-', '.'], '', $r);");
+            self.line("$digits = ltrim($digits, '0');");
+            self.line("if ($digits === '') { $digits = '0'; }");
+            self.line(
+                "if (bccomp($digits, '170141183460469231731687303715887105727', 0) > 0) { \
+                 throw new \\RuntimeException('decimal overflow'); }",
+            );
+            self.line("return $r;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_add {
+            self.line("function __phorge_dec_add($a, $b) {");
+            self.indent += 1;
+            self.line("$s = max(__phorge_dec_scale($a), __phorge_dec_scale($b));");
+            self.line("return __phorge_dec_check(bcadd($a, $b, $s));");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_sub {
+            self.line("function __phorge_dec_sub($a, $b) {");
+            self.indent += 1;
+            self.line("$s = max(__phorge_dec_scale($a), __phorge_dec_scale($b));");
+            self.line("return __phorge_dec_check(bcsub($a, $b, $s));");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_mul {
+            self.line("function __phorge_dec_mul($a, $b) {");
+            self.indent += 1;
+            self.line("$s = __phorge_dec_scale($a) + __phorge_dec_scale($b);");
+            self.line("return __phorge_dec_check(bcmul($a, $b, $s));");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_of {
+            // `Decimal.of(s) -> decimal?`: validate the literal grammar (optional sign, digits with an
+            // optional single fractional part — `12`, `12.34`, `.5`; NO exponent/underscore/whitespace)
+            // with a PCRE, then bounds-check the i128 range; return the normalized string or null.
+            // Mirrors the Rust `value::decimal_of` exactly. The string is already its own decimal form
+            // (no `bc*` normalization needed — Phorge preserves trailing zeros as scale).
+            self.line("function __phorge_dec_of($s) {");
+            self.indent += 1;
+            self.line("if (preg_match('/^[+-]?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)$/', $s) !== 1) { return null; }");
+            self.line("$digits = ltrim(str_replace(['-', '+', '.'], '', $s), '0');");
+            self.line("if ($digits === '') { $digits = '0'; }");
+            self.line("if (bccomp($digits, '170141183460469231731687303715887105727', 0) > 0) { return null; }");
+            // Normalize a leading `+` away (Phorge's render has no `+`); keep the scale (trailing zeros).
+            self.line("return ltrim($s, '+');");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_list_sort {
             // Natural ascending over a COPY (Phorge lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via

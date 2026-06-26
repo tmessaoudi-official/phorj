@@ -226,6 +226,7 @@ impl Checker {
             Pattern::Binding { name, span } => self.declare(name, scrut.clone(), *span),
             Pattern::Int(_, span) => self.expect_prim(scrut, &Ty::Int, *span),
             Pattern::Float(_, span) => self.expect_prim(scrut, &Ty::Float, *span),
+            Pattern::Decimal { span, .. } => self.expect_prim(scrut, &Ty::Decimal, *span),
             Pattern::Str(_, span) => self.expect_prim(scrut, &Ty::String, *span),
             Pattern::Bool(_, span) => self.expect_prim(scrut, &Ty::Bool, *span),
             Pattern::Null(span) => {

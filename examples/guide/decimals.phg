@@ -1,0 +1,42 @@
+// Core decimal arithmetic — exact fixed-point money math.
+// `decimal` is a primitive: `1.50d` literals carry their scale, `+ - *` are exact,
+// comparison is numeric (scale-insensitive), and `decimal * int` stays decimal.
+package Main;
+
+import Core.Console;
+import Core.Decimal;
+
+function main(): void {
+    // Literals preserve scale from the text: 19.99d => scale 2.
+    decimal price = 19.99d;
+    int qty = 3;
+
+    // decimal * int => decimal (int widens, no float in sight).
+    decimal subtotal = price * qty;          // 59.97
+    decimal shipping = 4.50d;
+    decimal total = subtotal + shipping;     // 64.47
+    decimal discount = total - 14.47d;       // 50.00
+
+    Console.println("price    = {price}");
+    Console.println("subtotal = {subtotal}");
+    Console.println("total    = {total}");
+    Console.println("discount = {discount}");
+
+    // Multiplication grows scale exactly: 1.11 * 1.11 = 1.2321 (scale 4).
+    decimal r = 1.11d * 1.11d;
+    Console.println("1.11 * 1.11 = {r}");
+
+    // Comparison is numeric: 1.50 equals 1.5 even at different scales.
+    decimal a = 1.50d;
+    decimal b = 1.5d;
+    Console.println("1.50 == 1.5 : {a == b}");
+    Console.println("total > price : {total > price}");
+
+    // Trailing zeros render to the value's scale.
+    decimal padded = 1.500d;
+    Console.println("padded   = {padded}");
+
+    // Build from a string at runtime (returns decimal?).
+    decimal parsed = Decimal.of("12.34") ?? 0d;
+    Console.println("parsed   = {parsed}");
+}

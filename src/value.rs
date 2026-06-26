@@ -14,6 +14,16 @@ use std::rc::Rc;
 pub enum Value {
     Int(i64),
     Float(f64),
+    /// An exact fixed-point **`decimal`** (M-NUM S1): value = `unscaled × 10^(-scale)`. `19.99d` is
+    /// `{ unscaled: 1999, scale: 2 }`. A distinct primitive from `float` (no implicit coercion — the
+    /// whole point is keeping float out of money math). Arithmetic (`+ - *`) is single-sourced in the
+    /// `decimal_*` kernels below; any i128 overflow is a clean [`FAULT_DECIMAL_OVERFLOW`] fault,
+    /// byte-identical across both backends and the emitted BCMath PHP (the helper bounds-checks the
+    /// result against i128 range and faults the same way). Rendering is [`fmt_decimal`].
+    Decimal {
+        unscaled: i128,
+        scale: u8,
+    },
     Bool(bool),
     Str(String),
     /// Raw octet sequence (`bytes`). Shared (like `List`) — cloning is a refcount bump. Distinct from
@@ -208,6 +218,7 @@ impl Value {
         match self {
             Value::Int(_) => "int",
             Value::Float(_) => "float",
+            Value::Decimal { .. } => "decimal",
             Value::Bool(_) => "bool",
             Value::Str(_) => "string",
             Value::Bytes(_) => "bytes",
@@ -229,6 +240,11 @@ impl Value {
         match self {
             Value::Int(n) => Some(n.to_string()),
             Value::Float(x) => Some(format!("{x}")),
+            // A decimal renders with exactly `scale` fractional digits (BCMath pads), never `-0`.
+            // The same `fmt_decimal` both backends use, and the emitted PHP string already carries
+            // this form (a BCMath result string `(string)`s identically) — so interpolating a decimal
+            // is byte-identical across run/runvm/PHP (M-NUM S1).
+            Value::Decimal { unscaled, scale } => Some(fmt_decimal(*unscaled, *scale)),
             Value::Bool(b) => Some(b.to_string()),
             Value::Str(s) => Some(s.clone()),
             Value::Unit => Some("unit".to_string()),
@@ -264,6 +280,17 @@ impl Value {
         match (self, other) {
             (Int(a), Int(b)) => a == b,
             (Float(a), Float(b)) => a == b,
+            // Decimal equality is **numeric, scale-insensitive** (`1.50d == 1.5d`): align both to the
+            // max scale and compare unscaled. Mixed `decimal`/`int` widens the int to scale 0 (so
+            // `2d == 2` matches `decimal == int` operator typing). An alignment overflow can't occur
+            // here — it would only change two unequal values, never make equal values compare wrong:
+            // when alignment overflows, the magnitudes differ by ≥10^Δ at i128 scale, so they are not
+            // equal, and `decimal_cmp` returns `None` ⇒ `false`, which is correct.
+            (Decimal { .. } | Int(_), Decimal { .. } | Int(_))
+                if matches!((self, other), (Decimal { .. }, _) | (_, Decimal { .. })) =>
+            {
+                decimal_cmp(self, other) == Some(Ordering::Equal)
+            }
             (Bool(a), Bool(b)) => a == b,
             (Str(a), Str(b)) => a == b,
             (Bytes(a), Bytes(b)) => a == b,
@@ -344,6 +371,12 @@ pub fn const_literal(e: &crate::ast::Expr) -> Option<Value> {
     match e {
         Expr::Int(n, _) => Some(Value::Int(*n)),
         Expr::Float(f, _) => Some(Value::Float(*f)),
+        Expr::Decimal {
+            unscaled, scale, ..
+        } => Some(Value::Decimal {
+            unscaled: *unscaled,
+            scale: *scale,
+        }),
         Expr::Bool(b, _) => Some(Value::Bool(*b)),
         Expr::Null(_) => Some(Value::Null),
         // A plain string literal is a single `Literal` part; any interpolation makes it non-const.
@@ -366,6 +399,10 @@ pub const FAULT_MOD_ZERO: &str = "modulo by zero";
 pub const FAULT_INT_OVERFLOW: &str = "integer overflow";
 /// Canonical fault body for a bitwise shift by a negative count (PHP throws `ArithmeticError`).
 pub const FAULT_NEGATIVE_SHIFT: &str = "bit shift by negative number";
+/// Canonical fault body for a `decimal` `+ - *` (or scale-alignment) whose exact result leaves
+/// `i128` range (M-NUM S1). Byte-identical across both Rust backends AND the emitted BCMath PHP (the
+/// `__phorge_dec_*` helper bounds-checks its result against i128 range and throws the same body).
+pub const FAULT_DECIMAL_OVERFLOW: &str = "decimal overflow";
 /// Canonical fault body for `int ** int` with a negative exponent. A negative exponent yields a
 /// fractional result, which cannot be the typed `int` the `**` operator promises — so it faults
 /// rather than silently widening to `float` (PHP's `2 ** -1 == 0.5`). Use `float**float` for that.
@@ -464,6 +501,183 @@ pub fn float_div(a: f64, b: f64) -> f64 {
 pub fn float_rem(a: f64, b: f64) -> f64 {
     a % b
 }
+
+// --- Decimal (fixed-point) kernels (M-NUM S1; single-sourced — both backends + the example oracle
+// agree, and the BCMath PHP helper mirrors them). value = `unscaled × 10^(-scale)`. ---
+
+/// Project a `Value` operand of a decimal op onto `(unscaled, scale)`: a `Decimal` verbatim, an `Int`
+/// widened to scale 0 (the `decimal op int ⇒ decimal` rule). `None` for anything else — checker-
+/// unreachable (the checker guarantees decimal operands are `decimal`/`int`), handled defensively.
+fn dec_parts(v: &Value) -> Option<(i128, u8)> {
+    match v {
+        Value::Decimal { unscaled, scale } => Some((*unscaled, *scale)),
+        Value::Int(n) => Some((i128::from(*n), 0)),
+        _ => None,
+    }
+}
+
+/// Multiply `unscaled` by `10^exp`, checked (an alignment that leaves `i128` range faults). Used to
+/// align two decimals to a common scale before add/sub/compare.
+fn dec_scale_up(unscaled: i128, exp: u8) -> Option<i128> {
+    let factor = 10i128.checked_pow(u32::from(exp))?;
+    unscaled.checked_mul(factor)
+}
+
+/// Align `(a, sa)` and `(b, sb)` to the common scale `max(sa, sb)`, returning the two scaled unscaled
+/// values plus that scale. `None` on an alignment overflow (i128 range) — the caller turns it into a
+/// clean [`FAULT_DECIMAL_OVERFLOW`] fault. Shared by add/sub and comparison so every path aligns
+/// identically.
+fn dec_align(a: i128, sa: u8, b: i128, sb: u8) -> Option<(i128, i128, u8)> {
+    let scale = sa.max(sb);
+    let au = dec_scale_up(a, scale - sa)?;
+    let bu = dec_scale_up(b, scale - sb)?;
+    Some((au, bu, scale))
+}
+
+/// Exact decimal addition (M-NUM S1): result scale = `max(scales)`; align then `checked_add`. Any
+/// i128 overflow (incl. the alignment) ⇒ [`FAULT_DECIMAL_OVERFLOW`]. Accepts mixed `(Decimal, Int)`
+/// (the int widens to scale 0). Mirrors `bcadd($a, $b, max)`.
+pub fn decimal_add(a: &Value, b: &Value) -> Result<Value, String> {
+    let (au, sa) = dec_parts(a).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (bu, sb) = dec_parts(b).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (x, y, scale) =
+        dec_align(au, sa, bu, sb).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let unscaled = x
+        .checked_add(y)
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    Ok(Value::Decimal { unscaled, scale })
+}
+
+/// Exact decimal subtraction (M-NUM S1): result scale = `max(scales)`; align then `checked_sub`.
+/// Mirrors `bcsub($a, $b, max)`. Same overflow + mixed-operand rules as [`decimal_add`].
+pub fn decimal_sub(a: &Value, b: &Value) -> Result<Value, String> {
+    let (au, sa) = dec_parts(a).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (bu, sb) = dec_parts(b).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (x, y, scale) =
+        dec_align(au, sa, bu, sb).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let unscaled = x
+        .checked_sub(y)
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    Ok(Value::Decimal { unscaled, scale })
+}
+
+/// Exact decimal multiplication (M-NUM S1): result scale = `sa + sb` (no truncation), unscaled =
+/// `a.unscaled checked_mul b.unscaled`. Mirrors `bcmul($a, $b, sa + sb)`. Same overflow + mixed-
+/// operand rules as [`decimal_add`]. The scale sum can't itself overflow `u8` for realistic inputs
+/// (two scale-127 decimals would need ~10^254 magnitude — far past i128 — and overflow the mul long
+/// before the scale add); a `u8` scale-add overflow is treated as an overflow fault, defensively.
+pub fn decimal_mul(a: &Value, b: &Value) -> Result<Value, String> {
+    let (au, sa) = dec_parts(a).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (bu, sb) = dec_parts(b).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let scale = sa
+        .checked_add(sb)
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let unscaled = au
+        .checked_mul(bu)
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    Ok(Value::Decimal { unscaled, scale })
+}
+
+/// Decimal negation (unary `-`): negate `unscaled` (checked — `i128::MIN` would overflow). The scale
+/// is preserved; rendering never produces `-0` (see [`fmt_decimal`]).
+pub fn decimal_neg(unscaled: i128, scale: u8) -> Result<Value, String> {
+    let unscaled = unscaled
+        .checked_neg()
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    Ok(Value::Decimal { unscaled, scale })
+}
+
+/// Numeric, **scale-insensitive** ordering of two decimal operands (mixed `decimal`/`int` allowed):
+/// align to the common scale and compare unscaled. `None` if the operands aren't decimal/int
+/// (checker-unreachable) **or** an alignment overflow — in the overflow case the operands differ by
+/// ≥10^Δ at i128 scale, so they are necessarily unequal; the caller's `< > <= >=` projection treats a
+/// `None` like NaN (`false`), which is sound here because equality is `Some(Equal)` only. (M-NUM S1.)
+pub fn decimal_cmp(a: &Value, b: &Value) -> Option<Ordering> {
+    let (au, sa) = dec_parts(a)?;
+    let (bu, sb) = dec_parts(b)?;
+    let (x, y, _) = dec_align(au, sa, bu, sb)?;
+    Some(x.cmp(&y))
+}
+
+/// Render `(unscaled, scale)` as a decimal string with **exactly `scale`** fractional digits — the
+/// BCMath-padding form, single-sourced so both backends agree and the emitted PHP (a BCMath result
+/// string) matches. `{1999, 2}` → `"19.99"`, `{1500, 3}` → `"1.500"`, `{100, 0}` → `"100"`,
+/// `{15, 4}` → `"0.0015"`. Negative values carry a leading `-`; the value `0` (any scale) **never**
+/// renders `-0` (M-NUM S1).
+pub fn fmt_decimal(unscaled: i128, scale: u8) -> String {
+    let neg = unscaled < 0;
+    // Magnitude as a string of digits. `unsigned_abs` handles `i128::MIN` without overflow.
+    let digits = unscaled.unsigned_abs().to_string();
+    let s = scale as usize;
+    let body = if s == 0 {
+        digits
+    } else if digits.len() > s {
+        let dot = digits.len() - s;
+        format!("{}.{}", &digits[..dot], &digits[dot..])
+    } else {
+        // Fewer integer digits than the scale → pad with leading zeros after `0.`.
+        format!("0.{}{}", "0".repeat(s - digits.len()), digits)
+    };
+    // Never render `-0` / `-0.00`: only prefix `-` for a genuinely non-zero magnitude.
+    if neg && unscaled != 0 {
+        format!("-{body}")
+    } else {
+        body
+    }
+}
+
+/// Parse the `decimal` literal grammar at runtime for `Decimal.of(string)` (M-NUM S1) — the SAME
+/// grammar the lexer accepts for a `…d` literal, returning `(unscaled, scale)` or `None` on a
+/// malformed string or i128 overflow (so `Decimal.of` is `decimal?`). Grammar: optional sign, then
+/// digits with an optional single fractional part (`12`, `12.34`, `.5`, `-0.50`); NO exponent, NO
+/// underscores (a runtime string is exact, unlike a source literal), NO surrounding whitespace. The
+/// scale is the count of fractional digits (trailing zeros preserved). Shared by the interpreter, the
+/// VM, and mirrored by the PHP `__phorge_dec_of` PCRE helper.
+pub fn decimal_of(s: &str) -> Option<(i128, u8)> {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() {
+        return None;
+    }
+    let (neg, rest) = match bytes[0] {
+        b'-' => (true, &s[1..]),
+        b'+' => (false, &s[1..]),
+        _ => (false, s),
+    };
+    if rest.is_empty() {
+        return None;
+    }
+    let (int_part, frac_part) = match rest.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (rest, None),
+    };
+    // At least one digit overall; each part must be all ASCII digits (an empty integer part like `.5`
+    // is allowed, but a trailing `12.` with an empty fractional part is not — matches the lexer, which
+    // requires a digit after the dot to treat it as a fraction).
+    if let Some(f) = frac_part {
+        if f.is_empty() || !f.bytes().all(|c| c.is_ascii_digit()) {
+            return None;
+        }
+    }
+    if !int_part.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    if int_part.is_empty() && frac_part.is_none() {
+        return None;
+    }
+    let frac = frac_part.unwrap_or("");
+    let scale = u8::try_from(frac.len()).ok()?;
+    let combined = format!("{int_part}{frac}");
+    if combined.is_empty() {
+        return None;
+    }
+    let magnitude: i128 = combined.parse().ok()?;
+    let unscaled = if neg {
+        magnitude.checked_neg()?
+    } else {
+        magnitude
+    };
+    Some((unscaled, scale))
+}
 /// Checked integer power `base ** exp` (Phase 1 operators slice). A negative exponent faults
 /// ([`FAULT_NEGATIVE_EXPONENT`] — the result can't be a typed `int`); overflow (incl. an exponent
 /// too large to fit `u32`) is a clean [`FAULT_INT_OVERFLOW`], never a panic (EV-7). Single-sourced:
@@ -522,6 +736,12 @@ pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => Ok(x.partial_cmp(y)),
         (Value::Float(x), Value::Float(y)) => Ok(x.partial_cmp(y)),
+        // Decimal ordering is numeric + scale-insensitive (mixed `decimal`/`int` allowed): the checker
+        // guarantees `< > <= >=` operands match (decimal⊕decimal or decimal⊕int), so this only fires
+        // for those. `decimal_cmp` returns `None` only on an (unreachable-for-equal-values) alignment
+        // overflow, which projects to `false` like NaN — sound, since equality is `Some(Equal)` only.
+        (Value::Decimal { .. }, Value::Decimal { .. } | Value::Int(_))
+        | (Value::Int(_), Value::Decimal { .. }) => Ok(decimal_cmp(a, b)),
         _ => Err(format!(
             "cannot compare {} and {}",
             a.type_name(),
@@ -533,6 +753,123 @@ pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn dec(unscaled: i128, scale: u8) -> Value {
+        Value::Decimal { unscaled, scale }
+    }
+
+    #[test]
+    fn fmt_decimal_renders_with_exact_scale() {
+        assert_eq!(fmt_decimal(1999, 2), "19.99");
+        assert_eq!(fmt_decimal(1500, 3), "1.500");
+        assert_eq!(fmt_decimal(100, 0), "100");
+        assert_eq!(fmt_decimal(15, 4), "0.0015");
+        assert_eq!(fmt_decimal(0, 0), "0");
+        assert_eq!(fmt_decimal(0, 2), "0.00");
+        assert_eq!(fmt_decimal(-5000, 2), "-50.00");
+        assert_eq!(fmt_decimal(-1, 3), "-0.001");
+        // never `-0` even though the sign bit could be set (it can't be for 0, but guard anyway).
+        assert_eq!(fmt_decimal(0, 4), "0.0000");
+    }
+
+    /// Assert a decimal-kernel `Ok` matches an expected `(unscaled, scale)` exactly (not just
+    /// numerically — the scale is part of the result), since `Value` has no `PartialEq`.
+    fn assert_dec(got: Result<Value, String>, unscaled: i128, scale: u8) {
+        match got {
+            Ok(Value::Decimal {
+                unscaled: u,
+                scale: s,
+            }) => {
+                assert_eq!((u, s), (unscaled, scale), "decimal result mismatch");
+            }
+            other => panic!("expected Ok(Decimal), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decimal_add_sub_use_max_scale() {
+        // 1.50 + 2.300 = 3.800 (scale 3); align the lower-scale operand up.
+        assert_dec(decimal_add(&dec(150, 2), &dec(2300, 3)), 3800, 3);
+        // 1.50 - 1.50 = 0.00 (scale 2, no neg zero in render).
+        assert_dec(decimal_sub(&dec(150, 2), &dec(150, 2)), 0, 2);
+        // mixed decimal + int: int widens to scale 0 → 19.99 + 1 = 20.99.
+        assert_dec(decimal_add(&dec(1999, 2), &Value::Int(1)), 2099, 2);
+        assert_dec(decimal_add(&Value::Int(1), &dec(1999, 2)), 2099, 2);
+    }
+
+    #[test]
+    fn decimal_mul_sums_scales() {
+        // 1.11 * 1.11 = 1.2321 (scale 4 = 2 + 2).
+        assert_dec(decimal_mul(&dec(111, 2), &dec(111, 2)), 12321, 4);
+        // decimal * int: 19.99 * 3 = 59.97 (scale 2, int scale 0).
+        assert_dec(decimal_mul(&dec(1999, 2), &Value::Int(3)), 5997, 2);
+    }
+
+    fn assert_dec_overflow(got: Result<Value, String>) {
+        assert_eq!(got.err().as_deref(), Some(FAULT_DECIMAL_OVERFLOW));
+    }
+
+    #[test]
+    fn decimal_overflow_is_a_clean_fault() {
+        let big = dec(i128::MAX, 0);
+        assert_dec_overflow(decimal_add(&big, &Value::Int(1)));
+        assert_dec_overflow(decimal_mul(&big, &Value::Int(2)));
+        // Alignment overflow: scaling i128::MAX up by 10^1 overflows before the add.
+        assert_dec_overflow(decimal_add(&big, &dec(0, 1)));
+        // Negation of i128::MIN overflows.
+        assert_dec_overflow(decimal_neg(i128::MIN, 0));
+    }
+
+    #[test]
+    fn decimal_cmp_and_eq_are_scale_insensitive() {
+        // 1.50 == 1.5 numerically (scale-insensitive).
+        assert_eq!(
+            decimal_cmp(&dec(150, 2), &dec(15, 1)),
+            Some(Ordering::Equal)
+        );
+        assert!(dec(150, 2).eq_val(&dec(15, 1)));
+        assert!(!dec(150, 2).eq_val(&dec(151, 2)));
+        // mixed decimal/int equality: 2.00d == 2.
+        assert!(dec(200, 2).eq_val(&Value::Int(2)));
+        assert!(Value::Int(2).eq_val(&dec(200, 2)));
+        // ordering
+        assert_eq!(decimal_cmp(&dec(149, 2), &dec(15, 1)), Some(Ordering::Less));
+        assert_eq!(
+            compare_ord(&dec(150, 2), &dec(15, 1)),
+            Ok(Some(Ordering::Equal))
+        );
+        // a decimal never equals a float (no cross-type) — handled by eq_val_rec's `_ => false`.
+        assert!(!dec(150, 2).eq_val(&Value::Float(1.5)));
+    }
+
+    #[test]
+    fn decimal_of_parses_the_literal_grammar() {
+        assert_eq!(decimal_of("12.34"), Some((1234, 2)));
+        assert_eq!(decimal_of("100"), Some((100, 0)));
+        assert_eq!(decimal_of("1.500"), Some((1500, 3))); // trailing zeros set scale
+        assert_eq!(decimal_of("-0.50"), Some((-50, 2)));
+        assert_eq!(decimal_of(".5"), Some((5, 1)));
+        assert_eq!(decimal_of("+3.0"), Some((30, 1)));
+        // malformed → None
+        assert_eq!(decimal_of(""), None);
+        assert_eq!(decimal_of("abc"), None);
+        assert_eq!(decimal_of("1.2.3"), None);
+        assert_eq!(decimal_of("12."), None); // empty fractional part
+        assert_eq!(decimal_of("1e3"), None); // no exponent
+        assert_eq!(decimal_of("1_000"), None); // no underscores at runtime
+        assert_eq!(decimal_of(" 12"), None); // no surrounding whitespace
+                                             // i128 overflow → None
+        let too_big = "1".repeat(40);
+        assert_eq!(decimal_of(&too_big), None);
+    }
+
+    #[test]
+    fn decimal_as_display_matches_fmt() {
+        assert_eq!(dec(1999, 2).as_display().as_deref(), Some("19.99"));
+        assert_eq!(dec(100, 0).as_display().as_deref(), Some("100"));
+        assert_eq!(dec(0, 2).as_display().as_deref(), Some("0.00"));
+        assert_eq!(dec(150, 2).type_name(), "decimal");
+    }
 
     #[test]
     fn int_pow_normal_negative_and_overflow() {

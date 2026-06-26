@@ -35,6 +35,10 @@ pub enum TokenKind {
     // literals
     Int(i64),
     Float(f64),
+    /// A `decimal` literal `19.99d` (M-NUM S1), carrying its text-parsed `(unscaled, scale)` so
+    /// trailing zeros set the scale. Lexed when a numeric literal is immediately followed by `d` (no
+    /// space, no exponent — `1e3d` is rejected).
+    Decimal(i128, u8),
     /// A string literal, pre-split into literal + interpolation segments (the lexer owns the split
     /// so `\{` literal braces are unambiguous). Empty vec = the empty string `""`.
     Str(Vec<StrSeg>),

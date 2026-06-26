@@ -49,6 +49,8 @@ impl Transpiler {
                 "float" => "float".into(),
                 "bool" => "bool".into(),
                 "string" => "string".into(),
+                // `decimal` erases to a PHP `string` — BCMath's carrier (PHP has no native decimal).
+                "decimal" => "string".into(),
                 // PHP strings ARE byte arrays — `bytes` erases to `string` (M6 W0).
                 "bytes" => "string".into(),
                 // `Html` and `Attr` are render-ready text — both erase to `string`. The escaping

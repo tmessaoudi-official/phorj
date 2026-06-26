@@ -37,6 +37,35 @@ fn parses_parenthesized() {
 }
 
 #[test]
+fn parses_decimal_literal_with_text_scale() {
+    // `19.99d` → Expr::Decimal { 1999, scale 2 }; trailing zeros widen the scale (M-NUM S1).
+    assert!(matches!(
+        expr("19.99d"),
+        Expr::Decimal {
+            unscaled: 1999,
+            scale: 2,
+            ..
+        }
+    ));
+    assert!(matches!(
+        expr("1.500d"),
+        Expr::Decimal {
+            unscaled: 1500,
+            scale: 3,
+            ..
+        }
+    ));
+    assert!(matches!(
+        expr("100d"),
+        Expr::Decimal {
+            unscaled: 100,
+            scale: 0,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn precedence_and_associativity() {
     assert_eq!(sexpr(&expr("1 + 2 * 3")), "(+ 1 (* 2 3))");
     assert_eq!(sexpr(&expr("1 * 2 + 3")), "(+ (* 1 2) 3)");

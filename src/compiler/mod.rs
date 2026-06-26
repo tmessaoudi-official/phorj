@@ -30,6 +30,9 @@ use std::collections::HashMap;
 enum NumTy {
     Int,
     Float,
+    /// `decimal` (M-NUM S1) — picks the `AddD/SubD/MulD` ops. The compiler emits a decimal op when
+    /// *either* operand is decimal (the `decimal ⊕ int` widen happens in the value kernel).
+    Decimal,
 }
 
 /// The compiler's class-aware view of a declared type (M2 Wave 4). Derived *structurally* from the
@@ -47,6 +50,10 @@ enum NumTy {
 enum CTy {
     Int,
     Float,
+    /// `decimal` (M-NUM S1). Tracked distinctly so a decimal-valued operand — including a
+    /// decimal-typed field read, map-index, or method result — picks the `AddD/SubD/MulD` ops on the
+    /// VM. Omitting it would make the VM reject what the interpreter accepts (the CTy-operand trap).
+    Decimal,
     /// A `string` — not a numeric operand, but tracked distinctly so the compiler can lower
     /// `string + string` to `Op::Concat(2)` (Phase 1 string slice) instead of an `AddI`/`AddF`. A
     /// string operand that collapsed to `Other` would make the VM reject what the interpreter
@@ -283,6 +290,7 @@ fn resolve_cty(ty: &Type) -> CTy {
         Type::Named { name, args, .. } => match name.as_str() {
             "int" => CTy::Int,
             "float" => CTy::Float,
+            "decimal" => CTy::Decimal,
             // Track the element type so `xs[i]` can be an arithmetic operand (M3 S1.1); a bare
             // `List` (no arg) defaults its element to `Other`.
             "List" => CTy::List(Box::new(args.first().map_or(CTy::Other, resolve_cty))),
@@ -396,6 +404,8 @@ impl<'a> Compiler<'a> {
             Op::Const(_) | Op::GetLocal(_) => 1,
             Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => -1,
             Op::AddF | Op::SubF | Op::MulF | Op::DivF | Op::RemF => -1,
+            // Decimal `+ - *` pop two, push one (M-NUM S1).
+            Op::AddD | Op::SubD | Op::MulD => -1,
             // Bitwise binaries pop two, push one (primitives P2).
             Op::BitAnd | Op::BitOr | Op::BitXor | Op::Shl | Op::Shr => -1,
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => -1,
@@ -534,6 +544,7 @@ impl<'a> Compiler<'a> {
         match e {
             Expr::Int(..) => Ok(CTy::Int),
             Expr::Float(..) => Ok(CTy::Float),
+            Expr::Decimal { .. } => Ok(CTy::Decimal),
             // A string literal (incl. an interpolated one — both are `Expr::Str`) is `CTy::Str` so a
             // `"a" + s` concat lowers to `Op::Concat`; `bool`/`bytes` literals are non-operands.
             Expr::Str(..) => Ok(CTy::Str),
@@ -686,6 +697,7 @@ impl<'a> Compiler<'a> {
         match ty {
             CTy::Int => Some(NumTy::Int),
             CTy::Float => Some(NumTy::Float),
+            CTy::Decimal => Some(NumTy::Decimal),
             CTy::Str
             | CTy::Class(_)
             | CTy::Other

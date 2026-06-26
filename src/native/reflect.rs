@@ -68,6 +68,9 @@ fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
         [v] => match v {
             Value::Int(_) => "int",
             Value::Float(_) => "float",
+            // A `decimal` erases to a PHP `string` (BCMath carrier), so the coarse PHP `kind` is
+            // "string" — the Rust arm agrees for byte-identity (M-NUM S1).
+            Value::Decimal { .. } => "string",
             Value::Bool(_) => "bool",
             // A real UTF-8 string and erased `bytes` are both a PHP `string` — coarse kind agrees.
             Value::Str(_) | Value::Bytes(_) => "string",
@@ -114,6 +117,7 @@ fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {
         [v] => match v {
             Value::Int(_) => "int",
             Value::Float(_) => "float",
+            Value::Decimal { .. } => "decimal",
             Value::Bool(_) => "bool",
             Value::Str(_) => "string",
             Value::Bytes(_) => "bytes",

@@ -134,6 +134,48 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
+        // `decimal` suffix `…d` (M-NUM S1): a numeric literal immediately followed by `d` that is NOT
+        // continued by another identifier char (so `3d` is a decimal but `3days` is `3` + `days`). The
+        // scale comes from the literal TEXT (trailing zeros preserved): `1.50d` ⇒ scale 2. An
+        // exponent literal (`1e3d`) is rejected — `e`-exponent on a decimal is out of scope this slice.
+        if self.peek() == Some(b'd')
+            && !matches!(self.src.get(self.pos + 1), Some(c) if c.is_ascii_alphanumeric() || *c == b'_')
+        {
+            let raw_dec = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
+            self.bump(); // consume the `d`
+            if is_float {
+                // `is_float` here means a fraction OR an exponent was scanned. A `.` fraction is fine
+                // for a decimal; an `e`-exponent is rejected this slice.
+                let stripped: String = raw_dec.chars().filter(|c| *c != '_').collect();
+                if stripped.contains(['e', 'E']) {
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "an exponent is not allowed on a `decimal` literal (`1e3d`) — write the digits out",
+                        line,
+                        col,
+                    )
+                    .with_code("E-DECIMAL-LITERAL"));
+                }
+            }
+            let (unscaled, scale) = parse_decimal_literal(raw_dec).ok_or_else(|| {
+                Diagnostic::new(
+                    Stage::Lex,
+                    "`decimal` literal is out of range (exceeds i128)",
+                    line,
+                    col,
+                )
+                .with_code("E-DECIMAL-LITERAL")
+            })?;
+            return Ok(Token {
+                kind: TokenKind::Decimal(unscaled, scale),
+                span: Span {
+                    start,
+                    len: self.pos - start,
+                    line,
+                    col,
+                },
+            });
+        }
         let raw = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
         // Strip `_` separators before parsing; the literal's value (not its surface form) is what
         // reaches the AST, so every base/format collapses to the same Int/Float — byte-identical.
@@ -728,6 +770,24 @@ impl<'a> Lexer<'a> {
             .and_then(|s| s.chars().next())
             .unwrap_or(char::REPLACEMENT_CHARACTER)
     }
+}
+
+/// Parse the numeric TEXT of a `…d` decimal literal (the part before the `d`, e.g. `"1.50"`,
+/// `"100"`, `"1_000.5"`) into `(unscaled, scale)` (M-NUM S1). Underscore separators are stripped (a
+/// source literal may use them, unlike the runtime `Decimal.of` grammar). The scale is the count of
+/// fractional digits, so trailing zeros are preserved. Returns `None` if the unscaled value overflows
+/// `i128` (a compile-time error, not a runtime fault). No sign handling — the lexer scans the
+/// magnitude; a leading `-` is the unary-minus operator on the literal.
+fn parse_decimal_literal(text: &str) -> Option<(i128, u8)> {
+    let cleaned: String = text.chars().filter(|c| *c != '_').collect();
+    let (int_part, frac_part) = match cleaned.split_once('.') {
+        Some((i, f)) => (i, f),
+        None => (cleaned.as_str(), ""),
+    };
+    let scale = u8::try_from(frac_part.len()).ok()?;
+    let combined = format!("{int_part}{frac_part}");
+    let unscaled: i128 = combined.parse().ok()?;
+    Some((unscaled, scale))
 }
 
 fn keyword(s: &str) -> Option<TokenKind> {

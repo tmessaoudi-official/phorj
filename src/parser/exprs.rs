@@ -361,6 +361,14 @@ impl Parser {
                 self.advance();
                 Ok(Expr::Float(f, sp))
             }
+            TokenKind::Decimal(unscaled, scale) => {
+                self.advance();
+                Ok(Expr::Decimal {
+                    unscaled,
+                    scale,
+                    span: sp,
+                })
+            }
             TokenKind::True => {
                 self.advance();
                 Ok(Expr::Bool(true, sp))
