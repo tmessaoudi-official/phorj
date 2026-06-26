@@ -66,4 +66,5 @@
   109 differential (PHP-8.5 oracle) green, clippy + fmt clean.
 - [x] **2 web+JSON demo** — DONE (`examples/web/json-api.phg`: a `handle(Request) -> Response` JSON
   endpoint pairing Core.Json + Core.Bytes + the M6 value model; byte-identical run/runvm/real PHP).
-- [ ] 3 MILESTONES fix   [ ] 4 F-m   [ ] 5 parseInt/sort
+- [x] **3 MILESTONES fix** — DONE (M6 section now reflects W0–W4 shipped + Core.Json layered on; deferrals listed).
+- [ ] 4 F-m   [ ] 5 parseInt/sort

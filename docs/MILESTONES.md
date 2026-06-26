@@ -237,14 +237,19 @@ name-mangling pass (`run ≡ runvm` structural; the transpiler de-mangles to `na
 never fetch ([ADR-0005](adr/0005-offline-only-vendor.md)). Design
 `docs/specs/2026-06-18-m5-project-model-design.md`.
 
-## M6 — Web capabilities — 🔨 IN PROGRESS
+## M6 — Web capabilities — 🔨 CORE COMPLETE (W0–W4 shipped; extensions deferred)
 
 A portable `handle(Request) -> Response` model at the *value* level (PSR-7/15 shape); the socket bridge is
 runtime glue, quarantined in `src/serve.rs` behind a `Transport` trait, outside the byte-identity spine.
-Shipped: **W0** (`bytes` primitive + `b"…"` literals + `core.bytes`) and **W1** (pure-Phorge
-`Request`/`Response` + `parse_request`/`serialize_response`). Remaining: **W2** static router → **W3**
-`src/serve.rs` transport → **W4** `phg serve` + PHP front-controller. Design
-`docs/specs/2026-06-18-m6-web-design.md`.
+Shipped: **W0** (`bytes` primitive + `b"…"` literals + `Core.Bytes`), **W1** (pure-Phorge
+`Request`/`Response` + `parse_request`/`serialize_response`, `examples/web/handler.phg`), **W2** (static
+exact-match router, `examples/web/router.phg`), **W3** (`src/serve.rs` socket transport behind the
+`Transport` trait, tested via `tests/serve.rs` outside the spine), and **W4** (`phg serve` + the PHP
+front-controller `examples/web/server.php`, full served app `examples/web/server.phg`). **`Core.Json`**
+(parse/stringify/stringifyPretty) layers on top — `examples/web/json-api.phg` is a byte-identity-gated
+JSON endpoint over the same `handle` contract. Deferred (Track A / later M6): path parameters
+(`/users/{id}`), middleware/closure routes, and green-threaded concurrency under the *unchanged*
+contract. Design `docs/specs/2026-06-18-m6-web-design.md`.
 
 ## M7 — Correctness closure — ✅ COMPLETE (2026-06-19, `1c6119d` / `ac9bda8`)
 
