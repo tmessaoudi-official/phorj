@@ -21,6 +21,7 @@ use std::sync::OnceLock;
 // Per-leaf stdlib modules: each owns its `*_natives()` builder + bodies; `build()` below is the sole
 // ordering coordinator (the pinned-slot invariant). `Core.Console` stays here (slot 0, inlined).
 mod bytes;
+mod convert;
 mod file;
 mod html;
 mod json;
@@ -284,6 +285,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(list::list_natives());
     registry.extend(map::map_natives());
     registry.extend(set::set_natives());
+    registry.extend(convert::convert_natives());
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());

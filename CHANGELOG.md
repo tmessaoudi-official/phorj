@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.Convert` value conversion (M4 casting, axis 1)
+
+Explicit value conversion — Phorge has no implicit coercion, so you convert on purpose, and lossy
+conversions are *named* (no silent `(int)`). `Convert.toString(T) -> string` (generic, reuses the
+`__phorge_str` rendering — bool→`true`/`false`, float→shortest-round-trip), `toFloat(int) -> float`
+(total widening), `truncate(float) -> int` (toward zero), `round(float) -> int` (half away from zero).
+Because UFCS ships, `Convert.toFloat(n)` ≡ `n.toFloat()` — module + method API in one. (The type
+*cast*/reinterpret is the separate `as` operator, axis 2, next slice.) Byte-identical run/runvm/real
+PHP; `examples/guide/convert.phg`. **No new `Op`/`Value`.**
+
 ### Added — `Core.List.sort` / `sortWith` (M4 stdlib breadth)
 
 Ordering for lists, mirroring PHP `sort`/`usort`. `Core.List.sort(List<T>) -> List<T>` returns a new

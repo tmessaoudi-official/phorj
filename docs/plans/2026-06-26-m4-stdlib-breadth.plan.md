@@ -46,5 +46,10 @@ total-or-optional conversions**, not a C-cast operator:
   Locked (developer): **checked `as` → `T?`** (decline TS unchecked); **no implicit coercion**;
   conversion via **`Core.Convert`** (UFCS makes it module+method in one); `to*` from typed values,
   `parse*` (fallible, from string) stays in `Core.Text`.
-- [ ] **Slice 2a** — `Core.Convert` natives (`toString`/`toFloat`/`truncate`/`round`) + `Text.parseFloat` (additive, NEXT).
+- [2026-06-26] **Module name = `Core.Convert`** (developer confirmed over `Core.Cast` after challenge):
+  the `as` operator is the real "cast" (reinterpret); the module does value *conversion* (= .NET
+  `System.Convert` / Rust `From` / Kotlin `toInt`), and "cast" stays one concept = the operator.
+- [x] **Slice 2a** — `Core.Convert` natives DONE (`toString`/`toFloat`/`truncate`/`round`,
+  `examples/guide/convert.phg`, byte-identical incl. UFCS `n.toFloat()`). `Text.parseFloat` deferred
+  (fiddly inf/nan/`.5` byte-identity — a follow-up like parseInt).
 - [ ] **Slice 2b** — the checked `as` operator (language change; reuse `Op::IsInstance`).

@@ -140,6 +140,10 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        // `Convert.toString` erases to the existing `__phorge_str` helper — gate it.
+                        if nat.module == "Core.Convert" && nat.name == "toString" {
+                            self.uses_str = true;
+                        }
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).
