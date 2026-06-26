@@ -423,7 +423,12 @@ impl Transpiler {
         // call the matching `bc*` with that scale, then bounds-check the result's unscaled magnitude
         // against i128 range and `throw` the same `decimal overflow` body the Rust backends fault with
         // (the `agree_err` oracle classifies by body substring). BCMath is tier-1 (works under `php -n`).
-        if self.uses_dec_add || self.uses_dec_sub || self.uses_dec_mul {
+        if self.uses_dec_add
+            || self.uses_dec_sub
+            || self.uses_dec_mul
+            || self.uses_dec_div
+            || self.uses_dec_round
+        {
             // Scale of a BCMath decimal string = digits after the dot (0 if none). Matches the Rust
             // kernel deriving scale from `(unscaled, scale)`; a `bc*` result is always normalized.
             self.line("function __phorge_dec_scale($x) {");
@@ -486,6 +491,128 @@ impl Transpiler {
             self.line("if (bccomp($digits, '170141183460469231731687303715887105727', 0) > 0) { return null; }");
             // Normalize a leading `+` away (Phorge's render has no `+`); keep the scale (trailing zeros).
             self.line("return ltrim($s, '+');");
+            self.indent -= 1;
+            self.line("}");
+        }
+        // --- Decimal division + rounding (M-NUM S2). Replicate the Rust `value::round_div` kernel via
+        // BCMath integer arithmetic on the *unscaled* integer strings (`bcdiv`/`bcmod` truncate toward
+        // zero / take the dividend's sign — verified identical to Rust i128 `/`/`%`), so every rounding
+        // mode matches `run`/`runvm` byte-for-byte. The `RoundingMode` enum value arrives as a PHP
+        // object (`new HalfUp()` ⇒ an instance of the injected global class `HalfUp`); the helper reads
+        // its short class name and switches on it, exactly as the Rust native reads `Value::Enum.variant`.
+        if self.uses_dec_div || self.uses_dec_round {
+            // Unscaled integer-string of a decimal string: drop the dot. `"19.99"`→`"1999"`,
+            // `"-2.5"`→`"-25"`, `"100"`→`"100"`. Matches `(unscaled, _)` in the Rust `(unscaled, scale)`.
+            self.line("function __phorge_dec_unscaled($x) {");
+            self.indent += 1;
+            self.line("return str_replace('.', '', $x);");
+            self.indent -= 1;
+            self.line("}");
+            // Short (namespace-free) class name of the RoundingMode value — `HalfUp`, `Floor`, …
+            self.line("function __phorge_round_mode($mode) {");
+            self.indent += 1;
+            self.line("$c = get_class($mode);");
+            self.line("$p = strrpos($c, '\\\\');");
+            self.line("return $p === false ? $c : substr($c, $p + 1);");
+            self.indent -= 1;
+            self.line("}");
+            // round_div(n, d, mode) on integer strings — the verbatim Rust kernel. `n`/`d` are signed
+            // integer strings; the caller guarantees `d != 0`. Returns the rounded integer string.
+            self.line("function __phorge_round_div($n, $d, $mode) {");
+            self.indent += 1;
+            // 1. Normalise the divisor sign so d > 0 (quotient sign unchanged).
+            self.line(
+                "if (bccomp($d, '0', 0) < 0) { $n = bcmul($n, '-1', 0); $d = bcmul($d, '-1', 0); }",
+            );
+            // 2. Truncating quotient + dividend-signed remainder.
+            self.line("$q = bcdiv($n, $d, 0);");
+            self.line("$rem = bcmod($n, $d);");
+            self.line("if (bccomp($rem, '0', 0) === 0) { return $q; }");
+            // s = sign of the dividend.
+            self.line("$s = bccomp($n, '0', 0) > 0 ? '1' : '-1';");
+            // half-comparison without doubling: |rem| vs d - |rem| (both >= 0).
+            self.line("$absRem = ltrim($rem, '-');");
+            self.line("$comp = bcsub($d, $absRem, 0);");
+            self.line("$cmp = bccomp($absRem, $comp, 0);"); // -1/0/1
+            self.line("$mode = __phorge_round_mode($mode);");
+            self.line("switch ($mode) {");
+            self.indent += 1;
+            self.line("case 'Down': return $q;");
+            self.line("case 'Up': return bcadd($q, $s, 0);");
+            self.line("case 'Ceiling': return bccomp($n, '0', 0) > 0 ? bcadd($q, '1', 0) : $q;");
+            self.line("case 'Floor': return bccomp($n, '0', 0) < 0 ? bcadd($q, '-1', 0) : $q;");
+            self.line("case 'HalfUp': return $cmp >= 0 ? bcadd($q, $s, 0) : $q;");
+            self.line("case 'HalfDown': return $cmp > 0 ? bcadd($q, $s, 0) : $q;");
+            self.line("case 'HalfEven':");
+            self.indent += 1;
+            self.line("if ($cmp > 0) { return bcadd($q, $s, 0); }");
+            self.line("if ($cmp < 0) { return $q; }");
+            // exact tie → round to even: bump only if q is currently odd.
+            self.line("return bccomp(bcmod($q, '2'), '0', 0) !== 0 ? bcadd($q, $s, 0) : $q;");
+            self.indent -= 1;
+            self.line("default: throw new \\RuntimeException('unknown RoundingMode');");
+            self.indent -= 1;
+            self.line("}");
+            self.indent -= 1;
+            self.line("}");
+            // Format a (bounds-checked) unscaled integer string at `scale` fractional digits — the
+            // BCMath-padding form, matching the Rust `value::fmt_decimal` (never `-0`).
+            self.line("function __phorge_dec_fmt($u, $scale) {");
+            self.indent += 1;
+            self.line("__phorge_dec_check($u);"); // i128 range guard (same overflow fault)
+            self.line("$neg = bccomp($u, '0', 0) < 0;");
+            self.line("$digits = ltrim($u, '-');");
+            self.line("if ($scale === 0) { $body = $digits; }");
+            self.line("else {");
+            self.indent += 1;
+            self.line("$digits = str_pad($digits, $scale + 1, '0', STR_PAD_LEFT);");
+            self.line("$dot = strlen($digits) - $scale;");
+            self.line("$body = substr($digits, 0, $dot) . '.' . substr($digits, $dot);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return ($neg && bccomp($u, '0', 0) !== 0) ? '-' . $body : $body;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_div {
+            // `Decimal.div(a, b, scale, mode)`: N = au*10^(sb+scale), D = bu*10^sa; round_div(N,D);
+            // format at `scale`. scale<0 / b==0 throw the same bodies as the Rust kernel.
+            self.line("function __phorge_dec_div($a, $b, $scale, $mode) {");
+            self.indent += 1;
+            self.line(
+                "if ($scale < 0) { throw new \\RuntimeException('decimal scale out of range'); }",
+            );
+            self.line("$sa = __phorge_dec_scale($a); $sb = __phorge_dec_scale($b);");
+            self.line("$au = __phorge_dec_unscaled($a); $bu = __phorge_dec_unscaled($b);");
+            self.line("if (bccomp($bu, '0', 0) === 0) { throw new \\RuntimeException('decimal division by zero'); }");
+            self.line("$N = bcmul($au, bcpow('10', (string)($sb + $scale), 0), 0);");
+            self.line("$D = bcmul($bu, bcpow('10', (string)$sa, 0), 0);");
+            self.line("$u = __phorge_round_div($N, $D, $mode);");
+            self.line("return __phorge_dec_fmt($u, $scale);");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_round {
+            // `Decimal.round(d, scale, mode)`: up-scale is exact (u*10^Δ), down-scale rounds via
+            // round_div(u, 10^Δ). scale<0 throws.
+            self.line("function __phorge_dec_round($d, $scale, $mode) {");
+            self.indent += 1;
+            self.line(
+                "if ($scale < 0) { throw new \\RuntimeException('decimal scale out of range'); }",
+            );
+            self.line("$sd = __phorge_dec_scale($d);");
+            self.line("$u = __phorge_dec_unscaled($d);");
+            self.line("if ($scale >= $sd) {");
+            self.indent += 1;
+            self.line("$r = bcmul($u, bcpow('10', (string)($scale - $sd), 0), 0);");
+            self.indent -= 1;
+            self.line("} else {");
+            self.indent += 1;
+            self.line("$divisor = bcpow('10', (string)($sd - $scale), 0);");
+            self.line("$r = __phorge_round_div($u, $divisor, $mode);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return __phorge_dec_fmt($r, $scale);");
             self.indent -= 1;
             self.line("}");
         }
@@ -878,7 +1005,9 @@ impl Transpiler {
         // The base + its variant subclasses are declared inside the enum's own `namespace` block, so
         // both use the bare trailing segment (`Acme\Geometry\Color` ⇒ `Color`); a single-package enum
         // is unchanged. Variant subclass names are never mangled (they aren't types).
-        let base = last_segment(&e.name);
+        // Mangle a reserved enum-class name (`RoundingMode` → `RoundingMode_`) so it can't collide
+        // with a PHP built-in enum (M-NUM S2); a non-reserved name is unchanged.
+        let base = super::php_class_name(last_segment(&e.name));
         self.line(&format!("abstract class {} {{}}", base));
         for v in &e.variants {
             // A variant whose name is a PHP-reserved class word (`Int`/`Bool`/`Null`/…) is mangled

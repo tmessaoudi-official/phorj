@@ -37,9 +37,11 @@ not a panic:
 
 - **`decimal` primitive (M-NUM S1) — shipped corners + deferrals.** The exact fixed-point `decimal`
   ships with `19.99d` literals, `Decimal.of(string) -> decimal?`, `+ - *`, scale-insensitive
-  comparison/equality, unary `-`, and BCMath transpile. Deferrals: (1) **`/` and `%` (division +
-  rounding) are deferred to M-NUM S2** — a `decimal /`/`%` is a clean compile error this slice (the
-  result scale + rounding mode is a deliberate, explicit choice, not a default). (2) **i128 overflow is
+  comparison/equality, unary `-`, and BCMath transpile. Deferrals: (1) **`/` and `%` are NOT operators**
+  — division landed in M-NUM S2 as the explicit `Decimal.div(a, b, scale, mode)` /
+  `Decimal.round(d, scale, mode)` natives (bare `decimal /`/`%` is a clean compile error,
+  `E-DECIMAL-DIV`); the result scale + rounding mode is a deliberate, explicit choice, not a default,
+  and there is **no decimal modulo**. (2) **i128 overflow is
   a runtime fault, not a compile error** — an exact `+ - *` result (or a scale alignment) that leaves
   the `i128` range faults `"decimal overflow"` (byte-identical on `run`/`runvm` and in the emitted
   BCMath, which bounds-checks the result against i128 range and `throw`s the same body). Because every
@@ -49,6 +51,20 @@ not a panic:
   design (`E-DECIMAL-FLOAT-MIX`); the only operator-level widen is `decimal ⊕ int`. (4) **No
   arbitrary-precision decimal / `BigInt` / `Money`+currency** — those are M-NUM-2 (they share a
   hand-rolled bignum core); the i128 range (~10^36 at scale 2) covers all realistic money.
+
+- **Decimal division + rounding (M-NUM S2) — shipped corners + deferrals.** `Decimal.div`/`Decimal.round`
+  ship with the full seven-mode `RoundingMode` enum (injected on `import Core.Decimal`), single-sourced
+  in `value::round_div` and mirrored by BCMath. Deferrals/corners: (1) **The fault cases are not runnable
+  examples** — a zero divisor (`"decimal division by zero"`), a negative `scale`
+  (`"decimal scale out of range"`), and an intermediate i128 overflow (`"decimal overflow"`) are clean
+  faults, byte-identical on `run`/`runvm` (FaultKind parity) and the emitted PHP helper `throw`s the same
+  body; but because every shipped example must produce identical *Ok* output, the faults are exercised by
+  the kernel + native unit tests (`value::decimal_div_by_zero_is_a_clean_fault`, …) and the differential
+  `agree_err` cases, not the example set. (2) **No default-scale division** — `Decimal.div` always takes
+  an explicit `scale` (the whole point: no silent precision choice); there is no `Decimal.div(a, b)`
+  overload. (3) **No decimal modulo** — `decimal %` is rejected with `E-DECIMAL-DIV` (no decimal-remainder
+  native this milestone). (4) **A `scale` past 255** (`u8::MAX`) faults `"decimal scale out of range"` —
+  far beyond any realistic money use, and an i128 decimal can carry at most ~38 significant digits anyway.
 
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
   `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)

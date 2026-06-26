@@ -2578,3 +2578,34 @@ function main() -> void {
         "p3_byte_safe_stdlib",
     );
 }
+
+#[test]
+fn m_num_s2_decimal_div_by_zero_faults_identically() {
+    // `Decimal.div` with a zero divisor faults the same way on both backends (the `decimal division
+    // by zero` body contains `division by zero`, so it classifies as FaultKind::DivZero). The PHP
+    // helper throws the same body — but a fault is not a runnable example (Ok-only rule), so this is a
+    // run≡runvm parity check, not a 3-way one.
+    agree_err(
+        "import Core.Decimal; function main() -> void { decimal r = Decimal.div(10.00d, 0d, 2, new HalfUp()); }",
+    );
+}
+
+#[test]
+fn m_num_s2_decimal_scale_out_of_range_faults_identically() {
+    // A negative `scale` faults `decimal scale out of range` on both backends (FaultKind::Other, but
+    // the body is byte-identical so `agree_err` is satisfied).
+    agree_err(
+        "import Core.Decimal; function main() -> void { decimal r = Decimal.div(10.00d, 3d, -1, new HalfUp()); }",
+    );
+    agree_err(
+        "import Core.Decimal; function main() -> void { decimal r = Decimal.round(2.345d, -1, new HalfUp()); }",
+    );
+}
+
+#[test]
+fn m_num_s2_decimal_div_overflow_faults_identically() {
+    // A target scale that overflows 10^k before the division faults `decimal overflow` on both.
+    agree_err(
+        "import Core.Decimal; function main() -> void { decimal r = Decimal.div(1d, 3d, 200, new HalfUp()); }",
+    );
+}

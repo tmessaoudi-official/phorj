@@ -330,8 +330,53 @@ fn inject_json_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     }
 }
 
+/// The canonical `RoundingMode` enum, injected (below) when a program imports `Core.Decimal`
+/// (M-NUM S2). Zero-payload variants — constructed `new HalfUp()` and matched `HalfUp()`, the
+/// project's zero-payload variant convention — read by `Decimal.div`/`Decimal.round` via the
+/// variant name. The seven modes mirror `value::RoundMode`. (Same [[core-json-and-injected-types]]
+/// injected-type pattern as `Json`.)
+const ROUNDING_MODE_PRELUDE: &str =
+    "enum RoundingMode { HalfUp(), HalfDown(), HalfEven(), Up(), Down(), Ceiling(), Floor() }";
+
+/// Inject the `RoundingMode` enum at the head of a program that imports `Core.Decimal`, so the
+/// `Decimal.div`/`Decimal.round` natives' `RoundingMode`-typed signatures resolve and user code can
+/// construct the variants (`new HalfUp()`) — the enum then flows through every backend as an ordinary
+/// enum. Mirrors [`inject_json_prelude`]: a no-op (borrowed) unless `Core.Decimal` is imported and no
+/// `RoundingMode` enum is already declared.
+fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports_decimal = prog.items.iter().any(|it| {
+        matches!(it, Item::Import { path, type_only: false, .. }
+            if path.len() == 2 && path[0] == "Core" && path[1] == "Decimal")
+    });
+    let already_declared = prog
+        .items
+        .iter()
+        .any(|it| matches!(it, Item::Enum(e) if e.name == "RoundingMode"));
+    if !imports_decimal || already_declared {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    match lex_parse(ROUNDING_MODE_PRELUDE)
+        .ok()
+        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
+    {
+        Some(enum_item) => {
+            let mut items = Vec::with_capacity(prog.items.len() + 1);
+            items.push(enum_item);
+            items.extend(prog.items.iter().cloned());
+            std::borrow::Cow::Owned(Program {
+                package: prog.package.clone(),
+                items,
+                span: prog.span,
+            })
+        }
+        None => std::borrow::Cow::Borrowed(prog), // unreachable: ROUNDING_MODE_PRELUDE is valid
+    }
+}
+
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
-    let injected = inject_json_prelude(prog);
+    let json_injected = inject_json_prelude(prog);
+    let injected = inject_rounding_mode_prelude(json_injected.as_ref());
     let prog = injected.as_ref();
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs)) => {

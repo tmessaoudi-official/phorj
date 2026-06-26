@@ -250,6 +250,13 @@ struct Transpiler {
     /// Set when `Decimal.of(s)` is emitted — defines `__phorge_dec_of`, validating the literal grammar
     /// (a tier-1 PCRE — NOT mbstring) + i128 range, returning the normalized decimal string or `null`.
     uses_dec_of: bool,
+    /// Set when `Decimal.div`/`Decimal.round` are emitted (M-NUM S2) — define `__phorge_dec_div` /
+    /// `__phorge_dec_round`, replicating the Rust `round_div` rounding kernel via BCMath
+    /// (`bcdiv`/`bcmod`/`bccomp` truncate-toward-zero, dividend-signed remainder — verified identical
+    /// to Rust i128 `/`/`%`), switching on the `RoundingMode` enum's PHP form, and reusing
+    /// `__phorge_dec_check` for the i128 overflow fault. Both gate the shared `__phorge_round_div`.
+    uses_dec_div: bool,
+    uses_dec_round: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -336,7 +343,24 @@ fn is_error_marker_type(ty: &Type) -> bool {
 /// types). Byte-identical to the pre-lift output for a single-package program (no `\` names).
 fn php_type_ref(name: &str) -> String {
     if name.contains('\\') {
-        format!("\\{name}")
+        let leaf = php_class_name(last_segment(name));
+        let ns = &name[..name.len() - last_segment(name).len()];
+        format!("\\{ns}{leaf}")
+    } else {
+        php_class_name(name)
+    }
+}
+
+/// Mangle a PHP-reserved **class/enum** name that a Phorge type name would collide with. The only
+/// case today is `RoundingMode`: PHP 8.4+ ships a built-in `enum RoundingMode`, so the injected M-NUM
+/// S2 enum (`abstract class RoundingMode` + its variant subclasses) would otherwise fatal with
+/// "cannot extend enum RoundingMode". Append `_` (`RoundingMode` → `RoundingMode_`), transpiler-only:
+/// `run`/`runvm` address the enum by its Phorge name (`EnumVal.ty`), never a PHP class name, so
+/// program stdout is unaffected. Distinct from [`php_variant_name`] (which mangles reserved *variant*
+/// names like `Int`); the enum *type* name and its variant names mangle independently.
+fn php_class_name(name: &str) -> String {
+    if name.eq_ignore_ascii_case("RoundingMode") {
+        format!("{name}_")
     } else {
         name.to_string()
     }
@@ -436,6 +460,8 @@ impl Transpiler {
             uses_dec_sub: false,
             uses_dec_mul: false,
             uses_dec_of: false,
+            uses_dec_div: false,
+            uses_dec_round: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

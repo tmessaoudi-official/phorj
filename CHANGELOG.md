@@ -6,6 +6,36 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — decimal division + rounding (M-NUM S2)
+
+Exact, **explicitly-rounded** decimal division — the precision-safe complement to S1's `+ - *`.
+Bare `decimal / decimal` (and `decimal % decimal`) is now a **compile error** (`E-DECIMAL-DIV`):
+division isn't exact, so an operator would have to silently pick a scale and a rounding rule — exactly
+the hidden precision loss `decimal` exists to prevent. Division goes through two natives that name
+both:
+
+- **`Decimal.div(decimal a, decimal b, int scale, RoundingMode mode) -> decimal`** — the exact
+  rational `a / b`, rounded to `scale` fractional digits under `mode`.
+- **`Decimal.round(decimal d, int scale, RoundingMode mode) -> decimal`** — re-scale a decimal
+  (exact up-scale, rounded down-scale).
+- **`RoundingMode`** — a seven-variant enum (`HalfUp`, `HalfDown`, `HalfEven` banker's, `Up`, `Down`,
+  `Ceiling`, `Floor`) **injected** when a program imports `Core.Decimal` (the same compiler-injected
+  enum pattern as `Core.Json`); construct a mode with `new HalfUp()`.
+- **Faults:** a zero divisor → `"decimal division by zero"`; a negative `scale` →
+  `"decimal scale out of range"`; any i128 overflow in the intermediate → the existing
+  `"decimal overflow"`. Byte-identical run≡runvm (FaultKind parity); the PHP helper throws the same.
+
+The rounding kernel `value::round_div(n, d, mode)` is **single-sourced** (sign-normalise so `d > 0`,
+truncating quotient + dividend-signed remainder, a half-comparison via `|rem|` vs `d − |rem|` to avoid
+`2*rem` overflow, the seven mode rules, all `checked_*`). It is mirrored step-for-step by gated
+BCMath helpers `__phorge_dec_div`/`__phorge_dec_round` (`bcdiv`/`bcmod` truncate toward zero / take
+the dividend's sign — verified identical to Rust i128 `/`/`%`), switching on the `RoundingMode` value's
+PHP class and reusing S1's `__phorge_dec_check` for the i128 bounds fault. **No new `Op`, no new
+`Value`** — division is a `CallNative`, `RoundingMode` rides the existing enum ops. (Transpiler-only:
+the injected enum's PHP class name is mangled `RoundingMode → RoundingMode_` to dodge PHP 8.4+'s
+built-in `RoundingMode` enum.) Byte-identical `run ≡ runvm ≡ real PHP 8.5`; `examples/guide/decimal-div.phg`;
+`phg explain E-DECIMAL-DIV`.
+
 ### Added — the `decimal` primitive (M-NUM S1)
 
 An exact fixed-point **`decimal`** scalar primitive for money/fixed-point math — making

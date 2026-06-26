@@ -157,9 +157,14 @@ impl Transpiler {
                         if nat.module == "Core.Convert" && nat.name == "toString" {
                             self.uses_str = true;
                         }
-                        // `Decimal.of` erases to the gated `__phorge_dec_of` helper (M-NUM S1).
-                        if nat.module == "Core.Decimal" && nat.name == "of" {
-                            self.uses_dec_of = true;
+                        // `Decimal.*` erases to gated `__phorge_dec_*` helpers (M-NUM S1/S2).
+                        if nat.module == "Core.Decimal" {
+                            match nat.name {
+                                "of" => self.uses_dec_of = true,
+                                "div" => self.uses_dec_div = true,
+                                "round" => self.uses_dec_round = true,
+                                _ => {}
+                            }
                         }
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to

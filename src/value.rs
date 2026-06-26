@@ -403,6 +403,14 @@ pub const FAULT_NEGATIVE_SHIFT: &str = "bit shift by negative number";
 /// `i128` range (M-NUM S1). Byte-identical across both Rust backends AND the emitted BCMath PHP (the
 /// `__phorge_dec_*` helper bounds-checks its result against i128 range and throws the same body).
 pub const FAULT_DECIMAL_OVERFLOW: &str = "decimal overflow";
+/// Canonical fault body for `Decimal.div` with a zero divisor (M-NUM S2). Distinct from the integer
+/// `FAULT_DIV_ZERO` body so the message is decimal-specific, but it still *contains* the substring
+/// `"division by zero"`, so the differential harness classifies it as `FaultKind::DivZero` (run≡runvm
+/// parity); the emitted PHP `__phorge_dec_div` helper throws the same body.
+pub const FAULT_DECIMAL_DIV_ZERO: &str = "decimal division by zero";
+/// Canonical fault body for a negative `scale` argument to `Decimal.div`/`Decimal.round` (M-NUM S2).
+/// A scale is the count of fractional digits, so it must be `>= 0`; the PHP helpers throw the same.
+pub const FAULT_DECIMAL_SCALE: &str = "decimal scale out of range";
 /// Canonical fault body for `int ** int` with a negative exponent. A negative exponent yields a
 /// fractional result, which cannot be the typed `int` the `**` operator promises — so it faults
 /// rather than silently widening to `float` (PHP's `2 ** -1 == 0.5`). Use `float**float` for that.
@@ -585,6 +593,192 @@ pub fn decimal_neg(unscaled: i128, scale: u8) -> Result<Value, String> {
         .checked_neg()
         .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
     Ok(Value::Decimal { unscaled, scale })
+}
+
+/// The seven rounding modes a `Decimal.div`/`Decimal.round` accepts (M-NUM S2). The injected
+/// `RoundingMode` enum's variant *names* map onto these — the natives read `Value::Enum.variant` and
+/// project it here via [`RoundMode::from_variant`], so the rounding kernel is variant-name-agnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundMode {
+    /// Ties away from zero (`2.5 -> 3`, `-2.5 -> -3`).
+    HalfUp,
+    /// Ties toward zero (`2.5 -> 2`, `-2.5 -> -2`).
+    HalfDown,
+    /// Ties to the nearest even digit — banker's rounding (`2.5 -> 2`, `3.5 -> 4`).
+    HalfEven,
+    /// Always away from zero (`2.1 -> 3`, `-2.1 -> -3`).
+    Up,
+    /// Always toward zero — truncate (`2.9 -> 2`, `-2.9 -> -2`); equals a raw `bcdiv`.
+    Down,
+    /// Always toward `+∞` (`2.1 -> 3`, `-2.9 -> -2`).
+    Ceiling,
+    /// Always toward `-∞` (`2.9 -> 2`, `-2.1 -> -3`).
+    Floor,
+}
+
+impl RoundMode {
+    /// Map a `RoundingMode` enum variant name to a [`RoundMode`], or `None` for an unknown variant
+    /// (checker-unreachable — the injected enum has exactly these seven variants and the native's
+    /// signature requires a `RoundingMode`; handled defensively rather than panicking, EV-7).
+    pub fn from_variant(variant: &str) -> Option<RoundMode> {
+        Some(match variant {
+            "HalfUp" => RoundMode::HalfUp,
+            "HalfDown" => RoundMode::HalfDown,
+            "HalfEven" => RoundMode::HalfEven,
+            "Up" => RoundMode::Up,
+            "Down" => RoundMode::Down,
+            "Ceiling" => RoundMode::Ceiling,
+            "Floor" => RoundMode::Floor,
+            _ => return None,
+        })
+    }
+}
+
+/// Round the exact rational `n / d` to an integer under `mode` (M-NUM S2) — the single-sourced
+/// rounding primitive both backends call and the PHP `__phorge_dec_div`/`_round` helpers replicate
+/// step-for-step. The caller guarantees `d != 0` (a zero divisor is the `FAULT_DECIMAL_DIV_ZERO`
+/// fault, checked before this). Any `checked_*` overflow ⇒ [`FAULT_DECIMAL_OVERFLOW`].
+///
+/// The half-decision compares `|rem|` against `d - |rem|` (both non-negative, so no `2*rem`
+/// doubling that could overflow `i128`). i128 MIN edges are handled via `unsigned_abs`/`checked_neg`
+/// — never a bare `-x` or `x.abs()`.
+pub fn round_div(n: i128, d: i128, mode: RoundMode) -> Result<i128, String> {
+    // 1. Normalise the divisor's sign so `d > 0`; the quotient sign is unchanged. `d == 0` is the
+    //    caller's responsibility (div-by-zero fault).
+    let (n, d) = if d < 0 {
+        (
+            n.checked_neg().ok_or(FAULT_DECIMAL_OVERFLOW)?,
+            d.checked_neg().ok_or(FAULT_DECIMAL_OVERFLOW)?,
+        )
+    } else {
+        (n, d)
+    };
+    // 2. Truncating quotient + dividend-signed remainder (matches BCMath `bcdiv`/`bcmod`).
+    let q = n / d; // d != 0 here, and d > 0 so no MIN/-1 overflow
+    let rem = n % d;
+    if rem == 0 {
+        return Ok(q); // exact
+    }
+    // `s` = sign of the dividend (and of the exact quotient): the direction "away from zero".
+    let s: i128 = if n > 0 { 1 } else { -1 };
+    // Magnitudes for the half-comparison. `d > 0`, so `d` is its own magnitude; `|rem| <= d - 1 < d`,
+    // so `d - abs_rem` is `>= 1 > 0` and never underflows.
+    let abs_rem =
+        i128::try_from(rem.unsigned_abs()).map_err(|_| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let complement = d - abs_rem; // safe: 0 < abs_rem < d
+    let bump = |q: i128, by: i128| q.checked_add(by).ok_or(FAULT_DECIMAL_OVERFLOW.to_string());
+    let result = match mode {
+        RoundMode::Down => q,
+        RoundMode::Up => bump(q, s)?,
+        RoundMode::Ceiling => {
+            if n > 0 {
+                bump(q, 1)?
+            } else {
+                q
+            }
+        }
+        RoundMode::Floor => {
+            if n < 0 {
+                bump(q, -1)?
+            } else {
+                q
+            }
+        }
+        RoundMode::HalfUp => {
+            if abs_rem >= complement {
+                bump(q, s)?
+            } else {
+                q
+            }
+        }
+        RoundMode::HalfDown => {
+            if abs_rem > complement {
+                bump(q, s)?
+            } else {
+                q
+            }
+        }
+        RoundMode::HalfEven => match abs_rem.cmp(&complement) {
+            Ordering::Greater => bump(q, s)?,
+            Ordering::Less => q,
+            // Exact tie: round to even — bump only if `q` is currently odd.
+            Ordering::Equal => {
+                if q % 2 != 0 {
+                    bump(q, s)?
+                } else {
+                    q
+                }
+            }
+        },
+    };
+    Ok(result)
+}
+
+/// `Decimal.div(a, b, scale, mode)` (M-NUM S2): the exact rational `a / b`, rounded to `scale`
+/// fractional digits under `mode`. Computes `N = a.unscaled * 10^(b.scale + scale)` and
+/// `D = b.unscaled * 10^a.scale` (both checked), then `round_div(N, D, mode)` at `scale`.
+/// `b == 0` ⇒ [`FAULT_DECIMAL_DIV_ZERO`]; `scale < 0` ⇒ [`FAULT_DECIMAL_SCALE`]; any i128 overflow ⇒
+/// [`FAULT_DECIMAL_OVERFLOW`]. Mirrored by the PHP `__phorge_dec_div` helper.
+pub fn decimal_div(a: &Value, b: &Value, scale: i64, mode: RoundMode) -> Result<Value, String> {
+    let (au, sa) = dec_parts(a).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (bu, sb) = dec_parts(b).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let out_scale = scale_u8(scale)?;
+    if bu == 0 {
+        return Err(FAULT_DECIMAL_DIV_ZERO.to_string());
+    }
+    // N = au * 10^(sb + out_scale); D = bu * 10^sa. Both exponents are non-negative `u8` sums.
+    let n_exp = u32::from(sb)
+        .checked_add(u32::from(out_scale))
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let n = pow10_mul(au, n_exp)?;
+    let d = pow10_mul(bu, u32::from(sa))?;
+    let unscaled = round_div(n, d, mode)?;
+    Ok(Value::Decimal {
+        unscaled,
+        scale: out_scale,
+    })
+}
+
+/// `Decimal.round(d, scale, mode)` (M-NUM S2): re-scale `d` to exactly `scale` fractional digits.
+/// Scaling up (`scale >= d.scale`) is exact (`unscaled * 10^Δ`, checked, no rounding); scaling down
+/// rounds via `round_div(unscaled, 10^Δ, mode)`. `scale < 0` ⇒ [`FAULT_DECIMAL_SCALE`]; overflow ⇒
+/// [`FAULT_DECIMAL_OVERFLOW`]. Mirrored by the PHP `__phorge_dec_round` helper.
+pub fn decimal_round(d: &Value, scale: i64, mode: RoundMode) -> Result<Value, String> {
+    let (du, sd) = dec_parts(d).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let out_scale = scale_u8(scale)?;
+    let unscaled = if out_scale >= sd {
+        // Exact up-scale: multiply by 10^(out_scale - sd).
+        pow10_mul(du, u32::from(out_scale - sd))?
+    } else {
+        // Down-scale: divide by 10^(sd - out_scale) with rounding.
+        let divisor = pow10(u32::from(sd - out_scale))?;
+        round_div(du, divisor, mode)?
+    };
+    Ok(Value::Decimal {
+        unscaled,
+        scale: out_scale,
+    })
+}
+
+/// `10^exp` as a checked `i128`, [`FAULT_DECIMAL_OVERFLOW`] on overflow (M-NUM S2 helper).
+fn pow10(exp: u32) -> Result<i128, String> {
+    10i128
+        .checked_pow(exp)
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())
+}
+
+/// `value * 10^exp` as a checked `i128`, [`FAULT_DECIMAL_OVERFLOW`] on overflow (M-NUM S2 helper).
+fn pow10_mul(value: i128, exp: u32) -> Result<i128, String> {
+    value
+        .checked_mul(pow10(exp)?)
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())
+}
+
+/// Validate + narrow a `scale` argument (an `int`, so `i64`) to the `u8` a `Value::Decimal` stores.
+/// A negative scale is [`FAULT_DECIMAL_SCALE`]; a scale past `u8::MAX` (255, far beyond any realistic
+/// money use) is also [`FAULT_DECIMAL_SCALE`] (M-NUM S2). The PHP helpers throw on `scale < 0` too.
+fn scale_u8(scale: i64) -> Result<u8, String> {
+    u8::try_from(scale).map_err(|_| FAULT_DECIMAL_SCALE.to_string())
 }
 
 /// Numeric, **scale-insensitive** ordering of two decimal operands (mixed `decimal`/`int` allowed):
@@ -818,6 +1012,154 @@ mod tests {
         assert_dec_overflow(decimal_add(&big, &dec(0, 1)));
         // Negation of i128::MIN overflows.
         assert_dec_overflow(decimal_neg(i128::MIN, 0));
+    }
+
+    #[test]
+    fn round_div_all_seven_modes_on_a_positive_tie() {
+        // 5/2 = 2.5 — an exact tie; each mode resolves the half differently.
+        use RoundMode::*;
+        assert_eq!(round_div(5, 2, Down), Ok(2)); // toward 0
+        assert_eq!(round_div(5, 2, Up), Ok(3)); // away from 0
+        assert_eq!(round_div(5, 2, Ceiling), Ok(3)); // toward +inf
+        assert_eq!(round_div(5, 2, Floor), Ok(2)); // toward -inf
+        assert_eq!(round_div(5, 2, HalfUp), Ok(3)); // tie away
+        assert_eq!(round_div(5, 2, HalfDown), Ok(2)); // tie toward 0
+        assert_eq!(round_div(5, 2, HalfEven), Ok(2)); // tie to even (q=2 even)
+    }
+
+    #[test]
+    fn round_div_all_seven_modes_on_a_negative_tie() {
+        // -5/2 = -2.5 — mirror of the positive tie.
+        use RoundMode::*;
+        assert_eq!(round_div(-5, 2, Down), Ok(-2)); // toward 0
+        assert_eq!(round_div(-5, 2, Up), Ok(-3)); // away from 0
+        assert_eq!(round_div(-5, 2, Ceiling), Ok(-2)); // toward +inf
+        assert_eq!(round_div(-5, 2, Floor), Ok(-3)); // toward -inf
+        assert_eq!(round_div(-5, 2, HalfUp), Ok(-3)); // tie away
+        assert_eq!(round_div(-5, 2, HalfDown), Ok(-2)); // tie toward 0
+        assert_eq!(round_div(-5, 2, HalfEven), Ok(-2)); // tie to even (q=-2 even)
+    }
+
+    #[test]
+    fn round_div_half_even_picks_the_odd_quotient_up() {
+        // 7/2 = 3.5 — tie, q=3 is odd, so HalfEven rounds to the even 4.
+        assert_eq!(round_div(7, 2, RoundMode::HalfEven), Ok(4));
+        assert_eq!(round_div(-7, 2, RoundMode::HalfEven), Ok(-4));
+    }
+
+    #[test]
+    fn round_div_non_tie_and_exact() {
+        use RoundMode::*;
+        // 7/3 = 2.333… — not a tie; the half rules don't trigger (rem < complement).
+        assert_eq!(round_div(7, 3, HalfUp), Ok(2));
+        assert_eq!(round_div(7, 3, Up), Ok(3));
+        assert_eq!(round_div(7, 3, Down), Ok(2));
+        assert_eq!(round_div(7, 3, Ceiling), Ok(3));
+        assert_eq!(round_div(7, 3, Floor), Ok(2));
+        // 8/3 = 2.666… — past the half, so HalfUp/HalfDown/HalfEven all round up.
+        assert_eq!(round_div(8, 3, HalfUp), Ok(3));
+        assert_eq!(round_div(8, 3, HalfDown), Ok(3));
+        assert_eq!(round_div(8, 3, HalfEven), Ok(3));
+        // Exact division: every mode agrees, no rounding.
+        for m in [HalfUp, HalfDown, HalfEven, Up, Down, Ceiling, Floor] {
+            assert_eq!(round_div(6, 3, m), Ok(2));
+            assert_eq!(round_div(-6, 3, m), Ok(-2));
+        }
+    }
+
+    #[test]
+    fn round_div_negative_divisor_normalises() {
+        // A negative divisor is normalised so the result matches the equivalent positive-divisor form.
+        assert_eq!(
+            round_div(5, -2, RoundMode::HalfUp),
+            round_div(-5, 2, RoundMode::HalfUp)
+        );
+        assert_eq!(
+            round_div(-5, -2, RoundMode::Up),
+            round_div(5, 2, RoundMode::Up)
+        );
+    }
+
+    #[test]
+    fn decimal_div_rounds_to_scale() {
+        // 10.00 / 3 = 3.3333… → scale 2 HalfEven → 3.33.
+        assert_dec(
+            decimal_div(&dec(1000, 2), &Value::Int(3), 2, RoundMode::HalfEven),
+            333,
+            2,
+        );
+        // 1 / 8 = 0.125 → scale 2 HalfUp → 0.13 (tie at the third digit).
+        assert_dec(
+            decimal_div(&Value::Int(1), &Value::Int(8), 2, RoundMode::HalfUp),
+            13,
+            2,
+        );
+        // 1 / 8 = 0.125 → scale 2 HalfEven → 0.12 (q=12 even).
+        assert_dec(
+            decimal_div(&Value::Int(1), &Value::Int(8), 2, RoundMode::HalfEven),
+            12,
+            2,
+        );
+    }
+
+    #[test]
+    fn decimal_div_by_zero_is_a_clean_fault() {
+        assert_eq!(
+            decimal_div(&dec(1000, 2), &dec(0, 2), 2, RoundMode::HalfUp)
+                .err()
+                .as_deref(),
+            Some(FAULT_DECIMAL_DIV_ZERO)
+        );
+        // an int-zero divisor too (the int widens to scale 0).
+        assert_eq!(
+            decimal_div(&dec(1000, 2), &Value::Int(0), 2, RoundMode::HalfUp)
+                .err()
+                .as_deref(),
+            Some(FAULT_DECIMAL_DIV_ZERO)
+        );
+    }
+
+    #[test]
+    fn decimal_div_negative_scale_is_a_clean_fault() {
+        assert_eq!(
+            decimal_div(&dec(1000, 2), &Value::Int(3), -1, RoundMode::HalfUp)
+                .err()
+                .as_deref(),
+            Some(FAULT_DECIMAL_SCALE)
+        );
+    }
+
+    #[test]
+    fn decimal_round_up_and_down_scale() {
+        // 2.345 → scale 2 HalfUp → 2.35 (tie rounds away).
+        assert_dec(decimal_round(&dec(2345, 3), 2, RoundMode::HalfUp), 235, 2);
+        // 2.345 → scale 2 HalfEven → 2.34 (q=234 even).
+        assert_dec(decimal_round(&dec(2345, 3), 2, RoundMode::HalfEven), 234, 2);
+        // up-scale is exact: 2.5 → scale 3 → 2.500 (no rounding).
+        assert_dec(decimal_round(&dec(25, 1), 3, RoundMode::Down), 2500, 3);
+        // same-scale is identity.
+        assert_dec(decimal_round(&dec(1999, 2), 2, RoundMode::HalfUp), 1999, 2);
+    }
+
+    #[test]
+    fn decimal_round_negative_scale_is_a_clean_fault() {
+        assert_eq!(
+            decimal_round(&dec(2345, 3), -1, RoundMode::HalfUp)
+                .err()
+                .as_deref(),
+            Some(FAULT_DECIMAL_SCALE)
+        );
+    }
+
+    #[test]
+    fn decimal_div_overflow_is_a_clean_fault() {
+        // A huge target scale overflows 10^k before the division.
+        assert_eq!(
+            decimal_div(&Value::Int(1), &Value::Int(3), 200, RoundMode::HalfUp)
+                .err()
+                .as_deref(),
+            Some(FAULT_DECIMAL_OVERFLOW)
+        );
     }
 
     #[test]

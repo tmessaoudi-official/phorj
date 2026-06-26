@@ -279,11 +279,21 @@ impl Checker {
                     ),
                 }
             }
-            BinaryOp::Div | BinaryOp::Rem if l == Ty::Decimal || r == Ty::Decimal => self.err(
+            // `decimal / decimal` and `decimal % decimal` are a compile error (M-NUM S2): the silent
+            // precision loss of `/` (what scale? what rounding?) is exactly the bug `decimal`
+            // prevents, so division is an explicit `Decimal.div(a, b, scale, mode)` call, not an
+            // operator. `%` on a decimal is likewise rejected (no decimal-modulo this slice). The
+            // hint routes the user to the native.
+            BinaryOp::Div | BinaryOp::Rem if l == Ty::Decimal || r == Ty::Decimal => self.err_coded(
                 span,
-                "`decimal` division (`/`, `%`) is not available yet — it lands in M-NUM S2 (with \
-                 explicit rounding)"
+                "`decimal` has no `/` or `%` operator — division would silently lose precision"
                     .to_string(),
+                "E-DECIMAL-DIV",
+                Some(
+                    "use `Decimal.div(a, b, scale, mode)` for an explicit, rounded quotient (import \
+                     `Core.Decimal`); there is no decimal modulo"
+                        .into(),
+                ),
             ),
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => {
                 if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) {

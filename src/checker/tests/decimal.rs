@@ -68,10 +68,48 @@ fn decimal_comparison_and_equality() {
 }
 
 #[test]
-fn decimal_division_is_deferred() {
-    // `/` and `%` on a decimal are not available this slice (S2).
+fn decimal_division_is_a_compile_error() {
+    // Bare `decimal / decimal` is `E-DECIMAL-DIV` (S2) — division goes through `Decimal.div`.
     let e = errors_of("function main() -> void { decimal a = 1.00d; decimal r = a / 2; }");
-    assert!(!e.is_empty(), "decimal `/` must error this slice");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
+        "decimal `/` must be E-DECIMAL-DIV, got {e:?}"
+    );
+    // `decimal / decimal` (both operands decimal) is rejected too.
+    let e2 = errors_of(
+        "function main() -> void { decimal a = 10.00d; decimal b = 3d; decimal r = a / b; }",
+    );
+    assert!(
+        e2.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
+        "decimal/decimal must be E-DECIMAL-DIV, got {e2:?}"
+    );
+}
+
+#[test]
+fn decimal_modulo_is_a_compile_error() {
+    // `decimal % …` shares the `E-DECIMAL-DIV` code (no decimal modulo this slice).
+    let e = errors_of("function main() -> void { decimal a = 10.00d; decimal r = a % 3; }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
+        "decimal `%` must be E-DECIMAL-DIV, got {e:?}"
+    );
+}
+
+#[test]
+fn decimal_div_and_round_natives_typecheck() {
+    // `Decimal.div`/`Decimal.round` accept (decimal, …, scale, RoundingMode) and yield decimal. The
+    // `RoundingMode` enum is injected by the CLI's `check_and_expand` chokepoint (gated on
+    // `import Core.Decimal;`), so this goes through that path rather than the raw checker.
+    let src = "package Main; import Core.Decimal; \
+               function main() -> void { \
+               decimal u = Decimal.div(10.00d, 3d, 2, new HalfEven()); \
+               decimal c = Decimal.round(2.345d, 2, new HalfUp()); \
+               }";
+    let prog = prog_raw(src);
+    assert!(
+        crate::cli::check_and_expand(&prog, src).is_ok(),
+        "div/round natives must typecheck via the injected RoundingMode enum"
+    );
 }
 
 #[test]
