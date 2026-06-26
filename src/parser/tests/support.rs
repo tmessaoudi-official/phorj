@@ -112,6 +112,9 @@ pub(super) fn sexpr(e: &Expr) -> String {
         Expr::InstanceOf {
             value, type_name, ..
         } => format!("(instanceof {} {type_name})", sexpr(value)),
+        Expr::Cast {
+            value, type_name, ..
+        } => format!("(as {} {type_name})", sexpr(value)),
         other => format!("{other:?}"),
     }
 }

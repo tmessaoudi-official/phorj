@@ -438,6 +438,17 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             type_name: resolve_type_ref(&type_name, ctx).unwrap_or(type_name),
             span,
         },
+        // `value as TypeName` — the cast target is a type name, so (like `instanceof`) a cross-package
+        // imported type must be mangled to its FQN here, before any backend sees it (M4 casting).
+        Expr::Cast {
+            value,
+            type_name,
+            span,
+        } => Expr::Cast {
+            value: Box::new(resolve_expr(*value, ctx)),
+            type_name: resolve_type_ref(&type_name, ctx).unwrap_or(type_name),
+            span,
+        },
         Expr::Lambda {
             params,
             ret,

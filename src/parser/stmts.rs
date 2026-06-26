@@ -369,7 +369,13 @@ impl Parser {
         let sp = self.peek_span();
         self.advance(); // `foreach` (contextual)
         self.expect(&TokenKind::LParen, "'(' after 'foreach'")?;
-        let iter = self.parse_expr()?;
+        // Read the iterable with the `as`-cast fold suppressed at the top level, so the upcoming `as`
+        // is recognized as the foreach separator (not a cast). `parse_range` keeps the flag; any
+        // bracketed sub-expression re-enters `parse_expr`, which re-enables casts (M4 casting).
+        self.no_as_cast = true;
+        let iter = self.parse_range();
+        self.no_as_cast = false;
+        let iter = iter?;
         if !matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
             return Err(self.error("'as' after the foreach iterable (e.g. `foreach (xs as x)`)"));
         }

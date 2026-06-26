@@ -112,6 +112,15 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
                 type_name,
                 span,
             },
+            Expr::Cast {
+                value,
+                type_name,
+                span,
+            } => Expr::Cast {
+                value: Box::new(rexpr(*value, u)),
+                type_name,
+                span,
+            },
             Expr::Member {
                 object,
                 name,

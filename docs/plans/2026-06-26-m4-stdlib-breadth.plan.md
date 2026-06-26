@@ -45,12 +45,8 @@ total-or-optional conversions**, not a C-cast operator:
 > hands-off, commit green slices, NEVER `git push`, pause only on genuine design forks (→ AskUserQuestion).
 > Each item byte-identity-gated (run≡runvm≡real PHP 8.5) + a guide example, per standing rules.
 
-1. **`as` operator (Slice 2b)** — speced in `docs/specs/2026-06-26-m4-casting-conversion-design.md`.
-   `v as T` ⇒ `T?` (checked, Kotlin/Swift model). Reuse `Op::IsInstance` (NO new Op): lower to
-   `if (v instanceof T) Some(v) else None`; transpile `($v instanceof T ? $v : null)`. Scrutinee =
-   class/interface/union; primitive `as` rejected (`E-CAST-TYPE`). `as` is contextual (import-alias
-   reuse). Precedence tighter than `??`, looser than member. Smart-cast in `if (var t = v as T)`.
-   `phg explain E-CAST-TYPE`; `examples/guide/as-cast.phg`.
+1. **`as` operator (Slice 2b)** — ✅ **DONE** (see Slice 2b in Status above). `v as T` ⇒ `T?`, no new
+   `Op`, byte-identical 3-way, single-eval proven, foreach-`as` ambiguity fixed. `examples/guide/as-cast.phg`.
 2. **Map mutation/access** — `Core.Map` is read-only today (keys/values/has/size; `m[k]` reads &
    faults on miss). Add `set(Map<K,V>, K, V) -> Map<K,V>` (new map, COW), `remove(Map<K,V>, K) ->
    Map<K,V>`, `get(Map<K,V>, K) -> V?` (safe, None on miss; V is non-optional so a present value is
@@ -83,4 +79,22 @@ total-or-optional conversions**, not a C-cast operator:
 - [x] **Slice 2a** — `Core.Convert` natives DONE (`toString`/`toFloat`/`truncate`/`round`,
   `examples/guide/convert.phg`, byte-identical incl. UFCS `n.toFloat()`). `Text.parseFloat` deferred
   (fiddly inf/nan/`.5` byte-identity — a follow-up like parseInt).
-- [ ] **Slice 2b** — the checked `as` operator (language change; reuse `Op::IsInstance`).
+- [x] **Slice 2b** — the checked `as` operator. **DONE** (`examples/guide/as-cast.phg`, byte-identical
+  3-way + single-eval proven by a side-effecting scrutinee; `phg explain E-CAST-TYPE`; no new `Op`).
+  **Regression found + fixed:** `as` is contextual (foreach `as`-separator vs cast) — added a parser
+  `no_as_cast` restriction (set in `parse_foreach`, reset by every `parse_expr` so brackets re-enable
+  casts; Rust no-struct-literal pattern). 930 lib + 109 differential (PHP-8.5 oracle) green.
+  Implementation map (8 touch points, no new `Op`/`Value`):
+  1. `src/ast/mod.rs` — new `Expr::Cast { value, type_name, span }` (mirrors `InstanceOf`).
+  2. `src/ast/walk.rs` + `checker/expr.rs::expr_span` — Cast arms (free-vars + span).
+  3. `src/parser/exprs.rs` — fold `Ident("as")` in `parse_binary` at prec 8 (== instanceof level),
+     single type-name RHS → `Expr::Cast`. `support.rs` sexpr `(as v T)` + parser test.
+  4. `src/checker/expr.rs::check_cast` — left operand class/union/intersection (else E-CAST-TYPE),
+     RHS class/interface (primitive `as` rejected → guide to Convert), result `Ty::Optional(Named(T,
+     erased-args))`. if-let smart-cast is inherited (T? narrows to T) — no narrow_from_condition arm.
+  5. `src/interpreter/expr.rs` — eval value once, instanceof predicate, value-or-`Value::Null`.
+  6. `src/compiler/expr.rs` — `??`-style scratch-slot (`self.height-1`) + `Op::IsInstance` + branch
+     (value once); no `ctype` arm (T? is not an arithmetic operand, like instanceof→bool).
+  7. `src/transpile/expr.rs` — arrow-IIFE `(fn($__as) => $__as instanceof T ? $__as : null)(<v>)`
+     (evaluates `<v>` once — PHP byte-identity for side-effecting scrutinees; uses `type_pos_ref`).
+  8. `src/cli/explain.rs` E-CAST-TYPE + `examples/guide/as-cast.phg` + README + KNOWN_ISSUES/CHANGELOG.

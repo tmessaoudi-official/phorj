@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the checked `as` downcast operator (M4 casting, axis 2)
+
+`value as Type` is a **checked** downcast: it yields `Type?` — the value itself when it really is a
+`Type` at runtime, else `null` (the Kotlin/Swift `as?` model, the honest form of TS's unchecked
+`<T>v` — no lying to the compiler, no later crash). It composes with `??` (`(x as Circle) ?? d`) and
+if-let smart-cast (`if (var c = v as Circle) { … c.radius … }`); the scrutinee may be a class,
+interface, or union value, and the target a class or interface (a primitive target like `x as int` is
+rejected — that's value *conversion*, the `Core.Convert` axis — with a hint, `E-CAST-TYPE`). `value`
+is evaluated **exactly once** (the example bakes a side-effecting scrutinee into its byte-identity
+gate to prove it). `as` is a *contextual* word (it also separates `foreach (xs as x)` and aliases
+imports); a parser restriction keeps the foreach separator from being read as a cast, with brackets as
+the escape. Lowers with **no new `Op`** — reuses `Op::IsInstance` + a branch on the backends (the
+`??`/`$match` scratch-slot trick, so the operand isn't re-evaluated); transpiles to a PHP arrow-fn
+IIFE `(fn($x) => $x instanceof T ? $x : null)($value)`. Byte-identical run/runvm/real PHP;
+`examples/guide/as-cast.phg`; `phg explain E-CAST-TYPE`. **No new `Op`/`Value`.**
+
 ### Added — `Core.Convert` value conversion (M4 casting, axis 1)
 
 Explicit value conversion — Phorge has no implicit coercion, so you convert on purpose, and lossy

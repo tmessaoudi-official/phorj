@@ -4,6 +4,7 @@
 mod basics;
 mod calls;
 mod casing;
+mod casting;
 mod collections;
 mod constants;
 mod destructuring;

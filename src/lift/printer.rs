@@ -499,6 +499,14 @@ impl Printer {
                 let v = self.operand(value, 8, false, false)?;
                 Ok(format!("{v} instanceof {type_name}"))
             }
+            Expr::Cast {
+                value, type_name, ..
+            } => {
+                // `as` is a left-precedence-8 cast (same level as `instanceof`); its value operand
+                // needs parens below 8.
+                let v = self.operand(value, 8, false, false)?;
+                Ok(format!("{v} as {type_name}"))
+            }
             Expr::Call { callee, args, .. } => {
                 let a: Result<Vec<_>, _> = args.iter().map(|x| self.expr(x)).collect();
                 Ok(format!(
@@ -721,7 +729,7 @@ fn bin_prec(op: BinaryOp) -> u8 {
 fn prec_of(e: &Expr) -> u8 {
     match e {
         Expr::Binary { op, .. } => bin_prec(*op),
-        Expr::InstanceOf { .. } => 8,
+        Expr::InstanceOf { .. } | Expr::Cast { .. } => 8,
         Expr::Unary { .. } => PREC_UNARY,
         Expr::Range { .. } => PREC_RANGE,
         _ => PREC_ATOM,

@@ -3,9 +3,16 @@
 use super::*;
 
 impl Parser {
-    /// Entry point: parse a full expression (lowest precedence).
+    /// Entry point: parse a full expression (lowest precedence). Every fresh expression context —
+    /// including a bracketed sub-expression (parens / call args / index / list & map literals all
+    /// re-enter here) — re-enables the `as`-cast fold: the `foreach` separator-vs-cast ambiguity
+    /// (M4 casting) only exists at the *top level* of the iterable, never inside brackets.
     pub fn parse_expr(&mut self) -> Result<Expr, Diagnostic> {
-        self.parse_range()
+        let saved = self.no_as_cast;
+        self.no_as_cast = false;
+        let r = self.parse_range();
+        self.no_as_cast = saved;
+        r
     }
 
     /// Ranges bind looser than every binary operator: `a..b` reads `a` and `b` as full
@@ -83,6 +90,31 @@ impl Parser {
                     _ => return Err(self.error("a class name after `instanceof`")),
                 };
                 lhs = Expr::InstanceOf {
+                    value: Box::new(lhs),
+                    type_name,
+                    span: sp,
+                };
+                continue;
+            }
+            // `value as TypeName` — the checked downcast (M4 casting axis 2), result `TypeName?`. `as`
+            // is a *contextual* word (it also aliases imports), so it lexes as `Ident("as")`; here in
+            // expression position it is the cast operator. Same precedence (8) and type-name RHS shape
+            // as `instanceof` — so `a.b as T ?? d` is `((a.b) as T) ?? d` (tighter than `??`, looser
+            // than member/call). The checker validates the RHS is a class/interface and types it `T?`.
+            if !self.no_as_cast
+                && matches!(self.peek(), TokenKind::Ident(s) if s == "as")
+                && 8 >= min_bp
+            {
+                let sp = self.peek_span();
+                self.advance(); // consume `as`
+                let type_name = match self.peek().clone() {
+                    TokenKind::Ident(n) => {
+                        self.advance();
+                        n
+                    }
+                    _ => return Err(self.error("a class or interface name after `as`")),
+                };
+                lhs = Expr::Cast {
                     value: Box::new(lhs),
                     type_name,
                     span: sp,

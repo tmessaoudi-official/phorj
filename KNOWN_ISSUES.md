@@ -107,6 +107,15 @@ not a panic:
   intersection-typed *operand* are both accepted; what is still deferred is `instanceof` whose **right
   side** is an intersection (`x instanceof (A & B)`) — `Op::IsInstance` carries a single name, so this
   needs a new op or a lowering to `x instanceof A && x instanceof B` (M-RT S5 deferral).
+- **The checked `as` cast (M4 casting axis 2) — deferred corners** (each rejected cleanly, never a
+  panic). The cast **target** is a single class/interface *name* — exactly like `instanceof`'s right
+  side — so a **union/intersection target** (`x as (A | B)`, `x as (A & B)`) and an explicit **generic
+  argument** (`x as Box<int>`) are not parsed; a generic target erases its args (`x as Box` ≡
+  `x as Box<…erased…>`, no runtime type arguments, same as `instanceof`). The cast **scrutinee** must
+  be a class/union/intersection value (a primitive or an `Optional` left operand is `E-CAST-TYPE`), so
+  a **chained cast on the optional result** (`(x as A) as B`, where `x as A` is `A?`) is rejected —
+  bind/if-let the first cast, then cast the narrowed value. **Primitive targets** (`x as int`) are
+  rejected by design (value *conversion* is the `Core.Convert` axis).
 - **Intersection types (M-RT S5) — deferred corners** (each rejected cleanly, never a panic): **two or
   more concrete classes** (`Cat & Dog` → `E-INTERSECT-MULTI-CLASS`; a value has exactly one class — this
   becomes meaningful only once class `extends` lands in S6), **primitive/enum/optional/function members**

@@ -213,6 +213,19 @@ pub enum Expr {
         type_name: String,
         span: Span,
     },
+    /// `value as TypeName` — a **checked** downcast (M4 casting axis 2). Result type is `TypeName?`:
+    /// `value` itself when `value instanceof TypeName` at runtime, else `null` (the Kotlin/Swift `as?`
+    /// model — the honest, surprise-free form of TS's unchecked `<T>v`). The RHS is a class/interface
+    /// *type name* (parsed as a type, like `InstanceOf`), so this is its own variant. `value` is
+    /// evaluated exactly once. Lowers (no new `Op`) to the `IsInstance` predicate + a branch on the
+    /// backends; transpiles to a PHP arrow-IIFE `(fn($x) => $x instanceof T ? $x : null)($value)`.
+    /// Composes with `??` / if-let smart-cast. (Value *conversion* — `int→float` etc. — is the
+    /// separate `Core.Convert` axis; `as` only reinterprets an existing value.)
+    Cast {
+        value: Box<Expr>,
+        type_name: String,
+        span: Span,
+    },
     /// `callee(args)` — also covers `Circle(2.0)` constructor calls
     Call {
         callee: Box<Expr>,

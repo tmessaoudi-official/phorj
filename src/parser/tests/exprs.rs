@@ -56,6 +56,12 @@ fn precedence_and_associativity() {
     assert_eq!(sexpr(&expr("a ?? b")), "(?? a b)");
     // `??` binds looser than `||`: `a || b ?? c` is `(a || b) ?? c`
     assert_eq!(sexpr(&expr("a || b ?? c")), "(?? (|| a b) c)");
+    // `as` is the checked cast (M4): same precedence as `instanceof`, RHS is a type name.
+    assert_eq!(sexpr(&expr("a as Foo")), "(as a Foo)");
+    // `as` binds tighter than `??` (spec): `a as Foo ?? b` is `((a as Foo)) ?? b`.
+    assert_eq!(sexpr(&expr("a as Foo ?? b")), "(?? (as a Foo) b)");
+    // member access binds tighter than `as`: `a.b as Foo` is `((a.b)) as Foo`.
+    assert_eq!(sexpr(&expr("a.b as Foo")), "(as a.b Foo)");
 }
 
 #[test]

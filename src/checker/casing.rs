@@ -274,7 +274,9 @@ impl Checker {
                 self.check_expr_casing(lhs);
                 self.check_expr_casing(rhs);
             }
-            Expr::InstanceOf { value, .. } => self.check_expr_casing(value),
+            Expr::InstanceOf { value, .. } | Expr::Cast { value, .. } => {
+                self.check_expr_casing(value);
+            }
             Expr::Call { callee, args, .. } => {
                 self.check_expr_casing(callee);
                 for a in args {

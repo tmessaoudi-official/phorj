@@ -87,6 +87,11 @@ impl Checker {
                 type_name,
                 span,
             } => self.check_instanceof(value, type_name, *span),
+            Expr::Cast {
+                value,
+                type_name,
+                span,
+            } => self.check_cast(value, type_name, *span),
             Expr::Call { callee, args, span } => self.check_call(callee, args, *span), // Task 4
             Expr::New(inner, span) => self.check_new(inner, *span),
             Expr::Member {
@@ -386,6 +391,75 @@ impl Checker {
         Ty::Bool
     }
 
+    /// `value as TypeName` — the checked downcast (M4 casting axis 2). Validates the same operands as
+    /// `instanceof` (a class/union/intersection value on the left; a class or interface name on the
+    /// right) but types the result `TypeName?` (the cast yields the value when it really is a
+    /// `TypeName` at runtime, else `null`). A *primitive* `as` (e.g. `x as int`) is rejected with a
+    /// hint toward `Core.Convert`/`parse*` — value conversion is a different axis from type assertion.
+    pub(super) fn check_cast(
+        &mut self,
+        value: &crate::ast::Expr,
+        type_name: &str,
+        span: Span,
+    ) -> Ty {
+        let v = self.check_expr(value);
+        // A trait is reuse, not a type — same guard as `instanceof`.
+        if self.traits.contains(type_name) {
+            return self.err_coded(
+                span,
+                format!("`{type_name}` is a trait, not a type"),
+                "E-CAST-TYPE",
+                Some("a trait is reuse, not a type; cast to a class or interface".into()),
+            );
+        }
+        let is_class = self.classes.contains_key(type_name);
+        if !is_class && !self.interfaces.contains_key(type_name) {
+            // Tailor the hint for a primitive target: `as` is *assertion*, not conversion.
+            let hint = if is_builtin_type_name(type_name) {
+                "`as` is a checked downcast, not a value conversion — use `Core.Convert` (e.g. \
+                 `Convert.toFloat`/`truncate`) or `Core.Text.parseInt`/`parseFloat` to change a value's type"
+            } else {
+                "only a declared class or interface can be a cast target"
+            };
+            return self.err_coded(
+                span,
+                format!(
+                    "`as` requires a class or interface name on the right, found `{type_name}`"
+                ),
+                "E-CAST-TYPE",
+                Some(hint.into()),
+            );
+        }
+        match &v {
+            // A poisoned operand already reported; still type the cast as `TypeName?`.
+            Ty::Error => {}
+            // A class instance — or a union (S4) / intersection (S5) of them — is the meaningful left
+            // operand (same surface as `instanceof`).
+            Ty::Named(..) | Ty::Union(..) | Ty::Intersection(..) => {}
+            other => {
+                self.err_coded(
+                    span,
+                    format!("`as` left operand must be a class instance, found `{other}`"),
+                    "E-CAST-TYPE",
+                    Some(
+                        "`as` downcasts a class instance to a more specific class or interface"
+                            .into(),
+                    ),
+                );
+            }
+        }
+        // Result is `TypeName?`. A generic class carries erased (poison) args — `instanceof`/`as` see
+        // no runtime type arguments (`x as Box` ≡ `x as Box<…erased…>`), mirroring the narrow logic.
+        let arity = self
+            .classes
+            .get(type_name)
+            .map_or(0, |c| c.type_params.len());
+        Ty::Optional(Box::new(Ty::Named(
+            type_name.to_string(),
+            vec![Ty::Error; arity],
+        )))
+    }
+
     // ---- stubs replaced in later tasks ----
     pub(super) fn check_str(&mut self, parts: &[crate::ast::StrPart]) -> Ty {
         use crate::ast::StrPart;
@@ -512,6 +586,7 @@ impl Checker {
             Expr::Unary { span, .. }
             | Expr::Binary { span, .. }
             | Expr::InstanceOf { span, .. }
+            | Expr::Cast { span, .. }
             | Expr::Call { span, .. }
             | Expr::Member { span, .. }
             | Expr::Index { span, .. }

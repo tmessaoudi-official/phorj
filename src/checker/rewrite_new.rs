@@ -141,7 +141,7 @@ fn ue_expr(e: &mut Expr) {
             ue_expr(lhs);
             ue_expr(rhs);
         }
-        Expr::InstanceOf { value, .. } => ue_expr(value),
+        Expr::InstanceOf { value, .. } | Expr::Cast { value, .. } => ue_expr(value),
         Expr::Call { callee, args, .. } => {
             ue_expr(callee);
             for a in args {

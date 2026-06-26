@@ -73,6 +73,31 @@ impl Compiler<'_> {
                 self.expr(value)?;
                 self.emit(Op::IsInstance(type_name.clone()), span.line);
             }
+            Expr::Cast {
+                value,
+                type_name,
+                span,
+            } => {
+                // Checked downcast (M4 casting axis 2): keep `value` if it `IsInstance` of `type_name`,
+                // else replace it with `null` — result type `type_name?`. `value` is evaluated ONCE:
+                // stash it in a scratch slot (the `??`/`$match` trick — its frame-relative top, NOT
+                // `add_local`, since live transients may sit below), duplicate it to feed `IsInstance`,
+                // then branch. Reuses `Op::IsInstance` — no new `Op` (decision S2-OPS).
+                self.expr(value)?; // [v] — v lands in the scratch slot
+                let slot = self.height - 1;
+                self.emit(Op::GetLocal(slot), span.line); // [v, v]
+                self.emit(Op::IsInstance(type_name.clone()), span.line); // [v, bool]
+                let to_null = self.emit_jump(Op::JumpIfFalse(0), span.line); // [v]; jump if !instanceof
+                let h_merge = self.height;
+                // true path: `v` is already the result; jump past the null branch.
+                let end_j = self.emit_jump(Op::Jump(0), span.line);
+                self.patch_jump(to_null); // null path arrives with [v]
+                self.height = h_merge;
+                self.emit_const(Value::Null, span.line); // [v, null]
+                self.emit(Op::SetLocal(slot), span.line); // [null] — overwrite the slot with null
+                self.patch_jump(end_j); // both paths leave one value at `slot`
+                self.height = h_merge;
+            }
             Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
             Expr::Null(sp) => self.emit_const(Value::Null, sp.line),
             Expr::This(sp) => match self.this_slot {

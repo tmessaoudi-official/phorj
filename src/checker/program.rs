@@ -42,7 +42,7 @@ fn field_init_forbidden_ref(
                 walk(lhs, f, out);
                 walk(rhs, f, out);
             }
-            Expr::InstanceOf { value, .. } => walk(value, f, out),
+            Expr::InstanceOf { value, .. } | Expr::Cast { value, .. } => walk(value, f, out),
             Expr::Call { callee, args, .. } => {
                 walk(callee, f, out);
                 args.iter().for_each(|a| walk(a, f, out));

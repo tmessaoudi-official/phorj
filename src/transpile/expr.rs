@@ -104,6 +104,20 @@ impl Transpiler {
                 // subtype `implements I<name>` (it does not `extends <name>`).
                 Ok(format!("{v} instanceof {}", self.type_pos_ref(type_name)))
             }
+            // `value as TypeName` → the checked downcast (M4 casting axis 2), result `TypeName?`.
+            // Lowered to an arrow-fn IIFE so `value` is evaluated EXACTLY ONCE (a naive
+            // `$v instanceof T ? $v : null` would double-evaluate a side-effecting scrutinee like
+            // `f() as T` and diverge from the run/runvm backends). The `$__as` parameter is local to
+            // the arrow fn, so nested casts don't collide.
+            Expr::Cast {
+                value, type_name, ..
+            } => {
+                let v = self.emit_expr(value)?;
+                Ok(format!(
+                    "(fn($__as) => $__as instanceof {} ? $__as : null)({v})",
+                    self.type_pos_ref(type_name)
+                ))
+            }
             Expr::List(items, _) => {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
                 Ok(format!("[{}]", parts?.join(", ")))

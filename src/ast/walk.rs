@@ -62,6 +62,7 @@ fn collect_free_expr(
             collect_free_expr(rhs, bound, found);
         }
         Expr::InstanceOf { value, .. } => collect_free_expr(value, bound, found),
+        Expr::Cast { value, .. } => collect_free_expr(value, bound, found),
         Expr::Call { callee, args, .. } => {
             collect_free_expr(callee, bound, found);
             for a in args {
@@ -281,6 +282,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             Expr::Unary { expr, .. } => in_expr(expr),
             Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
             Expr::InstanceOf { value, .. } => in_expr(value),
+            Expr::Cast { value, .. } => in_expr(value),
             Expr::Call { callee, args, .. } => in_expr(callee) || args.iter().any(in_expr),
             Expr::Member { object, .. } => in_expr(object),
             Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),

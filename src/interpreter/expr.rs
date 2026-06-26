@@ -58,6 +58,22 @@ impl Interp {
                             .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
                 Ok(Value::Bool(is))
             }
+            Expr::Cast {
+                value, type_name, ..
+            } => {
+                // Checked downcast (M4 casting axis 2): evaluate `value` ONCE; keep it when it really is
+                // a `type_name` (same predicate as `instanceof` above — exact class or a supertype via
+                // `class_implements`), else produce `null`. Result type is `type_name?` (checker). Never
+                // faults — `as` is the safe alternative to `opt!`-style force-unwrap.
+                let v = self.eval(value)?;
+                let is = matches!(&v, Value::Instance(inst)
+                    if inst.class == *type_name
+                        || self
+                            .class_implements
+                            .get(&inst.class)
+                            .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
+                Ok(if is { v } else { Value::Null })
+            }
             Expr::Call { callee, args, .. } => self.eval_call(callee, args),
             Expr::Member {
                 object, name, safe, ..

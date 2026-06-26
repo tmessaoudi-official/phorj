@@ -148,6 +148,15 @@ pub fn erase_generics(program: Program) -> Program {
                 type_name: type_name.clone(),
                 span: *span,
             },
+            Expr::Cast {
+                value,
+                type_name,
+                span,
+            } => Expr::Cast {
+                value: Box::new(rexpr(value, params)),
+                type_name: type_name.clone(),
+                span: *span,
+            },
             Expr::Call { callee, args, span } => Expr::Call {
                 callee: Box::new(rexpr(callee, params)),
                 args: args.iter().map(|a| rexpr(a, params)).collect(),

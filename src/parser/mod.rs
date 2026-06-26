@@ -41,6 +41,14 @@ pub struct Parser {
     /// one function every nesting vector (parens, unary chains, index/list/arg re-entry) passes
     /// through exactly once per level.
     depth: usize,
+    /// Restriction flag suppressing the `as`-cast fold at the *top level* of a `foreach` iterable
+    /// (M4 casting). `as` is contextual — both the `foreach (EXPR as NAME)` separator and the cast
+    /// operator — so while reading the iterable we must not let `parse_binary` greedily consume the
+    /// separator `as` as a cast. It is set only by [`parse_foreach`] and **reset by every
+    /// [`parse_expr`]** (parens/call-args/index/list-map all re-enter there), so a cast *inside* the
+    /// iterable still parses; a top-level cast needs explicit parens (and is meaningless anyway — a
+    /// cast yields `T?`, not an iterable). Mirrors Rust's no-struct-literal restriction in `if cond`.
+    no_as_cast: bool,
 }
 
 // impl-cluster cohesion split (M-Decomp W3.1): one `impl Parser` block per cluster file.
@@ -57,6 +65,7 @@ impl Parser {
             tokens,
             pos: 0,
             depth: 0,
+            no_as_cast: false,
         }
     }
 

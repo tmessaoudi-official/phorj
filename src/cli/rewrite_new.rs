@@ -203,7 +203,7 @@ impl Walker<'_> {
                 self.expr(lhs);
                 self.expr(rhs);
             }
-            Expr::InstanceOf { value, .. } => self.expr(value),
+            Expr::InstanceOf { value, .. } | Expr::Cast { value, .. } => self.expr(value),
             Expr::Member { object, .. } => self.expr(object),
             Expr::Index { object, index, .. } => {
                 self.expr(object);

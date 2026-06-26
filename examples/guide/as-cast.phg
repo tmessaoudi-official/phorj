@@ -1,0 +1,66 @@
+// `as` — the checked downcast operator (M4 casting axis 2).
+//
+// `value as Type` yields `Type?`: the value itself when it really is a `Type` at runtime, else
+// `null`. This is the honest, surprise-free form of a downcast — the Kotlin/Swift `as?` model — the
+// opposite of a C-style `(Type)` cast that lies to the compiler and crashes later. It composes with
+// `??` (supply a fallback) and with if-let (`if (var c = v as Circle) { … }` binds `c: Circle`,
+// smart-cast in the body). `value` is evaluated exactly once.
+//
+// `as` is *type assertion* — it reinterprets an existing value, it never changes one. To change a
+// value's type (int→float, float→int, string→int?) use `Core.Convert` / `Core.Text.parseInt`.
+package Main;
+import Core.Console;
+
+interface Shape {
+    function area(): int;
+}
+
+class Circle implements Shape {
+    constructor(public int radius) {}
+    function area(): int { return radius * radius; }
+}
+
+class Square implements Shape {
+    constructor(public int side) {}
+    function area(): int { return side * side; }
+}
+
+// Downcast a `Shape` to `Circle`: success → read `radius`; failure → fall back. The if-let smart-cast
+// makes `c` a `Circle` in the body.
+function radiusOr(Shape s, int fallback): int {
+    if (var c = s as Circle) {
+        return c.radius;
+    }
+    return fallback;
+}
+
+// `as` evaluates its operand EXACTLY ONCE. `noisy` prints as a side effect; the line below must
+// print it a single time. (A naive `$x instanceof T ? $x : null` transpilation would run it twice —
+// the arrow-fn IIFE prevents that, and this example's byte-identity gate enforces it.)
+function noisy(): Shape {
+    Console.println("  (noisy ran)");
+    return new Circle(7);
+}
+
+function main(): void {
+    Shape c = new Circle(3);
+    Shape sq = new Square(4);
+
+    Console.println("circle radius = {radiusOr(c, -1)}");  // 3  — c is a Circle
+    Console.println("square radius = {radiusOr(sq, -1)}"); // -1 — a Square is not a Circle → null
+
+    // `as` + `?.` + `??` inline: succeed → the value, fail → null → fallback.
+    int r = (c as Circle)?.radius ?? 0;
+    Console.println("inline circle = {r}");                 // 3
+    int bad = (sq as Circle)?.radius ?? 0;
+    Console.println("inline square = {bad}");               // 0
+
+    // cast to an interface a value implements always succeeds.
+    if (var shape = c as Shape) {
+        Console.println("area = {shape.area()}");           // 9
+    }
+
+    // single-evaluation: "(noisy ran)" prints once, then the radius 7.
+    int n = (noisy() as Circle)?.radius ?? 0;
+    Console.println("noisy radius = {n}");                  // 7
+}
