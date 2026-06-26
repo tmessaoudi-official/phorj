@@ -487,3 +487,65 @@ fn comments_are_skipped() {
     assert_eq!(kinds("1 // line comment\n2"), vec![Int(1), Int(2), Eof]);
     assert_eq!(kinds("1 /* block\ncomment */ 2"), vec![Int(1), Int(2), Eof]);
 }
+
+// ── A-62: `"""…"""` text blocks (dedent + interpolation) ──
+
+/// Lex a single source and return the first token's kind (expects a leading token).
+fn first(src: &str) -> TokenKind {
+    lex(src).unwrap().into_iter().next().unwrap().kind
+}
+
+#[test]
+fn text_block_basic_dedent() {
+    // Closing delimiter at column 0; content lines have no indent → joined by \n, no trailing nl.
+    let src = "\"\"\"\nhello\nworld\n\"\"\"";
+    assert_eq!(first(src), lit("hello\nworld"));
+}
+
+#[test]
+fn text_block_strips_common_indentation() {
+    // Common 4-space prefix (incl. the closing delimiter's column) is stripped; relative indent kept.
+    let src = "    \"\"\"\n    SELECT *\n      FROM t\n    \"\"\"";
+    assert_eq!(first(src), lit("SELECT *\n  FROM t"));
+}
+
+#[test]
+fn text_block_interpolates() {
+    // A `{expr}` hole splits into Lit + Interp exactly like a normal string.
+    let src = "\"\"\"\nhi {name}!\n\"\"\"";
+    match first(src) {
+        TokenKind::Str(segs) => {
+            assert_eq!(segs[0], StrSeg::Lit("hi ".into()));
+            assert!(matches!(&segs[1], StrSeg::Interp(s, _) if s == "name"));
+            assert_eq!(segs[2], StrSeg::Lit("!".into()));
+        }
+        other => panic!("expected Str, got {other:?}"),
+    }
+}
+
+#[test]
+fn text_block_keeps_literal_quotes() {
+    // A bare `"` inside the block is literal (the block only closes on a `"""` line).
+    let src = "\"\"\"\nsay \"hi\"\n\"\"\"";
+    assert_eq!(first(src), lit("say \"hi\""));
+}
+
+#[test]
+fn text_block_requires_newline_after_open() {
+    let e = lex("\"\"\"oops\n\"\"\"").unwrap_err();
+    assert!(
+        e.message.contains("must be followed by a newline"),
+        "{}",
+        e.message
+    );
+}
+
+#[test]
+fn text_block_unterminated_errors() {
+    let e = lex("\"\"\"\nno close\n").unwrap_err();
+    assert!(
+        e.message.contains("unterminated text block"),
+        "{}",
+        e.message
+    );
+}
