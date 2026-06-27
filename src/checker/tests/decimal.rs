@@ -86,12 +86,21 @@ fn decimal_division_is_a_compile_error() {
 }
 
 #[test]
-fn decimal_modulo_is_a_compile_error() {
-    // `decimal % …` shares the `E-DECIMAL-DIV` code (no decimal modulo this slice).
+fn decimal_modulo_typechecks_and_is_decimal() {
+    // `decimal % …` is the exact-remainder operator (2026-06-27) — it type-checks and yields decimal.
+    // (Bare `/` stays `E-DECIMAL-DIV`, asserted above.)
     let e = errors_of("function main() -> void { decimal a = 10.00d; decimal r = a % 3; }");
     assert!(
-        e.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
-        "decimal `%` must be E-DECIMAL-DIV, got {e:?}"
+        !e.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
+        "decimal `%` must now type-check (exact remainder), got {e:?}"
+    );
+    // A `decimal % decimal` result flowing into a `decimal` binding must also be accepted.
+    let e2 = errors_of(
+        "function main() -> void { decimal a = 10.50d; decimal b = 3.00d; decimal r = a % b; }",
+    );
+    assert!(
+        e2.is_empty(),
+        "decimal % decimal should be clean, got {e2:?}"
     );
 }
 

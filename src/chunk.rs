@@ -100,6 +100,10 @@ pub enum Op {
     AddD,
     SubD,
     MulD,
+    // Exact `decimal` remainder (bare `%`, 2026-06-27): pops two values, pushes the exact `Decimal`
+    // remainder (`value::decimal_rem`) or a `"decimal modulo by zero"` / overflow fault. Bare `/` on a
+    // decimal is the exact-or-fault `DivD`; `Decimal.div` (rounded) stays a native call.
+    RemD,
     // Bitwise ops on `int` operands (primitives P2; the checker guarantees int operands). Shifts
     // fault on a negative count, yield 0 / sign-fill for a count ≥ 64.
     BitAnd,
@@ -497,6 +501,7 @@ impl BytecodeProgram {
                     | Op::AddD
                     | Op::SubD
                     | Op::MulD
+                    | Op::RemD
                     | Op::BitAnd
                     | Op::BitOr
                     | Op::BitXor

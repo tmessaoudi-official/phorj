@@ -411,6 +411,9 @@ pub const FAULT_DECIMAL_DIV_ZERO: &str = "decimal division by zero";
 /// Canonical fault body for a negative `scale` argument to `Decimal.div`/`Decimal.round` (M-NUM S2).
 /// A scale is the count of fractional digits, so it must be `>= 0`; the PHP helpers throw the same.
 pub const FAULT_DECIMAL_SCALE: &str = "decimal scale out of range";
+/// Canonical fault body for a bare `decimal % 0` (the exact-remainder operator, 2026-06-27). Contains
+/// `"modulo by zero"` so the differential harness classifies it as the same `FaultKind` as int `%0`.
+pub const FAULT_DECIMAL_MOD_ZERO: &str = "decimal modulo by zero";
 /// Canonical fault body for `int ** int` with a negative exponent. A negative exponent yields a
 /// fractional result, which cannot be the typed `int` the `**` operator promises — so it faults
 /// rather than silently widening to `float` (PHP's `2 ** -1 == 0.5`). Use `float**float` for that.
@@ -661,6 +664,24 @@ pub fn decimal_mul(a: &Value, b: &Value) -> Result<Value, String> {
         .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
     let unscaled = au
         .checked_mul(bu)
+        .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    Ok(Value::Decimal { unscaled, scale })
+}
+
+/// Exact decimal remainder (bare `%`, 2026-06-27): align to `max(scales)`, then `x % y` — exact and
+/// representable at that scale (no rounding, unlike `/`). A zero divisor faults
+/// ([`FAULT_DECIMAL_MOD_ZERO`]); the sign follows the dividend (Rust `%` / PHP `bcmod`). Accepts a
+/// mixed `(Decimal, Int)` (the int widens to scale 0). Mirrors `bcmod($a, $b, max)`.
+pub fn decimal_rem(a: &Value, b: &Value) -> Result<Value, String> {
+    let (au, sa) = dec_parts(a).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (bu, sb) = dec_parts(b).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    let (x, y, scale) =
+        dec_align(au, sa, bu, sb).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    if y == 0 {
+        return Err(FAULT_DECIMAL_MOD_ZERO.to_string());
+    }
+    let unscaled = x
+        .checked_rem(y)
         .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
     Ok(Value::Decimal { unscaled, scale })
 }
@@ -1072,6 +1093,43 @@ mod tests {
         assert_eq!(float_rem(1.0, 0.0).unwrap_err(), FAULT_MOD_ZERO);
         // A finite overflow to inf is NOT a zero division — it stays inf.
         assert!(float_div(1.0e308, 1.0e-308).unwrap().is_infinite());
+    }
+
+    #[test]
+    fn decimal_rem_is_exact_and_faults_on_zero() {
+        let d = |u, s| Value::Decimal {
+            unscaled: u,
+            scale: s,
+        };
+        // 10.50 % 3.00 = 1.50 (align to scale 2: 1050 % 300 = 150).
+        assert!(matches!(
+            decimal_rem(&d(1050, 2), &d(300, 2)),
+            Ok(Value::Decimal {
+                unscaled: 150,
+                scale: 2
+            })
+        ));
+        // Mixed scales align to max: 10.5 % 3 (int) → 1.5 (scale 1).
+        assert!(matches!(
+            decimal_rem(&d(105, 1), &Value::Int(3)),
+            Ok(Value::Decimal {
+                unscaled: 15,
+                scale: 1
+            })
+        ));
+        // Sign follows the dividend: -10 % 3 = -1.
+        assert!(matches!(
+            decimal_rem(&d(-10, 0), &d(3, 0)),
+            Ok(Value::Decimal {
+                unscaled: -1,
+                scale: 0
+            })
+        ));
+        // Zero divisor faults.
+        assert_eq!(
+            decimal_rem(&d(5, 0), &d(0, 0)).unwrap_err(),
+            FAULT_DECIMAL_MOD_ZERO
+        );
     }
 
     #[test]

@@ -410,8 +410,8 @@ impl<'a> Compiler<'a> {
             Op::Const(_) | Op::GetLocal(_) => 1,
             Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => -1,
             Op::AddF | Op::SubF | Op::MulF | Op::DivF | Op::RemF => -1,
-            // Decimal `+ - *` pop two, push one (M-NUM S1).
-            Op::AddD | Op::SubD | Op::MulD => -1,
+            // Decimal `+ - *` pop two, push one (M-NUM S1); exact `%` (`RemD`) too (2026-06-27).
+            Op::AddD | Op::SubD | Op::MulD | Op::RemD => -1,
             // Bitwise binaries pop two, push one (primitives P2).
             Op::BitAnd | Op::BitOr | Op::BitXor | Op::Shl | Op::Shr => -1,
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => -1,

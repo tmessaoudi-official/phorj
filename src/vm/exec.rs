@@ -75,6 +75,10 @@ impl<'a> Vm<'a> {
                 let (a, b) = self.pop2();
                 self.stack.push(crate::value::decimal_mul(&a, &b)?);
             }
+            Op::RemD => {
+                let (a, b) = self.pop2();
+                self.stack.push(crate::value::decimal_rem(&a, &b)?);
+            }
 
             // Bitwise ops on ints (primitives P2) — shared `value::*` kernels (interpreter parity).
             Op::BitAnd => {

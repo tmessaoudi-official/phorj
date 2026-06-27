@@ -48,11 +48,11 @@ not a panic:
 
 - **`decimal` primitive (M-NUM S1) — shipped corners + deferrals.** The exact fixed-point `decimal`
   ships with `19.99d` literals, `Decimal.of(string) -> decimal?`, `+ - *`, scale-insensitive
-  comparison/equality, unary `-`, and BCMath transpile. Deferrals: (1) **`/` and `%` are NOT operators**
-  — division landed in M-NUM S2 as the explicit `Decimal.div(a, b, scale, mode)` /
-  `Decimal.round(d, scale, mode)` natives (bare `decimal /`/`%` is a clean compile error,
-  `E-DECIMAL-DIV`); the result scale + rounding mode is a deliberate, explicit choice, not a default,
-  and there is **no decimal modulo**. (2) **i128 overflow is
+  comparison/equality, unary `-`, and BCMath transpile. Notes: (1) **`%` IS an exact operator**
+  (2026-06-27): bare `decimal % decimal` is the exact remainder (`Op::RemD` → `value::decimal_rem` →
+  `bcmod`), no rounding, result scale = `max(operand scales)`, zero divisor faults. **Bare `/` is still
+  rejected** (`E-DECIMAL-DIV`) — a fixed-point quotient may not terminate; use `Decimal.div(a, b,
+  scale, mode)` (rounded) for division. (Exact-or-fault bare `/` is a planned follow-up.) (2) **i128 overflow is
   a runtime fault, not a compile error** — an exact `+ - *` result (or a scale alignment) that leaves
   the `i128` range faults `"decimal overflow"` (byte-identical on `run`/`runvm` and in the emitted
   BCMath, which bounds-checks the result against i128 range and `throw`s the same body). Because every
@@ -80,8 +80,9 @@ not a panic:
   the kernel + native unit tests (`value::decimal_div_by_zero_is_a_clean_fault`, …) and the differential
   `agree_err` cases, not the example set. (2) **No default-scale division** — `Decimal.div` always takes
   an explicit `scale` (the whole point: no silent precision choice); there is no `Decimal.div(a, b)`
-  overload. (3) **No decimal modulo** — `decimal %` is rejected with `E-DECIMAL-DIV` (no decimal-remainder
-  native this milestone). (4) **A `scale` past 255** (`u8::MAX`) faults `"decimal scale out of range"` —
+  overload. (3) **Decimal modulo SHIPPED** (2026-06-27) — `decimal %` is the exact remainder operator
+  (`Op::RemD`); the result keeps `max(operand scales)` and a zero divisor faults `"decimal modulo by
+  zero"`. (4) **A `scale` past 255** (`u8::MAX`) faults `"decimal scale out of range"` —
   far beyond any realistic money use, and an i128 decimal can carry at most ~38 significant digits anyway.
 
 - **Float predicates + numeric conversions (M-NUM S3) — shipped corners + deferrals.** `Core.Math`'s

@@ -289,7 +289,7 @@ impl Checker {
             // the error path. A `decimal ⊕ float` mix is the bug this primitive prevents
             // (`E-DECIMAL-FLOAT-MIX`). Checked before the int/float arm so a decimal operand never
             // reaches the matching-int-or-float test.
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Rem
                 if l == Ty::Decimal || r == Ty::Decimal =>
             {
                 let other = if l == Ty::Decimal { &r } else { &l };
@@ -312,19 +312,18 @@ impl Checker {
                     ),
                 }
             }
-            // `decimal / decimal` and `decimal % decimal` are a compile error (M-NUM S2): the silent
-            // precision loss of `/` (what scale? what rounding?) is exactly the bug `decimal`
-            // prevents, so division is an explicit `Decimal.div(a, b, scale, mode)` call, not an
-            // operator. `%` on a decimal is likewise rejected (no decimal-modulo this slice). The
-            // hint routes the user to the native.
-            BinaryOp::Div | BinaryOp::Rem if l == Ty::Decimal || r == Ty::Decimal => self.err_coded(
+            // Bare `decimal / decimal` is a compile error: a fixed-point quotient is generally
+            // non-terminating (`1/3`), so there is no exact result and a rounding mode is required.
+            // (`%` IS allowed above — remainder is exact and closed on fixed-point.) Bare `/` as an
+            // exact-or-fault operator lands in the next slice; until then the hint routes to the native.
+            BinaryOp::Div if l == Ty::Decimal || r == Ty::Decimal => self.err_coded(
                 span,
-                "`decimal` has no `/` or `%` operator — division would silently lose precision"
+                "`decimal` has no bare `/` operator — a fixed-point quotient may not be exact"
                     .to_string(),
                 "E-DECIMAL-DIV",
                 Some(
                     "use `Decimal.div(a, b, scale, mode)` for an explicit, rounded quotient (import \
-                     `Core.Decimal`); there is no decimal modulo"
+                     `Core.Decimal`); `%` (remainder) is exact and available"
                         .into(),
                 ),
             ),

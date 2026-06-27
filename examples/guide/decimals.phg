@@ -26,6 +26,11 @@ function main(): void {
     decimal r = 1.11d * 1.11d;
     Console.println("1.11 * 1.11 = {r}");
 
+    // Remainder `%` is exact (no rounding — unlike `/`, which needs Decimal.div).
+    // 10.50 % 3.00 = 1.50; the result keeps the max operand scale.
+    decimal rem = 10.50d % 3.00d;
+    Console.println("10.50 %% 3.00 = {rem}");
+
     // Comparison is numeric: 1.50 equals 1.5 even at different scales.
     decimal a = 1.50d;
     decimal b = 1.5d;

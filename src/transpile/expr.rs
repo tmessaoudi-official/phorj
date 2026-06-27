@@ -39,7 +39,10 @@ impl Transpiler {
                 // int isn't). Checked FIRST (before the `+`/`-`/`*` native-operator paths below), since
                 // a decimal operand's kind is neither `Str` nor `Int`/`Float`, so those would
                 // mis-route it. Detected when EITHER operand's kind is `Decimal`.
-                if matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul) {
+                if matches!(
+                    op,
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Rem
+                ) {
                     let (lk, rk) = (self.expr_kind(lhs), self.expr_kind(rhs));
                     if lk == OpKind::Decimal || rk == OpKind::Decimal {
                         let ls = if lk == OpKind::Decimal {
@@ -65,7 +68,13 @@ impl Transpiler {
                                 self.uses_dec_mul = true;
                                 "__phorge_dec_mul"
                             }
-                            _ => unreachable!("matched Add/Sub/Mul above"),
+                            // Exact decimal `%` (2026-06-27): `bcmod` at `max(scales)`, zero divisor
+                            // throws (matching the Rust `decimal_rem` fault).
+                            BinaryOp::Rem => {
+                                self.uses_dec_rem = true;
+                                "__phorge_dec_rem"
+                            }
+                            _ => unreachable!("matched Add/Sub/Mul/Rem above"),
                         };
                         return Ok(format!("{bs}{helper}({ls}, {rs})"));
                     }

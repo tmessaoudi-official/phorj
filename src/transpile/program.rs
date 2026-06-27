@@ -494,6 +494,7 @@ impl Transpiler {
         if self.uses_dec_add
             || self.uses_dec_sub
             || self.uses_dec_mul
+            || self.uses_dec_rem
             || self.uses_dec_div
             || self.uses_dec_round
         {
@@ -534,6 +535,19 @@ impl Transpiler {
             self.indent += 1;
             self.line("$s = max(__phorge_dec_scale($a), __phorge_dec_scale($b));");
             self.line("return __phorge_dec_check(bcsub($a, $b, $s));");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_rem {
+            // Exact decimal remainder (bare `%`): `bcmod` at `max(scales)`; a zero divisor throws,
+            // matching the Rust `decimal_rem` fault ("any division by zero throws").
+            self.line("function __phorge_dec_rem($a, $b) {");
+            self.indent += 1;
+            self.line("$s = max(__phorge_dec_scale($a), __phorge_dec_scale($b));");
+            self.line(
+                "if (bccomp($b, '0', $s) === 0) { throw new \\DivisionByZeroError('decimal modulo by zero'); }",
+            );
+            self.line("return __phorge_dec_check(bcmod($a, $b, $s));");
             self.indent -= 1;
             self.line("}");
         }

@@ -71,9 +71,10 @@ Each its own commit, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), + ex
 2. **Division-by-zero cluster** ✅ DONE (float `/0`/`%0` now fault — `value::float_div`/`float_rem`
    → `Result`, wired through both backends + `__phorge_rem` PHP guard; int/0 + decimal-div/0 already
    faulted). `Math.fdiv` for explicit IEEE inf = deferred (add only if requested).
-3. **Decimal `%` un-reject** (exact bare operator: 3 backends + PHP + example).
+3. **Decimal `%` un-reject** ✅ DONE — exact remainder operator (`Op::RemD` → `value::decimal_rem` →
+   `bcmod`; zero divisor faults; result scale = max). Checker allows `%`, keeps `/` rejected.
 4. **Decimal `/` exact-or-fault** (terminating → exact; non-terminating/overflow → fault; keep
-   `Decimal.div` for rounded).
+   `Decimal.div` for rounded). IN PROGRESS next.
 5. **numberFormat digit-based rounding** (shortest-string, byte-identical).
 6. **Random → byte-identical parity** (hand-roll xorshift64 in PHP; un-quarantine; rejoin oracle).
 7. **Overload erasure reject** (`E-OVERLOAD-ERASE`: string-vs-bytes / List-Map-Set-only pairs).
