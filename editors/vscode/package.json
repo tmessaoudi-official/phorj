@@ -1,0 +1,36 @@
+{
+  "name": "phorge",
+  "displayName": "Phorge",
+  "description": "Phorge language support — diagnostics, hover, and go-to-definition via the `phg lsp` language server.",
+  "version": "0.1.0",
+  "publisher": "phorge",
+  "license": "MIT OR Apache-2.0",
+  "repository": { "type": "git", "url": "https://github.com/tmessaoudi-official/phorge" },
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:phorge"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "phorge",
+        "aliases": ["Phorge"],
+        "extensions": [".phg"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configuration": {
+      "title": "Phorge",
+      "properties": {
+        "phorge.serverPath": {
+          "type": "string",
+          "default": "phg",
+          "description": "Path to the `phg` binary. The language server is started as `phg lsp`."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}

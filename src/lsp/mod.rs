@@ -12,6 +12,7 @@
 //! follow-up slice (they need a position→symbol index over the checker's resolved tables).
 
 mod json;
+mod symbols;
 #[cfg(test)]
 mod tests;
 
@@ -44,6 +45,8 @@ impl Server {
             "initialize" => vec![response(id, INITIALIZE_RESULT)],
             // Notifications (no `id`): no response, but `didOpen`/`didChange` recompute diagnostics.
             "initialized" | "$/setTrace" => vec![],
+            "textDocument/hover" => vec![response(id, &self.hover(msg))],
+            "textDocument/definition" => vec![response(id, &self.definition(msg))],
             "textDocument/didOpen" => self.on_open(msg),
             "textDocument/didChange" => self.on_change(msg),
             "textDocument/didClose" => {
@@ -105,6 +108,60 @@ impl Server {
         vec![self.publish(&uri)]
     }
 
+    /// Resolve a `textDocument/{hover,definition}` request to the identifier name under the cursor +
+    /// the parsed program of its buffer. `None` if the document/position/identifier can't be located.
+    fn symbol_at(&self, msg: &Json) -> Option<(String, String, crate::ast::Program)> {
+        let uri = doc_uri(msg)?;
+        let text = self.docs.get(&uri)?;
+        let pos = msg.get("params")?.get("position")?;
+        let line = num(pos.get("line"))?;
+        let character = num(pos.get("character"))?;
+        let offset = symbols::offset_at(text, line, character)?;
+        let name = symbols::ident_at(text, offset)?;
+        let tokens = crate::lexer::lex(text).ok()?;
+        let program = Parser::new(tokens).parse_program().ok()?;
+        Some((name, text.clone(), program))
+    }
+
+    /// `textDocument/hover` — show the declaration signature of the symbol under the cursor, or `null`.
+    fn hover(&self, msg: &Json) -> String {
+        let Some((name, text, program)) = self.symbol_at(msg) else {
+            return "null".to_string();
+        };
+        match symbols::definition_of(&program, &name) {
+            Some((_kind, span)) => {
+                let sig = symbols::signature_text(&text, span);
+                format!(
+                    "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"```phorge\\n{}\\n```\"}}}}",
+                    escape(&sig)
+                )
+            }
+            None => "null".to_string(),
+        }
+    }
+
+    /// `textDocument/definition` — the `Location` of the symbol's top-level declaration, or `null`.
+    fn definition(&self, msg: &Json) -> String {
+        let Some(uri) = doc_uri(msg) else {
+            return "null".to_string();
+        };
+        let Some((name, _text, program)) = self.symbol_at(msg) else {
+            return "null".to_string();
+        };
+        match symbols::definition_of(&program, &name) {
+            Some((_kind, span)) => {
+                let line = span.line.saturating_sub(1);
+                let col = span.col.saturating_sub(1);
+                format!(
+                    "{{\"uri\":\"{}\",\"range\":{{\"start\":{{\"line\":{line},\"character\":{col}}},\"end\":{{\"line\":{line},\"character\":{}}}}}}}",
+                    escape(&uri),
+                    col + 1
+                )
+            }
+            None => "null".to_string(),
+        }
+    }
+
     /// Build a `textDocument/publishDiagnostics` notification for `uri` from the current buffer.
     fn publish(&self, uri: &str) -> Out {
         let text = self.docs.get(uri).map(String::as_str).unwrap_or("");
@@ -118,10 +175,10 @@ impl Server {
     }
 }
 
-/// The advertised server capabilities (v1): full-text sync (`1`) — the client sends the whole document
-/// on each change — and diagnostics via push. Hover/definition are added when that slice lands.
+/// The advertised server capabilities: full-text sync (`1`) — the client sends the whole document on
+/// each change — push diagnostics, plus hover and go-to-definition.
 const INITIALIZE_RESULT: &str =
-    "{\"capabilities\":{\"textDocumentSync\":1},\"serverInfo\":{\"name\":\"phorge-lsp\"}}";
+    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true},\"serverInfo\":{\"name\":\"phorge-lsp\"}}";
 
 /// Compute the diagnostics for a document buffer — the **same** pipeline `phg check` runs (lex →
 /// parse → `check`), so editor diagnostics equal the CLI's. A lex or parse error is a single
@@ -191,6 +248,14 @@ fn id_json(id: Option<&Json>) -> String {
         Some(Json::Num(n)) => format!("{}", *n as i64),
         Some(Json::Str(s)) => format!("\"{}\"", escape(s)),
         _ => "null".to_string(),
+    }
+}
+
+/// Read a JSON number as a `u32` (LSP positions are non-negative integers).
+fn num(j: Option<&Json>) -> Option<u32> {
+    match j {
+        Some(Json::Num(n)) if *n >= 0.0 => Some(*n as u32),
+        _ => None,
     }
 }
 

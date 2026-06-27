@@ -215,6 +215,25 @@ file is left untouched (its diagnostic is reported, exit 2). Comments are preser
 comment-safe* (canonical indentation, spacing, blank-line collapse, `->`→`:` return syntax); line
 wrapping/width-reflow is a later addition.
 
+## Editor support (`phg lsp`)
+
+`phg lsp` is a [Language Server](https://microsoft.github.io/language-server-protocol/) over stdio, so
+any LSP-capable editor gets:
+
+- **Diagnostics** as you type — the *same* checker `phg check` runs, so editor squiggles equal the CLI.
+- **Hover** — the declaration signature of the symbol under the cursor.
+- **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration.
+
+It is dependency-free (hand-rolled JSON-RPC in `std` — no `tower-lsp`/`serde`), like the rest of Phorge.
+
+**VS Code**: a thin client lives in [`editors/vscode/`](editors/vscode/) — see its README to run it in an
+Extension Development Host or package it. **Other editors** (Neovim, Helix, PhpStorm, …): register a
+language server for `*.phg` that launches `phg lsp` with stdio transport. For example, Neovim:
+
+```lua
+vim.lsp.start({ name = 'phorge', cmd = { 'phg', 'lsp' }, root_dir = vim.fn.getcwd() })
+```
+
 ## Language at a glance
 
 - **Static types** — `int`, `float`, `bool`, `string`, generic `List<T>`.

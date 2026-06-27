@@ -6,10 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### Added — `phg lsp` language server (Item D, diagnostics core)
+### Added — `phg lsp` language server (Item D)
 
-A Language Server over stdio so editors show Phorge diagnostics inline (GA rock 2 — daily-use tooling).
-Design: `docs/specs/2026-06-28-lsp-design.md`. No new `Op`/`Value`; off the byte-identity spine.
+A Language Server over stdio so editors get live Phorge diagnostics, hover, and go-to-definition (GA
+rock 2 — daily-use tooling). Design: `docs/specs/2026-06-28-lsp-design.md`. No new `Op`/`Value`; off
+the byte-identity spine. Ships with a VS Code thin client (`editors/vscode/`).
+
+- **Hover** — the declaration signature of the symbol under the cursor (sliced from source).
+- **Go-to-definition** — jump to a function / class / enum / interface / trait / type alias declaration.
+- Both resolve via a lightweight lexer-token + top-level-name index (`src/lsp/symbols.rs`); locals and
+  name collisions are a v2 refinement.
+- **VS Code thin client** (`editors/vscode/`): registers `*.phg` + launches `phg lsp`. Generic-editor
+  registration (incl. a Neovim snippet) documented in the README "Editor support" section.
 
 - **Hand-rolled JSON-RPC in `std`** (`src/lsp/`): an LSP server is not a security-critical primitive,
   so the dependency policy excludes `tower-lsp`/`lsp-server`/`serde`. The module owns a minimal total
