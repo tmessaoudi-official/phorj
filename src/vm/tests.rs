@@ -63,6 +63,8 @@ fn run_chunk(chunk: Chunk) -> Result<String, String> {
             chunk,
         }],
         main: 0,
+        main_is_static: false,
+        main_params: 0,
         enum_descs: Vec::new(),
         class_descs: Vec::new(),
         names: Vec::new(),
@@ -294,6 +296,8 @@ fn call_runs_a_second_function_and_returns() {
             },
         ],
         main: 0,
+        main_is_static: false,
+        main_params: 0,
         enum_descs: Vec::new(),
         class_descs: Vec::new(),
         names: Vec::new(),
@@ -333,6 +337,8 @@ fn make_enum_then_match_tag_and_get_field() {
             chunk: c,
         }],
         main: 0,
+        main_is_static: false,
+        main_params: 0,
         enum_descs: vec![EnumDesc {
             ty: "Opt".into(),
             variant: "Some".into(),
@@ -368,6 +374,8 @@ fn match_tag_is_false_for_a_different_variant() {
             chunk: c,
         }],
         main: 0,
+        main_is_static: false,
+        main_params: 0,
         enum_descs: vec![
             EnumDesc {
                 ty: "Opt".into(),
@@ -414,6 +422,8 @@ fn make_instance_then_get_field() {
             chunk: c,
         }],
         main: 0,
+        main_is_static: false,
+        main_params: 0,
         enum_descs: Vec::new(),
         class_descs: vec![ClassDesc {
             class: "Point".into(),
@@ -448,6 +458,8 @@ fn get_field_absent_faults_like_interpreter() {
             chunk: c,
         }],
         main: 0,
+        main_is_static: false,
+        main_params: 0,
         enum_descs: Vec::new(),
         class_descs: vec![ClassDesc {
             class: "Empty".into(),

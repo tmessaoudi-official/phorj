@@ -238,8 +238,10 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
             _ => Diagnostic::runtime("internal error: control escaped a static initializer"),
         });
     }
-    let main = match interp.funcs.get("main").and_then(|v| v.first()) {
-        Some(f) => f.clone(),
+    // Batch-1 D: the entry is a top-level `function main` OR a class-static `main` method — the shared
+    // `ast::entry_point` resolver picks the one (the checker's `E-MULTIPLE-MAIN` guarantees ≤1).
+    let (entry_class, main) = match crate::ast::entry_point(program, "main") {
+        Some(e) => e,
         None => return Err(Diagnostic::runtime(
             "no entry point: running needs a `main` function. A library or web file (no `main`) \
                  still type-checks and transpiles — use `phg check` / `phg transpile`",
@@ -254,7 +256,13 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
     } else {
         vec![crate::native::process_args_value()]
     };
-    match interp.run_call("main", &names, &main.body, args, None) {
+    // A class-static entry has no receiver (`this = None`); the trace name mirrors the VM's
+    // `Class::main` for a static method, or bare `main` for a top-level one.
+    let call_name = match entry_class {
+        Some(c) => format!("{c}::main"),
+        None => "main".to_string(),
+    };
+    match interp.run_call(&call_name, &names, &main.body, args, None) {
         // `run_call` converts `main`'s `return n` into `Ok(Value::Int(n))` (and a fall-off-the-end
         // `void` `main` into `Ok(Value::Unit)`); `exit_code_of` maps both to the exit status.
         Ok(v) => Ok((interp.out, exit_code_of(&v))),

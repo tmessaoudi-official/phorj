@@ -88,11 +88,17 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     for s in &trait_synths {
         class_decls.push(s);
     }
-    let main = fns.get("main").map(|m| m.index).ok_or_else(|| {
+    // Batch-1 D: the entry is a top-level `function main` OR a class-static `main` method (the shared
+    // `ast::entry_point` resolver, also consumed by the interpreter; `E-MULTIPLE-MAIN` guarantees ≤1).
+    // The entry *index* needs the methods table, built below, so only the metadata is computed here.
+    let (entry_class, entry_decl) = crate::ast::entry_point(program, "main").ok_or_else(|| {
         "no entry point: running needs a `main` function. A library or web file (no `main`) \
              still type-checks and transpiles — use `phg check` / `phg transpile`"
             .to_string()
     })?;
+    let entry_class: Option<String> = entry_class.map(str::to_string);
+    let main_is_static = entry_class.is_some();
+    let main_params = entry_decl.params.len();
 
     // M-RT overloading post-pass: for every name with more than one declaration, build a dispatch
     // table (each overload's runtime `ParamKind`s + its function index) and stamp the name's `FnMeta`
@@ -492,7 +498,9 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
         // `main`, in declaration order — `<init>` then `SetStatic(slot)` — before any user code. A
         // later static may read an earlier one (its slot is already set). No `this`/locals are needed
         // (statics are class-level); the compiler context here has none.
-        if f.name == "main" {
+        // Only a *top-level* `main` is the entry here; a class-static entry gets the same prelude in
+        // its `compile_method` call below (Batch-1 D).
+        if f.name == "main" && entry_class.is_none() {
             for (slot, init) in &static_runtime_inits {
                 c.expr(init)?; // [value]
                 c.emit(Op::SetStatic(*slot), last_line); // pop into the static slot
@@ -538,6 +546,16 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     for (ci, f) in &methods_to_compile {
         let class_name = &class_decls[*ci].name;
         let base = next_idx + lambdas.len();
+        // Batch-1 D: a class-static `main` entry runs the non-literal static-init prelude at its start
+        // (the same prelude a top-level `main` gets above); every other method gets none.
+        let prelude: &[(usize, &Expr)] = if main_is_static
+            && entry_class.as_deref() == Some(class_name.as_str())
+            && f.name == "main"
+        {
+            &static_runtime_inits
+        } else {
+            &[]
+        };
         let (func, extras) = compile_method(
             class_name,
             f,
@@ -554,10 +572,23 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys,
             &method_rets,
             base,
+            prelude,
         )?;
         functions.push(func);
         lambdas.extend(extras);
     }
+
+    // Batch-1 D: resolve the entry index now the methods table is complete — a top-level `main` keeps
+    // its free-function index; a class-static `main` is its `(class, "main")` entry.
+    let main = match &entry_class {
+        None => fns
+            .get("main")
+            .map(|m| m.index)
+            .expect("entry_point reported a top-level main"),
+        Some(class) => *methods
+            .get(&(class.clone(), "main".to_string()))
+            .expect("entry_point reported a class-static main"),
+    };
 
     // Append the trailing lambda block. Named functions occupy `0..next_idx` (hoist order); every
     // lambda follows at the index it was numbered with (`next_idx + its position within lambdas`).
@@ -566,6 +597,8 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     Ok(BytecodeProgram {
         functions,
         main,
+        main_is_static,
+        main_params,
         enum_descs,
         class_descs,
         names,
@@ -702,6 +735,9 @@ pub(super) fn compile_method<'a>(
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
     base_fn_idx: usize,
+    // Batch-1 D: the non-literal static-init prelude, non-empty only for a class-static `main` entry
+    // (emitted before the body, exactly as a top-level `main` does it). `&[]` for every other method.
+    static_prelude: &[(usize, &Expr)],
 ) -> Result<(Function, Vec<Function>), String> {
     let mut comp = Compiler::new(
         fns,
@@ -726,6 +762,12 @@ pub(super) fn compile_method<'a>(
     comp.this_slot = Some(0);
     comp.height = comp.locals.len();
     let last_line = f.span.line;
+    // Static-init prelude (class-static `main` entry only) — `<init>` then `SetStatic(slot)`, before
+    // any user code; the statics are class-level so no `this`/locals are read.
+    for (slot, init) in static_prelude {
+        comp.expr(init)?;
+        comp.emit(Op::SetStatic(*slot), last_line);
+    }
     for s in &f.body {
         comp.stmt(s)?;
     }

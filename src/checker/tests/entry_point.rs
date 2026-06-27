@@ -70,3 +70,50 @@ fn non_main_function_is_unconstrained() {
     let src = "function helper(int x): string { return \"\"; } function main(): void { }";
     assert!(!has(src, "E-MAIN-SIGNATURE"), "{:?}", errors_of(src));
 }
+
+// --- Batch-1 D: class-static entry points ------------------------------------------------------
+
+#[test]
+fn class_static_main_ok() {
+    let src = "class App { static function main(): int { return 0; } }";
+    assert!(!has(src, "E-MAIN-SIGNATURE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn class_static_main_argv_ok() {
+    let src = "class App { static function main(List<string> a): int { return 0; } }";
+    assert!(!has(src, "E-MAIN-SIGNATURE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn class_static_main_bad_signature_rejected() {
+    // A static entry `main` is constrained exactly like a top-level one.
+    let src = "class App { static function main(int x): void { } }";
+    assert!(has(src, "E-MAIN-SIGNATURE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn instance_method_named_main_is_not_an_entry() {
+    // An *instance* method named `main` is an ordinary method — any signature, not gated.
+    let src = "class App { constructor() {} function main(int x, int y): string { return \"\"; } }";
+    assert!(!has(src, "E-MAIN-SIGNATURE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn top_level_and_class_static_main_is_multiple() {
+    let src = "function main(): void { } class App { static function main(): void { } }";
+    assert!(has(src, "E-MULTIPLE-MAIN"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn two_class_static_mains_is_multiple() {
+    let src =
+        "class A { static function main(): void { } } class B { static function main(): void { } }";
+    assert!(has(src, "E-MULTIPLE-MAIN"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn single_class_static_main_is_not_multiple() {
+    let src = "class App { static function main(): void { } }";
+    assert!(!has(src, "E-MULTIPLE-MAIN"), "{:?}", errors_of(src));
+}

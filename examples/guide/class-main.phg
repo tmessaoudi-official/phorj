@@ -1,0 +1,29 @@
+// Class entry points (Batch-1 D) — a program's `main` may be a class `static` method.
+//
+// Phorge's Go-style top-level `function main` still works (every other example uses it). This
+// example shows the Java-style alternative: a `static function main` on a class. Either form is a
+// valid entry; declaring BOTH (or two class-static `main`s) is `E-MULTIPLE-MAIN`. A static method
+// has no `this`, so it cannot read instance state — but it may construct the class and drive it,
+// which is the idiomatic "the class is the program" shape.
+//
+// The transpiled PHP bootstraps `App::main()` (vs `\Main\main()` for the top-level form); run/runvm/
+// real PHP are byte-identical, and a `main(): int` return becomes the process exit code.
+package Main;
+
+import Core.Console;
+
+class App {
+    constructor(public string name) {}
+
+    function greet(): void {
+        Console.println("Hello from {this.name}");
+    }
+
+    // The Java-style entry: no `this`, returns the exit code. It builds an instance and runs it.
+    static function main(): int {
+        var app = new App("App.main");
+        app.greet();
+        Console.println("done");
+        return 0;
+    }
+}

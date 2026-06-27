@@ -3,6 +3,8 @@
 ## Decisions Log
 - [2026-06-27] AGREED: build all three, in order **Entry-point (B+C) → Native stdlib wave → Bidirectional lift (L5+L6)** (developer: "all of them", chose recommended order). Rationale: foundation → breadth → capstone; lift last covers the widest stable surface (least rework).
 - [2026-06-27] AGREED: pace = fully autonomous (autonomous-3c sentinels armed, per-session + per-project). Commit green byte-identical slices; never push.
+- [2026-06-27] AGREED: **Core.Http API = Option 1 (static methods on injected types).** Inject `Request`/`Response` as types (used bare, like `Json`) with static/instance methods — `Request.parse(raw) -> Request?`, `resp.serialize() -> bytes`, `Response.text(status, body)` — pure Phorge ⇒ byte-identical for free; namespace-clean (no free-floating functions, honors "nothing in the wind"). `phg serve` keeps its `respond(bytes)->bytes` entry; Core.Http injects a `respond` bridge that wraps the user's `handle`. Rationale: developer pick.
+- [2026-06-27] AGREED (**Batch-1 D — class entry points**): developer chose **both forms allowed** (over my "top-level only" recommendation — I challenged it as a Java-ism solving a non-problem; developer overruled, wants the flexibility). A program entry (`main` AND `handle`) may be EITHER a top-level free function OR a `static` method on a class (`class App { static function main(...) }`). The `List<string> args` param stays **optional** (0-or-1, both forms) — `main(): void` still valid, NO breaking migration. Ambiguity (a top-level entry AND a class-static one, or 2+ class-static ones) → new error **E-MULTIPLE-MAIN** (never silent). Transpile: class-static entry → `\Main\App::main(...)` bootstrap. Sequence: (A) class-static `main` → (B) Core.Http (Option 1) with top-level `handle` → (C) class-static `handle` wiring.
 
 ## Stage 1 — Entry-point story
 
@@ -36,11 +38,14 @@ directly servable — Batch-1 C remainder).
   null on invalid-UTF-8). DONE `fe5ef1e`.
 - **`Core.Validate`** — isInt/isNumber/isAlpha/isAlnum/isHex (`string->bool`, hand-roll + matching PHP
   `preg_match`). DONE `08eb5e5`.
-- Next: `Core.Csv` (parse line `string->List<string>` / format `List<string>->string`; match PHP
-  `str_getcsv`/`fputcsv` quoting — FIDDLY, pin every quoting edge to php) → `Core.Random` (QUARANTINED
-  — seeded PRNG, constants `<2^63`, shifts `1..=63`, no PHP-float `/`; examples in `examples/random/`
-  like process) → `Core.Http` (Request/Response/parse/serialize → makes `handle` directly servable,
-  closes Batch-1 C remainder; the biggest module).
+- **`Core.Csv`** — single-row `parse`/`format`, RFC-4180; `parse` mirrors PHP `str_getcsv($s,",","\"","")`
+  (escape disabled — no proprietary backslash escape, no 8.4+ deprecation), every quoting quirk pinned
+  to `php -n`; documented deviation: empty input → `[""]` not PHP's `[null]`. DONE `b19fa89`.
+- **`Core.Random`** — seeded xorshift64 PRNG (`seed`/`next`/`intBetween`); `pure:false`, QUARANTINED
+  like Process (global state + PHP `mt_rand` divergence); `run≡runvm` via shared generator, verified in
+  `tests/random.rs`; walkthrough `examples/random/`. DONE `d0a1cb2`.
+- Next: `Core.Http` (Request/Response/parse/serialize → makes `handle` directly servable, closes
+  Batch-1 C remainder; the biggest module — design-heavy, touches `phg serve`).
 Pattern: `src/native/<m>.rs` (`Vec<NativeFn>` + `php:` emission) + register in `native/mod.rs` +
 `#[path]` unit tests + a gated `examples/guide/<m>.phg` + README row. Tier-A only if byte-identical to
 a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core).
@@ -49,10 +54,10 @@ a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core
 L5 round-trip semantic gate (PHP→Phorge→PHP via oracle) + L6 `phg lift <file.php>` CLI.
 
 ## Status
-**Stage 1 DONE** (`b710c6e` Batch-1 B, `6f0a939` Batch-1 C). **Stage 2 in progress**: Encoding `31745c3`,
-Hash `8b8896f`, Url `fe5ef1e`, Validate `08eb5e5` done; next = Csv → Random → Http. **Stage 3 (lift
-L5/L6)** not started. Base `9fb9f32`; 7 commits this session, all green, **unpushed** (awaiting push).
-Autonomous; commit green, no push.
+**Stage 1 DONE** (`b710c6e` Batch-1 B, `6f0a939` Batch-1 C). **Stage 2 5/6 done**: Encoding `31745c3`,
+Hash `8b8896f`, Url `fe5ef1e`, Validate `08eb5e5`, Csv `b19fa89`, Random `d0a1cb2`; next = `Core.Http`
+(the last + biggest). **Stage 3 (lift L5/L6)** not started. All commits green, **unpushed** (awaiting an
+explicit push). Autonomous; commit green, no push.
 
 ### Native-module recipe (reuse for Url/Validate/Csv/Http)
 1. `src/native/<m>.rs`: `<m>_natives() -> Vec<NativeFn>` (each: `module:"Core.X"`, `name`, `params`,

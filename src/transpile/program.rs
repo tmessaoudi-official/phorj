@@ -36,22 +36,29 @@ fn runtime_static_inits(program: &Program) -> Vec<(&str, &str, &Expr)> {
 /// and an `int`-returning `main` is wrapped in `exit(…)` so the return value becomes the process exit
 /// status. A `void` `main()` keeps the bare `main();` call (byte-identical to pre-Batch-1 B output).
 fn main_entry_shape(program: &Program) -> (bool, bool) {
-    for it in &program.items {
-        if let Item::Function(f) = it {
-            if f.name == "main" {
-                let has_argv = !f.params.is_empty();
-                let returns_int = matches!(&f.ret, Some(Type::Named { name, .. }) if name == "int");
-                return (has_argv, returns_int);
-            }
+    match crate::ast::entry_point(program, "main") {
+        Some((_, f)) => {
+            let has_argv = !f.params.is_empty();
+            let returns_int = matches!(&f.ret, Some(Type::Named { name, .. }) if name == "int");
+            (has_argv, returns_int)
         }
+        None => (false, false),
     }
-    (false, false)
 }
 
-/// The PHP statement that invokes the entry point (Batch-1 B), given the call target (`main` or
-/// `\Main\main`). Composes [`main_entry_shape`]'s argv + exit-code decisions.
-fn main_bootstrap_stmt(program: &Program, callee: &str) -> String {
+/// The PHP statement that invokes the entry point (Batch-1 B/D), given the namespace prefix (`""` in
+/// flat mode, `"\Main\"` namespaced). A top-level entry is `{prefix}main(...)`; a class-static entry
+/// (Batch-1 D) is `{prefix}App::main(...)`. Empty string when the program has no entry (a library/web
+/// file) — the caller guards on that too. Composes [`main_entry_shape`]'s argv + exit-code decisions.
+fn main_bootstrap_stmt(program: &Program, ns_prefix: &str) -> String {
+    let Some((entry_class, _)) = crate::ast::entry_point(program, "main") else {
+        return String::new();
+    };
     let (has_argv, returns_int) = main_entry_shape(program);
+    let callee = match entry_class {
+        Some(c) => format!("{ns_prefix}{c}::main"),
+        None => format!("{ns_prefix}main"),
+    };
     let call = if has_argv {
         format!("{callee}(array_slice($argv ?? [], 1))")
     } else {
@@ -216,11 +223,13 @@ impl Transpiler {
         let rt_statics = runtime_static_inits(program);
         // The interpreter auto-invokes `main`; PHP does not. Emit the call so the output
         // is a runnable program, not just definitions.
-        if self.funcs.contains("main") {
+        // Batch-1 D: the entry may be a top-level `main` OR a class-static `main` (so the guard is
+        // `entry_point`, not `funcs.contains("main")` — a static entry isn't a free function).
+        if crate::ast::entry_point(program, "main").is_some() {
             if !rt_statics.is_empty() {
                 self.line("__phorge_init_statics();");
             }
-            let stmt = main_bootstrap_stmt(program, "main");
+            let stmt = main_bootstrap_stmt(program, "");
             self.line(&stmt);
         }
         if !rt_statics.is_empty() {
@@ -302,8 +311,8 @@ impl Transpiler {
         }
         self.line("namespace {");
         self.indent += 1;
-        if self.funcs.contains("main") {
-            let stmt = main_bootstrap_stmt(program, "\\Main\\main");
+        if crate::ast::entry_point(program, "main").is_some() {
+            let stmt = main_bootstrap_stmt(program, "\\Main\\");
             self.line(&stmt);
         }
         self.emit_runtime_helpers();
@@ -991,8 +1000,18 @@ impl Transpiler {
             None if self.namespaced && !is_method => last_segment(&f.name),
             None => &f.name,
         };
+        // Batch-1 D: a `static` method must be emitted `static` in PHP, else a class-static entry call
+        // (`App::main()`) is a "non-static method called statically" fatal. Safe for every static
+        // method: the checker forbids `this` inside one (`E-STATIC-THIS`), and PHP still permits an
+        // instance-style call (`$m->staticMethod()`), so the existing `m.square(5)` pattern is unaffected.
+        let static_prefix = if is_method && f.modifiers.contains(&Modifier::Static) {
+            "static "
+        } else {
+            ""
+        };
         self.line(&format!(
-            "function {}({}){} {{",
+            "{}function {}({}){} {{",
+            static_prefix,
             disp,
             params.join(", "),
             self.ret_suffix(&f.ret)

@@ -157,6 +157,42 @@ impl Checker {
         // classes + functions are collected, with no `this` — so an initializer may call a function or
         // read another static.
         self.check_static_inits(program);
+        // Batch-1 D: an entry point may be a top-level `function main` OR a class-static `main` method,
+        // but never more than one — an ambiguous entry is an error, never a silent pick.
+        if crate::ast::entry_point_count(program, "main") > 1 {
+            // Report at every entry after the first, so each duplicate is flagged.
+            let mut seen = false;
+            for item in &program.items {
+                let dup_span = match item {
+                    Item::Function(f) if f.name == "main" => Some(f.span),
+                    Item::Class(c) => c.members.iter().find_map(|m| match m {
+                        crate::ast::ClassMember::Method(f)
+                            if f.name == "main"
+                                && f.modifiers.contains(&crate::ast::Modifier::Static) =>
+                        {
+                            Some(f.span)
+                        }
+                        _ => None,
+                    }),
+                    _ => None,
+                };
+                if let Some(span) = dup_span {
+                    if seen {
+                        self.err_coded(
+                            span,
+                            "multiple program entry points named `main`",
+                            "E-MULTIPLE-MAIN",
+                            Some(
+                                "a program has at most one entry: either a top-level `function main` \
+                                 or a single class `static function main` — remove the extras"
+                                    .into(),
+                            ),
+                        );
+                    }
+                    seen = true;
+                }
+            }
+        }
         for item in &program.items {
             match item {
                 Item::Function(f) => self.check_function(f),
@@ -524,14 +560,17 @@ impl Checker {
         // active discharge context for the body (M-faults 2b).
         let throws = Self::flatten_throws(f.throws.iter().map(|t| self.resolve_type(t)).collect());
         self.validate_throws_decl(f, &throws);
-        // Batch-1 B: the entry point `main` has a constrained signature — 0 or 1 params (the one
-        // allowed param is `List<string>`, the argv), returning `void` or `int` (the exit code).
-        if f.name == "main" {
+        // Batch-1 B/D: the entry point `main` has a constrained signature — 0 or 1 params (the one
+        // allowed param is `List<string>`, the argv), returning `void` or `int` (the exit code). An
+        // entry is a top-level function OR a `static` method named `main` (Batch-1 D) — an *instance*
+        // method named `main` is an ordinary method, not an entry, so it is not constrained.
+        let is_entry_main = f.name == "main" && (self.cur_class.is_none() || self.in_static_method);
+        if is_entry_main {
             self.check_main_signature(f, &ret);
         }
         let prev_ret = std::mem::replace(&mut self.cur_ret, ret.clone());
         let prev_throws = std::mem::replace(&mut self.cur_throws, throws);
-        let prev_main = std::mem::replace(&mut self.cur_is_main, f.name == "main");
+        let prev_main = std::mem::replace(&mut self.cur_is_main, is_entry_main);
         self.push_scope();
         for p in &f.params {
             let pty = self.resolve_type(&p.ty);

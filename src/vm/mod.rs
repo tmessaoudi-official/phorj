@@ -117,10 +117,14 @@ impl<'a> Vm<'a> {
         // mid-execution — keeps the no-crash contract (EV-7). See `BytecodeProgram::validate`.
         // Bytecode-validation faults have no source line, so they surface position-less.
         self.program.validate().map_err(Diagnostic::runtime)?;
-        // Batch-1 B: a one-parameter `main` receives the program argv at slot 0 (params occupy
-        // slots `0..arity`); a zero-parameter `main` gets nothing. `E-MAIN-SIGNATURE` guarantees
-        // arity is 0 or 1, so at most one value is pushed.
-        if self.program.functions[self.program.main].arity == 1 {
+        // Batch-1 B/D: lay out the entry frame's slots. A class-static entry's compiled `Function`
+        // reserves slot 0 for `$this` (a dummy receiver — a static method never reads it), so push a
+        // placeholder first. Then a one-parameter `main` receives the program argv as the next slot;
+        // a zero-parameter `main` gets nothing. `E-MAIN-SIGNATURE` bounds the params to 0 or 1.
+        if self.program.main_is_static {
+            self.stack.push(Value::Unit);
+        }
+        if self.program.main_params == 1 {
             self.stack.push(crate::native::process_args_value());
         }
         self.frames.push(Frame {

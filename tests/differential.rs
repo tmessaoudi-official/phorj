@@ -1877,6 +1877,36 @@ fn main_exit_code_is_byte_identical_across_backends() {
     }
 }
 
+/// Batch-1 D: a class-`static` `main(): int` entry is byte-identical across all three legs, and its
+/// `int` return is the process exit code. The transpiled PHP bootstraps `App::main()` (not
+/// `\Main\main()`); `run_php` asserts exit-0, so php is driven directly to read the non-zero status.
+#[test]
+fn class_static_main_exit_code_is_byte_identical_across_backends() {
+    let src = "package Main;\nimport Core.Console;\n\
+               class App {\n  static function main(): int {\n    Console.println(\"x\");\n    return 7;\n  }\n}";
+    let run = cmd_run_exit(src).expect("run ok");
+    let runvm = cmd_runvm_exit(src).expect("runvm ok");
+    assert_eq!(run, runvm, "run vs runvm (stdout, exit)");
+    assert_eq!(run, ("x\n".to_string(), 7));
+    if let Some(php) = php_or_gate("class_static_main_exit_code") {
+        let php_src = cli::cmd_transpile(src).expect("transpile ok");
+        let path = std::env::temp_dir().join("phorge_classmain_oracle.php");
+        std::fs::write(&path, &php_src).expect("write php");
+        let out = Command::new(&php)
+            .args(php_n_args(&php))
+            .arg(&path)
+            .output()
+            .expect("spawn php");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(out.status.code(), Some(7), "php exit code\n{php_src}");
+        assert_eq!(
+            String::from_utf8(out.stdout).expect("utf-8"),
+            "x\n",
+            "php stdout\n{php_src}"
+        );
+    }
+}
+
 /// M-RT S6b.4 — the `rename` resolution clause lowers to PHP `T::m insteadof …; T::m as n;`. The
 /// guide example exercises `use`; this gates the `rename` path (the trickier emission — `as` alone
 /// does not remove the original method, so an `insteadof` for the remaining winner is also required)
