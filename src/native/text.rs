@@ -397,6 +397,22 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_parse_int),
             php: |a| format!("__phorge_parse_int({})", parg(a, 0)),
         },
+        // `parseBool(string) -> bool?` (M4 `string as bool`) — strict `"true"`/`"false"` only; never
+        // PHP truthiness. Arrow-IIFE PHP carrier = single-eval of the operand.
+        NativeFn {
+            module: "Core.Text",
+            name: "parseBool",
+            params: vec![s()],
+            ret: Ty::Optional(Box::new(Ty::Bool)),
+            pure: true,
+            eval: NativeEval::Pure(text_parse_bool),
+            php: |a| {
+                format!(
+                    "(fn($__b) => $__b === 'true' ? true : ($__b === 'false' ? false : null))({})",
+                    parg(a, 0)
+                )
+            },
+        },
         // `parseFloat(string, bool permissive = false) -> float?` — the motivating native for M4
         // default parameters (the `permissive` flag defaults to strict). Rejects inf/nan in both
         // modes; permissive also accepts a lone leading/trailing dot. Gated `__phorge_parse_float`.
@@ -473,6 +489,21 @@ fn text_parse_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(s.parse::<i64>().map_or(Value::Null, Value::Int)),
         _ => Err("Text.parseInt expects (string)".into()),
+    }
+}
+
+/// `parseBool(string) -> bool?` (M4 as-matrix S3, the `string as bool` kernel) — **strict**: only the
+/// literals `"true"`/`"false"` parse; anything else (incl. `"1"`, `"yes"`, `""`) is `null`. Phorge
+/// deliberately does NOT inherit PHP's `(bool)"0" == false` / `(bool)"false" == true` truthiness — the
+/// #1 string-cast footgun. The PHP carrier is an arrow-IIFE matching this exactly.
+fn text_parse_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(match s.as_str() {
+            "true" => Value::Bool(true),
+            "false" => Value::Bool(false),
+            _ => Value::Null,
+        }),
+        _ => Err("Text.parseBool expects (string)".into()),
     }
 }
 

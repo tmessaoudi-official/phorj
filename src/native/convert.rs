@@ -152,6 +152,69 @@ fn convert_as_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// `Convert.floatToDecimal(float) -> decimal?` (M4 as-matrix S4, the `float as decimal` kernel) —
+/// parse the float's **shortest round-trip** string into an exact decimal (`2.5 → 2.5`), or `null`
+/// on a non-finite value / i128 overflow. Captures the *displayed* value, not the exact binary float
+/// (documented; floats like `0.1` are inexact in binary). Single-sourced with `value::decimal_of`
+/// over the shortest string (Rust's `{}` Display == the PHP `__phorge_str`/`__phorge_float` helper).
+fn convert_float_to_decimal(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(f)] if f.is_finite() => Ok(crate::value::decimal_of(&format!("{f}")).map_or(
+            Value::Null,
+            |(unscaled, scale)| Value::Decimal { unscaled, scale },
+        )),
+        [Value::Float(_)] => Ok(Value::Null), // NaN / ±∞
+        _ => Err("Convert.floatToDecimal expects (float)".into()),
+    }
+}
+
+/// bool ↔ numeric/decimal conversions (M4 as-matrix S3) — all TOTAL, with the explicit, documented
+/// rules (NOT PHP's hidden truthiness): a number/decimal is true iff non-zero; a bool is `1`/`0`.
+fn convert_int_to_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(n)] => Ok(Value::Bool(*n != 0)),
+        _ => Err("Convert.intToBool expects (int)".into()),
+    }
+}
+
+fn convert_float_to_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(f)] => Ok(Value::Bool(*f != 0.0)),
+        _ => Err("Convert.floatToBool expects (float)".into()),
+    }
+}
+
+fn convert_decimal_to_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Decimal { unscaled, .. }] => Ok(Value::Bool(*unscaled != 0)),
+        _ => Err("Convert.decimalToBool expects (decimal)".into()),
+    }
+}
+
+fn convert_bool_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Bool(b)] => Ok(Value::Int(i64::from(*b))),
+        _ => Err("Convert.boolToInt expects (bool)".into()),
+    }
+}
+
+fn convert_bool_to_float(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Bool(b)] => Ok(Value::Float(if *b { 1.0 } else { 0.0 })),
+        _ => Err("Convert.boolToFloat expects (bool)".into()),
+    }
+}
+
+fn convert_bool_to_decimal(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Bool(b)] => Ok(Value::Decimal {
+            unscaled: i128::from(*b),
+            scale: 0,
+        }),
+        _ => Err("Convert.boolToDecimal expects (bool)".into()),
+    }
+}
+
 pub(crate) fn convert_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -252,6 +315,76 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             php: |a| format!("__phorge_dec_to_int_exact({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_int_exact),
+        },
+        // --- float → decimal (M4 as-matrix S4) — shortest-string parse, optional ---
+        NativeFn {
+            module: "Core.Convert",
+            name: "floatToDecimal",
+            params: vec![Ty::Float],
+            ret: Ty::Optional(Box::new(Ty::Decimal)),
+            pure: true,
+            // Reuses the float-display (`__phorge_str`) + decimal-parse (`__phorge_dec_of`) helpers,
+            // both gated in `transpile::emit_member_call` (see the `floatToDecimal` case there).
+            php: |a| format!("__phorge_dec_of(__phorge_str({}))", parg(a, 0)),
+            eval: NativeEval::Pure(convert_float_to_decimal),
+        },
+        // --- bool conversions (M4 as-matrix S3) — total, explicit `!= 0` / `1`/`0` rules ---
+        NativeFn {
+            module: "Core.Convert",
+            name: "intToBool",
+            params: vec![Ty::Int],
+            ret: Ty::Bool,
+            pure: true,
+            php: |a| format!("(({}) != 0)", parg(a, 0)),
+            eval: NativeEval::Pure(convert_int_to_bool),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "floatToBool",
+            params: vec![Ty::Float],
+            ret: Ty::Bool,
+            pure: true,
+            php: |a| format!("(({}) != 0.0)", parg(a, 0)),
+            eval: NativeEval::Pure(convert_float_to_bool),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "decimalToBool",
+            params: vec![Ty::Decimal],
+            ret: Ty::Bool,
+            pure: true,
+            // The carrier is a plain decimal string; it is non-zero iff it contains a 1-9 digit
+            // (handles `0.00`, `-0.0`, any scale — no BCMath, no exponent forms).
+            php: |a| format!("(preg_match('/[1-9]/', {}) === 1)", parg(a, 0)),
+            eval: NativeEval::Pure(convert_decimal_to_bool),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "boolToInt",
+            params: vec![Ty::Bool],
+            ret: Ty::Int,
+            pure: true,
+            php: |a| format!("(({}) ? 1 : 0)", parg(a, 0)),
+            eval: NativeEval::Pure(convert_bool_to_int),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "boolToFloat",
+            params: vec![Ty::Bool],
+            ret: Ty::Float,
+            pure: true,
+            php: |a| format!("(({}) ? 1.0 : 0.0)", parg(a, 0)),
+            eval: NativeEval::Pure(convert_bool_to_float),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "boolToDecimal",
+            params: vec![Ty::Bool],
+            ret: Ty::Decimal,
+            pure: true,
+            // Decimal carrier is a string; `'1'`/`'0'` (scale 0).
+            php: |a| format!("(({}) ? '1' : '0')", parg(a, 0)),
+            eval: NativeEval::Pure(convert_bool_to_decimal),
         },
         // --- runtime type assertions (M4 as-matrix S2: union source `as int/float/bool`) ---
         NativeFn {

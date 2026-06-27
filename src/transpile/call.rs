@@ -100,8 +100,8 @@ impl Transpiler {
                     // because (a) the checker rejects any user-written un-imported stdlib call
                     // (E-UNKNOWN-IDENT), and (b) we skip the fallback when `q` is a user class — so a
                     // user `Convert`/`Text` static call still wins.
-                    let cast_leaf =
-                        matches!(q.as_str(), "Convert" | "Text") && !self.classes.contains(q);
+                    let cast_leaf = matches!(q.as_str(), "Convert" | "Text" | "Decimal")
+                        && !self.classes.contains(q);
                     let resolved = self
                         .imports
                         .get(q)
@@ -175,6 +175,11 @@ impl Transpiler {
                                 "decimalToInt" => self.uses_dec_to_int = true,
                                 "floatToIntExact" => self.uses_float_to_int_exact = true,
                                 "decimalToIntExact" => self.uses_dec_to_int_exact = true,
+                                // `float as decimal` reuses the float-display + decimal-parse helpers.
+                                "floatToDecimal" => {
+                                    self.uses_str = true;
+                                    self.uses_dec_of = true;
+                                }
                                 _ => {}
                             }
                         }

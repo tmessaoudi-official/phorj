@@ -252,3 +252,62 @@ fn convert_runtime_assertions_keep_or_null() {
         "(fn($__a) => is_bool($__a) ? $__a : null)($x)"
     );
 }
+
+#[test]
+fn convert_bool_cells_and_float_to_decimal() {
+    let one = |f: fn(&[Value], &mut String) -> Result<Value, String>, v: Value| {
+        let mut o = String::new();
+        f(&[v], &mut o).unwrap()
+    };
+    // numeric/decimal → bool (total, explicit != 0)
+    assert!(matches!(
+        one(convert_int_to_bool, Value::Int(7)),
+        Value::Bool(true)
+    ));
+    assert!(matches!(
+        one(convert_int_to_bool, Value::Int(0)),
+        Value::Bool(false)
+    ));
+    assert!(matches!(
+        one(convert_float_to_bool, Value::Float(0.0)),
+        Value::Bool(false)
+    ));
+    assert!(matches!(
+        one(
+            convert_decimal_to_bool,
+            Value::Decimal {
+                unscaled: 0,
+                scale: 2
+            }
+        ),
+        Value::Bool(false)
+    ));
+    // bool → numeric/decimal (total, 1/0)
+    assert!(matches!(
+        one(convert_bool_to_int, Value::Bool(true)),
+        Value::Int(1)
+    ));
+    assert!(matches!(
+        one(convert_bool_to_float, Value::Bool(false)),
+        Value::Float(f) if f == 0.0
+    ));
+    assert!(matches!(
+        one(convert_bool_to_decimal, Value::Bool(true)),
+        Value::Decimal {
+            unscaled: 1,
+            scale: 0
+        }
+    ));
+    // float → decimal? (shortest-string; 2.5 → 2.5, non-finite → null)
+    assert!(matches!(
+        one(convert_float_to_decimal, Value::Float(2.5)),
+        Value::Decimal {
+            unscaled: 25,
+            scale: 1
+        }
+    ));
+    assert!(matches!(
+        one(convert_float_to_decimal, Value::Float(f64::NAN)),
+        Value::Null
+    ));
+}

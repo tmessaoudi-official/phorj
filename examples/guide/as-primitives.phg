@@ -45,4 +45,20 @@ function main(): void {
     int|string other = "hi";
     Console.println("{maybe as int ?? -1} {other as int ?? -1}");  // 5 -1
     Console.println("{maybe as string} {other as string}");        // 5 hi
+
+    // bool cells (S3): numeric/decimal <-> bool are total (explicit `!= 0` / `1`/`0`); string -> bool
+    // is a STRICT parse ("true"/"false" only — NEVER PHP truthiness).
+    int z = 0;
+    int nz = 7;
+    bool flag = true;
+    string yes = "true";
+    string bad = "nope";
+    Console.println("{nz as bool} {z as bool}");                   // true false
+    Console.println("{flag as int} {flag as string}");            // 1 true
+    Console.println("{yes as bool ?? false} {bad as bool ?? false}"); // true false
+
+    // decimal extras (S4): float -> decimal? (shortest displayed value), string -> decimal? (parse).
+    float rate = 2.5;
+    string price = "3.14";
+    Console.println("{rate as decimal ?? 0.0d} {price as decimal ?? 0.0d}"); // 2.5 3.14
 }

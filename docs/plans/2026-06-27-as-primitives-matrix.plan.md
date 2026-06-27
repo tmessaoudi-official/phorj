@@ -71,5 +71,12 @@ higher-order `(T)->bool` predicates all require a real `bool`; no C-ternary exis
   single-eval). `as string` on a union stays total `toString`. **`as decimal` assertion deferred**
   (decimal's PHP carrier is a string — indistinguishable from a `string` union member; `is_*` can't
   tell them apart). Erased-generic sources also deferred. Example extended; if-let smart-cast works.
-- [ ] S3 bool cells (numeric↔bool, bool→string, string→bool? strict)
-- [ ] S4 decimal extras (`float as decimal?`, `string as decimal?`)
+- [x] **S3 bool cells — DONE.** numeric/decimal↔bool total (explicit `!= 0` / `1`/`0`; natives
+  `Convert.intToBool`/`floatToBool`/`decimalToBool`/`boolToInt`/`boolToFloat`/`boolToDecimal`),
+  bool→string via `toString`, **`string as bool` = strict `bool?`** (`Text.parseBool` — `"true"`/
+  `"false"` only, never PHP truthiness). All inline PHP (no gated helper).
+- [x] **S4 decimal extras — DONE; MATRIX COMPLETE.** `float as decimal?` (`Convert.floatToDecimal` —
+  shortest-string parse via `value::decimal_of`, reuses `__phorge_str`+`__phorge_dec_of`), `string as
+  decimal?` (reuses existing `Decimal.of`). Transpiler leaf-fallback allowlist extended to `Decimal`.
+  Remaining deferred (KNOWN_ISSUES): union `as decimal` assertion (carrier conflation), erased-generic
+  sources, out-of-range float→decimal overflow boundary.

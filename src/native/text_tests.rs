@@ -187,6 +187,22 @@ fn text_parse_float_strict_and_permissive() {
 }
 
 #[test]
+fn text_parse_bool_is_strict_no_truthiness() {
+    // M4 `string as bool` — ONLY "true"/"false" parse; never PHP truthiness ("0"/""/"false"-as-true).
+    let p = |s: &str| {
+        let mut o = String::new();
+        text_parse_bool(&[Value::Str(s.into())], &mut o).unwrap()
+    };
+    assert!(matches!(p("true"), Value::Bool(true)));
+    assert!(matches!(p("false"), Value::Bool(false)));
+    assert!(matches!(p("1"), Value::Null)); // NOT PHP-truthy
+    assert!(matches!(p("0"), Value::Null));
+    assert!(matches!(p(""), Value::Null));
+    assert!(matches!(p("True"), Value::Null)); // case-sensitive
+    assert!(matches!(p("yes"), Value::Null));
+}
+
+#[test]
 fn text_breadth_pad_indexof_substring() {
     let mut o = String::new();
     let s = |v: &str| Value::Str(v.into());

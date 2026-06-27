@@ -119,6 +119,50 @@ fn as_int_and_decimal_round_trip_types() {
 }
 
 #[test]
+fn as_decimal_from_float_and_string_is_optional() {
+    // S4: float → decimal? (shortest-string parse) and string → decimal? (via Decimal.of).
+    let e = errors_of("function main() -> void { float f = 2.5; decimal d = f as decimal; }");
+    assert!(
+        e.iter().any(|x| x.code == Some("E-OPT-ASSIGN")),
+        "float as decimal is decimal?, got {e:?}"
+    );
+    assert!(
+        errors_of("function main() -> void { float f = 2.5; decimal? d = f as decimal; }")
+            .is_empty()
+    );
+    assert!(errors_of(
+        "function main() -> void { string s = \"3.14\"; decimal? d = s as decimal; }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn as_bool_cells_total_and_strict_string_parse() {
+    // S3: numeric/decimal → bool is TOTAL (explicit `!= 0`).
+    assert!(errors_of("function main() -> void { int n = 1; bool b = n as bool; }").is_empty());
+    assert!(errors_of("function main() -> void { float f = 0.0; bool b = f as bool; }").is_empty());
+    assert!(
+        errors_of("function main() -> void { decimal d = 0.00d; bool b = d as bool; }").is_empty()
+    );
+    // bool → numeric/decimal/string is TOTAL.
+    assert!(errors_of(
+        "function main() -> void { bool b = true; int n = b as int; float f = b as float; \
+         decimal d = b as decimal; string s = b as string; }"
+    )
+    .is_empty());
+    // string → bool is a STRICT parse → `bool?` (no PHP truthiness).
+    let e = errors_of("function main() -> void { string s = \"true\"; bool b = s as bool; }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
+        "string as bool is bool?, got {e:?}"
+    );
+    assert!(
+        errors_of("function main() -> void { string s = \"true\"; bool? b = s as bool; }")
+            .is_empty()
+    );
+}
+
+#[test]
 fn as_union_member_is_assertion() {
     // S2: a PRIMITIVE union narrows via `as` → `T?` (runtime assertion, not conversion).
     assert!(

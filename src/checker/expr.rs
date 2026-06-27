@@ -630,8 +630,19 @@ impl Checker {
             (Ty::Decimal, "float") => Some(("Convert", "decimalToFloat", Ty::Float)),
             (Ty::String, "int") => Some(("Text", "parseInt", opt(Ty::Int))),
             (Ty::String, "float") => Some(("Text", "parseFloat", opt(Ty::Float))),
-            // any primitive → string is total (Convert.toString is generic). bool→string is S3.
-            (Ty::Int | Ty::Float | Ty::Decimal, "string") => {
+            // S4 decimal extras — float via the shortest-string parse; string via `Decimal.of`.
+            (Ty::Float, "decimal") => Some(("Convert", "floatToDecimal", opt(Ty::Decimal))),
+            (Ty::String, "decimal") => Some(("Decimal", "of", opt(Ty::Decimal))),
+            // S3 bool cells — total numeric↔bool (explicit `!= 0` / `1`/`0`), strict string parse.
+            (Ty::Int, "bool") => Some(("Convert", "intToBool", Ty::Bool)),
+            (Ty::Float, "bool") => Some(("Convert", "floatToBool", Ty::Bool)),
+            (Ty::Decimal, "bool") => Some(("Convert", "decimalToBool", Ty::Bool)),
+            (Ty::Bool, "int") => Some(("Convert", "boolToInt", Ty::Int)),
+            (Ty::Bool, "float") => Some(("Convert", "boolToFloat", Ty::Float)),
+            (Ty::Bool, "decimal") => Some(("Convert", "boolToDecimal", Ty::Decimal)),
+            (Ty::String, "bool") => Some(("Text", "parseBool", opt(Ty::Bool))),
+            // any primitive → string is total (Convert.toString is generic).
+            (Ty::Int | Ty::Float | Ty::Decimal | Ty::Bool, "string") => {
                 Some(("Convert", "toString", Ty::String))
             }
             _ => None,
