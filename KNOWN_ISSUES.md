@@ -638,17 +638,17 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   `examples/guide/enums-match.phg` and `examples/guide/match-expr.phg` are enrolled in the oracle, not
   deferred. The empty/reversed-range and integer-division transpile divergences were fixed earlier in
   M7.)*
-- **Float division by zero diverges in the fault domain (transpile target).** A finite `float` now
-  renders **byte-identically** across all three backends — the transpiler's `__phorge_float` runtime
-  helper reproduces Rust's shortest-round-trip, always-positional `f64` Display exactly (so
-  `sqrt(2.0)` → `1.4142135623730951`, `1234567890123456.0` → `1234567890123456`, and `0.00001` →
-  `0.00001` all match, with no PHP `precision=14` rounding or scientific-notation switch — see
-  `guide/floats.phg`, which round-trips every magnitude through real PHP). The *one* remaining float
-  caveat is non-finite: Phorge float `1.0 / 0.0` yields `inf`/`NaN` on `run`/`runvm` (a valid `f64`,
-  never a fault), but the transpiled PHP's `/` throws `DivisionByZeroError`. This is a fault-domain
-  divergence only — the differential harness excludes fault cases by design, and no byte-identity
-  example produces a non-finite float. (`__phorge_float` itself renders `inf`/`-inf`/`NaN` the Rust
-  way if one is reached through other means.)
+- **Float display is byte-identical across all three backends.** A finite `float` renders identically —
+  the transpiler's `__phorge_float` runtime helper reproduces Rust's shortest-round-trip,
+  always-positional `f64` Display exactly (so `sqrt(2.0)` → `1.4142135623730951`,
+  `1234567890123456.0` → `1234567890123456`, and `0.00001` → `0.00001` all match, with no PHP
+  `precision=14` rounding or scientific-notation switch — see `guide/floats.phg`, which round-trips
+  every magnitude through real PHP). **Float division by zero now FAULTS** (resolved 2026-06-27, the
+  "any division by zero throws" rule): `1.0 / 0.0` → `"division by zero"` and `1.0 % 0.0` → `"modulo by
+  zero"` on `run`/`runvm` (no IEEE `inf`/`NaN`), and the transpiled PHP throws `DivisionByZeroError`
+  to agree (`/` throws natively; float `%` routes through `__phorge_rem`, which guards `$b == 0`). A
+  finite overflow-to-`inf` (huge ÷ tiny non-zero) is *not* a zero division and stays `inf`;
+  `__phorge_float` renders `inf`/`-inf`/`NaN` the Rust way if one is reached through other means.
 - **`opt!`-on-null transpiles to a different message than the Phorge backends.** A null force-unwrap
   faults `force-unwrap of null` on `run`/`runvm` (located, classified `FaultKind::ForceUnwrap`); the
   transpiled PHP throws a `RuntimeException("force-unwrap of null")` via the `__phorge_unwrap()`

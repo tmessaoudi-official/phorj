@@ -570,13 +570,23 @@ pub fn float_sub(a: f64, b: f64) -> f64 {
 pub fn float_mul(a: f64, b: f64) -> f64 {
     a * b
 }
-/// Float division (`b == 0.0` yields `inf`/`NaN`, not a fault).
-pub fn float_div(a: f64, b: f64) -> f64 {
-    a / b
+/// Float division. A **zero divisor faults** (`FAULT_DIV_ZERO`) — matching int `/0` and PHP 8's
+/// `DivisionByZeroError` on `$a / 0.0` — rather than yielding IEEE `inf`/`NaN` (the "any division by
+/// zero throws" rule). `-0.0` counts as zero (`-0.0 == 0.0`). A finite-overflow-to-`inf` (huge `a`,
+/// tiny non-zero `b`) is *not* a zero division and stays `inf`.
+pub fn float_div(a: f64, b: f64) -> Result<f64, String> {
+    if b == 0.0 {
+        return Err(FAULT_DIV_ZERO.to_string());
+    }
+    Ok(a / b)
 }
-/// Float remainder.
-pub fn float_rem(a: f64, b: f64) -> f64 {
-    a % b
+/// Float remainder. A **zero divisor faults** (`FAULT_MOD_ZERO`), like int `%0` (PHP `fmod` would
+/// return `NAN`; the emitted PHP routes through `__phorge_rem`, which throws to agree).
+pub fn float_rem(a: f64, b: f64) -> Result<f64, String> {
+    if b == 0.0 {
+        return Err(FAULT_MOD_ZERO.to_string());
+    }
+    Ok(a % b)
 }
 
 // --- Decimal (fixed-point) kernels (M-NUM S1; single-sourced — both backends + the example oracle
@@ -1049,6 +1059,19 @@ mod tests {
         assert_eq!(int_intdiv(5, 0).unwrap_err(), FAULT_DIV_ZERO);
         // i64::MIN / -1 overflows → integer overflow fault
         assert_eq!(int_intdiv(i64::MIN, -1).unwrap_err(), FAULT_INT_OVERFLOW);
+    }
+
+    #[test]
+    fn float_div_rem_by_zero_fault() {
+        // Non-zero divisor: ordinary IEEE result.
+        assert_eq!(float_div(7.0, 2.0), Ok(3.5));
+        assert_eq!(float_rem(7.5, 2.0), Ok(1.5));
+        // Zero divisor faults (no IEEE inf/NaN) — both +0.0 and -0.0.
+        assert_eq!(float_div(1.0, 0.0).unwrap_err(), FAULT_DIV_ZERO);
+        assert_eq!(float_div(1.0, -0.0).unwrap_err(), FAULT_DIV_ZERO);
+        assert_eq!(float_rem(1.0, 0.0).unwrap_err(), FAULT_MOD_ZERO);
+        // A finite overflow to inf is NOT a zero division — it stays inf.
+        assert!(float_div(1.0e308, 1.0e-308).unwrap().is_infinite());
     }
 
     #[test]

@@ -96,7 +96,13 @@ impl Transpiler {
                             let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
                             format!("{l} % {r}")
                         }
-                        OpKind::Float => format!("fmod({l}, {r})"),
+                        // Float `%` routes through `__phorge_rem` (not a bare `fmod`) so a zero divisor
+                        // *throws* — PHP `fmod($x, 0.0)` returns `NAN`, but Phorge faults on any
+                        // division by zero, so the helper guards `$b == 0` before the `fmod`.
+                        OpKind::Float => {
+                            self.uses_rem = true;
+                            format!("{bs}__phorge_rem({l}, {r})")
+                        }
                         _ => {
                             self.uses_rem = true;
                             format!("{bs}__phorge_rem({l}, {r})")

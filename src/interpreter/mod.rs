@@ -639,16 +639,23 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
             }
         }
         (Value::Float(a), Value::Float(b)) => {
-            let v = match op {
-                Add => crate::value::float_add(a, b),
-                Sub => crate::value::float_sub(a, b),
-                Mul => crate::value::float_mul(a, b),
-                Pow => crate::value::float_pow(a, b),
-                Div => crate::value::float_div(a, b),
-                Rem => crate::value::float_rem(a, b),
+            // `+ - * **` are infallible on `f64`; `/` and `%` fault on a zero divisor (the same
+            // kernels the VM's `DivF`/`RemF` call, so the fault path can't diverge).
+            match op {
+                Add => Ok(Value::Float(crate::value::float_add(a, b))),
+                Sub => Ok(Value::Float(crate::value::float_sub(a, b))),
+                Mul => Ok(Value::Float(crate::value::float_mul(a, b))),
+                Pow => Ok(Value::Float(crate::value::float_pow(a, b))),
+                Div => match crate::value::float_div(a, b) {
+                    Ok(n) => Ok(Value::Float(n)),
+                    Err(msg) => rt(msg),
+                },
+                Rem => match crate::value::float_rem(a, b) {
+                    Ok(n) => Ok(Value::Float(n)),
+                    Err(msg) => rt(msg),
+                },
                 _ => unreachable!("arith only called with +-*/%**"),
-            };
-            Ok(Value::Float(v))
+            }
         }
         // `decimal` arithmetic (M-NUM S1): `+ - *` over a decimal — including a mixed `decimal`/`int`
         // pair (the kernel widens the int to scale 0) — dispatches into the single-sourced

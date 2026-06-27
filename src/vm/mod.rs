@@ -334,6 +334,12 @@ impl<'a> Vm<'a> {
         self.stack.push(Value::Int(r?));
         Ok(())
     }
+    /// Push a fallible `f64` result, propagating a zero-divisor fault (`float_div`/`float_rem`). The
+    /// `?` turns the kernel's fault body into the VM fault, byte-identical to the interpreter.
+    fn push_f(&mut self, r: Result<f64, String>) -> Result<(), String> {
+        self.stack.push(Value::Float(r?));
+        Ok(())
+    }
 }
 
 /// Ordering comparison for `Lt`/`Gt`/`Le`/`Ge` on int or float operands. The ordering and the

@@ -1124,6 +1124,12 @@ function main() -> void { int z = 0; Console.println("{1 / z}"); }"#,
     // modulo by zero
     r#"import Core.Console;
 function main() -> void { int z = 0; Console.println("{1 % z}"); }"#,
+    // float division by zero — faults like int /0 (no IEEE inf), byte-identical run/runvm
+    r#"import Core.Console;
+function main() -> void { float z = 0.0; Console.println("{1.0 / z}"); }"#,
+    // float modulo by zero — faults like int %0 (PHP fmod would give NAN; we throw)
+    r#"import Core.Console;
+function main() -> void { float z = 0.0; Console.println("{1.0 % z}"); }"#,
     // unbounded recursion: trips the shared `MAX_CALL_DEPTH` guard on both backends.
     // Before Task 0.3 the interpreter recursed on the native stack and SIGABRTed (exit 134)
     // while the VM cleanly reported "stack overflow" — a parity divergence in the fault path.

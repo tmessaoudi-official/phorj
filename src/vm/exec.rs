@@ -52,11 +52,11 @@ impl<'a> Vm<'a> {
             }
             Op::DivF => {
                 let (a, b) = self.pop2_float()?;
-                self.stack.push(Value::Float(crate::value::float_div(a, b)));
+                self.push_f(crate::value::float_div(a, b))?;
             }
             Op::RemF => {
                 let (a, b) = self.pop2_float()?;
-                self.stack.push(Value::Float(crate::value::float_rem(a, b)));
+                self.push_f(crate::value::float_rem(a, b))?;
             }
 
             // Decimal `+ - *` (M-NUM S1): pop two raw values (a `Decimal`, or a mixed `Decimal`/`Int`)

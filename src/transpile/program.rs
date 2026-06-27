@@ -336,8 +336,11 @@ impl Transpiler {
         }
         if self.uses_rem {
             // Phorge `%`: int/int integer modulo; float/float `fmod` (sign of dividend, like Rust `%`).
+            // A zero divisor *throws* (Phorge faults on any division by zero): PHP `$a % 0` already
+            // throws, but `fmod($a, 0.0)` would return `NAN`, so guard `$b == 0` first to agree.
             self.line("function __phorge_rem($a, $b) {");
             self.indent += 1;
+            self.line("if ($b == 0) { throw new \\DivisionByZeroError(\"Modulo by zero\"); }");
             self.line("return (is_int($a) && is_int($b)) ? $a % $b : fmod($a, $b);");
             self.indent -= 1;
             self.line("}");
