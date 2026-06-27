@@ -108,8 +108,18 @@ return annotation, coverage+example).
   primitive matrix + union assertion; no new `Op`/`Value`; byte-identical run≡runvm≡PHP 8.5.
   Design forks resolved with the developer (full matrix; honest/loud, not PHP coercion; bool
   conditions already strict everywhere — verified). Deferred edges in KNOWN_ISSUES.
-- (b) **password hashing** — NEXT. Quarantined `Core.Crypto`, security design pass, brainstorm +
-  API question first.
+- (b) **password hashing** — IN PROGRESS. **Decision (2026-06-27, after the developer challenged
+  hard):** do NOT delegate to PHP and do NOT compromise security. Since secure password hashing
+  requires a vetted impl ("never roll your own") and `std` has no crypto, the developer's rules
+  *force* the first external crate. **Adopted RustCrypto `argon2`** (Argon2id) behind a written
+  **dependency policy** (`docs/specs/2026-06-27-dependency-policy.md` — audited-crypto-only exception
+  to `std`-only). `Core.Crypto.hashPassword`/`verifyPassword`/`needsRehash` implemented **natively in
+  the Rust backends** (run/runvm), transpiling to PHP `password_hash(ARGON2ID)`/`password_verify` as a
+  **peer emission target** (standard PHC `$argon2id$…` ⇒ Rust↔PHP cross-verify). `pure:false`,
+  EXCLUDED from the byte-identity oracle (random salt); dedicated `tests/crypto.rs`; a **verify-only**
+  example (committed PHC hash) IS gateable (deterministic). argon2 feature-gated OFF for the WASM
+  playground. **Principle reaffirmed:** transpile/lift are migration+test bridges, never a runtime
+  Phorge depends on — every native has a real Rust impl; PHP is only an emission target.
 - (c) **statics research** — inherited/overloaded/LSB statics; research + brainstorm pass.
 
 **Then design-first items** (each: brainstorm + AskUserQuestion on the API before building), slotted
