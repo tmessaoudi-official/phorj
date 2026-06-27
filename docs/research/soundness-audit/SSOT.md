@@ -1,5 +1,11 @@
 # Soundness-Enforcement Audit — SSOT
 
+> **STATUS [2026-06-27]: ALL FIXES SHIPPED.** The fix queue A→C→B→D→F→E→G is complete — all 6 P0 + the
+> 1 P1 closed, each a green byte-identical front-end-only commit (A `4cf4939`, C `b3ee332`, B `489adfc`,
+> D `a198f38`, F `7c7e488`, E `dafcd01`, G `e16f289`). Per-batch details + documented deferrals in
+> `docs/plans/2026-06-26-developer-idea-backlog.plan.md` (Build progress section).
+
+
 **Date:** 2026-06-27 · **Binary probed:** `/stack/projects/phorge/target/release/phg` (prebuilt
 release, never rebuilt) · **Method:** one minimal probe program per declared rule, run through
 `phg check` / `phg run` / `phg runvm` / `phg transpile`; a rule is a GAP only when a program that
