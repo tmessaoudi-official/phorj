@@ -1193,6 +1193,7 @@ impl Checker {
                 is_abstract: c.is_abstract,
                 field_vis: HashMap::new(),
                 method_vis: HashMap::new(),
+                static_methods: std::collections::HashSet::new(),
             },
         );
         use crate::ast::Modifier;
@@ -1235,6 +1236,8 @@ impl Checker {
         let mut consts: HashMap<String, ConstEntry> = HashMap::new();
         let mut static_mut = std::collections::HashSet::new();
         let mut methods: HashMap<String, Vec<FnSig>> = HashMap::new();
+        let mut static_methods: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
         let mut ctor_vis = MemberVis::Public;
@@ -1448,6 +1451,10 @@ impl Checker {
                     method_vis
                         .entry(f.name.clone())
                         .or_insert((MemberVis::of(&f.modifiers), c.name.clone()));
+                    // slice B0: a `static` method is callable via the class name (`ClassName.m(args)`).
+                    if f.modifiers.contains(&Modifier::Static) {
+                        static_methods.insert(f.name.clone());
+                    }
                 }
                 // A property hook (M-mut.7b): record its declared type and which accessors it
                 // provides. The body is type-checked in phase 2 (`check_program`), with `this` and
@@ -1502,6 +1509,7 @@ impl Checker {
         info.fields = fields;
         info.field_vis = field_vis;
         info.method_vis = method_vis;
+        info.static_methods = static_methods;
         info.mutable_fields = mutable_fields;
         info.statics = statics;
         info.consts = consts;

@@ -523,6 +523,28 @@ impl Compiler<'_> {
                     }
                 }
             }
+            // Static method call `ClassName.method(args)` (slice B0): the class is known at compile
+            // time, so this is a *direct* call to the `(class, method)` function index — push a dummy
+            // receiver (slot 0 of the compiled method is `$this`, which a static method never reads)
+            // then the args, then `Op::Call`. Resolved after the native path (an explicit import wins a
+            // name collision), before instance dispatch.
+            if !*safe {
+                if let Expr::Ident(cls, _) = &**object {
+                    if self.resolve_local(cls).is_none()
+                        && self.resolve_binding(cls).is_none()
+                        && self.classes.contains_key(cls)
+                    {
+                        if let Some(&fn_idx) = self.methods.get(&(cls.clone(), name.clone())) {
+                            self.emit_const(Value::Unit, line); // dummy receiver in slot 0
+                            for a in args {
+                                self.expr(a)?;
+                            }
+                            self.emit(Op::Call(fn_idx), line);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
             // `o?.m(args)`: a null receiver short-circuits — the args are NOT evaluated and the
             // method is NOT dispatched (the null-skip lowering jumps over the whole `access`).
             if *safe {
@@ -793,6 +815,7 @@ impl Compiler<'_> {
             &empty_fields,
             self.class_field_ctys,
             self.method_rets,
+            self.methods,
             sub_base,
         );
 

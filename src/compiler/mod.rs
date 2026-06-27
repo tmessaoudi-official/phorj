@@ -182,6 +182,10 @@ struct Compiler<'a> {
     /// Program-wide `(class, method) → return type` table (M2 Wave 4). `ctype` reads it to resolve
     /// a method-call result (`c.get() + 1`).
     method_rets: &'a HashMap<(String, String), CTy>,
+    /// Program-wide `(class, method) → function index` table (slice B0). A static call
+    /// `ClassName.method(args)` lowers to a dummy-receiver push + `Op::Call(idx)` via this index —
+    /// the class is known at compile time, so no runtime dispatch is needed.
+    methods: &'a HashMap<(String, String), usize>,
     /// The class whose body is being compiled (a method or constructor), or `None` in a free
     /// function. `ctype(This)` resolves to `Class(cur_class)`.
     cur_class: Option<String>,
@@ -358,6 +362,7 @@ impl<'a> Compiler<'a> {
         field_tags: &'a HashMap<String, CTy>,
         class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
         method_rets: &'a HashMap<(String, String), CTy>,
+        methods: &'a HashMap<(String, String), usize>,
         base_fn_idx: usize,
     ) -> Self {
         Compiler {
@@ -380,6 +385,7 @@ impl<'a> Compiler<'a> {
             field_tags,
             class_field_ctys,
             method_rets,
+            methods,
             cur_class: None,
             match_bindings: Vec::new(),
             height: 0,

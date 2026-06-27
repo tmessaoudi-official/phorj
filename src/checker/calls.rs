@@ -83,6 +83,17 @@ impl Checker {
                         }
                     }
                 }
+                // Static method call `ClassName.method(args)` (slice B0): the head is a class *name*
+                // (not a value binding), resolved after the native path (an explicit import wins a
+                // name collision with a class) but before instance-method dispatch. Mirrors the
+                // static-field read in `check_member`.
+                if !*safe {
+                    if let Expr::Ident(cls, _) = &**object {
+                        if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
+                            return self.check_static_method_call(cls, name, args, span);
+                        }
+                    }
+                }
                 self.check_method_call(object, name, args, *safe, span)
             }
             other => {
@@ -919,6 +930,69 @@ impl Checker {
         } else {
             ret
         }
+    }
+
+    /// `ClassName.method(args)` — a **static** method call (slice B0). The class is known (the caller
+    /// verified `cls` is a class name, not a value binding). The method must be declared `static`;
+    /// calling an instance method this way is `E-STATIC-CALL`. Arg/overload/throws checking reuses
+    /// [`check_method_sigs`] (no receiver, so no class-type-arg substitution — a static method that
+    /// uses the class's own type parameter is out of scope this slice).
+    pub(super) fn check_static_method_call(
+        &mut self,
+        cls: &str,
+        name: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        let sigs: Option<Vec<MethodSig>> = self
+            .classes
+            .get(cls)
+            .and_then(|i| i.methods.get(name))
+            .map(|v| {
+                v.iter()
+                    .map(|s| (s.params.clone(), s.ret.clone(), s.throws.clone()))
+                    .collect()
+            });
+        let Some(sigs) = sigs else {
+            for a in args {
+                self.check_expr(a);
+            }
+            return self.err(span, format!("class `{cls}` has no static method `{name}`"));
+        };
+        if !self.classes[cls].static_methods.contains(name) {
+            for a in args {
+                self.check_expr(a);
+            }
+            return self.err_coded(
+                span,
+                format!("`{name}` is an instance method of `{cls}`, not a static one"),
+                "E-STATIC-CALL",
+                Some(format!(
+                    "`ClassName.{name}(…)` calls a `static` method — make `{name}` static, or call it on an instance (`x.{name}(…)`)"
+                )),
+            );
+        }
+        // v1 scope: a static call lowers to a *direct* call to one function index, so an overloaded
+        // static method (multiple signatures) is not yet dispatchable this way. Reject it cleanly
+        // rather than silently calling one overload (a `run`↔`runvm` divergence risk).
+        if sigs.len() > 1 {
+            for a in args {
+                self.check_expr(a);
+            }
+            return self.err_coded(
+                span,
+                format!("`{cls}.{name}` is overloaded — a static call to an overloaded method is not yet supported"),
+                "E-STATIC-CALL",
+                Some("call it on an instance, or give the static method a single signature".into()),
+            );
+        }
+        // Visibility, mirroring the instance method-call site (Wave 1.1).
+        let v = self
+            .classes
+            .get(cls)
+            .and_then(|i| i.method_vis.get(name).cloned());
+        self.enforce_member_vis(v, name, span, false);
+        self.check_method_sigs(name, &sigs, args, span)
     }
 
     pub(super) fn check_member(

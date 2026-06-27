@@ -70,6 +70,17 @@ impl Interp {
                     }
                 }
             }
+            // Static method call `ClassName.method(args)` (slice B0): the head is a class name, not a
+            // value binding. Resolved before the instance-method path (the checker guarantees the
+            // method exists and is static). No receiver.
+            if !*safe {
+                if let Expr::Ident(cls, _) = &**object {
+                    if self.frame.lookup(cls).is_none() && self.classes.contains_key(cls) {
+                        let argv = self.eval_args(args)?;
+                        return self.call_static_method(cls, name, argv);
+                    }
+                }
+            }
             let recv = self.eval(object)?;
             if *safe && matches!(recv, Value::Null) {
                 // `o?.m(args)` on a null receiver short-circuits: args are NOT evaluated.
@@ -342,5 +353,72 @@ impl Interp {
         let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
         let mname = format!("{}::{name}", inst.class);
         self.run_call(&mname, &names, &f.body, args, Some(Value::Instance(inst)))
+    }
+
+    /// `ClassName.method(args)` — a **static** method call (slice B0). The method is resolved on the
+    /// class's *own* members (the checker's `static_methods` is own-only, so this never sees an
+    /// inherited/trait static — a documented v1 limitation). No receiver (`this = None`); overload
+    /// selection mirrors `call_method`.
+    pub(super) fn call_static_method(
+        &mut self,
+        cls: &str,
+        name: &str,
+        args: Vec<Value>,
+    ) -> R<Value> {
+        let candidates: Vec<FunctionDecl> = self
+            .classes
+            .get(cls)
+            .map(|class| {
+                class
+                    .members
+                    .iter()
+                    .filter_map(|m| match m {
+                        ClassMember::Method(f)
+                            if f.name == name
+                                && f.modifiers.contains(&crate::ast::Modifier::Static) =>
+                        {
+                            Some(f.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let f = match candidates.len() {
+            0 => return rt(format!("class `{cls}` has no static method `{name}`")),
+            1 => candidates[0].clone(),
+            _ => {
+                let kinds: Vec<Vec<crate::dispatch::ParamKind>> = candidates
+                    .iter()
+                    .map(|f| {
+                        f.params
+                            .iter()
+                            .map(|p| crate::dispatch::param_kind(&p.ty))
+                            .collect()
+                    })
+                    .collect();
+                match crate::dispatch::select_overload(&kinds, &args, &self.class_implements) {
+                    Ok(i) => candidates[i].clone(),
+                    Err(crate::dispatch::SelectErr::Ambiguous) => {
+                        return rt(format!("ambiguous overloaded call to `{name}`"))
+                    }
+                    Err(crate::dispatch::SelectErr::NoMatch) => {
+                        return rt(format!(
+                            "no overload of `{name}` matches the argument types"
+                        ))
+                    }
+                }
+            }
+        };
+        if args.len() != f.params.len() {
+            return rt(format!(
+                "static method `{name}` expects {} args, got {}",
+                f.params.len(),
+                args.len()
+            ));
+        }
+        let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
+        let mname = format!("{cls}::{name}");
+        self.run_call(&mname, &names, &f.body, args, None)
     }
 }

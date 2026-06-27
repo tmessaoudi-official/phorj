@@ -135,6 +135,10 @@ struct ClassInfo {
     /// Member visibility for methods: method name → (vis, owner). Per-name (an overload set shares one
     /// visibility — the first-declared overload's modifiers win). Enforced at the method-call site.
     method_vis: HashMap<String, (MemberVis, String)>,
+    /// Names of the `static` methods (Batch-1 D / slice B0). A static method is callable via the class
+    /// name (`ClassName.method(args)`) with no receiver; a *non*-static method called that way is
+    /// `E-STATIC-CALL`. Inherited alongside `methods`. A subset of `methods`' keys.
+    static_methods: std::collections::HashSet<String>,
 }
 
 /// A property hook's declared type and which accessors it provides (M-mut.7b).

@@ -194,6 +194,18 @@ impl Transpiler {
                     }
                 }
             }
+            // Static method call `ClassName.method(args)` (slice B0) → PHP `Class::method(args)`.
+            // The head is a class name (not a local), resolved after the native path (matching the
+            // other backends' ordering); `php_type_ref` gives the same reference `new` uses (FQN in
+            // namespaced mode).
+            if !*safe {
+                if let Expr::Ident(cls, _) = &**object {
+                    if !self.is_local(cls) && self.classes.contains(cls) {
+                        let a = self.emit_args(args)?;
+                        return Ok(format!("{}::{name}({a})", php_type_ref(cls)));
+                    }
+                }
+            }
             let o = self.emit_expr(object)?;
             let a = self.emit_args(args)?;
             let arrow = if *safe { "?->" } else { "->" };

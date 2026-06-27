@@ -487,6 +487,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &empty_fields,
             &class_field_ctys,
             &method_rets,
+            &methods,
             base,
         );
         for p in &f.params {
@@ -538,6 +539,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys[&cd.name],
             &class_field_ctys,
             &method_rets,
+            &methods,
             base,
         )?;
         functions.push(f);
@@ -571,6 +573,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys[class_name],
             &class_field_ctys,
             &method_rets,
+            &methods,
             base,
             prelude,
         )?;
@@ -637,6 +640,7 @@ pub(super) fn compile_constructor<'a>(
     field_tags: &'a HashMap<String, CTy>,
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
+    methods: &'a HashMap<(String, String), usize>,
     base_fn_idx: usize,
 ) -> Result<(Function, Vec<Function>), String> {
     // M-RT S6c.2: a no-own-ctor class compiles its inherited constructor *plan* — for single
@@ -659,6 +663,7 @@ pub(super) fn compile_constructor<'a>(
         field_tags,
         class_field_ctys,
         method_rets,
+        methods,
         base_fn_idx,
     );
     comp.cur_class = Some(c.name.clone()); // `this` resolves to this class (ctype)
@@ -734,6 +739,7 @@ pub(super) fn compile_method<'a>(
     field_tags: &'a HashMap<String, CTy>,
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
+    methods: &'a HashMap<(String, String), usize>,
     base_fn_idx: usize,
     // Batch-1 D: the non-literal static-init prelude, non-empty only for a class-static `main` entry
     // (emitted before the body, exactly as a top-level `main` does it). `&[]` for every other method.
@@ -752,6 +758,7 @@ pub(super) fn compile_method<'a>(
         field_tags,
         class_field_ctys,
         method_rets,
+        methods,
         base_fn_idx,
     );
     comp.cur_class = Some(class_name.to_string()); // `this` resolves to this class (ctype)

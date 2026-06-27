@@ -1,0 +1,39 @@
+// Static method calls (slice B0) — call a `static` method via the class name: `ClassName.method(args)`.
+//
+// A `static` method belongs to the class, not an instance, so it has no `this`. Until now a static
+// method was only reachable through an instance (`m.square(5)`); now it is callable directly on the
+// class. The common shape is a **static factory** — a static method that constructs and returns an
+// instance (`Greeter.make("world")`). Calling an *instance* method this way is `E-STATIC-CALL`.
+//
+// Transpiles to PHP `Class::method(args)`; run/runvm/real PHP are byte-identical.
+package Main;
+
+import Core.Console;
+
+class MathUtil {
+    static function square(int n): int { return n * n; }
+    static function add(int a, int b): int { return a + b; }
+}
+
+class Greeter {
+    constructor(public string who) {}
+
+    // A static factory: no `this`, builds and returns an instance.
+    static function make(string w): Greeter {
+        return new Greeter(w);
+    }
+
+    function greet(): string {
+        return "Hello, {this.who}";
+    }
+}
+
+function main(): void {
+    // Direct static calls on the class.
+    Console.println("square(6) = {MathUtil.square(6)}");
+    Console.println("add(3, 4) = {MathUtil.add(3, 4)}");
+
+    // A static factory returns an instance you then use normally.
+    var g = Greeter.make("Phorge");
+    Console.println(g.greet());
+}
