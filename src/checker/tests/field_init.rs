@@ -101,3 +101,63 @@ fn static_initializer_type_mismatch_is_error() {
         .iter()
         .any(|e| e.code == Some("E-STATIC-INIT-TYPE")));
 }
+
+// ── definite assignment of instance fields (Soundness Batch D) ───────────────────────────────────
+
+#[test]
+fn non_optional_field_never_assigned_is_error() {
+    // A non-optional field with no initializer and no ctor assignment is a latent runtime fault
+    // ("no field x") — the `T` promise is unbacked. Reject it up front.
+    let src =
+        "class C { mutable int x; constructor() {} } function main() -> void { var c = new C(); }";
+    assert!(has(src, "E-FIELD-UNINITIALIZED"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn non_optional_field_no_ctor_is_error() {
+    let src = "class C { int x; } function main() -> void { }";
+    assert!(has(src, "E-FIELD-UNINITIALIZED"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn non_optional_field_assigned_in_ctor_is_ok() {
+    let src = "class C { mutable int x; constructor(int v) { this.x = v; } } \
+               function main() -> void { var c = new C(5); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn non_optional_field_with_initializer_is_ok() {
+    let src =
+        "class C { int x = 0; constructor() {} } function main() -> void { var c = new C(); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn promoted_non_optional_field_is_ok() {
+    let src =
+        "class C { constructor(public int x) {} } function main() -> void { var c = new C(5); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn conditionally_assigned_field_is_error() {
+    // Assigned only in one branch — not on all paths (finding #4 GAP-2).
+    let src = "class C { mutable int x; constructor(bool flag) { if (flag) { this.x = 7; } } } \
+               function main() -> void { var c = new C(true); }";
+    assert!(has(src, "E-FIELD-UNINITIALIZED"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn field_assigned_in_both_if_branches_is_ok() {
+    let src = "class C { mutable int x; constructor(bool flag) { if (flag) { this.x = 1; } else { this.x = 2; } } } \
+               function main() -> void { var c = new C(true); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn optional_field_without_initializer_is_ok() {
+    // An optional field defaults to null — no assignment required (DEFAULT-NULL policy).
+    let src = "class C { int? n; constructor() {} } function main() -> void { var c = new C(); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}

@@ -133,6 +133,23 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   *nested* un-inferred placeholder (`Box<Option<Error>> -> Box<Option<int>>`) is conservatively
   rejected (safe over-rejection) rather than bound.
 
+- **Batch D — definite assignment + optional default-null — ✅ DONE** (autonomous). Finding #4 (P0) +
+  GAP-2 (conditional assign) + optional-field policy. Two parts: (1) **checker definite-assignment** —
+  `check_type_body` now runs `check_definite_assignment`: every non-optional instance field with no
+  initializer and not a promoted ctor param must be assigned on **every completing path** of the
+  constructor, else `E-FIELD-UNINITIALIZED` (a one-branch `if` is not every path → GAP-2 closed; no
+  ctor → rejected). The path analysis (`block_assigns_field`/`stmt_assigns_field`/
+  `stmt_diverges_no_return` + free `is_this_field`/`stmt_has_return` in common.rs) is the return-aware
+  dual of the totality engine: a ctor `return` *completes* construction (a non-assigning path), only a
+  throw/panic/infinite-loop is a saving divergence; conservative + sound. (2) **optional default-null**
+  — a new front-end pass `inject_optional_field_defaults` (after `expand_aliases`) injects `= null` for
+  every optional instance field lacking an initializer, so the existing field-init machinery sets it on
+  all backends → `int? n;` reads `null` instead of faulting "no field n" (byte-identical, no backend
+  change). 3 unsound test fixtures (declared-but-unassigned fields: GREETER, Box, C) fixed to use
+  promotion. 8 new checker tests; `examples/guide/field-safety.phg` (byte-identical run≡runvm≡real PHP
+  8.5); `phg explain E-FIELD-UNINITIALIZED`; README index + rejected-cases. Full workspace gate green
+  (1017 lib + 112 differential w/ PHP oracle).
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep

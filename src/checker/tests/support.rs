@@ -120,4 +120,4 @@ pub(super) const IFACES: &str = "interface Drawable { function draw() -> string;
             function draw() -> string { return \"[]\"; } \
             function name() -> string { return this.label; } }";
 pub(super) const SHAPE: &str = "enum Shape { Circle(float radius), Rect(float w, float h), }";
-pub(super) const GREETER: &str = "class Greeter { private string name; constructor(string name) {} function greet() -> string { return \"Hi\"; } }";
+pub(super) const GREETER: &str = "class Greeter { constructor(private string name) {} function greet() -> string { return \"Hi\"; } }";

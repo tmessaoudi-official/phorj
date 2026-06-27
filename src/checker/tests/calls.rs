@@ -182,13 +182,14 @@ fn unknown_method_errors() {
 
 #[test]
 fn field_access_typed() {
-    let src = "class Box { public int n; constructor(int n) {} } function main() -> void { Box b = new Box(1); int x = b.n; }";
+    let src = "class Box { constructor(public int n) {} } function main() -> void { Box b = new Box(1); int x = b.n; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
 #[test]
 fn bare_field_visible_in_method() {
-    let src = "class C { private string name; constructor(string name) {} function who() -> string { return name; } }";
+    let src =
+        "class C { constructor(private string name) {} function who() -> string { return name; } }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 

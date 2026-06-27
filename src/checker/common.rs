@@ -194,6 +194,54 @@ pub(super) fn breaks_this_loop(stmts: &[crate::ast::Stmt]) -> bool {
     })
 }
 
+/// Whether `target` is an assignment to `this.<field>` (the constructor definite-assignment analysis,
+/// Soundness Batch D). Matches a non-safe member access `this.field` exactly.
+pub(super) fn is_this_field(target: &crate::ast::Expr, field: &str) -> bool {
+    use crate::ast::Expr;
+    matches!(
+        target,
+        Expr::Member { object, name, safe: false, .. }
+            if name == field && matches!(**object, Expr::This(_))
+    )
+}
+
+/// Whether a statement contains a `return` anywhere on any path (descending into blocks, `if`, loops,
+/// and `try`). Used by the constructor definite-assignment check (Batch D): a `return` reached before a
+/// field is assigned completes construction with the field unset, so it conservatively fails the check.
+pub(super) fn stmt_has_return(s: &crate::ast::Stmt) -> bool {
+    use crate::ast::Stmt;
+    match s {
+        Stmt::Return { .. } => true,
+        Stmt::Block(b, _) => b.iter().any(stmt_has_return),
+        Stmt::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block.iter().any(stmt_has_return)
+                || else_block
+                    .as_ref()
+                    .is_some_and(|eb| eb.iter().any(stmt_has_return))
+        }
+        Stmt::While { body, .. } | Stmt::CFor { body, .. } | Stmt::For { body, .. } => {
+            body.iter().any(stmt_has_return)
+        }
+        Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            ..
+        } => {
+            body.iter().any(stmt_has_return)
+                || catches.iter().any(|c| c.body.iter().any(stmt_has_return))
+                || finally_block
+                    .as_ref()
+                    .is_some_and(|fb| fb.iter().any(stmt_has_return))
+        }
+        _ => false,
+    }
+}
+
 /// Whether a pattern matches *every* value of its static type — it can never fall through. Only a
 /// wildcard or plain binding qualifies; a literal, variant, type or struct pattern is a runtime test
 /// that can fail. Drives both `match_arm_key` (a refined payload isn't a plain duplicate) and the

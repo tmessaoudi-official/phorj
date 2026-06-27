@@ -383,8 +383,76 @@ impl Checker {
                 ClassMember::Field { .. } => {}
             }
         }
+        self.check_definite_assignment(type_name, members);
         self.cur_class_type_params = prev_tp;
         self.cur_class = prev;
+    }
+
+    /// Definite-assignment pass (Soundness Batch D, finding #4): every **non-optional** instance field
+    /// that has no initializer and is not a promoted ctor param must be assigned on every completing
+    /// path of the constructor — else the field is constructed unset and reading it faults at runtime
+    /// (`no field x`), an unbacked `T`. An **optional** field is exempt: it defaults to `null`
+    /// (`inject_optional_field_defaults` injects the default before any backend). A trait is skipped —
+    /// its fields are the responsibility of the composing class. `E-FIELD-UNINITIALIZED`.
+    fn check_definite_assignment(&mut self, type_name: &str, members: &[crate::ast::ClassMember]) {
+        use crate::ast::{ClassMember, Modifier};
+        if self.traits.contains(type_name) {
+            return;
+        }
+        // Promoted ctor params (visibility-modified) auto-assign their field; collect the names + the
+        // constructor body (empty when the class has no constructor).
+        let mut promoted: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        let mut ctor_body: &[crate::ast::Stmt] = &[];
+        for m in members {
+            if let ClassMember::Constructor { params, body, .. } = m {
+                ctor_body = body;
+                for p in params {
+                    if p.modifiers.iter().any(|md| {
+                        matches!(
+                            md,
+                            Modifier::Public | Modifier::Private | Modifier::Protected
+                        )
+                    }) {
+                        promoted.insert(p.name.as_str());
+                    }
+                }
+            }
+        }
+        for m in members {
+            let ClassMember::Field {
+                modifiers,
+                name,
+                init: None,
+                span,
+                ..
+            } = m
+            else {
+                continue;
+            };
+            // Only plain instance fields (a `static`/`const` field has its own init rules); an
+            // optional field defaults to null; a promoted field is assigned by promotion.
+            if modifiers.contains(&Modifier::Static)
+                || modifiers.contains(&Modifier::Const)
+                || promoted.contains(name.as_str())
+            {
+                continue;
+            }
+            let is_optional = matches!(
+                self.classes.get(type_name).and_then(|i| i.fields.get(name)),
+                Some(Ty::Optional(_))
+            );
+            if is_optional {
+                continue;
+            }
+            if !self.block_assigns_field(ctor_body, name) {
+                self.err_coded(
+                    *span,
+                    format!("field `{name}` is never initialized — it must be set on every path of the constructor, or given an initializer"),
+                    "E-FIELD-UNINITIALIZED",
+                    Some("assign `this.{name} = …` unconditionally in the constructor, give the field an initializer (`int {name} = 0;`), make it a promoted ctor param (`constructor(public int {name})`), or make it optional (`int? {name};`, defaults to null)".replace("{name}", name)),
+                );
+            }
+        }
     }
 
     /// Check one free function or method body. Seeds a fresh scope with params. A generic function's
@@ -504,6 +572,71 @@ impl Checker {
                 }
                 self.block_terminates(body)
                     && catches.iter().all(|c| self.block_terminates(&c.body))
+            }
+            _ => false,
+        }
+    }
+
+    /// Definite assignment (Soundness Batch D): does **every completing path** through `stmts` assign
+    /// `this.field` before the path ends? A path that *diverges* (throw/panic/infinite loop — not a
+    /// plain `return`, which completes construction) is vacuously fine; an early `return` before the
+    /// assignment is NOT (the object is constructed with the field unset). Conservative and sound: any
+    /// `return` reached before the assignment fails the check.
+    pub(super) fn block_assigns_field(&self, stmts: &[crate::ast::Stmt], field: &str) -> bool {
+        for s in stmts {
+            if self.stmt_assigns_field(s, field) {
+                return true;
+            }
+            if self.stmt_diverges_no_return(s) {
+                return true; // no completing path continues past here
+            }
+            if stmt_has_return(s) {
+                return false; // an early return completes construction without the assignment
+            }
+        }
+        false
+    }
+
+    /// Whether *every completing path* through a single statement assigns `this.field`.
+    fn stmt_assigns_field(&self, s: &crate::ast::Stmt, field: &str) -> bool {
+        use crate::ast::Stmt;
+        match s {
+            Stmt::Assign { target, .. } => is_this_field(target, field),
+            Stmt::Block(b, _) => self.block_assigns_field(b, field),
+            Stmt::If {
+                then_block,
+                else_block: Some(eb),
+                ..
+            } => self.block_assigns_field(then_block, field) && self.block_assigns_field(eb, field),
+            // An `if` with no else, or a loop body (may run zero times), does not assign on all paths.
+            _ => false,
+        }
+    }
+
+    /// Whether a statement *always* diverges without returning (throw / `never` expr / infinite loop /
+    /// a block or both-branch `if` that does). The `return`-excluding dual of [`Self::stmt_terminates`]
+    /// — for definite assignment a `return` is a *completing* path, not a saving divergence.
+    fn stmt_diverges_no_return(&self, s: &crate::ast::Stmt) -> bool {
+        use crate::ast::Stmt;
+        match s {
+            Stmt::Throw { .. } => true,
+            Stmt::Expr(e, _) => self.expr_is_never(e),
+            Stmt::Block(b, _) => b.iter().any(|x| self.stmt_diverges_no_return(x)),
+            Stmt::If {
+                then_block,
+                else_block: Some(eb),
+                ..
+            } => {
+                then_block.iter().any(|x| self.stmt_diverges_no_return(x))
+                    && eb.iter().any(|x| self.stmt_diverges_no_return(x))
+            }
+            Stmt::While { cond, body, .. } => is_true_lit(cond) && !breaks_this_loop(body),
+            Stmt::CFor { cond, body, .. } => {
+                let cond_always = match cond {
+                    None => true,
+                    Some(c) => is_true_lit(c),
+                };
+                cond_always && !breaks_this_loop(body)
             }
             _ => false,
         }

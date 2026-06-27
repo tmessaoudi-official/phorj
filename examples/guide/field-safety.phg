@@ -1,0 +1,40 @@
+// Definite assignment + optional default-null (Soundness Batch D).
+//
+// A non-optional instance field carries a `T` the type system guarantees holds a value — so it must
+// be initialized on every path: by a promoted ctor param, a field initializer, or an unconditional
+// `this.f = …` in the constructor. A field that is never definitely assigned is rejected at compile
+// time (E-FIELD-UNINITIALIZED) instead of faulting "no field" at runtime — see the README.
+//
+// An OPTIONAL field (`T?`) is exempt: with no initializer it defaults to `null` (the DEFAULT-NULL
+// policy), so reading it before assignment yields `null`, never a fault.
+package Main;
+
+import Core.Console;
+
+class Account {
+  // Promoted ctor param — assigned by promotion.
+  constructor(public string owner, int opening) {
+    // Unconditional assignment in the constructor satisfies definite assignment.
+    this.balance = opening;
+  }
+
+  mutable int balance;
+
+  // A field initializer — runs at construction, in declaration order.
+  int created = 1;
+
+  // An optional field with no initializer: defaults to `null`.
+  string? note;
+
+  function describe() -> string {
+    // `?? "(none)"` supplies a fallback for the null-defaulted optional (bound first — an
+    // interpolation hole can't hold a quoted string literal).
+    var n = this.note ?? "(none)";
+    return "{this.owner}: balance={this.balance} created={this.created} note={n}";
+  }
+}
+
+function main() -> void {
+  var a = new Account("ada", 100);
+  Console.println(a.describe());
+}

@@ -390,9 +390,17 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
             // is gone, so every backend sees the plain construction `Call`. Slice 6: `rewrite_ufcs`
             // runs last, rewriting each resolved `x.f(a)` member call into the ordinary free/native
             // call `f(x, a)` the checker chose — by then the receiver/args are fully de-sugared.
+            // Batch D: inject `= null` defaults for optional instance fields (after aliases are
+            // expanded, so an aliased optional is already `Type::Optional`) — a front-end desugar so
+            // every backend initializes them identically.
             Ok(crate::checker::rewrite_ufcs(
                 crate::checker::unwrap_new(crate::checker::erase_generics(
-                    crate::checker::resolve_html(crate::checker::expand_aliases(prog), &html),
+                    crate::checker::resolve_html(
+                        crate::checker::inject_optional_field_defaults(
+                            crate::checker::expand_aliases(prog),
+                        ),
+                        &html,
+                    ),
                 )),
                 &ufcs,
             ))

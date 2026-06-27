@@ -11,6 +11,41 @@ use super::*;
 use crate::ast::{CatchClause, ClassMember, Expr, Item, LambdaBody, MatchArm, Stmt, StrPart};
 use crate::token::Span;
 
+/// Default-null injection for optional instance fields (Soundness Batch D, DEFAULT-NULL policy). An
+/// optional field with no initializer (`int? n;`) reads as `null` rather than faulting "no field n":
+/// inject an explicit `= null` initializer so the existing field-initializer machinery sets it at
+/// construction on every backend — a front-end desugar, so the interpreter, VM, and transpiled PHP all
+/// initialize it identically (byte-identity safe, no backend change). Runs after `expand_aliases`, so a
+/// field typed via an alias to an optional is already `Type::Optional` here. A constructor that *does*
+/// assign the field still overrides this default (field initializers run before the ctor body).
+pub fn inject_optional_field_defaults(mut program: Program) -> Program {
+    for item in &mut program.items {
+        let members = match item {
+            Item::Class(c) => &mut c.members,
+            Item::Trait(t) => &mut t.members,
+            _ => continue,
+        };
+        for m in members {
+            if let ClassMember::Field {
+                modifiers,
+                ty,
+                init: init @ None,
+                span,
+                ..
+            } = m
+            {
+                use crate::ast::Modifier;
+                let instance =
+                    !modifiers.contains(&Modifier::Static) && !modifiers.contains(&Modifier::Const);
+                if instance && matches!(ty, crate::ast::Type::Optional { .. }) {
+                    *init = Some(Expr::Null(*span));
+                }
+            }
+        }
+    }
+    program
+}
+
 /// Erase every `Expr::New(inner, _)` to `*inner` throughout the program (in place).
 pub fn unwrap_new(mut program: Program) -> Program {
     for item in &mut program.items {

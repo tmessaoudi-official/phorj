@@ -20,7 +20,7 @@ mod rewrite_ufcs;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
-pub use rewrite_new::unwrap_new;
+pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
 pub use rewrite_ufcs::rewrite_ufcs;
 
 // impl-cluster cohesion split (M-Decomp W2): one `impl Checker` block per cluster
