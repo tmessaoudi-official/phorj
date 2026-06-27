@@ -51,6 +51,16 @@
   conversion** — lossy narrowing is always optional (loud null); `Convert.truncate` stays the named
   tool for "I want truncation". `T as T` = identity (W-redundant-cast lint).
 
+### Tooling needle-mover (post Option-2 a/b)
+- [2026-06-27] AGREED: next = **M-Test then phg fmt** (developer chose the tooling needle-mover). Both
+  **design-specced first** (developer chose spec-first): `docs/specs/2026-06-27-m-test-design.md` +
+  `docs/specs/2026-06-27-phg-fmt-design.md`. **All flagged forks approved as recommended** (developer:
+  "build with all recommended defaults — M-Test first"): M-Test = `test "name" {}` items + catchable-
+  fault failures + `Core.Test` asserts + `tests/**/*.phg` discovery + interpreter runner; phg fmt =
+  comment side-channel + reattachment + gofmt-shaped CLI + tidy-no-reflow v1. **Finding:** phg fmt is
+  NOT a printer reuse — the lexer discards comments, so it needs the trivia slice (F1–F5); M-Test is
+  unblocked, hence first. Build order: M-Test T1→T5, then phg fmt F1→F5.
+
 ### Batch 4 (minor / technical-constraint items)
 - [2026-06-27] **CHANGE** float `/0` → **clean fault** (general principle: ANY division by zero throws —
   int/float/decimal `/` and `%`). Was: `1.0/0.0`→`inf` (IEEE), diverging from PHP DivisionByZeroError.
