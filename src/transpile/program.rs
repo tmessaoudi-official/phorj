@@ -371,7 +371,8 @@ impl Transpiler {
         // `__phorge_float` is needed by `__phorge_str` AND directly by a statically-float interpolation
         // hole (T6) — so it is emitted whenever either is in play, independent of the `__phorge_str`
         // dispatch helper above.
-        if self.uses_str || self.uses_float || self.uses_json_encode {
+        if self.uses_str || self.uses_float || self.uses_json_encode || self.uses_math_number_format
+        {
             // Reproduce Rust's `f64` Display exactly (EV-6): the shortest decimal that round-trips to
             // the same double, in positional notation (never scientific, for any magnitude), with an
             // integer-valued float rendered without a trailing `.0`. The `%.{p}e` loop finds the
@@ -771,33 +772,55 @@ impl Transpiler {
             self.line("}");
         }
         if self.uses_math_number_format {
-            // `Math.numberFormat($v, $d)` — assembles the grouped string exactly like Rust
-            // `value::number_format`: round half-away-from-zero to `$d` places, group the integer part
-            // by threes, join with `.`. Single-sourced here (NOT PHP's `number_format`) so the `-0`
-            // sign rule and grouping match the Rust kernel byte-for-byte. Tier-1 functions only.
+            // `Math.numberFormat($v, $d)` — digit-string rounding, mirroring `value::number_format`
+            // byte-for-byte: round the *shortest-round-trip* decimal string (`__phorge_float`, identical
+            // to Rust's `{}` Display) half-away-from-zero by carry — NOT `round($v * 10^$d)` — so the
+            // `.5`-boundary divergence is gone (both legs round the intended decimal). Then group by
+            // threes and join with `.`. Single-sourced here (NOT PHP's `number_format`).
             self.line("function __phorge_number_format($v, $d) {");
             self.indent += 1;
             self.line("if ($d < 0) { $d = 0; }");
-            self.line("$scaled = round($v * pow(10, $d));");
-            self.line("$neg = $scaled < 0;");
-            self.line("$digits = sprintf(\"%.0f\", abs($scaled));");
-            self.line("if (strlen($digits) <= $d) {");
+            self.line("if (!is_finite($v)) { return __phorge_float($v); }");
+            self.line("$s = __phorge_float($v);");
+            self.line("$neg = ($s[0] ?? '') === '-';");
+            self.line("if ($neg) { $s = substr($s, 1); }");
+            self.line("$dot = strpos($s, '.');");
+            self.line("$int = $dot === false ? $s : substr($s, 0, $dot);");
+            self.line("$frac = $dot === false ? '' : substr($s, $dot + 1);");
+            self.line("$intd = str_split($int);");
+            self.line("$fracd = strlen($frac) > 0 ? str_split($frac) : [];");
+            self.line("$round_up = isset($fracd[$d]) && ord($fracd[$d]) >= ord('5');");
+            self.line("$fracd = array_slice($fracd, 0, $d);");
+            self.line("while (count($fracd) < $d) { $fracd[] = '0'; }");
+            self.line("if ($round_up) {");
             self.indent += 1;
-            self.line("$digits = str_repeat(\"0\", $d + 1 - strlen($digits)) . $digits;");
+            self.line("$carry = 1;");
+            self.line("for ($i = count($fracd) - 1; $i >= 0 && $carry; $i--) {");
+            self.indent += 1;
+            self.line("$x = (ord($fracd[$i]) - 48) + $carry; $fracd[$i] = chr(48 + $x % 10); $carry = intdiv($x, 10);");
             self.indent -= 1;
             self.line("}");
-            self.line("$split = strlen($digits) - $d;");
-            self.line("$intpart = substr($digits, 0, $split);");
-            self.line("$frac = substr($digits, $split);");
-            self.line("$len = strlen($intpart);");
-            self.line("$out = $neg ? \"-\" : \"\";");
-            self.line("for ($i = 0; $i < $len; $i++) {");
+            self.line("for ($i = count($intd) - 1; $i >= 0 && $carry; $i--) {");
             self.indent += 1;
-            self.line("if ($i > 0 && ($len - $i) % 3 === 0) { $out .= \",\"; }");
-            self.line("$out .= $intpart[$i];");
+            self.line("$x = (ord($intd[$i]) - 48) + $carry; $intd[$i] = chr(48 + $x % 10); $carry = intdiv($x, 10);");
             self.indent -= 1;
             self.line("}");
-            self.line("if ($d > 0) { $out .= \".\" . $frac; }");
+            self.line("if ($carry) { array_unshift($intd, chr(48 + $carry)); }");
+            self.indent -= 1;
+            self.line("}");
+            self.line("while (count($intd) > 1 && $intd[0] === '0') { array_shift($intd); }");
+            self.line(
+                "$all_zero = !in_array(true, array_map(fn($c) => $c !== '0', array_merge($intd, $fracd)), true);",
+            );
+            self.line("$out = ($neg && !$all_zero) ? '-' : '';");
+            self.line("$n = count($intd);");
+            self.line("for ($i = 0; $i < $n; $i++) {");
+            self.indent += 1;
+            self.line("if ($i > 0 && ($n - $i) % 3 === 0) { $out .= ','; }");
+            self.line("$out .= $intd[$i];");
+            self.indent -= 1;
+            self.line("}");
+            self.line("if ($d > 0) { $out .= '.' . implode('', $fracd); }");
             self.line("return $out;");
             self.indent -= 1;
             self.line("}");

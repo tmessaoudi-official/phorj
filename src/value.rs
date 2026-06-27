@@ -492,32 +492,66 @@ pub fn float_to_int(v: f64) -> Option<i64> {
 
 /// `Math.numberFormat(value, decimals)` (M-NUM S4): a non-locale `number_format` — `value` rounded
 /// half-away-from-zero to `decimals` places, grouped with `,` every three integer digits and a `.`
-/// decimal point. Single-sourced so the interpreter and VM agree; mirrored byte-for-byte by the
-/// `__phorge_number_format` PHP helper (same digit-string assembly), so the only divergence axis is
-/// the float→integer rounding at an exact `.5` boundary (Rust `f64::round` has no pre-rounding, PHP
-/// `round` does) — examples keep off those boundaries, exactly like the rest of the float surface.
-/// A negative `decimals` is clamped to `0` (both legs), so the result is always well-formed.
+/// decimal point. **Digit-string rounding** (2026-06-27): it rounds the *shortest-round-trip decimal
+/// string* of `value` (`format!("{value}")`, which the PHP `__phorge_float` helper reproduces
+/// byte-for-byte) digit-by-digit with carry — NOT `(value * 10^d).round()`. That removes the previous
+/// `.5`-boundary divergence (Rust `f64::round` had no pre-rounding, PHP `round` did): both legs now
+/// round the *intended* decimal identically (`numberFormat(0.285, 2) == "0.29"` on all three backends).
+/// A negative `decimals` is clamped to `0`. A non-finite `value` is outside the format domain and
+/// falls back to its plain display.
 pub fn number_format(value: f64, decimals: usize) -> String {
-    let factor = 10f64.powi(decimals as i32);
-    // Round half-away-from-zero to an integer-valued f64 (`-0.0 < 0.0` is false, so a value that
-    // rounds to zero prints "0", never "-0").
-    let scaled = (value * factor).round();
-    let neg = scaled < 0.0;
-    let mut digits = format!("{:.0}", scaled.abs());
-    // Guarantee at least one whole-part digit ahead of the fractional split.
-    if digits.len() <= decimals {
-        digits = format!("{}{}", "0".repeat(decimals + 1 - digits.len()), digits);
+    if !value.is_finite() {
+        return format!("{value}");
     }
-    let (int_part, frac_part) = digits.split_at(digits.len() - decimals);
-    // Group the integer part into thousands (separator before every digit whose distance from the
-    // end is a positive multiple of three).
-    let bytes = int_part.as_bytes();
-    let n = bytes.len();
+    let s = format!("{value}");
+    let neg = s.starts_with('-');
+    let s = s.strip_prefix('-').unwrap_or(&s);
+    let (int_str, frac_str) = match s.split_once('.') {
+        Some((i, f)) => (i, f),
+        None => (s, ""),
+    };
+    let mut int_digits: Vec<u8> = int_str.bytes().collect();
+    let mut frac_digits: Vec<u8> = frac_str.bytes().collect();
+    // Round half-away-from-zero: round up iff the first dropped fractional digit is >= '5'.
+    let round_up = frac_digits.get(decimals).is_some_and(|&d| d >= b'5');
+    frac_digits.truncate(decimals);
+    while frac_digits.len() < decimals {
+        frac_digits.push(b'0');
+    }
+    if round_up {
+        let mut carry = 1u8;
+        for d in frac_digits.iter_mut().rev() {
+            if carry == 0 {
+                break;
+            }
+            let v = *d - b'0' + carry;
+            *d = b'0' + v % 10;
+            carry = v / 10;
+        }
+        for d in int_digits.iter_mut().rev() {
+            if carry == 0 {
+                break;
+            }
+            let v = *d - b'0' + carry;
+            *d = b'0' + v % 10;
+            carry = v / 10;
+        }
+        if carry > 0 {
+            int_digits.insert(0, b'0' + carry);
+        }
+    }
+    // Strip leading zeros from the integer part (keep at least one digit).
+    while int_digits.len() > 1 && int_digits[0] == b'0' {
+        int_digits.remove(0);
+    }
+    // A result that is entirely zero never carries a sign (no `-0`).
+    let all_zero = int_digits.iter().all(|&d| d == b'0') && frac_digits.iter().all(|&d| d == b'0');
     let mut out = String::new();
-    if neg {
+    if neg && !all_zero {
         out.push('-');
     }
-    for (i, b) in bytes.iter().enumerate() {
+    let n = int_digits.len();
+    for (i, b) in int_digits.iter().enumerate() {
         if i > 0 && (n - i) % 3 == 0 {
             out.push(',');
         }
@@ -525,7 +559,9 @@ pub fn number_format(value: f64, decimals: usize) -> String {
     }
     if decimals > 0 {
         out.push('.');
-        out.push_str(frac_part);
+        for b in &frac_digits {
+            out.push(*b as char);
+        }
     }
     out
 }

@@ -116,12 +116,12 @@ not a panic:
   libm, and a non-representable result would diverge between Rust's shortest-round-trip and PHP, so the
   guide exercises them at their *exact* IEEE-defined points (`exp(0)`=1, `sin(0)`=0, `cos(0)`=1, …) and
   prints real values through `numberFormat`, which collapses any last-ULP libm difference. The
-  `run ≡ runvm` spine is always identical (both Rust). (2) **`numberFormat` rounding at an exact `.5`
-  boundary may differ** — the Rust kernel uses `f64::round` (no pre-rounding) and the `__phorge_number_format`
-  helper uses PHP `round` (which pre-rounds), so a value sitting *exactly* on a half-way boundary at the
-  formatted precision can disagree; examples (like the rest of the float surface) keep off those
-  boundaries. The string assembly (grouping, sign, decimal point, `-0`→`0`) is single-sourced with
-  `value::number_format`, so only the rounding primitive is a divergence axis. (3) **`gcd` with the
+  `run ≡ runvm` spine is always identical (both Rust). (2) **`numberFormat` rounding is byte-identical**
+  (fixed 2026-06-27) — both `value::number_format` and `__phorge_number_format` now **digit-string
+  round** the *shortest-round-trip* decimal (`__phorge_float`, identical to Rust's `{}` Display)
+  half-away-from-zero by carry, NOT `(value * 10^d).round()`. So a half-way money value rounds the
+  intended decimal identically on all three backends (`numberFormat(0.285, 2) == "0.29"`); the old
+  `f64::round`-vs-PHP-`round` boundary divergence is gone. (3) **`gcd` with the
   `i64::MIN` magnitude faults** — `gcd(i64::MIN, i64::MIN)`/`gcd(i64::MIN, 0)` would be `2^63`, outside
   i64, so it is a clean `"integer overflow"` fault (EV-7), exercised by the `math_gcd` unit test, not the
   example set.

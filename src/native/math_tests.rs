@@ -217,6 +217,12 @@ fn math_s4_breadth_eval_and_emit() {
     assert_eq!(nf(5.0, 0), "5");
     assert_eq!(nf(1234.0, 0), "1,234");
     assert_eq!(nf(12.5, -1), "13"); // negative decimals clamp to 0 (half-away)
+                                    // Digit-string rounding (2026-06-27): the `.5`-boundary values the old float-scaling got wrong.
+                                    // 0.285 / 2.675 are stored just below their literal, but rounding the shortest decimal string
+                                    // gives the intended (and PHP-matching) result.
+    assert_eq!(nf(0.285, 2), "0.29");
+    assert_eq!(nf(2.675, 2), "2.68");
+    assert_eq!(nf(999.99, 1), "1,000.0"); // carry ripples through every 9
 
     // PHP erasure
     let php = |name: &str, args: &[&str]| {

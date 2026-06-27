@@ -65,6 +65,12 @@ function main(): void {
     string n4 = Math.numberFormat(0.0, 2);
     Console.println("{n1} | {n2} | {n3} | {n4}");
 
+    // Half-way money values round on the *intended decimal* (digit-string rounding), identical on
+    // all three backends: 0.285 -> 0.29, 2.675 -> 2.68 (not 0.28 / 2.67).
+    string m1 = Math.numberFormat(0.285, 2);
+    string m2 = Math.numberFormat(2.675, 2);
+    Console.println("0.285~{m1}, 2.675~{m2}");
+
     string pf = Math.numberFormat(Math.pi(), 4);
     string ef = Math.numberFormat(Math.e(), 4);
     string xf = Math.numberFormat(Math.exp(1.0), 4);
