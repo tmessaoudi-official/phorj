@@ -831,19 +831,17 @@ impl Printer<'_> {
                             Some(t) => format!(" -> {}", ty(t)?),
                             None => String::new(),
                         };
-                        let mut out = format!("fn({ps}){r} {{ ");
-                        let inner: Result<Vec<_>, _> =
-                            stmts.iter().map(|s| self.stmt_inline_loose(s)).collect();
-                        out.push_str(&inner?.join(" "));
-                        out.push_str(" }");
-                        Ok(out)
+                        // A lambda is an expression, so its block body is rendered on one line (v1 has
+                        // no reflow). `inline_block` handles any statement, including control flow.
+                        Ok(format!("fn({ps}){r} {{ {} }}", self.inline_block(stmts)?))
                     }
                 }
             }
             Expr::CloneWith { object, fields, .. } => {
+                // `obj with { field = value, … }` — the functional-update syntax uses `=`, not `:`.
                 let mut fs = Vec::new();
                 for (name, e) in fields {
-                    fs.push(format!("{name}: {}", self.expr(e)?));
+                    fs.push(format!("{name} = {}", self.expr(e)?));
                 }
                 Ok(format!(
                     "{} with {{ {} }}",
@@ -857,7 +855,9 @@ impl Printer<'_> {
                 for part in parts {
                     match part {
                         StrPart::Literal(lit) => s.push_str(&escape_str(lit)),
-                        StrPart::Expr(e) => s.push_str(&format!("{{{}}}", self.expr(e)?)),
+                        StrPart::Expr(e) => {
+                            s.push_str(&format!("{{{}}}", escape_interp(&self.expr(e)?)));
+                        }
                     }
                 }
                 s.push('"');
@@ -866,16 +866,147 @@ impl Printer<'_> {
         }
     }
 
-    /// A statement printed inline (for a single-line lambda block body) with a trailing `;` but no
-    /// indent/newline. Reuses [`Self::stmt_inline`] for the expression-ish forms; a `return` is the
-    /// common lambda-block statement.
-    fn stmt_inline_loose(&self, s: &Stmt) -> Result<String, String> {
+    /// Render a statement list on one line (for a statement-body lambda — a lambda is an expression,
+    /// so v1 prints its block inline; no reflow). Each statement via [`Self::stmt_inline_any`].
+    fn inline_block(&self, stmts: &[Stmt]) -> Result<String, String> {
+        let xs: Result<Vec<_>, _> = stmts.iter().map(|s| self.stmt_inline_any(s)).collect();
+        Ok(xs?.join(" "))
+    }
+
+    /// Render ANY statement to a single line (trailing `;` where one belongs, nested blocks as
+    /// `{ … }`). Total over every `Stmt` variant — the lambda-block path needs full coverage, unlike
+    /// the for-clause [`Self::stmt_inline`] (which the parser restricts to var-decl/assign/expr).
+    fn stmt_inline_any(&self, s: &Stmt) -> Result<String, String> {
         match s {
+            Stmt::VarDecl {
+                ty: t,
+                name,
+                init,
+                mutable,
+                ..
+            } => {
+                let m = if *mutable { "mutable " } else { "" };
+                Ok(format!("{m}{} {name} = {};", ty(t)?, self.expr(init)?))
+            }
+            Stmt::Assign { target, value, .. } => {
+                Ok(format!("{} = {};", self.expr(target)?, self.expr(value)?))
+            }
             Stmt::Return { value, .. } => match value {
                 Some(e) => Ok(format!("return {};", self.expr(e)?)),
                 None => Ok("return;".to_string()),
             },
-            other => Ok(format!("{};", self.stmt_inline(other)?)),
+            Stmt::Expr(e, _) => Ok(format!("{};", self.expr(e)?)),
+            Stmt::Break(_) => Ok("break;".to_string()),
+            Stmt::Continue(_) => Ok("continue;".to_string()),
+            Stmt::Throw { value, .. } => Ok(format!("throw {};", self.expr(value)?)),
+            Stmt::Block(b, _) => Ok(format!("{{ {} }}", self.inline_block(b)?)),
+            Stmt::If {
+                cond,
+                bind,
+                then_block,
+                else_block,
+                ..
+            } => {
+                let c = match bind {
+                    Some(name) => format!("var {name} = {}", self.expr(cond)?),
+                    None => self.expr(cond)?,
+                };
+                let mut out = format!("if ({c}) {{ {} }}", self.inline_block(then_block)?);
+                if let Some(eb) = else_block {
+                    out.push_str(&format!(" else {{ {} }}", self.inline_block(eb)?));
+                }
+                Ok(out)
+            }
+            Stmt::While {
+                cond,
+                body,
+                post_cond,
+                ..
+            } => {
+                if *post_cond {
+                    Ok(format!(
+                        "do {{ {} }} while ({});",
+                        self.inline_block(body)?,
+                        self.expr(cond)?
+                    ))
+                } else {
+                    Ok(format!(
+                        "while ({}) {{ {} }}",
+                        self.expr(cond)?,
+                        self.inline_block(body)?
+                    ))
+                }
+            }
+            Stmt::For {
+                ty: t,
+                name,
+                iter,
+                body,
+                ..
+            } => {
+                let head = if matches!(t, Type::Infer(_)) {
+                    format!("foreach ({} as {name})", self.expr(iter)?)
+                } else {
+                    format!("for ({} {name} in {})", ty(t)?, self.expr(iter)?)
+                };
+                Ok(format!("{head} {{ {} }}", self.inline_block(body)?))
+            }
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                ..
+            } => {
+                let i = match init {
+                    Some(s) => self.stmt_inline(s)?,
+                    None => String::new(),
+                };
+                let c = match cond {
+                    Some(e) => self.expr(e)?,
+                    None => String::new(),
+                };
+                let st = match step {
+                    Some(s) => self.stmt_inline(s)?,
+                    None => String::new(),
+                };
+                Ok(format!(
+                    "for ({i}; {c}; {st}) {{ {} }}",
+                    self.inline_block(body)?
+                ))
+            }
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                let mut out = format!("try {{ {} }}", self.inline_block(body)?);
+                for cat in catches {
+                    out.push_str(&format!(
+                        " catch ({} {}) {{ {} }}",
+                        ty(&cat.ty)?,
+                        cat.name,
+                        self.inline_block(&cat.body)?
+                    ));
+                }
+                if let Some(fb) = finally_block {
+                    out.push_str(&format!(" finally {{ {} }}", self.inline_block(fb)?));
+                }
+                Ok(out)
+            }
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                ..
+            } => {
+                let head = format!("var {} = {}", self.destructure_pat(pat)?, self.expr(init)?);
+                match else_block {
+                    None => Ok(format!("{head};")),
+                    Some(eb) => Ok(format!("{head} else {{ {} }}", self.inline_block(eb)?)),
+                }
+            }
         }
     }
 
@@ -884,7 +1015,10 @@ impl Printer<'_> {
         for part in parts {
             match part {
                 StrPart::Literal(lit) => s.push_str(&escape_str(lit)),
-                StrPart::Expr(e) => s.push_str(&format!("{{{}}}", self.expr(e)?)),
+                // An interpolation hole's expression is re-lexed by the parser, so any `"`/`}`/`\` in
+                // its printed form must be escaped or it would close the string / the hole early
+                // (e.g. `{scores["alice"]}` ⇒ `{scores[\"alice\"]}`).
+                StrPart::Expr(e) => s.push_str(&format!("{{{}}}", escape_interp(&self.expr(e)?))),
             }
         }
         s.push('"');
@@ -1050,6 +1184,11 @@ fn prec_of(e: &Expr) -> u8 {
         Expr::InstanceOf { .. } | Expr::Cast { .. } => 8,
         Expr::Unary { .. } => PREC_UNARY,
         Expr::Range { .. } => PREC_RANGE,
+        // A lambda (`fn(x) => …`) and the value-position `if`/`match` are "loose" primaries: their
+        // bodies/arms extend rightward, so as a postfix receiver (`(lambda)(args)`, the pipe-desugared
+        // call) or a binary operand they MUST be parenthesized. Treat them at the loosest precedence so
+        // `operand`/`postfix_operand` wrap them.
+        Expr::Lambda { .. } | Expr::If { .. } | Expr::Match { .. } => PREC_RANGE,
         _ => PREC_ATOM,
     }
 }
@@ -1117,6 +1256,22 @@ fn stmt_start(s: &Stmt) -> usize {
         | Stmt::Destructure { span, .. } => span.start,
         Stmt::Break(sp) | Stmt::Continue(sp) | Stmt::Block(_, sp) | Stmt::Expr(_, sp) => sp.start,
     }
+}
+
+/// Escape the printed text of an interpolation hole's expression so the lexer re-captures it intact:
+/// `\` → `\\`, `"` → `\"` (else it closes the surrounding string), `}` → `\}` (else it closes the
+/// hole early). A `{` needs no escape — inside an open interpolation it does not start a nested hole.
+fn escape_interp(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '}' => out.push_str("\\}"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 /// A plain double-quoted string literal (for a `test` name) — escaped, no interpolation holes.

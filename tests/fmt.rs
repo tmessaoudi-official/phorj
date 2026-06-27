@@ -94,3 +94,52 @@ fn stdin_path_formats_a_source_string() {
     // idempotent at the source level.
     assert_eq!(out, cli::fmt_source(&out).unwrap());
 }
+
+/// Recursively collect every `*.phg` under `dir`.
+fn collect_phg(dir: &Path, out: &mut Vec<PathBuf>) {
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                collect_phg(&p, out);
+            } else if p.extension().is_some_and(|x| x == "phg") {
+                out.push(p);
+            }
+        }
+    }
+}
+
+/// F4 dogfood: the formatter must handle **every** real `.phg` in the repo — format without error,
+/// be idempotent, and (for a program that runs as a standalone single file) preserve its behavior.
+/// This is the meaning-preservation gate on real code; it also guards against any future construct
+/// the printer doesn't cover.
+#[test]
+fn every_repo_phg_formats_idempotently_and_safely() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+    collect_phg(&root.join("examples"), &mut files);
+    collect_phg(&root.join("selftest"), &mut files);
+    files.sort();
+    assert!(
+        files.len() > 20,
+        "expected the repo's example corpus, found {}",
+        files.len()
+    );
+
+    for f in &files {
+        let src = std::fs::read_to_string(f).unwrap();
+        // Formats without error.
+        let once =
+            cli::fmt_source(&src).unwrap_or_else(|e| panic!("fmt failed on {}:\n{e}", f.display()));
+        // Idempotent.
+        let twice = cli::fmt_source(&once).unwrap();
+        assert_eq!(once, twice, "not idempotent: {}", f.display());
+        // Meaning preserved for a standalone-runnable program (skip multi-file project parts /
+        // impure / fragment files, which don't run as a single source).
+        let before = cli::cmd_run(&src);
+        if before.is_ok() {
+            let after = cli::cmd_run(&once);
+            assert_eq!(before, after, "fmt changed behavior of {}", f.display());
+        }
+    }
+}
