@@ -3,7 +3,7 @@
 //! surface as a unified `diagnostic::Diagnostic` (`Stage::Lex`) carrying line/col.
 
 use crate::diagnostic::{Diagnostic, Stage};
-use crate::token::{Span, StrSeg, Token, TokenKind};
+use crate::token::{Comment, CommentKind, Span, StrSeg, Token, TokenKind};
 
 pub struct Lexer<'a> {
     src: &'a [u8],
@@ -878,7 +878,32 @@ fn dedent_block(body: &[u8], closing_indent: usize) -> Vec<u8> {
     out
 }
 
+/// Tokenize `src`. Comments are **discarded** (the parser never sees them). Use
+/// [`lex_with_comments`] when a tool (the formatter `phg fmt`) needs the trivia.
 pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
+    lex_inner(src, &mut Vec::new())
+}
+
+/// Like [`lex`], but also returns every comment captured in source order (the `phg fmt`
+/// side-channel — F1). The token stream is identical to [`lex`]'s; comments are collected, not
+/// emitted as tokens, so the parser/AST are unchanged.
+pub fn lex_with_comments(src: &str) -> Result<(Vec<Token>, Vec<Comment>), Diagnostic> {
+    let mut comments = Vec::new();
+    let tokens = lex_inner(src, &mut comments)?;
+    Ok((tokens, comments))
+}
+
+/// True when only whitespace precedes byte offset `start` on its source line (an "own-line"
+/// comment) — i.e. everything back to the previous newline (or start of file) is blank.
+fn at_line_start(src: &[u8], start: usize) -> bool {
+    src[..start]
+        .iter()
+        .rev()
+        .take_while(|&&b| b != b'\n')
+        .all(|&b| b == b' ' || b == b'\t' || b == b'\r')
+}
+
+fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagnostic> {
     let mut lx = Lexer::new(src);
     let mut out = Vec::new();
     loop {
@@ -901,11 +926,42 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
             }
             Some(b) => {
                 if b == b'/' && lx.peek2() == Some(b'/') {
+                    let own_line = at_line_start(lx.src, start);
                     lx.skip_line_comment();
+                    // The raw `// …` text, trailing whitespace trimmed (the line comment stops at the
+                    // newline, which is not consumed).
+                    let text = String::from_utf8_lossy(&lx.src[start..lx.pos])
+                        .trim_end()
+                        .to_string();
+                    comments.push(Comment {
+                        span: Span {
+                            start,
+                            len: lx.pos - start,
+                            line,
+                            col,
+                        },
+                        text,
+                        kind: CommentKind::Line,
+                        own_line,
+                    });
                     continue;
                 }
                 if b == b'/' && lx.peek2() == Some(b'*') {
+                    let own_line = at_line_start(lx.src, start);
                     lx.skip_block_comment()?;
+                    // `start..lx.pos` spans the whole `/* … */` including the closing delimiter.
+                    let text = String::from_utf8_lossy(&lx.src[start..lx.pos]).to_string();
+                    comments.push(Comment {
+                        span: Span {
+                            start,
+                            len: lx.pos - start,
+                            line,
+                            col,
+                        },
+                        text,
+                        kind: CommentKind::Block,
+                        own_line,
+                    });
                     continue;
                 }
 

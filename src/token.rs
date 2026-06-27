@@ -10,6 +10,27 @@ pub struct Span {
     pub col: u32,  // 1-based
 }
 
+/// A source comment, captured by the lexer's [`crate::lexer::lex_with_comments`] side-channel (the
+/// formatter `phg fmt` needs comments, which the normal token stream discards). `text` is the raw
+/// comment including its `//` or `/* */` markers (trailing whitespace trimmed for a line comment).
+/// `own_line` is true when only whitespace precedes the comment on its source line (an own-line
+/// comment formats above the following node; otherwise it is a trailing comment on the prior node).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Comment {
+    pub span: Span,
+    pub text: String,
+    pub kind: CommentKind,
+    pub own_line: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommentKind {
+    /// `// …` to end of line.
+    Line,
+    /// `/* … */` (may span lines).
+    Block,
+}
+
 /// One segment of a lexed string literal. The lexer splits interpolation (`{expr}`) from literal
 /// runs because only the lexer knows whether a `{` is a real interpolation brace or a `\{` literal
 /// escape — a parser-side split on a flat, escape-expanded value couldn't tell them apart (a literal

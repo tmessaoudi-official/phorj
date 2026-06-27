@@ -585,3 +585,48 @@ fn decimal_literal_overflow_is_a_lex_error() {
     let e = lex(&big).unwrap_err();
     assert!(e.message.contains("out of range"), "{}", e.message);
 }
+
+// --- phg fmt F1: comment capture side-channel ---------------------------------------------------
+
+#[test]
+fn lex_with_comments_captures_line_and_block() {
+    let src = "// header\nfunction f() {}\nint x = 1; // trailing\n/* block */\n";
+    let (tokens, comments) = lex_with_comments(src).expect("lex ok");
+    // The token stream is unchanged — comments are NOT tokens.
+    assert!(!tokens
+        .iter()
+        .any(|t| matches!(&t.kind, TokenKind::Ident(s) if s.contains("//"))));
+    assert_eq!(comments.len(), 3, "got {comments:?}");
+
+    assert_eq!(comments[0].text, "// header");
+    assert_eq!(comments[0].kind, crate::token::CommentKind::Line);
+    assert!(comments[0].own_line, "header is on its own line");
+
+    assert_eq!(comments[1].text, "// trailing");
+    assert!(
+        !comments[1].own_line,
+        "trailing comment follows code on its line"
+    );
+
+    assert_eq!(comments[2].text, "/* block */");
+    assert_eq!(comments[2].kind, crate::token::CommentKind::Block);
+    assert!(comments[2].own_line);
+}
+
+#[test]
+fn plain_lex_still_discards_comments() {
+    // `lex` produces the same tokens whether or not comments are present.
+    let with = kinds("int x = 1; // note\n");
+    let without = kinds("int x = 1;\n");
+    assert_eq!(with, without);
+}
+
+#[test]
+fn comment_spans_point_at_source() {
+    let src = "  // indented\n";
+    let (_t, comments) = lex_with_comments(src).expect("lex ok");
+    assert_eq!(comments.len(), 1);
+    let c = &comments[0];
+    assert_eq!(&src[c.span.start..c.span.start + c.span.len], "// indented");
+    assert!(c.own_line, "whitespace-only prefix is still own-line");
+}

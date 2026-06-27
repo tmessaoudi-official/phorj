@@ -69,6 +69,11 @@
   self-hosted suite lives at top-level **`selftest/`** (outside `examples/`, so the byte-identity
   differential never touches it), gated by `tests/mtest.rs`. GA rock 2 30%→45%, total 49%→52%.
   **Next on the critical path: phg fmt (F1–F5).**
+- [2026-06-27] AGREED: developer pushes the 5 M-Test commits themselves; I build **phg fmt next,
+  autonomously, recommended defaults** (spec `docs/specs/2026-06-27-phg-fmt-design.md`): D1 comment
+  side-channel + position reattachment, D2 gofmt-shaped CLI, D3 tidy-no-reflow v1, quotes left as
+  written. Build order F1 (lexer comment capture) → F2 (comment-aware printer) → F3 (`phg fmt` CLI) →
+  F4 (dogfood) → F5 (bonus: lift L5 comment fidelity).
 
 ### Batch 4 (minor / technical-constraint items)
 - [2026-06-27] **CHANGE** float `/0` → **clean fault** (general principle: ANY division by zero throws —
