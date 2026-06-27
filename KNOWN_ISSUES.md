@@ -656,12 +656,14 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   to agree (`/` throws natively; float `%` routes through `__phorge_rem`, which guards `$b == 0`). A
   finite overflow-to-`inf` (huge ÷ tiny non-zero) is *not* a zero division and stays `inf`;
   `__phorge_float` renders `inf`/`-inf`/`NaN` the Rust way if one is reached through other means.
-- **`opt!`-on-null transpiles to a different message than the Phorge backends.** A null force-unwrap
-  faults `force-unwrap of null` on `run`/`runvm` (located, classified `FaultKind::ForceUnwrap`); the
-  transpiled PHP throws a `RuntimeException("force-unwrap of null")` via the `__phorge_unwrap()`
-  helper without the source name/line. The *present-value* case is byte-identical; only the null-fault
-  message differs (a transpile-only caveat, parallel to the range/index-OOB notes). The differential
-  harness excludes fault cases by design.
+- **`opt!`-on-null fault: message body matches across backends; only the source location differs.**
+  A null force-unwrap faults with the body `force-unwrap of null` on **all three** backends — `run`/
+  `runvm` (located, classified `FaultKind::ForceUnwrap`) and the transpiled PHP, which throws
+  `RuntimeException("force-unwrap of null")` (same body, verified 2026-06-27). The only residual
+  difference is the *location*: PHP's exception carries the generated `.php` file:line, not the Phorge
+  source line — inherent to transpilation (a PHP exception has no Phorge source position) and
+  fault-domain (the differential harness excludes fault cases by design), so it never affects the
+  byte-identity spine. The *present-value* case is fully byte-identical.
 - **`package Main` function names must avoid PHP built-in names (transpile target).** A top-level
   function in `package Main` transpiles to a *global* PHP function, so naming one `serialize`,
   `strlen`, `header`, … collides with the PHP builtin (`Cannot redeclare function …`). The Phorge
