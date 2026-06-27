@@ -292,6 +292,13 @@ struct Transpiler {
     /// (so a seeded sequence matches `run`/`runvm`). `>>` is masked for logical shift; `GOLDEN` is the
     /// signed-i64 reinterpretation of the unsigned constant.
     uses_rng: bool,
+    /// Set when any `Core.Regex` native is emitted (Fork A, 2026-06-28) — defines the
+    /// `__phorge_regex_*` helpers + the `__phorge_regex_delim` delimiter picker. The injected `Regex`
+    /// class holds the bare pattern; each helper builds a collision-free `~…~u` PCRE form and calls the
+    /// matching `preg_*`. Byte-identical to the `regex`-crate backends on the regular subset (the
+    /// engine's no-backref/lookaround set ≡ what PCRE matches identically); `\d\w\s` Unicode-vs-ASCII
+    /// is the one documented edge (KNOWN_ISSUES), so shipped examples keep ASCII subjects.
+    uses_regex: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -506,6 +513,7 @@ impl Transpiler {
             uses_math_gcd: false,
             uses_math_number_format: false,
             uses_rng: false,
+            uses_regex: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

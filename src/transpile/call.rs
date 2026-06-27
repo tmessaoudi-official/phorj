@@ -200,6 +200,12 @@ impl Transpiler {
                         if nat.module == "Core.Random" {
                             self.uses_rng = true;
                         }
+                        // `Core.Regex` erases to gated `__phorge_regex_*` helpers (Fork A, 2026-06-28):
+                        // the injected `Regex` holds the bare pattern; the helpers build a
+                        // collision-free `~…~u` PCRE form and delegate to `preg_*`.
+                        if nat.module == "Core.Regex" {
+                            self.uses_regex = true;
+                        }
                         // `Decimal.*` erases to gated `__phorge_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {

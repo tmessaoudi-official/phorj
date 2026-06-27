@@ -547,10 +547,50 @@ fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     })
 }
 
+/// The opaque compiled-`Regex` value model, injected when a program imports `Core.Regex` (Fork A,
+/// `docs/specs/2026-06-28-core-regex-design.md`). A `Regex` value is built only by `Regex.compile`
+/// (which validates via the `regex` crate); the `pattern` field is the **bare** pattern. It is public
+/// so the transpiled `__phorge_regex_*` global helpers can read `$re->pattern` to build the
+/// `/u`-delimited PHP `preg_*` form. Mirrors [`inject_json_prelude`]: a no-op unless `Core.Regex` is
+/// imported and no `Regex` class is already declared.
+const REGEX_PRELUDE: &str = "class Regex { constructor(public string pattern) {} }";
+
+fn inject_regex_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports_regex = prog.items.iter().any(|it| {
+        matches!(it, Item::Import { path, type_only: false, .. }
+            if path.len() == 2 && path[0] == "Core" && path[1] == "Regex")
+    });
+    let already_declared = prog
+        .items
+        .iter()
+        .any(|it| matches!(it, Item::Class(c) if c.name == "Regex"));
+    if !imports_regex || already_declared {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    match lex_parse(REGEX_PRELUDE)
+        .ok()
+        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Class(_))))
+    {
+        Some(class_item) => {
+            let mut items = Vec::with_capacity(prog.items.len() + 1);
+            items.push(class_item);
+            items.extend(prog.items.iter().cloned());
+            std::borrow::Cow::Owned(Program {
+                package: prog.package.clone(),
+                items,
+                span: prog.span,
+            })
+        }
+        None => std::borrow::Cow::Borrowed(prog), // unreachable: REGEX_PRELUDE is valid
+    }
+}
+
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
     let json_injected = inject_json_prelude(prog);
     let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
-    let injected = inject_http_prelude(rm_injected.as_ref());
+    let http_injected = inject_http_prelude(rm_injected.as_ref());
+    let injected = inject_regex_prelude(http_injected.as_ref());
     let prog = injected.as_ref();
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs)) => {

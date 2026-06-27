@@ -628,6 +628,31 @@ SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration
 Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
 closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
+## Core.Regex (Fork A) — documented edges + deferrals
+
+`Core.Regex` is backed by the `regex` crate (RE2-style, linear-time, ReDoS-immune). The byte-identity
+spine (`run ≡ runvm ≡ real PHP`) holds on the **regular subset** the engine accepts; the items below
+are deliberate edges, each either rejected cleanly or kept inside ASCII where the three backends agree.
+
+- **Backreferences / lookaround are rejected at `Regex.compile`** (the engine omits them by design —
+  they would force backtracking, the ReDoS hazard). A clean fault, never a divergence. This *is* the
+  "restricted-subset dual-engine parity" — the omitted set is exactly the non-regular part of PCRE.
+- **`\d` / `\w` / `\s` are Unicode-aware on the Rust backends, ASCII-only in transpiled PCRE** (no
+  `(*UCP)`). So a Unicode-digit subject would diverge between the backends and the PHP leg. Shipped
+  examples keep **ASCII** subjects, where all three agree. (A future `(*UCP)` emission could align them.)
+- **Named captures only** — `findGroups` returns `Map<string,string>?` keyed by group name; numbered
+  groups are intentionally not exposed. A named group that does not participate in the match is omitted.
+- **Always Unicode (`/u`), case-sensitive.** Inline flags / case-insensitivity (`Regex.compileWith`)
+  are deferred — add when requested.
+- **`replace` replacement syntax** uses the `$1` / `${name}` form shared by the `regex` crate and PHP
+  `preg_replace`; PCRE-only `\1` backslash references are not portable (use `$1`).
+- **Patterns must use raw strings** `r"..."`: a normal `"\d{4}"` parses `{4}` as `{expr}` string
+  interpolation (silently yielding `\d4`) — both backends agree, but the pattern is wrong. Not a bug in
+  Regex; a consequence of interpolation. The guide example and docs use raw strings throughout.
+- **Multi-package transpile is a follow-up** (same boundary as `Core.Json`): the injected `Regex`
+  class lives in the entry package, so a *namespaced* multi-package program emitting `new Regex(...)`
+  inside another package block is untested. Single-package `run ≡ runvm ≡ real PHP` is gated green.
+
 ## Behavioral quirks
 
 - **Errors inside string interpolation report line 1 (and the caret points there).** A fault *or* a

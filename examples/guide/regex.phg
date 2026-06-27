@@ -1,0 +1,45 @@
+// Core.Regex (Fork A) — a ReDoS-safe regular-expression engine. Backed by the `regex` crate (a
+// RE2-style finite automaton, linear-time / ReDoS-immune by construction), so patterns are compiled
+// once into a `Regex` value and reused. Its feature set is the *regular* subset PHP `preg_*` matches
+// identically, so run / runvm / real PHP all agree byte-for-byte; backreferences and lookaround are
+// rejected at `Regex.compile` (they would force backtracking — the ReDoS hazard the engine avoids).
+//
+// Patterns use RAW strings (`r"..."`): no `\` double-escaping, and — crucially — the `{n}` quantifier
+// does NOT collide with Phorge's `{expr}` string interpolation. Always write regex patterns raw.
+//
+// Subjects here are ASCII: `\d` / `\w` / `\s` are Unicode-aware on the Rust backends but ASCII-only in
+// transpiled PCRE (no UCP), so ASCII keeps the three backends identical (see KNOWN_ISSUES).
+package Main;
+
+import Core.Console;
+import Core.Text;
+import Core.Regex;
+
+function main(): void {
+    // Compile once, reuse. `matches` tests for a match anywhere; `find` returns the first whole match.
+    var date = Regex.compile(r"(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})");
+    var hit = Regex.matches(date, "today is 2026-06-28.");
+    var first = Regex.find(date, "today is 2026-06-28.") ?? "none";
+    Console.println("matches = {hit}");
+    Console.println("find    = {first}");
+
+    // Named captures → Map<string, string>? (null when there is no match).
+    if (var g = Regex.findGroups(date, "2026-06-28")) {
+        string y = g["year"];
+        string m = g["month"];
+        string d = g["day"];
+        Console.println("year={y} month={m} day={d}");
+    }
+
+    // findAll → every whole match; split → pieces between matches.
+    var word = Regex.compile(r"\w+");
+    var words = Text.join(Regex.findAll(word, "the quick brown fox"), ",");
+    Console.println("words = {words}");
+    var comma = Regex.compile(r",\s*");
+    var pieces = Text.join(Regex.split(comma, "a, b,c,  d"), "|");
+    Console.println("split = {pieces}");
+
+    // replace — every match replaced (literal replacement here).
+    var redacted = Regex.replace(date, "from 2026-06-28 to 2027-01-01", "<date>");
+    Console.println("redact = {redacted}");
+}

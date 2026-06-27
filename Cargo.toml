@@ -19,17 +19,25 @@ path = "src/lib.rs"
 name = "phg"
 path = "src/main.rs"
 
-# Phorge core is std-only. The SOLE exception is audited crypto primitives, behind this feature so the
-# WASM playground builds without the dependency (docs/specs/2026-06-27-dependency-policy.md).
+# Phorge core is std-only. The exceptions are security-critical primitives where std has none and
+# rolling-your-own is the anti-pattern: audited crypto, and a ReDoS-safe regex engine. Each is behind
+# a feature so the WASM playground builds without it (docs/specs/2026-06-27-dependency-policy.md).
 [features]
-default = ["crypto"]
+default = ["crypto", "regex"]
 crypto = ["dep:argon2"]
+regex = ["dep:regex"]
 
 [dependencies]
 # FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
 # a domain where rolling your own is the security anti-pattern and std has no equivalent. `std` enables
 # the OS RNG (`OsRng`) for salt generation; feature-gated off for the playground.
 argon2 = { version = "0.5", optional = true, features = ["std"] }
+
+# SECOND external dependency (Rust project / BurntSushi, exhaustively fuzzed). Powers `Core.Regex` —
+# a RE2-style finite-automaton engine with guaranteed linear-time matching (ReDoS-immune by
+# construction, unlike PHP/PCRE backtracking). Regex over untrusted input is a security-critical
+# parser; std has none; "never roll your own" applies. Feature-gated off for the playground.
+regex = { version = "1", optional = true }
 
 # Quality gate (M2 P3.5 Wave 0, Task 0.5): clippy-clean and warning-free become a *compile* gate,
 # not just a CI nicety. Solo dev controls the toolchain, so the known fragility of denying warnings

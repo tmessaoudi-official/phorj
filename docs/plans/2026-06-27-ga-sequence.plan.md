@@ -194,6 +194,28 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   stability/conformance** (conformance corpus + semver/BC + deprecation policy + frozen surface — the
   biggest remaining GA mover, ~17 pts). Build LSP design-spec first (the developer's spec-first
   preference), surface forks, then implement autonomously.
+- [2026-06-28] **REVISED ORDER** (developer chose "solve all the forks, then statics research, then
+  LSP"): resolve the two standing design FORKs first — **(A) `Core.Regex` API** + **(B) `Secret<T>`
+  model** — each brainstorm + AskUserQuestion + spec, then build; **then (C) statics research pass**
+  (inherited/overloaded/LSB); **then (D) LSP design-first then build**. Statics is research-not-fork;
+  LSP is last.
+- [2026-06-28] FORK A RESOLVED — **`Core.Regex`**: (engine) **adopt the `regex` crate** as the 2nd
+  vetted dependency (developer reframed the question to "best & most secure regardless of byte-identity
+  /PHP" — `regex` is RE2-style, **ReDoS-immune by construction**, unlike PHP/PCRE backtracking; "never
+  roll your own" applies to untrusted-input parsers too). **Amend `dependency-policy.md` clause 1**:
+  generalize "crypto-only" → "security-critical primitive (crypto **and** untrusted-input parsers like
+  regex) where std has none and rolling-your-own is the anti-pattern." Feature-gate off for the WASM
+  playground (like `argon2`). Key insight: secure ≠ at odds with parity — `regex`'s restricted feature
+  set (no backref/lookaround) is exactly the *regular* subset PHP `preg` matches identically, so
+  byte-identity holds on the supported subset; backref/lookaround are **rejected at compile**
+  (`E-REGEX-UNSUPPORTED`). (API) **compiled `Regex` value + named groups** — `Regex.compile(p) ->
+  Regex` (validates once, reusable), `r.matches/find/findAll/replace/split`, named-group typed match;
+  transpiles to `preg_*` with the compiled pattern + `/u`.
+- [2026-06-28] FORK B RESOLVED — **`Secret<T>`**: **runtime-redacting wrapper + `W-SECRET` lint**.
+  `Secret<T>` Displays/interpolates as `***`; `.expose()` is the sole read path; `W-SECRET` flow-lint
+  flags a secret reaching a sink (`Console.println`/`File.write`/error) without `.expose()`. Both a
+  runtime guarantee and a compile nudge. Transpiles to a `final` PHP class (redacting `__toString`) +
+  `#[\SensitiveParameter]` on params. Matches SSOT `K-secrets-type` (⊂ opaque-newtype).
 - [x] 3. M-Test — **COMPLETE** (T1–T5: `test` item + `Core.Test` + `assertFaults` + `phg test` runner + `selftest/` showcase). GA 49% → 52%.
 - [ ] 4. M-text
 - [ ] 5. breadth gaps

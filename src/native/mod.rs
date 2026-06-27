@@ -39,6 +39,10 @@ mod math;
 mod process;
 mod random;
 mod reflect;
+// `Core.Regex` is crate-backed (`regex`) — gated so the WASM playground builds without the
+// dependency (see docs/specs/2026-06-27-dependency-policy.md).
+#[cfg(feature = "regex")]
+mod regex;
 mod set;
 mod test;
 mod text;
@@ -311,6 +315,8 @@ fn build() -> Vec<NativeFn> {
     registry.extend(test::test_natives());
     #[cfg(feature = "crypto")]
     registry.extend(crypto::crypto_natives());
+    #[cfg(feature = "regex")]
+    registry.extend(regex::regex_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(

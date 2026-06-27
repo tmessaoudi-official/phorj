@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.Regex` (Fork A) + 2nd vetted dependency
+
+A ReDoS-safe regular-expression engine. No new `Op`, no new `Value` (the compiled value reuses the
+injected-type + value-as-first-arg patterns). Design: `docs/specs/2026-06-28-core-regex-design.md`.
+
+- **Engine = the `regex` crate** — the project's **2nd** external dependency (after `argon2`). A
+  RE2-style finite automaton with **guaranteed linear-time matching (ReDoS-immune by construction)**,
+  unlike PHP/PCRE backtracking. The dependency policy (`docs/specs/2026-06-27-dependency-policy.md`)
+  is amended: clause 1 generalizes from "crypto" to "security-critical primitive — crypto **and**
+  untrusted-input parsers (regex) where `std` has none and rolling-your-own is the anti-pattern."
+  Feature-gated `regex` (default on; OFF for `phorge-playground`, like `crypto`).
+- **`import Core.Regex;`** → `Regex.compile(string) -> Regex` (validate once, memoized; faults on an
+  invalid/unsupported pattern), `matches`/`find`(→`string?`)/`findAll`(→`List<string>`)/`findGroups`
+  (→`Map<string,string>?`, named captures)/`replace`/`split`. `Regex` is a compiler-injected class
+  holding the bare pattern; always Unicode (`/u`), case-sensitive.
+- **Byte-identity holds on the regular subset**: the crate's no-backref/lookaround feature set is
+  exactly what PHP `preg_*` matches identically; unsupported patterns are rejected at `Regex.compile`.
+  Transpiles to gated `__phorge_regex_*` helpers (collision-free delimiter + `preg_*`); `run ≡ runvm ≡
+  real PHP 8.5`. Showcase `examples/guide/regex.phg`.
+- **Patterns use raw strings** `r"..."` — the `{n}` quantifier would otherwise collide with `{expr}`
+  string interpolation, and raw strings drop `\` double-escaping.
+
 ### Added — `phg fmt` formatter (M-fmt)
 
 A canonical-form source formatter (GA rock 2 — daily-use tooling). No new `Op`, no new `Value`.

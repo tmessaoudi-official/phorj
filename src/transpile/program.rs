@@ -909,6 +909,59 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_regex {
+            // `Core.Regex` (Fork A) — the injected `Regex` holds the BARE pattern; `__phorge_regex_delim`
+            // wraps it in a collision-free PCRE delimiter + the `u` (Unicode) modifier, matching the
+            // `regex`-crate backends on the regular subset. `\d\w\s` are Unicode in the crate and ASCII
+            // in PCRE-without-UCP — the one documented edge (KNOWN_ISSUES); shipped examples use ASCII
+            // subjects so the byte-identity gate holds. PCRE is PHP core (present under `php -n`).
+            self.line("function __phorge_regex_delim($pattern) {");
+            self.indent += 1;
+            self.line("foreach (['~', '#', '%', '@', '!', '`'] as $d) {");
+            self.indent += 1;
+            self.line("if (strpos($pattern, $d) === false) { return $d . $pattern . $d . 'u'; }");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return '~' . str_replace('~', '\\\\~', $pattern) . '~u';");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_regex_matches($re, $s) {");
+            self.indent += 1;
+            self.line("return preg_match(__phorge_regex_delim($re->pattern), $s) === 1;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_regex_find($re, $s) {");
+            self.indent += 1;
+            self.line("return preg_match(__phorge_regex_delim($re->pattern), $s, $m) === 1 ? $m[0] : null;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_regex_find_all($re, $s) {");
+            self.indent += 1;
+            self.line("preg_match_all(__phorge_regex_delim($re->pattern), $s, $m);");
+            self.line("return $m[0];");
+            self.indent -= 1;
+            self.line("}");
+            // Named captures only (the API), in group-index order — matches the crate's
+            // `capture_names()` order and a matched-only filter (`is_string` drops numbered keys).
+            self.line("function __phorge_regex_find_groups($re, $s) {");
+            self.indent += 1;
+            self.line("if (preg_match(__phorge_regex_delim($re->pattern), $s, $m) !== 1) { return null; }");
+            self.line("$out = [];");
+            self.line("foreach ($m as $k => $v) { if (is_string($k)) { $out[$k] = $v; } }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_regex_replace($re, $s, $repl) {");
+            self.indent += 1;
+            self.line("return preg_replace(__phorge_regex_delim($re->pattern), $repl, $s);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_regex_split($re, $s) {");
+            self.indent += 1;
+            self.line("return preg_split(__phorge_regex_delim($re->pattern), $s);");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_list_sort {
             // Natural ascending over a COPY (Phorge lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via
