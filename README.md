@@ -133,6 +133,7 @@ phg <command> <source> [options]
 | `vendor` | fetch + pin git dependencies into `vendor/` (the only network-touching command), writing `phorge.lock` | exit 1 on fetch/lock failure |
 | `serve` | run an HTTP server that dispatches requests to a Phorge `handle(Request) -> Response` (M6) | exit 1 on bind/handler error |
 | `test` | discover + run `test "name" { … }` blocks (under `tests/`, or a given file/dir) with `Core.Test` assertions | exit 1 if any test fails |
+| `fmt` | format source to canonical form (`--check` for CI, `-` for stdin, in-place otherwise) | `--check`: exit 1 if any file would change; exit 2 on a parse error |
 | `explain` | look up a diagnostic code (`phg explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
 
 **Source** (for the run-family commands):
@@ -196,6 +197,23 @@ continues. Exit code is `0` iff every test passes — so `phg test` drops straig
 `Core.Test` assertions are `assert`, `assertTrue`/`assertFalse`, `assertEquals`/`assertNotEquals`,
 `assertNull`/`assertNotNull`, and `assertFaults(() -> T)` (passes iff the closure faults). A runnable
 showcase lives in [`selftest/`](selftest/README.md).
+
+## Formatting (`phg fmt`)
+
+`phg fmt` rewrites source to a canonical form (`gofmt`/`rustfmt` shaped):
+
+```sh
+phg fmt                 # format every *.phg under the current directory, in place
+phg fmt src/app.phg     # one file
+phg fmt --check .       # CI gate: exit 1 if anything isn't formatted, write nothing
+cat app.phg | phg fmt - # stdin → stdout
+```
+
+It is **meaning-preserving by construction** — it prints from the parsed AST (not by re-spacing
+tokens), so formatting can never change what a program means; it is idempotent, and an unparseable
+file is left untouched (its diagnostic is reported, exit 2). Comments are preserved. v1 is *tidy +
+comment-safe* (canonical indentation, spacing, blank-line collapse, `->`→`:` return syntax); line
+wrapping/width-reflow is a later addition.
 
 ## Language at a glance
 

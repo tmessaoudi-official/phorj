@@ -719,6 +719,17 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   library project. `Core.Test` is `pure` but only meaningful under `phg test`; its PHP emission exists
   only for a future `--emit-phpunit` bridge and is **not** byte-identity-gated.
 
+- **`phg fmt` — v1 limitations (M-fmt).** The formatter is *tidy + comment-safe*, not yet opinionated.
+  (1) **No line-wrapping / width reflow** — a long line stays long; canonical indentation, spacing,
+  and blank-line collapse only. (2) **Comment reattachment is position-based**, not a full lossless
+  CST: an own-line comment formats above the following declaration/statement, but a **trailing
+  same-line comment** (`x = 1; // note`) reattaches as a *leading* comment of the next node, and a
+  comment **above the `package` line** moves just below it. Comments are never lost, and the result is
+  idempotent — just occasionally relocated. (3) A **statement-body lambda** (`fn(x) -> T { … }`) is
+  rendered on a single line (a lambda is an expression; no reflow yet). All three are additive
+  follow-ups; the hard guarantee — formatting never changes program meaning (`parse(fmt(x))`
+  preserved) — holds today, gated by a dogfood test over the whole example corpus.
+
 ## Reporting
 
 Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.

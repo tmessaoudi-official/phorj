@@ -187,7 +187,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 
 ## Status
 - [ ] 1. M4 charter — IN PROGRESS
-- [ ] 2. phg fmt + lints
+- [x] 2. phg fmt — **COMPLETE** (F1–F4: comment side-channel + full-surface AST printer + gofmt-shaped CLI + dogfood). F5 (lift L5) deferred. GA 52% → 57%.
 - [x] 3. M-Test — **COMPLETE** (T1–T5: `test` item + `Core.Test` + `assertFaults` + `phg test` runner + `selftest/` showcase). GA 49% → 52%.
 - [ ] 4. M-text
 - [ ] 5. breadth gaps

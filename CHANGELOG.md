@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg fmt` formatter (M-fmt)
+
+A canonical-form source formatter (GA rock 2 — daily-use tooling). No new `Op`, no new `Value`.
+
+- **Comment side-channel** — `lex_with_comments()` collects comments (which the token stream drops)
+  as `Comment{span,text,kind,own_line}`; `lex()` is unchanged.
+- **Full-surface, meaning-preserving printer** (`src/fmt/`) — prints from the parsed AST (not by
+  re-spacing tokens), so `parse(fmt(x))` can't change meaning; exhaustive matches make it
+  compiler-proven complete over every Item/Stmt/Expr/Type/Pattern. Idempotent; comments preserved.
+- **`phg fmt [--check] [path… | -]`** — in-place (writes only on change), `--check` (exit 1 if any
+  file would change, no writes — the CI gate), stdin (`-`), recursive dir/no-path discovery. An
+  unparseable file is left untouched (exit 2). A dogfood test formats every repo example and asserts
+  behavior is preserved.
+- v1 is *tidy + comment-safe* (canonical indentation/spacing/blank-lines, `->`→`:`); no line-wrapping.
+
 ### Added — `phg test` runner + `Core.Test` assertions (M-Test)
 
 A first-class testing story so Phorge can dogfood itself (GA rock 2 — daily-use tooling). No new `Op`,

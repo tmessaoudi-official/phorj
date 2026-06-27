@@ -1,7 +1,14 @@
 # `phg fmt` — a comment-preserving formatter (design)
 
-> Status: **design — pending developer confirmation** (2026-06-27). Goal: a canonical-form formatter
-> (`gofmt`/`rustfmt` shaped) for `.phg`. Plan slot: GA-sequence item 2.
+> Status: **COMPLETE** (2026-06-27, F1–F4). Goal achieved: a `gofmt`/`rustfmt`-shaped, comment- and
+> meaning-preserving formatter for `.phg`. **D1 redecided after challenge:** the spec's recommended
+> "reuse the AST printer" (option B) rested on a false premise — the lift printer is Tier-1-subset
+> only — so a NEW full-surface, exhaustive AST printer (`src/fmt/`) was built instead (still option
+> "AST printer", not the token reformatter). D2 (gofmt-shaped CLI), D3 (tidy-no-reflow v1), and "leave
+> quotes as written" adopted as recommended. Shipped: F1 lexer comment side-channel (`lex_with_comments`),
+> F2 comment-aware printer, F3 `phg fmt [--check] [path…|-]` CLI, F4 dogfood over the example corpus.
+> **F5 (lift L5 comment fidelity) — deferred** (optional bonus). Deferrals in KNOWN_ISSUES (no reflow;
+> position-based comment reattachment; single-line statement-body lambdas).
 
 ## The blocker that shapes everything
 The lexer **discards comments** (`lexer/mod.rs` `skip_line_comment`/`skip_block_comment`) — they never
