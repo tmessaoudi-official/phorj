@@ -340,8 +340,8 @@ impl Compiler<'_> {
             Add | Sub | Mul | Div | Rem => {
                 // `decimal` arithmetic (M-NUM S1): emit `AddD/SubD/MulD` when EITHER operand is
                 // decimal (`decimal ⊕ int` widens the int in the value kernel) — `num_ty(lhs)` alone
-                // would mis-classify `int * decimal`. The checker allows decimal `+ - * %` (exact) and
-                // rejects only `/`, so `Add/Sub/Mul/Rem` reach the decimal path. Probe both operands; a probe that errs
+                // would mis-classify `int * decimal`. The checker allows all of decimal `+ - * % /`
+                // (`/` is exact-or-fault), so any of them reaches the decimal path. Probe both operands; a probe that errs
                 // (a genuinely unresolvable operand) falls through to the int/float path's error.
                 let lhs_dec = matches!(self.ctype(lhs), Ok(CTy::Decimal));
                 let rhs_dec = matches!(self.ctype(rhs), Ok(CTy::Decimal));
@@ -366,10 +366,9 @@ impl Compiler<'_> {
                     (Div, NumTy::Float) => Op::DivF,
                     (Rem, NumTy::Int) => Op::RemI,
                     (Rem, NumTy::Float) => Op::RemF,
-                    // Exact decimal `%` (2026-06-27). Decimal `/` is still rejected by the checker
-                    // (exact-or-fault `DivD` lands in the next slice), so it never reaches here.
+                    // Exact decimal `%` and exact-or-fault `/` (2026-06-27).
                     (Rem, NumTy::Decimal) => Op::RemD,
-                    (Div, NumTy::Decimal) => unreachable!("decimal / rejected by checker"),
+                    (Div, NumTy::Decimal) => Op::DivD,
                     _ => unreachable!("arithmetic op set"),
                 };
                 self.emit(emit, line);

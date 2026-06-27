@@ -48,11 +48,15 @@ not a panic:
 
 - **`decimal` primitive (M-NUM S1) — shipped corners + deferrals.** The exact fixed-point `decimal`
   ships with `19.99d` literals, `Decimal.of(string) -> decimal?`, `+ - *`, scale-insensitive
-  comparison/equality, unary `-`, and BCMath transpile. Notes: (1) **`%` IS an exact operator**
+  comparison/equality, unary `-`, and BCMath transpile. Notes: (1) **`%` and `/` are operators**
   (2026-06-27): bare `decimal % decimal` is the exact remainder (`Op::RemD` → `value::decimal_rem` →
-  `bcmod`), no rounding, result scale = `max(operand scales)`, zero divisor faults. **Bare `/` is still
-  rejected** (`E-DECIMAL-DIV`) — a fixed-point quotient may not terminate; use `Decimal.div(a, b,
-  scale, mode)` (rounded) for division. (Exact-or-fault bare `/` is a planned follow-up.) (2) **i128 overflow is
+  `bcmod`), no rounding, result scale = `max(operand scales)`, zero divisor faults. Bare `decimal /
+  decimal` is **exact-or-fault** (`Op::DivD` → `value::decimal_div_exact`): a terminating quotient
+  returns the exact value in minimal form (`10.0d/4.0d → 2.5`); a **non-terminating** quotient
+  (`1d/3d`) faults `"decimal division is not exact"`, a zero divisor faults, and a result past i128
+  range faults `"decimal overflow"`. Use `Decimal.div(a, b, scale, mode)` for an explicit *rounded*
+  quotient. (The non-terminating/zero faults are fault-domain, excluded from the example oracle; the
+  exact paths are byte-identity-gated through `decimals.phg`.) (2) **i128 overflow is
   a runtime fault, not a compile error** — an exact `+ - *` result (or a scale alignment) that leaves
   the `i128` range faults `"decimal overflow"` (byte-identical on `run`/`runvm` and in the emitted
   BCMath, which bounds-checks the result against i128 range and `throw`s the same body). Because every

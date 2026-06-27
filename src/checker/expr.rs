@@ -283,13 +283,14 @@ impl Checker {
             // (the typed system kills JS's `"1" + 1` footgun). Only `+` concatenates; `-`/`*`/`/`/`%`
             // remain numeric-only.
             BinaryOp::Add if l == Ty::String && r == Ty::String => Ty::String,
-            // `decimal` arithmetic (M-NUM S1). `+ - *` over decimals is exact and yields `decimal`;
-            // `decimal ⊕ int` (either order) widens the int and stays `decimal` — the one ergonomic
-            // coercion (qty math). `/` and `%` on a decimal are deferred to S2, so they fall through to
-            // the error path. A `decimal ⊕ float` mix is the bug this primitive prevents
-            // (`E-DECIMAL-FLOAT-MIX`). Checked before the int/float arm so a decimal operand never
-            // reaches the matching-int-or-float test.
-            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Rem
+            // `decimal` arithmetic. All of `+ - * / %` over decimals yield `decimal`; `decimal ⊕ int`
+            // (either order) widens the int and stays `decimal` — the one ergonomic coercion (qty
+            // math). `/` is *exact-or-fault* at runtime (a non-terminating quotient like `1d/3d`
+            // faults; use `Decimal.div(a, b, scale, mode)` for a rounded one) and `%` is the exact
+            // remainder — both type as `decimal` here. A `decimal ⊕ float` mix is the bug this
+            // primitive prevents (`E-DECIMAL-FLOAT-MIX`). Checked before the int/float arm so a decimal
+            // operand never reaches the matching-int-or-float test.
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem
                 if l == Ty::Decimal || r == Ty::Decimal =>
             {
                 let other = if l == Ty::Decimal { &r } else { &l };
@@ -312,21 +313,6 @@ impl Checker {
                     ),
                 }
             }
-            // Bare `decimal / decimal` is a compile error: a fixed-point quotient is generally
-            // non-terminating (`1/3`), so there is no exact result and a rounding mode is required.
-            // (`%` IS allowed above — remainder is exact and closed on fixed-point.) Bare `/` as an
-            // exact-or-fault operator lands in the next slice; until then the hint routes to the native.
-            BinaryOp::Div if l == Ty::Decimal || r == Ty::Decimal => self.err_coded(
-                span,
-                "`decimal` has no bare `/` operator — a fixed-point quotient may not be exact"
-                    .to_string(),
-                "E-DECIMAL-DIV",
-                Some(
-                    "use `Decimal.div(a, b, scale, mode)` for an explicit, rounded quotient (import \
-                     `Core.Decimal`); `%` (remainder) is exact and available"
-                        .into(),
-                ),
-            ),
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => {
                 if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) {
                     l

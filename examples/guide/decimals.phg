@@ -26,10 +26,17 @@ function main(): void {
     decimal r = 1.11d * 1.11d;
     Console.println("1.11 * 1.11 = {r}");
 
-    // Remainder `%` is exact (no rounding — unlike `/`, which needs Decimal.div).
-    // 10.50 % 3.00 = 1.50; the result keeps the max operand scale.
+    // Remainder `%` is exact (no rounding); result keeps the max operand scale.
     decimal rem = 10.50d % 3.00d;
     Console.println("10.50 %% 3.00 = {rem}");
+
+    // Bare `/` is exact-or-fault: it returns the exact quotient when it terminates (10.0/4.0 = 2.5,
+    // 1/8 = 0.125), in minimal form. A non-terminating quotient (1d/3d) FAULTS — use
+    // `Decimal.div(a, b, scale, mode)` for a rounded result. (No silent precision loss.)
+    decimal q1 = 10.0d / 4.0d;     // 2.5
+    decimal q2 = 1d / 8d;          // 0.125
+    Console.println("10.0 / 4.0 = {q1}");
+    Console.println("1 / 8 = {q2}");
 
     // Comparison is numeric: 1.50 equals 1.5 even at different scales.
     decimal a = 1.50d;

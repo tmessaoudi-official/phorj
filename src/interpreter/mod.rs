@@ -671,13 +671,8 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
                 Sub => crate::value::decimal_sub(&l, &r),
                 Mul => crate::value::decimal_mul(&l, &r),
                 Rem => crate::value::decimal_rem(&l, &r),
-                // Bare decimal `/` is still rejected by the checker (exact-or-fault lands next slice);
-                // a stray `Div` here is checker-unreachable.
-                _ => {
-                    return rt(
-                        "decimal `/` is not an operator — use `Decimal.div(a, b, scale, mode)`",
-                    )
-                }
+                Div => crate::value::decimal_div_exact(&l, &r),
+                _ => unreachable!("decimal arith only +-*/%"),
             };
             match res {
                 Ok(v) => Ok(v),

@@ -92,6 +92,10 @@ enum FaultKind {
     /// four share one kind: their bodies are single-sourced on `FaultMsg`, so both backends render
     /// byte-identically; classifying by body substring keeps the VM's line prefix from splitting them.
     Panic,
+    /// Bare `decimal /` with a non-terminating quotient (`1d/3d`, 2026-06-27 exact-or-fault). Both
+    /// backends fault `"decimal division is not exact"`; classified by body substring so the VM's
+    /// line prefix doesn't split it from the interpreter's prefix-less render.
+    DecimalInexact,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -114,6 +118,8 @@ fn classify(err: &str) -> FaultKind {
         FaultKind::ForceUnwrap
     } else if err.contains("range too large") {
         FaultKind::RangeTooLarge
+    } else if err.contains("decimal division is not exact") {
+        FaultKind::DecimalInexact
     } else if err.contains("panic:")
         || err.contains("not yet implemented")
         || err.contains("unreachable code")
@@ -1130,6 +1136,15 @@ function main() -> void { float z = 0.0; Console.println("{1.0 / z}"); }"#,
     // float modulo by zero — faults like int %0 (PHP fmod would give NAN; we throw)
     r#"import Core.Console;
 function main() -> void { float z = 0.0; Console.println("{1.0 % z}"); }"#,
+    // decimal bare `/` non-terminating quotient — exact-or-fault faults on both backends
+    r#"import Core.Console;
+function main() -> void { decimal z = 3d; Console.println("{1d / z}"); }"#,
+    // decimal bare `/` by zero — faults on both backends
+    r#"import Core.Console;
+function main() -> void { decimal z = 0d; Console.println("{1d / z}"); }"#,
+    // decimal `%` by zero — faults on both backends
+    r#"import Core.Console;
+function main() -> void { decimal z = 0d; Console.println("{1d % z}"); }"#,
     // unbounded recursion: trips the shared `MAX_CALL_DEPTH` guard on both backends.
     // Before Task 0.3 the interpreter recursed on the native stack and SIGABRTed (exit 134)
     // while the VM cleanly reported "stack overflow" — a parity divergence in the fault path.

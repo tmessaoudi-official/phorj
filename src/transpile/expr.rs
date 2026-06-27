@@ -41,7 +41,7 @@ impl Transpiler {
                 // mis-route it. Detected when EITHER operand's kind is `Decimal`.
                 if matches!(
                     op,
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Rem
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Rem | BinaryOp::Div
                 ) {
                     let (lk, rk) = (self.expr_kind(lhs), self.expr_kind(rhs));
                     if lk == OpKind::Decimal || rk == OpKind::Decimal {
@@ -74,7 +74,13 @@ impl Transpiler {
                                 self.uses_dec_rem = true;
                                 "__phorge_dec_rem"
                             }
-                            _ => unreachable!("matched Add/Sub/Mul/Rem above"),
+                            // Exact-or-fault decimal `/` (2026-06-27): bcdiv + exactness check + strip
+                            // to minimal form; non-terminating or zero divisor throws.
+                            BinaryOp::Div => {
+                                self.uses_dec_div_exact = true;
+                                "__phorge_dec_div_exact"
+                            }
+                            _ => unreachable!("matched Add/Sub/Mul/Rem/Div above"),
                         };
                         return Ok(format!("{bs}{helper}({ls}, {rs})"));
                     }

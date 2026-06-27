@@ -250,6 +250,10 @@ struct Transpiler {
     /// Set when bare `decimal % decimal` is emitted — defines `__phorge_dec_rem` (`bcmod` at
     /// `max(scales)`; a zero divisor throws, matching the Rust `decimal_rem` fault).
     uses_dec_rem: bool,
+    /// Set when bare `decimal / decimal` is emitted — defines `__phorge_dec_div_exact` (bcdiv +
+    /// exactness check + trailing-zero strip; non-terminating / zero divisor throws, matching the
+    /// Rust `decimal_div_exact` fault boundary byte-for-byte).
+    uses_dec_div_exact: bool,
     /// Set when `Decimal.of(s)` is emitted — defines `__phorge_dec_of`, validating the literal grammar
     /// (a tier-1 PCRE — NOT mbstring) + i128 range, returning the normalized decimal string or `null`.
     uses_dec_of: bool,
@@ -476,6 +480,7 @@ impl Transpiler {
             uses_text_parse_float: false,
             uses_dec_add: false,
             uses_dec_rem: false,
+            uses_dec_div_exact: false,
             uses_dec_sub: false,
             uses_dec_mul: false,
             uses_dec_of: false,

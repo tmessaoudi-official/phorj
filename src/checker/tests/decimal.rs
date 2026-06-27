@@ -68,27 +68,26 @@ fn decimal_comparison_and_equality() {
 }
 
 #[test]
-fn decimal_division_is_a_compile_error() {
-    // Bare `decimal / decimal` is `E-DECIMAL-DIV` (S2) — division goes through `Decimal.div`.
+fn decimal_division_typechecks_exact_or_fault() {
+    // Bare `decimal / decimal` is the exact-or-fault operator (2026-06-27) — it type-checks and
+    // yields `decimal` (a non-terminating quotient faults at runtime, not at compile time).
     let e = errors_of("function main() -> void { decimal a = 1.00d; decimal r = a / 2; }");
     assert!(
-        e.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
-        "decimal `/` must be E-DECIMAL-DIV, got {e:?}"
+        !e.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
+        "decimal `/` must now type-check (exact-or-fault), got {e:?}"
     );
-    // `decimal / decimal` (both operands decimal) is rejected too.
     let e2 = errors_of(
-        "function main() -> void { decimal a = 10.00d; decimal b = 3d; decimal r = a / b; }",
+        "function main() -> void { decimal a = 10.00d; decimal b = 4d; decimal r = a / b; }",
     );
     assert!(
-        e2.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),
-        "decimal/decimal must be E-DECIMAL-DIV, got {e2:?}"
+        e2.is_empty(),
+        "decimal / decimal should be clean, got {e2:?}"
     );
 }
 
 #[test]
 fn decimal_modulo_typechecks_and_is_decimal() {
     // `decimal % …` is the exact-remainder operator (2026-06-27) — it type-checks and yields decimal.
-    // (Bare `/` stays `E-DECIMAL-DIV`, asserted above.)
     let e = errors_of("function main() -> void { decimal a = 10.00d; decimal r = a % 3; }");
     assert!(
         !e.iter().any(|d| d.code == Some("E-DECIMAL-DIV")),

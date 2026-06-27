@@ -270,19 +270,19 @@ pub fn explain_text(code: &str) -> Option<String> {
              convert explicitly first — there is no silent bridge.\n"
         }
         "E-DECIMAL-DIV" => {
-            "E-DECIMAL-DIV — `decimal` has no `/` or `%` operator.\n\n\
-             Unlike `+ - *`, decimal division is not exact (`10.00d / 3d` has no finite decimal form),\n\
-             so an operator would have to silently pick a scale and a rounding rule — exactly the kind\n\
-             of hidden precision loss the `decimal` type exists to prevent. Division is therefore an\n\
-             explicit call that names both:\n\n\
+            "E-DECIMAL-DIV — decimal division semantics (informational; no longer a compile error).\n\n\
+             As of 2026-06-27, `decimal` supports both `%` and `/` as operators:\n\n\
+             \t• `%` (remainder) is always exact — no rounding, result scale = max(operand scales).\n\
+             \t• `/` is *exact-or-fault*: it returns the exact quotient when it terminates\n\
+             \t  (`10.0d / 4.0d → 2.5`, `1d / 8d → 0.125`, minimal form), and FAULTS at runtime when\n\
+             \t  the quotient does not terminate (`1d / 3d`) — no silent precision loss.\n\n\
+             For a *rounded* quotient, name the scale and rounding mode explicitly:\n\n\
              \timport Core.Decimal;\n\
              \tdecimal unit = Decimal.div(10.00d, 3d, 2, new HalfEven());  // 3.33\n\
              \tdecimal cents = Decimal.round(2.345d, 2, new HalfUp());     // 2.35\n\n\
-             `Decimal.div(a, b, scale, mode)` rounds the quotient to `scale` fractional digits under\n\
-             `mode`; `Decimal.round(d, scale, mode)` re-scales an existing decimal. `mode` is a\n\
-             `RoundingMode` (`HalfUp`/`HalfDown`/`HalfEven`/`Up`/`Down`/`Ceiling`/`Floor`, injected when\n\
-             you import `Core.Decimal`). A zero divisor or a negative scale is a clean runtime fault.\n\
-             There is no decimal modulo (`%`).\n"
+             `mode` is a `RoundingMode` (`HalfUp`/`HalfDown`/`HalfEven`/`Up`/`Down`/`Ceiling`/`Floor`,\n\
+             injected when you import `Core.Decimal`). A zero divisor faults; so does a result past\n\
+             i128 range.\n"
         }
         "E-DECIMAL-LITERAL" => {
             "E-DECIMAL-LITERAL — a `decimal` literal is malformed or out of range.\n\n\

@@ -73,8 +73,9 @@ Each its own commit, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), + ex
    faulted). `Math.fdiv` for explicit IEEE inf = deferred (add only if requested).
 3. **Decimal `%` un-reject** ✅ DONE — exact remainder operator (`Op::RemD` → `value::decimal_rem` →
    `bcmod`; zero divisor faults; result scale = max). Checker allows `%`, keeps `/` rejected.
-4. **Decimal `/` exact-or-fault** (terminating → exact; non-terminating/overflow → fault; keep
-   `Decimal.div` for rounded). IN PROGRESS next.
+4. **Decimal `/` exact-or-fault** ✅ DONE — `Op::DivD` → `value::decimal_div_exact` (reduce fraction,
+   strip 2s/5s, fault if non-terminating, minimal-form result). Transpiles to `__phorge_dec_div_exact`
+   (bcdiv + exactness check + strip) byte-identical under PHP 8.5. `Decimal.div` (rounded) unchanged.
 5. **numberFormat digit-based rounding** (shortest-string, byte-identical).
 6. **Random → byte-identical parity** (hand-roll xorshift64 in PHP; un-quarantine; rejoin oracle).
 7. **Overload erasure reject** (`E-OVERLOAD-ERASE`: string-vs-bytes / List-Map-Set-only pairs).

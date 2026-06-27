@@ -495,6 +495,7 @@ impl Transpiler {
             || self.uses_dec_sub
             || self.uses_dec_mul
             || self.uses_dec_rem
+            || self.uses_dec_div_exact
             || self.uses_dec_div
             || self.uses_dec_round
         {
@@ -548,6 +549,31 @@ impl Transpiler {
                 "if (bccomp($b, '0', $s) === 0) { throw new \\DivisionByZeroError('decimal modulo by zero'); }",
             );
             self.line("return __phorge_dec_check(bcmod($a, $b, $s));");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_div_exact {
+            // Exact-or-fault bare `decimal /`: divide at high precision, verify the quotient is exact
+            // (bcmul back == dividend), strip trailing zeros to the canonical minimal form (matching
+            // the Rust `decimal_div_exact` result), then i128-bound-check. A non-terminating quotient
+            // fails the exactness check and throws; a zero divisor throws. Byte-identical to the Rust
+            // kernel's fault boundary + minimal output.
+            self.line("function __phorge_dec_div_exact($a, $b) {");
+            self.indent += 1;
+            self.line("$sb = __phorge_dec_scale($b);");
+            self.line(
+                "if (bccomp($b, '0', $sb) === 0) { throw new \\DivisionByZeroError('decimal division by zero'); }",
+            );
+            self.line("$prec = __phorge_dec_scale($a) + $sb + 80;");
+            self.line("$q = bcdiv($a, $b, $prec);");
+            self.line(
+                "if (bccomp(bcmul($q, $b, $prec * 2), $a, $prec) !== 0) { throw new \\RuntimeException('decimal division is not exact'); }",
+            );
+            self.line(
+                "if (strpos($q, '.') !== false) { $q = rtrim($q, '0'); $q = rtrim($q, '.'); }",
+            );
+            self.line("if ($q === '' || $q === '-' || $q === '-0') { $q = '0'; }");
+            self.line("return __phorge_dec_check($q);");
             self.indent -= 1;
             self.line("}");
         }

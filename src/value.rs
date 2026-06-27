@@ -414,6 +414,11 @@ pub const FAULT_DECIMAL_SCALE: &str = "decimal scale out of range";
 /// Canonical fault body for a bare `decimal % 0` (the exact-remainder operator, 2026-06-27). Contains
 /// `"modulo by zero"` so the differential harness classifies it as the same `FaultKind` as int `%0`.
 pub const FAULT_DECIMAL_MOD_ZERO: &str = "decimal modulo by zero";
+/// Canonical fault body for a bare `decimal / decimal` whose quotient does not terminate
+/// (2026-06-27 exact-or-fault `/`): the fraction in lowest terms has a denominator with a prime
+/// factor other than 2 or 5 (e.g. `1d / 3d`). Use `Decimal.div(a, b, scale, mode)` for a rounded
+/// quotient instead. The emitted PHP `__phorge_dec_div_exact` throws the same body.
+pub const FAULT_DECIMAL_NONTERMINATING: &str = "decimal division is not exact";
 /// Canonical fault body for `int ** int` with a negative exponent. A negative exponent yields a
 /// fractional result, which cannot be the typed `int` the `**` operator promises — so it faults
 /// rather than silently widening to `float` (PHP's `2 ** -1 == 0.5`). Use `float**float` for that.
@@ -683,6 +688,99 @@ pub fn decimal_rem(a: &Value, b: &Value) -> Result<Value, String> {
     let unscaled = x
         .checked_rem(y)
         .ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
+    Ok(Value::Decimal { unscaled, scale })
+}
+
+/// Euclidean gcd of two non-zero `u128` magnitudes (used by exact decimal division to reduce the
+/// quotient fraction to lowest terms before testing termination).
+fn u128_gcd(mut a: u128, mut b: u128) -> u128 {
+    while b != 0 {
+        let t = a % b;
+        a = b;
+        b = t;
+    }
+    a
+}
+
+/// Bare exact-or-fault decimal division (`/`, 2026-06-27). The value `(a/b)` is returned **exactly** in
+/// its minimal-scale form when the quotient terminates (`10d/4d → 2.5`, `1d/8d → 0.125`); a
+/// **non-terminating** quotient (`1d/3d`) faults [`FAULT_DECIMAL_NONTERMINATING`], a zero divisor
+/// faults [`FAULT_DECIMAL_DIV_ZERO`], and an exact result past `i128` range / scale 255 faults
+/// [`FAULT_DECIMAL_OVERFLOW`]. (Use `Decimal.div(a, b, scale, mode)` for a *rounded* quotient.)
+/// Algorithm: reduce `a/b` to lowest terms `p/q·10^(sb-sa)`; if `q` (after stripping factors of 2 and
+/// 5) is not 1 the decimal repeats → fault; otherwise the exact unscaled is `p·2^(m-i)·5^(m-j)` at
+/// scale derived from `max(i,j)` and the `10^(sb-sa)` factor, then trailing zeros are stripped to the
+/// canonical minimal form. The emitted PHP `__phorge_dec_div_exact` (bcdiv + exactness check + strip)
+/// mirrors this byte-for-byte.
+pub fn decimal_div_exact(a: &Value, b: &Value) -> Result<Value, String> {
+    let ovf = || FAULT_DECIMAL_OVERFLOW.to_string();
+    let (au, sa) = dec_parts(a).ok_or_else(ovf)?;
+    let (bu, sb) = dec_parts(b).ok_or_else(ovf)?;
+    if bu == 0 {
+        return Err(FAULT_DECIMAL_DIV_ZERO.to_string());
+    }
+    if au == 0 {
+        return Ok(Value::Decimal {
+            unscaled: 0,
+            scale: 0,
+        });
+    }
+    let neg = (au < 0) ^ (bu < 0);
+    let mut p = au.unsigned_abs();
+    let mut q = bu.unsigned_abs();
+    let g = u128_gcd(p, q);
+    p /= g;
+    q /= g;
+    // Strip factors of 2 and 5 from the reduced denominator; anything left ⇒ non-terminating.
+    let mut i = 0u32;
+    while q % 2 == 0 {
+        q /= 2;
+        i += 1;
+    }
+    let mut j = 0u32;
+    while q % 5 == 0 {
+        q /= 5;
+        j += 1;
+    }
+    if q != 1 {
+        return Err(FAULT_DECIMAL_NONTERMINATING.to_string());
+    }
+    let m = i.max(j);
+    let mul2 = 2u128.checked_pow(m - i).ok_or_else(ovf)?;
+    let mul5 = 5u128.checked_pow(m - j).ok_or_else(ovf)?;
+    let mut mag = p
+        .checked_mul(mul2)
+        .ok_or_else(ovf)?
+        .checked_mul(mul5)
+        .ok_or_else(ovf)?;
+    // value = mag · 10^(delta - m), delta = sb - sa. exp <= 0 ⇒ that magnitude at scale -exp; exp > 0
+    // ⇒ scale 0 after multiplying in the extra factor.
+    let delta = i64::from(sb) - i64::from(sa);
+    let exp = delta - i64::from(m);
+    let scale = if exp <= 0 {
+        let s = -exp;
+        if s > i64::from(u8::MAX) {
+            return Err(FAULT_DECIMAL_OVERFLOW.to_string());
+        }
+        s as u8
+    } else {
+        let factor = 10u128
+            .checked_pow(u32::try_from(exp).map_err(|_| ovf())?)
+            .ok_or_else(ovf)?;
+        mag = mag.checked_mul(factor).ok_or_else(ovf)?;
+        0
+    };
+    if mag > i128::MAX as u128 {
+        return Err(FAULT_DECIMAL_OVERFLOW.to_string());
+    }
+    let mut unscaled = if neg { -(mag as i128) } else { mag as i128 };
+    // Canonical minimal form: strip trailing zeros (division has no inherent scale, unlike `* + -`),
+    // matching the PHP helper's rtrim — so `2.50d / 1d` is `2.5`, not `2.50`.
+    let mut scale = scale;
+    while scale > 0 && unscaled % 10 == 0 {
+        unscaled /= 10;
+        scale -= 1;
+    }
     Ok(Value::Decimal { unscaled, scale })
 }
 
@@ -1130,6 +1228,71 @@ mod tests {
             decimal_rem(&d(5, 0), &d(0, 0)).unwrap_err(),
             FAULT_DECIMAL_MOD_ZERO
         );
+    }
+
+    #[test]
+    fn decimal_div_exact_terminates_or_faults() {
+        let d = |u, s| Value::Decimal {
+            unscaled: u,
+            scale: s,
+        };
+        let dv = |a, b| decimal_div_exact(&a, &b);
+        // Terminating quotients, minimal form.
+        assert!(matches!(
+            dv(d(10, 0), d(4, 0)),
+            Ok(Value::Decimal {
+                unscaled: 25,
+                scale: 1
+            })
+        )); // 2.5
+        assert!(matches!(
+            dv(d(1, 0), d(8, 0)),
+            Ok(Value::Decimal {
+                unscaled: 125,
+                scale: 3
+            })
+        )); // 0.125
+        assert!(matches!(
+            dv(d(10, 0), d(2, 0)),
+            Ok(Value::Decimal {
+                unscaled: 5,
+                scale: 0
+            })
+        )); // 5
+            // Trailing zeros are stripped to minimal form: 2.50 / 1 = 2.5 (matches the PHP rtrim).
+        assert!(matches!(
+            dv(d(250, 2), d(1, 0)),
+            Ok(Value::Decimal {
+                unscaled: 25,
+                scale: 1
+            })
+        ));
+        // Negative sign carries.
+        assert!(matches!(
+            dv(d(-1, 0), d(4, 0)),
+            Ok(Value::Decimal {
+                unscaled: -25,
+                scale: 2
+            })
+        )); // -0.25
+            // Non-terminating ⇒ fault.
+        assert_eq!(
+            dv(d(1, 0), d(3, 0)).unwrap_err(),
+            FAULT_DECIMAL_NONTERMINATING
+        );
+        assert_eq!(
+            dv(d(10, 0), d(6, 0)).unwrap_err(),
+            FAULT_DECIMAL_NONTERMINATING
+        ); // 5/3
+           // Zero divisor ⇒ div-zero fault; 0/x = 0.
+        assert_eq!(dv(d(5, 0), d(0, 0)).unwrap_err(), FAULT_DECIMAL_DIV_ZERO);
+        assert!(matches!(
+            dv(d(0, 0), d(5, 0)),
+            Ok(Value::Decimal {
+                unscaled: 0,
+                scale: 0
+            })
+        ));
     }
 
     #[test]
