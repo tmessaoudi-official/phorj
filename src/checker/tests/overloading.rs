@@ -52,3 +52,29 @@ fn overloaded_call_with_no_matching_argument_type_errors() {
         "{errs:?}"
     );
 }
+
+#[test]
+fn overload_set_rejects_php_erasure_collisions() {
+    // `string`/`bytes` both erase to PHP `string` → indistinguishable in transpiled PHP.
+    let e1 = errors_of(
+        "function f(string s) -> int { return 1; } function f(bytes b) -> int { return 2; }",
+    );
+    assert!(
+        e1.iter().any(|e| e.code == Some("E-OVERLOAD-ERASE")),
+        "string vs bytes must be E-OVERLOAD-ERASE: {e1:?}"
+    );
+    // `List`/`Set` both erase to PHP `array`.
+    let e2 = errors_of("function g(List<int> xs) -> int { return 1; } function g(Set<int> ys) -> int { return 2; }");
+    assert!(
+        e2.iter().any(|e| e.code == Some("E-OVERLOAD-ERASE")),
+        "List vs Set must be E-OVERLOAD-ERASE: {e2:?}"
+    );
+    // `int` vs `string` ARE distinguishable in PHP (is_int / is_string) — no error.
+    let e3 = errors_of(
+        "function h(int x) -> int { return 1; } function h(string s) -> int { return 2; }",
+    );
+    assert!(
+        !e3.iter().any(|e| e.code == Some("E-OVERLOAD-ERASE")),
+        "int vs string must NOT collide: {e3:?}"
+    );
+}

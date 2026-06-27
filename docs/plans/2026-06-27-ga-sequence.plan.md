@@ -80,7 +80,8 @@ Each its own commit, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), + ex
    string (`__phorge_float`) by carry, not float-scaling. `0.285→0.29` byte-identical; `.5` divergence gone.
 6. **Random → byte-identical parity** ✅ DONE — `pure: true`; transpiler hand-rolls the same xorshift64
    (`__phorge_rng_*`, logical-`>>` mask + signed `GOLDEN`); dice.phg now oracle-gated, seq identical 3-way.
-7. **Overload erasure reject** (`E-OVERLOAD-ERASE`: string-vs-bytes / List-Map-Set-only pairs).
+7. **Overload erasure reject** ✅ DONE — `E-OVERLOAD-ERASE` at declaration via a `php_erasure_key`
+   (string/bytes→string, List/Map/Set→array, Optional recursive); explain + checker test.
 8. **Lambda bare-field fix** (sub-brainstorm: clear `E-LAMBDA-BARE-FIELD` vs auto-capture as `this.v`).
 9. **opt!-on-null PHP message alignment** (cosmetic).
 

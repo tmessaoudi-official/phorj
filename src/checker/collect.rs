@@ -2,6 +2,30 @@
 
 use super::*;
 
+/// PHP-erasure key of a type: types PHP cannot distinguish at runtime share a key. `string`/`bytes`
+/// both erase to PHP `string`; `List`/`Map`/`Set` all to PHP `array`; an `Optional<T>` keys by its
+/// inner type. Everything else keys by its own `Display` (distinct), so only genuinely PHP-ambiguous
+/// pairs collide. Used by `validate_new_overload` to reject overloads the transpiler can't dispatch.
+fn php_erasure_key(t: &Ty) -> String {
+    match t {
+        Ty::String | Ty::Bytes => "php:string".to_string(),
+        Ty::List(_) | Ty::Map(..) | Ty::Set(_) => "php:array".to_string(),
+        Ty::Optional(inner) => format!("php:?{}", php_erasure_key(inner)),
+        other => format!("ty:{other}"),
+    }
+}
+
+/// Two overload parameter lists are *PHP-erasure-alike* when they have the same arity and every
+/// position shares a [`php_erasure_key`] — transpiled PHP cannot tell them apart — yet they are not
+/// literally identical (that case is `E-OVERLOAD-DUPLICATE`). Such a pair is `E-OVERLOAD-ERASE`.
+fn overloads_erase_alike(a: &[Ty], b: &[Ty]) -> bool {
+    a.len() == b.len()
+        && a != b
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| php_erasure_key(x) == php_erasure_key(y))
+}
+
 impl Checker {
     /// Phase 1 — hoist all top-level declarations and the active import map. There is no longer a
     /// builtin prelude: every callable is namespaced ("nothing in the wind"), so even `println` must
@@ -1096,6 +1120,22 @@ impl Checker {
                 format!("overloaded {kind} `{name}` has two declarations with identical parameter types"),
                 "E-OVERLOAD-DUPLICATE",
                 Some("each overload must differ in its parameter types".into()),
+            );
+        } else if existing
+            .iter()
+            .any(|e| overloads_erase_alike(&e.params, &sig.params))
+        {
+            // Two overloads that are not *identical* but collide under PHP erasure: `string`/`bytes`
+            // both erase to PHP `string`, and `List`/`Map`/`Set` all erase to PHP `array`. The
+            // transpiler's overload dispatch is an `instanceof`/`is_*` if-chain that cannot tell them
+            // apart, so an ambiguous call would fault on the Phorge backends but silently take the
+            // first PHP branch (the documented transpile-only divergence). Reject at declaration
+            // instead (decision review, 2026-06-27).
+            self.err_coded(
+                span,
+                format!("overloaded {kind} `{name}` has two declarations indistinguishable in transpiled PHP"),
+                "E-OVERLOAD-ERASE",
+                Some("`string`/`bytes` both become PHP `string`, and `List`/`Map`/`Set` all become PHP `array`, so the dispatch can't tell these overloads apart — differentiate them by another parameter, or merge them".into()),
             );
         }
     }

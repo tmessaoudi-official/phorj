@@ -554,6 +554,16 @@ pub fn explain_text(code: &str) -> Option<String> {
              parameter types). Two declarations with the same parameters are redundant and could never\n\
              be told apart at a call. Remove one, or change its parameters.\n"
         }
+        "E-OVERLOAD-ERASE" => {
+            "E-OVERLOAD-ERASE — two overloads are indistinguishable in transpiled PHP.\n\n\
+             Phorge transpiles to PHP, whose runtime cannot tell some distinct Phorge types apart:\n\
+             `string` and `bytes` both become PHP `string`, and `List`/`Map`/`Set` all become PHP\n\
+             `array`. So two overloads that differ ONLY in such a position (e.g. `f(string)` vs\n\
+             `f(bytes)`, or `g(List<int>)` vs `g(Set<int>)`) compile to a dispatch the PHP backend\n\
+             can't resolve — an ambiguous call would fault on the Phorge backends but silently take\n\
+             the first matching PHP branch. Differentiate the overloads by another parameter, or merge\n\
+             them into one.\n"
+        }
         "E-OVERLOAD-GENERIC" => {
             "E-OVERLOAD-GENERIC — a generic function/method cannot be overloaded.\n\n\
              A generic declaration (`f<T>(…)`) must be the only one with its name. Generic overloading\n\

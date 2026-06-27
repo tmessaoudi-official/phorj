@@ -408,12 +408,11 @@ Dynamic multiple dispatch over free functions and class methods ships and is byt
   (`ambiguous overloaded call to …`, byte-identical on both backends). A compile-time ambiguity check
   is a future refinement; identical signatures are already rejected at declaration
   (`E-OVERLOAD-DUPLICATE`).
-- **Two PHP-erasure limits** (the transpile target cannot distinguish what the Phorge backends can):
-  overloads that differ *only* by `string`-vs-`bytes`, or *only* among `List`/`Map`/`Set`, are
-  indistinguishable in PHP (both erase to `string` / `array`) — avoid such pairs in transpiled code;
-  and on a genuinely *ambiguous* call the Phorge backends fault while the emitted PHP `if`-chain takes
-  the first matching branch (a transpile-only divergence on faulting input — a runnable example, which
-  must produce identical `Ok` output, never exercises it).
+- **PHP-erasure overload collisions are REJECTED at declaration** (`E-OVERLOAD-ERASE`, 2026-06-27):
+  overloads that differ *only* by `string`-vs-`bytes`, or *only* among `List`/`Map`/`Set` (both erase
+  to PHP `string` / `array`), are caught at compile time rather than producing a transpile-only
+  divergence on an ambiguous call. Differentiate by another parameter or merge them. (The general
+  runtime-ambiguity case for distinguishable multi-arg sets is still a runtime fault — see above.)
 - **Overload × intersection types**: the S5 `E-INTERSECT-SIG` agreement check uses the first overload
   as the representative when an intersection member's method is itself overloaded — a full
   overload-aware intersection check is a follow-up.
