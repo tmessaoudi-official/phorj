@@ -1,0 +1,55 @@
+// Core.Http — the portable HTTP handler model, now in the stdlib.
+//
+// M6 W1 shipped `Request`/`Response`/parse/serialize as pure Phorge written *in* the example
+// (examples/web/handler.phg). Core.Http promotes them to the standard library: `import Core.Http;`
+// gives you the `Request` and `Response` types with a static-method API —
+//   * `Request.parse(bytes) -> Request?`   — parse a raw HTTP/1.1 request (null if malformed)
+//   * `req.header(name) -> string?`        — look up a header
+//   * `Response.text(status, body)`        — a text/plain response
+//   * `resp.serialize() -> bytes`          — render to the HTTP/1.1 wire form
+// The application is a single `handle(Request) -> Response`. Under `phg serve`, Core.Http injects a
+// `respond(bytes) -> bytes` bridge that calls your `handle` (a malformed request → 400), so a bare
+// handler is directly servable. run/runvm/real PHP are byte-identical.
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+// The whole application: greet by path, echoing the Host header.
+function handle(Request req): Response {
+    string host = req.header("Host") ?? "world";
+    return Response.text(200, "Hello {req.path} (host {host})");
+}
+
+function main(): void {
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+
+    // A canonical raw request, built from a `b"…"` literal with explicit CRLFs (deterministic).
+    bytes raw = b"GET /hi HTTP/1.1\x0d\x0aHost: localhost\x0d\x0aAccept: text/plain\x0d\x0a\x0d\x0a";
+
+    if (var req = Request.parse(raw)) {
+        string m = req.method;
+        string p = req.path;
+        Console.println("method={m} path={p}");
+        Console.println("host={req.header(\"Host\") ?? \"(none)\"}");
+
+        // Run the handler and serialize the response to the wire form.
+        Response resp = handle(req);
+        bytes wire = resp.serialize();
+        int n = Bytes.length(wire);
+        // CRLFs shown as " | " so the output stays one clean ASCII line.
+        string oneLine = Text.replace(Bytes.toString(wire) ?? "", nl, " | ");
+        Console.println("wire ({n}B): {oneLine}");
+    } else {
+        Console.println("malformed request");
+    }
+
+    // A malformed request (no CRLFCRLF head/body boundary) parses to null.
+    bytes bad = b"not a request";
+    if (var r2 = Request.parse(bad)) {
+        Console.println("parsed: {r2.method}");
+    } else {
+        Console.println("malformed: yes");
+    }
+}

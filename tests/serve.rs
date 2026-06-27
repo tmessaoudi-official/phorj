@@ -89,6 +89,22 @@ function main() -> void {
 }
 "#;
 
+/// slice B1: a Core.Http program that defines ONLY `handle(Request) -> Response` — no parse/serialize,
+/// no `respond`. The Core.Http injection supplies `Request`/`Response` and synthesizes the
+/// `respond(bytes) -> bytes` serve bridge that wraps `handle` (malformed → 400). Closes Batch-1 C: a
+/// bare handler is directly servable.
+const HTTP_HANDLE_PROGRAM: &str = r#"
+package Main;
+import Core.Http;
+function handle(Request req) -> Response {
+  if (req.path == "/") {
+    return Response.text(200, "home");
+  }
+  return Response.text(404, "missing");
+}
+function main() -> void { }
+"#;
+
 /// Deterministic in-memory transport: `recv` pops a canned request; `send` records the response.
 struct FixtureTransport {
     inbox: VecDeque<Vec<u8>>,
@@ -159,6 +175,29 @@ fn serves_known_unknown_and_malformed() {
             other => panic!("respond returned {}, expected bytes", other.type_name()),
         }
     }
+}
+
+#[test]
+fn core_http_handle_is_servable_via_injected_respond_bridge() {
+    // The program has no `respond` of its own — the Core.Http injection supplies it, wrapping `handle`.
+    let prog = phorge::cli::parse_checked_program(HTTP_HANDLE_PROGRAM)
+        .expect("Core.Http handle program type-checks");
+    let get_root = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
+    let get_missing = b"GET /missing HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
+    let malformed = b"not a request".to_vec();
+
+    let mut fx = FixtureTransport::new(vec![
+        get_root.clone(),
+        get_missing.clone(),
+        malformed.clone(),
+    ]);
+    serve(&prog, &mut fx, false).expect("serve loop completes");
+
+    assert_eq!(fx.sent.len(), 3, "one response per request");
+    assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
+    assert_eq!(fx.sent[1], http("HTTP/1.1 404 Not Found", "missing"));
+    // A malformed request → the injected bridge's 400 (body "Bad Request").
+    assert_eq!(fx.sent[2], http("HTTP/1.1 400 Bad Request", "Bad Request"));
 }
 
 /// A transport with a scripted sequence of `recv` results (including errors), so the loop's

@@ -374,9 +374,144 @@ fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program>
     }
 }
 
+/// The canonical `Core.Http` types, injected (below) when a program imports `Core.Http` (M6 W1 →
+/// stdlib). The portable handler model — `handle(Request) -> Response` — at the value level: `Request`
+/// and `Response` are immutable values; `Request.parse(bytes) -> Request?` and `resp.serialize()`
+/// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.Text` (so the prelude also
+/// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
+/// stdlib behind the static-method API (slice B0). Flows through every backend as ordinary classes.
+const HTTP_PRELUDE: &str = r#"
+import Core.Bytes;
+import Core.Text;
+class Request {
+  constructor(public string method, public string path, public bytes body, private List<string> headerLines) {}
+  function header(string name): string? {
+    for (string line in headerLines) {
+      if (Text.contains(line, ":")) {
+        List<string> kv = Text.splitOnce(line, ":");
+        string key = Text.trim(kv[0]);
+        if (key == name) { return Text.trim(kv[1]); }
+      }
+    }
+    return null;
+  }
+  static function parse(bytes raw): Request? {
+    int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
+    if (sep < 0) { return null; }
+    bytes headBytes = Bytes.slice(raw, 0, sep);
+    bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
+    string head = Bytes.toString(headBytes) ?? "";
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    List<string> lines = Text.split(head, nl);
+    string requestLine = lines[0];
+    List<string> rl = Text.split(requestLine, " ");
+    string method = rl[0];
+    string path = rl[1];
+    return new Request(method, path, body, lines);
+  }
+}
+class Response {
+  constructor(public int status, public bytes body, public List<string> headerLines) {}
+  static function text(int status, string body): Response {
+    return new Response(status, Bytes.fromString(body), ["Content-Type: text/plain"]);
+  }
+  static function reason(int s): string {
+    return if (s == 200) { "OK" }
+      else { if (s == 400) { "Bad Request" }
+      else { if (s == 404) { "Not Found" }
+      else { "Internal Server Error" } } };
+  }
+  function serialize(): bytes {
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    string reason = Response.reason(status);
+    int st = status;
+    string statusLine = "HTTP/1.1 {st} {reason}";
+    int bodyLen = Bytes.length(body);
+    string userHeaders = Text.join(headerLines, nl);
+    string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
+    return Bytes.concat(Bytes.fromString(head), body);
+  }
+}
+"#;
+
+/// The `phg serve` bridge: the runtime's `respond(bytes) -> bytes` entry, synthesized to wrap a
+/// user-defined `handle(Request) -> Response` (closes Batch-1 C). Injected only when `Core.Http` is
+/// imported, a `handle` exists, and the user hasn't written their own `respond`. A malformed request
+/// (parse returns null) becomes a 400 — HTTP policy lives here in Phorge, not in the Rust runtime.
+const HTTP_RESPOND_BRIDGE: &str = r#"
+function respond(bytes raw): bytes {
+  if (var req = Request.parse(raw)) {
+    return handle(req).serialize();
+  }
+  return Response.text(400, "Bad Request").serialize();
+}
+"#;
+
+/// Inject the `Core.Http` types (and, when applicable, the `respond` serve bridge) into a program that
+/// imports `Core.Http`. Mirrors [`inject_json_prelude`]: a no-op (borrowed) unless `Core.Http` is
+/// imported. Each piece is injected only if absent — a user may declare their own `Request`/`Response`
+/// or `respond` and it wins. The `Core.Bytes`/`Core.Text` imports the bodies need are injected too
+/// (skipped if the user already imports them).
+fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports = |m: &str| {
+        prog.items.iter().any(
+            |it| matches!(it, Item::Import { path, type_only: false, .. } if path.join(".") == m),
+        )
+    };
+    if !imports("Core.Http") {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    let has_class = |n: &str| {
+        prog.items
+            .iter()
+            .any(|it| matches!(it, Item::Class(c) if c.name == n))
+    };
+    let has_fn = |n: &str| {
+        prog.items
+            .iter()
+            .any(|it| matches!(it, Item::Function(f) if f.name == n))
+    };
+    let Some(parsed) = lex_parse(HTTP_PRELUDE).ok() else {
+        return std::borrow::Cow::Borrowed(prog); // unreachable: HTTP_PRELUDE is valid
+    };
+    let mut prepend: Vec<Item> = Vec::new();
+    for it in parsed.items {
+        match &it {
+            Item::Import { path, .. } if !imports(&path.join(".")) => prepend.push(it),
+            Item::Class(c) if c.name == "Request" && !has_class("Request") => prepend.push(it),
+            Item::Class(c) if c.name == "Response" && !has_class("Response") => prepend.push(it),
+            _ => {}
+        }
+    }
+    // The serve bridge: wrap the user's `handle` when present and no `respond` is defined.
+    if has_fn("handle") && !has_fn("respond") {
+        if let Ok(bridge) = lex_parse(HTTP_RESPOND_BRIDGE) {
+            prepend.extend(
+                bridge
+                    .items
+                    .into_iter()
+                    .filter(|it| matches!(it, Item::Function(f) if f.name == "respond")),
+            );
+        }
+    }
+    if prepend.is_empty() {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    let mut items = Vec::with_capacity(prog.items.len() + prepend.len());
+    items.extend(prepend);
+    items.extend(prog.items.iter().cloned());
+    std::borrow::Cow::Owned(Program {
+        package: prog.package.clone(),
+        items,
+        span: prog.span,
+    })
+}
+
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
     let json_injected = inject_json_prelude(prog);
-    let injected = inject_rounding_mode_prelude(json_injected.as_ref());
+    let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
+    let injected = inject_http_prelude(rm_injected.as_ref());
     let prog = injected.as_ref();
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs)) => {
