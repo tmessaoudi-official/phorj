@@ -1,0 +1,14 @@
+// Bounded context: Ordering. Entity inside the Order aggregate: a product and a quantity. One public
+// type per file → `OrderLine.phg`. Composes Catalog's value object + entity via cross-package imports.
+package Ordering;
+
+import type Catalog.Money;
+import type Catalog.Product;
+
+class OrderLine {
+    constructor(public Product product, public int qty) {}
+
+    function subtotal() -> Money {
+        return this.product.price.times(this.qty);
+    }
+}

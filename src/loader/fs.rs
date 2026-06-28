@@ -82,6 +82,68 @@ pub(super) fn validate_folder_path(
     Ok(())
 }
 
+/// The public-surface file-naming rule (`docs/specs/2026-06-28-public-surface-file-rule-design.md`): a
+/// non-`main` file's public face is either exactly one public named type (and the file stem equals it,
+/// byte-exact incl. casing) or some public free functions (no public type) — never both, never two
+/// public types. `private`/`internal` helpers and `declare` (foreign) items ride along free; an entry
+/// file (declares `main`) is fully exempt. Loader-only — never touches a backend.
+pub(super) fn validate_public_surface(prog: &Program, file: &Path) -> Result<(), String> {
+    use crate::ast::Visibility;
+    // Entry/program files mix freely under any name.
+    if crate::ast::entry_point(prog, "main").is_some() {
+        return Ok(());
+    }
+    let mut pub_types: Vec<&str> = Vec::new();
+    let mut pub_fns: Vec<&str> = Vec::new();
+    for item in &prog.items {
+        match item {
+            // A foreign `declare` describes external PHP — it is not an export of this file, so it does
+            // not count toward the public surface (a `.d.phg`-style declaration file is exempt).
+            Item::Class(c) if c.foreign => {}
+            Item::Function(f) if f.foreign => {}
+            Item::Class(c) if c.vis == Visibility::Public => pub_types.push(&c.name),
+            Item::Enum(e) if e.vis == Visibility::Public => pub_types.push(&e.name),
+            Item::Interface(i) if i.vis == Visibility::Public => pub_types.push(&i.name),
+            // A trait carries no visibility modifier (always public reuse); it is a public named type.
+            Item::Trait(t) => pub_types.push(&t.name),
+            Item::Function(f) if f.vis == Visibility::Public => pub_fns.push(&f.name),
+            _ => {}
+        }
+    }
+    if pub_types.len() > 1 {
+        return Err(format!(
+            "{}: a file may declare at most one public type, but this declares {} ({}) — split them \
+             into one file each (`<TypeName>.phg`), or mark the extras `private`/`internal` [E-FILE-MULTI-PUBLIC]",
+            file.display(),
+            pub_types.len(),
+            pub_types.join(", ")
+        ));
+    }
+    if pub_types.len() == 1 && !pub_fns.is_empty() {
+        return Err(format!(
+            "{}: a public type (`{}`) and public free function(s) ({}) cannot share a file — move the \
+             function(s) to a function module, make them methods, or mark them `private`/`internal` [E-FILE-MIXED-PUBLIC]",
+            file.display(),
+            pub_types[0],
+            pub_fns.join(", ")
+        ));
+    }
+    if let Some(ty) = pub_types.first() {
+        let stem = file.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        if stem != *ty {
+            return Err(format!(
+                "{}: the public type `{}` must live in a file named `{}.phg` (byte-exact, casing \
+                 included), not `{}.phg` [E-FILE-NAME]",
+                file.display(),
+                ty,
+                ty,
+                stem
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The path of `file` relative to `source_root`, resolving symlinks/`.`/`..` via canonicalization
 /// when possible. Returns `None` when `file` is not under `source_root`.
 pub(super) fn relative_under(file: &Path, source_root: &Path) -> Option<PathBuf> {

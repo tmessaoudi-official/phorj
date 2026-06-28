@@ -67,6 +67,28 @@ pub fn explain_text(code: &str) -> Option<String> {
              model): `src/app/util/*.phg` must declare `package app.util;`. `package Main;` is exempt\n\
              (runnable anywhere). Move the file, or fix its package to match the directory.\n"
         }
+        "E-FILE-NAME" => {
+            "E-FILE-NAME — a public type lives in a file not named after it.\n\n\
+             A file's public face is one thing (the public-surface rule): a non-`main` file that exports\n\
+             exactly one public type must be named after it, byte-exactly including casing —\n\
+             `public class Circle` lives in `Circle.phg` (not `circle.phg`, not `shapes.phg`). Rename the\n\
+             file, or mark the type `private`/`internal` if it is not part of the package's public API.\n\
+             A file that declares `main` is exempt (programs mix freely).\n"
+        }
+        "E-FILE-MULTI-PUBLIC" => {
+            "E-FILE-MULTI-PUBLIC — a file declares more than one public type.\n\n\
+             A non-`main` file exports at most one public type (class/enum/interface/trait), so its name\n\
+             can identify it. Split the extra public types into their own `<TypeName>.phg` files, or mark\n\
+             the helpers `private`/`internal` (those ride along free — they are single-file-scoped). This\n\
+             keeps Phorge's function-heavy model: free functions and non-public helpers are unconstrained.\n"
+        }
+        "E-FILE-MIXED-PUBLIC" => {
+            "E-FILE-MIXED-PUBLIC — a file mixes a public type with public free function(s).\n\n\
+             A non-`main` file is either a *type module* (one public type, named after the file) or a\n\
+             *function module* (public free functions, topic-named) — not both. Move the function(s) to\n\
+             their own function module, turn them into methods/static methods of the type, or mark them\n\
+             `private`/`internal`. `main` files are exempt.\n"
+        }
         "E-PKG-TYPE" => {
             "E-PKG-TYPE — a class/enum was declared in a library (non-`main`) package.\n\n\
              M5 S2c namespaces *functions* across packages; cross-package types are a later slice.\n\
@@ -993,7 +1015,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER, E-ROUTE-METHOD-STATIC, E-FOREIGN-RUNTIME)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER, E-ROUTE-METHOD-STATIC, E-FOREIGN-RUNTIME, E-FILE-NAME, E-FILE-MULTI-PUBLIC, E-FILE-MIXED-PUBLIC)"
         )
     })
 }

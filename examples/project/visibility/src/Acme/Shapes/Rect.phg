@@ -7,17 +7,17 @@ package Acme.Shapes;
 //   private                                 — visible only inside THIS .phg file
 //
 // `Rect` is `public`, so `main` (a different package) may `import type Acme.Shapes.Rect`.
-public class Rect {
-  constructor(public int w, public int h) {}
-  function area(): int {
-    // `scale` is `internal` and declared in this same file — visible here.
-    return scale(this.w * this.h);
-  }
+class Rect {
+    constructor(public int w, public int h) {}
+    function area(): int {
+        // `scale` is `internal` and declared in this same file — visible here.
+        return scale(this.w * this.h);
+    }
 }
 
 // `internal` — usable from this package's other file (helpers.phg) but NOT from `main`.
 internal function scale(int n): int {
-  // `factor` is `internal`, declared in the SIBLING file helpers.phg — a same-package, cross-file
-  // reference, which `internal` permits (only `private` would block it).
-  return n * factor();
+    // `factor` is `internal`, declared in the SIBLING file helpers.phg — a same-package, cross-file
+    // reference, which `internal` permits (only `private` would block it).
+    return n * factor();
 }

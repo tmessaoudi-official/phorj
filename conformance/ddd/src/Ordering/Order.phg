@@ -1,0 +1,22 @@
+// Bounded context: Ordering. Aggregate root: an immutable order with its lines; the total folds each
+// line's subtotal. One public type per file → `Order.phg`. `OrderLine` is same-package (no import).
+package Ordering;
+
+import Core.List;
+import type Catalog.Money;
+
+class Order {
+    constructor(public int id, public List<OrderLine> lines) {}
+
+    function lineCount() -> int {
+        return List.length(this.lines);
+    }
+
+    function total() -> Money {
+        mutable Money sum = new Money(0);
+        for (OrderLine line in this.lines) {
+            sum = sum.plus(line.subtotal());
+        }
+        return sum;
+    }
+}

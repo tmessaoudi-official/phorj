@@ -24,7 +24,7 @@ byte-identity spine is unaffected.
 ```
 src/
   main.phg                  package Main      — imports the public Rect across packages
-  Acme/Shapes/shapes.phg    package Acme.Shapes — public class Rect; internal fn scale
+  Acme/Shapes/Rect.phg    package Acme.Shapes — public class Rect; internal fn scale
   Acme/Shapes/helpers.phg   package Acme.Shapes — internal fn factor; private fn clamp
 ```
 
@@ -39,7 +39,7 @@ phg transpile src/main.phg | php   # area: 12
 The legal references it exercises:
 
 - `main` imports `Rect` — **public**, so the cross-package `import type Acme.Shapes.Rect;` is allowed.
-- `scale` (in `shapes.phg`) calls `factor` (in `helpers.phg`) — both **internal**, same package, different
+- `scale` (in `Rect.phg`) calls `factor` (in `helpers.phg`) — both **internal**, same package, different
   file — allowed.
 - `factor` calls `clamp` — `clamp` is **private** but the call is in the *same file* — allowed.
 
@@ -54,7 +54,7 @@ import type Acme.Shapes.Scale;   //  no such public type
 Shapes.scale(12);                  //  E-VIS-INTERNAL: scale is internal to Acme.Shapes
 
 // clamp is `private` to helpers.phg — not visible to any other file:
-//   (referenced from shapes.phg or main.phg)
+//   (referenced from Rect.phg or main.phg)
 clamp(1);                        //  E-VIS-PRIVATE: clamp is private to helpers.phg
 ```
 

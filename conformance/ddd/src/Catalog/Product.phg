@@ -1,0 +1,7 @@
+// Bounded context: Catalog. Entity — identified by `id`, carrying a same-package `Money` price.
+// One public type per file → `Product.phg`.
+package Catalog;
+
+class Product {
+    constructor(public int id, public string name, public Money price) {}
+}

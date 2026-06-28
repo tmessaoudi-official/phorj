@@ -1,0 +1,10 @@
+package Acme.Geometry;
+
+// A library package that EXPORTS types for other packages to `import type`. Folder = package
+// (`src/Acme/Geometry/`), and — per the public-surface rule — each public type lives in its own
+// file named after it (`Shape.phg`/`Rect.phg`/`Paint.phg`). The loader flat-merges the package, so
+// the cross-package output is identical to a single combined file.
+// An interface (a nominal contract). A class implementing it is a subtype of it cross-package.
+interface Shape {
+    function area(): int;
+}

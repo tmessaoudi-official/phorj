@@ -198,6 +198,53 @@ struct InterfaceInfo {
     extends: Vec<String>,
 }
 
+impl ClassInfo {
+    /// An empty-membered placeholder carrying only the declared type parameters — registered by the
+    /// name-binding pre-pass (`prebind_types`) so a forward/cross-file reference to this class resolves
+    /// (correct generic arity) before its members are collected. `collect_class` overwrites it with the
+    /// fully-populated entry.
+    fn placeholder(type_params: Vec<String>) -> Self {
+        ClassInfo {
+            fields: HashMap::new(),
+            mutable_fields: std::collections::HashSet::new(),
+            statics: HashMap::new(),
+            consts: HashMap::new(),
+            static_mut: std::collections::HashSet::new(),
+            methods: HashMap::new(),
+            hooks: HashMap::new(),
+            ctor: Vec::new(),
+            has_ctor: false,
+            ctor_vis: MemberVis::Public,
+            ctor_owner: String::new(),
+            type_params,
+            is_abstract: false,
+            field_vis: HashMap::new(),
+            method_vis: HashMap::new(),
+            static_methods: std::collections::HashSet::new(),
+        }
+    }
+}
+
+impl EnumInfo {
+    /// See [`ClassInfo::placeholder`] — name-binding placeholder for an enum (`enum Option<T>`).
+    fn placeholder(type_params: Vec<String>) -> Self {
+        EnumInfo {
+            variants: HashMap::new(),
+            type_params,
+        }
+    }
+}
+
+impl InterfaceInfo {
+    /// See [`ClassInfo::placeholder`] — name-binding placeholder for an interface.
+    fn placeholder() -> Self {
+        InterfaceInfo {
+            methods: HashMap::new(),
+            extends: Vec::new(),
+        }
+    }
+}
+
 pub struct Checker {
     /// Free-function overload sets (M-RT overloading): a name maps to one *or more* signatures
     /// (dynamic multiple dispatch). Length 1 in the common case.
@@ -210,6 +257,15 @@ pub struct Checker {
     /// machinery), but a trait is **not a type**: this set lets `resolve_type`/`instanceof`/construction
     /// reject a trait name where a type is expected.
     traits: std::collections::HashSet<String>,
+    /// Type names registered by the name-binding **pre-pass** (`prebind_types`) before any member type
+    /// is resolved, so a type reference is **order-independent** — a forward reference (a later type in
+    /// the same file) and a cross-file reference (a sibling file merged earlier, after the loader's
+    /// alphabetical sort) both resolve. Without this, `collect_class` only pre-bound its *own* name, so
+    /// `class Order { … List<OrderLine> … }` failed when `OrderLine` was declared/merged later. The set
+    /// also carries duplicate detection (a name seen twice in the pre-pass is the "already defined"
+    /// error), which lets the per-item collectors treat an existing-and-prebound name as "fill my
+    /// placeholder" rather than a duplicate.
+    prebound: std::collections::HashSet<String>,
     /// Transitively-flattened interface set each class implements (the `instanceof`/subtyping table),
     /// computed once via [`crate::ast::class_implements`] and shared verbatim with the backends so
     /// the runtime test can never diverge from the static one (M-RT S2).
@@ -365,6 +421,7 @@ impl Checker {
             classes: HashMap::new(),
             interfaces,
             traits: std::collections::HashSet::new(),
+            prebound: std::collections::HashSet::new(),
             class_implements: std::collections::BTreeMap::new(),
             class_supertypes: std::collections::BTreeMap::new(),
             scopes: Vec::new(),

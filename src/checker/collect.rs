@@ -31,9 +31,60 @@ impl Checker {
     /// builtin prelude: every callable is namespaced ("nothing in the wind"), so even `println` must
     /// be reached as `console.println` after `import core.console;` (M3 Wave 1). A bare `println(…)`
     /// now resolves as an unknown function.
+    /// Name-binding pre-pass: register every top-level type's name (+ generic arity) as a placeholder
+    /// before any member type is resolved, so a type reference is **order-independent** — a forward
+    /// reference within a file and a cross-file reference (a sibling merged earlier by the loader's
+    /// alphabetical sort) both resolve. Duplicate detection lives here (order-independent); the per-item
+    /// collectors then treat a prebound name as "fill my placeholder", not a duplicate. Built-in-named
+    /// types are skipped (the per-item collector emits `cannot redefine built-in type`).
+    fn prebind_types(&mut self, program: &Program) {
+        use crate::ast::Item;
+        for item in &program.items {
+            let (name, type_params, span): (&str, &[String], crate::token::Span) = match item {
+                Item::Class(c) => (&c.name, &c.type_params, c.span),
+                Item::Enum(e) => (&e.name, &e.type_params, e.span),
+                Item::Interface(i) => (&i.name, &[][..], i.span),
+                Item::Trait(t) => (&t.name, &[][..], t.span),
+                _ => continue,
+            };
+            if is_builtin_type_name(name) {
+                continue; // the per-item collector reports `cannot redefine built-in type`
+            }
+            if !self.prebound.insert(name.to_string()) {
+                self.err(span, format!("type `{name}` is already defined"));
+                continue;
+            }
+            match item {
+                Item::Enum(_) => {
+                    self.enums.insert(
+                        name.to_string(),
+                        EnumInfo::placeholder(type_params.to_vec()),
+                    );
+                }
+                Item::Interface(_) => {
+                    self.interfaces
+                        .insert(name.to_string(), InterfaceInfo::placeholder());
+                }
+                // A class or a trait (a trait reuses the class machinery, keyed by its name).
+                _ => {
+                    self.classes.insert(
+                        name.to_string(),
+                        ClassInfo::placeholder(type_params.to_vec()),
+                    );
+                    if matches!(item, Item::Trait(_)) {
+                        self.traits.insert(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn collect(&mut self, program: &Program) {
         use crate::ast::Item;
         self.imports = crate::native::import_map(&program.items);
+        // Pre-bind all type names so member/annotation resolution is order-independent (forward +
+        // cross-file references). Must run before the per-item collect loop resolves any type.
+        self.prebind_types(program);
         for item in &program.items {
             // PHP reserves a set of words in symbol positions (a free function / class / enum /
             // interface / trait / type-alias). Several are usable Phorge value identifiers (param /
@@ -117,9 +168,10 @@ impl Checker {
             );
             return;
         }
-        if self.classes.contains_key(&i.name)
-            || self.enums.contains_key(&i.name)
-            || self.interfaces.contains_key(&i.name)
+        if !self.prebound.contains(&i.name)
+            && (self.classes.contains_key(&i.name)
+                || self.enums.contains_key(&i.name)
+                || self.interfaces.contains_key(&i.name))
         {
             self.err(i.span, format!("type `{}` is already defined", i.name));
             return;
@@ -1206,7 +1258,9 @@ impl Checker {
             );
             return;
         }
-        if self.enums.contains_key(&e.name) || self.classes.contains_key(&e.name) {
+        if !self.prebound.contains(&e.name)
+            && (self.enums.contains_key(&e.name) || self.classes.contains_key(&e.name))
+        {
             self.err(e.span, format!("type `{}` is already defined", e.name));
             return;
         }
@@ -1242,7 +1296,9 @@ impl Checker {
             );
             return;
         }
-        if self.classes.contains_key(&c.name) || self.enums.contains_key(&c.name) {
+        if !self.prebound.contains(&c.name)
+            && (self.classes.contains_key(&c.name) || self.enums.contains_key(&c.name))
+        {
             self.err(c.span, format!("type `{}` is already defined", c.name));
             return;
         }

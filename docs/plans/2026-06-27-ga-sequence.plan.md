@@ -505,3 +505,26 @@ byte-identical (run≡runvm≡real PHP 8.5) + guide example + conformance + docs
    breadth, Convert). Spec `docs/specs/2026-06-27-m4-stdlib-charter.md` already exists.
 
 Decisions log: see the per-milestone specs created during the run.
+
+---
+
+## REPRIORITIZED 2026-06-28 (mid-marathon, developer interrupt)
+
+After M-TIME (complete) + M8.5 S1/S2 (core complete), the developer redirected to two things, with the
+marathon's M-perf/M4 deprioritized (still pending):
+
+### Decisions Log
+- [2026-06-28] AGREED: **public-surface file-naming rule** (brainstormed, approved "build it", HARD errors).
+  A non-`main` file's public face is exactly ONE named type (file = `TypeName.phg`, byte-exact incl.
+  casing) OR public free functions (topic/lowercase name) — never both, never two public types.
+  `private`/`internal` helper types + functions ride along free (no PSR-4 micro-file tax). A file
+  declaring `main` is fully exempt (programs mix freely). Codes: `E-FILE-NAME` /
+  `E-FILE-MULTI-PUBLIC` / `E-FILE-MIXED-PUBLIC`. Enforced in the loader (project mode), beside
+  `folder=path`/`E-PKG-PATH`. Loose single-file + `-e`/stdin are `main`-only → exempt. Synthesis of
+  AskUserQuestion options 1 (helper ergonomics) + 3 (clean public separation). Spec:
+  `docs/specs/2026-06-28-public-surface-file-rule-design.md`.
+- [2026-06-28] AGREED: then **finish the LSP** (references, rename, formatting via `phg fmt`, code
+  actions from `phg explain`, semantic tokens, …) and ship the **PhpStorm/IntelliJ** extension alongside
+  the existing VSCode client.
+
+Marathon remainder (M-perf, M4) parked behind these.

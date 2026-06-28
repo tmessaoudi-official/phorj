@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — public-surface file-naming rule + order-independent type resolution
+
+Design `docs/specs/2026-06-28-public-surface-file-rule-design.md`. **No new `Op`/`Value`** (loader +
+checker front-end only; the byte-identity spine is untouched).
+
+- **Public-surface rule** (loader, project mode): a non-`main` file's public face is exactly **one
+  public named type** (class/enum/interface/trait — file stem must equal it, byte-exact incl. casing)
+  **or** public free functions (topic-named) — never both, never two public types. `private`/`internal`
+  helper types + functions and `declare` (foreign) items ride along free; a file declaring `main` is
+  exempt (programs mix freely). New codes `E-FILE-NAME` / `E-FILE-MULTI-PUBLIC` / `E-FILE-MIXED-PUBLIC`
+  (+ `phg explain`). "Go packages, PSR-4 public-type files." Loose single-file + `-e`/stdin are
+  `main`-only ⇒ exempt; every guide example has `main` ⇒ zero guide churn. The `examples/project/shapes`
+  and `…/visibility` library packages were split to one-type-per-file (`Shape.phg`/`Rect.phg`/`Paint.phg`),
+  and the `ddd` conformance project too (`Money.phg`/`Product.phg`/`OrderLine.phg`/`Order.phg`).
+- **Order-independent type resolution** (checker `prebind_types` pre-pass): all top-level type names are
+  registered (with generic arity) *before* any member type is resolved, so a **forward reference**
+  (`function toB(): B` where `B` is declared later) and a **cross-file reference** (a sibling merged
+  earlier by the loader's alphabetical sort) both resolve. This was a real limitation — it previously
+  forced prelude/source ordering (the M-TIME `Duration → Date → Instant` workaround) and would have made
+  the file-splitting rule painful. Duplicate + built-in-redefinition detection is preserved (now
+  order-independent).
+- **Fix (`phg fmt`):** the printer dropped top-level declaration visibility (`internal`/`private` on a
+  free function / class / enum / interface — only `public`, the default, was correctly elided). It now
+  round-trips them; regression-tested. (Found because formatting a split library file silently turned an
+  `internal function` public, tripping `E-FILE-MIXED-PUBLIC`.)
+
 ### Added — M8.5 S2: foreign-PHP classes (`declare class`)
 
 Foreign PHP **classes** — call a PHP library class (e.g. `DateTimeImmutable`, `PDO`) from Phorge,

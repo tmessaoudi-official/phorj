@@ -1,0 +1,10 @@
+package Acme.Geometry;
+
+// A class implementing a same-package interface, with constructor-promoted fields and a method.
+// One public type per file → `Rect.phg`.
+class Rect implements Shape {
+    constructor(public int w, public int h) {}
+    function area(): int {
+        return this.w * this.h;
+    }
+}

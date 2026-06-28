@@ -132,7 +132,7 @@ impl Printer<'_> {
     }
 
     fn interface(&mut self, i: &crate::ast::InterfaceDecl) -> Result<(), String> {
-        let mut header = format!("interface {}", i.name);
+        let mut header = format!("{}interface {}", vis_str(i.vis), i.name);
         if !i.extends.is_empty() {
             header.push_str(&format!(" extends {}", i.extends.join(", ")));
         }
@@ -182,7 +182,8 @@ impl Printer<'_> {
             format!(" throws {}", ts?.join(" | "))
         };
         Ok(format!(
-            "{mods}function {}{generics}({params}){ret}{throws}",
+            "{}{mods}function {}{generics}({params}){ret}{throws}",
+            vis_str(f.vis),
             f.name
         ))
     }
@@ -236,7 +237,7 @@ impl Printer<'_> {
         } else {
             format!("<{}>", c.type_params.join(", "))
         };
-        let mut header = format!("{prefix}class {}{generics}", c.name);
+        let mut header = format!("{}{prefix}class {}{generics}", vis_str(c.vis), c.name);
         if !c.extends.is_empty() {
             header.push_str(&format!(" extends {}", c.extends.join(", ")));
         }
@@ -368,7 +369,8 @@ impl Printer<'_> {
             }
         }
         self.line(&format!(
-            "enum {}{generics} {{ {} }}",
+            "{}enum {}{generics} {{ {} }}",
+            vis_str(e.vis),
             e.name,
             variants.join(", ")
         ));
@@ -1174,6 +1176,18 @@ fn ty(t: &Type) -> Result<String, String> {
         // `Type::Erased` is produced only by the post-check `erase_generics` pass, which `phg fmt`
         // (parse → print, no checking) never runs — so a parsed program cannot contain it.
         Type::Erased(_) => Err("printer: Type::Erased cannot occur in a parsed program".into()),
+    }
+}
+
+/// Declaration-level visibility keyword for a top-level item (free function / class / enum /
+/// interface), trailing space included. `Public` is the default and is omitted (canonical form);
+/// `internal`/`private` are emitted so the loader's visibility semantics survive a format round-trip.
+/// (Method/field member visibility lives in `modifiers`, emitted by [`modifiers_str`] — not here.)
+fn vis_str(v: crate::ast::Visibility) -> &'static str {
+    match v {
+        crate::ast::Visibility::Public => "",
+        crate::ast::Visibility::Internal => "internal ",
+        crate::ast::Visibility::Private => "private ",
     }
 }
 

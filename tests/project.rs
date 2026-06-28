@@ -142,7 +142,7 @@ fn library_package_type_is_usable_cross_package() {
          function main() -> void {\n    Shape s = new Shape(5);\n    Console.println(\"{s.w}\");\n}",
     );
     tmp.write(
-        "src/Acme/Util/shape.phg",
+        "src/Acme/Util/Shape.phg",
         "package Acme.Util;\nclass Shape { constructor(public int w) {} }",
     );
     let unit = loader::load(&entry).expect("project with a cross-package type loads");
@@ -163,7 +163,7 @@ fn import_type_unknown_is_rejected() {
         "package Main;\nimport type Acme.Util.Nope;\nfunction main() -> void {}",
     );
     tmp.write(
-        "src/Acme/Util/shape.phg",
+        "src/Acme/Util/Shape.phg",
         "package Acme.Util;\nclass Shape { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
@@ -180,11 +180,11 @@ fn import_type_conflict_is_rejected() {
         "package Main;\nimport type Acme.A.Shape;\nimport type Acme.B.Shape;\nfunction main() -> void {}",
     );
     tmp.write(
-        "src/Acme/A/shape.phg",
+        "src/Acme/A/Shape.phg",
         "package Acme.A;\nclass Shape { constructor(public int w) {} }",
     );
     tmp.write(
-        "src/Acme/B/shape.phg",
+        "src/Acme/B/Shape.phg",
         "package Acme.B;\nclass Shape { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
@@ -224,7 +224,7 @@ fn import_type_shadow_is_rejected() {
         "package Acme.Util;\nfunction noop() -> void {}",
     );
     tmp.write(
-        "src/Acme/Types/t.phg",
+        "src/Acme/Types/Util.phg",
         "package Acme.Types;\nclass Util { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();

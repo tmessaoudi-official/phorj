@@ -112,3 +112,34 @@ fn unparseable_source_is_refused_not_reformatted() {
     assert!(format("package Main;\nfunction (").is_err());
     assert!(format("@@@ not phorge").is_err());
 }
+
+#[test]
+fn declaration_visibility_survives_formatting() {
+    // Regression: the printer used to drop top-level `internal`/`private` visibility on free functions
+    // and types (only `Public` is the default and elided). Splitting public types across files relies
+    // on these surviving, so assert they round-trip and the form is idempotent.
+    let src = "package Main;\n\
+        internal function scale(int n): int { return n; }\n\
+        private function clamp(int n): int { return n; }\n\
+        internal class Helper { constructor() {} }\n\
+        private enum Mode { On(), Off() }\n\
+        function main(): void {}";
+    let out = fmt(src);
+    assert!(
+        out.contains("internal function scale"),
+        "lost internal fn:\n{out}"
+    );
+    assert!(
+        out.contains("private function clamp"),
+        "lost private fn:\n{out}"
+    );
+    assert!(
+        out.contains("internal class Helper"),
+        "lost internal class:\n{out}"
+    );
+    assert!(
+        out.contains("private enum Mode"),
+        "lost private enum:\n{out}"
+    );
+    assert_idempotent(src);
+}

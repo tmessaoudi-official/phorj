@@ -678,6 +678,18 @@ SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration
 Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
 closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
+## Public-surface file-naming rule — scope
+
+The rule (`E-FILE-NAME`/`E-FILE-MULTI-PUBLIC`/`E-FILE-MIXED-PUBLIC`) is enforced by the loader in
+**project mode** only.
+
+- A file declaring `main` is fully exempt (programs mix freely). Loose single-file (`phg run x.phg`) and
+  `-e`/stdin are `main`-only ⇒ exempt. So the rule shapes multi-package projects, not single-file guides.
+- `private`/`internal` helper types and functions ride along free (no PSR-4 micro-file tax); only the
+  *public* surface is constrained.
+- **Deferred:** a per-project opt-out; applying the rule inside `package Main` (entry files stay exempt
+  by design); auto-rename tooling (`phg fmt --rename-files`).
+
 ## Foreign PHP interop (M8.5) — scope + deferrals
 
 `declare function …;` (S1) describes a foreign PHP function so Phorge can type-check calls and transpile
