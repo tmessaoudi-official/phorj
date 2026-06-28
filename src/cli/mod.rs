@@ -422,8 +422,9 @@ fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program>
 const HTTP_PRELUDE: &str = r#"
 import Core.Bytes;
 import Core.Text;
+import Core.List;
 class Request {
-  constructor(public string method, public string path, public bytes body, private List<string> headerLines) {}
+  constructor(public string method, public string path, public bytes body, private List<string> headerLines, private List<string> attrs) {}
   function header(string name): string? {
     for (string line in this.headerLines) {
       if (Text.contains(line, ":")) {
@@ -433,6 +434,18 @@ class Request {
       }
     }
     return null;
+  }
+  function param(string name): string? {
+    mutable int i = 0;
+    int n = List.length(this.attrs);
+    while (i + 1 < n) {
+      if (this.attrs[i] == name) { return this.attrs[i + 1]; }
+      i += 2;
+    }
+    return null;
+  }
+  function withParams(List<string> p): Request {
+    return new Request(this.method, this.path, this.body, this.headerLines, p);
   }
   static function parse(bytes raw): Request? {
     int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
@@ -446,7 +459,7 @@ class Request {
     List<string> rl = Text.split(requestLine, " ");
     string method = rl[0];
     string path = rl[1];
-    return new Request(method, path, body, lines);
+    return new Request(method, path, body, lines, []);
   }
 }
 class Response {
@@ -469,6 +482,67 @@ class Response {
     string userHeaders = Text.join(this.headerLines, nl);
     string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
     return Bytes.concat(Bytes.fromString(head), this.body);
+  }
+}
+class Route {
+  constructor(public string method, public string pattern, public (Request) -> Response handler) {}
+}
+class Router {
+  constructor(private List<Route> table) {}
+  function route(string method, string pattern, (Request) -> Response handler): Router {
+    return new Router(List.concat(this.table, [new Route(method, pattern, handler)]));
+  }
+  static function idStrs(List<string> xs): List<string> { return xs; }
+  static function segScore(string pattern, string path): int {
+    List<string> ps = Text.split(pattern, "/");
+    List<string> xs = Text.split(path, "/");
+    if (List.length(ps) != List.length(xs)) { return -1; }
+    mutable int score = 0;
+    mutable int i = 0;
+    int n = List.length(ps);
+    while (i < n) {
+      string p = ps[i];
+      if (Text.startsWith(p, "\{") && Text.endsWith(p, "\}")) {
+      } else {
+        if (p != xs[i]) { return -1; }
+        score += 1;
+      }
+      i += 1;
+    }
+    return score;
+  }
+  static function extractParams(string pattern, string path): List<string> {
+    List<string> ps = Text.split(pattern, "/");
+    List<string> xs = Text.split(path, "/");
+    mutable List<string> out = Router.idStrs([]);
+    mutable int i = 0;
+    int n = List.length(ps);
+    while (i < n) {
+      string p = ps[i];
+      if (Text.startsWith(p, "\{") && Text.endsWith(p, "\}")) {
+        string name = Text.replace(Text.replace(p, "\{", ""), "\}", "");
+        out = List.concat(out, [name, xs[i]]);
+      }
+      i += 1;
+    }
+    return out;
+  }
+  function handle(Request req): Response {
+    mutable int best = -1;
+    mutable int bestScore = -1;
+    mutable int idx = 0;
+    for (Route r in this.table) {
+      if (r.method == req.method) {
+        int sc = Router.segScore(r.pattern, req.path);
+        if (sc > bestScore) { best = idx; bestScore = sc; }
+      }
+      idx += 1;
+    }
+    if (best < 0) { return Response.text(404, "Not Found: {req.method} {req.path}"); }
+    Route chosen = this.table[best];
+    List<string> params = Router.extractParams(chosen.pattern, req.path);
+    var h = chosen.handler;
+    return h(req.withParams(params));
   }
 }
 "#;
@@ -520,6 +594,8 @@ fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
             Item::Import { path, .. } if !imports(&path.join(".")) => prepend.push(it),
             Item::Class(c) if c.name == "Request" && !has_class("Request") => prepend.push(it),
             Item::Class(c) if c.name == "Response" && !has_class("Response") => prepend.push(it),
+            Item::Class(c) if c.name == "Route" && !has_class("Route") => prepend.push(it),
+            Item::Class(c) if c.name == "Router" && !has_class("Router") => prepend.push(it),
             _ => {}
         }
     }

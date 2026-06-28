@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M6 W2 HTTP router + path parameters
+
+`import Core.Http;` now also injects a **`Router`** (+ a `Route` row type): build it by chaining
+`.route(method, pattern, handler)` — handlers are ordinary first-class `(Request) -> Response`
+functions — then `router.handle(req)` matches and dispatches. Pure Phorge over the W1 model (no new
+`Op`, no new `Value`, no socket — that is W3 `phg serve`); byte-identical `run ≡ runvm ≡ real PHP`.
+
+- **Path parameters** — a `{name}` pattern segment captures that path component, read by the handler
+  with **`req.param("name") -> string?`** (PSR-15-style request attributes, so the
+  `handle(Request) -> Response` contract is unchanged — `Request` gains a 5th private `attrs` field
+  carrying the captures, plus `param`/`withParams`).
+- **Literal > parameter precedence** — `/users/me` (all-literal) beats `/users/{id}` regardless of
+  registration order (specificity = literal-segment count; a true tie goes to the first-registered
+  route). Method-sensitive; no match → a 404 response.
+- A pattern containing `{…}` **must be a raw string** (`r"/users/{id}"`), otherwise the normal string
+  interpolates `{id}` as a variable — documented in `examples/web/router.phg` (rewritten from the W1
+  enum-tag placeholder into the real router) and pinned by `conformance/web/router.phg`.
+
 ### Added — stability & conformance (GA rock 3)
 
 A stability story for the pre-1.0 surface: a golden-output conformance corpus, written policies, and a

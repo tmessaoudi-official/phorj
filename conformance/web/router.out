@@ -1,0 +1,5 @@
+GET / -> 200 home
+GET /users/7 -> 200 user 7
+GET /users/me -> 200 me
+GET /missing -> 404 Not Found: GET /missing
+POST / -> 404 Not Found: POST /

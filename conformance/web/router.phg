@@ -1,0 +1,33 @@
+// Conformance: the Core.Http Router (M6 W2) — path parameters, literal>param precedence, method
+// sensitivity, and the 404 fallback. Experimental tier (M6 web layer in progress), pinned here for
+// golden-output regression coverage. Byte-identical run≡runvm≡real PHP.
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+function home(Request req): Response { return Response.text(200, "home"); }
+function showUser(Request req): Response { return Response.text(200, "user " + (req.param("id") ?? "?")); }
+function currentUser(Request req): Response { return Response.text(200, "me"); }
+
+function show(Router rt, string method, string path): void {
+  // Build a minimal raw request; only the request line matters for routing.
+  Response resp = rt.handle(new Request(method, path, b"", [], []));
+  int st = resp.status;
+  string body = Bytes.toString(resp.body) ?? "?";
+  Console.println("{method} {path} -> {st} {body}");
+}
+
+function main() -> void {
+  Router rt = new Router([])
+    .route("GET", "/", home)
+    .route("GET", r"/users/{id}", showUser)
+    .route("GET", "/users/me", currentUser);
+
+  show(rt, "GET", "/");
+  show(rt, "GET", "/users/7");
+  show(rt, "GET", "/users/me"); // literal beats {id}
+  show(rt, "GET", "/missing");  // 404
+  show(rt, "POST", "/");        // method mismatch -> 404
+}
