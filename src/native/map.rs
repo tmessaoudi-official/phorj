@@ -77,11 +77,82 @@ fn map_remove(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// `getOr(Map<K,V>, K, V) -> V` — the value at `key`, or `default` if the key is absent. Unlike
+/// `get` (`-> V?`), this never returns null for a *present* `key` whose value is null.
+fn map_get_or(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), key, default] => {
+            let hk = crate::value::HKey::from_value(key)
+                .ok_or_else(|| format!("invalid map key: {}", key.type_name()))?;
+            Ok(m.iter()
+                .find(|(k, _)| *k == hk)
+                .map_or_else(|| default.clone(), |(_, v)| v.clone()))
+        }
+        _ => Err("Map.getOr expects (Map<K, V>, K, V)".into()),
+    }
+}
+/// `merge(a, b) -> Map<K,V>` — `a`'s entries with `b`'s merged in: a shared key keeps `a`'s position
+/// but takes `b`'s value, `b`'s new keys append (≡ PHP `array_merge`, ≡ `build_map` over `a ++ b`).
+fn map_merge(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(a), Value::Map(b)] => {
+            let mut out = (**a).clone();
+            for (bk, bv) in b.iter() {
+                if let Some(slot) = out.iter_mut().find(|(k, _)| k == bk) {
+                    slot.1 = bv.clone();
+                } else {
+                    out.push((bk.clone(), bv.clone()));
+                }
+            }
+            Ok(Value::Map(std::rc::Rc::new(out)))
+        }
+        _ => Err("Map.merge expects (Map<K, V>, Map<K, V>)".into()),
+    }
+}
+/// `map(Map<K,V>, (V) -> W) -> Map<K,W>` — transform each VALUE, keys preserved (≡ PHP `array_map`
+/// over a single assoc array). Higher-order.
+fn map_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), f] => {
+            let mut out = Vec::with_capacity(m.len());
+            for (k, v) in m.iter() {
+                out.push((k.clone(), call(f, vec![v.clone()])?));
+            }
+            Ok(Value::Map(std::rc::Rc::new(out)))
+        }
+        _ => Err("Map.map expects (Map<K, V>, (V) -> W)".into()),
+    }
+}
+/// `filter(Map<K,V>, (V) -> bool) -> Map<K,V>` — keep entries whose VALUE passes (≡ PHP `array_filter`,
+/// default mode, keys preserved). Higher-order.
+fn map_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), f] => {
+            let mut out = Vec::new();
+            for (k, v) in m.iter() {
+                match call(f, vec![v.clone()])? {
+                    Value::Bool(true) => out.push((k.clone(), v.clone())),
+                    Value::Bool(false) => {}
+                    other => {
+                        return Err(format!(
+                            "Map.filter predicate must return bool, got {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::Map(std::rc::Rc::new(out)))
+        }
+        _ => Err("Map.filter expects (Map<K, V>, (V) -> bool)".into()),
+    }
+}
+
 /// The `Core.Map` registry entries (M-RT S7b). All generic over `K`/`V`; each erases to a PHP array
 /// builtin (D-L9). NOTE the PHP arg order for `has`: `array_key_exists(key, array)` — key first.
 pub(crate) fn map_natives() -> Vec<NativeFn> {
     let k = || Ty::Param("K".into());
     let v = || Ty::Param("V".into());
+    let w = || Ty::Param("W".into());
     let map = || Ty::Map(Box::new(k()), Box::new(v()));
     vec![
         NativeFn {
@@ -157,6 +228,55 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(map_remove),
             php: |a| format!("__phorge_map_remove({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `getOr` — safe access with a fallback (never faults / returns the default for an absent key).
+        NativeFn {
+            module: "Core.Map",
+            name: "getOr",
+            params: vec![map(), k(), v()],
+            ret: v(),
+            pure: true,
+            eval: NativeEval::Pure(map_get_or),
+            // array_key_exists (not `??`) so a present key with a null value returns that null.
+            php: |a| {
+                format!(
+                    "(array_key_exists({1}, {0}) ? {0}[{1}] : {2})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+        // `merge` — a new map; a shared key takes the SECOND map's value at the first's position.
+        NativeFn {
+            module: "Core.Map",
+            name: "merge",
+            params: vec![map(), map()],
+            ret: map(),
+            pure: true,
+            eval: NativeEval::Pure(map_merge),
+            php: |a| format!("array_merge({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `map` / `filter` over VALUES (keys preserved) — higher-order, like the `Core.List` versions.
+        NativeFn {
+            module: "Core.Map",
+            name: "map",
+            params: vec![map(), Ty::Function(vec![v()], Box::new(w()))],
+            ret: Ty::Map(Box::new(k()), Box::new(w())),
+            pure: true,
+            eval: NativeEval::HigherOrder(map_map),
+            // array_map(callable, array) over a single assoc array preserves keys.
+            php: |a| format!("array_map({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "filter",
+            params: vec![map(), Ty::Function(vec![v()], Box::new(Ty::Bool))],
+            ret: map(),
+            pure: true,
+            eval: NativeEval::HigherOrder(map_filter),
+            // array_filter(array, callback) default mode: callback gets the value, keys preserved.
+            php: |a| format!("array_filter({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

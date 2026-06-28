@@ -66,6 +66,42 @@ fn set_difference(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// `add(s, x) -> Set<T>` — a new set with `x` added (no-op if already present), first-occurrence
+/// order preserved (≡ `union` with a singleton).
+fn set_add(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(s), elem] => {
+            let hk = crate::value::HKey::from_value(elem)
+                .ok_or_else(|| format!("invalid set element: {}", elem.type_name()))?;
+            let mut out = (**s).clone();
+            if !out.contains(&hk) {
+                out.push(hk);
+            }
+            Ok(Value::Set(std::rc::Rc::new(out)))
+        }
+        _ => Err("Set.add expects (Set<T>, T)".into()),
+    }
+}
+/// `remove(s, x) -> Set<T>` — a new set without `x` (no-op if absent), order preserved.
+fn set_remove(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(s), elem] => {
+            let hk = crate::value::HKey::from_value(elem)
+                .ok_or_else(|| format!("invalid set element: {}", elem.type_name()))?;
+            let out: Vec<_> = s.iter().filter(|k| **k != hk).cloned().collect();
+            Ok(Value::Set(std::rc::Rc::new(out)))
+        }
+        _ => Err("Set.remove expects (Set<T>, T)".into()),
+    }
+}
+/// `isSubset(a, b) -> bool` — every element of `a` is in `b`.
+fn set_is_subset(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(a), Value::Set(b)] => Ok(Value::Bool(a.iter().all(|k| b.contains(k)))),
+        _ => Err("Set.isSubset expects (Set<T>, Set<T>)".into()),
+    }
+}
+
 /// The `Core.Set` registry entries (M-RT S7b). All generic over the element type `T`.
 pub(crate) fn set_natives() -> Vec<NativeFn> {
     let t = || Ty::Param("T".into());
@@ -141,6 +177,48 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_difference),
             php: |a| format!("array_values(array_diff({}, {}))", parg(a, 0), parg(a, 1)),
+        },
+        // `add` / `remove` return a new set (sets are immutable); `isSubset` is a containment test.
+        NativeFn {
+            module: "Core.Set",
+            name: "add",
+            params: vec![Ty::Set(Box::new(t())), t()],
+            ret: Ty::Set(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(set_add),
+            // ≡ union with a singleton: dedup-merge keeping first-occurrence order (SORT_STRING ≡ HKey).
+            php: |a| {
+                format!(
+                    "array_values(array_unique(array_merge({}, [{}]), SORT_STRING))",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "remove",
+            params: vec![Ty::Set(Box::new(t())), t()],
+            ret: Ty::Set(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(set_remove),
+            php: |a| {
+                format!(
+                    "array_values(array_filter({}, fn($e) => $e !== {}))",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "isSubset",
+            params: vec![Ty::Set(Box::new(t())), Ty::Set(Box::new(t()))],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(set_is_subset),
+            // a ⊆ b ⇔ a has no element absent from b.
+            php: |a| format!("count(array_diff({}, {})) === 0", parg(a, 0), parg(a, 1)),
         },
     ]
 }

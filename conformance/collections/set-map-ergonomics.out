@@ -1,0 +1,6 @@
+sizes 3 4 3
+subset true false
+getOr 1 99
+merge 20 3 3
+map 10 20
+filter 2

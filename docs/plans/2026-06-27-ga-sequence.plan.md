@@ -353,6 +353,11 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 > after each feature; end every status with `GA: ~X% · Global: ~Y%`.
 
 ### Decisions Log (this round)
+- [2026-06-28] DONE: **stdlib Set + Map ergonomics** → everyday collection breadth (List/Set/Map)
+  COMPLETE. `Core.Set` += add/remove/isSubset; `Core.Map` += getOr/merge/map(value)/filter(value). Pure
+  + higher-order, no new Op/Value, byte-identical 3-way. `examples/guide/collection-ergonomics.phg` +
+  conformance. Gotcha: a literal `{1,3}` in an example string is read as interpolation → reword/escape.
+  Natural push point (collections done). NEXT options: Text breadth, push+tag, or a bigger track.
 - [2026-06-28] DONE: **stdlib List breadth** (developer-chosen fresh deterministic track). `Core.List` +=
   `unique`/`min`/`max`/`find`/`any`/`all`. Pure (unique/min/max) + higher-order (find/any/all,
   short-circuiting). All via `__phorge_*` helpers for strict parity (PHP min/max/array_unique juggle

@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — stdlib: `Core.Set` + `Core.Map` ergonomics (collection breadth complete)
+
+Completes everyday collection breadth (List/Set/Map), byte-identical `run ≡ runvm ≡ real PHP`, no new
+`Op`/`Value`:
+
+- **`Core.Set`** += `add(s, x)` / `remove(s, x) -> Set<T>` (immutable; no-op if already present /
+  absent) and `isSubset(a, b) -> bool` (union/intersection/difference already shipped).
+- **`Core.Map`** += `getOr(m, k, default) -> V` (safe access — returns `default` for a missing key,
+  never faults; and unlike `get`/`??` it returns a *present* key's value even when null),
+  `merge(a, b) -> Map<K,V>` (a shared key takes `b`'s value at `a`'s position, `b`'s new keys append —
+  ≡ PHP `array_merge` / `build_map` over `a ++ b`), and higher-order `map(m, (V)->W) -> Map<K,W>` /
+  `filter(m, (V)->bool) -> Map<K,V>` over **values** (keys preserved). Each erases to a PHP array
+  builtin. `examples/guide/collection-ergonomics.phg` + `conformance/collections/set-map-ergonomics.phg`.
+
 ### Added — stdlib: `Core.List` breadth (query/aggregate)
 
 Six everyday `Core.List` ops, all byte-identical `run ≡ runvm ≡ real PHP`:
