@@ -102,6 +102,7 @@ impl Checker {
             resolutions: Vec::new(),
             uses: Vec::new(),
             members: t.members.clone(),
+            foreign: false,
             span: t.span,
         };
         self.collect_class(&synthetic);

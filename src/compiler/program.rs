@@ -32,6 +32,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                 resolutions: Vec::new(),
                 uses: Vec::new(),
                 members: t.members.clone(),
+                foreign: false,
                 span: t.span,
             }),
             _ => None,
@@ -342,6 +343,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                                 value: Some(g.clone()),
                                 span: *span,
                             }],
+                            foreign: false,
                             span: *span,
                         },
                     ));
@@ -359,6 +361,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                             ret: None,
                             throws: Vec::new(),
                             body: body.clone(),
+                            foreign: false,
                             span: *span,
                         },
                     ));

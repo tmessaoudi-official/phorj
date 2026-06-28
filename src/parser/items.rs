@@ -21,6 +21,22 @@ impl Parser {
         if self.at_kw("test") && matches!(self.peek2(), TokenKind::Str(_)) {
             return self.parse_test(sp);
         }
+        // Contextual `declare function …;` / `declare class … { … }` (M8.5 interop): a foreign PHP
+        // symbol. `declare` lexes as an ordinary identifier, special only at item position when followed
+        // by `function` or `class`. Attributes/visibility on a foreign decl are rejected inside.
+        if self.at_kw("declare") && matches!(self.peek2(), TokenKind::Function) {
+            if !attrs.is_empty() {
+                let asp = attrs[0].span;
+                return Err(Diagnostic::new(
+                    Stage::Parse,
+                    "attributes (`#[…]`) are not allowed on a foreign `declare`".to_string(),
+                    asp.line,
+                    asp.col,
+                )
+                .with_code("E-ATTR-TARGET"));
+            }
+            return self.parse_declare(sp);
+        }
         // Optional leading declaration visibility (visibility modifiers): at most one of
         // public/internal/private. Absent ⇒ the default `Visibility::Public`.
         let vis = self.parse_decl_visibility()?;
@@ -254,8 +270,46 @@ impl Parser {
             ret,
             throws,
             body,
+            foreign: false,
             span: sp,
         })
+    }
+
+    /// Parse a `declare …` foreign-symbol declaration (M8.5 interop). Currently `declare function
+    /// name(params) -> ret;` — a bodyless signature describing an existing PHP function. The result is a
+    /// `FunctionDecl` with `foreign: true` and an empty body; the checker validates calls against it but
+    /// skips the body, `run`/`runvm` refuse the program (`E-FOREIGN-RUNTIME`), and the transpiler emits
+    /// `\name(…)`. (`declare class` is M8.5 S2.)
+    pub(super) fn parse_declare(&mut self, sp: Span) -> Result<Item, Diagnostic> {
+        self.expect_ident("'declare'")?; // consume the contextual `declare`
+        self.expect(&TokenKind::Function, "'function' after 'declare'")?;
+        let name = self.expect_ident("a foreign function name")?;
+        let type_params = self.parse_type_params()?;
+        self.expect(&TokenKind::LParen, "'(' after function name")?;
+        let params = self.parse_params()?;
+        self.expect(&TokenKind::RParen, "')' to close parameters")?;
+        let ret = if self.eat(&TokenKind::Colon) || self.eat(&TokenKind::Arrow) {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+        self.expect(
+            &TokenKind::Semicolon,
+            "';' after a foreign function declaration (it has no body)",
+        )?;
+        Ok(Item::Function(FunctionDecl {
+            modifiers: Vec::new(),
+            attrs: Vec::new(),
+            vis: Visibility::Public,
+            name,
+            type_params,
+            params,
+            ret,
+            throws: Vec::new(),
+            body: Vec::new(),
+            foreign: true,
+            span: sp,
+        }))
     }
 
     /// Parse zero or more leading item attributes `#[ Name ( arg, … ) ]` (M6 W2). Each group is a
@@ -441,6 +495,7 @@ impl Parser {
             resolutions,
             uses,
             members,
+            foreign: false,
             span: sp,
         })
     }
@@ -575,6 +630,7 @@ impl Parser {
                 ret,
                 throws,
                 body: Vec::new(),
+                foreign: false,
                 span: msp,
             });
         }

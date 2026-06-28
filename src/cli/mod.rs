@@ -1006,9 +1006,30 @@ pub fn parse_checked_program(src: &str) -> Result<Program, String> {
 }
 
 /// `run`: lex -> parse -> check (gate) -> interpret -> captured stdout.
+/// M8.5 interop: refuse to *execute* a program that uses foreign `declare` symbols. The Rust backends
+/// (interpreter/VM) have no PHP runtime, so a foreign call cannot run — the program is PHP-target-only.
+/// `check`/`transpile` work fully; only `run`/`runvm` hit this one clean pre-flight gate (no per-call
+/// fault machinery in the execution paths). A single scan after type-checking, before any backend.
+fn foreign_runtime_gate(prog: &Program) -> Result<(), String> {
+    use crate::ast::Item;
+    let has_foreign = prog.items.iter().any(|it| {
+        matches!(it, Item::Function(f) if f.foreign) || matches!(it, Item::Class(c) if c.foreign)
+    });
+    if has_foreign {
+        return Err(
+            "error[E-FOREIGN-RUNTIME]: this program declares foreign PHP symbols (`declare`), \
+             which require the PHP runtime to execute. The Rust backends (run/runvm) have no PHP \
+             runtime — transpile it instead: `phg transpile <file> > out.php && php out.php`.\n"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 pub fn cmd_run(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
+        foreign_runtime_gate(&prog)?;
         interpret(&prog).map_err(|e| e.to_string())
     })
 }
@@ -1018,6 +1039,7 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
 pub fn cmd_runvm(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
+        foreign_runtime_gate(&prog)?;
         let program = compile(&prog).map_err(|e| e.to_string())?;
         Vm::new(&program).run().map_err(|e| e.to_string())
     })
@@ -1028,6 +1050,7 @@ pub fn cmd_runvm(src: &str) -> Result<String, String> {
 pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
+        foreign_runtime_gate(&prog)?;
         interpret_main(&prog).map_err(|e| e.to_string())
     })
 }
@@ -1036,6 +1059,7 @@ pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
 pub fn cmd_runvm_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
+        foreign_runtime_gate(&prog)?;
         let program = compile(&prog).map_err(|e| e.to_string())?;
         Vm::new(&program).run_main().map_err(|e| e.to_string())
     })
@@ -1061,6 +1085,7 @@ pub fn cmd_check(src: &str) -> Result<String, String> {
 pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        foreign_runtime_gate(&checked)?;
         interpret(&checked).map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
@@ -1072,6 +1097,7 @@ pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
 pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        foreign_runtime_gate(&checked)?;
         let program = compile(&checked).map_err(|e| e.to_string())?;
         Vm::new(&program).run().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
@@ -1085,6 +1111,7 @@ pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
 pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        foreign_runtime_gate(&checked)?;
         interpret_main(&checked).map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
@@ -1096,6 +1123,7 @@ pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), Str
 pub fn runvm_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        foreign_runtime_gate(&checked)?;
         let program = compile(&checked).map_err(|e| e.to_string())?;
         Vm::new(&program).run_main().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);

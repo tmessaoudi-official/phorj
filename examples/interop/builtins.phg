@@ -1,0 +1,40 @@
+// M8.5 interop — calling existing PHP from Phorge via `declare` (the migration bridge).
+//
+// IMPORTANT: this program is **PHP-target-only**. It declares foreign PHP functions, which live only in
+// the PHP runtime — so `phg run` / `phg runvm` refuse it (`E-FOREIGN-RUNTIME`). Build it with
+// `phg transpile builtins.phg > out.php && php out.php`. The `declare` lines describe existing PHP
+// functions so Phorge type-checks the calls; they emit no PHP (PHP already has them) and each call
+// transpiles to the global form `\name(...)`.
+package Main;
+
+import Core.Console;
+
+// Foreign PHP standard-library functions (their real PHP names — snake_case is fine here).
+declare function strtoupper(string s): string;
+
+declare function strrev(string s): string;
+
+declare function str_repeat(string s, int times): string;
+
+declare function ucfirst(string s): string;
+
+declare function abs(int n): int;
+
+declare function max(int a, int b): int;
+
+function main(): void {
+    Console.println(strtoupper("hello"));
+    // HELLO
+    Console.println(strrev("phorge"));
+    // egrohp
+    Console.println(str_repeat("ab", 3));
+    // ababab
+    Console.println(ucfirst("migrated"));
+    // Migrated
+    Console.println("{abs(-42)} {max(7, 12)}");
+    // 42 12
+    // Foreign results compose with native Phorge code and Core.* normally.
+    string shout = strtoupper("phorge");
+    Console.println("{shout}!");
+}
+// PHORGE!

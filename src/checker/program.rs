@@ -609,8 +609,9 @@ impl Checker {
         self.active_type_params.clear();
         // Totality: a non-`unit` function must return (or diverge) on every path (M-RT totality
         // cluster). Run after the body walk so all signatures are visible to the divergence analysis.
-        // An `abstract` method (M-RT S6b) is a bodyless signature — exempt, like an interface method.
-        if !f.modifiers.contains(&crate::ast::Modifier::Abstract) {
+        // An `abstract` method (M-RT S6b) is a bodyless signature — exempt, like an interface method. A
+        // `foreign` (`declare`) function (M8.5) is likewise bodyless — its body lives in PHP.
+        if !f.modifiers.contains(&crate::ast::Modifier::Abstract) && !f.foreign {
             self.check_return_totality(&ret, &f.body, f.span);
         }
     }

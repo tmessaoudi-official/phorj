@@ -198,6 +198,11 @@ impl Printer<'_> {
             }
         }
         let sig = self.fn_signature(f)?;
+        if f.foreign {
+            // A foreign `declare function …;` (M8.5) — a bodyless signature, prefixed with `declare`.
+            self.line(&format!("declare {sig};"));
+            return Ok(());
+        }
         if f.modifiers.contains(&Modifier::Abstract) {
             // A bodyless abstract method signature.
             self.line(&format!("{sig};"));

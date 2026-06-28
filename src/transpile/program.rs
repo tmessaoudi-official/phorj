@@ -89,6 +89,11 @@ impl Transpiler {
     pub(super) fn collect(&mut self, program: &Program) {
         for item in &program.items {
             match item {
+                Item::Function(f) if f.foreign => {
+                    // M8.5: a foreign `declare function` — index it as foreign (emitted nowhere; a call
+                    // resolves to the `\name(…)` global form). Not added to `funcs`/`fn_ret_kinds`.
+                    self.foreign_fns.insert(f.name.clone());
+                }
                 Item::Function(f) => {
                     self.funcs.insert(f.name.clone());
                     // T6c: a free function's return kind — overloads with differing kinds collapse
@@ -198,6 +203,8 @@ impl Transpiler {
         for item in &program.items {
             match item {
                 Item::Import { .. } => {}
+                // M8.5: a foreign `declare function` produces no PHP definition (PHP already has it).
+                Item::Function(f) if f.foreign => {}
                 Item::Function(f) => {
                     self.emit_free_fn(&program.items, f, &mut emitted_overloads)?
                 }
@@ -1616,6 +1623,7 @@ impl Transpiler {
             resolutions: Vec::new(),
             uses: Vec::new(),
             members: t.members.clone(),
+            foreign: false,
             span: t.span,
         };
         let disp = if self.namespaced {

@@ -678,6 +678,22 @@ SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration
 Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
 closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
+## Foreign PHP interop (M8.5) — scope + deferrals
+
+`declare function …;` (S1) describes a foreign PHP function so Phorge can type-check calls and transpile
+to `\name(...)`. Interop is a **migration bridge**, transpile-target-only by nature.
+
+- **A program using `declare` cannot run on the Rust backends** (`E-FOREIGN-RUNTIME`) — foreign PHP needs
+  the PHP runtime. `check`/`transpile` work; run it via `phg transpile app.phg > app.php && php app.php`.
+  This is by design (the byte-identity spine covers pure Phorge only); such programs are quarantined from
+  the `differential.rs` oracle and gated by `tests/interop.rs` (transpile → real PHP golden).
+- **`declare class` (foreign PHP classes) and `.d.phg` declaration files are not yet implemented** (M8.5
+  S2/S3). Foreign-exception `catch` is S3.
+- **No foreign generics, no namespaced foreign imports beyond a single leading `\`**, no automatic
+  `.d.phg` generation from PHP, no Composer-package declaration bundling.
+- A `declare`d function's parameter *names* are never emitted, so they are not casing-checked; the
+  function *name* is emitted verbatim (snake_case PHP names are intended).
+
 ## Core.Time (M-TIME) — determinism + scope
 
 `Core.Time` models `Instant`/`Duration` (S1) as an injected pure-Phorge prelude, so all arithmetic is

@@ -55,6 +55,11 @@ impl Transpiler {
             if self.is_local(name) {
                 return Ok(format!("${name}({argv})"));
             }
+            // M8.5: a foreign `declare function` call → the global PHP form `\name(…)`, so it resolves
+            // to the PHP builtin/library function even inside a namespace block.
+            if self.foreign_fns.contains(name) {
+                return Ok(format!("\\{name}({argv})"));
+            }
             // A resolved cross-package call carries a mangled (`\`-bearing) name → emit it
             // fully-qualified (leading `\`). A bare name (same-`Main`-namespace call) stays bare.
             if self.namespaced && name.contains('\\') {

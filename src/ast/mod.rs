@@ -600,6 +600,12 @@ pub struct FunctionDecl {
     /// is checker-only (PHP has no checked exceptions).
     pub throws: Vec<Type>,
     pub body: Vec<Stmt>,
+    /// `declare function …;` — a **foreign** PHP symbol (M8.5 interop): a bodyless signature describing
+    /// an existing PHP function. The checker validates calls against `params`/`ret` but skips the
+    /// (empty) body; `run`/`runvm` refuse to execute a program containing any foreign decl
+    /// (`E-FOREIGN-RUNTIME` — foreign code needs the PHP runtime); the transpiler emits references as the
+    /// global PHP form (`\name(…)`) and emits no definition. `false` for every ordinary function.
+    pub foreign: bool,
     pub span: Span,
 }
 
@@ -729,6 +735,12 @@ pub struct ClassDecl {
     /// native PHP `trait`/`use`. Empty for a class that composes no traits.
     pub uses: Vec<UseTrait>,
     pub members: Vec<ClassMember>,
+    /// `declare class …` — a **foreign** PHP class (M8.5 interop): a signature-only description of an
+    /// existing PHP class (constructor / methods / static methods / public fields). Checked like a normal
+    /// class for member resolution but its methods are bodyless; `run`/`runvm` refuse a program using it
+    /// (`E-FOREIGN-RUNTIME`); the transpiler emits references as the global PHP form (`new \Name`,
+    /// `\Name::s`, `$o->m`) and emits no class definition. `false` for every ordinary class.
+    pub foreign: bool,
     pub span: Span,
 }
 

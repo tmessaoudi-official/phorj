@@ -202,6 +202,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             ret: f.ret.as_ref().map(|t| rt(t, a, 0)),
             throws: f.throws.iter().map(|t| rt(t, a, 0)).collect(),
             body: f.body.iter().map(|s| rstmt(s, a)).collect(),
+            foreign: f.foreign,
             span: f.span,
         }
     }
@@ -288,6 +289,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                 resolutions: c.resolutions.clone(),
                 uses: c.uses.clone(),
                 members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
+                foreign: c.foreign,
                 span: c.span,
             })),
             // M-RT S8: a trait's member type annotations are alias-rewritten exactly like a class's.

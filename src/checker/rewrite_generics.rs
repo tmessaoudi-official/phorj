@@ -397,6 +397,7 @@ pub fn erase_generics(program: Program) -> Program {
                     ret: f.ret.as_ref().map(|t| rty(t, &params)),
                     throws: f.throws.iter().map(|t| rty(t, &params)).collect(),
                     body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
+                    foreign: f.foreign,
                     span: f.span,
                 })
             }
@@ -431,6 +432,7 @@ pub fn erase_generics(program: Program) -> Program {
                                 ret: f.ret.as_ref().map(|t| rty(t, &set)),
                                 throws: f.throws.iter().map(|t| rty(t, &set)).collect(),
                                 body: f.body.iter().map(|s| rstmt(s, &set)).collect(),
+                                foreign: f.foreign,
                                 span: f.span,
                             })
                         }
@@ -497,6 +499,7 @@ pub fn erase_generics(program: Program) -> Program {
                     resolutions: c.resolutions,
                     uses: c.uses,
                     members,
+                    foreign: c.foreign,
                     span: c.span,
                 })
             }

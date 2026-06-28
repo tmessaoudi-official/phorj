@@ -939,6 +939,12 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.join("phorge.toml").is_file() {
         return; // a project root — handled by the project-aware harness below
     }
+    // M8.5: `examples/interop/` holds foreign-PHP (`declare`) walkthroughs that are PHP-target-only —
+    // they cannot run on the Rust backends (`E-FOREIGN-RUNTIME`), so they are not byte-identity-gated
+    // here. `tests/interop.rs` validates them via transpile → real PHP golden output instead.
+    if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
+        return;
+    }
     for entry in std::fs::read_dir(dir).expect("read_dir examples/") {
         let path = entry.expect("examples dir entry").path();
         if path.is_dir() {

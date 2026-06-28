@@ -446,6 +446,7 @@ impl Interp {
                             resolutions: Vec::new(),
                             uses: Vec::new(),
                             members: t.members.clone(),
+                            foreign: false,
                             span: t.span,
                         },
                     );

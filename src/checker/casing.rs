@@ -14,6 +14,10 @@ impl Checker {
         use crate::ast::{ClassMember, Item};
         for item in &program.items {
             match item {
+                // M8.5: a foreign `declare function` keeps its real PHP name (often snake_case, e.g.
+                // `str_repeat`/`json_encode`) — it is emitted verbatim as `\name`, so the camelCase rule
+                // does not apply. Its parameter names are never emitted, so they are exempt too.
+                Item::Function(f) if f.foreign => {}
                 Item::Function(f) => self.check_fn_casing(f),
                 Item::Class(c) => {
                     self.want_type_case(&c.name, c.span);

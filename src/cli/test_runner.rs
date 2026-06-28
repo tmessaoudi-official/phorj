@@ -168,6 +168,7 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
         }),
         throws: Vec::new(),
         body: body.to_vec(),
+        foreign: false,
         span,
     }));
     Program {

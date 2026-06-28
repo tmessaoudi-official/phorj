@@ -80,6 +80,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             ret: Some(named("void")),
             throws: Vec::new(),
             body: top_stmts,
+            foreign: false,
             span: SP,
         }));
     }
@@ -127,6 +128,7 @@ impl Lifter {
             ret: lift_ret(&f.ret, Some(&f.body))?,
             throws: Vec::new(),
             body: self.lift_block(&f.body, &mut declared)?,
+            foreign: false,
             span: SP,
         })
     }
@@ -149,6 +151,7 @@ impl Lifter {
             resolutions: Vec::new(),
             uses: Vec::new(),
             members,
+            foreign: false,
             span: SP,
         })
     }
@@ -264,6 +267,7 @@ impl Lifter {
             ret: lift_ret(&m.ret, m.body.as_deref())?,
             throws: Vec::new(),
             body,
+            foreign: false,
             span: SP,
         }))
     }

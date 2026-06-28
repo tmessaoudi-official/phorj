@@ -88,6 +88,7 @@ fn builds_function_item() {
         }),
         throws: vec![],
         body: vec![],
+        foreign: false,
         span: sp(),
     };
     match Item::Function(f) {

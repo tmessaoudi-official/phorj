@@ -122,6 +122,11 @@ fn decomposed_classes(program: &Program) -> BTreeSet<String> {
 
 struct Transpiler {
     funcs: HashSet<String>,
+    /// Foreign PHP free functions declared via `declare function …;` (M8.5 interop). They are **not**
+    /// emitted as PHP definitions (PHP already has them) and a call to one is emitted as the global form
+    /// `\name(…)` (so it resolves to the PHP builtin even inside a namespace block). Kept separate from
+    /// `funcs` so the emit loop skips them and `emit_call` routes them to the `\`-prefixed form.
+    foreign_fns: HashSet<String>,
     classes: HashSet<String>,
     /// `(class, NAME)` pairs that name a `const` class constant (Feature A), inheritance/traits already
     /// flattened (the shared [`crate::ast::class_consts`] table). A `ClassName.NAME` access whose pair
@@ -474,6 +479,7 @@ impl Transpiler {
     fn new() -> Self {
         Transpiler {
             funcs: HashSet::new(),
+            foreign_fns: HashSet::new(),
             classes: HashSet::new(),
             consts: HashSet::new(),
             variants: HashSet::new(),

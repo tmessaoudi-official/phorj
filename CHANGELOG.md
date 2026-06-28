@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M8.5 S1: foreign-PHP interop (`declare function`)
+
+The migration bridge — call existing PHP from Phorge, type-checked, transpiling to idiomatic PHP
+(`docs/specs/2026-06-28-m8.5-interop-design.md`). `Phorge : PHP :: TypeScript : JavaScript`, and
+`.d.phg : .d.ts`. **No new `Op`/`Value`.**
+
+- **`declare function name(params) -> ret;`** — a bodyless signature for an existing PHP function
+  (contextual `declare`, not a reserved word). Its name is the real PHP name (snake_case like
+  `str_repeat` is allowed — the camelCase rule is waived for foreign symbols). The checker type-checks
+  calls against it; it emits **no** PHP definition; a call transpiles to the global form `\name(...)`.
+- **The byte-identity spine is untouched.** Foreign PHP only exists in the PHP runtime, so a program
+  containing any `declare` is **PHP-target-only**: `check` and `transpile` work, but `run`/`runvm` refuse
+  with one clean pre-flight gate (**`E-FOREIGN-RUNTIME`** — `phg explain` it). Such programs are
+  quarantined from the `differential.rs` byte-identity oracle and validated by a new **`tests/interop.rs`**
+  harness (transpile → real PHP → golden output) plus the refuse-gate assertion.
+- `examples/interop/builtins.phg` (+ README, excluded from the differential glob); `phg fmt` learns the
+  `declare` surface. **`declare class` and `.d.phg` files are S2/S3.**
+
 ### Added — M-TIME S3: civil (wall-time) view + ISO-8601
 
 The human date-time view, **folded onto `Instant`** (no separate class), byte-identical
