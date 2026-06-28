@@ -68,6 +68,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/sets.phg` | **`Set<T>`** via `Core.Set` — `of(List<T>) -> Set<T>` (dedupe, insertion-ordered), `contains(Set<T>, T) -> bool`, `size(Set<T>) -> int`; generic, erases to a deduped PHP array (`array_unique`/`in_array`/`count`) (Rich Types M-RT S7b) |
 | `guide/higher-order.phg` | **higher-order `Core.List` natives** — `map`/`filter`/`reduce` taking a closure argument (run once per element on either backend via one shared native body); inline lambdas, a captured local, and a composed filter→map→reduce pipeline; generic, erases to PHP `array_map`/`array_values(array_filter(…))`/`array_reduce` (Rich Types M-RT S7b-3) |
 | `guide/static-inheritance.phg` | **inherited / trait static methods** (Statics-A) — a `static` method is inherited, so `Child.make(..)` resolves the parent's body, and a `trait`-supplied static is callable on the using class. Resolves through the shared `method_origins` table; byte-identical run/runvm/real PHP. (Late static binding `static::` stays out of scope.) |
+| `guide/overloaded-statics.phg` | **overloaded static methods** (Statics-B) — several `static` declarations of one name (`Color.of(int)` / `of(int,int,int)` / `of(string)`), selected at the call site by the argument types; runtime multiple dispatch via the VM's `Op::CallStaticOverload` (a dummy receiver below the args + the shared `dispatch::select_overload`), the same selector the interpreter and the transpiled PHP `static` dispatcher use; inherited by a subclass (`Swatch.of(..)`). All overloads of a name must agree on `static`-ness (`E-OVERLOAD-STATIC-MIX`). Byte-identical run/runvm/real PHP |
 | `guide/secret.phg` | **`Secret<T>`** — an opaque wrapper for sensitive values. By construction *loud*: a `Secret` isn't a string and has no display, so `Console.println(s)` / `"{s}"` is a **compile error**; the field is private, so `.expose()` is the only read path. `W-SECRET` lints an `.expose()` flowing *directly* into a sink (`println`/`File.write`). Transpiles to a `final class Secret` with a `#[\SensitiveParameter]` constructor (PHP trace redaction). Byte-identical run/runvm/real PHP (Fork B) |
 | `guide/regex.phg` | **`Core.Regex`** — a **ReDoS-safe** engine (the `regex` crate, RE2-style linear-time; the project's 2nd vetted dependency). `compile(string) -> Regex` (validate once, reuse; faults on backref/lookaround), `matches`/`find`(→`string?`)/`findAll`(→`List<string>`)/`findGroups`(→`Map<string,string>?`, named captures)/`replace`/`split`. Patterns use **raw strings** `r"..."` (the `{n}` quantifier would otherwise collide with `{expr}` interpolation). Erases to PHP `preg_*` on the regular subset; byte-identical run/runvm/real PHP (Fork A) |
 | `guide/unions.phg` | union types `A \| B \| C` (classes, interfaces, primitives); a value of any member flows into a union-typed slot; reach a member via **match-over-union** type patterns (`match s { Circle c => … }`, exhaustive) or `instanceof` narrowing; a primitive `int \| string` union matched by literal value; transpiles to PHP 8.0 `A\|B` (Rich Types M-RT S4) |
@@ -231,6 +232,13 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
   - a bare instance-field read in a static method — `return x;` → `E-STATIC-THIS`.
   Access static members as `Class.member`, pass values as parameters, or drop `static`.
   `phg explain E-STATIC-THIS` documents it.
+
+- **Overloads of one name must agree on `static`-ness (Statics-B) — no runnable example (a compile
+  error).** A method name that has both a `static` and an instance overload —
+  `class C { static function f(int x) -> int {…} function f(string s) -> int {…} }` →
+  `E-OVERLOAD-STATIC-MIX`. A mixed set has no sound call form (`C.f(..)` would resolve only the static
+  overloads, `x.f(..)` only the instance ones), and PHP forbids it too. Make every overload `static`,
+  or none. `phg explain E-OVERLOAD-STATIC-MIX` documents it.
 
 - **Declaration names must be unique (Soundness Batch G)** — no runnable example (these are all
   compile errors):

@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — overloaded static methods (Statics-B)
+
+A `static` method may now be **overloaded** and called by the class name: `Color.of(int)` /
+`of(int,int,int)` / `of(string)` are selected at the call site by the argument types, runtime
+multiple dispatch identical to instance-method overloading. Closes the Statics-A deferral. One new
+`Op::CallStaticOverload` (runtime-identical to `Op::CallOverload` — it shares the exec arm and the
+`validate` bounds check; it differs only in compile-time `stack_effect`, since the compiler pushes a
+dummy receiver below the args that the selected static body's arity pops). Byte-identical
+run≡runvm≡real PHP.
+
+- Checker: removed the static-call overload rejection (routes through `check_method_sigs`, the
+  instance-overload path); added `E-OVERLOAD-STATIC-MIX` — every overload of one name must agree on
+  `static`-ness (a mixed set has no sound call form; PHP forbids it too). Interpreter already
+  selected; compiler now consults `method_overloads` at a static call site and emits
+  `Op::CallStaticOverload`; transpiler emits a `static` dispatcher with `self::` branch targets.
+- `examples/guide/overloaded-statics.phg` (incl. an inherited overloaded static `Swatch.of(..)`);
+  checker tests; `phg explain E-OVERLOAD-STATIC-MIX`. **Still deferred:** a static on a generic class
+  using the class type parameter; late static binding (`static::` / `new static()`).
+
 ### Added — `phg lsp` language server (Item D)
 
 A Language Server over stdio so editors get live Phorge diagnostics, hover, and go-to-definition (GA

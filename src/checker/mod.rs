@@ -63,6 +63,10 @@ struct FnSig {
     /// `throws` (M-faults 2b). Free functions and class methods carry their declared set; interface
     /// method signatures keep it empty (dynamic-dispatch throws enforcement is a documented deferral).
     throws: Vec<Ty>,
+    /// Whether this declaration is `static` (Statics-B). Only meaningful for methods; always `false`
+    /// for free functions and natives. Every overload of one method name must agree on this
+    /// (`E-OVERLOAD-STATIC-MIX`) so a static-call site resolves the same set on all backends.
+    is_static: bool,
 }
 
 struct EnumInfo {

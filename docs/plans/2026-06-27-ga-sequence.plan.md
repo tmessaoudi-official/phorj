@@ -57,6 +57,15 @@
 
 ### Locked autonomous execution order (post-compaction, fully autonomous)
 1. **Overloaded statics** (runtime VM dispatch) — close Item C Area B; un-defer in KNOWN_ISSUES.
+   ✅ DONE (2026-06-28, not pushed). New `Op::CallStaticOverload` (runtime-identical to `CallOverload`,
+   shares exec + validate arms; distinct `stack_effect` since the compiler pushes a dummy receiver below
+   the args). Checker: removed the static-call overload rejection → routes through `check_method_sigs`;
+   added `E-OVERLOAD-STATIC-MIX` (overloads must agree on static-ness — closes the soundness hole the
+   un-rejection would open). Interpreter already selected; compiler consults `method_overloads` at static
+   call sites; transpiler emits a `static` dispatcher with `self::` targets.
+   `examples/guide/overloaded-statics.phg` (incl. inherited `Swatch.of`) byte-identical run≡runvm≡real
+   PHP 8.5; 1381 workspace tests green w/ oracle, clippy+fmt clean. KNOWN_ISSUES + CHANGELOG +
+   examples/README + explain updated. **NEXT: (2) LSP v2 full.**
 2. **LSP v2 full** — locals/params resolution, true end-ranges, completion, document symbols.
 3. **Rock 3** — focused golden `conformance/` corpus + flagship DDD project + `SEMVER`/`STABILITY.md`
    policy docs + `W-DEPRECATED` lint + deprecation-policy doc.

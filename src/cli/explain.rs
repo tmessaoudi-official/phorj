@@ -601,6 +601,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              signature to give the value. Call the function directly, or wrap the intended overload in\n\
              a lambda (`var g = fn(int x) => f(x);`).\n"
         }
+        "E-OVERLOAD-STATIC-MIX" => {
+            "E-OVERLOAD-STATIC-MIX — overloads of one name mix `static` and instance declarations.\n\n\
+             Every overload of a method name must be either all `static` or all instance methods. A\n\
+             mixed set has no sound call form: `ClassName.m(args)` dispatches only the static overloads\n\
+             while `x.m(args)` dispatches only the instance ones, so the checker would accept calls the\n\
+             runtime rejects. (PHP also forbids a static and an instance method sharing a name.) Make\n\
+             every overload `static`, or none of them, or rename one declaration.\n"
+        }
         "E-MISSING-RETURN" => {
             "E-MISSING-RETURN — a function does not return a value on every path.\n\n\
              A function whose declared return type carries a value (`-> int`, `-> Shape`, …) must\n\
@@ -816,11 +824,10 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-STATIC-CALL" => {
             "E-STATIC-CALL — a class-name method call `ClassName.method(…)` didn't resolve to a static method.\n\n\
-             `ClassName.method(args)` (slice B0) calls a `static` method with no receiver. It is an error\n\
-             when `method` is an *instance* method (call it on an instance: `x.method(…)`), or when the\n\
-             static method is overloaded (a static call to an overloaded method is not yet supported —\n\
-             give it a single signature, or call it on an instance). Inherited/trait static methods are\n\
-             resolved on the declaring class only this slice.\n"
+             `ClassName.method(args)` calls a `static` method with no receiver. It is an error when\n\
+             `method` is an *instance* method — call it on an instance instead (`x.method(…)`).\n\
+             Inherited and trait-supplied static methods resolve fine (Statics-A), and overloaded static\n\
+             methods are dispatched by argument type (Statics-B).\n"
         }
         "E-STATIC-THIS" => {
             "E-STATIC-THIS — a static method accessed instance state.\n\n\

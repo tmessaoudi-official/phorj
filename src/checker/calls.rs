@@ -1009,20 +1009,11 @@ impl Checker {
                 )),
             );
         }
-        // v1 scope: a static call lowers to a *direct* call to one function index, so an overloaded
-        // static method (multiple signatures) is not yet dispatchable this way. Reject it cleanly
-        // rather than silently calling one overload (a `run`↔`runvm` divergence risk).
-        if sigs.len() > 1 {
-            for a in args {
-                self.check_expr(a);
-            }
-            return self.err_coded(
-                span,
-                format!("`{cls}.{name}` is overloaded — a static call to an overloaded method is not yet supported"),
-                "E-STATIC-CALL",
-                Some("call it on an instance, or give the static method a single signature".into()),
-            );
-        }
+        // Statics-B: an overloaded static is dispatched at runtime exactly like an instance overload
+        // (the VM's `method_overloads` table + `dispatch::select_overload`, the same selector the
+        // interpreter's `call_static_method` runs), so `check_method_sigs` handles the multi-sig set
+        // here just as it does for `x.m(args)`. The static/instance-consistency of the overload set is
+        // guaranteed at declaration (`E-OVERLOAD-STATIC-MIX`), so every candidate here is static.
         // Visibility, mirroring the instance method-call site (Wave 1.1).
         let v = self
             .classes

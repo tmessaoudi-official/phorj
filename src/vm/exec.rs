@@ -295,7 +295,12 @@ impl<'a> Vm<'a> {
                     slot_base,
                 });
             }
-            Op::CallOverload(set_id, argc) => {
+            // `CallStaticOverload` (Statics-B) is byte-identical at runtime to `CallOverload`: the
+            // compiler pushed a dummy receiver below the `argc` args, so selection (which peeks only
+            // the top `argc`) is unaffected, and the selected static body's `arity` (= 1 + nparams)
+            // pops the dummy together with the args. The two ops differ only in compile-time
+            // `stack_effect`, so they share this arm.
+            Op::CallOverload(set_id, argc) | Op::CallStaticOverload(set_id, argc) => {
                 if self.frames.len() >= MAX_CALL_DEPTH {
                     return Err("stack overflow".to_string());
                 }

@@ -86,11 +86,51 @@ fn unknown_static_method_is_error() {
 }
 
 #[test]
-fn overloaded_static_call_is_rejected_for_now() {
+fn overloaded_static_call_is_ok() {
+    // Statics-B (2026-06-28): an overloaded static is dispatched at runtime, like an instance
+    // overload — the call site checks against the whole set via `check_method_sigs`.
     let src = "class C { static function f(int x) -> int { return x; } \
                static function f(string s) -> int { return 0; } } \
-               function main() -> void { var r = C.f(1); }";
-    assert!(has(src, "E-STATIC-CALL"), "{:?}", errors_of(src));
+               function main() -> void { var r = C.f(1); var s = C.f(\"a\"); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn overloaded_static_call_no_matching_overload_is_error() {
+    // Arity/type mismatch against every overload is still rejected (the multi-sig path).
+    let src = "class C { static function f(int x) -> int { return x; } \
+               static function f(int x, int y) -> int { return x; } } \
+               function main() -> void { var r = C.f(true); }";
+    assert!(!errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn inherited_overloaded_static_call_is_ok() {
+    // The overload set is inherited (aliased in the dispatch tables), so `Child.f(..)` resolves it.
+    let src = "open class Base { static function f(int x) -> int { return x; } \
+               static function f(string s) -> int { return 0; } } \
+               class Child extends Base {} \
+               function main() -> void { var r = Child.f(1); var s = Child.f(\"a\"); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn overload_mixing_static_and_instance_is_rejected() {
+    // Statics-B guard: a method name's overloads must all agree on `static`-ness, else a static-call
+    // site and an instance-call site would resolve different subsets (a checker/runtime divergence).
+    let src = "class C { static function f(int x) -> int { return x; } \
+               function f(string s) -> int { return 0; } } \
+               function main() -> void { }";
+    assert!(has(src, "E-OVERLOAD-STATIC-MIX"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn overload_mixing_instance_then_static_is_rejected() {
+    // Order-independent: instance first, then static, also rejected.
+    let src = "class C { function f(int x) -> int { return x; } \
+               static function f(string s) -> int { return 0; } } \
+               function main() -> void { }";
+    assert!(has(src, "E-OVERLOAD-STATIC-MIX"), "{:?}", errors_of(src));
 }
 
 #[test]

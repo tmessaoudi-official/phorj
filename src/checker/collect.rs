@@ -169,6 +169,7 @@ impl Checker {
                     // Interface-method throws are not enforced through dynamic dispatch this slice
                     // (a documented deferral); keep the set empty so no call site mis-discharges.
                     throws: Vec::new(),
+                    is_static: false,
                 },
             );
         }
@@ -982,6 +983,7 @@ impl Checker {
             ret,
             type_params: f.type_params.clone(),
             throws,
+            is_static: false, // free functions are never static
         };
         let existing = self.funcs.get(&f.name).cloned().unwrap_or_default();
         self.validate_new_overload(&existing, &sig, &f.name, f.span, "function");
@@ -1116,6 +1118,22 @@ impl Checker {
                 Some("a generic declaration must be the only one with its name; remove the type parameters or rename".into()),
             );
             return;
+        }
+        // Statics-B: every overload of one name must agree on `static`-ness. A mixed set has no sound
+        // call form — `ClassName.m(args)` dispatches only the static candidates (the interpreter's
+        // `call_static_method` filters by `static`), while `x.m(args)` dispatches only the instance
+        // ones, so the checker (which sees the whole set) would accept calls the runtime rejects. PHP
+        // also forbids a static and an instance method sharing a name.
+        if sig.is_static != existing[0].is_static {
+            self.err_coded(
+                span,
+                format!("overloaded {kind} `{name}` mixes `static` and instance declarations"),
+                "E-OVERLOAD-STATIC-MIX",
+                Some(
+                    "all overloads of one name must be either all `static` or all instance methods"
+                        .into(),
+                ),
+            );
         }
         let want_ret = &existing[0].ret;
         if &sig.ret != want_ret {
@@ -1498,6 +1516,7 @@ impl Checker {
                         ret,
                         type_params: f.type_params.clone(),
                         throws,
+                        is_static: f.modifiers.contains(&Modifier::Static),
                     };
                     let existing = methods.get(&f.name).cloned().unwrap_or_default();
                     self.validate_new_overload(&existing, &sig, &f.name, f.span, "method");

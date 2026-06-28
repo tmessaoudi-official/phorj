@@ -183,6 +183,15 @@ pub enum Op {
     /// `ParamKind`s, same selector). A no-match/ambiguous selection is a clean runtime fault. The
     /// set index is bounds-checked in `validate` (its target indices are checked there too).
     CallOverload(usize, usize),
+    /// Call an *overloaded static* method `ClassName.m(args)` (Statics-B). Identical at runtime to
+    /// [`Op::CallOverload`] — same operands (overload-set index, argument count), same selector
+    /// (`dispatch::select_overload` over the top `argc` argument values) — but the compiler pushes a
+    /// dummy receiver into slot 0 *below* the args first (a static method's compiled frame reserves
+    /// slot 0 for `this`, which it never reads), so the selected body's `arity` (`1 + nparams`) pops
+    /// the dummy together with the args. The only reason this is a distinct op from `CallOverload` is
+    /// the compiler's `stack_effect`: this form pops one extra value (the dummy), so its net effect is
+    /// `-argc`, not `1 - argc`. `validate` bounds-checks it exactly like `CallOverload`.
+    CallStaticOverload(usize, usize),
     /// Pop the return value, unwind the current frame (truncate its slot window), pop the
     /// frame, push the return value onto the caller's stack. End execution when the last
     /// (`main`) frame returns (decision P3-2).
@@ -444,7 +453,7 @@ impl BytecodeProgram {
                         .then(|| format!("const index {i} out of range (pool has {const_len})")),
                     Op::Call(idx) => (*idx >= nfns)
                         .then(|| format!("call target {idx} out of range ({nfns} functions)")),
-                    Op::CallOverload(sid, _) => {
+                    Op::CallOverload(sid, _) | Op::CallStaticOverload(sid, _) => {
                         if *sid >= self.overloads.len() {
                             Some(format!(
                                 "overload set {sid} out of range ({} sets)",

@@ -535,17 +535,29 @@ impl Compiler<'_> {
                 }
             }
             // Static method call `ClassName.method(args)` (slice B0): the class is known at compile
-            // time, so this is a *direct* call to the `(class, method)` function index — push a dummy
-            // receiver (slot 0 of the compiled method is `$this`, which a static method never reads)
-            // then the args, then `Op::Call`. Resolved after the native path (an explicit import wins a
-            // name collision), before instance dispatch.
+            // time. Push a dummy receiver (slot 0 of the compiled method is `$this`, which a static
+            // method never reads) then the args. A *non-overloaded* static lowers to a direct
+            // `Op::Call` to the `(class, method)` function index; an *overloaded* static (Statics-B)
+            // lowers to `Op::CallOverload(set_id, argc)` — the same runtime selector instance overloads
+            // use, with the dummy receiver sitting below the `argc` args (so selection sees only the
+            // args, and the selected body's arity pops the dummy + args). Resolved after the native
+            // path (an explicit import wins a name collision), before instance dispatch.
             if !*safe {
                 if let Expr::Ident(cls, _) = &**object {
                     if self.resolve_local(cls).is_none()
                         && self.resolve_binding(cls).is_none()
                         && self.classes.contains_key(cls)
                     {
-                        if let Some(&fn_idx) = self.methods.get(&(cls.clone(), name.clone())) {
+                        let key = (cls.clone(), name.clone());
+                        if let Some(&set_id) = self.method_overloads.get(&key) {
+                            self.emit_const(Value::Unit, line); // dummy receiver in slot 0
+                            for a in args {
+                                self.expr(a)?;
+                            }
+                            self.emit(Op::CallStaticOverload(set_id, args.len()), line);
+                            return Ok(());
+                        }
+                        if let Some(&fn_idx) = self.methods.get(&key) {
                             self.emit_const(Value::Unit, line); // dummy receiver in slot 0
                             for a in args {
                                 self.expr(a)?;
@@ -827,6 +839,7 @@ impl Compiler<'_> {
             self.class_field_ctys,
             self.method_rets,
             self.methods,
+            self.method_overloads,
             sub_base,
         );
 

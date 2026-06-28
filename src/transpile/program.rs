@@ -1304,13 +1304,22 @@ impl Transpiler {
         } else {
             name.to_string()
         };
+        // Statics-B: a static overload set's dispatcher must itself be `static` (so `Class::m(args)`
+        // is not a "non-static method called statically" fatal), and its branches call the mangled
+        // bodies through `self::` rather than `$this->`. All overloads agree on static-ness
+        // (`E-OVERLOAD-STATIC-MIX`), so the first is representative. Non-method (free) overloads are
+        // never static.
+        let is_static = is_method && ovls[0].modifiers.contains(&Modifier::Static);
+        let static_prefix = if is_static { "static " } else { "" };
         let ret = self.ret_suffix(&ovls[0].ret);
-        self.line(&format!("function {disp}(...$args){ret} {{"));
+        self.line(&format!("{static_prefix}function {disp}(...$args){ret} {{"));
         self.indent += 1;
         for &i in &order {
             let test = self.overload_branch_test(&kinds[i]);
             let mangled = format!("{leaf}__ovl_{i}");
-            let target = if is_method {
+            let target = if is_static {
+                format!("self::{mangled}")
+            } else if is_method {
                 format!("$this->{mangled}")
             } else {
                 mangled

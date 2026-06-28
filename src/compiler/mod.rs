@@ -182,10 +182,15 @@ struct Compiler<'a> {
     /// Program-wide `(class, method) → return type` table (M2 Wave 4). `ctype` reads it to resolve
     /// a method-call result (`c.get() + 1`).
     method_rets: &'a HashMap<(String, String), CTy>,
-    /// Program-wide `(class, method) → function index` table (slice B0). A static call
+    /// Program-wide `(class, method) → function index` table (slice B0). A non-overloaded static call
     /// `ClassName.method(args)` lowers to a dummy-receiver push + `Op::Call(idx)` via this index —
     /// the class is known at compile time, so no runtime dispatch is needed.
     methods: &'a HashMap<(String, String), usize>,
+    /// Program-wide `(class, method) → overload-set id` table (Statics-B), the static-call twin of the
+    /// instance `method_overloads` table the VM's `Op::CallMethod` consults. An *overloaded* static
+    /// call lowers to a dummy-receiver push + `Op::CallOverload(set_id, argc)`, which selects the
+    /// matching body at runtime by the argument types — the same selector the interpreter runs.
+    method_overloads: &'a HashMap<(String, String), usize>,
     /// The class whose body is being compiled (a method or constructor), or `None` in a free
     /// function. `ctype(This)` resolves to `Class(cur_class)`.
     cur_class: Option<String>,
@@ -363,6 +368,7 @@ impl<'a> Compiler<'a> {
         class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
         method_rets: &'a HashMap<(String, String), CTy>,
         methods: &'a HashMap<(String, String), usize>,
+        method_overloads: &'a HashMap<(String, String), usize>,
         base_fn_idx: usize,
     ) -> Self {
         Compiler {
@@ -386,6 +392,7 @@ impl<'a> Compiler<'a> {
             class_field_ctys,
             method_rets,
             methods,
+            method_overloads,
             cur_class: None,
             match_bindings: Vec::new(),
             height: 0,
@@ -430,6 +437,9 @@ impl<'a> Compiler<'a> {
             Op::Call(idx) => 1 - self.arities[*idx] as isize,
             // Pops `argc` args, dispatches to one overload, pushes its single return value.
             Op::CallOverload(_, argc) => 1 - *argc as isize,
+            // Statics-B: like `CallOverload` but the compiler pushed a dummy receiver below the args,
+            // and the selected static body's arity pops it too — so this pops `argc + 1`, pushes 1.
+            Op::CallStaticOverload(_, argc) => -(*argc as isize),
             Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
             Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
             Op::GetField(_) => 0,   // pop instance, push field value
