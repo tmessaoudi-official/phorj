@@ -1,0 +1,25 @@
+// Conformance: destructuring — struct (irrefutable) + fixed-length list patterns.
+package Main;
+
+import Core.Console;
+
+class Point {
+    constructor(public int x, public int y) {}
+}
+
+function describe(Point p) -> string {
+    var Point { x, y } = p;
+    return "x={x} y={y}";
+}
+
+function swap(int a, int b) -> string {
+    [int; 2] pair = [b, a];
+    var [first, second] = pair;
+    return "first={first} second={second}";
+}
+
+function main() -> void {
+    Point p = new Point(3, 4);
+    Console.println(describe(p));
+    Console.println(swap(7, 9));
+}
