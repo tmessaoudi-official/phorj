@@ -909,6 +909,40 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_clock {
+            // `Core.Time` — a freezable process-global clock matching the Rust kernel
+            // (`src/native/time.rs`). The frozen value persists in by-reference function-statics (no
+            // global statement). `nowMillis()` returns the frozen value when set, else `floor` of
+            // `microtime(true)*1000` (integer epoch-millis, matching `SystemTime` truncation). A frozen
+            // program is byte-identical across all backends; an unfrozen one reads the wall clock.
+            self.line("function &__phorge_now_frozen() {");
+            self.indent += 1;
+            self.line("static $f = null;");
+            self.line("return $f;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_now_freeze($ms) {");
+            self.indent += 1;
+            self.line("$f = &__phorge_now_frozen();");
+            self.line("$f = $ms;");
+            self.line("return null;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_now_unfreeze() {");
+            self.indent += 1;
+            self.line("$f = &__phorge_now_frozen();");
+            self.line("$f = null;");
+            self.line("return null;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_now_millis() {");
+            self.indent += 1;
+            self.line("$f = &__phorge_now_frozen();");
+            self.line("if ($f !== null) { return $f; }");
+            self.line("return (int)(microtime(true) * 1000);");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_regex {
             // `Core.Regex` (Fork A) — the injected `Regex` holds the BARE pattern; `__phorge_regex_delim`
             // wraps it in a collision-free PCRE delimiter + the `u` (Unicode) modifier, matching the

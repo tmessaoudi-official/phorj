@@ -772,12 +772,92 @@ fn inject_secret_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     }
 }
 
+/// The `Core.Time` value model (M-TIME, `docs/specs/2026-06-28-m-time-design.md`): the pure-Phorge
+/// `Instant`, `Duration`, `Date`, and `DateTime` classes. Because the prelude is run through the same
+/// backends and transpiler as user code, all calendar and formatting math is byte-identical by
+/// construction; the only native is the clock seam (the `Core.Time` module in `src/native/time.rs`).
+/// The model is UTC-only because timezones are non-deterministic and would break the byte-identity
+/// spine. Calendar math uses Hinnant's truncating-division-safe civil/day conversions, which port
+/// verbatim since Phorge int division truncates toward zero (PHP `intdiv`).
+const TIME_PRELUDE: &str = r#"
+class Duration {
+  constructor(public int ms) {}
+  static function millis(int n) -> Duration { return new Duration(n); }
+  static function seconds(int n) -> Duration { return new Duration(n * 1000); }
+  static function minutes(int n) -> Duration { return new Duration(n * 60000); }
+  static function hours(int n) -> Duration { return new Duration(n * 3600000); }
+  static function days(int n) -> Duration { return new Duration(n * 86400000); }
+  function toMillis() -> int { return this.ms; }
+  function toSeconds() -> int { return this.ms / 1000; }
+  function toMinutes() -> int { return this.ms / 60000; }
+  function toHours() -> int { return this.ms / 3600000; }
+  function toDays() -> int { return this.ms / 86400000; }
+  function plus(Duration o) -> Duration { return new Duration(this.ms + o.ms); }
+  function minus(Duration o) -> Duration { return new Duration(this.ms - o.ms); }
+  function negate() -> Duration { return new Duration(-this.ms); }
+  function isZero() -> bool { return this.ms == 0; }
+  function isNegative() -> bool { return this.ms < 0; }
+}
+class Instant {
+  constructor(public int ms) {}
+  static function ofEpochMillis(int m) -> Instant { return new Instant(m); }
+  static function ofEpochSeconds(int s) -> Instant { return new Instant(s * 1000); }
+  static function now() -> Instant { return new Instant(Time.nowMillis()); }
+  function epochMillis() -> int { return this.ms; }
+  function epochSeconds() -> int { return this.ms / 1000; }
+  function plus(Duration d) -> Instant { return new Instant(this.ms + d.ms); }
+  function minus(Duration d) -> Instant { return new Instant(this.ms - d.ms); }
+  function durationSince(Instant o) -> Duration { return new Duration(this.ms - o.ms); }
+  function isBefore(Instant o) -> bool { return this.ms < o.ms; }
+  function isAfter(Instant o) -> bool { return this.ms > o.ms; }
+  function compareTo(Instant o) -> int {
+    return if (this.ms < o.ms) { -1 } else { if (this.ms > o.ms) { 1 } else { 0 } };
+  }
+}
+"#;
+
+fn inject_time_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports_time = prog.items.iter().any(|it| {
+        matches!(it, Item::Import { path, type_only: false, .. }
+            if path.len() == 2 && path[0] == "Core" && path[1] == "Time")
+    });
+    if !imports_time {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    let has_class = |n: &str| {
+        prog.items
+            .iter()
+            .any(|it| matches!(it, Item::Class(c) if c.name == n))
+    };
+    let Ok(parsed) = lex_parse(TIME_PRELUDE) else {
+        return std::borrow::Cow::Borrowed(prog); // unreachable: TIME_PRELUDE is valid
+    };
+    let prepend: Vec<Item> = parsed
+        .items
+        .into_iter()
+        .filter(|it| matches!(it, Item::Class(c) if !has_class(&c.name)))
+        .collect();
+    if prepend.is_empty() {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    let mut items = Vec::with_capacity(prog.items.len() + prepend.len());
+    items.extend(prepend);
+    items.extend(prog.items.iter().cloned());
+    std::borrow::Cow::Owned(Program {
+        package: prog.package.clone(),
+        items,
+        span: prog.span,
+    })
+}
+
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
     let json_injected = inject_json_prelude(prog);
     let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
     let http_injected = inject_http_prelude(rm_injected.as_ref());
     let regex_injected = inject_regex_prelude(http_injected.as_ref());
-    let injected = inject_secret_prelude(regex_injected.as_ref());
+    let secret_injected = inject_secret_prelude(regex_injected.as_ref());
+    let injected = inject_time_prelude(secret_injected.as_ref());
     // M6 W2: lower `Http.autoRouter()` into explicit `Router` construction from the `#[Route]`-
     // annotated handlers — BEFORE the checker, so the generated registration type-checks like
     // hand-written code (a no-op unless `Core.Http` is imported). The `#[Route]` attrs survive for the

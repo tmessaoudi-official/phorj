@@ -212,6 +212,12 @@ impl Transpiler {
                         if nat.module == "Core.Regex" {
                             self.uses_regex = true;
                         }
+                        // `Core.Time` erases to gated `__phorge_now_*` helpers (M-TIME, 2026-06-28): a
+                        // freezable process-global clock hand-rolled to match the Rust kernel, so a frozen
+                        // program is byte-identical across all backends.
+                        if nat.module == "Core.Time" {
+                            self.uses_clock = true;
+                        }
                         // `Decimal.*` erases to gated `__phorge_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {

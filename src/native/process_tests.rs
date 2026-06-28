@@ -26,8 +26,9 @@ fn every_other_native_is_pure() {
     // (2026-06-27): the transpiler hand-rolls the same xorshift64, so a seeded sequence is
     // byte-identical and Random rejoins the oracle. `Core.Crypto` is the one **mixed** module —
     // `hashPassword` is impure (random salt → quarantined) but `verifyPassword` is pure
-    // (deterministic for a fixed `(password, hash)` → gateable).
-    let impure_modules = ["Core.Process", "Core.Env"];
+    // (deterministic for a fixed `(password, hash)` → gateable). `Core.Time` is impure (M-TIME): an
+    // unfrozen `nowMillis()` reads the wall clock; a program freezes the clock to become gateable.
+    let impure_modules = ["Core.Process", "Core.Env", "Core.Time"];
     for n in registry() {
         let impure = impure_modules.contains(&n.module)
             || (n.module == "Core.Crypto" && n.name == "hashPassword");

@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-TIME S1: `Core.Time` instants + durations
+
+First slice of the time library (`docs/specs/2026-06-28-m-time-design.md`), byte-identical
+`run ≡ runvm ≡ real PHP 8.5`, **no new `Op`/`Value`**:
+
+- **`Instant`** — a point in time (epoch-millis, UTC): `Instant.now()` (clock seam),
+  `ofEpochMillis`/`ofEpochSeconds`; `epochMillis`/`epochSeconds`, `plus`/`minus` (a `Duration`),
+  `durationSince`, `isBefore`/`isAfter`/`compareTo`.
+- **`Duration`** — a span: `Duration.seconds`/`minutes`/`hours`/`days`/`millis`; `toMillis`/`toSeconds`/
+  `toMinutes`/`toHours`/`toDays`, `plus`/`minus`/`negate`, `isZero`/`isNegative`.
+- **Architecture** — an **injected pure-Phorge prelude** (`cli::inject_time_prelude`, gated on
+  `import Core.Time`): because the prelude runs through the same backends *and* transpiler as user code,
+  all arithmetic is byte-identical by construction with zero hand-rolled-PHP divergence. The only native
+  (`src/native/time.rs`, `Core.Time`) is the **freezable clock seam** — `Time.freeze(ms)` /
+  `Time.unfreeze()` / `Time.nowMillis()`, hand-rolled identically in PHP (`__phorge_now_*`), so a frozen
+  program is reproducible (the `Core.Random` determinism pattern). UTC-only (timezones are
+  non-deterministic). `guide/time.phg` + `conformance/stdlib/time.phg`.
+
 ### Added — stdlib: `Core.Set` + `Core.Map` ergonomics (collection breadth complete)
 
 Completes everyday collection breadth (List/Set/Map), byte-identical `run ≡ runvm ≡ real PHP`, no new

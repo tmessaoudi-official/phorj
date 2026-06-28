@@ -1,0 +1,30 @@
+package Main;
+
+import Core.Console;
+import Core.Time;
+
+function main() -> void {
+  Time.freeze(1700000000000);
+  Instant now = Instant.now();
+  Console.println("{now.epochMillis()}");
+  Console.println("{now.epochSeconds()}");
+  Duration d = Duration.hours(2).plus(Duration.minutes(15));
+  Console.println("{d.toMillis()}");
+  Console.println("{d.toMinutes()}");
+  Console.println("{d.toSeconds()}");
+  Instant later = now.plus(d);
+  Console.println("{later.epochMillis()}");
+  Console.println("{later.durationSince(now).toSeconds()}");
+  Console.println("{now.isBefore(later)}");
+  Console.println("{later.isAfter(now)}");
+  Console.println("{now.compareTo(later)}");
+  Console.println("{later.compareTo(now)}");
+  Console.println("{now.compareTo(now)}");
+  Instant prev = now.minus(Duration.days(1));
+  Console.println("{prev.epochSeconds()}");
+  Console.println("{Duration.days(1).toHours()}");
+  Console.println("{d.negate().toMinutes()}");
+  Console.println("{d.negate().isNegative()}");
+  Console.println("{Duration.millis(0).isZero()}");
+  Time.unfreeze();
+}

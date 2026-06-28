@@ -678,6 +678,22 @@ SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration
 Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
 closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
+## Core.Time (M-TIME) — determinism + scope
+
+`Core.Time` models `Instant`/`Duration` (S1) as an injected pure-Phorge prelude, so all arithmetic is
+byte-identical by construction. The clock is the one non-deterministic surface, deliberately quarantined.
+
+- **Unfrozen `Instant.now()` is non-deterministic** and therefore cannot appear in a byte-identity-gated
+  example/conformance program — it reads the real wall clock, which differs per run and per backend. A
+  program that wants reproducible output calls `Time.freeze(ms)` first (the `Core.Random` pattern); all
+  shipped examples freeze. `Time.unfreeze()` restores real-clock behavior. The frozen clock is
+  process-global, so under `phg serve --workers > 1` it is shared across worker threads (same caveat as
+  `Core.Random`).
+- **UTC-only, no timezones.** Civil breakdown (S2/S3) is always UTC. A `ZonedDateTime` / timezone
+  database is out of scope — timezones are environment-dependent and would break the byte-identity spine.
+- **Millisecond precision; no sub-millisecond.** `Instant` is integer epoch-millis; nanos are not modeled.
+- **No locale-aware or arbitrary-format parsing** (S3 ships fixed ISO-8601 output only).
+
 ## Core.Regex (Fork A) — documented edges + deferrals
 
 `Core.Regex` is backed by the `regex` crate (RE2-style, linear-time, ReDoS-immune). The byte-identity

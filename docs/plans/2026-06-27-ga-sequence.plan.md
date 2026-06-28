@@ -482,3 +482,26 @@ sha256 manifest into the released `x86_64-linux-gnu` primary, `.github/workflows
 (build stubs → hash → bake → publish), `Cargo.toml` `repository`. Integrity gate (sha256 mismatch →
 fault), EV-7 checked arithmetic. `tests/build.rs` fixture coverage (offline; a fake manifest+stub).
 Phase 3b (signing/macOS) DEFERRED in KNOWN_ISSUES.
+
+---
+
+## NEXT MARATHON (locked 2026-06-28 via "what's next?" gate)
+
+Developer answered the milestone-fork with **"all of them in order"** — execute this four-milestone
+sequence fully autonomously (persistent autonomy bypass ON), spec-first, each slice green +
+byte-identical (run≡runvm≡real PHP 8.5) + guide example + conformance + docs + memory:
+
+1. **M-TIME** (dates/time/durations) — FIRST. Design: an **injected pure-Phorge prelude**
+   (`Instant`/`Duration`/`Date`/`DateTime`, all calendar+format math in Phorge ⇒ identical on all
+   backends, zero native divergence) + **one native clock seam** `Core.Time.nowMillis()` (process-
+   global, `freeze`/`unfreeze` like `Core.Random.seed`, hand-rolled identically in PHP). Examples
+   freeze the clock for determinism; unfrozen `now()` reads wall-clock and is documented non-gated
+   (KNOWN_ISSUES). UTC-only (no timezones — non-deterministic across environments).
+2. **M8.5 Interop / `.d.phg`** — foreign-PHP declaration files + importer boundary + foreign-exception
+   catch. Highest spine risk; spec-first, quarantine foreign behavior from the byte-identity oracle.
+3. **M-perf** — profile + optimize VM/serve with before/after `phg bench` numbers (Phase B slot-indexed
+   fields is the headline candidate; bench-gated).
+4. **M4 Stdlib charter** — broad batteries (Text codepoint-aware, List/Map/Set sort/order, parse*, Math
+   breadth, Convert). Spec `docs/specs/2026-06-27-m4-stdlib-charter.md` already exists.
+
+Decisions log: see the per-milestone specs created during the run.

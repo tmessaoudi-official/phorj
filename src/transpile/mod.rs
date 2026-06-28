@@ -310,6 +310,11 @@ struct Transpiler {
     /// engine's no-backref/lookaround set ≡ what PCRE matches identically); `\d\w\s` Unicode-vs-ASCII
     /// is the one documented edge (KNOWN_ISSUES), so shipped examples keep ASCII subjects.
     uses_regex: bool,
+    /// Set when any `Core.Time` native is emitted (M-TIME, 2026-06-28) — defines the `__phorge_now_*`
+    /// helpers: a freezable process-global clock (`static $frozen`) hand-rolled to match the Rust kernel
+    /// (`src/native/time.rs`). A *frozen* program is byte-identical on `run`/`runvm`/transpiled PHP; an
+    /// unfrozen `nowMillis()` reads the wall clock on each backend and is documented non-gated.
+    uses_clock: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -531,6 +536,7 @@ impl Transpiler {
             uses_math_number_format: false,
             uses_rng: false,
             uses_regex: false,
+            uses_clock: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

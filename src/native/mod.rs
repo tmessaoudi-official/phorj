@@ -46,6 +46,7 @@ mod regex;
 mod set;
 mod test;
 mod text;
+mod time;
 mod url;
 mod validate;
 
@@ -343,6 +344,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
     registry.extend(test::test_natives());
+    registry.extend(time::time_natives());
     #[cfg(feature = "crypto")]
     registry.extend(crypto::crypto_natives());
     #[cfg(feature = "regex")]
