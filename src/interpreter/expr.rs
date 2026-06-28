@@ -123,7 +123,7 @@ impl Interp {
                             }
                             // Clone the value out and drop the borrow (handle semantics: the shared
                             // cell stays available for later mutation).
-                            match inst.fields.borrow().get(name).cloned() {
+                            match inst.get_field(name) {
                                 Some(v) => Ok(v),
                                 None => rt(format!("no field `{name}` on `{}`", inst.class)),
                             }
@@ -199,15 +199,18 @@ impl Interp {
                         ))
                     }
                 };
-                let mut new_fields = base.fields.borrow().clone();
+                // S1b: a `with` clone reuses the base's shared layout (same class ⇒ same slots), so
+                // copy the slot `Vec` and overwrite the named slots by name.
+                let new_inst = Instance {
+                    class: base.class.clone(),
+                    layout: base.layout.clone(),
+                    fields: RefCell::new(base.fields.borrow().clone()),
+                };
                 for (name, e) in fields {
                     let v = self.eval(e)?;
-                    new_fields.insert(name.clone(), v);
+                    new_inst.set_field(name, v);
                 }
-                Ok(Value::Instance(Rc::new(Instance {
-                    class: base.class.clone(),
-                    fields: RefCell::new(new_fields),
-                })))
+                Ok(Value::Instance(Rc::new(new_inst)))
             }
             Expr::Match {
                 scrutinee, arms, ..
@@ -296,7 +299,7 @@ impl Interp {
         }
         // bare field reference inside a method body (mirrors checker scope seeding)
         if let Some(Value::Instance(inst)) = &self.this {
-            if let Some(v) = inst.fields.borrow().get(name).cloned() {
+            if let Some(v) = inst.get_field(name) {
                 return Ok(v);
             }
         }

@@ -429,6 +429,7 @@ fn make_instance_then_get_field() {
         class_descs: vec![ClassDesc {
             class: "Point".into(),
             fields: vec!["x".into(), "y".into()],
+            layout: crate::value::ClassLayout::new(vec!["x".into(), "y".into()]),
         }],
         names: vec!["x".into()],
         methods: HashMap::new(),
@@ -465,6 +466,7 @@ fn get_field_absent_faults_like_interpreter() {
         class_descs: vec![ClassDesc {
             class: "Empty".into(),
             fields: Vec::new(),
+            layout: crate::value::ClassLayout::new(vec![]),
         }],
         names: vec!["tag".into()],
         methods: HashMap::new(),

@@ -45,23 +45,23 @@ fn compiled(pattern: &str) -> Result<Rc<::regex::Regex>, String> {
     }
 }
 
-/// Build the opaque `Regex` value holding the bare pattern.
+/// Build the opaque `Regex` value holding the bare pattern. S1b: a native carrier builds its own
+/// single-field [`crate::value::ClassLayout`] (`["pattern"]`) — independent of any injected prelude,
+/// and self-consistent (every `Regex` shares the same one-slot layout, so eq/reflect parity holds).
 fn regex_value(pattern: &str) -> Value {
-    let mut fields = crate::value::FieldMap::default();
-    fields.insert("pattern".to_string(), Value::Str(pattern.to_string()));
-    Value::Instance(Rc::new(Instance {
-        class: "Regex".to_string(),
-        fields: RefCell::new(fields),
-    }))
+    let inst = Instance::new(
+        "Regex".to_string(),
+        crate::value::ClassLayout::from_sorted_names(&["pattern"]),
+    );
+    inst.set_field("pattern", Value::Str(pattern.to_string()));
+    Value::Instance(Rc::new(inst))
 }
 
 /// Extract the bare pattern from a `Regex` instance argument.
 fn as_pattern(v: &Value) -> Result<String, String> {
     match v {
         Value::Instance(inst) if inst.class == "Regex" => inst
-            .fields
-            .borrow()
-            .get("pattern")
+            .get_field("pattern")
             .and_then(|p| match p {
                 Value::Str(s) => Some(s.clone()),
                 _ => None,

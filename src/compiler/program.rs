@@ -143,6 +143,10 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     let nclasses = class_decls.len();
     let mut classes: HashMap<String, usize> = HashMap::new();
     let mut class_descs: Vec<ClassDesc> = Vec::new();
+    // M-perf S1b: the shared `name → slot` layout for every class, computed once from the AST so the
+    // VM (`MakeInstance`) and the interpreter build identical layouts. A class with no storage fields
+    // gets an empty layout.
+    let field_layouts = crate::ast::class_field_layout(program);
     // Program-wide field-type table, keyed by class *name* so `ctype` can resolve a field read on
     // any instance (not just `this`) — `obj.field` looks up `class_field_ctys[class_of(obj)][field]`.
     let mut class_field_ctys: HashMap<String, HashMap<String, CTy>> = HashMap::new();
@@ -214,6 +218,9 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
         class_descs.push(ClassDesc {
             class: c.name.clone(),
             fields,
+            layout: crate::value::ClassLayout::new(
+                field_layouts.get(&c.name).cloned().unwrap_or_default(),
+            ),
         });
         class_field_ctys.insert(c.name.clone(), tags);
     }

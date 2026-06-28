@@ -29,7 +29,7 @@ fn compile_validates_and_faults_on_unsupported() {
     match re(r"\d{4}") {
         Value::Instance(inst) => {
             assert_eq!(inst.class, "Regex");
-            assert_eq!(text(inst.fields.borrow().get("pattern").unwrap()), r"\d{4}");
+            assert_eq!(text(&inst.get_field("pattern").unwrap()), r"\d{4}");
         }
         other => panic!("compile returned {other:?}"),
     }

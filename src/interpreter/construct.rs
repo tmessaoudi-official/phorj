@@ -52,10 +52,14 @@ impl Interp {
         // inheritance the parent's ctor, for multiple inheritance every parent's in `extends` order.
         // The full args are the plan entries' params concatenated; each entry takes its slice.
         let plan = self.ctor_plan(class_name);
-        let mut inst = Instance {
-            class: class_name.to_string(),
-            fields: RefCell::new(crate::value::FieldMap::default()),
-        };
+        // M-perf S1b: allocate with the class's shared slot layout (same source as the VM). A class
+        // with no storage fields gets an empty layout (checker-unreachable miss → empty, EV-7).
+        let layout = self
+            .layouts
+            .get(class_name)
+            .cloned()
+            .unwrap_or_else(|| crate::value::ClassLayout::new(vec![]));
+        let inst = Instance::new(class_name.to_string(), layout);
         let total: usize = plan.iter().map(|(p, _)| p.len()).sum();
         if plan.is_empty() {
             if !args.is_empty() {
@@ -88,9 +92,7 @@ impl Interp {
         for (params, _) in &plan {
             for (i, p) in params.iter().enumerate() {
                 if promoted(p) {
-                    inst.fields
-                        .get_mut()
-                        .insert(p.name.clone(), args[offset + i].clone());
+                    inst.set_field(&p.name, args[offset + i].clone());
                 }
             }
             offset += params.len();
@@ -129,7 +131,7 @@ impl Interp {
         if let Some(inits) = self.field_inits.get(&rc.class).cloned() {
             for (fname, init) in &inits {
                 let v = self.run_hook_get(Value::Instance(rc.clone()), init)?;
-                rc.fields.borrow_mut().insert(fname.clone(), v);
+                rc.set_field(fname, v);
             }
         }
         Ok(())

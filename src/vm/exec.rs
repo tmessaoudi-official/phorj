@@ -395,10 +395,20 @@ impl<'a> Vm<'a> {
                 // before `split_off` takes `&mut self` (mirrors `MakeEnum`).
                 let desc = self.program.class_descs[idx].clone();
                 let values = self.split_off(desc.fields.len());
-                let fields: crate::value::FieldMap = desc.fields.into_iter().zip(values).collect();
+                // M-perf S1b: place each promoted-field value at its slot in the shared layout. The
+                // field push order (`desc.fields`) need not match slot order — `slot(name)` maps it —
+                // so construction and access agree regardless of order (the MI-offset hazard is moot).
+                let layout = desc.layout.clone();
+                let mut slots: Vec<Option<Value>> = vec![None; layout.len()];
+                for (name, val) in desc.fields.iter().zip(values) {
+                    if let Some(i) = layout.slot(name) {
+                        slots[i] = Some(val);
+                    }
+                }
                 self.stack.push(Value::Instance(Rc::new(Instance {
                     class: desc.class,
-                    fields: RefCell::new(fields),
+                    layout,
+                    fields: RefCell::new(slots),
                 })));
             }
             Op::GetField(idx) => {
@@ -406,8 +416,9 @@ impl<'a> Vm<'a> {
                 match self.pop() {
                     Value::Instance(inst) => {
                         // Clone the field value out and drop the borrow before pushing (handle
-                        // semantics: the shared cell stays available for a later mutation).
-                        let v = inst.fields.borrow().get(&name).cloned();
+                        // semantics: the shared cell stays available for a later mutation). S1b: the
+                        // read resolves `name → slot` against the receiver's own runtime layout.
+                        let v = inst.get_field(&name);
                         match v {
                             Some(v) => self.stack.push(v),
                             // Byte-identical to the interpreter (`Expr::Member`): a checker-valid but
@@ -426,7 +437,9 @@ impl<'a> Vm<'a> {
                 let value = self.pop();
                 match self.pop() {
                     Value::Instance(inst) => {
-                        inst.fields.borrow_mut().insert(name, value);
+                        // S1b: write to the named slot in the shared cell, visible through every
+                        // binding. `name` is a checker-valid declared field ⇒ the slot always exists.
+                        inst.set_field(&name, value);
                     }
                     v => return Err(format!("cannot set `.{name}` on {}", v.type_name())),
                 }

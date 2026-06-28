@@ -43,14 +43,13 @@ fn reflect_kind_php_emits_the_gated_helper() {
 
 #[test]
 fn reflect_class_name_returns_runtime_class_for_objects_null_otherwise() {
-    use crate::value::{EnumVal, FieldMap, Instance};
-    use std::cell::RefCell;
+    use crate::value::{ClassLayout, EnumVal, Instance};
     let mut out = String::new();
     // An instance reports its class name (≡ PHP get_class for a package-Main class).
-    let inst = Value::Instance(Rc::new(Instance {
-        class: "Point".into(),
-        fields: RefCell::new(FieldMap::default()),
-    }));
+    let inst = Value::Instance(Rc::new(Instance::new(
+        "Point".into(),
+        ClassLayout::new(vec![]),
+    )));
     assert!(matches!(reflect_class_name(&[inst], &mut out), Ok(Value::Str(s)) if s == "Point"));
     // An enum variant reports the VARIANT name — PHP get_class returns the variant subclass (Q3).
     let ev = Value::Enum(Rc::new(EnumVal {
@@ -81,8 +80,7 @@ fn reflect_class_name_returns_runtime_class_for_objects_null_otherwise() {
 
 #[test]
 fn reflect_enumeration_natives_read_class_tables() {
-    use crate::value::{FieldMap, Instance};
-    use std::cell::RefCell;
+    use crate::value::{ClassLayout, Instance};
     use std::collections::BTreeMap;
     let mut interfaces = BTreeMap::new();
     interfaces.insert(
@@ -97,10 +95,10 @@ fn reflect_enumeration_natives_read_class_tables() {
         methods: BTreeMap::new(),
         fields: BTreeMap::new(),
     };
-    let widget = Value::Instance(Rc::new(Instance {
-        class: "Widget".into(),
-        fields: RefCell::new(FieldMap::default()),
-    }));
+    let widget = Value::Instance(Rc::new(Instance::new(
+        "Widget".into(),
+        ClassLayout::new(vec![]),
+    )));
     let strs = |v: Value| match v {
         Value::List(items) => items
             .iter()

@@ -173,6 +173,11 @@ pub struct Interp {
     /// (base-first across ancestors, declaration order). Seeded once at load from the shared
     /// [`crate::ast::field_initializers`]; evaluated per-instance in `construct` after promotion.
     field_inits: HashMap<String, Vec<(String, Expr)>>,
+    /// The shared `name → slot` field layout per class (M-perf S1b), built once at load from
+    /// [`crate::ast::class_field_layout`] — the *same* source the compiler/VM build their layouts
+    /// from, so an interpreter-built instance and a VM-built instance of one class agree on slots.
+    /// Consulted by `construct` (allocate + populate) and every field read/write.
+    layouts: HashMap<String, std::rc::Rc<crate::value::ClassLayout>>,
     frame: CallScopes,
     this: Option<Value>,
     out: String,
@@ -218,6 +223,7 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
         statics: HashMap::new(),
         consts: HashMap::new(),
         field_inits: HashMap::new(),
+        layouts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -336,6 +342,7 @@ pub fn call_named(
         statics: HashMap::new(),
         consts: HashMap::new(),
         field_inits: HashMap::new(),
+        layouts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -495,6 +502,13 @@ impl Interp {
         // VM (the BytecodeProgram builds the identical table), no divergence.
         self.class_implements = crate::ast::instanceof_table(program);
         self.class_tables = crate::native::ClassTables::from_program(program);
+        // M-perf S1b: the shared `name → slot` layout per class — same source as the compiler/VM, so
+        // both backends allocate slot-aligned instances. Stored as one `Rc` per class, cloned onto
+        // every instance of that class in `construct`.
+        self.layouts = crate::ast::class_field_layout(program)
+            .into_iter()
+            .map(|(class, names)| (class, crate::value::ClassLayout::new(names)))
+            .collect();
         // The single shared method-dispatch table (M-RT S6b): `call_method` resolves `(class, name)`
         // to its `(declaring_class, method)` — the same table the compiler pre-flattens into the VM's
         // method table, so multi-parent / resolution-clause / renamed dispatch can never diverge. The
@@ -819,7 +833,7 @@ fn match_pattern(
             }
             if let Value::Instance(inst) = value {
                 for fp in fields {
-                    let fv = inst.fields.borrow().get(&fp.field).cloned();
+                    let fv = inst.get_field(&fp.field);
                     match fv {
                         Some(v) => {
                             if !match_pattern(&fp.pat, &v, implements, out) {

@@ -92,7 +92,7 @@ impl Interp {
                                 )?;
                                 return Ok(());
                             }
-                            inst.fields.borrow_mut().insert(name.clone(), v);
+                            inst.set_field(name, v);
                             Ok(())
                         }
                         other => rt(format!("cannot set `.{name}` on {}", other.type_name())),
@@ -274,7 +274,7 @@ impl Interp {
             } => match v {
                 Value::Instance(inst) => {
                     for f in fields {
-                        let fv = inst.fields.borrow().get(&f.field).cloned();
+                        let fv = inst.get_field(&f.field);
                         match fv {
                             Some(val) => self.frame.declare(&f.binding, val),
                             None => {

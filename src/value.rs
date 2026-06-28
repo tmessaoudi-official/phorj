@@ -42,10 +42,67 @@ impl Hasher for FnvHasher {
     }
 }
 
-/// The field map of a class instance — a `HashMap` keyed by [`FnvHasher`] (see its docs). A type alias
-/// so the (few) construction sites read `FieldMap::default()` and the rest of the `HashMap` API is
-/// unchanged. `BuildHasherDefault` builds a fresh zero-seed `FnvHasher` per hash.
-pub type FieldMap = HashMap<String, Value, BuildHasherDefault<FnvHasher>>;
+/// A class's instance-field **slot layout** (M-perf slot-indexed fields, S1b): the bidirectional
+/// name↔slot map shared by every instance of one class. Built once per class from
+/// [`crate::ast::class_field_layout`] (so the two backends agree) and held behind `Rc` on each
+/// [`Instance`], so construction *and* access both resolve `name → slot` against the instance's own
+/// **runtime** layout — making slot order irrelevant to correctness (the multiple-inheritance
+/// base-offset hazard never arises; slots are always runtime-resolved, never statically baked).
+#[derive(Debug, Default)]
+pub struct ClassLayout {
+    /// field name → slot index, keyed by [`FnvHasher`]. The S2 inline cache fast-paths past this
+    /// lookup on a monomorphic site; this map is the slow path / first miss.
+    slots: HashMap<String, usize, BuildHasherDefault<FnvHasher>>,
+    /// slot index → field name, in the deterministic sorted order from `class_field_layout`. Drives
+    /// eq/reflect iteration so two instances of one class compare slot-aligned.
+    names: Vec<String>,
+}
+
+impl ClassLayout {
+    /// Build a layout from an **ordered, deduplicated** field-name list (as `class_field_layout`
+    /// produces — sorted). The slot of a name is its index in `names`.
+    pub fn new(names: Vec<String>) -> Rc<Self> {
+        let slots = names
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(i, n)| (n, i))
+            .collect();
+        Rc::new(ClassLayout { slots, names })
+    }
+
+    /// Build a layout for a **native carrier** (`Regex`, …) from the field names it populates. The
+    /// names are sorted and deduped for self-consistency: two carriers of the same kind get an
+    /// identical layout, matching what `class_field_layout` produces for the same field set — so
+    /// eq/reflect parity holds.
+    pub fn from_sorted_names(names: &[&str]) -> Rc<Self> {
+        let mut v: Vec<String> = names.iter().map(|s| (*s).to_string()).collect();
+        v.sort();
+        v.dedup();
+        Self::new(v)
+    }
+
+    /// The slot index of `name`, or `None` when the name is not a declared storage field of the class.
+    #[inline]
+    pub fn slot(&self, name: &str) -> Option<usize> {
+        self.slots.get(name).copied()
+    }
+
+    /// The field names in slot order (slot `i` is `names()[i]`).
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+
+    /// The number of slots (declared storage fields).
+    pub fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    /// Whether the class has no storage fields.
+    pub fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -128,7 +185,47 @@ pub enum ClosureData {
 #[derive(Debug, Clone)]
 pub struct Instance {
     pub class: String,
-    pub fields: RefCell<FieldMap>,
+    /// The shared `name → slot` layout for `class` (M-perf S1b). Every instance of one class shares the
+    /// same `Rc`, so field access resolves a slot against the receiver's own runtime layout.
+    pub layout: Rc<ClassLayout>,
+    /// Slot-indexed field storage, `len() == layout.len()`. The `None` sentinel = an unset field
+    /// (preserves the old "read of an unpopulated field faults" semantics — an absent HashMap key
+    /// before S1b). Interior-mutable for shared-handle field writes (`o.f = e`), same as before.
+    pub fields: RefCell<Vec<Option<Value>>>,
+}
+
+impl Instance {
+    /// Allocate an instance of `class` with every slot unset (`None`).
+    pub fn new(class: String, layout: Rc<ClassLayout>) -> Self {
+        let n = layout.len();
+        Instance {
+            class,
+            layout,
+            fields: RefCell::new(vec![None; n]),
+        }
+    }
+
+    /// Read field `name`, cloning the value out (and dropping the borrow before returning, preserving
+    /// handle semantics). `None` if the name is not in the layout *or* the slot is unset — the caller
+    /// turns that into the same runtime fault as a pre-S1b absent key.
+    pub fn get_field(&self, name: &str) -> Option<Value> {
+        self.layout
+            .slot(name)
+            .and_then(|i| self.fields.borrow()[i].clone())
+    }
+
+    /// Write field `name`. Returns `false` when `name` is not a declared storage slot — checker-
+    /// unreachable for a valid program (the layout is a superset of declared fields), so callers may
+    /// ignore the result; surfacing it keeps the write total/panic-free (EV-7).
+    pub fn set_field(&self, name: &str, v: Value) -> bool {
+        match self.layout.slot(name) {
+            Some(i) => {
+                self.fields.borrow_mut()[i] = Some(v);
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -370,12 +467,17 @@ impl Value {
                 if a.class != b.class {
                     return false;
                 }
+                // Same class ⇒ same shared `layout` ⇒ identical slot order, so compare slot-aligned.
+                // An unset slot (`None`) is equal only to another unset slot — byte-identical to the
+                // pre-S1b key-set comparison (a `None` slot was an absent HashMap key there).
                 let fa = a.fields.borrow();
                 let fb = b.fields.borrow();
                 fa.len() == fb.len()
-                    && fa
-                        .iter()
-                        .all(|(k, v)| fb.get(k).is_some_and(|bv| v.eq_val_rec(bv, visited)))
+                    && fa.iter().zip(fb.iter()).all(|(x, y)| match (x, y) {
+                        (Some(xv), Some(yv)) => xv.eq_val_rec(yv, visited),
+                        (None, None) => true,
+                        _ => false,
+                    })
             }
             (Null, Null) => true,
             // Functions are not comparable — the checker forbids `==`/`!=` on function
@@ -1828,10 +1930,10 @@ mod tests {
 
     #[test]
     fn as_display_is_none_for_composite() {
-        let inst = Value::Instance(Rc::new(Instance {
-            class: "Greeter".into(),
-            fields: RefCell::new(FieldMap::default()),
-        }));
+        let inst = Value::Instance(Rc::new(Instance::new(
+            "Greeter".into(),
+            ClassLayout::new(vec![]),
+        )));
         assert!(inst.as_display().is_none());
     }
 
@@ -1840,20 +1942,11 @@ mod tests {
         // M-mut.6 / F4: build `a.next = b; b.next = a` (a 2-node instance cycle) and assert `eq_val`
         // returns instead of overflowing the native stack. Without the `visited` guard this test
         // aborts the process via stack overflow; with it, it terminates deterministically.
-        let a = Rc::new(Instance {
-            class: "Node".into(),
-            fields: RefCell::new(FieldMap::default()),
-        });
-        let b = Rc::new(Instance {
-            class: "Node".into(),
-            fields: RefCell::new(FieldMap::default()),
-        });
-        a.fields
-            .borrow_mut()
-            .insert("next".into(), Value::Instance(b.clone()));
-        b.fields
-            .borrow_mut()
-            .insert("next".into(), Value::Instance(a.clone()));
+        let layout = ClassLayout::new(vec!["next".into()]);
+        let a = Rc::new(Instance::new("Node".into(), layout.clone()));
+        let b = Rc::new(Instance::new("Node".into(), layout));
+        a.set_field("next", Value::Instance(b.clone()));
+        b.set_field("next", Value::Instance(a.clone()));
         let va = Value::Instance(a);
         let vb = Value::Instance(b);
         // The two cyclic nodes are structurally bisimilar ⇒ equal; the call must terminate.

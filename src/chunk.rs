@@ -358,6 +358,10 @@ pub struct EnumDesc {
 pub struct ClassDesc {
     pub class: String,
     pub fields: Vec<String>,
+    /// The class's full slot layout (M-perf S1b), shared (`Rc`) onto every instance `MakeInstance`
+    /// builds. Built from [`crate::ast::class_field_layout`] so it is identical to the layout the
+    /// interpreter uses for the same class — the two backends agree on `name → slot`.
+    pub layout: std::rc::Rc<crate::value::ClassLayout>,
 }
 
 /// A whole compiled program: every top-level function (free functions, then synthetic
