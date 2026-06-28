@@ -168,6 +168,59 @@ fn selector_on_non_return_overloaded_function_errors() {
 }
 
 #[test]
+fn c2_typed_binding_resolves_without_a_selector() {
+    // A typed binding supplies the resolving context (C2) — no `<Type>` selector needed.
+    let errs = errors_of(
+        "function read(string s) -> int { return 1; } \
+         function read(string s) -> bool { return true; } \
+         function main() -> void { int a = read(\"x\"); bool b = read(\"y\"); \
+             discard a; discard b; }",
+    );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn c2_return_position_resolves_without_a_selector() {
+    let errs = errors_of(
+        "function read(string s) -> int { return 1; } \
+         function read(string s) -> bool { return true; } \
+         function port() -> int { return read(\"p\"); } \
+         function main() -> void { discard <int>read(\"q\"); }",
+    );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn c2_var_inference_has_no_context() {
+    // `var x = …` is inferred (no declared type) → no resolving context → still an error.
+    let errs = errors_of(
+        "function read(string s) -> int { return 1; } \
+         function read(string s) -> bool { return true; } \
+         function main() -> void { var x = read(\"x\"); discard x; }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-OVERLOAD-NO-CONTEXT")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn c2_sink_type_matching_no_overload_is_ambiguous() {
+    // The declared type is assignable from no overload's return → ambiguous (fix: a selector, or a
+    // matching type).
+    let errs = errors_of(
+        "function read(string s) -> int { return 1; } \
+         function read(string s) -> bool { return true; } \
+         function main() -> void { float f = read(\"x\"); discard f; }",
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e.code == Some("E-OVERLOAD-AMBIGUOUS-RETURN")),
+        "{errs:?}"
+    );
+}
+
+#[test]
 fn identical_param_and_return_is_still_a_duplicate() {
     let errs = errors_of(
         "function f(int x) -> int { return x; } \

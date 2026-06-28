@@ -29,8 +29,14 @@ returns (`function read(string): int` / `function read(string): bool`). Spec
   existing programs are byte-identical.
 - `E-OVERLOAD-RETURN` repurposed: it no longer means "must share a return type" but "a name mixes
   parameter- and return-type overloading" (the parameter-overload shared-return rule is kept). All four
-  new codes self-document via `phg explain`. Scope (C1): free functions only; the selector is the sole
-  resolving context (the shallow sinks are C2). See `KNOWN_ISSUES.md`.
+  new codes self-document via `phg explain`.
+- **C2 sink-widening** (same change): a **typed binding** (`int x = read("k")`) and a **`return`**
+  (`function port(): int { return read("k"); }`) now supply the resolving type context directly — no
+  selector needed in those positions. A `var x = …` inference has no context (`E-OVERLOAD-NO-CONTEXT`),
+  and a declared type assignable from no overload's return is `E-OVERLOAD-AMBIGUOUS-RETURN`. The
+  resolution core is shared with the selector (exact → unique-assignable → error). Scope: free
+  functions; remaining sinks (typed reassignment / field write / argument-to-non-overloaded-parameter)
+  still need a selector. `E-OVERLOAD-SELECT-CONFLICT` remains reserved. See `KNOWN_ISSUES.md`.
 
 ### Added — M8.5 S3: `.d.phg` declaration files + foreign-exception `catch`
 

@@ -120,22 +120,96 @@ impl Checker {
                 );
             }
         };
-        let members = match self.return_overload_sets.get(&name) {
-            Some(m) => m.clone(),
-            None => {
-                for a in &args {
-                    self.check_expr(a);
-                }
-                return self.err_coded(
-                    select_span,
-                    format!("`<{sel}>` selects a return-overload, but `{name}` is not return-type-overloaded"),
-                    "E-OVERLOAD-SELECT-UNKNOWN",
-                    Some("an overload selector applies only to a function declared with several return types over identical parameters".into()),
-                );
+        if !self.return_overload_sets.contains_key(&name) {
+            for a in &args {
+                self.check_expr(a);
             }
+            return self.err_coded(
+                select_span,
+                format!("`<{sel}>` selects a return-overload, but `{name}` is not return-type-overloaded"),
+                "E-OVERLOAD-SELECT-UNKNOWN",
+                Some("an overload selector applies only to a function declared with several return types over identical parameters".into()),
+            );
+        }
+        // Resolve against the selector type; key the rewrite by the selector node (its span is disjoint
+        // from the inner call's, so the rewrite never re-matches itself).
+        self.resolve_return_overload(
+            &name,
+            &args,
+            call_span,
+            select_span.start,
+            &sel,
+            skip_throws,
+            true,
+        )
+    }
+
+    /// Whether `e` is a *bare* call to a return-overloaded free function (no `<Type>` selector) — the
+    /// shape a C2 sink can resolve against its expected type. Cheap; checked before resolving the sink's
+    /// declared type so the common (non-overloaded) path is untouched.
+    pub(super) fn is_return_overload_call(&self, e: &Expr) -> bool {
+        matches!(e, Expr::Call { callee, .. }
+            if matches!(&**callee, Expr::Ident(n, _) if self.return_overload_sets.contains_key(n)))
+    }
+
+    /// C2 sink: resolve a *bare* return-overloaded call `name(args)` against an `expected` type fixed by
+    /// the surrounding context (a typed binding or `return`), with no explicit `<Type>` selector.
+    /// Returns `Some(ret)` (recording the mangled rewrite keyed by the call's own span — the bare
+    /// `Expr::Call` that `rewrite_ufcs` will replace) when `name` is a return-overload set; `None` when
+    /// it is not (so the caller falls back to ordinary checking, e.g. a plain or parameter-overloaded
+    /// call). A non-resolving expected type is a hard error inside (returns `Some(Ty::Error)`), so the
+    /// sink never silently passes an unresolved selector-less call to a backend.
+    pub(super) fn try_resolve_sink_overload(&mut self, call: &Expr, expected: &Ty) -> Option<Ty> {
+        let (name, args, call_span) = match call {
+            Expr::Call { callee, args, span } => match &**callee {
+                Expr::Ident(n, _) if self.return_overload_sets.contains_key(n) => {
+                    (n.clone(), args.clone(), *span)
+                }
+                _ => return None,
+            },
+            _ => return None,
         };
+        let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
+        Some(self.resolve_return_overload(
+            &name,
+            &args,
+            call_span,
+            call_span.start,
+            expected,
+            skip_throws,
+            false,
+        ))
+    }
+
+    /// Shared return-overload resolution core (Slice C). Picks the member of `name` whose return type
+    /// the `expected` type selects — exact equality → unique assignable → else error — type-checks the
+    /// arguments against the (shared) parameter signature, discharges the chosen member's checked
+    /// exceptions, records the mangled call rewrite keyed by `rewrite_key`, and returns the chosen
+    /// return type. `from_selector` distinguishes the error flavour of the zero-candidate case
+    /// (`E-OVERLOAD-SELECT-UNKNOWN` for an explicit selector vs `E-OVERLOAD-AMBIGUOUS-RETURN` for a
+    /// sink). The caller guarantees `name` is a return-overload set.
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_return_overload(
+        &mut self,
+        name: &str,
+        args: &[Expr],
+        call_span: Span,
+        rewrite_key: usize,
+        expected: &Ty,
+        skip_throws: bool,
+        from_selector: bool,
+    ) -> Ty {
+        // A poisoned expected type means the surrounding context already errored — resolve to poison
+        // without a second diagnostic (and without a rewrite; the program will not reach a backend).
+        if *expected == Ty::Error {
+            for a in args {
+                self.check_expr(a);
+            }
+            return Ty::Error;
+        }
+        let members = self.return_overload_sets[name].clone();
         // Arity + assignability against the shared parameter signature (all members share it).
-        let params = self.funcs[&name][0].params.clone();
+        let params = self.funcs[name][0].params.clone();
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
         let arity_ok = params.len() == arg_tys.len()
             && params
@@ -156,54 +230,64 @@ impl Checker {
             );
         }
         // Pick the member: exact return match → unique assignable → else unknown / ambiguous.
-        let exact: Vec<&(Ty, String)> = members.iter().filter(|(r, _)| *r == sel).collect();
+        let exact: Vec<&(Ty, String)> = members.iter().filter(|(r, _)| r == expected).collect();
         let chosen = if exact.len() == 1 {
             exact[0].clone()
         } else {
             let assignable: Vec<&(Ty, String)> = members
                 .iter()
-                .filter(|(r, _)| self.ty_assignable(r, &sel))
+                .filter(|(r, _)| self.ty_assignable(r, expected))
                 .collect();
             match assignable.len() {
                 1 => assignable[0].clone(),
-                0 => {
+                0 if from_selector => {
                     let have = members
                         .iter()
                         .map(|(r, _)| r.to_string())
                         .collect::<Vec<_>>()
                         .join(", ");
                     return self.err_coded(
-                        select_span,
-                        format!("`{name}` has no overload returning `{sel}` (returns: {have})"),
+                        call_span,
+                        format!(
+                            "`{name}` has no overload returning `{expected}` (returns: {have})"
+                        ),
                         "E-OVERLOAD-SELECT-UNKNOWN",
                         Some("name a return type one of the overloads actually has".into()),
                     );
                 }
                 _ => {
+                    let have = members
+                        .iter()
+                        .map(|(r, _)| r.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     return self.err_coded(
-                        select_span,
-                        format!("`<{sel}>` matches more than one overload of `{name}`"),
+                        call_span,
+                        format!(
+                            "`{name}` has no unique overload whose return type is `{expected}` (returns: {have})"
+                        ),
                         "E-OVERLOAD-AMBIGUOUS-RETURN",
-                        Some("name the exact return type of the overload you mean".into()),
+                        Some("add an explicit `<Type>` selector naming the exact return type you want".into()),
                     );
                 }
             }
         };
         // Discharge the chosen member's checked exceptions (M-faults 2b) unless under `?`-propagation.
         if !skip_throws {
-            if let Some(sig) = self.funcs[&name].iter().find(|s| s.ret == chosen.0) {
+            if let Some(sig) = self.funcs[name].iter().find(|s| s.ret == chosen.0) {
                 for e in sig.throws.clone() {
-                    self.discharge_call_throw(&name, &e, call_span);
+                    self.discharge_call_throw(name, &e, call_span);
                 }
             }
         }
-        // Record the resolved rewrite: the selector wrapper becomes a plain call to the mangled name.
-        // Keyed by the selector node's span (disjoint from the inner call's own span → no rewrite loop).
+        // Record the resolved rewrite: a plain call to the mangled name, keyed by `rewrite_key` (the
+        // selector node for a selector, or the bare call's own span for a sink). The replacement's own
+        // span is the inner call's, re-walked by `apply_repl` without re-matching the key.
         self.overload_resolutions.insert(
-            select_span.start,
+            rewrite_key,
             Expr::Call {
                 callee: Box::new(Expr::Ident(chosen.1.clone(), call_span)),
-                args,
+                args: args.to_vec(),
                 span: call_span,
             },
         );

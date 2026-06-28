@@ -41,6 +41,17 @@ impl Checker {
                     crate::ast::Expr::Propagate { inner, span: psp } => self
                         .try_throws_propagate(inner, *psp)
                         .unwrap_or_else(|| self.check_propagate(inner, *psp)),
+                    // C2 sink: a bare return-overloaded call binds to a concrete declared type without a
+                    // `<Type>` selector — the typed binding supplies the resolving context. (`var x = …`
+                    // is `Type::Infer`, has no context, and falls through to the `E-OVERLOAD-NO-CONTEXT`
+                    // path.)
+                    _ if !matches!(ty, crate::ast::Type::Infer(_))
+                        && self.is_return_overload_call(init) =>
+                    {
+                        let expected = self.resolve_type(ty);
+                        self.try_resolve_sink_overload(init, &expected)
+                            .unwrap_or(Ty::Error)
+                    }
                     _ => self.check_expr(init),
                 };
                 let declared = match ty {
@@ -140,11 +151,21 @@ impl Checker {
                 }
             }
             Stmt::Return { value, span } => {
+                let want = self.cur_ret.clone();
                 let actual = match value {
+                    // C2 sink: `return f()` resolves a bare return-overloaded call against the declared
+                    // return type. Skipped for a `void`/poison return type (no real overload returns
+                    // it) — that falls through to `E-OVERLOAD-NO-CONTEXT`.
+                    Some(e)
+                        if !matches!(want, Ty::Void | Ty::Error)
+                            && self.is_return_overload_call(e) =>
+                    {
+                        self.try_resolve_sink_overload(e, &want)
+                            .unwrap_or(Ty::Error)
+                    }
                     Some(e) => self.check_expr(e),
                     None => Ty::Void,
                 };
-                let want = self.cur_ret.clone();
                 if !self.ty_assignable(&actual, &want) {
                     self.err_assign(*span, &actual, &want);
                 }

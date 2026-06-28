@@ -2,12 +2,15 @@ package Main;
 
 import Core.Console;
 
-// Return-type overloading (M-RT Slice C1): several functions may share a name AND parameter signature,
+// Return-type overloading (M-RT Slice C): several functions may share a name AND parameter signature,
 // differing only in RETURN type. PHP has no overloading and cannot see the caller's expected type at
 // runtime, so — unlike parameter overloading (resolved by the runtime argument types) — return-type
-// overloads are resolved entirely at COMPILE TIME and emitted as distinct PHP functions. The resolving
-// context in this slice is an explicit selector `<Type>f(args)`: an angle-bracketed type immediately
-// before the call that names which overload's return type you want. (It is NOT a value cast — `as` is.)
+// overloads are resolved entirely at COMPILE TIME and emitted as distinct PHP functions.
+//
+// The compiler picks the overload from the type the call must produce. A typed binding or a `return`
+// supplies that context directly (C2), so no annotation is needed there. Where there is no context —
+// `discard`, an operand, an argument — name it explicitly with a selector `<Type>f(args)`: an
+// angle-bracketed type immediately before the call. (It is NOT a value cast — `as` is.)
 // `read` parses one config string into three different value types. Identical parameters (`string`),
 // distinct return types (`int` / `bool` / `string`) — a return-type overload set.
 function read(string raw): int {
@@ -22,18 +25,23 @@ function read(string raw): string {
     return "hello {raw}";
 }
 
+// `return` is a resolving context too: the bare call picks the `: int` overload from the declared
+// return type — no selector needed (C2).
+function port(): int {
+    return read("port");
+}
+
 function main(): void {
-    // The selector picks the overload by its return type; the result is fully statically typed.
-    int port = <int>read("port");
-    bool enabled = <bool>read("enabled");
-    string name = <string>read("name");
-    Console.println("port = {port}");
+    // A typed binding resolves the overload from the declared type — no selector (C2 sink).
+    int p = port();
+    bool enabled = read("enabled");
+    string name = read("name");
+    Console.println("port = {p}");
     // port = 42
     Console.println("enabled = {enabled}");
     // enabled = true
     Console.println("name = {name}");
     // name = hello name
-    // A selector is also how you call one purely for its side effects: `discard` supplies no type
-    // context, so it needs the selector to know which overload to run.
+    // `discard` supplies no type context, so it needs an explicit selector to pick the overload.
     discard <int>read("ignored");
 }

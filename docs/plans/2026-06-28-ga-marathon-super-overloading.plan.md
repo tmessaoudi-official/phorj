@@ -45,8 +45,18 @@
 - DONE: **step 2 — must-use Slice A** (`53fa3af`): `Stmt::Discard` + contextual `discard` keyword;
   E-UNUSED-VALUE on non-{void,Empty,never,Error} expression-statements; front-end-only (run≡runvm≡PHP);
   codemod (mutable-fields, static-fields + 3 inline tests); guide example + explain. 1444 tests green.
-- NEXT: **step 3 — return-type overloading (Slice C)**, then step 4 super/parent impl, step 5 M4 stdlib,
-  step 6 cross-file LSP + JetBrains.
+- DONE: **step 3 — return-type overloading Slice C1** (`ef108d0`): `<Type>f(args)` selector
+  (`Expr::OverloadSelect`), `finalize_overloads` classification, `check_overload_select` resolution,
+  per-return mangle (`rename_overload_defs` + `rewrite_ufcs` call rewrites), 4 new E-codes, guide
+  example, 7 tests. 1451 green, byte-identical run≡runvm≡PHP 8.5, clippy/fmt clean. Free functions only;
+  selector is the sole context (C2 widens to sinks — non-breaking, deferred).
+- DONE: **step 3' — Slice C2 (partial)**: typed-binding + `return` sinks resolve a selector-less
+  return-overload call from their declared type (shared `resolve_return_overload` core; `var` infer →
+  NO-CONTEXT; no-assignable → AMBIGUOUS-RETURN). 4 C2 tests, example shows both. Remaining sinks
+  (reassignment/field-write/arg-to-param) + `E-OVERLOAD-SELECT-CONFLICT` deferred (non-breaking).
+- NEXT: **step 4 — super/parent impl** (needs the multi-of-multi trait lowering first; spec
+  `docs/specs/2026-06-28-super-parent-dispatch-design.md`), then step 5 M4 stdlib, step 6 cross-file
+  LSP + JetBrains.
 - Implementation note (must-use): `discard` `at_discard` gate fires only on statement-leading
   `discard <Ident|new>`; `Stmt::Discard` OR-combines with `Stmt::Expr` everywhere except the checker
   (must-use exemption) and the fmt printer (emits the keyword); rewrite passes mirror Discard→Discard.

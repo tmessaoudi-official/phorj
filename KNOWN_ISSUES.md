@@ -425,11 +425,12 @@ Dynamic multiple dispatch over free functions and class methods ships and is byt
   an explicit `<Type>f(args)` selector and mangled per return before any backend
   (`examples/guide/return-overloading.phg`, byte-identical `run ≡ runvm ≡ real PHP`). Remaining C1
   deferrals: (1) **methods** are not return-overloadable yet — the classic shared-return rule still
-  applies to class methods (`E-OVERLOAD-RETURN`); (2) the selector is the **only** resolving context —
-  the shallow sinks (typed binding / reassignment / typed field write / `return` / non-overloaded typed
-  parameter) that would make it optional are **C2** (designed, not built), so a bare return-overloaded
-  call without a selector is `E-OVERLOAD-NO-CONTEXT` and `E-OVERLOAD-SELECT-CONFLICT` is reserved for
-  C2; (3) **mixing** parameter- and return-overloading in one name is rejected (`E-OVERLOAD-RETURN`) —
+  applies to class methods (`E-OVERLOAD-RETURN`); (2) **C2 sink-widening is partial** — a *typed
+  binding* and a *`return`* now resolve a selector-less call from their declared type, but the remaining
+  sinks (typed *reassignment* `x = f()`, typed *field write* `this.f = f()`, *argument* to a
+  non-overloaded typed parameter) still need a `<Type>` selector, and `E-OVERLOAD-SELECT-CONFLICT`
+  (selector disagrees with a sink) is still reserved (a selector at a sink currently just type-checks
+  its result against the declared type); (3) **mixing** parameter- and return-overloading in one name is rejected (`E-OVERLOAD-RETURN`) —
   a name is either parameter-overloaded (distinct params, shared return) or return-overloaded (identical
   params, distinct returns); (4) the per-return mangled name (`f__ret_int`) is a slug of the return
   type's display, so two return types with the same slug (pathological — e.g. a user type literally
