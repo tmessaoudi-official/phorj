@@ -113,6 +113,24 @@
   run≡runvm≡real PHP 8.5.
 - **NEXT: B2** (MI `parent(X).m/.constructor` + multi-of-multi trait lowering), then step 5 M4 stdlib,
   step 6 cross-file LSP + JetBrains.
+
+### B2 — scoped (code-verified probe, 2026-06-29; NOT built)
+**B2 is a TRANSPILER-ONLY gap — much narrower than feared.** Probed with two MI programs:
+- **MI parent *method* dispatch** (`parent(A).m()` / `parent(B).m()` from `class C extends A, B`):
+  `run` ≡ `runvm` already produce `A+B+C` (B1a's `Op::CallParent` bakes the resolver's target; the
+  resolver `ast::resolve_parent_method` already handles MI/`Ambiguous`). **Only the transpiler is
+  wrong** — it emits `A::m()`, which PHP rejects (`Non-static method A::m() cannot be called
+  statically`). This is THE B2 work item.
+- **MI parent *constructor* forwarding** via per-parent `parent(A).constructor(1); parent(B).constructor(2);`
+  **already works on all three backends** (`1/2`): B1b's inline targets each named ancestor directly and
+  the transpiled inline block is plain assignments (no `parent::`). So the bare-`parent.constructor()`-under-MI
+  case stays `E-PARENT-CTOR-MI` (no single target), but the idiomatic per-parent form is DONE.
+**So B2 ≈ transpiler-only:** emit an MI parent-method call (`parent(X).m()`, and the qualified form that
+resolves into an MI arm) via PHP **trait aliasing** — `use X { X::m as private __super_X_m; }` + the
+multi-of-multi lowering (emit any MI-parent that is *also* an MI-ancestor as a trait, not just
+interface+use), then the call emits `$this->__super_X_m(args)`. Existing machinery to reuse:
+`transpile/program.rs` `emit_multi_class` (~2071), `insteadof_clauses` (~2116/2198), `decomposed_classes`
+(`transpile/mod.rs:93`). Oracle-gated PHP-8.5 iteration — best done with fresh context.
 - Implementation note (must-use): `discard` `at_discard` gate fires only on statement-leading
   `discard <Ident|new>`; `Stmt::Discard` OR-combines with `Stmt::Expr` everywhere except the checker
   (must-use exemption) and the fmt printer (emits the keyword); rewrite passes mirror Discard→Discard.
