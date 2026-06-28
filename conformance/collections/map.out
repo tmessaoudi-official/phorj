@@ -1,0 +1,7 @@
+alice=30
+size=3
+hasBob=true hasDave=false
+key alice
+key bob
+key carol
+total=96

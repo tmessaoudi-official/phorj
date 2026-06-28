@@ -1,0 +1,25 @@
+// Conformance: typed params, recursion, default parameters, lambdas + pipe.
+package Main;
+
+import Core.Console;
+
+function fact(int n) -> int {
+    return if (n <= 1) { 1 } else { n * fact(n - 1) };
+}
+
+function greet(string who, string greeting = "Hello") -> string {
+    return "{greeting}, {who}";
+}
+
+function applyTwice(int x, (int) -> int f) -> int {
+    return f(f(x));
+}
+
+function main() -> void {
+    Console.println("{fact(5)}");
+    Console.println(greet("Ada"));
+    Console.println(greet("Ada", "Hi"));
+    var inc = fn(int x) => x + 1;
+    Console.println("{applyTwice(10, inc)}");
+    Console.println("{5 |> inc |> inc}");
+}

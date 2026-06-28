@@ -1,0 +1,7 @@
+sum 1..5 = 15
+k = 3
+k = 2
+k = 1
+neg
+zero
+pos

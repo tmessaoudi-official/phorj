@@ -1,0 +1,35 @@
+// Conformance: enums with payloads, match (variant + literal + guard patterns).
+package Main;
+
+import Core.Console;
+
+enum Shape {
+    Circle(int radius),
+    Rect(int w, int h),
+    Unit(),
+}
+
+function area(Shape s) -> int {
+    return match s {
+        Circle(r) => 3 * r * r,
+        Rect(w, h) => w * h,
+        Unit() => 0,
+    };
+}
+
+function sign(int n) -> string {
+    return match n {
+        0 => "zero",
+        x when x > 0 => "pos",
+        _ => "neg",
+    };
+}
+
+function main() -> void {
+    Console.println("{area(new Circle(2))}");
+    Console.println("{area(new Rect(3, 5))}");
+    Console.println("{area(new Unit())}");
+    Console.println(sign(0));
+    Console.println(sign(9));
+    Console.println(sign(-4));
+}

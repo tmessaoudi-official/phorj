@@ -1,0 +1,23 @@
+// Conformance: classes — constructor promotion, methods, this, field reads.
+package Main;
+
+import Core.Console;
+
+class Rect {
+    constructor(public int w, public int h) {}
+
+    function area() -> int {
+        return this.w * this.h;
+    }
+
+    function scaled(int k) -> Rect {
+        return new Rect(this.w * k, this.h * k);
+    }
+}
+
+function main() -> void {
+    Rect r = new Rect(3, 4);
+    Console.println("area = {r.area()}");
+    Rect big = r.scaled(2);
+    Console.println("big = {big.w}x{big.h}, area = {big.area()}");
+}

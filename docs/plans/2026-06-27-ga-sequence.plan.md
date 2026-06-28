@@ -67,6 +67,14 @@
    PHP 8.5; 1381 workspace tests green w/ oracle, clippy+fmt clean. KNOWN_ISSUES + CHANGELOG +
    examples/README + explain updated. **NEXT: (2) LSP v2 full.**
 2. **LSP v2 full** — locals/params resolution, true end-ranges, completion, document symbols.
+   ✅ DONE (2026-06-28, not pushed, `eccb9c0`). All front-end-only (off the byte-identity spine): new
+   `src/lsp/scope.rs` (position↔offset, binding collection, enclosing-callable by source-ordering) +
+   token-span/outline helpers in `symbols.rs`. True end-ranges re-derived from the buffer (the
+   `Diagnostic` is span-less). Locals/params resolution via nearest-preceding binding in the enclosing
+   callable; top-level wins first. Completion = top-level + in-scope locals + keywords. Document symbols
+   = hierarchical outline (`[item..next_item)` ranges so children nest). 7 new tests + a wire smoke
+   verified; 1176 lib + all suites green. README/CHANGELOG/spec updated. Deferred: member completion
+   (needs resolved-type index), lambda/match-pattern binders. **NEXT: (3) rock 3.**
 3. **Rock 3** — focused golden `conformance/` corpus + flagship DDD project + `SEMVER`/`STABILITY.md`
    policy docs + `W-DEPRECATED` lint + deprecation-policy doc.
 Each: design-spec where non-trivial, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), commit green,

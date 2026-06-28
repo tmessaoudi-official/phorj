@@ -1,0 +1,28 @@
+// Entry point (package Main): wires the Catalog + Ordering bounded contexts together. Demonstrates
+// composition at scale — two library packages, cross-package types, an aggregate computing over its
+// entities, all byte-identical on run / runvm / real PHP (exact integer-cents arithmetic).
+package Main;
+
+import Core.Console;
+import type Catalog.Money;
+import type Catalog.Product;
+import type Ordering.OrderLine;
+import type Ordering.Order;
+
+function main() -> void {
+    Product widget = new Product(1, "Widget", new Money(250));
+    Product gadget = new Product(2, "Gadget", new Money(125));
+
+    List<OrderLine> lines = [
+        new OrderLine(widget, 3),
+        new OrderLine(gadget, 2),
+    ];
+    Order order = new Order(1001, lines);
+
+    Console.println("Order #{order.id}");
+    Console.println("lines: {order.lineCount()}");
+
+    Money total = order.total();
+    string formatted = total.format();
+    Console.println("total: {formatted}");
+}

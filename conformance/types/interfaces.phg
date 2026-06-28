@@ -1,0 +1,29 @@
+// Conformance: interfaces + implements + polymorphic dispatch through an interface type.
+package Main;
+
+import Core.Console;
+
+interface Speaker {
+    function speak() -> string;
+}
+
+class Dog implements Speaker {
+    function speak() -> string {
+        return "woof";
+    }
+}
+
+class Cat implements Speaker {
+    function speak() -> string {
+        return "meow";
+    }
+}
+
+function announce(Speaker s) -> string {
+    return "says {s.speak()}";
+}
+
+function main() -> void {
+    Console.println(announce(new Dog()));
+    Console.println(announce(new Cat()));
+}

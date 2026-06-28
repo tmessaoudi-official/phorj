@@ -1,0 +1,33 @@
+// Bounded context: Ordering. An entity (`OrderLine`) and the aggregate root (`Order`), composed from
+// Catalog's value object + entity via cross-package `import type`. Folder = package `Ordering`.
+package Ordering;
+
+import Core.List;
+import type Catalog.Money;
+import type Catalog.Product;
+
+// Entity inside the Order aggregate: a product and a quantity.
+class OrderLine {
+    constructor(public Product product, public int qty) {}
+
+    function subtotal() -> Money {
+        return this.product.price.times(this.qty);
+    }
+}
+
+// Aggregate root: an immutable order with its lines; the total folds each line's subtotal.
+class Order {
+    constructor(public int id, public List<OrderLine> lines) {}
+
+    function lineCount() -> int {
+        return List.length(this.lines);
+    }
+
+    function total() -> Money {
+        mutable Money sum = new Money(0);
+        for (OrderLine line in this.lines) {
+            sum = sum.plus(line.subtotal());
+        }
+        return sum;
+    }
+}

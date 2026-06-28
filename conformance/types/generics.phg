@@ -1,0 +1,27 @@
+// Conformance: erased generics — a generic function and a generic class.
+package Main;
+
+import Core.Console;
+
+function identity<T>(T x) -> T {
+    return x;
+}
+
+class Box<T> {
+    constructor(public T value) {}
+    function get() -> T {
+        return this.value;
+    }
+}
+
+function main() -> void {
+    Console.println("{identity(42)}");
+    Console.println(identity("hi"));
+
+    Box<string> b = new Box("boxed");
+    Console.println(b.get());
+
+    Box<int> n = new Box(7);
+    int v = n.get();
+    Console.println("{v}");
+}
