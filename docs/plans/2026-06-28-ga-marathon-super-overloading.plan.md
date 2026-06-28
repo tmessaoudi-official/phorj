@@ -50,3 +50,25 @@
 - Implementation note (must-use): `discard` `at_discard` gate fires only on statement-leading
   `discard <Ident|new>`; `Stmt::Discard` OR-combines with `Stmt::Expr` everywhere except the checker
   (must-use exemption) and the fmt printer (emits the keyword); rewrite passes mirror Discard→Discard.
+
+## Slice C (return-type overloading) — implementation approach (discovered, NOT yet built)
+**Key finding:** `Checker::check_expr(&mut self, expr) -> Ty` is purely bottom-up — no expected-type
+param — and `E-OVERLOAD-RETURN` is enforced at `checker/collect.rs:1199`. So Slice C is **interlocking**
+(relax-invariant + resolve + backend-dispatch must land together; runtime can't pick among same-param
+different-return overloads) and **has no small green checkpoint**. Recommended decomposition:
+- **C1 (minimal-first, per spec):** explicit `<type>f(...)` selector ONLY (expected type is *local* at
+  the call → no bidirectional change). Relax `E-OVERLOAD-RETURN` to allow differing returns; a
+  return-overloaded call WITHOUT a selector → `E-OVERLOAD-NO-CONTEXT`; same-return sets keep working
+  selector-free. Resolve the member at the selector; **mangle each return-overload member to a distinct
+  name + rewrite resolved call sites** (reuse the cross-package mangle/rewrite discipline + `erase_generics`
+  "rewrite-before-backends" pattern — NO new Op/Value, NO runtime-dispatch change). Transpiler emits the
+  mangled names (single-return names stay bare → existing programs byte-identical). Parser: `<Type>` prefix
+  production at operand position (`<` is infix-only today, so it's free) + the `>>` nested-generic split
+  (reuse the type-annotation parser's split).
+- **C2 (widening, non-breaking):** add bidirectional expected-type propagation at the 5 shallow sinks
+  (typed binding / typed reassignment / typed field write / `return` / non-overloaded typed param) so the
+  selector becomes optional there. This threads an `Option<&Ty>` expected type into `check_expr` (or a
+  dedicated `check_expr_expected`) at those sites only.
+- Errors: `E-OVERLOAD-NO-CONTEXT`, `E-OVERLOAD-AMBIGUOUS-RETURN` (exact→unique-assignable→else),
+  `E-OVERLOAD-SELECT-UNKNOWN`, `E-OVERLOAD-SELECT-CONFLICT`. Resolution rule + PHP mangling per the spec.
+- **No small green checkpoint → implement in one focused (ideally fresh-context) session.**
