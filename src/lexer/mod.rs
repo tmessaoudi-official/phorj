@@ -1111,6 +1111,10 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
                     // through to the single-char dispatch. There is deliberately no `>>` token (it
                     // would break nested generics) — shift-right is two `Gt` handled in the parser.
                     (b'<', Some(b'<')) => Some(TokenKind::Shl),
+                    // `#[` opens a PHP-8-style attribute group (M6 W2). A bare `#` has no other use
+                    // (raw strings `r#"…"#` are lexed in the string path above), so this is the only
+                    // place `#` is accepted; a lone `#` falls through to the unexpected-char error.
+                    (b'#', Some(b'[')) => Some(TokenKind::HashBracket),
                     _ => None,
                 };
                 if let Some(k) = matched_two {

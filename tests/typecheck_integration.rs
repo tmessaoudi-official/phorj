@@ -79,3 +79,58 @@ fn loop_variable_type_mismatch_errors() {
     let errs = check_src(&broken).expect_err("should be a type error");
     assert!(!errs.is_empty());
 }
+
+// ── M6 W2: `#[Route(...)]` attribute validation ───────────────────────────────────────────────
+
+fn has_code(errs: &[phorge::diagnostic::Diagnostic], code: &str) -> bool {
+    errs.iter().any(|e| e.code == Some(code))
+}
+
+#[test]
+fn route_attribute_well_formed_checks_clean() {
+    // The raw `check` path does not inject the Core.Http prelude (that is `cli::check_and_expand`),
+    // so this asserts only the attribute validation itself: a well-formed `#[Route]` (two string
+    // literals, good path, one-param + return handler shape) produces no attribute diagnostics. The
+    // end-to-end `Request`/`Response` typing is covered by the conformance + differential gates.
+    let src = "package Main;\n#[Route(\"GET\", \"/health\")]\nfunction h(int x) -> int { return x; }\nfunction main() -> void {}\n";
+    assert!(check_src(src).is_ok(), "{:?}", check_src(src));
+}
+
+#[test]
+fn unknown_attribute_is_rejected() {
+    let src = "package Main;\n#[Cache(60)]\nfunction f() -> void {}\nfunction main() -> void {}\n";
+    let errs = check_src(src).expect_err("unknown attribute");
+    assert!(has_code(&errs, "E-UNKNOWN-ATTRIBUTE"), "{errs:?}");
+}
+
+#[test]
+fn route_with_wrong_arg_count_is_rejected() {
+    let src = "package Main;\nimport Core.Http;\n#[Route(\"GET\")]\nfunction f(Request req) -> Response { return Response.text(200, \"x\"); }\nfunction main() -> void {}\n";
+    let errs = check_src(src).expect_err("bad route args");
+    assert!(has_code(&errs, "E-ROUTE-ARGS"), "{errs:?}");
+}
+
+#[test]
+fn route_with_bad_path_is_rejected() {
+    let src = "package Main;\nimport Core.Http;\n#[Route(\"GET\", \"health\")]\nfunction f(Request req) -> Response { return Response.text(200, \"x\"); }\nfunction main() -> void {}\n";
+    let errs = check_src(src).expect_err("bad route spec");
+    assert!(has_code(&errs, "E-ROUTE-SPEC"), "{errs:?}");
+}
+
+#[test]
+fn route_handler_wrong_shape_is_rejected() {
+    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nfunction f(int a, int b) -> int { return a + b; }\nfunction main() -> void {}\n";
+    let errs = check_src(src).expect_err("bad handler shape");
+    assert!(has_code(&errs, "E-ROUTE-HANDLER"), "{errs:?}");
+}
+
+#[test]
+fn attribute_on_non_function_is_a_parse_error() {
+    // E-ATTR-TARGET is a parse-stage error, so it surfaces before the checker.
+    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nclass Foo {}\nfunction main() -> void {}\n";
+    let tokens = lex(src).expect("lex ok");
+    let err = Parser::new(tokens)
+        .parse_program()
+        .expect_err("attribute on a class must fail to parse");
+    assert_eq!(err.code, Some("E-ATTR-TARGET"), "{err:?}");
+}

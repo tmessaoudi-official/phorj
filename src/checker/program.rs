@@ -555,6 +555,7 @@ impl Checker {
     /// type parameters are made active for the whole body so `T`-typed params/locals resolve to
     /// `Ty::Param` (M-RT S7). Functions never nest, so a flat set + clear is sufficient.
     pub(super) fn check_function(&mut self, f: &crate::ast::FunctionDecl) {
+        self.check_attributes(f);
         // S0b: every function and method declares its return type — no exemptions where a return
         // slot exists (constructors and property hooks are separate `ClassMember` variants, so they
         // never reach here; expression-body lambdas infer and are not `FunctionDecl`s). Even `main`
@@ -611,6 +612,82 @@ impl Checker {
         // An `abstract` method (M-RT S6b) is a bodyless signature — exempt, like an interface method.
         if !f.modifiers.contains(&crate::ast::Modifier::Abstract) {
             self.check_return_totality(&ret, &f.body, f.span);
+        }
+    }
+
+    /// Validate a free function's `#[…]` attributes (M6 W2). Only `#[Route("METHOD", "/path")]` is
+    /// recognized; every other name is a hard `E-UNKNOWN-ATTRIBUTE`. A `Route` must carry exactly two
+    /// string-literal args (`E-ROUTE-ARGS`), a non-empty method + a `/`-leading path (`E-ROUTE-SPEC`),
+    /// and the handler must take one parameter and return a value (`E-ROUTE-HANDLER` — the structural
+    /// shape; the precise `(Request) -> Response` typing is enforced where `Http.autoRouter()` lowers
+    /// the route into a `.route(…)` registration). Front-end-only — attributes never reach a backend.
+    pub(super) fn check_attributes(&mut self, f: &crate::ast::FunctionDecl) {
+        for attr in &f.attrs {
+            if attr.name != "Route" {
+                self.err_coded(
+                    attr.span,
+                    format!(
+                        "unknown attribute `#[{}]` — only `#[Route(...)]` is supported",
+                        attr.name
+                    ),
+                    "E-UNKNOWN-ATTRIBUTE",
+                    Some("remove it, or use `#[Route(\"GET\", \"/path\")]`".into()),
+                );
+                continue;
+            }
+            let lits: Vec<Option<String>> =
+                attr.args.iter().map(Self::string_literal_value).collect();
+            if attr.args.len() != 2 || lits.iter().any(Option::is_none) {
+                self.err_coded(
+                    attr.span,
+                    "`#[Route]` takes exactly two string-literal arguments: an HTTP method and a path"
+                        .to_string(),
+                    "E-ROUTE-ARGS",
+                    Some("e.g. `#[Route(\"GET\", r\"/users/{id}\")]`".into()),
+                );
+                continue;
+            }
+            let method = lits[0].clone().unwrap_or_default();
+            let path = lits[1].clone().unwrap_or_default();
+            if method.is_empty() || !path.starts_with('/') {
+                self.err_coded(
+                    attr.span,
+                    "`#[Route]` method must be non-empty and the path must start with `/`"
+                        .to_string(),
+                    "E-ROUTE-SPEC",
+                    Some("e.g. `#[Route(\"GET\", \"/health\")]`".into()),
+                );
+            }
+            if f.params.len() != 1 || f.ret.is_none() {
+                self.err_coded(
+                    f.span,
+                    format!(
+                        "a `#[Route]` handler must take exactly one `Request` parameter and return a `Response` (got {} parameter(s))",
+                        f.params.len()
+                    ),
+                    "E-ROUTE-HANDLER",
+                    Some("declare `function name(Request req) -> Response { … }`".into()),
+                );
+            }
+        }
+    }
+
+    /// The static string value of an expression iff it is a string literal with no interpolation
+    /// (a plain `"…"` or a raw `r"…"`); `None` for any interpolated or non-string expression. Used to
+    /// read `#[Route]`'s arguments at check time.
+    fn string_literal_value(e: &crate::ast::Expr) -> Option<String> {
+        match e {
+            crate::ast::Expr::Str(parts, _) => {
+                let mut s = String::new();
+                for p in parts {
+                    match p {
+                        crate::ast::StrPart::Literal(lit) => s.push_str(lit.as_str()),
+                        crate::ast::StrPart::Expr(_) => return None,
+                    }
+                }
+                Some(s)
+            }
+            _ => None,
         }
     }
 

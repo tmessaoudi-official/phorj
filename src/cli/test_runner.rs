@@ -156,6 +156,7 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
         .collect();
     items.push(Item::Function(FunctionDecl {
         modifiers: Vec::new(),
+        attrs: Vec::new(),
         vis: Visibility::Public,
         name: "main".into(),
         type_params: Vec::new(),

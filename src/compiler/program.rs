@@ -331,6 +331,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                         ci,
                         FunctionDecl {
                             modifiers: Vec::new(),
+                            attrs: Vec::new(),
                             vis: Visibility::Public,
                             name: format!("{name}$get"),
                             type_params: Vec::new(),
@@ -350,6 +351,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                         ci,
                         FunctionDecl {
                             modifiers: Vec::new(),
+                            attrs: Vec::new(),
                             vis: Visibility::Public,
                             name: format!("{name}$set"),
                             type_params: Vec::new(),

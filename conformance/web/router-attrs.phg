@@ -1,0 +1,33 @@
+// Conformance: the `#[Route(...)]` attribute + `Http.autoRouter()` compile-time desugar (M6 W2).
+// Declaring routes via attributes produces the identical behaviour as explicit `.route(...)`
+// registration (see conformance/web/router.phg). Experimental tier; byte-identical run≡runvm≡real PHP.
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+#[Route("GET", "/")]
+function home(Request req) -> Response { return Response.text(200, "home"); }
+
+#[Route("GET", r"/users/{id}")]
+function showUser(Request req) -> Response { return Response.text(200, "user " + (req.param("id") ?? "?")); }
+
+#[Route("GET", "/users/me")]
+function currentUser(Request req) -> Response { return Response.text(200, "me"); }
+
+function show(Router rt, string method, string path) -> void {
+  Response resp = rt.handle(new Request(method, path, b"", [], []));
+  int st = resp.status;
+  string body = Bytes.toString(resp.body) ?? "?";
+  Console.println("{method} {path} -> {st} {body}");
+}
+
+function main() -> void {
+  Router rt = Http.autoRouter();
+  show(rt, "GET", "/");
+  show(rt, "GET", "/users/7");
+  show(rt, "GET", "/users/me"); // literal beats {id}
+  show(rt, "GET", "/missing");  // 404
+  show(rt, "POST", "/");        // method mismatch -> 404
+}

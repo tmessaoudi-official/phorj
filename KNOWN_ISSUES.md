@@ -540,6 +540,22 @@ or simply unavailable, never a crash):
   committed `vendor/`. Only `phg vendor` touches the network; commit `vendor/` + `phorge.lock` so
   builds stay deterministic and reproducible (the same determinism rule that defers URL/network to M6).
 
+## M6 W2 router & `#[Route]` attributes (in progress)
+
+- **Route patterns with `{param}` must be raw strings.** Write `r"/users/{id}"`, not `"/users/{id}"` —
+  a normal string interpolates `{id}` as a variable (`E-UNKNOWN-IDENT`). Applies to both the
+  hand-written `.route(...)` pattern and the `#[Route("GET", r"/users/{id}")]` argument.
+- **Attributes are free-function-only.** `#[Route]` (or any `#[…]`) on a class, enum, interface,
+  method, or import is `E-ATTR-TARGET`. Attributes on methods/classes are a later slice.
+- **Only `#[Route]` has semantics.** The grammar parses any `#[Name(args)]`, but every name other than
+  `Route` is a hard `E-UNKNOWN-ATTRIBUTE` (no silent ignore). A general attribute/annotation facility
+  is future work.
+- **No middleware, route groups, or regex/typed constraints.** Routing is exact-segment with `{name}`
+  captures only; `{id:\d+}`, optional segments, wildcards, and a middleware pipeline are deferred. The
+  `handle(Request) -> Response` contract will not change when they land.
+- **Router lives on the injected `Core.Http` types.** A program that declares its *own* `Request`/
+  `Response` (the W1 examples) does not get the injected `Router`; import `Core.Http` to use it.
+
 ## `phg build` limitations (M2.5, in progress)
 
 - **macOS targets are rejected.** The Mach-O/fat section *reader* ships and is tested, but producing a

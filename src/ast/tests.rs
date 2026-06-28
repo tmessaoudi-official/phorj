@@ -67,6 +67,7 @@ fn builds_var_decl_stmt() {
 fn builds_function_item() {
     let f = FunctionDecl {
         modifiers: vec![Modifier::Private],
+        attrs: Vec::new(),
         vis: Visibility::Public,
         name: "area".into(),
         type_params: vec![],

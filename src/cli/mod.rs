@@ -709,7 +709,12 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
     let http_injected = inject_http_prelude(rm_injected.as_ref());
     let regex_injected = inject_regex_prelude(http_injected.as_ref());
     let injected = inject_secret_prelude(regex_injected.as_ref());
-    let prog = injected.as_ref();
+    // M6 W2: lower `Http.autoRouter()` into explicit `Router` construction from the `#[Route]`-
+    // annotated handlers — BEFORE the checker, so the generated registration type-checks like
+    // hand-written code (a no-op unless `Core.Http` is imported). The `#[Route]` attrs survive for the
+    // checker's validation pass, then are inert for the backends.
+    let routed = crate::checker::desugar_auto_router(injected.into_owned());
+    let prog = &routed;
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs)) => {
             for w in &warnings {

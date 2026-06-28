@@ -188,6 +188,15 @@ impl Printer<'_> {
     }
 
     fn function(&mut self, f: &FunctionDecl) -> Result<(), String> {
+        // Item attributes (`#[Route("GET", "/p")]`, M6 W2) print one per line above the signature.
+        for attr in &f.attrs {
+            if attr.args.is_empty() {
+                self.line(&format!("#[{}]", attr.name));
+            } else {
+                let args: Result<Vec<_>, _> = attr.args.iter().map(|a| self.expr(a)).collect();
+                self.line(&format!("#[{}({})]", attr.name, args?.join(", ")));
+            }
+        }
         let sig = self.fn_signature(f)?;
         if f.modifiers.contains(&Modifier::Abstract) {
             // A bodyless abstract method signature.

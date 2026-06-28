@@ -72,6 +72,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         }
         items.push(Item::Function(FunctionDecl {
             modifiers: Vec::new(),
+            attrs: Vec::new(),
             vis: crate::ast::Visibility::Public,
             name: "main".into(),
             type_params: Vec::new(),
@@ -118,6 +119,7 @@ impl Lifter {
         }
         Ok(FunctionDecl {
             modifiers: Vec::new(),
+            attrs: Vec::new(),
             vis: crate::ast::Visibility::Public,
             name: f.name.clone(),
             type_params: Vec::new(),
@@ -254,6 +256,7 @@ impl Lifter {
         };
         Ok(ClassMember::Method(FunctionDecl {
             modifiers,
+            attrs: Vec::new(),
             vis: crate::ast::Visibility::Public,
             name: m.name.clone(),
             type_params: Vec::new(),

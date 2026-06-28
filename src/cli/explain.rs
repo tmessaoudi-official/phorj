@@ -618,6 +618,37 @@ pub fn explain_text(code: &str) -> Option<String> {
              runtime rejects. (PHP also forbids a static and an instance method sharing a name.) Make\n\
              every overload `static`, or none of them, or rename one declaration.\n"
         }
+        "E-ATTR-TARGET" => {
+            "E-ATTR-TARGET — an attribute is attached to something other than a free function.\n\n\
+             A `#[…]` attribute (M6 W2) may currently sit only directly above a top-level `function`.\n\
+             Attributes on a class, enum, interface, method, or import are not yet supported. Move the\n\
+             `#[Route(...)]` to the handler function it describes.\n"
+        }
+        "E-UNKNOWN-ATTRIBUTE" => {
+            "E-UNKNOWN-ATTRIBUTE — an unrecognized attribute name.\n\n\
+             Only `#[Route(\"METHOD\", \"/path\")]` is given meaning today (M6 W2). The attribute grammar\n\
+             accepts any `#[Name(args)]`, but every name other than `Route` is rejected so a typo can\n\
+             never be silently ignored. Remove the attribute or correct the name.\n"
+        }
+        "E-ROUTE-ARGS" => {
+            "E-ROUTE-ARGS — `#[Route]` has the wrong arguments.\n\n\
+             `#[Route]` takes exactly two string-literal arguments: an HTTP method and a path —\n\
+             `#[Route(\"GET\", r\"/users/{id}\")]`. A pattern containing `{name}` must be a RAW string\n\
+             (`r\"…\"`); a normal string would interpolate `{name}` as a variable. Non-literal or\n\
+             interpolated arguments are rejected (the route is read at compile time).\n"
+        }
+        "E-ROUTE-SPEC" => {
+            "E-ROUTE-SPEC — `#[Route]`'s method or path is malformed.\n\n\
+             The method must be a non-empty string and the path must start with `/` —\n\
+             `#[Route(\"GET\", \"/health\")]`. This is a light sanity check, not a full URL grammar.\n"
+        }
+        "E-ROUTE-HANDLER" => {
+            "E-ROUTE-HANDLER — a `#[Route]` handler has the wrong shape.\n\n\
+             A routed handler must take exactly one parameter (the `Request`) and declare a return type\n\
+             (the `Response`): `function show(Request req) -> Response { … }`. The precise\n\
+             `(Request) -> Response` typing is enforced where `Http.autoRouter()` lowers the route into\n\
+             a `.route(…)` registration; this check catches the gross shape at the declaration.\n"
+        }
         "E-MISSING-RETURN" => {
             "E-MISSING-RETURN — a function does not return a value on every path.\n\n\
              A function whose declared return type carries a value (`-> int`, `-> Shape`, …) must\n\
@@ -945,7 +976,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER)"
         )
     })
 }

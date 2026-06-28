@@ -577,6 +577,12 @@ pub struct CatchClause {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDecl {
     pub modifiers: Vec<Modifier>,
+    /// Item-level attributes (`#[Route("GET", "/p")]`, M6 W2) on a free function. **Front-end-only**:
+    /// the checker validates them (`E-UNKNOWN-ATTRIBUTE`/`E-ROUTE-*`) and the `Http.autoRouter()`
+    /// desugar consumes the `Route` ones; no backend ever reads this field, so it is inert with
+    /// respect to the byte-identity spine (like `throws`). Empty for a function with no attributes
+    /// (the common case) and always empty on a method (attributes are free-function-only this slice).
+    pub attrs: Vec<Attribute>,
     /// Declaration-level visibility. Meaningful only for a free (top-level) function; a method or an
     /// interface method signature carries `Visibility::Public` and the loader never checks it.
     pub vis: Visibility,
@@ -594,6 +600,17 @@ pub struct FunctionDecl {
     /// is checker-only (PHP has no checked exceptions).
     pub throws: Vec<Type>,
     pub body: Vec<Stmt>,
+    pub span: Span,
+}
+
+/// A PHP-8-style item attribute — `#[Name(arg, …)]` (M6 W2). Parsed generally (any `Name` + any
+/// expression args); only `Route` is given semantics this slice (every other name is a hard
+/// `E-UNKNOWN-ATTRIBUTE`). Attributes are front-end metadata: validated by the checker and consumed by
+/// the `Http.autoRouter()` desugar, never seen by a backend.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attribute {
+    pub name: String,
+    pub args: Vec<Expr>,
     pub span: Span,
 }
 

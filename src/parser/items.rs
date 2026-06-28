@@ -8,6 +8,10 @@ impl Parser {
     /// stamped onto the declaration by the free `stamp_visibility`.
     pub fn parse_item(&mut self) -> Result<Item, Diagnostic> {
         let sp = self.peek_span();
+        // Leading item attributes `#[Route(…)]` (M6 W2) — parsed before any modifier/visibility, PHP
+        // order. Only a free `function` may carry them this slice; the target check is below (after
+        // visibility/modifiers, at the item keyword).
+        let attrs = self.parse_attributes()?;
         // Contextual `test "name" { … }` item (M-Test T1), recognized *before* any modifier parsing.
         // `test` lexes as an ordinary identifier, so it is special only at item position when
         // immediately followed by a string literal — `test` followed by anything else stays a usable
@@ -37,6 +41,19 @@ impl Parser {
         if (is_open || is_abstract) && !self.check(&TokenKind::Class) {
             return Err(self.error("only a class can be declared `open` or `abstract`"));
         }
+        // Attributes are free-function-only this slice — at the item keyword, anything but `function`
+        // with attributes present is rejected (`E-ATTR-TARGET`).
+        if !attrs.is_empty() && !self.check(&TokenKind::Function) {
+            let asp = attrs[0].span;
+            return Err(Diagnostic::new(
+                Stage::Parse,
+                "attributes (`#[…]`) are only allowed on a free function".to_string(),
+                asp.line,
+                asp.col,
+            )
+            .with_code("E-ATTR-TARGET")
+            .with_hint("place the `#[…]` attribute directly above a top-level `function`"));
+        }
         let item = match self.peek() {
             TokenKind::Import => {
                 if vis != Visibility::Public {
@@ -50,7 +67,7 @@ impl Parser {
                 }
                 return self.parse_type_alias(sp);
             }
-            TokenKind::Function => Item::Function(self.parse_function(Vec::new(), sp)?),
+            TokenKind::Function => Item::Function(self.parse_function(Vec::new(), attrs, sp)?),
             TokenKind::Enum => Item::Enum(self.parse_enum(sp)?),
             TokenKind::Class => {
                 Item::Class(self.parse_class(sp, is_open || is_abstract, is_abstract)?)
@@ -192,6 +209,7 @@ impl Parser {
     pub(super) fn parse_function(
         &mut self,
         modifiers: Vec<Modifier>,
+        attrs: Vec<Attribute>,
         sp: Span,
     ) -> Result<FunctionDecl, Diagnostic> {
         self.expect(&TokenKind::Function, "'function'")?;
@@ -228,6 +246,7 @@ impl Parser {
         };
         Ok(FunctionDecl {
             modifiers,
+            attrs,
             vis: Visibility::Public,
             name,
             type_params,
@@ -237,6 +256,44 @@ impl Parser {
             body,
             span: sp,
         })
+    }
+
+    /// Parse zero or more leading item attributes `#[ Name ( arg, … ) ]` (M6 W2). Each group is a
+    /// single attribute; `#[Name]` with no parens has empty args. Args reuse the expression parser, so
+    /// string-literal patterns (`"GET"`, `r"/users/{id}"`) parse as ordinary `Expr`s. Returns the
+    /// collected attributes (empty when none) — the caller attaches them to the following item.
+    pub(super) fn parse_attributes(&mut self) -> Result<Vec<Attribute>, Diagnostic> {
+        let mut attrs = Vec::new();
+        while self.check(&TokenKind::HashBracket) {
+            let sp = self.peek_span();
+            self.advance(); // `#[`
+            let name = self.expect_ident("an attribute name after `#[`")?;
+            let args = if self.eat(&TokenKind::LParen) {
+                let mut args = Vec::new();
+                if !self.check(&TokenKind::RParen) {
+                    loop {
+                        args.push(self.parse_expr()?);
+                        if !self.eat(&TokenKind::Comma) {
+                            break;
+                        }
+                        if self.check(&TokenKind::RParen) {
+                            break; // trailing comma
+                        }
+                    }
+                }
+                self.expect(&TokenKind::RParen, "')' to close attribute arguments")?;
+                args
+            } else {
+                Vec::new()
+            };
+            self.expect(&TokenKind::RBracket, "']' to close the attribute")?;
+            attrs.push(Attribute {
+                name,
+                args,
+                span: sp,
+            });
+        }
+        Ok(attrs)
     }
 
     /// Comma-separated `Type name` parameters up to (not including) `)`.
@@ -510,6 +567,7 @@ impl Parser {
             )?;
             methods.push(FunctionDecl {
                 modifiers: Vec::new(),
+                attrs: Vec::new(),
                 vis: Visibility::Public,
                 name: mname,
                 type_params: Vec::new(),
@@ -560,7 +618,11 @@ impl Parser {
                     span: sp,
                 })
             }
-            TokenKind::Function => Ok(ClassMember::Method(self.parse_function(modifiers, sp)?)),
+            TokenKind::Function => Ok(ClassMember::Method(self.parse_function(
+                modifiers,
+                Vec::new(),
+                sp,
+            )?)),
             _ => {
                 // field or property hook: [modifiers] Type name …
                 let ty = self.parse_type()?;

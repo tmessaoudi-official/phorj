@@ -194,6 +194,7 @@ pub fn expand_aliases(program: &Program) -> Program {
     fn rfunc(f: &FunctionDecl, a: &Aliases) -> FunctionDecl {
         FunctionDecl {
             modifiers: f.modifiers.clone(),
+            attrs: f.attrs.clone(),
             vis: f.vis,
             name: f.name.clone(),
             type_params: f.type_params.clone(),

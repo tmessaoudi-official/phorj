@@ -161,6 +161,9 @@ pub enum TokenKind {
     RBrace,
     LBracket,
     RBracket,
+    /// `#[` — opens a PHP-8-style attribute group (`#[Route("GET", "/p")]`, M6 W2). The matching close
+    /// reuses `RBracket`. A bare `#` is not a token (raw-string `r#"…"#` is lexed in the string path).
+    HashBracket,
     Lt,
     Gt,
     Le,

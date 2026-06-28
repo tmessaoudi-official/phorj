@@ -389,6 +389,7 @@ pub fn erase_generics(program: Program) -> Program {
                 let params: Params = f.type_params.iter().map(String::as_str).collect();
                 Item::Function(FunctionDecl {
                     modifiers: f.modifiers.clone(),
+                    attrs: f.attrs.clone(),
                     vis: f.vis,
                     name: f.name.clone(),
                     type_params: Vec::new(), // erased
@@ -422,6 +423,7 @@ pub fn erase_generics(program: Program) -> Program {
                             }
                             ClassMember::Method(FunctionDecl {
                                 modifiers: f.modifiers.clone(),
+                                attrs: f.attrs.clone(),
                                 vis: f.vis,
                                 name: f.name.clone(),
                                 type_params: Vec::new(), // erased

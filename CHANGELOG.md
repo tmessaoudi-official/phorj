@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M6 W2 `#[Route(...)]` attributes
+
+A PHP-8-style **attribute** surface — `#[Route("GET", r"/users/{id}")]` on a handler — that
+**desugars at compile time** into explicit router registration. No runtime reflection, no new `Op`,
+no new `Value`; byte-identical `run ≡ runvm ≡ real PHP`.
+
+- **New front-end surface:** the lexer gains a `#[` token; the parser accepts item-level
+  `#[Name(args)]` groups on **free functions** (other targets are `E-ATTR-TARGET`); `FunctionDecl`
+  carries the parsed `Attribute`s (front-end-only — no backend reads them).
+- **Checker validation:** only `#[Route]` is recognized (`E-UNKNOWN-ATTRIBUTE` for any other name);
+  a `Route` needs exactly two string-literal args (`E-ROUTE-ARGS`), a non-empty method + `/`-leading
+  path (`E-ROUTE-SPEC`), and a one-parameter handler that returns a value (`E-ROUTE-HANDLER`). All
+  five codes self-document via `phg explain`.
+- **Compile-time desugar:** `Http.autoRouter()` is lowered (before the type-checker, in the injection
+  chain) into `new Router([]).route(...).route(...)` — one `.route` per `#[Route]` handler, each
+  referenced as a first-class function value — so every backend sees the same explicit registration.
+  `examples/web/router-attrs.phg` + `conformance/web/router-attrs.phg` (golden identical to the
+  explicit `router.phg` form). Patterns with `{name}` must be raw strings (`r"/users/{id}"`).
+
 ### Added — M6 W2 HTTP router + path parameters
 
 `import Core.Http;` now also injects a **`Router`** (+ a `Route` row type): build it by chaining
