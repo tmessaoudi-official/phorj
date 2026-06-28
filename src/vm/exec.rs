@@ -412,36 +412,85 @@ impl<'a> Vm<'a> {
                 })));
             }
             Op::GetField(idx) => {
-                let name = self.program.names[idx].clone();
+                // S2 inline cache: this op's site is `(func, ip - 1)` (`ip` was pre-incremented).
+                let site = self.frames[fr].ip - 1;
                 match self.pop() {
                     Value::Instance(inst) => {
-                        // Clone the field value out and drop the borrow before pushing (handle
-                        // semantics: the shared cell stays available for a later mutation). S1b: the
-                        // read resolves `name → slot` against the receiver's own runtime layout.
-                        let v = inst.get_field(&name);
-                        match v {
+                        let lp: *const crate::value::ClassLayout = Rc::as_ptr(&inst.layout);
+                        // Resolve the slot — a monomorphic site hits the cache (no name clone, no
+                        // hash); a miss falls back to the layout hash and refills. The block scopes the
+                        // immutable `field_caches` borrow so the `self.stack.push` below can take `&mut`.
+                        let slot = {
+                            let cell = &self.field_caches[func][site];
+                            let (cached, cslot) = cell.get();
+                            if std::ptr::eq(cached, lp) {
+                                cslot as usize
+                            } else {
+                                match inst.layout.slot(&self.program.names[idx]) {
+                                    Some(s) => {
+                                        cell.set((lp, s as u32));
+                                        s
+                                    }
+                                    // Checker-unreachable for a typed read; fault, never panic (EV-7).
+                                    None => {
+                                        return Err(format!(
+                                            "no field `{}` on `{}`",
+                                            self.program.names[idx], inst.class
+                                        ))
+                                    }
+                                }
+                            }
+                        };
+                        // `slot < layout.len() == fields.len()` (slot came from this instance's layout),
+                        // so the index is in-bounds. An in-layout-but-unset slot (`None`) faults exactly
+                        // like a pre-S1b absent key (byte-identical to the interpreter's `Expr::Member`).
+                        match inst.fields.borrow()[slot].clone() {
                             Some(v) => self.stack.push(v),
-                            // Byte-identical to the interpreter (`Expr::Member`): a checker-valid but
-                            // unpopulated explicit `Field` read faults here at runtime.
-                            None => return Err(format!("no field `{name}` on `{}`", inst.class)),
+                            None => {
+                                return Err(format!(
+                                    "no field `{}` on `{}`",
+                                    self.program.names[idx], inst.class
+                                ))
+                            }
                         }
                     }
-                    v => return Err(format!("cannot read `.{name}` on {}", v.type_name())),
+                    v => {
+                        return Err(format!(
+                            "cannot read `.{}` on {}",
+                            self.program.names[idx],
+                            v.type_name()
+                        ))
+                    }
                 }
             }
             Op::SetField(idx) => {
                 // `o.f = e` (M-mut.6): pop the value (top), then the instance, and write the field
                 // into the shared `Rc<Instance>` cell in place — visible through every binding. The
                 // value is fully evaluated before `borrow_mut`, so no borrow is held across `eval`.
-                let name = self.program.names[idx].clone();
+                // S2 inline cache, keyed identically to `GetField`.
+                let site = self.frames[fr].ip - 1;
                 let value = self.pop();
                 match self.pop() {
                     Value::Instance(inst) => {
-                        // S1b: write to the named slot in the shared cell, visible through every
-                        // binding. `name` is a checker-valid declared field ⇒ the slot always exists.
-                        inst.set_field(&name, value);
+                        let lp: *const crate::value::ClassLayout = Rc::as_ptr(&inst.layout);
+                        let cell = &self.field_caches[func][site];
+                        let (cached, cslot) = cell.get();
+                        if std::ptr::eq(cached, lp) {
+                            inst.fields.borrow_mut()[cslot as usize] = Some(value);
+                        } else if let Some(s) = inst.layout.slot(&self.program.names[idx]) {
+                            cell.set((lp, s as u32));
+                            inst.fields.borrow_mut()[s] = Some(value);
+                        }
+                        // A name not in the layout is checker-unreachable for a typed write — drop it
+                        // silently (matches the S1b `set_field` no-op), never panic.
                     }
-                    v => return Err(format!("cannot set `.{name}` on {}", v.type_name())),
+                    v => {
+                        return Err(format!(
+                            "cannot set `.{}` on {}",
+                            self.program.names[idx],
+                            v.type_name()
+                        ))
+                    }
                 }
             }
             Op::GetStatic(idx) => {

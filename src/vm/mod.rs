@@ -82,7 +82,19 @@ pub struct Vm<'a> {
     /// B). `do_return` discards a return value once the stack is empty, so it is stashed here first;
     /// [`run_main`](Vm::run_main) reads its `int` (or `0` for `Value::Unit`) as the process exit code.
     exit_value: Value,
+    /// Per-site monomorphic **inline caches** for `Op::GetField`/`SetField` (M-perf S2), indexed
+    /// `[func][ip]`. A site that repeatedly reads one class hits `(layout_ptr, slot)` and skips the
+    /// `name → slot` hash entirely (and the name clone); a class change at the site refills it. The
+    /// key is the receiver's `ClassLayout` pointer — every instance of one class shares that `Rc`, so
+    /// a raw-pointer compare is an exact, allocation-free monomorphism test. Classes are immutable, so
+    /// a filled entry never goes stale. Built empty per run (a fresh `Vm`), so no cross-run leakage.
+    field_caches: Vec<Vec<FieldCache>>,
 }
+
+/// One inline-cache slot (M-perf S2): the `ClassLayout` pointer last seen at a field site and the
+/// field's resolved slot. The `(null, _)` value is the never-filled sentinel (no real `Rc` is null).
+/// Only ever *compared* by pointer — never dereferenced — so it carries no aliasing/lifetime hazard.
+type FieldCache = std::cell::Cell<(*const crate::value::ClassLayout, u32)>;
 
 // cohesion split (M-Decomp W4): exec/closure clusters.
 mod closure;
@@ -99,6 +111,19 @@ impl<'a> Vm<'a> {
             handlers: Vec::new(),
             pending_throw: None,
             exit_value: Value::Unit,
+            // One cache cell per op in every function (sparse use — only field sites read it — but a
+            // one-time, per-run allocation keyed directly by `ip`, so the hot path is a flat index).
+            field_caches: program
+                .functions
+                .iter()
+                .map(|f| {
+                    f.chunk
+                        .code
+                        .iter()
+                        .map(|_| std::cell::Cell::new((std::ptr::null(), 0u32)))
+                        .collect()
+                })
+                .collect(),
         }
     }
 
