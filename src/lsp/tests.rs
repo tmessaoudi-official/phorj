@@ -375,3 +375,51 @@ fn formatting_unparseable_buffer_yields_no_edit() {
     let out = s.handle(&req);
     assert!(out[0].contains("\"result\":[]"), "{}", out[0]);
 }
+
+// ── cross-file go-to-definition + hover (Item D follow-up) ───────────────────────────────────────
+
+fn req_at_uri(uri: &str, method: &str, line: u32, character: u32) -> Json {
+    Json::parse(&format!(
+        r#"{{"id":7,"method":"textDocument/{method}","params":{{"textDocument":{{"uri":"{uri}"}},"position":{{"line":{line},"character":{character}}}}}}}"#
+    ))
+    .unwrap()
+}
+
+const DEF_FILE: &str = "package Main;\nfunction helper(int n) -> int { return n; }\n";
+const USE_FILE: &str = "package Main;\nfunction main() -> void { var x = helper(3); }\n";
+
+#[test]
+fn definition_resolves_across_open_files() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///b.phg", DEF_FILE));
+    s.handle(&did_open("file:///a.phg", USE_FILE));
+    // `helper` use in a.phg (line 1, inside the call) resolves to its decl in b.phg.
+    let out = s.handle(&req_at_uri("file:///a.phg", "definition", 1, 37));
+    let body = &out[0];
+    assert!(body.contains("file:///b.phg"), "{body}");
+    assert!(body.contains("\"line\":1"), "{body}"); // helper declared on b.phg line 1 (0-based)
+}
+
+#[test]
+fn hover_resolves_across_open_files() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///b.phg", DEF_FILE));
+    s.handle(&did_open("file:///a.phg", USE_FILE));
+    let out = s.handle(&req_at_uri("file:///a.phg", "hover", 1, 37));
+    assert!(
+        out[0].contains("function helper(int n) -> int"),
+        "{}",
+        out[0]
+    );
+}
+
+#[test]
+fn definition_with_no_symbol_under_cursor_is_null() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///b.phg", DEF_FILE));
+    s.handle(&did_open("file:///a.phg", USE_FILE));
+    // Past the end of the line → no identifier → null; the cross-file fallback is never reached.
+    let out = s.handle(&req_at_uri("file:///a.phg", "definition", 1, 100));
+    assert!(out[0].contains("\"result\":null"), "{}", out[0]);
+    assert!(!out[0].contains("file:///"), "{}", out[0]);
+}

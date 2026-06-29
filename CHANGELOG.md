@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — LSP cross-file go-to-definition + hover
+
+The language server (`phg lsp`) now resolves **go-to-definition and hover across the open buffer set**: a
+name that resolves to neither a local nor a same-file top-level symbol is looked up in the other open
+documents (a same-package sibling file), and the jump/hover targets that file. Same-file resolution
+always wins; other buffers are scanned in sorted-uri order for determinism. The VSCode and JetBrains
+(LSP4IJ) clients consume this transparently — no client change. The server stays off the byte-identity
+spine. Cross-file *references* (which need project-aware file merging to stay scope-accurate) remain a
+documented follow-up.
+
 ### Added — M-RT super/parent dispatch (B2: multiple inheritance, transpiler trait aliasing)
 
 `parent(A).m(…)` / `parent.m(…)` now transpile correctly when the calling class has **multiple

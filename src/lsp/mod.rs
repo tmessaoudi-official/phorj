@@ -13,8 +13,11 @@
 //! formatting** — top-level *and* local/parameter resolution (the query layer lives in `scope.rs` +
 //! `symbols.rs`, all front-end-only). References/highlight/rename share one scope-accurate `occurrences`
 //! engine (same-name idents filtered to those resolving to the same declaration); formatting reuses
-//! `crate::fmt::format`, so editor-format equals `phg fmt`. Member completion and lambda/match-pattern
-//! binders, and cross-file references, remain a documented follow-up.
+//! `crate::fmt::format`, so editor-format equals `phg fmt`. **Go-to-definition and hover are
+//! cross-file** over the open buffer set: a name resolving to neither a local nor a same-file top-level
+//! symbol is looked up in the other open documents (a same-package sibling file). Member completion and
+//! lambda/match-pattern binders, and cross-file *references* (which need project-aware file merging to
+//! stay scope-accurate), remain a documented follow-up.
 
 mod json;
 mod scope;
@@ -139,6 +142,38 @@ impl Server {
         Some((text.clone(), offset, name, program))
     }
 
+    /// Cross-file resolution (Item D follow-up): search the *other* open documents for a **top-level**
+    /// declaration of `name`, returning the first match's `(uri, decl span, that document's text)`.
+    /// Used by go-to-definition and hover when a name resolves to neither a local nor a
+    /// same-file top-level symbol — i.e. it lives in another open buffer (a same-package sibling file).
+    /// Same-file resolution always wins (the caller only falls back here on a local `None`). Other open
+    /// buffers are scanned in sorted-uri order so a name declared in two files resolves deterministically.
+    fn cross_file_decl(
+        &self,
+        exclude_uri: &str,
+        name: &str,
+    ) -> Option<(String, crate::token::Span, String)> {
+        let mut uris: Vec<&String> = self
+            .docs
+            .keys()
+            .filter(|u| u.as_str() != exclude_uri)
+            .collect();
+        uris.sort();
+        for uri in uris {
+            let text = &self.docs[uri];
+            let Ok(tokens) = crate::lexer::lex(text) else {
+                continue;
+            };
+            let Ok(program) = Parser::new(tokens).parse_program() else {
+                continue;
+            };
+            if let Some((_kind, span)) = symbols::definition_of(&program, name) {
+                return Some((uri.clone(), span, text.clone()));
+            }
+        }
+        None
+    }
+
     /// Resolve the identifier under the cursor to its declaration span: a top-level symbol first, then
     /// a local binding (parameter / `var` / `for` var / `if`-let / `catch` / destructure) of the
     /// enclosing callable. `is_local` distinguishes the two for hover rendering.
@@ -172,7 +207,17 @@ impl Server {
                     escape(&sig)
                 )
             }
-            None => "null".to_string(),
+            // Cross-file: the name is declared in another open document (a same-package sibling).
+            None => match self.cross_file_decl(&doc_uri(msg).unwrap_or_default(), &name) {
+                Some((_uri, span, other_text)) => {
+                    let sig = symbols::signature_text(&other_text, span);
+                    format!(
+                        "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"```phorj\\n{}\\n```\"}}}}",
+                        escape(&sig)
+                    )
+                }
+                None => "null".to_string(),
+            },
         }
     }
 
@@ -195,7 +240,19 @@ impl Server {
                     range_json(sl, sc, el, ec)
                 )
             }
-            None => "null".to_string(),
+            // Cross-file: jump to a top-level declaration in another open document.
+            None => match self.cross_file_decl(&uri, &name) {
+                Some((other_uri, span, other_text)) => {
+                    let (sl, sc) = scope::position_at(&other_text, span.start);
+                    let (el, ec) = scope::position_at(&other_text, span.start + span.len);
+                    format!(
+                        "{{\"uri\":\"{}\",\"range\":{}}}",
+                        escape(&other_uri),
+                        range_json(sl, sc, el, ec)
+                    )
+                }
+                None => "null".to_string(),
+            },
         }
     }
 

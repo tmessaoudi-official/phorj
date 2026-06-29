@@ -124,7 +124,12 @@
   `examples/guide/parent-dispatch-mi.phg`; 2 CLI tests; byte-identical run≡runvm≡real PHP 8.5. Deferred:
   transitive-jump-under-MI, multi-of-multi lowering, MI bare-`parent.constructor()` (per-parent
   `parent(A).constructor()` already works), overloaded parent methods.
-- **NEXT: step 5 M4 stdlib breadth** (additive `Core.*` ops), then step 6 cross-file LSP + JetBrains.
+- **M4 stdlib breadth DONE + committed + green** (two batches): collections (`f5d9626` —
+  `List.isEmpty`/`flatten`/`count`, `Map.isEmpty`, `Set.isEmpty`/`toList`) + text/numeric (`3ad8912` —
+  `Text.isEmpty`/`trimStart`/`trimEnd`/`count`, `Math.isEven`/`isOdd`). Additive natives via the
+  established recipe (no plumbing change); float-algorithm-mismatch ops deliberately avoided; bare-arg
+  binary PHP parenthesized. Two guide examples + 5 unit tests; byte-identical run≡runvm≡real PHP 8.5.
+- **NEXT: step 6 cross-file LSP + JetBrains** (last marathon step).
 
 ### B2 — scoped (code-verified probe, 2026-06-29; built per this scope)
 **B2 is a TRANSPILER-ONLY gap — much narrower than feared.** Probed with two MI programs:
