@@ -242,6 +242,9 @@ fn ue_expr(e: &mut Expr) {
             }
         }
         Expr::New(inner, _) => ue_expr(inner),
+        // `spawn <call>` (M6 W4): the spawned call may itself construct (`spawn build(new C())`) — walk
+        // it so the inner `new` is unwrapped before the backends.
+        Expr::Spawn { call, .. } => ue_expr(call),
         // A return-overload selector's inner call (Slice C1) and a `parent` call's args (super/parent)
         // carry sub-expressions that may construct (`new …`) — walk them so the `new` is unwrapped.
         Expr::OverloadSelect { call, .. } => ue_expr(call),

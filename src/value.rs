@@ -7,7 +7,7 @@
 
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{BuildHasherDefault, Hasher};
 use std::rc::Rc;
 
@@ -146,6 +146,30 @@ pub enum Value {
     /// A first-class function value: either a tree-walking closure (interpreter),
     /// a bare named-function reference, or a VM bytecode closure (Task 4).
     Closure(Rc<ClosureData>),
+    /// A typed FIFO channel (M6 W4 green threads) — a **shared-mutable handle** like [`Instance`]:
+    /// cloning a `Value::Channel` shares the *same* buffer, so a `send` through one binding is visible
+    /// to a `recv` through another (the whole point of a channel). The static element type is the
+    /// compile-time-only `Channel<T>` annotation; the buffer holds erased `Value`s. **Opaque** to the
+    /// arithmetic/compare/display kernels (the checker forbids using a channel as an operand), so the
+    /// single-sourced `value.rs` kernels are untouched. Never transpiled — green threads have no PHP
+    /// target (`E-CONCURRENCY-NO-PHP`); a `spawn`/channel program is quarantined from the PHP oracle.
+    Channel(Rc<RefCell<VecDeque<Value>>>),
+    /// A green-task handle (M6 W4). A **shared handle** like `Channel`/`Instance`. In the step-2
+    /// synchronous-degenerate model the spawned body runs to completion at `spawn`, so [`TaskState`]'s
+    /// `result` is populated the moment the `Task` exists and `join` returns it; the cooperative
+    /// scheduler (step 4) will instead populate it when the task's coroutine completes. Opaque to the
+    /// kernels; never transpiled.
+    Task(Rc<RefCell<TaskState>>),
+}
+
+/// The mutable state behind a [`Value::Task`] (M6 W4 green threads). Step-2 synchronous-degenerate: the
+/// spawned body runs immediately at `spawn`, so `result` is `Some` from the moment the `Task` is
+/// created and `join` simply reads it. The cooperative scheduler (build step 4) keeps the same shape
+/// but populates `result` when the task's coroutine reports [`crate::green::sched::Trap::Done`].
+#[derive(Debug, Clone)]
+pub struct TaskState {
+    /// The value the spawned body returned, once it has completed.
+    pub result: Option<Value>,
 }
 
 /// The data of a first-class function value (M3 S3, Task 3).
@@ -364,6 +388,8 @@ impl Value {
             Value::Instance(_) => "instance",
             Value::Enum(_) => "enum",
             Value::Closure(_) => "function",
+            Value::Channel(_) => "channel",
+            Value::Task(_) => "task",
         }
     }
 

@@ -1,0 +1,52 @@
+package Main;
+import Core.Console;
+
+// Green threads (M6 W4) — uncolored cooperative concurrency: a `spawn` that starts a task, typed
+// `Channel<T>` FIFOs to communicate, and `join` to collect a task's result. No `async`/`await`
+// colouring — any function can be `spawn`ed.
+//
+// This is the synchronous-degenerate foundation (build step 2): a spawned task runs to completion at
+// `spawn`, so `join` always has its result and a producer fills a channel before a consumer drains it.
+// The cooperative scheduler (build step 4) keeps this exact surface but interleaves tasks, so a
+// `recv` on an empty channel suspends the receiver until a `send` arrives.
+//
+// Green threads have NO PHP target (PHP has no green threads), so this program is quarantined from the
+// PHP oracle — it runs on the Phorj interpreter and VM, byte-identically. The transpiler rejects it
+// with `E-CONCURRENCY-NO-PHP` rather than emitting a misleading synchronous lowering.
+
+function square(int n): int { return n * n; }
+
+// Fork several tasks, then join their results — the fork-join pattern.
+function sumOfSquares(): int {
+    Task<int> a = spawn square(2);
+    Task<int> b = spawn square(3);
+    Task<int> c = spawn square(4);
+    return a.join() + b.join() + c.join();
+}
+
+function main(): void {
+    // 1. spawn + join — start a task, then collect its value.
+    Task<int> t = spawn square(9);
+    Console.println("9 squared = {t.join()}");
+
+    // 2. fork-join over several tasks.
+    Console.println("2² + 3² + 4² = {sumOfSquares()}");
+
+    // 3. a typed channel: send values, then receive them in FIFO order.
+    Channel<string> words = Channel.create();
+    words.send("hello");
+    words.send("green");
+    words.send("threads");
+    Console.println("{words.recv()} {words.recv()} {words.recv()}");
+
+    // 4. channels carry any type; a small producer/consumer over ints.
+    Channel<int> nums = Channel.create();
+    for (int i in 1..=5) {
+        nums.send(i * 10);
+    }
+    mutable int total = 0;
+    for (int j in 1..=5) {
+        total = total + nums.recv();
+    }
+    Console.println("channel total = {total}");
+}

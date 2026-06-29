@@ -92,6 +92,13 @@ impl Checker {
                         if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
                             return self.check_static_method_call(cls, name, args, span);
                         }
+                        // Built-in concurrency static — `Channel.new()` (M6 W4). `Channel`/`Task` are
+                        // reserved built-in type names (not user classes), so route them before the
+                        // instance-method fallthrough (which would type `Channel` as an unknown value).
+                        if (cls == "Channel" || cls == "Task") && self.lookup_binding(cls).is_none()
+                        {
+                            return self.check_concurrency_static(cls, name, args, span);
+                        }
                     }
                 }
                 self.check_method_call(object, name, args, *safe, span)
@@ -1009,6 +1016,147 @@ impl Checker {
         None
     }
 
+    /// `spawn <call>` — type a green-task spawn (M6 W4 / S4.3). The operand must be a call; its return
+    /// type `T` becomes the handle type `Task<T>`. A `void`/`never` call can't be a task payload this
+    /// slice (the `join` result would be uncapturable) — `E-SPAWN-VOID`. The result types as
+    /// `Ty::Named("Task", [T])`, the same nominal shape `resolve_type` produces for a `Task<T>`
+    /// annotation, so `Task<int> t = spawn f();` and `var t = spawn f();` both check.
+    pub(super) fn check_spawn(&mut self, call: &crate::ast::Expr, span: Span) -> Ty {
+        if !matches!(call, crate::ast::Expr::Call { .. }) {
+            let _ = self.check_expr(call); // surface nested errors
+            return self.err_coded(
+                span,
+                "`spawn` must be applied to a function or method call, e.g. `spawn work(x)`",
+                "E-SPAWN-NOT-CALL",
+                Some("`spawn` starts a task from a call; it cannot wrap a plain value".into()),
+            );
+        }
+        match self.check_expr(call) {
+            Ty::Error => Ty::Error,
+            t @ (Ty::Void | Ty::Never) => self.err_coded(
+                span,
+                format!("a `spawn`ned call must return a value, found `{t}`"),
+                "E-SPAWN-VOID",
+                Some(
+                    "spawn a call that returns a value; fire-and-forget void tasks are a follow-up"
+                        .into(),
+                ),
+            ),
+            t => Ty::Named("Task".into(), vec![t]),
+        }
+    }
+
+    /// `true` if `e` is exactly the built-in channel constructor `Channel.new()` (M6 W4). Used by the
+    /// `VarDecl` checker to type it from the binding's `Channel<T>` annotation (the static call has no
+    /// argument to infer `T` from).
+    pub(super) fn is_channel_new(e: &crate::ast::Expr) -> bool {
+        matches!(
+            e,
+            crate::ast::Expr::Call { callee, .. }
+                if matches!(&**callee, crate::ast::Expr::Member { object, name, safe: false, .. }
+                    if name == "create" && matches!(&**object, crate::ast::Expr::Ident(h, _) if h == "Channel"))
+        )
+    }
+
+    /// Static call on a built-in concurrency type — `Channel.new()` / (no `Task` statics yet). Reached
+    /// only when `Channel.new()` is used **without** a `Channel<T>` binding context (e.g. `return
+    /// Channel.new();`): with no argument to infer the element type, an explicit annotation is required
+    /// (`E-CHANNEL-ANNOTATION`). The annotated-`VarDecl` path types it directly and never funnels here.
+    pub(super) fn check_concurrency_static(
+        &mut self,
+        head: &str,
+        name: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        for a in args {
+            self.check_expr(a);
+        }
+        match (head, name) {
+            ("Channel", "create") => self.err_coded(
+                span,
+                "`Channel.create()` needs a `Channel<T>` annotation to fix its element type".to_string(),
+                "E-CHANNEL-ANNOTATION",
+                Some("bind it to an annotated local first, e.g. `Channel<int> ch = Channel.create();`".into()),
+            ),
+            ("Channel", other) => self.err_coded(
+                span,
+                format!("`Channel` has no static method `{other}` — did you mean `Channel.create()`?"),
+                "E-CONCURRENCY-METHOD",
+                None,
+            ),
+            (_, other) => self.err_coded(
+                span,
+                format!("`{head}` has no static method `{other}`"),
+                "E-CONCURRENCY-METHOD",
+                None,
+            ),
+        }
+    }
+
+    /// Built-in method dispatch for the concurrency handle types (M6 W4): `Channel<T>` `send`/`recv`,
+    /// `Task<T>` `join`. `cargs[0]` is the element type `T`. Returns `None` if `name` is not a known
+    /// built-in method, so the caller falls through to ordinary class-method dispatch.
+    pub(super) fn check_concurrency_method(
+        &mut self,
+        head: &str,
+        elem: &Ty,
+        name: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Option<Ty> {
+        match (head, name) {
+            ("Channel", "send") => {
+                if args.len() != 1 {
+                    return Some(self.err_coded(
+                        span,
+                        format!("`send` takes exactly one argument, got {}", args.len()),
+                        "E-CONCURRENCY-ARITY",
+                        None,
+                    ));
+                }
+                let at = self.check_expr(&args[0]);
+                if !self.ty_assignable(&at, elem) {
+                    self.err_assign(span, &at, elem);
+                }
+                Some(Ty::Void)
+            }
+            ("Channel", "recv") => {
+                if !args.is_empty() {
+                    return Some(self.err_coded(
+                        span,
+                        "`recv` takes no arguments".to_string(),
+                        "E-CONCURRENCY-ARITY",
+                        None,
+                    ));
+                }
+                Some(elem.clone())
+            }
+            ("Task", "join") => {
+                if !args.is_empty() {
+                    return Some(self.err_coded(
+                        span,
+                        "`join` takes no arguments".to_string(),
+                        "E-CONCURRENCY-ARITY",
+                        None,
+                    ));
+                }
+                Some(elem.clone())
+            }
+            _ => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                Some(self.err_coded(
+                    span,
+                    format!("`{head}<T>` has no method `{name}`"),
+                    "E-CONCURRENCY-METHOD",
+                    None,
+                ))
+            }
+        }
+    }
+
     pub(super) fn check_method_call(
         &mut self,
         object: &crate::ast::Expr,
@@ -1052,6 +1200,15 @@ impl Checker {
             UfcsNav::SafeNonNull
         };
         let ret = match base {
+            // Built-in concurrency handles (M6 W4): `Channel<T>` (send/recv), `Task<T>` (join).
+            // Dispatched before user-class lookup — `Channel`/`Task` are reserved built-ins, never a
+            // user class. `?.` on a (never-optional) handle behaves like a plain call.
+            Ty::Named(ref cls, ref cargs) if cls == "Channel" || cls == "Task" => {
+                let elem = cargs.first().cloned().unwrap_or(Ty::Error);
+                return self
+                    .check_concurrency_method(cls, &elem, name, args, span)
+                    .expect("concurrency method dispatch is total");
+            }
             Ty::Named(cls, cargs) => {
                 // A class method, or — when `cls` is an interface (M-RT S2) — an interface method
                 // from its flattened (own + `extends`) signature set. Interface-typed receivers

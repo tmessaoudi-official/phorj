@@ -172,6 +172,12 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 fields: fields.into_iter().map(|(n, e)| (n, rexpr(e, h))).collect(),
                 span,
             },
+            // `spawn <call>` (M6 W4) carries a nested call that may contain an `html"…"` literal — walk
+            // it (not erased before backends, so it reaches every rewrite pass).
+            Expr::Spawn { call, span } => Expr::Spawn {
+                call: Box::new(rexpr(*call, h)),
+                span,
+            },
             // leaves carry no nested expression: Int / Float / Bool / Null / Bytes / Ident / This
             leaf => leaf,
         }

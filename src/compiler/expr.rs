@@ -180,6 +180,13 @@ impl Compiler<'_> {
                 self.height = h_merge;
             }
             Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
+            // `spawn <call>` (M6 W4): step-2 synchronous-degenerate — compile the call (it runs,
+            // leaving its result on top), then `Op::Spawn` wraps it in a completed `Task`. Step 4 will
+            // instead capture a thunk and enqueue it with `green::sched`.
+            Expr::Spawn { call, span } => {
+                self.expr(call)?;
+                self.emit(Op::Spawn, span.line);
+            }
             Expr::Null(sp) => self.emit_const(Value::Null, sp.line),
             Expr::This(sp) => match self.this_slot {
                 // `this` is the receiver local: slot 0 in a method, the instance slot in a ctor.
@@ -611,6 +618,44 @@ impl Compiler<'_> {
                             self.emit(Op::CallNative(idx, args.len()), line);
                             return Ok(());
                         }
+                    }
+                }
+            }
+            // Built-in concurrency static `Channel.create()` (M6 W4): `Channel` is a reserved type
+            // name, not a value/class, so intercept it before the class-static and instance paths
+            // (both of which would treat `Channel` as a binding). Args are empty (checker-enforced).
+            if !*safe {
+                if let Expr::Ident(h, _) = &**object {
+                    if h == "Channel"
+                        && name == "create"
+                        && self.resolve_local(h).is_none()
+                        && self.resolve_binding(h).is_none()
+                    {
+                        self.emit(Op::ChannelNew, line);
+                        return Ok(());
+                    }
+                }
+            }
+            // Built-in concurrency instance methods (M6 W4): `ch.send(v)` / `ch.recv()` / `t.join()`,
+            // dispatched off the receiver's compile-time type (`Channel`/`Task` are reserved class
+            // names, never user classes). Lowers to the dedicated op — there is no method-table entry
+            // to find, so this MUST precede the generic `CallMethod` path.
+            if !*safe {
+                if let Ok(CTy::Class(cls)) = self.ctype(object) {
+                    if cls == "Channel" || cls == "Task" {
+                        self.expr(object)?;
+                        for a in args {
+                            self.expr(a)?;
+                        }
+                        match (cls.as_str(), name.as_str()) {
+                            ("Channel", "send") => self.emit(Op::ChannelSend, line),
+                            ("Channel", "recv") => self.emit(Op::ChannelRecv, line),
+                            ("Task", "join") => self.emit(Op::Join, line),
+                            _ => {
+                                return Err(format!("`{cls}` has no built-in method `{name}`"));
+                            }
+                        }
+                        return Ok(());
                     }
                 }
             }

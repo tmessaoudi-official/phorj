@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — green threads: `spawn` + channels (M6 W4 / S4.3, step 2)
+
+The concurrency **surface and value model** — uncolored cooperative concurrency: `spawn <call>` (a
+contextual keyword) starts a green task and evaluates to a `Task<T>` handle; `t.join()` collects its
+result; typed `Channel<T>` FIFOs (`Channel.create()`, `ch.send(v)`, `ch.recv()`). New `Value::Channel`
+(shared-mutable FIFO handle) / `Value::Task`, the reserved built-in types `Channel<T>`/`Task<T>` (like
+`List`/`Map`/`Set`), and five new bytecode ops (`Spawn`/`ChannelNew`/`ChannelSend`/`ChannelRecv`/`Join`).
+This slice is the **synchronous-degenerate foundation**: a spawned task runs to completion at `spawn`
+(byte-identical by construction — there is no scheduler to drift), so fork-join (`spawn f(); … t.join()`)
+works end-to-end and a channel is filled before it is drained. The shared deterministic scheduler that
+**interleaves** tasks and **suspends** a blocked `recv`/`join` (kernel `green::sched` already landed) is
+the next build step. Green threads have **no PHP target** — `spawn`/channel programs are quarantined from
+the PHP oracle and the transpiler emits `E-CONCURRENCY-NO-PHP` (never a misleading synchronous lowering);
+`run ≡ runvm` stays fully gated. Guide demo `examples/guide/concurrency.phg`; +6 differential tests
+(spawn/join, fork-join arithmetic, channel send/recv, string channel, recv-empty fault parity, `spawn`
+still usable as an identifier). New diagnostics: `E-SPAWN-NOT-CALL`, `E-SPAWN-VOID`,
+`E-CHANNEL-ANNOTATION`, `E-CHANNEL-NEW-ARITY`, `E-CHANNEL-NEW-TYPE`, `E-CONCURRENCY-METHOD`,
+`E-CONCURRENCY-ARITY`, `E-CONCURRENCY-NO-PHP`.
+
 ### Added — `Core.Text.capitalize` (M4 breadth, charter-compliant)
 
 `Core.Text.capitalize(string) -> string` uppercases the first character when it is an ASCII lowercase

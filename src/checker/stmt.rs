@@ -58,6 +58,40 @@ impl Checker {
                         self.try_resolve_sink_overload(init, &expected)
                             .unwrap_or(Ty::Error)
                     }
+                    // `Channel<T> ch = Channel.new();` (M6 W4): the static constructor has no argument
+                    // to infer `T` from, so it takes its element type from the binding's annotation
+                    // (the one construction site for a channel). Validate the call shape (0 args) here;
+                    // a non-`Channel` annotation falls through to the normal assign-mismatch path.
+                    _ if !matches!(ty, crate::ast::Type::Infer(_))
+                        && Self::is_channel_new(init) =>
+                    {
+                        if let crate::ast::Expr::Call {
+                            args, span: csp, ..
+                        } = init
+                        {
+                            if !args.is_empty() {
+                                self.err_coded(
+                                    *csp,
+                                    "`Channel.new()` takes no arguments",
+                                    "E-CHANNEL-NEW-ARITY",
+                                    None,
+                                );
+                            }
+                        }
+                        let declared = self.resolve_type(ty);
+                        if matches!(&declared, Ty::Named(n, _) if n == "Channel") {
+                            declared
+                        } else {
+                            self.err_coded(
+                                *span,
+                                format!(
+                                    "`Channel.new()` produces a `Channel<T>`, not `{declared}`"
+                                ),
+                                "E-CHANNEL-NEW-TYPE",
+                                None,
+                            )
+                        }
+                    }
                     _ => self.check_expr(init),
                 };
                 let declared = match ty {

@@ -14,6 +14,16 @@ impl Interp {
                 scale: *scale,
             }),
             Expr::Bool(b, _) => Ok(Value::Bool(*b)),
+            // `spawn <call>` (M6 W4): step-2 synchronous-degenerate — run the call now and wrap its
+            // result in a completed `Task`. Step 4 will enqueue a coroutine via `green::sched` instead.
+            Expr::Spawn { call, .. } => {
+                let result = self.eval(call)?;
+                Ok(Value::Task(Rc::new(std::cell::RefCell::new(
+                    crate::value::TaskState {
+                        result: Some(result),
+                    },
+                ))))
+            }
             Expr::Null(_) => Ok(Value::Null),
             Expr::Str(parts, _) => self.eval_str(parts),
             Expr::Bytes(b, _) => Ok(Value::Bytes(Rc::new(b.clone()))),

@@ -144,12 +144,19 @@ stack_effect` — in the same commit. The scheduler lives in `vm.rs` around the 
 
 ## 7. Incremental build plan (gate each step green)
 
-1. **Surface + value model:** `spawn` contextual keyword (parser, expr position), `Channel`/`Task`
-   reserved types, `Value::Channel`/`Value::Task`, checker types `Ty::Channel(T)`/`Ty::Task(T)`. No
-   scheduler yet — `spawn f()` runs synchronously, `recv` on a non-empty channel works. Gets the types
-   + surface in; byte-identical (synchronous degenerate case).
-2. **Channels (synchronous):** `Channel.new`, `send`, `recv` over the `VecDeque` — single-task, no
-   yielding (recv on empty = fault for now). Proves the value/op plumbing.
+1. **Surface + value model:** ✅ **DONE** (step 2, combined with step 2 below). `spawn` contextual
+   keyword (parser, expr position → `Expr::Spawn`), `Channel`/`Task` reserved built-in type names
+   (resolve to `Ty::Named("Channel"/"Task", [T])` — no dedicated `Ty` variant, since they never
+   participate in the arithmetic/compare kernels), `Value::Channel(Rc<RefCell<VecDeque>>)` /
+   `Value::Task(Rc<RefCell<TaskState>>)`. Byte-identical (synchronous degenerate case).
+2. **Channels (synchronous):** ✅ **DONE.** `Channel.create()` (constructor renamed from `new` — `new`
+   is a reserved keyword token), `send`, `recv` over the `VecDeque`; recv-on-empty = a clean fault
+   (`recv from empty channel`), join-on-incomplete = `join on an incomplete task` (unreachable in the
+   eager model). **Five new ops** `Spawn`/`ChannelNew`/`ChannelSend`/`ChannelRecv`/`Join` (the three
+   coupled matches), bodies synchronous now and rewired to the scheduler in step 4. Built-in method
+   dispatch via the receiver's `CTy::Class("Channel"/"Task")` (no new `CTy`). Transpiler emits
+   `E-CONCURRENCY-NO-PHP`; PHP oracle + harness quarantine wired. `examples/guide/concurrency.phg`
+   byte-identical `run≡runvm`; +6 differential tests. **Steps 1+2 landed together.**
 3. **Coroutine crate spike (GATING):** pick the stackful-coroutine crate, add it (4th dep + policy
    row), and prove a minimal native spike (spawn a coroutine, yield, resume, drop) AND **verify wasm32
    support** (the playground gate — §4). If wasm is unsupported, decide the wasm fallback before going

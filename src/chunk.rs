@@ -165,6 +165,27 @@ pub enum Op {
     /// Carries no static index, so — like `GetEnumField` — it needs no `validate` arm (decision
     /// S1-R, M3 S1.2).
     MakeRange(bool),
+    /// **Green-thread concurrency (M6 W4 / S4.3).** The five ops below carry no pool index, so — like
+    /// `MakeRange` — none needs a `validate` arm. In the **step-2 synchronous-degenerate** model their
+    /// bodies are immediate (no scheduler): `spawn` runs the task eagerly, `recv`/`join` on an
+    /// unavailable value fault cleanly. Build step 4 keeps the op set fixed and only rewires the bodies
+    /// to drive the shared `green::sched` scheduler (suspending the coroutine at `recv`/`join`/`yield`).
+    /// Quarantined from the PHP oracle — the transpiler never emits these (`E-CONCURRENCY-NO-PHP`).
+    ///
+    /// `Spawn`: pop the spawned call's result and push a `Task` wrapping it (step-2 eager: the call has
+    /// already run, leaving its value on top).
+    Spawn,
+    /// `ChannelNew`: push a fresh empty `Channel`.
+    ChannelNew,
+    /// `ChannelSend`: pop the value (top) then the channel; enqueue the value; push `Unit` (the void
+    /// result a statement-expression discards).
+    ChannelSend,
+    /// `ChannelRecv`: pop the channel; push the front value, or fault ("recv from empty channel") when
+    /// empty (step 2 has no scheduler to yield to — step 4 suspends instead).
+    ChannelRecv,
+    /// `Join`: pop the task; push its result, or fault ("join on incomplete task") if not yet complete
+    /// (never happens in the step-2 eager model — the task always finished at `spawn`).
+    Join,
     /// Call the native (built-in) function at `native::registry()[idx]` with the top `argc` values
     /// as its arguments (source order): pop them, run the native's shared `eval` (which may append
     /// to the program output), and push its return value. The migrated former `Op::Print`
@@ -563,7 +584,13 @@ impl BytecodeProgram {
                     | Op::Throw
                     | Op::PopHandler
                     // Carries the class name inline (like `Fault`), not a pool index.
-                    | Op::IsInstance(_) => None,
+                    | Op::IsInstance(_)
+                    // Green-thread ops (M6 W4) carry no pool index — operands are on the stack.
+                    | Op::Spawn
+                    | Op::ChannelNew
+                    | Op::ChannelSend
+                    | Op::ChannelRecv
+                    | Op::Join => None,
                 };
                 if let Some(what) = problem {
                     return Err(format!(

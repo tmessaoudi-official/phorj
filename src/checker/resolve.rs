@@ -198,6 +198,14 @@ impl Checker {
                     let v = self.resolve_type(&args[1]);
                     Ty::Map(Box::new(k), Box::new(v))
                 }
+                // Green-thread handle types (M6 W4): `Channel<T>` / `Task<T>`. The element type is the
+                // single type argument; kept as a `Ty::Named` (no dedicated `Ty` variant — channels /
+                // tasks never participate in arithmetic/compare, so the single-sourced value kernels and
+                // the type machinery treat them as any other one-arg nominal). `Channel.new()` /
+                // `.send` / `.recv` / `.join` are typed by dedicated checker arms (see `check_spawn`,
+                // `check_method_call`, `check_static_method_call`).
+                "Channel" => Ty::Named("Channel".into(), vec![self.one_arg(name, args, *span)]),
+                "Task" => Ty::Named("Task".into(), vec![self.one_arg(name, args, *span)]),
                 "double" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => self.err(
                     *span,
                     format!("the numeric type `{name}` is not yet supported in M1"),

@@ -323,6 +323,10 @@ pub(super) fn is_builtin_type_name(name: &str) -> bool {
             // The built-in `Error` marker interface (M-faults 2b) — reserved so user code can't
             // redefine it (as a class/enum/interface/alias).
             | "Error"
+            // Green-thread handle types (M6 W4): `Channel<T>` / `Task<T>`. Reserved built-ins like
+            // `List`/`Map` — import-free, and user code cannot redefine them as a class/enum/etc.
+            | "Channel"
+            | "Task"
     )
 }
 

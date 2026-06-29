@@ -96,6 +96,11 @@ enum FaultKind {
     /// backends fault `"decimal division is not exact"`; classified by body substring so the VM's
     /// line prefix doesn't split it from the interpreter's prefix-less render.
     DecimalInexact,
+    /// A green-thread runtime fault (M6 W4): `recv` on an empty channel or `join` on an incomplete
+    /// task — checker-valid, runtime-reachable (the checker proves the receiver is a `Channel`/`Task`,
+    /// never that a value is available). Both backends fault identically; classified by body substring
+    /// so the VM's `at N:` line prefix doesn't split it from the interpreter's prefix-less render.
+    Concurrency,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -120,6 +125,9 @@ fn classify(err: &str) -> FaultKind {
         FaultKind::RangeTooLarge
     } else if err.contains("decimal division is not exact") {
         FaultKind::DecimalInexact
+    } else if err.contains("recv from empty channel") || err.contains("join on an incomplete task")
+    {
+        FaultKind::Concurrency
     } else if err.contains("panic:")
         || err.contains("not yet implemented")
         || err.contains("unreachable code")
@@ -2093,6 +2101,14 @@ fn all_examples_transpile_and_match_php() {
         };
         let php_src = match cli::cmd_transpile(&src) {
             Ok(php) => php,
+            // Green-thread concurrency (M6 W4) has NO PHP target (`E-CONCURRENCY-NO-PHP`) — PHP has no
+            // green threads and a synchronous lowering would diverge from the VM, so a `spawn`/channel
+            // example is QUARANTINED from the oracle exactly like the ambient-environment impure
+            // modules. The run≡runvm glob still gates it byte-identically.
+            Err(e) if e.contains("E-CONCURRENCY-NO-PHP") => {
+                eprintln!("SKIP (concurrency/quarantined) {label}");
+                continue;
+            }
             // A transpiler feature the backend explicitly defers (e.g. literal `match` patterns,
             // expr-position `match`, `is` — all scheduled for M11). This is NOT a silent skip: it's
             // logged + counted, and a genuine transpile regression (any other error) still panics.
@@ -2824,5 +2840,59 @@ fn m_num_s2_decimal_div_overflow_faults_identically() {
     // A target scale that overflows 10^k before the division faults `decimal overflow` on both.
     agree_err(
         "import Core.Decimal; function main() -> void { decimal r = Decimal.div(1d, 3d, 200, new HalfUp()); }",
+    );
+}
+
+// ---- M6 W4 green threads (S4.3, step 2 synchronous-degenerate) -------------------------------------
+
+#[test]
+fn m6w4_spawn_join_agrees() {
+    // `spawn <call>` returns a `Task<T>`; `join` collects the result. Step-2 eager, byte-identical.
+    agree(
+        "import Core.Console; function sq(int n) -> int { return n*n; } \
+         function main() -> void { Task<int> t = spawn sq(7); Console.println(\"{t.join()}\"); }",
+    );
+}
+
+#[test]
+fn m6w4_fork_join_arithmetic_agrees() {
+    // Several tasks joined and summed — a `join()` result used directly as an arithmetic operand runs
+    // on both backends (the polymorphic arithmetic path; no specialized op needed for parity).
+    agree(
+        "import Core.Console; function id(int n) -> int { return n; } \
+         function main() -> void { Task<int> a = spawn id(2); Task<int> b = spawn id(3); \
+         Console.println(\"{a.join() + b.join()}\"); }",
+    );
+}
+
+#[test]
+fn m6w4_channel_send_recv_agrees() {
+    // A typed channel: send three, receive three in FIFO order; byte-identical on both backends.
+    agree(
+        "import Core.Console; function main() -> void { Channel<int> ch = Channel.create(); \
+         ch.send(1); ch.send(2); ch.send(3); \
+         Console.println(\"{ch.recv()} {ch.recv()} {ch.recv()}\"); }",
+    );
+}
+
+#[test]
+fn m6w4_channel_carries_strings_agrees() {
+    agree(
+        "import Core.Console; function main() -> void { Channel<string> ch = Channel.create(); \
+         ch.send(\"a\"); ch.send(\"b\"); Console.println(\"{ch.recv()}{ch.recv()}\"); }",
+    );
+}
+
+#[test]
+fn m6w4_recv_empty_faults_identically() {
+    // `recv` on an empty channel faults the same on both backends (no scheduler to yield to in step 2).
+    agree_err("function main() -> void { Channel<int> ch = Channel.create(); int x = ch.recv(); }");
+}
+
+#[test]
+fn m6w4_spawn_is_a_usable_identifier() {
+    // `spawn` is contextual: still usable as an ordinary variable name when not leading a call.
+    agree(
+        "import Core.Console; function main() -> void { int spawn = 5; Console.println(\"{spawn}\"); }",
     );
 }

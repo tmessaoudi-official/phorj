@@ -179,6 +179,14 @@ impl Parser {
         self.at_kw("parent") && matches!(self.peek2(), TokenKind::Dot | TokenKind::LParen)
     }
 
+    /// `spawn` is a contextual concurrency keyword (M6 W4), recognized ONLY as the prefix of a call —
+    /// `spawn <call>` — when followed by an identifier (the call's callee, e.g. `spawn work(x)`). A
+    /// bare `spawn` followed by `;`, `.`, `(`, `=`, or an operator stays an ordinary identifier (so the
+    /// same word is usable as a value/field/parameter name), per [[contextual-var-and-reserved-names]].
+    fn at_spawn(&self) -> bool {
+        self.at_kw("spawn") && matches!(self.peek2(), TokenKind::Ident(_))
+    }
+
     /// Consume the contextual keyword `kw` (its presence already established by the caller) or error.
     fn eat_kw(&mut self, kw: &str, what: &str) -> Result<(), Diagnostic> {
         if self.at_kw(kw) {

@@ -256,6 +256,56 @@ impl<'a> Vm<'a> {
                 self.stack.push(Value::List(Rc::new(list)));
             }
 
+            // Green-thread concurrency (M6 W4 / S4.3) — step-2 synchronous-degenerate bodies. The fault
+            // strings MUST match the interpreter's exactly (run≡runvm + `agree_err` FaultKind parity).
+            Op::Spawn => {
+                // The spawned call already ran (its result is on top); wrap it in a completed task.
+                // Step 4 will instead enqueue a coroutine driven by `green::sched`.
+                let result = self.pop();
+                self.stack.push(Value::Task(Rc::new(std::cell::RefCell::new(
+                    crate::value::TaskState {
+                        result: Some(result),
+                    },
+                ))));
+            }
+            Op::ChannelNew => {
+                self.stack
+                    .push(Value::Channel(Rc::new(std::cell::RefCell::new(
+                        std::collections::VecDeque::new(),
+                    ))));
+            }
+            Op::ChannelSend => {
+                let value = self.pop();
+                match self.pop() {
+                    Value::Channel(ch) => {
+                        ch.borrow_mut().push_back(value);
+                        self.stack.push(Value::Unit);
+                    }
+                    v => return Err(format!("cannot send on a {}", v.type_name())),
+                }
+            }
+            Op::ChannelRecv => match self.pop() {
+                Value::Channel(ch) => {
+                    let front = ch.borrow_mut().pop_front();
+                    match front {
+                        Some(v) => self.stack.push(v),
+                        // No scheduler to yield to in step 2 — step 4 suspends the coroutine instead.
+                        None => return Err("recv from empty channel".to_string()),
+                    }
+                }
+                v => return Err(format!("cannot recv from a {}", v.type_name())),
+            },
+            Op::Join => match self.pop() {
+                Value::Task(t) => {
+                    let result = t.borrow().result.clone();
+                    match result {
+                        Some(v) => self.stack.push(v),
+                        None => return Err("join on an incomplete task".to_string()),
+                    }
+                }
+                v => return Err(format!("cannot join a {}", v.type_name())),
+            },
+
             Op::CallNative(idx, argc) => {
                 // The native's `eval` is shared verbatim with the interpreter (structural parity).
                 // `validate` has already bounded `idx`; the args sit on top in source order. The

@@ -70,6 +70,18 @@ impl Interp {
                     }
                 }
             }
+            // Built-in concurrency static `Channel.new()` (M6 W4): `Channel` is a reserved type name,
+            // not a value/class — intercept before the class-static path. A fresh empty shared FIFO
+            // (args empty, checker-enforced).
+            if !*safe {
+                if let Expr::Ident(h, _) = &**object {
+                    if h == "Channel" && name == "create" && self.frame.lookup(h).is_none() {
+                        return Ok(Value::Channel(Rc::new(std::cell::RefCell::new(
+                            std::collections::VecDeque::new(),
+                        ))));
+                    }
+                }
+            }
             // Static method call `ClassName.method(args)` (slice B0): the head is a class name, not a
             // value binding. Resolved before the instance-method path (the checker guarantees the
             // method exists and is static). No receiver.
@@ -354,6 +366,35 @@ impl Interp {
     }
 
     pub(super) fn call_method(&mut self, recv: Value, name: &str, args: Vec<Value>) -> R<Value> {
+        // Built-in concurrency handle methods (M6 W4): `Channel<T>` send/recv, `Task<T>` join.
+        // Synchronous-degenerate (step 2): recv-on-empty / join-on-incomplete fault — the fault
+        // strings match the VM's `exec_op` exactly (run≡runvm + `agree_err` FaultKind parity).
+        match &recv {
+            Value::Channel(ch) => {
+                return match name {
+                    "send" => {
+                        ch.borrow_mut()
+                            .push_back(args.into_iter().next().expect("send arity checked"));
+                        Ok(Value::Unit)
+                    }
+                    "recv" => match ch.borrow_mut().pop_front() {
+                        Some(v) => Ok(v),
+                        None => rt("recv from empty channel".to_string()),
+                    },
+                    _ => rt(format!("`Channel<T>` has no method `{name}`")),
+                };
+            }
+            Value::Task(t) => {
+                return match name {
+                    "join" => match t.borrow().result.clone() {
+                        Some(v) => Ok(v),
+                        None => rt("join on an incomplete task".to_string()),
+                    },
+                    _ => rt(format!("`Task<T>` has no method `{name}`")),
+                };
+            }
+            _ => {}
+        }
         let inst = match recv {
             Value::Instance(inst) => inst,
             other => return rt(format!("cannot call `.{name}()` on {}", other.type_name())),

@@ -245,6 +245,11 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
                 span,
             },
             Expr::New(inner, span) => Expr::New(Box::new(rexpr(*inner, u)), span),
+            // `spawn <call>` (M6 W4): walk the nested call so a UFCS method call inside it rewrites.
+            Expr::Spawn { call, span } => Expr::Spawn {
+                call: Box::new(rexpr(*call, u)),
+                span,
+            },
             Expr::Html(parts, span) => Expr::Html(parts, span),
             // leaves carry no nested expression: Int / Float / Bool / Null / Bytes / Ident / This
             leaf => leaf,

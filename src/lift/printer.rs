@@ -593,6 +593,9 @@ impl Printer {
                 self.expr(else_expr)?
             )),
             Expr::New(inner, _) => Ok(format!("new {}", self.expr(inner)?)),
+            // The PHP→Phorj lifter never produces `spawn` (PHP has no green threads); printed
+            // defensively for totality.
+            Expr::Spawn { call, .. } => Ok(format!("spawn {}", self.expr(call)?)),
             Expr::Match {
                 scrutinee, arms, ..
             } => {

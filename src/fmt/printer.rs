@@ -873,6 +873,8 @@ impl Printer<'_> {
                 self.expr(else_expr)?
             )),
             Expr::New(inner, _) => Ok(format!("new {}", self.expr(inner)?)),
+            // `spawn <call>` (M6 W4) — contextual keyword, printed as a prefix on the call.
+            Expr::Spawn { call, .. } => Ok(format!("spawn {}", self.expr(call)?)),
             Expr::Match {
                 scrutinee, arms, ..
             } => {

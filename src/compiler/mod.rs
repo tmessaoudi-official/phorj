@@ -546,6 +546,13 @@ impl<'a> Compiler<'a> {
             // at the landing pad (like a `match` scrutinee), not via a stack effect here.
             Op::Throw => -1,
             Op::PushHandler(_) | Op::PopHandler => 0,
+            // Green-thread ops (M6 W4). `Spawn` pops the call's result, pushes a `Task` (0).
+            // `ChannelNew` pushes a fresh channel (+1). `ChannelSend` pops the value + channel and
+            // pushes the void `Unit` (net -1). `ChannelRecv` pops the channel, pushes the value (0).
+            // `Join` pops the task, pushes its result (0).
+            Op::Spawn | Op::ChannelRecv | Op::Join => 0,
+            Op::ChannelNew => 1,
+            Op::ChannelSend => -1,
         }
     }
 
@@ -870,6 +877,13 @@ impl<'a> Compiler<'a> {
             Expr::ParentCall {
                 ancestor, method, ..
             } => Ok(self.parent_ret_cty(ancestor.as_deref(), method)),
+            // `spawn <call>` is a `Task<T>` handle (M6 W4). Modeled as `CTy::Class("Task")` (the
+            // reserved built-in) so `var t = spawn f(); t.join()` dispatches the `Op::Join` lowering —
+            // without it the instance-method path would not recognize the receiver. (The payload type
+            // `T` is not carried, so a `t.join()`/`ch.recv()` result is not specialized to `AddI`/etc.
+            // when used directly as an arithmetic operand — it still runs correctly via the polymorphic
+            // arithmetic path, only without the int/float fast op; byte-identity is unaffected.)
+            Expr::Spawn { .. } => Ok(CTy::Class("Task".to_string())),
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }

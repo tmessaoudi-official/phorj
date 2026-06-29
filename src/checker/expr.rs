@@ -169,6 +169,7 @@ impl Checker {
                 span,
             } => self.check_parent_call(ancestor.as_deref(), method, args, *span),
             Expr::New(inner, span) => self.check_new(inner, *span),
+            Expr::Spawn { call, span } => self.check_spawn(call, *span),
             Expr::Member {
                 object,
                 name,
@@ -885,6 +886,7 @@ impl Checker {
             | Expr::OverloadSelect { span, .. }
             | Expr::ParentCall { span, .. }
             | Expr::New(_, span)
+            | Expr::Spawn { span, .. }
             | Expr::Html(_, span) => *span,
         }
     }

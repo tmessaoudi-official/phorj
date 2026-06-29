@@ -464,6 +464,13 @@ impl Transpiler {
                 unreachable!("overload selector resolved + rewritten before transpilation (Slice C1)")
             }
             Expr::New(..) => unreachable!("Expr::New is unwrapped before transpilation (checker::unwrap_new)"),
+            // Green-thread concurrency (M6 W4) has NO PHP target — PHP has no green threads, and a
+            // synchronous lowering would make a concurrent program behave differently under PHP than on
+            // the VM, breaking the byte-identical spine. So `spawn` is a hard transpile error (never a
+            // silent sync lowering); a `spawn`/channel program is quarantined from the PHP oracle.
+            Expr::Spawn { .. } => Err(
+                "E-CONCURRENCY-NO-PHP: green-thread concurrency (`spawn` / channels) cannot be transpiled to PHP — it runs on the Phorj VM/interpreter only".to_string(),
+            ),
         }
     }
 

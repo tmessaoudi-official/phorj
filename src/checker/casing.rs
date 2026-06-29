@@ -357,6 +357,7 @@ impl Checker {
                 }
             }
             Expr::New(inner, _) => self.check_expr_casing(inner),
+            Expr::Spawn { call, .. } => self.check_expr_casing(call),
         }
     }
 

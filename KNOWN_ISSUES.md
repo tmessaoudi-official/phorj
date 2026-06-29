@@ -686,6 +686,34 @@ or simply unavailable, never a crash):
 - **Router lives on the injected `Core.Http` types.** A program that declares its *own* `Request`/
   `Response` (the W1 examples) does not get the injected `Router`; import `Core.Http` to use it.
 
+## M6 W4 green threads (`spawn` / channels) — step 2 (synchronous-degenerate)
+
+The concurrency *surface* and value model are in (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`,
+build step 2): `spawn <call>` → `Task<T>`, `t.join()`, typed `Channel<T>` (`Channel.create()` /
+`ch.send(v)` / `ch.recv()`). Both backends run it **byte-identically** (`run≡runvm`); it is **quarantined
+from the PHP oracle** (PHP has no green threads — the transpiler emits `E-CONCURRENCY-NO-PHP`, never a
+misleading synchronous lowering).
+
+- **Cooperative scheduling is not wired yet (the synchronous-degenerate model).** A `spawn`ned task runs
+  to **completion immediately** at `spawn` (so `join` always has its result, and a producer must fill a
+  channel *before* a consumer drains it). A `recv` on an **empty** channel is a clean fault (`recv from
+  empty channel`) rather than a suspension. This is the byte-identical step-2 foundation; the shared
+  deterministic scheduler (`green::sched`, kernel already landed) that **interleaves** tasks and
+  **suspends** a blocked `recv`/`join` until a `send`/completion wakes it is **build step 4** (the
+  stackful-coroutine executor on native; the VM frame-swap fallback on wasm). Until then, programs that
+  need true interleaving (e.g. a `recv` *before* the matching `send`) deadlock-fault instead of yielding.
+- **`Channel`/`Task` are reserved built-in type names** (like `List`/`Map`/`Set`/`Error`) — a user
+  program cannot declare a `class`/`enum`/`interface`/`type` named `Channel` or `Task`.
+- **`Channel.create()` requires a `Channel<T>` annotation** to fix its element type (the static
+  constructor has no argument to infer `T` from): `Channel<int> ch = Channel.create();` — a bare
+  `var ch = Channel.create();` is `E-CHANNEL-ANNOTATION`, and a context-less `return Channel.create();`
+  likewise. Bind it to an annotated local first.
+- **`spawn` requires a value-returning call.** `spawn f()` where `f` returns `void`/`never` is
+  `E-SPAWN-VOID` (a `Task<void>` whose `join` is uncapturable) — fire-and-forget void tasks are a
+  follow-up.
+- **Unbounded channels.** `send` never blocks (the buffer grows without limit this slice); a
+  bounded/closeable channel is a follow-up.
+
 ## `phg build` limitations (M2.5, in progress)
 
 - **Cross-builds: source checkout OR a published registry (Phase 3a).** `--target`/`--all` compile a

@@ -137,6 +137,7 @@ fn collect_free_expr(
         }
         // `new <call>` (Feature C): captures whatever its inner construction captures.
         Expr::New(inner, _) => collect_free_expr(inner, bound, found),
+        Expr::Spawn { call, .. } => collect_free_expr(call, bound, found),
     }
 }
 
@@ -330,6 +331,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
                 LambdaBody::Block(stmts) => in_stmts(stmts),
             },
             Expr::New(inner, _) => in_expr(inner),
+            Expr::Spawn { call, .. } => in_expr(call),
         }
     }
     fn in_stmts(stmts: &[Stmt]) -> bool {

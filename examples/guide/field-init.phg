@@ -12,7 +12,7 @@ function compute(int n): int {
     return n * 10;
 }
 
-class Task {
+class Parcel {
     int weight = compute(3) + 1;     // a call in the default → 31
     int doubled = this.weight * 2;   // reads `this` + an EARLIER sibling → 62
     constructor(public string label) {}
@@ -23,7 +23,7 @@ class Task {
 }
 
 function main(): void {
-    Task t = new Task("alpha");
+    Parcel t = new Parcel("alpha");
     Console.println(t.summary());                // alpha: w=31 d=62
     Console.println("{t.weight + t.doubled}");   // 93
 }

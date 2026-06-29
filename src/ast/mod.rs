@@ -350,6 +350,20 @@ pub enum Expr {
     /// it and construction semantics + the byte-identity spine are unchanged. A bare `new` not followed
     /// by a call is a parse error.
     New(Box<Expr>, Span),
+    /// `spawn <call>` — start a green task (M6 W4 concurrency, S4.3). `call` is the function /
+    /// closure / method call to run as a task; the expression evaluates to a `Task<T>` handle where
+    /// `T` is the call's return type. In the **step-2 synchronous-degenerate** model the call runs to
+    /// completion immediately at `spawn` (so `join` already has its result); the cooperative scheduler
+    /// (build step 4) will instead enqueue it and run it interleaved. `spawn` is a **contextual**
+    /// keyword (recognized only when it leads a call — an ordinary identifier everywhere else), per the
+    /// [[contextual-var-and-reserved-names]] lesson. Unlike `new`/`html`/aliases this is **NOT** erased
+    /// before the backends — it is a real runtime construct (like `Range`). Green threads have no PHP
+    /// target: a `spawn` program is quarantined from the PHP oracle and the transpiler emits
+    /// `E-CONCURRENCY-NO-PHP`.
+    Spawn {
+        call: Box<Expr>,
+        span: Span,
+    },
     /// `html"<h1>{name}</h1>"` — a typed HTML literal (core.html Wave 3). The parser captures it as
     /// interpolation `parts` (literal chunks + `{expr}` holes, exactly like [`Expr::Str`]); the
     /// **checker** resolves each hole by type (an `Html` hole embeds as-is, a `string`/primitive hole

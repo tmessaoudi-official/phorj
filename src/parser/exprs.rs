@@ -214,6 +214,18 @@ impl Parser {
                 span: sp,
             });
         }
+        // `spawn <call>` (M6 W4): a contextual prefix keyword that starts a green task. It binds like a
+        // unary prefix over the following postfix expression (the call), so `spawn a.b(x)` is
+        // `spawn (a.b(x))`. The checker validates the operand is a call.
+        if self.at_spawn() {
+            self.advance(); // consume `spawn`
+            let call = self.parse_postfix()?;
+            self.depth -= 1;
+            return Ok(Expr::Spawn {
+                call: Box::new(call),
+                span: sp,
+            });
+        }
         let op = match self.peek() {
             TokenKind::Minus => Some(UnaryOp::Neg),
             TokenKind::Bang => Some(UnaryOp::Not),

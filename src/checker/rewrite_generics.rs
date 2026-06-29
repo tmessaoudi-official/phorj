@@ -278,6 +278,12 @@ pub fn erase_generics(program: Program) -> Program {
                     .collect(),
                 span: *span,
             },
+            // `spawn <call>` (M6 W4): walk the nested call so a generic call inside it is erased too
+            // (not front-end-erased itself — it reaches every rewrite pass).
+            Expr::Spawn { call, span } => Expr::Spawn {
+                call: Box::new(rexpr(call, params)),
+                span: *span,
+            },
             // leaves carry no type and no nested expression: Int / Float / Bool / Null / Bytes /
             // Ident / This — clone unchanged.
             leaf => leaf.clone(),
