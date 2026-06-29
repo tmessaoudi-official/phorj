@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Core.Json` in multi-package projects + cross-package map literals
+
+A multi-package project that imports `Core.Json` now round-trips byte-identically
+`run ≡ runvm ≡ real PHP`. Two PHP-emission/loader fixes: (1) the injected `Json` enum is a
+`package Main` type, so in a namespaced program its variant classes live in `\Main\`; the JSON runtime
+helpers (emitted in the global block) referenced them by bare name (`instanceof Obj`), so every
+`instanceof` missed and stringify/parse fell through — they now reference `\Main\Obj` etc. when
+namespaced. (2) The loader's cross-package resolution pass had no `Expr::Map` arm, so a qualified call
+or cross-package type nested in a map literal `[k => v]` was left unresolved (`E-UNKNOWN-IDENT`); it now
+descends both key and value, like a list. `run`/`runvm` were already correct — both are
+PHP-emission/loader-only fixes. New example `examples/project/jsonmulti/`.
+
 ### Added — Lambdas + first-class function values in library packages (M3 S3, cross-package)
 
 A same-package function reference inside a *library* (non-`main`) package now resolves in **every**

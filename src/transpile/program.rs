@@ -1159,15 +1159,32 @@ impl Transpiler {
     /// hand-walked. Decoding delegates to native `json_decode` (objects → `stdClass` so `{}` ≠ `[]`),
     /// returning `null` (Phorj `None`) on any parse error, then rebuilds the enum hierarchy.
     fn emit_json_helpers(&mut self) {
+        // The injected `Json` enum is a `package Main` type, so its PHP variant classes live in
+        // `\Main\` in a multi-package (namespaced) program but in the global namespace in a flat one.
+        // These runtime helpers are emitted in the nameless global block, so a bare `instanceof Obj`
+        // would resolve to `\Obj` (global) and never match the real `\Main\Obj` — every `instanceof`
+        // would fall through to the object branch (the multi-package core.json bug). Qualify the
+        // variant class references with `\Main\` when namespaced; empty (bare) when flat.
+        let jp = if self.namespaced { "\\Main\\" } else { "" };
         if self.uses_json_encode {
             self.line("function __phorj_json_encode($j) {");
             self.indent += 1;
-            self.line("if ($j instanceof Null_) { return \"null\"; }");
-            self.line("if ($j instanceof Bool_) { return $j->value ? \"true\" : \"false\"; }");
-            self.line("if ($j instanceof Int_) { return (string)$j->value; }");
-            self.line("if ($j instanceof Float_) { return __phorj_float($j->value); }");
-            self.line("if ($j instanceof Str) { return json_encode($j->value); }");
-            self.line("if ($j instanceof Arr) {");
+            self.line(&format!(
+                "if ($j instanceof {jp}Null_) {{ return \"null\"; }}"
+            ));
+            self.line(&format!(
+                "if ($j instanceof {jp}Bool_) {{ return $j->value ? \"true\" : \"false\"; }}"
+            ));
+            self.line(&format!(
+                "if ($j instanceof {jp}Int_) {{ return (string)$j->value; }}"
+            ));
+            self.line(&format!(
+                "if ($j instanceof {jp}Float_) {{ return __phorj_float($j->value); }}"
+            ));
+            self.line(&format!(
+                "if ($j instanceof {jp}Str) {{ return json_encode($j->value); }}"
+            ));
+            self.line(&format!("if ($j instanceof {jp}Arr) {{"));
             self.indent += 1;
             self.line("$parts = [];");
             self.line("foreach ($j->items as $x) { $parts[] = __phorj_json_encode($x); }");
@@ -1188,7 +1205,9 @@ impl Transpiler {
             );
             self.line("function __phorj_json_pretty($j, $indent) {");
             self.indent += 1;
-            self.line("if ($j instanceof Arr && count($j->items) > 0) {");
+            self.line(&format!(
+                "if ($j instanceof {jp}Arr && count($j->items) > 0) {{"
+            ));
             self.indent += 1;
             self.line("$pad = str_repeat(\" \", $indent + 4);");
             self.line("$parts = [];");
@@ -1200,7 +1219,9 @@ impl Transpiler {
             );
             self.indent -= 1;
             self.line("}");
-            self.line("if ($j instanceof Obj && count($j->entries) > 0) {");
+            self.line(&format!(
+                "if ($j instanceof {jp}Obj && count($j->entries) > 0) {{"
+            ));
             self.indent += 1;
             self.line("$pad = str_repeat(\" \", $indent + 4);");
             self.line("$parts = [];");
@@ -1226,23 +1247,25 @@ impl Transpiler {
             self.line("}");
             self.line("function __phorj_json_build($d) {");
             self.indent += 1;
-            self.line("if (is_null($d)) { return new Null_(); }");
-            self.line("if (is_bool($d)) { return new Bool_($d); }");
-            self.line("if (is_int($d)) { return new Int_($d); }");
-            self.line("if (is_float($d)) { return new Float_($d); }");
-            self.line("if (is_string($d)) { return new Str($d); }");
+            self.line(&format!("if (is_null($d)) {{ return new {jp}Null_(); }}"));
+            self.line(&format!("if (is_bool($d)) {{ return new {jp}Bool_($d); }}"));
+            self.line(&format!("if (is_int($d)) {{ return new {jp}Int_($d); }}"));
+            self.line(&format!(
+                "if (is_float($d)) {{ return new {jp}Float_($d); }}"
+            ));
+            self.line(&format!("if (is_string($d)) {{ return new {jp}Str($d); }}"));
             self.line("if (is_array($d)) {");
             self.indent += 1;
             self.line("$items = [];");
             self.line("foreach ($d as $x) { $items[] = __phorj_json_build($x); }");
-            self.line("return new Arr($items);");
+            self.line(&format!("return new {jp}Arr($items);"));
             self.indent -= 1;
             self.line("}");
             self.line("$entries = [];");
             self.line(
                 "foreach (get_object_vars($d) as $k => $v) { $entries[(string)$k] = __phorj_json_build($v); }",
             );
-            self.line("return new Obj($entries);");
+            self.line(&format!("return new {jp}Obj($entries);"));
             self.indent -= 1;
             self.line("}");
         }

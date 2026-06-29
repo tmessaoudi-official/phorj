@@ -1,0 +1,8 @@
+// A trivial library package, present only to make this a multi-package (namespaced) project — which
+// is exactly the condition that used to break `Core.Json` (the injected JSON runtime helpers landed in
+// the global namespace while the `Json` variant classes live in `\Main\`).
+package Acme.Meta;
+
+public function version(): string {
+  return "1.0";
+}

@@ -391,6 +391,17 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             items.into_iter().map(|e| resolve_expr(e, ctx)).collect(),
             span,
         ),
+        // A map literal `[k => v]` — resolve both the key and the value of every pair, so a
+        // cross-package qualified call or type reference inside a map (e.g. `["k" => new Str(M.f())]`)
+        // is rewritten just like one inside a list. Without this arm a map literal fell into the
+        // `leaf` catch-all and its sub-expressions were left unresolved (the multi-package gap).
+        Expr::Map(pairs, span) => Expr::Map(
+            pairs
+                .into_iter()
+                .map(|(k, v)| (resolve_expr(k, ctx), resolve_expr(v, ctx)))
+                .collect(),
+            span,
+        ),
         Expr::Str(parts, span) => Expr::Str(
             parts
                 .into_iter()

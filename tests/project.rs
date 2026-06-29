@@ -344,3 +344,24 @@ fn cross_package_trait_used_as_type_is_rejected() {
     let err = cli::run_program(&unit).unwrap_err();
     assert!(err.contains("E-USE-AS-TYPE"), "got: {err}");
 }
+
+/// A qualified cross-package call inside a **map literal** value (`["k" => Util.f()]`) is resolved by
+/// the loader — the `Expr::Map` arm descends both key and value, so a cross-package reference nested
+/// in a map is rewritten like one in a list (the multi-package map-literal gap).
+#[test]
+fn cross_package_call_inside_map_literal_resolves() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
+         function main() -> void {\n  Map<string, int> m = [\"k\" => Util.compute(20)];\n  Console.println(\"{m[\\\"k\\\"]}\");\n}",
+    );
+    tmp.write(
+        "src/Acme/Util/compute.phg",
+        "package Acme.Util;\nfunction compute(int n) -> int { return n + 22; }",
+    );
+    let (run, runvm) = run_both(&entry);
+    assert_eq!(run, "42\n");
+    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+}

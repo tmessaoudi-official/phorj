@@ -136,8 +136,13 @@ not a panic:
   for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as
   `100000000000000000000`, not json's `1.0e+20`. `run ≡ runvm ≡ real PHP` is always byte-identical (the
   PHP leg uses the same helper); only the comparison to PHP's *native* `json_encode` differs at
-  magnitude extremes. (2) **`package Main` only:** the injected `Json` enum is emitted flat, so a
-  multi-package project that `import`s `Core.Json` is a follow-up. (3) **Reserved-variant collision
+  magnitude extremes. (2) **Multi-package now works** (validated 2026-06-29): a multi-package project
+  that `import`s `Core.Json` round-trips byte-identically `run ≡ runvm ≡ real PHP`
+  (`examples/project/jsonmulti/`). The injected `Json` enum is a `package Main` type, so in a namespaced
+  program its variant classes live in `\Main\`; the JSON runtime helpers (emitted in the global block)
+  now reference them as `\Main\Obj` etc. instead of bare names. (The companion fix: the loader's
+  `Expr::Map` resolution arm — a cross-package call/type nested in a map literal `[k => v]` was
+  previously left unresolved.) (3) **Reserved-variant collision
   edge:** an enum literally declaring both `Int` and `Int_` would collide after mangling — adversarial,
   not hit by any first-party code. (4) `NaN`/`Infinity` (non-JSON) stringify to `NaN`/`inf` tokens
   (consistent across backends, not standard JSON).

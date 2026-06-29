@@ -1,0 +1,22 @@
+// `Core.Json` in a MULTI-PACKAGE project (cross-package): building, stringifying, and parsing JSON
+// from a `package Main` entry that also imports a library package. The injected `Json` enum is a
+// `package Main` type, so in a namespaced program its variant classes live in `\Main\`; the JSON
+// runtime helpers (emitted in the global block) now reference them as `\Main\Obj` etc., so a
+// multi-package program round-trips byte-identically `run ≡ runvm ≡ real PHP`.
+package Main;
+
+import Core.Console;
+import Core.Json;
+import Acme.Meta;
+
+function main(): void {
+  Json doc = new Obj([
+    "version" => new Str(Meta.version()),
+    "count" => new Int(42),
+    "tags" => new Arr([new Str("a"), new Str("b")]),
+  ]);
+  Console.println(Json.stringify(doc));
+
+  var parsed = Json.parse("[1, 2, 3]");
+  Console.println(Json.stringify(parsed ?? new Null()));
+}
