@@ -157,6 +157,14 @@ struct Transpiler {
     /// The class whose members are being emitted, for `this` operand-kind resolution (T6b). Set
     /// around `emit_class_members`, restored after.
     cur_class: Option<String>,
+    /// B2 — active trait-alias map for `parent.m(…)` / `parent(A).m(…)` calls emitted inside an
+    /// **MI class** or a **decomposed trait body**, where PHP has no native `parent::`/`A::` target
+    /// (the ancestor lives in a `use`d trait). `Some` only while emitting such a body; keyed by the
+    /// call's `(ancestor-as-written, method)`, valued by the `private` trait alias the `use` block
+    /// declares (`T<dp>::m as private __super_<dp>_<m>` ⇒ `$this->__super_<dp>_<m>(…)`). A parent call
+    /// absent from the map while this is `Some` targets a non-direct ancestor (a transitive MI jump) —
+    /// not yet lowerable, surfaced as a transpile error rather than invalid PHP.
+    parent_aliases: Option<std::collections::BTreeMap<(Option<String>, String), String>>,
     /// `class → (field/hook/promoted-ctor-param name → OpKind)` — operand kinds of a class's *own*
     /// members (T6b). Field reads (`p.x`, `this.x`) resolve through here + the parent chain
     /// (`class_parents`), so `p.x + 1` / `"{p.x}"` emit native PHP instead of a runtime helper.
@@ -479,6 +487,7 @@ impl Transpiler {
             locals: Vec::new(),
             local_kinds: Vec::new(),
             cur_class: None,
+            parent_aliases: None,
             class_field_kinds: HashMap::new(),
             class_parents: HashMap::new(),
             variant_field_kinds: HashMap::new(),

@@ -216,22 +216,44 @@ impl Transpiler {
             Expr::Call { callee, args, .. } => self.emit_call(callee, args),
             // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).
             // Single inheritance → native PHP: immediate ⇒ `parent::m(args)`, a named ancestor ⇒
-            // `A::m(args)` (PHP forwards `$this`; no 8.5 deprecation). MI's trait-aliased form is B2.
+            // `A::m(args)` (PHP forwards `$this`; no 8.5 deprecation). Inside an MI class or a decomposed
+            // trait body (`parent_aliases` is `Some`) PHP has no native parent — the call is rewritten to
+            // a `private` trait alias `$this->__super_<dp>_<m>(args)` declared in the `use` block (B2).
             Expr::ParentCall {
                 ancestor,
                 method,
                 args,
                 ..
             } => {
-                let prefix = match ancestor {
-                    Some(a) => format!("{}::", php_type_ref(a)),
-                    None => "parent::".to_string(),
-                };
                 let mut emitted = Vec::with_capacity(args.len());
                 for a in args {
                     emitted.push(self.emit_expr(a)?);
                 }
-                Ok(format!("{prefix}{method}({})", emitted.join(", ")))
+                let aliased = self
+                    .parent_aliases
+                    .as_ref()
+                    .map(|m| m.get(&(ancestor.clone(), method.clone())).cloned());
+                match aliased {
+                    // MI/decomposed context, direct-parent target → trait alias.
+                    Some(Some(alias)) => Ok(format!("$this->{alias}({})", emitted.join(", "))),
+                    // MI/decomposed context, but a non-direct ancestor jump — not yet lowerable.
+                    Some(None) => {
+                        let who = ancestor.as_deref().unwrap_or("parent");
+                        Err(format!(
+                            "transpile: `parent({who}).{method}(…)` targets a non-direct ancestor under \
+                             multiple inheritance — not yet supported (B2 follow-up; the run/runvm \
+                             backends handle it)"
+                        ))
+                    }
+                    // Single inheritance → native PHP.
+                    None => {
+                        let prefix = match ancestor {
+                            Some(a) => format!("{}::", php_type_ref(a)),
+                            None => "parent::".to_string(),
+                        };
+                        Ok(format!("{prefix}{method}({})", emitted.join(", ")))
+                    }
+                }
             }
             Expr::Member {
                 object, name, safe, ..

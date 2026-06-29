@@ -181,13 +181,21 @@ not a panic:
   bindings, promotions, field initializers, body — on the existing instance, lowered by *front-end
   inlining* before any backend (NO new `Op`/`Value`), byte-identical run≡runvm≡real PHP
   (`guide/parent-constructor.phg`). Statement-only inside a constructor body; codes
-  `E-PARENT-CTOR-OUTSIDE`/`-STMT`/`-MI`. **Deferred:**
-  (a) **multiple-inheritance constructor forwarding** (`E-PARENT-CTOR-MI` for the bare form — one
-  `parent(P).constructor(…)` per parent lands with B2); (b) **multiple inheritance** `parent(X).m(…)` + the
-  multi-of-multi trait lowering (B2 — the resolver already supports MI/ambiguity, but the trait-aliased
-  PHP emission is the remaining work); (c) an **overloaded** parent method (the compiler resolves via the
+  `E-PARENT-CTOR-OUTSIDE`/`-STMT`/`-MI`.
+  **B2 shipped (multiple-inheritance parent-*method* dispatch, transpiler trait aliasing):**
+  `parent(A).m(…)` / `parent.m(…)` inside an MI class (or a decomposed-ancestor trait body) lower to a
+  `private` trait alias — `use … { T<dp>::m as private __super_<dp>_<m>; }` ⇒ `$this->__super_<dp>_<m>(…)`
+  (the `run`/`runvm` backends already dispatched MI via `Op::CallParent`; B2 fixes only the PHP emission).
+  Byte-identical run≡runvm≡real PHP (`guide/parent-dispatch-mi.phg`). **Deferred:**
+  (a) **multiple-inheritance constructor forwarding** via the bare form (`E-PARENT-CTOR-MI`) — the
+  idiomatic per-parent `parent(P).constructor(…)` already works on all three backends (B1b inline);
+  (b) a parent-method jump to a **non-direct** ancestor under MI (`parent(G).m()` through an MI arm) —
+  PHP cannot alias a transitively-`use`d trait method, so this is a **clean transpile error** (the
+  `run`/`runvm` backends handle it); (c) the **multi-of-multi** trait lowering — a class that is both an
+  MI leaf and an MI ancestor takes the `implements`/`use` path and is not also emitted as a trait (a deep
+  edge outside `package Main` scope); (d) an **overloaded** parent method (the compiler resolves via the
   `methods` table, which doesn't carry the overload set — single-method parents only for now);
-  (d) cross-package parent calls (package-`Main` scope, like every M-RT slice).
+  (e) cross-package parent calls (package-`Main` scope, like every M-RT slice).
 
 - **Traits — S8 shipped; deferrals (all clean compile-time, or transpile-oracle-gated):** `trait`/`use`
   composition (methods, `mutable`/`static` state, a trait constructor, abstract requirements, property

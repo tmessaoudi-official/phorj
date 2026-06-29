@@ -336,3 +336,74 @@ fn explain_subcommand_known_and_unknown() {
         .expect("spawn phorj");
     assert_eq!(bad.status.code(), Some(1));
 }
+
+/// B2 — a multiple-inheritance super-method call (`parent(A).m(…)`) transpiles to a `private` trait
+/// alias (PHP has no native `parent::`/`A::` in an MI class). The run≡runvm≡real-PHP byte-identity is
+/// gated by `examples/guide/parent-dispatch-mi.phg`; this locks the *shape* of the emitted PHP.
+#[test]
+fn mi_super_method_transpiles_to_a_trait_alias() {
+    let path = std::env::temp_dir().join("phg_b2_mi_super.phg");
+    std::fs::write(
+        &path,
+        "package Main;\n\
+         import Core.Console;\n\
+         open class A { open function m(): string { return \"A\"; } }\n\
+         open class B { open function m(): string { return \"B\"; } }\n\
+         class C extends A, B { function m(): string { return \"{parent(A).m()}+{parent(B).m()}+C\"; } }\n\
+         function main(): void { C c = new C(); Console.println(c.m()); }\n",
+    )
+    .unwrap();
+    let out = Command::new(BIN)
+        .args(["transpile", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorj");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let php = String::from_utf8_lossy(&out.stdout);
+    assert!(php.contains("TA::m as private __super_A_m;"), "{php}");
+    assert!(php.contains("TB::m as private __super_B_m;"), "{php}");
+    assert!(php.contains("$this->__super_A_m()"), "{php}");
+    assert!(php.contains("$this->__super_B_m()"), "{php}");
+}
+
+/// B2 — a parent-method jump to a *non-direct* ancestor under multiple inheritance is not yet lowerable
+/// to PHP (the trait alias requires a directly-`use`d ancestor); it is a clean transpile error, not
+/// invalid PHP. The `run`/`runvm` backends still handle it (resolution is MI-aware).
+#[test]
+fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
+    let path = std::env::temp_dir().join("phg_b2_mi_transitive.phg");
+    std::fs::write(
+        &path,
+        "package Main;\n\
+         import Core.Console;\n\
+         open class G { open function m(): string { return \"G\"; } }\n\
+         open class A extends G { open function m(): string { return \"A\"; } }\n\
+         open class B { open function m(): string { return \"B\"; } }\n\
+         class C extends A, B { function m(): string { return \"{parent(G).m()}+C\"; } }\n\
+         function main(): void { C c = new C(); Console.println(c.m()); }\n",
+    )
+    .unwrap();
+    // run still works (MI-aware resolution).
+    let run = Command::new(BIN)
+        .args(["run", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorj");
+    assert!(run.status.success(), "run should still work under MI");
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "G+C\n");
+    // transpile is a clean error (exit 1), not broken PHP.
+    let tr = Command::new(BIN)
+        .args(["transpile", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorj");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(tr.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&tr.stderr).contains("non-direct ancestor"),
+        "stderr: {}",
+        String::from_utf8_lossy(&tr.stderr)
+    );
+}

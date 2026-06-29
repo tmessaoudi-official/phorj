@@ -111,10 +111,18 @@
   `in_constructor` + `parent_ctor_ok`; validates args vs `info.ctor`. Closes the own-ctor-under-inheritance
   KNOWN_ISSUE. 6 new checker tests; `examples/guide/parent-constructor.phg`; byte-identical
   run≡runvm≡real PHP 8.5.
-- **NEXT: B2** (MI `parent(X).m/.constructor` + multi-of-multi trait lowering), then step 5 M4 stdlib,
-  step 6 cross-file LSP + JetBrains.
+- **B2 DONE + committed + green** (transpiler-only, as scoped): MI parent-**method** dispatch
+  `parent(A).m(…)`/`parent.m(…)` now transpiles via PHP **trait aliasing** (`use … { T<dp>::m as private
+  __super_<dp>_<m>; }` ⇒ `$this->__super_<dp>_<m>(…)`) in both `emit_multi_class` and decomposed-trait
+  bodies; `run`/`runvm` already worked (B1a `Op::CallParent`). New transpiler field `parent_aliases` +
+  `mi_parent_aliases` + a read-only `collect_parent_method_calls` walker (mirrors `rewrite_new`).
+  Non-direct ancestor jump under MI → clean transpile error (PHP can't alias a transitively-used trait).
+  `examples/guide/parent-dispatch-mi.phg`; 2 CLI tests; byte-identical run≡runvm≡real PHP 8.5. Deferred:
+  transitive-jump-under-MI, multi-of-multi lowering, MI bare-`parent.constructor()` (per-parent
+  `parent(A).constructor()` already works), overloaded parent methods.
+- **NEXT: step 5 M4 stdlib breadth** (additive `Core.*` ops), then step 6 cross-file LSP + JetBrains.
 
-### B2 — scoped (code-verified probe, 2026-06-29; NOT built)
+### B2 — scoped (code-verified probe, 2026-06-29; built per this scope)
 **B2 is a TRANSPILER-ONLY gap — much narrower than feared.** Probed with two MI programs:
 - **MI parent *method* dispatch** (`parent(A).m()` / `parent(B).m()` from `class C extends A, B`):
   `run` ≡ `runvm` already produce `A+B+C` (B1a's `Op::CallParent` bakes the resolver's target; the

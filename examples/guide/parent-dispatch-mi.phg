@@ -1,0 +1,53 @@
+package Main;
+
+import Core.Console;
+
+// Super/parent dispatch under MULTIPLE INHERITANCE (M-RT super/parent, B2).
+//
+// A multiple-inheritance class has no single PHP parent, so `parent::m(…)` cannot name "the version
+// above me". Phorj resolves a parent-method call lexically to a specific ancestor and, in PHP, lowers
+// it through the trait decomposition: each ancestor is a `trait`, and the call becomes a `private`
+// trait alias (`use T { T::m as private __super_T_m; }` → `$this->__super_T_m(…)`). The run / runvm /
+// real-PHP backends all produce the same output.
+//
+// Use `parent(A).m(…)` to name which direct parent you mean (bare `parent.m(…)` is ambiguous when two
+// parents provide `m`). Inside a single-inheritance ancestor, plain `parent.m(…)` still reaches the
+// nearest ancestor as usual — here `Bird` reuses `Animal`'s description.
+
+open class Animal {
+    open function describe(): string {
+        return "animal";
+    }
+}
+
+// A single-inheritance ancestor whose own override calls `parent.m(…)`. Because `Bird` is an ancestor
+// of the multi-parent `Duck` below, it is emitted as a trait — its `parent.describe()` is lowered to a
+// trait alias too (a plain `parent::` would be wrong inside a trait body).
+open class Bird extends Animal {
+    open function describe(): string {
+        return "{parent.describe()}/bird";
+    }
+}
+
+open class Swimmer {
+    open function describe(): string {
+        return "swimmer";
+    }
+}
+
+// Multiple inheritance: `Duck` extends both `Bird` and `Swimmer`. Its override composes the two
+// inherited descriptions with `parent(Bird).describe()` and `parent(Swimmer).describe()`.
+class Duck extends Bird, Swimmer {
+    function describe(): string {
+        return "{parent(Bird).describe()} + {parent(Swimmer).describe()} = duck";
+    }
+}
+
+function main(): void {
+    Duck d = new Duck();
+    Console.println(d.describe());
+
+    // The single-inheritance ancestor still works on its own.
+    Bird b = new Bird();
+    Console.println(b.describe());
+}

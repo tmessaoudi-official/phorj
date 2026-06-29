@@ -2,6 +2,10 @@
 
 use super::*;
 
+/// B2 — trait-alias lookup for MI/decomposed `parent.m(…)` calls: each call's `(ancestor-as-written,
+/// method)` → the `private` trait alias it lowers to. See [`Transpiler::mi_parent_aliases`].
+type ParentAliasMap = std::collections::BTreeMap<(Option<String>, String), String>;
+
 /// Feature B-static: the program's **non-literal** static-field initializers, as `(class, field,
 /// init_expr)` in declaration order. These can't be PHP property defaults (PHP requires a constant
 /// expression), so they are set once by a generated `__phorj_init_statics()` called before `main()`.
@@ -2034,13 +2038,28 @@ impl Transpiler {
         self.indent -= 1;
         self.line("}");
 
-        // trait T<name> { [use T<parent>, …;] members }
+        // trait T<name> { [use T<parent> [{ aliases }], …;] members }
         self.line(&format!("trait T{} {{", c.name));
         self.indent += 1;
+        // B2: a decomposed ancestor's own `parent.m(…)` calls (to its direct parent) need the same
+        // trait-alias lowering — `parent::` is wrong inside a trait body. The alias clauses ride this
+        // trait's `use T<parent>` block.
+        let (parent_aliases, alias_clauses) = self.mi_parent_aliases(c, program);
         if !c.extends.is_empty() {
             let tparents: Vec<String> = c.extends.iter().map(|p| format!("T{p}")).collect();
-            self.line(&format!("use {};", tparents.join(", ")));
+            if alias_clauses.is_empty() {
+                self.line(&format!("use {};", tparents.join(", ")));
+            } else {
+                self.line(&format!("use {} {{", tparents.join(", ")));
+                self.indent += 1;
+                for cl in &alias_clauses {
+                    self.line(cl);
+                }
+                self.indent -= 1;
+                self.line("}");
+            }
         }
+        let prev_aliases = self.parent_aliases.replace(parent_aliases);
         let (promoted_names, fields, is_error) = self.class_field_context(c);
         let prev = self.cur_class_fields.replace(fields);
         // `as_trait = true`: promoted ctor params become plain fields, the constructor is NOT emitted
@@ -2052,7 +2071,8 @@ impl Transpiler {
 
         // concrete class <name> implements I<name> { use T<name>; <explicit __construct> } — directly
         // instantiable + single-`extends`able. The constructor logic the trait dropped lives here as an
-        // explicit-assignment ctor (M-RT S6c.2b).
+        // explicit-assignment ctor (M-RT S6c.2b). `parent_aliases` stays active: a synth ctor body's
+        // `parent.m(…)` resolves to the same `private` alias (declared in `use T<name>`).
         self.line(&format!("class {0} implements I{0} {{", c.name));
         self.indent += 1;
         self.line(&format!("use T{};", c.name));
@@ -2061,6 +2081,7 @@ impl Transpiler {
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");
+        self.parent_aliases = prev_aliases;
         Ok(())
     }
 
@@ -2082,7 +2103,11 @@ impl Transpiler {
             iparents.join(", ")
         ));
         self.indent += 1;
-        let clauses = self.build_trait_clauses(c, program);
+        // B2: trait aliases for any `parent.m(…)`/`parent(A).m(…)` inside this MI class's bodies (no
+        // native `parent::` here) — their `T<dp>::m as private …;` clauses join the `insteadof` block.
+        let (parent_aliases, alias_clauses) = self.mi_parent_aliases(c, program);
+        let mut clauses = self.build_trait_clauses(c, program);
+        clauses.extend(alias_clauses);
         if clauses.is_empty() {
             self.line(&format!("use {};", tparents.join(", ")));
         } else {
@@ -2094,6 +2119,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        let prev_aliases = self.parent_aliases.replace(parent_aliases);
         let (promoted_names, fields, is_error) = self.class_field_context(c);
         let prev = self.cur_class_fields.replace(fields);
         self.emit_class_members(c, &promoted_names, is_error, false)?;
@@ -2108,6 +2134,7 @@ impl Transpiler {
             self.emit_synth_construct(c, program)?;
         }
         self.cur_class_fields = prev;
+        self.parent_aliases = prev_aliases;
         self.indent -= 1;
         self.line("}");
         Ok(())
@@ -2285,6 +2312,56 @@ impl Transpiler {
         clauses
     }
 
+    /// B2 — the trait-alias lookup + `use`-block clauses for every **direct-parent** `parent.m(…)` /
+    /// `parent(A).m(…)` call in `c`'s bodies, when `c` is emitted as an MI class or a decomposed trait
+    /// (PHP has no native `parent::`/`A::` there — the ancestor lives in a `use`d trait). `lookup` keys
+    /// each call's `(ancestor-as-written, method)` to its `private` alias; `clauses` are the deduped
+    /// `T<dp>::m as private __super_<dp>_<m>;` lines. A call to a non-direct ancestor (a transitive MI
+    /// jump) is intentionally absent from `lookup` — the emit arm surfaces it as a transpile error
+    /// rather than emitting invalid PHP. Empty when `c` has no parent calls (the common case → the `use`
+    /// block is unchanged and existing MI output stays byte-identical).
+    pub(super) fn mi_parent_aliases(
+        &self,
+        c: &ClassDecl,
+        program: &Program,
+    ) -> (ParentAliasMap, std::collections::BTreeSet<String>) {
+        let mut lookup = std::collections::BTreeMap::new();
+        let mut clauses = std::collections::BTreeSet::new();
+        let calls = collect_parent_method_calls(c);
+        if calls.is_empty() {
+            return (lookup, clauses);
+        }
+        let (origins, _) = crate::ast::class_method_origins(program);
+        for (ancestor, method) in calls {
+            // The direct parent whose trait carries the target method.
+            let dp = match &ancestor {
+                Some(a) if c.extends.iter().any(|p| p == a) => Some(a.clone()),
+                Some(_) => None, // transitive ancestor — not lowerable here
+                None => {
+                    let providers: Vec<String> = c
+                        .extends
+                        .iter()
+                        .filter(|p| origins.contains_key(&((**p).clone(), method.clone())))
+                        .cloned()
+                        .collect();
+                    // Exactly one direct provider ⇒ that parent; zero/≥2 are checker errors or not
+                    // direct (left out so the emit arm reports a clean transpile error).
+                    if providers.len() == 1 {
+                        providers.into_iter().next()
+                    } else {
+                        None
+                    }
+                }
+            };
+            if let Some(dp) = dp {
+                let alias = format!("__super_{dp}_{method}");
+                clauses.insert(format!("T{dp}::{method} as private {alias};"));
+                lookup.insert((ancestor, method), alias);
+            }
+        }
+        (lookup, clauses)
+    }
+
     /// The `(promoted ctor-param names, instance-field set, is_error)` context a class body needs to
     /// emit its members — shared setup for `emit_class`, `emit_multi_class`, and `emit_decomposed_class`.
     pub(super) fn class_field_context(
@@ -2344,5 +2421,207 @@ impl Transpiler {
         self.indent -= 1;
         self.line("}");
         Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// B2 — `parent.m(…)` / `parent(A).m(…)` collection (for trait-aliased MI emission). A read-only walk
+// over every expression position in a class's method/constructor/hook bodies, mirroring the complete
+// `checker::rewrite_new` walker so no parent call is missed. Returns each call's
+// `(ancestor-as-written, method)`; constructor (`parent.constructor`) calls are already inlined out by
+// the front-end before transpilation, so only method calls remain.
+// ---------------------------------------------------------------------------------------------------
+
+fn collect_parent_method_calls(c: &ClassDecl) -> Vec<(Option<String>, String)> {
+    let mut out = Vec::new();
+    for m in &c.members {
+        match m {
+            ClassMember::Method(f) => pc_block(&f.body, &mut out),
+            ClassMember::Constructor { body, .. } => pc_block(body, &mut out),
+            ClassMember::Hook { get, set, .. } => {
+                if let Some(g) = get {
+                    pc_expr(g, &mut out);
+                }
+                if let Some((_, b)) = set {
+                    pc_block(b, &mut out);
+                }
+            }
+            ClassMember::Field { .. } => {} // `parent` is rejected in a field initializer (checker)
+        }
+    }
+    out
+}
+
+fn pc_block(stmts: &[Stmt], out: &mut Vec<(Option<String>, String)>) {
+    for s in stmts {
+        pc_stmt(s, out);
+    }
+}
+
+fn pc_stmt(s: &Stmt, out: &mut Vec<(Option<String>, String)>) {
+    match s {
+        Stmt::VarDecl { init, .. } => pc_expr(init, out),
+        Stmt::Assign { target, value, .. } => {
+            pc_expr(target, out);
+            pc_expr(value, out);
+        }
+        Stmt::Return { value, .. } => {
+            if let Some(e) = value {
+                pc_expr(e, out);
+            }
+        }
+        Stmt::If {
+            cond,
+            then_block,
+            else_block,
+            ..
+        } => {
+            pc_expr(cond, out);
+            pc_block(then_block, out);
+            if let Some(b) = else_block {
+                pc_block(b, out);
+            }
+        }
+        Stmt::For { iter, body, .. } => {
+            pc_expr(iter, out);
+            pc_block(body, out);
+        }
+        Stmt::While { cond, body, .. } => {
+            pc_expr(cond, out);
+            pc_block(body, out);
+        }
+        Stmt::CFor {
+            init,
+            cond,
+            step,
+            body,
+            ..
+        } => {
+            if let Some(i) = init {
+                pc_stmt(i, out);
+            }
+            if let Some(co) = cond {
+                pc_expr(co, out);
+            }
+            if let Some(st) = step {
+                pc_stmt(st, out);
+            }
+            pc_block(body, out);
+        }
+        Stmt::Block(b, _) => pc_block(b, out),
+        Stmt::Destructure {
+            init, else_block, ..
+        } => {
+            pc_expr(init, out);
+            if let Some(eb) = else_block {
+                pc_block(eb, out);
+            }
+        }
+        Stmt::Expr(e, _) | Stmt::Discard(e, _) | Stmt::Throw { value: e, .. } => pc_expr(e, out),
+        Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            ..
+        } => {
+            pc_block(body, out);
+            for CatchClause { body, .. } in catches {
+                pc_block(body, out);
+            }
+            if let Some(fb) = finally_block {
+                pc_block(fb, out);
+            }
+        }
+        Stmt::Break(_) | Stmt::Continue(_) => {}
+    }
+}
+
+fn pc_expr(e: &Expr, out: &mut Vec<(Option<String>, String)>) {
+    match e {
+        Expr::ParentCall {
+            ancestor,
+            method,
+            args,
+            ..
+        } => {
+            out.push((ancestor.clone(), method.clone()));
+            for a in args {
+                pc_expr(a, out);
+            }
+        }
+        Expr::Unary { expr, .. } => pc_expr(expr, out),
+        Expr::Force { inner, .. } | Expr::Propagate { inner, .. } => pc_expr(inner, out),
+        Expr::Binary { lhs, rhs, .. } => {
+            pc_expr(lhs, out);
+            pc_expr(rhs, out);
+        }
+        Expr::InstanceOf { value, .. } | Expr::Cast { value, .. } => pc_expr(value, out),
+        Expr::Call { callee, args, .. } => {
+            pc_expr(callee, out);
+            for a in args {
+                pc_expr(a, out);
+            }
+        }
+        Expr::OverloadSelect { call, .. } => pc_expr(call, out),
+        Expr::Member { object, .. } => pc_expr(object, out),
+        Expr::Index { object, index, .. } => {
+            pc_expr(object, out);
+            pc_expr(index, out);
+        }
+        Expr::Str(parts, _) | Expr::Html(parts, _) => {
+            for p in parts {
+                if let StrPart::Expr(x) = p {
+                    pc_expr(x, out);
+                }
+            }
+        }
+        Expr::List(xs, _) => {
+            for x in xs {
+                pc_expr(x, out);
+            }
+        }
+        Expr::Map(ps, _) => {
+            for (k, v) in ps {
+                pc_expr(k, out);
+                pc_expr(v, out);
+            }
+        }
+        Expr::Match {
+            scrutinee, arms, ..
+        } => {
+            pc_expr(scrutinee, out);
+            for MatchArm { guard, body, .. } in arms {
+                if let Some(g) = guard {
+                    pc_expr(g, out);
+                }
+                pc_expr(body, out);
+            }
+        }
+        Expr::Range { start, end, .. } => {
+            pc_expr(start, out);
+            pc_expr(end, out);
+        }
+        Expr::If {
+            cond,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            pc_expr(cond, out);
+            pc_expr(then_expr, out);
+            pc_expr(else_expr, out);
+        }
+        Expr::Lambda { body, .. } => match body {
+            LambdaBody::Expr(x) => pc_expr(x, out),
+            LambdaBody::Block(b) => pc_block(b, out),
+        },
+        Expr::CloneWith { object, fields, .. } => {
+            pc_expr(object, out);
+            for (_, v) in fields {
+                pc_expr(v, out);
+            }
+        }
+        Expr::New(inner, _) => pc_expr(inner, out),
+        _ => {} // literals / Ident / This / etc. have no sub-expressions
     }
 }

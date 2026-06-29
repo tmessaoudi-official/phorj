@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-RT super/parent dispatch (B2: multiple inheritance, transpiler trait aliasing)
+
+`parent(A).m(…)` / `parent.m(…)` now transpile correctly when the calling class has **multiple
+inheritance** (or is a trait-decomposed ancestor of one). The `run`/`runvm` backends already dispatched
+these (B1a's `Op::CallParent` + the MI-aware resolver); the gap was PHP emission — a multiple-inheritance
+class has no native PHP parent, so `parent::m()`/`A::m()` was invalid. Byte-identical
+`run ≡ runvm ≡ real PHP 8.5` (`examples/guide/parent-dispatch-mi.phg`).
+
+- **Lowering** — a parent-method call inside an MI class (`emit_multi_class`) or a decomposed trait body
+  (`emit_decomposed_class`) is rewritten to a `private` trait alias: the `use` block gains
+  `T<dp>::m as private __super_<dp>_<m>;` and the call becomes `$this->__super_<dp>_<m>(…)`, where `dp`
+  is the direct parent (named ancestor, or the single direct provider for the bare form). Verified
+  against real PHP 8.5 (aliasing requires the aliased trait to be *directly* `use`d — which holds for a
+  direct parent). A read-only AST walk (`collect_parent_method_calls`, mirroring the complete
+  `rewrite_new` walker) finds every call so the `use` block declares exactly the aliases needed.
+- **Scope** — direct-parent targets. A jump to a **non-direct** ancestor under MI (`parent(G).m()` where
+  `G` is reached through an MI arm) is not yet lowerable (PHP can't alias a transitively-`use`d trait
+  method) and is a **clean transpile error**, not invalid PHP — the `run`/`runvm` backends still handle
+  it. Single-inheritance parent calls are unchanged (native `parent::`/`A::`). No backend (`run`/`runvm`)
+  change; programs without MI parent calls are byte-identical.
+
 ### Added — M-RT super/parent dispatch (B1b: parent-constructor forwarding, single inheritance)
 
 `parent.constructor(…)` / `parent(A).constructor(…)` — run the parent constructor's effect on the
