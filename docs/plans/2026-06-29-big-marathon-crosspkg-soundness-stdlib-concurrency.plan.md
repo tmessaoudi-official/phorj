@@ -53,6 +53,14 @@
 
 ## Progress
 
+- **Marathon checkpoint #9 (session 3): SPINE-2 SOUNDNESS COMPLETE.** S2.1 full (narrow `1163e47` +
+  methods `3a95755` + broad `d210c62`), S2.2 method return-overloading `9b1864a`, S2.4 while-let guards
+  `33f4d0d`, S2.5 LSB closed `3d3faf9`, **S2.3 must-use B/C closed as moot** (subsumed by Slice A's
+  universal rule — no opt-in attribute to propagate). Plus Spine-3 breadth `a38ff45`/`b983fb9`. **The
+  ONLY remaining marathon work is Spine-4 (M6 W4 concurrency capstone)** — milestone-scale (server
+  keep-alive + graceful shutdown → uncolored `spawn` + channels green-threads on the VM's reified frames,
+  Tier-3 quarantined OUTSIDE `differential.rs`). Builds on M6 W3's concurrent OS-thread-pool `phg serve`
+  (`84ddc32`). **Start fresh** — it's a milestone, not a slice.
 - **Marathon checkpoint #8 (session 3 cont., fully autonomous — bypass set): S2.1-broad CLOSED.** The
   reified-operand side-table shipped exactly per the design above: checker records `expr span.start → Ty`
   for concrete `Call`/`Member`/`Index` results (`Checker::reified_operands`, hooked in `check_expr`),
@@ -119,7 +127,15 @@
     return-overload override across an inheritance/interface hierarchy, generic-class bare-param-return
     member. **Commit pending gate-green.**
   - **S2.2 method return-overloading [original design, now implemented above]** — extend C1's `OverloadSelect`/per-return mangle from free fns to methods. **FULL DESIGN (mapped, pick-up-ready):** per-class method overload sets already exist (`checker::classes[cls].methods[name]: Vec<MethodSig>`), so mirror the free-fn machinery: (1) a `finalize_method_overloads` classifying each `(class, method)` with ≥2 sigs / shared params / distinct returns into a method analog of `return_overload_sets`; (2) `check_overload_select` — currently *rejects* a `Member` callee (calls.rs ~1095) — gains a method arm: resolve the receiver's static class (`check_expr(object)` → `Ty::Named(cls,_)`), pick the member by selector/expected return, mangle (`m__ret_int`); (3) a sink path in `check_method_call` (calls.rs:1012) mirroring `try_resolve_sink_overload`; (4) a method-def mangle pass (extend `rename_overload_defs`, overloads.rs:305 — currently skips methods) renaming the `ClassMember::Method`; (5) the call-site rewrite produces a **method** call to the mangled name (`obj.m__ret_int(args)` — a `Call` with a `Member` callee, preserving the receiver) — NOT a free `Call`. **4-backend dispatch:** interpreter + VM key methods on `(class, name)`; both def-rename and call-rewrite to the mangled name keeps dispatch consistent; transpiler emits `$obj->m__ret_int(...)` (the class must define it). **Scope it C1-equivalent: single declaring class, no override of an overload member across the hierarchy** (defer the inheritance/polymorphic-dispatch interaction — a base-typed receiver resolving the mangled name needs every implementer to rename consistently). Irreducibly multi-commit + byte-identity-critical across all 4 backends — **do in a fresh context.**
-  - **S2.3 must-use B/C** — bidirectional must-use propagation (flagged a real arch change in the 4th marathon).
+  - **S2.3 must-use B/C — ✅ CLOSED (session 3) as MOOT / subsumed by Slice A** (no code). Slice A
+    (`53fa3af`) shipped the **strictest possible** must-use: *any* non-`void`/`Empty` expression-statement
+    whose value is unused is `E-UNUSED-VALUE` (universal, no opt-in). "Bidirectional must-use propagation"
+    is a concept from languages with an *opt-in* `#[must_use]` attribute (Rust) that must be threaded
+    through wrappers — but Phorj has no such attribute: must-use is determined purely by a value's type,
+    applied at every expression-statement by construction, so there is nothing to propagate. The only
+    genuinely-stricter direction is unused-**local** / dead-store analysis (a value bound then never read),
+    which is a *separate* future lint (`W-UNUSED-LOCAL`), NOT must-use B/C. **S2.3 requires no further work;
+    Spine-2 soundness is COMPLETE.**
   - **S2.5 LSB — ✅ CLOSED (session 3) as a documented deliberate non-feature** (no code; the decision was
     already adjudicated in `docs/specs/2026-06-28-statics-research-design.md` §C: defer + reject cleanly).
     LSB (`static::`/`new static()`) introduces a runtime called-class concept + the `self::`/`static::`
