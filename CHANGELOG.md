@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M4 standard-library charter (governing policy)
+
+Adopted `docs/specs/2026-06-29-m4-stdlib-charter.md`: the governing policy for every `Core.*` module
+across five axes — naming (`Core.<Pascal>` / `camelCase` / `is…` predicates), subject-first argument
+order (closure last), the optional-vs-fault-vs-`throws` recoverability rule, the three determinism
+tiers (Tier-1 byte-identity-gated, Tier-2 representation-sensitive, Tier-3 quarantined), and the
+native-vs-injected-`.phg` decision. Descriptive of the conventions already practised across the 20+
+shipped modules and prescriptive for the M11 breadth push, with a quick decision tree. Doc-only.
+
 ### Added — Cross-package single inheritance + parent dispatch (M-RT S6/B1a, cross-package)
 
 A `package Main` class can now `extends` a class declared in a library package (imported via

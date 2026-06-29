@@ -15,7 +15,13 @@
 - [2026-06-29] S1.1 cross-package traits — DONE `cc711b9` (loader symbol-table + resolve `Item::Trait`/`uses` rewrite + transpiler namespace bucketing).
 - [2026-06-29] S1.2 lambdas/fn-values in library packages — DONE `5d7beb9` (loader `Expr::Ident` value-resolution arm; Main no-op).
 - [2026-06-29] S1.3 core.json multi-package + cross-package map literals — DONE `d63cb9d` (JSON helper `\Main\` prefix + loader `Expr::Map` arm).
-- NEXT: S1.5 cross-package parent calls, then Spine 2.
+- [2026-06-29] S1.5 cross-package single inheritance + parent dispatch — DONE `41fa646` (loader `c.extends` resolution + `Expr::ParentCall` arm). **SPINE 1 COMPLETE.**
+- [2026-06-29] **Spine 2 DEFERRED to a dedicated session** (recorded autonomously; reorder, not drop). Rationale: every Spine-2 slice is architecturally heavy and each has a clean documented workaround, so rushing one under context pressure risks the byte-identity spine.
+  - **S2.1 generic-result VM operand (`id(7)+1`)** — the compiler re-derives types from the *erased* AST and `compile_program(&Program)` takes no checker annotations. Fix: a span-keyed side-table of checker-reified call/field result types (`Ty`→`CTy`), populated in `check_generic_call`/member-resolution, threaded through `cli::check_and_expand` into `compile_program`/`Compiler::new`, consumed in `ctype`'s `Call`/`Member` arms. Multi-file; do it deliberately. (Narrower partial: add `generic_ret_from_param: Option<usize>` to `FunctionDecl`, set pre-erasure, infer from arg CTy — but only covers `-> T` free fns, not methods/fields/`List<T>`.)
+  - **S2.2 method return-overloading** — extend C1's `OverloadSelect`/per-return mangle from free fns to methods (method dispatch table doesn't carry the overload-by-return set).
+  - **S2.3 must-use B/C** — bidirectional must-use propagation (flagged a real arch change in the 4th marathon).
+  - **S2.4 while-let guards** — needs `Stmt::If.guard` through ~18 construction/consumer sites, or a synthetic-local desugar.
+- NEXT: Spine 3 — S3.1 stdlib charter (doc), then breadth natives.
 
 ## Formal Plan
 

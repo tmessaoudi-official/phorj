@@ -111,7 +111,8 @@ I/O · (10) the GA governance doc-bundle (semver/BC/conformance-corpus/security-
 **New milestones created to hold the breadth** (skeletons — scope in the spec's §3 rollup):
 
 - **M4 — stdlib charter** (naming, subject-first arg-order, optional-vs-fault discipline, determinism
-  tiers, native-vs-`.phg` policy) — *precedes* the M11 breadth push.
+  tiers, native-vs-`.phg` policy) — *precedes* the M11 breadth push. **Adopted** (2026-06-29):
+  `docs/specs/2026-06-29-m4-stdlib-charter.md`.
 - **M-NUM** — numerics & business data: typed **`decimal`/money** (float-for-currency becomes a compile
   error) + rounding modes, numeric parse, `intdiv`/conversions, `int`=i64 pinning, float predicates,
   numeric literals (hex/bin/octal, exponent). Defers `BigInt`, `Money`+currency to M-NUM-2.
