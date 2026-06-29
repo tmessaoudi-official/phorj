@@ -51,6 +51,47 @@
 > `List<int>`-element return `+1`, `Map`-value `+1`. Example: extend `examples/guide/generic-types.phg`.
 > Scope: still `package Main`; no new `Op`/`Value`. **Do in a fresh context — multi-site + byte-identity-critical.**
 
+## Spine-4 (M6 W4 concurrency capstone) — scoping for a fresh context
+
+> Spine-2 + Spine-3 are done; this is the LAST marathon item. It is **milestone-scale** — three sub-slices
+> of ascending risk. The serve layer (`src/serve.rs`, 617 lines) is **quarantined OUTSIDE `differential.rs`**
+> (tested only in `tests/serve.rs`), so S4.1/S4.2 do NOT touch the byte-identity spine — but S4.3 does.
+>
+> Current state (M6 W3, `84ddc32`): concurrent serving via a bounded **OS-thread pool** (`serve_pool`,
+> `--workers N`, `Arc<Program>` Send+Sync), one request per connection (`Connection: close`).
+>
+> **S4.1 — HTTP/1.1 keep-alive (bounded, serve-layer only, LOW risk).** Today `recv` frames one request
+> then drops the stream. Add a per-connection loop: read request → dispatch → write response → if the
+> request is HTTP/1.1 and lacks `Connection: close` (or HTTP/1.0 *with* `Connection: keep-alive`), keep
+> the socket and read the next; else close. Needs: a read **timeout** (`stream.set_read_timeout`) to reap
+> idle keep-alive sockets; emit `Connection: keep-alive`/`close` + always a correct `Content-Length` (the
+> serializer already sets it); cap requests-per-connection (EV-7, e.g. 100). Test in `tests/serve.rs`:
+> two requests on one socket (pipelined / sequential) get two responses; an idle socket closes on timeout.
+> No `differential.rs` impact. **This is the safe first down-payment.**
+>
+> **S4.2 — graceful shutdown / join (bounded, serve-layer only, LOW-MED risk).** Install a SIGINT/SIGTERM
+> handler (std-only: a `static AtomicBool` flipped by `signal_hook`-free raw handler, or a self-pipe;
+> verify std capability — may need a tiny `libc`-free trick or accept a `Ctrl-C`-only `ctrlc` shim, but
+> the dependency policy forbids casual deps → prefer the self-pipe / atomic + non-blocking accept loop).
+> On signal: stop `accept()`ing, let in-flight workers drain (join the pool), exit 0. Per-worker request
+> counters for the `--dev` banner. Test: spawn server, fire a request, send the signal, assert clean exit
+> + the in-flight response completed.
+>
+> **S4.3 — uncolored `spawn` + channels (green threads) — the HARD part, milestone in itself, HIGH risk
+> (touches the VM + spine).** Design FIRST (its own spec). Cooperative scheduler over the VM's reified
+> call frames: a `spawn <call>` expression starts a green task; `Channel<T>` send/recv yield to the
+> scheduler. The `Value` heap is `Rc` (not `Send`), so this is **single-OS-thread cooperative** (matches
+> the design's "single-threaded forced" note) — NOT the OS-thread pool. New surface: `spawn` keyword,
+> `Core.Channel` (or a `chan` primitive), scheduler in the VM. Determinism: a deterministic scheduler
+> (round-robin, fixed yield points) so `run ≡ runvm` stays gated; PHP transpile target = ??? (PHP has no
+> green threads — likely `spawn` transpiles to immediate synchronous call + a documented divergence, OR
+> the concurrency layer is Rust-backend-only and quarantined from the PHP oracle like `serve`). **This
+> needs a full design pass + developer decision on the PHP-target story before any code.**
+>
+> **Recommended fresh-context order:** S4.1 (ship) → S4.2 (ship) → then OPEN S4.3 with a dedicated design
+> spec + a developer fork on the PHP-target story (it may be a Rust-backend-only feature, breaking the
+> 3-way oracle for `spawn` specifically — a genuine design decision, not autonomous).
+
 ## Progress
 
 - **Marathon checkpoint #9 (session 3): SPINE-2 SOUNDNESS COMPLETE.** S2.1 full (narrow `1163e47` +
