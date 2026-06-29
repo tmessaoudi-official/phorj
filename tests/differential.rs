@@ -2890,6 +2890,19 @@ fn m6w4_recv_empty_faults_identically() {
 }
 
 #[test]
+fn m6w4_spawned_call_fault_agrees() {
+    // A fault inside a `spawn`ned call must fault identically on both backends. `spawn f()` compiles
+    // the call **inline** (not via a thunk lambda) precisely so the VM stack trace matches the
+    // interpreter's — a thunk lambda would surface as a `<lambda@N>` frame only on the VM (closures
+    // are real frames there, invisible in the tree-walker), a run≢runvm trace divergence. This guards
+    // fault-kind parity; the trace-text parity is verified at the CLI level (the rendered trace).
+    agree_err(
+        "function risky(int n) -> int { return 100 / n; } \
+         function main() -> void { Task<int> t = spawn risky(0); int r = t.join(); }",
+    );
+}
+
+#[test]
 fn m6w4_spawn_is_a_usable_identifier() {
     // `spawn` is contextual: still usable as an ordinary variable name when not leading a call.
     agree(

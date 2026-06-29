@@ -180,14 +180,14 @@ impl Compiler<'_> {
                 self.height = h_merge;
             }
             Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
-            // `spawn <call>` (M6 W4): compile the call as a zero-arg **thunk closure** `() => call`
-            // (capturing the call's free locals by value at spawn time), then `Op::Spawn`. The eager
-            // path invokes the thunk immediately (behavior-identical to running `call` inline); the
-            // cooperative path (the cutover) instead enqueues the thunk as a `green::sched` task. Using
-            // the closure form uniformly handles any call shape (free fn / method / closure value).
+            // `spawn <call>` (M6 W4): synchronous-degenerate — compile the call (it runs inline,
+            // leaving its result on top), then `Op::Spawn` registers a finished task. Compiling the
+            // call inline (rather than wrapping it in a thunk lambda) keeps the fault stack trace
+            // identical to the interpreter's — a synthetic thunk frame would show as `<lambda@N>` only
+            // on the VM (closures are real frames there, invisible in the tree-walker), breaking the
+            // run≡runvm trace. The cooperative cutover will introduce deferral with trace consistency.
             Expr::Spawn { call, span } => {
-                let body = LambdaBody::Expr(Box::new((**call).clone()));
-                self.compile_lambda(&[], &body, None, span.line)?;
+                self.expr(call)?;
                 self.emit(Op::Spawn, span.line);
             }
             Expr::Null(sp) => self.emit_const(Value::Null, sp.line),

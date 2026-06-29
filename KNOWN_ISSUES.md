@@ -713,6 +713,17 @@ misleading synchronous lowering).
   follow-up.
 - **Unbounded channels.** `send` never blocks (the buffer grows without limit this slice); a
   bounded/closeable channel is a follow-up.
+- **`spawn` compiles its call inline (no thunk frame).** A `spawn f(x)` runs `f(x)` inline rather than
+  wrapping it in a thunk closure, so a fault inside a spawned call traces through the real call
+  (`f → caller`) **identically** on `run` and `runvm`. (A thunk lambda would surface as a synthetic
+  `<lambda@N>` frame on the VM only — closures are real call frames there but invisible in the
+  tree-walker — a `run`≢`runvm` trace divergence. The cooperative cutover, when it needs to *defer* the
+  call, must preserve this trace transparency.) This sits on a **broader pre-existing asymmetry**: a
+  fault inside *any* lambda/closure call shows the closure frame (`<lambda@N>`) on `runvm` but not on
+  `run` (the interpreter pushes no trace frame for closure calls). The differential `agree_err` oracle
+  classifies faults by *kind* (body substring), so it tolerates this trace-text difference; the
+  emitted output and fault kind stay byte-identical. Making closure-call traces fully identical on both
+  backends is a separate follow-up.
 
 ## `phg build` limitations (M2.5, in progress)
 
