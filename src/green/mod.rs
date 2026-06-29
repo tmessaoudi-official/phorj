@@ -12,6 +12,7 @@
 //!
 //! This module currently contains only the kernel; the executor wiring lands in the next build steps.
 
+pub mod exec;
 pub mod sched;
 
 // S4.3 step-3 gating spike (feasibility probe; compiled only under `green` + non-wasm + test).
