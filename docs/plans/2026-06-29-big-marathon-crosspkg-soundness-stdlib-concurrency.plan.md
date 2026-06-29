@@ -21,7 +21,12 @@
   - **S2.2 method return-overloading** — extend C1's `OverloadSelect`/per-return mangle from free fns to methods (method dispatch table doesn't carry the overload-by-return set).
   - **S2.3 must-use B/C** — bidirectional must-use propagation (flagged a real arch change in the 4th marathon).
   - **S2.4 while-let guards** — needs `Stmt::If.guard` through ~18 construction/consumer sites, or a synthetic-local desugar.
-- NEXT: Spine 3 — S3.1 stdlib charter (doc), then breadth natives.
+- [2026-06-29] S3.1 stdlib charter — DONE `3a6d2ea` (`docs/specs/2026-06-29-m4-stdlib-charter.md`, ROADMAP M4 adopted).
+- [2026-06-29] S3.2 `Core.List.chunk` — DONE `ddfabc4` (charter-compliant; `List<List<T>>`, `array_chunk`, size<1 faults).
+- [2026-06-29] S3.3 `Core.Text.lines` — DONE `8ea0b67` (split on `\n`, `explode` semantics).
+- **Spine 3 has a charter + 2 breadth natives** (more breadth — core.json encode/safe-parse already shipped; sprintf/path/url — remain for a follow-up).
+- **Spine 4 (M6 W4 concurrency/server) NOT started** — a large milestone (keep-alive, graceful shutdown, then uncolored `spawn`+channels green threads on the VM's reified frames, Tier-3 quarantined per the charter). Start fresh.
+- **Marathon checkpoint (8 commits): Spine 1 complete, Spine 3 charter+2 natives; Spine 2 deferred (architectural), Spine 4 pending.**
 
 ## Formal Plan
 
