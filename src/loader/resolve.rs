@@ -455,10 +455,26 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
         // A bare identifier that names a cross-package type (e.g. the head of an enum access
         // `Color.Red`) resolves to the mangled FQN; the shadow guard guarantees an imported type
         // name is never also a local/variable, so rewriting every occurrence is safe.
-        Expr::Ident(n, sp) => match resolve_type_ref(&n, ctx) {
-            Some(m) => Expr::Ident(m, sp),
-            None => Expr::Ident(n, sp),
-        },
+        Expr::Ident(n, sp) => {
+            if let Some(m) = resolve_type_ref(&n, ctx) {
+                Expr::Ident(m, sp)
+            } else if let Some(f) = ctx
+                .defined
+                .get(&(ctx.package.join("."), n.clone()))
+                .cloned()
+            {
+                // A bare reference to a same-package function used as a *value* (a first-class
+                // function reference, e.g. `var f = dbl;` or passing `dbl` to a higher-order call):
+                // mangle it to its FQN so the backends resolve the (mangled) function, mirroring the
+                // call-site path in `resolve_call`. For `package Main` the mangle is a no-op (bare
+                // name preserved), so single-package programs are byte-identical. Visibility is
+                // enforced exactly as for a same-package call.
+                check_fn_visibility(ctx, &ctx.package.join("."), &n);
+                Expr::Ident(f, sp)
+            } else {
+                Expr::Ident(n, sp)
+            }
+        }
         Expr::InstanceOf {
             value,
             type_name,

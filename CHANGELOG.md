@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Lambdas + first-class function values in library packages (M3 S3, cross-package)
+
+A same-package function reference inside a *library* (non-`main`) package now resolves in **every**
+position: at a call site (already worked), inside a lambda body (`fn(int x) => dbl(x)`), and — the new
+case — in **value position** (`var f = dbl;`, or passing `dbl` to a higher-order call). The loader's
+`Expr::Ident` value-resolution arm now mangles a bare same-package function reference to its package
+FQN, mirroring the call-site path; for `package Main` the mangle is a no-op, so single-file programs
+stay byte-identical. Verified `run ≡ runvm ≡ real PHP 8.5` (`examples/project/funcvalues/`). Qualified
+cross-package function *values* (passing `Acme.Calc.dbl` itself vs. calling it) remain deferred.
+
 ### Added — Cross-package traits (M-RT S8, cross-package)
 
 A `trait` declared in a library package can now be composed into a class in another package. It is

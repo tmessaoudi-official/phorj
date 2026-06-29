@@ -1,0 +1,2 @@
+module = "acme/funcvalues"
+source = "src"

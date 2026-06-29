@@ -556,15 +556,15 @@ or simply unavailable, never a crash):
   correctly, only the location is imprecise; a follow-up. Backend note: the interpreter/compiler retain
   their bare-field resolution paths, but the checker gates every program, so they are unreachable for
   valid code.
-- **Lambdas and first-class function references are supported in `package Main` (and single-file
-  programs), not yet inside library (non-`main`) packages.** The M5 loader's name-mangling pass
-  rewrites *call sites*, but not a bare function reference used as a *value* nor the body of a lambda,
-  so a same-package call inside a lambda body — or a bare named-fn value — declared in a dotted
-  library package is not rewritten to its mangled target. In practice this is rejected cleanly
-  (`E-UNKNOWN-IDENT`); avoid lambdas / function values in library packages this slice (the guide
-  example and every `package Main` program are unaffected). Loader-resolving lambda bodies and
-  fn-value references is a follow-up. Qualified / cross-package function *values* (passing
-  `acme.util.compute` itself, vs. *calling* it) are likewise deferred — call them directly.
+- **Lambdas and first-class function references now work inside library (non-`main`) packages**
+  (validated 2026-06-29). The loader's name-mangling pass rewrites a same-package function reference in
+  every position — at a call site, inside a lambda body (`fn(int x) => dbl(x)`), AND in value position
+  (`var f = dbl;` / passing `dbl` to a higher-order call) — to its package FQN, so the backends resolve
+  the mangled function. For `package Main` the mangle is a no-op, so single-file programs are
+  byte-identical. Verified `run ≡ runvm ≡ real PHP` (`examples/project/funcvalues/`). Still deferred:
+  **qualified / cross-package function *values*** — passing `Acme.Calc.dbl` itself (the dotted member as
+  a value, vs. *calling* it `Acme.Calc.dbl(x)`) is not yet rewritten; call it, or wrap it in a local
+  same-package function and pass that.
 - **Statement-body lambdas require an explicit `-> T`** — the return type of a block-body lambda is
   not inferred (expression-body lambdas infer it from the expression). This is by design this slice.
 - **Function-type assignability is exact structural equality** — no parameter/return variance

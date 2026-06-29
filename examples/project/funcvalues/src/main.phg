@@ -1,0 +1,14 @@
+// Cross-package LAMBDAS + first-class FUNCTION VALUES (M3 S3, cross-package): a library package whose
+// functions use a lambda (calling a same-package function) and a bare function-value reference, called
+// from `Main`. Both surfaces now resolve across the package boundary.
+package Main;
+
+import Core.Console;
+import Core.List;
+import Acme.Calc;
+
+function main(): void {
+  var ys = Calc.doubleAll([1, 2, 3]); // [2, 4, 6]
+  Console.println("sum: {List.sum(ys)}"); // sum: 12
+  Console.println("applyDouble: {Calc.applyDouble(5)}"); // applyDouble: 10
+}
