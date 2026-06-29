@@ -3,7 +3,9 @@
 //   • `padLeft`/`padRight(s, width, pad) -> string` — fill to `width` by repeating `pad` (PHP
 //                                                     `str_pad`); an already-wide string is unchanged.
 //   • `indexOf(s, needle) -> int?`  — byte offset of the first occurrence, else `null` (PHP `strpos`).
+//   • `lastIndexOf(s, needle) -> int?` — byte offset of the LAST occurrence, else `null` (`strrpos`).
 //   • `substring(s, start, len) -> string` — a byte slice (PHP `substr`: negatives count from the end).
+//   • `removePrefix`/`removeSuffix(s, affix) -> string` — drop a leading/trailing affix if present.
 package Main;
 
 import Core.Console;
@@ -27,4 +29,16 @@ function main(): void {
     var last2 = Text.substring("hello", -2, 2); // "lo"
     Console.println("sub 1,3  = {ell}");
     Console.println("sub -2,2 = {last2}");
+
+    // lastIndexOf: the final occurrence (here the second '/').
+    var slash = Text.lastIndexOf("a/b/c", "/") ?? -1;
+    Console.println("lastIndexOf / = {slash}"); // 3
+
+    // removePrefix / removeSuffix: trim a known affix, leave the rest untouched.
+    var noProto = Text.removePrefix("https://x.io", "https://"); // "x.io"
+    var stem = Text.removeSuffix("report.csv", ".csv");          // "report"
+    var asis = Text.removeSuffix("report.csv", ".txt");          // unchanged
+    Console.println("noProto = {noProto}");
+    Console.println("stem    = {stem}");
+    Console.println("asis    = {asis}");
 }

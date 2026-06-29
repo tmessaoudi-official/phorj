@@ -215,6 +215,37 @@ fn text_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Text.indexOf expects (string, string)".into()),
     }
 }
+/// `lastIndexOf(string, string) -> int?` — the byte offset of the **last** occurrence of `needle`,
+/// else `null` (PHP `strrpos`, mapped from `false`). An empty needle is `strlen(s)` (PHP 8 + Rust
+/// `rfind` agree). The byte/`int?` complement of `indexOf`.
+fn text_last_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(needle)] => Ok(s
+            .rfind(needle.as_str())
+            .map_or(Value::Null, |i| Value::Int(i as i64))),
+        _ => Err("Text.lastIndexOf expects (string, string)".into()),
+    }
+}
+/// `removePrefix(string, string) -> string` — drop a leading `prefix` if present, else return `s`
+/// unchanged (Kotlin/Swift ergonomics; PHP `str_starts_with` + `substr`). An empty prefix is a no-op.
+fn text_remove_prefix(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(pre)] => Ok(Value::Str(
+            s.strip_prefix(pre.as_str()).unwrap_or(s).to_string(),
+        )),
+        _ => Err("Text.removePrefix expects (string, string)".into()),
+    }
+}
+/// `removeSuffix(string, string) -> string` — drop a trailing `suffix` if present, else return `s`
+/// unchanged (PHP `str_ends_with` + `substr`). An empty suffix is a no-op.
+fn text_remove_suffix(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(suf)] => Ok(Value::Str(
+            s.strip_suffix(suf.as_str()).unwrap_or(s).to_string(),
+        )),
+        _ => Err("Text.removeSuffix expects (string, string)".into()),
+    }
+}
 /// The float grammar (M4 `parseFloat`): `[+-]? digits? (. digits?)? ([eE][+-]?digits)?` with the
 /// **strict**/**permissive** difference being only the leading/trailing dot. STRICT requires leading
 /// integer digits and (if a dot is present) trailing fractional digits — `1`, `1.5`, `-2.5e3` ok;
@@ -641,6 +672,55 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_index_of),
             php: |a| format!("__phorj_text_index_of({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `lastIndexOf(string, string) -> int?` — the last occurrence (PHP `strrpos` → null via a
+        // single-eval arrow-IIFE, like `parseBool`; no helper-file edit).
+        NativeFn {
+            module: "Core.Text",
+            name: "lastIndexOf",
+            params: vec![s(), s()],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(text_last_index_of),
+            php: |a| {
+                format!(
+                    "(fn($__h, $__n) => ($__p = strrpos($__h, $__n)) === false ? null : $__p)({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        // `removePrefix`/`removeSuffix(string, string) -> string` — drop an affix if present (PHP
+        // `str_starts_with`/`str_ends_with` + `substr`, single-eval arrow-IIFE).
+        NativeFn {
+            module: "Core.Text",
+            name: "removePrefix",
+            params: vec![s(), s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_remove_prefix),
+            php: |a| {
+                format!(
+                    "(fn($__s, $__p) => str_starts_with($__s, $__p) ? substr($__s, strlen($__p)) : $__s)({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "removeSuffix",
+            params: vec![s(), s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_remove_suffix),
+            php: |a| {
+                format!(
+                    "(fn($__s, $__p) => str_ends_with($__s, $__p) ? substr($__s, 0, strlen($__s) - strlen($__p)) : $__s)({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
         },
         // `substring(string, int, int) -> string` — PHP `substr` (byte-indexed; negatives from end).
         NativeFn {

@@ -19,6 +19,50 @@ fn text_capitalize_ascii_ucfirst() {
 }
 
 #[test]
+fn text_last_index_of_matches_strrpos() {
+    let li = |s: &str, n: &str| {
+        text_last_index_of(
+            &[Value::Str(s.into()), Value::Str(n.into())],
+            &mut String::new(),
+        )
+        .unwrap()
+    };
+    // Reference values captured from real `php -n` 8.5 (strrpos).
+    assert!(matches!(li("hello world", "o"), Value::Int(7)));
+    assert!(matches!(li("aXbXc", "X"), Value::Int(3)));
+    assert!(matches!(li("abc", "x"), Value::Null)); // absent → null
+    assert!(matches!(li("abc", ""), Value::Int(3))); // empty needle → strlen (PHP 8 + Rust agree)
+}
+
+#[test]
+fn text_remove_affix() {
+    let rp = |s: &str, p: &str| match text_remove_prefix(
+        &[Value::Str(s.into()), Value::Str(p.into())],
+        &mut String::new(),
+    )
+    .unwrap()
+    {
+        Value::Str(r) => r.to_string(),
+        other => panic!("got {other:?}"),
+    };
+    let rs = |s: &str, p: &str| match text_remove_suffix(
+        &[Value::Str(s.into()), Value::Str(p.into())],
+        &mut String::new(),
+    )
+    .unwrap()
+    {
+        Value::Str(r) => r.to_string(),
+        other => panic!("got {other:?}"),
+    };
+    assert_eq!(rp("unhappy", "un"), "happy");
+    assert_eq!(rp("happy", "un"), "happy"); // absent prefix → unchanged
+    assert_eq!(rp("abc", ""), "abc"); // empty prefix → no-op
+    assert_eq!(rs("file.txt", ".txt"), "file");
+    assert_eq!(rs("file.txt", ".doc"), "file.txt"); // absent suffix → unchanged
+    assert_eq!(rs("abc", ""), "abc"); // empty suffix → no-op
+}
+
+#[test]
 fn text_lines_splits_on_newline() {
     let mut o = String::new();
     let collect = |v: Value| match v {
