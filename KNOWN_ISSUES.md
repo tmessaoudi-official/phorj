@@ -494,9 +494,15 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   `runvm` errors.] Fixing this needs the compiler to thread reified generic result types (deferred).
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
-- **Cross-package generic *library* types** are not validated this slice — a generic class is
-  `package Main`-only (the loader leaves a class type parameter unchanged and erasure removes it, so it
-  may happen to work, but it is untested). Cross-package *monomorphic* types ship (`E-PKG-TYPE` lifted).
+- **Cross-package generic *library* types now ship** (validated 2026-06-29) — a generic class
+  (`Box<T>`, `Pair<A, B>`) declared in a library package is consumed from another package via
+  `import type Pkg.Path.Type`, inferred at construction and recovered at each use site, with invariant
+  type arguments enforced across the package boundary. The loader leaves the type parameter untouched
+  and `erase_generics` removes it before any backend, so it rides the same erasure path as a
+  `package Main` generic class — byte-identical `run ≡ runvm ≡ real PHP`
+  (`examples/project/genericbox/`). Generic *enums* in a library package are the same erasure path but
+  not yet covered by a shipped example; cross-package generic *methods* on a non-generic library class
+  likewise ride the existing method machinery.
 - **Explicit type arguments at construction** (`Box<int>(7)`) are not parsed — the type argument is
   inferred from the constructor arguments. An explicit *annotation* (`Box<int> b = Box(7)`) does work.
 - **Generic enums** (`enum Option<T>` / `enum Result<T, E>`) ship, with the same scope as generic

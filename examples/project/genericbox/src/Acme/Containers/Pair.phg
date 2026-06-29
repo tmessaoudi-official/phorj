@@ -1,0 +1,13 @@
+// A two-parameter generic container in the same library package. `A` and `B` are inferred
+// independently from the two constructor arguments (`new Pair(1, "one")` ⇒ `Pair<int, string>`).
+package Acme.Containers;
+
+public class Pair<A, B> {
+  constructor(private A first, private B second) {}
+  function left(): A {
+    return this.first;
+  }
+  function right(): B {
+    return this.second;
+  }
+}

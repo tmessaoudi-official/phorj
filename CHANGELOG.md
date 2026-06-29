@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Cross-package generic library types (M-RT generics-all, cross-package)
+
+A generic class declared in a *library* package (`Box<T>`, `Pair<A, B>`) is now a validated,
+example-gated surface: it is consumed from another package via `import type Pkg.Path.Type`, its type
+parameter is inferred at construction and recovered at each use site, and type arguments are invariant
+across the package boundary. No new machinery — the loader leaves the type parameter untouched and
+`erase_generics` removes it before any backend, so it rides the same erasure path as a `package Main`
+generic class. Byte-identical `run ≡ runvm ≡ real PHP 8.5`, gated by the project-aware differential
+harness (`examples/project/genericbox/`). Lifts the prior "untested" note in `KNOWN_ISSUES.md`.
+
 ### Added — LSP cross-file go-to-definition + hover
 
 The language server (`phg lsp`) now resolves **go-to-definition and hover across the open buffer set**: a

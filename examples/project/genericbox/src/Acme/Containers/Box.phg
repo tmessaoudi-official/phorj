@@ -1,0 +1,24 @@
+// A generic container in a *library* package (M-RT generics-all, cross-package).
+//
+// `Box<T>` is a one-field generic class declared in the `Acme.Containers` package and consumed from
+// `Main` via `import type Acme.Containers.Box`. The type parameter `T` is inferred at construction
+// (`new Box(7)` ⇒ `Box<int>`) and recovered at each use site, exactly as it is for a `package Main`
+// generic class — the loader leaves the type parameter untouched and `erase_generics` removes it
+// before any backend, so the interpreter, the VM, and the transpiled PHP all run identical,
+// type-variable-free code (`T` ⇒ PHP `mixed`). Type arguments are invariant across the package
+// boundary: a `Box<string>` does not flow into a `Box<int>` slot.
+package Acme.Containers;
+
+public class Box<T> {
+  constructor(private T value) {}
+
+  // Returns the stored value at whatever concrete type the box was constructed with.
+  function get(): T {
+    return this.value;
+  }
+
+  // A method taking a `T`: checked at the instance's concrete type.
+  function orElse(T fallback): T {
+    return this.value;
+  }
+}
