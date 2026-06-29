@@ -45,6 +45,12 @@ function main(): void {
     int g2 = Math.gcd(17, 5);
     Console.println("gcd(48,36) = {g1}, gcd(17,5) = {g2}");
 
+    // `lcm` pairs with `gcd` (= |a|/gcd*|b|), erasing to a `__phorj_lcm` helper; `lcm(_, 0) = 0`.
+    int l1 = Math.lcm(4, 6);
+    int l2 = Math.lcm(21, 6);
+    int l3 = Math.lcm(7, 0);
+    Console.println("lcm(4,6) = {l1}, lcm(21,6) = {l2}, lcm(7,0) = {l3}");
+
     // --- Transcendentals (log / exp / trig) erase to the PHP libm builtins. A non-representable
     // result would diverge between Rust's shortest-round-trip and PHP's libm, so we exercise them at
     // their *exact* values (defined by IEEE) — see `numberFormat` below for printing real results. ---

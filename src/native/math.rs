@@ -157,6 +157,32 @@ fn math_gcd(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Math.gcd expects (int, int)".into()),
     }
 }
+fn math_lcm(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // `lcm(a, b) = |a| / gcd(|a|, |b|) * |b|` over the magnitudes (`unsigned_abs` so `i64::MIN`
+        // doesn't overflow `abs`). `lcm(_, 0) = 0` by convention. Division before multiplication keeps
+        // the intermediate as small as possible; the final `u64` product and the `i64` narrowing are
+        // both checked → a clean fault on overflow (EV-7), never a panic.
+        [Value::Int(a), Value::Int(b)] => {
+            if *a == 0 || *b == 0 {
+                return Ok(Value::Int(0));
+            }
+            let (x, y) = (a.unsigned_abs(), b.unsigned_abs());
+            let (mut ga, mut gb) = (x, y);
+            while gb != 0 {
+                let t = gb;
+                gb = ga % gb;
+                ga = t;
+            }
+            (x / ga)
+                .checked_mul(y)
+                .and_then(|l| i64::try_from(l).ok())
+                .map(Value::Int)
+                .ok_or_else(|| "integer overflow in Math.lcm".to_string())
+        }
+        _ => Err("Math.lcm expects (int, int)".into()),
+    }
+}
 fn math_log(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Float(x.ln())),
@@ -428,6 +454,15 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(math_gcd),
             php: |a| format!("__phorj_gcd({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "lcm",
+            params: vec![Ty::Int, Ty::Int],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(math_lcm),
+            php: |a| format!("__phorj_lcm({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Math",

@@ -315,6 +315,9 @@ struct Transpiler {
     /// Set when `Math.gcd(int, int)` is emitted (M-NUM S4) — defines `__phorj_gcd` (Euclid over the
     /// magnitudes), since gmp is absent under `php -n`. Mirrors the Rust `math_gcd` native body.
     uses_math_gcd: bool,
+    /// Set when `Math.lcm(int, int)` is emitted (M4) — defines `__phorj_lcm` (`x/gcd*y` over the
+    /// magnitudes, inlining Euclid so it needs no `__phorj_gcd`). Mirrors the Rust `math_lcm` native.
+    uses_math_lcm: bool,
     /// Set when `Math.numberFormat(float, int)` is emitted (M-NUM S4) — defines
     /// `__phorj_number_format`, assembling the grouped string byte-for-byte like `value::number_format`
     /// (so the PHP leg never relies on PHP's own `number_format` and its `-0`/locale quirks).
@@ -541,6 +544,7 @@ impl Transpiler {
             uses_float_to_int_exact: false,
             uses_dec_to_int_exact: false,
             uses_math_gcd: false,
+            uses_math_lcm: false,
             uses_math_number_format: false,
             uses_rng: false,
             uses_regex: false,

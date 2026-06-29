@@ -191,6 +191,25 @@ fn math_s4_breadth_eval_and_emit() {
     ));
     assert!(math_gcd(&[Value::Int(i64::MIN), Value::Int(i64::MIN)], &mut out).is_err());
 
+    // lcm — |a|/gcd*|b|; lcm(_,0)=0; sign-independent; i64-overflow faults (EV-7)
+    assert!(matches!(
+        math_lcm(&[Value::Int(4), Value::Int(6)], &mut out),
+        Ok(Value::Int(12))
+    ));
+    assert!(matches!(
+        math_lcm(&[Value::Int(21), Value::Int(6)], &mut out),
+        Ok(Value::Int(42))
+    ));
+    assert!(matches!(
+        math_lcm(&[Value::Int(-4), Value::Int(6)], &mut out),
+        Ok(Value::Int(12))
+    ));
+    assert!(matches!(
+        math_lcm(&[Value::Int(7), Value::Int(0)], &mut out),
+        Ok(Value::Int(0))
+    ));
+    assert!(math_lcm(&[Value::Int(i64::MAX), Value::Int(2)], &mut out).is_err());
+
     // transcendentals at exact (IEEE-defined) points
     assert!(matches!(math_exp(&[Value::Float(0.0)], &mut out), Ok(Value::Float(x)) if x == 1.0));
     assert!(matches!(math_log(&[Value::Float(1.0)], &mut out), Ok(Value::Float(x)) if x == 0.0));
@@ -236,6 +255,7 @@ fn math_s4_breadth_eval_and_emit() {
         "max($lo, min($v, $hi))"
     );
     assert_eq!(php("gcd", &["$a", "$b"]), "__phorj_gcd($a, $b)");
+    assert_eq!(php("lcm", &["$a", "$b"]), "__phorj_lcm($a, $b)");
     assert_eq!(php("log", &["$x"]), "log($x)");
     assert_eq!(php("log10", &["$x"]), "log10($x)");
     assert_eq!(php("exp", &["$x"]), "exp($x)");

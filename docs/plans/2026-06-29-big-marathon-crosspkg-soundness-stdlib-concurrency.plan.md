@@ -12,8 +12,50 @@
 - [2026-06-29] AGREED (session 3, "new big thing + marathon"): developer chose **"all of 1 and 2 and 4 in the recommended order autonomously"** = full Spine-2 soundness long-tail → Spine-4 M6 W4 concurrency capstone, with Spine-3 breadth interleaved as low-risk warm-ups. Pacing: **one heavy slice per context window, commit green, let compaction carry the marathon.** Immediate next = S2.2 method return-overloading (design recorded checkpoint #4).
 - [2026-06-29] AGREED (session 2, post-breadth): developer pushed the 13 marathon commits; directive = **do all the rest**, in this **confirmed order** — **Spine 2 soundness first (tractable→heaviest): S2.4 while-let guards → S2.2 method return-overloading → S2.1 generic-result VM operand → S2.3 must-use B/C; then Spine 4 W4 concurrency (capstone) on the cleaned base; Spine-3 breadth interleaved as low-risk warm-ups.** Rationale: don't build the concurrency layer atop known run↔runvm parity gaps; ramp difficulty up rather than opening on the heaviest item.
 
+## S2.1-broad REMAINDER — implementation design (pick-up-ready, for a fresh context)
+
+> The narrow free-fn case (`1163e47`) and the generic-method-param-echo case (`3a95755`) both rode an
+> AST field (`generic_ret_from_param`) into the compiler. The REMAINDER cannot — it needs the
+> *reified instance type argument* at a call/read site, which the AST field can't carry:
+> - `box.get() + 1` where `Box<int>` and `get()` returns the **class** `T` (via a field) — the operand
+>   type is `int` only because *this receiver* is `Box<int>`; a different `Box<string>` differs.
+> - a generic **field** read `box.value + 1` (value: `T`).
+> - a `List<T>`-element/`Map<K,V>`-value return, or a return computed from several params.
+>
+> **Root cause:** the compiler's `CTy::Class(String)` carries **no type arguments**, and `ctype` has no
+> per-expression reified-type source. The checker DOES compute the precise reified type at each such
+> expression (it already types `box.get()` as `int`).
+>
+> **Chosen approach — checker-produced, span-keyed reified-operand side-table (NOT a CTy::Class arg
+> extension).** Extending `CTy::Class` to carry args touches every CTy match site (huge blast radius)
+> and still wouldn't cover `List<T>` returns. Instead:
+> 1. **Checker:** during `check_expr`, when an expression's resolved `Ty` is a concrete scalar
+>    (`Int`/`Float`/`Bool`/`String`) **but** the expression is a generic call/method-call/field-read
+>    whose *static* shape would erase to `Other` (i.e. the precise type is only known via generics),
+>    record `reified_operand: HashMap<usize /*expr span.start*/, CTy>`. Map `Ty -> CTy` via the existing
+>    `resolve_cty`-equivalent. Keep it MINIMAL: only insert when the Ty is a specializable operand
+>    (Int/Float) — that is the only thing the VM `ctype` needs; everything else stays `Other` safely.
+> 2. **Thread it out** of `check_resolutions` as a 5th return (alongside `html`/`ufcs`/`overload_renames`)
+>    and into `compile`/`compile_program` — the friction point: `compile_program(&Program)` has no
+>    side-channel today. Add a parallel entry `compile_program_with(program, &reified)` (keep the old
+>    one delegating with an empty map) so the many `compile`/test callers stay source-compatible; the
+>    `cmd_runvm` path passes the map, tests/`compile()` default to empty.
+> 3. **Compiler `ctype`:** as the FIRST check in `ctype`, `if let Some(cty) = self.reified_operand.get(&span_of(e)) { return Ok(cty.clone()); }`. Every `Expr` variant carries a `span` — add a small `expr_span(&Expr)` helper (or reuse one if present). This subsumes the field-based `generic_ret_from_param` paths too (they can stay; the side-table just wins first).
+> **Span stability:** the expand pipeline (alias/html/generics-erase/ufcs/overload) preserves expression
+> spans (rewrites carry original spans), so the checker-time span keys still align with the compiled AST.
+> **VERIFY THIS FIRST** in the fresh context with a probe (a generic field read through the pipeline),
+> because UFCS/overload rewrites REPLACE call nodes — a replaced node's span may differ. If a key misses,
+> the operand falls back to `Other` (VM rejects) — a *safe* failure (no silent wrong answer), caught by
+> an `agree` test. **Gate every case with an `agree_out_php` test**: `box.get()+1`, `box.value+1`,
+> `List<int>`-element return `+1`, `Map`-value `+1`. Example: extend `examples/guide/generic-types.phg`.
+> Scope: still `package Main`; no new `Op`/`Value`. **Do in a fresh context — multi-site + byte-identity-critical.**
+
 ## Progress
 
+- **Marathon checkpoint #7 (session 3 cont.): `Core.Math.lcm`** — pairs with `gcd` (`|a|/gcd*|b|`,
+  `lcm(_,0)=0`, EV-7 overflow fault), gated `__phorj_lcm` (inlines Euclid). Byte-identical;
+  `examples/guide/math.phg` + unit tests (values + php-mapping) + README. Commit pending gate-green.
+  **Also recorded the S2.1-broad-remainder design above (the genuinely heavy reified-result side-table).**
 - **Marathon checkpoint #6 (session 3 cont.): two more commits.**
   - **`a38ff45` Spine-3 breadth: `Core.List.lastIndexOf`** — last structural-match index → `int?`,
     symmetric companion to `indexOf` (gated `__phorj_last_index_of` over `array_keys(…, true)`); unique

@@ -842,6 +842,20 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_math_lcm {
+            // `Math.lcm` — `|a|/gcd*|b|` over the magnitudes, inlining Euclid (so it needs no
+            // `__phorj_gcd`). Mirrors the Rust `math_lcm` native for every in-range input; `lcm(_, 0)=0`.
+            self.line("function __phorj_lcm($a, $b) {");
+            self.indent += 1;
+            self.line("if ($a === 0 || $b === 0) { return 0; }");
+            self.line("if ($a < 0) { $a = -$a; }");
+            self.line("if ($b < 0) { $b = -$b; }");
+            self.line("$x = $a; $y = $b;");
+            self.line("while ($y != 0) { $t = $y; $y = $x % $y; $x = $t; }");
+            self.line("return intdiv($a, $x) * $b;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_math_number_format {
             // `Math.numberFormat($v, $d)` — digit-string rounding, mirroring `value::number_format`
             // byte-for-byte: round the *shortest-round-trip* decimal string (`__phorj_float`, identical
