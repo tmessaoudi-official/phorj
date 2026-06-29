@@ -297,3 +297,39 @@ fn text_breadth_pad_indexof_substring() {
         Ty::Optional(Box::new(Ty::Int))
     );
 }
+
+#[test]
+fn text_is_empty_trims_and_count() {
+    let mut o = String::new();
+    assert!(matches!(
+        text_is_empty(&[Value::Str("".into())], &mut o).unwrap(),
+        Value::Bool(true)
+    ));
+    assert!(matches!(
+        text_is_empty(&[Value::Str("x".into())], &mut o).unwrap(),
+        Value::Bool(false)
+    ));
+    assert!(matches!(
+        text_trim_start(&[Value::Str("  hi  ".into())], &mut o).unwrap(),
+        Value::Str(s) if s == "hi  "
+    ));
+    assert!(matches!(
+        text_trim_end(&[Value::Str("  hi  ".into())], &mut o).unwrap(),
+        Value::Str(s) if s == "  hi"
+    ));
+    // non-overlapping count
+    assert!(matches!(
+        text_count(
+            &[Value::Str("banana".into()), Value::Str("a".into())],
+            &mut o
+        )
+        .unwrap(),
+        Value::Int(3)
+    ));
+    assert!(matches!(
+        text_count(&[Value::Str("aaa".into()), Value::Str("aa".into())], &mut o).unwrap(),
+        Value::Int(1)
+    ));
+    // empty needle is a clean fault (matches PHP substr_count rejecting it)
+    assert!(text_count(&[Value::Str("x".into()), Value::Str("".into())], &mut o).is_err());
+}

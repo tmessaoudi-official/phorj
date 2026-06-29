@@ -249,3 +249,21 @@ fn math_s4_breadth_eval_and_emit() {
         "__phorj_number_format($v, $d)"
     );
 }
+
+#[test]
+fn math_is_even_is_odd_incl_negatives() {
+    let mut o = String::new();
+    let even = |n: i64, o: &mut String| {
+        matches!(
+            math_is_even(&[Value::Int(n)], o).unwrap(),
+            Value::Bool(true)
+        )
+    };
+    let odd = |n: i64, o: &mut String| {
+        matches!(math_is_odd(&[Value::Int(n)], o).unwrap(), Value::Bool(true))
+    };
+    assert!(even(4, &mut o) && even(0, &mut o) && even(-4, &mut o));
+    assert!(!even(7, &mut o) && !even(-3, &mut o));
+    assert!(odd(7, &mut o) && odd(-3, &mut o));
+    assert!(!odd(4, &mut o) && !odd(0, &mut o));
+}

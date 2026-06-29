@@ -285,9 +285,82 @@ fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// The `Core.Text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
 /// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
 /// reorder accordingly so the erasure matches Phorj's `(subject, …)` argument order.
+fn text_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Bool(s.is_empty())),
+        _ => Err("Text.isEmpty expects (string)".into()),
+    }
+}
+
+fn text_trim_start(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.trim_start().to_string())),
+        _ => Err("Text.trimStart expects (string)".into()),
+    }
+}
+
+fn text_trim_end(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.trim_end().to_string())),
+        _ => Err("Text.trimEnd expects (string)".into()),
+    }
+}
+
+/// `Text.count(string, string) -> int` — non-overlapping occurrences of the substring (PHP
+/// `substr_count`). An empty needle is a clean fault (PHP `substr_count` rejects it too).
+fn text_count(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(sub)] => {
+            if sub.is_empty() {
+                return Err("Text.count: the substring must not be empty".into());
+            }
+            Ok(Value::Int(
+                i64::try_from(s.matches(sub.as_str()).count()).unwrap_or(i64::MAX),
+            ))
+        }
+        _ => Err("Text.count expects (string, string)".into()),
+    }
+}
+
 pub(crate) fn text_natives() -> Vec<NativeFn> {
     let s = || Ty::String;
     vec![
+        NativeFn {
+            module: "Core.Text",
+            name: "isEmpty",
+            params: vec![s()],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(text_is_empty),
+            php: |a| format!("({}) === ''", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "trimStart",
+            params: vec![s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_trim_start),
+            php: |a| format!("ltrim({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "trimEnd",
+            params: vec![s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_trim_end),
+            php: |a| format!("rtrim({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "count",
+            params: vec![s(), s()],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(text_count),
+            php: |a| format!("substr_count({}, {})", parg(a, 0), parg(a, 1)),
+        },
         NativeFn {
             module: "Core.Text",
             name: "length",

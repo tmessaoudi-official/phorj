@@ -217,8 +217,40 @@ fn math_number_format(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// The `Core.Math` registry entries (M3 Track B Wave 2; breadth added in M-NUM S4).
+fn math_is_even(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(n)] => Ok(Value::Bool(n % 2 == 0)),
+        _ => Err("Math.isEven expects (int)".into()),
+    }
+}
+
+fn math_is_odd(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(n)] => Ok(Value::Bool(n % 2 != 0)),
+        _ => Err("Math.isOdd expects (int)".into()),
+    }
+}
+
 pub(crate) fn math_natives() -> Vec<NativeFn> {
     vec![
+        NativeFn {
+            module: "Core.Math",
+            name: "isEven",
+            params: vec![Ty::Int],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(math_is_even),
+            php: |a| format!("({}) % 2 === 0", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "isOdd",
+            params: vec![Ty::Int],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(math_is_odd),
+            php: |a| format!("({}) % 2 !== 0", parg(a, 0)),
+        },
         NativeFn {
             module: "Core.Math",
             name: "sqrt",
