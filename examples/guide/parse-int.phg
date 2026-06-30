@@ -1,4 +1,4 @@
-// `Core.Text.parseInt` — string → int, the safe way.
+// `Core.String.parseInt` — string → int, the safe way.
 //
 // `parseInt(string) -> int?` returns `None` when the whole string is not a valid base-10 integer,
 // rather than guessing (PHP's `(int)"12abc"` is `12`; here it is `None`). It mirrors the language's
@@ -6,10 +6,10 @@
 // and no surrounding whitespace. Compose it with `??` for a default, or `if (var n = …)` to branch.
 package Main;
 import Core.Console;
-import Core.Text;
+import Core.String;
 
 function describe(string s): string {
-  if (var n = Text.parseInt(s)) {
+  if (var n = String.parseInt(s)) {
     return "{s} -> {n}";
   }
   return "{s} -> (not an int)";
@@ -26,8 +26,8 @@ function main(): void {
   Console.println(describe("99999999999999999999")); // not an int (out of int range)
 
   // Compose with `??` for a default.
-  int port = Text.parseInt("8080") ?? 0;
+  int port = String.parseInt("8080") ?? 0;
   Console.println("port = {port}");       // port = 8080
-  int fallback = Text.parseInt("nope") ?? -1;
+  int fallback = String.parseInt("nope") ?? -1;
   Console.println("fallback = {fallback}"); // fallback = -1
 }

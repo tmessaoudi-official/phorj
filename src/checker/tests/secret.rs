@@ -11,7 +11,7 @@ const SECRET: &str =
     "class Secret<T> { constructor(private T value) {} function expose(): T { return this.value; } }";
 
 fn src_of(body: &str) -> String {
-    format!("import Core.Console; import Core.Text; import Core.File; {SECRET} {body}")
+    format!("import Core.Console; import Core.String; import Core.File; {SECRET} {body}")
 }
 
 fn warns(body: &str, code: &str) -> bool {
@@ -48,7 +48,7 @@ fn printing_a_secret_is_a_type_error() {
 fn expose_is_the_read_path_and_checks_clean() {
     // A legitimate expose away from a sink: no error, no W-SECRET.
     let body =
-        "function main() -> void { var s = new Secret(\"k\"); int n = Text.length(s.expose()); }";
+        "function main() -> void { var s = new Secret(\"k\"); int n = String.length(s.expose()); }";
     assert!(errs(body).is_empty(), "{:?}", errs(body));
     assert!(!warns(body, "W-SECRET"));
 }

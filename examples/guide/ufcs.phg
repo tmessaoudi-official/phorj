@@ -12,7 +12,7 @@ package Main;
 
 import Core.Console;
 import Core.List;
-import Core.Text;
+import Core.String;
 
 // A user free function — UFCS lets it be called method-style on its first argument (`n.triple()`).
 function triple(int x): int {
@@ -40,7 +40,7 @@ function main(): void {
     var seven = 7;
     Console.println("triple     = {seven.triple()}"); // 21
 
-    // String native UFCS: `s.uppercase()` ≡ `Text.uppercase(s)`, `s.repeat(n)` ≡ `Text.repeat(s, n)`.
+    // String native UFCS: `s.uppercase()` ≡ `String.uppercase(s)`, `s.repeat(n)` ≡ `String.repeat(s, n)`.
     var name = "phorj";
     Console.println("upper      = {name.uppercase()}"); // PHORJ
     Console.println("repeat     = {name.repeat(2)}"); // phorjphorj

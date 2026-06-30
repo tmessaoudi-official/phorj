@@ -13,7 +13,7 @@ package Main;
 // only thing NOT exercised here (that lives in tests/serve.rs, outside the byte-identity spine).
 import Core.Console;
 import Core.Bytes;
-import Core.Text;
+import Core.String;
 
 class Request {
   constructor(public string method, public string path, public bytes body,
@@ -21,10 +21,10 @@ class Request {
 
   function header(string name): string? {
     for (string line in this.headerLines) {
-      if (Text.contains(line, ":")) {
-        List<string> kv = Text.splitOnce(line, ":");
-        string key = Text.trim(kv[0]);
-        if (key == name) { return Text.trim(kv[1]); }
+      if (String.contains(line, ":")) {
+        List<string> kv = String.splitOnce(line, ":");
+        string key = String.trim(kv[0]);
+        if (key == name) { return String.trim(kv[1]); }
       }
     }
     return null;
@@ -50,9 +50,9 @@ function parseRequest(bytes raw): Request? {
   bytes headBytes = Bytes.slice(raw, 0, sep);
   bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
   string head = Bytes.toString(headBytes) ?? "";
-  List<string> lines = Text.split(head, nl);
+  List<string> lines = String.split(head, nl);
   string requestLine = lines[0];
-  List<string> rl = Text.split(requestLine, " ");
+  List<string> rl = String.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
   return new Request(method, path, body, lines);
@@ -65,7 +65,7 @@ function serializeResponse(Response resp): bytes {
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
   int bodyLen = Bytes.length(resp.body);
-  string userHeaders = Text.join(resp.headerLines, nl);
+  string userHeaders = String.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}Connection: close{nl}{userHeaders}{nl}{nl}";
   return Bytes.concat(Bytes.fromString(head), resp.body);
 }
@@ -143,7 +143,7 @@ function summarize(bytes raw): void {
   bytes wire = respond(raw);
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   string wireStr = Bytes.toString(wire) ?? "(binary)";
-  List<string> lines = Text.split(wireStr, nl);
+  List<string> lines = String.split(wireStr, nl);
   string statusLine = lines[0];
   int len = Bytes.length(wire);
   Console.println("{statusLine} ({len}B)");

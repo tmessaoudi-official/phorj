@@ -2803,7 +2803,7 @@ function main() -> void {
     );
 }
 
-/// Primitives sweep P3.2 — the byte-safe stdlib subset: `Text.startsWith`/`endsWith`/`repeat`,
+/// Primitives sweep P3.2 — the byte-safe stdlib subset: `String.startsWith`/`endsWith`/`repeat`,
 /// `Math.round` (→ int, half-away-from-zero like PHP's default), and `List.length`. Each erases 1:1
 /// to a PHP builtin (`str_starts_with`/`str_ends_with`/`str_repeat`/`(int)round`/`count`). Bools are
 /// rendered through an expression-`if` (PHP echoes a bool as `1`/`""`, not `true`/`false`).
@@ -2811,13 +2811,13 @@ function main() -> void {
 fn p3_byte_safe_stdlib_byte_identical() {
     agree_out_php(
         "import Core.Console;
-import Core.Text;
+import Core.String;
 import Core.Math;
 import Core.List;
 function main() -> void {
-    string sw = if (Text.startsWith(\"hello\", \"he\")) { \"yes\" } else { \"no\" };
-    string ew = if (Text.endsWith(\"hello\", \"lo\")) { \"yes\" } else { \"no\" };
-    string rep = Text.repeat(\"ab\", 3);
+    string sw = if (String.startsWith(\"hello\", \"he\")) { \"yes\" } else { \"no\" };
+    string ew = if (String.endsWith(\"hello\", \"lo\")) { \"yes\" } else { \"no\" };
+    string rep = String.repeat(\"ab\", 3);
     Console.println(\"sw={sw} ew={ew} rep={rep}\");
     int r1 = Math.round(2.5);
     int r2 = Math.round(2.4);

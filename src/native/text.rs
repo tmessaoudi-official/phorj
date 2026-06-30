@@ -387,7 +387,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
     let s = || Ty::String;
     vec![
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "isEmpty",
             params: vec![s()],
             ret: Ty::Bool,
@@ -396,7 +396,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("({}) === ''", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "trimStart",
             params: vec![s()],
             ret: Ty::String,
@@ -405,7 +405,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("ltrim({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "trimEnd",
             params: vec![s()],
             ret: Ty::String,
@@ -414,7 +414,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("rtrim({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "count",
             params: vec![s(), s()],
             ret: Ty::Int,
@@ -423,7 +423,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("substr_count({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "length",
             params: vec![s()],
             ret: Ty::Int,
@@ -432,7 +432,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strlen({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "uppercase",
             params: vec![s()],
             ret: Ty::String,
@@ -441,7 +441,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strtoupper({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "lowercase",
             params: vec![s()],
             ret: Ty::String,
@@ -450,7 +450,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strtolower({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "trim",
             params: vec![s()],
             ret: Ty::String,
@@ -459,7 +459,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("trim({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "contains",
             params: vec![s(), s()],
             ret: Ty::Bool,
@@ -468,7 +468,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("str_contains({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "reverse",
             params: vec![s()],
             ret: Ty::String,
@@ -477,7 +477,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strrev({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "equalsIgnoreCase",
             params: vec![s(), s()],
             ret: Ty::Bool,
@@ -486,7 +486,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strcasecmp({}, {}) === 0", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "containsIgnoreCase",
             params: vec![s(), s()],
             ret: Ty::Bool,
@@ -495,7 +495,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("stripos({}, {}) !== false", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "split",
             params: vec![s(), s()],
             ret: Ty::List(Box::new(Ty::String)),
@@ -506,7 +506,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         // `capitalize(string) -> string` — ASCII `ucfirst` (Tier-1, byte-identical).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "capitalize",
             params: vec![s()],
             ret: Ty::String,
@@ -516,7 +516,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         // `lines(string) -> List<string>` — split on `\n` (charter §2 subject-first; Tier-1).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "lines",
             params: vec![s()],
             ret: Ty::List(Box::new(Ty::String)),
@@ -525,7 +525,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("explode(\"\\n\", {})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "splitOnce",
             params: vec![s(), s()],
             ret: Ty::List(Box::new(Ty::String)),
@@ -535,7 +535,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("explode({}, {}, 2)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "join",
             params: vec![Ty::List(Box::new(Ty::String)), s()],
             ret: Ty::String,
@@ -545,7 +545,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("implode({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "replace",
             params: vec![s(), s(), s()],
             ret: Ty::String,
@@ -562,7 +562,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "startsWith",
             params: vec![s(), s()],
             ret: Ty::Bool,
@@ -571,7 +571,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("str_starts_with({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "endsWith",
             params: vec![s(), s()],
             ret: Ty::Bool,
@@ -580,7 +580,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("str_ends_with({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "repeat",
             params: vec![s(), Ty::Int],
             ret: Ty::String,
@@ -593,7 +593,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         // Rust's `i64::from_str` exactly: optional sign, base-10 digits (leading zeros OK), in i64
         // range, no surrounding whitespace; anything else is `null` (Phorj `None`).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "parseInt",
             params: vec![s()],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -604,7 +604,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         // `parseBool(string) -> bool?` (M4 `string as bool`) — strict `"true"`/`"false"` only; never
         // PHP truthiness. Arrow-IIFE PHP carrier = single-eval of the operand.
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "parseBool",
             params: vec![s()],
             ret: Ty::Optional(Box::new(Ty::Bool)),
@@ -621,7 +621,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         // default parameters (the `permissive` flag defaults to strict). Rejects inf/nan in both
         // modes; permissive also accepts a lone leading/trailing dot. Gated `__phorj_parse_float`.
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "parseFloat",
             params: vec![s(), Ty::Bool],
             ret: Ty::Optional(Box::new(Ty::Float)),
@@ -631,7 +631,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         // `padLeft`/`padRight(string, int, string) -> string` — PHP `str_pad` (byte-based, no mbstring).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "padLeft",
             params: vec![s(), Ty::Int, s()],
             ret: Ty::String,
@@ -647,7 +647,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "padRight",
             params: vec![s(), Ty::Int, s()],
             ret: Ty::String,
@@ -665,7 +665,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         // `indexOf(string, string) -> int?` — gated `__phorj_text_index_of` (PHP `strpos` → null).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "indexOf",
             params: vec![s(), s()],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -676,7 +676,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         // `lastIndexOf(string, string) -> int?` — the last occurrence (PHP `strrpos` → null via a
         // single-eval arrow-IIFE, like `parseBool`; no helper-file edit).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "lastIndexOf",
             params: vec![s(), s()],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -693,7 +693,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         // `removePrefix`/`removeSuffix(string, string) -> string` — drop an affix if present (PHP
         // `str_starts_with`/`str_ends_with` + `substr`, single-eval arrow-IIFE).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "removePrefix",
             params: vec![s(), s()],
             ret: Ty::String,
@@ -708,7 +708,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "removeSuffix",
             params: vec![s(), s()],
             ret: Ty::String,
@@ -724,7 +724,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         // `substring(string, int, int) -> string` — PHP `substr` (byte-indexed; negatives from end).
         NativeFn {
-            module: "Core.Text",
+            module: "Core.String",
             name: "substring",
             params: vec![s(), Ty::Int, Ty::Int],
             ret: Ty::String,

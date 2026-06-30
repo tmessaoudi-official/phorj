@@ -419,22 +419,22 @@ fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program>
 /// The canonical `Core.Http` types, injected (below) when a program imports `Core.Http` (M6 W1 →
 /// stdlib). The portable handler model — `handle(Request) -> Response` — at the value level: `Request`
 /// and `Response` are immutable values; `Request.parse(bytes) -> Request?` and `resp.serialize()`
-/// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.Text` (so the prelude also
+/// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.String` (so the prelude also
 /// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
 /// stdlib behind the static-method API (slice B0). Flows through every backend as ordinary classes.
 const HTTP_PRELUDE: &str = r#"
 import Core.Bytes;
-import Core.Text;
+import Core.String;
 import Core.List;
 import Core.Regex;
 class Request {
   constructor(public string method, public string path, public bytes body, private List<string> headerLines, private List<string> attrs) {}
   function header(string name): string? {
     for (string line in this.headerLines) {
-      if (Text.contains(line, ":")) {
-        List<string> kv = Text.splitOnce(line, ":");
-        string key = Text.trim(kv[0]);
-        if (key == name) { return Text.trim(kv[1]); }
+      if (String.contains(line, ":")) {
+        List<string> kv = String.splitOnce(line, ":");
+        string key = String.trim(kv[0]);
+        if (key == name) { return String.trim(kv[1]); }
       }
     }
     return null;
@@ -458,9 +458,9 @@ class Request {
     bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
     string head = Bytes.toString(headBytes) ?? "";
     string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-    List<string> lines = Text.split(head, nl);
+    List<string> lines = String.split(head, nl);
     string requestLine = lines[0];
-    List<string> rl = Text.split(requestLine, " ");
+    List<string> rl = String.split(requestLine, " ");
     string method = rl[0];
     string path = rl[1];
     return new Request(method, path, body, lines, []);
@@ -483,7 +483,7 @@ class Response {
     int st = this.status;
     string statusLine = "HTTP/1.1 {st} {reason}";
     int bodyLen = Bytes.length(this.body);
-    string userHeaders = Text.join(this.headerLines, nl);
+    string userHeaders = String.join(this.headerLines, nl);
     string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
     return Bytes.concat(Bytes.fromString(head), this.body);
   }
@@ -535,24 +535,24 @@ class Router {
   // A pattern segment is a parameter iff it is `{...}`. The inner text is `name` (bare) or
   // `name:regex` (constrained); the regex must match the WHOLE path segment.
   static function isParam(string seg): bool {
-    return Text.startsWith(seg, "\{") && Text.endsWith(seg, "\}");
+    return String.startsWith(seg, "\{") && String.endsWith(seg, "\}");
   }
   static function paramInner(string seg): string {
     // Drop only the OUTER braces (substring 1..len-1) — a constraint regex may itself contain braces
     // (`\d{4}`), so stripping every `{`/`}` would corrupt it. `substring(s, 1, -1)` = bytes[1..len-1]
     // on both backends and PHP `substr($s, 1, -1)`.
-    return Text.substring(seg, 1, -1);
+    return String.substring(seg, 1, -1);
   }
   static function paramName(string seg): string {
     string inner = Router.paramInner(seg);
-    if (Text.contains(inner, ":")) { List<string> kv = Text.splitOnce(inner, ":"); return kv[0]; }
+    if (String.contains(inner, ":")) { List<string> kv = String.splitOnce(inner, ":"); return kv[0]; }
     return inner;
   }
   // A constrained segment matches its path component iff the (whole-segment-anchored) regex matches.
   static function constraintOk(string seg, string component): bool {
     string inner = Router.paramInner(seg);
-    if (Text.contains(inner, ":")) {
-      List<string> kv = Text.splitOnce(inner, ":");
+    if (String.contains(inner, ":")) {
+      List<string> kv = String.splitOnce(inner, ":");
       var re = Regex.compile("^(?:" + kv[1] + ")$");
       return Regex.matches(re, component);
     }
@@ -562,8 +562,8 @@ class Router {
   // matching CONSTRAINED param scores 1, a bare param scores 0 — so literal > constrained > param.
   // A constrained param whose component fails its regex makes the whole route not match.
   static function segScore(string pattern, string path): int {
-    List<string> ps = Text.split(pattern, "/");
-    List<string> xs = Text.split(path, "/");
+    List<string> ps = String.split(pattern, "/");
+    List<string> xs = String.split(path, "/");
     if (List.length(ps) != List.length(xs)) { return -1; }
     mutable int score = 0;
     mutable int i = 0;
@@ -572,7 +572,7 @@ class Router {
       string p = ps[i];
       if (Router.isParam(p)) {
         if (!Router.constraintOk(p, xs[i])) { return -1; }
-        if (Text.contains(Router.paramInner(p), ":")) { score += 1; }
+        if (String.contains(Router.paramInner(p), ":")) { score += 1; }
       } else {
         if (p != xs[i]) { return -1; }
         score += 2;
@@ -582,8 +582,8 @@ class Router {
     return score;
   }
   static function extractParams(string pattern, string path): List<string> {
-    List<string> ps = Text.split(pattern, "/");
-    List<string> xs = Text.split(path, "/");
+    List<string> ps = String.split(pattern, "/");
+    List<string> xs = String.split(path, "/");
     mutable List<string> out = Router.idStrs([]);
     mutable int i = 0;
     int n = List.length(ps);
@@ -632,7 +632,7 @@ function respond(bytes raw): bytes {
 /// Inject the `Core.Http` types (and, when applicable, the `respond` serve bridge) into a program that
 /// imports `Core.Http`. Mirrors [`inject_json_prelude`]: a no-op (borrowed) unless `Core.Http` is
 /// imported. Each piece is injected only if absent — a user may declare their own `Request`/`Response`
-/// or `respond` and it wins. The `Core.Bytes`/`Core.Text` imports the bodies need are injected too
+/// or `respond` and it wins. The `Core.Bytes`/`Core.String` imports the bodies need are injected too
 /// (skipped if the user already imports them).
 fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;

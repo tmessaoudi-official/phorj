@@ -1,7 +1,7 @@
 package Main;
 import Core.Console;
 import Core.File;
-import Core.Text;
+import Core.String;
 
 // M3 Track B Wave 2 — the `Core.File` stdlib module (std::fs ↔ PHP file builtins). `read` returns
 // `string?`, so it composes with the S2 null-safety operators (`??`, `if (var x = …)`). The example
@@ -22,7 +22,7 @@ function main(): void {
     // `read` → string?; `??` returns the contents for a present File.
     string? maybe = File.read(path);
     string body = maybe ?? "(missing)";
-    int bytes = Text.length(body);
+    int bytes = String.length(body);
     Console.println("read {bytes} bytes");
 
     // A missing file reads as `null` → the fallback (never a fault).
@@ -32,7 +32,7 @@ function main(): void {
 
     // `if (var c = …)` binds the non-null content (S2 smart-cast) only inside the then-block.
     if (var c = File.read(path)) {
-        int n = Text.length(c);
+        int n = String.length(c);
         Console.println("if-let ok: {n} bytes");
     } else {
         Console.println("if-let: absent");

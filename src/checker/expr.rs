@@ -555,7 +555,7 @@ impl Checker {
             // Tailor the hint for a primitive target: `as` is *assertion*, not conversion.
             let hint = if is_builtin_type_name(type_name) {
                 "`as` is a checked downcast, not a value conversion — use `Core.Conversion` (e.g. \
-                 `Conversion.toFloat`/`truncate`) or `Core.Text.parseInt`/`parseFloat` to change a value's type"
+                 `Conversion.toFloat`/`truncate`) or `Core.String.parseInt`/`parseFloat` to change a value's type"
             } else {
                 "only a declared class or interface can be a cast target"
             };
@@ -601,7 +601,7 @@ impl Checker {
     /// `value as <primitive>` (M4 as-matrix, S1 — concrete-primitive sources). Types the result per
     /// the **Unified, fallibility-typed** model (lossless → total `T`, lossy/fallible → `T?`) and, for
     /// a real conversion, records a span-keyed rewrite to a leaf-qualified native call
-    /// (`Conversion.toFloat(v)` / `Text.parseInt(v)` …) that the backends resolve by `index_of_by_leaf`
+    /// (`Conversion.toFloat(v)` / `String.parseInt(v)` …) that the backends resolve by `index_of_by_leaf`
     /// without an import. **Identity** (`T as T`) is total, fires `W-REDUNDANT-CAST`, and is NOT
     /// rewritten — the `Cast` node survives and each backend emits the value unchanged. Bool cells,
     /// `float as decimal`, `string as decimal`, and union/erased *assertion* sources land in later
@@ -674,8 +674,8 @@ impl Checker {
             (Ty::Float, "int") => Some(("Conversion", "floatToIntExact", opt(Ty::Int))),
             (Ty::Decimal, "int") => Some(("Conversion", "decimalToIntExact", opt(Ty::Int))),
             (Ty::Decimal, "float") => Some(("Conversion", "decimalToFloat", Ty::Float)),
-            (Ty::String, "int") => Some(("Text", "parseInt", opt(Ty::Int))),
-            (Ty::String, "float") => Some(("Text", "parseFloat", opt(Ty::Float))),
+            (Ty::String, "int") => Some(("String", "parseInt", opt(Ty::Int))),
+            (Ty::String, "float") => Some(("String", "parseFloat", opt(Ty::Float))),
             // S4 decimal extras — float via the shortest-string parse; string via `Decimal.of`.
             (Ty::Float, "decimal") => Some(("Conversion", "floatToDecimal", opt(Ty::Decimal))),
             (Ty::String, "decimal") => Some(("Decimal", "of", opt(Ty::Decimal))),
@@ -686,7 +686,7 @@ impl Checker {
             (Ty::Bool, "int") => Some(("Conversion", "boolToInt", Ty::Int)),
             (Ty::Bool, "float") => Some(("Conversion", "boolToFloat", Ty::Float)),
             (Ty::Bool, "decimal") => Some(("Conversion", "boolToDecimal", Ty::Decimal)),
-            (Ty::String, "bool") => Some(("Text", "parseBool", opt(Ty::Bool))),
+            (Ty::String, "bool") => Some(("String", "parseBool", opt(Ty::Bool))),
             // any primitive → string is total (Convert.toString is generic).
             (Ty::Int | Ty::Float | Ty::Decimal | Ty::Bool, "string") => {
                 Some(("Conversion", "toString", Ty::String))
@@ -705,7 +705,7 @@ impl Checker {
                     format!("`{v} as {target}` is not a supported conversion"),
                     "E-CAST-TYPE",
                     Some(
-                        "convert via `Core.Conversion` / `Core.Text.parse*`; bool/decimal-from-float/string \
+                        "convert via `Core.Conversion` / `Core.String.parse*`; bool/decimal-from-float/string \
                          casts ship in a later slice"
                             .into(),
                     ),
@@ -718,7 +718,7 @@ impl Checker {
     /// Record a primitive `as`-cast rewrite: `value as T` ⇒ `Leaf.name(value)` (a leaf-qualified
     /// native call the backends resolve by `index_of_by_leaf` without an import), keyed by the cast
     /// node's span. The synthetic call must be full-arity — the default-param fill pass does not see a
-    /// post-check rewrite — so `Text.parseFloat` (which takes `(string, bool permissive=false)`) gets
+    /// post-check rewrite — so `String.parseFloat` (which takes `(string, bool permissive=false)`) gets
     /// its `false` (strict) default supplied explicitly.
     fn record_cast_call(&mut self, leaf: &str, name: &str, value: &crate::ast::Expr, span: Span) {
         use crate::ast::Expr;

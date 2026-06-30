@@ -1,8 +1,8 @@
 package Main;
 import Core.Console;
-import Core.Text;
+import Core.String;
 
-// M3 Track B Wave 2 — the `Core.Text` stdlib module. Each function erases to a PHP string builtin
+// M3 Track B Wave 2 — the `Core.String` stdlib module. Each function erases to a PHP string builtin
 // (`strlen`/`strtoupper`/`explode`/`implode`/`strReplace`/…). ASCII text keeps the Rust backends
 // and PHP byte-identical (`length` is the byte length; `upper`/`lower` are ASCII-case).
 //
@@ -12,43 +12,43 @@ import Core.Text;
 function main(): void {
     string greeting = "Hello, Phorj";
 
-    int n = Text.length(greeting);
-    string up = Text.uppercase(greeting);
-    string down = Text.lowercase(greeting);
-    string padded = Text.trim("   padded   ");
+    int n = String.length(greeting);
+    string up = String.uppercase(greeting);
+    string down = String.lowercase(greeting);
+    string padded = String.trim("   padded   ");
     Console.println("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
 
     // `contains` returns a bool; render it through an expression-`if` so the output is a string.
-    string has = if (Text.contains(greeting, "Phorj")) { "yes" } else { "no" };
+    string has = if (String.contains(greeting, "Phorj")) { "yes" } else { "no" };
     Console.println("contains 'Phorj' = {has}");
 
     // split → List<string>, then join with a different separator (the inverse op).
-    List<string> parts = Text.split("a,b,c", ",");
-    string rejoined = Text.join(parts, " - ");
+    List<string> parts = String.split("a,b,c", ",");
+    string rejoined = String.join(parts, " - ");
     Console.println("rejoined = {rejoined}");
 
     // lines → split on "\n" (→ explode). Index the resulting List<string> directly.
-    List<string> rows = Text.lines("one\ntwo\nthree");
+    List<string> rows = String.lines("one\ntwo\nthree");
     Console.println("first row = {rows[0]}, third row = {rows[2]}");
 
     // capitalize → ASCII ucfirst (uppercase the first letter; multibyte first char unchanged).
-    string capped = Text.capitalize("phorj");
+    string capped = String.capitalize("phorj");
     Console.println("capitalize = {capped}");
 
-    string swapped = Text.replace(greeting, "Phorj", "World");
+    string swapped = String.replace(greeting, "Phorj", "World");
     Console.println("replaced = {swapped}");
 
     // P3.2 byte-safe subset: prefix/suffix tests (→ str_starts_with/str_ends_with) and repeat
     // (→ str_repeat). Bool results render via expression-`if` (PHP echoes a bool as 1/"").
-    string sw = if (Text.startsWith(greeting, "Hello")) { "yes" } else { "no" };
-    string ew = if (Text.endsWith(greeting, "Phorj")) { "yes" } else { "no" };
-    string bar = Text.repeat("=", 5);
+    string sw = if (String.startsWith(greeting, "Hello")) { "yes" } else { "no" };
+    string ew = if (String.endsWith(greeting, "Phorj")) { "yes" } else { "no" };
+    string bar = String.repeat("=", 5);
     Console.println("startsWith 'Hello' = {sw}, endsWith 'Phorj' = {ew}, bar = {bar}");
 
     // M4 breadth (ASCII): reverse (→ strrev), and case-insensitive compare/contains
     // (→ strcasecmp/stripos). Non-ASCII is a documented edge (no mbstring under `php -n`).
-    string rev = Text.reverse("phorj");
-    bool sameCi = Text.equalsIgnoreCase("PHORJ", "phorj");
-    bool hasCi = Text.containsIgnoreCase("Hello, Phorj", "phorj");
+    string rev = String.reverse("phorj");
+    bool sameCi = String.equalsIgnoreCase("PHORJ", "phorj");
+    bool hasCi = String.containsIgnoreCase("Hello, Phorj", "phorj");
     Console.println("reverse = {rev}, equalsIgnoreCase = {sameCi}, containsIgnoreCase = {hasCi}");
 }

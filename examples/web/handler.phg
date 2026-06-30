@@ -12,11 +12,11 @@ package Main;
 //     RFC 7230) is decoded to a string for line/`:` splitting; the body stays raw Bytes.
 //   * Headers are carried as `List<string>` raw lines; `req.header(name)` parses on lookup (a linear
 //     scan). The method-call API is the public surface — a typed `Header` value arrives with S3.
-//   * No mutation / no `core.list` yet, so the serializer folds headers via `Text.join` (a native that
+//   * No mutation / no `core.list` yet, so the serializer folds headers via `String.join` (a native that
 //     iterates internally) rather than a mutable accumulator.
 import Core.Console;
 import Core.Bytes;
-import Core.Text;
+import Core.String;
 
 class Request {
   // method/path/body are read externally (→ `public`, so the PHP transpile can read them too);
@@ -28,10 +28,10 @@ class Request {
   // Lines without a `:` (the request-line) are skipped by the `contains` guard.
   function header(string name): string? {
     for (string line in this.headerLines) {
-      if (Text.contains(line, ":")) {
-        List<string> kv = Text.splitOnce(line, ":");
-        string key = Text.trim(kv[0]);
-        if (key == name) { return Text.trim(kv[1]); }
+      if (String.contains(line, ":")) {
+        List<string> kv = String.splitOnce(line, ":");
+        string key = String.trim(kv[0]);
+        if (key == name) { return String.trim(kv[1]); }
       }
     }
     return null;
@@ -62,9 +62,9 @@ function parseRequest(bytes raw): Request? {
   bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
 
   string head = Bytes.toString(headBytes) ?? "";
-  List<string> lines = Text.split(head, nl);
+  List<string> lines = String.split(head, nl);
   string requestLine = lines[0];
-  List<string> rl = Text.split(requestLine, " ");
+  List<string> rl = String.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
   // Pass ALL lines (incl. the request-line) — header() skips colon-free lines.
@@ -78,8 +78,8 @@ function serializeResponse(Response resp): bytes {
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
   int bodyLen = Bytes.length(resp.body);
-  // `Text.join` folds the user headers (no mutation / no list-append needed).
-  string userHeaders = Text.join(resp.headerLines, nl);
+  // `String.join` folds the user headers (no mutation / no list-append needed).
+  string userHeaders = String.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
   return Bytes.concat(Bytes.fromString(head), resp.body);
 }
@@ -121,7 +121,7 @@ function main(): void {
     bytes wire = serializeResponse(resp);
     int wireLen = Bytes.length(wire);
     string wireStr = Bytes.toString(wire) ?? "(binary)";
-    string oneLine = Text.replace(wireStr, nl, " | ");
+    string oneLine = String.replace(wireStr, nl, " | ");
     Console.println("wire ({wireLen}B): {oneLine}");
   } else {
     Console.println("malformed request");

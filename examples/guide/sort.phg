@@ -10,16 +10,16 @@
 package Main;
 import Core.Console;
 import Core.List;
-import Core.Text;
+import Core.String;
 
 function showInts(List<int> xs): string {
   mutable string out = "";
   for (int n in xs) { out = "{out}{n} "; }
-  return Text.trim(out);
+  return String.trim(out);
 }
 
 function showStrs(List<string> xs): string {
-  return Text.join(xs, " ");
+  return String.join(xs, " ");
 }
 
 function main(): void {

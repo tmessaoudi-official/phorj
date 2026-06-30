@@ -15,7 +15,7 @@ package Main;
 import Core.Console;
 import Core.Reflection;
 import Core.Set;
-import Core.Text;
+import Core.String;
 
 class Point {
     constructor(public int x, public int y) {}
@@ -88,12 +88,12 @@ function main(): void {
 
     // Enumeration natives (Tier 2): the sorted interface / parent names of an instance's class.
     var w = new Widget();
-    Console.println("interfaces = {Text.join(Reflection.interfaces(w), \", \")}");
-    Console.println("parents    = {Text.join(Reflection.parents(w), \", \")}");
+    Console.println("interfaces = {String.join(Reflection.interfaces(w), \", \")}");
+    Console.println("parents    = {String.join(Reflection.parents(w), \", \")}");
     // A non-class value has no interfaces/parents → empty lists.
-    Console.println("int ifaces = [{Text.join(Reflection.interfaces(7), \", \")}]");
+    Console.println("int ifaces = [{String.join(Reflection.interfaces(7), \", \")}]");
 
     // methods / fields of an instance's class (sorted, incl. inherited + promoted ctor params).
-    Console.println("methods = {Text.join(Reflection.methods(p), \", \")}");
-    Console.println("fields  = {Text.join(Reflection.fields(p), \", \")}");
+    Console.println("methods = {String.join(Reflection.methods(p), \", \")}");
+    Console.println("fields  = {String.join(Reflection.fields(p), \", \")}");
 }

@@ -12,7 +12,7 @@
 package Main;
 
 import Core.Console;
-import Core.Text;
+import Core.String;
 import Core.Regex;
 
 function main(): void {
@@ -33,10 +33,10 @@ function main(): void {
 
     // findAll → every whole match; split → pieces between matches.
     var word = Regex.compile(r"\w+");
-    var words = Text.join(Regex.findAll(word, "the quick brown fox"), ",");
+    var words = String.join(Regex.findAll(word, "the quick brown fox"), ",");
     Console.println("words = {words}");
     var comma = Regex.compile(r",\s*");
-    var pieces = Text.join(Regex.split(comma, "a, b,c,  d"), "|");
+    var pieces = String.join(Regex.split(comma, "a, b,c,  d"), "|");
     Console.println("split = {pieces}");
 
     // replace — every match replaced (literal replacement here).

@@ -19,7 +19,7 @@ const SERVE_PROGRAM: &str = r#"
 package Main;
 import Core.Console;
 import Core.Bytes;
-import Core.Text;
+import Core.String;
 
 class Request {
   constructor(public string method, public string path, public bytes body) {}
@@ -42,9 +42,9 @@ function parseRequest(bytes raw) -> Request? {
   bytes headBytes = Bytes.slice(raw, 0, sep);
   bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
   string head = Bytes.toString(headBytes) ?? "";
-  List<string> lines = Text.split(head, nl);
+  List<string> lines = String.split(head, nl);
   string requestLine = lines[0];
-  List<string> rl = Text.split(requestLine, " ");
+  List<string> rl = String.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
   return new Request(method, path, body);
@@ -56,7 +56,7 @@ function serializeResponse(Response resp) -> bytes {
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
   int bodyLen = Bytes.length(resp.body);
-  string userHeaders = Text.join(resp.headerLines, nl);
+  string userHeaders = String.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
   return Bytes.concat(Bytes.fromString(head), resp.body);
 }

@@ -13,7 +13,7 @@ fn text_capitalize_ascii_ucfirst() {
     assert_eq!(cap("123"), "123"); // non-letter first byte → unchanged
                                    // PHP mapping is ucfirst.
     assert_eq!(
-        (registry()[index_of("Core.Text", "capitalize").unwrap()].php)(&["$s".into()]),
+        (registry()[index_of("Core.String", "capitalize").unwrap()].php)(&["$s".into()]),
         "ucfirst($s)"
     );
 }
@@ -92,7 +92,7 @@ fn text_lines_splits_on_newline() {
     );
     // PHP mapping is explode on a literal "\n".
     assert_eq!(
-        (registry()[index_of("Core.Text", "lines").unwrap()].php)(&["$s".into()]),
+        (registry()[index_of("Core.String", "lines").unwrap()].php)(&["$s".into()]),
         "explode(\"\\n\", $s)"
     );
 }
@@ -175,15 +175,15 @@ fn text_natives_eval_and_emit() {
     .is_err());
     // PHP arg-order reordering (the sharp edge): explode/implode separator-first, str_replace search-first
     assert_eq!(
-        (registry()[index_of("Core.Text", "split").unwrap()].php)(&["$s".into(), "\",\"".into()]),
+        (registry()[index_of("Core.String", "split").unwrap()].php)(&["$s".into(), "\",\"".into()]),
         "explode(\",\", $s)"
     );
     assert_eq!(
-        (registry()[index_of("Core.Text", "join").unwrap()].php)(&["$xs".into(), "\"-\"".into()]),
+        (registry()[index_of("Core.String", "join").unwrap()].php)(&["$xs".into(), "\"-\"".into()]),
         "implode(\"-\", $xs)"
     );
     assert_eq!(
-        (registry()[index_of("Core.Text", "replace").unwrap()].php)(&[
+        (registry()[index_of("Core.String", "replace").unwrap()].php)(&[
             "$s".into(),
             "$a".into(),
             "$b".into()
@@ -191,8 +191,8 @@ fn text_natives_eval_and_emit() {
         "str_replace($a, $b, $s)"
     );
     assert_eq!(
-        index_of_by_leaf("Text", "length"),
-        index_of("Core.Text", "length")
+        index_of_by_leaf("String", "length"),
+        index_of("Core.String", "length")
     );
 }
 
@@ -232,15 +232,18 @@ fn text_p3_byte_safe_natives() {
     assert!(text_repeat(&[Value::Str("ab".into()), Value::Int(-1)], &mut o).is_err());
     // PHP erasure to the same-named builtins.
     assert_eq!(
-        (registry()[index_of("Core.Text", "startsWith").unwrap()].php)(&["$s".into(), "$p".into()]),
+        (registry()[index_of("Core.String", "startsWith").unwrap()].php)(&[
+            "$s".into(),
+            "$p".into()
+        ]),
         "str_starts_with($s, $p)"
     );
     assert_eq!(
-        (registry()[index_of("Core.Text", "endsWith").unwrap()].php)(&["$s".into(), "$p".into()]),
+        (registry()[index_of("Core.String", "endsWith").unwrap()].php)(&["$s".into(), "$p".into()]),
         "str_ends_with($s, $p)"
     );
     assert_eq!(
-        (registry()[index_of("Core.Text", "repeat").unwrap()].php)(&["$s".into(), "$n".into()]),
+        (registry()[index_of("Core.String", "repeat").unwrap()].php)(&["$s".into(), "$n".into()]),
         "str_repeat($s, $n)"
     );
 }
@@ -269,7 +272,7 @@ fn text_parse_float_strict_and_permissive() {
     assert!(matches!(p("inf", true), Value::Null));
     assert!(matches!(p(".", true), Value::Null));
     // PHP erasure + signature.
-    let reg = &registry()[index_of("Core.Text", "parseFloat").unwrap()];
+    let reg = &registry()[index_of("Core.String", "parseFloat").unwrap()];
     assert_eq!(
         (reg.php)(&["$s".into(), "$p".into()]),
         "__phorj_parse_float($s, $p)"
@@ -278,7 +281,7 @@ fn text_parse_float_strict_and_permissive() {
     assert_eq!(reg.params, vec![Ty::String, Ty::Bool]);
     // the permissive flag defaults to strict (M4 default parameters).
     assert!(matches!(
-        crate::native::native_defaults("Core.Text", "parseFloat"),
+        crate::native::native_defaults("Core.String", "parseFloat"),
         [crate::native::NativeDefault::Bool(false)]
     ));
 }
@@ -374,7 +377,7 @@ fn text_breadth_pad_indexof_substring() {
     // PHP erasures.
     let php = |n: &str, a: &[&str]| {
         let args: Vec<String> = a.iter().map(|x| (*x).to_string()).collect();
-        (registry()[index_of("Core.Text", n).unwrap()].php)(&args)
+        (registry()[index_of("Core.String", n).unwrap()].php)(&args)
     };
     assert_eq!(
         php("padLeft", &["$s", "$w", "$p"]),
@@ -390,7 +393,7 @@ fn text_breadth_pad_indexof_substring() {
     );
     assert_eq!(php("substring", &["$s", "$a", "$b"]), "substr($s, $a, $b)");
     assert_eq!(
-        registry()[index_of("Core.Text", "indexOf").unwrap()].ret,
+        registry()[index_of("Core.String", "indexOf").unwrap()].ret,
         Ty::Optional(Box::new(Ty::Int))
     );
 }

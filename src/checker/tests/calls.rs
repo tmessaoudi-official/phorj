@@ -351,9 +351,9 @@ fn ufcs_unresolved_still_errors() {
 
 #[test]
 fn ufcs_string_native() {
-    // `s.uppercase()` ≡ `Text.uppercase(s)`; `s.repeat(n)` ≡ `Text.repeat(s, n)`.
+    // `s.uppercase()` ≡ `String.uppercase(s)`; `s.repeat(n)` ≡ `String.repeat(s, n)`.
     assert!(errors_of(
-        "import Core.Text; \
+        "import Core.String; \
          function main() -> void { var s = \"hi\"; string u = s.uppercase(); string r = s.repeat(2); }"
     )
     .is_empty());
@@ -363,11 +363,11 @@ fn ufcs_string_native() {
 fn ufcs_arg_type_still_checked() {
     // A resolved UFCS still type-checks the remaining arguments: `repeat` wants an `int` count.
     let errs = errors_of(
-        "import Core.Text; \
+        "import Core.String; \
          function main() -> void { var s = \"hi\"; string r = s.repeat(\"no\"); }",
     );
     assert!(
-        errs.iter().any(|e| e.message.contains("Text.repeat")),
+        errs.iter().any(|e| e.message.contains("String.repeat")),
         "{errs:?}"
     );
 }
@@ -377,7 +377,7 @@ fn ufcs_safe_nav_on_optional() {
     // `x?.f()` UFCS: a null-safe member call on an optional receiver resolves the native and
     // yields an optional result (lowered to a `match` over the optional, F-002).
     assert!(errors_of(
-        "import Core.Text; \
+        "import Core.String; \
          function main() -> void { string? s = \"hi\"; string u = s?.uppercase() ?? \"x\"; }"
     )
     .is_empty());
@@ -387,7 +387,7 @@ fn ufcs_safe_nav_on_optional() {
 fn ufcs_safe_nav_result_is_optional() {
     // The `?.` UFCS result is optional, so binding it to a non-optional type without `??` is an error.
     let errs = errors_of(
-        "import Core.Text; \
+        "import Core.String; \
          function main() -> void { string? s = \"hi\"; string u = s?.uppercase(); }",
     );
     assert!(

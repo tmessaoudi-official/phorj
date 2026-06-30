@@ -395,7 +395,7 @@ pub enum NativeDefault {
 pub fn native_defaults(module: &str, name: &str) -> &'static [NativeDefault] {
     match (module, name) {
         // `parseFloat(string, bool permissive = false)` — the permissive flag defaults to strict.
-        ("Core.Text", "parseFloat") => &[NativeDefault::Bool(false)],
+        ("Core.String", "parseFloat") => &[NativeDefault::Bool(false)],
         _ => &[],
     }
 }

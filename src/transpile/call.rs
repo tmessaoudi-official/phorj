@@ -109,7 +109,7 @@ impl Transpiler {
                     // because (a) the checker rejects any user-written un-imported stdlib call
                     // (E-UNKNOWN-IDENT), and (b) we skip the fallback when `q` is a user class — so a
                     // user `Convert`/`Text` static call still wins.
-                    let cast_leaf = matches!(q.as_str(), "Conversion" | "Text" | "Decimal")
+                    let cast_leaf = matches!(q.as_str(), "Conversion" | "String" | "Decimal")
                         && !self.classes.contains(q);
                     let resolved = self
                         .imports
@@ -152,7 +152,7 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
-                        if nat.module == "Core.Text" {
+                        if nat.module == "Core.String" {
                             match nat.name {
                                 "parseInt" => self.uses_text_parse_int = true,
                                 "indexOf" => self.uses_text_index_of = true,

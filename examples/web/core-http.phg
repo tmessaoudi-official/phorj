@@ -39,7 +39,7 @@ function main(): void {
         bytes wire = resp.serialize();
         int n = Bytes.length(wire);
         // CRLFs shown as " | " so the output stays one clean ASCII line.
-        string oneLine = Text.replace(Bytes.toString(wire) ?? "", nl, " | ");
+        string oneLine = String.replace(Bytes.toString(wire) ?? "", nl, " | ");
         Console.println("wire ({n}B): {oneLine}");
     } else {
         Console.println("malformed request");
