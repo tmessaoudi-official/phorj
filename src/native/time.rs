@@ -41,7 +41,7 @@ fn now_millis() -> i64 {
 fn time_now_millis(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [] => Ok(Value::Int(now_millis())),
-        _ => Err("Time.nowMillis expects ()".into()),
+        _ => Err("Time.nowMilliseconds expects ()".into()),
     }
 }
 
@@ -73,7 +73,7 @@ pub(crate) fn time_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Time",
-            name: "nowMillis",
+            name: "nowMilliseconds",
             params: vec![],
             ret: Ty::Int,
             pure: false,

@@ -16,7 +16,7 @@ import Core.Map;
 
 function main(): void {
     // Program arguments — everything after the `--` terminator.
-    var args = Process.args();
+    var args = Process.arguments();
     Console.println("argc = {List.length(args)}");
     for (string a in args) {
         Console.println("arg: {a}");

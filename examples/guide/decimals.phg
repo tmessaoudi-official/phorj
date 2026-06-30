@@ -32,7 +32,7 @@ function main(): void {
 
     // Bare `/` is exact-or-fault: it returns the exact quotient when it terminates (10.0/4.0 = 2.5,
     // 1/8 = 0.125), in minimal form. A non-terminating quotient (1d/3d) FAULTS — use
-    // `Decimal.div(a, b, scale, mode)` for a rounded result. (No silent precision loss.)
+    // `Decimal.divide(a, b, scale, mode)` for a rounded result. (No silent precision loss.)
     decimal q1 = 10.0d / 4.0d;     // 2.5
     decimal q2 = 1d / 8d;          // 0.125
     Console.println("10.0 / 4.0 = {q1}");

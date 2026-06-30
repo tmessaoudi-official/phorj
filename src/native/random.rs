@@ -70,7 +70,7 @@ fn random_seed(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn random_next(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [] => Ok(Value::Int(advance())),
-        _ => Err("Random.next expects ()".into()),
+        _ => Err("Random.nextInt expects ()".into()),
     }
 }
 
@@ -108,7 +108,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Random",
-            name: "next",
+            name: "nextInt",
             params: vec![],
             ret: Ty::Int,
             pure: true,

@@ -233,7 +233,7 @@ impl Transpiler {
                         if nat.module == "Core.Decimal" {
                             match nat.name {
                                 "of" => self.uses_dec_of = true,
-                                "div" => self.uses_dec_div = true,
+                                "divide" => self.uses_dec_div = true,
                                 "round" => self.uses_dec_round = true,
                                 _ => {}
                             }

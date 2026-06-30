@@ -105,12 +105,12 @@ fn decimal_modulo_typechecks_and_is_decimal() {
 
 #[test]
 fn decimal_div_and_round_natives_typecheck() {
-    // `Decimal.div`/`Decimal.round` accept (decimal, …, scale, RoundingMode) and yield decimal. The
+    // `Decimal.divide`/`Decimal.round` accept (decimal, …, scale, RoundingMode) and yield decimal. The
     // `RoundingMode` enum is injected by the CLI's `check_and_expand` chokepoint (gated on
     // `import Core.Decimal;`), so this goes through that path rather than the raw checker.
     let src = "package Main; import Core.Decimal; \
                function main() -> void { \
-               decimal u = Decimal.div(10.00d, 3d, 2, new HalfEven()); \
+               decimal u = Decimal.divide(10.00d, 3d, 2, new HalfEven()); \
                decimal c = Decimal.round(2.345d, 2, new HalfUp()); \
                }";
     let prog = prog_raw(src);

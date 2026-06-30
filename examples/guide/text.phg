@@ -13,8 +13,8 @@ function main(): void {
     string greeting = "Hello, Phorj";
 
     int n = Text.length(greeting);
-    string up = Text.upper(greeting);
-    string down = Text.lower(greeting);
+    string up = Text.uppercase(greeting);
+    string down = Text.lowercase(greeting);
     string padded = Text.trim("   padded   ");
     Console.println("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
 

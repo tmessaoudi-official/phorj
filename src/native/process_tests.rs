@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn process_env_natives_are_impure_and_registered() {
     for (module, name) in [
-        ("Core.Process", "args"),
+        ("Core.Process", "arguments"),
         ("Core.Env", "get"),
         ("Core.Env", "all"),
     ] {

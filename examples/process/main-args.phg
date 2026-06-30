@@ -1,7 +1,7 @@
 // `main(List<string> args): int` — argv as a parameter, plus an exit code (Batch-1 B).
 //
 // A program that needs its arguments can take them directly as `main`'s single `List<string>`
-// parameter, instead of calling `Core.Process.args()`. Both surfaces read the SAME argv, so this
+// parameter, instead of calling `Core.Process.arguments()`. Both surfaces read the SAME argv, so this
 // file also imports `Core.Process` to show they agree.
 //
 // The returned `int` is the process exit code — here, the number of arguments. Run it as:
@@ -23,7 +23,7 @@ function main(List<string> args): int {
         Console.println("arg: {s}");
     }
     // Both forms see the same arguments.
-    var same = List.length(args) == List.length(Process.args());
-    Console.println("matches Process.args() = {same}");
+    var same = List.length(args) == List.length(Process.arguments());
+    Console.println("matches Process.arguments() = {same}");
     return List.length(args);
 }

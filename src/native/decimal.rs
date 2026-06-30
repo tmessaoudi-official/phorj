@@ -38,7 +38,7 @@ fn round_mode(v: &Value) -> Result<RoundMode, String> {
 fn decimal_div_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [a, b, Value::Int(scale), mode] => decimal_div(a, b, *scale, round_mode(mode)?),
-        _ => Err("Decimal.div expects (decimal, decimal, int, RoundingMode)".into()),
+        _ => Err("Decimal.divide expects (decimal, decimal, int, RoundingMode)".into()),
     }
 }
 
@@ -71,7 +71,7 @@ pub(crate) fn decimal_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Decimal",
-            name: "div",
+            name: "divide",
             params: vec![Ty::Decimal, Ty::Decimal, Ty::Int, rmode()],
             ret: Ty::Decimal,
             pure: true,

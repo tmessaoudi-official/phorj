@@ -25,6 +25,6 @@ function main(): void {
 
     // `next()` returns the raw non-negative value (useful as a hash-ish key or to derive your own
     // bounded value).
-    var raw = Random.next();
+    var raw = Random.nextInt();
     Console.println("raw next: {raw}");
 }

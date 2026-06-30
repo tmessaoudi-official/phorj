@@ -38,7 +38,7 @@ fn registry_exposes_decimal_of() {
 
 #[test]
 fn registry_exposes_div_and_round() {
-    assert!(index_of("Core.Decimal", "div").is_some());
+    assert!(index_of("Core.Decimal", "divide").is_some());
     assert!(index_of("Core.Decimal", "round").is_some());
 }
 

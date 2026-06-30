@@ -81,7 +81,7 @@ function main(): void {
   Console.println(Html.render(card("Profile", inner)));
 
   // --- Option 1: named per-tag helpers ---
-  // Each tag is sugar over el/voidEl with the tag baked in: Html.div(attrs, children),
+  // Each tag is sugar over el/voidEl with the tag baked in: Html.divide(attrs, children),
   // Html.hr(attrs). Same auto-escaping (attribute values + text), same byte output.
   Html bar = Html.nav([Html.attr("class", "top")],
                       [Html.a([Html.attr("href", "/?a=1&b=2")], [Html.text("Home & Away")])]);

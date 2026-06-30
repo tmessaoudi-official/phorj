@@ -88,7 +88,7 @@ fn map_get_or(args: &[Value], _: &mut String) -> Result<Value, String> {
                 .find(|(k, _)| *k == hk)
                 .map_or_else(|| default.clone(), |(_, v)| v.clone()))
         }
-        _ => Err("Map.getOr expects (Map<K, V>, K, V)".into()),
+        _ => Err("Map.getOrDefault expects (Map<K, V>, K, V)".into()),
     }
 }
 /// `merge(a, b) -> Map<K,V>` — `a`'s entries with `b`'s merged in: a shared key keeps `a`'s position
@@ -248,7 +248,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
         // `getOr` — safe access with a fallback (never faults / returns the default for an absent key).
         NativeFn {
             module: "Core.Map",
-            name: "getOr",
+            name: "getOrDefault",
             params: vec![map(), k(), v()],
             ret: v(),
             pure: true,

@@ -11,13 +11,13 @@ fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase())),
-        _ => Err("Text.upper expects (string)".into()),
+        _ => Err("Text.uppercase expects (string)".into()),
     }
 }
 fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase())),
-        _ => Err("Text.lower expects (string)".into()),
+        _ => Err("Text.lowercase expects (string)".into()),
     }
 }
 fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -433,7 +433,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Text",
-            name: "upper",
+            name: "uppercase",
             params: vec![s()],
             ret: Ty::String,
             pure: true,
@@ -442,7 +442,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Text",
-            name: "lower",
+            name: "lowercase",
             params: vec![s()],
             ret: Ty::String,
             pure: true,

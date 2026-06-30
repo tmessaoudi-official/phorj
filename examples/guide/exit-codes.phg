@@ -3,7 +3,7 @@
 // `main` is where a Phorj program starts. It can take no parameters, or a single `List<string>`
 // parameter — the program arguments (everything after `phg run file.phg --`). It returns `void`
 // (exit code 0) or `int` (the process exit code). The same argv is also available anywhere via
-// `Core.Process.args()`, so a small program can just take it as a parameter.
+// `Core.Process.arguments()`, so a small program can just take it as a parameter.
 //
 // This example returns 0 (success), so it runs identically on every backend (and `phg run` exits 0).
 // A non-zero return becomes the process exit status — handy for scripts and CI:

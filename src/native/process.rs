@@ -71,7 +71,7 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Process",
-            name: "args",
+            name: "arguments",
             params: vec![],
             ret: Ty::List(Box::new(Ty::String)),
             pure: false,
