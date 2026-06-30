@@ -1,4 +1,4 @@
-//! Phorj CLI: `phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|explain>
+//! Phorj CLI: `phg <run|runvm|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|explain>
 //! <file>`. Thin dispatcher over the testable `phorj::cli` module.
 #![forbid(unsafe_code)]
 
@@ -7,7 +7,7 @@ use std::process::exit;
 use phorj::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|lsp|test|fmt|explain> \
+    "usage: phg <run|runvm|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|lsp|test|format|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -66,8 +66,9 @@ fn main() {
     }
     let cmd = match args.get(1).map(String::as_str) {
         Some(
-            c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "lift" | "disasm"
-            | "bench" | "build" | "vendor" | "serve" | "lsp" | "test" | "fmt" | "explain"),
+            c @ ("run" | "runvm" | "check" | "parse" | "tokenize" | "transpile" | "lift"
+            | "disassemble" | "benchmark" | "build" | "vendor" | "serve" | "lsp" | "test"
+            | "format" | "explain"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -110,7 +111,7 @@ fn main() {
     }
     // `fmt [--check] [path… | -]` formats source (M-fmt). Like `test`, it takes paths/flags, not a
     // single program source, so it is handled before the source-resolving run-family path.
-    if cmd == "fmt" {
+    if cmd == "format" {
         // `phg fmt -` (or `--check -`) reads stdin → formats → stdout.
         if args[2..].iter().any(|a| a == "-") {
             let src = read_stdin();
@@ -331,7 +332,7 @@ fn main() {
     }
     // `bench` accepts an optional `--vs-php` flag (transpile + median-time the PHP backend too).
     // Strip it before source resolution so it isn't mistaken for a file/flag.
-    let bench_vs_php = cmd == "bench" && args[2..].iter().any(|a| a == "--vs-php");
+    let bench_vs_php = cmd == "benchmark" && args[2..].iter().any(|a| a == "--vs-php");
     // `check --json` emits machine-readable diagnostics (LSP foothold) instead of the "OK" Text.
     let check_json = cmd == "check" && args[2..].iter().any(|a| a == "--json");
     let rest: Vec<String> = args[2..]
@@ -415,11 +416,11 @@ fn main() {
         };
         match cmd {
             "parse" => cli::cmd_parse(&src),
-            "lex" => cli::cmd_lex(&src),
+            "tokenize" => cli::cmd_lex(&src),
             "lift" => cli::cmd_lift(&src),
-            "disasm" => cli::cmd_disasm(&src),
-            "bench" if bench_vs_php => cli::cmd_bench_vs_php(&src),
-            "bench" => cli::cmd_bench(&src),
+            "disassemble" => cli::cmd_disasm(&src),
+            "benchmark" if bench_vs_php => cli::cmd_bench_vs_php(&src),
+            "benchmark" => cli::cmd_bench(&src),
             _ => unreachable!("validated above"),
         }
     };

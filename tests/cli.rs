@@ -214,7 +214,7 @@ fn parse_subcommand_dumps_ast_exit_0() {
 #[test]
 fn lex_subcommand_dumps_tokens_exit_0() {
     let out = Command::new(BIN)
-        .args(["lex", "tests/fixtures/sample.phg"])
+        .args(["tokenize", "tests/fixtures/sample.phg"])
         .output()
         .expect("spawn phorj");
     assert!(out.status.success(), "exit {:?}", out.status.code());
@@ -294,10 +294,10 @@ fn per_command_help_prints_examples_exit_0() {
         "runvm",
         "check",
         "parse",
-        "lex",
+        "tokenize",
         "transpile",
-        "disasm",
-        "bench",
+        "disassemble",
+        "benchmark",
         "build",
     ] {
         let out = Command::new(BIN)
@@ -418,7 +418,7 @@ fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
 #[test]
 fn disasm_and_bench_accept_reified_operand_program() {
     let ex = "examples/guide/concurrency.phg";
-    for cmd in ["disasm", "bench"] {
+    for cmd in ["disassemble", "benchmark"] {
         let out = Command::new(BIN)
             .args([cmd, ex])
             .output()

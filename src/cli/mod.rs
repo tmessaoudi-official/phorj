@@ -40,16 +40,16 @@ pub fn help_text() -> String {
          runvm      run the program on the bytecode VM\n  \
          check      type-check only\n  \
          parse      print the AST\n  \
-         lex        print the token stream\n  \
+         tokenize   print the token stream\n  \
          transpile  emit PHP\n  \
          lift       PHP -> a Phorj draft (review required; inverse of transpile)\n  \
-         disasm     print the compiled bytecode\n  \
-         bench      benchmark run vs runvm (time + memory)\n  \
+         disassemble print the compiled bytecode\n  \
+         benchmark  benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
          vendor     fetch [require] git deps into an offline vendor/ (writes phorj.lock)\n  \
          serve      serve the program over HTTP (calls respond(bytes) -> bytes per request)\n  \
          test       discover and run `test` blocks (under tests/, or a given file/dir)\n  \
-         fmt        format source to canonical form (--check for CI; - for stdin)\n  \
+         format     format source to canonical form (--check for CI; - for stdin)\n  \
          explain    explain a diagnostic code (e.g. phg explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
@@ -98,11 +98,11 @@ pub fn help_for(cmd: &str) -> String {
                     examples:\n  \
                     phg parse src.phg\n"
         }
-        "lex" => {
-            "lex — print the token stream with positions.\n\n\
-                  usage:\n  phg lex <file | - | -e code>\n\n\
+        "tokenize" => {
+            "tokenize — print the token stream with positions.\n\n\
+                  usage:\n  phg tokenize <file | - | -e code>\n\n\
                   examples:\n  \
-                  phg lex -e 'var x = 1;'\n"
+                  phg tokenize -e 'var x = 1;'\n"
         }
         "transpile" => {
             "transpile — emit idiomatic PHP for the program.\n\n\
@@ -120,21 +120,21 @@ pub fn help_for(cmd: &str) -> String {
                    phg lift legacy.php\n  \
                    phg lift legacy.php > draft.phg\n"
         }
-        "disasm" => {
-            "disasm — print the compiled bytecode the VM will execute.\n\n\
-                     usage:\n  phg disasm <file | - | -e code>\n\n\
+        "disassemble" => {
+            "disassemble — print the compiled bytecode the VM will execute.\n\n\
+                     usage:\n  phg disassemble <file | - | -e code>\n\n\
                      examples:\n  \
-                     phg disasm -e 'function main() -> void { int x = 1 + 2; }'\n"
+                     phg disassemble -e 'function main() -> void { int x = 1 + 2; }'\n"
         }
-        "bench" => {
-            "bench — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\
-                    usage:\n  phg bench [--vs-php] <file | - | -e code>\n\n\
+        "benchmark" => {
+            "benchmark — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\
+                    usage:\n  phg benchmark [--vs-php] <file | - | -e code>\n\n\
                     flags:\n  \
                     --vs-php   also transpile + median-time the PHP backend (3-way comparison;\n             \
                                requires `php` on PATH; output-identity-gated)\n\n\
                     examples:\n  \
-                    phg bench examples/bench/workload.phg\n  \
-                    phg bench --vs-php examples/bench/workload.phg\n"
+                    phg benchmark examples/bench/workload.phg\n  \
+                    phg benchmark --vs-php examples/bench/workload.phg\n"
         }
         "build" => {
             "build — compile to a standalone executable (embeds the program source).\n\n\
@@ -157,13 +157,13 @@ pub fn help_for(cmd: &str) -> String {
                    phg test tests/math.phg\n  \
                    phg test tests/\n"
         }
-        "fmt" => {
-            "fmt — format Phorj source to canonical form (comment-preserving, meaning-preserving).\n\n\
+        "format" => {
+            "format — format Phorj source to canonical form (comment-preserving, meaning-preserving).\n\n\
                   Prints from the parsed AST, so formatting never changes what the program means\n\
                   (parse(fmt(x)) == parse(x)); it is idempotent, and an unparseable file is left\n\
                   untouched (its diagnostic is reported, exit 2). v1 is tidy + comment-safe (canonical\n\
                   indentation/spacing/blank-lines), no line-wrapping yet.\n\n\
-                  usage:\n  phg fmt [--check] [path… | -]\n\n\
+                  usage:\n  phg format [--check] [path… | -]\n\n\
                   flags:\n  \
                   --check   report files that aren't already formatted and exit 1; write nothing (CI)\n\n\
                   paths:\n  \
@@ -172,10 +172,10 @@ pub fn help_for(cmd: &str) -> String {
                   <dir>     format every *.phg under that directory in place\n  \
                   -         read from stdin, write the formatted result to stdout\n\n\
                   examples:\n  \
-                  phg fmt\n  \
-                  phg fmt src/app.phg\n  \
-                  phg fmt --check .\n  \
-                  cat app.phg | phg fmt -\n"
+                  phg format\n  \
+                  phg format src/app.phg\n  \
+                  phg format --check .\n  \
+                  cat app.phg | phg format -\n"
         }
         "explain" => {
             "explain — print the explanation for a diagnostic code.\n\n\
@@ -1381,7 +1381,7 @@ fn annotate(op: &Op, chunk: &Chunk, p: &BytecodeProgram) -> Option<String> {
 /// invariant #8) so the output is stable across runs.
 fn disasm_program(p: &BytecodeProgram) -> String {
     let mut out = format!(
-        "phg disasm — {} function(s), main = #{}\n",
+        "phg disassemble — {} function(s), main = #{}\n",
         p.functions.len(),
         p.main
     );
