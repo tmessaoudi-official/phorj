@@ -4,11 +4,11 @@ use super::support::*;
 
 #[test]
 fn propagate_in_result_fn_is_clean() {
-    // `?` in a let-initializer inside a `Result`-returning fn unwraps the `Ok` payload (an `int`).
+    // `?` in a let-initializer inside a `Result`-returning fn unwraps the `Success` payload (an `int`).
     let ok = errors_of(&format!(
         "{RESULT_DEF} \
-             function f() -> Result<int, string> {{ return new Ok(1); }} \
-             function g() -> Result<int, string> {{ int x = f()?; return new Ok(x + 1); }} \
+             function f() -> Result<int, string> {{ return new Success(1); }} \
+             function g() -> Result<int, string> {{ int x = f()?; return new Success(x + 1); }} \
              function main() -> void {{}}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -19,8 +19,8 @@ fn propagate_outside_let_initializer_is_position_error() {
     // `?` nested in a larger expression is `E-PROPAGATE-POSITION` (not a whole let-initializer).
     let bad = errors_of(&format!(
         "{RESULT_DEF} \
-             function f() -> Result<int, string> {{ return new Ok(1); }} \
-             function g() -> Result<int, string> {{ int x = f()? + 1; return new Ok(x); }} \
+             function f() -> Result<int, string> {{ return new Success(1); }} \
+             function g() -> Result<int, string> {{ int x = f()? + 1; return new Success(x); }} \
              function main() -> void {{}}"
     ));
     assert!(
@@ -72,7 +72,7 @@ fn propagate_in_non_result_fn_is_context_error() {
     // `?` requires the enclosing fn to return the same `Result` — otherwise `E-PROPAGATE-CONTEXT`.
     let bad = errors_of(&format!(
         "{RESULT_DEF} \
-             function f() -> Result<int, string> {{ return new Ok(1); }} \
+             function f() -> Result<int, string> {{ return new Success(1); }} \
              function g() -> int {{ int x = f()?; return x; }} \
              function main() -> void {{}}"
     ));

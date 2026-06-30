@@ -206,11 +206,11 @@ fn generic_enum_annotated_non_inferring_variant_ok() {
 
 #[test]
 fn generic_enum_two_params_independent() {
-    // `Result<T, E>` binds `T` from `Ok`'s argument and `E` from `Err`'s, independently.
+    // `Result<T, E>` binds `T` from `Success`'s argument and `E` from `Failure`'s, independently.
     let ok = errors_of(&format!(
-        "{RESULT} function ok() -> Result<int, string> {{ return new Ok(1); }} \
-             function bad() -> Result<int, string> {{ return new Err(\"no\"); }} \
-             function main() -> void {{ string r = match ok() {{ Ok(v) => \"v\", Err(e) => e }}; }}"
+        "{RESULT} function ok() -> Result<int, string> {{ return new Success(1); }} \
+             function bad() -> Result<int, string> {{ return new Failure(\"no\"); }} \
+             function main() -> void {{ string r = match ok() {{ Success(v) => \"v\", Failure(e) => e }}; }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }

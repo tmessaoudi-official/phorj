@@ -503,7 +503,7 @@ impl Parser {
         self.expect(&TokenKind::Enum, "'enum'")?;
         let name = self.expect_ident("an enum name")?;
         // Optional generic parameter list `<T, E>` immediately after the enum name (M-RT generic
-        // enums) — `enum Result<T, E> { Ok(T value), Err(E error) }`.
+        // enums) — `enum Result<T, E> { Success(T value), Failure(E error) }`.
         let type_params = self.parse_type_params()?;
         self.expect(&TokenKind::LBrace, "'{' to open enum body")?;
         let mut variants = Vec::new();

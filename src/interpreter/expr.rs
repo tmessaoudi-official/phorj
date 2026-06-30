@@ -189,14 +189,14 @@ impl<'c> Interp<'c> {
                 }
             }
             Expr::Propagate { inner, .. } => {
-                // `expr?` (M-faults 2a): a `Result`-shaped enum — `Ok(v)` unwraps to `v`; `Err(_)`
-                // early-returns the whole `Err` value from the enclosing function (the checker
+                // `expr?` (M-faults 2a): a `Result`-shaped enum — `Success(v)` unwraps to `v`; `Failure(_)`
+                // early-returns the whole `Failure` value from the enclosing function (the checker
                 // guarantees the function returns the same Result type, so this is well-typed). The
                 // `Signal::Return` mirrors the VM's mid-expression `Op::Return`.
                 let v = self.eval(inner)?;
                 match &v {
-                    Value::Enum(e) if e.variant == "Ok" => Ok(e.payload[0].clone()),
-                    Value::Enum(e) if e.variant == "Err" => Err(Signal::Return(v.clone())),
+                    Value::Enum(e) if e.variant == "Success" => Ok(e.payload[0].clone()),
+                    Value::Enum(e) if e.variant == "Failure" => Err(Signal::Return(v.clone())),
                     other => rt(format!(
                         "`?` requires a Result value, got {}",
                         other.type_name()

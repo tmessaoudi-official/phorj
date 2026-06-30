@@ -3,9 +3,9 @@
 // that may be absent) and `Result<T, E>` (a success `T` or an error `E`).
 //
 // A type parameter is in scope across every variant's payload. It is **inferred at the variant
-// constructor** (`Some(7)` ⇒ `Option<int>`, `Ok(1)` ⇒ `Result<int, …>`) and recovered at every
+// constructor** (`Some(7)` ⇒ `Option<int>`, `Success(1)` ⇒ `Result<int, …>`) and recovered at every
 // `match`: matching an `Option<int>` binds `Some(n)` with `n: int`, so the payload is usable at its
-// concrete type. A variant that does not mention a parameter (`None`, or `Ok` w.r.t. `E`) can't infer
+// concrete type. A variant that does not mention a parameter (`None`, or `Success` w.r.t. `E`) can't infer
 // it — annotate the binding to fix it (`Option<int> n = None();`). As with generic classes/functions
 // there is **no monomorphization**: after checking, the parameters are *erased* (a `T` payload becomes
 // PHP `mixed`), so the interpreter, the bytecode VM, and the transpiled PHP run identical,
@@ -21,10 +21,10 @@ enum Option<T> {
     Some(T value),
 }
 
-// Success-or-failure. `Ok` carries the success `T`; `Err` carries the error `E`.
+// Success-or-failure. `Success` carries the success `T`; `Failure` carries the error `E`.
 enum Result<T, E> {
-    Ok(T value),
-    Err(E error),
+    Success(T value),
+    Failure(E error),
 }
 
 // Takes a concrete `Option<int>`; the `Some` payload binds at `int`, so `n` is a real integer.
@@ -38,15 +38,15 @@ function describe(Option<int> o): string {
 // Returns a generic enum: divide, or report the reason as a string error.
 function safeDiv(int a, int b): Result<int, string> {
     return match b {
-        0 => new Err("divide by zero"),
-        _ => new Ok(a / b),
+        0 => new Failure("divide by zero"),
+        _ => new Success(a / b),
     };
 }
 
 function report(Result<int, string> r): string {
     return match r {
-        Ok(v)  => "ok {v}",
-        Err(e) => "err {e}",
+        Success(v)  => "ok {v}",
+        Failure(e) => "err {e}",
     };
 }
 

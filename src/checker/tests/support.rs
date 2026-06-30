@@ -114,8 +114,8 @@ pub(super) fn program_has_propagate(p: &Program) -> bool {
 
 // Shared multi-test fixtures (centralized from the flat tests.rs — M-Decomp W2b).
 pub(super) const OPTION: &str = "enum Option<T> { None, Some(T value) }";
-pub(super) const RESULT: &str = "enum Result<T, E> { Ok(T value), Err(E error) }";
-pub(super) const RESULT_DEF: &str = "enum Result<T, E> { Ok(T value), Err(E error) }";
+pub(super) const RESULT: &str = "enum Result<T, E> { Success(T value), Failure(E error) }";
+pub(super) const RESULT_DEF: &str = "enum Result<T, E> { Success(T value), Failure(E error) }";
 pub(super) const ERRDEF: &str =
     "class BadInput implements Error { constructor(public string message) {} } \
          class NotFound implements Error { constructor(public string message) {} }";

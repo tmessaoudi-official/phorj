@@ -26,8 +26,8 @@ impl Transpiler {
                 self.emit_match(scrutinee, arms, MatchTarget::Assign(name.clone()))?;
             }
             // `T x = expr?;` (M-faults 2a) — PHP cannot caller-return from an expression, so the `?` is
-            // hoisted to statements here: stash the Result in `$x`, return it unchanged if it is `Err`,
-            // else unwrap the `Ok` payload in place. The checker restricts `?` to this position, so the
+            // hoisted to statements here: stash the Result in `$x`, return it unchanged if it is `Failure`,
+            // else unwrap the `Success` payload in place. The checker restricts `?` to this position, so the
             // expression-level `Expr::Propagate` arm in `emit_expr` is unreachable.
             Stmt::VarDecl {
                 name,
@@ -36,10 +36,10 @@ impl Transpiler {
             } => {
                 let v = self.emit_expr(inner)?;
                 self.declare(name);
-                let err = self.variant_ref("Err");
+                let err = self.variant_ref("Failure");
                 let ok_field = self
                     .variant_fields
-                    .get("Ok")
+                    .get("Success")
                     .and_then(|f| f.first())
                     .cloned()
                     .unwrap_or_else(|| "value".to_string());

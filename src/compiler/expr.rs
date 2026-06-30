@@ -822,19 +822,19 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    /// `expr?` — Result-error propagation (M-faults 2a). Evaluate the operand; if it is `Err(_)`,
-    /// `Op::Return` the whole `Err` value (`do_return` truncates to the frame base, so this mid-expression
-    /// early-return is clean even nested); otherwise unwrap the `Ok` payload. No new `Op` — reuses
+    /// `expr?` — Result-error propagation (M-faults 2a). Evaluate the operand; if it is `Failure(_)`,
+    /// `Op::Return` the whole `Failure` value (`do_return` truncates to the frame base, so this mid-expression
+    /// early-return is clean even nested); otherwise unwrap the `Success` payload. No new `Op` — reuses
     /// `MatchTag`/`GetEnumField`/`Return`. The checker restricts `?` to a let-initializer, so the result
-    /// (the `Ok` payload) is what the binding receives.
+    /// (the `Success` payload) is what the binding receives.
     pub(super) fn compile_propagate(&mut self, inner: &Expr, line: u32) -> Result<(), String> {
         self.expr(inner)?; // [.., r]
         let slot = self.height - 1; // r's frame-relative slot (transients may sit below it)
         let err_idx = self
             .variants
-            .get("Err")
+            .get("Failure")
             .ok_or_else(|| {
-                "`?` requires a Result-shaped enum (no `Err` variant in scope)".to_string()
+                "`?` requires a Result-shaped enum (no `Failure` variant in scope)".to_string()
             })?
             .index;
         self.emit(Op::GetLocal(slot), line); // [.., r, r]

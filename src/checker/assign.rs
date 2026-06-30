@@ -357,17 +357,17 @@ impl Checker {
 
     /// `opt!` checked force-unwrap (M3 S2.5): `T?` → `T`. Every use is linted (`W-FORCE-UNWRAP`) to
     /// nudge toward `??`/`?.`/if-let; force-unwrapping a non-optional is `E-OPT-UNWRAP`.
-    /// Is `name` a `Result`-shaped enum — exactly an `Ok` variant (arity 1) and an `Err` variant
+    /// Is `name` a `Result`-shaped enum — exactly an `Success` variant (arity 1) and an `Failure` variant
     /// (arity 1)? `?` propagation is defined only over this shape (M-faults 2a).
     pub(super) fn is_result_enum(&self, name: &str) -> bool {
         self.enums.get(name).is_some_and(|e| {
-            e.variants.get("Ok").is_some_and(|f| f.len() == 1)
-                && e.variants.get("Err").is_some_and(|f| f.len() == 1)
+            e.variants.get("Success").is_some_and(|f| f.len() == 1)
+                && e.variants.get("Failure").is_some_and(|f| f.len() == 1)
         })
     }
 
     /// The type of variant `v`'s single payload field on enum `name`, with the enum's type parameters
-    /// substituted by `args` (`Ok` payload of `Result<int, _>` ⇒ `int`).
+    /// substituted by `args` (`Success` payload of `Result<int, _>` ⇒ `int`).
     pub(super) fn result_payload(&self, name: &str, v: &str, args: &[Ty]) -> Ty {
         let theta = self.enum_subst(name, args);
         self.enums[name].variants[v]
@@ -375,11 +375,11 @@ impl Checker {
             .map_or(Ty::Error, |t| apply_subst(t, &theta))
     }
 
-    /// `expr?` — Result-error propagation (M-faults 2a). Unwraps an `Ok` payload to its value, or
-    /// early-returns the `Err` from the enclosing function. Requires the operand to be a `Result`-shaped
-    /// enum AND the enclosing function (`cur_ret`) to return that *same* enum, with the operand's `Err`
+    /// `expr?` — Result-error propagation (M-faults 2a). Unwraps an `Success` payload to its value, or
+    /// early-returns the `Failure` from the enclosing function. Requires the operand to be a `Result`-shaped
+    /// enum AND the enclosing function (`cur_ret`) to return that *same* enum, with the operand's `Failure`
     /// payload assignable to the function's (`E-PROPAGATE-CONTEXT`/`E-PROPAGATE-ERR`). Returns the
-    /// unwrapped `Ok` payload type. Called only from a let-initializer; any other position is rejected
+    /// unwrapped `Success` payload type. Called only from a let-initializer; any other position is rejected
     /// by the `Expr::Propagate` arm in `check_expr` (`E-PROPAGATE-POSITION`).
     pub(super) fn check_propagate(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
         let t = self.check_expr(inner);
@@ -389,29 +389,29 @@ impl Checker {
             other => {
                 return self.err_coded(
                     span,
-                    format!("`?` requires a `Result`-shaped operand (an enum with `Ok`/`Err` variants), found `{other}`"),
+                    format!("`?` requires a `Result`-shaped operand (an enum with `Success`/`Failure` variants), found `{other}`"),
                     "E-PROPAGATE-CONTEXT",
-                    Some("`?` unwraps `Ok` or early-returns `Err`".into()),
+                    Some("`?` unwraps `Success` or early-returns `Failure`".into()),
                 );
             }
         };
         match self.cur_ret.clone() {
             Ty::Named(rn, rargs) if rn == name => {
-                let err_in = self.result_payload(&name, "Err", &args);
-                let err_ret = self.result_payload(&rn, "Err", &rargs);
+                let err_in = self.result_payload(&name, "Failure", &args);
+                let err_ret = self.result_payload(&rn, "Failure", &rargs);
                 if !self.ty_assignable(&err_in, &err_ret) {
                     self.err_coded(
                         span,
-                        format!("`?` propagates an `Err({err_in})` but the enclosing `{name}` carries `Err({err_ret})`"),
+                        format!("`?` propagates an `Failure({err_in})` but the enclosing `{name}` carries `Failure({err_ret})`"),
                         "E-PROPAGATE-ERR",
                         None,
                     );
                 }
-                self.result_payload(&name, "Ok", &args)
+                self.result_payload(&name, "Success", &args)
             }
             other => self.err_coded(
                 span,
-                format!("`?` early-returns the `Err`, so the enclosing function must return `{name}<…>`, but it returns `{other}`"),
+                format!("`?` early-returns the `Failure`, so the enclosing function must return `{name}<…>`, but it returns `{other}`"),
                 "E-PROPAGATE-CONTEXT",
                 Some(format!("declare the function to return `{name}<…>`")),
             ),
