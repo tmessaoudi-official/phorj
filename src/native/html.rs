@@ -64,7 +64,7 @@ fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(name), Value::Str(value)] => {
             Ok(Value::Str(format!(" {name}=\"{}\"", html_escape(value))))
         }
-        _ => Err("Html.attr expects (string, string)".into()),
+        _ => Err("Html.attribute expects (string, string)".into()),
     }
 }
 
@@ -85,7 +85,7 @@ fn html_el(args: &[Value], _: &mut String) -> Result<Value, String> {
             let c = html_join_fragments(children)?;
             Ok(Value::Str(format!("<{tag}{a}>{c}</{tag}>")))
         }
-        _ => Err("Html.el expects (string, List<Attr>, List<Html>)".into()),
+        _ => Err("Html.element expects (string, List<Attr>, List<Html>)".into()),
     }
 }
 
@@ -228,7 +228,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
         // ---- Wave 2 builders ----
         NativeFn {
             module: "Core.Html",
-            name: "attr",
+            name: "attribute",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Attr,
             pure: true,
@@ -245,7 +245,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Html",
-            name: "boolAttr",
+            name: "booleanAttribute",
             params: vec![Ty::String],
             ret: Ty::Attr,
             pure: true,
@@ -254,7 +254,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Html",
-            name: "el",
+            name: "element",
             params: vec![
                 Ty::String,
                 Ty::List(Box::new(Ty::Attr)),
@@ -276,7 +276,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Html",
-            name: "voidEl",
+            name: "voidElement",
             params: vec![Ty::String, Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
             pure: true,

@@ -80,27 +80,30 @@ fn html_natives_eval_and_emit() {
         (registry()[index_of("Core.Html", n).unwrap()].php)(&args)
     };
     assert_eq!(
-        php("attr", &["$n", "$v"]),
+        php("attribute", &["$n", "$v"]),
         "' ' . $n . '=\"' . htmlspecialchars($v, ENT_QUOTES, 'UTF-8') . '\"'"
     );
-    assert_eq!(php("boolAttr", &["$n"]), "' ' . $n");
+    assert_eq!(php("booleanAttribute", &["$n"]), "' ' . $n");
     assert_eq!(
-            php("el", &["$t", "$a", "$c"]),
+            php("element", &["$t", "$a", "$c"]),
             "(function($t,$a,$c){return '<' . $t . implode('', $a) . '>' . implode('', $c) . '</' . $t . '>';})($t, $a, $c)"
         );
     assert_eq!(
-        php("voidEl", &["$t", "$a"]),
+        php("voidElement", &["$t", "$a"]),
         "(function($t,$a){return '<' . $t . implode('', $a) . '/>';})($t, $a)"
     );
     assert_eq!(php("concat", &["$xs"]), "implode('', $xs)");
     // All builders resolve by both index forms + carry the Attr/Html return types.
-    assert_eq!(index_of_by_leaf("Html", "el"), index_of("Core.Html", "el"));
     assert_eq!(
-        registry()[index_of("Core.Html", "attr").unwrap()].ret,
+        index_of_by_leaf("Html", "element"),
+        index_of("Core.Html", "element")
+    );
+    assert_eq!(
+        registry()[index_of("Core.Html", "attribute").unwrap()].ret,
         Ty::Attr
     );
     assert_eq!(
-        registry()[index_of("Core.Html", "el").unwrap()].ret,
+        registry()[index_of("Core.Html", "element").unwrap()].ret,
         Ty::Html
     );
 }

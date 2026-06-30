@@ -18,7 +18,7 @@ function field(string label, string value): Html {
 
 // Wave-2 style: the same row built from typed fragments — no hand-written markup.
 function row(string label, string value): Html {
-  return Html.el("li", [Html.attr("data-label", label)],
+  return Html.element("li", [Html.attribute("data-label", label)],
                  [Html.text("{label}: "), Html.text(value)]);
 }
 
@@ -46,19 +46,19 @@ function main(): void {
 
   // --- Wave 2: typed element builders ---
   // An element with an attribute (value escaped) and escaped text children.
-  Html link = Html.el("a", [Html.attr("href", "/p?x=1&y=2")], [Html.text("Tom & Jerry")]);
+  Html link = Html.element("a", [Html.attribute("href", "/p?x=1&y=2")], [Html.text("Tom & Jerry")]);
   Console.println(Html.render(link));   // <a href="/p?x=1&amp;y=2">Tom &amp; Jerry</a>
 
   // A no-attribute element — empty [] is accepted in call-argument position.
-  Html para = Html.el("p", [], [Html.text(bio)]);
+  Html para = Html.element("p", [], [Html.text(bio)]);
   Console.println(Html.render(para));   // <p>&lt;script&gt;alert(1)&lt;/script&gt;</p>
 
   // A self-closing void element with an attribute.
-  Html img = Html.voidEl("img", [Html.attr("src", "a&b.png")]);
+  Html img = Html.voidElement("img", [Html.attribute("src", "a&b.png")]);
   Console.println(Html.render(img));    // <img src="a&amp;b.png"/>
 
   // A boolean (valueless) attribute.
-  Html btn = Html.el("button", [Html.boolAttr("disabled")], [Html.text("Go")]);
+  Html btn = Html.element("button", [Html.booleanAttribute("disabled")], [Html.text("Go")]);
   Console.println(Html.render(btn));    // <button disabled>Go</button>
 
   // concat joins sibling fragments into one Html.
@@ -72,7 +72,7 @@ function main(): void {
   Console.println(Html.render(h));      // <h1>Tom &amp; &quot;Jerry&quot;</h1><p>since 2026</p>
 
   // An Html hole embeds verbatim — no double-escape (the value is already safe).
-  Html badge = Html.el("span", [Html.boolAttr("hidden")], [Html.text(bio)]);
+  Html badge = Html.element("span", [Html.booleanAttribute("hidden")], [Html.text(bio)]);
   Html line = html"<div>{badge}</div>";
   Console.println(Html.render(line));   // <div><span hidden>&lt;script&gt;alert(1)&lt;/script&gt;</span></div>
 
@@ -83,8 +83,8 @@ function main(): void {
   // --- Option 1: named per-tag helpers ---
   // Each tag is sugar over el/voidEl with the tag baked in: Html.divide(attrs, children),
   // Html.hr(attrs). Same auto-escaping (attribute values + text), same byte output.
-  Html bar = Html.nav([Html.attr("class", "top")],
-                      [Html.a([Html.attr("href", "/?a=1&b=2")], [Html.text("Home & Away")])]);
+  Html bar = Html.nav([Html.attribute("class", "top")],
+                      [Html.a([Html.attribute("href", "/?a=1&b=2")], [Html.text("Home & Away")])]);
   Console.println(Html.render(bar));   // <nav class="top"><a href="/?a=1&amp;b=2">Home &amp; Away</a></nav>
 
   Html items = Html.ul([], [Html.li([], [Html.text(name)]), Html.li([], [Html.text(bio)])]);
