@@ -1,9 +1,9 @@
 //! `Core.Url` — URL percent-encoding (native-stdlib wave, Tier A).
 //!
 //! Pure, deterministic, std-only. `urlEncode`/`rawUrlEncode` (`string -> string`) and
-//! `urlDecode`/`rawUrlDecode` (`string -> string?`) are byte-identical to PHP `urlencode` /
-//! `rawurlencode` / `urldecode` / `rawurldecode`. The `url*` pair is the `application/x-www-form-
-//! urlencoded` form (space ⇒ `+`, `~` encoded); the `rawUrl*` pair is RFC 3986 (space ⇒ `%20`, `~`
+//! `decodeForm`/`decodeUriComponent` (`string -> string?`) are byte-identical to PHP `urlencode` /
+//! `rawurlencode` / `urldecode` / `rawurldecode`. The `encodeForm`/`decodeForm` pair is the `application/x-www-form-
+//! urlencoded` form (space ⇒ `+`, `~` encoded); the `encodeUriComponent`/`decodeUriComponent` pair is RFC 3986 (space ⇒ `%20`, `~`
 //! left as-is). Decoders return `string?` — `null` when the decoded bytes are not valid UTF-8 (a
 //! Phorj `string` is UTF-8; the PHP side mirrors with a `//u` check), so they stay byte-identical.
 
@@ -83,16 +83,16 @@ fn decode_native(args: &[Value], raw: bool, who: &str) -> Result<Value, String> 
     }
 }
 fn url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
-    encode_native(a, false, "urlEncode")
+    encode_native(a, false, "encodeForm")
 }
 fn raw_url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
-    encode_native(a, true, "rawUrlEncode")
+    encode_native(a, true, "encodeUriComponent")
 }
 fn url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
-    decode_native(a, false, "urlDecode")
+    decode_native(a, false, "decodeForm")
 }
 fn raw_url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
-    decode_native(a, true, "rawUrlDecode")
+    decode_native(a, true, "decodeUriComponent")
 }
 
 /// PHP emission for a decoder: decode, then return the string only if it is valid UTF-8 (matching the
@@ -107,7 +107,7 @@ pub(crate) fn url_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Url",
-            name: "urlEncode",
+            name: "encodeForm",
             params: vec![Ty::String],
             ret: Ty::String,
             pure: true,
@@ -116,7 +116,7 @@ pub(crate) fn url_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Url",
-            name: "rawUrlEncode",
+            name: "encodeUriComponent",
             params: vec![Ty::String],
             ret: Ty::String,
             pure: true,
@@ -125,7 +125,7 @@ pub(crate) fn url_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Url",
-            name: "urlDecode",
+            name: "decodeForm",
             params: vec![Ty::String],
             ret: Ty::Optional(Box::new(Ty::String)),
             pure: true,
@@ -134,7 +134,7 @@ pub(crate) fn url_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Url",
-            name: "rawUrlDecode",
+            name: "decodeUriComponent",
             params: vec![Ty::String],
             ret: Ty::Optional(Box::new(Ty::String)),
             pure: true,
