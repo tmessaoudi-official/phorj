@@ -2,11 +2,11 @@
 // explicitly between int / float / decimal. All additive stdlib natives; no implicit coercion.
 //
 //   Core.Math:
-//     isNan / isFinite / isInfinite (float) -> bool   // detect special values
-//     nan / infinity / negInfinity () -> float        // construct them (never PRINTED directly:
+//     isNaN / isFinite / isInfinite (float) -> bool   // detect special values
+//     nan / infinity / negativeInfinity () -> float        // construct them (never PRINTED directly:
 //                                                      //   PHP echoes NAN/INF, Rust prints NaN/inf —
 //                                                      //   so exercise them through the predicates)
-//     intdiv(int, int) -> int                          // truncating-toward-zero division
+//     integerDivide(int, int) -> int                          // truncating-toward-zero division
 //
 //   Core.Convert:
 //     toFloat(int) -> float            // total widening
@@ -23,18 +23,18 @@ import Core.Convert;
 function main(): void {
     // --- Float predicates. The special values are detected, not printed (printing NAN/INF would
     // diverge between Rust and PHP rendering). The bool results ARE byte-identical.
-    Console.println("isNan(nan())        = {Math.isNan(Math.nan())}");          // true
-    Console.println("isNan(1.5)          = {Math.isNan(1.5)}");                 // false
+    Console.println("isNaN(nan())        = {Math.isNaN(Math.nan())}");          // true
+    Console.println("isNaN(1.5)          = {Math.isNaN(1.5)}");                 // false
     Console.println("isFinite(2.0)       = {Math.isFinite(2.0)}");             // true
     Console.println("isFinite(infinity()) = {Math.isFinite(Math.infinity())}"); // false
     Console.println("isInfinite(inf())   = {Math.isInfinite(Math.infinity())}"); // true
-    Console.println("isInfinite(negInf()) = {Math.isInfinite(Math.negInfinity())}"); // true
+    Console.println("isInfinite(negInf()) = {Math.isInfinite(Math.negativeInfinity())}"); // true
     Console.println("isInfinite(3.0)     = {Math.isInfinite(3.0)}");           // false
 
     // --- Integer division (truncating toward zero), the named twin of `/`.
-    Console.println("intdiv(7, 2)   = {Math.intdiv(7, 2)}");    // 3
-    Console.println("intdiv(-7, 2)  = {Math.intdiv(-7, 2)}");   // -3 (toward zero)
-    Console.println("intdiv(17, 5)  = {Math.intdiv(17, 5)}");   // 3
+    Console.println("integerDivide(7, 2)   = {Math.integerDivide(7, 2)}");    // 3
+    Console.println("integerDivide(-7, 2)  = {Math.integerDivide(-7, 2)}");   // -3 (toward zero)
+    Console.println("integerDivide(17, 5)  = {Math.integerDivide(17, 5)}");   // 3
 
     // --- int -> float (total). Stays exactly representable, so it prints cleanly.
     float f = Convert.toFloat(7);

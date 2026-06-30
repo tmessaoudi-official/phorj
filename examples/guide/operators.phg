@@ -41,7 +41,7 @@ function main(): void {
     // Float power (exact-representable result to stay byte-identical with PHP's echo).
     var fp = 3.0 ** 2.0;               // 9.0
     Console.println("3.0 ** 2.0     = {fp}");
-    // `Math.ipow` is the named, value-level twin of integer `**` (int ** int → int).
-    var ip = Math.ipow(5, 2);          // 25
-    Console.println("Math.ipow(5,2) = {ip}");
+    // `Math.integerPower` is the named, value-level twin of integer `**` (int ** int → int).
+    var ip = Math.integerPower(5, 2);          // 25
+    Console.println("Math.integerPower(5,2) = {ip}");
 }

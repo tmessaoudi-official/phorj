@@ -455,13 +455,13 @@ impl Compiler<'_> {
             // registry index is resolved at compile time, so no `import Core.Math` is required.
             Pow => {
                 let leaf = match self.num_ty(lhs)? {
-                    NumTy::Int => "ipow",
+                    NumTy::Int => "integerPower",
                     NumTy::Float => "pow",
                     // `decimal ** _` is rejected by the checker (decimal supports only `+ - *`).
                     NumTy::Decimal => unreachable!("decimal `**` rejected by checker"),
                 };
                 let idx = crate::native::index_of("Core.Math", leaf)
-                    .expect("Core.Math.ipow/pow are registered natives");
+                    .expect("Core.Math.integerPower/pow are registered natives");
                 self.expr(lhs)?;
                 self.expr(rhs)?;
                 self.emit(Op::CallNative(idx, 2), line);

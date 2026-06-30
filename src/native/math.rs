@@ -19,7 +19,7 @@ fn math_ipow(args: &[Value], _: &mut String) -> Result<Value, String> {
         // Single-sourced with the interpreter's `int ** int` arm via `value::int_pow`: a negative
         // exponent or overflow is a clean fault (EV-7), never a panic.
         [Value::Int(b), Value::Int(e)] => crate::value::int_pow(*b, *e).map(Value::Int),
-        _ => Err("Math.ipow expects (int, int)".into()),
+        _ => Err("Math.integerPower expects (int, int)".into()),
     }
 }
 fn math_floor(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -72,7 +72,7 @@ fn math_round(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn math_is_nan(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Bool(x.is_nan())),
-        _ => Err("Math.isNan expects (float)".into()),
+        _ => Err("Math.isNaN expects (float)".into()),
     }
 }
 fn math_is_finite(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -102,16 +102,16 @@ fn math_infinity(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn math_neg_infinity(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [] => Ok(Value::Float(f64::NEG_INFINITY)),
-        _ => Err("Math.negInfinity expects ()".into()),
+        _ => Err("Math.negativeInfinity expects ()".into()),
     }
 }
-/// `Math.intdiv(int, int) -> int` (M-NUM S3) — integer division truncating toward zero. Single-sourced
+/// `Math.integerDivide(int, int) -> int` (M-NUM S3) — integer division truncating toward zero. Single-sourced
 /// with `value::int_intdiv`: `b == 0` faults `"division by zero"`, `intdiv(i64::MIN, -1)` faults
 /// `"integer overflow"` (both run≡runvm via FaultKind; PHP `intdiv` throws the matching class).
 fn math_intdiv(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(a), Value::Int(b)] => crate::value::int_intdiv(*a, *b).map(Value::Int),
-        _ => Err("Math.intdiv expects (int, int)".into()),
+        _ => Err("Math.integerDivide expects (int, int)".into()),
     }
 }
 
@@ -296,12 +296,12 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             php: |a| format!("pow({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            // `Math.ipow(int, int) -> int` — integer power as a value (the `**` operator's named twin,
+            // `Math.integerPower(int, int) -> int` — integer power as a value (the `**` operator's named twin,
             // Phase 1 operators slice). PHP's `pow` returns an `int` for non-negative int args whose
             // result fits, matching the kernel's safe domain; the negative/overflow cases fault in
             // Phorj (never reached by a byte-identity example).
             module: "Core.Math",
-            name: "ipow",
+            name: "integerPower",
             params: vec![Ty::Int, Ty::Int],
             ret: Ty::Int,
             pure: true,
@@ -365,7 +365,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
         // --- Float predicates + special values + intdiv (M-NUM S3) ---
         NativeFn {
             module: "Core.Math",
-            name: "isNan",
+            name: "isNaN",
             params: vec![Ty::Float],
             ret: Ty::Bool,
             pure: true,
@@ -410,7 +410,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Math",
-            name: "negInfinity",
+            name: "negativeInfinity",
             params: vec![],
             ret: Ty::Float,
             pure: true,
@@ -419,7 +419,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Math",
-            name: "intdiv",
+            name: "integerDivide",
             params: vec![Ty::Int, Ty::Int],
             ret: Ty::Int,
             pure: true,

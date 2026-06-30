@@ -632,7 +632,7 @@ pub fn int_neg(n: i64) -> Result<i64, String> {
     n.checked_neg()
         .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
 }
-/// `Math.intdiv(a, b)` (M-NUM S3): integer division truncating toward zero (PHP `intdiv`). `b == 0`
+/// `Math.integerDivide(a, b)` (M-NUM S3): integer division truncating toward zero (PHP `intdiv`). `b == 0`
 /// is [`FAULT_DIV_ZERO`]; `i64::MIN / -1` overflows ([`FAULT_INT_OVERFLOW`]) — both clean faults, never
 /// a panic (EV-7). Distinct from [`int_div`] only in name/intent (both truncate toward zero); kept
 /// separate so the `intdiv` native and the `/`-on-int operator can diverge later without coupling.

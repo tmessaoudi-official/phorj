@@ -33,7 +33,7 @@ fn math_natives_eval_and_emit() {
     ));
     assert!(math_ipow(&[Value::Int(2), Value::Int(-1)], &mut out).is_err());
     assert_eq!(
-        (registry()[index_of("Core.Math", "ipow").unwrap()].php)(&["5".into(), "2".into()]),
+        (registry()[index_of("Core.Math", "integerPower").unwrap()].php)(&["5".into(), "2".into()]),
         "pow(5, 2)"
     );
     // resolvable by both index forms + PHP erasure to the same-named builtin
@@ -131,13 +131,13 @@ fn math_s3_predicates_special_and_intdiv() {
         let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
         (registry()[i].php)(&a)
     };
-    assert_eq!(php("isNan", &["$f"]), "is_nan($f)");
+    assert_eq!(php("isNaN", &["$f"]), "is_nan($f)");
     assert_eq!(php("isFinite", &["$f"]), "is_finite($f)");
     assert_eq!(php("isInfinite", &["$f"]), "is_infinite($f)");
     assert_eq!(php("nan", &[]), "NAN");
     assert_eq!(php("infinity", &[]), "INF");
-    assert_eq!(php("negInfinity", &[]), "-INF");
-    assert_eq!(php("intdiv", &["$a", "$b"]), "intdiv($a, $b)");
+    assert_eq!(php("negativeInfinity", &[]), "-INF");
+    assert_eq!(php("integerDivide", &["$a", "$b"]), "intdiv($a, $b)");
 }
 
 #[test]
