@@ -300,12 +300,14 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
             Stmt::For {
                 ty,
                 name,
+                val,
                 iter,
                 body,
                 span,
             } => Stmt::For {
                 ty,
                 name,
+                val,
                 iter: rexpr(iter, u),
                 body: rblock(body, u),
                 span,

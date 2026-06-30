@@ -335,12 +335,14 @@ pub fn erase_generics(program: Program) -> Program {
             Stmt::For {
                 ty,
                 name,
+                val,
                 iter,
                 body,
                 span,
             } => Stmt::For {
                 ty: rty(ty, params),
                 name: name.clone(),
+                val: val.as_ref().map(|(t, n)| (rty(t, params), n.clone())),
                 iter: rexpr(iter, params),
                 body: body.iter().map(|s| rstmt(s, params)).collect(),
                 span: *span,

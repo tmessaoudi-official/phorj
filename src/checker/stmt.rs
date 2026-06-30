@@ -740,48 +740,87 @@ impl Checker {
         if let crate::ast::Stmt::For {
             ty,
             name,
+            val,
             iter,
             body,
             span,
         } = stmt
         {
             let iter_ty = self.check_expr(iter);
-            let elem = match iter_ty {
-                // B1 iteration protocol: a `List<T>` or `Set<T>` iterates its elements (`T`).
-                Ty::List(e) | Ty::Set(e) => *e,
-                // A `string` iterates its characters, each a 1-char `string`.
-                Ty::String => Ty::String,
-                Ty::Error => Ty::Error,
-                other => {
-                    self.err(
-                        *span,
-                        format!("`for`-`in` requires a List, Set, or string, found `{other}`"),
-                    );
-                    Ty::Error
-                }
-            };
-            // A-6: an inferred binding (`foreach (xs as x)` desugars to `for (var x in xs)`) takes the
-            // element type directly; an explicit `for (T x in xs)` validates `T` against it.
-            let declared = if matches!(ty, crate::ast::Type::Infer(_)) {
-                elem.clone()
-            } else {
-                let d = self.resolve_type(ty);
-                if !self.ty_assignable(&elem, &d) {
-                    self.err(
-                        *span,
-                        format!("loop variable `{name}` declared `{d}` but iterating `{elem}`"),
-                    );
-                }
-                d
-            };
             self.push_scope();
-            self.declare(name, declared, *span);
+            if let Some((vty, vname)) = val {
+                // B1 two-binding form `for (K k, V v in map)` — requires a `Map<K, V>`. The first
+                // binding takes the key type, the second the value type.
+                let (kt, vt) = match iter_ty {
+                    Ty::Map(k, v) => (*k, *v),
+                    Ty::Error => (Ty::Error, Ty::Error),
+                    other => {
+                        self.err(
+                            *span,
+                            format!(
+                                "two-binding `for (k, v in …)` requires a Map, found `{other}`"
+                            ),
+                        );
+                        (Ty::Error, Ty::Error)
+                    }
+                };
+                let kd = self.bind_loop_var(ty, name, &kt, *span);
+                self.declare(name, kd, *span);
+                let vd = self.bind_loop_var(vty, vname, &vt, *span);
+                self.declare(vname, vd, *span);
+            } else {
+                let elem = match iter_ty {
+                    // B1 iteration protocol: a `List<T>` or `Set<T>` iterates its elements (`T`).
+                    Ty::List(e) | Ty::Set(e) => *e,
+                    // A `string` iterates its characters, each a 1-char `string`.
+                    Ty::String => Ty::String,
+                    // A `Map<K, V>` requires the two-binding form.
+                    Ty::Map(_, _) => {
+                        self.err(
+                            *span,
+                            "iterating a Map needs two bindings — `for (K k, V v in map)`"
+                                .to_string(),
+                        );
+                        Ty::Error
+                    }
+                    Ty::Error => Ty::Error,
+                    other => {
+                        self.err(
+                            *span,
+                            format!(
+                                "`for`-`in` requires a List, Set, string, or Map, found `{other}`"
+                            ),
+                        );
+                        Ty::Error
+                    }
+                };
+                let declared = self.bind_loop_var(ty, name, &elem, *span);
+                self.declare(name, declared, *span);
+            }
             self.loop_depth += 1;
             for s in body {
                 self.check_stmt(s);
             }
             self.loop_depth -= 1;
             self.pop_scope();
+        }
+    }
+
+    /// Resolve a loop-variable annotation against the element type it iterates. An inferred binding
+    /// (`var x` / `foreach … as x`) takes the element type directly; an explicit `T x` is validated
+    /// against it (`E`-less diagnostic on mismatch). Returns the binding's resolved type.
+    fn bind_loop_var(&mut self, ty: &crate::ast::Type, name: &str, elem: &Ty, span: Span) -> Ty {
+        if matches!(ty, crate::ast::Type::Infer(_)) {
+            elem.clone()
+        } else {
+            let d = self.resolve_type(ty);
+            if !self.ty_assignable(elem, &d) {
+                self.err(
+                    span,
+                    format!("loop variable `{name}` declared `{d}` but iterating `{elem}`"),
+                );
+            }
+            d
         }
     }
 

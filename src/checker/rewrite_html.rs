@@ -227,12 +227,14 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
             Stmt::For {
                 ty,
                 name,
+                val,
                 iter,
                 body,
                 span,
             } => Stmt::For {
                 ty,
                 name,
+                val,
                 iter: rexpr(iter, h),
                 body: rblock(body, h),
                 span,

@@ -159,10 +159,16 @@ impl Compiler<'_> {
             Stmt::For {
                 ty,
                 name,
+                val,
                 iter,
                 body,
                 span,
-            } => self.compile_for(name, resolve_cty(ty), iter, body, span.line),
+            } => {
+                let kv = val
+                    .as_ref()
+                    .map(|(vty, vname)| (vname.as_str(), resolve_cty(vty)));
+                self.compile_for(name, resolve_cty(ty), kv, iter, body, span.line)
+            }
             Stmt::While {
                 cond,
                 body,
@@ -365,6 +371,7 @@ impl Compiler<'_> {
         &mut self,
         name: &str,
         elem_ty: CTy,
+        kv: Option<(&str, CTy)>,
         iter: &Expr,
         body: &[Stmt],
         line: u32,
@@ -390,10 +397,28 @@ impl Compiler<'_> {
         self.emit(Op::Lt, line); // [idx < len]
         let exit_jump = self.emit_jump(Op::JumpIfFalse(0), line);
 
-        self.emit(Op::GetLocal(s_list), line);
-        self.emit(Op::GetLocal(s_idx), line);
-        self.emit(Op::Index, line); // [elem]
-        self.add_local(name, elem_ty); // elem becomes the loop variable
+        // B1: for the two-binding Map form, `IterElems` yields a list of `[key, value]` 2-lists, so
+        // each `elem` is destructured into two loop vars (re-fetching the pair for each — cheap, no dup
+        // op). The single-binding form binds the element directly.
+        if let Some((vname, vcty)) = kv.clone() {
+            self.emit(Op::GetLocal(s_list), line);
+            self.emit(Op::GetLocal(s_idx), line);
+            self.emit(Op::Index, line); // [pair]
+            self.emit_const(Value::Int(0), line);
+            self.emit(Op::Index, line); // [key]
+            self.add_local(name, elem_ty); // key loop var
+            self.emit(Op::GetLocal(s_list), line);
+            self.emit(Op::GetLocal(s_idx), line);
+            self.emit(Op::Index, line); // [pair]
+            self.emit_const(Value::Int(1), line);
+            self.emit(Op::Index, line); // [value]
+            self.add_local(vname, vcty); // value loop var
+        } else {
+            self.emit(Op::GetLocal(s_list), line);
+            self.emit(Op::GetLocal(s_idx), line);
+            self.emit(Op::Index, line); // [elem]
+            self.add_local(name, elem_ty); // elem becomes the loop variable
+        }
 
         self.loop_frames.push(LoopFrame {
             break_jumps: Vec::new(),
@@ -407,6 +432,12 @@ impl Compiler<'_> {
         self.end_scope(line);
         let frame = self.loop_frames.pop().expect("for loop frame");
 
+        // Drop the loop variable(s): two for the Map two-binding form (value then key, LIFO), one
+        // otherwise.
+        if kv.is_some() {
+            self.emit(Op::Pop, line);
+            self.locals.pop();
+        }
         self.emit(Op::Pop, line); // drop the loop variable
         self.locals.pop(); // unregister `name`
 

@@ -249,12 +249,14 @@ pub(super) fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
         Stmt::For {
             ty,
             name,
+            val,
             iter,
             body,
             span,
         } => Stmt::For {
             ty: resolve_type(&ty, ctx),
             name,
+            val: val.map(|(t, n)| (resolve_type(&t, ctx), n)),
             iter: resolve_expr(iter, ctx),
             body: resolve_block(body, ctx),
             span,

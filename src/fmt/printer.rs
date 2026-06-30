@@ -488,13 +488,22 @@ impl Printer<'_> {
             Stmt::For {
                 ty: t,
                 name,
+                val,
                 iter,
                 body,
                 ..
             } => {
                 // An inferred-element for-in prints as the idiomatic `foreach (iter as name)`
-                // (A-6); an explicit element type keeps the typed `for (T name in iter)` form.
-                let head = if matches!(t, Type::Infer(_)) {
+                // (A-6); an explicit element type keeps the typed `for (T name in iter)` form; a
+                // two-binding Map form prints `for (K k, V v in iter)` (B1).
+                let head = if let Some((vt, vname)) = val {
+                    format!(
+                        "for ({} {name}, {} {vname} in {})",
+                        ty(t)?,
+                        ty(vt)?,
+                        self.expr(iter)?
+                    )
+                } else if matches!(t, Type::Infer(_)) {
                     format!("foreach ({} as {name})", self.expr(iter)?)
                 } else {
                     format!("for ({} {name} in {})", ty(t)?, self.expr(iter)?)

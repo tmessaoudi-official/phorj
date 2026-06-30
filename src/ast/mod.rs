@@ -483,10 +483,14 @@ pub enum Stmt {
         else_block: Option<Vec<Stmt>>,
         span: Span,
     },
-    /// `for (Type name in iter) { .. }`
+    /// `for (Type name in iter) { .. }` — single-binding iteration over a List/Set/string/range.
+    /// `for (Type k, Type v in map) { .. }` — two-binding Map iteration (B1): then `ty`/`name` is the
+    /// **key** binding and `val` carries the **value** binding `(Type, name)`. `val` is `None` for the
+    /// single-binding form.
     For {
         ty: Type,
         name: String,
+        val: Option<(Type, String)>,
         iter: Expr,
         body: Vec<Stmt>,
         span: Span,

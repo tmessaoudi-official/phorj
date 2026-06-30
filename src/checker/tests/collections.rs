@@ -116,6 +116,31 @@ fn for_in_string_binds_char_as_string() {
 }
 
 #[test]
+fn for_in_map_two_binding_binds_key_and_value() {
+    // B1: `for (K k, V v in map)` binds the key and value types from the Map.
+    assert!(errors_of(
+        "import Core.Output; function main() -> void { Map<string, int> m = [\"a\" => 1]; \
+         for (string k, int v in m) { int x = v + 1; Output.printLine(k); } }"
+    )
+    .is_empty());
+    // A single binding over a Map is an error (needs the two-binding form).
+    let errs = errors_of(
+        "function main() -> void { Map<string, int> m = [\"a\" => 1]; for (string k in m) { } }",
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e.message.contains("needs two bindings")),
+        "{errs:?}"
+    );
+    // The two-binding form requires a Map (not a List).
+    let bad = errors_of("function main() -> void { for (int a, int b in [1, 2]) { } }");
+    assert!(
+        bad.iter().any(|e| e.message.contains("requires a Map")),
+        "{bad:?}"
+    );
+}
+
+#[test]
 fn range_in_for_checks_clean_and_binds_int() {
     assert!(
         errors_of("function main() -> void { for (int i in 0..5) { int x = i + 1; } }").is_empty()

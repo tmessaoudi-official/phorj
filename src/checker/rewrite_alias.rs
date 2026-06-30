@@ -90,12 +90,14 @@ pub fn expand_aliases(program: &Program) -> Program {
             Stmt::For {
                 ty,
                 name,
+                val,
                 iter,
                 body,
                 span,
             } => Stmt::For {
                 ty: rt(ty, a, 0),
                 name: name.clone(),
+                val: val.as_ref().map(|(t, n)| (rt(t, a, 0), n.clone())),
                 iter: iter.clone(),
                 body: body.iter().map(|s| rstmt(s, a)).collect(),
                 span: *span,

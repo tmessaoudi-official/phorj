@@ -358,6 +358,15 @@ impl Parser {
         }
         let ty = self.parse_type()?;
         let name = self.expect_ident("a loop variable name")?;
+        // B1 Map iteration: an optional second binding `for (K k, V v in map)`. When present, `ty`/`name`
+        // is the key and `val` the value; the checker requires a `Map<K, V>` source.
+        let val = if self.eat(&TokenKind::Comma) {
+            let vty = self.parse_type()?;
+            let vname = self.expect_ident("a value binding name after ','")?;
+            Some((vty, vname))
+        } else {
+            None
+        };
         self.expect(&TokenKind::In, "'in' in for-loop header")?;
         let iter = self.parse_expr()?;
         self.expect(&TokenKind::RParen, "')' after for-loop header")?;
@@ -365,6 +374,7 @@ impl Parser {
         Ok(Stmt::For {
             ty,
             name,
+            val,
             iter,
             body,
             span: sp,
@@ -431,6 +441,7 @@ impl Parser {
         let loop_stmt = Stmt::For {
             ty: Type::Infer(sp),
             name,
+            val: None,
             iter,
             body,
             span: sp,

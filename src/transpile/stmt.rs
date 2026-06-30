@@ -123,26 +123,37 @@ impl Transpiler {
             Stmt::For {
                 ty,
                 name,
+                val,
                 iter,
                 body,
                 ..
             } => {
                 let it = self.emit_expr(iter)?;
-                // B1: a `string` iterates its characters — PHP `foreach` over a raw string is invalid,
-                // so wrap it in `str_split` (1-byte chunks; byte-identical to the backends' char walk in
-                // the ASCII domain). A List/Set already transpiles to a PHP array `foreach` directly.
-                let src = if matches!(self.expr_kind(iter), OpKind::Str) {
-                    format!("str_split({it})")
-                } else {
-                    it
-                };
-                self.line(&format!("foreach ({src} as ${name}) {{"));
-                self.indent += 1;
                 self.push_scope();
-                self.declare(name);
-                // T6: the loop variable's element type drives operand specialization in the body
-                // (`for (int i in 0..n) { … i / 2 … }` → native `intdiv`).
-                self.declare_kind(name, kind_of_type(ty));
+                if let Some((vty, vname)) = val {
+                    // B1 two-binding Map form → PHP `foreach ($map as $k => $v)`.
+                    self.line(&format!("foreach ({it} as ${name} => ${vname}) {{"));
+                    self.indent += 1;
+                    self.declare(name);
+                    self.declare_kind(name, kind_of_type(ty));
+                    self.declare(vname);
+                    self.declare_kind(vname, kind_of_type(vty));
+                } else {
+                    // A `string` iterates its characters — PHP `foreach` over a raw string is invalid,
+                    // so wrap it in `str_split` (1-byte chunks; byte-identical to the backends' char
+                    // walk in the ASCII domain). A List/Set transpiles to a PHP array `foreach` directly.
+                    let src = if matches!(self.expr_kind(iter), OpKind::Str) {
+                        format!("str_split({it})")
+                    } else {
+                        it
+                    };
+                    self.line(&format!("foreach ({src} as ${name}) {{"));
+                    self.indent += 1;
+                    self.declare(name);
+                    // T6: the loop variable's element type drives operand specialization in the body
+                    // (`for (int i in 0..n) { … i / 2 … }` → native `intdiv`).
+                    self.declare_kind(name, kind_of_type(ty));
+                }
                 for st in body {
                     self.emit_stmt(st)?;
                 }

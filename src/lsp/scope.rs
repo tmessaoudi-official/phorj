@@ -60,9 +60,16 @@ pub fn collect_bindings(body: &[Stmt], out: &mut Vec<(String, Span)>) {
         match s {
             Stmt::VarDecl { name, span, .. } => out.push((name.clone(), *span)),
             Stmt::For {
-                name, body, span, ..
+                name,
+                val,
+                body,
+                span,
+                ..
             } => {
                 out.push((name.clone(), *span));
+                if let Some((_, vname)) = val {
+                    out.push((vname.clone(), *span));
+                }
                 collect_bindings(body, out);
             }
             Stmt::If {

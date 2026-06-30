@@ -403,12 +403,14 @@ fn rstmt(s: Stmt, r: &[Route]) -> Stmt {
         Stmt::For {
             ty,
             name,
+            val,
             iter,
             body,
             span,
         } => Stmt::For {
             ty,
             name,
+            val,
             iter: rexpr(iter, r),
             body: rblock(body, r),
             span,

@@ -300,6 +300,13 @@ pub fn iter_elements(v: &Value) -> Result<Vec<Value>, String> {
         // String stdlib — Unicode scalars; the transpiler emits PHP `str_split`, byte-identical for
         // ASCII). An empty string yields no elements (matches PHP 8 `str_split("")` == []).
         Value::Str(s) => Ok(s.chars().map(|c| Value::Str(c.to_string())).collect()),
+        // B1: a `Map<K, V>` iterates as `[key, value]` 2-element lists in insertion order — the
+        // two-binding `for (k, v in map)` form destructures each pair (the VM indexes [0]/[1], the
+        // interpreter unpacks below). Single-sourced so run≡runvm.
+        Value::Map(entries) => Ok(entries
+            .iter()
+            .map(|(k, v)| Value::List(Rc::new(vec![k.to_value(), v.clone()])))
+            .collect()),
         other => Err(format!("cannot iterate over {}", other.type_name())),
     }
 }

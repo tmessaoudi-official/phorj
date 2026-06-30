@@ -52,4 +52,14 @@ function main(): void {
 
     // A string iterates its characters.
     Output.printLine("vowels in 'education' = {countVowels(\"education\")}");
+
+    // A Map iterates as (key, value) pairs — the two-binding form `for (K k, V v in map)`,
+    // insertion-ordered. Transpiles to PHP `foreach ($m as $k => $v)`.
+    Map<string, int> prices = ["apple" => 3, "pear" => 5, "plum" => 2];
+    mutable int cart = 0;
+    for (string item, int price in prices) {
+        Output.printLine("{item}: {price}");
+        cart = cart + price;
+    }
+    Output.printLine("cart total = {cart}");
 }

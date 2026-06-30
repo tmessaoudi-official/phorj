@@ -381,6 +381,7 @@ impl Lifter {
                 vec![Stmt::For {
                     ty: Type::Infer(SP),
                     name: value.clone(),
+                    val: None,
                     iter: lift_expr(array)?,
                     body: self.lift_block(body, declared)?,
                     span: SP,

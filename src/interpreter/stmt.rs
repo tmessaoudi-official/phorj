@@ -140,11 +140,15 @@ impl<'c> Interp<'c> {
                 }
             }
             Stmt::For {
-                name, iter, body, ..
+                name,
+                val,
+                iter,
+                body,
+                ..
             } => {
-                // B1 iteration protocol: normalize the source (`List`/`Set`) to its element sequence
-                // via the shared `value::iter_elements` kernel (byte-identical order to the VM's
-                // `Op::IterElems`).
+                // B1 iteration protocol: normalize the source (`List`/`Set`/`string`/`Map`) to its
+                // element sequence via the shared `value::iter_elements` kernel (byte-identical order
+                // to the VM's `Op::IterElems`). A `Map` yields `[key, value]` 2-lists.
                 let iterable = self.eval(iter)?;
                 let items = match crate::value::iter_elements(&iterable) {
                     Ok(v) => v,
@@ -152,7 +156,16 @@ impl<'c> Interp<'c> {
                 };
                 for item in items.iter() {
                     self.frame.push_scope();
-                    self.frame.declare(name, item.clone());
+                    match val {
+                        // Two-binding Map form: `item` is a `[key, value]` list — unpack both.
+                        Some((_, vname)) => {
+                            if let Value::List(pair) = item {
+                                self.frame.declare(name, pair[0].clone());
+                                self.frame.declare(vname, pair[1].clone());
+                            }
+                        }
+                        None => self.frame.declare(name, item.clone()),
+                    }
                     let r = self.exec_stmts(body);
                     self.frame.pop_scope();
                     match r {
