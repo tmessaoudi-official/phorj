@@ -85,7 +85,7 @@ jobs:
       # On a published release, attach the archive to that release.
       - name: Attach to release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             ${{ matrix.asset }}.tar.gz
