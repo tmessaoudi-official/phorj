@@ -58,7 +58,11 @@
 
 - [x] **W0** (empty-list init `2350428`; comma-throws + line-wrap `debe230`; keyword-vs-import rule → INVARIANTS §12)
 - [x] **W1** (Core.Runtime memory+monotonic natives, Stopwatch, quarantine)  - [x] **W2** (File.read verified working; nested-quote interpolation `adbc343`; Core.Json verified)  - [ ] W3  - [ ] W4  - [ ] W5  - [ ] W6
-- [~] **W3** (OOP spine validated; error-model + 5 more benchmarks remain — demo in `/stack`)
+- [x] **W3** (OOP + **error-model** spine COMPLETE — interface/abstract Template-Method/enum/checked
+  exception `throws`/`try`/`catch` all validated in the demo, run≡runvm; a failing benchmark exercises
+  the caught→Failed path. The other 6 benchmarks are **intentionally not ported** — they need in-place
+  cross-call mutation Phorj's value semantics forbid; documented as the dogfood finding in
+  `KNOWN_ISSUES.md` (`c8e5337`) + `/stack/projects/phorj-app/FINDINGS.md` with the decision surface.)
 - [x] **W4** (list upcast `671612a`; 2-benchmark demo)
 - [x] **W5** (`Core.List.append` `5b23515`)
 - [~] W6 (sieve(100000) already exercises a 100k-element list + memory report — demonstrated in the demo)
