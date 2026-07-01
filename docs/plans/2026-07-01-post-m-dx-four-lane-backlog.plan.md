@@ -101,16 +101,66 @@
   the M4 charter answers most; the fresh session should read the charter at Lane-4 Phase 0 and only
   pause if a module's policy is genuinely ambiguous. Not a blocker to starting.
 
-## OPEN QUESTION (developer, 2026-07-01) — answer at session end, with challenge
-Dynamic reflection surface — the developer asks:
-1. Can we **instantiate a class from a string at runtime** dynamically, WITHOUT importing it? (PHP `new $className()`)
-2. Can we **call a function dynamically at runtime from a string**? (PHP `$fn()` / `call_user_func`)
-3. What **callable formats** do we currently have? (first-class fn values, closures, method refs?)
-> To answer: audit `Core.Reflection` (`src/native/reflect.rs`), `Value::Closure`, first-class fn values,
-> the resolution model (imports resolved at compile-time via the loader mangle pass). CHALLENGE angle:
-> dynamic-from-string fights the whole design — compile-time namespacing, "nothing in the wind",
-> byte-identity spine, and the type system's non-null/exhaustiveness guarantees. A string→class/fn
-> lookup is un-typeable and un-erasable. Frame the tension explicitly before recommending.
+## DEVELOPER OPEN QUESTIONS (2026-07-01) — audited this session; feed the NEXT big auto session
+
+### Q1 — Dynamic reflection (instantiate/call from a string). AUDITED — answer: NO, by design.
+- **Instantiate a class from a runtime string / without importing?** NO. Classes compile to
+  `Op::MakeInstance(index)` — a compile-time index into `class_descs`, no runtime string→class table;
+  and resolution *requires* the type in scope (the loader mangle pass). No `new $className()`.
+- **Call a function from a runtime string?** NO. Calls resolve at compile time (loader mangle → FQN →
+  direct / `Op::CallNative(idx)`) or dispatch a closure VALUE via `Op::CallValue`. No `call_user_func`.
+- **Callable formats we DO have:** exactly ONE value — `Value::Closure(Rc<ClosureData>)`, three internal
+  variants: `Tree` (interpreter lambda; has `this_capture` — lambdas CAN reference `this` now),
+  `Named(String)` (a bare named fn is a first-class value), `Byte{func,captures}` (VM bytecode closure).
+  Invoked by direct call or pipe `|>`; higher-order natives (map/filter/reduce/sort) consume it via
+  `ClosureInvoker`. **No method-reference-as-value** (`obj.method` un-called) — deferred (KNOWN_ISSUES).
+- **Reflection is read-only, name-level:** `Core.Reflection` = kind/className/typeName/interfaces/
+  parents/methods/fields — it TELLS you names, gives NO way to ACT on them (no invoke/instantiate).
+- **CHALLENGE (locked):** dynamic-from-string is *un-typeable* (result is `mixed` → kills non-null +
+  exhaustiveness + arg-checking), *un-erasable* (inherently runtime, breaks the erase-before-backend
+  discipline), and re-introduces the global string registry the namespace design removed. Almost every
+  PHP use has a typed equivalent already: pass a **closure** (we have first-class fns), dispatch through
+  an **interface/union + match** (see `examples/web/router.phg` — handlers are first-class values, not
+  name strings), model closed sets as **enums**. The idiomatic escape hatch for the real ~5% (construct-
+  by-name from data) is a **developer-owned typed registry**: `Map<string, () -> T>` of constructor
+  closures, or a `match name { … }` — string→behavior as *data you own*, not a hole in the checker.
+
+### Q2 — Filesystem beyond read: create/delete/rename/overwrite/append, in a good OOP way.
+- **Current `Core.File`:** only `read` (→`string?`), `exists`, `write` — function-style, minimal.
+  Missing: delete/rename/copy/append/mkdir/metadata/list-dir, and any OOP handle.
+- **Direction (design next session):** a richer `Core.File` (`append`/`delete`/`rename`/`copy`/`size`/
+  `isDir`/`listDir`/`mkdir`) AND/OR an OOP `File`/`Path` value-object surface (`file_get_contents`/
+  `file_put_contents` peers, but methods on a typed handle). All `pure: false` → **quarantined** from
+  the byte-identity oracle (like `Core.Process`/`Core.Environment`), tested in `tests/`, walkthrough
+  (not gated) examples. **CHALLENGE:** OOP file *handles* (an open fd you read/write/seek) fight the
+  value-native, immutable-by-default model — a handle is mutable stateful identity. Decide: (a) stateless
+  static-method OOP (`File.readText(path)` — a namespace, not a handle; keeps determinism-quarantine
+  simple) vs (b) real stateful `File` objects (opens the door to resource lifecycle, `defer`-close,
+  the mutation/GC story). Recommend (a) first; (b) only if a real streaming need appears.
+
+### Q3 — Guzzle-style HTTP CLIENT (rich, well-structured) to consume/get APIs.
+- **Current state:** NONE. All HTTP is server-side (`handle(Request)->Response`, `phg serve`). No client,
+  no `TcpStream`, no network native anywhere — network was deliberately **deferred to M6/beyond** because
+  (1) Rust std has no HTTP client → breaks zero-dep, and (2) network is non-deterministic → breaks the
+  byte-identical spine (the real gate, per the M6 design).
+- **CHALLENGE (the hard one):** a Guzzle-rich client (PSR-7/18, middleware, retries, pooling) is a
+  genuinely large surface AND its results can NEVER be byte-identity-gated (a live API is
+  non-deterministic + external). Options, in ascending cost: (a) reuse the **existing PSR-7-style
+  `Request`/`Response` VALUE model** from M6 W1 as the client's data types (the portable unit already
+  exists — only the transport is new), keep transport quarantined behind a `Transport` trait like
+  `src/serve.rs`; (b) admit a vetted HTTP dependency (breaks zero-dep — needs a dependency-policy
+  decision like the `argon2` precedent) OR hand-roll HTTP/1.1 over `std::net::TcpStream` (zero-dep, no
+  TLS → HTTPS needs a TLS crate anyway). **The unavoidable tension:** the client's *value surface*
+  (build a request, read a response) can be pure, typed, and even transpile to PHP Guzzle/`curl`; but
+  the *send* is I/O — quarantined, tested against a local fixture server (like `tests/vendor.rs`'s
+  `file://` git fixture), never in `differential.rs`. Frame it as **"rich typed value API + thin
+  quarantined transport,"** mirroring the M6 server split. TLS/HTTPS is the real dependency fork.
+
+## Session 2026-07-01 (this session) — progress
+- Lane 1 (Naming) COMPLETE (`88082a8`/`4f539f0`/`b8679e7`). Lane 2 W1 (perf gate) DONE (`df00f4d`).
+- Lane 2 W2 (`Rc`-share `Value::Str`) SCOPED, deliberately DEFERRED: 164 sites / 34 files — the headline
+  win, but a full-differential-reverified mechanical sweep best done in its own worktree-isolated session
+  rather than half-landed under budget. NEXT concrete perf step.
 
 ## Progress
 - [x] Lane 1 — Naming-overhaul (**COMPLETE** 2026-07-01, `88082a8`/`4f539f0`/`b8679e7`) — W1 discovery
