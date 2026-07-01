@@ -56,6 +56,22 @@
 - [x] **W1** (Core.Runtime memory+monotonic natives, Stopwatch, quarantine)  - [x] **W2** (File.read verified working; nested-quote interpolation `adbc343`; Core.Json verified)  - [ ] W3  - [ ] W4  - [ ] W5  - [ ] W6
 - [ ] W7  - [ ] W8  - [ ] W9  - [ ] W10  - [ ] W11  - [ ] W12  - [ ] Wrap
 
+### W3/W4/W7/W8 status (2026-07-01)
+- **W8 perf — DONE, the headline win** (`b8a2877`): `xs[i]=v` was O(n)-per-write (COW deep-copied the
+  whole container every write; both backends held a spurious 2nd `Rc`). Fixed via `Frame::lookup_mut`
+  (interp) + new `Op::SetIndexLocal` (VM). sieve(20000): interp 2.73s→16ms (170×), VM 2.55s→8ms (305×).
+  COW preserved; 1300 lib + 126 differential (incl PHP oracle) green.
+- **W4/W7 — working demo delivered** (in `/stack/projects/phorj-app/`, NOT committed — that's the `/stack`
+  repo, separate autonomy scope): `benchforge.phg` (2 of 8 benchmarks — Fibonacci + PrimeSieve) with the
+  full OOP spine, self-timing via `Core.Runtime`; `BENCHFORGE.md` has the Phorj-vs-PHP-8.5 table. Sieve:
+  Phorj VM ~3.3× slower than optimized PHP 8.5 (was un-runnable before the W8 fix).
+- **W3 — partial**: interface + abstract Template-Method + enum + class + `Map<string,string>` metrics
+  all validated on a real program. Remaining: the error-model path (`try`/`catch` in `run()`), and
+  porting the other 6 benchmarks (Sorting/Aggregation/StringProcessing/Search/Matrix/ObjectGraph).
+- **W4 also fixed a checker gap** (`in the W8 commit's precursor`): heterogeneous list of interface
+  implementers now upcasts to the annotation's element type (expected-type-directed list checking,
+  generalizing W0's empty-list fix). Committed with W0-adjacent checker work.
+
 ### New gaps surfaced during the marathon (feed later waves)
 - **`Core.List` has no append/push/add** — only query ops (map/filter/reduce/concat…). Imperative `$arr[] = x` has no direct equivalent; idiom is `List.map(range, fn)` / `List.concat`. → W5 (decide: add mutable append or keep functional).
 - **`import <unknown module>` type-checks clean** (e.g. `import Core.Types` on a non-existent module is a silent no-op) — candidate `W-UNKNOWN-IMPORT` lint. → W12.
