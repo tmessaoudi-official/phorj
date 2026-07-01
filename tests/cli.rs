@@ -67,6 +67,52 @@ fn dump_on_fault_shows_redacted_locals_only_when_requested() {
     );
 }
 
+/// M-DX S5: `phg debug` runs the interactive REPL debugger — commands on stdin, debugger UI on
+/// stderr, program output on stdout. Drives a scripted session (step into a call, inspect locals,
+/// continue) and asserts each surface.
+#[test]
+fn debug_repl_steps_inspects_and_continues() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let prog = "package Main;\nimport Core.Output;\n\
+                function add(int a, int b) -> int {\n  int sum = a + b;\n  return sum;\n}\n\
+                function main() -> void {\n  int x = 3;\n  int y = add(x, 4);\n  Output.printLine(\"y = {y}\");\n}\n";
+    let path = std::env::temp_dir().join(format!("phg_dbg_{}.phg", std::process::id()));
+    std::fs::write(&path, prog).expect("write program");
+
+    let mut child = Command::new(BIN)
+        .args(["debug", path.to_str().unwrap()])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn phg debug");
+    // step into `add`, show locals, continue to completion.
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"s\ns\nl\nc\n")
+        .unwrap();
+    let out = child.wait_with_output().expect("wait");
+    let _ = std::fs::remove_file(&path);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+
+    assert_eq!(
+        stdout, "y = 7\n",
+        "program stdout is clean (debugger UI is on stderr)"
+    );
+    assert!(
+        stderr.contains("paused at line"),
+        "debugger paused: {stderr}"
+    );
+    assert!(
+        stderr.contains("a = 3") && stderr.contains("b = 4"),
+        "locals inspected: {stderr}"
+    );
+}
+
 /// M-DX S3: the VM backend has no named locals, so `runvm --dump-on-fault` emits the (byte-identical)
 /// backtrace without a locals section — never slot noise, never a leak.
 #[test]

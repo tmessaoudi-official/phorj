@@ -72,7 +72,7 @@ fn main() {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "tokenize" | "transpile" | "lift"
             | "disassemble" | "benchmark" | "build" | "vendor" | "serve" | "lsp" | "test"
-            | "format" | "explain"),
+            | "format" | "explain" | "debug"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -246,6 +246,37 @@ fn main() {
             Ok(code) => exit(code),
             Err(e) => {
                 eprintln!("lsp: {e}");
+                exit(1);
+            }
+        }
+    }
+    // `debug <file>` (M-DX S5) runs the program under the interactive REPL debugger, reading commands
+    // on stdin and writing the debugger UI to stderr. Dev-only + interpreter-only; project-aware load
+    // like `run`. Program stdout is printed after the session (the interpreter buffers it).
+    if cmd == "debug" {
+        let file = match args.get(2) {
+            Some(f) => f,
+            None => {
+                eprintln!("usage: phg debug <file>");
+                exit(2);
+            }
+        };
+        // The debugger is a Dev-profile capability (value inspection); mark the process Dev.
+        phorj::profile::set_active(phorj::profile::Profile::Dev);
+        let unit = match loader::load(std::path::Path::new(file)) {
+            Ok(u) => u,
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        };
+        match cli::run_repl(&unit) {
+            Ok(text) => {
+                print!("{text}");
+                return;
+            }
+            Err(err) => {
+                eprintln!("{err}");
                 exit(1);
             }
         }
