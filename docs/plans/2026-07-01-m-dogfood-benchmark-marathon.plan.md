@@ -16,7 +16,11 @@
 
 ## Design forks to batch (surface via AskUserQuestion — genuine taste decisions)
 
-- **DF-1 return-type syntax**: parser accepts BOTH `function f(): void` and `function f() -> void` (`src/parser/items.rs:239`) — identical after parse. Canonicalize on one (PHP/TS `:` vs Rust/lambda `->`)? Decision → then `phg fmt` normalizes + optional `W-` deprecation. Non-blocking.
+- **DF-1 return-type syntax — RESOLVED (2026-07-01):** parser accepts BOTH `function f(): void` and
+  `function f() -> void`. **Decision: `:` is canonical** (PHP/TS familiarity — the developer flagged
+  `-> type` as looking old, confirming the lean); `->` stays accepted (non-breaking). A `phg fmt`
+  normalization to `:` + an optional `W-` deprecation on `->` are deferred (breaking-ish — do when the
+  developer wants the codemod). No code change this marathon.
 
 ## Verified gap inventory (Phase 0)
 
@@ -54,7 +58,16 @@
 
 - [x] **W0** (empty-list init `2350428`; comma-throws + line-wrap `debe230`; keyword-vs-import rule → INVARIANTS §12)
 - [x] **W1** (Core.Runtime memory+monotonic natives, Stopwatch, quarantine)  - [x] **W2** (File.read verified working; nested-quote interpolation `adbc343`; Core.Json verified)  - [ ] W3  - [ ] W4  - [ ] W5  - [ ] W6
-- [ ] W7  - [ ] W8  - [ ] W9  - [ ] W10  - [ ] W11  - [ ] W12  - [ ] Wrap
+- [~] **W3** (OOP spine validated; error-model + 5 more benchmarks remain — demo in `/stack`)
+- [x] **W4** (list upcast `671612a`; 2-benchmark demo)
+- [x] **W5** (`Core.List.append` `5b23515`)
+- [~] W6 (sieve(100000) already exercises a 100k-element list + memory report — demonstrated in the demo)
+- [x] **W7** (working demo `benchforge.phg` + `BENCHFORGE.md`)
+- [x] **W8** (O(n²)→O(1) index-assign `b8a2877`, the headline)
+- [x] **W9** (`bench --json` / `--vs-php --json` `43e8e3b`)
+- [x] **W10** (grammar + LSP keyword sync `2d9d78a`)
+- [x] **W11** (playground compiles on wasm32 against all changes; default sample current-syntax; CI rebuilds+deploys on push — no source change needed)
+- [x] **W12** (old-syntax audit CLEAN across all `.phg` incl conformance; `W-UNKNOWN-IMPORT` DEFERRED — needs a single-sourced known-module set incl injected-prelude-only modules `Core.Http`/`Core.Secret`, else false-positives on valid code; DF-1 return-type syntax = open user taste decision)
 
 ### W3/W4/W7/W8 status (2026-07-01)
 - **W8 perf — DONE, the headline win** (`b8a2877`): `xs[i]=v` was O(n)-per-write (COW deep-copied the
