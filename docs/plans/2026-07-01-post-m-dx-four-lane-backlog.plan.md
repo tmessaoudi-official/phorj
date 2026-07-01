@@ -48,8 +48,57 @@
   safe parse, `core.regex` (PCRE `/u`), `sprintf`, hash/encoding/path/url/log, iterators. Each module
   ships a byte-identity-gated guide example (per the examples-ship-with-features rule).
 
+## Wave breakdown (turnkey for a big autonomous session — each wave: green + byte-identical + commit)
+
+### Lane 1 — Naming-overhaul (7 waves)
+- **W1** Phase-0 delta: grep the codebase for every OLD name (memory is ambiguous re what shipped) →
+  produce the authoritative remaining-renames list. No code change; just the verified delta.
+- **W2** Native-fn renames, per module (registry `name:` + every `.phg`/inline-test caller):
+  Output(`println→printLine`?), String(`upper→uppercase`/`lower→lowercase`), Html(`el→element`/
+  `voidEl→voidElement`/`attr→attribute`/`boolAttr→booleanAttribute`), Decimal(`div→divide`),
+  Math(`ipow→integerPower`/`intdiv→integerDivide`/`negInfinity`/`isNan→isNaN`), Path(`basename→baseName`/
+  `dirname→directoryName`/`stem→fileStem`), Map(`getOr→getOrDefault`), Random(`next→nextInt` + add
+  `nextFloat`), Time(`nowMillis→nowMilliseconds`), Url(`urlEncode→encodeForm`/…). One commit per module.
+- **W3** Package renames: `Core.Text→Core.String`, `Core.Validate→Core.Validation`,
+  `Core.Convert→Core.Conversion`, `Core.Reflect→Core.Reflection`, `Core.Crypto→Core.Cryptography`
+  (module strings + import paths + transpiler namespace emission + `E-PKG-CASE` data + UFCS leaf tables).
+- **W4** NEW `Core.Environment` ← `Process.get`/`all` move as `Environment.get`/`all`.
+- **W5** CLI subcommands: `bench→benchmark`, `disasm→disassemble`, `lex→tokenize` (verify `fmt→format`
+  shipped); update USAGE + `help_for` + every test/skill/doc invoking them.
+- **W6** Migrate all `examples/**/*.phg` + fixtures + guide READMEs + CHANGELOG to the new names.
+- **W7** Confirm keyword/type renames complete (`Empty→empty`+`E-VOID-IN-UNION`, `Ok/Err→Success/Failure`,
+  `fn→function`, `recv→receive` — memory says done; verify none regressed).
+
+### Lane 2 — M-perf (7 waves)
+- **W1** Establish the **CI perf-regression gate** FIRST (a `phg bench` baseline JSON + a gate that
+  fails on a >X% median regression, output-identity-gated). Guards all later waves.
+- **W2** `Rc`-share `Value::Str` (clone = refcount bump). **W3** intern `IsInstance` (class name→id).
+  **W4** faster opcode dispatch. **W5** compiler const-fold. **W6** peephole. **W7** lazy `for`-range
+  (don't materialize `List<int>`). Each: before/after `phg bench` number + byte-identity preserved.
+
+### Lane 3 — VM debug symbols (5 waves) — closes the S3/S5 deviation
+- **W1** Compiler emits per-local scope IP ranges into `chunk::Function`
+  (`Vec<LocalDebug{name, slot, start_ip, end_ip}>`) — solves the slot-recycling ambiguity.
+- **W2** VM maps live slots→names at fault → `runvm --dump-on-fault` gains named locals, byte-identical
+  to the interpreter dump (closes the S3 deviation). **W3** VM per-line pause hook (mirror the
+  interpreter's `exec_stmt` hook) → VM stepping. **W4** wire the VM into the debug engine
+  (`src/debug.rs`) so REPL + DAP work over `runvm`; tests. **W5** examples/docs (`examples/debug/`).
+
+### Lane 4 — Stdlib breadth (M11, ~8 waves; each module ships a byte-identity-gated guide example)
+- **W1** `core.json` encode + safe parse. **W2** `core.regex` (PCRE `/u`). **W3** `sprintf`/format.
+  **W4** hash/encoding breadth. **W5** path/url breadth. **W6** log facility. **W7** iterators.
+  **W8** collections breadth (audit gaps vs the M4 charter). Charter:
+  `docs/specs/2026-06-29-m4-stdlib-charter.md`.
+
+## Lock assessment (are we ready for a big autonomous run?)
+- **LOCKED** for Lanes 1–3: scope + waves + verified constraints are concrete; a fresh session can
+  execute top-to-bottom autonomously (project bypass sentinel armed).
+- **Lane 4 needs one decision per module** (native-vs-`.phg`, optional-vs-fault, determinism tier) —
+  the M4 charter answers most; the fresh session should read the charter at Lane-4 Phase 0 and only
+  pause if a module's policy is genuinely ambiguous. Not a blocker to starting.
+
 ## Progress
-- [ ] Lane 1 — Naming-overhaul (NOT STARTED)
-- [ ] Lane 2 — M-perf (NOT STARTED)
-- [ ] Lane 3 — VM debug symbols (NOT STARTED)
-- [ ] Lane 4 — Stdlib breadth (NOT STARTED)
+- [ ] Lane 1 — Naming-overhaul (NOT STARTED) — W1..W7
+- [ ] Lane 2 — M-perf (NOT STARTED) — W1..W7
+- [ ] Lane 3 — VM debug symbols (NOT STARTED) — W1..W5
+- [ ] Lane 4 — Stdlib breadth (NOT STARTED) — W1..W8
