@@ -50,11 +50,12 @@ impl Compiler<'_> {
                     let slot = self
                         .resolve_local(name)
                         .ok_or_else(|| format!("unresolved local in index-assignment: {name}"))?;
-                    self.emit(Op::GetLocal(slot), span.line); // [container]
-                    self.expr(index)?; // [container, index]
-                    self.expr(value)?; // [container, index, value]
-                    self.emit(Op::SetIndex, span.line); // [newcontainer]
-                    self.emit(Op::SetLocal(slot), span.line); // write back
+                    // `SetIndexLocal` mutates the container in its slot (COW, O(1) per write) instead
+                    // of `GetLocal` + `SetIndex` + `SetLocal`, which cloned the slot's `Rc` onto the
+                    // stack and so deep-copied the whole container on every write (M-DOGFOOD W8).
+                    self.expr(index)?; // [index]
+                    self.expr(value)?; // [index, value]
+                    self.emit(Op::SetIndexLocal(slot), span.line); // mutate slot in place, pop both
                     Ok(())
                 }
                 // Static write `ClassName.field = e` (M-mut.7): push the value, store into the

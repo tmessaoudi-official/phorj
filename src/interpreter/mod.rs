@@ -131,6 +131,13 @@ impl CallScopes {
     fn lookup(&self, name: &str) -> Option<&Value> {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
+    /// Mutable view of an existing binding's slot (innermost scope that declares it). Used by
+    /// index-assign so it can `Rc::make_mut` the container *in the slot* — copy-on-write stays
+    /// correct (a genuinely shared `Rc` still copies), but a uniquely-owned container mutates in
+    /// place instead of being cloned first, which is the difference between O(1) and O(n) per write.
+    fn lookup_mut(&mut self, name: &str) -> Option<&mut Value> {
+        self.scopes.iter_mut().rev().find_map(|s| s.get_mut(name))
+    }
     /// Overwrite an existing binding in the innermost scope that declares it (M-mut.1
     /// reassignment). Returns `false` if no scope holds `name` (defensive — the checker guarantees
     /// the binding exists and is `mutable`). Does NOT create a new binding.

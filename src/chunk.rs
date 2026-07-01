@@ -156,6 +156,14 @@ pub enum Op {
     /// acyclic, so `Rc::make_mut` reclaims fully — no GC. The caller writes the pushed container back
     /// to its place (e.g. `SetLocal`).
     SetIndex,
+    /// Pop a value and an index; copy-on-write set `local[index] = value` **in place in the local
+    /// slot** (M-DOGFOOD W8). Unlike `SetIndex` (which pops the container off the stack — so the local
+    /// slot still holds a second `Rc`, forcing `Rc::make_mut` to deep-copy on every write, making
+    /// imperative array algorithms O(n²)), this mutates the container directly in its slot, so
+    /// `make_mut` sees a refcount of 1 in the common case and mutates in place — O(1) per write. COW is
+    /// preserved: a genuinely shared container still copies. The checker restricts index-assign to a
+    /// local container, so the target is always a slot. Pushes nothing.
+    SetIndexLocal(usize),
     /// Pop a list; push its length as an `Int`.
     Len,
     /// Pop an iterable (`List`/`Set`); push a `List` of its elements in iteration order (B1 iteration
@@ -587,6 +595,7 @@ impl BytecodeProgram {
                     | Op::Pop
                     | Op::GetLocal(_)
                     | Op::SetLocal(_)
+                    | Op::SetIndexLocal(_)
                     | Op::Concat(_)
                     | Op::MakeList(_)
                     | Op::MakeMap(_)

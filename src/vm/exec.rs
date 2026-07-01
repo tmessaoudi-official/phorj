@@ -242,6 +242,32 @@ impl<'a> Vm<'a> {
                     v => return Err(format!("cannot index-assign {}", v.type_name())),
                 }
             }
+            Op::SetIndexLocal(slot) => {
+                // In-place COW element set on a local container (M-DOGFOOD W8): mutate the slot
+                // directly so `Rc::make_mut` sees refcount 1 (O(1)), instead of `SetIndex`'s
+                // pop-mutate-push-back which leaves a second `Rc` in the slot and deep-copies every
+                // write. COW is preserved — a shared container still copies. Eval order (index, value)
+                // matches `SetIndex` and the interpreter.
+                let v = self.pop();
+                let index = self.pop();
+                let base = self.frames[fr].slot_base;
+                let idx = self.frame_slot(base, slot);
+                match &mut self.stack[idx] {
+                    Value::List(xs) => {
+                        let i = match index {
+                            Value::Int(n) => n,
+                            x => {
+                                return Err(format!("expected int index, found {}", x.type_name()))
+                            }
+                        };
+                        crate::value::list_set(Rc::make_mut(xs).as_mut_slice(), i, v)?;
+                    }
+                    Value::Map(m) => {
+                        crate::value::map_set(Rc::make_mut(m), &index, v)?;
+                    }
+                    other => return Err(format!("cannot index-assign {}", other.type_name())),
+                }
+            }
             Op::Len => match self.pop() {
                 Value::List(xs) => self.stack.push(Value::Int(xs.len() as i64)),
                 v => return Err(format!("cannot take length of {}", v.type_name())),

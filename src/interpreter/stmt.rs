@@ -24,9 +24,14 @@ impl<'c> Interp<'c> {
                         rt(format!("undefined variable `{name}`"))
                     }
                 }
-                // Value-type element set `xs[i] = e` / `m[k] = e` (M-mut.5). Copy-on-write: clone the
-                // container's `Rc` only if another binding shares it (`Rc::make_mut`), mutate, write
-                // back to the local. Eval order matches the VM: index, then value.
+                // Value-type element set `xs[i] = e` / `m[k] = e` (M-mut.5). Copy-on-write: mutate
+                // the container **in its slot** via `Rc::make_mut` — a genuinely shared `Rc` still
+                // copies (COW preserved), but a uniquely-owned container mutates in place. Looking up
+                // the slot mutably (rather than cloning it out first) is what keeps `make_mut`'s
+                // refcount at 1 in the common case, making element-set O(1) instead of O(n)-per-write
+                // (M-DOGFOOD W8 — the prior `.cloned()` inflated the refcount so every write deep-copied
+                // the whole container, making imperative array algorithms O(n²)). Eval order matches the
+                // VM: index, then value, *before* borrowing the slot.
                 Expr::Index { object, index, .. } => {
                     let name = match &**object {
                         Expr::Ident(n, _) => n,
@@ -34,10 +39,10 @@ impl<'c> Interp<'c> {
                     };
                     let idx_val = self.eval(index)?;
                     let new_val = self.eval(value)?;
-                    let mut container = self.frame.lookup(name).cloned().ok_or_else(|| {
+                    let slot = self.frame.lookup_mut(name).ok_or_else(|| {
                         Signal::Runtime(Diagnostic::runtime(format!("undefined variable `{name}`")))
                     })?;
-                    match &mut container {
+                    match slot {
                         Value::List(xs) => {
                             let idx = match idx_val {
                                 Value::Int(n) => n,
@@ -57,7 +62,6 @@ impl<'c> Interp<'c> {
                         }
                         v => return rt(format!("cannot index-assign {}", v.type_name())),
                     }
-                    self.frame.assign(name, container);
                     Ok(())
                 }
                 // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6). Eval the

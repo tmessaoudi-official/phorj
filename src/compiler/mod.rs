@@ -499,6 +499,8 @@ impl<'a> Compiler<'a> {
             Op::Pop | Op::SetLocal(_) | Op::JumpIfFalse(_) | Op::Index | Op::MakeRange(_) => -1,
             // SetIndex pops (container, index, value) and pushes the new container: net -2.
             Op::SetIndex => -2,
+            // SetIndexLocal pops (index, value) and mutates the local slot in place — pushes nothing.
+            Op::SetIndexLocal(_) => -2,
             // BitNot is unary (pop one, push one) like Neg/Not.
             Op::Neg | Op::Not | Op::BitNot | Op::Len | Op::IterElems | Op::Jump(_) => 0,
             Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
