@@ -374,6 +374,31 @@ an explicit non-goal, never a panic):
   transpile to PHP `public` (Phorj does not enforce field visibility at runtime; `readonly`/`final`
   emission is not done — immutable fields are already write-prevented by the checker).
 
+## Dogfood findings (M-DOGFOOD — porting a real PHP OOP benchmark suite)
+
+Porting the PHP `benchforge` suite surfaced these characteristics (see the demo at
+`/stack/projects/phorj-app/`). None is a bug — they are the value-semantics design showing through —
+but they shape how imperative code ports:
+
+- **No by-reference / `mutable` parameters.** A parameter cannot be declared `mutable` (parse error),
+  and lists/maps/sets are value-type (COW), so mutating a container passed to a function never
+  propagates back to the caller. Combined with the nested-place restriction above, **in-place
+  imperative array algorithms that mutate across a call boundary cannot be expressed** — e.g. PHP's
+  `quicksort(array &$arr, …)` (in-place recursive sort) and group-by via `$groups[$k]['sum'] += …`.
+  The Phorj idiom is **functional** (return a new container; `List.map`/`filter`/`reduce`,
+  `List.sort`) or **keep the mutation in one scope on a `mutable` local** (a local `xs[i]=e` is O(1)
+  since the W8 fix). A decision to support in-place cross-call mutation (by-ref/`inout` params, or
+  nested-place stores) is a future language question, not a defect. The benchforge benchmarks that fit
+  the model are ported (Fibonacci, PrimeSieve); the mutation-heavy ones (Sorting/Search/Aggregation/…)
+  are intentionally not force-fitted.
+- **No empty `Map`/`Set` literal.** `[]` is always an empty *list* (its element type resolved from the
+  expected type since W0). There is no `[:]`-style empty-map literal, and `[]` cannot stand in for an
+  empty `Map<K,V>`/`Set<T>` binding (the runtime value would be a list). Build a non-empty literal, or
+  a one-entry map, or use a constructor. (Empty-`[]`-as-Map/Set would need a backend signal — deferred.)
+- **`instanceof` rejects an enum variant** (`E-INSTANCEOF-TYPE`) — it accepts only a class/interface.
+  Dispatch on an enum variant with a `match` (there is no statement-`match`, so a `match` **expression**
+  returning e.g. `bool` behind an `if` is the idiom).
+
 ## Error model Slice 2a (M-faults) — deferred refinements
 
 The value tier (`Result<T, E>` + `?`) and the panic tier (`panic`/`todo`/`unreachable`/`assert`) ship in
