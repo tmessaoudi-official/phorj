@@ -1,0 +1,28 @@
+// Empty collection initialization (M-DOGFOOD W0).
+//
+// An empty list literal `[]` carries no element to infer from, so it takes its element type
+// from the surrounding *expected type* — a variable's declared annotation or a function's
+// declared return type. This is the bidirectional-inference case that used to be rejected with
+// "cannot infer element type of empty list literal". `var xs = []` (no expected type) is still
+// an error by design — the fix is context-driven, not a silent default.
+package Main;
+
+import Core.Output;
+import Core.List;
+
+// The return type `List<int>` supplies the element type for the empty `[]`.
+function emptyInts() -> List<int> {
+    return [];
+}
+
+function main() -> void {
+    // Declared-annotation form.
+    List<string> names = [];
+    Output.printLine("names empty? {List.isEmpty(names)}");
+
+    // Return-type form, then grow it functionally (List is immutable — concat returns a new list).
+    List<int> xs = emptyInts();
+    List<int> grown = List.concat(xs, [1, 2, 3]);
+    Output.printLine("grown length = {List.length(grown)}");
+    Output.printLine("grown sum    = {List.sum(grown)}");
+}

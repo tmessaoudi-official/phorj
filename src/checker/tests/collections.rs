@@ -167,3 +167,29 @@ fn list_indexing_yields_element() {
         errors_of("function main() -> void { List<int> xs = [1, 2]; int y = xs[0]; }").is_empty()
     );
 }
+
+#[test]
+fn empty_list_literal_infers_from_declared_annotation() {
+    // `List<T> xs = []` takes the element type from the annotation (expected-type at the decl site).
+    assert!(
+        errors_of("function main() -> void { List<string> xs = []; }").is_empty(),
+        "{:?}",
+        errors_of("function main() -> void { List<string> xs = []; }")
+    );
+    assert!(errors_of("function main() -> void { List<int> xs = []; int n = xs[0]; }").is_empty());
+}
+
+#[test]
+fn empty_list_literal_infers_from_return_type() {
+    assert!(
+        errors_of("function f() -> List<int> { return []; }").is_empty(),
+        "{:?}",
+        errors_of("function f() -> List<int> { return []; }")
+    );
+}
+
+#[test]
+fn empty_list_literal_still_needs_context() {
+    // No expected type (`var`) → still an error; the fix is expected-type-driven, not a blanket default.
+    assert!(!errors_of("function main() -> void { var xs = []; }").is_empty());
+}

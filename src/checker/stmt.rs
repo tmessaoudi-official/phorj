@@ -92,6 +92,19 @@ impl Checker {
                             )
                         }
                     }
+                    // `List<T> xs = []`: an empty list literal has no element to infer from, so it
+                    // takes its element type from the declared annotation (expected-type at the decl
+                    // site). The runtime value is an empty `Value::List` regardless of `T`, so no
+                    // backend change is needed. A non-`List` annotation falls through to the normal
+                    // path, which surfaces the "cannot infer" / mismatch diagnostic.
+                    crate::ast::Expr::List(elems, _)
+                        if elems.is_empty() && !matches!(ty, crate::ast::Type::Infer(_)) =>
+                    {
+                        match self.resolve_type(ty) {
+                            list @ Ty::List(_) => list,
+                            _ => self.check_expr(init),
+                        }
+                    }
                     _ => self.check_expr(init),
                 };
                 let declared = match ty {
@@ -202,6 +215,13 @@ impl Checker {
                     {
                         self.try_resolve_sink_overload(e, &want)
                             .unwrap_or(Ty::Error)
+                    }
+                    // `return []` with a `-> List<T>` return type: same expected-type inference as the
+                    // decl site — the empty list takes its element type from the declared return type.
+                    Some(crate::ast::Expr::List(elems, _))
+                        if elems.is_empty() && matches!(want, Ty::List(_)) =>
+                    {
+                        want.clone()
                     }
                     Some(e) => self.check_expr(e),
                     None => Ty::Void,
