@@ -46,7 +46,15 @@
       for review). **GOTCHA: `Box<str>` is a 16-byte fat pointer** — using it on `Diagnostic` grew the
       hot recursive `Signal` frame enough to overflow the 256 MB `MAX_CALL_DEPTH` worker; `Box<String>`
       (thin 8-byte) fits. Verified pre-S3 parent was clean → confirmed the regression + fix.
-- [ ] **S4** Assertions (`assert`, always-checked, FaultKind::Assert, transpile to `if(!c)`)
+- [x] **S4** Assertions — DONE (feature was pre-existing). `assert(cond[, msg])` already: checker-
+      validated (bool + optional literal msg), `FaultMsg::Assert` on both backends (always-checked —
+      keystone satisfied, never stripped in Release), FaultKind-classified in the differential
+      (pass+fail tested `differential.rs:2279`), transpiles to a real PHP `throw` (not disableable
+      `assert()`). M-DX added `examples/guide/assertions.phg` (byte-identical) + README matrix.
+      **DECISION: no separate Dev-rich assert message** — operand inspection on a failing assert is
+      already delivered by S3 `--dump-on-fault` (a failing assert is a `Signal::Runtime` fault); a
+      second operand path would be redundant + interpreter/VM-asymmetric + a spine risk. Message stays
+      uniform across profiles (byte-identical).
 - [ ] **S5** Interactive debugger (interpreter-only; REPL + DAP frontends)
 
 ## Surprises / improvements flagged

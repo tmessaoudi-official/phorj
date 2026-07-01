@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — assertions guide + M-DX S4 scope (assertions already shipped)
+
+`assert(cond)` / `assert(cond, msg)` were already a complete language feature (checker-validated,
+`FaultMsg::Assert` on both backends, transpiled to a real PHP `throw` — never the disableable
+`assert()`, always-checked). M-DX S4 formalizes and showcases them: a new `examples/guide/assertions.phg`
+(byte-identical `run ≡ runvm ≡ real PHP`) + coverage-matrix entry. **The keystone holds already** —
+assertions are *never stripped* in Release (that would change control flow); a profile may only make
+the failure message terser. **Operand inspection on a failing assert is delivered by S3's
+`--dump-on-fault`** (a failing assert is a `Signal::Runtime` fault), so no separate Dev-rich assert
+message was added — avoiding a redundant, spine-risking interpreter/VM-asymmetric code path.
+
 ### Added — value-dump on fault: `phg run --dump-on-fault` (M-DX S3)
 
 The headline diagnostic aid: on an uncaught runtime fault, print the **faulting frame's local

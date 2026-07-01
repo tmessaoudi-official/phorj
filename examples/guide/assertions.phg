@@ -1,0 +1,31 @@
+// Assertions — `assert(cond)` / `assert(cond, msg)` (M-DX S4).
+//
+// `assert` is an always-checked runtime guard: it evaluates its condition on EVERY run and, when the
+// condition is false, aborts with a clean `assertion failed` fault — byte-identical on `run`, `runvm`,
+// and the transpiled PHP (which lowers to a real `throw`, never PHP's `assert()`, so it cannot be
+// disabled by `zend.assertions`). Unlike C's `assert` / Rust's `debug_assert!`, it is NOT stripped in
+// a Release build: dropping the check would change control flow and break the `run ≡ runvm ≡ PHP`
+// spine, so a build profile may only make the *failure message* terser, never remove the check.
+//
+// On a *failing* assert, `phg run --dump-on-fault` (M-DX S3) prints the faulting frame's locals to
+// stderr, so you can see the values that violated the invariant. This example exercises only *passing*
+// asserts — a fault has no byte-identical "Ok" output, so it can't be a runnable example (see
+// examples/dump/README.md for the failure walkthrough).
+package Main;
+
+import Core.Output;
+
+// Preconditions: guard the argument range, then use it. Both asserts hold for every call below.
+function percent(int n) -> int {
+    assert(n >= 0, "percent must be non-negative");
+    assert(n <= 100);
+    return n;
+}
+
+function main() -> void {
+    Output.printLine("percent = {percent(50)}");
+    // Passing asserts are no-ops — execution continues past them.
+    assert(percent(0) == 0);
+    assert(percent(100) == 100, "boundary holds");
+    Output.printLine("assertions passed");
+}
