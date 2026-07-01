@@ -57,8 +57,13 @@
       already delivered by S3 `--dump-on-fault` (a failing assert is a `Signal::Runtime` fault); a
       second operand path would be redundant + interpreter/VM-asymmetric + a spine risk. Message stays
       uniform across profiles (byte-identical).
-- [ ] **S5** Interactive debugger (interpreter-only; REPL + DAP frontends) — **NOT STARTED** (largest
-      slice; deferred to a fresh session for a well-tested build). Ready-to-execute plan below.
+- [x] **S5** Interactive debugger — DONE (full: engine + REPL + DAP). `src/debug.rs` engine
+      (Debugger/StepMode/DebugFrontend/DebugSession, 8 unit tests); `exec_stmt` hook (`#[cold]` pause,
+      hot frame preserved — differential still 126-green); `src/cli/debug_repl.rs` REPL (`phg debug`,
+      5 unit + 1 e2e test); `src/dap.rs` DAP server (`phg debug --dap`, 3 round-trip tests); JSON
+      parser promoted `src/lsp/json.rs` → shared `src/json.rs` (LSP + DAP). `examples/debug/README.md`.
+      Interpreter-only; deferred (KNOWN_ISSUES): conditional breakpoints, watchpoints, async pause,
+      multi-thread, VM stepping. **M-DX COMPLETE — all 6 slices shipped.**
 
 ### S5 implementation plan (ready to execute)
 **Engine (foundation) — `src/debug.rs`:**

@@ -1067,6 +1067,15 @@ fn foreign_runtime_gate(prog: &Program) -> Result<(), String> {
     Ok(())
 }
 
+/// Check + de-sugar a program for the interactive debugger (M-DX S5): the same `check_and_expand`
+/// the run backends use, plus the foreign-runtime gate (the debugger is interpreter-only, so a
+/// `declare`d foreign-PHP program can't be stepped). Shared by the REPL and DAP frontends.
+pub fn check_and_expand_for_debug(prog: &Program, diag_src: &str) -> Result<Program, String> {
+    let checked = check_and_expand(prog, diag_src)?;
+    foreign_runtime_gate(&checked)?;
+    Ok(checked)
+}
+
 pub fn cmd_run(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;

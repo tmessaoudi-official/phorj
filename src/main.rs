@@ -7,7 +7,7 @@ use std::process::exit;
 use phorj::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|lsp|test|format|explain> \
+    "usage: phg <run|runvm|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|lsp|debug|test|format|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -254,10 +254,13 @@ fn main() {
     // on stdin and writing the debugger UI to stderr. Dev-only + interpreter-only; project-aware load
     // like `run`. Program stdout is printed after the session (the interpreter buffers it).
     if cmd == "debug" {
-        let file = match args.get(2) {
+        // `--dap` runs the Debug Adapter Protocol server (editor integration); otherwise the terminal
+        // REPL. The file is the first non-flag argument.
+        let dap = args[2..].iter().any(|a| a == "--dap");
+        let file = match args[2..].iter().find(|a| !a.starts_with('-')) {
             Some(f) => f,
             None => {
-                eprintln!("usage: phg debug <file>");
+                eprintln!("usage: phg debug [--dap] <file>");
                 exit(2);
             }
         };
@@ -270,6 +273,19 @@ fn main() {
                 exit(1);
             }
         };
+        if dap {
+            // The DAP server speaks Content-Length-framed JSON on stdio (StdinLock/StdoutLock are
+            // `'static`). It runs the interpreter inline and emits `terminated` when done.
+            let stdin = std::io::stdin();
+            let stdout = std::io::stdout();
+            match phorj::dap::run_dap(&unit, stdin.lock(), stdout.lock()) {
+                Ok(()) => return,
+                Err(err) => {
+                    eprintln!("{err}");
+                    exit(1);
+                }
+            }
+        }
         match cli::run_repl(&unit) {
             Ok(text) => {
                 print!("{text}");

@@ -2,8 +2,8 @@
 //! The server is off the byte-identity spine, so these cover framing/dispatch/mapping; the diagnostic
 //! *content* is already covered by the checker tests.
 
-use super::json::Json;
 use super::*;
+use crate::json::Json;
 
 // ── JSON parser ──────────────────────────────────────────────────────────────────────────────
 

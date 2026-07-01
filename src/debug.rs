@@ -79,6 +79,17 @@ impl Debugger {
         }
     }
 
+    /// A debugger that starts **running** (`Continue`) rather than paused at the first statement.
+    /// Used by the DAP adapter, where `launch` runs to the first breakpoint (editor convention); the
+    /// REPL uses [`Debugger::new`]/`default` to pause immediately so the user can set breakpoints.
+    #[must_use]
+    pub fn running(breakpoints: BTreeSet<u32>) -> Self {
+        Debugger {
+            breakpoints,
+            mode: StepMode::Continue,
+        }
+    }
+
     /// Whether execution should pause before the statement on `line`, executing at call `depth`.
     #[must_use]
     pub fn should_pause(&self, line: u32, depth: usize) -> bool {

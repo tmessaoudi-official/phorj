@@ -112,8 +112,7 @@ impl<R: BufRead, W: Write> DebugFrontend for ReplFrontend<R, W> {
 /// session starts paused at the first statement so the user can set breakpoints.
 pub fn run_repl(unit: &Unit) -> Result<String, String> {
     super::on_deep_stack(|| {
-        let checked = super::check_and_expand(&unit.program, &unit.diag_src)?;
-        super::foreign_runtime_gate(&checked)?;
+        let checked = super::check_and_expand_for_debug(&unit.program, &unit.diag_src)?;
         let stdin = std::io::stdin();
         let frontend = ReplFrontend::new(stdin.lock(), std::io::stderr());
         let session = DebugSession::new(Debugger::default(), Box::new(frontend));

@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — interactive debugger: `phg debug` (M-DX S5) — **M-DX COMPLETE**
+
+An **interpreter-only** pause/step/inspect debugger with two frontends over one shared engine —
+Dev-only, entirely off the correctness spine (never touches stdout / the differential).
+
+- **Engine** (`src/debug.rs`): `Debugger` (line breakpoints + depth-aware `StepMode`
+  Continue/StepInto/StepOver/StepOut), `DebugFrontend` trait, `DebugSession`. Pure + deterministic
+  (unit-tested with a scripted frontend). Hooked into `exec_stmt` (a cheap `Option` check on the hot
+  path; the pause is a `#[cold]` helper so the recursive frame stays small — differential unaffected).
+- **REPL** (`phg debug <file>`): `step`/`next`/`stepout`/`continue`, `break`/`clear <line>`,
+  `locals` (secure renderer — `Secret` redacted), `backtrace`, `quit`. UI on stderr, program output on
+  stdout. Starts paused at the first statement.
+- **DAP** (`phg debug --dap <file>`, `src/dap.rs`): a Debug Adapter Protocol server on stdio
+  (`Content-Length`-framed JSON, same transport as the LSP) so VS Code / JetBrains can set breakpoints,
+  launch, stop, inspect the stack + locals, and step. Handshake → run-to-breakpoint → `stopped` →
+  `stackTrace`/`scopes`/`variables` → step/continue → `terminated`; round-trip tested.
+- Interpreter-only by design (the VM has no line/local debug table; the parity spine makes an
+  interpreter session faithful). The shared JSON parser (`src/lsp/json.rs`) was promoted to a
+  crate-level `src/json.rs` reused by both the LSP and DAP. Walkthrough: `examples/debug/README.md`.
+
 ### Added — assertions guide + M-DX S4 scope (assertions already shipped)
 
 `assert(cond)` / `assert(cond, msg)` were already a complete language feature (checker-validated,

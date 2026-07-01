@@ -19,16 +19,15 @@
 //! lambda/match-pattern binders, and cross-file *references* (which need project-aware file merging to
 //! stay scope-accurate), remain a documented follow-up.
 
-mod json;
 mod scope;
 mod symbols;
 #[cfg(test)]
 mod tests;
 
 use crate::diagnostic::Diagnostic;
+use crate::json::Json;
 use crate::lexer::lex;
 use crate::parser::Parser;
-use json::Json;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 

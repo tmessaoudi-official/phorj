@@ -216,6 +216,17 @@ not a panic:
   (`examples/project/inherit/`). Cross-package **multiple** inheritance (a class decomposed to PHP
   traits across packages) is still out of scope (the MI transpile path is `package Main`-only).
 
+- **Interactive debugger — interpreter-only, tight v1 (M-DX S5).** `phg debug` (REPL) and
+  `phg debug --dap` (editor DAP) step/inspect on the tree-walking interpreter only — the bytecode VM
+  has no source-line/local-name table, so stepping it would need a debug-symbol subproject (the parity
+  spine makes an interpreter session faithful to the VM/PHP anyway, the same rationale as the S3
+  value-dump). Deferred to a later slice: **conditional breakpoints**, **watchpoints**, async `pause`
+  (break into a running program), **multiple threads** (green-task debugging), and **VM stepping**.
+  `quit` detaches and lets the program finish (rather than aborting — no new interpreter `Signal`).
+  The DAP server runs the interpreter inline (not the 256 MB deep-stack worker — single-threaded so
+  the `Rc`-heap `Value` never crosses threads), so extremely deep recursion in a *debugged* program
+  runs on the default stack.
+
 - **Value-dump on fault — interpreter-rich, VM backtrace-only (M-DX S3).** `phg run --dump-on-fault`
   prints the faulting frame's named locals; `phg runvm --dump-on-fault` prints the byte-identical
   backtrace but no locals section. The bytecode VM stores slot-indexed locals with no runtime

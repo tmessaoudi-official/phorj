@@ -1,8 +1,9 @@
-//! A minimal, total, `std`-only JSON parser for inbound LSP request bodies (Item D). Phorj has no
-//! internal JSON parser — `Core.Json` is the *language's* parser, not callable here — and the
-//! dependency policy forbids `serde` (an LSP server is not a security-critical primitive). This
-//! parser handles exactly what LSP message bodies need: objects, arrays, strings (with escapes),
-//! numbers, booleans, and null. It is internal tooling, off the byte-identity spine.
+//! A minimal, total, `std`-only JSON parser for inbound editor-protocol request bodies — shared by
+//! the LSP server (Item D) and the DAP debug adapter (M-DX S5). Phorj has no internal JSON parser
+//! (`Core.Json` is the *language's* parser, not callable here) and the dependency policy forbids
+//! `serde` (editor tooling is not a security-critical primitive). It handles exactly what these
+//! protocols' message bodies need: objects, arrays, strings (with escapes), numbers, booleans, and
+//! null. Internal tooling, off the byte-identity spine.
 
 /// A parsed JSON value. Objects preserve key order (a `Vec` of pairs) — irrelevant for lookups but
 /// avoids pulling in a map and keeps the type `Clone`/`Debug` trivially.
@@ -52,6 +53,16 @@ impl Json {
     pub fn as_array(&self) -> Option<&[Json]> {
         match self {
             Json::Arr(xs) => Some(xs),
+            _ => None,
+        }
+    }
+
+    /// The value as an `i64`, if this is a `Num` (DAP `seq`, breakpoint `line`, `frameId`, …). JSON
+    /// has no integer type; the truncation is exact for the integer-valued numbers these protocols use.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Json::Num(n) => Some(*n as i64),
             _ => None,
         }
     }
