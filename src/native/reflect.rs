@@ -1,4 +1,4 @@
-//! `Core.Reflect` — read-only, name-level runtime reflection
+//! `Core.Reflection` — read-only, name-level runtime reflection
 //! (`docs/specs/2026-06-25-core-reflect-design.md`).
 //!
 //! This module hosts the natives whose result a value can compute on its own: `Reflect.kind` (the
@@ -16,7 +16,7 @@
 //!
 //! Erasure: `kind` emits the gated `__phorj_kind($x)` helper (defined once in
 //! `transpile::program::emit_runtime_helpers`). A native's `php` closure can't set the transpiler's
-//! `uses_*` flag, so `emit_member_call` special-cases `Core.Reflect.kind` to set `uses_reflect_kind`
+//! `uses_*` flag, so `emit_member_call` special-cases `Core.Reflection.kind` to set `uses_reflect_kind`
 //! before emitting — the established gated-helper pattern (`__phorj_str`/`__phorj_div`/…).
 
 use super::*;

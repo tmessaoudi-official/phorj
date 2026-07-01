@@ -8,8 +8,8 @@ byte-identity sweep). Run `phg <command> --help` for per-command help with worke
 
 ```bash
 phg run demo.phg                                              # a file
-echo 'package Main; import Core.Console; function main() { Console.println("from stdin"); }' | phg run -   # stdin
-phg run -e 'package Main; import Core.Console; function main() { Console.println("inline program"); }'     # inline
+echo 'package Main; import Core.Output; function main() { Output.printLine("from stdin"); }' | phg run -   # stdin
+phg run -e 'package Main; import Core.Output; function main() { Output.printLine("inline program"); }'     # inline
 ```
 
 ```
@@ -62,9 +62,9 @@ Front-end errors carry a caret-underlined span, a stable code, and a did-you-mea
 name is in scope:
 
 ```
-$ phg run -e 'package Main; import Core.Console; function main() { int count = 1; int y = conut + 1; Console.println("{y}"); }'
+$ phg run -e 'package Main; import Core.Output; function main() { int count = 1; int y = conut + 1; Output.printLine("{y}"); }'
 type error at 1:77: unknown identifier `conut`
-package Main; import Core.Console; function main() { int count = 1; int y = conut + 1; Console.println("{y}"); }
+package Main; import Core.Output; function main() { int count = 1; int y = conut + 1; Output.printLine("{y}"); }
                                                                             ^
   [E-UNKNOWN-IDENT]
   hint: did you mean `count`?

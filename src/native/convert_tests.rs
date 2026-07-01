@@ -165,7 +165,7 @@ fn convert_natives_registered_and_emit() {
     ] {
         assert!(
             crate::native::index_of("Core.Conversion", name).is_some(),
-            "Core.Convert.{name} not registered"
+            "Core.Conversion.{name} not registered"
         );
     }
     let php = |name: &str, args: &[&str]| {

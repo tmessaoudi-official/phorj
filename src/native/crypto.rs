@@ -1,4 +1,4 @@
-//! `Core.Crypto` — password hashing (Argon2id). The FIRST module backed by an external crate
+//! `Core.Cryptography` — password hashing (Argon2id). The FIRST module backed by an external crate
 //! (RustCrypto `argon2`), admitted under `docs/specs/2026-06-27-dependency-policy.md` (the
 //! audited-crypto-only exception to `std`-only). Rationale: secure password hashing demands a *vetted*
 //! implementation ("never roll your own crypto"), `std` ships none, and the capability must be NATIVE

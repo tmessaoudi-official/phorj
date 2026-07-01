@@ -45,7 +45,7 @@ milestone; see "Module decomposition" below. The roles are unchanged.
 | `vm/` | stack VM; `exec_op` dispatch; reified call `Frame { func, ip, slot_base }` |
 | `transpile/` | AST → PHP source |
 | `value.rs` | `Value` + single-sourced arith/compare kernels (both backends) |
-| `native/` | namespaced stdlib registry keyed by `(module,name)` (`console.println`, …); single-sources each native's checker sig + shared `eval` + PHP emission; target of `import core.*` + `Op::CallNative` |
+| `native/` | namespaced stdlib registry keyed by `(module,name)` (`Core.Output`/`printLine`, …); single-sources each native's checker sig + shared `eval` + PHP emission; target of `import Core.*` + `Op::CallNative` |
 | `loader/` | multi-file project loader + cross-package name resolution |
 | `diagnostic.rs` | unified `Diagnostic { stage, message, line, col }` |
 | `limits.rs` | recursion/nesting caps + numeric-width policy |

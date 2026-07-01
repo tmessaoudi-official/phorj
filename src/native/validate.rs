@@ -1,4 +1,4 @@
-//! `Core.Validate` — syntactic string predicates (native-stdlib wave, Tier A).
+//! `Core.Validation` — syntactic string predicates (native-stdlib wave, Tier A).
 //!
 //! Pure, deterministic, std-only. Each predicate is `string -> bool`. Phorj has no regex crate (the
 //! library is std-only), so the checks are hand-rolled in Rust and the PHP side emits a `preg_match`
@@ -71,7 +71,7 @@ fn is_hex_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     pred(a, is_hex, "isHex")
 }
 
-/// The `Core.Validate` registry entries. Each `string -> bool`, the Rust hand-roll mirrored by a PHP
+/// The `Core.Validation` registry entries. Each `string -> bool`, the Rust hand-roll mirrored by a PHP
 /// `preg_match(pattern) === 1` over the identical anchored pattern.
 pub(crate) fn validate_natives() -> Vec<NativeFn> {
     fn entry(

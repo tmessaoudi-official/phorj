@@ -1,4 +1,4 @@
-//! `Core.Convert` — explicit value conversion (`docs/specs/2026-06-26-m4-casting-conversion-design.md`,
+//! `Core.Conversion` — explicit value conversion (`docs/specs/2026-06-26-m4-casting-conversion-design.md`,
 //! axis 1). The *cast* (type assertion / reinterpret) is the `as` operator; this module produces a
 //! **new value** of another type, always explicitly (Phorj has no implicit coercion). Lossy
 //! conversions are *named* (`truncate`/`round`), never a silent `(int)`. Because UFCS ships,

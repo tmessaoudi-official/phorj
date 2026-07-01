@@ -37,7 +37,7 @@ emits clean Phorj, it doesn't mirror PHP's quirks). PHP interpolation maps strai
 
 ```phorj
 package Main;
-import Core.Console;
+import Core.Output;
 
 function greet(string name) -> string {
     return "Hello, {name}!";
@@ -52,8 +52,8 @@ open class Counter {
 
 function main() -> void {
     mutable var c = new Counter(41);
-    Console.print(greet("Phorj"));
-    Console.print(" Counter starts at {c.start}, next is {c.next()}.");
+    Output.print(greet("Phorj"));
+    Output.print(" Counter starts at {c.start}, next is {c.next()}.");
 }
 ```
 
@@ -69,7 +69,7 @@ example.
 | the whole file | `package Main;` (PHP has no packages) |
 | `$x = e` | `mutable var x = e;` (PHP locals are freely reassignable) |
 | `.` string concat / `===` / `!==` | `+` / `==` / `!=` (Phorj is typed) |
-| `echo e;` | `Console.print(e);` (+ an automatic `import Core.Console;`) |
+| `echo e;` | `Output.print(e);` (+ an automatic `import Core.Output;`) |
 | `__construct` + promoted params | a `constructor` with promoted (mutable) fields |
 | a non-`final` PHP class | an `open` class (Phorj is final-by-default) |
 | `[a, b]` / `[k => v]` | a `List` / a `Map` |

@@ -307,8 +307,8 @@ pub fn explain_text(code: &str) -> Option<String> {
              `T?` (`float`/`decimal as int` is exact-or-null — never a silent truncate; `string as\n\
              int`/`as float` is a strict parse). It never inherits PHP's loose coercion. This error\n\
              fires for a pair that is impossible or not yet supported (bool casts, `float as decimal`,\n\
-             `string as decimal` ship in a later slice) — use `Core.Convert` / `Core.String.parse*`, or\n\
-             `Convert.truncate` when you explicitly want truncation.\n"
+             `string as decimal` ship in a later slice) — use `Core.Conversion` / `Core.String.parse*`, or\n\
+             `Conversion.truncate` when you explicitly want truncation.\n"
         }
         "W-REDUNDANT-CAST" => {
             "W-REDUNDANT-CAST — a cast whose target is already the value's type (lint).\n\n\

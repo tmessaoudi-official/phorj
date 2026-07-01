@@ -129,7 +129,7 @@ the boundary is not negotiable per-file:
    defined in another package is reached only through a selective type import (M-RT cross-package
    types). No wildcard (PHP has no `use A\*`).
 3. **Stdlib *functions* — `import Core.X;` then leaf-qualified calls (`X.fn(...)`).** e.g.
-   `import Core.Console;` → `Console.println(...)`. Functions are always qualified; there is no bare
+   `import Core.Output;` → `Output.printLine(...)`. Functions are always qualified; there is no bare
    global.
 
 Corollary (rejected designs, M-DOGFOOD): **no forced import of primitives** and **no `Integer`/

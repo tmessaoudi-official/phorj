@@ -343,7 +343,7 @@ fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-/// The `Core.Text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
+/// The `Core.String` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
 /// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
 /// reorder accordingly so the erasure matches Phorj's `(subject, …)` argument order.
 fn text_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {

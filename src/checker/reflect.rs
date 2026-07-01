@@ -1,4 +1,4 @@
-//! Core.Reflect — the precise `typeName` static-type pass (Tier 3 of
+//! Core.Reflection — the precise `typeName` static-type pass (Tier 3 of
 //! `docs/specs/2026-06-25-core-reflect-design.md`).
 //!
 //! `Reflect.typeName(x)` cannot be both precise (distinguish `List`/`Map`/`Set`/`bytes`/enum) AND a
