@@ -166,7 +166,8 @@ impl Parser {
     /// `import`.
     pub(super) fn parse_import(&mut self, sp: Span) -> Result<Item, Diagnostic> {
         self.expect(&TokenKind::Import, "'import'")?;
-        let type_only = self.eat(&TokenKind::TypeKw); // contextual `import type …`
+        // One unified `import` (2026-07-03 unified-import spec): the loader classifies each import as
+        // a module (call-qualifier) or a type (bare name) by resolving the path — no `type` keyword.
         let mut path = vec![self.expect_ident("a module path segment")?];
         while self.eat(&TokenKind::Dot) {
             path.push(self.expect_ident("a module path segment after '.'")?);
@@ -181,7 +182,8 @@ impl Parser {
         Ok(Item::Import {
             path,
             alias,
-            type_only,
+            // Vestigial since the unified-import spec: always false (the loader classifies by path).
+            type_only: false,
             span: sp,
         })
     }

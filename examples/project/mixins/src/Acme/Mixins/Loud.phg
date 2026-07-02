@@ -1,7 +1,7 @@
 // A trait in a *library* package, composed cross-package (M-RT S8, cross-package).
 //
 // A trait is horizontal code reuse — NOT a type. Declared in the `Acme.Mixins` package, it is brought
-// into a class in another package by importing the name (`import type Acme.Mixins.Loud`) and composing
+// into a class in another package by importing the name (`import Acme.Mixins.Loud`) and composing
 // it with `use Loud;`. The loader mangles both the trait declaration and the `use` clause to the same
 // FQN, so the by-name trait flatten lines up; the transpiler emits a native PHP `trait` in its package
 // namespace and the using class composes it with `use \Acme\Mixins\Loud`.

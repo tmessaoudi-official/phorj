@@ -4,10 +4,10 @@
 package Main;
 
 import Core.Output;
-import type Catalog.Money;
-import type Catalog.Product;
-import type Ordering.OrderLine;
-import type Ordering.Order;
+import Catalog.Money;
+import Catalog.Product;
+import Ordering.OrderLine;
+import Ordering.Order;
 
 function main() -> void {
     Product widget = new Product(1, "Widget", new Money(250));

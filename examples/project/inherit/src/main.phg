@@ -4,7 +4,7 @@
 package Main;
 
 import Core.Output;
-import type Acme.Zoo.Animal;
+import Acme.Zoo.Animal;
 
 // `Dog` inherits `Animal`'s constructor (so `new Dog("rex")` sets `name`) and its `name` field.
 open class Dog extends Animal {

@@ -4,7 +4,7 @@ import Core.Output;
 
 // `Rect` is `public`, so this cross-package `import type` is allowed. Its `internal` helper `scale`
 // and `private` helper `clamp` are NOT importable here — see README.md for the rejected cases.
-import type Acme.Shapes.Rect;
+import Acme.Shapes.Rect;
 
 function main(): void {
   Rect r = new Rect(3, 4);

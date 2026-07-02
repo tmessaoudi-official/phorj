@@ -2,8 +2,8 @@
 // type per file → `OrderLine.phg`. Composes Catalog's value object + entity via cross-package imports.
 package Ordering;
 
-import type Catalog.Money;
-import type Catalog.Product;
+import Catalog.Money;
+import Catalog.Product;
 
 class OrderLine {
     constructor(public Product product, public int qty) {}

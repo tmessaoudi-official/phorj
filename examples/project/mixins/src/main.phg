@@ -1,11 +1,11 @@
 // Cross-package TRAITS (M-RT S8, cross-package): compose two traits declared in a library package
-// into a `package Main` class. `import type Pkg.Path.TraitName` binds the trait name (a trait is still
+// into a `package Main` class. `import Pkg.Path.TraitName` binds the trait name (a trait is still
 // not a type — `Loud x` as an annotation is `E-USE-AS-TYPE`), and `use TraitName;` composes it.
 package Main;
 
 import Core.Output;
-import type Acme.Mixins.Loud;
-import type Acme.Mixins.Identified;
+import Acme.Mixins.Loud;
+import Acme.Mixins.Identified;
 
 class Speaker {
   use Loud; // method reuse + a private helper

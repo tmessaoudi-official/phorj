@@ -138,7 +138,7 @@ fn library_package_type_is_usable_cross_package() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport type Acme.Util.Shape;\n\
+        "package Main;\nimport Core.Output;\nimport Acme.Util.Shape;\n\
          function main() -> void {\n    Shape s = new Shape(5);\n    Output.printLine(\"{s.w}\");\n}",
     );
     tmp.write(
@@ -160,14 +160,14 @@ fn import_type_unknown_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.Util.Nope;\nfunction main() -> void {}",
+        "package Main;\nimport Acme.Util.Nope;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/Shape.phg",
         "package Acme.Util;\nclass Shape { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
-    assert!(err.contains("E-TYPE-IMPORT-UNKNOWN"), "got: {err}");
+    assert!(err.contains("E-IMPORT-UNKNOWN"), "got: {err}");
 }
 
 /// Two `import type` binding the same bare name without an alias.
@@ -177,7 +177,7 @@ fn import_type_conflict_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.A.Shape;\nimport type Acme.B.Shape;\nfunction main() -> void {}",
+        "package Main;\nimport Acme.A.Shape;\nimport Acme.B.Shape;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/A/Shape.phg",
@@ -188,7 +188,7 @@ fn import_type_conflict_is_rejected() {
         "package Acme.B;\nclass Shape { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
-    assert!(err.contains("E-TYPE-IMPORT-CONFLICT"), "got: {err}");
+    assert!(err.contains("E-IMPORT-CONFLICT"), "got: {err}");
 }
 
 /// `import type` naming a built-in type (built-ins are import-free).
@@ -198,14 +198,14 @@ fn import_type_builtin_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.Util.List;\nfunction main() -> void {}",
+        "package Main;\nimport Acme.Util.List;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
         "package Acme.Util;\nfunction noop() -> void {}",
     );
     let err = loader::load(&entry).unwrap_err();
-    assert!(err.contains("E-TYPE-IMPORT-BUILTIN"), "got: {err}");
+    assert!(err.contains("E-IMPORT-BUILTIN"), "got: {err}");
 }
 
 /// `import type` whose bound name collides with a module-import qualifier.
@@ -213,11 +213,11 @@ fn import_type_builtin_is_rejected() {
 fn import_type_shadow_is_rejected() {
     let tmp = TempDir::new();
     tmp.write("phorj.toml", "module = \"acme/app\"");
-    // A type named `Util` (bound bare by `import type Acme.Types.Util`) clashing with the
+    // A type named `Util` (bound bare by `import Acme.Types.Util`) clashing with the
     // `Acme.Util` module-import leaf `Util`. The shadow guard keeps the two import kinds disjoint.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Acme.Util;\nimport type Acme.Types.Util;\nfunction main() -> void {}",
+        "package Main;\nimport Acme.Util;\nimport Acme.Types.Util;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
@@ -228,7 +228,7 @@ fn import_type_shadow_is_rejected() {
         "package Acme.Types;\nclass Util { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
-    assert!(err.contains("E-TYPE-IMPORT-SHADOW"), "got: {err}");
+    assert!(err.contains("E-IMPORT-SHADOW"), "got: {err}");
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn loose_non_main_file_is_rejected() {
 // --- Cross-package traits (M-RT S8, cross-package) ---
 
 /// A `trait` declared in a library package is composed into a `package Main` class via
-/// `import type Pkg.Trait;` + `use Trait;`, and runs byte-identically on both backends. The loader
+/// `import Pkg.Trait;` + `use Trait;`, and runs byte-identically on both backends. The loader
 /// mangles the trait declaration and the `use` clause to the same FQN, so the by-name flatten lines up.
 #[test]
 fn cross_package_trait_composition_runs_byte_identically() {
@@ -288,7 +288,7 @@ fn cross_package_trait_composition_runs_byte_identically() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport type Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
          function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(\"{p.name}: {p.hello()}\");\n}",
     );
@@ -309,7 +309,7 @@ fn cross_package_trait_transpiles_to_namespaced_trait() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport type Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
          function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(p.hello());\n}",
     );
@@ -332,7 +332,7 @@ fn cross_package_trait_used_as_type_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport type Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          function f(Greet x) -> void { Output.printLine(\"no\"); }\n\
          function main() -> void { Output.printLine(\"hi\"); }",
     );
@@ -375,7 +375,7 @@ fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
     tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport type Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return \"woof/\" + parent(Animal).speak(); }\n}\n\
          function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );
@@ -396,7 +396,7 @@ fn cross_package_inheritance_transpiles_to_qualified_extends() {
     tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport type Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return parent.speak(); }\n}\n\
          function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );

@@ -1290,28 +1290,28 @@ pub fn explain_text(code: &str) -> Option<String> {
              behavior). Move any real implementation into a normal `.phg` file, or mark the item\n\
              `declare`.\n"
         }
-        "E-TYPE-IMPORT-UNKNOWN" => {
-            "E-TYPE-IMPORT-UNKNOWN — an `import type` names a type the package does not export.\n\n\
-             `import type acme.geometry.Point [as P];` must be package-qualified and name a public type\n\
-             that package actually exports. This fires when the import is not package-qualified, or the\n\
-             package exports no such type. Check the package path and the type name.\n"
+        "E-IMPORT-UNKNOWN" => {
+            "E-IMPORT-UNKNOWN — an `import` names a type a known package does not export.\n\n\
+             `import Acme.Geometry.Point [as P];` names a public type a package actually exports. This\n\
+             fires when the package is known (it exports other types) but not the named one — a mistyped\n\
+             type import. Check the package path and the type name.\n"
         }
-        "E-TYPE-IMPORT-BUILTIN" => {
-            "E-TYPE-IMPORT-BUILTIN — an `import type` names a built-in type.\n\n\
+        "E-IMPORT-BUILTIN" => {
+            "E-IMPORT-BUILTIN — an `import` names a built-in type.\n\n\
              Built-in types (`int`, `float`, `bool`, `string`, `bytes`, `List`, `Map`, `Set`, …) are\n\
-             import-free — they are always in scope, like `int`. Remove the `import type` for a\n\
-             built-in; only user/library types are imported.\n"
+             import-free — they are always in scope, like `int`. Remove the `import` for a built-in;\n\
+             only user/library types are imported.\n"
         }
-        "E-TYPE-IMPORT-CONFLICT" => {
-            "E-TYPE-IMPORT-CONFLICT — two `import type`s bind the same bare name.\n\n\
-             Each selective type import introduces a bare type name into the file; two imports that\n\
-             would bind the same name collide. Alias one with `as`: `import type a.b.Point as BPoint;`.\n"
+        "E-IMPORT-CONFLICT" => {
+            "E-IMPORT-CONFLICT — two imports bind the same bare type name.\n\n\
+             Each type import introduces a bare type name into the file; two imports that would bind\n\
+             the same name collide. Alias one with `as`: `import Acme.B.Point as BPoint;`.\n"
         }
-        "E-TYPE-IMPORT-SHADOW" => {
-            "E-TYPE-IMPORT-SHADOW — an `import type` name collides with a local type or module qualifier.\n\n\
-             The bare name a selective type import introduces must not shadow a type declared in this\n\
-             file or an imported module qualifier. Alias the import with `as` to give it a distinct\n\
-             name, or rename the local declaration.\n"
+        "E-IMPORT-SHADOW" => {
+            "E-IMPORT-SHADOW — an imported type name collides with a local type or module qualifier.\n\n\
+             The bare name a type import introduces must not shadow a type declared in this file or an\n\
+             imported module qualifier. Alias the import with `as` to give it a distinct name, or\n\
+             rename the local declaration.\n"
         }
         _ => return None,
     };

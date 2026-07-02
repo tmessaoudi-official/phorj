@@ -1,6 +1,6 @@
 // Bounded context: Catalog. Value object — an amount in integer cents (exact integer math, no floats
 // → byte-identical). One public type per file (public-surface rule) → `Money.phg`. Folder = package
-// `Catalog`; consumed cross-package via `import type Catalog.Money`.
+// `Catalog`; consumed cross-package via `import Catalog.Money`.
 package Catalog;
 
 class Money {

@@ -1,11 +1,11 @@
 // Cross-package GENERIC types (M-RT generics-all): a library package's generic class, used from
-// `Main` via the terminal `import type Pkg.Path.TypeName;` form — the same surface as a monomorphic
+// `Main` via the terminal `import Pkg.Path.TypeName;` form — the same surface as a monomorphic
 // cross-package type, now with type parameters that infer and erase across the package boundary.
 package Main;
 
 import Core.Output;
-import type Acme.Containers.Box;
-import type Acme.Containers.Pair;
+import Acme.Containers.Box;
+import Acme.Containers.Pair;
 
 function main(): void {
   var bi = new Box(7); // Box<int>  — T inferred from `7`

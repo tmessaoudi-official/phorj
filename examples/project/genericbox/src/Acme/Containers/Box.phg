@@ -1,7 +1,7 @@
 // A generic container in a *library* package (M-RT generics-all, cross-package).
 //
 // `Box<T>` is a one-field generic class declared in the `Acme.Containers` package and consumed from
-// `Main` via `import type Acme.Containers.Box`. The type parameter `T` is inferred at construction
+// `Main` via `import Acme.Containers.Box`. The type parameter `T` is inferred at construction
 // (`new Box(7)` ⇒ `Box<int>`) and recovered at each use site, exactly as it is for a `package Main`
 // generic class — the loader leaves the type parameter untouched and `erase_generics` removes it
 // before any backend, so the interpreter, the VM, and the transpiled PHP all run identical,

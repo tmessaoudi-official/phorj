@@ -5,6 +5,44 @@
 > SSOT = `docs/plans/MASTER-PLAN.md`. Gate = full PHP-oracle `cargo test --workspace` + clippy + fmt + build.
 
 ## Decisions Log
+- [2026-07-03] AGREED (developer, interactive — SUPERSEDES this session's primary focus):
+  **Injected `Core.Http` names become qualification-required** (Option 2). Concretely:
+  (1) default usage must be QUALIFIED: `Http.Router`, `Http.Request`, `Http.Response`, and the
+      attribute `#[Http.Route(...)]` — bare `Router`/`Route`/etc. after a plain `import Core.Http`
+      becomes an error (mirror of `E-INJECTED-VARIANT-BARE`).
+  (2) NEW targeted **member-import** form `import Core.Http.Router;` (three-level) brings the leaf
+      `Router` into bare scope — so `Router rt` works ONLY when the member is explicitly imported.
+  (3) Parity consequence flagged by developer: bare `Json` type name would then be the inconsistent
+      one — apply the same treatment for consistency (investigate scope).
+  (4) Developer directive: **inspect ALL code + ALL compiler/interpreter code** for affected sites.
+  Rationale: "everything should be imported" — nothing usable in the wind; explicit is the rule.
+- [2026-07-03] AGREED (developer): **Functions/natives are NOT bare-importable** (challenge accepted).
+  They stay module-qualified (`String.trim(s)`) or UFCS (`s.trim()`) — always traceable. Only TYPES
+  (class/enum/interface/trait) are bare-importable. Preserves "nothing in the wind" + DEC-087 method-first.
+- [2026-07-03] FINDING: Phorj already has the member-import — `import type Pkg.Path.Type` binds a bare
+  type name for class/enum/interface/trait across USER packages (18 sites; `shapes/`, `mixins/`). Gaps:
+  (1) Core injected types excluded; (2) `type` keyword vs the bare `import Core.Http.Router` the dev typed;
+  (3) plain `import` binds a call-qualifier, `import type` binds a bare type — different purposes today.
+- [2026-07-03] AGREED (developer — FULL MODEL LOCKED). The import/namespace redesign:
+  1. **Unify `import`; DROP `import type` entirely (no back-compat, migrate all 18 sites).** The resolver
+     classifies each import by resolving its path: → module ⇒ bind call-qualifier; → type
+     (class/enum/interface/trait) ⇒ bind bare name; → neither ⇒ error.
+  2. **Injected Core types get import discipline** (the bug found): qualified-by-leaf DEFAULT —
+     `Http.Router/Request/Response`, `#[Http.Route]`, `Time.Duration/Date/Instant`, `Decimal.RoundingMode`;
+     bare ONLY via member-import (`import Core.Http.Router;`); new `E-INJECTED-TYPE-BARE` (mirror of
+     `E-INJECTED-VARIANT-BARE`). Requires NEW qualified-type resolution `Qualifier.Type` in type position.
+  3. **Single-type modules (Json/Regex/Secret) compliant as-is** (leaf==type); variants stay `Json.Object`.
+  4. **Functions NOT bare-importable** (qualified/UFCS only). **No associated functions** (`MyClass.fn(x)`
+     is NOT a free-fn namespace; use `x.fn()` UFCS or a static method).
+
+  ### Implementation slices (each gates green + commits independently)
+  - **S0 — Unify import**: parser drops `type` keyword; checker classifies module-vs-type by resolving
+    path; migrate 18 `import type` → `import`. Foundational.
+  - **S1 — Qualified type refs**: parser + AST + checker resolve `Qualifier.Type` in type position
+    (`Http.Router` as an annotation) → the injected type; transpiler erases qualifier (PHP stays bare).
+  - **S2 — Injected-type discipline**: `E-INJECTED-TYPE-BARE`; member-import for Core injected types;
+    `#[Http.Route]` qualified attribute (parser dotted attr name + desugar_router match); migrate the
+    injected preludes' user-facing surface + ~40 .phg (examples/conformance) + docs to qualified/member form.
 - [2026-07-03] AGREED (framework, advisor-confirmed): this session builds the **Wave-0 remainder**
   (W0-6b, W0-9, W0-10 — all RULED §12, mechanical, no adjudication) autonomously; **XML (W4-10) is
   NOT built** — it is `DESIGN-NEEDED` (user-visible surface), so it is recorded as a PENDING

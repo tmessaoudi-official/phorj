@@ -3,7 +3,7 @@
 package Ordering;
 
 import Core.List;
-import type Catalog.Money;
+import Catalog.Money;
 
 class Order {
     constructor(public int id, public List<OrderLine> lines) {}

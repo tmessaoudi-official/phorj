@@ -384,7 +384,7 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
             unit_package = prog.package.clone();
             unit_span = prog.span;
         }
-        let user_imports = user_import_map(&prog.items);
+        let user_imports = user_import_map(&prog.items, &types);
         let type_imports = build_type_imports(&prog, &types, &prov_types, &user_imports, &file)?;
         let ctx = ResolveCtx {
             package: prog.package.clone(),
@@ -477,17 +477,20 @@ fn pascal(s: &str) -> String {
 /// only. Native (`Core.*`) imports are excluded — their member calls stay native and are resolved by
 /// the backends (and the transpiler) as before. An alias (`import a.b as c;`) binds `c`, else the
 /// path's last segment.
-fn user_import_map(items: &[Item]) -> HashMap<String, Vec<String>> {
+fn user_import_map(
+    items: &[Item],
+    types: &HashMap<(String, String), String>,
+) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
     for item in items {
-        if let Item::Import {
-            path,
-            alias,
-            type_only: false,
-            ..
-        } = item
-        {
+        if let Item::Import { path, alias, .. } = item {
             if path.first().map(String::as_str) == Some("Core") {
+                continue;
+            }
+            // Unified-import classification (2026-07-03 spec): a path whose last segment is a type
+            // the package exports is a *type* import (bound bare by `build_type_imports`), NOT a
+            // module qualifier — skip it here so the two maps stay disjoint.
+            if is_type_import_path(path, types) {
                 continue;
             }
             let qualifier = alias.clone().or_else(|| path.last().cloned());
@@ -499,14 +502,24 @@ fn user_import_map(items: &[Item]) -> HashMap<String, Vec<String>> {
     map
 }
 
+/// A `import Pkg.Path.TypeName` path resolves to a known type iff its last segment is a type exported
+/// by the package formed from the preceding segments. Such an import binds a bare type name; every
+/// other import binds a module call-qualifier. The single classifier shared by both import maps.
+fn is_type_import_path(path: &[String], types: &HashMap<(String, String), String>) -> bool {
+    match path.split_last() {
+        Some((leaf, pkg)) if !pkg.is_empty() => types.contains_key(&(pkg.join("."), leaf.clone())),
+        _ => false,
+    }
+}
+
 /// Build a file's **type-import map**: bare name (or `as` alias) ⇒ the mangled FQN of a cross-package
 /// type, from each `import type a.b.C [as D];`. Validates against the global `types` table and the
 /// file's own definitions / module imports (cross-package types, M-RT generics-all):
-/// - `E-TYPE-IMPORT-BUILTIN` — the leaf is a built-in type (`List`/`Map`/`Set`/scalars); built-ins
+/// - `E-IMPORT-BUILTIN` — the leaf is a built-in type (`List`/`Map`/`Set`/scalars); built-ins
 ///   are import-free, like `int`.
-/// - `E-TYPE-IMPORT-UNKNOWN` — the package exports no such type.
-/// - `E-TYPE-IMPORT-CONFLICT` — two terminal imports bind the same bare name (alias one with `as`).
-/// - `E-TYPE-IMPORT-SHADOW` — the bound name collides with a local type in this file or a module-import
+/// - `E-IMPORT-UNKNOWN` — a known type-bearing package exports no such type (a mistyped type import).
+/// - `E-IMPORT-CONFLICT` — two terminal imports bind the same bare name (alias one with `as`).
+/// - `E-IMPORT-SHADOW` — the bound name collides with a local type in this file or a module-import
 ///   qualifier (the two import kinds stay disjoint, the `E-SHADOW-IMPORT` discipline).
 fn build_type_imports(
     prog: &Program,
@@ -529,37 +542,45 @@ fn build_type_imports(
         .collect();
     let mut map: HashMap<String, String> = HashMap::new();
     for item in &prog.items {
-        if let Item::Import {
-            path,
-            alias,
-            type_only: true,
-            ..
-        } = item
-        {
+        if let Item::Import { path, alias, .. } = item {
+            // Unified-import classification (2026-07-03 spec): a type-import is a multi-segment path
+            // whose last segment is a type the package exports. Everything else — single-segment
+            // paths and paths whose leaf is not a known type — is a module import (handled by
+            // `user_import_map`); skip it here so the two maps stay disjoint.
+            // `Core.*` imports are module/native imports (their injected types get discipline in a
+            // later slice); never classified as user type-imports — skip, like `user_import_map`.
+            if path.first().map(String::as_str) == Some("Core") {
+                continue;
+            }
             let (leaf, pkg_segs) = match path.split_last() {
                 Some((leaf, pkg)) if !pkg.is_empty() => (leaf, pkg),
-                _ => {
-                    return Err(format!(
-                        "{}: `import type` needs a package-qualified type (e.g. \
-                         `import type acme.geometry.Point;`) [E-TYPE-IMPORT-UNKNOWN]",
-                        file.display()
-                    ))
-                }
+                _ => continue, // single-segment ⇒ module import
             };
             if is_builtin_type_leaf(leaf) {
                 return Err(format!(
                     "{}: `{leaf}` is a built-in type and needs no import (built-ins are \
-                     import-free, like `int`) [E-TYPE-IMPORT-BUILTIN]",
+                     import-free, like `int`) [E-IMPORT-BUILTIN]",
                     file.display()
                 ));
             }
             let pkg = pkg_segs.join(".");
-            let mangled = types.get(&(pkg.clone(), leaf.clone())).ok_or_else(|| {
-                format!(
-                    "{}: package `{pkg}` exports no type `{leaf}` [E-TYPE-IMPORT-UNKNOWN]",
-                    file.display()
-                )
-            })?;
+            let Some(mangled) = types.get(&(pkg.clone(), leaf.clone())) else {
+                // Leaf isn't a type this package exports. If `pkg` is a known (type-bearing) package
+                // and the leaf looks like a type name, the user meant a type import that does not
+                // exist → diagnose (preserves the old `import type` UNKNOWN check under the unified
+                // surface). Otherwise this is a module import (handled by `user_import_map`) — skip.
+                // (S0 limitation: a 3-level *module* import under a type-bearing package would
+                // false-positive here; refined when module existence is modelled in S2.)
+                let pkg_is_known = types.keys().any(|(p, _)| p == &pkg);
+                let looks_like_type = leaf.chars().next().is_some_and(char::is_uppercase);
+                if pkg_is_known && looks_like_type {
+                    return Err(format!(
+                        "{}: package `{pkg}` exports no type `{leaf}` [E-IMPORT-UNKNOWN]",
+                        file.display()
+                    ));
+                }
+                continue;
+            };
             // Visibility: a cross-package `import type` may only reach a `public` type.
             if let Some(info) = prov_types.get(&(pkg.clone(), leaf.clone())) {
                 if let Some(code) = vis_violation(info, file, &prog.package.join(".")) {
@@ -576,14 +597,14 @@ fn build_type_imports(
             if local_types.contains(bound.as_str()) || user_imports.contains_key(&bound) {
                 return Err(format!(
                     "{}: imported type `{bound}` shadows a local type or an imported module \
-                     qualifier — alias it with `as` [E-TYPE-IMPORT-SHADOW]",
+                     qualifier — alias it with `as` [E-IMPORT-SHADOW]",
                     file.display()
                 ));
             }
             if map.insert(bound.clone(), mangled.clone()).is_some() {
                 return Err(format!(
-                    "{}: two `import type` bind the name `{bound}` — alias one with `as` \
-                     [E-TYPE-IMPORT-CONFLICT]",
+                    "{}: two imports bind the type name `{bound}` — alias one with `as` \
+                     [E-IMPORT-CONFLICT]",
                     file.display()
                 ));
             }

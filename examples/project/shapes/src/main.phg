@@ -1,15 +1,15 @@
 package Main;
 
 // Cross-package TYPES (M-RT): a library package's class / interface / enum, used here via the
-// terminal `import type Pkg.Path.TypeName;` form. Each binds a bare type name (`Shape`, `Rect`,
+// terminal `import Pkg.Path.TypeName;` form. Each binds a bare type name (`Shape`, `Rect`,
 // `Paint`) to the library's type; functions still use the Go-qualified form (`pkg.function()`). Built-ins
 // (`int`, `List`, …) stay import-free. Everything erases to fully-qualified PHP
 // (`new \Acme\Geometry\Rect(…)`, `instanceof \Acme\Geometry\Shape`), byte-identical on
 // run / runvm / real PHP.
 import Core.Output;
-import type Acme.Geometry.Shape;
-import type Acme.Geometry.Rect;
-import type Acme.Geometry.Paint;
+import Acme.Geometry.Shape;
+import Acme.Geometry.Rect;
+import Acme.Geometry.Paint;
 
 // Typed by an imported INTERFACE — any implementer flows in (nominal subtyping, cross-package).
 function describe(Shape s): int {

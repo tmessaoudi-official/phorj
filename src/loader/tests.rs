@@ -207,7 +207,7 @@ fn import_type_of_internal_library_type_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.Geo.Hidden;\nfunction main() -> void { Hidden h = Hidden(); }",
+        "package Main;\nimport Acme.Geo.Hidden;\nfunction main() -> void { Hidden h = Hidden(); }",
     );
     tmp.write(
         "src/Acme/Geo/geo.phg",
@@ -223,7 +223,7 @@ fn import_type_of_public_library_type_is_allowed() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.Geo.Shown;\nfunction main() -> void { Shown s = Shown(); }",
+        "package Main;\nimport Acme.Geo.Shown;\nfunction main() -> void { Shown s = Shown(); }",
     );
     // Public-surface rule: a file with one public type is named after it (`Shown.phg`).
     tmp.write(

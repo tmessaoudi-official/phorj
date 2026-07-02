@@ -6,7 +6,7 @@ package Acme.Shapes;
 //   internal                                — visible across THIS package's files, not other packages
 //   private                                 — visible only inside THIS .phg file
 //
-// `Rect` is `public`, so `main` (a different package) may `import type Acme.Shapes.Rect`.
+// `Rect` is `public`, so `main` (a different package) may `import Acme.Shapes.Rect`.
 class Rect {
     constructor(public int w, public int h) {}
     function area(): int {
