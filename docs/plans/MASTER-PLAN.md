@@ -1248,3 +1248,7 @@ examples). Where a ⏳ marker conflicts with this ledger, THE LEDGER WINS. Detai
 | hooksPath P0 | **REPAIRED** — `core.hooksPath scripts/git-hooks` |
 | Showcase | **ALL SIX ADOPTED** (front door, flagship, truthful README, spec+conformance, honest benchmarks, editor refresh) |
 | Master plan | **SIGNED OFF by the developer, 2026-07-02** — this document is THE roadmap; next session: CLAUDE.md → here → Wave 0 item 1 |
+| Value/handle (DEF-024/037) | **Split KEPT** (unification via `&` references REJECTED after challenge); W-LOST-MUTATION + spec chapter + E-TRAIT-STATE-DUP now; Swift-style `&` inout params (copy-in/copy-out, `&` at both ends, no reference bindings) = ADOPT-LATER design item |
+| Wave-3 FS design | **Path value type, stateless IO**; errors: `throws FileError` default, `readOrNull()` explicit, probes never throw |
+| Wave-3 HTTP design | **Layered**: HttpClient engine (baseUrl/timeout/middleware/fake seam) + Http.get/post sugar over a stock client |
+| Reflection reach | **Opt-in `#[Reflectable]` registry, FQN-everywhere** (construct + className round-trip on "Pkg.Path.Type"; E-REFLECT-QUALIFY on bare names) |

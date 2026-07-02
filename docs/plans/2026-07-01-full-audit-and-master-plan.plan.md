@@ -65,6 +65,10 @@ Phase 6/6C on the documents, four-dimension evidence table, verification guide, 
 
 ---
 
+- [2026-07-02 POST-CLOSE ROUND 3]: **"8 UNCLEAR register rows" DISSOLVED** — row-by-row verification found 0 unclear rows (the "≈8" was an arithmetic residual in Agent C's summary, now corrected in the register with a supersession note). The 5 real mixed-mode rows (DEC-053/056/060/087/129) were all already re-adjudicated this session. Nothing left to ratify — adjudication is 100% complete with zero residue.
+- [2026-07-02 POST-CLOSE ROUND 2]: **`&`-unification REJECTED after hard challenge (developer accepted)** — value/handle split stays + W-LOST-MUTATION + spec chapter + E-TRAIT-STATE-DUP now (DEF-024/DEF-037 → FIXED-BY-DESIGN); **Swift-style `&` inout params (copy-in/copy-out, mandatory `&` at BOTH ends, NO reference bindings) recorded ADOPT-LATER** with design doc. **FS error shape FINAL**: `p.read(): string throws FileError` default + `readOrNull()` explicit + non-throwing probes. **Reflection FQN FINAL**: FQN-everywhere, `className` returns FQN, construct(className(v)) round-trips by construction; E-REFLECT-QUALIFY on bare names.
+- [2026-07-02 POST-CLOSE ROUND]: **HTTP client = LAYERED (C)** FINAL ✓ (HttpClient engine + Http.get/post sugar over a stock client + HttpClient.fake test seam). FS = Path-value-type (B) + developer demands hard-errors-no-silent-failures (shape confirming: throws FileError). Reflection = opt-in #[Reflectable] (B) + developer demands FQN strings (confirming). Value/handle: developer proposes full `&`-reference unification — challenged (re-imports DEF-006, breaks Rc heap + transpile parity; Swift-inout middle offered).
+
 ## QUESTION CATALOG — surface ALL of this when the developer returns
 > Standing format rule: every design question ships with a concrete current-syntax risk example.
 > Recommended option always FIRST. Ask via AskUserQuestion, 4 per round, in the order below.

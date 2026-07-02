@@ -319,5 +319,9 @@ briefing; `W-SEQUENCE-MUTATION` lint status unverified); DEC-057 D2 revisit (C-8
 
 *Register totals: 141 primary rows (DEC-001…DEC-176 numbering with gaps) + 555 triage rows summarized
 by category (§10). Mode split over primary rows: ASKED ≈ 108 (incl. 2 RATIFIED overnight forks),
-AUTONOMOUS ≈ 25, UNCLEAR ≈ 8 (mostly early-M1/M2 records with no explicit mode note). 10 conflicts,
+AUTONOMOUS ≈ 25, UNCLEAR = 0 — ⊳ CORRECTED 2026-07-02 (row-by-row verification): every primary row
+carries an explicit Mode; the original "UNCLEAR ≈ 8 (early-M1/M2, no mode note)" was an arithmetic
+residual, not located rows. The 5 mixed-mode rows (DEC-053/056/060/087/129 — ASKED approach /
+AUTONOMOUS details) are the only ambiguity, and ALL FIVE were re-adjudicated in the 2026-07-02
+rulings (MASTER-PLAN §12). 10 conflicts,
 33 supersessions traced.*
