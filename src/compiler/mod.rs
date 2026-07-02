@@ -805,7 +805,7 @@ impl<'a> Compiler<'a> {
                         && crate::native::index_of_by_leaf(q, name).is_some()) =>
                 {
                     let Expr::Ident(q, _) = &**object else {
-                        unreachable!()
+                        unreachable!("guard above already matched `object` as `Expr::Ident`")
                     };
                     Ok(native_ret_cty(
                         crate::native::index_of_by_leaf(q, name).unwrap(),
@@ -826,7 +826,7 @@ impl<'a> Compiler<'a> {
                         && self.classes.contains_key(cls)) =>
                 {
                     let Expr::Ident(cls, _) = &**object else {
-                        unreachable!()
+                        unreachable!("guard above already matched `object` as `Expr::Ident`")
                     };
                     self.method_rets
                         .get(&(cls.clone(), name.clone()))

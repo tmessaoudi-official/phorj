@@ -521,7 +521,7 @@ impl Compiler<'_> {
                         Gt => Op::Gt,
                         Le => Op::Le,
                         Ge => Op::Ge,
-                        _ => unreachable!(),
+                        _ => unreachable!("outer arm restricts `op` to Lt/Gt/Le/Ge"),
                     },
                     line,
                 );
@@ -538,7 +538,9 @@ impl Compiler<'_> {
                         BitXor => Op::BitXor,
                         Shl => Op::Shl,
                         Shr => Op::Shr,
-                        _ => unreachable!(),
+                        _ => {
+                            unreachable!("outer arm restricts `op` to BitAnd/BitOr/BitXor/Shl/Shr")
+                        }
                     },
                     line,
                 );

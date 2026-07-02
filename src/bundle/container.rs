@@ -71,7 +71,10 @@ pub fn decode_container_full(blob: &[u8]) -> Option<(Vec<u8>, crate::profile::Pr
     if blob[12] != 0 {
         return None; // only source_utf8 in Phase 1
     }
-    let payload_len = u64::from_le_bytes(blob[16..24].try_into().ok()?) as usize;
+    // `usize::try_from`, not `as usize`: on a 32-bit target a >4 GiB `payload_len` would silently
+    // truncate, and the truncated value could pass the `end > blob.len()` bounds check below while
+    // the real length overruns the blob. `try_from` rejects a value that does not fit `usize`.
+    let payload_len = usize::try_from(u64::from_le_bytes(blob[16..24].try_into().ok()?)).ok()?;
     let payload_crc = u32::from_le_bytes([blob[24], blob[25], blob[26], blob[27]]);
     let end = header_len.checked_add(payload_len)?;
     if end > blob.len() {
