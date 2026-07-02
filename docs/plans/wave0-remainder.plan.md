@@ -36,8 +36,11 @@
      is NOT a free-fn namespace; use `x.fn()` UFCS or a static method).
 
   ### Implementation slices (each gates green + commits independently)
-  - **S0 — Unify import**: parser drops `type` keyword; checker classifies module-vs-type by resolving
-    path; migrate 18 `import type` → `import`. Foundational.
+  - **S0 — Unify import ✅ SHIPPED `11a6c71`**: parser dropped `type` keyword; loader classifies
+    module-vs-type by path (`is_type_import_path`; Core skipped in `build_type_imports`);
+    `E-TYPE-IMPORT-*` → `E-IMPORT-*`; UNKNOWN preserved via known-package heuristic; 18 sites + 4 tests
+    migrated. Full oracle gate green. Vestigial `type_only` field + stale `import type` prose comments
+    pending S2 cleanup.
   - **S1 — Qualified type refs**: parser + AST + checker resolve `Qualifier.Type` in type position
     (`Http.Router` as an annotation) → the injected type; transpiler erases qualifier (PHP stays bare).
   - **S2 — Injected-type discipline**: `E-INJECTED-TYPE-BARE`; member-import for Core injected types;
