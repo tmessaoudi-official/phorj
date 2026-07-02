@@ -260,7 +260,24 @@ impl Parser {
         } else if matches!(self.peek(), TokenKind::New) {
             let sp = self.peek_span();
             self.advance();
-            let callee = self.parse_primary()?;
+            let mut callee = self.parse_primary()?;
+            // Qualified enum-variant construction `new Enum.Variant(args)` (injected-enum
+            // qualification): consume a dotted-ident chain before the argument list so the callee is a
+            // `Member` path the checker resolves to a specific enum's variant. `new Counter()` (no dot)
+            // keeps the plain `Ident` callee.
+            while matches!(self.peek(), TokenKind::Dot) {
+                self.advance();
+                let nsp = self.peek_span();
+                let name = self.expect_ident(
+                    "a variant name after `.` in a qualified constructor (`new Enum.Variant(…)`)",
+                )?;
+                callee = Expr::Member {
+                    object: Box::new(callee),
+                    name,
+                    safe: false,
+                    span: nsp,
+                };
+            }
             self.expect(
                 &TokenKind::LParen,
                 "'(' — `new` must be followed by a constructor call, e.g. `new Counter()`",

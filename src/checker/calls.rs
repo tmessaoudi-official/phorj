@@ -99,6 +99,14 @@ impl Checker {
                         {
                             return self.check_concurrency_static(cls, name, args, span);
                         }
+                        // Qualified enum-variant construction `Enum.Variant(args)` (slice A1): the head
+                        // is an enum *name* (not a value binding). Resolves after native/class/concurrency
+                        // (an import or class of the same name wins), before instance-method dispatch.
+                        // Erased to the bare variant call before any backend (see
+                        // `check_qualified_variant_call`).
+                        if self.lookup_binding(cls).is_none() && self.enums.contains_key(cls) {
+                            return self.check_qualified_variant_call(cls, name, args, span);
+                        }
                     }
                 }
                 self.check_method_call(object, name, args, *safe, span)
@@ -915,45 +923,14 @@ impl Checker {
                 )
             });
         if let Some((enum_name, fields, type_params)) = owner {
-            if type_params.is_empty() {
-                self.check_args(name, &fields, args, span);
-                return Some(Ty::Named(enum_name, Vec::new()));
-            }
-            // A generic enum (`Option<T>`/`Result<T, E>`): infer its type arguments from the variant
-            // constructor call (M-RT generic enums), the same first-binding-wins unifier as a generic
-            // class constructor. A type parameter a variant does not mention (`None` for `Option<T>`,
-            // `Ok(T)` w.r.t. `E`) stays un-inferred and defaults to `Ty::Error` (permissive — the call
-            // site annotates the binding to fix it, e.g. `Option<int> n = None();`).
-            if fields.len() != args.len() {
-                self.err(
-                    span,
-                    format!(
-                        "variant `{name}` expects {} argument(s), found {}",
-                        fields.len(),
-                        args.len()
-                    ),
-                );
-                for a in args {
-                    self.check_expr(a);
-                }
-                return Some(Ty::Named(enum_name, vec![Ty::Error; type_params.len()]));
-            }
-            let mut theta: HashMap<String, Ty> = HashMap::new();
-            for (field, arg) in fields.iter().zip(args) {
-                let at = self.check_arg(arg, field);
-                if !self.unify(field, &at, &mut theta) {
-                    let want = apply_subst(field, &theta);
-                    self.err(
-                        span,
-                        format!("variant `{name}` expects `{want}`, found `{at}`"),
-                    );
-                }
-            }
-            let inst_args = type_params
-                .iter()
-                .map(|p| theta.get(p).cloned().unwrap_or(Ty::Error))
-                .collect();
-            return Some(Ty::Named(enum_name, inst_args));
+            return Some(self.type_variant_construction(
+                &enum_name,
+                name,
+                &fields,
+                &type_params,
+                args,
+                span,
+            ));
         }
         // class constructor: `ClassName(args)`
         if let Some(info) = self.classes.get(name) {
@@ -1014,6 +991,103 @@ impl Checker {
             return Some(Ty::Named(name.to_string(), inst_args));
         }
         None
+    }
+
+    /// Shared enum-variant construction typing — both the bare `Variant(args)` path
+    /// ([`Self::try_variant_or_class_call`]) and the qualified `Enum.Variant(args)` path
+    /// ([`Self::check_qualified_variant_call`]) route here. Checks the args against the variant's field
+    /// types, inferring a generic enum's type arguments (first-binding-wins), and returns the enum type.
+    pub(super) fn type_variant_construction(
+        &mut self,
+        enum_name: &str,
+        variant: &str,
+        fields: &[Ty],
+        type_params: &[String],
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        if type_params.is_empty() {
+            self.check_args(variant, fields, args, span);
+            return Ty::Named(enum_name.to_string(), Vec::new());
+        }
+        if fields.len() != args.len() {
+            self.err(
+                span,
+                format!(
+                    "variant `{variant}` expects {} argument(s), found {}",
+                    fields.len(),
+                    args.len()
+                ),
+            );
+            for a in args {
+                self.check_expr(a);
+            }
+            return Ty::Named(enum_name.to_string(), vec![Ty::Error; type_params.len()]);
+        }
+        let mut theta: HashMap<String, Ty> = HashMap::new();
+        for (field, arg) in fields.iter().zip(args) {
+            let at = self.check_arg(arg, field);
+            if !self.unify(field, &at, &mut theta) {
+                let want = apply_subst(field, &theta);
+                self.err(
+                    span,
+                    format!("variant `{variant}` expects `{want}`, found `{at}`"),
+                );
+            }
+        }
+        let inst_args = type_params
+            .iter()
+            .map(|p| theta.get(p).cloned().unwrap_or(Ty::Error))
+            .collect();
+        Ty::Named(enum_name.to_string(), inst_args)
+    }
+
+    /// Qualified enum-variant construction `new Enum.Variant(args)` (injected-enum qualification,
+    /// slice A1). The caller has confirmed `enum_name` is a known enum. Validates the variant belongs
+    /// to it, types the construction via [`Self::type_variant_construction`], and records an *erase*
+    /// substitution (`Enum.Variant(args)` → bare `Variant(args)`) into `ufcs_resolutions` — the same
+    /// "compile-time sugar erased before any backend" discipline as UFCS/casts (Invariant 5): every
+    /// backend and the transpiler see the ordinary bare construction, so byte-identity is unchanged.
+    pub(super) fn check_qualified_variant_call(
+        &mut self,
+        enum_name: &str,
+        variant: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        // Take the `new`-prefix flag before checking args (a construction argument still needs its own
+        // `new`). A qualified construction reached without `new` is `E-NEW-REQUIRED`, exactly like the
+        // bare form (DEC-083 mandatory `new`).
+        let was_new = std::mem::take(&mut self.under_new);
+        let info = &self.enums[enum_name];
+        let Some(fields) = info.variants.get(variant).cloned() else {
+            for a in args {
+                self.check_expr(a);
+            }
+            return self.err(
+                span,
+                format!("enum `{enum_name}` has no variant `{variant}`"),
+            );
+        };
+        let type_params = info.type_params.clone();
+        if !was_new {
+            self.err_coded(
+                span,
+                format!("construct `{enum_name}.{variant}` with `new {enum_name}.{variant}(…)`"),
+                "E-NEW-REQUIRED",
+                Some(format!("write `new {enum_name}.{variant}(…)`")),
+            );
+        }
+        // Erase to the bare variant call the backends already construct (resolved by variant name).
+        self.ufcs_resolutions.insert(
+            span.start,
+            crate::ast::Expr::Call {
+                callee: Box::new(crate::ast::Expr::Ident(variant.to_string(), span)),
+                args: args.to_vec(),
+                span,
+            },
+        );
+        self.type_variant_construction(enum_name, variant, &fields, &type_params, args, span)
     }
 
     /// `spawn <call>` — type a green-task spawn (M6 W4 / S4.3). The operand must be a call; its return

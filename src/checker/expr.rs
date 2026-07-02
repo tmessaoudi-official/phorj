@@ -265,6 +265,24 @@ impl Checker {
     pub(super) fn is_construction_callee(&self, callee: &crate::ast::Expr) -> bool {
         match callee {
             crate::ast::Expr::Ident(name, _) => self.is_construction_name(name),
+            // Qualified enum-variant construction `new Enum.Variant(…)` (slice A1): the callee is a
+            // `Member` whose object is an (unshadowed) enum name and whose member is one of its
+            // variants. Resolved + erased in `check_qualified_variant_call`.
+            crate::ast::Expr::Member {
+                object,
+                name,
+                safe: false,
+                ..
+            } => match &**object {
+                crate::ast::Expr::Ident(en, _) => {
+                    self.lookup(en).is_none()
+                        && self
+                            .enums
+                            .get(en)
+                            .is_some_and(|info| info.variants.contains_key(name))
+                }
+                _ => false,
+            },
             _ => false,
         }
     }

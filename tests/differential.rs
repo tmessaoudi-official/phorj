@@ -270,6 +270,36 @@ fn p2_programs_match_between_backends() {
     }
 }
 
+/// Variant qualification slice A1 — qualified enum-variant construction `new Enum.Variant(args)` runs
+/// byte-identically on both backends (it is erased to the bare `Variant(args)` construction before any
+/// backend, so run≡runvm is structural). Covers a non-generic and a generic enum; constructed
+/// qualified, matched bare (qualified match patterns are slice A2).
+#[test]
+fn qualified_variant_construction_is_byte_identical() {
+    agree(
+        r#"import Core.Output;
+enum Shape { Circle(float r), Square(float s) }
+function area(Shape s): float {
+    return match s { Circle(r) => 3.0 * r * r, Square(x) => x * x };
+}
+function main(): void {
+    Shape c = new Shape.Circle(2.0);
+    Shape q = new Shape.Square(3.0);
+    Output.printLine("{area(c)}");
+    Output.printLine("{area(q)}");
+}"#,
+    );
+    agree(
+        r#"import Core.Output;
+enum Opt<T> { Some(T value), None }
+function main(): void {
+    Opt<int> a = new Opt.Some(7);
+    int n = match a { Some(v) => v, None() => 0 };
+    Output.printLine("{n}");
+}"#,
+    );
+}
+
 /// M-RT S6a — single inheritance: an inherited method, an overridden method (via a subclass ref),
 /// and dynamic dispatch (via a superclass-typed ref holding the subclass) all resolve identically on
 /// `run` and `runvm`. The interpreter walks the parent chain; the compiler pre-flattens the same

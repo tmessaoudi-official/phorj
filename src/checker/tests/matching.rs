@@ -362,3 +362,44 @@ fn match_arm_guards() {
     let e2 = errors_of(&bad_guard);
     assert!(e2.iter().any(|d| d.code == Some("E-GUARD-TYPE")), "{e2:?}");
 }
+
+// ── qualified enum-variant construction `new Enum.Variant(args)` (slice A1) ───────────────────────
+
+#[test]
+fn qualified_variant_construction_type_checks() {
+    // `new Shape.Circle(2.0)` — qualified construction of a user enum's variant is accepted and typed
+    // as the enum, exactly like the bare `new Circle(2.0)` form (which stays valid, DEC-083).
+    let src = "enum Shape { Circle(float r), Square(float s) } \
+               function main() -> void { var c = new Shape.Circle(2.0); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn qualified_variant_generic_infers() {
+    // Generic enum: `new Option.Some(3)` infers `Option<int>` like the bare form.
+    let src = "enum Option<T> { Some(T value), None } \
+               function main() -> void { Option<int> o = new Option.Some(3); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn qualified_variant_wrong_variant_errors() {
+    // A name that is not a variant of the named enum is a clear error (not a confusing method-call one).
+    let src = "enum Shape { Circle(float r) } \
+               function main() -> void { var x = new Shape.Nope(1); }";
+    assert!(
+        errors_of(src)
+            .iter()
+            .any(|d| d.message.contains("no variant")),
+        "{:?}",
+        errors_of(src)
+    );
+}
+
+#[test]
+fn qualified_variant_arg_type_checked() {
+    // Args are checked against the variant's fields (a string where a float is expected errors).
+    let src = "enum Shape { Circle(float r) } \
+               function main() -> void { var c = new Shape.Circle(\"x\"); }";
+    assert!(!errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
