@@ -1,7 +1,8 @@
 # PHORJ MASTER PLAN — the consolidated roadmap to 100% of the language
 
 > **This is the living plan.** Deliberately undated: it is maintained, not frozen. Produced by the
-> 2026-07-01/02 full-audit fleet (session plan `docs/plans/2026-07-01-full-audit-and-master-plan.plan.md`);
+> 2026-07-01/02 full-audit fleet (session/adjudication plan since consolidated into this file — its
+> Decisions Log + QUESTION CATALOG live in git history at/before `60540fc`);
 > input reports indexed in Appendix C. It supersedes the live content of the 15 MERGE plans
 > (P-plan-verdicts §2/§5) — every one of P's **56 live items (LI-A1…LI-H6)** appears below; none dropped.
 
@@ -25,11 +26,13 @@ no cutline*, plus a *reproducible completion percentage*, plus *full PHP coverag
    (`PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test --workspace`
    + clippy + fmt + `cargo build --release`), and — for language/stdlib features — a shipped example
    (Governance rule G-5).
-4. Items marked **⏳BLOCKED-ON(id)** await a developer ruling (Appendix B maps every id to the
-   QUESTION CATALOG in the session plan). Each carries a **default path = the recommended option**;
-   the plan stays valid under either outcome — the ⏳ line states the delta if overruled. Do not
-   start a ⏳ item's *irreversible* part (codemods, deletions, API surface) before the ruling;
-   preparatory work (design docs, tests) may proceed on the default path.
+4. **Adjudication is CLOSED.** Every `⏳BLOCKED-ON(id)` marker below was ruled on 2026-07-02 and is
+   **RESOLVED to its stated default path** — the **§12 RULINGS LEDGER is authoritative** (it already
+   superseded every marker). Markers are retained only as provenance of what was asked; **treat each
+   as RULED and do NOT stop on one.** The single place a ruling diverges from a body default is
+   **W5-17b UFCS** (§12: *type-scoped*, not global leaf-uniqueness) — §12 governs. The **one** genuinely
+   open developer question is the **S8 user-facing `trait` disposition** (§7 "Open language question",
+   default: subsumed-by-MI); nothing else is pending. (Appendix B cross-references each marker to §12.)
 5. Re-compute the percentage ledger (§10) after every wave (recompute rule §0.3).
 
 ### 0.2 The two-axis lens (applies to every feature item)
@@ -51,10 +54,9 @@ shown there, weights declared judgment calls):
 - **PHP-parity ≈ 58%** (domain-weighted: language 79.8% · stdlib 27.5% row-weighted / 32.5%
   usage-weighted · runtime 69.4%; raw row-parity **floor 38.8%**). Always quote with the weights.
 - **Vision ≈ 60%** (70% parity + 30% beyond-PHP programme at 64.4%).
-- ⏳BLOCKED-ON(R4-M1) — ratify these numbers + the weight model; **default path: ratified**, and the
-  standing rule adopted: **re-run the M §4 arithmetic after every milestone/wave** (re-grade the
-  affected Pass-1 rows, recompute the three domain scores, republish both headlines). If overruled:
-  keep the raw floor as the only headline.
+- **✅ RULED (§12): numbers + weight model RATIFIED** (parity ≈58% / vision ≈60%), and the standing
+  rule adopted: **re-run the M §4 arithmetic after every milestone/wave** (re-grade the affected
+  Pass-1 rows, recompute the three domain scores, republish both headlines).
 - Projected per-wave gains: §10 ledger. End-state after Wave 6: **parity ≈ 75% / vision ≈ 81%**, the
   residual being the extension-tier stdlib (§9) and the deliberate GAP-by-design rows (Appendix A).
 
@@ -72,9 +74,10 @@ Concurrency (`spawn`/`Channel`/`Task`) is **permanently outside the PHP oracle**
 `run ≡ runvm` holds (deterministic scheduler on both backends); the transpiled-PHP leg is rejected
 (`E-CONCURRENCY-NO-PHP`) — sequential-degenerate PHP was rejected as spine-breaking. Additionally,
 until W5-13 lands, fault **line numbers** inside interpolation diverge on the VM (H §5) — fault
-parity is currently by FaultKind, message and exit code, not line. ⏳BLOCKED-ON(R3-1) — default path:
-**ratify DEC-133 + require README/spec disclosure** (Wave 0 doc batch and Wave 6 spec both carry the
-disclosure). If overruled toward a PHP-fibers mapping: new M6+ design item, heavy, nothing else here changes.
+parity is currently by FaultKind, message and exit code, not line. **✅ RULED (§12): DEC-133 ratified**
+— concurrency PHP leg is a hard error `E-TRANSPILE-CONCURRENCY` + explicit `--sequential-concurrency`
+opt-in (with warning); README/spec MUST disclose the exception wherever byte-identity is claimed
+(Wave 0 doc batch and Wave 6 spec both carry the disclosure).
 
 **G-2 · Quality gate (green means ALL):** `cargo test --workspace` + `cargo clippy --all-targets`
 (warnings deny) + `cargo fmt --check` + `cargo build --release`, plus the full PHP-oracle gate before
@@ -92,7 +95,8 @@ scratch slots = `self.height - 1` with a two-in-one-expression differential case
 
 **G-4 · Decision register + question catalog.** Canonical decisions: Agent C register
 (`docs/research/full-audit/raw/C-decisions.md`, 141 DEC rows + 10 conflicts + 33 supersessions);
-pending rulings: the QUESTION CATALOG in the session plan. **Adjudication protocol for all future
+pending rulings: **NONE** — adjudication closed 2026-07-02 (§12 ledger; the sole open language
+question is §7-OPEN traits). **Adjudication protocol for all future
 decisions:** interactive, batched 4 per round via AskUserQuestion, recommended option first, and —
 standing developer feedback, 2026-07-02 — **every design question ships with a concrete real-world
 code example demonstrating the risk**. Ratified rulings baked into this plan: **E-MATCH-BARE-TYPE
@@ -104,11 +108,10 @@ change: a runnable `examples/` program (auto-gated by the differential glob) + `
 index entry. CLI/tooling features: walkthrough README + companion `.phg`. Faults → README capture.
 Impure/quarantined features follow the `pure:false` conventions (DEC-156).
 
-**G-6 · Anti-regrowth file-size rule.** ⏳BLOCKED-ON(R3-6) — default path: **adopt** (B §6): soft cap
-**800 production lines**/file (inline `#[cfg(test)]` excluded), hard review trigger **1000** with a
-tracked exemption list (`vm/exec.rs`, `cli/explain.rs`, `transpile/runtime.rs`), ≤3-word cohesion
-test, inline test mods > 150 lines move to sibling `tests.rs`, enforced by `scripts/size-gate.sh` in
-CI (W1-6). If overruled: drop W1-6, keep the splits.
+**G-6 · Anti-regrowth file-size rule.** **✅ RULED (§12): ADOPTED** (B §6): soft cap **800 production
+lines**/file (inline `#[cfg(test)]` excluded), hard review trigger **1000** with a tracked exemption
+list (`vm/exec.rs`, `cli/explain.rs`, `transpile/runtime.rs`), ≤3-word cohesion test, inline test
+mods > 150 lines move to sibling `tests.rs`, enforced by `scripts/size-gate.sh` in CI (W1-6).
 
 **G-7 · Honesty rules.** No silent scope drops: rejected GAP rows live in Appendix A with reasons;
 the C-2 lesson (a ratified *replacement* silently softened into an *addition* during an autonomous
@@ -119,10 +122,10 @@ Benchmarks: no public perf claim against a dev-built PHP (G P1; fixed in W6-4).
 
 ## 2. WAVE 0 — REPAIRS & HYGIENE
 
-*Mandatory; no adjudication needed except where ⏳-marked — these restore already-decided guarantees.
+*Mandatory; adjudication is closed (every ruling in §12) — these restore already-decided guarantees.
 Everything here is repo-state repair, docs, or process; zero language-surface change.*
 
-### W0-1 · Restore the local pre-commit gate (hooksPath) — S
+### W0-1 · Restore the local pre-commit gate (hooksPath) — S · ✅ DONE (`c66bde5`; §12 REPAIRED)
 - **WHAT:** `git config core.hooksPath scripts/git-hooks` (relative, rename-proof); verify with a
   no-op commit; re-run the full gate over the current tree before the next push.
 - **WHY:** A-CI-1 (**P0**): `core.hooksPath` still points at the deleted `/stack/projects/phorge/`
@@ -132,8 +135,8 @@ Everything here is repo-state repair, docs, or process; zero language-surface ch
 - **HOW:** one config line + a CONTRIBUTING callout ("verify with `git config core.hooksPath`" —
   the documented relative form was correct; the config diverged from it, A §14).
 - **ACCEPTANCE:** hook fires on a test commit (observe fmt/clippy/test output); CONTRIBUTING updated.
-- **DEPS:** none. First action of the plan. ⏳BLOCKED-ON(R3-5) — default: **approved** (it restores a
-  decided guarantee); if withheld, everything else proceeds but every commit must run the gate manually.
+- **DEPS:** none. First action of the plan. **✅ RULED (§12): approved + DONE** — `core.hooksPath
+  scripts/git-hooks` set and verified (fires fmt/clippy/test on commit).
 
 ### W0-2 · P0 soundness repair: static-field visibility (spine break) — M
 - **WHAT:** enforce `private`/`protected` on **static fields** (read AND write, from outside/subclass).
@@ -209,7 +212,7 @@ Everything here is repo-state repair, docs, or process; zero language-surface ch
 - **DEPS:** none. (Full README *rewrite* — truthfulness, status table — is W6-3; this item is only
   "nothing on the front page is broken".)
 
-### W0-7 · Doc-reconciliation batch + CLAUDE.md rules-only rewrite — M
+### W0-7 · Doc-reconciliation batch + CLAUDE.md rules-only rewrite — M · ✅ CLAUDE.md+HISTORY.md DONE (`c66bde5`); repoint/de-dangle tail done in the consolidation pass
 - **WHAT:** one batch, three parts. (1) **Conflict-record fixes** (register C-1/3/4/5/6/7/10): amend
   D-L3's MI-reject text with a supersession note (→ DEC-062/064); update the stale zero-dep "LOCKED
   FRAMING" (→ DEC-009 four-dep policy); note the Text→String rationale check (LI-H6: confirm the
@@ -229,11 +232,11 @@ Everything here is repo-state repair, docs, or process; zero language-surface ch
   relocation map proves nothing is silently dropped.
 - **ACCEPTANCE:** each C-n row's stale record carries a supersession note; grep-verifiable DRIFT
   fixes; new CLAUDE.md ≤ ~130 lines; `docs/HISTORY.md` exists; MILESTONES headers current.
-- **DEPS:** W0-6 (shares the rename sweep). ⏳BLOCKED-ON(R2-Q4 + R3-10 + R4-Q) — default: **batch
-  approved as one task** (all three recs are "batch/approve"). If Q4 is overruled to walk-each:
-  split part (1) into 7 mini-commits; content identical.
+- **DEPS:** W0-6 (shares the rename sweep). **✅ RULED (§12): batch approved.** Part (3) CLAUDE.md
+  rules-only rewrite + `docs/HISTORY.md` shipped `c66bde5`. Parts (1)/(2) conflict-record + DRIFT
+  fixes and the MILESTONES/ROADMAP repoint were carried in the 2026-07-02 consolidation pass.
 
-### W0-8 · Plan-file deletions (48) + dangling-citation cleanup — S
+### W0-8 · Plan-file deletions (48) + dangling-citation cleanup — S · ✅ 48 DELETED (`c66bde5`); second batch (17 plans + shipped specs) + de-dangle done in the consolidation pass
 - **WHAT:** execute P §6's `git rm` of the 48 DELETE-VERIFIED plan files; then fix the **42 dangling
   plan-path citations** this creates (18 CLAUDE.md — mooted by W0-7's rewrite —, 11 MILESTONES.md,
   13 CHANGELOG.md; precedent exists for 7 previously-deleted plans).
@@ -241,10 +244,13 @@ Everything here is repo-state repair, docs, or process; zero language-surface ch
   MERGE plans' live content is fully carried by this plan (§5 inventory absorbed below) — after this
   plan lands, a second small batch (language-evolution, php-fidelity, review-pass, trackB, big-chunk,
   and the 2 KEEP-AS-RECORD files once R2-A/R2-B close) also becomes deletable.
-- **ACCEPTANCE:** `docs/plans/` holds only: this file, the session plan, the MERGE files pending
-  their second batch, and future plans; no dangling "docs/plans/2026-…" reference in living docs.
-- **DEPS:** this plan committed (it is the carrier). ⏳BLOCKED-ON(R4-P) — default: **approve the 48**.
-  If withheld: skip; zero downstream impact (deletions are pure hygiene).
+- **ACCEPTANCE:** `docs/plans/` holds only **this file** (MASTER-PLAN) + future plans; no dangling
+  "docs/plans/2026-…" reference in living docs. (Achieved in the 2026-07-02 consolidation pass.)
+- **DEPS:** this plan committed (it is the carrier). **✅ RULED (§12): 48 approved + DELETED** (`c66bde5`).
+  The **second batch** — the 15 MERGE + 2 KEEP-AS-RECORD + the session plan, plus the shipped/superseded
+  design specs, plus MILESTONES/ROADMAP repoint and dangling-citation cleanup — was executed in the
+  2026-07-02 consolidation pass, leaving MASTER-PLAN the sole roadmap file (raw/ register + HISTORY +
+  MILESTONES + ADR retained as the record layer).
 
 ### W0-9 · Repo housekeeping: branches, dist/, KNOWN_ISSUES, examples index — S
 - **WHAT:** (a) delete the 2 dangling worktree-agent branches (LI-H3, verified present);
@@ -258,8 +264,8 @@ Everything here is repo-state repair, docs, or process; zero language-surface ch
 - **WHY:** P LI-H3; B §9/§10/§11; G Part 1; R3-8/R3-9.
 - **ACCEPTANCE:** `git branch` clean; README index lists every shipped example; KNOWN_ISSUES contains
   only live issues.
-- **DEPS:** none. ⏳BLOCKED-ON(R3-8, R3-9) — default: **adopt all**; if overruled, drop the
-  restructure, keep the gap/contradiction fixes (those are plain errors).
+- **DEPS:** none. **✅ RULED (§12): adopt all** — examples-README restructure + KNOWN_ISSUES prune +
+  codemod/dist cleanup.
 
 ### W0-10 · P2 hardening batch (debug tooling + supply chain) — M
 - **WHAT:** (a) DAP write errors: track `dead: bool`, end the session on write failure (A-ERR-3);
@@ -272,9 +278,10 @@ Everything here is repo-state repair, docs, or process; zero language-surface ch
   (h) add the four missing `unreachable!` justification messages (A-ERR-1); (i) document the
   `W-SECRET` one-hop limitation in its explain text (A-SEC-7).
 - **WHY:** A §2/§7 — the complete P2 set plus the trivial P3s worth batching.
-- **ACCEPTANCE:** DAP/LSP framing tests for the two error paths (A-TEST-1's `json.rs` unit tests ride
-  along); workflows show pinned installs; gate green.
-- **DEPS:** none. ⏳BLOCKED-ON(R3-11) — default: **adopt as one hardening task**.
+- **ACCEPTANCE:** DAP/LSP framing tests for the two error paths; **A-TEST-1's full unit-test set rides
+  along — BOTH halves: `json.rs` AND `dispatch.rs`/`select_overload` ambiguity + no-match edges**
+  (the second half was previously unplaced); workflows show pinned installs; gate green.
+- **DEPS:** none. **✅ RULED (§12): adopt as one hardening task**.
 
 ### W0-11 · realworld Core.File example — S
 - **WHAT:** one `examples/realworld/` program that reads a committed fixture via `Core.File`
@@ -307,7 +314,7 @@ do-not-split list (B §3: 24 production files incl. `vm/exec.rs`, `cli/explain.r
 - **WHAT:** 2966 lines → `tests/differential/{main,milestones,features,errors_traits,php_oracle,runtime}.rs`
   (directory-form integration test, same single binary, B §8.1 cluster map).
 - **WHY:** largest file in the repo; the correctness spine's own harness must be navigable before the
-  spine files move. ⏳BLOCKED-ON(R3-7) — default: **adopt as Wave-1 step 0**.
+  spine files move. **✅ RULED (§12): adopt as Wave-1 step 0**.
 - **ACCEPTANCE:** **test-count parity** (`cargo test --test differential -- --list | wc -l` identical
   before/after — 126) + full green with `PHORJ_REQUIRE_PHP=1`.
 
@@ -345,7 +352,7 @@ coupled sites) + `cargo build --release`.
 ### W1-6 · size-gate CI + standing rule write-back — S
 - **WHAT:** `scripts/size-gate.sh` (warn > 800, fail > 1000 unless exempted) wired into ci.yml;
   the G-6 rule text added to INVARIANTS/CONTRIBUTING.
-- **DEPS:** W1-1..W1-4 (numbers calibrated to the post-split census). ⏳BLOCKED-ON(R3-6), default: adopt.
+- **DEPS:** W1-1..W1-4 (numbers calibrated to the post-split census). **✅ RULED (§12): adopt**.
 
 ### W1-7 · Clarity workstream (LI-F9) — M
 - **WHAT:** ARCHITECTURE.md narrated rewrite; module-level `//!` docs across `src/`; **blanket
@@ -368,7 +375,7 @@ codemod de-risk our own breaking changes).*
   (check-only default, `--apply` writes); LSP code-actions ride the same data.
 - **WHY:** F XL-004 (ADOPT-NOW, DX-pure-win): spans + did-you-mean already computed (S0/M-DX S1) and
   currently die as prose; this is the delivery vehicle for W2-2/W2-3/W2-4 and every future rename.
-  ⏳BLOCKED-ON(R3-4 covers the batch) — default: adopt.
+  **✅ RULED (§12): adopt** (F ADOPT-NOW batch — `phg fix` ships first in Wave 2).
 - **HOW:** extend `Diagnostic` with an optional `fix: Vec<(Span, String)>`; populate the
   one-candidate cases first (unknown name w/ one suggestion, unused import once W2-8 lands, `->`→`:`,
   bare-type-in-pattern); `src/cli/` new `cmd_fix`; output must be `phg format`-stable.
@@ -469,8 +476,7 @@ codemod de-risk our own breaking changes).*
 - **DEPS:** W2-6 (import machinery churn — same files, sequence to avoid conflicts).
 
 ### W2-8 · Enforcement adoptions from H (R4-H1/H2/H4/H5/H6) — M
-⏳BLOCKED-ON(R4-H1..H6) — defaults = H's recommendation column; each independent (drop any overruled
-one without affecting the rest):
+**✅ RULED (§12): H's recommendation column ADOPTED** (enforcement batches 1+2+3, all independent):
 - **H1 · E-IMPORT-UNKNOWN** (default: ERROR): an import resolving to nothing (loose, project, vendored)
   errors at the import line — Go model, beats PHP's silent `use`. Needs a single-sourced known-module
   set (native registry + loader symbol tables); this also subsumes the deferred `W-UNKNOWN-IMPORT`
@@ -487,7 +493,9 @@ one without affecting the rest):
 - **H6 · remaining rule recs as a block**: property-hook syntactic self-reference warning (H M6);
   cyclic-import diagnostics; `==`-across-unrelated-types already enforced (record as brag); catch-order/
   dead-catch diagnostics; the "method references aren't values" dedicated message (H P3 — superseded
-  by W3-9 when method refs land; until then, fix the message).
+  by W3-9 when method refs land; until then, fix the message); **float `==` exact-compare lint
+  (`W-FLOAT-EQ` / J-float-eq-lint — DEF-004 residual: `x == 0.1` on floats warns, suggests an
+  epsilon compare or `decimal`).**
 - **ACCEPTANCE:** one should-error/should-warn conformance program per adopted rule; explain entries;
   warnings never gate (DEC-081).
 - **DEPS:** W2-1 (unused-import feeds `phg fix`).
@@ -549,16 +557,18 @@ one without affecting the rest):
   program in `conformance/diagnostics/` (H's probe corpus is the seed — it lives in scratchpad and
   must be re-generated/committed); a ratchet test asserts every `E-`/`W-` code in the explain
   registry has ≥1 trigger program (H found 2 CLI-dead + 1 uncoded by exactly this method).
+  **Dispose `E-OVERLOAD-SELECT-CONFLICT` first** (H P3 — registered in `phg explain` but never raised
+  anywhere; it would fail this ratchet): either wire it into `select_overload`'s conflict path with a
+  trigger program, or drop the explain entry. Same disposition rule for any other orphan code the
+  ratchet surfaces.
 - **WHY:** post-dogfood W1 (P LI-E16); feeds the Wave-6 spec's clause-tagged corpus directly.
 - **ACCEPTANCE:** the ratchet test exists and is green; adding an untriggerable code fails CI.
 - **DEPS:** W0-4 (dead codes revived first), W2-8 (new rules included).
 
 ### W2-14 · `new` on enum variants — decision checkpoint — S
-- ⏳BLOCKED-ON(R3-2) — **default path: KEEP mandatory `new`** (DEC-083): consistency ("all
-  construction looks the same") and the construction/pattern asymmetry (`new V()` vs `V()`) is now
-  pedagogically load-bearing for W2-2's did-you-mean. **If overruled** (exempt variants for
-  TS/Rust/Kotlin familiarity): breaking codemod via W2-1, byte-identity-gated, plus doc sweep — a
-  self-contained M-size follow-up; nothing else in this plan depends on the outcome.
+- **✅ RULED (§12): KEEP mandatory `new`** (DEC-083): consistency ("all construction looks the same")
+  and the construction/pattern asymmetry (`new V()` vs `V()`) is pedagogically load-bearing for
+  W2-2's did-you-mean. Checkpoint closed — no codemod, nothing else depends on it.
 
 ---
 
@@ -745,7 +755,7 @@ All front-end unless noted; every item byte-identity-gated (concurrency exceptio
 - **DEPS:** none. W5-2 `derive(Show)` auto-implements it.
 
 ### W4-4 · M-text: Unicode-correct strings (M gap #6; DEF-016; LI-D9) — XL · DESIGN-NEEDED
-- **LENS:** **MANDATORY-better** (⏳BLOCKED-ON(R4-M2), default: **adopt Unicode-correct-by-default**).
+- **LENS:** **MANDATORY-better** (**✅ RULED §12: adopt Unicode-correct-by-default** strings; bytes explicit).
   PHP does it wrong (byte strlen + the mb_* second family); Phorj currently **inherits the flaw**
   [M verified: `"héllo".length` = 6] — the one genuinely inherited PHP defect. Breaking, codemod-assisted.
 - **WHAT:** scalar `string` ops (length/slice/indexOf/upper/…) become code-point-or-grapheme correct
@@ -774,7 +784,8 @@ All front-end unless noted; every item byte-identity-gated (concurrency exceptio
 ### W4-6 · Stdlib blitz: array/list long tail + math breadth + misc (gaps #11, #20 part; LI-D2, LI-D12) — L
 - **WHAT:** the L-list-breadth remainder (`zip` — deferred from B3 —, diff/intersect on lists,
   splice/column/combine/pad idioms per charter), `Math` long tail (asin/acos/atan/atan2/hyperbolics/
-  hypot/deg2rad/log2/…, G-math-breadth), `Math.rem`/`mod` follow-up (LI-D12, never closed),
+  hypot/deg2rad/log2/…, G-math-breadth), `Math.rem`/`mod` + `Math.fdiv` (explicit IEEE-inf division —
+  ga-sequence "add only if requested"; ships here) follow-up (LI-D12, never closed),
   ctype completions, filter/validation breadth (email/URL validators), `List.enumerate` extensions.
   Uses the collection-native recipe (memory stdlib-collection-breadth) verbatim.
 - **WHY:** M TOP-20 #11 ("muscle-memory blockers for line-by-line migration"); P LI-D2/LI-D12.
@@ -847,8 +858,8 @@ All front-end unless noted; every item byte-identity-gated (concurrency exceptio
 
 ## 7. WAVE 5 — BEYOND-PHP PROGRAMME
 
-*Where Phorj pulls ahead. F's 13 ADOPT-NOW (⏳BLOCKED-ON(R3-4), default: adopt all 13 — 11 are
-front-end-only), the concurrency/M-Parallel cluster, the perf lane, and the DX cluster.*
+*Where Phorj pulls ahead. F's 13 ADOPT-NOW (**✅ RULED §12: all 13 ADOPTED** — 11 front-end-only),
+the concurrency/M-Parallel cluster, the perf lane, and the DX cluster.*
 
 ### The 13 ADOPT-NOW items (F Tier 1; per-item deep dives in F §2)
 
@@ -879,7 +890,7 @@ front-end-only), the concurrency/M-Parallel cluster, the perf lane, and the DX c
 - **DEPS:** W1-4 (compiler layout).
 
 ### W5-14 · M-perf lane (LI-B1, LI-B2, LI-B3; A-PERF trio) — L
-- **WHAT:** (a) ⏳BLOCKED-ON(R3-12), default adopt: `Op::CallMethod` inline cache (A-PERF-1 — two
+- **WHAT:** (a) **✅ RULED (§12): adopt** — `Op::CallMethod` inline cache (A-PERF-1 — two
   String allocs per call; extend the S1b field-cache shape) + `Op::CallValue` captures borrow
   (A-PERF-2 — deep-clone per closure invocation, paid per element in map/filter/reduce) +
   interpreter static/const borrow-keyed lookup (A-PERF-3); (b) LI-B1 W2 Rc-share `Value::Str`
@@ -910,26 +921,27 @@ front-end-only), the concurrency/M-Parallel cluster, the perf lane, and the DX c
   (LI-A2 re-scoped: **structured concurrency without colored async/await** — colored functions stay
   REJECTED, XL-041/SSOT); (c) **M-Parallel** (LI-A3): the commissioned deep plan — actor-model
   multicore (XL-017, the only path that keeps the Rc heap) + the D-Async-1 pure data-parallel subset
-  re-scoped against green threads. ⏳BLOCKED-ON(DEC-135 deep-plan approval) — default: actor model,
-  plan-first; nothing else here blocks on it.
+  re-scoped against green threads. **✅ RULED (§12): WORKER ISOLATES** (own heap/thread, channel
+  messaging, nothing shared — shared-memory Arc rewrite REJECTED); deep plan first. Nothing else here blocks on it.
 - **ACCEPTANCE:** run≡runvm determinism litmus per primitive (the A1 litmus discipline);
   `E-CONCURRENCY-NO-PHP` coverage extended; examples under the quarantine conventions.
 - **DEPS:** design docs; W5-3 (sealed) helps message-type modeling.
 
 ### W5-17 · Pending-syntax checkpoints: generics explicit args + UFCS policy + ternary register — S
-- **(a)** ⏳BLOCKED-ON(R2-A) — generics explicit type arguments. Default (rec): **adopt both sites**
-  — `new Box<int>([])` + `firstOr<int>([], 0)` with TS-style lookahead disambiguation (closes the
-  no-turbofish gap; the R2-A examples show un-annotatable positions). If overruled to new-sites-only:
-  drop the call-site grammar; if keep-inference-only: record as permanent limitation in the spec.
-- **(b)** ⏳BLOCKED-ON(R2-B) — UFCS stability policy. Default (rec): **keep breadth + policy** —
-  (1) leaf-name uniqueness across UFCS-eligible natives enforced by a CI registry test (the
-  `repeat`→`fill` incident becomes structurally impossible), (2) documented precedence: real methods
-  beat UFCS. If overruled: marked-natives-only or primitive-receiver retirement — each a scoped codemod.
+- **(a)** **✅ RULED (§12): generics explicit type args, BOTH sites** — `new Box<int>([])` +
+  `firstOr<int>([], 0)` with TS-style lookahead disambiguation (closes the no-turbofish gap; the
+  examples show the otherwise un-annotatable positions).
+- **(b)** **✅ RULED (§12): UFCS = TYPE-SCOPED** (developer's design — supersedes the earlier
+  global-leaf-uniqueness default). The SAME leaf name is legal across different receiver types;
+  resolution ranks by specificity (**real method > concrete-type UFCS > interface UFCS > generic
+  UFCS**); an unbreakable tie ⇒ `E-UFCS-AMBIGUOUS`. A CI guard tests the specificity/rebind rules
+  (the `repeat`→`fill` breakage becomes structurally impossible). User functions — including
+  primitive receivers, `1.xyz()` — are the sanctioned extension surface (Core is sealed; §12
+  "Core override REJECTED"). HOW: `checker/ufcs.rs` ranks candidates by the specificity ladder.
 - **(c)** LI-E9 ternary `? :`: stays **deferred-not-rejected** (DEC-090); the revisit trigger
   (demand evidence) recorded here as the register carrier; C-5's stale record fixed in W0-7.
-- **(d)** ⏳BLOCKED-ON(R2-C) — bulk-ratify the six shipped autonomous items (totality contours ·
-  pattern-cluster syntax · generic-invariance retrofit · COW `Op::SetIndexLocal` · dogfood grammar
-  patches · `phg debug` surface). Default: ratify all; any pulled item gets its own review slice.
+- **(d)** **✅ RULED (§12): all six bulk-ratified** — totality contours · pattern-cluster syntax ·
+  generic-invariance retrofit · COW `Op::SetIndexLocal` · dogfood grammar patches · `phg debug` surface.
 
 ### The 27 ADOPT-LATER (F Tier 2) — charter table
 Carried as a standing charter; each activates on its named trigger. XL-014/015/016/017 → W5-16.
@@ -948,16 +960,30 @@ annotations → when M-Parallel needs provable purity. XL-038 contracts → prof
 assertions usage data. XL-039 raw-string ergonomics → with XL-008 regex work (note: `r"…"` already
 shipped — this row is the *escaping-form audit*). XL-040 generators → W4-2 (promoted).
 **Comprehensions (mega B2 = LI-E1): CONFLICT** — F rejects (XL-049: map/filter is the teachable
-spelling) vs the mega backlog carries it live. ⏳ adjudicate; default: **REJECT stands** (Appendix A),
+spelling) vs the mega backlog carries it live. **✅ RULED (§12): REJECT stands** (Appendix A.2),
 LI-E1 discharged by this record. **Enum methods + associated fns (mega C1 = LI-E3)** and
 **ergonomics pack (C4 = LI-E5)**: adopt-later, batch with the pattern slice / scope-at-start
 respectively. **Protocols (mega D1 = LI-E6)**: Printable ships in W4-3; Comparable/Equatable/
 Iterable follow as design-first slices (Equatable/Hash via W5-2 derive; Iterable via W4-2).
 **FFI (mega H3 = LI-E8): CONFLICT** — SSOT §5 rejected E-php-ffi; the extension seam is `.d.phg`
-declare-interop (M8.5, shipped). ⏳ adjudicate; default: REJECT stands, `.d.phg` + the §9
+declare-interop (M8.5, shipped). **✅ RULED (§12): REJECT stands** — `.d.phg` + the §9
 extension-policy path is the answer. **Compile-time macros (mega H2 = LI-E7):** resolved — open
 macros stay rejected; W5-2's closed derive channel is the sanctioned subset. **Editions (mega H4 =
 LI-G7):** M13, post-1.0 — spec hook designed in W6-5, mechanism deferred.
+
+### §7-OPEN · Open language question — user-facing `trait` construct (⏳ the ONE pending ruling)
+The m-rt-rich-types plan listed "S8 traits" as pending, and `FEATURES.md` L53 still marks `trait` 🔲
+future. Phorj shipped a full **multiple-inheritance** system (`use`/rename/exclude + compile-time
+conflict resolution) that is trait-like in capability, but the standalone `trait` keyword was never
+adopted **or** explicitly rejected — a real language-surface fork, so per the adjudication rule
+(CLAUDE.md #15) it is the developer's call, surfaced here rather than decided autonomously:
+- **Default (rec): SUBSUMED-BY-MI — reject the standalone keyword.** Phorj's MI already delivers trait
+  semantics; a separate `trait` surface is redundant. On this path: add the reject-with-reason to
+  Appendix A and flip `FEATURES.md` L53 `trait` 🔲 → ❌ (delivered via MI).
+- **Alternative: add `trait` as sugar** over the MI machinery (PHP/Rust/Kotlin muscle memory) — a
+  front-end-only, byte-identity-gated slice; costs one keyword + a lifter mapping.
+
+Until ruled, `FEATURES.md` keeps `trait` 🔲 and **this record is the capture** — nothing is lost.
 
 ---
 
@@ -970,7 +996,7 @@ LI-G7):** M13, post-1.0 — spec hook designed in W6-5, mechanism deferred.
   today (before Wave 3 even); after Wave 3, extend with DB + sessions. Feature it as README section 2
   with its transpiled-PHP twin side by side (the bridge IS the pitch).
 - **WHY:** G P1 killer-app gap ("the flagship exists but is hidden in conformance/").
-  ⏳BLOCKED-ON(R3-3) — default: adopt all 6 G items (this + W0-6 + W6-3/4/5 + editor refresh).
+  **✅ RULED (§12): all 6 G showcase items ADOPTED** (this + W0-6 + W6-3/4/5 + editor refresh).
 - **ACCEPTANCE:** flagship indexed, differential-gated, README-featured.
 
 ### W6-2 · (reserved — flagship API v2 with the Wave-3 spine) — folds into W6-1's extension step.
@@ -1036,15 +1062,16 @@ LI-G7):** M13, post-1.0 — spec hook designed in W6-5, mechanism deferred.
 ### W6-8 · Editor + docs-site surface (G item 6; LI-F3, LI-F4) — M
 - **WHAT:** grammar additions (`empty`, `todo`, `unreachable`, `parent`, `html"` prefix), extension
   version tracks phg, drop the committed `.vsix`; **LI-F4** LSP finish: member completion
-  (resolved-type index), lambda/match-pattern binders, cross-file *references*, JetBrains plugin
-  completion; **LI-F3** docs site + playground polish + tutorial chapters (mega G1/G2).
+  (resolved-type index), lambda/match-pattern binders, cross-file *references*, incremental document
+  sync (ga-sequence L299), JetBrains plugin completion; **LI-F3** docs site + playground polish +
+  tutorial chapters (mega G1/G2).
 - **DEPS:** W6-5 (spec is the docs-site backbone).
 
 ---
 
 ## 9. STDLIB CHARTER — the 259 GAP-unplanned rows
 
-Per M's bucketing recommendation (R4-M5; ⏳BLOCKED-ON(R4-M5), default: adopt the three buckets).
+Per M's bucketing recommendation (**✅ RULED §12: three buckets ADOPTED**).
 Every FN GAP-unplanned row from M §1.2 lands in exactly one bucket; the per-group counts reconcile
 to 259. Governance: **LI-D11** — the M4 charter's *enforcement half* (naming/shape/determinism-tier
 checks on new natives; charter spec `docs/specs/2026-06-29-m4-stdlib-charter.md` adopted, minimal
@@ -1121,25 +1148,31 @@ class_exists-at-runtime (static model), dynamic extension .so model (RT-015).
 
 **A.2 · F's 26 cross-language rejects** (XL-041..066, reasons in F Tier 3): colored async/await ·
 open macros · comptime · decorators · user operator overloading · extension functions ·
-Kotlin scope functions · Dart cascades · **comprehensions** (also discharges mega B2/LI-E1 — ⏳noted
-in W5's charter) · LINQ syntax · implicit `it`/`$0` · placeholder partial application · structural
+Kotlin scope functions · Dart cascades · **comprehensions** (also discharges mega B2/LI-E1 — REJECT
+RULED §12, W5 charter) · LINQ syntax · implicit `it`/`$0` · placeholder partial application · structural
 records · refinement/liquid types · typestate/linear types · HKT/typeclasses · variance annotations ·
 const generics · GADTs · units of measure · guaranteed TCO (spine violation) · method_missing ·
 implicits/givens · do-notation · chained comparisons · hot code reload. Plus **FFI** (mega H3/LI-E8 —
-SSOT §5 reject stands by default, `.d.phg` is the seam; ⏳noted in W5).
+SSOT §5 reject RULED §12, `.d.phg` is the seam).
 
 **A.3 · Register rejects** (C §10 representative bucket of 81): single-quote strings, `<=>`, `.`
 concat, ambient superglobals, loose `==`, plus the PL-theory vanity set — all re-graded under the
-craftsmanship-apex lens (DEC-004) and still rejected.
+craftsmanship-apex lens (DEC-004) and still rejected. Also **shared run/VM IR** (`src/ir.rs`,
+GA-roadmap Top-10 #6, whose descriptor-table was already dropped in M9) — rejected by **ADR-0001**
+(no shared run/VM IR: the two backends stay independent, validated by byte-identity, not a common IR).
 
 **A.4 · Stdlib Bucket-3 rejects**: §9 Bucket 3 (≈69 FN rows with per-family reasons).
 
-### Appendix B — Question-catalog cross-reference (every ⏳ in this plan)
+### Appendix B — Ruling cross-reference (every former ⏳ marker → §12)
 
-| ⏳ id | Where in this plan | Default path |
+> All markers were RULED on 2026-07-02; the "Ruling" column is the §12 outcome (= the former default
+> path in every case **except UFCS**, which §12 changed to type-scoped). Retained as provenance —
+> nothing here is pending. Full ruling text + examples: §12 RULINGS LEDGER.
+
+| Former ⏳ id | Where in this plan | Ruling (§12) |
 |---|---|---|
 | R2-A generics explicit type args | W5-17a | adopt both sites |
-| R2-B UFCS stability policy | W5-17b | keep breadth + uniqueness CI test + method precedence |
+| R2-B UFCS stability policy | W5-17b | TYPE-SCOPED UFCS + specificity ranking + CI rebind guard |
 | R2-Q4 doc-reconciliation batch | W0-7 | batch as one task |
 | R2-C bulk-ratify six autonomous items | W5-17d | ratify all |
 | R3-1 DEC-133 concurrency-outside-oracle | G-1.1 (governance) | ratify + disclose in README/spec |
@@ -1177,8 +1210,10 @@ surface audit + 6-item roadmap + spec architecture) · **H**-enforcement (~300 p
 missing-rule recs; 15-rule brag) · **A**-craftsmanship (P0 hooksPath; P2/P3 batches; CI verification)
 · **C**-decisions (141-row register, 10 conflicts, 33 supersessions) · **D**-php-surface (869 pinned
 PHP 8.5 rows — M's Pass-1 input) · **E**-phorj-surface (code-verified surface + DRIFT-01..09) ·
-**Q**-claude-md-draft (rules-only rewrite + relocation map + HISTORY skeleton). Session plan (cursor
-+ QUESTION CATALOG): `docs/plans/2026-07-01-full-audit-and-master-plan.plan.md`.
+**Q**-claude-md-draft (rules-only rewrite + relocation map + HISTORY skeleton). The session/adjudication
+plan (cursor + QUESTION CATALOG + Decisions Log) was consolidated into this file and removed; its full
+text is in git history at/before `60540fc`. The decision register `raw/C-decisions.md` (kept) is the
+canonical decision record.
 
 ### Appendix D — The marketing arsenal
 
@@ -1213,8 +1248,9 @@ single forward SSOT — `ROADMAP.md` and `docs/MILESTONES.md` point here after W
 ## 12. RULINGS LEDGER — 2026-07-02 full adjudication (supersedes the ⏳BLOCKED-ON markers above)
 
 Every pending marker in this plan was adjudicated interactively on 2026-07-02 (full re-ask, embedded
-examples). Where a ⏳ marker conflicts with this ledger, THE LEDGER WINS. Details + examples in
-`docs/plans/2026-07-01-full-audit-and-master-plan.plan.md` (Decisions Log).
+examples). Where a ⏳ marker conflicts with this ledger, THE LEDGER WINS. Full ruling detail + the
+worked examples are in git history (the removed session plan's Decisions Log, at/before `60540fc`)
+and in the decision register `docs/research/full-audit/raw/C-decisions.md`.
 
 | Ruling | Outcome |
 |---|---|
