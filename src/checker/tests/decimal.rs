@@ -110,8 +110,8 @@ fn decimal_div_and_round_natives_typecheck() {
     // `import Core.Decimal;`), so this goes through that path rather than the raw checker.
     let src = "package Main; import Core.Decimal; \
                function main() -> void { \
-               decimal u = Decimal.divide(10.00d, 3d, 2, new HalfEven()); \
-               decimal c = Decimal.round(2.345d, 2, new HalfUp()); \
+               decimal u = Decimal.divide(10.00d, 3d, 2, new RoundingMode.HalfEven()); \
+               decimal c = Decimal.round(2.345d, 2, new RoundingMode.HalfUp()); \
                }";
     let prog = prog_raw(src);
     assert!(

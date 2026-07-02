@@ -9,10 +9,10 @@ function main() -> void {
     decimal total = price * 3d;          // exact: 59.97
     Output.printLine("total = {total}");
 
-    decimal share = Decimal.divide(total, 7d, 2, new HalfUp());
+    decimal share = Decimal.divide(total, 7d, 2, new RoundingMode.HalfUp());
     Output.printLine("share = {share}");
 
     decimal tie = 2.345d;
-    Output.printLine("up   = {Decimal.round(tie, 2, new HalfUp())}");
-    Output.printLine("even = {Decimal.round(tie, 2, new HalfEven())}");
+    Output.printLine("up   = {Decimal.round(tie, 2, new RoundingMode.HalfUp())}");
+    Output.printLine("even = {Decimal.round(tie, 2, new RoundingMode.HalfEven())}");
 }

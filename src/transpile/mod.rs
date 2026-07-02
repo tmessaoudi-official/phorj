@@ -384,13 +384,14 @@ fn last_segment(name: &str) -> &str {
 /// be a parse error. We mangle such a variant's PHP class name by appending `_` (`Int`→`Int_`). This
 /// is **transpiler-only**: `run`/`runvm` address a variant by its Phorj name (`EnumVal.variant`),
 /// never a PHP class name, so program stdout is unaffected. Comparison is case-insensitive (PHP class
-/// names are). (`array`/`callable`/`list`/`enum` are NOT reserved as class names — left untouched.)
+/// names are). `array`/`callable`/`list` ARE rejected as class names by PHP 8.5 (verified) and so are
+/// mangled; `enum` is the one type-ish word PHP still accepts as a class name, left untouched.
 fn php_variant_name(variant: &str) -> String {
     // The trailing segment is the actual PHP class name (`\Ns\Int` ⇒ `Int`); mangle only that.
     let leaf = last_segment(variant);
     const RESERVED: &[&str] = &[
         "int", "float", "bool", "string", "true", "false", "null", "void", "iterable", "object",
-        "mixed", "never", "self", "parent", "static",
+        "mixed", "never", "self", "parent", "static", "array", "list", "callable",
     ];
     if RESERVED.contains(&leaf.to_ascii_lowercase().as_str()) {
         format!("{variant}_")

@@ -701,6 +701,11 @@ pub struct EnumDecl {
     /// the same compile-time-only discipline as generic classes (`Box<T>`).
     pub type_params: Vec<String>,
     pub variants: Vec<EnumVariant>,
+    /// True for a compiler-INJECTED enum (`Json`, `RoundingMode` — added by `cli::inject_*_prelude`
+    /// when the matching `Core.*` module is imported), false for a user-declared enum. Its variants
+    /// bind ONLY qualified (`Json.Object(…)`, never bare `Object(…)`) — the "nothing in the wind"
+    /// rule (variant-qualification B): an injected name a user never wrote must carry its enum.
+    pub injected: bool,
     pub span: Span,
 }
 

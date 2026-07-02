@@ -685,6 +685,7 @@ fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
         name: e.name.clone(),
         type_params: Vec::new(),
         variants,
+        injected: false,
         span: SP,
     })
 }

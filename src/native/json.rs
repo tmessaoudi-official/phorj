@@ -73,8 +73,8 @@ fn encode(v: &Value, out: &mut String) -> Result<(), String> {
         ("Bool", [Value::Bool(b)]) => out.push_str(if *b { "true" } else { "false" }),
         ("Int", [Value::Int(n)]) => out.push_str(&n.to_string()),
         ("Float", [Value::Float(f)]) => out.push_str(&format!("{f}")),
-        ("Str", [Value::Str(s)]) => encode_str(s, out),
-        ("Arr", [Value::List(xs)]) => {
+        ("String", [Value::Str(s)]) => encode_str(s, out),
+        ("Array", [Value::List(xs)]) => {
             out.push('[');
             for (i, x) in xs.iter().enumerate() {
                 if i > 0 {
@@ -84,7 +84,7 @@ fn encode(v: &Value, out: &mut String) -> Result<(), String> {
             }
             out.push(']');
         }
-        ("Obj", [Value::Map(m)]) => {
+        ("Object", [Value::Map(m)]) => {
             out.push('{');
             for (i, (k, val)) in m.iter().enumerate() {
                 if i > 0 {
@@ -106,7 +106,7 @@ fn encode(v: &Value, out: &mut String) -> Result<(), String> {
 fn encode_pretty(v: &Value, indent: usize, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
     match (e.variant.as_str(), &e.payload[..]) {
-        ("Arr", [Value::List(xs)]) if !xs.is_empty() => {
+        ("Array", [Value::List(xs)]) if !xs.is_empty() => {
             let inner = indent + 4;
             out.push_str("[\n");
             for (i, x) in xs.iter().enumerate() {
@@ -120,7 +120,7 @@ fn encode_pretty(v: &Value, indent: usize, out: &mut String) -> Result<(), Strin
             out.push_str(&" ".repeat(indent));
             out.push(']');
         }
-        ("Obj", [Value::Map(m)]) if !m.is_empty() => {
+        ("Object", [Value::Map(m)]) if !m.is_empty() => {
             let inner = indent + 4;
             out.push_str("{\n");
             for (i, (k, val)) in m.iter().enumerate() {
@@ -231,7 +231,7 @@ impl JParser<'_> {
             'f' => self.lit("false", jnode("Bool", vec![Value::Bool(false)])),
             '"' => {
                 let s = self.string()?;
-                Some(jnode("Str", vec![Value::Str(s)]))
+                Some(jnode("String", vec![Value::Str(s)]))
             }
             '[' => self.array(),
             '{' => self.object(),
@@ -361,14 +361,14 @@ impl JParser<'_> {
         let mut xs = Vec::new();
         if self.peek() == Some(']') {
             self.bump();
-            return Some(jnode("Arr", vec![Value::List(Rc::new(xs))]));
+            return Some(jnode("Array", vec![Value::List(Rc::new(xs))]));
         }
         loop {
             xs.push(self.value()?);
             self.ws();
             match self.bump()? {
                 ',' => self.ws(),
-                ']' => return Some(jnode("Arr", vec![Value::List(Rc::new(xs))])),
+                ']' => return Some(jnode("Array", vec![Value::List(Rc::new(xs))])),
                 _ => return None,
             }
         }
@@ -406,7 +406,7 @@ impl JParser<'_> {
     fn make_obj(&self, pairs: Vec<(Value, Value)>) -> Option<Value> {
         // String keys ⇒ `build_map` never rejects; it dedups first-position/last-value (PHP assoc).
         let entries = build_map(pairs).ok()?;
-        Some(jnode("Obj", vec![Value::Map(Rc::new(entries))]))
+        Some(jnode("Object", vec![Value::Map(Rc::new(entries))]))
     }
 }
 

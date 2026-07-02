@@ -258,7 +258,21 @@ fn ue_expr(e: &mut Expr) {
     }
     if let Expr::New(inner, span) = e {
         let s: Span = *span;
-        let taken = std::mem::replace(inner.as_mut(), Expr::Null(s));
+        let mut taken = std::mem::replace(inner.as_mut(), Expr::Null(s));
+        // Variant-qualification: a qualified construction `new Enum.Variant(args)` reaches here as a
+        // `Call` with a `Member { name: variant, .. }` callee (the checker validated it — only a
+        // qualified variant construction has this shape post-check). Erase the qualifier to the bare
+        // `Variant(args)` construction every backend already builds. The args were unwrapped in place
+        // by the recursion above, so this carries no stale `New`.
+        if let Expr::Call { callee, .. } = &mut taken {
+            if let Expr::Member {
+                name, span: msp, ..
+            } = callee.as_ref()
+            {
+                let bare = Expr::Ident(name.clone(), *msp);
+                *callee.as_mut() = bare;
+            }
+        }
         *e = taken;
     }
 }

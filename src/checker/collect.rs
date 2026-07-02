@@ -1503,6 +1503,7 @@ impl Checker {
             EnumInfo {
                 variants: HashMap::new(),
                 type_params: e.type_params.clone(),
+                injected: e.injected,
             },
         );
         // The enum's type parameters are in scope while resolving every variant field type, so a bare

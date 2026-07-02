@@ -32,7 +32,7 @@ fn encode_scalars() {
 
 #[test]
 fn encode_strings_match_php_json_encode_default() {
-    let s = |t: &str| enc(&jnode("Str", vec![Value::Str(t.into())]));
+    let s = |t: &str| enc(&jnode("String", vec![Value::Str(t.into())]));
     assert_eq!(s("hi"), "\"hi\"");
     assert_eq!(s("a/b"), "\"a\\/b\""); // forward slash escaped (PHP default)
     assert_eq!(s("café"), "\"caf\\u00e9\""); // non-ASCII → lowercase \u
@@ -116,7 +116,7 @@ fn pretty_matches_json_pretty_print_layout() {
 #[test]
 fn pretty_empty_and_scalar() {
     assert_eq!(
-        pretty(&jnode("Arr", vec![Value::List(std::rc::Rc::new(vec![]))])),
+        pretty(&jnode("Array", vec![Value::List(std::rc::Rc::new(vec![]))])),
         "[]"
     );
     assert_eq!(pretty(&jnode("Int", vec![Value::Int(7)])), "7");

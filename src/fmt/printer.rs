@@ -1168,9 +1168,21 @@ impl Printer<'_> {
             Pattern::Str(s, _) => Ok(format!("\"{}\"", escape_str(s))),
             Pattern::Bool(b, _) => Ok(b.to_string()),
             Pattern::Null(_) => Ok("null".to_string()),
-            Pattern::Variant { name, fields, .. } => {
+            Pattern::Variant {
+                name,
+                fields,
+                enum_qualifier,
+                ..
+            } => {
                 let fs: Result<Vec<_>, _> = fields.iter().map(|f| self.pattern(f)).collect();
-                Ok(format!("{name}({})", fs?.join(", ")))
+                // Preserve a qualified pattern `Enum.Variant(..)` (variant-qualification A2/B) — an
+                // injected enum's variant is match-legal ONLY qualified, so dropping the qualifier
+                // would change behavior (E-INJECTED-VARIANT-BARE) and break fmt's meaning-preservation.
+                let head = match enum_qualifier {
+                    Some(q) => format!("{q}.{name}"),
+                    None => name.clone(),
+                };
+                Ok(format!("{head}({})", fs?.join(", ")))
             }
             Pattern::Type {
                 type_name, binding, ..

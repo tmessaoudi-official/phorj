@@ -1,0 +1,7 @@
+package Main;
+
+import Core.Json;
+
+function main() -> void {
+    Json doc = new Object(["n" => new Json.Int(1)]);
+}

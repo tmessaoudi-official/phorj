@@ -322,6 +322,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                         span: v.span,
                     })
                     .collect(),
+                injected: e.injected,
                 span: e.span,
             })),
             // M-Test: a `test` body may use a `type` alias, so its statements are alias-rewritten like

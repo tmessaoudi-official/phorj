@@ -1007,6 +1007,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              Inherited and trait-supplied static methods resolve fine (Statics-A), and overloaded static\n\
              methods are dispatched by argument type (Statics-B).\n"
         }
+        "E-INJECTED-VARIANT-BARE" => {
+            "E-INJECTED-VARIANT-BARE — a compiler-injected enum's variant was used bare.\n\n\
+             `import Core.Json;` injects the `Json` enum (and `Core.Decimal` injects `RoundingMode`).\n\
+             Their variants are names you never wrote, so — unlike a user-declared enum — they must be\n\
+             reached *qualified* (\"nothing in the wind\"): write `new Json.Object(…)` / `new Json.Int(…)`\n\
+             to construct and `Json.Object(es) => …` to match, never the bare `Object(…)`. A user enum's\n\
+             own variants stay bare (`new Some(7)`).\n"
+        }
         "E-VARIANT-QUALIFIER" => {
             "E-VARIANT-QUALIFIER — a qualified variant pattern named the wrong enum.\n\n\
              In a `match`, a qualified pattern `Enum.Variant(…)` must name the *scrutinee's* enum. If\n\

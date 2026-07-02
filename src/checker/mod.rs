@@ -83,6 +83,10 @@ struct EnumInfo {
     /// construction unifies a variant's fields against the call arguments to bind them, and a `match`
     /// substitutes them with the scrutinee's type arguments (M-RT generic enums).
     type_params: Vec<String>,
+    /// True for a compiler-injected enum (`Json`/`RoundingMode`); its variants must be constructed and
+    /// matched *qualified* (`Json.Object(…)`), bare use is `E-INJECTED-VARIANT-BARE` (B). Mirrors
+    /// [`crate::ast::EnumDecl::injected`], carried through `collect_enum`.
+    injected: bool,
 }
 
 #[derive(Clone)]
@@ -239,6 +243,7 @@ impl EnumInfo {
     fn placeholder(type_params: Vec<String>) -> Self {
         EnumInfo {
             variants: HashMap::new(),
+            injected: false,
             type_params,
         }
     }

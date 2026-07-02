@@ -1,0 +1,5 @@
+type error at 6:16: `Object` is a variant of the injected enum `Json` — construct it qualified
+    Json doc = new Object(["n" => new Json.Int(1)]);
+               ^
+  [E-INJECTED-VARIANT-BARE]
+  hint: write `new Json.Object(…)`

@@ -256,8 +256,8 @@ impl Checker {
                 };
                 // A qualified pattern `Enum.Variant(..)` (A2): the qualifier must name the scrutinee's
                 // enum. (The variant-belongs check is the `None` arm below, shared with the bare form.)
-                if let Some(q) = enum_qualifier {
-                    if q != &enum_name {
+                match enum_qualifier {
+                    Some(q) if q != &enum_name => {
                         self.err_coded(
                             *span,
                             format!("pattern qualifier `{q}` does not match the scrutinee's enum `{enum_name}`"),
@@ -265,6 +265,17 @@ impl Checker {
                             Some(format!("use `{enum_name}.{name}(…)` (or the bare `{name}(…)`)")),
                         );
                     }
+                    // Variant-qualification B: a bare pattern on an injected enum's variant is "in the
+                    // wind" — require the qualified `Enum.Variant(..)` form (mirrors construction).
+                    None if self.enums.get(&enum_name).is_some_and(|i| i.injected) => {
+                        self.err_coded(
+                            *span,
+                            format!("`{name}` is a variant of the injected enum `{enum_name}` — match it qualified"),
+                            "E-INJECTED-VARIANT-BARE",
+                            Some(format!("write `{enum_name}.{name}(…)`")),
+                        );
+                    }
+                    _ => {}
                 }
                 let field_tys: Vec<Ty> = match self.enums[&enum_name].variants.get(name) {
                     // Substitute the enum's type parameters with the scrutinee's type arguments

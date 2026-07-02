@@ -336,7 +336,7 @@ pub fn parse_program(src: &str) -> Result<Program, String> {
 /// The canonical `Core.Json` value model, injected (below) when a program imports `Core.Json`. A
 /// recursive enum over the JSON shapes; `Int`/`Float` are distinct (PHP-faithful, design-locked).
 const JSON_PRELUDE: &str = "enum Json { Null(), Bool(bool value), Int(int value), \
-     Float(float value), Str(string value), Arr(List<Json> items), Obj(Map<string, Json> entries) }";
+     Float(float value), String(string value), Array(List<Json> items), Object(Map<string, Json> entries) }";
 
 /// Inject the `Json` enum at the head of a program that imports `Core.Json`, so the `Core.Json.*`
 /// natives' `Json`-typed signatures resolve and user code can construct/`match` the variants — the
@@ -360,7 +360,12 @@ fn inject_json_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
         .ok()
         .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
     {
-        Some(enum_item) => {
+        Some(mut enum_item) => {
+            // Mark it injected so its variants bind qualified-only (`Json.Object(…)`) — the checker's
+            // `E-INJECTED-VARIANT-BARE` rule (variant-qualification B).
+            if let Item::Enum(e) = &mut enum_item {
+                e.injected = true;
+            }
             let mut items = Vec::with_capacity(prog.items.len() + 1);
             items.push(enum_item);
             items.extend(prog.items.iter().cloned());
@@ -404,7 +409,10 @@ fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program>
         .ok()
         .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
     {
-        Some(enum_item) => {
+        Some(mut enum_item) => {
+            if let Item::Enum(e) = &mut enum_item {
+                e.injected = true;
+            }
             let mut items = Vec::with_capacity(prog.items.len() + 1);
             items.push(enum_item);
             items.extend(prog.items.iter().cloned());

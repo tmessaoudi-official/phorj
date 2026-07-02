@@ -1213,9 +1213,9 @@ impl Transpiler {
                 "if ($j instanceof {jp}Float_) {{ return __phorj_float($j->value); }}"
             ));
             self.line(&format!(
-                "if ($j instanceof {jp}Str) {{ return json_encode($j->value); }}"
+                "if ($j instanceof {jp}String_) {{ return json_encode($j->value); }}"
             ));
-            self.line(&format!("if ($j instanceof {jp}Arr) {{"));
+            self.line(&format!("if ($j instanceof {jp}Array_) {{"));
             self.indent += 1;
             self.line("$parts = [];");
             self.line("foreach ($j->items as $x) { $parts[] = __phorj_json_encode($x); }");
@@ -1237,7 +1237,7 @@ impl Transpiler {
             self.line("function __phorj_json_pretty($j, $indent) {");
             self.indent += 1;
             self.line(&format!(
-                "if ($j instanceof {jp}Arr && count($j->items) > 0) {{"
+                "if ($j instanceof {jp}Array_ && count($j->items) > 0) {{"
             ));
             self.indent += 1;
             self.line("$pad = str_repeat(\" \", $indent + 4);");
@@ -1251,7 +1251,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
             self.line(&format!(
-                "if ($j instanceof {jp}Obj && count($j->entries) > 0) {{"
+                "if ($j instanceof {jp}Object_ && count($j->entries) > 0) {{"
             ));
             self.indent += 1;
             self.line("$pad = str_repeat(\" \", $indent + 4);");
@@ -1284,19 +1284,21 @@ impl Transpiler {
             self.line(&format!(
                 "if (is_float($d)) {{ return new {jp}Float_($d); }}"
             ));
-            self.line(&format!("if (is_string($d)) {{ return new {jp}Str($d); }}"));
+            self.line(&format!(
+                "if (is_string($d)) {{ return new {jp}String_($d); }}"
+            ));
             self.line("if (is_array($d)) {");
             self.indent += 1;
             self.line("$items = [];");
             self.line("foreach ($d as $x) { $items[] = __phorj_json_build($x); }");
-            self.line(&format!("return new {jp}Arr($items);"));
+            self.line(&format!("return new {jp}Array_($items);"));
             self.indent -= 1;
             self.line("}");
             self.line("$entries = [];");
             self.line(
                 "foreach (get_object_vars($d) as $k => $v) { $entries[(string)$k] = __phorj_json_build($v); }",
             );
-            self.line(&format!("return new {jp}Obj($entries);"));
+            self.line(&format!("return new {jp}Object_($entries);"));
             self.indent -= 1;
             self.line("}");
         }

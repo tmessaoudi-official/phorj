@@ -576,6 +576,7 @@ pub fn erase_generics(program: Program) -> Program {
                             span: v.span,
                         })
                         .collect(),
+                    injected: e.injected,
                     span: e.span,
                 })
             }

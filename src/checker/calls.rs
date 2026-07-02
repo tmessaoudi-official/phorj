@@ -920,9 +920,22 @@ impl Checker {
                     enum_name.clone(),
                     info.variants[name].clone(),
                     info.type_params.clone(),
+                    info.injected,
                 )
             });
-        if let Some((enum_name, fields, type_params)) = owner {
+        if let Some((enum_name, fields, type_params, injected)) = owner {
+            // Variant-qualification B: a compiler-injected enum's variant must be constructed
+            // *qualified* (`new Json.Object(…)`) — a bare `new Object(…)` is a name the user never
+            // wrote, "in the wind" (DEC-020). Qualified construction routes through
+            // `check_qualified_variant_call`, never here, so reaching this point bare is the error.
+            if injected {
+                self.err_coded(
+                    span,
+                    format!("`{name}` is a variant of the injected enum `{enum_name}` — construct it qualified"),
+                    "E-INJECTED-VARIANT-BARE",
+                    Some(format!("write `new {enum_name}.{name}(…)`")),
+                );
+            }
             return Some(self.type_variant_construction(
                 &enum_name,
                 name,
@@ -1078,15 +1091,10 @@ impl Checker {
                 Some(format!("write `new {enum_name}.{variant}(…)`")),
             );
         }
-        // Erase to the bare variant call the backends already construct (resolved by variant name).
-        self.ufcs_resolutions.insert(
-            span.start,
-            crate::ast::Expr::Call {
-                callee: Box::new(crate::ast::Expr::Ident(variant.to_string(), span)),
-                args: args.to_vec(),
-                span,
-            },
-        );
+        // The qualifier is erased to the bare `Variant(args)` construction by `unwrap_new`, which
+        // strips the enclosing `new` and rewrites the `Member` callee to the bare variant *after* its
+        // recursion has unwrapped any nested `new` in the args — so no stale `New` survives (a
+        // post-`unwrap_new` side-table rewrite re-embeds check-time args and would leak nested `New`s).
         self.type_variant_construction(enum_name, variant, &fields, &type_params, args, span)
     }
 

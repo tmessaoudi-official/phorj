@@ -532,6 +532,7 @@ impl Parser {
             name,
             type_params,
             variants,
+            injected: false, // user-written; only `cli::inject_*_prelude` sets this true
             span: sp,
         })
     }
