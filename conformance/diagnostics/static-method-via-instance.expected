@@ -1,0 +1,5 @@
+type error at 11:19: `make` is a static method of `Counter` — call it as `Counter.make(…)`, not through an instance
+    var n = c.make();
+                  ^
+  [E-STATIC-VIA-INSTANCE]
+  hint: write `Counter.make(…)`

@@ -1246,6 +1246,26 @@ impl Checker {
                 let theta = self.class_subst(&cls, &cargs);
                 match sigs {
                     Some(sigs) => {
+                        // W0-3: a `static` method reached through an instance value (`a.m()` /
+                        // `this.m()`) is rejected — static members are reachable only via the class
+                        // name (`ClassName.m()`), mirroring the static-field-via-instance rule. PHP
+                        // tolerates `$a->staticMethod()`, but the developer's rule is "static not via
+                        // instance"; a `ClassName.m()` site never funnels here (`check_static_method_call`).
+                        if self
+                            .classes
+                            .get(&cls)
+                            .is_some_and(|i| i.static_methods.contains(name))
+                        {
+                            for a in args {
+                                self.check_expr(a);
+                            }
+                            return self.err_coded(
+                                span,
+                                format!("`{name}` is a static method of `{cls}` — call it as `{cls}.{name}(…)`, not through an instance"),
+                                "E-STATIC-VIA-INSTANCE",
+                                Some(format!("write `{cls}.{name}(…)`")),
+                            );
+                        }
                         // M-RT S2.2: a bare (selector-less) return-overloaded method call has no type
                         // context to pick a member — C1 requires a `<Type>` selector at the call site.
                         // The selector path resolves via `resolve_method_return_overload` and never

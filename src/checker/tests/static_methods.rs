@@ -162,6 +162,28 @@ fn inherited_instance_method_via_class_name_still_errors() {
 }
 
 #[test]
+fn static_method_via_instance_is_error() {
+    // W0-3: a static method reached through an instance value (`a.m()`) is rejected — the mirror of
+    // the already-enforced static-field-via-instance rule (`a.s` → "no field"). Static members are
+    // reachable only via the class name (`ClassName.m()`). Matches PHP's tolerance being narrowed to
+    // the developer's stated rule ("static not via instance").
+    let src = "class A { static function m() -> int { return 7; } } \
+               function main() -> void { var a = new A(); var x = a.m(); }";
+    assert!(has(src, "E-STATIC-VIA-INSTANCE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn static_method_via_this_is_error() {
+    // Consistency: `this` is an instance receiver, so an in-class `this.staticMethod()` is the same
+    // error — a static must be reached as `ClassName.m()` from everywhere (mirrors `this.staticField`
+    // never resolving as an instance field).
+    let src = "class A { static function m() -> int { return 7; } \
+                         function inst() -> int { return this.m(); } } \
+               function main() -> void { var a = new A(); var x = a.inst(); }";
+    assert!(has(src, "E-STATIC-VIA-INSTANCE"), "{:?}", errors_of(src));
+}
+
+#[test]
 fn static_factory_returns_instance() {
     // The static-factory pattern: a static method constructs and returns an instance.
     let src = "class C { constructor(public int x) {} \

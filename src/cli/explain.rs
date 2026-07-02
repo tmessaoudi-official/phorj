@@ -1007,6 +1007,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              Inherited and trait-supplied static methods resolve fine (Statics-A), and overloaded static\n\
              methods are dispatched by argument type (Statics-B).\n"
         }
+        "E-STATIC-VIA-INSTANCE" => {
+            "E-STATIC-VIA-INSTANCE — a `static` method was called through an instance.\n\n\
+             A static method belongs to the class, not an instance, so it is reached only as\n\
+             `ClassName.method(…)` — never `instance.method(…)` or `this.method(…)`. This mirrors the\n\
+             static-field rule (`instance.staticField` is likewise not an instance member). PHP tolerates\n\
+             `$a->staticMethod()`, but Phorj keeps the class/instance boundary explicit. Rewrite the call\n\
+             with the class name: `Account.make(…)` rather than `a.make(…)`.\n"
+        }
         "E-STATIC-THIS" => {
             "E-STATIC-THIS — a static method accessed instance state.\n\n\
              A `static` method belongs to the class, not an instance, so it has no `this` and cannot\n\

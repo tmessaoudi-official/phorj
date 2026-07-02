@@ -2,7 +2,8 @@
 //
 // A static method has no `this`, so it cannot read instance fields (bare or via `this`) — attempting
 // to is a compile error (E-STATIC-THIS), see the README. It may take parameters, return a value, and
-// read static members. (It is currently invoked through an instance — `m.square(5)`.)
+// read static members. It is invoked through the class name — `MathUtil.square(5)`; calling it
+// through an instance (`m.square(5)`) is E-STATIC-VIA-INSTANCE, mirroring the static-field rule.
 package Main;
 
 import Core.Output;
@@ -25,7 +26,6 @@ class MathUtil {
 }
 
 function main() -> void {
-  var m = new MathUtil();
-  Output.printLine("square(5) = {m.square(5)}");
-  Output.printLine("describe = {m.describe()}");
+  Output.printLine("square(5) = {MathUtil.square(5)}");
+  Output.printLine("describe = {MathUtil.describe()}");
 }
