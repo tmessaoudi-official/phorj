@@ -243,3 +243,27 @@ examples/guide/ — see challenge re: conformance-are-tests + WASM-run safety).
   pairs) — `injected-variant-bare.phg` / `static-field-visibility.phg` are negative tests, not bugs.
 - Clarified (facts): UFCS `xs.take(2)` works; `take`=first-n / `drop`=rest (complementary, slice=from-variant);
   `new X().m()` chains; `phg format` auto-rewrites `->`→`:`.
+
+## CLEANUP PROGRAM STATUS (2026-07-03, post-audit — phases)
+Audit report: `docs/research/2026-07-03-corpus-audit.md`. Autonomous/marathon ON HOLD until done.
+
+- **Phase 1 — `->` removal** (RULED: remove entirely).
+  - ✅ Formatter fixed to canonical (`5fe4e90` + `479dee4`): `=>` for function types, `:` for lambda
+    returns, grouped imports, `.d.phg` package preserved.
+  - ✅ `.phg` corpus purged (`479dee4`): all 121 files, code `->` gone; diagnostics re-blessed; gate green (1660).
+  - ⏳ REMAINDER: injection preludes in `src/` (~52 `->`) + ~489 embedded programs in `tests/*.rs`
+    (Rust string literals — delicate) → then parser REJECTS `->`. Needs a focused pass.
+- **Phase 2 — API renames** (APPROVED): `Bytes.find`→`indexOf`, `Map.has`→`containsKey`, unify slice
+  convention (recommend length+negatives = PHP array_slice). Update natives + all .phg/test/doc usages. TODO.
+- **Phase 3 — additive natives** (APPROVED): Math Float variants; String `startsWith/endsWithIgnoreCase`
+  + `replaceFirst`; Set `isSuperset/symmetricDifference/isDisjoint/map/filter`. + examples + tests. TODO.
+- **Phase 4 — doc corrections** (APPROVED): fix "zero deps" (4 default deps), `import type` (removed),
+  dead CLI verbs (lex/disasm/bench/fmt), non-existent `E-TRANSPILE-CONCURRENCY`, FEATURES status column,
+  add 10 examples/README rows, add 4 E-codes to `phg explain`. (Overlaps Phase 5.) TODO.
+- **Phase 5 — docs consolidation** (DIRECTIVE): merge everything into ONE rich MASTER-PLAN; remove
+  superseded decisions; prune KNOWN_ISSUES to ONLY currently-unfixed issues; reconcile traits (running
+  code says shipped; §7-OPEN is the one genuine open item — decide). TODO.
+- **Phase 6 — editor/LSP refresh** (AFTER corpus clean): LSP completion/hover/diagnostics for new
+  natives (W3-4) + injected-type discipline (S2); VSCode `tmLanguage`/snippets + PhpStorm to `:`/`=>`
+  surface; drop dead verbs. TODO.
+- **Final:** convergence verification pass (developer asked "are we 100% covering everything?").
