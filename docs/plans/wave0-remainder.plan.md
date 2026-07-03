@@ -54,6 +54,21 @@
   deleted; examples/README "71 KB" = bytes not lines (289 long lines, real 72 KB monolith);
   CI supply-chain pins (A-CI-4/5/6) need external data — verify or record, never guess.
 
+## Dependency-policy amendment (AGREED 2026-07-03, developer)
+- **APPROVED:** admit `rusqlite` (SQLite) + `rustls` (TLS) as new vetted domains — native-only,
+  feature-gated (`db`/`tls`, off in WASM playground), spine-quarantined (corosensei/ctrlc shape),
+  `#![forbid(unsafe_code)]` intact in phorj's own code. Unblocks native `Core.Db` + HTTPS client.
+  Ships pure zero-dep P0s first (`Core.Sql`, `Core.Url`). Requires editing `docs/specs/2026-06-27-dependency-policy.md`.
+- **DB engine scope RULED (developer, 2026-07-03):** a multi-driver **SQL DBAL** (data-access layer,
+  PDO/Doctrine-DBAL analog) — **SQLite** (P1, rusqlite, embedded) + **Postgres** (`postgres` sync crate
+  → PDO_PGSQL) + **MySQL/MariaDB** (`mysql` sync crate → PDO_MYSQL; one driver both). ALL sync drivers
+  (no tokio — async runtimes stay policy-rejected). **Oracle DEFERRED** (closed-source Instant Client
+  violates policy clause 2). **MongoDB ACCEPTED as a SEPARATE LADDER item** (non-SQL/no-PDO → native-only
+  `E-TRANSPILE-MONGO`, no PHP leg; async-driver problem) — its own future XL design, NOT part of the SQL DBAL.
+- **The three parallel designs = the "three things":** (1) SQL DBAL [W3-1], (2) HTTP client [W3-2],
+  (3) **Unicode-correct strings [W4-4]** (codepoints default; case-folding is the LADDER-quarantine
+  landmine; ~12/35 Core.String natives change). All 3 drafts in `docs/research/wave3-4-drafts/`.
+
 ## Delivery order (AGREED 2026-07-03, developer — Option 1 ROI-first)
 Ledger basis (§10): W3 web-spine 59%→65%, W4 bridge 65%→71% are the +12 parity points.
 1. Import redesign **S1 → S2** (finish in-flight; fixes the `Route`-in-the-wind bug).
