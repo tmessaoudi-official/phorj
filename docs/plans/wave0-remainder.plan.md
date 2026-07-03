@@ -9,6 +9,16 @@
   SHA-256, byte-identical to PHP, RFC 4231/5869/PBKDF2 KATs) + `Core.Random.secureBytes/secureInt`
   (CSPRNG via `/dev/urandom`, impure/quarantined). Guide example `examples/guide/crypto-mac.phg`. Full
   oracle gate green (1660 tests). Delivered per ROI order item #2 (first half).
+- [2026-07-03] AGREED (developer, interactive): **W3-5 = `String.format(spec, args) -> string`** (on
+  the EXISTING `Core.String` module; Java-familiar; RETURNS a string, does not print) with **`{}`-style
+  spec grammar** shared with W5-1 interpolation (`"{price:.2f}"`). Rejected the `Fmt` name + `%`-style.
+- [2026-07-03] ⚠️ **W3-5 BLOCKER found (empirical):** the `args` list can't hold mixed types today —
+  Phorj `List<T>` is homogeneous AND expected types do NOT flow to a list-literal call argument, so
+  `String.format("{}", [name, price])` (string+float) FAILS type-check (`list elements must share one
+  type`). An explicit `List<string|float> a = [...]` local DOES check, but that's verbose. Unblock
+  options (developer's call): (A) thread expected types into list-literal args [type-checker
+  enhancement, enables the clean form, broadly useful]; (B) ship verbose-now (explicit union local);
+  (C) do W4-1 variadics first, then `format(spec, ...args)`. Surfaced for adjudication.
 - [2026-07-03] ⏳ **W3-5 (sprintf/`Core.Fmt`) NEEDS DESIGN ADJUDICATION (§15) before build** — the
   `%`-style vs `{}`-style spec-syntax fork is user-visible and the developer's call. MASTER-PLAN's
   recorded *recommendation*: `{}`-style specs sharing ONE closed grammar with W5-1's interpolation
