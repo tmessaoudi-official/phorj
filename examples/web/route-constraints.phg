@@ -10,7 +10,9 @@ package Main;
 // match is byte-identical on run / runvm / real PHP for ASCII patterns.
 import Core.Output;
 import Core.Bytes;
-import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.Router;
 
 function showUser(Request req): Response {
   return Response.text(200, "user #{req.param(\"id\") ?? \"?\"}");

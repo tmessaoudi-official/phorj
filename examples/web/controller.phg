@@ -10,6 +10,10 @@ package Main;
 import Core.Output;
 import Core.Bytes;
 import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.Route;
+import Core.Http.Router;
 
 // A controller: a class grouping related static route handlers.
 class UserController {

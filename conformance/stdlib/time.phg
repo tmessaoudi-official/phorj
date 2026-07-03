@@ -2,6 +2,8 @@ package Main;
 
 import Core.Output;
 import Core.Time;
+import Core.Time.Duration;
+import Core.Time.Instant;
 
 function main() -> void {
   Time.freeze(1700000000000);

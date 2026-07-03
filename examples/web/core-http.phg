@@ -14,7 +14,8 @@ package Main;
 
 import Core.Output;
 import Core.Bytes;
-import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
 
 // The whole application: greet by path, echoing the Host header.
 function handle(Request req): Response {

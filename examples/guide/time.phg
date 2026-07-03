@@ -8,6 +8,8 @@ package Main;
 
 import Core.Output;
 import Core.Time;
+import Core.Time.Duration;
+import Core.Time.Instant;
 
 function main() -> void {
   // Pin the clock so `now()` is deterministic (2023-11-14T22:13:20Z = 1700000000000 ms).

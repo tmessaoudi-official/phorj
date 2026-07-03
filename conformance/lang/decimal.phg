@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 import Core.Decimal;
+import Core.Decimal.RoundingMode;
 
 function main() -> void {
     decimal price = 19.99d;

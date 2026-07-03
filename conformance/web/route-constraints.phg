@@ -5,7 +5,9 @@ package Main;
 
 import Core.Output;
 import Core.Bytes;
-import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.Router;
 
 function byId(Request req) -> Response { return Response.text(200, "id " + (req.param("id") ?? "?")); }
 function byName(Request req) -> Response { return Response.text(200, "name " + (req.param("name") ?? "?")); }

@@ -12,7 +12,9 @@ package Main;
 // folded over the list.
 import Core.Output;
 import Core.Bytes;
-import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.Router;
 
 function home(Request req): Response { return Response.text(200, "home"); }
 function secret(Request req): Response { return Response.text(200, "secret data"); }
