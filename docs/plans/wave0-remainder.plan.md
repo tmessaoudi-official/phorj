@@ -54,6 +54,18 @@
   deleted; examples/README "71 KB" = bytes not lines (289 long lines, real 72 KB monolith);
   CI supply-chain pins (A-CI-4/5/6) need external data — verify or record, never guess.
 
+## Delivery order (AGREED 2026-07-03, developer — Option 1 ROI-first)
+Ledger basis (§10): W3 web-spine 59%→65%, W4 bridge 65%→71% are the +12 parity points.
+1. Import redesign **S1 → S2** (finish in-flight; fixes the `Route`-in-the-wind bug).
+2. **W3-4** CSPRNG/HMAC/KDF (M) + **W3-5** sprintf/`Core.Fmt` (M) — high value-per-effort.
+3. **W3-1** DB access (XL) + **W3-2** HTTP client (XL) — the heart of "real apps in Phorj".
+4. **W3-3/6/8** — finish the web spine.
+5. **W4-4** Unicode-correct strings (XL, PHP-is-wrong correctness fix).
+6. **W4-6** stdlib blitz (L) + **W4-5** date/time (L).
+7. rest of W4 → W2 polish → W5 beyond-PHP → W6 GA; W0/W1 hygiene folded in opportunistically.
+Also queued (developer, 2026-07-03): **playground example expansion** (curated breadth beyond
+examples/guide/ — see challenge re: conformance-are-tests + WASM-run safety).
+
 ## Formal Plan
 
 ### W0-10 — P2 hardening batch (code half first: local + testable)
