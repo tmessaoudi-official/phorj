@@ -20,11 +20,11 @@
 
 | | |
 |---|---|
-| **Date / HEAD** | 2026-07-03 · `0691228` (clean, gate green, 1660 tests; several commits ahead of origin — push is developer-gated, never autonomous) |
+| **Date / HEAD** | 2026-07-04 · docs-unification milestone committed `27ea7b8` (tree clean; several commits ahead of origin — push is developer-gated, never autonomous). Gate green on **php-8.5.8** (stack reloaded; oracle path now in `scripts/toolchain.env`). |
 | **Completion** | **PHP-parity ≈ 59%** (domain-weighted 35 SYN / 40 FN-usage-weighted / 25 RT; raw row floor ≈39%) · **Vision ≈ 61%** (70% parity + 30% programme) — denominator = the M-gap-matrix **824 verdict rows** (665 net of N/A + GAP-by-design). [Inferred: 2026-07-03 FN re-score of the ratified 2026-07-02 model — row flips shown in §11.2; full 824-row re-pass due at next milestone close] |
-| **Current phase** | **CLEANUP / UNIFICATION programme** (autonomous marathons ON HOLD until done). Stage D (docs consolidation) EXECUTING NOW: this plan + `docs/specs/UNIFIED-SPEC.md` + truthful KNOWN_ISSUES/FEATURES/ARCHITECTURE/README/STABILITY (Bucket 3, §2.3). |
-| **Actively in progress** | Stage-D doc consolidation (this file, the unified spec, the Bucket-3 corrections). Code work NOT started on the audit findings — everything ruled, nothing implemented yet. |
-| **Next up (in order)** | ① UA-0 free wins (§2.1: mold, test-gate sharding, broken `--help`, stray dirs) → ② UA-1 byte-identity fixes + `->` retirement sequence (§2.2) → ③ UA-L2 injected-prelude/loader unification (§2.2, MUST precede W3-1/W3-2) → ④ resume the ROI delivery order (§12): W3-5 (blocker adjudication pending) → W3-1 DB + W3-2 HTTP. |
+| **Current phase** | **DONE: cleanup/unification (Stages A–E) — committed `27ea7b8`.** Plan + `UNIFIED-SPEC.md` + all docs are now truthful; toolchain php path centralized. **NEXT: the AUTONOMOUS OVERNIGHT MARATHON (§2.7)** — the developer will restart the session to run it; it ships features + examples + updated VSCode/PhpStorm editor support for real-project testing. |
+| **Actively in progress** | Nothing mid-flight (clean handoff point). ALL audit code-findings are RULED-BUT-UNBUILT; the marathon (§2.7) implements them in order. |
+| **Next up (in order)** | **Follow the §2.7 marathon queue: M0 hygiene (archive the 18 specs + repoint · fix `gen_examples.py` non-determinism · Bucket-1 free wins) → M1 language self-consistency (UA-1.x) → M2 architecture (UA-L2 injected-prelude, UA-L4 Rc<str>) → M3 web spine (W3-5→W3-1 DB→W3-2 HTTP) → M4 stdlib breadth (UA-L5/L6/L1/L3) → M5 VSCode + PhpStorm extensions → M6 Core.Dotenv (UA-L7).** Each step: gate-green + example + commit. |
 | **Open adjudications** | W3-5 mixed-type-args blocker (3 options, §6 W3-5) · W4-10 XML design (recorded, not built) · §7-OPEN user-facing `trait` (the ONE open language question). Everything else is RULED (§13 + Appendix B). |
 | **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt + release build (oracle php path = the single editable knob in `scripts/toolchain.env`, currently `php-8.5.8`). Pre-commit = Rust-only (`PHORJ_SKIP_PHP=1`); pre-push = full 8.5 oracle. |
 
@@ -280,6 +280,73 @@ Corpus 100% clean of syntactic `->` and `import type`; formatter idempotent; sin
 | P4+P5 docs consolidation | §2.3 Bucket 3 + this file + UNIFIED-SPEC (executing) |
 | P6 editor/LSP refresh | W6-8, gated on the corpus being clean (post UA-1.5/UA-L5) |
 | Final convergence verification | Stage E: full gate re-verify + archive the audit raw dirs (B3-12) |
+
+---
+
+### 2.7 AUTONOMOUS OVERNIGHT MARATHON — execution queue (set 2026-07-04)
+
+> **Goal (developer, 2026-07-04):** a large autonomous run that ships **features + runnable examples +
+> up-to-date VSCode & PhpStorm editor support**, so the developer can build & real-test a real Phorj
+> project the next morning. Runs autonomously (autonomous-3c); **commit each green self-contained
+> step** (phorj rule — `feat:`/`fix:`/`docs:`, no `Co-Authored-By`); **never `git push`**. This is an
+> ORDERING over the already-ruled work below — nothing here is a new decision (except the two clearly
+> marked NEW deliverables), and nothing overrides §15 (surface a genuine fork, don't guess).
+
+**Definition of done per step (all must hold before moving on):**
+1. Full gate GREEN on the real oracle: `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test
+   --workspace` + clippy + fmt + `cargo build --release` (php-8.5.8; a missing php FAILS, never skips).
+2. Invariant 9 — every shipped feature lands a runnable `examples/**/*.phg` (auto-gated by the
+   differential glob) + an `examples/README.md` row, same commit.
+3. Byte-identity holds (`run ≡ runvm ≡ transpiled PHP`) unless the item is a ruled quarantine
+   (concurrency, impure natives, the UA-L1 checked-exception pilot cases).
+4. Report `target/release/phg` path after each shipped feature (standing rule).
+
+**Ordered queue** (stop-and-surface via §15 on any genuine language fork — do NOT self-rule):
+
+- **M0 — hygiene/unblockers first (fast, no design risk):**
+  - Repoint the 11 live spec pointers → `UNIFIED-SPEC.md` sections and **archive all 18
+    `docs/specs/2026-*.md`** (developer ruled "review-then-archive"; faithfulness already verified —
+    closeout TASK-3 PASS). Repoint map: closeout TASK-4 list (README/FEATURES/VISION/STABILITY/
+    THIRD-PARTY-NOTICES/docs/examples are live pointers; CHANGELOG + `src/*.rs` provenance comments
+    may stay as historical). `git mv` originals into `docs/specs/archive/`.
+  - **NEW — fix `playground/web/gen_examples.py` non-determinism** (Rule 10 violation): it emits the
+    example list in filesystem/dict order → the committed `examples.js` reorders on every regen
+    (proven pure-reorder, 0 content delta). Sort deterministically, regenerate, commit once. (Bucket-1.)
+  - The rest of **UA-0 / Bucket 1** (§2.1): mold linker wiring, the broken `phg run --help` examples
+    (also drops their `->`), missing diagnostic corpus cases, the KNOWN_ISSUES disclosures, gate-test
+    sharding, stray `target/` scratch dirs.
+- **M1 — language self-consistency (unblocks everything a real project touches):** UA-1.1..1.4 (the 4
+  byte-identity fixes incl. `Hash.hmac`→bytes), UA-1.6 (Set/Map empty-literal inference), UA-1.7
+  (`Math.clamp` fault), UA-1.8 (fault-message canonicalization). Then **UA-1.5 (`->` retirement:
+  docs/help first — mostly done — then parser-reject, then individual gate-guided fixes; NO bulk sed).**
+- **M2 — architecture-before-waves:** UA-L2 (injected-prelude → loader unification, MUST precede
+  W3-1/W3-2) · UA-L4 (`Rc<str>` VM string fix, benchmark before/after per Invariant 11).
+- **M3 — the web-app spine (the heart of "real project"):** §12 ROI order — W3-5 `String.format`
+  (SURFACE the `{}`-grammar blocker via §15 FIRST, then build) → W3-1 SQL DBAL (SQLite P1) → W3-2
+  HTTP client → W3-3/6/8 finish the serve/router spine. Each ships examples.
+- **M4 — stdlib breadth for real apps:** UA-L5 (the one naming-rename wave) · UA-L6 (additive
+  batch) · UA-L1 (native-error checked-exception taxonomy spec + 4-native pilot) · UA-L3 (ReDoS
+  transpile-time analyzer — needs its design pass).
+- **M5 — NEW: editor support so the project is actually writable/testable in an IDE:**
+  - **VSCode** (`editors/vscode/`): update `syntaxes/phorj.tmLanguage.json` to the current surface
+    (`=>`/`:` not `->`, current keywords, unified `import`, `#[Http.Route]` attrs, decimal/bytes
+    literals); confirm `extension.js` launches `phg lsp` as the LSP client (wire it if not); fix the
+    README's dead verbs (`phg fmt`→`format`); bump version + rebuild the `.vsix`.
+  - **PhpStorm** (`editors/phpstorm/` — currently README-ONLY, no plugin): build a real plugin — at
+    minimum a TextMate-bundle grammar + file-type + LSP-client via the JetBrains LSP API (or document
+    the concrete manual install path if a full plugin is out of scope for one run). This is the
+    biggest single M5 lift — SURFACE scope via §15 if it balloons.
+  - Refresh `examples/guide/` walkthroughs referenced by both extensions; re-gen the playground.
+- **M6 — Core.Dotenv (UA-L7, developer-requested full Symfony cascade):** write the design spec first
+  (taxonomy · the `test`-env "`.env.local` skipped" footgun decision · Secret-type integration · the
+  emitted PHP cascade helper · quarantine), then implement + example. Layers on existing
+  `Core.Environment`. (Sequence after M3's web spine, since dotenv serves web apps.)
+- **Close — convergence verification:** full gate re-verify; recompute the §11 percentage (824-row
+  re-score) + update the §0 cursor; `/handoff`.
+
+**Autonomous guardrails:** obey §15 (ADJUDICATION) — record genuine user-visible forks as PENDING and
+keep going on the rest; never silently downgrade byte-identity (§14 LADDER); the 5-round advisor cap
+still escalates via `ask-human` even autonomously. Update the §0 cursor block at each milestone close.
 
 ---
 
