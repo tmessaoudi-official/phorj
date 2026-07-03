@@ -5,14 +5,24 @@
 > SSOT = `docs/plans/MASTER-PLAN.md`. Gate = full PHP-oracle `cargo test --workspace` + clippy + fmt + build.
 
 ## Decisions Log
-- [2026-07-03] AGREED (developer): **Delivery-speed strategy = speed up tooling, KEEP the full
-  commit gate** (challenged the "move gate to pre-push" idea; rejected — the byte-identity spine needs
-  the full differential glob at commit, and batched failures are harder to bisect). Concretely:
-  install `cargo-nextest` (parallel test runner — biggest ROI: the PHP-oracle differential spawns one
-  `php` per case, parallelizes across 8 cores); pre-commit hook PREFERS nextest, falls back to
-  `cargo test` (zero hard dep preserved). Commit per-slice not per-edit; targeted tests during dev,
-  full gate at commit. Established that phase/evidence-grade ceremony is ~0 wall-clock (text only) —
-  real cost is compile + oracle suite. No system linker (mold/lld) — needs root; deferred.
+- [2026-07-03] AGREED (developer): **Delivery-speed strategy.** Started with "speed up tooling, keep
+  full commit gate"; the developer then REVISED to also (a) move the PHP-oracle to pre-push only and
+  (b) install `mold` (dev runs the sudo). Final design SHIPPED:
+  1. **`cargo-nextest` + oversubscribed threads** (`.config/nextest.toml` `test-threads=16` on 8 cores).
+     The suite is I/O-bound (serve 5s socket waits + one `php` per oracle case), so 16 threads reclaim
+     the tail: full-oracle `cargo test` 228s → nextest-8 209s → **nextest-16 147s (~35%)**.
+  2. **Split gate** (§ per developer): **pre-commit = Rust-only** (`PHORJ_SKIP_PHP=1`, new early-return
+     in all four test `php_bin()` — deterministic, ignores the 8.6-dev php on PATH; run≡runvm + every
+     unit/integration test still gated); **pre-push = full PHP oracle** against the 8.5 floor
+     (`PHORJ_REQUIRE_PHP=1`, fails-not-skips). New `scripts/git-hooks/pre-push`.
+  3. **Parallelized the dominant test** `fmt::every_repo_phg_formats_idempotently_and_safely` (std
+     scoped threads, no new dep): it single-handedly gated the suite (>140s serial). FINDING: only
+     1.65x from 8-way (145s→88s alone) — **~60% of `cmd_run` work is serialized by a global lock in
+     the run pipeline** (nextest never hit it — separate processes; in-process threads do). Deeper
+     fix (find/remove that lock) is a tracked future item, not chased now.
+  Net commit-gate: **228s → ~118s Rust-only (~48%)**. `mold` linker = compile-time win, machine-local
+  `.cargo/config.toml` (gitignored, CI has no mold), applied after dev installs it. Ceremony is ~0
+  wall-clock (text only) — the real cost was always compile + the one serial fmt test.
 - [2026-07-03] AGREED (developer, interactive — SUPERSEDES this session's primary focus):
   **Injected `Core.Http` names become qualification-required** (Option 2). Concretely:
   (1) default usage must be QUALIFIED: `Http.Router`, `Http.Request`, `Http.Response`, and the

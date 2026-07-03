@@ -126,20 +126,42 @@ fn every_repo_phg_formats_idempotently_and_safely() {
         files.len()
     );
 
-    for f in &files {
-        let src = std::fs::read_to_string(f).unwrap();
-        // Formats without error.
-        let once =
-            cli::fmt_source(&src).unwrap_or_else(|e| panic!("fmt failed on {}:\n{e}", f.display()));
-        // Idempotent.
-        let twice = cli::fmt_source(&once).unwrap();
-        assert_eq!(once, twice, "not idempotent: {}", f.display());
-        // Meaning preserved for a standalone-runnable program (skip multi-file project parts /
-        // impure / fragment files, which don't run as a single source).
-        let before = cli::cmd_run(&src);
-        if before.is_ok() {
-            let after = cli::cmd_run(&once);
-            assert_eq!(before, after, "fmt changed behavior of {}", f.display());
+    // The per-file work (two `cmd_run` pipelines, each on a deep-stack worker thread) is CPU-bound
+    // and independent per file — and this single test otherwise dominates the whole suite's
+    // wall-clock. Fan the corpus out across the cores with std scoped threads (no new dependency).
+    // A failing file panics inside its worker; the panic propagates on scope join, so the test still
+    // fails with the offending path in the message.
+    let n = std::thread::available_parallelism()
+        .map(|p| p.get())
+        .unwrap_or(4);
+    let chunk = files.len().div_ceil(n).max(1);
+    std::thread::scope(|s| {
+        for group in files.chunks(chunk) {
+            s.spawn(move || {
+                for f in group {
+                    assert_phg_fmt_safe(f);
+                }
+            });
         }
+    });
+}
+
+/// Format-safety checks for one `.phg`: it formats without error, is idempotent, and (for a
+/// standalone-runnable program) preserves behavior. Split out of the corpus sweep above so that
+/// sweep can fan out across threads.
+fn assert_phg_fmt_safe(f: &Path) {
+    let src = std::fs::read_to_string(f).unwrap();
+    // Formats without error.
+    let once =
+        cli::fmt_source(&src).unwrap_or_else(|e| panic!("fmt failed on {}:\n{e}", f.display()));
+    // Idempotent.
+    let twice = cli::fmt_source(&once).unwrap();
+    assert_eq!(once, twice, "not idempotent: {}", f.display());
+    // Meaning preserved for a standalone-runnable program (skip multi-file project parts /
+    // impure / fragment files, which don't run as a single source).
+    let before = cli::cmd_run(&src);
+    if before.is_ok() {
+        let after = cli::cmd_run(&once);
+        assert_eq!(before, after, "fmt changed behavior of {}", f.display());
     }
 }

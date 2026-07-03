@@ -17,6 +17,12 @@ use std::process::Command;
 
 /// Resolve the php binary: `PHORJ_PHP` override, else `php` on PATH if `--version` succeeds.
 fn php_bin() -> Option<String> {
+    // `PHORJ_SKIP_PHP=1` forces the deterministic Rust-only gate (run == runvm, no oracle)
+    // regardless of what `php` is on PATH — set by the pre-commit hook. The full PHP-oracle spine
+    // check moves to pre-push (`PHORJ_REQUIRE_PHP=1` against the 8.5 floor).
+    if std::env::var("PHORJ_SKIP_PHP").as_deref() == Ok("1") {
+        return None;
+    }
     let cand = std::env::var("PHORJ_PHP").unwrap_or_else(|_| "php".to_string());
     let ok = Command::new(&cand)
         .arg("--version")

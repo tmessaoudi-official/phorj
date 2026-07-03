@@ -2,14 +2,23 @@
 # Phorj pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
 #   git config core.hooksPath scripts/git-hooks
 # Zero HARD dependencies — just the cargo toolchain. Blocks a commit unless formatting,
-# clippy (all lints denied, matching Cargo.toml), and the full test suite all pass.
+# clippy (all lints denied, matching Cargo.toml), and the RUST-ONLY test suite all pass.
 # cargo-nextest is used as a FASTER (parallel) test runner when present; the hook falls back to
 # plain `cargo test` when it is absent, so it still works on a machine without nextest.
+#
+# SPEED SPLIT (developer, 2026-07-03): the PHP-oracle differential (byte-identity spine check —
+# one `php` subprocess per case) moved to the PRE-PUSH hook. Pre-commit runs the deterministic
+# Rust-only gate (run == runvm parity + every unit/integration test), which is fast and never
+# depends on whichever `php` is on PATH (the system php here is 8.6-dev, the wrong floor). The
+# full oracle against the 8.5 floor runs once before publishing — see scripts/git-hooks/pre-push.
 set -euo pipefail
 
 # The toolchain lives outside the default PATH on this machine; prepend it only if cargo is
 # not already reachable (keeps the hook working under git's reduced environment).
 command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
+
+# Force the Rust-only gate regardless of any `php` on PATH (the oracle is a pre-push concern).
+export PHORJ_SKIP_PHP=1
 
 echo "[pre-commit] cargo fmt --check"
 cargo fmt --check

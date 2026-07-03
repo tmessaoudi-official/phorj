@@ -9,3 +9,5 @@
 #   nextest (16 threads) 147s   ← ~35% faster than `cargo test`, same coverage
 [profile.default]
 test-threads = 16
+# Flag any test still running after 20s so slow outliers stay visible (they dominate the tail).
+slow-timeout = "20s"
