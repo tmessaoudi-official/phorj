@@ -183,7 +183,6 @@ impl Parser {
             path,
             alias,
             // Vestigial since the unified-import spec: always false (the loader classifies by path).
-            type_only: false,
             span: sp,
         })
     }

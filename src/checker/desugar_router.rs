@@ -31,7 +31,7 @@ type Route = (Expr, Expr, Expr);
 /// touched when the web layer isn't in play.
 pub fn desugar_auto_router(program: Program) -> Program {
     let imports_http = program.items.iter().any(|it| {
-        matches!(it, Item::Import { path, type_only: false, .. }
+        matches!(it, Item::Import { path, .. }
             if path.len() == 2 && path[0] == "Core" && path[1] == "Http")
     });
     if !imports_http {

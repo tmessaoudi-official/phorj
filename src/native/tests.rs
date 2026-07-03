@@ -91,7 +91,6 @@ fn import_map_binds_leaf_to_full_path() {
     let items = vec![Item::Import {
         path: vec!["Core".into(), "Output".into()],
         alias: None,
-        type_only: false,
         span: sp,
     }];
     let m = import_map(&items);
@@ -101,7 +100,6 @@ fn import_map_binds_leaf_to_full_path() {
     let aliased = vec![Item::Import {
         path: vec!["acme".into(), "util".into()],
         alias: Some("u".into()),
-        type_only: false,
         span: sp,
     }];
     let m = import_map(&aliased);

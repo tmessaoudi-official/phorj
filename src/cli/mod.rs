@@ -346,7 +346,7 @@ const JSON_PRELUDE: &str = "enum Json { Null(), Bool(bool value), Int(int value)
 fn inject_json_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
     let imports_json = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, type_only: false, .. }
+        matches!(it, Item::Import { path, .. }
             if path.len() == 2 && path[0] == "Core" && path[1] == "Json")
     });
     let already_declared = prog
@@ -398,7 +398,7 @@ const ROUNDING_MODE_PRELUDE: &str =
 /// prelude, since the leaf type it names is one of that prelude's classes/enums.
 fn imports_module_or_member(prog: &Program, module: &[&str]) -> bool {
     prog.items.iter().any(|it| {
-        matches!(it, crate::ast::Item::Import { path, type_only: false, .. }
+        matches!(it, crate::ast::Item::Import { path, .. }
             if (path.len() == module.len() || path.len() == module.len() + 1)
                 && path.iter().zip(module).all(|(a, b)| a == b))
     })
@@ -656,9 +656,9 @@ function respond(bytes raw): bytes {
 fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
     let imports = |m: &str| {
-        prog.items.iter().any(
-            |it| matches!(it, Item::Import { path, type_only: false, .. } if path.join(".") == m),
-        )
+        prog.items
+            .iter()
+            .any(|it| matches!(it, Item::Import { path, .. } if path.join(".") == m))
     };
     // S2: a member-import (`import Core.Http.Router`) pulls in the prelude too, not just the whole-
     // module `import Core.Http`.
@@ -724,7 +724,7 @@ const REGEX_PRELUDE: &str = "class Regex { constructor(public string pattern) {}
 fn inject_regex_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
     let imports_regex = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, type_only: false, .. }
+        matches!(it, Item::Import { path, .. }
             if path.len() == 2 && path[0] == "Core" && path[1] == "Regex")
     });
     let already_declared = prog
@@ -765,7 +765,7 @@ const SECRET_PRELUDE: &str =
 fn inject_secret_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
     let imports_secret = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, type_only: false, .. }
+        matches!(it, Item::Import { path, .. }
             if path.len() == 2 && path[0] == "Core" && path[1] == "Secret")
     });
     let already_declared = prog

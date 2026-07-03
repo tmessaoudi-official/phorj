@@ -92,7 +92,6 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         final_items.push(Item::Import {
             path: vec!["Core".into(), "Output".into()],
             alias: None,
-            type_only: false,
             span: SP,
         });
     }

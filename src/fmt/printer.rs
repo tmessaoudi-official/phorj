@@ -102,17 +102,11 @@ impl Printer<'_> {
 
     fn item(&mut self, item: &Item) -> Result<(), String> {
         match item {
-            Item::Import {
-                path,
-                alias,
-                type_only,
-                ..
-            } => {
-                let kw = if *type_only { "import type" } else { "import" };
+            Item::Import { path, alias, .. } => {
                 let path = path.join(".");
                 match alias {
-                    Some(a) => self.line(&format!("{kw} {path} as {a};")),
-                    None => self.line(&format!("{kw} {path};")),
+                    Some(a) => self.line(&format!("import {path} as {a};")),
+                    None => self.line(&format!("import {path};")),
                 }
                 Ok(())
             }
