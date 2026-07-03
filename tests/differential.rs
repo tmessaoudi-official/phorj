@@ -3061,3 +3061,84 @@ fn m6w4_spawn_is_a_usable_identifier() {
         "import Core.Output; function main() -> void { int spawn = 5; Output.printLine(\"{spawn}\"); }",
     );
 }
+
+// --- Import redesign S1: qualified injected-type references in type position ------------------
+// `Http.Router` / `Time.Duration` / `Decimal.RoundingMode` as a type ANNOTATION resolve to the bare
+// injected type (the S1 collapse pass), and are byte-identical across run/runvm/PHP to the bare form.
+// Zero `.phg` edits — the surface migration is S2. No `E-INJECTED-TYPE-BARE` enforcement yet (S2),
+// so bare `Router` still works; S1 only ADDS the qualified spelling.
+
+#[test]
+fn s1_qualified_http_router_type_resolves_and_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Http;
+
+#[Route("GET", "/")]
+function home(Request req): Response { return Response.text(200, "hi"); }
+
+function serve(Http.Router rt, bytes raw): void {
+  if (var req = Request.parse(raw)) {
+    Response resp = rt.handle(req);
+    Output.printLine("{resp.status}");
+  } else {
+    Output.printLine("bad");
+  }
+}
+
+function main(): void {
+  Http.Router rt = Http.autoRouter();
+  serve(rt, b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");
+}"#,
+        "200\n",
+        "s1_qualified_http_router",
+    );
+}
+
+#[test]
+fn s1_qualified_form_checks_and_runs_identically_to_bare() {
+    // The qualified annotation `Http.Router` and the bare `Router` must produce identical
+    // check output AND identical run output — the collapse pass makes them the same program.
+    let bare = "package Main; import Core.Output; import Core.Http;\n\
+        #[Route(\"GET\", \"/\")] function home(Request req): Response { return Response.text(200, \"ok\"); }\n\
+        function dispatch(Router rt, bytes raw): void { if (var q = Request.parse(raw)) { Response resp = rt.handle(q); Output.printLine(\"{resp.status}\"); } }\n\
+        function main(): void { Router rt = Http.autoRouter(); dispatch(rt, b\"GET / HTTP/1.1\\x0d\\x0aHost: x\\x0d\\x0a\\x0d\\x0a\"); }";
+    let qualified = bare.replace("Router rt", "Http.Router rt");
+    assert!(
+        qualified.contains("Http.Router rt"),
+        "sanity: replacement applied"
+    );
+    assert!(
+        cli::cmd_check(&qualified).is_ok(),
+        "qualified form must check clean"
+    );
+    assert_eq!(
+        cli::cmd_run(bare),
+        cli::cmd_run(&qualified),
+        "bare vs qualified run output"
+    );
+    assert_eq!(
+        cli::cmd_runvm(bare),
+        cli::cmd_runvm(&qualified),
+        "bare vs qualified runvm output"
+    );
+}
+
+#[test]
+fn s1_qualified_time_and_decimal_types_resolve() {
+    // `Time.Duration` (member of the Time module) and `Decimal.RoundingMode` (member of Decimal)
+    // both collapse to their bare injected types in annotation position.
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Time;
+
+function label(Time.Duration d): string { return "{d.toMilliseconds()}ms"; }
+
+function main(): void {
+  Time.Duration d = Duration.milliseconds(250);
+  Output.printLine(label(d));
+}"#,
+        "250ms\n",
+        "s1_qualified_time_duration",
+    );
+}

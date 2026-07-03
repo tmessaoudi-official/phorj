@@ -12,6 +12,7 @@ use crate::types::Ty;
 // Self-contained post-check AST-rewrite passes (M-Decomp W1.3): each is a pure `Program -> Program`
 // expansion run before the backends (alias expansion, generic erasure, `html"…"` hole resolution).
 // Re-exported so callers keep using `checker::expand_aliases` etc.
+mod collapse_injected;
 mod desugar_router;
 mod inline_parent_ctor;
 mod overloads;
@@ -20,6 +21,7 @@ mod rewrite_generics;
 mod rewrite_html;
 mod rewrite_new;
 mod rewrite_ufcs;
+pub use collapse_injected::collapse_injected_type_qualifiers;
 pub use desugar_router::desugar_auto_router;
 pub use inline_parent_ctor::inline_parent_ctors;
 pub use overloads::rename_overload_defs;

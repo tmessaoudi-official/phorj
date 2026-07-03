@@ -5,6 +5,14 @@
 > SSOT = `docs/plans/MASTER-PLAN.md`. Gate = full PHP-oracle `cargo test --workspace` + clippy + fmt + build.
 
 ## Decisions Log
+- [2026-07-03] AGREED (developer): **Delivery-speed strategy = speed up tooling, KEEP the full
+  commit gate** (challenged the "move gate to pre-push" idea; rejected — the byte-identity spine needs
+  the full differential glob at commit, and batched failures are harder to bisect). Concretely:
+  install `cargo-nextest` (parallel test runner — biggest ROI: the PHP-oracle differential spawns one
+  `php` per case, parallelizes across 8 cores); pre-commit hook PREFERS nextest, falls back to
+  `cargo test` (zero hard dep preserved). Commit per-slice not per-edit; targeted tests during dev,
+  full gate at commit. Established that phase/evidence-grade ceremony is ~0 wall-clock (text only) —
+  real cost is compile + oracle suite. No system linker (mold/lld) — needs root; deferred.
 - [2026-07-03] AGREED (developer, interactive — SUPERSEDES this session's primary focus):
   **Injected `Core.Http` names become qualification-required** (Option 2). Concretely:
   (1) default usage must be QUALIFIED: `Http.Router`, `Http.Request`, `Http.Response`, and the
@@ -41,8 +49,13 @@
     `E-TYPE-IMPORT-*` → `E-IMPORT-*`; UNKNOWN preserved via known-package heuristic; 18 sites + 4 tests
     migrated. Full oracle gate green. Vestigial `type_only` field + stale `import type` prose comments
     pending S2 cleanup.
-  - **S1 — Qualified type refs**: parser + AST + checker resolve `Qualifier.Type` in type position
-    (`Http.Router` as an annotation) → the injected type; transpiler erases qualifier (PHP stays bare).
+  - **S1 — Qualified type refs ✅ BUILT (green, uncommitted)**: parser reads dotted type names
+    (`parse_type_atom` consumes `.Ident` chain, preserves dotted form); new
+    `checker/collapse_injected.rs` `collapse_injected_type_qualifiers` (modeled on `expand_aliases`,
+    KEEPS `TypeAlias`) rewrites registered `Http.{Request,Response,Route,Router}` /
+    `Time.{Duration,Date,Instant}` / `Decimal.RoundingMode` → bare; wired in `check_and_expand_reified`
+    after `desugar_auto_router`, before `check_resolutions`; transpiler erases qualifier (PHP bare).
+    3 differential tests (run≡runvm≡PHP), full oracle gate green. Zero .phg edits (surface migration = S2).
   - **S2 — Injected-type discipline**: `E-INJECTED-TYPE-BARE`; member-import for Core injected types;
     `#[Http.Route]` qualified attribute (parser dotted attr name + desugar_router match); migrate the
     injected preludes' user-facing surface + ~40 .phg (examples/conformance) + docs to qualified/member form.

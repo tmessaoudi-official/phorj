@@ -978,6 +978,12 @@ pub fn check_and_expand_reified(
     // hand-written code (a no-op unless `Core.Http` is imported). The `#[Route]` attrs survive for the
     // checker's validation pass, then are inert for the backends.
     let routed = crate::checker::desugar_auto_router(injected.into_owned());
+    // Import-redesign S1: collapse qualified injected-type references (`Http.Router`, `Time.Duration`,
+    // `Decimal.RoundingMode`) in type-annotation position down to their bare injected type — so both the
+    // checker AND every backend see the plain `Router`/`Duration`/`RoundingMode` the preludes declare.
+    // Runs after `desugar_auto_router` (its generated `Router` construction is bare already) and before
+    // `check_resolutions`.
+    let routed = crate::checker::collapse_injected_type_qualifiers(routed);
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs, overload_renames, reified)) => {

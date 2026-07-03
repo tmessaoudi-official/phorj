@@ -138,13 +138,25 @@ impl Parser {
             }
             return Ok(t);
         }
-        let name = match self.peek().clone() {
+        let mut name = match self.peek().clone() {
             TokenKind::Ident(n) => {
                 self.advance();
                 n
             }
             _ => return Err(self.error("a type name")),
         };
+        // Import-redesign S1: a **dotted** type name (`Http.Router`, `Time.Duration`) is a qualifier-
+        // qualified reference to an injected/exported type. Consume the `.Ident` chain and PRESERVE the
+        // dotted form in `Type::Named { name }` — the checker's `collapse_injected_type_qualifiers` pass
+        // rewrites a registered `Qual.Member` to its bare type, and `phg fmt` reads this pre-check AST
+        // and must print the qualified spelling. Additive: a `.` after a type name was previously a
+        // parse error, so no existing program regresses. (Only `Dot`, never `DotDot`/`DotDotEq`.)
+        while self.check(&TokenKind::Dot) {
+            self.advance(); // consume `.`
+            let seg = self.expect_ident("a type name segment after `.`")?;
+            name.push('.');
+            name.push_str(&seg);
+        }
         let mut args = Vec::new();
         if self.eat(&TokenKind::Lt) {
             // at least one type argument
