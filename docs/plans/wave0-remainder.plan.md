@@ -5,6 +5,16 @@
 > SSOT = `docs/plans/MASTER-PLAN.md`. Gate = full PHP-oracle `cargo test --workspace` + clippy + fmt + build.
 
 ## Decisions Log
+- [2026-07-03] ✅ **W3-4 SHIPPED** `f4c4c1d`: `Core.Hash.hmac/equals/hkdf/pbkdf2` (pure, over in-tree
+  SHA-256, byte-identical to PHP, RFC 4231/5869/PBKDF2 KATs) + `Core.Random.secureBytes/secureInt`
+  (CSPRNG via `/dev/urandom`, impure/quarantined). Guide example `examples/guide/crypto-mac.phg`. Full
+  oracle gate green (1660 tests). Delivered per ROI order item #2 (first half).
+- [2026-07-03] ⏳ **W3-5 (sprintf/`Core.Fmt`) NEEDS DESIGN ADJUDICATION (§15) before build** — the
+  `%`-style vs `{}`-style spec-syntax fork is user-visible and the developer's call. MASTER-PLAN's
+  recorded *recommendation*: `{}`-style specs sharing ONE closed grammar with W5-1's interpolation
+  format specifiers, list-args until W4-1 variadics land (then a variadic overload). An autonomous
+  session must NOT rule this — surface it to the developer, then build. (Reason W3-4 was built first
+  and W3-5 deferred: W3-4 had no open fork; W3-5 does.)
 - [2026-07-03] AGREED (developer, interactive — REFINES/SUPERSEDES the frozen S2 spec's injection
   model): **STRICT per-type imports, self-contained types, no surprises.**
   1. `import Core.Time.Duration` brings in **ONLY `Duration`** (bare). NOT Instant, NOT Date, NOT the
