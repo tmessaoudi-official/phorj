@@ -267,3 +267,21 @@ Audit report: `docs/research/2026-07-03-corpus-audit.md`. Autonomous/marathon ON
   natives (W3-4) + injected-type discipline (S2); VSCode `tmLanguage`/snippets + PhpStorm to `:`/`=>`
   surface; drop dead verbs. TODO.
 - **Final:** convergence verification pass (developer asked "are we 100% covering everything?").
+
+## Phase 1 remainder — ATTEMPT + RECOVERY (2026-07-03)
+Attempted the src/test `->` purge + parser-reject aggressively; RECOVERED to HEAD via `git restore`
+(no damage; committed .phg purge + formatter fixes intact). LESSONS for the clean redo:
+- **Return `-> T` → `: T` bulk-sed is UNSAFE for function-type arrows ending in a primitive**: a
+  pattern like `) -> int` wrongly hits a function TYPE `(int) -> int`, producing malformed `(int): int`.
+  A regex cannot distinguish a *return* `) -> T` from a *function-type* `) -> T` — only the AST can.
+- **Safe subset that DID work** (keep for the redo): `) -> (void|int|string|float|bytes|decimal)` on
+  NON-function-type returns, `function NAME(simpleparams) -> T`, `function NAME<...>(simpleparams) -> T`,
+  anonymous `function(...) -> T`. But these STILL catch function-type-param cases with nested parens.
+- **`function(` (no space) is NOT phorj-only**: Rust fns named `*function` (`fn function`, `fn
+  lift_function`, `fn parse_function`, `fn run_task_function`) exist → 5 got mangled, restored by hand.
+- **CORRECT approach for the redo:** flip the parser-reject FIRST, then let the gate surface each
+  remaining `->` and fix them INDIVIDUALLY (`=>` for function types, `:` for any missed return) — NO
+  bulk sed on the ambiguous tail. Scale: ~40 gate-surfaced sites, mostly function-type arrows in
+  generics/parser tests + the `->`-alias assertions (which should flip to "asserts `->` is rejected").
+  ~1700 embedded arrows total; the lowercase-primitive returns (~1500) are the safe bulk, the ~200
+  ambiguous tail is gate-guided. Best done in a fresh context (this session was too long for it).
