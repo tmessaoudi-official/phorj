@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Phorj pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
 #   git config core.hooksPath scripts/git-hooks
-# Zero external dependencies — just the cargo toolchain. Blocks a commit unless formatting,
+# Zero HARD dependencies — just the cargo toolchain. Blocks a commit unless formatting,
 # clippy (all lints denied, matching Cargo.toml), and the full test suite all pass.
+# cargo-nextest is used as a FASTER (parallel) test runner when present; the hook falls back to
+# plain `cargo test` when it is absent, so it still works on a machine without nextest.
 set -euo pipefail
 
 # The toolchain lives outside the default PATH on this machine; prepend it only if cargo is
@@ -15,7 +17,17 @@ cargo fmt --check
 echo "[pre-commit] cargo clippy --all-targets -- -D warnings"
 cargo clippy --all-targets -- -D warnings
 
-echo "[pre-commit] cargo test"
-cargo test --quiet
+if cargo nextest --version >/dev/null 2>&1; then
+  # nextest runs each test in its own process, in parallel — the big win here is the PHP-oracle
+  # differential suite (one `php` subprocess per case). It does NOT run doctests, so the cheap
+  # doc-test pass below covers those (currently zero, but future-proofed).
+  echo "[pre-commit] cargo nextest run (parallel)"
+  cargo nextest run --status-level fail
+  echo "[pre-commit] cargo test --doc"
+  cargo test --doc --quiet
+else
+  echo "[pre-commit] cargo test (nextest absent — fallback)"
+  cargo test --quiet
+fi
 
 echo "[pre-commit] OK"

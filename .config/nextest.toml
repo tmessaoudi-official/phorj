@@ -1,0 +1,11 @@
+# cargo-nextest configuration (Phorj). Read automatically by `cargo nextest run`.
+#
+# Speed: much of the suite is I/O-bound, not CPU-bound — the `serve` tests wait on 5s socket
+# keep-alive/idle timeouts and the PHP-oracle differential tests each spawn a `php` subprocess.
+# Those threads sit blocked on I/O without needing a core, so OVERSUBSCRIBING past the 8 physical
+# cores reclaims the tail. Measured on this box (8 cores, full PHP oracle):
+#   cargo test           228s
+#   nextest (8 threads)  209s
+#   nextest (16 threads) 147s   ← ~35% faster than `cargo test`, same coverage
+[profile.default]
+test-threads = 16
