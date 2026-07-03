@@ -41,10 +41,14 @@ fn every_other_native_is_pure() {
         "Core.Runtime",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
+    // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the
+    // CSPRNG `secure*` natives read OS entropy → impure, oracle-quarantined.
+    let mixed_impure_random = ["secureBytes", "secureInt"];
     for n in registry() {
         let impure = impure_modules.contains(&n.module)
             || (n.module == "Core.Cryptography" && n.name == "hashPassword")
-            || (n.module == "Core.File" && mixed_impure_file.contains(&n.name));
+            || (n.module == "Core.File" && mixed_impure_file.contains(&n.name))
+            || (n.module == "Core.Random" && mixed_impure_random.contains(&n.name));
         assert_eq!(
             n.pure, !impure,
             "{}.{} purity flag disagrees with its module",

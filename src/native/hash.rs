@@ -387,8 +387,146 @@ fn sha256_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     hash_bytes(a, |b| to_hex(&sha256(b)), "sha256")
 }
 
-/// The `Core.Hash` registry entries. Each is `(bytes) -> string` (lowercase hex), 1:1 with a PHP core
-/// digest function (no extension needed under `php -n`).
+// --- W3-4: HMAC / HKDF / PBKDF2 / timing-safe compare (all over the in-file SHA-256) ------------
+// Security-critical, pure, std-only. Pinned by RFC known-answer vectors (hash_tests.rs) and by
+// byte-identity vs real PHP (`hash_hmac`/`hash_hkdf`/`hash_pbkdf2`/`hash_equals`).
+
+const SHA256_BLOCK: usize = 64;
+
+/// HMAC-SHA256 (RFC 2104).
+fn hmac_sha256(key: &[u8], msg: &[u8]) -> [u8; 32] {
+    // Keys longer than the block are hashed first; shorter keys are zero-padded to the block.
+    let mut k = [0u8; SHA256_BLOCK];
+    if key.len() > SHA256_BLOCK {
+        k[..32].copy_from_slice(&sha256(key));
+    } else {
+        k[..key.len()].copy_from_slice(key);
+    }
+    let mut ipad = [0x36u8; SHA256_BLOCK];
+    let mut opad = [0x5cu8; SHA256_BLOCK];
+    for i in 0..SHA256_BLOCK {
+        ipad[i] ^= k[i];
+        opad[i] ^= k[i];
+    }
+    let mut inner = Vec::with_capacity(SHA256_BLOCK + msg.len());
+    inner.extend_from_slice(&ipad);
+    inner.extend_from_slice(msg);
+    let inner_digest = sha256(&inner);
+    let mut outer = Vec::with_capacity(SHA256_BLOCK + 32);
+    outer.extend_from_slice(&opad);
+    outer.extend_from_slice(&inner_digest);
+    sha256(&outer)
+}
+
+/// HKDF-SHA256 (RFC 5869): extract-then-expand. An empty `salt` is HMAC-equivalent to the RFC's
+/// HashLen-zeros default (HMAC zero-pads the key to the block either way), matching PHP `hash_hkdf`.
+fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8], length: usize) -> Result<Vec<u8>, String> {
+    let n = length.div_ceil(32);
+    if length == 0 || n > 255 {
+        return Err("Hash.hkdf: length must be 1..=8160".to_string());
+    }
+    let prk = hmac_sha256(salt, ikm); // extract
+    let mut okm = Vec::with_capacity(n * 32);
+    let mut t: Vec<u8> = Vec::new();
+    for i in 1..=n {
+        let mut input = Vec::with_capacity(t.len() + info.len() + 1);
+        input.extend_from_slice(&t);
+        input.extend_from_slice(info);
+        input.push(i as u8);
+        t = hmac_sha256(&prk, &input).to_vec();
+        okm.extend_from_slice(&t);
+    }
+    okm.truncate(length);
+    Ok(okm)
+}
+
+/// PBKDF2-HMAC-SHA256 (RFC 8018 §5.2).
+fn pbkdf2_sha256(password: &[u8], salt: &[u8], iterations: u32, length: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(length);
+    let mut block_index: u32 = 1;
+    while out.len() < length {
+        let mut salted = Vec::with_capacity(salt.len() + 4);
+        salted.extend_from_slice(salt);
+        salted.extend_from_slice(&block_index.to_be_bytes());
+        let mut u = hmac_sha256(password, &salted);
+        let mut acc = u;
+        for _ in 1..iterations {
+            u = hmac_sha256(password, &u);
+            for j in 0..32 {
+                acc[j] ^= u[j];
+            }
+        }
+        out.extend_from_slice(&acc);
+        block_index += 1;
+    }
+    out.truncate(length);
+    out
+}
+
+/// Timing-safe byte equality. Matches PHP `hash_equals`: a length mismatch returns `false`
+/// immediately (that leak is intentional parity); equal-length inputs are compared in constant time.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for i in 0..a.len() {
+        diff |= a[i] ^ b[i];
+    }
+    diff == 0
+}
+
+fn two_bytes<'a>(args: &'a [Value], who: &str) -> Result<(&'a [u8], &'a [u8]), String> {
+    match args {
+        [Value::Bytes(x), Value::Bytes(y)] => Ok((x, y)),
+        _ => Err(format!("Hash.{who} expects (bytes, bytes)")),
+    }
+}
+
+fn hmac_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    let (key, data) = two_bytes(a, "hmac")?;
+    Ok(Value::Str(to_hex(&hmac_sha256(key, data))))
+}
+
+fn equals_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    let (x, y) = two_bytes(a, "equals")?;
+    Ok(Value::Bool(constant_time_eq(x, y)))
+}
+
+fn nonneg_len(v: &Value, who: &str) -> Result<usize, String> {
+    match v {
+        Value::Int(n) if *n >= 0 => Ok(*n as usize),
+        _ => Err(format!("Hash.{who}: length must be a non-negative int")),
+    }
+}
+
+fn hkdf_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    match a {
+        [Value::Bytes(ikm), Value::Bytes(salt), Value::Bytes(info), len] => {
+            let length = nonneg_len(len, "hkdf")?;
+            let okm = hkdf_sha256(ikm, salt, info, length)?;
+            Ok(Value::Bytes(std::rc::Rc::new(okm)))
+        }
+        _ => Err("Hash.hkdf expects (bytes ikm, bytes salt, bytes info, int length)".to_string()),
+    }
+}
+
+fn pbkdf2_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    match a {
+        [Value::Bytes(pw), Value::Bytes(salt), Value::Int(iters), len] if *iters > 0 => {
+            let length = nonneg_len(len, "pbkdf2")?;
+            let dk = pbkdf2_sha256(pw, salt, *iters as u32, length);
+            Ok(Value::Bytes(std::rc::Rc::new(dk)))
+        }
+        _ => Err(
+            "Hash.pbkdf2 expects (bytes password, bytes salt, int iterations>0, int length)"
+                .to_string(),
+        ),
+    }
+}
+
+/// The `Core.Hash` registry entries. The plain digests are `(bytes) -> string` (lowercase hex), 1:1
+/// with a PHP core digest function; W3-4 adds the MAC/KDF facility (hmac/equals/hkdf/pbkdf2).
 pub(crate) fn hash_natives() -> Vec<NativeFn> {
     fn entry(
         name: &'static str,
@@ -414,6 +552,61 @@ pub(crate) fn hash_natives() -> Vec<NativeFn> {
         entry("sha256", sha256_native, |a| {
             format!("hash('sha256', {})", parg(a, 0))
         }),
+        // W3-4 MAC/KDF. `hmac(key, data)` — note PHP `hash_hmac(algo, data, key)` arg order.
+        NativeFn {
+            module: "Core.Hash",
+            name: "hmac",
+            params: vec![Ty::Bytes, Ty::Bytes],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(hmac_native),
+            php: |a| format!("hash_hmac('sha256', {}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Hash",
+            name: "equals",
+            params: vec![Ty::Bytes, Ty::Bytes],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(equals_native),
+            php: |a| format!("hash_equals({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `hkdf(ikm, salt, info, length)` → PHP `hash_hkdf(algo, ikm, length, info, salt)` (raw bytes).
+        NativeFn {
+            module: "Core.Hash",
+            name: "hkdf",
+            params: vec![Ty::Bytes, Ty::Bytes, Ty::Bytes, Ty::Int],
+            ret: Ty::Bytes,
+            pure: true,
+            eval: NativeEval::Pure(hkdf_native),
+            php: |a| {
+                format!(
+                    "hash_hkdf('sha256', {}, {}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 3),
+                    parg(a, 2),
+                    parg(a, 1)
+                )
+            },
+        },
+        // `pbkdf2(password, salt, iterations, length)` → PHP `hash_pbkdf2(..., raw_output=true)`.
+        NativeFn {
+            module: "Core.Hash",
+            name: "pbkdf2",
+            params: vec![Ty::Bytes, Ty::Bytes, Ty::Int, Ty::Int],
+            ret: Ty::Bytes,
+            pure: true,
+            eval: NativeEval::Pure(pbkdf2_native),
+            php: |a| {
+                format!(
+                    "hash_pbkdf2('sha256', {}, {}, {}, {}, true)",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2),
+                    parg(a, 3)
+                )
+            },
+        },
     ]
 }
 

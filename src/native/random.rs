@@ -109,14 +109,78 @@ fn random_int_between(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-/// The `Core.Random` registry entries. `pure: true` (2026-06-27): the PHP emission **hand-rolls the
-/// same xorshift64** (`__phorj_rng_*` helpers) rather than PHP's Mersenne-Twister, so a seeded
-/// sequence is **byte-identical** on `run`/`runvm`/transpiled PHP — Random rejoins the oracle and
-/// reproducibility survives transpile. The kernel itself is still process-global state (the result of
-/// a call depends on prior calls), but it is *deterministic w.r.t. the program text*, which is what
-/// `pure` means here; an unseeded program replays the same default-`GOLDEN` stream on every backend.
+// --- W3-4: CSPRNG (OS entropy) --------------------------------------------------------------------
+// Tier B, `pure: false` — the result comes from OS entropy, not the program text, so these are
+// quarantined from the byte-identity oracle (like `Core.Cryptography.hashPassword`) and tested with a
+// statistical smoke test only. Std-only: read `/dev/urandom` directly (no dep, DEC-009). The seeded
+// deterministic PRNG above stays the default/test seam (DEC-150 untouched).
+
+fn read_urandom(n: usize) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut f = std::fs::File::open("/dev/urandom")
+        .map_err(|e| format!("Random.secure*: cannot open /dev/urandom: {e}"))?;
+    let mut buf = vec![0u8; n];
+    f.read_exact(&mut buf)
+        .map_err(|e| format!("Random.secure*: entropy read failed: {e}"))?;
+    Ok(buf)
+}
+
+fn secure_bytes_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    match a {
+        [Value::Int(n)] if *n >= 0 => {
+            Ok(Value::Bytes(std::rc::Rc::new(read_urandom(*n as usize)?)))
+        }
+        _ => Err("Random.secureBytes expects (int n >= 0)".to_string()),
+    }
+}
+
+/// Uniform integer in `[min, max]` (inclusive, like PHP `random_int`), via rejection sampling over a
+/// fresh 64-bit OS draw to avoid modulo bias.
+fn secure_int_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+    match a {
+        [Value::Int(min), Value::Int(max)] if min <= max => {
+            let range = (*max as i128 - *min as i128 + 1) as u128; // inclusive span, fits u128
+            let limit = u128::from(u64::MAX) + 1;
+            let reject_at = limit - (limit % range); // largest multiple of range ≤ 2^64
+            loop {
+                let draw = read_urandom(8)?;
+                let r = u128::from(u64::from_le_bytes(draw.try_into().unwrap()));
+                if r < reject_at {
+                    return Ok(Value::Int((*min as i128 + (r % range) as i128) as i64));
+                }
+            }
+        }
+        _ => Err("Random.secureInt expects (int min, int max) with min <= max".to_string()),
+    }
+}
+
+/// The `Core.Random` registry entries. The seeded PRNG is `pure: true` (2026-06-27): the PHP emission
+/// **hand-rolls the same xorshift64** (`__phorj_rng_*` helpers) rather than PHP's Mersenne-Twister, so
+/// a seeded sequence is **byte-identical** on `run`/`runvm`/transpiled PHP — Random rejoins the oracle
+/// and reproducibility survives transpile. The kernel is still process-global state (a call depends on
+/// prior calls) but *deterministic w.r.t. the program text*, which is what `pure` means here. The W3-4
+/// `secure*` CSPRNG entries are `pure: false` (OS entropy) and oracle-quarantined.
 pub(crate) fn random_natives() -> Vec<NativeFn> {
     vec![
+        // CSPRNG (OS entropy) — impure, oracle-quarantined. PHP: random_bytes / random_int.
+        NativeFn {
+            module: "Core.Random",
+            name: "secureBytes",
+            params: vec![Ty::Int],
+            ret: Ty::Bytes,
+            pure: false,
+            eval: NativeEval::Pure(secure_bytes_native),
+            php: |a| format!("random_bytes({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Random",
+            name: "secureInt",
+            params: vec![Ty::Int, Ty::Int],
+            ret: Ty::Int,
+            pure: false,
+            eval: NativeEval::Pure(secure_int_native),
+            php: |a| format!("random_int({}, {})", parg(a, 0), parg(a, 1)),
+        },
         NativeFn {
             module: "Core.Random",
             name: "seed",

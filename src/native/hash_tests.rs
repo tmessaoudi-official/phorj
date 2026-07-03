@@ -81,3 +81,54 @@ fn digests_handle_multiblock_input() {
         "2816597888e4a0d3a36b82b83316ab32680eb8f00f8cd3b904d681246d285a0e"
     );
 }
+
+// --- W3-4 MAC/KDF: RFC known-answer vectors (independent of the PHP oracle) --------------------
+
+#[test]
+fn hmac_sha256_rfc4231() {
+    // RFC 4231 Test Case 1: key = 0x0b×20, data = "Hi There".
+    let tc1 = hmac_sha256(&[0x0b; 20], b"Hi There");
+    assert_eq!(
+        to_hex(&tc1),
+        "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+    );
+    // RFC 4231 Test Case 2: key = "Jefe".
+    let tc2 = hmac_sha256(b"Jefe", b"what do ya want for nothing?");
+    assert_eq!(
+        to_hex(&tc2),
+        "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+    );
+}
+
+#[test]
+fn hkdf_sha256_rfc5869_tc1() {
+    let ikm = [0x0b; 22];
+    let salt: Vec<u8> = (0x00..=0x0c).collect();
+    let info: Vec<u8> = (0xf0..=0xf9).collect();
+    let okm = hkdf_sha256(&ikm, &salt, &info, 42).unwrap();
+    assert_eq!(
+        to_hex(&okm),
+        "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+    );
+}
+
+#[test]
+fn pbkdf2_sha256_known_vectors() {
+    // password="password", salt="salt", dkLen=32; iteration counts 1 and 2 (published KATs).
+    assert_eq!(
+        to_hex(&pbkdf2_sha256(b"password", b"salt", 1, 32)),
+        "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"
+    );
+    assert_eq!(
+        to_hex(&pbkdf2_sha256(b"password", b"salt", 2, 32)),
+        "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43"
+    );
+}
+
+#[test]
+fn constant_time_eq_matches_php_hash_equals_semantics() {
+    assert!(constant_time_eq(b"abc", b"abc"));
+    assert!(!constant_time_eq(b"abc", b"abd"));
+    assert!(!constant_time_eq(b"abc", b"abcd")); // length mismatch → false (PHP parity)
+    assert!(constant_time_eq(b"", b""));
+}
