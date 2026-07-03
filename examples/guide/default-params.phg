@@ -3,35 +3,43 @@
 // literal and must trail the required parameters. v1 covers **free functions** (methods are a
 // follow-up). The motivating native, `String.parseFloat`, carries one: `permissive` defaults to false.
 package Main;
+
 import Core.Output;
 import Core.String;
 
 // One default: `greeting` falls back to "Hello" when omitted.
-function greet(string name, string greeting = "Hello") -> string {
+function greet(string name, string greeting = "Hello"): string {
     return "{greeting}, {name}!";
 }
 
 // Two defaults: omit none, the last, or both trailing arguments.
-function pad(string s, int width = 6, string fill = " ") -> string {
+function pad(string s, int width = 6, string fill = " "): string {
     return String.padLeft(s, width, fill);
 }
 
 function main(): void {
-    Output.printLine(greet("World"));         // Hello, World!  (default greeting)
-    Output.printLine(greet("World", "Hi"));   // Hi, World!     (explicit)
-
-    var a = pad("hi");          // width 6, fill " "  -> "    hi"
-    var b = pad("hi", 4);       // width 4, fill " "  -> "  hi"
-    var c = pad("hi", 4, "*");  // width 4, fill "*"  -> "**hi"
+    Output.printLine(greet("World"));
+    // Hello, World!  (default greeting)
+    Output.printLine(greet("World", "Hi"));
+    // Hi, World!     (explicit)
+    var a = pad("hi");
+    // width 6, fill " "  -> "    hi"
+    var b = pad("hi", 4);
+    // width 4, fill " "  -> "  hi"
+    var c = pad("hi", 4, "*");
+    // width 4, fill "*"  -> "**hi"
     Output.printLine("[{a}]");
     Output.printLine("[{b}]");
     Output.printLine("[{c}]");
-
     // parseFloat: strict by default, opt-in permissive — the payoff of the default parameter.
-    var strict = String.parseFloat("3.5") ?? -1.0;          // 3.5
-    var dotLead = String.parseFloat(".5") ?? -1.0;          // strict rejects -> -1
-    var dotLeadLax = String.parseFloat(".5", true) ?? -1.0; // permissive accepts -> 0.5
-    var notInf = String.parseFloat("inf") ?? -1.0;          // never inf -> -1
+    var strict = String.parseFloat("3.5") ?? -1.0;
+    // 3.5
+    var dotLead = String.parseFloat(".5") ?? -1.0;
+    // strict rejects -> -1
+    var dotLeadLax = String.parseFloat(".5", true) ?? -1.0;
+    // permissive accepts -> 0.5
+    var notInf = String.parseFloat("inf") ?? -1.0;
+    // never inf -> -1
     Output.printLine("strict 3.5  = {strict}");
     Output.printLine("strict .5   = {dotLead}");
     Output.printLine("lax .5      = {dotLeadLax}");

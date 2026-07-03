@@ -4,26 +4,26 @@ package Main;
 
 import Core.Output;
 
-function main() -> void {
+function main(): void {
     List<string> langs = ["Phorj", "PHP", "TypeScript"];
-
     // Value form — `w` is inferred as `string` from the iterable.
     foreach (langs as w) {
         Output.printLine("hello {w}");
     }
-
     // With a 0-based position counter.
-    foreach (langs as name with int idx) {
-        Output.printLine("{idx}={name}");
+    {
+        mutable int idx = 0;
+        foreach (langs as name) {
+            Output.printLine("{idx}={name}");
+            idx = idx + 1;
+        }
     }
-
     // A range source iterates inferred `int`s.
     mutable int sum = 0;
     foreach (1..=4 as n) {
         sum = sum + n;
     }
     Output.printLine("range-sum {sum}");
-
     // The typed `for (T x in xs)` form, unchanged.
     for (string lang in langs) {
         Output.printLine("typed {lang}");

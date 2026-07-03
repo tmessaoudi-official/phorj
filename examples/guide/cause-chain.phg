@@ -7,35 +7,34 @@ import Core.Output;
 // `Error?` on an `Error` subtype is routed into PHP's native exception chain
 // (`parent::__construct($message, 0, $cause)`), so the transpiled PHP reports an idiomatic
 // "caused by" via `getPrevious()` too — while the Phorj backends read it back as a plain field.
-
 class IoError implements Error {
-  constructor(public string message) {}
+    constructor(public string message) {}
 }
 
 class ConfigError implements Error {
-  constructor(public string message, public Error? cause) {}
+    constructor(public string message, public Error? cause) {}
 }
 
 // Simulate a low-level failure, then wrap it in a higher-level error that preserves the cause.
 function readConfig(): int throws ConfigError {
-  try {
-    throw new IoError("disk offline");
-  } catch (IoError e) {
-    throw new ConfigError("could not load config", e);
-  }
+    try {
+        throw new IoError("disk offline");
+    } catch (IoError e) {
+        throw new ConfigError("could not load config", e);
+    }
 }
 
 function main(): void {
-  try {
-    var n = readConfig();
-    Output.printLine("loaded {n}");
-  } catch (ConfigError e) {
-    Output.printLine("error: {e.message}");
-    // `e.cause` is `Error?`; narrow it with an if-let, then `instanceof` to read the concrete cause.
-    if (var c = e.cause) {
-      if (c instanceof IoError) {
-        Output.printLine("  caused by: {c.message}");
-      }
+    try {
+        var n = readConfig();
+        Output.printLine("loaded {n}");
+    } catch (ConfigError e) {
+        Output.printLine("error: {e.message}");
+        // `e.cause` is `Error?`; narrow it with an if-let, then `instanceof` to read the concrete cause.
+        if (var c = e.cause) {
+            if (c instanceof IoError) {
+                Output.printLine("  caused by: {c.message}");
+            }
+        }
     }
-  }
 }

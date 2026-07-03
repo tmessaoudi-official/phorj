@@ -5,26 +5,28 @@ package Main;
 import Core.Output;
 
 type Celsius = int;
+
 type Name = string;
+
 type Scores = List<int>;
 
-function freezing() -> Celsius {
+function freezing(): Celsius {
     return 0;
 }
 
-function label(Name who, Celsius t) -> string {
+function label(Name who, Celsius t): string {
     return "{who}: {t}";
 }
 
-function total(Scores xs) -> int {
+function total(Scores xs): int {
     mutable int sum = 0;
     for (int x in xs) {
-        sum += x;
+        sum = sum + x;
     }
     return sum;
 }
 
-function main() -> void {
+function main(): void {
     Celsius lo = freezing();
     Celsius hi = 100;
     Output.printLine(label("water", lo));

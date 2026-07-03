@@ -5,22 +5,21 @@ import Core.Output;
 
 open class Money {
     constructor(public int cents) {}
-
-    static function of(int dollars) -> Money {
+    static function of(int dollars): Money {
         return new Money(dollars * 100);
     }
-    static function of(int dollars, int cents) -> Money {
+    static function of(int dollars, int cents): Money {
         return new Money(dollars * 100 + cents);
     }
-
-    function show() -> string {
+    function show(): string {
         return "${this.cents}c";
     }
 }
 
-class Wallet extends Money {}
+class Wallet extends Money {
+}
 
-function main() -> void {
+function main(): void {
     Output.printLine(Money.of(5).show());
     Output.printLine(Money.of(5, 25).show());
     Output.printLine(Wallet.of(3).show());

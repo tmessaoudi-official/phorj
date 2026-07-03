@@ -7,25 +7,22 @@ package Main;
 import Core.Output;
 
 // A function over plain `List<T>` — a `[T; N]` flows in (a fixed list is a list).
-function total(List<int> xs) -> int {
+function total(List<int> xs): int {
     mutable int sum = 0;
     for (int x in xs) {
-        sum += x;
+        sum = sum + x;
     }
     return sum;
 }
 
-function main() -> void {
+function main(): void {
     [int; 3] rgb = [255, 128, 0];
     Output.printLine("r={rgb[0]} g={rgb[1]} b={rgb[2]}");
-
     // A fixed-list element is a first-class operand.
     var half = rgb[0] / 2;
     Output.printLine("half {half}");
-
     // `[int; 3]` is assignable to `List<int>`.
     Output.printLine("sum {total(rgb)}");
-
     // Element-set is length-preserving, allowed on a `mutable` fixed list.
     mutable [int; 2] pair = [1, 2];
     pair[0] = 10;

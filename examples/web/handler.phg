@@ -19,111 +19,106 @@ import Core.Bytes;
 import Core.String;
 
 class Request {
-  // method/path/body are read externally (→ `public`, so the PHP transpile can read them too);
-  // headerLines is read only inside `header()` (→ `private`).
-  constructor(public string method, public string path, public bytes body,
-              private List<string> headerLines) {}
-
-  // Linear scan, parse on lookup. `splitOnce` keeps `:` inside a value intact (e.g. a Host:port).
-  // Lines without a `:` (the request-line) are skipped by the `contains` guard.
-  function header(string name): string? {
-    for (string line in this.headerLines) {
-      if (String.contains(line, ":")) {
-        List<string> kv = String.splitOnce(line, ":");
-        string key = String.trim(kv[0]);
-        if (key == name) { return String.trim(kv[1]); }
-      }
+    constructor(public string method, public string path, public bytes body, private List<string> headerLines) {}
+    function header(string name): string? {
+        // method/path/body are read externally (→ `public`, so the PHP transpile can read them too);
+        // headerLines is read only inside `header()` (→ `private`).
+        // Linear scan, parse on lookup. `splitOnce` keeps `:` inside a value intact (e.g. a Host:port).
+        // Lines without a `:` (the request-line) are skipped by the `contains` guard.
+        for (string line in this.headerLines) {
+            if (String.contains(line, ":")) {
+                List<string> kv = String.splitOnce(line, ":");
+                string key = String.trim(kv[0]);
+                if (key == name) {
+                    return String.trim(kv[1]);
+                }
+            }
+        }
+        return null;
     }
-    return null;
-  }
 }
 
 class Response {
-  // The handler supplies headers as a fixed `List<string>` literal (Content-Length is added by
-  // `serializeResponse`). At least one header is expected for the spike.
-  constructor(public int status, public bytes body, public List<string> headerLines) {}
+    constructor(public int status, public bytes body, public List<string> headerLines) {}
 }
 
+// The handler supplies headers as a fixed `List<string>` literal (Content-Length is added by
+// `serializeResponse`). At least one header is expected for the spike.
 // status code → reason phrase, as nested expression-`if` (match is over enums, not ints).
 function reasonPhrase(int s): string {
-  return if (s == 200) { "OK" }
-    else { if (s == 400) { "Bad Request" }
-    else { if (s == 404) { "Not Found" }
-    else { "Internal Server Error" } } };
+    return if (s == 200) { "OK" } else { if (s == 400) { "Bad Request" } else { if (s == 404) { "Not Found" } else { "Internal Server Error" } } };
 }
 
 // Parse a raw HTTP/1.1 request. Returns `null` (→ a 400 at the socket layer) when malformed.
 function parseRequest(bytes raw): Request? {
-  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-  // Locate the CRLFCRLF head/body boundary at the BYTE level (the body may be non-UTF-8).
-  int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
-  if (sep < 0) { return null; }
-  bytes headBytes = Bytes.slice(raw, 0, sep);
-  bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
-
-  string head = Bytes.toString(headBytes) ?? "";
-  List<string> lines = String.split(head, nl);
-  string requestLine = lines[0];
-  List<string> rl = String.split(requestLine, " ");
-  string method = rl[0];
-  string path = rl[1];
-  // Pass ALL lines (incl. the request-line) — header() skips colon-free lines.
-  return new Request(method, path, body, lines);
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    // Locate the CRLFCRLF head/body boundary at the BYTE level (the body may be non-UTF-8).
+    int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
+    if (sep < 0) {
+        return null;
+    }
+    bytes headBytes = Bytes.slice(raw, 0, sep);
+    bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
+    string head = Bytes.toString(headBytes) ?? "";
+    List<string> lines = String.split(head, nl);
+    string requestLine = lines[0];
+    List<string> rl = String.split(requestLine, " ");
+    string method = rl[0];
+    string path = rl[1];
+    // Pass ALL lines (incl. the request-line) — header() skips colon-free lines.
+    return new Request(method, path, body, lines);
 }
 
 // Serialize a Response to raw HTTP/1.1 Bytes. Always (re)computes Content-Length from the body.
 function serializeResponse(Response resp): bytes {
-  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-  string reason = reasonPhrase(resp.status);
-  int st = resp.status;
-  string statusLine = "HTTP/1.1 {st} {reason}";
-  int bodyLen = Bytes.length(resp.body);
-  // `String.join` folds the user headers (no mutation / no list-append needed).
-  string userHeaders = String.join(resp.headerLines, nl);
-  string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
-  return Bytes.concat(Bytes.fromString(head), resp.body);
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    string reason = reasonPhrase(resp.status);
+    int st = resp.status;
+    string statusLine = "HTTP/1.1 {st} {reason}";
+    int bodyLen = Bytes.length(resp.body);
+    // `String.join` folds the user headers (no mutation / no list-append needed).
+    string userHeaders = String.join(resp.headerLines, nl);
+    string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
+    return Bytes.concat(Bytes.fromString(head), resp.body);
 }
 
 // The application: greet by path, echoing the Host header.
 function handle(Request req): Response {
-  string host = req.header("Host") ?? "world";
-  string path = req.path;
-  string msg = "Hello {path} (host {host})";
-  bytes body = Bytes.fromString(msg);
-  return new Response(200, body, ["Content-Type: text/plain"]);
+    string host = req.header("Host") ?? "world";
+    string path = req.path;
+    string msg = "Hello {path} (host {host})";
+    bytes body = Bytes.fromString(msg);
+    return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function main(): void {
-  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-  // A canonical raw request, built as a `b"…"` literal with explicit `\x0d\x0a` CRLFs — deterministic
-  // (no committed-file autocrlf hazard) and a showcase of W0's byte literals.
-  bytes raw = b"GET /hi HTTP/1.1\x0d\x0aHost: localhost\x0d\x0aAccept: text/plain\x0d\x0a\x0d\x0ahello";
-
-  if (var req = parseRequest(raw)) {
-    string m = req.method;
-    string p = req.path;
-    Output.printLine("method={m} path={p}");
-    string host = req.header("Host") ?? "(none)";
-    Output.printLine("host={host}");
-    string accept = req.header("Accept") ?? "(none)";
-    Output.printLine("accept={accept}");
-    string reqBody = Bytes.toString(req.body) ?? "(binary)";
-    Output.printLine("reqbody={reqBody}");
-
-    Response resp = handle(req);
-    int st = resp.status;
-    string reason = reasonPhrase(st);
-    Output.printLine("response status={st} {reason}");
-    string respBody = Bytes.toString(resp.body) ?? "(binary)";
-    Output.printLine("respbody={respBody}");
-
-    // The full serialized response, with CRLFs shown as " | " so the output stays one clean ASCII line.
-    bytes wire = serializeResponse(resp);
-    int wireLen = Bytes.length(wire);
-    string wireStr = Bytes.toString(wire) ?? "(binary)";
-    string oneLine = String.replace(wireStr, nl, " | ");
-    Output.printLine("wire ({wireLen}B): {oneLine}");
-  } else {
-    Output.printLine("malformed request");
-  }
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    // A canonical raw request, built as a `b"…"` literal with explicit `\x0d\x0a` CRLFs — deterministic
+    // (no committed-file autocrlf hazard) and a showcase of W0's byte literals.
+    bytes raw = b"GET /hi HTTP/1.1\x0d\x0aHost: localhost\x0d\x0aAccept: text/plain\x0d\x0a\x0d\x0ahello";
+    if (var req = parseRequest(raw)) {
+        string m = req.method;
+        string p = req.path;
+        Output.printLine("method={m} path={p}");
+        string host = req.header("Host") ?? "(none)";
+        Output.printLine("host={host}");
+        string accept = req.header("Accept") ?? "(none)";
+        Output.printLine("accept={accept}");
+        string reqBody = Bytes.toString(req.body) ?? "(binary)";
+        Output.printLine("reqbody={reqBody}");
+        Response resp = handle(req);
+        int st = resp.status;
+        string reason = reasonPhrase(st);
+        Output.printLine("response status={st} {reason}");
+        string respBody = Bytes.toString(resp.body) ?? "(binary)";
+        Output.printLine("respbody={respBody}");
+        // The full serialized response, with CRLFs shown as " | " so the output stays one clean ASCII line.
+        bytes wire = serializeResponse(resp);
+        int wireLen = Bytes.length(wire);
+        string wireStr = Bytes.toString(wire) ?? "(binary)";
+        string oneLine = String.replace(wireStr, nl, " | ");
+        Output.printLine("wire ({wireLen}B): {oneLine}");
+    } else {
+        Output.printLine("malformed request");
+    }
 }

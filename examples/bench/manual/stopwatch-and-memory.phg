@@ -15,40 +15,34 @@ import Core.Runtime;
 
 class Stopwatch {
     private mutable int startNs = 0;
-
-    public function start() -> void {
+    public function start(): void {
         this.startNs = Runtime.monotonicNanos();
     }
-
-    public function elapsedNanos() -> int {
+    public function elapsedNanos(): int {
         return Runtime.monotonicNanos() - this.startNs;
     }
-
-    public function elapsedMicros() -> int {
+    public function elapsedMicros(): int {
         return this.elapsedNanos() / 1000;
     }
-
-    public function elapsedMillis() -> int {
+    public function elapsedMillis(): int {
         return this.elapsedNanos() / 1000000;
     }
 }
 
-function fib(int n) -> int {
+function fib(int n): int {
     if (n < 2) {
         return n;
     }
     return fib(n - 1) + fib(n - 2);
 }
 
-function main() -> void {
+function main(): void {
     // Reset the peak so the reading below reflects only this workload.
     Runtime.resetPeakMemory();
-
     var sw = new Stopwatch();
     sw.start();
     int result = fib(30);
     int micros = sw.elapsedMicros();
-
     Output.printLine("fib(30)           = {result}");
     // Sanity assertions instead of the raw timing/memory numbers, so the walkthrough reads cleanly
     // (the raw numbers are what YOU print in a real benchmark — see the README for sample output).

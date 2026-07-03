@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 // A-62 — `"""…"""` multi-line text blocks (Java/Swift/Kotlin style). The opening `"""` is followed
@@ -7,26 +8,14 @@ import Core.Output;
 // just like in a normal `"…"` string. A bare `"` inside the block is literal. Text blocks lex to the
 // same segments a single-line string would, so all three backends + the transpiled PHP stay
 // byte-identical.
-
 function main(): void {
     string name = "Ada";
     int unread = 3;
-
     // The 8-space common indent (and the closing delimiter's column) is stripped; the 2-space
     // relative indent on the "you have" line is preserved.
-    string letter = """
-        Dear {name},
-          you have {unread} unread message(s).
-        Regards,
-        The Phorj Team
-        """;
+    string letter = "Dear {name},\n  you have {unread} unread message(s).\nRegards,\nThe Phorj Team";
     Output.printLine(letter);
-
     // A bare quote needs no escaping inside a text block — handy for SQL / HTML / JSON.
-    string sql = """
-        SELECT *
-        FROM "users"
-        WHERE name = '{name}'
-        """;
+    string sql = "SELECT *\nFROM \"users\"\nWHERE name = '{name}'";
     Output.printLine(sql);
 }

@@ -10,17 +10,18 @@ import Core.Output;
 
 // `open` is required to allow extension (Phorj classes are final by default).
 open class Shape {
-    static function describe(int sides) -> string {
+    static function describe(int sides): string {
         return "a polygon with {sides} sides";
     }
 }
 
 // Inherits `describe` — no redeclaration needed.
-class Triangle extends Shape {}
+class Triangle extends Shape {
+}
 
 // A trait can also supply a static, callable on the using class.
 trait Tagged {
-    static function tag() -> string {
+    static function tag(): string {
         return "tagged";
     }
 }
@@ -29,7 +30,7 @@ class Widget {
     use Tagged;
 }
 
-function main() -> void {
+function main(): void {
     // Called on the subclass — resolves Shape.describe.
     Output.printLine(Triangle.describe(3));
     // Still callable on the declaring class.

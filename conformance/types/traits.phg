@@ -4,13 +4,13 @@ package Main;
 import Core.Output;
 
 trait Greet {
-    function hello() -> string {
+    function hello(): string {
         return "hello from a trait";
     }
 }
 
 trait Taggable {
-    function tag() -> string {
+    function tag(): string {
         return "tagged";
     }
 }
@@ -20,7 +20,7 @@ class Robot {
     use Taggable;
 }
 
-function main() -> void {
+function main(): void {
     Robot r = new Robot();
     Output.printLine(r.hello());
     Output.printLine(r.tag());

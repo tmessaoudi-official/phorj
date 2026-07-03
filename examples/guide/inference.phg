@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 // `type` alias: a domain-specific name for a primitive. It is compile-time only — the checker

@@ -1,5 +1,5 @@
 package Main;
 
-function main() -> void {
+function main(): void {
     Map<int> m = [1 => 2];
 }

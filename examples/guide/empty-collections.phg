@@ -11,15 +11,14 @@ import Core.Output;
 import Core.List;
 
 // The return type `List<int>` supplies the element type for the empty `[]`.
-function emptyInts() -> List<int> {
+function emptyInts(): List<int> {
     return [];
 }
 
-function main() -> void {
+function main(): void {
     // Declared-annotation form.
     List<string> names = [];
     Output.printLine("names empty? {List.isEmpty(names)}");
-
     // Return-type form, then grow it functionally (List is immutable — concat returns a new list).
     List<int> xs = emptyInts();
     List<int> grown = List.concat(xs, [1, 2, 3]);

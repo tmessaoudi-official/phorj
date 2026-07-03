@@ -9,16 +9,14 @@
 // boundary: a `Box<string>` does not flow into a `Box<int>` slot.
 package Acme.Containers;
 
-public class Box<T> {
-  constructor(private T value) {}
-
-  // Returns the stored value at whatever concrete type the box was constructed with.
-  function get(): T {
-    return this.value;
-  }
-
-  // A method taking a `T`: checked at the instance's concrete type.
-  function orElse(T fallback): T {
-    return this.value;
-  }
+class Box<T> {
+    constructor(private T value) {}
+    function get(): T {
+        // Returns the stored value at whatever concrete type the box was constructed with.
+        return this.value;
+    }
+    function orElse(T fallback): T {
+        // A method taking a `T`: checked at the instance's concrete type.
+        return this.value;
+    }
 }

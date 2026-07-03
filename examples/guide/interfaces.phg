@@ -20,12 +20,18 @@ interface Pet extends Speaker {
 
 class Dog implements Pet {
     constructor(public string dogName) {}
-    function speak(): string { return "Woof"; }
-    function petName(): string { return this.dogName; }
+    function speak(): string {
+        return "Woof";
+    }
+    function petName(): string {
+        return this.dogName;
+    }
 }
 
 class Robot implements Speaker {
-    function speak(): string { return "Beep"; }
+    function speak(): string {
+        return "Beep";
+    }
 }
 
 // Polymorphism through an interface-typed parameter: `announce` knows only the contract.
@@ -36,22 +42,27 @@ function announce(Speaker s): string {
 function main(): void {
     var d = new Dog("Rex");
     var r = new Robot();
-
     // Called polymorphically — both a Dog and a Robot are Speakers.
-    Output.printLine(announce(d)); // Woof
-    Output.printLine(announce(r)); // Beep
-
+    Output.printLine(announce(d));
+    // Woof
+    Output.printLine(announce(r));
+    // Beep
     // `instanceof` against a class and against (extended) interfaces.
-    Output.printLine("{d instanceof Dog}");     // true
-    Output.printLine("{d instanceof Speaker}"); // true  (Dog implements Pet, Pet extends Speaker)
-    Output.printLine("{d instanceof Pet}");     // true
-    Output.printLine("{r instanceof Speaker}"); // true
-    Output.printLine("{r instanceof Pet}");     // false (Robot is only a Speaker)
-
+    Output.printLine("{d instanceof Dog}");
+    // true
+    Output.printLine("{d instanceof Speaker}");
+    // true  (Dog implements Pet, Pet extends Speaker)
+    Output.printLine("{d instanceof Pet}");
+    // true
+    Output.printLine("{r instanceof Speaker}");
+    // true
+    Output.printLine("{r instanceof Pet}");
+    // false (Robot is only a Speaker)
     // A class instance flows into an interface-typed binding (nominal subtyping).
     Speaker sp = d;
     // Smart-cast: a Speaker known to be a Dog reads the Dog's own field.
     if (sp instanceof Dog) {
-        Output.printLine(sp.dogName); // Rex
+        Output.printLine(sp.dogName);
     }
 }
+// Rex

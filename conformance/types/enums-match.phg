@@ -3,29 +3,17 @@ package Main;
 
 import Core.Output;
 
-enum Shape {
-    Circle(int radius),
-    Rect(int w, int h),
-    Unit(),
+enum Shape { Circle(int radius), Rect(int w, int h), Unit }
+
+function area(Shape s): int {
+    return match (s) { Circle(r) => 3 * r * r, Rect(w, h) => w * h, Unit() => 0 };
 }
 
-function area(Shape s) -> int {
-    return match s {
-        Circle(r) => 3 * r * r,
-        Rect(w, h) => w * h,
-        Unit() => 0,
-    };
+function sign(int n): string {
+    return match (n) { 0 => "zero", x when x > 0 => "pos", _ => "neg" };
 }
 
-function sign(int n) -> string {
-    return match n {
-        0 => "zero",
-        x when x > 0 => "pos",
-        _ => "neg",
-    };
-}
-
-function main() -> void {
+function main(): void {
     Output.printLine("{area(new Circle(2))}");
     Output.printLine("{area(new Rect(3, 5))}");
     Output.printLine("{area(new Unit())}");

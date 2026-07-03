@@ -10,16 +10,16 @@ package Acme.Calc;
 import Core.List;
 
 function dbl(int x): int {
-  return x * 2;
+    return x * 2;
 }
 
 // (1) A lambda whose body calls a same-package function — passed to a higher-order native.
-public function doubleAll(List<int> xs): List<int> {
-  return List.map(xs, function(int x) => dbl(x));
+function doubleAll(List<int> xs): List<int> {
+    return List.map(xs, function(int x) => dbl(x));
 }
 
 // (2) A bare function value: `dbl` referenced as a value, then invoked.
-public function applyDouble(int x): int {
-  var f = dbl;
-  return f(x);
+function applyDouble(int x): int {
+    var f = dbl;
+    return f(x);
 }

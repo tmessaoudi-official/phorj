@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 // M-mut.7b — property hooks: a member that looks like a field but runs code on read (`get`) and/or
@@ -6,27 +7,31 @@ import Core.Output;
 // other (stored) fields. `get => expr` is a computed read; `set(T v) { … }` intercepts a write,
 // binding the assigned value to `v`. A hook may be read-only (get only), write-only (set only), or
 // both. It transpiles 1:1 to a PHP 8.4 property hook.
-
 class Temp {
-    // One stored field; `fahrenheit` is a hook computed from it both ways.
     constructor(public mutable float celsius) {}
-
     float fahrenheit {
         get => this.celsius * 9.0 / 5.0 + 32.0;
-        set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; }
+        set(float f) {
+            // One stored field; `fahrenheit` is a hook computed from it both ways.
+            this.celsius = (f - 32.0) * 5.0 / 9.0;
+        }
     }
 }
 
 class Account {
     constructor(public mutable int raw) {}
-
-    // A write-validating hook: the `set` clamps negatives to zero before storing. A read-only
-    // computed hook (`isEmpty`) derives a boolean from the stored balance.
     int balance {
         get => this.raw;
-        set(int v) { if (v < 0) { this.raw = 0; } else { this.raw = v; } }
+        set(int v) {
+            // A write-validating hook: the `set` clamps negatives to zero before storing. A read-only
+            // computed hook (`isEmpty`) derives a boolean from the stored balance.
+            if (v < 0) {
+                this.raw = 0;
+            } else {
+                this.raw = v;
+            }
+        }
     }
-
     bool isEmpty {
         get => this.raw == 0;
     }
@@ -34,15 +39,20 @@ class Account {
 
 function main(): void {
     Temp t = new Temp(100.0);
-    Output.printLine("100C is {t.fahrenheit}F"); // 100C is 212F
+    Output.printLine("100C is {t.fahrenheit}F");
+    // 100C is 212F
     // Writing the hook converts back into the stored celsius field.
     t.fahrenheit = 32.0;
-    Output.printLine("32F is {t.celsius}C"); // 32F is 0C
+    Output.printLine("32F is {t.celsius}C");
+    // 32F is 0C
     // A computed read is a first-class operand.
-    Output.printLine("delta: {t.fahrenheit + 18.0}"); // 32 + 18 = 50
-
+    Output.printLine("delta: {t.fahrenheit + 18.0}");
+    // 32 + 18 = 50
     Account a = new Account(50);
-    Output.printLine("balance: {a.balance}, empty: {a.isEmpty}"); // 50, false
-    a.balance = -10; // the set hook clamps to 0
-    Output.printLine("after -10: {a.balance}, empty: {a.isEmpty}"); // 0, true
+    Output.printLine("balance: {a.balance}, empty: {a.isEmpty}");
+    // 50, false
+    a.balance = -10;
+    // the set hook clamps to 0
+    Output.printLine("after -10: {a.balance}, empty: {a.isEmpty}");
 }
+// 0, true

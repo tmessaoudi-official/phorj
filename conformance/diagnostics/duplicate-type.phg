@@ -1,6 +1,9 @@
 package Main;
 
-class Widget {}
+class Widget {
+}
+
 enum Widget { A }
 
-function main() -> void {}
+function main(): void {
+}

@@ -4,6 +4,6 @@ class A {
     private static int s = 3;
 }
 
-function main() -> void {
+function main(): void {
     var x = A.s;
 }

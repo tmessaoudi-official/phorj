@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 // Green threads (M6 W4 / S4.3) — uncolored COOPERATIVE concurrency. `spawn` starts a green task, typed
@@ -14,8 +15,9 @@ import Core.Output;
 // Green threads have NO PHP target (PHP has no green threads), so this program is quarantined from the
 // PHP oracle — it runs on the Phorj interpreter and VM, byte-identically. The transpiler rejects it
 // with `E-CONCURRENCY-NO-PHP` rather than emitting a misleading synchronous lowering.
-
-function square(int n): int { return n * n; }
+function square(int n): int {
+    return n * n;
+}
 
 // Fork several tasks, then join their results — the fork-join pattern.
 function sumOfSquares(): int {
@@ -53,17 +55,14 @@ function main(): void {
     // 1. spawn + join — start a task, then collect its value.
     Task<int> t = spawn square(9);
     Output.printLine("9 squared = {t.join()}");
-
     // 2. fork-join over several tasks.
     Output.printLine("2² + 3² + 4² = {sumOfSquares()}");
-
     // 3. a typed channel: send values, then receive them in FIFO order.
     Channel<string> words = Channel.create();
     words.send("hello");
     words.send("green");
     words.send("threads");
     Output.printLine("{words.receive()} {words.receive()} {words.receive()}");
-
     // 4. genuine cooperative interleave: a blocked `recv` suspends the consumer until the spawned
     //    producer sends (impossible under the old eager model — it would have faulted at `spawn`).
     Output.printLine("interleaved total = {interleave()}");

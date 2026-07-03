@@ -1,13 +1,15 @@
 package Main;
+
 import Core.Output;
 
 // M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over
 // `T?`. A non-optional `T` can never hold `null` — the checker enforces it (TypeScript
 // `strictNullChecks` over PHP's nullable runtime). These operators are the only ways from `T?` to T.
-
 class Box {
     constructor(private int v) {}
-    function get(): int { return this.v; }
+    function get(): int {
+        return this.v;
+    }
 }
 
 // A self-optional field (`Node? next`) — the building block of a linked list. Exercises chained
@@ -19,25 +21,19 @@ class Node {
 
 // `match` over an optional: the `null` arm handles absence; the binding arm narrows `v` to `int`.
 function describe(int? o): string {
-    return match o {
-        null => "absent",
-        v => "present {v}",
-    };
+    return match (o) { null => "absent", v => "present {v}" };
 }
 
 function main(): void {
     // A `T?` holds a value or `null`; a non-optional `T` widens to `T?`.
     int? some = 7;
     int? none = null;
-
     // `??` supplies a default when the left side is null (and skips it otherwise).
     Output.printLine("coalesce: {some ?? -1} {none ?? -1}");
-
     // `?.` reads through a present receiver and short-circuits a null one to `null`.
     Box? box = new Box(42);
     Box? nobox = null;
-    Output.printLine("safe: {(box?.get()) ?? -1} {(nobox?.get()) ?? -1}");
-
+    Output.printLine("safe: {box?.get() ?? -1} {nobox?.get() ?? -1}");
     // `if (var x = opt)` binds the non-null inner inside the then-block only (smart-cast to `int`).
     if (var x = some) {
         Output.printLine("if-let: got {x}");
@@ -49,15 +45,12 @@ function main(): void {
     } else {
         Output.printLine("if-let: none");
     }
-
     // `opt!` force-unwraps a known-present optional to `int` (it would fault on null — never used on
     // a value that can be null; the `W-FORCE-UNWRAP` lint flags every use). `x` is then a real `int`.
     int forced = some!;
     Output.printLine("force: {forced + 1}");
-
     // `match` over `T?` with null-arm narrowing.
     Output.printLine("match: {describe(some)} / {describe(none)}");
-
     // Chained `opt!` through object optionals: a 3-node list, force-unwrapping `next` twice to reach
     // the third node's `v`. The two-`opt!`-in-one-interpolation case (`{a.next!.v} / {…next!.next!.v}`)
     // is the precise shape a past scratch-slot bug touched — guarded here on both backends + PHP.

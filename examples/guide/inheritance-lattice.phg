@@ -35,7 +35,7 @@ open class Bird extends Animal {
 
 // Multiple inheritance: a Duck is a Fish AND a Bird (and, through both, an Animal — the diamond).
 class Duck extends Fish, Bird {
-    use Fish.move
+    use Fish.move;
 }
 
 // A parameter typed as an ancestor accepts any subtype (subtyping at a call boundary).
@@ -45,16 +45,14 @@ function describe(Animal a): string {
 
 function main(): void {
     Duck d = new Duck();
-
     // (1) `instanceof` against every ancestor in the lattice — all true.
     Output.printLine("{d instanceof Duck} {d instanceof Fish} {d instanceof Bird} {d instanceof Animal}");
-
     // (2) the Duck flows into ancestor-typed bindings; dispatch stays dynamic.
     Fish f = d;
     Animal a = d;
     Output.printLine("{f.move()} {a.name()}");
-    Output.printLine(describe(d)); // a Duck passed where an Animal is expected
-
+    Output.printLine(describe(d));
+    // a Duck passed where an Animal is expected
     // (3) a non-subtype test is false — Bird is an ancestor of Duck, but a fresh Animal is not a Bird.
     Animal plain = new Animal();
     Output.printLine("{plain instanceof Bird}");

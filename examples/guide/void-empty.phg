@@ -28,13 +28,10 @@ function doNothing(): empty {
 
 function main(): void {
     note("start");
-
     // Hold the empty value — the explicit escape from E-VOID-CAPTURE.
     empty a = doNothing();
-
     // `void <: empty`: a void-returning call also flows into an `empty` binding. The side effect
     // still happens; the captured empty value is never inspected (there is nothing to inspect).
     empty b = note("middle");
-
     note("end");
 }

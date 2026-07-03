@@ -3,6 +3,6 @@
 // the global namespace while the `Json` variant classes live in `\Main\`).
 package Acme.Meta;
 
-public function version(): string {
-  return "1.0";
+function version(): string {
+    return "1.0";
 }

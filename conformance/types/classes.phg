@@ -5,17 +5,15 @@ import Core.Output;
 
 class Rect {
     constructor(public int w, public int h) {}
-
-    function area() -> int {
+    function area(): int {
         return this.w * this.h;
     }
-
-    function scaled(int k) -> Rect {
+    function scaled(int k): Rect {
         return new Rect(this.w * k, this.h * k);
     }
 }
 
-function main() -> void {
+function main(): void {
     Rect r = new Rect(3, 4);
     Output.printLine("area = {r.area()}");
     Rect big = r.scaled(2);

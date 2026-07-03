@@ -1,33 +1,33 @@
 package Main;
+
 import Core.Output;
 import Core.Math;
 
 // Arithmetic, comparison, logical, and unary operators.
 // Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).
-
 function main(): void {
     int a = 7;
     int b = 3;
     Output.printLine("a + b = {a + b}");
     Output.printLine("a - b = {a - b}");
     Output.printLine("a * b = {a * b}");
-    Output.printLine("a / b = {a / b}");   // integer division
+    Output.printLine("a / b = {a / b}");
+    // integer division
     Output.printLine("a % b = {a % b}");
-
     float x = 7.0;
     float y = 2.0;
-    Output.printLine("x / y = {x / y}");   // float division
-
+    Output.printLine("x / y = {x / y}");
+    // float division
     Output.printLine("a < b   = {a < b}");
     Output.printLine("a == 7  = {a == 7}");
     Output.printLine("a != b  = {a != b}");
-    Output.printLine("and     = {(a > b) && (x > y)}");
-    Output.printLine("or      = {(a < b) || (x > y)}");
+    Output.printLine("and     = {a > b && x > y}");
+    Output.printLine("or      = {a < b || x > y}");
     Output.printLine("not     = {!(a < b)}");
     Output.printLine("neg     = {-a}");
-
     // `**` power. Type-directed: `int ** int` → int, `float ** float` → float.
-    var sq = 2 ** 10;                  // 1024
+    var sq = 2 ** 10;
+    // 1024
     Output.printLine("2 ** 10        = {sq}");
     // Right-associative (like PHP): 2 ** (3 ** 2) = 2 ** 9 = 512.
     var ra = 2 ** 3 ** 2;
@@ -39,9 +39,11 @@ function main(): void {
     var negPow = -a ** 2;
     Output.printLine("-a ** 2        = {negPow}");
     // Float power (exact-representable result to stay byte-identical with PHP's echo).
-    var fp = 3.0 ** 2.0;               // 9.0
+    var fp = 3.0 ** 2.0;
+    // 9.0
     Output.printLine("3.0 ** 2.0     = {fp}");
     // `Math.integerPower` is the named, value-level twin of integer `**` (int ** int → int).
-    var ip = Math.integerPower(5, 2);          // 25
+    var ip = Math.integerPower(5, 2);
+    // 25
     Output.printLine("Math.integerPower(5,2) = {ip}");
 }

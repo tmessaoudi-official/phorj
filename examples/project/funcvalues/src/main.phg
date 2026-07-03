@@ -8,7 +8,10 @@ import Core.List;
 import Acme.Calc;
 
 function main(): void {
-  var ys = Calc.doubleAll([1, 2, 3]); // [2, 4, 6]
-  Output.printLine("sum: {List.sum(ys)}"); // sum: 12
-  Output.printLine("applyDouble: {Calc.applyDouble(5)}"); // applyDouble: 10
+    var ys = Calc.doubleAll([1, 2, 3]);
+    // [2, 4, 6]
+    Output.printLine("sum: {List.sum(ys)}");
+    // sum: 12
+    Output.printLine("applyDouble: {Calc.applyDouble(5)}");
 }
+// applyDouble: 10

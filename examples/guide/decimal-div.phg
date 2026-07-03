@@ -7,7 +7,6 @@
 package Main;
 
 import Core.Output;
-
 import Core.Decimal;
 import Core.Decimal.RoundingMode;
 

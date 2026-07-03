@@ -20,54 +20,54 @@ import Core.Http.Router;
 
 #[Route("GET", "/")]
 function home(Request req): Response {
-  return Response.text(200, "Phorj web — home");
+    return Response.text(200, "Phorj web — home");
 }
 
 #[Route("GET", "/health")]
 function health(Request req): Response {
-  return Response.text(200, "ok");
+    return Response.text(200, "ok");
 }
 
-#[Route("GET", r"/users/{id}")]
+#[Route("GET", "/users/\{id\}")]
 function showUser(Request req): Response {
-  return Response.text(200, "user #{req.param(\"id\") ?? \"?\"}");
+    return Response.text(200, "user #{req.param(\"id\") ?? \"?\"}");
 }
 
 // More specific than `/users/{id}` — literal>param precedence makes it win for that exact path,
 // regardless of declaration order.
 #[Route("GET", "/users/me")]
 function currentUser(Request req): Response {
-  return Response.text(200, "the current user");
+    return Response.text(200, "the current user");
 }
 
-#[Route("GET", r"/posts/{year}/{slug}")]
+#[Route("GET", "/posts/\{year\}/\{slug\}")]
 function showPost(Request req): Response {
-  string year = req.param("year") ?? "?";
-  string slug = req.param("slug") ?? "?";
-  return Response.text(200, "post {year}/{slug}");
+    string year = req.param("year") ?? "?";
+    string slug = req.param("slug") ?? "?";
+    return Response.text(200, "post {year}/{slug}");
 }
 
 function show(Router rt, bytes raw): void {
-  if (var req = Request.parse(raw)) {
-    Response resp = rt.handle(req);
-    int st = resp.status;
-    string m = req.method;
-    string p = req.path;
-    string body = Bytes.toString(resp.body) ?? "(binary)";
-    Output.printLine("{m} {p} -> {st}: {body}");
-  } else {
-    Output.printLine("malformed request");
-  }
+    if (var req = Request.parse(raw)) {
+        Response resp = rt.handle(req);
+        int st = resp.status;
+        string m = req.method;
+        string p = req.path;
+        string body = Bytes.toString(resp.body) ?? "(binary)";
+        Output.printLine("{m} {p} -> {st}: {body}");
+    } else {
+        Output.printLine("malformed request");
+    }
 }
 
 function main(): void {
-  // `Http.autoRouter()` lowers to the explicit registration of every `#[Route]` handler above.
-  Router rt = Http.autoRouter();
-  show(rt, b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /users/42 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /users/me HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /posts/2026/hello-phorj HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"POST / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    // `Http.autoRouter()` lowers to the explicit registration of every `#[Route]` handler above.
+    Router rt = Http.autoRouter();
+    show(rt, b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /users/42 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /users/me HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /posts/2026/hello-phorj HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"POST / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
 }

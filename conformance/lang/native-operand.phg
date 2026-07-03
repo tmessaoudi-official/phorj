@@ -9,23 +9,20 @@ import Core.List;
 import Core.Math;
 import Core.String;
 
-function main() -> void {
+function main(): void {
     List<int> xs = [10, 20, 30, 40];
-
     // List.length(...) as the left operand of every arithmetic form.
     Output.printLine("{List.length(xs) - 1}");
     Output.printLine("{List.length(xs) + 2}");
     Output.printLine("{List.length(xs) * 3}");
-
     // The classic loop-counter form that first surfaced the bug.
     mutable int i = List.length(xs) - 1;
     mutable int sum = 0;
     while (i >= 0) {
-        sum += xs[i];
-        i -= 1;
+        sum = sum + xs[i];
+        i = i - 1;
     }
     Output.printLine("rev-sum {sum}");
-
     // Other int-returning natives as operands.
     Output.printLine("{Math.abs(-7) + 1}");
     Output.printLine("{Math.max(3, 9) - 4}");

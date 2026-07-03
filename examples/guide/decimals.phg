@@ -10,44 +10,41 @@ function main(): void {
     // Literals preserve scale from the text: 19.99d => scale 2.
     decimal price = 19.99d;
     int qty = 3;
-
     // decimal * int => decimal (int widens, no float in sight).
-    decimal subtotal = price * qty;          // 59.97
+    decimal subtotal = price * qty;
+    // 59.97
     decimal shipping = 4.50d;
-    decimal total = subtotal + shipping;     // 64.47
-    decimal discount = total - 14.47d;       // 50.00
-
+    decimal total = subtotal + shipping;
+    // 64.47
+    decimal discount = total - 14.47d;
+    // 50.00
     Output.printLine("price    = {price}");
     Output.printLine("subtotal = {subtotal}");
     Output.printLine("total    = {total}");
     Output.printLine("discount = {discount}");
-
     // Multiplication grows scale exactly: 1.11 * 1.11 = 1.2321 (scale 4).
     decimal r = 1.11d * 1.11d;
     Output.printLine("1.11 * 1.11 = {r}");
-
     // Remainder `%` is exact (no rounding); result keeps the max operand scale.
     decimal rem = 10.50d % 3.00d;
     Output.printLine("10.50 %% 3.00 = {rem}");
-
     // Bare `/` is exact-or-fault: it returns the exact quotient when it terminates (10.0/4.0 = 2.5,
     // 1/8 = 0.125), in minimal form. A non-terminating quotient (1d/3d) FAULTS — use
     // `Decimal.divide(a, b, scale, mode)` for a rounded result. (No silent precision loss.)
-    decimal q1 = 10.0d / 4.0d;     // 2.5
-    decimal q2 = 1d / 8d;          // 0.125
+    decimal q1 = 10.0d / 4.0d;
+    // 2.5
+    decimal q2 = 1d / 8d;
+    // 0.125
     Output.printLine("10.0 / 4.0 = {q1}");
     Output.printLine("1 / 8 = {q2}");
-
     // Comparison is numeric: 1.50 equals 1.5 even at different scales.
     decimal a = 1.50d;
     decimal b = 1.5d;
     Output.printLine("1.50 == 1.5 : {a == b}");
     Output.printLine("total > price : {total > price}");
-
     // Trailing zeros render to the value's scale.
     decimal padded = 1.500d;
     Output.printLine("padded   = {padded}");
-
     // Build from a string at runtime (returns decimal?).
     decimal parsed = Decimal.of("12.34") ?? 0d;
     Output.printLine("parsed   = {parsed}");

@@ -15,7 +15,6 @@
 package Main;
 
 import Core.Output;
-
 import Core.Json;
 
 // Render a parsed JSON value's top-level shape — demonstrates matching every variant.

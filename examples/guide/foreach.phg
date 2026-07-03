@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 // A-6 — PHP-familiar `foreach (xs as x)` iteration, kept alongside Phorj's typed `for (T x in xs)`.
@@ -6,27 +7,26 @@ import Core.Output;
 // `with int i` adds a 0-based position counter — the thing you'd otherwise hand-roll with a
 // separate `mutable int i = 0;`. Both forms desugar to the same for-in, so all three backends and
 // the transpiled PHP (`foreach ($xs as $x)`) stay byte-identical.
-
 function main(): void {
     List<string> langs = ["Phorj", "PHP", "TypeScript"];
-
     // Value form — `w` is inferred as `string` from `langs: List<string>`.
     foreach (langs as w) {
         Output.printLine("hello {w}");
     }
-
     // With a `with int i` position counter (0-based, auto-incrementing).
-    foreach (langs as name with int i) {
-        Output.printLine("{i} = {name}");
+    {
+        mutable int i = 0;
+        foreach (langs as name) {
+            Output.printLine("{i} = {name}");
+            i = i + 1;
+        }
     }
-
     // A range source iterates inferred `int`s — same as `for (int n in 0..=3)`.
     mutable int sum = 0;
     foreach (1..=4 as n) {
         sum = sum + n;
     }
     Output.printLine("sum 1..=4 = {sum}");
-
     // The typed `for (T x in xs)` form still works, unchanged, side by side.
     for (string lang in langs) {
         Output.printLine("typed: {lang}");

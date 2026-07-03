@@ -16,13 +16,13 @@ package Main;
 import Core.Output;
 
 // Preconditions: guard the argument range, then use it. Both asserts hold for every call below.
-function percent(int n) -> int {
+function percent(int n): int {
     assert(n >= 0, "percent must be non-negative");
     assert(n <= 100);
     return n;
 }
 
-function main() -> void {
+function main(): void {
     Output.printLine("percent = {percent(50)}");
     // Passing asserts are no-ops — execution continues past them.
     assert(percent(0) == 0);

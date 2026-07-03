@@ -57,6 +57,13 @@ impl Printer<'_> {
     /// F2b: flush every own-line comment whose source position precedes byte offset `before`, each on
     /// its own indented line, ahead of the node about to be printed. (A trailing comment on the same
     /// line as preceding code is handled separately.) Comment text is emitted verbatim (no reflow).
+    /// Whether an own-line comment is still pending before source offset `before` (used to keep a
+    /// commented import from being tightly grouped with the previous import).
+    fn has_comment_before(&self, before: usize) -> bool {
+        self.next_comment < self.comments.len()
+            && self.comments[self.next_comment].span.start < before
+    }
+
     fn flush_comments_before(&mut self, before: usize) {
         while self.next_comment < self.comments.len()
             && self.comments[self.next_comment].span.start < before
@@ -82,20 +89,34 @@ impl Printer<'_> {
     }
 
     fn program(&mut self, p: &Program) -> Result<(), String> {
-        let pkg = if p.package.is_empty() {
-            "Main".to_string()
-        } else {
-            p.package.join(".")
-        };
         // A comment above the `package` line (a file header) is emitted first, before the package.
         let pkg_start = p.span.start;
         self.flush_comments_before(pkg_start);
-        self.line(&format!("package {pkg};"));
+        // Preserve an ABSENT package: a `.d.phg` foreign-declaration file has no package and MUST NOT
+        // gain one (`E-DECL-PACKAGE`). Only emit the line when the source actually declared a package —
+        // never synthesize "Main".
+        let mut emitted = false;
+        if !p.package.is_empty() {
+            self.line(&format!("package {};", p.package.join(".")));
+            emitted = true;
+        }
+        let mut prev: Option<&Item> = None;
         for item in &p.items {
-            self.out.push('\n');
+            // Consecutive `import`s are grouped tightly (no blank line between them); every other
+            // item pair — and an import adjacent to a non-import — gets a blank-line separator.
+            let grouped_import = matches!(item, Item::Import { .. })
+                && matches!(prev, Some(Item::Import { .. }))
+                && !self.has_comment_before(item_start(item));
+            if !emitted {
+                // First output when there was no package line — no leading blank.
+                emitted = true;
+            } else if !grouped_import {
+                self.out.push('\n');
+            }
             // Own-line comments that precede this item (after the blank separator).
             self.flush_comments_before(item_start(item));
             self.item(item)?;
+            prev = Some(item);
         }
         Ok(())
     }

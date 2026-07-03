@@ -12,26 +12,35 @@ import Core.Http.Route;
 import Core.Http.Router;
 
 #[Route("GET", "/")]
-function home(Request req) -> Response { return Response.text(200, "home"); }
+function home(Request req): Response {
+    return Response.text(200, "home");
+}
 
-#[Route("GET", r"/users/{id}")]
-function showUser(Request req) -> Response { return Response.text(200, "user " + (req.param("id") ?? "?")); }
+#[Route("GET", "/users/\{id\}")]
+function showUser(Request req): Response {
+    return Response.text(200, "user " + (req.param("id") ?? "?"));
+}
 
 #[Route("GET", "/users/me")]
-function currentUser(Request req) -> Response { return Response.text(200, "me"); }
-
-function show(Router rt, string method, string path) -> void {
-  Response resp = rt.handle(new Request(method, path, b"", [], []));
-  int st = resp.status;
-  string body = Bytes.toString(resp.body) ?? "?";
-  Output.printLine("{method} {path} -> {st} {body}");
+function currentUser(Request req): Response {
+    return Response.text(200, "me");
 }
 
-function main() -> void {
-  Router rt = Http.autoRouter();
-  show(rt, "GET", "/");
-  show(rt, "GET", "/users/7");
-  show(rt, "GET", "/users/me"); // literal beats {id}
-  show(rt, "GET", "/missing");  // 404
-  show(rt, "POST", "/");        // method mismatch -> 404
+function show(Router rt, string method, string path): void {
+    Response resp = rt.handle(new Request(method, path, b"", [], []));
+    int st = resp.status;
+    string body = Bytes.toString(resp.body) ?? "?";
+    Output.printLine("{method} {path} -> {st} {body}");
 }
+
+function main(): void {
+    Router rt = Http.autoRouter();
+    show(rt, "GET", "/");
+    show(rt, "GET", "/users/7");
+    show(rt, "GET", "/users/me");
+    // literal beats {id}
+    show(rt, "GET", "/missing");
+    // 404
+    show(rt, "POST", "/");
+}
+// method mismatch -> 404

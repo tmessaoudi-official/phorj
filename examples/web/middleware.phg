@@ -16,50 +16,52 @@ import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
 
-function home(Request req): Response { return Response.text(200, "home"); }
-function secret(Request req): Response { return Response.text(200, "secret data"); }
+function home(Request req): Response {
+    return Response.text(200, "home");
+}
+
+function secret(Request req): Response {
+    return Response.text(200, "secret data");
+}
 
 // A logging middleware: continues the chain, then logs the status (post-processing after `next`).
-function logging(Request req, (Request) -> Response next): Response {
-  var n = next;
-  Response resp = n(req);
-  Output.printLine("LOG {req.method} {req.path} -> {resp.status}");
-  return resp;
+function logging(Request req, (Request) => Response next): Response {
+    var n = next;
+    Response resp = n(req);
+    Output.printLine("LOG {req.method} {req.path} -> {resp.status}");
+    return resp;
 }
 
 // An auth middleware: SHORT-CIRCUITS with 401 when there is no Authorization header (never calls
 // `next`, so the protected handler is not reached).
-function requireAuth(Request req, (Request) -> Response next): Response {
-  var n = next;
-  if ((req.header("Authorization") ?? "") == "") {
-    return Response.text(401, "unauthorized");
-  }
-  return n(req);
+function requireAuth(Request req, (Request) => Response next): Response {
+    var n = next;
+    if ((req.header("Authorization") ?? "") == "") {
+        return Response.text(401, "unauthorized");
+    }
+    return n(req);
 }
 
 function show(Router rt, bytes raw): void {
-  if (var req = Request.parse(raw)) {
-    Response resp = rt.handle(req);
-    int st = resp.status;
-    string m = req.method;
-    string p = req.path;
-    string body = Bytes.toString(resp.body) ?? "?";
-    Output.printLine("{m} {p} -> {st}: {body}");
-  } else {
-    Output.printLine("malformed request");
-  }
+    if (var req = Request.parse(raw)) {
+        Response resp = rt.handle(req);
+        int st = resp.status;
+        string m = req.method;
+        string p = req.path;
+        string body = Bytes.toString(resp.body) ?? "?";
+        Output.printLine("{m} {p} -> {st}: {body}");
+    } else {
+        Output.printLine("malformed request");
+    }
 }
 
 function main(): void {
-  // `logging` applies to every route; the `/admin` group adds `requireAuth` to just its routes.
-  Router rt = new Router([], [])
-    .use(logging)
-    .route("GET", "/", home)
-    .group("/admin", function(Router r) -> Router {
-      return r.use(requireAuth).route("GET", "/secret", secret);
-    });
-
-  show(rt, b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");                                  // logged, 200
-  show(rt, b"GET /admin/secret HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");                       // 401, auth short-circuits
-  show(rt, b"GET /admin/secret HTTP/1.1\x0d\x0aHost: x\x0d\x0aAuthorization: t\x0d\x0a\x0d\x0a"); // 200, authorized
+    // `logging` applies to every route; the `/admin` group adds `requireAuth` to just its routes.
+    Router rt = new Router([], []).use(logging).route("GET", "/", home).group("/admin", function(Router r): Router { return r.use(requireAuth).route("GET", "/secret", secret); });
+    show(rt, b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");
+    // logged, 200
+    show(rt, b"GET /admin/secret HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");
+    // 401, auth short-circuits
+    show(rt, b"GET /admin/secret HTTP/1.1\x0d\x0aHost: x\x0d\x0aAuthorization: t\x0d\x0a\x0d\x0a");
 }
+// 200, authorized

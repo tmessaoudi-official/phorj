@@ -7,14 +7,14 @@ class BadInput implements Error {
     constructor(public string message) {}
 }
 
-function checked(int n) -> int throws BadInput {
+function checked(int n): int throws BadInput {
     if (n < 0) {
         throw new BadInput("negative: {n}");
     }
     return n * 2;
 }
 
-function main() -> void {
+function main(): void {
     try {
         Output.printLine("ok {checked(5)}");
         Output.printLine("ok {checked(-1)}");

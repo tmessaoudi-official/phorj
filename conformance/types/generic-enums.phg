@@ -3,19 +3,13 @@ package Main;
 
 import Core.Output;
 
-enum Option<T> {
-    None,
-    Some(T value),
+enum Option<T> { None, Some(T value) }
+
+function describe(Option<int> o): string {
+    return match (o) { Some(n) => "some {n}", None() => "none" };
 }
 
-function describe(Option<int> o) -> string {
-    return match o {
-        Some(n) => "some {n}",
-        None() => "none",
-    };
-}
-
-function main() -> void {
+function main(): void {
     Output.printLine(describe(new Some(7)));
     Option<int> z = new None();
     Output.printLine(describe(z));

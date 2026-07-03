@@ -14,19 +14,16 @@ import Core.Random;
 function main(): void {
     // A fixed seed makes the stream reproducible — the same seed always replays the same rolls.
     Random.seed(2026);
-
     // Roll a six-sided die five times. `intBetween(lo, hi)` is inclusive on both ends.
     Output.printLine("Five d6 rolls:");
     for (int i in 0..5) {
         var roll = Random.intBetween(1, 6);
         Output.printLine("  roll {i}: {roll}");
     }
-
     // `nextInt()` returns the raw non-negative value (useful as a hash-ish key or to derive your own
     // bounded value).
     var raw = Random.nextInt();
     Output.printLine("raw nextInt: {raw}");
-
     // `nextFloat()` returns a value in [0.0, 1.0) — a dyadic fraction, so it is *exactly* representable
     // and byte-identical across all three backends (unlike an irrational float).
     Output.printLine("Three nextFloat draws:");

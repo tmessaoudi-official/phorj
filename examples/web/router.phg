@@ -25,63 +25,61 @@ import Core.Http.Router;
 
 // Handlers are plain `(Request) -> Response` functions — registered as first-class values below.
 function home(Request req): Response {
-  return Response.text(200, "Phorj web — home");
+    return Response.text(200, "Phorj web — home");
 }
 
 function health(Request req): Response {
-  return Response.text(200, "ok");
+    return Response.text(200, "ok");
 }
 
 // A parameterised route reads its capture with `req.param`.
 function showUser(Request req): Response {
-  string id = req.param("id") ?? "?";
-  return Response.text(200, "user #{id}");
+    string id = req.param("id") ?? "?";
+    return Response.text(200, "user #{id}");
 }
 
 // The literal `/users/me` route — more specific than `/users/{id}`, so it wins for that exact path.
 function currentUser(Request req): Response {
-  return Response.text(200, "the current user");
+    return Response.text(200, "the current user");
 }
 
 // A two-parameter pattern: both captures are read by name.
 function showPost(Request req): Response {
-  string year = req.param("year") ?? "?";
-  string slug = req.param("slug") ?? "?";
-  return Response.text(200, "post {year}/{slug}");
+    string year = req.param("year") ?? "?";
+    string slug = req.param("slug") ?? "?";
+    return Response.text(200, "post {year}/{slug}");
 }
 
 // Build the router once: registration order does not affect literal>param precedence.
 function app(): Router {
-  return new Router([], [])
-    .route("GET", "/", home)
-    .route("GET", "/health", health)
-    .route("GET", r"/users/{id}", showUser)
-    .route("GET", "/users/me", currentUser)
-    .route("GET", r"/posts/{year}/{slug}", showPost);
+    return new Router([], []).route("GET", "/", home).route("GET", "/health", health).route("GET", "/users/\{id\}", showUser).route("GET", "/users/me", currentUser).route("GET", "/posts/\{year\}/\{slug\}", showPost);
 }
 
 // Parse one raw request, route it, print a one-line summary: METHOD PATH -> STATUS: body.
 function show(Router rt, bytes raw): void {
-  if (var req = Request.parse(raw)) {
-    Response resp = rt.handle(req);
-    int st = resp.status;
-    string m = req.method;
-    string p = req.path;
-    string body = Bytes.toString(resp.body) ?? "(binary)";
-    Output.printLine("{m} {p} -> {st}: {body}");
-  } else {
-    Output.printLine("malformed request");
-  }
+    if (var req = Request.parse(raw)) {
+        Response resp = rt.handle(req);
+        int st = resp.status;
+        string m = req.method;
+        string p = req.path;
+        string body = Bytes.toString(resp.body) ?? "(binary)";
+        Output.printLine("{m} {p} -> {st}: {body}");
+    } else {
+        Output.printLine("malformed request");
+    }
 }
 
 function main(): void {
-  Router rt = app();
-  // CRLFs as explicit `\x0d\x0a` (deterministic, no file/socket).
-  show(rt, b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /users/42 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /users/me HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a"); // literal beats {id}
-  show(rt, b"GET /posts/2026/hello-phorj HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a"); // 404
-  show(rt, b"POST / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");       // method mismatch -> 404
+    Router rt = app();
+    // CRLFs as explicit `\x0d\x0a` (deterministic, no file/socket).
+    show(rt, b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /users/42 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /users/me HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    // literal beats {id}
+    show(rt, b"GET /posts/2026/hello-phorj HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    show(rt, b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+    // 404
+    show(rt, b"POST / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
 }
+// method mismatch -> 404

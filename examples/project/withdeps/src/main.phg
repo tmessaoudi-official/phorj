@@ -7,7 +7,7 @@ import Core.Output;
 import Acme.Strutil;
 
 function main(): void {
-  // Qualified calls into the vendored dependency (leaf-qualified, exactly like core.*).
-  Output.printLine(Strutil.banner("Phorj deps"));
-  Output.printLine(Strutil.shout("vendored offline"));
+    // Qualified calls into the vendored dependency (leaf-qualified, exactly like core.*).
+    Output.printLine(Strutil.banner("Phorj deps"));
+    Output.printLine(Strutil.shout("vendored offline"));
 }

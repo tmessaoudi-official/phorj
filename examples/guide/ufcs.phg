@@ -22,7 +22,6 @@ function triple(int x): int {
 // A class with a real method: `b.describe()` resolves as a method (method-first), never as UFCS.
 class Boxed {
     constructor(public int v) {}
-
     function describe(): string {
         return "boxed {this.v}";
     }
@@ -30,31 +29,34 @@ class Boxed {
 
 function main(): void {
     var nums = [1, 2, 3, 4, 5];
-
     // Native UFCS + chaining: keep the elements > 2, square them, then sum / count.
     var pipeline = nums.filter(function(int x) => x > 2).map(function(int x) => x * x);
-    Output.printLine("chain sum  = {pipeline.sum()}"); // 3²+4²+5² = 50
-    Output.printLine("chain len  = {pipeline.length()}"); // 3
-
+    Output.printLine("chain sum  = {pipeline.sum()}");
+    // 3²+4²+5² = 50
+    Output.printLine("chain len  = {pipeline.length()}");
+    // 3
     // User free-function UFCS: `n.triple()` ≡ `triple(n)`.
     var seven = 7;
-    Output.printLine("triple     = {seven.triple()}"); // 21
-
+    Output.printLine("triple     = {seven.triple()}");
+    // 21
     // String native UFCS: `s.uppercase()` ≡ `String.uppercase(s)`, `s.repeat(n)` ≡ `String.repeat(s, n)`.
     var name = "phorj";
-    Output.printLine("upper      = {name.uppercase()}"); // PHORJ
-    Output.printLine("repeat     = {name.repeat(2)}"); // phorjphorj
-
+    Output.printLine("upper      = {name.uppercase()}");
+    // PHORJ
+    Output.printLine("repeat     = {name.repeat(2)}");
+    // phorjphorj
     // Null-safe UFCS (`?.`): short-circuits to null on a null receiver, otherwise applies the
     // free/native fn to the unwrapped value (lowers to a `match` over the optional — no new `Op`).
     string? maybe = "hi";
     string shout = maybe?.uppercase() ?? "(none)";
-    Output.printLine("safe-some  = {shout}"); // HI
+    Output.printLine("safe-some  = {shout}");
+    // HI
     string? nothing = null;
     string fallback = nothing?.uppercase() ?? "(none)";
-    Output.printLine("safe-null  = {fallback}"); // (none)
-
+    Output.printLine("safe-null  = {fallback}");
+    // (none)
     // Method-first: `Boxed` declares `describe`, so this is a method call, not a UFCS rewrite.
     var b = new Boxed(9);
-    Output.printLine("method     = {b.describe()}"); // boxed 9
+    Output.printLine("method     = {b.describe()}");
 }
+// boxed 9

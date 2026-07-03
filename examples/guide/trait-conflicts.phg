@@ -14,26 +14,39 @@ package Main;
 import Core.Output;
 
 trait English {
-    function hello(): string { return "hello"; }
-    function bye(): string { return "bye"; }
+    function hello(): string {
+        return "hello";
+    }
+    function bye(): string {
+        return "bye";
+    }
 }
 
 trait French {
-    function hello(): string { return "bonjour"; }
-    function bye(): string { return "au revoir"; }
+    function hello(): string {
+        return "bonjour";
+    }
+    function bye(): string {
+        return "au revoir";
+    }
 }
 
 // Compose both languages; resolve each collided method explicitly.
 class Greeter {
     use English;
     use French;
-    use English.hello      // `hello` resolves to English's
-    rename French.bye as goodbyeFr // keep French's `bye` as `goodbyeFr`; `bye` then falls to English
+    use English.hello;
+    rename French.bye as goodbyeFr;
 }
 
+// `hello` resolves to English's
+// keep French's `bye` as `goodbyeFr`; `bye` then falls to English
 function main(): void {
     Greeter g = new Greeter();
-    Output.printLine(g.hello()); // English wins  -> hello
-    Output.printLine(g.bye()); // English (French.bye renamed away) -> bye
-    Output.printLine(g.goodbyeFr()); // French's bye under its new name -> au revoir
+    Output.printLine(g.hello());
+    // English wins  -> hello
+    Output.printLine(g.bye());
+    // English (French.bye renamed away) -> bye
+    Output.printLine(g.goodbyeFr());
 }
+// French's bye under its new name -> au revoir

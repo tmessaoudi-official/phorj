@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 function main(): void {

@@ -14,13 +14,11 @@ import Core.Output;
 
 class App {
     constructor(public string name) {}
-
     function greet(): void {
         Output.printLine("Hello from {this.name}");
     }
-
-    // The Java-style entry: no `this`, returns the exit code. It builds an instance and runs it.
     static function main(): int {
+        // The Java-style entry: no `this`, returns the exit code. It builds an instance and runs it.
         var app = new App("App.main");
         app.greet();
         Output.printLine("done");

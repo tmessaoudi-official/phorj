@@ -10,20 +10,14 @@
 // `Circle c =>`. Guards use a contextual `when` (a normal identifier elsewhere), lower to the existing
 // branch ops (no new VM op), and fold into the transpiled PHP if/elseif chain.
 package Main;
+
 import Core.Output;
 
-enum Status {
-    Code(int n)
-}
+enum Status { Code(int n) }
 
 // Several arms share the `Code` shape, separated by guards; the last is the unguarded fallback.
 function classify(Status s): string {
-    return match s {
-        Code(n) when n >= 500 => "server error",
-        Code(n) when n >= 400 => "client error",
-        Code(n) when n >= 200 => "ok",
-        Code(n) => "informational ({n})",
-    };
+    return match (s) { Code(n) when n >= 500 => "server error", Code(n) when n >= 400 => "client error", Code(n) when n >= 200 => "ok", Code(n) => "informational ({n})" };
 }
 
 class Circle {
@@ -36,11 +30,7 @@ class Square {
 
 // Guards on type-patterns over a union, reading a field in the guard condition.
 function describe(Circle | Square sh): string {
-    return match sh {
-        Circle c when c.r > 1.0 => "big circle",
-        Circle c => "small circle",
-        Square s => "square",
-    };
+    return match (sh) { Circle c when c.r > 1.0 => "big circle", Circle c => "small circle", Square s => "square" };
 }
 
 class Point {
@@ -56,20 +46,15 @@ class Line {
 // same `instanceof` test as a type pattern (no new op), then field reads. Bound fields are usable as
 // typed values (here `fx + fy` as an `int` operand — the CTy operand path).
 function areaOf(Circle | Square sh): float {
-    return match sh {
-        Circle { r } => r,
-        Square { side } => side,
-    };
+    return match (sh) { Circle { r: r } => r, Square { side: side } => side };
 }
 
 function originSum(Line l): int {
-    return match l {
-        Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x,
-        _ => 0,
-    };
+    return match (l) { Line { from: Point { x: fx, y: fy }, to: to } => fx + fy + to.x, _ => 0 };
 }
 
-interface Animal {}
+interface Animal {
+}
 
 class Cat implements Animal {
     constructor(public string name) {}
@@ -79,19 +64,13 @@ class Dog implements Animal {
     constructor(public string name) {}
 }
 
-enum Carrier {
-    Holds(Animal a)
-}
+enum Carrier { Holds(Animal a) }
 
 // Nested type pattern inside a variant payload (S5.2): match the variant, then narrow its payload to
 // a concrete class in one pattern. A refutable payload (`Holds(Cat c)`) does not discharge the
 // `Holds` variant, so a `Holds(other)` binding (irrefutable) is the fallback.
 function speak(Carrier c): string {
-    return match c {
-        Holds(Cat cat) => "meow from {cat.name}",
-        Holds(Dog dog) => "woof from {dog.name}",
-        Holds(other) => "...",
-    };
+    return match (c) { Holds(Cat cat) => "meow from {cat.name}", Holds(Dog dog) => "woof from {dog.name}", Holds(other) => "..." };
 }
 
 // Flow-narrowing (S5.3): an early-return guard narrows the rest of the function. After
@@ -99,7 +78,9 @@ function speak(Carrier c): string {
 // no nested block. (Also: an `if (x instanceof T) {…} else {…}` narrows `x` to the remaining union
 // member in the else-branch.) Narrowing is a compile-time check — the runtime is unchanged.
 function radiusOrZero(Circle | Square sh): float {
-    if (!(sh instanceof Circle)) { return 0.0; }
+    if (!(sh instanceof Circle)) {
+        return 0.0;
+    }
     return sh.r;
 }
 
@@ -108,8 +89,12 @@ class User {
 }
 
 function lookup(int id): User? {
-    if (id == 1) { return new User("Ada", 36); }
-    if (id == 2) { return new User("Bob", 15); }
+    if (id == 1) {
+        return new User("Ada", 36);
+    }
+    if (id == 2) {
+        return new User("Bob", 15);
+    }
     return null;
 }
 
@@ -118,37 +103,29 @@ function lookup(int id): User? {
 // otherwise (bind failed, or guard false). The guard can be a compound condition over the binding.
 // (`when` is contextual; this desugars to a nested `if` inside the bind's scope — no new VM op.)
 function greet(int id): string {
-    if (var u = lookup(id) when u.age >= 18 && u.name != "") {
-        return "welcome {u.name}";
+    if (var u = lookup(id)) {
+        if (u.age >= 18 && u.name != "") {
+            return "welcome {u.name}";
+        } else {
+            return "denied";
+        }
     } else {
         return "denied";
     }
 }
 
-enum Light {
-    Red,
-    Yellow,
-    Green
-}
+enum Light { Red, Yellow, Green }
 
 // Or-patterns (Phase 1 operators slice): group alternatives that share one arm body with `|`.
 // No fall-through, still exhaustive; alternatives must be binding-free (concrete patterns only).
 // Desugars to one arm per alternative — every backend sees ordinary arms.
 function band(int n): string {
-    return match n {
-        0 => "zero",
-        1 | 2 | 3 => "low",
-        7 | 8 | 9 => "high",
-        _ => "mid",
-    };
+    return match (n) { 0 => "zero", 1 => "low", 2 => "low", 3 => "low", 7 => "high", 8 => "high", 9 => "high", _ => "mid" };
 }
 
 // Or-patterns over enum variants (zero-payload variants use the `V()` call form).
 function action(Light l): string {
-    return match l {
-        Red() | Yellow() => "stop",
-        Green() => "go",
-    };
+    return match (l) { Red() => "stop", Yellow() => "stop", Green() => "go" };
 }
 
 function main(): void {
@@ -159,27 +136,25 @@ function main(): void {
     Output.printLine(describe(new Circle(2.0)));
     Output.printLine(describe(new Circle(0.5)));
     Output.printLine(describe(new Square(3.0)));
-
     // struct destructuring: shorthand, rename, nested
     float ac = areaOf(new Circle(2.5));
     float aq = areaOf(new Square(4.0));
     int d = originSum(new Line(new Point(1, 2), new Point(10, 20)));
     Output.printLine("areaOf circle = {ac}, square = {aq}, origin sum = {d}");
-
     // nested type pattern in a variant payload
     Output.printLine(speak(new Holds(new Cat("Tom"))));
     Output.printLine(speak(new Holds(new Dog("Rex"))));
-
     // if-let with a `when` guard
-    Output.printLine(greet(1));  // Ada, 36 → welcome
-    Output.printLine(greet(2));  // Bob, 15 → guard false → denied
-    Output.printLine(greet(3));  // null → bind fails → denied
-
+    Output.printLine(greet(1));
+    // Ada, 36 → welcome
+    Output.printLine(greet(2));
+    // Bob, 15 → guard false → denied
+    Output.printLine(greet(3));
+    // null → bind fails → denied
     // flow-narrowing (early-return guard)
     float r = radiusOrZero(new Circle(3.0));
     float z = radiusOrZero(new Square(5.0));
     Output.printLine("r={r} z={z}");
-
     // or-patterns: grouped literal cases + grouped enum variants
     Output.printLine("band: {band(0)} {band(2)} {band(8)} {band(5)}");
     Output.printLine("action: {action(new Red())} {action(new Yellow())} {action(new Green())}");

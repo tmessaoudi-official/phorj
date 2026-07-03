@@ -7,9 +7,7 @@
 package Main;
 
 import Core.Output;
-
 import Core.Json;
-
 import Acme.Meta;
 
 function main(): void {

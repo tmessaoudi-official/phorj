@@ -1,24 +1,20 @@
 package Main;
+
 import Core.Output;
 
 // This program is also in the byte-identity sweep. `phg transpile` turns it into
 // runnable PHP 8.x — the only Phorj↔PHP-ecosystem path (output, not input).
-
-enum Shape {
-    Circle(float r),
-    Square(float side),
-}
+enum Shape { Circle(float r), Square(float side) }
 
 class Named {
     constructor(private string label) {}
-    function labelOf(): string { return this.label; }
+    function labelOf(): string {
+        return this.label;
+    }
 }
 
 function area(Shape s): float {
-    return match s {
-        Circle(r)    => 3.14159 * r * r,
-        Square(side) => side * side,
-    };
+    return match (s) { Circle(r) => 3.14159 * r * r, Square(side) => side * side };
 }
 
 function main(): void {

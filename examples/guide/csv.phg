@@ -17,21 +17,17 @@ function main(): void {
     for (string field in fields) {
         Output.printLine("field: {field}");
     }
-
     // empty input parses to zero fields (a clean empty list — deviates from PHP
     // str_getcsv's `[null]` so the type stays a plain List<string>).
     var empty = Csv.parse("");
     Output.printLine("empty field count: {List.length(empty)}");
-
     // A doubled quote inside an enclosed field decodes to one literal quote.
     var quoted = Csv.parse("\"she said \"\"hi\"\"\",ok");
     Output.printLine("first: {quoted[0]}");
-
     // Format is the inverse: fields needing protection are quoted automatically.
     var row = ["name", "city, state", "note \"x\""];
     var line = Csv.format(row);
     Output.printLine("formatted: {line}");
-
     // parse ∘ format round-trips.
     var back = Csv.parse(line);
     var same = back == row;

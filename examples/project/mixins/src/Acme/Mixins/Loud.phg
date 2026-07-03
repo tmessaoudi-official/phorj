@@ -8,13 +8,12 @@
 package Acme.Mixins;
 
 trait Loud {
-  // A public method that reuses a private helper — both flatten into the using class.
-  function announce(string s): string {
-    return this.emphasize(s);
-  }
-
-  // A private helper only the trait's own methods can call.
-  private function emphasize(string s): string {
-    return "** {s} **";
-  }
+    function announce(string s): string {
+        // A public method that reuses a private helper — both flatten into the using class.
+        return this.emphasize(s);
+    }
+    private function emphasize(string s): string {
+        // A private helper only the trait's own methods can call.
+        return "** {s} **";
+    }
 }

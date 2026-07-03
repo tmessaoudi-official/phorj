@@ -11,35 +11,29 @@ import Core.Time;
 import Core.Time.Duration;
 import Core.Time.Instant;
 
-function main() -> void {
-  // Pin the clock so `now()` is deterministic (2023-11-14T22:13:20Z = 1700000000000 ms).
-  Time.freeze(1700000000000);
-
-  Instant now = Instant.now();
-  Output.printLine("now epoch-milliseconds  = {now.epochMilliseconds()}");
-  Output.printLine("now epoch-seconds = {now.epochSeconds()}");
-
-  // Durations: build from units, combine, convert.
-  Duration d = Duration.hours(1).plus(Duration.minutes(30));
-  Output.printLine("1h30m in milliseconds   = {d.toMilliseconds()}");
-  Output.printLine("1h30m in minutes  = {d.toMinutes()}");
-
-  // Instant arithmetic.
-  Instant later = now.plus(d);
-  Output.printLine("later - now (s)   = {later.durationSince(now).toSeconds()}");
-  Output.printLine("now isBefore later= {now.isBefore(later)}");
-  Output.printLine("compareTo (now,later) = {now.compareTo(later)}");
-
-  // Construct from seconds, subtract a day.
-  Instant epoch = Instant.ofEpochSeconds(0);
-  Instant yesterday = now.minus(Duration.days(1));
-  Output.printLine("epoch milliseconds      = {epoch.epochMilliseconds()}");
-  Output.printLine("a day earlier (s) = {yesterday.epochSeconds()}");
-
-  // Negative and zero durations.
-  Duration back = d.negate();
-  Output.printLine("negated isNegative= {back.isNegative()}");
-  Output.printLine("zero isZero       = {Duration.milliseconds(0).isZero()}");
-
-  Time.unfreeze();
+function main(): void {
+    // Pin the clock so `now()` is deterministic (2023-11-14T22:13:20Z = 1700000000000 ms).
+    Time.freeze(1700000000000);
+    Instant now = Instant.now();
+    Output.printLine("now epoch-milliseconds  = {now.epochMilliseconds()}");
+    Output.printLine("now epoch-seconds = {now.epochSeconds()}");
+    // Durations: build from units, combine, convert.
+    Duration d = Duration.hours(1).plus(Duration.minutes(30));
+    Output.printLine("1h30m in milliseconds   = {d.toMilliseconds()}");
+    Output.printLine("1h30m in minutes  = {d.toMinutes()}");
+    // Instant arithmetic.
+    Instant later = now.plus(d);
+    Output.printLine("later - now (s)   = {later.durationSince(now).toSeconds()}");
+    Output.printLine("now isBefore later= {now.isBefore(later)}");
+    Output.printLine("compareTo (now,later) = {now.compareTo(later)}");
+    // Construct from seconds, subtract a day.
+    Instant epoch = Instant.ofEpochSeconds(0);
+    Instant yesterday = now.minus(Duration.days(1));
+    Output.printLine("epoch milliseconds      = {epoch.epochMilliseconds()}");
+    Output.printLine("a day earlier (s) = {yesterday.epochSeconds()}");
+    // Negative and zero durations.
+    Duration back = d.negate();
+    Output.printLine("negated isNegative= {back.isNegative()}");
+    Output.printLine("zero isZero       = {Duration.milliseconds(0).isZero()}");
+    Time.unfreeze();
 }

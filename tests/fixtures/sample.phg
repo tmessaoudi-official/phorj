@@ -1,32 +1,24 @@
 package Main;
+
 import Core.Output;
 
-enum Shape {
-    Circle(float radius),
-    Rect(float w, float h),
-}
+enum Shape { Circle(float radius), Rect(float w, float h) }
 
-function area(Shape s) -> float {
-    return match s {
-        Circle(r)  => 3.14159 * r * r,
-        Rect(w, h) => w * h,
-    };
+function area(Shape s): float {
+    return match (s) { Circle(r) => 3.14159 * r * r, Rect(w, h) => w * h };
 }
 
 class Greeter {
     private string name;
-
     constructor(private string name) {}
-
-    function greet() -> string {
+    function greet(): string {
         return "Hello {this.name}";
     }
 }
 
-function main() -> void {
+function main(): void {
     Greeter g = new Greeter("Tak");
     Output.printLine(g.greet());
-
     List<Shape> shapes = [new Circle(2.0), new Rect(3.0, 4.0)];
     for (Shape s in shapes) {
         Output.printLine("area = {area(s)}");

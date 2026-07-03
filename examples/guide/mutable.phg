@@ -1,27 +1,24 @@
 package Main;
+
 import Core.Output;
 
 // M-mut.1 — mutable locals + reassignment.
 // Bindings are IMMUTABLE by default; only a `mutable` binding may be reassigned.
-
 function main(): void {
     // A mutable counter, reassigned twice.
     mutable int counter = 0;
     counter = counter + 1;
     counter = counter + 1;
     Output.printLine("counter = {counter}");
-
     // `mutable var` infers its type from the initializer and is still reassignable.
     mutable var total = 10;
     total = total * 3;
     Output.printLine("total = {total}");
-
     // Two-binding scalar case: scalars copy, so reassigning `b` leaves `a` untouched.
     int a = 10;
     mutable int b = a;
     b = 99;
     Output.printLine("a = {a} b = {b}");
-
     // Reassignment as a loop accumulator (the immutable `n` is a fresh binding each iteration).
     mutable int sum = 0;
     for (int n in 1..=5) {

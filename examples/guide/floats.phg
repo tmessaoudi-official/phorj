@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 import Core.Math;
 
@@ -9,24 +10,19 @@ import Core.Math;
 // in scientific notation (`1.0E+15`, `1.0E-5`) and many-digit values it would round to 14 figures
 // instead render identically to the Rust backends. (Earlier this was a transpile-only caveat; it is
 // now closed for every finite float — see KNOWN_ISSUES for the one remaining fault-domain note.)
-
 function main(): void {
     // Irrational result — 17 significant digits. `sqrt` is IEEE-correctly-rounded, so the Rust
     // backends and PHP compute the same double; both now render all of its digits.
     float irrational = Math.sqrt(2.0);
-
     // Large integer-valued float (16 digits) — PHP's default `echo` would show `1.2345...E+15`.
     float big = 1234567890123456.0;
-
     // Small magnitudes — PHP's default `echo` would show `1.23E-5` / `1.0E-5`.
-    float small = 0.0000123;
-    float tiny = 0.00001;
-
+    float small = 1.23e-5;
+    float tiny = 1e-5;
     // A high-precision terminating literal, and the integer-valued / short cases for good measure.
     float pi = 3.141592653589793;
     float whole = 42.0;
     float half = 12.5;
-
     Output.printLine("sqrt(2) = {irrational}");
     Output.printLine("big = {big}");
     Output.printLine("small = {small}, tiny = {tiny}");

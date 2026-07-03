@@ -4,27 +4,27 @@ package Main;
 import Core.Output;
 
 interface Named {
-    function name() -> string;
+    function name(): string;
 }
 
 interface Aged {
-    function age() -> int;
+    function age(): int;
 }
 
 class Person implements Named, Aged {
     constructor(public string n, public int a) {}
-    function name() -> string {
+    function name(): string {
         return this.n;
     }
-    function age() -> int {
+    function age(): int {
         return this.a;
     }
 }
 
-function describe(Named & Aged who) -> string {
+function describe(Named & Aged who): string {
     return "{who.name()} is {who.age()}";
 }
 
-function main() -> void {
+function main(): void {
     Output.printLine(describe(new Person("Ada", 36)));
 }

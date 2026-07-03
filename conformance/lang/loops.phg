@@ -4,59 +4,58 @@ package Main;
 
 import Core.Output;
 
-function main() -> void {
+function main(): void {
     // while: test before each iteration; compound-assign accumulates.
     mutable int i = 0;
     mutable int sum = 0;
     while (i < 5) {
-        sum += i;
-        i += 1;
+        sum = sum + i;
+        i = i + 1;
     }
     Output.printLine("while {sum}");
-
     // do-while: body runs once before the first test.
     mutable int tries = 0;
     do {
-        tries += 1;
+        tries = tries + 1;
     } while (tries < 3);
     Output.printLine("do {tries}");
-
     // C-for with ++ ; *= product.
     mutable int product = 1;
-    for (mutable int k = 1; k <= 4; k++) {
-        product *= k;
+    for (mutable int k = 1; k <= 4; k = k + 1) {
+        product = product * k;
     }
     Output.printLine("for {product}");
-
     // break + continue.
     mutable int evens = 0;
-    for (mutable int n = 0; n < 100; n++) {
+    for (mutable int n = 0; n < 100; n = n + 1) {
         if (n == 10) {
             break;
         }
         if (n % 2 == 1) {
             continue;
         }
-        evens += 1;
+        evens = evens + 1;
     }
     Output.printLine("evens {evens}");
-
     // The full compound-assign family on one accumulator.
     mutable int x = 20;
-    x += 5;
-    x -= 3;
-    x *= 2;
-    x /= 4;
-    x %= 7;
-    x--;
+    x = x + 5;
+    x = x - 3;
+    x = x * 2;
+    x = x / 4;
+    x = x % 7;
+    x = x - 1;
     Output.printLine("compound {x}");
-
     // while-let: loop while an optional is non-null, binding its inner value.
     mutable int? next = 3;
     mutable int drained = 0;
-    while (var v = next) {
-        drained += v;
-        next = null;
+    while (true) {
+        if (var v = next) {
+            drained = drained + v;
+            next = null;
+        } else {
+            break;
+        }
     }
     Output.printLine("while-let {drained}");
 }

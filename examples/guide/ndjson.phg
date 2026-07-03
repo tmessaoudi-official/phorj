@@ -13,14 +13,9 @@ import Core.Json;
 
 function main(): void {
     // Build three records and dump them as NDJSON (one compact JSON value per line).
-    List<Json> records = [
-        new Json.Object(["user" => new Json.String("ada"), "score" => new Json.Int(42)]),
-        new Json.Object(["user" => new Json.String("linus"), "score" => new Json.Int(37)]),
-        new Json.Array([new Json.Int(1), new Json.Int(2), new Json.Int(3)]),
-    ];
+    List<Json> records = [new Json.Object(["user" => new Json.String("ada"), "score" => new Json.Int(42)]), new Json.Object(["user" => new Json.String("linus"), "score" => new Json.Int(37)]), new Json.Array([new Json.Int(1), new Json.Int(2), new Json.Int(3)])];
     string dump = Json.stringifyLines(records);
     Output.printLine(dump);
-
     Output.printLine("--- parsed back ---");
     // Round-trip: parse the NDJSON back into a `List<Json>?` and re-dump it (identical).
     if (var parsed = Json.parseLines(dump)) {
@@ -28,7 +23,6 @@ function main(): void {
     } else {
         Output.printLine("malformed NDJSON");
     }
-
     // Blank lines are skipped; a malformed line makes the whole parse None.
     Output.printLine("--- malformed -> None ---");
     if (var ok = Json.parseLines("true\nnot json")) {

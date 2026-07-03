@@ -17,12 +17,11 @@ import Core.Regex;
 
 function main(): void {
     // Compile once, reuse. `matches` tests for a match anywhere; `find` returns the first whole match.
-    var date = Regex.compile(r"(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})");
+    var date = Regex.compile("(?<year>\\d\{4\})-(?<month>\\d\{2\})-(?<day>\\d\{2\})");
     var hit = Regex.matches(date, "today is 2026-06-28.");
     var first = Regex.find(date, "today is 2026-06-28.") ?? "none";
     Output.printLine("matches = {hit}");
     Output.printLine("find    = {first}");
-
     // Named captures → Map<string, string>? (null when there is no match).
     if (var g = Regex.findGroups(date, "2026-06-28")) {
         string y = g["year"];
@@ -30,15 +29,13 @@ function main(): void {
         string d = g["day"];
         Output.printLine("year={y} month={m} day={d}");
     }
-
     // findAll → every whole match; split → pieces between matches.
-    var word = Regex.compile(r"\w+");
+    var word = Regex.compile("\\w+");
     var words = String.join(Regex.findAll(word, "the quick brown fox"), ",");
     Output.printLine("words = {words}");
-    var comma = Regex.compile(r",\s*");
+    var comma = Regex.compile(",\\s*");
     var pieces = String.join(Regex.split(comma, "a, b,c,  d"), "|");
     Output.printLine("split = {pieces}");
-
     // replace — every match replaced (literal replacement here).
     var redacted = Regex.replace(date, "from 2026-06-28 to 2027-01-01", "<date>");
     Output.printLine("redact = {redacted}");

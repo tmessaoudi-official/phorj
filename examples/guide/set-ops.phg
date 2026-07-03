@@ -13,20 +13,26 @@ import Core.Set;
 function main(): void {
     var a = Set.of([1, 2, 3]);
     var b = Set.of([2, 3, 4]);
-
-    var u = Set.union(a, b);        // {1, 2, 3, 4}
-    var i = Set.intersection(a, b); // {2, 3}
-    var d = Set.difference(a, b);   // {1}
-
-    Output.printLine("union size = {Set.size(u)}");        // 4
-    Output.printLine("inter size = {Set.size(i)}");        // 2
-    Output.printLine("diff size  = {Set.size(d)}");        // 1
-
+    var u = Set.union(a, b);
+    // {1, 2, 3, 4}
+    var i = Set.intersection(a, b);
+    // {2, 3}
+    var d = Set.difference(a, b);
+    // {1}
+    Output.printLine("union size = {Set.size(u)}");
+    // 4
+    Output.printLine("inter size = {Set.size(i)}");
+    // 2
+    Output.printLine("diff size  = {Set.size(d)}");
+    // 1
     // membership checks confirm the contents.
     var uHas4 = Set.contains(u, 4);
     var iHas1 = Set.contains(i, 1);
     var dHas1 = Set.contains(d, 1);
-    Output.printLine("union has 4 = {uHas4}");  // true
-    Output.printLine("inter has 1 = {iHas1}");  // false (1 is not in b)
-    Output.printLine("diff has 1  = {dHas1}");  // true
+    Output.printLine("union has 4 = {uHas4}");
+    // true
+    Output.printLine("inter has 1 = {iHas1}");
+    // false (1 is not in b)
+    Output.printLine("diff has 1  = {dHas1}");
 }
+// true

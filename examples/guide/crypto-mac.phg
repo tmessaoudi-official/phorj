@@ -9,19 +9,16 @@ import Core.Hash;
 import Core.Encoding;
 
 function main(): void {
-  // HMAC-SHA256 — a keyed message authentication code, returned as a lowercase hex string.
-  string mac = Hash.hmac(b"secret-key", b"authenticated message");
-  Output.printLine("hmac   = {mac}");
-
-  // Timing-safe comparison — use this to check a MAC or token, never `==` (which can leak timing).
-  bool ok = Hash.equals(b"secret-key", b"secret-key");
-  Output.printLine("equal  = {ok}");
-
-  // HKDF-SHA256 — derive a 32-byte key from input keying material + salt + a context label.
-  bytes derived = Hash.hkdf(b"input-keying-material", b"salt", b"app-v1", 32);
-  Output.printLine("hkdf   = {Encoding.hexEncode(derived)}");
-
-  // PBKDF2-HMAC-SHA256 — password-based key derivation (use a high iteration count in production).
-  bytes dk = Hash.pbkdf2(b"correct horse battery staple", b"user-salt", 10000, 32);
-  Output.printLine("pbkdf2 = {Encoding.hexEncode(dk)}");
+    // HMAC-SHA256 — a keyed message authentication code, returned as a lowercase hex string.
+    string mac = Hash.hmac(b"secret-key", b"authenticated message");
+    Output.printLine("hmac   = {mac}");
+    // Timing-safe comparison — use this to check a MAC or token, never `==` (which can leak timing).
+    bool ok = Hash.equals(b"secret-key", b"secret-key");
+    Output.printLine("equal  = {ok}");
+    // HKDF-SHA256 — derive a 32-byte key from input keying material + salt + a context label.
+    bytes derived = Hash.hkdf(b"input-keying-material", b"salt", b"app-v1", 32);
+    Output.printLine("hkdf   = {Encoding.hexEncode(derived)}");
+    // PBKDF2-HMAC-SHA256 — password-based key derivation (use a high iteration count in production).
+    bytes dk = Hash.pbkdf2(b"correct horse battery staple", b"user-salt", 10000, 32);
+    Output.printLine("pbkdf2 = {Encoding.hexEncode(dk)}");
 }

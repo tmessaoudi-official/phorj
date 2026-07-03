@@ -18,7 +18,6 @@ function main(): void {
     Output.printLine("size  = {Set.size(s)}");
     Output.printLine("has 4 = {has4}");
     Output.printLine("has 7 = {has7}");
-
     // A string set — same ops, different element type (generics inferred at the call site).
     var names = Set.of(["ada", "bob", "ada", "cleo", "bob"]);
     var hasAda = Set.contains(names, "ada");

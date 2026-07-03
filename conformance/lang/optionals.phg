@@ -7,22 +7,20 @@ class Box {
     constructor(public int value) {}
 }
 
-function pick(bool present) -> Box? {
+function pick(bool present): Box? {
     if (present) {
         return new Box(7);
     }
     return null;
 }
 
-function main() -> void {
+function main(): void {
     int a = pick(true)?.value ?? -1;
     int b = pick(false)?.value ?? -1;
     Output.printLine("{a} {b}");
-
     if (var box = pick(true)) {
         Output.printLine("got {box.value}");
     }
-
     Box forced = pick(true)!;
     Output.printLine("forced {forced.value}");
 }

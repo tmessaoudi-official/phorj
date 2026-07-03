@@ -20,14 +20,22 @@ interface Named {
 // A class can implement several interfaces, making it a subtype of each.
 class Badge implements Drawable, Named {
     constructor(public string label) {}
-    function draw(): string { return "[{this.label}]"; }
-    function name(): string { return this.label; }
+    function draw(): string {
+        return "[{this.label}]";
+    }
+    function name(): string {
+        return this.label;
+    }
 }
 
 class Sticker implements Drawable, Named {
     constructor(public string text) {}
-    function draw(): string { return "<{this.text}>"; }
-    function name(): string { return this.text; }
+    function draw(): string {
+        return "<{this.text}>";
+    }
+    function name(): string {
+        return this.text;
+    }
 }
 
 // The intersection in action: `x` is known to be BOTH Drawable and Named, so a method from EACH
@@ -44,12 +52,14 @@ function justDraw(Drawable d): string {
 function main(): void {
     var badge = new Badge("ok");
     var sticker = new Sticker("hi");
-
     // Both implement Drawable AND Named, so both flow into `Drawable & Named`.
-    Output.printLine(describe(badge));   // ok => [ok]
-    Output.printLine(describe(sticker)); // hi => <hi>
-
+    Output.printLine(describe(badge));
+    // ok => [ok]
+    Output.printLine(describe(sticker));
+    // hi => <hi>
     // A & B narrows out to a single member without a cast.
-    Output.printLine(justDraw(badge));   // [ok]
-    Output.printLine(justDraw(sticker)); // <hi>
+    Output.printLine(justDraw(badge));
+    // [ok]
+    Output.printLine(justDraw(sticker));
 }
+// <hi>

@@ -3,24 +3,22 @@ package Main;
 
 import Core.Output;
 
-function identity<T>(T x) -> T {
+function identity<T>(T x): T {
     return x;
 }
 
 class Box<T> {
     constructor(public T value) {}
-    function get() -> T {
+    function get(): T {
         return this.value;
     }
 }
 
-function main() -> void {
+function main(): void {
     Output.printLine("{identity(42)}");
     Output.printLine(identity("hi"));
-
     Box<string> b = new Box("boxed");
     Output.printLine(b.get());
-
     Box<int> n = new Box(7);
     int v = n.get();
     Output.printLine("{v}");

@@ -5,62 +5,58 @@
 // type-checking, the type parameters are *erased* (every `T` becomes PHP `mixed` / a plain runtime
 // value), so the interpreter, the bytecode VM, and the transpiled PHP all run the exact same
 // type-variable-free code — byte-for-byte identical output.
-
 package Main;
 
 import Core.Output;
 
 // The classic: returns its argument unchanged, at whatever type it was called with.
 function identity<T>(T x): T {
-  return x;
+    return x;
 }
 
 // `T` is inferred from the list's element type; the fallback shares it, so the whole call is
 // checked against one consistent `T`.
 function firstOr<T>(List<T> xs, T fallback): T {
-  for (T x in xs) {
-    return x;
-  }
-  return fallback;
+    for (T x in xs) {
+        return x;
+    }
+    return fallback;
 }
 
 // A type parameter can appear inside a *function-typed* parameter too: `f` maps a `T` to a `T`.
 // Unification descends into the `(T) -> T` shape to bind `T` from the function value passed in.
 function applyTwice<T>(T x, (T) => T f): T {
-  return f(f(x));
+    return f(f(x));
 }
 
 // Two occurrences of the same parameter must agree: both `a` and `b` are the inferred `T`.
 function lastOfTwo<T>(T a, T b): T {
-  return b;
+    return b;
 }
 
 function main(): void {
-  // `identity` reused at three different concrete types — one definition, no duplication.
-  int n = identity(7);
-  string s = identity("phorj");
-  bool flag = identity(true);
-
-  // `firstOr` over a non-empty `List<int>` → `T = int`, returns the first element.
-  List<int> xs = [10, 20, 30];
-  int head = firstOr(xs, -1);
-
-  // `applyTwice` with an inline lambda: increments 5 twice → 7.
-  int bumped = applyTwice(5, function(int v) => v + 1);
-
-  // `lastOfTwo` over strings.
-  string last = lastOfTwo("alpha", "omega");
-
-  // S2.1: a generic result whose return *echoes a parameter* (`identity<T>(T) -> T`, `firstOr` →
-  // its fallback `T`) can be used **directly as an arithmetic operand** — the VM recovers the
-  // erased result's operand type from the argument, so this specializes exactly as the interpreter
-  // evaluates it (previously `runvm` rejected `identity(7) + 1`).
-  int incd = identity(7) + 1;          // 8
-  int doubled = firstOr(xs, -1) * 2;   // 20
-
-  Output.printLine("identity: {n} {s} {flag}");
-  Output.printLine("firstOr head: {head}");
-  Output.printLine("applyTwice: {bumped}");
-  Output.printLine("lastOfTwo: {last}");
-  Output.printLine("operand use: {incd} {doubled}");
+    // `identity` reused at three different concrete types — one definition, no duplication.
+    int n = identity(7);
+    string s = identity("phorj");
+    bool flag = identity(true);
+    // `firstOr` over a non-empty `List<int>` → `T = int`, returns the first element.
+    List<int> xs = [10, 20, 30];
+    int head = firstOr(xs, -1);
+    // `applyTwice` with an inline lambda: increments 5 twice → 7.
+    int bumped = applyTwice(5, function(int v) => v + 1);
+    // `lastOfTwo` over strings.
+    string last = lastOfTwo("alpha", "omega");
+    // S2.1: a generic result whose return *echoes a parameter* (`identity<T>(T) -> T`, `firstOr` →
+    // its fallback `T`) can be used **directly as an arithmetic operand** — the VM recovers the
+    // erased result's operand type from the argument, so this specializes exactly as the interpreter
+    // evaluates it (previously `runvm` rejected `identity(7) + 1`).
+    int incd = identity(7) + 1;
+    // 8
+    int doubled = firstOr(xs, -1) * 2;
+    // 20
+    Output.printLine("identity: {n} {s} {flag}");
+    Output.printLine("firstOr head: {head}");
+    Output.printLine("applyTwice: {bumped}");
+    Output.printLine("lastOfTwo: {last}");
+    Output.printLine("operand use: {incd} {doubled}");
 }

@@ -7,12 +7,10 @@ import Catalog.Money;
 
 class Order {
     constructor(public int id, public List<OrderLine> lines) {}
-
-    function lineCount() -> int {
+    function lineCount(): int {
         return List.length(this.lines);
     }
-
-    function total() -> Money {
+    function total(): Money {
         mutable Money sum = new Money(0);
         for (OrderLine line in this.lines) {
             sum = sum.plus(line.subtotal());

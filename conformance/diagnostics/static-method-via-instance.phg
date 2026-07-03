@@ -1,12 +1,12 @@
 package Main;
 
 class Counter {
-    static function make() -> int {
+    static function make(): int {
         return 0;
     }
 }
 
-function main() -> void {
+function main(): void {
     var c = new Counter();
     var n = c.make();
 }

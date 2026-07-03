@@ -4,14 +4,13 @@ package Main;
 import Core.Output;
 import Core.Bytes;
 
-function main() -> void {
+function main(): void {
     bytes hello = Bytes.fromString("hello");
     Output.printLine("len={Bytes.length(hello)}");
-
-    bytes raw = b"\x48\x69";              // "Hi"
+    bytes raw = b"Hi";
+    // "Hi"
     string s = Bytes.toString(raw) ?? "?";
     Output.printLine(s);
-
     bytes joined = Bytes.concat(hello, raw);
     Output.printLine("joinedLen={Bytes.length(joined)}");
 }

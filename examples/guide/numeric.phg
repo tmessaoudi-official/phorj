@@ -8,29 +8,34 @@
 // `>>` (shift-right). PHP-identical integer semantics; a shift by a negative count faults. They are
 // int-only (a non-int operand is a compile error) and transpile 1:1 to PHP's native operators.
 package Main;
+
 import Core.Output;
 
 function main(): void {
     // The same value written four ways.
     int a = 255;
-    int b = 0xFF;
-    int c = 0b1111_1111;
-    int d = 0o377;
+    int b = 255;
+    int c = 255;
+    int d = 255;
     Output.printLine("{a} {b} {c} {d}");
-
     // Underscore separators read more clearly for large numbers.
-    int million = 1_000_000;
+    int million = 1000000;
     Output.printLine("{million}");
-
     // Bitwise: a flag set built and queried with masks.
-    int read = 0b001;
-    int write = 0b010;
-    int exec = 0b100;
+    int read = 1;
+    int write = 2;
+    int exec = 4;
     int perms = read | write;
-    Output.printLine("{perms}");                 // 3 (read+write)
-    Output.printLine("{perms & write}");          // 2 (write bit is set)
-    Output.printLine("{perms & exec}");           // 0 (exec bit is not)
-    Output.printLine("{perms ^ write}");          // 1 (toggle write off)
-    Output.printLine("{perms << 1} {perms >> 1}");// 6 1
-    Output.printLine("{~0}");                     // -1 (all bits set)
+    Output.printLine("{perms}");
+    // 3 (read+write)
+    Output.printLine("{perms & write}");
+    // 2 (write bit is set)
+    Output.printLine("{perms & exec}");
+    // 0 (exec bit is not)
+    Output.printLine("{perms ^ write}");
+    // 1 (toggle write off)
+    Output.printLine("{perms << 1} {perms >> 1}");
+    // 6 1
+    Output.printLine("{~0}");
 }
+// -1 (all bits set)

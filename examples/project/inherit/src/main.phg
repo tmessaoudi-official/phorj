@@ -8,20 +8,20 @@ import Acme.Zoo.Animal;
 
 // `Dog` inherits `Animal`'s constructor (so `new Dog("rex")` sets `name`) and its `name` field.
 open class Dog extends Animal {
-  open function speak(): string {
-    // bare `parent.speak()` → nearest ancestor (Animal)
-    return "woof, says {this.name} — over [{parent.speak()}]";
-  }
+    open function speak(): string {
+        // bare `parent.speak()` → nearest ancestor (Animal)
+        return "woof, says {this.name} — over [{parent.speak()}]";
+    }
 }
 
 class Puppy extends Dog {
-  open function speak(): string {
-    // named `parent(Animal)` → jump past Dog straight to the library base
-    return "yip! (base: {parent(Animal).speak()})";
-  }
+    open function speak(): string {
+        // named `parent(Animal)` → jump past Dog straight to the library base
+        return "yip! (base: {parent(Animal).speak()})";
+    }
 }
 
 function main(): void {
-  Output.printLine(new Dog("rex").speak());
-  Output.printLine(new Puppy("milo").speak());
+    Output.printLine(new Dog("rex").speak());
+    Output.printLine(new Puppy("milo").speak());
 }

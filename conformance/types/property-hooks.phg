@@ -8,23 +8,28 @@ import Core.Output;
 
 class Account {
     constructor(public mutable int raw) {}
-
-    // A write-validating hook: the `set` clamps negatives to zero. A read-only computed hook
-    // derives a boolean from the stored balance.
     int balance {
         get => this.raw;
-        set(int v) { if (v < 0) { this.raw = 0; } else { this.raw = v; } }
+        set(int v) {
+            // A write-validating hook: the `set` clamps negatives to zero. A read-only computed hook
+            // derives a boolean from the stored balance.
+            if (v < 0) {
+                this.raw = 0;
+            } else {
+                this.raw = v;
+            }
+        }
     }
-
     bool isEmpty {
         get => this.raw == 0;
     }
 }
 
-function main() -> void {
+function main(): void {
     Account a = new Account(50);
     Output.printLine("balance {a.balance} empty {a.isEmpty}");
-    a.balance = -10; // the set hook clamps to 0
+    a.balance = -10;
+    // the set hook clamps to 0
     Output.printLine("after {a.balance} empty {a.isEmpty}");
     a.balance = 75;
     Output.printLine("set {a.balance}");

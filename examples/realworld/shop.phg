@@ -1,25 +1,17 @@
 package Main;
+
 import Core.Output;
 
 // A shopping cart with per-item discounts.
-
-enum Discount {
-    None,
-    Percent(int pct),
-    Flat(int cents),
-}
+enum Discount { None, Percent(int pct), Flat(int cents) }
 
 class Item {
     constructor(private string name, private int cents, private Discount disc) {}
-
-    function nameOf(): string { return this.name; }
-
+    function nameOf(): string {
+        return this.name;
+    }
     function price(): int {
-        return match this.disc {
-            None()     => this.cents,
-            Percent(p) => this.cents - this.cents * p / 100,
-            Flat(c)    => this.cents - c,
-        };
+        return match (this.disc) { None() => this.cents, Percent(p) => this.cents - this.cents * p / 100, Flat(c) => this.cents - c };
     }
 }
 
@@ -32,11 +24,7 @@ function bulk(int unit, int n): int {
 }
 
 function main(): void {
-    List<Item> cart = [
-        new Item("Widget", 1000, new None()),
-        new Item("Gadget", 2000, new Percent(10)),
-        new Item("Gizmo", 1500, new Flat(300)),
-    ];
+    List<Item> cart = [new Item("Widget", 1000, new None()), new Item("Gadget", 2000, new Percent(10)), new Item("Gizmo", 1500, new Flat(300))];
     for (Item it in cart) {
         Output.printLine("{it.nameOf()} = {it.price()}c");
     }

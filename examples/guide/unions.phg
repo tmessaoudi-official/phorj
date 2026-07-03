@@ -9,6 +9,7 @@
 // Primitive unions (`int | string`) accept either type and match by literal value. Transpiles to
 // PHP 8.0 native `A|B`.
 package Main;
+
 import Core.Output;
 
 class Circle {
@@ -26,11 +27,7 @@ class Triangle {
 // match-over-union: one arm per member, each binding the narrowed instance. Exhaustive — no `_`
 // needed, exactly like an enum match.
 function area(Circle | Square | Triangle s): int {
-    return match s {
-        Circle c => c.radius * c.radius,
-        Square sq => sq.side * sq.side,
-        Triangle t => t.base * t.height,
-    };
+    return match (s) { Circle c => c.radius * c.radius, Square sq => sq.side * sq.side, Triangle t => t.base * t.height };
 }
 
 // instanceof narrowing on a union operand: each `if` smart-casts `s` to the tested class in its body.
@@ -46,28 +43,30 @@ function name(Circle | Square | Triangle s): string {
 
 // A primitive union accepts either type; literal patterns match by value, with a `_` for the rest.
 function classify(int | string code): string {
-    return match code {
-        0 => "zero",
-        "ok" => "okay",
-        _ => "other",
-    };
+    return match (code) { 0 => "zero", "ok" => "okay", _ => "other" };
 }
 
 function main(): void {
     Circle c = new Circle(2);
     Square s = new Square(3);
     Triangle t = new Triangle(4, 3);
-
-    Output.printLine("area circle = {area(c)}");     // 4
-    Output.printLine("area square = {area(s)}");     // 9
-    Output.printLine("area triangle = {area(t)}");   // 12
-
-    Output.printLine(name(c));                        // circle r=2
-    Output.printLine(name(s));                        // square s=3
-    Output.printLine(name(t));                        // triangle
-
+    Output.printLine("area circle = {area(c)}");
+    // 4
+    Output.printLine("area square = {area(s)}");
+    // 9
+    Output.printLine("area triangle = {area(t)}");
+    // 12
+    Output.printLine(name(c));
+    // circle r=2
+    Output.printLine(name(s));
+    // square s=3
+    Output.printLine(name(t));
+    // triangle
     string okay = classify("ok");
-    Output.printLine("classify 0 = {classify(0)}"); // zero
-    Output.printLine("classify ok = {okay}");        // okay
-    Output.printLine("classify 7 = {classify(7)}"); // other
+    Output.printLine("classify 0 = {classify(0)}");
+    // zero
+    Output.printLine("classify ok = {okay}");
+    // okay
+    Output.printLine("classify 7 = {classify(7)}");
 }
+// other

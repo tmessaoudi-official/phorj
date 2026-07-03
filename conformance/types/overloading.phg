@@ -3,24 +3,24 @@ package Main;
 
 import Core.Output;
 
-function describe(int n) -> string {
+function describe(int n): string {
     return "int {n}";
 }
 
-function describe(string s) -> string {
+function describe(string s): string {
     return "str {s}";
 }
 
 class Adder {
-    function add(int a, int b) -> string {
+    function add(int a, int b): string {
         return "ints {a + b}";
     }
-    function add(string a, string b) -> string {
+    function add(string a, string b): string {
         return "cat {a + b}";
     }
 }
 
-function main() -> void {
+function main(): void {
     Output.printLine(describe(7));
     Output.printLine(describe("hi"));
     Adder ad = new Adder();

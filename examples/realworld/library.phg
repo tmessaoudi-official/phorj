@@ -1,28 +1,23 @@
 package Main;
+
 import Core.Output;
 
 // A library catalogue. Note zero-payload variants (`Available`, `Lost`) are
 // *constructed* with call form — `Available()` — but matched bare.
-
-enum Availability {
-    Available,
-    Borrowed(string by),
-    Lost,
-}
+enum Availability { Available, Borrowed(string by), Lost }
 
 class Book {
     constructor(private string title, private Availability status) {}
-
-    function titleOf(): string { return this.title; }
-    function statusOf(): Availability { return this.status; }
+    function titleOf(): string {
+        return this.title;
+    }
+    function statusOf(): Availability {
+        return this.status;
+    }
 }
 
 function describe(Availability a): string {
-    return match a {
-        Available()  => "available",
-        Borrowed(by) => "borrowed by {by}",
-        Lost()       => "lost",
-    };
+    return match (a) { Available() => "available", Borrowed(by) => "borrowed by {by}", Lost() => "lost" };
 }
 
 // Late fee: 25 cents per day (float arithmetic).
@@ -31,11 +26,7 @@ function fee(float days): float {
 }
 
 function main(): void {
-    List<Book> shelf = [
-        new Book("The Rust Book", new Available()),
-        new Book("Crafting Interpreters", new Borrowed("Ada")),
-        new Book("SICP", new Lost()),
-    ];
+    List<Book> shelf = [new Book("The Rust Book", new Available()), new Book("Crafting Interpreters", new Borrowed("Ada")), new Book("SICP", new Lost())];
     for (Book b in shelf) {
         Output.printLine("{b.titleOf()}: {describe(b.statusOf())}");
     }

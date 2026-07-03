@@ -21,11 +21,9 @@ function main(): void {
     for (string a in args) {
         Output.printLine("arg: {a}");
     }
-
     // A single environment variable, or null if unset — composes with `??` like any optional.
     Output.printLine("HOME = {Environment.get(\"HOME\") ?? \"<unset>\"}");
     Output.printLine("PHORJ_DEMO = {Environment.get(\"PHORJ_DEMO\") ?? \"<unset>\"}");
-
     // Every environment variable, sorted by key (a stable order; OS iteration order is not).
     var env = Environment.all();
     Output.printLine("env count = {Map.size(env)}");

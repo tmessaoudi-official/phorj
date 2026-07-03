@@ -12,29 +12,25 @@ package Main;
 import Core.Output;
 
 class Account {
-  // Promoted ctor param — assigned by promotion.
-  constructor(public string owner, int opening) {
-    // Unconditional assignment in the constructor satisfies definite assignment.
-    this.balance = opening;
-  }
-
-  mutable int balance;
-
-  // A field initializer — runs at construction, in declaration order.
-  int created = 1;
-
-  // An optional field with no initializer: defaults to `null`.
-  string? note;
-
-  function describe() -> string {
-    // `?? "(none)"` supplies a fallback for the null-defaulted optional (bound first — an
-    // interpolation hole can't hold a quoted string literal).
-    var n = this.note ?? "(none)";
-    return "{this.owner}: balance={this.balance} created={this.created} note={n}";
-  }
+    constructor(public string owner, int opening) {
+        // Promoted ctor param — assigned by promotion.
+        // Unconditional assignment in the constructor satisfies definite assignment.
+        this.balance = opening;
+    }
+    mutable int balance;
+    int created = 1;
+    string? note;
+    function describe(): string {
+        // A field initializer — runs at construction, in declaration order.
+        // An optional field with no initializer: defaults to `null`.
+        // `?? "(none)"` supplies a fallback for the null-defaulted optional (bound first — an
+        // interpolation hole can't hold a quoted string literal).
+        var n = this.note ?? "(none)";
+        return "{this.owner}: balance={this.balance} created={this.created} note={n}";
+    }
 }
 
-function main() -> void {
-  var a = new Account("ada", 100);
-  Output.printLine(a.describe());
+function main(): void {
+    var a = new Account("ada", 100);
+    Output.printLine(a.describe());
 }

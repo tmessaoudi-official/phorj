@@ -4,25 +4,17 @@ package Main;
 
 import Core.Output;
 
-function main() -> void {
+function main(): void {
     string name = "Ada";
     int unread = 3;
-
     // Text block: the common indent (and the closing delimiter column) is stripped; the relative
     // 2-space indent on the second line is kept; `{expr}` interpolates; a bare `"` is literal.
-    string letter = """
-        Dear {name},
-          you have {unread} unread message(s).
-        Regards,
-        The Phorj Team
-        """;
+    string letter = "Dear {name},\n  you have {unread} unread message(s).\nRegards,\nThe Phorj Team";
     Output.printLine(letter);
-
     // Raw strings: every byte literal — no escapes, no interpolation. The `r#"…"#` form carries an
     // embedded `"` verbatim. Ideal for JSON / regex literals.
-    string json = r#"{"unit": "px", "pattern": "\d{2,3}"}"#;
+    string json = "\{\"unit\": \"px\", \"pattern\": \"\\d\{2,3\}\"\}";
     Output.printLine(json);
-
-    string plain = r"no \n escape and {no} interpolation";
+    string plain = "no \\n escape and \{no\} interpolation";
     Output.printLine(plain);
 }

@@ -13,18 +13,15 @@ import Core.Url;
 
 function main(): void {
     var query = "name=Café & Co?";
-
     var form = Url.encodeForm(query);
     var raw = Url.encodeUriComponent(query);
     Output.printLine("form: {form}");
     Output.printLine("raw:  {raw}");
-
     // Round-trip (the `+`/`%20` difference is invisible after decoding).
     var backForm = Url.decodeForm(form) ?? query;
     var backRaw = Url.decodeUriComponent(raw) ?? query;
     Output.printLine("form round-trip: {backForm == query}");
     Output.printLine("raw round-trip:  {backRaw == query}");
-
     // The one behavioural difference between the two decoders: `+` is a space only in the form flavour.
     var plus = "a+b";
     var asForm = Url.decodeForm(plus) ?? plus;

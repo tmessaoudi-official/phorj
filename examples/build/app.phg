@@ -1,10 +1,10 @@
 package Main;
+
 import Core.Output;
 
 // A self-contained program built into a standalone executable with `phg build`.
 // The produced binary embeds this source (in a CRC-guarded `.phorj` object-file
 // section) and runs it on the bytecode VM at startup — no Phorj install needed.
-
 function fib(int n): int {
     if (n < 2) {
         return n;

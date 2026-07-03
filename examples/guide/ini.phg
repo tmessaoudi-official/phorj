@@ -12,9 +12,7 @@
 package Main;
 
 import Core.Output;
-
 import Core.Ini;
-
 import Core.Map;
 
 function main(): void {

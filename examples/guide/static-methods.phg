@@ -9,23 +9,20 @@ package Main;
 import Core.Output;
 
 class MathUtil {
-  // A static counter — class-level state, read via `MathUtil.calls` (not through an instance).
-  static mutable int calls = 0;
-
-  constructor() {}
-
-  // Pure static helper: depends only on its parameter, no instance state.
-  static function square(int n) -> int {
-    return n * n;
-  }
-
-  // A static method may read another static member.
-  static function describe() -> string {
-    return "MathUtil";
-  }
+    mutable static int calls = 0;
+    constructor() {}
+    static function square(int n): int {
+        // A static counter — class-level state, read via `MathUtil.calls` (not through an instance).
+        // Pure static helper: depends only on its parameter, no instance state.
+        return n * n;
+    }
+    static function describe(): string {
+        // A static method may read another static member.
+        return "MathUtil";
+    }
 }
 
-function main() -> void {
-  Output.printLine("square(5) = {MathUtil.square(5)}");
-  Output.printLine("describe = {MathUtil.describe()}");
+function main(): void {
+    Output.printLine("square(5) = {MathUtil.square(5)}");
+    Output.printLine("describe = {MathUtil.describe()}");
 }

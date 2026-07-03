@@ -3,7 +3,7 @@ package Main;
 
 import Core.Output;
 
-function main() -> void {
+function main(): void {
     string name = "Ada";
     int n = 42;
     Output.printLine("hello, {name}!");
@@ -11,5 +11,5 @@ function main() -> void {
     Output.printLine("a" + "b" + "c");
     Output.printLine("tab\tend");
     Output.printLine("brace \{literal\}");
-    Output.printLine("\u{2713} done");
+    Output.printLine("✓ done");
 }

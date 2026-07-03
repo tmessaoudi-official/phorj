@@ -1,10 +1,10 @@
 package Main;
+
 import Core.Output;
 
 // M-mut.4a — `obj with { field = value, … }`: a functional update that produces a FRESH instance
 // copying `obj` with the named fields replaced. The constructor is NOT re-run, and the source
 // instance is never modified — so it composes safely even before in-place mutation exists.
-
 class Point {
     constructor(public int x, public int y) {}
     function dist2(): int {
@@ -14,20 +14,21 @@ class Point {
 
 function main(): void {
     Point origin = new Point(0, 0);
-
     // Override one field — `origin` is untouched.
     Point right = origin with { x = 3 };
-    Output.printLine("origin = ({origin.x}, {origin.y})"); // (0, 0)
-    Output.printLine("right  = ({right.x}, {right.y})"); // (3, 0)
-
+    Output.printLine("origin = ({origin.x}, {origin.y})");
+    // (0, 0)
+    Output.printLine("right  = ({right.x}, {right.y})");
+    // (3, 0)
     // Override several fields at once.
     Point p = origin with { x = 3, y = 4 };
-    Output.printLine("p = ({p.x}, {p.y})"); // (3, 4)
-
+    Output.printLine("p = ({p.x}, {p.y})");
+    // (3, 4)
     // The result is a real instance: methods work on it.
-    Output.printLine("p.dist2 = {p.dist2()}"); // 25
-
+    Output.printLine("p.dist2 = {p.dist2()}");
+    // 25
     // The override value can read the source's fields.
     Point shifted = p with { x = p.x + 10 };
-    Output.printLine("shifted = ({shifted.x}, {shifted.y})"); // (13, 4)
+    Output.printLine("shifted = ({shifted.x}, {shifted.y})");
 }
+// (13, 4)

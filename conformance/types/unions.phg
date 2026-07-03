@@ -11,14 +11,11 @@ class Card {
     constructor(public string number) {}
 }
 
-function describe(Cash | Card payment) -> string {
-    return match payment {
-        Cash c => "cash {c.amount}",
-        Card k => "card {k.number}",
-    };
+function describe(Cash | Card payment): string {
+    return match (payment) { Cash c => "cash {c.amount}", Card k => "card {k.number}" };
 }
 
-function main() -> void {
+function main(): void {
     Output.printLine(describe(new Cash(100)));
     Output.printLine(describe(new Card("4321")));
 }

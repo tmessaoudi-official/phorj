@@ -20,18 +20,15 @@ function main(): void {
     Output.printLine("sum        = {List.sum(nums)}");
     Output.printLine("reversed[0] = {head}");
     Output.printLine("sum(rev)   = {List.sum(rev)}");
-
     // append (generic) — a new list with one element added at the end (lists are immutable/COW).
     var more = List.append(nums, 6);
     Output.printLine("appended   = {List.length(more)} last={more[5]}");
-
     // contains (generic, PHP `in_array` strict) — membership over a scalar list.
     Output.printLine("has 3      = {List.contains(nums, 3)}");
     Output.printLine("has 9      = {List.contains(nums, 9)}");
     var words = ["alpha", "beta"];
     var hasBeta = List.contains(words, "beta");
     Output.printLine("has beta   = {hasBeta}");
-
     // --- Core.Map: size / has / keys / values, insertion-ordered ---
     var ages = ["alice" => 30, "bob" => 25, "carol" => 41];
     var hasBob = Map.has(ages, "bob");
@@ -39,13 +36,11 @@ function main(): void {
     Output.printLine("size       = {Map.size(ages)}");
     Output.printLine("has bob    = {hasBob}");
     Output.printLine("has dave   = {hasDave}");
-
     // keys() preserves insertion order; index back into the map by each key.
     for (string name in Map.keys(ages)) {
         var age = ages[name];
         Output.printLine("{name} -> {age}");
     }
-
     // values() feeds straight into List.sum.
     var total = List.sum(Map.values(ages));
     Output.printLine("total age  = {total}");

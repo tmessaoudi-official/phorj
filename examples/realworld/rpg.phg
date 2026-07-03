@@ -1,35 +1,25 @@
 package Main;
+
 import Core.Output;
 
 // A turn-based RPG. Characters are immutable: `act` returns a new Character.
-
-enum Action {
-    Attack(int dmg),
-    Heal(int hp),
-    Defend,
-}
+enum Action { Attack(int dmg), Heal(int hp), Defend }
 
 class Character {
     constructor(private string name, private int hp) {}
-
-    function nameOf(): string { return this.name; }
-    function hpOf(): int { return this.hp; }
-
+    function nameOf(): string {
+        return this.name;
+    }
+    function hpOf(): int {
+        return this.hp;
+    }
     function act(Action a): Character {
-        return match a {
-            Attack(d) => new Character(this.name, this.hp - d),
-            Heal(h)   => new Character(this.name, this.hp + h),
-            Defend()  => new Character(this.name, this.hp),
-        };
+        return match (a) { Attack(d) => new Character(this.name, this.hp - d), Heal(h) => new Character(this.name, this.hp + h), Defend() => new Character(this.name, this.hp) };
     }
 }
 
 function resolve(Action a): string {
-    return match a {
-        Attack(d) => "attacks for {d}",
-        Heal(h)   => "heals {h}",
-        Defend()  => "defends",
-    };
+    return match (a) { Attack(d) => "attacks for {d}", Heal(h) => "heals {h}", Defend() => "defends" };
 }
 
 function main(): void {
@@ -37,7 +27,6 @@ function main(): void {
     Character hurt = hero.act(new Attack(12));
     Character healed = hurt.act(new Heal(5));
     Output.printLine("{healed.nameOf()} hp = {healed.hpOf()}");
-
     List<Action> turns = [new Attack(12), new Heal(5), new Defend()];
     for (Action a in turns) {
         Output.printLine(resolve(a));

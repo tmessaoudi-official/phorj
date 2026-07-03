@@ -16,9 +16,9 @@ package Main;
 import Core.Output;
 
 open class Animal {
-    // Reached by Duck through BOTH Swimmer and Flyer — but it is the same `Animal.name`, so it
-    // auto-merges (the diamond): no conflict, no resolution clause needed.
     function name(): string {
+        // Reached by Duck through BOTH Swimmer and Flyer — but it is the same `Animal.name`, so it
+        // auto-merges (the diamond): no conflict, no resolution clause needed.
         return "animal";
     }
 }
@@ -38,11 +38,13 @@ open class Flyer extends Animal {
 // Duck inherits from two parents. `move()` collides (Swimmer vs Flyer) and is resolved explicitly;
 // `name()` is the shared `Animal.name` reached through both arms (auto-merged).
 class Duck extends Swimmer, Flyer {
-    use Swimmer.move
+    use Swimmer.move;
 }
 
 function main(): void {
     Duck d = new Duck();
-    Output.printLine(d.move()); // "swims" — resolved by `use Swimmer.move`
-    Output.printLine(d.name()); // "animal" — diamond shared base, auto-merged
+    Output.printLine(d.move());
+    // "swims" — resolved by `use Swimmer.move`
+    Output.printLine(d.name());
 }
+// "animal" — diamond shared base, auto-merged

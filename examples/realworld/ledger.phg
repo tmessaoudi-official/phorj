@@ -1,36 +1,26 @@
 package Main;
+
 import Core.Output;
 
 // A bank ledger. Phorj values are immutable, so `apply` returns a *new* Account
 // rather than mutating in place — state evolves by binding fresh names.
-
-enum Tx {
-    Deposit(int cents),
-    Withdraw(int cents),
-    Transfer(int cents, string to),
-}
+enum Tx { Deposit(int cents), Withdraw(int cents), Transfer(int cents, string to) }
 
 class Account {
     constructor(private string owner, private int cents) {}
-
-    function ownerName(): string { return this.owner; }
-    function balance(): int { return this.cents; }
-
+    function ownerName(): string {
+        return this.owner;
+    }
+    function balance(): int {
+        return this.cents;
+    }
     function apply(Tx t): Account {
-        return match t {
-            Deposit(c)      => new Account(this.owner, this.cents + c),
-            Withdraw(c)     => new Account(this.owner, this.cents - c),
-            Transfer(c, to) => new Account(this.owner, this.cents - c),
-        };
+        return match (t) { Deposit(c) => new Account(this.owner, this.cents + c), Withdraw(c) => new Account(this.owner, this.cents - c), Transfer(c, to) => new Account(this.owner, this.cents - c) };
     }
 }
 
 function describe(Tx t): string {
-    return match t {
-        Deposit(c)      => "deposit {c}c",
-        Withdraw(c)     => "withdraw {c}c",
-        Transfer(c, to) => "transfer {c}c to {to}",
-    };
+    return match (t) { Deposit(c) => "deposit {c}c", Withdraw(c) => "withdraw {c}c", Transfer(c, to) => "transfer {c}c to {to}" };
 }
 
 // Recursive integer compound interest: 5% per year, floored (no list folding needed).
@@ -46,13 +36,10 @@ function main(): void {
     Account a1 = a0.apply(new Deposit(500));
     Account a2 = a1.apply(new Withdraw(200));
     Account a3 = a2.apply(new Transfer(100, "Bob"));
-
     Output.printLine("{a3.ownerName()} balance = {a3.balance()}c");
-
     List<Tx> log = [new Deposit(500), new Withdraw(200), new Transfer(100, "Bob")];
     for (Tx t in log) {
         Output.printLine(describe(t));
     }
-
     Output.printLine("1000c after 3y at 5% = {grow(1000, 3)}c");
 }

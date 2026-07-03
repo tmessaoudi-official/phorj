@@ -5,7 +5,8 @@
 // analog). No file repeats these signatures, and no `import` is needed. References transpile to the
 // global PHP form (`\strtoupper(...)`, `\str_repeat(...)`); the Rust backends refuse the program
 // (E-FOREIGN-RUNTIME) since foreign code needs the PHP runtime.
+declare function strtoupper(string s): string;
 
-declare function strtoupper(string s) -> string;
-declare function str_repeat(string s, int times) -> string;
-declare function strrev(string s) -> string;
+declare function str_repeat(string s, int times): string;
+
+declare function strrev(string s): string;

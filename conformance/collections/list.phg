@@ -4,21 +4,17 @@ package Main;
 import Core.Output;
 import Core.List;
 
-function main() -> void {
+function main(): void {
     List<int> xs = [1, 2, 3, 4];
     Output.printLine("first={xs[0]} last={xs[3]}");
     Output.printLine("len={List.length(xs)} sum={List.sum(xs)}");
     Output.printLine("has3={List.contains(xs, 3)} has9={List.contains(xs, 9)}");
-
     List<int> rev = List.reverse(xs);
     Output.printLine("rev0={rev[0]}");
-
     List<int> doubled = List.map(xs, function(int x) => x * 2);
     Output.printLine("mapSum={List.sum(doubled)}");
-
     List<int> evens = List.filter(xs, function(int x) => x % 2 == 0);
     Output.printLine("evens={List.length(evens)}");
-
     int product = List.reduce(xs, 1, function(int acc, int x) => acc * x);
     Output.printLine("product={product}");
 }

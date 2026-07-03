@@ -5,16 +5,14 @@ import Core.Output;
 import Core.Math;
 import Core.String;
 
-function main() -> void {
+function main(): void {
     Output.printLine("abs={Math.abs(-5)} min={Math.min(3, 8)} max={Math.max(3, 8)}");
     Output.printLine("sqrt={Math.sqrt(16.0)} pow={Math.pow(2.0, 3.0)}");
-
     string s = "Hello, World";
     Output.printLine("len={String.length(s)}");
     Output.printLine("upper={String.uppercase(s)}");
     bool hasWorld = String.contains(s, "World");
     Output.printLine("contains={hasWorld}");
-
     List<string> parts = String.split("a,b,c", ",");
     string joined = String.join(parts, "-");
     Output.printLine("join={joined}");

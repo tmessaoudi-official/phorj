@@ -2,12 +2,12 @@
 // independently from the two constructor arguments (`new Pair(1, "one")` ⇒ `Pair<int, string>`).
 package Acme.Containers;
 
-public class Pair<A, B> {
-  constructor(private A first, private B second) {}
-  function left(): A {
-    return this.first;
-  }
-  function right(): B {
-    return this.second;
-  }
+class Pair<A, B> {
+    constructor(private A first, private B second) {}
+    function left(): A {
+        return this.first;
+    }
+    function right(): B {
+        return this.second;
+    }
 }

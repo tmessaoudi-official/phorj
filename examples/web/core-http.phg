@@ -25,16 +25,13 @@ function handle(Request req): Response {
 
 function main(): void {
     string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-
     // A canonical raw request, built from a `b"…"` literal with explicit CRLFs (deterministic).
     bytes raw = b"GET /hi HTTP/1.1\x0d\x0aHost: localhost\x0d\x0aAccept: text/plain\x0d\x0a\x0d\x0a";
-
     if (var req = Request.parse(raw)) {
         string m = req.method;
         string p = req.path;
         Output.printLine("method={m} path={p}");
         Output.printLine("host={req.header(\"Host\") ?? \"(none)\"}");
-
         // Run the handler and serialize the response to the wire form.
         Response resp = handle(req);
         bytes wire = resp.serialize();
@@ -45,7 +42,6 @@ function main(): void {
     } else {
         Output.printLine("malformed request");
     }
-
     // A malformed request (no CRLFCRLF head/body boundary) parses to null.
     bytes bad = b"not a request";
     if (var r2 = Request.parse(bad)) {

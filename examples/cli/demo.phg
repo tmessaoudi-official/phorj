@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 // A tiny program used by ../cli/README.md to demonstrate the phorj CLI:

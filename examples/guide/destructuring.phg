@@ -17,7 +17,6 @@
 // runtime machinery: the struct form lowers to field reads, the list form to a length-check plus
 // indexed reads — the same ops as an `if`. Output is byte-for-byte identical on the interpreter, the
 // bytecode VM, and the transpiled PHP.
-
 package Main;
 
 import Core.Output;
@@ -52,11 +51,9 @@ function swap(int a, int b): string {
 function main(): void {
     var p = new Point(3, 4);
     Output.printLine(describe(p));
-
     // Length matches → 10 + 20 = 30.
     Output.printLine("sum2={firstTwoSum([10, 20])}");
     // Length differs → the `else` bails out with -1.
     Output.printLine("sum3={firstTwoSum([1, 2, 3])}");
-
     Output.printLine(swap(7, 9));
 }

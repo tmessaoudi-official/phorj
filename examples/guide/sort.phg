@@ -8,31 +8,35 @@
 // same value-level building block as `map`/`filter`/`reduce`. Both are stable and byte-identical on
 // run / runvm / real PHP.
 package Main;
+
 import Core.Output;
 import Core.List;
 import Core.String;
 
 function showInts(List<int> xs): string {
-  mutable string out = "";
-  for (int n in xs) { out = "{out}{n} "; }
-  return String.trim(out);
+    mutable string out = "";
+    for (int n in xs) {
+        out = "{out}{n} ";
+    }
+    return String.trim(out);
 }
 
 function showStrs(List<string> xs): string {
-  return String.join(xs, " ");
+    return String.join(xs, " ");
 }
 
 function main(): void {
-  List<int> nums = [3, 1, 4, 1, 5, 9, 2, 6];
-
-  // Natural ascending — a new list; `nums` itself is unchanged.
-  Output.printLine(showInts(List.sort(nums)));   // 1 1 2 3 4 5 6 9
-  Output.printLine(showInts(nums));               // 3 1 4 1 5 9 2 6  (original intact)
-
-  // Strings sort by byte order: "10" before "9".
-  List<string> words = ["banana", "apple", "10", "9", "cherry"];
-  Output.printLine(showStrs(List.sort(words)));   // 10 9 apple banana cherry
-
-  // sortWith: a descending comparator (b - a).
-  Output.printLine(showInts(List.sortWith(nums, function(int a, int b) => b - a))); // 9 6 5 4 3 2 1 1
+    List<int> nums = [3, 1, 4, 1, 5, 9, 2, 6];
+    // Natural ascending — a new list; `nums` itself is unchanged.
+    Output.printLine(showInts(List.sort(nums)));
+    // 1 1 2 3 4 5 6 9
+    Output.printLine(showInts(nums));
+    // 3 1 4 1 5 9 2 6  (original intact)
+    // Strings sort by byte order: "10" before "9".
+    List<string> words = ["banana", "apple", "10", "9", "cherry"];
+    Output.printLine(showStrs(List.sort(words)));
+    // 10 9 apple banana cherry
+    // sortWith: a descending comparator (b - a).
+    Output.printLine(showInts(List.sortWith(nums, function(int a, int b) => b - a)));
 }
+// 9 6 5 4 3 2 1 1

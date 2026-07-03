@@ -10,7 +10,7 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 
-function main() -> void {
+function main(): void {
     // A 2-D grid (List<List<int>>) mutated in place at nested indices.
     mutable List<List<int>> grid = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
     grid[0][0] = 10;
@@ -20,7 +20,6 @@ function main() -> void {
     Output.printLine("grid[1][2] = {grid[1][2]}");
     Output.printLine("grid[2][1] = {grid[2][1]}");
     Output.printLine("unchanged  = {grid[0][1]}");
-
     // A transpose-in-place over a square grid — the classic nested-index workload.
     mutable List<List<int>> m = [[1, 2], [3, 4]];
     for (int i in 0..2) {
@@ -33,9 +32,8 @@ function main() -> void {
         }
     }
     Output.printLine("transposed = {m[0][0]} {m[0][1]} {m[1][0]} {m[1][1]}");
-
     // Nested value in a Map<string, List<int>>.
     mutable Map<string, List<int>> buckets = ["a" => [0, 0], "b" => [0, 0]];
     buckets["a"][1] = 42;
-    Output.printLine("buckets[a][1] = {buckets["a"][1]}");
+    Output.printLine("buckets[a][1] = {buckets[\"a\"][1]}");
 }

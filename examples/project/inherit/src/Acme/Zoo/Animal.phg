@@ -9,9 +9,8 @@
 package Acme.Zoo;
 
 open class Animal {
-  constructor(public string name) {}
-
-  open function speak(): string {
-    return "(generic animal sound)";
-  }
+    constructor(public string name) {}
+    open function speak(): string {
+        return "(generic animal sound)";
+    }
 }

@@ -3,11 +3,10 @@
 package Acme.Mixins;
 
 trait Identified {
-  // The using class must provide this — the trait does not store the id itself.
-  abstract function id(): int;
-
-  // Built on the required method.
-  function tag(): string {
-    return "#{this.id()}";
-  }
+    abstract function id(): int;
+    function tag(): string {
+        // The using class must provide this — the trait does not store the id itself.
+        // Built on the required method.
+        return "#{this.id()}";
+    }
 }

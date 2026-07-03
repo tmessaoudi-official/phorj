@@ -13,24 +13,25 @@ import Acme.Geometry.Paint;
 
 // Typed by an imported INTERFACE — any implementer flows in (nominal subtyping, cross-package).
 function describe(Shape s): int {
-  return s.area();
+    return s.area();
 }
 
 // Matched over an imported ENUM (bare variant call form, both to construct and in patterns).
 function paintName(Paint p): string {
-  return match p {
-    Red() => "red",
-    Green() => "green",
-    Blue() => "blue",
-  };
+    return match (p) { Red() => "red", Green() => "green", Blue() => "blue" };
 }
 
 function main(): void {
-  Rect r = new Rect(3, 4); // instantiate an imported class
-  int a = describe(r); // pass it where an imported interface is expected
-  Output.printLine("area: {a}");
-  Output.printLine("{r instanceof Shape}"); // true — Rect implements Shape (cross-package)
-  Output.printLine("{r instanceof Rect}"); // true
-  Paint p = new Green(); // construct an imported enum's variant
-  Output.printLine("paint: {paintName(p)}");
+    Rect r = new Rect(3, 4);
+    // instantiate an imported class
+    int a = describe(r);
+    // pass it where an imported interface is expected
+    Output.printLine("area: {a}");
+    Output.printLine("{r instanceof Shape}");
+    // true — Rect implements Shape (cross-package)
+    Output.printLine("{r instanceof Rect}");
+    // true
+    Paint p = new Green();
+    // construct an imported enum's variant
+    Output.printLine("paint: {paintName(p)}");
 }

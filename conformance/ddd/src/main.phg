@@ -9,19 +9,13 @@ import Catalog.Product;
 import Ordering.OrderLine;
 import Ordering.Order;
 
-function main() -> void {
+function main(): void {
     Product widget = new Product(1, "Widget", new Money(250));
     Product gadget = new Product(2, "Gadget", new Money(125));
-
-    List<OrderLine> lines = [
-        new OrderLine(widget, 3),
-        new OrderLine(gadget, 2),
-    ];
+    List<OrderLine> lines = [new OrderLine(widget, 3), new OrderLine(gadget, 2)];
     Order order = new Order(1001, lines);
-
     Output.printLine("Order #{order.id}");
     Output.printLine("lines: {order.lineCount()}");
-
     Money total = order.total();
     string formatted = total.format();
     Output.printLine("total: {formatted}");

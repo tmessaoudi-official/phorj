@@ -12,26 +12,31 @@ import Core.Http.Route;
 import Core.Http.Router;
 
 class Api {
-  #[Route("GET", "/ping")]
-  static function ping(Request req) -> Response { return Response.text(200, "pong"); }
-
-  #[Route("GET", r"/items/{id:\d+}")]
-  static function item(Request req) -> Response { return Response.text(200, "item " + (req.param("id") ?? "?")); }
+    #[Route("GET", "/ping")]
+    static function ping(Request req): Response {
+        return Response.text(200, "pong");
+    }
+    #[Route("GET", "/items/\{id:\\d+\}")]
+    static function item(Request req): Response {
+        return Response.text(200, "item " + (req.param("id") ?? "?"));
+    }
 }
 
 #[Route("GET", "/")]
-function root(Request req) -> Response { return Response.text(200, "root"); }
-
-function show(Router rt, string path) -> void {
-  Response resp = rt.handle(new Request("GET", path, b"", [], []));
-  int st = resp.status;
-  Output.printLine("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
+function root(Request req): Response {
+    return Response.text(200, "root");
 }
 
-function main() -> void {
-  Router rt = Http.autoRouter();
-  show(rt, "/");
-  show(rt, "/ping");
-  show(rt, "/items/7");
-  show(rt, "/items/x");
+function show(Router rt, string path): void {
+    Response resp = rt.handle(new Request("GET", path, b"", [], []));
+    int st = resp.status;
+    Output.printLine("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
+}
+
+function main(): void {
+    Router rt = Http.autoRouter();
+    show(rt, "/");
+    show(rt, "/ping");
+    show(rt, "/items/7");
+    show(rt, "/items/x");
 }

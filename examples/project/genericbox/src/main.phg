@@ -8,18 +8,21 @@ import Acme.Containers.Box;
 import Acme.Containers.Pair;
 
 function main(): void {
-  var bi = new Box(7); // Box<int>  — T inferred from `7`
-  int x = bi.get(); // int
-  int y = bi.orElse(0); // int — the T-typed parameter accepts an int
-
-  var bs = new Box("phorj"); // Box<string>
-  string s = bs.get(); // string
-
-  var p = new Pair(1, "one"); // Pair<int, string> — A=int, B=string
-  int a = p.left();
-  string b = p.right();
-
-  Output.printLine("box int: {x} {y}");
-  Output.printLine("box str: {s}");
-  Output.printLine("pair: {a} {b}");
+    var bi = new Box(7);
+    // Box<int>  — T inferred from `7`
+    int x = bi.get();
+    // int
+    int y = bi.orElse(0);
+    // int — the T-typed parameter accepts an int
+    var bs = new Box("phorj");
+    // Box<string>
+    string s = bs.get();
+    // string
+    var p = new Pair(1, "one");
+    // Pair<int, string> — A=int, B=string
+    int a = p.left();
+    string b = p.right();
+    Output.printLine("box int: {x} {y}");
+    Output.printLine("box str: {s}");
+    Output.printLine("pair: {a} {b}");
 }

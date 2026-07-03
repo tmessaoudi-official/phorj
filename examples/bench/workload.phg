@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 
 // A focused profiling workload for `phg bench` and `phg disasm`. It mixes the two cost
@@ -7,12 +8,13 @@ import Core.Output;
 //   phg bench examples/bench/workload.phg     # per-phase wall-clock + peak-RSS growth
 //   phg disasm examples/bench/workload.phg    # the bytecode the VM executes
 // See examples/bench/README.md for how the time and memory numbers are collected.
-
 // One small heap object, allocated thousands of times below. Constructor promotion gives it a
 // single int field; `squared` exercises a method call + field read per instance.
 class Cell {
     constructor(private int v) {}
-    function squared(): int { return this.v * this.v; }
+    function squared(): int {
+        return this.v * this.v;
+    }
 }
 
 // Heap pressure: at recursion depth d, d `Cell`s are simultaneously live — each frame keeps its
@@ -42,10 +44,8 @@ function main(): void {
     // casual `phg bench` stays a few seconds, not a minute. The VM's speedup ratio is
     // n-independent, so a smaller n shows the same advantage.)
     Output.printLine("fib(18) = {fib(18)}");
-
     // Allocation-bound: 1000 live Cells at peak, 1000 method calls.
     Output.printLine("chain(1000) = {allocateChain(1000)}");
-
     // Object iteration: a method call + field read per element of a list literal.
     for (Cell c in [new Cell(3), new Cell(4), new Cell(5)]) {
         Output.printLine("cell^2 = {c.squared()}");

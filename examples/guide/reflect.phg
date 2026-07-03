@@ -19,20 +19,24 @@ import Core.String;
 
 class Point {
     constructor(public int x, public int y) {}
-    function sum(): int { return this.x + this.y; }
+    function sum(): int {
+        return this.x + this.y;
+    }
 }
 
-enum Color {
-    Red(),
-    Green(),
-}
+enum Color { Red, Green }
 
 // A small hierarchy for the enumeration natives.
-interface Shape {}
-interface Drawable {}
+interface Shape {
+}
+
+interface Drawable {
+}
+
 open class Base {
     constructor() {}
 }
+
 class Widget extends Base implements Shape, Drawable {
     constructor() {}
 }
@@ -47,19 +51,15 @@ function main(): void {
     Output.printLine("float  -> {Reflection.kind(3.14)}");
     Output.printLine("bool   -> {Reflection.kind(true)}");
     Output.printLine("string -> {Reflection.kind(\"hi\")}");
-
     // Every collection erases to a PHP array, so all three report "array".
     Output.printLine("list   -> {Reflection.kind([1, 2, 3])}");
     Output.printLine("map    -> {Reflection.kind([\"a\" => 1])}");
     Output.printLine("set    -> {Reflection.kind(Set.of([1, 2, 2]))}");
-
     // An instance and an enum variant are both plain objects after erasure.
     Output.printLine("object -> {Reflection.kind(new Point(1, 2))}");
     Output.printLine("enum   -> {Reflection.kind(new Red())}");
-
     // A first-class function value is callable.
     Output.printLine("fn     -> {Reflection.kind(dbl)}");
-
     // `Reflection.className(x) -> string?` is the RUNTIME class name (≡ PHP get_class), or null for a
     // non-object. An enum variant reports the variant name (PHP transpiles it to a subclass).
     var p = new Point(3, 4);
@@ -67,7 +67,6 @@ function main(): void {
     Output.printLine("class(enum)  = {Reflection.className(new Green()) ?? \"<none>\"}");
     // A scalar is not a class instance → null (shown via the ?? fallback).
     Output.printLine("class(int)   = {Reflection.className(7) ?? \"<none>\"}");
-
     // `Reflection.typeName(x) -> string` is the PRECISE Phorj type name, resolved from x's STATIC type
     // — so List / Map / Set / bytes / enum keep the identity that PHP erasure would collapse. Note
     // `typeName(list)` is "List" where `kind(list)` above was the coarse "array".
@@ -79,20 +78,17 @@ function main(): void {
     Output.printLine("typeName(enum) = {Reflection.typeName(new Green())}");
     // An object reports its runtime class.
     Output.printLine("typeName(obj)  = {Reflection.typeName(p)}");
-
     // An optional resolves through a single-eval null-branch: null → "null", else the inner rule.
     int? present = 7;
     int? absent = null;
     Output.printLine("typeName(int?) present = {Reflection.typeName(present)}");
     Output.printLine("typeName(int?) absent  = {Reflection.typeName(absent)}");
-
     // Enumeration natives (Tier 2): the sorted interface / parent names of an instance's class.
     var w = new Widget();
     Output.printLine("interfaces = {String.join(Reflection.interfaces(w), \", \")}");
     Output.printLine("parents    = {String.join(Reflection.parents(w), \", \")}");
     // A non-class value has no interfaces/parents → empty lists.
     Output.printLine("int ifaces = [{String.join(Reflection.interfaces(7), \", \")}]");
-
     // methods / fields of an instance's class (sorted, incl. inherited + promoted ctor params).
     Output.printLine("methods = {String.join(Reflection.methods(p), \", \")}");
     Output.printLine("fields  = {String.join(Reflection.fields(p), \", \")}");

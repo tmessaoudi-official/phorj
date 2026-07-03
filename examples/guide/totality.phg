@@ -31,16 +31,14 @@ function larger(int a, int b): int {
 
 // A `match` that returns on every arm is total (the arms are exhaustive over `int` via `_`).
 function sign(int n): string {
-    return match n {
-        0 => "zero",
-        _ => if (n > 0) { "positive" } else { "negative" },
-    };
+    return match (n) { 0 => "zero", _ => if (n > 0) { "positive" } else { "negative" } };
 }
 
 // The bottom type: a `-> never` function provably diverges, so it never returns a value. Declared to
 // showcase the type (and its PHP `: never` hint); never called, so the program still terminates.
 function spinForever(): never {
-    while (true) {}
+    while (true) {
+    }
 }
 
 function main(): void {
@@ -53,11 +51,6 @@ function main(): void {
     Output.printLine(sign(-2));
     // A statement-body lambda that returns on every path (Batch F) — one that could fall off the end
     // would be `E-MISSING-RETURN`.
-    var absOf = function(int n) -> int {
-        if (n < 0) {
-            return 0 - n;
-        }
-        return n;
-    };
+    var absOf = function(int n): int { if (n < 0) { return 0 - n; } return n; };
     Output.printLine("abs = {absOf(-4)}");
 }

@@ -5,14 +5,13 @@ import Core.Output;
 import Core.Decimal;
 import Core.Decimal.RoundingMode;
 
-function main() -> void {
+function main(): void {
     decimal price = 19.99d;
-    decimal total = price * 3d;          // exact: 59.97
+    decimal total = price * 3d;
+    // exact: 59.97
     Output.printLine("total = {total}");
-
     decimal share = Decimal.divide(total, 7d, 2, new RoundingMode.HalfUp());
     Output.printLine("share = {share}");
-
     decimal tie = 2.345d;
     Output.printLine("up   = {Decimal.round(tie, 2, new RoundingMode.HalfUp())}");
     Output.printLine("even = {Decimal.round(tie, 2, new RoundingMode.HalfEven())}");

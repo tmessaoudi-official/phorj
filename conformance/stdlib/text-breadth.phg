@@ -4,17 +4,17 @@ import Core.Output;
 import Core.String;
 
 function main(): void {
-  Output.printLine(String.reverse("phorj"));
-  Output.printLine(String.reverse("abcABC123"));
-  Output.printLine(String.reverse(""));
-  bool a = String.equalsIgnoreCase("Hello", "hello");
-  bool b = String.equalsIgnoreCase("Hello", "HELLO");
-  bool c = String.equalsIgnoreCase("Hello", "world");
-  bool d = String.equalsIgnoreCase("", "");
-  Output.printLine("{a} {b} {c} {d}");
-  bool e = String.containsIgnoreCase("Hello World", "WORLD");
-  bool f = String.containsIgnoreCase("Hello World", "world");
-  bool g = String.containsIgnoreCase("Hello", "xyz");
-  bool h = String.containsIgnoreCase("Hello", "");
-  Output.printLine("{e} {f} {g} {h}");
+    Output.printLine(String.reverse("phorj"));
+    Output.printLine(String.reverse("abcABC123"));
+    Output.printLine(String.reverse(""));
+    bool a = String.equalsIgnoreCase("Hello", "hello");
+    bool b = String.equalsIgnoreCase("Hello", "HELLO");
+    bool c = String.equalsIgnoreCase("Hello", "world");
+    bool d = String.equalsIgnoreCase("", "");
+    Output.printLine("{a} {b} {c} {d}");
+    bool e = String.containsIgnoreCase("Hello World", "WORLD");
+    bool f = String.containsIgnoreCase("Hello World", "world");
+    bool g = String.containsIgnoreCase("Hello", "xyz");
+    bool h = String.containsIgnoreCase("Hello", "");
+    Output.printLine("{e} {f} {g} {h}");
 }

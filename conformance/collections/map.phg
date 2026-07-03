@@ -5,7 +5,7 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 
-function main() -> void {
+function main(): void {
     Map<string, int> ages = ["alice" => 30, "bob" => 25, "carol" => 41];
     int alice = ages["alice"];
     Output.printLine("alice={alice}");
@@ -13,7 +13,6 @@ function main() -> void {
     bool hasBob = Map.has(ages, "bob");
     bool hasDave = Map.has(ages, "dave");
     Output.printLine("hasBob={hasBob} hasDave={hasDave}");
-
     for (string name in Map.keys(ages)) {
         Output.printLine("key {name}");
     }

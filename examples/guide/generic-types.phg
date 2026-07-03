@@ -13,59 +13,58 @@
 // Type arguments are **invariant** (Soundness Batch B): a `Box<string>` does NOT flow into a
 // `Box<int>` slot (it would be unsound — same storage). `Box<int> b = new Box("x");` is a type error.
 // (Can't be shown in a runnable example — every example must produce identical Ok output.)
-
 package Main;
 
 import Core.Output;
 
 // A one-field generic container. `T` flows through the promoted constructor field and the methods.
 class Box<T> {
-  constructor(private T value) {}
-
-  // Returns the stored value at whatever concrete type the box was constructed with.
-  function get(): T {
-    return this.value;
-  }
-
-  // A method *taking* a `T`: the parameter is checked at the instance's concrete type, so
-  // `Box(7).orElse(0)` type-checks but `Box(7).orElse("x")` would not.
-  function orElse(T fallback): T {
-    return this.value;
-  }
+    constructor(private T value) {}
+    function get(): T {
+        // Returns the stored value at whatever concrete type the box was constructed with.
+        return this.value;
+    }
+    function orElse(T fallback): T {
+        // A method *taking* a `T`: the parameter is checked at the instance's concrete type, so
+        // `Box(7).orElse(0)` type-checks but `Box(7).orElse("x")` would not.
+        return this.value;
+    }
 }
 
 // Two type parameters, inferred independently from the two constructor arguments.
 class Pair<A, B> {
-  constructor(private A first, private B second) {}
-  function left(): A {
-    return this.first;
-  }
-  function right(): B {
-    return this.second;
-  }
+    constructor(private A first, private B second) {}
+    function left(): A {
+        return this.first;
+    }
+    function right(): B {
+        return this.second;
+    }
 }
 
 function main(): void {
-  var bi = new Box(7); // Box<int>  — T inferred from `7`
-  int x = bi.get(); // int
-  int y = bi.orElse(0); // int — the T-typed parameter accepts an int
-
-  var bs = new Box("phorj"); // Box<string>
-  string s = bs.get(); // string
-
-  var p = new Pair(1, "one"); // Pair<int, string> — A=int, B=string
-  int a = p.left();
-  string b = p.right();
-
-  // S2.1-broad: a generic member result is a first-class arithmetic operand — `bi.get()` (a method
-  // returning the class `T`) and `bi.orElse(0)` (a `T`-typed-parameter result) both erase to `mixed`
-  // statically, but the VM recovers the operand type the checker proved, so these specialize and run
-  // byte-identically on both backends (no need to bind to a typed local first).
-  int viaMethod = bi.get() + 1;
-  int viaParam = bi.orElse(0) + 1;
-
-  Output.printLine("box int: {x} {y}");
-  Output.printLine("box str: {s}");
-  Output.printLine("pair: {a} {b}");
-  Output.printLine("operands: {viaMethod} {viaParam}");
+    var bi = new Box(7);
+    // Box<int>  — T inferred from `7`
+    int x = bi.get();
+    // int
+    int y = bi.orElse(0);
+    // int — the T-typed parameter accepts an int
+    var bs = new Box("phorj");
+    // Box<string>
+    string s = bs.get();
+    // string
+    var p = new Pair(1, "one");
+    // Pair<int, string> — A=int, B=string
+    int a = p.left();
+    string b = p.right();
+    // S2.1-broad: a generic member result is a first-class arithmetic operand — `bi.get()` (a method
+    // returning the class `T`) and `bi.orElse(0)` (a `T`-typed-parameter result) both erase to `mixed`
+    // statically, but the VM recovers the operand type the checker proved, so these specialize and run
+    // byte-identically on both backends (no need to bind to a typed local first).
+    int viaMethod = bi.get() + 1;
+    int viaParam = bi.orElse(0) + 1;
+    Output.printLine("box int: {x} {y}");
+    Output.printLine("box str: {s}");
+    Output.printLine("pair: {a} {b}");
+    Output.printLine("operands: {viaMethod} {viaParam}");
 }

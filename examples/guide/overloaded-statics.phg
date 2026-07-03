@@ -13,34 +13,37 @@ import Core.Output;
 // `open` so the subclass below can inherit the overloaded static factory.
 open class Color {
     constructor(public int r, public int g, public int b) {}
-
-    // Three overloaded static factories, distinguished at runtime by arity and parameter type.
-    static function of(int gray) -> Color {
+    static function of(int gray): Color {
+        // Three overloaded static factories, distinguished at runtime by arity and parameter type.
         return new Color(gray, gray, gray);
     }
-    static function of(int r, int g, int b) -> Color {
+    static function of(int r, int g, int b): Color {
         return new Color(r, g, b);
     }
-    static function of(string name) -> Color {
+    static function of(string name): Color {
         if (name == "red") {
             return new Color(255, 0, 0);
         }
         return new Color(0, 0, 0);
     }
-
-    function show() -> string {
+    function show(): string {
         return "rgb({this.r}, {this.g}, {this.b})";
     }
 }
 
 // Inherits the overloaded static factory — `Swatch.of(..)` resolves Color's overload set.
-class Swatch extends Color {}
+class Swatch extends Color {
+}
 
-function main() -> void {
-    Color a = Color.of(128);          // -> of(int)
-    Color b = Color.of(10, 20, 30);   // -> of(int, int, int)
-    Color c = Color.of("red");        // -> of(string)
-    Color d = Swatch.of(64);          // inherited overloaded static -> of(int)
+function main(): void {
+    Color a = Color.of(128);
+    // -> of(int)
+    Color b = Color.of(10, 20, 30);
+    // -> of(int, int, int)
+    Color c = Color.of("red");
+    // -> of(string)
+    Color d = Swatch.of(64);
+    // inherited overloaded static -> of(int)
     Output.printLine(a.show());
     Output.printLine(b.show());
     Output.printLine(c.show());

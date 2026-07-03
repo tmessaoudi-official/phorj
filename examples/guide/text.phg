@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 import Core.String;
 
@@ -8,43 +9,34 @@ import Core.String;
 //
 // Note: bind call results to locals before interpolating — the interpolation sub-lexer does not
 // nest string literals inside `{…}` (same constraint as guide/strings.phg).
-
 function main(): void {
     string greeting = "Hello, Phorj";
-
     int n = String.length(greeting);
     string up = String.uppercase(greeting);
     string down = String.lowercase(greeting);
     string padded = String.trim("   padded   ");
     Output.printLine("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
-
     // `contains` returns a bool; render it through an expression-`if` so the output is a string.
     string has = if (String.contains(greeting, "Phorj")) { "yes" } else { "no" };
     Output.printLine("contains 'Phorj' = {has}");
-
     // split → List<string>, then join with a different separator (the inverse op).
     List<string> parts = String.split("a,b,c", ",");
     string rejoined = String.join(parts, " - ");
     Output.printLine("rejoined = {rejoined}");
-
     // lines → split on "\n" (→ explode). Index the resulting List<string> directly.
     List<string> rows = String.lines("one\ntwo\nthree");
     Output.printLine("first row = {rows[0]}, third row = {rows[2]}");
-
     // capitalize → ASCII ucfirst (uppercase the first letter; multibyte first char unchanged).
     string capped = String.capitalize("phorj");
     Output.printLine("capitalize = {capped}");
-
     string swapped = String.replace(greeting, "Phorj", "World");
     Output.printLine("replaced = {swapped}");
-
     // P3.2 byte-safe subset: prefix/suffix tests (→ str_starts_with/str_ends_with) and repeat
     // (→ str_repeat). Bool results render via expression-`if` (PHP echoes a bool as 1/"").
     string sw = if (String.startsWith(greeting, "Hello")) { "yes" } else { "no" };
     string ew = if (String.endsWith(greeting, "Phorj")) { "yes" } else { "no" };
     string bar = String.repeat("=", 5);
     Output.printLine("startsWith 'Hello' = {sw}, endsWith 'Phorj' = {ew}, bar = {bar}");
-
     // M4 breadth (ASCII): reverse (→ strrev), and case-insensitive compare/contains
     // (→ strcasecmp/stripos). Non-ASCII is a documented edge (no mbstring under `php -n`).
     string rev = String.reverse("phorj");

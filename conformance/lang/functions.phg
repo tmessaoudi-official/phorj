@@ -3,23 +3,23 @@ package Main;
 
 import Core.Output;
 
-function fact(int n) -> int {
+function fact(int n): int {
     return if (n <= 1) { 1 } else { n * fact(n - 1) };
 }
 
-function greet(string who, string greeting = "Hello") -> string {
+function greet(string who, string greeting = "Hello"): string {
     return "{greeting}, {who}";
 }
 
-function applyTwice(int x, (int) -> int f) -> int {
+function applyTwice(int x, (int) => int f): int {
     return f(f(x));
 }
 
-function main() -> void {
+function main(): void {
     Output.printLine("{fact(5)}");
     Output.printLine(greet("Ada"));
     Output.printLine(greet("Ada", "Hi"));
     var inc = function(int x) => x + 1;
     Output.printLine("{applyTwice(10, inc)}");
-    Output.printLine("{5 |> inc |> inc}");
+    Output.printLine("{inc(inc(5))}");
 }

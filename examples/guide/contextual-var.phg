@@ -27,12 +27,10 @@ function main(): void {
     // `var name = …` is still the inference keyword (here `label` is inferred `string`).
     var label = tagged("phorj");
     Output.printLine(label);
-
     // `var` as a mutable local value name: declared with its type, then reassigned.
     mutable int var = 10;
     var = var + 5;
     Output.printLine("var = {var}");
-
     // `var` as a field name.
     var h = new Holder(41);
     Output.printLine("h.var = {h.var}, bumped = {h.bumped()}");

@@ -10,6 +10,7 @@
 // `as` over PRIMITIVES is value conversion (`int as float`, `float as int` ⇒ `int?`, …) — see
 // `as-primitives.phg`. The named `Core.Conversion` / `Core.String.parse*` functions remain available too.
 package Main;
+
 import Core.Output;
 
 interface Shape {
@@ -18,12 +19,16 @@ interface Shape {
 
 class Circle implements Shape {
     constructor(public int radius) {}
-    function area(): int { return this.radius * this.radius; }
+    function area(): int {
+        return this.radius * this.radius;
+    }
 }
 
 class Square implements Shape {
     constructor(public int side) {}
-    function area(): int { return this.side * this.side; }
+    function area(): int {
+        return this.side * this.side;
+    }
 }
 
 // Downcast a `Shape` to `Circle`: success → read `radius`; failure → fall back. The if-let smart-cast
@@ -46,22 +51,24 @@ function noisy(): Shape {
 function main(): void {
     Shape c = new Circle(3);
     Shape sq = new Square(4);
-
-    Output.printLine("circle radius = {radiusOr(c, -1)}");  // 3  — c is a Circle
-    Output.printLine("square radius = {radiusOr(sq, -1)}"); // -1 — a Square is not a Circle → null
-
+    Output.printLine("circle radius = {radiusOr(c, -1)}");
+    // 3  — c is a Circle
+    Output.printLine("square radius = {radiusOr(sq, -1)}");
+    // -1 — a Square is not a Circle → null
     // `as` + `?.` + `??` inline: succeed → the value, fail → null → fallback.
     int r = (c as Circle)?.radius ?? 0;
-    Output.printLine("inline circle = {r}");                 // 3
+    Output.printLine("inline circle = {r}");
+    // 3
     int bad = (sq as Circle)?.radius ?? 0;
-    Output.printLine("inline square = {bad}");               // 0
-
+    Output.printLine("inline square = {bad}");
+    // 0
     // cast to an interface a value implements always succeeds.
     if (var shape = c as Shape) {
-        Output.printLine("area = {shape.area()}");           // 9
+        Output.printLine("area = {shape.area()}");
     }
-
+    // 9
     // single-evaluation: "(noisy ran)" prints once, then the radius 7.
     int n = (noisy() as Circle)?.radius ?? 0;
-    Output.printLine("noisy radius = {n}");                  // 7
+    Output.printLine("noisy radius = {n}");
 }
+// 7

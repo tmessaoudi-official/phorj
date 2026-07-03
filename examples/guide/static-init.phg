@@ -1,25 +1,31 @@
 package Main;
+
 import Core.Output;
 
 // Feature B-static — runtime static-field initializers. PHP static property defaults must be constant
 // expressions; Phorj lifts that: a `static` field may be initialized by ANY expression, evaluated
 // ONCE at program start, in declaration order, before `main`. Lowered to a PHP `__phorj_init_statics`
 // run once before `main()`. (A literal static still works and stays a plain PHP static default.)
-
 function seed(): int {
     return 6 * 7;
 }
 
 class Registry {
-    static int answer = seed();             // a computed default via a call → 42
-    static int derived = Registry.answer + 1; // reads an EARLIER static (declaration order) → 43
-    static mutable int hits = 0;            // a literal static — still a plain PHP default
+    static int answer = seed();
+    static int derived = Registry.answer + 1;
+    mutable static int hits = 0;
 }
 
+// a computed default via a call → 42
+// reads an EARLIER static (declaration order) → 43
+// a literal static — still a plain PHP default
 function main(): void {
-    Output.printLine("{Registry.answer}");   // 42
-    Output.printLine("{Registry.derived}");   // 43
+    Output.printLine("{Registry.answer}");
+    // 42
+    Output.printLine("{Registry.derived}");
+    // 43
     Registry.hits = Registry.hits + 1;
     Registry.hits = Registry.hits + 1;
-    Output.printLine("{Registry.hits}");      // 2
+    Output.printLine("{Registry.hits}");
 }
+// 2

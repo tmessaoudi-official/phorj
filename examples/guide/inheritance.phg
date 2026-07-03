@@ -12,31 +12,30 @@ package Main;
 import Core.Output;
 
 open class Greeter {
-    // Not `open`: subclasses inherit it unchanged and cannot replace it. It calls `kind()`, which a
-    // subclass *can* override — so the inherited `greet()` adapts to the actual class.
     function greet(): string {
+        // Not `open`: subclasses inherit it unchanged and cannot replace it. It calls `kind()`, which a
+        // subclass *can* override — so the inherited `greet()` adapts to the actual class.
         var k = this.kind();
         return "Hello from a {k}";
     }
-
-    // `open`: a subclass may override this method.
     open function kind(): string {
+        // `open`: a subclass may override this method.
         return "greeter";
     }
 }
 
 class LoudGreeter extends Greeter {
-    // Overrides the `open` `kind()`. `greet()` is inherited unchanged.
     function kind(): string {
+        // Overrides the `open` `kind()`. `greet()` is inherited unchanged.
         return "loud greeter";
     }
 }
 
 function main(): void {
     LoudGreeter g = new LoudGreeter();
-    Output.printLine(g.greet()); // inherited greet() dispatches to the overridden kind()
+    Output.printLine(g.greet());
+    // inherited greet() dispatches to the overridden kind()
     Output.printLine(g.kind());
-
     // A LoudGreeter flows into a Greeter-typed binding (subtyping); dispatch stays dynamic.
     Greeter base = g;
     Output.printLine(base.greet());

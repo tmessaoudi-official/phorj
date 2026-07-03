@@ -1,9 +1,9 @@
 package Main;
+
 import Core.Output;
 
 // Functions in Phorj: typed parameters and a return type.
 // A function with no `-> T` (like `main`) returns nothing.
-
 // Two typed parameters, returns int.
 function add(int a, int b): int {
     return a + b;
@@ -34,11 +34,9 @@ function main(): void {
     Output.printLine("add(2, 3) = {add(2, 3)}");
     Output.printLine(greet("phorj"));
     Output.printLine(shout("phorj"));
-
     // Call results feed directly into other expressions.
     int total = add(add(1, 2), add(3, 4));
     Output.printLine("nested add = {total}");
-
     for (int i in upTo(4)) {
         Output.printLine("i = {i}");
     }

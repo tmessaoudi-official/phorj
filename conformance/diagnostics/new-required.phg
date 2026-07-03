@@ -1,7 +1,9 @@
 package Main;
 
-class Point { constructor(public int x) {} }
+class Point {
+    constructor(public int x) {}
+}
 
-function main() -> void {
+function main(): void {
     Point p = Point(1);
 }

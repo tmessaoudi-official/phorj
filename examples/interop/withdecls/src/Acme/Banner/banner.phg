@@ -2,6 +2,6 @@
 // with no `declare` of its own. The declaration is shared project-wide.
 package Acme.Banner;
 
-function rule(int width) -> string {
+function rule(int width): string {
     return str_repeat("=", width);
 }

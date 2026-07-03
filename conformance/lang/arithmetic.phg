@@ -3,7 +3,7 @@ package Main;
 
 import Core.Output;
 
-function main() -> void {
+function main(): void {
     Output.printLine("{2 + 3 * 4}");
     Output.printLine("{(2 + 3) * 4}");
     Output.printLine("{17 / 5} {17 % 5}");

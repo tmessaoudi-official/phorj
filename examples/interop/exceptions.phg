@@ -11,10 +11,10 @@ package Main;
 
 import Core.Output;
 
-declare function intdiv(int a, int b) -> int;
+declare function intdiv(int a, int b): int;
 
 declare class DivisionByZeroError implements Error {
-    function getMessage() -> string;
+    function getMessage(): string;
 }
 
 function main(): void {
@@ -25,7 +25,6 @@ function main(): void {
     } catch (DivisionByZeroError e) {
         Output.printLine("caught: {e.getMessage()}");
     }
-
     // A non-failing call returns normally.
     try {
         int ok = intdiv(10, 3);

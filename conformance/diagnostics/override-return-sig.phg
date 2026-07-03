@@ -1,11 +1,16 @@
 package Main;
 
 open class Base {
-    open function k() -> int { return 1; }
+    open function k(): int {
+        return 1;
+    }
 }
 
 class Sub extends Base {
-    function k() -> string { return "boom"; }
+    function k(): string {
+        return "boom";
+    }
 }
 
-function main() -> void {}
+function main(): void {
+}

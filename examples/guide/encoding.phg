@@ -12,13 +12,11 @@ import Core.Encoding;
 
 function main(): void {
     var data = Bytes.fromString("Hello, Phorj!");
-
     // Encode to base64 and hex.
     var b64 = Encoding.base64Encode(data);
     var hex = Encoding.hexEncode(data);
     Output.printLine("base64: {b64}");
     Output.printLine("hex:    {hex}");
-
     // Decode back (decoders return `bytes?` — `??` supplies a fallback on the absent case).
     var fromB64 = Encoding.base64Decode(b64) ?? data;
     var fromHex = Encoding.hexDecode(hex) ?? data;
@@ -26,7 +24,6 @@ function main(): void {
     var hexOk = fromHex == data;
     Output.printLine("base64 round-trip: {b64Ok}");
     Output.printLine("hex round-trip:    {hexOk}");
-
     // Encoding raw (non-text) bytes works too — base64/hex are byte codecs, not text codecs.
     var raw = Bytes.fromString("a/b+c");
     Output.printLine("encoded slashes: {Encoding.base64Encode(raw)}");

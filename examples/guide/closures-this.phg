@@ -1,4 +1,5 @@
 package Main;
+
 import Core.Output;
 import Core.List;
 
@@ -6,19 +7,16 @@ import Core.List;
 // the receiver is captured *live* (the same instance handle), so a field write made after the
 // closure is built is visible when the closure runs. (A field-initializer lambda still may not
 // capture `this` — the instance isn't fully built yet — that stays `E-LAMBDA-THIS`.)
-
 class Counter {
     constructor(public mutable int n) {}
-
-    // Returns a closure that reads `this.n` each time it is called — `this` is captured, not the
-    // value, so the closure tracks later mutations.
-    function reader(): (() => int) {
+    function reader(): () => int {
+        // Returns a closure that reads `this.n` each time it is called — `this` is captured, not the
+        // value, so the closure tracks later mutations.
         return function() => this.n;
     }
-
-    // `this` also flows into a closure passed to a higher-order native: each element is shifted by
-    // the live `this.base`-style field.
     function shiftAll(List<int> xs): List<int> {
+        // `this` also flows into a closure passed to a higher-order native: each element is shifted by
+        // the live `this.base`-style field.
         return List.map(xs, function(int x) => x + this.n);
     }
 }
@@ -26,11 +24,13 @@ class Counter {
 function main(): void {
     var c = new Counter(5);
     var read = c.reader();
-    Output.printLine("before={read()}");   // 5
-
-    c.n = 99;                              // mutate the field after the closure was built
-    Output.printLine("after={read()}");    // 99 — live capture
-
-    var shifted = c.shiftAll([1, 2, 3]);   // each + 99
+    Output.printLine("before={read()}");
+    // 5
+    c.n = 99;
+    // mutate the field after the closure was built
+    Output.printLine("after={read()}");
+    // 99 — live capture
+    var shifted = c.shiftAll([1, 2, 3]);
+    // each + 99
     Output.printLine("shifted={shifted[0]},{shifted[1]},{shifted[2]}");
 }
