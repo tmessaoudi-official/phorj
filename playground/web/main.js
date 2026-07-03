@@ -374,32 +374,47 @@ async function runAll() {
   }
 }
 
-// --- examples picker ---------------------------------------------------------------------------
+// --- examples sidebar --------------------------------------------------------------------------
+// `window.PHORJ_EXAMPLES` is an ordered [{category, name, src}] list (gen_examples.py). The sidebar
+// renders one section header per category with every example visible at once — click to load + run.
 function initExamples() {
-  const sel = $("examples");
-  const examples = window.PHORJ_EXAMPLES || {};
-  for (const name of Object.keys(examples)) {
-    const o = document.createElement("option");
-    o.value = name;
-    o.textContent = name;
-    sel.appendChild(o);
-  }
-  sel.onchange = () => {
-    const src = examples[sel.value];
-    if (src != null) {
-      setSource(src);
-      runAll();
+  const list = $("sidebar-list");
+  if (!list) return;
+  const examples = window.PHORJ_EXAMPLES || [];
+  let lastCat = null;
+  let activeBtn = null;
+  for (const ex of examples) {
+    if (ex.category !== lastCat) {
+      const h = document.createElement("div");
+      h.className = "sb-cat";
+      h.textContent = ex.category;
+      list.appendChild(h);
+      lastCat = ex.category;
     }
-  };
+    const b = document.createElement("button");
+    b.className = "sb-item";
+    b.type = "button";
+    b.textContent = ex.name;
+    b.title = `${ex.category} / ${ex.name}`;
+    b.onclick = () => {
+      setSource(ex.src);
+      if (activeBtn) activeBtn.classList.remove("active");
+      b.classList.add("active");
+      activeBtn = b;
+      runAll();
+    };
+    list.appendChild(b);
+  }
 }
 
 // --- boot --------------------------------------------------------------------------------------
 async function boot() {
-  const examples = window.PHORJ_EXAMPLES || {};
+  const examples = window.PHORJ_EXAMPLES || [];
   // Fallback when examples.js hasn't populated the global (e.g. it failed to load). Must be VALID
   // current Phorj — return types are mandatory — so the editor never boots a program that errors
   // on the first run. Mirrors gen_examples.py's DEFAULT (keep the two in sync).
-  let initialDoc = examples["hello (default)"] ||
+  const defaultEx = examples.find((e) => e.name === "hello (default)");
+  let initialDoc = (defaultEx && defaultEx.src) ||
     'package Main;\nimport Core.Output;\n\nfunction main(): void {\n    List<string> who = ["world", "Phorj"];\n    for (string w in who) {\n        Output.printLine("Hello, {w}!");\n    }\n}\n';
   if (location.hash.length > 2) {
     try {

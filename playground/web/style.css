@@ -47,8 +47,55 @@ header h1 { margin: 0 0 0.4rem; font-size: 1.1rem; }
 .toggle { display: inline-flex; align-items: center; gap: 0.3rem; }
 .version { margin-left: auto; font-size: 0.75rem; color: var(--muted); }
 
-main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
-@media (max-width: 800px) { main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+main { flex: 1; display: grid; grid-template-columns: 232px 1fr 1fr; min-height: 0; }
+@media (max-width: 800px) {
+  main { grid-template-columns: 1fr; grid-template-rows: 160px 1fr 1fr; }
+}
+
+/* Examples sidebar — the whole corpus visible at once, grouped by category. */
+#sidebar {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sb-head {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+}
+.sb-cat {
+  padding: 0.5rem 0.8rem 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.sb-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 0.28rem 0.8rem 0.28rem 1.2rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-item:hover { color: var(--fg); background: var(--panel); }
+.sb-item.active { color: var(--bg2); background: var(--accent); font-weight: 600; }
 
 #editor-pane { border-right: 1px solid var(--border); overflow: hidden; }
 #editor-pane .cm-editor { height: 100%; }
