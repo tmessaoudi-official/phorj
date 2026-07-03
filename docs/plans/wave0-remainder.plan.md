@@ -107,7 +107,16 @@
   deleted; examples/README "71 KB" = bytes not lines (289 long lines, real 72 KB monolith);
   CI supply-chain pins (A-CI-4/5/6) need external data — verify or record, never guess.
 
-## S2 build status + Stage C recipe (2026-07-03)
+## S2 ✅ FEATURE-COMPLETE (2026-07-03)
+Import redesign S2 shipped in full: Stage A (member-import injection) `0cedcb8` · Stage B (migrate 19
+examples/conformance) `202ec2b` · Stage C (E-INJECTED-TYPE-BARE enforcement — closes Route-in-the-wind)
+`20ecfe0` · type_only removal `bc523c1` · qualified expr-forms (`#[Http.Route]` + `new Http.Router()`).
+All forms work: member-imports (preferred) + qualified annotations (S1) + qualified construction +
+`#[Http.Route]`; enforcement rejects bare-without-import. Full oracle gate green (1656 tests). Registry
+single-sourced in `checker::enforce_injected::module_of`. REMAINING (minor, deferred): `instanceof`/`as`
+qualified injected-type resolution (0 usages in the corpus); docs prose polish in `examples/README.md`.
+
+## S2 build status + Stage C recipe (2026-07-03, historical — now DONE)
 - **Stage A ✅ SHIPPED `0cedcb8`**: member-import triggers prelude injection (`imports_module_or_member`
   in `src/cli/mod.rs`, used by http/time/rounding_mode gates) + `native::import_map` binds a multi-type
   Core module's qualifier on a member-import (so `Instant.now()`→`Time.nowMilliseconds()` resolves; hidden).
