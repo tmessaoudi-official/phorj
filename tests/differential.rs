@@ -3076,9 +3076,15 @@ fn m6w4_spawn_is_a_usable_identifier() {
 
 #[test]
 fn s1_qualified_http_router_type_resolves_and_is_byte_identical() {
+    // `Http.Router` stays QUALIFIED (the S1 feature under test); the other injected types are
+    // member-imported so S2 enforcement (E-INJECTED-TYPE-BARE) is satisfied. `import Core.Http`
+    // is kept for the `Http.autoRouter()` module native + the qualified `Http.Router`.
     agree_out_php(
         r#"import Core.Output;
 import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.Http.Route;
 
 #[Route("GET", "/")]
 function home(Request req): Response { return Response.text(200, "hi"); }
@@ -3102,31 +3108,33 @@ function main(): void {
 }
 
 #[test]
-fn s1_qualified_form_checks_and_runs_identically_to_bare() {
-    // The qualified annotation `Http.Router` and the bare `Router` must produce identical
-    // check output AND identical run output — the collapse pass makes them the same program.
-    let bare = "package Main; import Core.Output; import Core.Http;\n\
-        #[Route(\"GET\", \"/\")] function home(Request req): Response { return Response.text(200, \"ok\"); }\n\
-        function dispatch(Router rt, bytes raw): void { if (var q = Request.parse(raw)) { Response resp = rt.handle(q); Output.printLine(\"{resp.status}\"); } }\n\
-        function main(): void { Router rt = Http.autoRouter(); dispatch(rt, b\"GET / HTTP/1.1\\x0d\\x0aHost: x\\x0d\\x0a\\x0d\\x0a\"); }";
-    let qualified = bare.replace("Router rt", "Http.Router rt");
+fn s1_qualified_form_checks_and_runs_identically_to_member_import() {
+    // The `Http.Router` QUALIFIED annotation (S1 collapse) and the member-imported bare `Router`
+    // (S2) name the same type and must produce identical check + run + runvm output. Both are legal
+    // under S2 enforcement; a plain `import Core.Http` + bare `Router` would now be E-INJECTED-TYPE-BARE.
+    let member = "package Main; import Core.Output; import Core.Http; import Core.Http.Router;\n\
+        function useRouter(Router rt): int { return 0; }\n\
+        function main(): void { Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
+    let qualified = "package Main; import Core.Output; import Core.Http;\n\
+        function useRouter(Http.Router rt): int { return 0; }\n\
+        function main(): void { Http.Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
     assert!(
-        qualified.contains("Http.Router rt"),
-        "sanity: replacement applied"
+        cli::cmd_check(member).is_ok(),
+        "member-import form must check clean"
     );
     assert!(
-        cli::cmd_check(&qualified).is_ok(),
+        cli::cmd_check(qualified).is_ok(),
         "qualified form must check clean"
     );
     assert_eq!(
-        cli::cmd_run(bare),
-        cli::cmd_run(&qualified),
-        "bare vs qualified run output"
+        cli::cmd_run(member),
+        cli::cmd_run(qualified),
+        "member-import vs qualified run output"
     );
     assert_eq!(
-        cli::cmd_runvm(bare),
-        cli::cmd_runvm(&qualified),
-        "bare vs qualified runvm output"
+        cli::cmd_runvm(member),
+        cli::cmd_runvm(qualified),
+        "member-import vs qualified runvm output"
     );
 }
 
@@ -3195,4 +3203,68 @@ fn s2a_time_instant_member_import_is_self_contained() {
     );
     assert_eq!(cli::cmd_run(src), cli::cmd_runvm(src), "run vs runvm");
     assert_eq!(cli::cmd_run(src).unwrap(), "ok\n");
+}
+
+// --- Import redesign S2 (stage C): E-INJECTED-TYPE-BARE enforcement ---------------------------
+// A bare injected Core member type / `#[Route]` used without a member-import is rejected. The fix is
+// a member-import (`import Core.Http.Router;`) or the qualified form (`Http.Router`). A user's own
+// type of the same name is exempt (its prelude is not injected).
+
+#[test]
+fn s2c_bare_injected_type_annotation_is_rejected() {
+    let e = cli::cmd_check(
+        "package Main; import Core.Output; import Core.Http;\n\
+         function f(Router rt): void { Output.printLine(\"x\"); }\n\
+         function main(): void { Output.printLine(\"x\"); }",
+    )
+    .unwrap_err();
+    assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
+    assert!(e.contains("Router"), "{e}");
+}
+
+#[test]
+fn s2c_bare_route_attribute_is_rejected() {
+    let e = cli::cmd_check(
+        "package Main; import Core.Output; import Core.Http; import Core.Http.Request; import Core.Http.Response;\n\
+         #[Route(\"GET\", \"/\")] function home(Request req): Response { return Response.text(200, \"hi\"); }\n\
+         function main(): void { Output.printLine(\"x\"); }",
+    )
+    .unwrap_err();
+    // Request/Response are member-imported; only the bare `#[Route]` remains a violation.
+    assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
+    assert!(e.contains("Route"), "{e}");
+}
+
+#[test]
+fn s2c_member_import_satisfies_enforcement() {
+    // The migrated form: member-import makes the bare type legal.
+    assert!(cli::cmd_check(
+        "package Main; import Core.Output; import Core.Http.Router;\n\
+         function f(Router rt): void { Output.printLine(\"x\"); }\n\
+         function main(): void { Output.printLine(\"x\"); }",
+    )
+    .is_ok());
+}
+
+#[test]
+fn s2c_qualified_form_satisfies_enforcement() {
+    // The qualified form (needs the module import for the `Http` qualifier) is also legal.
+    assert!(cli::cmd_check(
+        "package Main; import Core.Output; import Core.Http;\n\
+         function f(Http.Router rt): void { Output.printLine(\"x\"); }\n\
+         function main(): void { Output.printLine(\"x\"); }",
+    )
+    .is_ok());
+}
+
+#[test]
+fn s2c_user_type_shadows_injected_name() {
+    // A user's own `Router` (no Core.Http import) is unaffected by the injected-type rule.
+    assert!(cli::cmd_check(
+        "package Main; import Core.Output;\n\
+         class Router { constructor() {} }\n\
+         function f(Router rt): void { Output.printLine(\"x\"); }\n\
+         function main(): void { Router r = new Router(); f(r); }",
+    )
+    .is_ok());
 }

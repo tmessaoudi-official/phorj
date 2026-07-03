@@ -14,6 +14,7 @@ use crate::types::Ty;
 // Re-exported so callers keep using `checker::expand_aliases` etc.
 mod collapse_injected;
 mod desugar_router;
+mod enforce_injected;
 mod inline_parent_ctor;
 mod overloads;
 mod rewrite_alias;
@@ -23,6 +24,7 @@ mod rewrite_new;
 mod rewrite_ufcs;
 pub use collapse_injected::collapse_injected_type_qualifiers;
 pub use desugar_router::desugar_auto_router;
+pub use enforce_injected::enforce_injected_discipline;
 pub use inline_parent_ctor::inline_parent_ctors;
 pub use overloads::rename_overload_defs;
 pub use rewrite_alias::expand_aliases;

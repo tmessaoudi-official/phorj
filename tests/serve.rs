@@ -96,6 +96,8 @@ function main() -> void {
 const HTTP_HANDLE_PROGRAM: &str = r#"
 package Main;
 import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
 function handle(Request req) -> Response {
   if (req.path == "/") {
     return Response.text(200, "home");

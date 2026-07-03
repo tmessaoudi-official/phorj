@@ -1015,6 +1015,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              to construct and `Json.Object(es) => …` to match, never the bare `Object(…)`. A user enum's\n\
              own variants stay bare (`new Some(7)`).\n"
         }
+        "E-INJECTED-TYPE-BARE" => {
+            "E-INJECTED-TYPE-BARE — a compiler-injected Core type was used bare without importing it.\n\n\
+             The multi-type Core modules inject several types: `Core.Http` → `Request`/`Response`/\n\
+             `Route`/`Router` (and the `#[Route]` attribute), `Core.Time` → `Duration`/`Date`/`Instant`,\n\
+             `Core.Decimal` → `RoundingMode`. These are names you never wrote, so — like injected enum\n\
+             variants (\"nothing in the wind\") — a bare use is only allowed when you explicitly\n\
+             member-import it: `import Core.Http.Router;` then `Router` is bare. Otherwise write it\n\
+             qualified — `Http.Router`, `#[Http.Route]`, `Time.Duration` — which needs the module import\n\
+             `import Core.Http;`. A user-declared type of the same name shadows the injected one and is\n\
+             unaffected. Single-type modules (`Core.Json`, `Core.Regex`, `Core.Secret`) are unaffected —\n\
+             their leaf IS the type.\n"
+        }
         "E-VARIANT-QUALIFIER" => {
             "E-VARIANT-QUALIFIER — a qualified variant pattern named the wrong enum.\n\n\
              In a `match`, a qualified pattern `Enum.Variant(…)` must name the *scrutinee's* enum. If\n\

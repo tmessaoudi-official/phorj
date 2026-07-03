@@ -975,6 +975,18 @@ pub fn check_and_expand_reified(
     prog: &Program,
     diag_src: &str,
 ) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+    // Import-redesign S2 stage C: enforce injected-type import discipline on the RAW user program,
+    // BEFORE any prelude injection or the S1 qualifier collapse — so the preludes' own bare internals
+    // are never scanned and bare-vs-qualified is still distinguishable. A bare injected member type
+    // (`Router`, `Duration`, …) or `#[Route]` used without a member-import is `E-INJECTED-TYPE-BARE`.
+    let injected_violations = crate::checker::enforce_injected_discipline(prog);
+    if !injected_violations.is_empty() {
+        let lines: Vec<String> = injected_violations
+            .iter()
+            .map(|e| e.render(diag_src))
+            .collect();
+        return Err(lines.join("\n"));
+    }
     let json_injected = inject_json_prelude(prog);
     let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
     let http_injected = inject_http_prelude(rm_injected.as_ref());
