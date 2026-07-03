@@ -99,6 +99,30 @@ impl Checker {
                         {
                             return self.check_concurrency_static(cls, name, args, span);
                         }
+                        // Qualified injected-type construction `new Http.Router(args)` /
+                        // `new Time.Duration(args)` (import-redesign S2): the head is an injected module
+                        // qualifier (Http/Time/Decimal) and `name` one of its injected *classes*. Resolve
+                        // as construction of the bare injected class — `unwrap_new` erases the `Member`
+                        // callee to the bare `Router(args)` every backend builds, exactly like the
+                        // qualified-variant path. Guarded on `name` being a known class, so a bare
+                        // injected enum (`RoundingMode`) and any non-injected `A.B(...)` fall through.
+                        if self.lookup_binding(cls).is_none()
+                            && super::enforce_injected::module_of(name) == Some(cls.as_str())
+                            && self.classes.contains_key(name)
+                        {
+                            let was_new = std::mem::take(&mut self.under_new);
+                            if !was_new {
+                                self.err_coded(
+                                    span,
+                                    format!("construct `{cls}.{name}` with `new {cls}.{name}(…)`"),
+                                    "E-NEW-REQUIRED",
+                                    Some(format!("write `new {cls}.{name}(…)`")),
+                                );
+                            }
+                            if let Some(t) = self.try_variant_or_class_call(name, args, span) {
+                                return t;
+                            }
+                        }
                         // Qualified enum-variant construction `Enum.Variant(args)` (slice A1): the head
                         // is an enum *name* (not a value binding). Resolves after native/class/concurrency
                         // (an import or class of the same name wins), before instance-method dispatch.

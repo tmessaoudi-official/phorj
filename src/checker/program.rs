@@ -630,7 +630,7 @@ impl Checker {
     /// the route into a `.route(…)` registration). Front-end-only — attributes never reach a backend.
     pub(super) fn check_attributes(&mut self, f: &crate::ast::FunctionDecl) {
         for attr in &f.attrs {
-            if attr.name != "Route" {
+            if !matches!(attr.name.as_str(), "Route" | "Http.Route") {
                 self.err_coded(
                     attr.span,
                     format!(

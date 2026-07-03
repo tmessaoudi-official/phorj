@@ -276,10 +276,15 @@ impl Checker {
             } => match &**object {
                 crate::ast::Expr::Ident(en, _) => {
                     self.lookup(en).is_none()
-                        && self
+                        && (self
                             .enums
                             .get(en)
                             .is_some_and(|info| info.variants.contains_key(name))
+                            // S2: qualified injected-CLASS construction `new Http.Router(…)` /
+                            // `new Time.Duration(…)` — the callee is an injected module qualifier + one
+                            // of its injected classes. Erased to bare construction by `unwrap_new`.
+                            || (super::enforce_injected::module_of(name) == Some(en.as_str())
+                                && self.classes.contains_key(name)))
                 }
                 _ => false,
             },

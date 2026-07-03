@@ -436,7 +436,17 @@ impl Parser {
         while self.check(&TokenKind::HashBracket) {
             let sp = self.peek_span();
             self.advance(); // `#[`
-            let name = self.expect_ident("an attribute name after `#[`")?;
+            let mut name = self.expect_ident("an attribute name after `#[`")?;
+            // Import-redesign S2: a **dotted** attribute name (`#[Http.Route(...)]`) qualifies an
+            // injected Core attribute type. Consume the `.Ident` chain and preserve the dotted form;
+            // `desugar_router` / attribute validation accept both `Route` (member-imported) and the
+            // qualified `Http.Route`. Additive — a `.` here was previously a parse error.
+            while self.check(&TokenKind::Dot) {
+                self.advance();
+                let seg = self.expect_ident("an attribute name segment after `.`")?;
+                name.push('.');
+                name.push_str(&seg);
+            }
             let args = if self.eat(&TokenKind::LParen) {
                 let mut args = Vec::new();
                 if !self.check(&TokenKind::RParen) {

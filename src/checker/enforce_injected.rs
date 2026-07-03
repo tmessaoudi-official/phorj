@@ -72,8 +72,9 @@ pub fn enforce_injected_discipline(prog: &Program) -> Vec<Diagnostic> {
 }
 
 /// The injected member type → owning module leaf. Mirrors the six injection preludes' multi-type
-/// modules (single-type Json/Regex/Secret are leaf==type — no bare-vs-qualified ambiguity).
-fn module_of(name: &str) -> Option<&'static str> {
+/// modules (single-type Json/Regex/Secret are leaf==type — no bare-vs-qualified ambiguity). The single
+/// source for the injected-type registry — reused by the qualified-construction dispatch in `calls.rs`.
+pub(super) fn module_of(name: &str) -> Option<&'static str> {
     Some(match name {
         "Request" | "Response" | "Route" | "Router" => "Http",
         "Duration" | "Date" | "Instant" => "Time",

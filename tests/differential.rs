@@ -3268,3 +3268,41 @@ fn s2c_user_type_shadows_injected_name() {
     )
     .is_ok());
 }
+
+// --- Import redesign S2 (spec-completeness): qualified expr-position forms ---------------------
+// `#[Http.Route]` and `new Http.Router()` / `new Time.Duration()` — the module-qualified alternative
+// to the member-import form. Both erase to the bare form before the backends (byte-identical), and
+// need the module import for the qualifier (they are NOT flagged by E-INJECTED-TYPE-BARE — dotted).
+
+#[test]
+fn s2d_qualified_http_route_attribute_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+#[Http.Route("GET", "/")] function home(Request req): Response { return Response.text(200, "home"); }
+function main(): void {
+  Http.Router rt = Http.autoRouter();
+  if (var q = Request.parse(b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a")) {
+    Output.printLine("{rt.handle(q).status}");
+  }
+}"#,
+        "200\n",
+        "s2d_qualified_http_route",
+    );
+}
+
+#[test]
+fn s2d_qualified_construction_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Time;
+function main(): void {
+  Time.Duration d = new Time.Duration(250);
+  Output.printLine("{d.toMilliseconds()}ms");
+}"#,
+        "250ms\n",
+        "s2d_qualified_construction",
+    );
+}
