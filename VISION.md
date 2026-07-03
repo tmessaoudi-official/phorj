@@ -56,22 +56,25 @@ effort.**
 3. **Earn complexity.** Abstractions (a pluggable backend trait, a tracing GC, an arena allocator)
    are added when a third use case demands them, not speculatively. The Rule of Three is a design
    tool, not a slogan.
-4. **Std-only, zero-dependency core.** The runtime links no external crates. The whole language fits
-   in one head, builds in seconds, and has no supply-chain surface.
+4. **Std-first core with a minimal, vetted dependency surface.** Exactly four feature-gated
+   external crates (`argon2`, `regex`, `ctrlc`, `corosensei`), each admitted only where rolling our
+   own would be the anti-pattern (see `docs/specs/2026-06-27-dependency-policy.md`). The whole
+   language fits in one head, builds in seconds, and keeps the supply-chain surface deliberately tiny.
 5. **Approachable on the outside, rigorous on the inside.** A beginner should be able to read a Phorj
    program; a compiler engineer should respect how it's built.
 
 ## Where this is going
 
 The near-term arc is concrete and already underway (see [ROADMAP.md](ROADMAP.md)): a complete language
-core (✅), a fast VM (✅), single-binary distribution across operating systems (🔨), then language
-enrichment — indexing, collections, optionals, pipes, exceptions, and mutation with a real garbage
-collector.
+core (✅), a fast VM (✅), single-binary distribution across operating systems (🔨), and language
+enrichment — indexing, collections, optionals, pipes, exceptions, and mutation (✅ — value/handle
+split + copy-on-write; a tracing GC stays deliberately deferred to v2).
 
-The longer-term ambition is an **ecosystem**, not just a language: a standard library, real modules
-and packages, first-class concurrency (uncolored `spawn` + channels) and a native HTTP server, proper
-tooling (LSP, formatter), and — closing the loop with its PHP heritage — a **PHP → Phorj migration
-tool** that lets existing codebases move onto a typed foundation incrementally.
+The longer-term ambition is an **ecosystem**, not just a language — and much of it has already
+landed: a growing standard library, real modules and packages (✅), first-class concurrency
+(uncolored `spawn` + channels, ✅) and a native HTTP server (✅), proper tooling (LSP, formatter,
+debugger — ✅), and — closing the loop with its PHP heritage — a **PHP → Phorj migration tool**
+(`phg lift`, ✅) that lets existing codebases move onto a typed foundation incrementally.
 
 The furthest horizon (v2) pushes toward systems programming: native ahead-of-time compilation, an
 ownership model that removes the GC, and sized-integer performance.

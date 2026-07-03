@@ -16,7 +16,7 @@ example byte-identical on both backends + the Phorj→PHP transpile bridge).
 The socle. Real Phorj programs run end-to-end (the frozen `Shape`/`area`/`match` sample).
 
 - **Pipeline:** lexer → parser → type-checker → tree-walking evaluator (`src/{lexer,parser,checker,interpreter}.rs`).
-- **CLI:** `phg <run|check|parse|lex|transpile> <file>`.
+- **CLI:** `phg <run|check|parse|tokenize|transpile> <file>`.
 - **Phorj → PHP transpiler** (`src/transpile.rs`) — round-trip-verified against real PHP 8.6.
 - **Docs/tests:** `README.md`, 3 runnable `examples/*.phg` (guarded by `tests/examples.rs`), 162 tests green at the M1 tag, clippy clean.
 - **Delivered language surface:** static types, immutable-by-default bindings, functions, classes + constructor promotion, single-payload enums + exhaustive `match`, string interpolation, `List<T>` literals, `for…in`, checked int/float arithmetic.
@@ -108,9 +108,9 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
 
 ### Tooling (v0.4.0) — profiling + introspection
 
-- `phg bench` reports **memory** (cold-execution peak-RSS growth + process `VmHWM`/`VmRSS`) next to
+- `phg benchmark` reports **memory** (cold-execution peak-RSS growth + process `VmHWM`/`VmRSS`) next to
   its timing, via a std-only Linux `/proc` sampler (`src/mem.rs`); non-Linux prints "unavailable".
-- `phg disasm <source>` dumps the compiled bytecode (per-function listings + descriptor tables).
+- `phg disassemble <source>` dumps the compiled bytecode (per-function listings + descriptor tables).
 - `examples/bench/workload.phg` (+ `examples/bench/README.md`) is the profiling showcase, auto
   byte-identity-gated like every example.
 
@@ -123,7 +123,7 @@ codes, `phg explain`), **S1** (ergonomics — indexing `xs[i]`, integer ranges `
 `if`), **S2** (null-safety — `T?`, `??`, `?.`, checked `opt!`, if-let binding, `match` over `T?`, the
 warning channel), and **S3 Track A** (lambdas — expression + statement body — first-class function
 values, and the pipe operator `|>`). Cross-cutting: stdlib **Track B** Waves 1–2
-(`core.console`/`math`/`text`/`file`, namespaced natives) and **Track D** (`phg bench --vs-php`). All
+(`core.console`/`math`/`text`/`file`, namespaced natives) and **Track D** (`phg benchmark --vs-php`). All
 slices are byte-identical on `run`/`runvm` and round-trip through real PHP. The live slice-by-slice
 status + forward plan live in `CLAUDE.md` (Active plan) and `CHANGELOG.md`; design specs are under
 `docs/specs/2026-06-17-m3-*` and `docs/specs/2026-06-18-m3-*`. Modules/packages and web capabilities were

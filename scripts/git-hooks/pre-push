@@ -17,7 +17,12 @@ cat >/dev/null || true
 command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
 
 # Gate against the 8.5 transpile floor (NOT the 8.6-dev php on PATH). A missing php FAILS.
-export PHORJ_PHP="/stack/tools/phpbrew/php/php-8.5.7/bin/php"
+# The oracle path is configured in scripts/toolchain.env (edit there when the stack php version
+# changes); resolve it via the repo root so this works whichever way the hook is invoked.
+_gate_root="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+# shellcheck source=/dev/null
+[[ -f "$_gate_root/scripts/toolchain.env" ]] && source "$_gate_root/scripts/toolchain.env"
+export PHORJ_PHP="${PHORJ_PHP:-/stack/tools/phpbrew/php/php-8.5.8/bin/php}"
 export PHORJ_REQUIRE_PHP=1
 
 echo "[pre-push] cargo fmt --check"

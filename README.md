@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml/badge.svg)](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml)
 
-**A statically-typed, PHP-inspired programming language — implemented in Rust, std-only, with
-zero external crates.**
+**A statically-typed, PHP-inspired programming language — implemented in Rust with a std-first
+core and exactly four vetted, feature-gated dependencies (`argon2`, `regex`, `ctrlc`, `corosensei`).**
 
 Phorj takes the ergonomics that make PHP pleasant to write (familiar syntax, string interpolation,
 classes) and puts them on a **statically-typed, immutable-by-default** footing with a clean compiler
@@ -86,7 +86,11 @@ cargo test                   # full suite
 cargo clippy --all-targets   # lints (warnings are denied)
 ```
 
-Toolchain: Rust (edition 2021), std-only — **no external crates** to download.
+Toolchain: Rust (edition 2021). The core is std-first with **four vetted, feature-gated
+dependencies** (`argon2` for Argon2id hashing, `regex` for `Core.Regex`, `ctrlc` for signal
+handling, `corosensei` for green threads) — cargo fetches them automatically; see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
+`docs/specs/2026-06-27-dependency-policy.md`.
 
 ### Prebuilt binary
 
@@ -125,15 +129,16 @@ phg <command> <source> [options]
 | `runvm` | lex → parse → type-check → compile → stack VM | exit 1 |
 | `check` | type-check only, report success | exit 1 on type error |
 | `parse` | dump the AST | exit 1 on parse error |
-| `lex` | dump the token stream | exit 1 on lex error |
+| `tokenize` | dump the token stream | exit 1 on lex error |
 | `transpile` | type-check (gate) → emit PHP to stdout | exit 1 on type/transpile error |
-| `disasm` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
-| `bench` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
+| `lift` | PHP → a best-effort Phorj draft (inverse of `transpile`; review required) | exit 1 on parse/lift error |
+| `disassemble` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
+| `benchmark` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
 | `vendor` | fetch + pin git dependencies into `vendor/` (the only network-touching command), writing `phorj.lock` | exit 1 on fetch/lock failure |
-| `serve` | run an HTTP server that dispatches requests to a Phorj `handle(Request) -> Response` (M6) | exit 1 on bind/handler error |
+| `serve` | run an HTTP server that dispatches requests to a Phorj `handle(Request): Response` | exit 1 on bind/handler error |
 | `test` | discover + run `test "name" { … }` blocks (under `tests/`, or a given file/dir) with `Core.Test` assertions | exit 1 if any test fails |
-| `fmt` | format source to canonical form (`--check` for CI, `-` for stdin, in-place otherwise) | `--check`: exit 1 if any file would change; exit 2 on a parse error |
+| `format` | format source to canonical form (`--check` for CI, `-` for stdin, in-place otherwise) | `--check`: exit 1 if any file would change; exit 2 on a parse error |
 | `explain` | look up a diagnostic code (`phg explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
 
 **Source** (for the run-family commands):
@@ -191,11 +196,11 @@ $ phg test            # every *.phg under tests/ (or: phg test <file|dir>)
 1 passed, 0 failed, 1 tests in 1 files
 ```
 
-A `test "name" { … }` block is checked like a `-> void` body and runs on the interpreter; a failing
+A `test "name" { … }` block is checked like a `: void` body and runs on the interpreter; a failing
 assertion (or any other fault) is reported with its message, line, and stack trace, and the runner
 continues. Exit code is `0` iff every test passes — so `phg test` drops straight into CI. The
 `Core.Test` assertions are `assert`, `assertTrue`/`assertFalse`, `assertEquals`/`assertNotEquals`,
-`assertNull`/`assertNotNull`, and `assertFaults(() -> T)` (passes iff the closure faults). A runnable
+`assertNull`/`assertNotNull`, and `assertFaults(() => T)` (passes iff the closure faults). A runnable
 showcase lives in [`selftest/`](selftest/README.md).
 
 ## Formatting (`phg format`)
@@ -228,7 +233,7 @@ any LSP-capable editor gets:
 - **Completion** — top-level names, in-scope locals/params, and keywords.
 - **Document symbols** — a structured outline (classes/enums/interfaces/traits expand to their members).
 
-It is dependency-free (hand-rolled JSON-RPC in `std` — no `tower-lsp`/`serde`), like the rest of Phorj.
+The LSP itself adds no dependencies (hand-rolled JSON-RPC in `std` — no `tower-lsp`/`serde`).
 
 **VS Code**: a thin client lives in [`editors/vscode/`](editors/vscode/) — see its README to run it in an
 Extension Development Host or package it. **Other editors** (Neovim, Helix, PhpStorm, …): register a
@@ -275,7 +280,7 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 
 > **Byte-identity caveats (disclosed):** two exceptions to `run ≡ runvm ≡ transpiled PHP`. (1) *Concurrency*
 > (`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle — `run ≡ runvm` holds, the PHP leg is a
-> hard error (`E-TRANSPILE-CONCURRENCY`). (2) *Fault line numbers inside `"{…}"` interpolation* diverge on the
+> hard error (`E-CONCURRENCY-NO-PHP`). (2) *Fault line numbers inside `"{…}"` interpolation* diverge on the
 > VM (reports line 1 vs. the true line) until **W5-13** — message, kind, and exit code still agree. See
 > [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) and [`docs/INVARIANTS.md`](docs/INVARIANTS.md).
 
@@ -283,8 +288,9 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 
 `phg transpile <file>` emits PHP 8.x (type-checked first): enums → an abstract base class plus a
 `final` subclass per variant; `match` → an `instanceof` chain; interpolation → concatenation;
-`printLine` → `echo`. The round-trip is verified against a real `php` in `tests/cli.rs`. (PHP → Phorj
-import is a separate future milestone.)
+`printLine` → `echo`. The round-trip is verified against a real `php` in `tests/cli.rs`. The inverse
+direction ships too: `phg lift <file.php>` produces a best-effort PHP → Phorj draft for human review
+(see [`examples/lift/`](examples/lift/)).
 
 ## Roadmap & vision
 
@@ -308,5 +314,6 @@ Dual-licensed under either of:
 
 at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for
 inclusion in Phorj by you, as defined in the Apache-2.0 license, shall be dual-licensed as above,
-without any additional terms or conditions. Phorj has **no third-party runtime dependencies** — see
+without any additional terms or conditions. Phorj's four vetted third-party dependencies (`argon2`,
+`regex`, `ctrlc`, `corosensei`) and their licenses are listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

@@ -1,5 +1,7 @@
 # Wave-0 Remainder Plan
 
+> **SUPERSEDED — see docs/plans/MASTER-PLAN.md, 2026-07-03 unification audit.**
+
 > Autonomous session 2026-07-03. Completes the RULED §12 Wave-0 tail + records XML (W4-10) as a
 > PENDING adjudication artifact (§15 — user-visible surface is the developer's, not ruled alone).
 > SSOT = `docs/plans/MASTER-PLAN.md`. Gate = full PHP-oracle `cargo test --workspace` + clippy + fmt + build.
@@ -177,7 +179,7 @@ qualified injected-type resolution (0 usages in the corpus); docs prose polish i
 - **APPROVED:** admit `rusqlite` (SQLite) + `rustls` (TLS) as new vetted domains — native-only,
   feature-gated (`db`/`tls`, off in WASM playground), spine-quarantined (corosensei/ctrlc shape),
   `#![forbid(unsafe_code)]` intact in phorj's own code. Unblocks native `Core.Db` + HTTPS client.
-  Ships pure zero-dep P0s first (`Core.Sql`, `Core.Url`). Requires editing `docs/specs/2026-06-27-dependency-policy.md`.
+  Ships pure zero-dep P0s first (`Core.Sql`, `Core.Url`). Requires editing the dependency policy (`docs/specs/UNIFIED-SPEC.md` § External dependency policy).
 - **DB engine scope RULED (developer, 2026-07-03):** a multi-driver **SQL DBAL** (data-access layer,
   PDO/Doctrine-DBAL analog) — **SQLite** (P1, rusqlite, embedded) + **Postgres** (`postgres` sync crate
   → PDO_PGSQL) + **MySQL/MariaDB** (`mysql` sync crate → PDO_MYSQL; one driver both). ALL sync drivers

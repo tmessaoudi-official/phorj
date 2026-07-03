@@ -83,7 +83,8 @@ warnings = "deny"
 all = "deny"
 
 # The WASM playground (`playground/`) is a separate workspace member so the core `phorj` crate above
-# stays dependency-free and `#![forbid(unsafe_code)]`. wasm-bindgen (the only external crate in the
-# project) lives solely in that member, as a wasm32-only target dependency — see `playground/Cargo.toml`.
+# keeps its dependency surface to the four vetted, feature-gated crates (argon2, regex, ctrlc,
+# corosensei) and `#![forbid(unsafe_code)]`. wasm-bindgen lives solely in that member, as a
+# wasm32-only target dependency — see `playground/Cargo.toml`.
 [workspace]
 members = ["playground"]

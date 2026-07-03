@@ -80,6 +80,14 @@ are typed, checker-enforced, and `?`-composable; lands as **M-faults Slice 2**.
 
 ## 🔲 M4–M8 — Ecosystem
 
+> **Historical numbering — superseded.** The bullets below reflect the frozen ecosystem design
+> (cited in the paragraph that follows) and are kept for provenance. Since then
+> **M5 — Modules + packages has shipped (✅ COMPLETE)** and **M6 — Concurrency + servers is core-complete
+> (🔨, W0–W4 shipped)**; the **M7 = tooling / M8 = migration** numbering here has been retired. The
+> authoritative milestone status and sequence live in **[docs/MILESTONES.md](docs/MILESTONES.md)** (where
+> **M7 = correctness closure ✅** and **M8+ = the road to GA 1.0**) and **[docs/plans/MASTER-PLAN.md](docs/plans/MASTER-PLAN.md)**
+> (the forward SSOT, Waves 0–6).
+
 The full ecosystem strategy is frozen in `docs/specs/2026-06-15-ecosystem-roadmap-design.md`: two
 backends (native VM + optional PHP-transpile) behind clean pluggable traits, with the PHP backend as a
 bootstrap-ecosystem lever. ROI-ranked:
@@ -108,7 +116,7 @@ top-10 spine, reject-list-with-reasons, and 10 cross-track themes are the SSOT i
 **Top-10 spine (the immediate priority order):** (1) totality cluster · (2) generic enums →
 `Result`/`Option` + `?` · (3) the three-tier error model (Slice 2) · (4) overloading → `extends` →
 traits · (5) pattern cluster (guards, destructuring, flow narrowing) · (6) `decimal`/money ·
-(7) collection breadth behind a written stdlib charter · (8) `phg fmt` + lexer-ergonomics (numeric
+(7) collection breadth behind a written stdlib charter · (8) `phg format` + lexer-ergonomics (numeric
 separators, `0x`/`0b`/`0o`) + unused-import/local lints · (9) `core.json` encode + safe parse + console
 I/O · (10) the GA governance doc-bundle (semver/BC/conformance-corpus/security-model).
 
@@ -144,7 +152,7 @@ I/O · (10) the GA governance doc-bundle (semver/BC/conformance-corpus/security-
 harness, release-profile, unused-import/local lints, `explain` coverage, `--php-target` floor → **M9**;
 **generic enums + the `id(7)+1` generic-result-operand fix** → **M10**; stdlib breadth (collections,
 `core.json`, `core.regex`, `sprintf`, hash/encoding/path/url/log) + iterators + API doc-gen → **M11**;
-language reference, the tour, migration guide, transpile-contract doc, `phg fmt`/repl/LSP/playground,
+language reference, the tour, migration guide, transpile-contract doc, `phg format`/repl/LSP/playground,
 release automation, audit command, and the GA governance doc-bundle → **M12 / M7**.
 
 **Namespace PascalCase reshape (tracked here — the audit missed it):** `package Main`, `E-PKG-CASE`

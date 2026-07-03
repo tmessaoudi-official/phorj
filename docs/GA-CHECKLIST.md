@@ -13,9 +13,9 @@
 | # | Rock | Weight | Status | Contribution | Done-criteria (the bar) |
 |---|------|-------:|-------:|-------------:|---|
 | 1 | **Language & type system** | 25% | **95%** | 23.75 | core/types/generics-all/unions/intersections/inheritance/traits/errors/packages/decimals shipped. Remaining: generic variance, erased-operand edges, statics (inherited/overloaded/LSB). |
-| 2 | **Daily-use tooling** | 20% | **70%** | 14.0 | `run/runvm/check/transpile/build/bench/disasm/explain/lift/vendor/serve` ✓; **`phg test` + `Core.Test` ✓ (M-Test)**; **`phg fmt` ✓ (M-fmt — comment-safe, meaning-preserving)**. **Missing: an LSP** (editor errors/hover/completion/go-to-def) + fmt line-reflow. Bar: author + test + format + edit-with-feedback. |
+| 2 | **Daily-use tooling** | 20% | **70%** *(stale — see 2026-07-03 log line)* | 14.0 | `run/runvm/check/transpile/build/benchmark/disassemble/explain/lift/vendor/serve` ✓; **`phg test` + `Core.Test` ✓ (M-Test)**; **`phg format` ✓ (M-fmt — comment-safe, meaning-preserving)**; **LSP ✓** (`phg lsp`: diagnostics/hover/go-to-def/completion/symbols + `editors/` clients); **`phg debug` ✓** (REPL + DAP). Remaining: format line-reflow, LSP query depth. Bar: author + test + format + edit-with-feedback. |
 | 3 | **Stability & conformance** | 20% | **15%** | 3.0 | Missing: frozen language surface, a **conformance test corpus** asserting the spec, a written **semver/BC + deprecation policy**. Bar: surface frozen + conformance suite green + BC policy published. |
-| 4 | **Stdlib completeness** | 15% | **70%** | 10.5 | ~22 modules ✓. Missing: **regex, datetime**, IO/streams beyond `File`, full higher-order collections, `sprintf`/format, path, log. Bar: charter-complete coverage of the common-program surface. |
+| 4 | **Stdlib completeness** | 15% | **70%** | 10.5 | 26 modules ✓ (incl. `Core.Regex`, `Core.Time`, `Core.Path`, `Core.Hash` MAC/KDF, `Core.Random` CSPRNG). Missing: IO/streams beyond `File`, `sprintf`/format (W3-5), DB/HTTP-client (W3-1/W3-2), log. Bar: charter-complete coverage of the common-program surface. |
 | 5 | **Documentation** | 12% | **40%** | 4.8 | README/ROADMAP/VISION/FEATURES/CONTRIBUTING ✓. Missing: a real **language reference**, a **tutorial**, a complete **stdlib reference**, a PHP-migration guide. Bar: a newcomer can learn + a user can look up any feature/native. |
 | 6 | **Validation / dogfooding** | 8% | **10%** | 0.8 | Missing: a **nontrivial real app built in Phorj**, perf targets stated+met vs PHP, CI on it. Bar: ≥1 real program shipped in Phorj + perf bar met. |
 | | **GA total** | 100% | | **≈ 57%** | |
@@ -30,8 +30,9 @@ The language (rock 1, 25% weight) was already ~done, so shipping *more language*
 hash fn) barely moves the total. The needle lives in rocks 2–6, which were getting pebbles, not focus.
 
 ## The critical path (what actually moves GA, in leverage order)
-1. **Rock 2 — daily-use tooling.** `phg test` → `phg fmt` → minimal LSP. Unblocks rock 6 (dogfooding),
-   which exposes what's really missing. Biggest single GA mover (+~14 points if taken to 100%).
+1. **Rock 2 — daily-use tooling.** `phg test` ✓ → `phg format` ✓ → LSP ✓ (all shipped). Remaining
+   rock-2 gap is format line-reflow + LSP query depth. Unblocks rock 6 (dogfooding),
+   which exposes what's really missing.
 2. **Rock 3 — stability/conformance.** Literally what "1.0" means (+~17 points).
 3. **Rock 4 — stdlib (regex/datetime)** then **Rock 5 — docs**, in parallel where possible.
 
@@ -41,9 +42,12 @@ hash fn) barely moves the total. The needle lives in rocks 2–6, which were get
 - 2026-06-27: **M-Test COMPLETE** (T1–T5) — `phg test` runner + `Core.Test` assertions + `assertFaults`
   + `selftest/` showcase. Rock 2 30% → 45%. **GA ≈ 49% → 52%.** Next on the critical path: `phg fmt`
   (comment-safe), then a minimal LSP, to finish rock 2.
-- 2026-06-27: **M-fmt COMPLETE** (F1–F4) — `phg fmt`: lexer comment side-channel, full-surface
+- 2026-06-27: **M-fmt COMPLETE** (F1–F4) — `phg fmt` (since renamed `phg format`): lexer comment side-channel, full-surface
   meaning-preserving AST printer (chose a real AST printer over a token reformatter — challenged the
   spec's false "reuse the printer" premise), gofmt-shaped CLI, dogfood over the whole example corpus
   (caught 3 printer bugs). Rock 2 45% → 70%. **GA ≈ 52% → 57%.** Next on the critical path: a minimal
   **LSP** (reuse the checker's Diagnostic surface) to finish rock 2; then rock 3 (stability/conformance).
+- 2026-07-03: **correction (unification audit B3-5)** — rock 2's "Missing: an LSP" premise was stale:
+  the LSP (`phg lsp` + `editors/` clients), `phg debug`, and `phg lift` have all shipped. Rock 2's 70%
+  (and therefore the ≈57% total) is a stale lower bound pending a re-score; no new number invented here.
 <!-- Update this file when a rock's status changes; recompute the total; append a dated burn-down line. -->

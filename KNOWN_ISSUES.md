@@ -59,7 +59,7 @@ not a panic:
   cast can't produce them).
 
 - **`decimal` primitive (M-NUM S1) — shipped corners + deferrals.** The exact fixed-point `decimal`
-  ships with `19.99d` literals, `Decimal.of(string) -> decimal?`, `+ - *`, scale-insensitive
+  ships with `19.99d` literals, `Decimal.of(string): decimal?`, `+ - *`, scale-insensitive
   comparison/equality, unary `-`, and BCMath transpile. Notes: (1) **`%` and `/` are operators**
   (2026-06-27): bare `decimal % decimal` is the exact remainder (`Op::RemD` → `value::decimal_rem` →
   `bcmod`), no rounding, result scale = `max(operand scales)`, zero divisor faults. Bare `decimal /
@@ -113,7 +113,7 @@ not a panic:
   (the pre-existing float-display divergence, also noted for `Core.Json`); the example exercises them
   only through the `bool`-returning predicates, never `Output.printLine(infinity())`. The `run ≡ runvm`
   spine is always byte-identical (both Rust); only printing a special value would diverge from PHP.
-  (3) **`toInt(float) -> int?` / `decimalToInt(decimal) -> int?` return `null` on out-of-range / special
+  (3) **`toInt(float): int?` / `decimalToInt(decimal): int?` return `null` on out-of-range / special
   inputs** — `toInt` is `null` for NaN/±∞/out-of-i64-range (deliberately avoiding PHP's `(int)NAN == 0`);
   `decimalToInt` is `null` when the integer part is outside i64. The i64 *edge* is closed with a shared
   exclusive upper bound (`9.2233720368547758E18`) on both sides because `i64::MAX` is not exactly
@@ -123,7 +123,7 @@ not a panic:
   is lossy by nature** — examples keep printed results to exactly-representable values (`12.5d`).
 
 - **Math breadth + number formatting (M-NUM S4) — shipped corners.** `Core.Math` gains `sign`/`clamp`/
-  `gcd` (int), `log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e` (float), and `numberFormat(float, int) ->
+  `gcd` (int), `log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e` (float), and `numberFormat(float, int):
   string`. Corners: (1) **transcendentals are not printed *raw*** — `log`/`exp`/`sin`/… erase to PHP's
   libm, and a non-representable result would diverge between Rust's shortest-round-trip and PHP, so the
   guide exercises them at their *exact* IEEE-defined points (`exp(0)`=1, `sin(0)`=0, `cos(0)`=1, …) and
@@ -147,7 +147,7 @@ not a panic:
   that `import`s `Core.Json` round-trips byte-identically `run ≡ runvm ≡ real PHP`
   (`examples/project/jsonmulti/`). The injected `Json` enum is a `package Main` type, so in a namespaced
   program its variant classes live in `\Main\`; the JSON runtime helpers (emitted in the global block)
-  now reference them as `\Main\Obj` etc. instead of bare names. (The companion fix: the loader's
+  now reference them as `\Main\Object` etc. instead of bare names. (The companion fix: the loader's
   `Expr::Map` resolution arm — a cross-package call/type nested in a map literal `[k => v]` was
   previously left unresolved.) (3) **Reserved-variant collision
   edge:** an enum literally declaring both `Int` and `Int_` would collide after mangling — adversarial,
@@ -208,7 +208,7 @@ not a panic:
   edge outside `package Main` scope); (d) an **overloaded** parent method (the compiler resolves via the
   `methods` table, which doesn't carry the overload set — single-method parents only for now).
   **(e) Cross-package single inheritance + parent calls now ship** (validated 2026-06-29): a
-  `package Main` class may `extends` a library-package class (imported via `import type`), inherit its
+  `package Main` class may `extends` a library-package class (imported via `import`), inherit its
   constructor + fields, override its `open` methods, and call up with both `parent.m(…)` and the named
   `parent(Ancestor).m(…)` form — the loader mangles the `extends` parent name and the
   `parent(Ancestor)` reference to the library FQN, the transpiler emits `extends \Acme\Zoo\Animal` +
@@ -251,7 +251,7 @@ not a panic:
   intentional and permanent; a trait is reuse, not a type (`E-USE-AS-TYPE`/`E-INSTANCEOF-TYPE`). Use an
   interface for the type side. (2) **generic traits** (`trait T<X>`) — mirror the generic-method gate;
   not yet parsed. (3) **cross-package traits now ship** (validated 2026-06-29) — a `trait` declared in a
-  library package is imported with `import type Pkg.Path.Trait [as A];` (it is still NOT a type —
+  library package is imported with `import Pkg.Path.Trait [as A];` (it is still NOT a type —
   `Trait x` as an annotation stays `E-USE-AS-TYPE`) and composed with `use Trait;`. The loader registers
   the trait in the type symbol table and mangles both the declaration and the `use` clause to the same
   FQN, so the checker's by-name trait flatten lines up; the transpiler emits a native PHP `trait` in its
@@ -330,15 +330,17 @@ not a panic:
   there is no fall-through to narrow. (**if-let and while-let `when` guards both ship** — see the
   pattern-cluster note below.)
 - ~~interfaces/classes/enums in a library (non-`main`) package~~ — **now supported** (M-RT
-  cross-package types): a library package exports types, consumed via `import type Pkg.Path.Type [as
+  cross-package types): a library package exports types, consumed via `import Pkg.Path.Type [as
   A]`; `E-PKG-TYPE` is retired. Remaining limits: the **module-qualified** type form (`import
-  acme.geometry;` then `Geometry.Point`) is deferred (the terminal `import type` is the shipped form);
+  acme.geometry;` then `Geometry.Point`) is deferred (the terminal `import` is the shipped form);
   variant/type names must be unique across all merged packages; generic *types* (`Box<T>`) are a
   separate pending slice.
-- Exceptions (try / catch / throw)
-- Method/function overloading, traits, operator overloading, property accessors
-- Sized integers (`i8`..`u64`), `const`/`final` enforcement (the `decimal` primitive now ships — M-NUM S1)
-- `match` outside return / variable-declaration-initializer position
+- Operator overloading (method/function overloading, traits, and property accessors/hooks **now ship** —
+  exceptions `try`/`catch`/`throw` ship too)
+- Sized integers (`i8`..`u64`), top-level `const` declarations (the `decimal` primitive now ships — M-NUM S1;
+  `final` **is** enforced — classes/methods are final-by-default)
+- `match` outside return / variable-declaration-initializer position (a bare `match` statement is a parse
+  error; use it in a `return` or a variable initializer)
 
 ## Pattern cluster (M-RT S5.1 / S5.2) — deferred refinements
 - **Match-arm guards ship** (`pat when <cond> => …`, contextual `when`, byte-identical, no new `Op`).
@@ -513,7 +515,7 @@ Return-on-all-paths (`E-MISSING-RETURN`), the `never` bottom type, and the `W-UN
 conservative** — it claims divergence only for shapes it can prove, so it never rejects a function
 that does return on every path. The corners below are deferred (each is sound, never a crash):
 
-- **`never` is only usefully inhabited by infinite loops today.** A `-> never` function must diverge;
+- **`never` is only usefully inhabited by infinite loops today.** A `: never` function must diverge;
   the only divergence producers in the current language are an infinite loop (`while (true) {}` /
   `for (;;) {}`) and a call to another `never` function. The natural producer — `throw`/`panic` — lands
   with the error model (**M-faults Slice 2**), at which point `never` lights up fully. The type, its
@@ -577,7 +579,7 @@ Dynamic multiple dispatch over free functions and class methods ships and is byt
 ## Generics (M-RT S7) — deferred refinements
 
 Erased generics ship for **free functions, class methods, classes, and enums**: `function id<T>(T x)
--> T`, `class U { function id<T>(T x) -> T … }`, `class Box<T> { … }` / `class Pair<A, B> { … }`, and
+: T`, `class U { function id<T>(T x): T … }`, `class Box<T> { … }` / `class Pair<A, B> { … }`, and
 `enum Option<T>` / `enum Result<T, E>`, inferred at the call site / at construction / at the variant
 constructor, byte-identical `run ≡ runvm ≡ real PHP` (see `examples/guide/generics.phg`,
 `generic-methods.phg`, `generic-types.phg`, `generic-enums.phg`). There is no monomorphization — type
@@ -587,14 +589,14 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
 
 - **A generic-typed *result* is a specialized operand only when the return *echoes a parameter*
   (S2.1 — partial).** A generic free function whose declared return is *exactly* one of its own
-  parameters (`id<T>(T x) -> T`, `firstOr<T>(List<T>, T) -> T`) now records that parameter index
+  parameters (`id<T>(T x): T`, `firstOr<T>(List<T>, T): T`) now records that parameter index
   (`FunctionDecl::generic_ret_from_param`, set in `erase_generics`); the VM compiler's `ctype` recovers
   the erased result's operand type from that argument, so **`identity(7) + 1` and `firstOr(xs, -1) * 2`
   now specialize on the VM** exactly as the interpreter evaluates them (byte-identical, gated by
   `examples/guide/generics.phg`). [Verified: both `run` and `runvm` print `8`.] **Generic *methods*
   echoing a param now work too** (S2.1-methods, 2026-06-29): `erase_generics` computes the echo index
   for class methods, threaded into the compiler as `method_generic_ret_from_param` and recovered in the
-  method-call `ctype` arm, so **`u.pick(7, 8) + 1`** (a method `pick<T>(T a, T b) -> T`) specializes on
+  method-call `ctype` arm, so **`u.pick(7, 8) + 1`** (a method `pick<T>(T a, T b): T`) specializes on
   the VM (`examples/guide/generic-methods.phg`, differential `generic_method_result_echoing_param_is_vm_operand`).
   [Verified: `run` ≡ `runvm` ≡ real PHP.] **S2.1-broad CLOSED** (2026-06-29) — the general fix shipped:
   the checker records a **reified-operand side-table** (`expr span.start → Ty` for `Call`/`Member`/`Index`
@@ -612,7 +614,7 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
 - **Cross-package generic *library* types now ship** (validated 2026-06-29) — a generic class
   (`Box<T>`, `Pair<A, B>`) declared in a library package is consumed from another package via
-  `import type Pkg.Path.Type`, inferred at construction and recovered at each use site, with invariant
+  `import Pkg.Path.Type`, inferred at construction and recovered at each use site, with invariant
   type arguments enforced across the package boundary. The loader leaves the type parameter untouched
   and `erase_generics` removes it before any backend, so it rides the same erasure path as a
   `package Main` generic class — byte-identical `run ≡ runvm ≡ real PHP`
@@ -672,10 +674,10 @@ or simply unavailable, never a crash):
   **qualified / cross-package function *values*** — passing `Acme.Calc.dbl` itself (the dotted member as
   a value, vs. *calling* it `Acme.Calc.dbl(x)`) is not yet rewritten; call it, or wrap it in a local
   same-package function and pass that.
-- **Statement-body lambdas require an explicit `-> T`** — the return type of a block-body lambda is
+- **Statement-body lambdas require an explicit `: T`** — the return type of a block-body lambda is
   not inferred (expression-body lambdas infer it from the expression). This is by design this slice.
 - **Function-type assignability is exact structural equality** — no parameter/return variance
-  (`(int) -> int` is not assignable to `(int) -> int?` etc.).
+  (`(int) => int` is not assignable to `(int) => int?` etc.).
 - **`core.list` higher-order helpers (`map`/`filter`/`reduce`) are not yet available** — they await
   the `List<T>`-generic native signatures; lambdas can already be passed to *user* functions today.
 
@@ -866,7 +868,7 @@ byte-identical on `run`/`runvm` and round-tripped through real PHP. These are de
   `$m[$k]`, and the differential harness excludes the fault case by design. A safe `has`/`get`
   accessor awaits generics.
 - **`keys` / `values` / `has` / `size` now ship as `Core.Map` natives (M-RT S7b).** They are generic
-  (`keys(Map<K,V>) -> List<K>`, `has(Map<K,V>, K) -> bool`, …), inferred at the call site like a
+  (`keys(Map<K,V>): List<K>`, `has(Map<K,V>, K): bool`, …), inferred at the call site like a
   generic free function, and erase to `array_keys`/`array_values`/`array_key_exists`/`count`. **Map
   *iteration* and `Set` itself are still pending** (Set construction is the next S7b sub-slice). Key
   coercion caveat: PHP arrays coerce integer-like string keys (and bools) to int keys, so `keys()`/
@@ -893,8 +895,8 @@ caveats (the `run`/`runvm` spine is always byte-identical):
 - **`Map.keys`/`values` key coercion** — see the *Maps* note above: PHP coerces integer-like string
   keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping.
 
-`Core.Set` now ships too (M-RT S7b): `of(List<T>) -> Set<T>` (insertion-ordered dedupe),
-`contains(Set<T>, T) -> bool`, `size(Set<T>) -> int`. `Value::Set` is an insertion-ordered
+`Core.Set` now ships too (M-RT S7b): `of(List<T>): Set<T>` (insertion-ordered dedupe),
+`contains(Set<T>, T): bool`, `size(Set<T>): int`. `Value::Set` is an insertion-ordered
 `Rc<Vec<HKey>>` (the Map discipline, not a `HashSet`), so it round-trips byte-identically as a deduped
 PHP array (`array_values(array_unique($xs, SORT_STRING))` / `in_array(_, _, true)` / `count`).
 Element type is the hashable subset (`int`/`bool`/`string`); homogeneous by typing, so the
@@ -1122,7 +1124,7 @@ only read path). Deliberate scope edges:
   CST: an own-line comment formats above the following declaration/statement, but a **trailing
   same-line comment** (`x = 1; // note`) reattaches as a *leading* comment of the next node, and a
   comment **above the `package` line** moves just below it. Comments are never lost, and the result is
-  idempotent — just occasionally relocated. (3) A **statement-body lambda** (`function(x) -> T { … }`) is
+  idempotent — just occasionally relocated. (3) A **statement-body lambda** (`function(x): T { … }`) is
   rendered on a single line (a lambda is an expression; no reflow yet). All three are additive
   follow-ups; the hard guarantee — formatting never changes program meaning (`parse(fmt(x))`
   preserved) — holds today, gated by a dogfood test over the whole example corpus.

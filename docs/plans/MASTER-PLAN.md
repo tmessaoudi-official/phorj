@@ -1,1296 +1,705 @@
-# PHORJ MASTER PLAN — the consolidated roadmap to 100% of the language
+# PHORJ MASTER PLAN — the ONE unified roadmap (cursor + live percentage + all tracked work)
 
-> **This is the living plan.** Deliberately undated: it is maintained, not frozen. Produced by the
-> 2026-07-01/02 full-audit fleet (session/adjudication plan since consolidated into this file — its
-> Decisions Log + QUESTION CATALOG live in git history at/before `60540fc`);
-> input reports indexed in Appendix C. It supersedes the live content of the 15 MERGE plans
-> (P-plan-verdicts §2/§5) — every one of P's **56 live items (LI-A1…LI-H6)** appears below; none dropped.
+> **This is the living plan and the single forward SSOT.** Unified 2026-07-03 by the Stage-D
+> consolidation of the full unification audit: it replaces BOTH the 2026-07-02 MASTER-PLAN and
+> `wave0-remainder.plan.md` (superseded, archived after review; full prior text in git history at
+> `0691228`). It absorbs: the 2026-07-02 full-audit roadmap (waves 0–6, §12 rulings ledger), the
+> wave-0-remainder session decisions, and the **2026-07-03 unification audit** (61 findings,
+> 4 buckets, 17 developer-ruled decisions — synthesis at
+> `docs/research/2026-07-03-unification-audit/SYNTHESIS.md`, raw reports A1–A10 alongside it).
 >
-> **On design-spec references (2026-07-02 consolidation):** the per-milestone design specs were
-> consolidated; `docs/specs/` now holds only the 17 live/SSOT specs. Where a HOW line below says
-> "the X spec" for a consolidated one (e.g. "update the S5 spec"), record the change in the surviving
-> SSOT spec if one covers it, else in `docs/HISTORY.md`; the original design text is in git history
-> (≤`60540fc`) and its decisions in the canonical register `docs/research/full-audit/raw/C-decisions.md`.
+> **Spec SSOT:** the frozen per-topic specs were folded into ONE spec —
+> `docs/specs/UNIFIED-SPEC.md` (ruled 2026-07-03). Every "the X spec" reference below means the
+> relevant section of UNIFIED-SPEC; the original per-file texts are in git history.
+> Decisions register: `docs/research/full-audit/raw/C-decisions.md` (canonical, 141 rows).
+> Delivery rules: `/stack/projects/phorj/CLAUDE.md` + `docs/INVARIANTS.md` — read both first.
 
 ---
 
-## 0. PREAMBLE
+## 0. CURSOR — WHERE WE ARE (update this block every working session)
 
-### 0.1 What this plan is and how to execute it
+| | |
+|---|---|
+| **Date / HEAD** | 2026-07-03 · `0691228` (clean, gate green, 1660 tests; several commits ahead of origin — push is developer-gated, never autonomous) |
+| **Completion** | **PHP-parity ≈ 59%** (domain-weighted 35 SYN / 40 FN-usage-weighted / 25 RT; raw row floor ≈39%) · **Vision ≈ 61%** (70% parity + 30% programme) — denominator = the M-gap-matrix **824 verdict rows** (665 net of N/A + GAP-by-design). [Inferred: 2026-07-03 FN re-score of the ratified 2026-07-02 model — row flips shown in §11.2; full 824-row re-pass due at next milestone close] |
+| **Current phase** | **CLEANUP / UNIFICATION programme** (autonomous marathons ON HOLD until done). Stage D (docs consolidation) EXECUTING NOW: this plan + `docs/specs/UNIFIED-SPEC.md` + truthful KNOWN_ISSUES/FEATURES/ARCHITECTURE/README/STABILITY (Bucket 3, §2.3). |
+| **Actively in progress** | Stage-D doc consolidation (this file, the unified spec, the Bucket-3 corrections). Code work NOT started on the audit findings — everything ruled, nothing implemented yet. |
+| **Next up (in order)** | ① UA-0 free wins (§2.1: mold, test-gate sharding, broken `--help`, stray dirs) → ② UA-1 byte-identity fixes + `->` retirement sequence (§2.2) → ③ UA-L2 injected-prelude/loader unification (§2.2, MUST precede W3-1/W3-2) → ④ resume the ROI delivery order (§12): W3-5 (blocker adjudication pending) → W3-1 DB + W3-2 HTTP. |
+| **Open adjudications** | W3-5 mixed-type-args blocker (3 options, §6 W3-5) · W4-10 XML design (recorded, not built) · §7-OPEN user-facing `trait` (the ONE open language question). Everything else is RULED (§13 + Appendix B). |
+| **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt + release build (oracle php path = the single editable knob in `scripts/toolchain.env`, currently `php-8.5.8`). Pre-commit = Rust-only (`PHORJ_SKIP_PHP=1`); pre-push = full 8.5 oracle. |
 
-This document is the single roadmap from the current state (v0.5.1-alpha.1, `ccb2403`) to "100% of the
-language" — defined by the developer (session Decisions Log, 2026-07-01) as: *everything ever mentioned,
-no cutline*, plus a *reproducible completion percentage*, plus *full PHP coverage done much better*.
-
-**Execution protocol for another model (Opus 4.8 or later), no prior session context required:**
-
-1. Read `/stack/projects/phorj/CLAUDE.md` first (after Wave 0 applies the rules-only rewrite, it is
-   short) and `docs/INVARIANTS.md`. Those are the delivery rules; this file is the work.
-2. Execute waves **top-down** (0 → 6). Within a wave, items are ordered; DEPS lines override order.
-3. **Per-item ACCEPTANCE is the definition of done.** Nothing is complete without: the named tests
-   green, the full correctness gate green
-   (`PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test --workspace`
-   + clippy + fmt + `cargo build --release`), and — for language/stdlib features — a shipped example
-   (Governance rule G-5).
-4. **Adjudication is CLOSED.** Every `⏳BLOCKED-ON(id)` marker below was ruled on 2026-07-02 and is
-   **RESOLVED to its stated default path** — the **§12 RULINGS LEDGER is authoritative** (it already
-   superseded every marker). Markers are retained only as provenance of what was asked; **treat each
-   as RULED and do NOT stop on one.** The single place a ruling diverges from a body default is
-   **W5-17b UFCS** (§12: *type-scoped*, not global leaf-uniqueness) — §12 governs. The **one** genuinely
-   open developer question is the **S8 user-facing `trait` disposition** (§7 "Open language question",
-   default: subsumed-by-MI); nothing else is pending. (Appendix B cross-references each marker to §12.)
-5. Re-compute the percentage ledger (§10) after every wave (recompute rule §0.3).
-
-### 0.2 The two-axis lens (applies to every feature item)
-
-Every feature item is judged on two axes and carries a one-line **LENS** verdict:
-
-- **Axis 1 — quality vs PHP:** `better-than-PHP` (the default ambition) · `PHP-equal` (only where PHP
-  is already right) · `MANDATORY-better` (where PHP is wrong — inheriting the flaw is forbidden;
-  e.g. Unicode strings, DEF-016).
-- **Axis 2 — transpilability:** every runtime feature maps to **idiomatic PHP** (D-L9 / DEC-002);
-  PHP-absent features are **compile-time-only + erased** (generics discipline). The one standing
-  exception is concurrency (§1.1).
-
-### 0.3 The completion baseline and recompute rule
-
-From the M gap matrix (824 verdict rows: 173 SYN + 631 FN + 20 RT; model in M §4 — arithmetic fully
-shown there, weights declared judgment calls):
-
-- **PHP-parity ≈ 58%** (domain-weighted: language 79.8% · stdlib 27.5% row-weighted / 32.5%
-  usage-weighted · runtime 69.4%; raw row-parity **floor 38.8%**). Always quote with the weights.
-- **Vision ≈ 60%** (70% parity + 30% beyond-PHP programme at 64.4%).
-- **✅ RULED (§12): numbers + weight model RATIFIED** (parity ≈58% / vision ≈60%), and the standing
-  rule adopted: **re-run the M §4 arithmetic after every milestone/wave** (re-grade the affected
-  Pass-1 rows, recompute the three domain scores, republish both headlines).
-- Projected per-wave gains: §10 ledger. End-state after Wave 6: **parity ≈ 75% / vision ≈ 81%**, the
-  residual being the extension-tier stdlib (§9) and the deliberate GAP-by-design rows (Appendix A).
+**Percentage protocol:** re-run the M §4 arithmetic (824 rows, weights 35/40/25) after every
+milestone/wave close (ratified rule, §12 ledger); update this cursor and §11 in the same commit.
+Always quote the number with its weights and denominator. The GA-CHECKLIST's separate "≈57%" figure
+was computed from a false premise (LSP-missing) and is retired (audit B3-5).
 
 ---
 
 ## 1. GOVERNANCE & STANDING RULES
 
-**G-1 · Byte-identity spine.** `phg run` ≡ `phg runvm` ≡ transpiled PHP under a real `php`
-(floor **8.5**, `PHORJ_REQUIRE_PHP=1` fails-not-skips), identical stdout AND failure behavior, for
-every program and every example; interpreter is the reference oracle. Enforced by
-`tests/differential.rs` (globs `examples/**/*.phg`, project-aware) + `tests/conformance.rs` (goldens).
+**G-1 · Byte-identity spine.** `phg run` ≡ `phg runvm` ≡ transpiled PHP under a real `php` (floor
+**8.5**, `PHORJ_REQUIRE_PHP=1` fails-not-skips): identical stdout AND failure behavior, every
+program, every example; the interpreter is the reference oracle. Enforced by `tests/differential.rs`
+(3308 lines — split tracked as W1-1) + `tests/conformance.rs`.
 
-**G-1.1 · The concurrency exception (MUST be disclosed wherever byte-identity is claimed).**
-Concurrency (`spawn`/`Channel`/`Task`) is **permanently outside the PHP oracle** (DEC-133):
-`run ≡ runvm` holds (deterministic scheduler on both backends); the transpiled-PHP leg is rejected
-(`E-CONCURRENCY-NO-PHP`) — sequential-degenerate PHP was rejected as spine-breaking. Additionally,
-until W5-13 lands, fault **line numbers** inside interpolation diverge on the VM (H §5) — fault
-parity is currently by FaultKind, message and exit code, not line. **✅ RULED (§12): DEC-133 ratified**
-— concurrency PHP leg is a hard error `E-TRANSPILE-CONCURRENCY` + explicit `--sequential-concurrency`
-opt-in (with warning); README/spec MUST disclose the exception wherever byte-identity is claimed
-(Wave 0 doc batch and Wave 6 spec both carry the disclosure).
+**G-1.1 · The concurrency exception (disclose wherever byte-identity is claimed).** Concurrency
+(`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle (DEC-133, ratified): `run ≡ runvm`
+holds; the PHP leg is a hard error — **the shipped code is `E-CONCURRENCY-NO-PHP`** (the ledger's
+"E-TRANSPILE-CONCURRENCY" was the pre-implementation name; audit B3-4 verified only
+`E-CONCURRENCY-NO-PHP` exists — use it everywhere) — with explicit `--sequential-concurrency`
+opt-in + warning. Until W5-13, fault *line numbers* inside interpolation also diverge on the VM
+(disclosed, W0-5). The audit added four *undisclosed* byte-identity breaks — now tracked + ruled as
+UA-1 (§2.2); each fix lands its adversarial differential case same-commit (UA-0.13).
 
-**G-2 · Quality gate (green means ALL):** `cargo test --workspace` + `cargo clippy --all-targets`
-(warnings deny) + `cargo fmt --check` + `cargo build --release`, plus the full PHP-oracle gate before
-claiming any feature done. Perf claims need `phg benchmark` before/after; CI regression gate
-`scripts/perf-gate.sh`. Pre-commit hook must actually run (Wave 0, W0-1).
+**G-2 · Quality gate (green means ALL):** workspace tests + clippy (warnings deny) + fmt +
+release build + the full PHP-oracle gate before claiming any feature done. Perf claims need
+`phg benchmark` before/after; CI regression gate `scripts/perf-gate.sh`.
 
-**G-3 · Invariants that constrain every HOW below** (detail: `docs/INVARIANTS.md`):
-new `Op` ⇒ extend the three coupled matches (`vm::exec_op`, `chunk::validate`,
-`compiler::stack_effect`) same commit; **"no new Op" is the default** for front-end features;
-value kernels single-sourced in `src/value/`; compile-time sugar expanded out pre-backend via the
-`cli::check_and_expand` chokepoint; reified operands thread ALL vm-compile paths
-(`check_and_expand_reified` + `compile_with`); CTy-operand trap (any newly-legal expression whose
-result can be an arithmetic operand needs a `CTy` resolution + an `expr + 1` differential case);
-scratch slots = `self.height - 1` with a two-in-one-expression differential case.
+**G-3 · Backend invariants** (detail `docs/INVARIANTS.md`): new `Op` ⇒ the three coupled matches
+same commit ("no new Op" is the front-end default); value kernels single-sourced; compile-time
+sugar expanded pre-backend via `cli::check_and_expand`; reified operands thread ALL vm-compile
+paths; CTy-operand trap (`expr + 1` case); scratch slots `self.height - 1` (two-in-one-expr case).
 
-**G-4 · Decision register + question catalog.** Canonical decisions: Agent C register
-(`docs/research/full-audit/raw/C-decisions.md`, 141 DEC rows + 10 conflicts + 33 supersessions);
-pending rulings: **NONE** — adjudication closed 2026-07-02 (§12 ledger; the sole open language
-question is §7-OPEN traits). **Adjudication protocol for all future
-decisions:** interactive, batched 4 per round via AskUserQuestion, recommended option first, and —
-standing developer feedback, 2026-07-02 — **every design question ships with a concrete real-world
-code example demonstrating the risk**. Ratified rulings baked into this plan: **E-MATCH-BARE-TYPE
-hard error** (I-2) · **foreach REPLACES for-in** (I-3) · **E-INTERSECT-SIG relaxed via overload
-rules** (I-4) · audit-only session (this plan executes *later*, i.e. now).
+**G-4 · Decisions.** Canonical register `docs/research/full-audit/raw/C-decisions.md`; the
+2026-07-02 adjudication ledger is Appendix B; the **2026-07-03 unification-audit rulings are §13**.
+Protocol for future decisions: interactive AskUserQuestion, ≤4 per round, recommended option first,
+every design question ships a concrete risk example. **NEW standing instruction (developer,
+2026-07-03): when a "more correct" answer and a "PHP-familiar" answer diverge, present and
+default-recommend the more-correct one — PHP-parity is not a tie-breaking bias.** (Pattern across
+the audit gate: the developer consistently chose the thorough option over the cheap one.)
 
-**G-5 · Examples-ship-with-features (definition of done).** Every shipped feature lands, in the same
-change: a runnable `examples/` program (auto-gated by the differential glob) + `examples/README.md`
-index entry. CLI/tooling features: walkthrough README + companion `.phg`. Faults → README capture.
-Impure/quarantined features follow the `pure:false` conventions (DEC-156).
+**G-5 · Examples ship with features** (definition of done): runnable `examples/` program
+(differential-globbed) + README index entry, same change; CLI features get a walkthrough README;
+faults → README capture; impure/quarantined follow the `pure:false` conventions.
 
-**G-6 · Anti-regrowth file-size rule.** **✅ RULED (§12): ADOPTED** (B §6): soft cap **800 production
-lines**/file (inline `#[cfg(test)]` excluded), hard review trigger **1000** with a tracked exemption
-list (`vm/exec.rs`, `cli/explain.rs`, `transpile/runtime.rs`), ≤3-word cohesion test, inline test
-mods > 150 lines move to sibling `tests.rs`, enforced by `scripts/size-gate.sh` in CI (W1-6).
+**G-6 · Anti-regrowth size rule:** soft 800 / hard 1000 production lines per file, tracked
+exemptions, `scripts/size-gate.sh` in CI (W1-6 — not yet built; 12 files currently over the hard
+cap, tracked, not silent).
 
-**G-7 · Honesty rules.** No silent scope drops: rejected GAP rows live in Appendix A with reasons;
-the C-2 lesson (a ratified *replacement* silently softened into an *addition* during an autonomous
-slice) is the named failure mode — codemod items below state "REPLACE, not add" explicitly.
-Benchmarks: no public perf claim against a dev-built PHP (G P1; fixed in W6-4).
+**G-7 · Honesty rules.** No silent scope drops (rejects live in Appendix A with reasons);
+codemod items say "REPLACE, not add"; no public perf claim vs a dev-built PHP (the local PHP
+oracle binary is a DEBUG+Xdebug build — any `--vs-php` number on this box is invalid until
+W6-4/UA-0.10). The five doc false-claim families the audit found (zero-deps, `import type`,
+dead CLI verbs, the wrong concurrency E-code, 🔲-on-shipped) are corrected in the Stage-D pass
+(§2.3) and must never be reintroduced.
 
 ---
 
-## 2. WAVE 0 — REPAIRS & HYGIENE
+## 2. UNIFICATION-AUDIT EXECUTION PROGRAMME (2026-07-03) — the current work
 
-*Mandatory; adjudication is closed (every ruling in §12) — these restore already-decided guarantees.
-Everything here is repo-state repair, docs, or process; zero language-surface change.*
+> Source: `docs/research/2026-07-03-unification-audit/SYNTHESIS.md` (61 findings, severity-ranked,
+> evidence-graded). Every Bucket-2 decision below was RULED interactively by the developer on
+> 2026-07-03 (§13 Decisions Log). Nothing here is open to re-litigation; the only judgment left is
+> execution sequencing, fixed below. This programme completes BEFORE autonomous marathons resume.
 
-### W0-1 · Restore the local pre-commit gate (hooksPath) — S · ✅ DONE (`c66bde5`; §12 REPAIRED)
-- **WHAT:** `git config core.hooksPath scripts/git-hooks` (relative, rename-proof); verify with a
-  no-op commit; re-run the full gate over the current tree before the next push.
-- **WHY:** A-CI-1 (**P0**): `core.hooksPath` still points at the deleted `/stack/projects/phorge/`
-  path — git silently runs **no hooks**; every local commit since the directory rename bypassed
-  fmt+clippy+test, and the whole run is unpushed so CI never saw it either. Current tree is green
-  (A's baseline 1617/0), so history is the only unknown.
-- **HOW:** one config line + a CONTRIBUTING callout ("verify with `git config core.hooksPath`" —
-  the documented relative form was correct; the config diverged from it, A §14).
-- **ACCEPTANCE:** hook fires on a test commit (observe fmt/clippy/test output); CONTRIBUTING updated.
-- **DEPS:** none. First action of the plan. **✅ RULED (§12): approved + DONE** — `core.hooksPath
-  scripts/git-hooks` set and verified (fires fmt/clippy/test on commit).
+### 2.1 UA-0 · Bucket 1 — nineteen ready-to-execute fixes (no design ambiguity)
 
-### W0-2 · P0 soundness repair: static-field visibility (spine break) — M
-- **WHAT:** enforce `private`/`protected` on **static fields** (read AND write, from outside/subclass).
-- **WHY:** H §2.1 (**P0**): today the access compiles clean, prints on run/runvm, and **fatals on the
-  PHP leg** (`Cannot access private property A::$s`) — a live three-way divergence on the exact
-  guarantee the developer named first. Root cause verified: `classes[cls].statics` is `name → Ty`
-  with no visibility (consts carry `entry.vis` and enforce).
-- **HOW:** store vis alongside the static's type (mirror the consts entry, `checker/collect.rs`);
-  gate the read path (`checker/calls.rs` ~1501) and write path (`checker/assign.rs` ~209) with the
-  E-CONST-VISIBILITY owner/subclass logic; reuse/extend `E-FIELD-VISIBILITY`. Front-end only — no
-  backend, no Op.
-- **ACCEPTANCE:** H's probes `v7run/v7b/v7d` become compile errors; new should-error tests in
-  `conformance/diagnostics/`; full gate green; `phg explain E-FIELD-VISIBILITY` mentions statics.
-- **DEPS:** none.
+Ordered P1→P3. Each item is done when its acceptance evidence exists and the gate is green.
 
-### W0-3 · Static-method-via-instance becomes an error — S
-- **WHAT:** `a.staticMethod()` → compile error (mirror of the already-enforced static-field-via-instance).
-- **WHY:** H §2.2: developer's own stated rule ("static not via instance"); currently accepted on all
-  three backends (no divergence, but rule-inconsistent with the field case one row up).
-- **HOW:** extend the existing instance-member check in `checker/calls.rs` (the field analogue's
-  logic); did-you-mean `ClassName.m()`. Note the deliberate inverse: cross-class `Class.method()`
-  static-call *ergonomics* are a separate LI-E14 item (W2-11).
-- **ACCEPTANCE:** H's `s2` probe errors; should-error test; gate green.
-- **DEPS:** none.
+| # | Sev | Item (source) | Status |
+|---|-----|---------------|--------|
+| UA-0.1 | P1 | **Test-gate serialization**: replace the per-call 256 MiB `on_deep_stack` thread spawn (`src/cli/mod.rs:300-308`, measured ~97 µs/call, caps 8-way scaling at ~4.8×) with a persistent deep-stack worker; shard the two monolithic corpus tests (`fmt::every_repo_phg_formats_idempotently_and_safely` 200.5 s, `runtime::shipped_manual_example_runs_on_both_backends` 154.7 s) into per-directory `#[test]`s. Expected 111 s → ~50–60 s commit gate. *Corrects the old "cmd_run global lock" memory — there is no Mutex.* (B1-1) | ☐ |
+| UA-0.2 | P1 | **Wire mold**: `/bin/mold` is installed, no `.cargo/config.toml` exists — add the gitignored machine-local config (CI has no mold). (B1-2) | ☐ |
+| UA-0.3 | P1 | **Fix broken `--help` examples**: `run`/`runvm`/`disassemble` examples fail verbatim (missing `package Main; import Core.Output;`) and teach `->` — fix + convert to `: void` (`src/cli/mod.rs:77,85,129` + arrow prose at `:52,201,638`, `src/main.rs:301`). First contact with the tool currently produces two errors. (B1-3; syntax half sequences with UA-1.5) | ☐ |
+| UA-0.4 | P1 | **Help-surface parity**: add `lsp` + `debug` to the long `--help` (terse usage lists 18 verbs, long help lists 16) + per-command help for both. (B1-4) | ☐ |
+| UA-0.5 | P2 | **6 golden diagnostic corpus cases** (E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-INJECTED-TYPE-BARE, E-DUP-FIELD, E-NEW-ON-NONCONSTRUCT, one `protected` variant) + a **reverse ratchet** (every explained code has ≥1 emission site). (B1-5) | ☐ |
+| UA-0.6 | P2 | **Static-FIELD-via-instance diagnostic**: `a.s` on a static field falls through to a generic code-less message (`src/checker/calls.rs:1709`) while the method sibling got `E-STATIC-VIA-INSTANCE` in W0-3 — mirror the shipped pattern + corpus case. (B1-6) | ☐ |
+| UA-0.7 | P2 | **17 emitted E-codes with zero test coverage** — one triggering test each (hooks ×4, E-UFCS-AMBIGUOUS, E-VARIANT-QUALIFIER, E-PARENT-AMBIGUOUS, E-DECIMAL-LITERAL, E-OVERLOAD-FN-VALUE, E-NEW-ON-NONCONSTRUCT, …; table in raw/A3 F6). (B1-7) | ☐ |
+| UA-0.8 | P2 | Format `selftest/{arithmetic,faults}.phg` (missed by the Phase-1 reformat) AND strengthen the fmt corpus test to assert `fmt(src) == src` (currently idempotency-only, so tracked files can drift). (B1-8) | ☐ |
+| UA-0.9 | P2 | Attach `[E-…]` codes to the most common diagnostics (arg-type, arity, expected/found — `check --json` emits `"code":null` for them) + fix the unknown-MEMBER misreport (`String.lenght` → "unknown identifier 'String'"). (B1-9) | ☐ |
+| UA-0.10 | P2 | `phg benchmark --vs-php` hardening: run php with `-n` (or detect+warn Xdebug/DEBUG builds) — the PHP leg currently aborts silently past 512-deep recursion and comparisons fold in a debug interpreter. (B1-10) | ☐ |
+| UA-0.11 | P2 | CI fixes: cargo-zigbuild via `taiki-e/install-action`/binstall (built from source every run today); gate job → nextest; `oracle-nightly` cron-only (currently every push, ~25% of runner minutes); rust-cache in playground.yml. (B1-11) | ☐ |
+| UA-0.12 | P2 | Install `wasm-pack` locally (playground Rust-side changes are untestable end-to-end today). (B1-12) | ☐ |
+| UA-0.13 | P2 | **Promote the A5 native-vs-PHP fuzz probes into the standing differential gate** (non-ASCII whitespace, multibyte, empty separators) — the structural mitigation for the byte-identity-leak class; every UA-1 fix lands its case here same-commit. (B1-13) | ☐ |
+| UA-0.14 | P2 | **Disclosures to ADD** (known-but-undisclosed): no-sandbox/full-user-authority trust model; `Math.pow(0.0, neg)` PHP-deprecation note; `List.append` O(n²) + the `List.fill`+index-set fast path (user-facing, not just a Rust doc comment); `String.length` byte semantics until W4-4; widen W5-13 scope (span reset also mis-anchors checker diagnostics in interpolation); `PHORJ_SKIP_PHP`+`PHORJ_REQUIRE_PHP` precedence. (B1-14) | ☐ |
+| UA-0.15 | P3 | `php_escape` single-vs-double-quote context mismatch (latent, unexploitable today): rename → `php_escape_dq`, add `php_escape_sq`, switch the two call sites (`src/transpile/program.rs:1380,1392`; `transpile/mod.rs:835-839`). (B1-15) | ☐ |
+| UA-0.16 | P3 | `subtle::ConstantTimeEq` for `Hash.equals` (already in the dep tree via argon2) + `cargo-audit` in CI for the vetted pins. (B1-16) | ☐ |
+| UA-0.17 | P3 | **Ghost/stale diagnostic-code cleanup**: drop never-raised explain entries `E-OVERLOAD-SELECT-CONFLICT` + `E-PKG-TYPE`; fix comment-only ghosts `E-TYPE-IMPORT-BUILTIN/SHADOW` (`loader/mod.rs:617`, `resolve.rs:590`), the `E-STATIC-INIT-CONST` claim (`value.rs:596`), the self-contradicting `casing.rs:398` comment. (B1-17) | ☐ |
+| UA-0.18 | P3 | Correct the `Suspend` trait doc comment (`src/green/exec.rs:40` — claims a nonexistent wasm frame-swap implementor; dep-isolation is the true justification). (B1-18) | ☐ |
+| UA-0.19 | P3 | Delete stray `target/` scratch dirs (`s2c_php_check/`, `s2d_php_check/`, empty `tmp/`) — they false-positive `phg format --check .`. (B1-19) | ☐ |
 
-### W0-4 · Revive the dead diagnostics: loader-side package gates + E-ALIAS-CYCLE — M
-- **WHAT:** (a) `E-RESERVED-PACKAGE` (user `package Core;`) and the `E-PKG-CASE` package-decl arm
-  enforced **in the loader, per-file, before the flat merge** (loose + project mode); (b) re-attach
-  the `E-ALIAS-CYCLE` code to its diagnostic and resolve the alias graph eagerly (an *unused* cycle
-  currently passes clean).
-- **WHY:** H §1/§2.3 (**P1**): in project mode a user can declare `package Core.Output;` — accepted,
-  then **silently dead** (registry wins); the documented "reserved `Core.` root" guarantee is
-  unenforced where it matters. This is also R4-H3 (rec: ERROR, loader-side) — folded here because it
-  restores an already-decided rule (DEC-020/022), no adjudication needed. E-ALIAS-CYCLE currently
-  fires uncoded (`phg explain` documents a code the compiler never attaches).
-- **HOW:** the loader already does per-file validation (E-PKG-PATH, E-FILE-*) — add the two decl
-  checks there (`src/loader/`, near the E-PKG-PATH site); alias graph: eager cycle walk at collect
-  time (`checker/collect.rs`), attach the code via `Diagnostic::new`.
-- **ACCEPTANCE:** H's `projects/{corehijack,reserved,pkgcase}` probes all error; `alias-cycle` probe
-  errors *with the code* even when unused; gate green.
-- **DEPS:** none.
+### 2.2 UA-1..UA-L · Bucket 2 — the seventeen RULED decisions as work items
 
-### W0-5 · VM interpolation fault-line divergence: DISCLOSE now, fix in W5-13 — S (doc)
-- **WHAT:** document (KNOWN_ISSUES + the G-1.1 disclosure sites) that fault parity currently excludes
-  line numbers for faults raised inside `"{…}"` interpolation on the VM (reports line 1; trace frames
-  skewed); extend the differential harness with a **line-comparison assertion behind a feature flag**
-  (off until fixed) so the fix has a ready gate.
-- **WHY:** H §5 (**P1**): real divergence, masked by design (FaultKind comparison). The *fix* needs VM
-  debug symbols (scope IP ranges — LI-C1) and is scheduled W5-13; claiming byte-identity without the
-  caveat until then violates G-7.
-- **ACCEPTANCE:** KNOWN_ISSUES entry; harness flag exists with a `#[ignore]`d red test demonstrating
-  the skew (`r1`/`r6`/`r11` shapes).
-- **DEPS:** none. Fix: W5-13.
+**Small/Medium code fixes (rulings final — implement exactly as ruled):**
 
-### W0-6 · Fix the front door: doc snippets compile + CLI rename sweep + CI doc-check — M
-- **WHAT:** (a) add `: void` (or proper return types) to every markdown-embedded `main` — README hero
-  block, both quick-start one-liners, `examples/cli/README.md` ×7; (b) rename `bench/fmt/disasm/lex`
-  → `benchmark/format/disassemble/tokenize` across the **19 stale occurrences / 12 files** (README CLI
-  table, CONTRIBUTING, examples/bench/README + workload comments, examples/README, examples/cli,
-  editors/*/README ×3, docs/GA-CHECKLIST, docs/MILESTONES); (c) add a **CI doc-snippet check**:
-  extract every ```` ```phorj ```` fence from README + all doc READMEs and `phg check` it — the
-  examples' discipline applied to the brochure; (d) delete the three spent codemods
-  (`tools/core_rename.py` — contains a *known-broken* scanner —, `core_rename2.py`,
-  `return_type_codemod.py`; git history preserves them) and remove the dangling
-  `tools/wave1_migrate.py` CLAUDE.md reference.
-- **WHY:** G P0-1/P0-2: a PHP developer's first 60 seconds is a compile error on the front page;
-  every stale command is a copy-paste failure. Codemods: project's own one-shot-migration doctrine +
-  A-TOOL-2 + B §9.
-- **HOW:** mechanical sweep; the CI check is a small script job in ci.yml (extract fences → temp
-  files → `phg check`), fail-closed like the existing gates.
-- **ACCEPTANCE:** the CI doc-check job exists and is green; grep for the four dead verbs in docs → 0;
-  `tools/` holds no spent codemods.
-- **DEPS:** none. (Full README *rewrite* — truthfulness, status table — is W6-3; this item is only
-  "nothing on the front page is broken".)
+| # | Ruling (2026-07-03, developer) | Scope notes |
+|---|---|---|
+| UA-1.1 | **`String.trim/trimStart/trimEnd` → Rust's Unicode-aware trim stays canonical; the PHP leg emits a matching Unicode-whitespace helper** (Option 2 — REVERSED the synthesis rec after evidence that codepoint/Unicode-by-default is the project's already-decided `String` direction, byte-exact lives on `Bytes`; W4-4 draft). (B2-1a, P0) | `src/native/text.rs:25,405,414,459`; transpile helper; adversarial differential case (`"\u{00A0}x"`) same-commit |
+| UA-1.2 | **`String.reverse` → char-wise on both legs; PHP gets an mb-safe helper** (Option 1 — byte-mangling multibyte is the surprise Phorj removes). (B2-1b, P0) | `text.rs:40,477`; differential case with multibyte input |
+| UA-1.3 | **`Hash.pbkdf2` → widen the internal iteration counter to u64; NO u32::MAX guard/fault** (Option 2 — REVERSED: u32::MAX is an implementation accident, not a domain limit; 2^32 iterations ≈ minutes, not years; `pbkdf2_sha256` is hand-rolled at `src/native/hash.rs:444`, so widening is free and fixes the root cause — silent truncation of a security parameter). (B2-1d, P0 + security) | `hash.rs:516-518`; KAT + differential case |
+| UA-1.4 | **`Hash.hmac` → returns `bytes`** (BREAKING, deliberate: hex is a transport concern, not a MAC's output type; makes hmac/hkdf/pbkdf2 uniform; blast radius verified tiny — `examples/guide/crypto-mac.phg:13` + 1 README line; pre-1.0). (B2-5) | Update example + README; differential |
+| UA-1.5 | **`->` retirement sequence: docs/help pass FIRST, then flip the parser-reject, then fix gate-surfaced sites INDIVIDUALLY** (Option 1). The 6 accept-sites: `src/parser/types.rs:109`, `items.rs:240/296/370/735`, `exprs.rs:546` (+ lexer `mod.rs:1125`). ~1700 embedded arrows in `src/` preludes + `tests/*.rs` strings; **NO bulk sed** — the 2026-07-03 attempt proved regex cannot distinguish return-`-> T` from function-type `-> T` (recovery lessons preserved in git history at `0691228`, wave0-remainder "ATTEMPT + RECOVERY"). ~200-site ambiguous tail is gate-guided, `=>` for fn types / `:` for returns. Fresh session recommended. (B2-3, P1; = cleanup Phase 1 remainder) | Docs half largely covered by the Stage-D pass + UA-0.3; then the flip |
+| UA-1.6 | **Empty-`[]` type inference extends from List to Map positions** — `Map<string,int> e = [];` must check. **PLUS (same work, ruled follow-up): `[...]` becomes context-typed for `Set` too** — Set currently has ZERO literal syntax (`Set<int> s = [1,2,3];` type-errors; `{1,2,3}` doesn't parse); same expected-type mechanism, no new syntax token. (B2-4 + Set expansion) | Checker expected-type rule; differential cases for all three collection literals |
+| UA-1.7 | **`Math.clamp(min > max)` → faults** (matches the module's precondition convention and Rust's own `clamp`). (B2-6) | One guard + fault string + differential |
+| UA-1.8 | **Fault-message canonicalization on `"Module.function: message"`** — sweep the ~40 stale strings (pre-rename `Text.`/`Convert.`/`Validate.` prefixes, never-existed `Bytes.from_string`, 4 competing shapes). Parity-affecting (Invariant 4): full differential gate. (B2-9) | One sweep; before more natives land |
+| UA-1.9 | **Import-redesign guide example: yes** — one small guide example + README row for the S0–S2 member-import/qualified discipline. (B2-12) | Cheap; closes the Invariant-9 gap |
+| UA-1.10 | **`playground/src/lib.rs`: try `#![forbid(unsafe_code)]` empirically**; if wasm-bindgen glue genuinely needs unsafe, record the exemption in INVARIANTS instead. (B2-13) | Try-first, fall back to recorded exemption |
 
-### W0-7 · Doc-reconciliation batch + CLAUDE.md rules-only rewrite — M · ✅ CLAUDE.md+HISTORY.md DONE (`c66bde5`); repoint/de-dangle tail done in the consolidation pass
-- **WHAT:** one batch, three parts. (1) **Conflict-record fixes** (register C-1/3/4/5/6/7/10): amend
-  D-L3's MI-reject text with a supersession note (→ DEC-062/064); update the stale zero-dep "LOCKED
-  FRAMING" (→ DEC-009 four-dep policy); note the Text→String rationale check (LI-H6: confirm the
-  06-18 shadowing concern was consciously dismissed — PascalCase moots it); correct the ternary
-  perimeter record (deferred won, C-5); add the W3-thread-pool historical note (C-6); CLI-verb drift
-  (C-7, largely done in W0-6); variant-construction guidance (`new V()` construct / `V()` pattern,
-  C-10). (2) **DRIFT-01..09 fixes** (E §DRIFT): `Op::Assert` claim → `Op::Fault(FaultMsg::Assert)`;
-  de-reservation inventory += the 9 reserved numeric words; "flat two-level import" wording; registry
-  count 270 (not ~166); stale `Core.Process.args()`/`parse, lex, disasm, bench`/`Channel.new()`
-  comments; retired E-PKG-TYPE comments (2 sites); std-only claims; retired explain codes labeled
-  historical (E-PKG-TYPE like E-DECIMAL-DIV); SSOT §3 line refs. (3) **CLAUDE.md rewrite**: apply
-  Agent Q Artifact 1 (118-line rules-only file — 13 delivery invariants incl. spine/Op-coupling/
-  examples-DoD + toolchain/gates/git-autonomy + 9-row pointer block), create `docs/HISTORY.md` from
-  Artifact 3, per the Artifact-2 relocation map (all 580 old lines accounted for; 9 drift fixes
-  itemized). Also: superglobal→Request doc map (LI-H4 tail) and stale MILESTONES headers.
-- **WHY:** C conflicts table; E DRIFT table; session ruling I-1 (CLAUDE.md = rules-only). Q's
-  relocation map proves nothing is silently dropped.
-- **ACCEPTANCE:** each C-n row's stale record carries a supersession note; grep-verifiable DRIFT
-  fixes; new CLAUDE.md ≤ ~130 lines; `docs/HISTORY.md` exists; MILESTONES headers current.
-- **DEPS:** W0-6 (shares the rename sweep). **✅ RULED (§12): batch approved.** Part (3) CLAUDE.md
-  rules-only rewrite + `docs/HISTORY.md` shipped `c66bde5`. Parts (1)/(2) conflict-record + DRIFT
-  fixes and the MILESTONES/ROADMAP repoint were carried in the 2026-07-02 consolidation pass.
+**Large-scope tracked waves (grew out of the audit gate — first-class items, each needs a
+design/spec pass in UNIFIED-SPEC before implementation, NOT just a code diff):**
 
-### W0-8 · Plan-file deletions (48) + dangling-citation cleanup — S · ✅ 48 DELETED (`c66bde5`); second batch (17 plans + shipped specs) + de-dangle done in the consolidation pass
-- **WHAT:** execute P §6's `git rm` of the 48 DELETE-VERIFIED plan files; then fix the **42 dangling
-  plan-path citations** this creates (18 CLAUDE.md — mooted by W0-7's rewrite —, 11 MILESTONES.md,
-  13 CHANGELOG.md; precedent exists for 7 previously-deleted plans).
-- **WHY:** P §1: every file carries 2+ fresh code anchors + register/CHANGELOG cross-refs; the 15
-  MERGE plans' live content is fully carried by this plan (§5 inventory absorbed below) — after this
-  plan lands, a second small batch (language-evolution, php-fidelity, review-pass, trackB, big-chunk,
-  and the 2 KEEP-AS-RECORD files once R2-A/R2-B close) also becomes deletable.
-- **ACCEPTANCE:** `docs/plans/` holds only **this file** (MASTER-PLAN) + future plans; no dangling
-  "docs/plans/2026-…" reference in living docs. (Achieved in the 2026-07-02 consolidation pass.)
-- **DEPS:** this plan committed (it is the carrier). **✅ RULED (§12): 48 approved + DELETED** (`c66bde5`).
-  The **second batch** — the 15 MERGE + 2 KEEP-AS-RECORD + the session plan, plus the shipped/superseded
-  design specs, plus MILESTONES/ROADMAP repoint and dangling-citation cleanup — was executed in the
-  2026-07-02 consolidation pass, leaving MASTER-PLAN the sole roadmap file (raw/ register + HISTORY +
-  MILESTONES + ADR retained as the record layer).
+#### UA-L1 · Native-error checked-exceptions: taxonomy spec + 4-native pilot — L · DESIGN-NEEDED
+- **RULED (B2-1c expansion):** today ALL ~236 natives' argument/domain errors are a deliberate
+  UNCATCHABLE fault tier, structurally disconnected from the (good, shipped) `throws`/`try`/`catch`
+  checked-exception system (verified: `try{ String.count("abc","") }catch(Error e)` never fires;
+  `src/vm/exec.rs:399-408` bare `?` on `Op::CallNative`). The developer ruled: **design the
+  taxonomy + class-hierarchy spec now** (which failures are recoverable domain errors vs programmer
+  bugs; Core.ValueError/RangeError-style family vs per-module types), **pilot checked-throw
+  semantics on exactly the four UA-1 natives (trim/reverse/split/pbkdf2) as the first real
+  example, ship together, then roll the remaining ~232 natives out in tracked follow-up waves** —
+  NOT a flag-day rewrite. Breaking-change note: natives declaring `throws` makes untried call
+  sites stop compiling — the rollout waves carry corpus migration.
+- **Within the pilot:** `String.split/splitOnce("")` empty-separator divergence (Rust total,
+  PHP fatal — the original B2-1c bug) is resolved BY the pilot's checked-throw semantics on both
+  legs, not by a standalone fault.
+- **ACCEPTANCE:** spec section ratified; 4 pilot natives throw checked exceptions byte-identically
+  (incl. the PHP leg); differential + adversarial cases; rollout waves enumerated in this plan.
 
-### W0-9 · Repo housekeeping: branches, dist/, KNOWN_ISSUES, examples index — S
-- **WHAT:** (a) delete the 2 dangling worktree-agent branches (LI-H3, verified present);
-  (b) clean `dist/` stale pre-rename binaries (~60 MB, git-ignored — local `rm`, note in a commit
-  message); (c) **KNOWN_ISSUES.md prune** (1125 lines): move resolved entries to CHANGELOG, keep the
-  filename honest; (d) **examples/README.md restructure**: 71 KB monolith → thin root index
-  (name + one-liner tables) + per-directory READMEs; adopt the ~150-line soft cap for guide examples;
-  fix the index gaps (`web/json-api.phg`, `examples/random/`, `process/args-env.phg`,
-  `debug/README.md` — A-EX-2/G) and the `decimal` self-contradiction (line 286 vs the index);
-  fix stale `recv`/`println` comments in `guide/concurrency.phg`/`guide/secret.phg`.
-- **WHY:** P LI-H3; B §9/§10/§11; G Part 1; R3-8/R3-9.
-- **ACCEPTANCE:** `git branch` clean; README index lists every shipped example; KNOWN_ISSUES contains
-  only live issues.
-- **DEPS:** none. **✅ RULED (§12): adopt all** — examples-README restructure + KNOWN_ISSUES prune +
-  codemod/dist cleanup.
+#### UA-L2 · Injected-prelude → module-loader unification — L · DESIGN-NEEDED · **BEFORE W3-1/W3-2**
+- **RULED (B2-2):** unify stdlib type resolution with the loader (virtual Core modules) NOW,
+  before the DB/HTTP waves multiply the registry. The ~5 special-case rules
+  (E-INJECTED-TYPE-BARE, leaf qualification, prelude exemption, collapse pass, hand-synced
+  registry in `checker::enforce_injected::module_of`) exist only because `inject_*_prelude` ×6
+  bypasses the loader. The S1/S2 user-facing surface (member-imports, qualified forms) is
+  PRESERVED — one resolution path underneath.
+- **ACCEPTANCE:** injected-type behavior byte-identical pre/post (the S2 test set is the gate);
+  the collapse/enforce special-case passes deleted or reduced to loader rules; W3-1/W3-2 blocked
+  on this landing.
 
-### W0-10 · P2 hardening batch (debug tooling + supply chain) — M
-- **WHAT:** (a) DAP write errors: track `dead: bool`, end the session on write failure (A-ERR-3);
-  (b) malformed `Content-Length` in DAP/LSP framing → protocol error/close, never silent desync
-  (A-ERR-4, two sites); (c) playground.yml: replace the unpinned `curl | sh` wasm-pack install with
-  `cargo install wasm-pack --locked --version <pin>` or a checksummed release artifact (A-CI-4);
-  (d) zig tarball checksum verification + pin GitHub Actions by commit SHA (A-CI-5); (e) move
-  `cargo install cargo-zigbuild` after the rust-cache restore (A-CI-6); (f) `usize::try_from` in the
-  container decode (A-SEC-3); (g) commit the VS Code extension `package-lock.json` (A-ED-2);
-  (h) add the four missing `unreachable!` justification messages (A-ERR-1); (i) document the
-  `W-SECRET` one-hop limitation in its explain text (A-SEC-7).
-- **WHY:** A §2/§7 — the complete P2 set plus the trivial P3s worth batching.
-- **ACCEPTANCE:** DAP/LSP framing tests for the two error paths; **A-TEST-1's full unit-test set rides
-  along — BOTH halves: `json.rs` AND `dispatch.rs`/`select_overload` ambiguity + no-match edges**
-  (the second half was previously unplaced); workflows show pinned installs; gate green.
-- **DEPS:** none. **✅ RULED (§12): adopt as one hardening task**.
+#### UA-L3 · ReDoS transpile-time static complexity analyzer — L · DESIGN-NEEDED
+- **RULED (B2-7):** FULL mitigation, not disclosure-only (developer explicitly chose the harder
+  option). Problem: Rust's `regex` crate is linear-time (no backtracking, no backrefs/lookaround);
+  PHP's PCRE backtracks — `(a+)+$` compiles fine under BOTH, runs instantly natively, and
+  catastrophically backtracks under PCRE on adversarial input. "Compiles under the regex crate"
+  is NOT a sufficient check. Needs a real static complexity analyzer at transpile time
+  (safe-regex-style nested/overlapping-quantifier detection), with the false-positive
+  (blocking legit patterns) and false-negative risks designed for explicitly — **do not scope
+  this down to a KNOWN_ISSUES paragraph.**
+- **ACCEPTANCE:** design section in UNIFIED-SPEC (detection heuristic, error/warn tier, escape
+  hatch); transpile rejects the known-catastrophic corpus; FP corpus documented; disclosure
+  paragraph ships with it (the honest interim is disclosure — but the tracked item is the analyzer).
 
-### W0-11 · realworld Core.File example — S
-- **WHAT:** one `examples/realworld/` program that reads a committed fixture via `Core.File`
-  (composing `??`/if-let), + a per-module example-coverage audit note in the examples index.
-- **WHY:** P LI-H5 [Verified: no realworld program reads Core.File]; trackB Task 6 was never carried.
-- **ACCEPTANCE:** program byte-identical on run/runvm/PHP (file reads are deterministic on a committed
-  fixture — the shipped Core.File discipline); indexed.
-- **DEPS:** none.
+#### UA-L4 · VM string performance: `Rc<str>` Value refactor — L
+- **RULED (B2-10):** the full architectural fix — `Value::Str` becomes Rc-shared (the only non-Rc
+  compound variant today; `Op::GetLocal` deep-clones every read, `src/value.rs:124`,
+  `src/vm/exec.rs:149-153`) + COW `make_mut` path for mutating natives. Measured: VM is 1.53×
+  SLOWER than the interpreter on string concat — inverts the documented contract.
+- **ACCEPTANCE:** full differential gate + before/after `phg benchmark` per G-2 (parity-affecting
+  surface); the inversion workload flips.
 
-### W0-12 · PUSH + external renames (developer-gated, listed for completeness) — S
-- **WHAT:** (a) **LI-H1**: `git push` of everything since `0d952a8` (M-DX, marathons, Lane 1, perf
-  gate, this audit) — *never autonomous* (DEC-174); playground Pages deploy + live re-verify rides
-  the push. (b) **LI-H2**: GitHub repo rename phorge→phorj + host directory `mv` (manual, DEC-013
-  residue). Sequence (b) is prerequisite-free but the dir `mv` is safe *because* W0-1 set the
-  relative hooksPath.
-- **ACCEPTANCE:** origin/master current; playground live shows the current examples set.
-- **DEPS:** W0-1 (gate restored) strongly recommended first; developer action required.
+#### UA-L5 · THE rename wave — one batch, everything — M/L
+- **RULED (B2-8):** fold EVERYTHING into ONE rename wave (not staged): the approved trio
+  (`Bytes.find→indexOf`, `Map.has→containsKey`, slice-convention unification to
+  length+negatives) PLUS all audit-surfaced candidates: `length` vs `size` (List/String/Bytes vs
+  Map/Set), `count`'s two meanings (List predicate vs String needle), `Core.Conversion`'s three
+  naming families + `Conversion.round` duplicating `Math.round`, `intBetween`/`secureInt` ranged-
+  pair naming, `nowMilliseconds`/`monotonicNanos` unit suffixes. Crypto 3-module split stays
+  (ruled KEEP — mirrors PHP's own layering) + one cross-referencing docs paragraph.
+  (= cleanup Phase 2, widened.)
+- **ACCEPTANCE:** naming section of UNIFIED-SPEC updated first; renames + all .phg/test/doc
+  usages one wave; zero grep hits for retired names; byte-identity gate.
 
----
+#### UA-L6 · Stdlib additive wave — one batch, everything — M
+- **RULED (B2-11):** approved items (`String.startsWith/endsWithIgnoreCase`, `replaceFirst`,
+  `Set.isSuperset/symmetricDifference/isDisjoint/map/filter`, `Math` Float variants) + new
+  candidates ship together: `Bytes.isEmpty`, `Map.entries` + `Map.of`/`fromList`,
+  document-level `Csv.parse` (multi-row), `Math.ceil/floor→float` vs `round→int` return-type
+  note. (= cleanup Phase 3, widened.) Examples + tests per G-5.
 
-## 3. WAVE 1 — DECOMPOSITION
+### 2.3 UA-D · Bucket 3 — doc-only corrections (EXECUTING in this Stage-D pass)
 
-*B's spec (`raw/B-modularity.md`), executed verbatim: moves-only, zero behavior change, one cluster
-move per commit, every commit gated by `cargo build` → clippy → fmt → the full differential with the
-PHP oracle (G-1; concurrency exception G-1.1 applies to the harness's quarantined cases). The
-do-not-split list (B §3: 24 production files incl. `vm/exec.rs`, `cli/explain.rs`, `checker/mod.rs`,
-`ast/*`, `loader/resolve.rs`, `types.rs`…) is honored — do not "improve" on it.*
+Fourteen findings, five of them P0 false-claim families — all being corrected in the 2026-07-03
+consolidation (this file + UNIFIED-SPEC + the sibling corrections to KNOWN_ISSUES/FEATURES/
+ARCHITECTURE/STABILITY/GA-CHECKLIST/ROADMAP/VISION/README/CONTRIBUTING). Checklist for
+verification, then this section collapses to "done + never reintroduce" (G-7):
 
-### W1-1 · `tests/differential.rs` split (step 0 — de-risks everything after) — M
-- **WHAT:** 2966 lines → `tests/differential/{main,milestones,features,errors_traits,php_oracle,runtime}.rs`
-  (directory-form integration test, same single binary, B §8.1 cluster map).
-- **WHY:** largest file in the repo; the correctness spine's own harness must be navigable before the
-  spine files move. **✅ RULED (§12): adopt as Wave-1 step 0**.
-- **ACCEPTANCE:** **test-count parity** (`cargo test --test differential -- --list | wc -l` identical
-  before/after — 126) + full green with `PHORJ_REQUIRE_PHP=1`.
+- ☐ B3-1 "zero external deps" FALSE everywhere (4 default deps: argon2, regex, ctrlc, corosensei;
+  rusqlite+rustls now approved as feature-gated domains) — incl. `Cargo.toml:83-85` comment.
+- ☐ B3-2 `import type` taught as current syntax (it hard-fails to parse since S0) — docs, .phg
+  comments, ~14 src doc-comments.
+- ☐ B3-3 dead CLI verbs (`fmt`/`lex`/`disasm`/`bench`) taught as real, declared *stable*; the
+  real verbs are `format`/`tokenize`/`disassemble`/`benchmark`.
+- ☐ B3-4 `E-TRANSPILE-CONCURRENCY` does not exist — the code is `E-CONCURRENCY-NO-PHP`
+  (fixed in THIS file at G-1.1); `E-RETIRED-SYNTAX` labeled *planned*.
+- ☐ B3-5 FEATURES 🔲/🚧 on SHIPPED features (traits-construct, concurrency, lift, LSP, formatter,
+  Set-algebra); GA-CHECKLIST "Missing: an LSP" false → its ≈57% retired.
+- ☐ B3-6 the 16 doc-vs-doc contradiction pairs (table in raw/A4 §C) — resolved once at merge.
+- ☑ B3-7 percentage staleness — re-scored in §11.2 (this file).
+- ☐ B3-8 undocumented shipped features (W3-4 crypto FEATURES row; S1/S2 import discipline
+  user-facing doc; decimal row; ctrlc/corosensei named; playground-member deps in the dep policy).
+- ☐ B3-9 the 5 `examples/project/` dirs indexed nowhere + `web/json-api.phg` index row.
+- ☑ B3-10 stale counts in plans (KNOWN_ISSUES 1133, differential.rs 3308, explain ≈200 codes,
+  28 stdlib modules / 236 natives; "S1 uncommitted" claim — S1 shipped `cd29f3c`) — corrected here.
+- ☐ B3-11 KNOWN_ISSUES stale content (`\Main\Obj`, the contradicted "not yet implemented" list,
+  `->` prose ×10) — sibling pass + UA-1.5 doc half.
+- ☐ B3-12 archive the superseded research corpus (~1.07 MB raw dirs) once Stage E closes;
+  `roadmap-completeness/raw/` is historical-only (its claims are refuted at HEAD).
+- ☐ B3-13 ARCHITECTURE.md:88 stale embedded verification command; statics research-spec header.
+- ☐ B3-14 undocumented flags into help (`--dump-on-fault`, `benchmark --json`,
+  `build --dev`/`--sign`); `phg --help` arrow prose (folds into UA-1.5).
 
-### W1-2 · Mechanical off-spine splits (B Wave 1) — M
-Six commits, B §5 order 1–6: `chunk.rs` → `chunk/{mod,tests}` (§1.12) · `cli/mod.rs` +
-`preludes.rs`/`disasm.rs` (§1.6 — also fixes the "embedded stdlib in the dispatcher" smell) ·
-`serve.rs` → `serve/{mod,tcp,pool}` (§2.3) · `lift/parser.rs` → `lift/parser/{mod,exprs,interp}`
-(§1.7) · `lift/lifter.rs` + `lift/exprs.rs` (§2.4) · `fmt/printer.rs` → `fmt/printer/{mod,stmt,expr,atoms}`
-(§1.5). ACCEPTANCE per commit: build + gate green.
+### 2.4 UA-W · Bucket 4 — watch / defer (known, deliberately not active)
 
-### W1-3 · Front-end splits (B Wave 2) — M
-Six commits, order 7–12: `lexer/mod.rs` + `scan.rs` · `parser/items.rs` + `parser/classes.rs` ·
-`checker/program.rs` + `checker/totality.rs` · `checker/expr.rs` + `checker/casts.rs` ·
-`checker/calls.rs` + `members.rs`/`ufcs.rs` · `checker/collect.rs` + `inherit.rs`/`signatures.rs`.
-ACCEPTANCE: full differential per commit (front-end feeds all backends).
+Do NOT work these without a trigger; do NOT drop them either.
 
-### W1-4 · Spine splits (B Wave 3, strictest gate) — L
-Five entries, order 13–17: `value.rs` → `value/{mod,containers,arith,decimal,tests}` (kernels stay
-single-sourced via `pub use` re-exports — zero caller churn; update INVARIANTS §3 wording
-`src/value.rs`→`src/value/` in the same commit) · `interpreter/mod.rs` + `ops.rs` ·
-`compiler/mod.rs` + `compiler/types.rs` (`stack_effect` STAYS in mod.rs) · `compiler/expr.rs` +
-`compiler/call.rs` (**scratch-slot discipline: verbatim moves; the two-ops-in-one-expression
-differential cases are the gate**) · `transpile/program.rs` → `{program,runtime,functions,classes,traits}.rs`
-(one cluster per commit, PHP oracle each; emission *order* inside `emit_program` unchanged).
-Post-wave: the §3.2 exhaustiveness smoke test (dummy `Op` variant must fail to compile in all three
-coupled sites) + `cargo build --release`.
+| # | Watch item | Trigger / note |
+|---|---|---|
+| B4-1 | **Four-backend maintenance tax** (~28% of src + the heaviest harness) — root cause of the UA-1 drift class; verdict: right call (byte-identity IS the product). | Re-weigh the VM's perf justification at GA; the cheap mitigation is UA-0.13, not fewer backends |
+| B4-2 | DAP transport write errors silently swallowed + non-loud malformed Content-Length in both framers | Scheduled in W0-10 (a/b) — do there |
+| B4-3 | Zero direct tests for `src/dispatch.rs` + `src/json.rs` | Rides W0-10's A-TEST-1 |
+| B4-4 | File-size rule unenforced (12 files > 1000 lines, no size-gate.sh) | W1-6 builds the gate |
+| B4-5 | **W2-7 (PSR-4 import roots) was designed BEFORE the unified-import model** — re-base/re-adjudicate before build or it becomes import redesign #5 | Hard gate on W2-7 |
+| B4-6 | `src/checker/` at ~21K lines is the gravitational center; three near-identical type-walkers | Consolidate when the NEXT type-walking pass is added, not before |
+| B4-7 | VM per-dispatch String clones (CallMethod ×2, MakeEnum, MatchTag, MakeInstance; GetField's inline-cache technique applies) | Needs measured before/after; UA-L4 first |
+| B4-8 | Monolithic 84 kLoC crate → 50.3 s release rebuilds; incremental dev builds healthy (4.5–7.6 s) | Crate split only if release-rebuild pain becomes real |
+| B4-9 | `List.append` refcount-1 fast path (signature or owned-arg path) | Guidance half is UA-0.14 |
+| B4-10 | DX wishlist: debugger REPL eval, did-you-mean on dead verbs/unknown flags, `(os error 2)` leak, `phg format` exclude mechanism, `phg fmt` alias | Batch when touching the CLI surface |
+| B4-11 | Dev-loop nice-to-haves: green-tree stamp, `debug = "line-tables-only"` (target/ is 22 GB), periodic target sweep | Opportunistic |
+| B4-12 | Hand-rolled SHA-256 now underpins keyed crypto — tension with the charter's never-roll-your-own clause; mitigated by RFC KATs + oracle byte-identity | Revisit if RustCrypto enters the tree (e.g. with rustls) |
+| B4-13 | Unbounded self-DoS allocations (secureBytes(exabytes), regex cache no eviction) — no resource-quota model by design | Listed for completeness |
+| B4-14 | Two production `expect` on scheduler invariants (`interpreter/coop.rs:103`, `green/exec.rs:131`) — internal, not user-reachable | None |
+| B4-15 | `examples.js` staleness CI check (`gen_examples.py && git diff --exit-code`) — artifact currently NOT stale | Add when touching playground CI |
 
-### W1-5 · Structural-smell backlog (non-move commit class, after the splits) — M
-- **WHAT:** decompose the three ~500-line functions B flagged (not text moves — behavior-preserving
-  extraction, separate commits): `main.rs::main` (511 lines → per-subcommand `cli::` parsers, also
-  A-DES-1) · `checker/collect.rs::check_interface_graph` (~480) · `compiler/program.rs::compile_program_with`
-  (~667). Plus A-DES-4: enable `clippy::cognitive_complexity` at a generous threshold as a ratchet.
-- **ACCEPTANCE:** each extraction gated by the full differential; no public-surface change.
+### 2.5 Positive attestations (do not re-litigate)
 
-### W1-6 · size-gate CI + standing rule write-back — S
-- **WHAT:** `scripts/size-gate.sh` (warn > 800, fail > 1000 unless exempted) wired into ci.yml;
-  the G-6 rule text added to INVARIANTS/CONTRIBUTING.
-- **DEPS:** W1-1..W1-4 (numbers calibrated to the post-split census). **✅ RULED (§12): adopt**.
+`src/` structurally clean (0 stubs/TODOs/dead-code allows; Op coupling 73/73/73 wildcard-free;
+`forbid(unsafe_code)` both crate roots; kernels single-sourced; deps exactly per policy; all prior
+src P0/P1s verified FIXED). All 9 golden diagnostics byte-identical; `phg explain` covers 100% of
+emitted codes; zero Rust panics across every error probe. Security posture strong: 0 High findings,
+13 positive attestations (Argon2id/OWASP defaults, fail-loud CSPRNG, no shell anywhere, hardened
+vendor, injection-safe PHP emission, bounded serve). No premature abstraction (4 traits / 75K LOC).
+Corpus 100% clean of syntactic `->` and `import type`; formatter idempotent; single-test loop 0.26 s.
 
-### W1-7 · Clarity workstream (LI-F9) — M
-- **WHAT:** ARCHITECTURE.md narrated rewrite; module-level `//!` docs across `src/`; **blanket
-  `clippy::pedantic` fix-ALL** (developer overrode selective — DEC-176, ASKED).
-- **WHY:** post-dogfood W5 (P LI-F9); sequenced after the splits so the churn lands on final layout.
-- **ACCEPTANCE:** pedantic clean workspace-wide (or a tracked allow-list each with a one-line reason);
-  gate green.
+### 2.6 Cleanup-program phase reconciliation (the old P1–P6 map onto this programme)
+
+| Old phase (wave0-remainder) | Now lives at |
+|---|---|
+| P1 remainder (`->` parser reject) | UA-1.5 (with the attempt+recovery lessons carried) |
+| P2 renames | UA-L5 (widened to the full batch, ruled) |
+| P3 additive natives | UA-L6 (widened, ruled) |
+| P4+P5 docs consolidation | §2.3 Bucket 3 + this file + UNIFIED-SPEC (executing) |
+| P6 editor/LSP refresh | W6-8, gated on the corpus being clean (post UA-1.5/UA-L5) |
+| Final convergence verification | Stage E: full gate re-verify + archive the audit raw dirs (B3-12) |
 
 ---
 
-## 4. WAVE 2 — RATIFIED LANGUAGE CHANGES + ENFORCEMENT COMPLETION
+## 3. WAVE 0 — REPAIRS & HYGIENE (status ledger)
 
-*The breaking/codemod wave. W2-1 lands FIRST because it converts every later codemod from a hand-rolled
-Python risk into a compiler-driven command (F's cluster observation: fix + auto-import + deprecation
-codemod de-risk our own breaking changes).*
+*All rulings in Appendix B; zero language-surface change. Detail recipes: git history `0691228`.*
 
-### W2-1 · `phg fix` — machine-applicable diagnostics (XL-004) — M
-- **LENS:** beyond-PHP tooling (no runtime surface; n/a to transpile).
-- **WHAT:** diagnostics carry structured `(span, replacement)` edits; `phg fix` applies them
-  (check-only default, `--apply` writes); LSP code-actions ride the same data.
-- **WHY:** F XL-004 (ADOPT-NOW, DX-pure-win): spans + did-you-mean already computed (S0/M-DX S1) and
-  currently die as prose; this is the delivery vehicle for W2-2/W2-3/W2-4 and every future rename.
-  **✅ RULED (§12): adopt** (F ADOPT-NOW batch — `phg fix` ships first in Wave 2).
-- **HOW:** extend `Diagnostic` with an optional `fix: Vec<(Span, String)>`; populate the
-  one-candidate cases first (unknown name w/ one suggestion, unused import once W2-8 lands, `->`→`:`,
-  bare-type-in-pattern); `src/cli/` new `cmd_fix`; output must be `phg format`-stable.
-- **ACCEPTANCE:** `phg fix --check` lists edits for a fixture program; `--apply` result passes
-  `phg check` + `phg format --check`; unit tests on span-application (overlap/ordering); example:
-  walkthrough README under `examples/cli/`.
-- **DEPS:** none (Wave 1 layout settled helps).
-
-### W2-2 · E-MATCH-BARE-TYPE hard error (RATIFIED I-2) — M
-- **LENS:** MANDATORY-better (PHP has no exhaustive match; Phorj's own footgun — a bare `Cash =>`
-  arm silently disables exhaustiveness). Front-end only; no transpile change.
-- **WHAT:** a bare PascalCase identifier in match-pattern position = compile error with did-you-mean
-  (`V()` variant / `V x` type pattern / lowercase binding).
-- **WHY:** session ruling 2026-07-02 (overturns DEC-056d's deliberate footgun preservation);
-  C register AUTONOMOUS-HIGH-IMPACT #1.
-- **HOW:** checker pattern pass (`checker/` match arm handling); new code + `phg explain`; `phg fix`
-  suggestion for each of the three interpretations; **repo codemod** of any legitimate bare-binding
-  arms to lowercase (expected rare — PascalCase bindings already fight E-NAME-CASE).
-- **ACCEPTANCE:** should-error conformance programs for all three did-you-mean shapes; every example/
-  test still green (byte-identical — the codemod may not change behavior); explain entry.
-- **DEPS:** W2-1 (fix suggestions).
-
-### W2-3 · foreach REPLACES for-in — repo codemod (RATIFIED I-3) — L
-- **LENS:** PHP-equal-where-right (foreach is PHP's good loop) + better (typed bindings, no by-ref
-  pitfall). Transpiles to PHP `foreach` — fully idiomatic.
-- **WHAT:** `foreach (coll as x)` / `foreach (m as k => v)` becomes the **ONLY** collection loop;
-  `for` reverts to C-style only. **REPLACE, not add** (the C-2 drift is the named failure mode, G-7).
-  Includes LI-E12: the A-6 follow-up binding forms (key/value destructure variants) and carrying B1's
-  two-binding string/Map iteration onto foreach.
-- **WHY:** session ruling 2026-07-02; C-2 conflict resolution (capability drift already happened once:
-  B1 landed on for-in only).
-- **HOW:** parser: remove `for (T x in xs)` (clean parse error w/ did-you-mean foreach); ensure
-  foreach covers the full for-in surface first (list/range/string/Map two-binding, `with int i`
-  counter); codemod all examples/tests/docs (via W2-1 where possible; `tools/` one-shot otherwise,
-  deleted after per doctrine); FEATURES.md/STABILITY.md updated; lifter (`src/lift/`) maps PHP
-  foreach → Phorj foreach 1:1 (one fewer decision).
-- **ACCEPTANCE:** byte-identity gate across the entire migrated corpus (the codemod is
-  output-preserving by construction); `for … in` → parse error test; guide example updated;
-  conformance corpus updated.
-- **DEPS:** W2-1. **Do not soften into an alias/deprecation period without a new ruling.**
-
-### W2-4 · `->` return-syntax retirement (DF-1) — M
-- **LENS:** consistency repair (DEC-093 decided `: T`; `->` still parsed = two spellings).
-- **WHAT:** remove the `TokenKind::Arrow` return-type alias from the parser [P verified: still eaten,
-  `src/parser/types.rs:109`]; `phg fix`/`phg format` normalization `->` → `:`.
-- **WHY:** P LI-E11; php-fidelity A-1 parked for exactly this tooling; DEC-093 (ASKED) says retired.
-- **HOW:** parse error with fix suggestion; sweep any residual `->` in docs/examples (grep suggests
-  none in code — verify); also **verify `W-SEQUENCE-MUTATION` shipped** (DEC-096 sweetener, register
-  flags status unverified) — if absent, implement here (a lint on multiple `++`/`--` of one variable
-  in one expression).
-- **ACCEPTANCE:** `-> T` in a signature = parse error + machine fix; W-SEQUENCE-MUTATION either
-  verified-present (test exists) or shipped.
-- **DEPS:** W2-1.
-
-### W2-5 · E-INTERSECT-SIG relaxed via overload rules (RATIFIED I-4) — M
-- **LENS:** better-than-PHP (PHP 8.1 `A&B` never checks member coherence at all). Transpiles
-  unchanged (PHP `A&B`).
-- **WHAT:** `A & B` legal when the shared method's signatures are **distinguishable under the shipped
-  overload-resolution rules**; intersection member access resolves like an overloaded call.
-- **WHY:** session ruling (closes register C-8 — the "revisit when overloading lands" that never
-  happened); DEC-057 D2 superseded.
-- **HOW:** `checker/` intersection member access (the S5 `check_method_call`/`check_member`
-  intersection arms) routes through the overload-resolution machinery (`checker/overloads.rs` +
-  dispatch); `E-INTERSECT-SIG` only fires when the sigs are overload-*indistinguishable*; update the
-  S5 spec with a supersession note.
-- **ACCEPTANCE:** positive conformance program (two interfaces sharing an overload-distinguishable
-  method, member access through the intersection, byte-identical incl. PHP); negative test for the
-  still-illegal indistinguishable case; explain updated.
-- **DEPS:** none.
-
-### W2-6 · DEC-047 no-wind implementation (LI-E18) — L
-- **LENS:** beyond-PHP explicitness (PHP has ambient everything); compile-time-only (imports erase).
-- **WHAT:** the designed-not-implemented no-wind closure: fault intrinsics (`panic`/`todo`/
-  `unreachable`/`assert`) move behind mandatory `import Core;` as `Core.assert(...)` etc.
-  (**E-UNIMPORTED**, verified absent today); deep imports `import Core.A.B.C` at any depth binding
-  bare leaf AND parent-qualified; import aliasing extended to stdlib + deep; de-reserve
-  `Attr`→Core.Html, `Error`→Core.Error, `Channel`/`Task`→**`Core.Async`** (E DRIFT-02: the
-  de-reservation inventory must also account for the 9 reserved numeric words `double`,`i8`–`u64`).
-- **WHY:** DEC-047 (ASKED, 📐); C-9 conflict (the principle was violated for weeks); design SSOT
-  `docs/specs/2026-07-01-no-wind-namespace-and-language-surface-design.md`.
-- **HOW:** per the spec; loader/checker import maps + registry; **breaking codemod** for intrinsic
-  call sites (via W2-1); transpiler unaffected (imports never reach PHP).
-- **ACCEPTANCE:** bare `panic(...)` without `import Core;` = E-UNIMPORTED with fix; deep-import +
-  alias conformance programs; full corpus migrated byte-identically; DEC-049's keyword-vs-import
-  3-way rule restated in the spec/INVARIANTS.
-- **DEPS:** W2-1 (codemod); pairs with W5-9 auto-import (XL-009) — the tooling half that makes
-  mandatory explicitness humane; acceptable to ship W2-6 first, W5-9 should follow soon after.
-
-### W2-7 · Import-roots PSR-4 `[packages]` map (LI-E17) — M
-- **LENS:** better-than-Composer (typed, checked, offline); build-system only.
-- **WHAT:** optional `[packages]` map in `phorj.toml` (PSR-4-style root mapping), default root `src/`
-  folder=path, `vendor:` prefix for deps, migration codemod.
-- **WHY:** P LI-E17; DEC-048 (ASKED, spec committed `8fc85f2`).
-- **HOW:** per spec: `manifest.rs` + `loader/` resolution; checker/transpiler unaffected (loader
-  mangles pre-backend, DEC-030).
-- **ACCEPTANCE:** project fixture with a mapped root loads + byte-identical; `tests/project.rs` cases;
-  spec examples runnable.
-- **DEPS:** W2-6 (import machinery churn — same files, sequence to avoid conflicts).
-
-### W2-8 · Enforcement adoptions from H (R4-H1/H2/H4/H5/H6) — M
-**✅ RULED (§12): H's recommendation column ADOPTED** (enforcement batches 1+2+3, all independent):
-- **H1 · E-IMPORT-UNKNOWN** (default: ERROR): an import resolving to nothing (loose, project, vendored)
-  errors at the import line — Go model, beats PHP's silent `use`. Needs a single-sourced known-module
-  set (native registry + loader symbol tables); this also subsumes the deferred `W-UNKNOWN-IMPORT`
-  lint (dogfood W12 — LI-E11 tail, dedupe noted).
-- **H2 · assignment to a by-value capture = ERROR** (default: ERROR, Kotlin/Java final-capture model):
-  today `x = 5` inside a lambda compiles and the write silently vanishes (H M1 probe) — the worst
-  kind of footgun because Phorj's capture is implicit. Explain suggests an explicit mutable container.
-- **H4 · W-family**: `W-CATCH-NEVER-THROWN` + `W-UNUSED-LOCAL`/`W-UNUSED-PARAM`/`W-UNUSED-IMPORT`
-  (none exist today; the highest-value cheap lints in every modern language), riding the existing
-  warning channel; plus the DX-tier shadowing warning (H M4).
-- **H5 · float NaN story unified** (default: `Math.sqrt(-1.0)` **faults**, matching the shipped
-  `/0.0` fault and the decimal precedent — Phorj already chose faults over silent NaN; alternative
-  per ruling: `float?` return or NaN-everywhere + lint).
-- **H6 · remaining rule recs as a block**: property-hook syntactic self-reference warning (H M6);
-  cyclic-import diagnostics; `==`-across-unrelated-types already enforced (record as brag); catch-order/
-  dead-catch diagnostics; the "method references aren't values" dedicated message (H P3 — superseded
-  by W3-9 when method refs land; until then, fix the message); **float `==` exact-compare lint
-  (`W-FLOAT-EQ` / J-float-eq-lint — DEF-004 residual: `x == 0.1` on floats warns, suggests an
-  epsilon compare or `decimal`).**
-- **ACCEPTANCE:** one should-error/should-warn conformance program per adopted rule; explain entries;
-  warnings never gate (DEC-081).
-- **DEPS:** W2-1 (unused-import feeds `phg fix`).
-
-### W2-9 · Naming-overhaul remainder (task #25 deltas) — M
-- **WHAT:** re-verify the naming SSOT (`docs/specs/2026-06-30-naming-overhaul-design.md`) against the
-  tree and execute what remains (P verified Lane 1 done for Path renames/Random.nextFloat/doc drift;
-  the spec's full native/package/CLI matrix needs a fresh Phase-0 diff — memory flags "fresh context,
-  substring/PHP-target care").
-- **WHY:** P LI-E11-adjacent; DEC-113 (ASKED, exhaustive review); memory naming-overhaul-decisions.
-- **HOW:** diff spec ↔ registry/CLI/docs; each rename via W2-1-generated edits where possible;
-  byte-identity-gated (renames are output-preserving unless a native's *output* embeds a name — check
-  `phg explain`/help text separately).
-- **ACCEPTANCE:** spec marked EXECUTED with a verification table; zero grep hits for retired names in
-  code + living docs.
-- **DEPS:** W2-1.
-
-### W2-10 · Narrow soundness-hole batch (LI-E14) — M
-- **WHAT:** the KNOWN_ISSUES-tracked corner batch: static-init constructing a parent's `protected`
-  ctor (init-expr scan missing); interface-method `throws` not discharged through an interface-typed
-  receiver; method-`?` propagation (`x.m()?`); nested un-inferred generic placeholder conservatively
-  rejected (improve message or infer); private *static* field via `ClassName.field` + intersection-
-  typed-receiver visibility corners (W0-2 covers the main hole; these are the named residuals);
-  MI lowering corners (transitive-jump, multi-of-multi, bare `parent.constructor()`, overloaded
-  parent methods).
-- **WHY:** P LI-E14 (recorded only in the deleted plans — this is their carrier).
-- **ACCEPTANCE:** each corner gets a differential/diagnostics test; KNOWN_ISSUES entries closed.
-- **DEPS:** W0-2.
-
-### W2-11 · Static-call ergonomics + field-base index-assign (LI-E14 tail + LI-E15) — M
-- **WHAT:** (a) cross-class `Class.method()` static calls (own-class-only today) + transpiler
-  `static function` emission; (b) **`this.f[i] = e` / `obj.f[i] = e`** field-base index assignment
-  (extends `84622c2`'s `Op::SetIndexLocal` model; today `E-ASSIGN-TARGET`).
-- **WHY:** P LI-E15 (the key unblock for the in-place benchmark ports, W6-4); LI-E14 static tail.
-- **HOW:** (b) follows the COW in-place discipline (memory cow-index-assign-inplace: `make_mut` the
-  container IN its slot at refcount 1) — likely one new Op variant for the field-base path (extend
-  the three coupled matches, G-3) or a compose of GetField+SetIndexLocal+SetField if provably
-  equivalent; interpreter mirrors via the shared kernel.
-- **ACCEPTANCE:** differential cases incl. aliasing shapes (shared instance, two handles); `phg
-  benchmark` before/after on an index-assign-heavy workload; by-ref params question stays open
-  (Appendix B) — do NOT add by-ref here.
-- **DEPS:** W1-4 (compiler files settled).
-
-### W2-12 · Erased-generic result as VM operand (LI-E20) — M
-- **WHAT:** close the standing run↔runvm surface gap: `id(7) + 1` / `box.get() + 1` runs on the
-  interpreter but the VM rejects it (erased result = `CTy::Other`, not a specialized operand).
-- **WHY:** P LI-E20 / GA-roadmap M10 residue; the documented CTy-operand trap instance (KNOWN_ISSUES).
-- **HOW:** either (i) compiler `ctype` consults the checker's *reified* result type via the
-  reified-operand side-table (`d210c62` precedent — memory reified-operands-must-thread-all-vm-compile-paths),
-  or (ii) VM gains a dynamic-operand arithmetic fallback for `CTy::Other` that calls the shared value
-  kernels (no specialization, still correct). Option (ii) is the smaller, spine-safe default: the
-  kernels are single-sourced so semantics cannot fork.
-- **ACCEPTANCE:** the exact KNOWN_ISSUES repro becomes a differential case (`expr + 1` per G-3);
-  entry removed.
-- **DEPS:** W1-4.
-
-### W2-13 · Enforcement audit → should-error conformance suite (LI-E16) — M
-- **WHAT:** systematize H's ~300 probes: every language rule gets a committed should-error/should-warn
-  program in `conformance/diagnostics/` (H's probe corpus is the seed — it lives in scratchpad and
-  must be re-generated/committed); a ratchet test asserts every `E-`/`W-` code in the explain
-  registry has ≥1 trigger program (H found 2 CLI-dead + 1 uncoded by exactly this method).
-  **Dispose `E-OVERLOAD-SELECT-CONFLICT` first** (H P3 — registered in `phg explain` but never raised
-  anywhere; it would fail this ratchet): either wire it into `select_overload`'s conflict path with a
-  trigger program, or drop the explain entry. Same disposition rule for any other orphan code the
-  ratchet surfaces.
-- **WHY:** post-dogfood W1 (P LI-E16); feeds the Wave-6 spec's clause-tagged corpus directly.
-- **ACCEPTANCE:** the ratchet test exists and is green; adding an untriggerable code fails CI.
-- **DEPS:** W0-4 (dead codes revived first), W2-8 (new rules included).
-
-### W2-14 · `new` on enum variants — decision checkpoint — S
-- **✅ RULED (§12): KEEP mandatory `new`** (DEC-083): consistency ("all construction looks the same")
-  and the construction/pattern asymmetry (`new V()` vs `V()`) is pedagogically load-bearing for
-  W2-2's did-you-mean. Checkpoint closed — no codemod, nothing else depends on it.
+| Item | What | Status |
+|---|---|---|
+| W0-1 | Restore pre-commit gate (hooksPath) | ✅ `c66bde5` |
+| W0-2 | Static-field visibility spine repair | ✅ (wave-0 slate `f28d950..c0f8969`) |
+| W0-3 | Static-method-via-instance error | ✅ (slate; the FIELD mirror is UA-0.6) |
+| W0-4 | Loader package gates + E-ALIAS-CYCLE | ✅ (slate, both halves) |
+| W0-5 | VM interpolation fault-line disclosure | ✅ (slate; fix = W5-13; scope widened per UA-0.14) |
+| W0-6 | Front door: doc snippets + CLI renames + CI doc-check | ✅ halves 1/2 (slate); **remainder = W0-6b**: verb-rename sweep across the 12 enumerated files + the CI ```phorj-fence `phg check` job (fold with §2.3 B3-3) |
+| W0-7 | Doc-reconciliation + CLAUDE.md rules-only rewrite | ✅ `c66bde5` + consolidation pass |
+| W0-8 | Plan-file deletions + de-dangle | ✅ (48 + second batch) |
+| W0-9 | Housekeeping: branches, dist/, KNOWN_ISSUES prune, examples index restructure | ☐ — KNOWN_ISSUES prune + examples restructure fold into §2.3 (B3-9/B3-11) + the sibling pass; branches/dist remain |
+| W0-10 | P2 hardening batch (DAP dead-flag, framing errors, CI pins, `usize::try_from`, package-lock, W-SECRET note, json.rs+dispatch.rs unit tests) | ☐ — CI-pin half needs verified external data (never guess a pin/SHA) |
+| W0-11 | realworld Core.File example | ☐ |
+| W0-12 | PUSH + external renames (repo rename, dir mv) | ☐ developer-gated — NEVER autonomous |
 
 ---
 
-## 5. WAVE 3 — WEB-APP ENABLEMENT SPINE
+## 4. WAVE 1 — DECOMPOSITION
 
-*M TOP-20's critical path: the gaps that block essentially every real application. Stdlib items follow
-the M4 charter (naming/shape conventions, subject-first args, `T?` returns, determinism tier declared
-per module — DEC-007 case-by-case Tier A/B admission). Tier-B (impure) modules are quarantined from
-the byte-identity example set per the shipped `pure:false` conventions; their PHP mappings still ship
-(the native `php` closure) so transpiled programs work — the differential simply doesn't drive them
-with live IO. Each item: design-doc-first where marked DESIGN.*
+*The B-modularity spec executed verbatim: moves-only, zero behavior change, one cluster per commit,
+full differential each. Do-not-split list honored. Detail: raw/B-modularity.md + git history.*
 
-### W3-1 · Database access (M gap #1 — all 10 FN-DB rows) — XL · DESIGN-NEEDED
-- **LENS:** better-than-PHP (typed rows, no PDO string soup, injection-resistant by construction);
-  transpiles to idiomatic PDO.
-- **WHAT:** `Core.Sql` (typed query builder, Tier A — pure value construction) + `Core.Db` execution
-  (Tier B — connections; start with SQLite (embeddable, deterministic fixtures) then Postgres per
-  ROADMAP M6). Parameterized-only execution (no string-concat query API — the injection class removed
-  at the type level); typed row mapping via generics/`derive(Json)`-style decode (W5-2 synergy).
-- **WHY:** M TOP-20 #1: "blocks essentially every real app"; P LI-D8 (Sql builder + DB execution,
-  Tier B, per-slice decision D-Db recorded there).
-- **HOW:** design spec first (connection model on green threads; single-threaded constraint G-1.1;
-  the `Transport`-style quarantine seam; vendored driver policy vs DEC-009 — a pure-Rust SQLite or
-  postgres protocol impl are the candidates; new dep = developer authorization per policy).
-- **ACCEPTANCE:** builder is byte-identity-gated (pure); execution fixture-tested (local SQLite file /
-  local postgres in CI); flagship example (W6-2) consumes it; PHP mapping documented (PDO).
-- **DEPS:** design ruling on the driver dep; W3-4 (CSPRNG for anything auth-adjacent).
-
-### W3-2 · HTTP client (M gap #2 — all 13 FN-CURL rows; folds DEF-030/URL) — XL · DESIGN-NEEDED
-- **LENS:** better-than-PHP (typed Request/Response reuse, no curl_setopt soup); Tier B; PHP mapping
-  = curl/streams idiom.
-- **WHAT:** **M-HTTP-Client** (P LI-D6 / four-lane Q3): Guzzle-style typed client reusing the shipped
-  `Request`/`Response` values, middleware closures, pooling on green threads, HTTPS via a rustls
-  feature-fork (dep authorization required, DEC-009), Transport-quarantined. **Folds LI-D7's URL
-  breadth + M gap DEF-030:** `Core.Url` gains a spec-compliant URL *parser* + `http_build_query`
-  equivalent (landing spec-compliant leapfrogs PHP's non-conformant `parse_url` — the G-url plan).
-- **WHY:** M TOP-20 #2 ("second-most-universal capability"); the audited post-M-DX developer question
-  **Q3 (HTTP-client callable pattern)** folds here — resolve the callable/middleware shape in the
-  design spec (recorded challenge in the four-lane plan).
-- **ACCEPTANCE:** URL parser is Tier A (pure, byte-identity + WHATWG/RFC test vectors); client
-  fixture-tested against a local `phg serve` instance (loopback only, A-TEST-6 discipline); example
-  under `examples/web/` with the `pure:false` convention.
-- **DEPS:** design spec (callable pattern ruling folded); rustls dep authorization.
-
-### W3-3 · Sessions / cookies / auth (M gap #3 — 10 FN-SESS rows) — L · DESIGN-NEEDED
-- **LENS:** MANDATORY-better (PHP sessions are ambient superglobal state — DEC-092 forbids ambient;
-  Phorj's must be value-level). Transpiles to PHP session/cookie idiom at the front-controller bridge.
-- **WHAT:** K-auth-csrf-session (parity SSOT §3 M6-deferred): typed `Cookie`/`Session` values on
-  `Request`/`Response` (no `$_SESSION` — explicit store), signed/encrypted session payloads (needs
-  W3-4 HMAC), CSRF token helpers.
-- **WHY:** M TOP-20 #3: every stateful web app.
-- **ACCEPTANCE:** pure parts (cookie parse/serialize, token verify) byte-identity-gated; store
-  interface fixture-tested; example: login flow in the flagship (W6-2).
-- **DEPS:** W3-4 (crypto primitives), W3-6 (serve bridge).
-
-### W3-4 · CSPRNG + timing-safe compare + HMAC/KDF (M gap #10, security-critical) — M
-- **LENS:** MANDATORY-better (PHP got random_int right in 7.0; Phorj currently *cannot* generate a
-  safe token at all — worse than PHP today, forbidden state).
-- **WHAT:** `Core.Random.secureInt/secureBytes` (CSPRNG engine, Tier B — OS entropy, quarantined;
-  the deterministic seeded PRNG stays the default/test seam, DEC-150 untouched); `Core.Hash`:
-  `hmac`, `equals` (timing-safe), `hkdf`, `pbkdf2` (M FN-HASH GP rows); hash breadth (sha512 etc.
-  as needed by HMAC).
-- **WHY:** M TOP-20 #10: "tokens/nonces can't be generated safely today"; G-crypto (§3 M8).
-- **HOW:** getrandom-style OS entropy (std-only via `/dev/urandom`/getrandom syscall — check DEC-009
-  before any dep); HMAC/HKDF over the existing in-tree SHA-256 (bundle sha256.rs precedent); PHP
-  mappings: `random_bytes`/`hash_hmac`/`hash_equals` (idiomatic, exact).
-- **ACCEPTANCE:** HMAC/HKDF test vectors (RFC) as unit tests + byte-identity for the pure digests;
-  secure engine quarantined with a statistical smoke test only; explain/W-SECRET interplay documented.
-- **DEPS:** none. **Do first in this wave** (W3-1/2/3 all want it).
-
-### W3-5 · sprintf family / `Core.Fmt` (M gap #4, LI-D3) — M · DESIGN (fork recorded)
-- **LENS:** better-than-PHP (type-checked formats — a `%d` on a string is a compile error via W5-1's
-  literal validation); transpiles to `sprintf` (exact idiom).
-- **WHAT:** `Core.Fmt.format(spec, args…)` covering the sprintf surface (7 FN-STR rows: width,
-  precision, padding, hex/oct, thousands). The recorded open fork (variadic-vs-list args,
-  `%`-vs-`{}` spec syntax — mega C3 / big-marathon) is resolved in the design doc; **recommendation:**
-  `{}`-style specs shared with W5-1's interpolation format specifiers (ONE closed spec grammar, two
-  entry points), list-args until W4-1 variadics land, then variadic overload.
-- **WHY:** M TOP-20 #4 ("ubiquitous in ported code"); P LI-D3; Lane 4 W3.
-- **ACCEPTANCE:** byte-identity incl. PHP against `sprintf` outputs for the full spec matrix;
-  guide example; lifter maps `sprintf` → `Fmt.format` (Tier-2 rule, W4-7).
-- **DEPS:** design doc; W5-1 shares the grammar (build the grammar module here, W5-1 reuses).
-
-### W3-6 · Filesystem breadth + serve static-handle bridge (M gap #5; LI-D5; LI-E13 part) — L
-- **LENS:** better-than-PHP (typed `T?` returns, no resource|false chains — DEF-040 discipline);
-  PHP mapping = the fs function family.
-- **WHAT:** (a) `Core.Directory` (mkdir/listDir/isDir/metadata/glob/tempdir — the Q2 remainder;
-  append/delete/rename/copy/size shipped `a23ca00`); stat/perms subset per charter ruling; the
-  **fs-OOP-API developer question** (audited, four-lane plan) resolves here — recommendation:
-  keep the static-module shape (`Core.File`/`Core.Directory` statics) over handle objects until
-  streams demand handles (XL-019 noted for later). Stream *handles* (the 16-row fopen family) are
-  **deferred to the charter** (§9) pending the resource-model design. (b) **serve class-static
-  `handle` bridge** [P verified open: `has_fn` matches only top-level `Item::Function`,
-  `src/cli/mod.rs:654/674`] — a `static handle` method must be resolvable as the web entry
-  (DEC-103 already allows class entry points for `main`).
-- **WHY:** M TOP-20 #5; P LI-D5 + LI-E13; the fs-OOP question is one of the three folded dev questions.
-- **ACCEPTANCE:** each fs native fixture-tested (committed fixtures where deterministic; Tier-B
-  convention otherwise); serve bridge: integration test in `tests/serve.rs` with a class-static
-  handler; examples.
-- **DEPS:** charter ruling on stat/perms scope.
-
-### W3-7 · Structured logging (M gap #18; LI-D7 W6) — M
-- **LENS:** better-than-PHP (typed levels/records vs error_log strings); PHP mapping = error_log/PSR-3 shape.
-- **WHAT:** `Core.Log` — record construction pure (Tier A), emission Tier B (stderr/file sink);
-  `phg serve` structured request logging (Q-serve-reqlog).
-- **WHY:** M TOP-20 #18: "production apps need a log seam before serve is production-usable".
-- **ACCEPTANCE:** record formatting byte-identity-gated; sink fixture-tested; serve emits request
-  lines under a flag; example.
-- **DEPS:** none.
-
-### W3-8 · Json encode + safe-parse hardening (LI-D1) + rich HTTP responses (LI-D8 part) — M
-- **WHAT:** `Core.Json.encode` for user types (pre-derive: explicit builders; full `derive(Json)` is
-  W5-2's wave 2); safe-parse hardening audit (depth/size limits, malformed-input fuzzing); rich
-  response constructors (JsonResponse/RedirectResponse/HtmlResponse — partial vs shipped
-  `Response.text`).
-- **WHY:** P LI-D1 (Lane 4 W1) + LI-D8 rich-response row; the web spine needs JSON APIs end-to-end.
-- **ACCEPTANCE:** encode/decode round-trip property tests; limits produce clean faults byte-identically;
-  `web/json-api.phg` upgraded and indexed.
-- **DEPS:** none (W5-2 extends).
-
-### W3-9 · Method references as values (DEC-107; the dynamic-reflection question) — M
-- **LENS:** better-than-PHP (typed closures vs `$obj->$m()` string dispatch — the un-typeable
-  primitive stays rejected); transpiles to PHP first-class callables.
-- **WHAT:** `obj.method` → typed closure value + the typed-registry guide pattern; fixes the
-  misleading "type A has no field m" diagnostic (H P3) as a side effect.
-- **WHY:** the third folded developer question (dynamic reflection → resolved as method-refs,
-  DEC-107 ASKED 📐); P LI-E13.
-- **HOW:** checker: member access resolving to a method yields `Ty::Function` (zero-capture closure
-  binding the receiver); VM: `MakeClosure` over a synthesized thunk or a receiver-capturing closure
-  (design chooses; prefer no new Op via synthesized lambda in the front-end, G-3 default);
-  PHP: `$obj->method(...)` first-class callable syntax.
-- **ACCEPTANCE:** differential cases (pass a method ref to `List.map`; store in a Map registry);
-  guide example (`examples/guide/method-refs.phg`); the H P3 diagnostic replaced.
-- **DEPS:** none.
+- **W1-1** `tests/differential.rs` split (3308 lines → directory-form, test-count parity) — step 0.
+- **W1-2** Mechanical off-spine splits (chunk, cli/mod+preludes, serve, lift/parser, lift/lifter, fmt/printer).
+- **W1-3** Front-end splits (lexer, parser/items, checker/program+totality+expr+casts+calls+collect).
+- **W1-4** Spine splits (value/, interpreter, compiler ×2 — scratch-slot discipline —, transpile/program) + the Op-exhaustiveness smoke test.
+- **W1-5** Decompose the three ~500-line functions (`main.rs::main`, `check_interface_graph`, `compile_program_with`) + cognitive-complexity ratchet.
+- **W1-6** `scripts/size-gate.sh` in CI + G-6 write-back (calibrated post-split).
+- **W1-7** Clarity workstream: ARCHITECTURE narrated rewrite, `//!` module docs, blanket `clippy::pedantic` fix-all (DEC-176).
 
 ---
 
-## 6. WAVE 4 — MIGRATION-BRIDGE COMPLETION
+## 5. WAVE 2 — RATIFIED LANGUAGE CHANGES + ENFORCEMENT COMPLETION
 
-*The features that make `phg lift` viable on modern PHP 8 codebases and close the muscle-memory gaps.
-All front-end unless noted; every item byte-identity-gated (concurrency exception G-1.1 n/a here).*
+*The breaking/codemod wave. W2-1 lands FIRST (converts later codemods into compiler-driven
+commands). All rulings Appendix B; item recipes in git history `0691228`.*
 
-### W4-1 · Named arguments + variadics + spread (M gap #7; LI-E10) — L · DESIGN-NEEDED
-- **LENS:** PHP-equal-where-right (8.0 named args are good) + better (compile-checked names; DEF-034
-  lesson pre-empted: **decide the param-renaming policy up front** — params become API).
-- **WHAT:** `f(x: 1, y: 2)` named args (checker reorders at compile time — no runtime cost, erases to
-  positional PHP or PHP named args); `int... xs` variadics (List-typed rest param); `...xs` spread at
-  call sites. [P verified all absent.]
-- **WHY:** M TOP-20 #7 — "modern PHP idiom; also blocks the lifter on 8.0+ code"; A-named-args/
-  A-variadics (SSOT §3, prior-adopted).
-- **HOW:** design doc (interaction with defaults/overloading/UFCS is the hard part — overload
-  resolution must incorporate named-arg sets); parser + checker call-fill (extend the DEC-101
-  call-rewrite-map technique, memory default-parameters-and-fill-technique); likely **no new Op**
-  (front-end reordering).
-- **ACCEPTANCE:** differential matrix (named×default×overload×variadic); W3-5 Fmt gains its variadic
-  overload; lifter Tier-2 consumes both (W4-7); guide example.
-- **DEPS:** design; before W4-7.
-
-### W4-2 · Generators / `yield` + iterator protocol (M gap #8; LI-A1; marathon A2) — XL · DESIGN-NEEDED
-- **LENS:** PHP-equal (PHP generators are genuinely good) + better (typed `Sequence<T>`); PHP mapping
-  = native generators. The prior lazy-seq transpile-divergence reject was superseded by the coroutine
-  engine (F XL-040 note; A2 is the named next marathon step).
-- **WHAT:** `yield` in functions → lazy `Sequence<T>`; for/foreach consumption; the Iterable protocol
-  (A-iterators, SPL Traversable interop story) — user types opt into foreach (ties to W5-11 protocols).
-- **HOW:** the corosensei green-thread substrate is the engine (both backends); determinism policy:
-  generator scheduling is fully deterministic (single consumer pull) so it stays **inside** the PHP
-  oracle (unlike spawn/channels) — the design doc must prove byte-identity vs PHP generators or
-  explicitly extend the G-1.1 exception (default: prove it; PHP generators are also deterministic).
-- **ACCEPTANCE:** differential + PHP oracle over generator programs (or a ruled exception extension);
-  laziness observable-behavior tests (side-effect ordering); guide example; lifter maps PHP
-  generators (W4-7).
-- **DEPS:** design; green-thread A1 base (shipped).
-
-### W4-3 · Magic-method interop: Printable/`__toString` + `__invoke` (M gap #17) — M
-- **LENS:** MANDATORY-better (PHP's `__toString` is implicit coercion magic; Phorj's is an explicit
-  checked contract) — this is F XL-011 (ADOPT-NOW) and mega's A-magic-stringable/invoke, one item.
-- **WHAT:** `Core.Printable { function toText(): string }` — a class-typed interpolation hole
-  requires it (compile error + did-you-mean otherwise; today render is primitive-only,
-  value.rs:461); transpiles to `__toString()`. `__invoke` counterpart: a class implementing
-  `Core.Callable`-shape gets call syntax, transpiling to `__invoke` (scope-check in design: may
-  defer if method-refs (W3-9) cover the use).
-- **ACCEPTANCE:** interpolating a Printable instance byte-identical incl. PHP (`__toString` emitted);
-  non-implementing class stays a compile error; guide example.
-- **DEPS:** none. W5-2 `derive(Show)` auto-implements it.
-
-### W4-4 · M-text: Unicode-correct strings (M gap #6; DEF-016; LI-D9) — XL · DESIGN-NEEDED
-- **LENS:** **MANDATORY-better** (**✅ RULED §12: adopt Unicode-correct-by-default** strings; bytes explicit).
-  PHP does it wrong (byte strlen + the mb_* second family); Phorj currently **inherits the flaw**
-  [M verified: `"héllo".length` = 6] — the one genuinely inherited PHP defect. Breaking, codemod-assisted.
-- **WHAT:** scalar `string` ops (length/slice/indexOf/upper/…) become code-point-or-grapheme correct
-  (design chooses the unit; recommendation: code points for length/index, explicit grapheme API —
-  full design in M-text); byte semantics remain explicitly available via `bytes`/`Core.Bytes`;
-  `s[i]` string indexing + `Text.charAt/substring` semantics land here (perimeter deferral);
-  chr/ord as `Core.Codepoint` ops; charset conversion contract (ICONV rows); normalization/grapheme
-  breadth staged (M-text S2/S3).
-- **HOW:** std-only UTF-8 iteration (Rust chars) keeps DEC-009 intact for the core; PHP mapping =
-  mb_* family (floor 8.5 has mbstring? — **the oracle runs `php -n`**: core stdlib must map to
-  tier-1 PCRE/`preg_*` with `u` or hand-rolled UTF-8 helpers, per the transpile-no-ini-extensions
-  memory — this is the design doc's hard constraint).
-- **ACCEPTANCE:** `"héllo".length == 5` byte-identical on all three legs; full non-ASCII conformance
-  set; codemod for any byte-length-dependent code (expected rare); KNOWN_ISSUES DEF-016 note closed.
-- **DEPS:** design; the `php -n` mapping constraint resolved first.
-
-### W4-5 · Date/time breadth (M gap #9) — L
-- **LENS:** better-than-PHP (immutable-only stands, DEF-011/DEF-039 stay fixed — no strtotime DWIM).
-- **WHAT:** IANA timezones (N-tz-iana, M-TIME-2), formatting breadth (beyond toIso), DatePeriod
-  equivalent (range iteration), parsing (explicit format-string only), mktime/checkdate factories.
-- **HOW:** tz data: compile-time-embedded subset or system tzdb read (design pick; determinism —
-  tz math on fixed instants is pure/Tier A); PHP mapping = DateTimeImmutable/DateTimeZone.
-- **ACCEPTANCE:** tz conversion vectors byte-identical incl. PHP; `Time.freeze` seam untouched; example.
-- **DEPS:** none.
-
-### W4-6 · Stdlib blitz: array/list long tail + math breadth + misc (gaps #11, #20 part; LI-D2, LI-D12) — L
-- **WHAT:** the L-list-breadth remainder (`zip` — deferred from B3 —, diff/intersect on lists,
-  splice/column/combine/pad idioms per charter), `Math` long tail (asin/acos/atan/atan2/hyperbolics/
-  hypot/deg2rad/log2/…, G-math-breadth), `Math.rem`/`mod` + `Math.fdiv` (explicit IEEE-inf division —
-  ga-sequence "add only if requested"; ships here) follow-up (LI-D12, never closed),
-  ctype completions, filter/validation breadth (email/URL validators), `List.enumerate` extensions.
-  Uses the collection-native recipe (memory stdlib-collection-breadth) verbatim.
-- **WHY:** M TOP-20 #11 ("muscle-memory blockers for line-by-line migration"); P LI-D2/LI-D12.
-- **ACCEPTANCE:** per-native byte-identity incl. PHP mapping tests; charter table (§9) rows flipped
-  to COVERED; guide examples extended.
-- **DEPS:** tuples (W5-10) make `zip` natural — sequence `zip` after it or return `List<Pair>` class interim.
-
-### W4-7 · Lift Tier-2/Tier-3 depth + playground PHP input (LI-F6) — L
-- **WHAT:** lifter inference depth (array→List/Map/Set element inference, foreach element types,
-  defaults, backed enums, key-foreach, elvis, assign-as-subexpr, sprintf→Fmt, generators, named
-  args/variadics as they land); Tier-3 best-effort with loud `// LIFTED TIER-3 (unsafe — verify)`
-  (DEC-166); `phg format` F5 lift-comment fidelity; playground "paste PHP → Phorj" input mode.
-- **WHY:** P LI-F6; the bidirectional bridge is the pitch (G) — the ↑ direction must keep pace with
-  the ↓ features shipped above.
-- **ACCEPTANCE:** `tests/lift_roundtrip.rs` extended per construct (round-trip-gated for Tier-2);
-  playground button behind the existing wasm build.
-- **DEPS:** W4-1, W4-2, W3-5 (targets must exist before the lifter maps to them).
-
-### W4-8 · General inert attributes (LI-E10 part) — M
-- **WHAT:** user-defined `#[Attr(...)]` as **inert metadata** (readable via Core.Reflection),
-  beyond the shipped `#[Route]`; the inert-vs-behavior decision recorded as: inert-only (behavioral
-  attributes stay closed — the derive channel W5-2 is the sanctioned behavioral surface).
-- **WHY:** M TOP-20 #16 (PHP frameworks are attribute-driven); full-bidirectional W2.4.
-- **ACCEPTANCE:** attributes survive lift (PHP #[Attr] ↔ Phorj), reflectable, transpile 1:1; example.
-- **DEPS:** none.
-
-### W4-9 · Dynamic `Json`/`Any` boundary type (LI-D4) — M
-- **WHAT:** the injected-type-pattern `Json` ADT completion for untyped-boundary work (mega C5) —
-  ergonomic accessors, path queries, `mixed` escape hatch discipline documented.
-- **ACCEPTANCE:** boundary round-trip tests; composes with W3-8 encode.
-- **DEPS:** W3-8.
-
-### W4-10 · XML/DOM/XPath (M gap #12) — L · DESIGN-NEEDED (charter admission)
-- **LENS:** better-than-PHP (typed nodes, no SimpleXML magic objects); Tier A (parsing is pure).
-- **WHAT:** `Core.Xml` — parse to a typed node tree + query subset + emission (Core.Html stays
-  emission-only for HTML). Scope per §9 charter ruling: DOM subset + XPath-lite, not the 12-row
-  full zoo.
-- **WHY:** M TOP-20 #12: "enterprise integration formats; no plan on record" — this is the plan record.
-- **ACCEPTANCE:** conformance vectors; PHP mapping (DOMDocument idiom); example.
-- **DEPS:** §9 charter ratification.
-
-### W4-11 · Subprocess execution (M gap #13) — M · DESIGN-NEEDED (charter admission)
-- **LENS:** better-than-PHP (arg-vector API only — **no shell-string exec, ever** (SYN-015 GD stands);
-  the injection class stays removed); Tier B quarantined.
-- **WHAT:** `Core.Process.run(cmd, args) -> ProcessResult` (exit/stdout/stderr, typed); no popen
-  streaming v1.
-- **WHY:** M TOP-20 #13: CLI tooling shells out constantly.
-- **ACCEPTANCE:** fixture-tested (run a committed script); `pure:false` conventions; PHP mapping
-  proc_open with arg arrays.
-- **DEPS:** §9 charter ratification.
-
-### W4-12 · Compression / archives (M gap #15) + regex breadth (M gap #14) — L
-- **WHAT:** (a) `Core.Compress` (gzip/deflate — pure, Tier A; std-only DEFLATE impl or a vetted dep
-  per DEC-009 ruling) + zip archives read/write subset; (b) regex breadth: `replaceWith(callback)`
-  (preg_replace_callback — rides the HigherOrder native machinery), `Regex.quote`, modifier-surface
-  audit vs the regex crate (LI-D7 W2).
-- **ACCEPTANCE:** round-trip vectors byte-identical; callback-replace differential (HigherOrder
-  fault-parity discipline); PHP mappings (zlib fns / preg_replace_callback).
-- **DEPS:** (a) dep ruling; (b) none.
-
-### W4-13 · M-NUM-2: BigInt + arbitrary-precision + Money (LI-D10; gap #20 tail) — L · DESIGN-NEEDED
-- **WHAT:** `Core.BigInt` (arbitrary-precision int), arbitrary-precision decimal extension,
-  `Money` + currency type over `decimal`.
-- **WHY:** P LI-D10 (m-num deferrals, ROADMAP); M FN-MATH GP rows (GMP/BCMath).
-- **ACCEPTANCE:** vectors vs BCMath outputs (the decimal→BCMath mapping precedent, DEC-147);
-  byte-identity; example.
-- **DEPS:** none.
+- **W2-1** `phg fix` — machine-applicable diagnostics (structured `(span, replacement)` edits; LSP code-actions ride it). The delivery vehicle for everything below.
+- **W2-2** E-MATCH-BARE-TYPE hard error (+ 3-way did-you-mean, repo codemod).
+- **W2-3** foreach REPLACES for-in (REPLACE, not add — the C-2 drift lesson) + binding forms; full corpus codemod.
+- **W2-4** `->` return-syntax retirement — **superseded by UA-1.5's ruled sequence** (docs first → parser-reject → individual fixes); W-SEQUENCE-MUTATION verify rides along.
+- **W2-5** E-INTERSECT-SIG relaxed via the shipped overload-resolution rules.
+- **W2-6** DEC-047 no-wind closure: fault intrinsics behind `import Core;` (E-UNIMPORTED), deep imports, aliasing, de-reservations. Spec: UNIFIED-SPEC (no-wind section).
+- **W2-7** Import-roots PSR-4 `[packages]` map — **⚠ B4-5 gate: re-base on the unified-import model (S0–S2 + UA-L2) and re-adjudicate BEFORE build.**
+- **W2-8** Enforcement adoptions (E-IMPORT-UNKNOWN, E-capture-write + `Core.Ref<T>`, W-family unused/never-thrown lints, NaN→fault unification, the batch-2 ten + batch-3 twenty-six — all adopted, Appendix B).
+- **W2-9** Naming-overhaul remainder — **fold into UA-L5** (one rename wave; the naming section of UNIFIED-SPEC is the SSOT).
+- **W2-10** Narrow soundness-hole batch (static-init protected ctor, interface throws discharge, `x.m()?`, MI lowering corners…).
+- **W2-11** Static-call ergonomics + `this.f[i] = e` field-base index-assign (unblocks W6-4 benchmark ports).
+- **W2-12** Erased-generic result as VM operand (close the run↔runvm CTy gap; option ii — kernel-backed dynamic fallback — is the spine-safe default).
+- **W2-13** Enforcement audit → should-error conformance suite + the explain-coverage ratchet (UA-0.5/0.7 seed it).
+- **W2-14** `new` on enum variants — ✅ ruled KEEP (closed).
 
 ---
 
-## 7. WAVE 5 — BEYOND-PHP PROGRAMME
+## 6. WAVE 3 — WEB-APP ENABLEMENT SPINE
 
-*Where Phorj pulls ahead. F's 13 ADOPT-NOW (**✅ RULED §12: all 13 ADOPTED** — 11 front-end-only),
-the concurrency/M-Parallel cluster, the perf lane, and the DX cluster.*
+*The critical path: what blocks real applications. Stdlib items follow the M4 charter
+(UNIFIED-SPEC, stdlib-charter section). Tier-B (impure) modules quarantined per `pure:false`.*
 
-### The 13 ADOPT-NOW items (F Tier 1; per-item deep dives in F §2)
+### Dependency-policy amendment (RULED 2026-07-03, developer)
+`rusqlite` (SQLite) + `rustls` (TLS) admitted as new vetted domains — native-only, feature-gated
+(`db`/`tls`, off in WASM), spine-quarantined (corosensei/ctrlc shape), `forbid(unsafe_code)`
+intact in phorj's own code. Pure zero-dep P0s ship FIRST (`Core.Sql`, `Core.Url`). Recorded in
+UNIFIED-SPEC (dependency-policy section). **Gate: UA-L2 (prelude/loader unification) lands before
+W3-1/W3-2 add stdlib types.**
 
-| # | Item | LENS | HOW (constraint per G-3) | ACCEPTANCE | SIZE |
-|---|---|---|---|---|---|
-| W5-1 | **XL-001 interpolation format specifiers** `"{price:.2f}"` | beyond-PHP; → `sprintf`/number_format (idiomatic) | closed spec mini-grammar (shared with W3-5), checked vs the hole's static type, desugars in checker to natives — **no new Op** | spec-vs-type error tests; byte-identity incl. PHP; guide example | M |
-| W5-2 | **XL-002 closed derive channel** `#[derive(Equals, Show, Hash, Ord, Default)]` (wave 2: `Json` = XL-028) | beyond-PHP; emits real readable PHP methods | front-end synthesis pass in the `erase_generics`/`expand_aliases` chokepoint family — methods exist before any backend; closed set, never user macros (the sanctioned answer to rejected open macros — resolves mega H2/LI-E7) | derived methods byte-identical incl. PHP; `phg transpile` shows the synthesis; Hash feeds user-typed Map/Set keys (HKey extension design note); guide example | L |
-| W5-3 | **XL-003 sealed hierarchies** + exhaustive subtype match | beyond-PHP; erases to plain interfaces (compile-time-only, legit) | `sealed` modifier; checker uses the existing whole-program `class_implements` table; type patterns reuse `Op::IsInstance` — no new Op | match over a sealed interface with no `_` compiles; adding an implementor breaks exhaustiveness (test); example | M |
-| W5-4 | **XL-005 doc-tests** | beyond-PHP tooling | extract ```` ``` ```` blocks from `///` comments → run through the 3-way oracle like examples; design into the `phg doc` comment format NOW (before W5-15) | a rotted doc block fails CI; stdlib natives get doc examples | M |
-| W5-5 | **XL-006 opaque newtypes** `newtype UserId = int;` | beyond-PHP; erases to rep type | rides the `type`-alias machinery with the compatibility flip (no implicit assignability); smart-ctor pattern documented | `takesUserId(orderId)` is a compile error; erased PHP unchanged; example | M |
-| W5-6 | **XL-007 Optional/Result combinators** (`map/flatMap/getOr/filter/okOr`; `mapError/andThen/toOptional`) | beyond-PHP stdlib; mechanical PHP mapping | pure stdlib recipe — generic sigs + `NativeEval::HigherOrder` + UFCS, all shipped; new `Core.Optional`/`Core.Result` modules | per-combinator differential incl. fault-parity re-entrancy; example | M |
-| W5-7 | **XL-008 compile-time-validated literals** (regex, format specs) | beyond-PHP; no PHP delta (front-end only) | checker special-cases literal args to known-validatable natives; design the small generic "literal validators" registry once | bad regex literal = compile error w/ caret; dynamic strings keep runtime behavior; tests | S |
-| W5-8 | **XL-012 let-else** `var x = opt else { return 0; }` | beyond-PHP; plain PHP if-null | parser desugar over shipped if-let + the totality engine verifies the else diverges | flat-binding scope tests; byte-identity; example | S |
-| W5-9 | **XL-009 auto-import quickfix + import organizer** | beyond-PHP tooling; load-bearing for no-wind (W2-6) | registry `(module,name)` lookup → W2-1 structured fix + LSP code-action + `phg format` import sorting | unknown-name-with-one-candidate produces the import edit; sorted-imports canonical form | M |
-| W5-10 | **XL-010 tuples + multiple return** `(int, string) f()` / `var (a, b) = f();` | beyond-PHP (typed positional product); PHP `[$a,$b]` — the exact idiom, now typed | `Ty::Tuple`; **value rep: reuse the List runtime rep with checker-level arity** (the Map runtime-polymorphism precedent — zero new Value/Op); destructuring rides pattern machinery; positional only, no 1-tuples | differential incl. tuple-in-match; map iteration `(k,v)` ergonomics; unlocks `zip` (W4-6); example | L |
-| W5-11 | **XL-011 Printable display protocol** | (= W4-3 — listed in both inventories; **build once in W4-3**, this row is the cross-reference) | — | — | — |
-| W5-12 | **XL-013 labeled loops** `outer: for … { break outer; }` | beyond-PHP (upgrades PHP's `break 2` footgun); emits `break N` with N computed | parser + compiler jump bookkeeping — no new Op | refactor-safety test (label survives nesting change); example | S |
-| — | **XL-004 `phg fix`** | (pulled forward to W2-1) | — | — | — |
-
-### W5-13 · VM debug symbols (LI-C1) — L
-- **WHAT:** the four-lane Lane 3, W1–W5: per-local scope IP ranges → named locals at VM fault
-  (`runvm --dump-on-fault`) → VM per-line pause hook → wire the VM into `src/debug.rs` (REPL + DAP
-  over runvm) → `examples/debug/`. **Also the fix for H's fault-line divergence** (W0-5): with IP→line
-  mapping correct inside interpolation, flip on the harness line-comparison flag.
-- **WHY:** P LI-C1; closes the M-DX S3/S5 deviation; upgrades G-1.1's fault-parity claim to include lines.
-- **ACCEPTANCE:** H's `r1/r6/r11` skew shapes now agree; the W0-5 flag permanently on; debugger works
-  on runvm.
-- **DEPS:** W1-4 (compiler layout).
-
-### W5-14 · M-perf lane (LI-B1, LI-B2, LI-B3; A-PERF trio) — L
-- **WHAT:** (a) **✅ RULED (§12): adopt** — `Op::CallMethod` inline cache (A-PERF-1 — two
-  String allocs per call; extend the S1b field-cache shape) + `Op::CallValue` captures borrow
-  (A-PERF-2 — deep-clone per closure invocation, paid per element in map/filter/reduce) +
-  interpreter static/const borrow-keyed lookup (A-PERF-3); (b) LI-B1 W2 Rc-share `Value::Str`
-  (scoped, the declared "NEXT concrete perf step", 164 sites); (c) LI-B2: W3 intern IsInstance ·
-  W4 dispatch · W5 const-fold · W6 peephole · W7 lazy for-range; (d) LI-B3 incremental/cached
-  compilation keyed on content hash (design-needed).
-- **ACCEPTANCE (per G-2/G-3):** every item ships with `phg benchmark` before/after numbers;
-  `scripts/perf-gate.sh` floor raised only with evidence; byte-identity untouched.
-- **DEPS:** W1-4.
-
-### W5-15 · DX cluster: `phg repl` + `phg doc` + parser multi-error recovery (LI-F1, LI-F2, LI-E19) — L
-- **WHAT:** REPL (the M-DX debugger REPL is the seed; interpreter-only is fine — a REPL is a dev
-  surface, no parity burden; shadowing/redefinition model designed vs immutable-by-default);
-  `phg doc` generator (doc-comment format co-designed with W5-4); parser multi-error recovery
-  (today first-error-stops; recover at statement boundaries).
-- **ACCEPTANCE:** REPL session test script; `phg doc` renders the stdlib registry; multi-error fixture
-  reports ≥2 diagnostics.
-- **DEPS:** W5-4 (doc format).
-
-### W5-16 · Concurrency completion: structured concurrency + M-Parallel (LI-A2, LI-A3, LI-A4) — XL · DESIGN
-- **LENS:** beyond-PHP; **outside the PHP oracle** (G-1.1 — the exception's scope grows with each
-  primitive; disclose per item).
-- **WHAT:** (a) LI-A4 green-thread follow-ups: method/overloaded/closure spawn, cooperative
-  fault-trace frames, per-task statics, wasm frame-swap executor; (b) **structured concurrency
-  scopes** (XL-014: `scope { spawn …; }` join-all-at-exit, error propagation — adopt *before*
-  unstructured spawn idioms accumulate) + `select` over channels (XL-015 — deterministic policy:
-  declared priority order, never Go's randomization) + deadlines (XL-016) + `Task.all`/race
-  (LI-A2 re-scoped: **structured concurrency without colored async/await** — colored functions stay
-  REJECTED, XL-041/SSOT); (c) **M-Parallel** (LI-A3): the commissioned deep plan — actor-model
-  multicore (XL-017, the only path that keeps the Rc heap) + the D-Async-1 pure data-parallel subset
-  re-scoped against green threads. **✅ RULED (§12): WORKER ISOLATES** (own heap/thread, channel
-  messaging, nothing shared — shared-memory Arc rewrite REJECTED); deep plan first. Nothing else here blocks on it.
-- **ACCEPTANCE:** run≡runvm determinism litmus per primitive (the A1 litmus discipline);
-  `E-CONCURRENCY-NO-PHP` coverage extended; examples under the quarantine conventions.
-- **DEPS:** design docs; W5-3 (sealed) helps message-type modeling.
-
-### W5-17 · Pending-syntax checkpoints: generics explicit args + UFCS policy + ternary register — S
-- **(a)** **✅ RULED (§12): generics explicit type args, BOTH sites** — `new Box<int>([])` +
-  `firstOr<int>([], 0)` with TS-style lookahead disambiguation (closes the no-turbofish gap; the
-  examples show the otherwise un-annotatable positions).
-- **(b)** **✅ RULED (§12): UFCS = TYPE-SCOPED** (developer's design — supersedes the earlier
-  global-leaf-uniqueness default). The SAME leaf name is legal across different receiver types;
-  resolution ranks by specificity (**real method > concrete-type UFCS > interface UFCS > generic
-  UFCS**); an unbreakable tie ⇒ `E-UFCS-AMBIGUOUS`. A CI guard tests the specificity/rebind rules
-  (the `repeat`→`fill` breakage becomes structurally impossible). User functions — including
-  primitive receivers, `1.xyz()` — are the sanctioned extension surface (Core is sealed; §12
-  "Core override REJECTED"). HOW: `checker/ufcs.rs` ranks candidates by the specificity ladder.
-- **(c)** LI-E9 ternary `? :`: stays **deferred-not-rejected** (DEC-090); the revisit trigger
-  (demand evidence) recorded here as the register carrier; C-5's stale record fixed in W0-7.
-- **(d)** **✅ RULED (§12): all six bulk-ratified** — totality contours · pattern-cluster syntax ·
-  generic-invariance retrofit · COW `Op::SetIndexLocal` · dogfood grammar patches · `phg debug` surface.
-
-### The 27 ADOPT-LATER (F Tier 2) — charter table
-Carried as a standing charter; each activates on its named trigger. XL-014/015/016/017 → W5-16.
-XL-018 `defer` + XL-019 `using`/resource blocks → land with the first handle-based IO (W3-1 DB
-handles are the likely trigger). XL-020 try-expression→Result bridge → after W5-6. XL-021
-semver-check → **flips to NOW at the first tagged public release** (W6-7). XL-022 snapshot tests ·
-XL-023 property-based testing → M-Test follow-ups. XL-024 deprecation-with-codemod → after W2-1
-(pre-1.0 renames become one command). XL-025 REPL → W5-15 (promoted). XL-026 asset embedding →
-M2.5/M6 companion (deterministic — stays inside the differential). XL-027 workspaces → with
-transitive deps (W6-6). XL-028 derive(Json) → W5-2 wave 2 (promoted). XL-029 slice syntax ·
-XL-030 range patterns · XL-031 @-bindings · XL-032 list patterns → the next pattern slice as a
-batch (mega C2 = LI-E4 carrier; XL-032 after XL-029). XL-033 trailing closures · XL-034 pipe
-placeholder → collect friction data from W5-6 usage first. XL-035 nameof → a diagnostics/reflection
-slice (`Core.nameof` per no-wind). XL-036 wasm build target → M2.5 Phase 3 adjacency. XL-037 purity
-annotations → when M-Parallel needs provable purity. XL-038 contracts → profile-gated, after
-assertions usage data. XL-039 raw-string ergonomics → with XL-008 regex work (note: `r"…"` already
-shipped — this row is the *escaping-form audit*). XL-040 generators → W4-2 (promoted).
-**Comprehensions (mega B2 = LI-E1): CONFLICT** — F rejects (XL-049: map/filter is the teachable
-spelling) vs the mega backlog carries it live. **✅ RULED (§12): REJECT stands** (Appendix A.2),
-LI-E1 discharged by this record. **Enum methods + associated fns (mega C1 = LI-E3)** and
-**ergonomics pack (C4 = LI-E5)**: adopt-later, batch with the pattern slice / scope-at-start
-respectively. **Protocols (mega D1 = LI-E6)**: Printable ships in W4-3; Comparable/Equatable/
-Iterable follow as design-first slices (Equatable/Hash via W5-2 derive; Iterable via W4-2).
-**FFI (mega H3 = LI-E8): CONFLICT** — SSOT §5 rejected E-php-ffi; the extension seam is `.d.phg`
-declare-interop (M8.5, shipped). **✅ RULED (§12): REJECT stands** — `.d.phg` + the §9
-extension-policy path is the answer. **Compile-time macros (mega H2 = LI-E7):** resolved — open
-macros stay rejected; W5-2's closed derive channel is the sanctioned subset. **Editions (mega H4 =
-LI-G7):** M13, post-1.0 — spec hook designed in W6-5, mechanism deferred.
-
-### §7-OPEN · Open language question — user-facing `trait` construct (⏳ the ONE pending ruling)
-The m-rt-rich-types plan listed "S8 traits" as pending, and `FEATURES.md` L53 still marks `trait` 🔲
-future. Phorj shipped a full **multiple-inheritance** system (`use`/rename/exclude + compile-time
-conflict resolution) that is trait-like in capability, but the standalone `trait` keyword was never
-adopted **or** explicitly rejected — a real language-surface fork, so per the adjudication rule
-(CLAUDE.md #15) it is the developer's call, surfaced here rather than decided autonomously:
-- **Default (rec): SUBSUMED-BY-MI — reject the standalone keyword.** Phorj's MI already delivers trait
-  semantics; a separate `trait` surface is redundant. On this path: add the reject-with-reason to
-  Appendix A and flip `FEATURES.md` L53 `trait` 🔲 → ❌ (delivered via MI).
-- **Alternative: add `trait` as sugar** over the MI machinery (PHP/Rust/Kotlin muscle memory) — a
-  front-end-only, byte-identity-gated slice; costs one keyword + a lifter mapping.
-
-Until ruled, `FEATURES.md` keeps `trait` 🔲 and **this record is the capture** — nothing is lost.
+- **W3-1 · SQL DBAL** (XL, design draft at `docs/research/wave3-4-drafts/`) — **scope RULED:** a
+  multi-driver data-access layer (PDO/Doctrine-DBAL analog): SQLite (P1, rusqlite, embedded) +
+  Postgres (`postgres` sync) + MySQL/MariaDB (`mysql` sync; one driver = both). ALL sync — async
+  runtimes stay policy-rejected. **Oracle DEFERRED** (closed Instant Client violates policy
+  clause 2). **MongoDB = a SEPARATE future LADDER item** (non-SQL/no-PDO → native-only
+  `E-TRANSPILE-MONGO`, no PHP leg; async-driver problem) — its own XL design, NOT part of the DBAL.
+  `Core.Sql` builder is Tier-A byte-identity; execution Tier-B fixture-tested. Faithful PDO mapping
+  ⇒ does NOT trigger the ladder.
+- **W3-2 · HTTP client** (XL, draft exists) — typed client over the shipped Request/Response,
+  middleware closures, pooling on green threads, HTTPS via the rustls feature fork. Ships pure
+  `Core.Url` (spec-compliant parser + build_query — leapfrogs `parse_url`) FIRST. Layered design
+  ruled (Appendix B): HttpClient engine + `Http.get/post` sugar.
+- **W3-3 · Sessions/cookies/auth** (L) — value-level (no ambient `$_SESSION`), signed/encrypted
+  payloads over W3-4 HMAC, CSRF helpers. DEPS: W3-4 ✅, W3-6.
+- **W3-4 · CSPRNG + HMAC/KDF** — ✅ **SHIPPED `f4c4c1d`**: `Core.Hash.hmac/equals/hkdf/pbkdf2`
+  (RFC KATs, byte-identical) + `Core.Random.secureBytes/secureInt` (quarantined). Follow-ups now
+  tracked: UA-1.3 (pbkdf2 u64), UA-1.4 (hmac→bytes), UA-0.16 (ConstantTimeEq).
+- **W3-5 · `String.format` (sprintf family)** — design RULED (developer, 2026-07-03): lives on
+  `Core.String` (NOT a new `Fmt` module), Java-familiar `format(spec, args) -> string`, **`{}`-style
+  spec grammar shared with W5-1** interpolation specifiers (`%`-style rejected). **⏳ BLOCKER
+  pending adjudication:** mixed-type args don't type-check today (`List<T>` homogeneous; expected
+  types don't flow to list-literal call args). Options recorded: (A) thread expected types into
+  list-literal arguments (checker enhancement, broadly useful), (B) ship verbose-now (explicit
+  `List<string|float>` local), (C) W4-1 variadics first, then `format(spec, ...args)`.
+  **Surface to the developer before building** (§15 adjudication rule).
+- **W3-6 · Filesystem breadth + serve static-handle bridge** (L) — `Core.Directory`
+  (mkdir/listDir/glob/…), fs-OOP question resolved (statics until streams demand handles); serve
+  class-static `handle` entry. FS design ruled (Appendix B): Path value type, stateless IO,
+  `throws FileError` default + `readOrNull()` explicit.
+- **W3-7 · Structured logging** (M) — `Core.Log`, record construction pure, emission Tier-B;
+  serve request logging.
+- **W3-8 · Json encode + safe-parse hardening + rich responses** (M). NDJSON
+  (`Json.parseLines/stringifyLines`) ✅ shipped `4dbd360`; INI (`Core.Ini.parse`) ✅ shipped
+  `4f4f271` (hand-rolled PHP-charset trim — note UA-1.1 keeps `String.trim` Unicode; Ini's own
+  parser keeps its PHP-exact set).
+- **W3-9 · Method references as values** (M) — `obj.method` → typed closure; fixes the misleading
+  "no field m" diagnostic.
 
 ---
 
-## 8. WAVE 6 — SHOWCASE, SPEC & GA
+## 7. WAVE 4 — MIGRATION-BRIDGE COMPLETION
 
-### W6-1 · Promote the flagship + build the killer app — M
-- **WHAT:** move/copy `conformance/ddd/` to `examples/flagship/` (conformance golden keeps pointing
-  at it); build `examples/flagship/api/`: a ~300-line REST micro-service composing Core.Http routing
-  + Json + `decimal` money + throws/Result + `Secret` + a `phg test` file — every ingredient ships
-  today (before Wave 3 even); after Wave 3, extend with DB + sessions. Feature it as README section 2
-  with its transpiled-PHP twin side by side (the bridge IS the pitch).
-- **WHY:** G P1 killer-app gap ("the flagship exists but is hidden in conformance/").
-  **✅ RULED (§12): all 6 G showcase items ADOPTED** (this + W0-6 + W6-3/4/5 + editor refresh).
-- **ACCEPTANCE:** flagship indexed, differential-gated, README-featured.
-
-### W6-2 · (reserved — flagship API v2 with the Wave-3 spine) — folds into W6-1's extension step.
-
-### W6-3 · Truthful README rewrite — S
-- **WHAT:** status table current (~15 shipped milestones undersold); dependency policy stated proudly
-  (4 vetted deps + policy link — "zero deps" is FALSE and stays deleted); "Language at a glance"
-  regenerated from STABILITY.md's stable list (traits/unions/generics/decimal/concurrency/web all
-  missing today); `phg lift` promoted to headline (README currently denies half the pitch);
-  transpiler description current (native match shipped); **G-1.1 concurrency disclosure** placed
-  where byte-identity is claimed.
-- **WHY:** G P1 batch. DEPS: W0-6 (front door), best after Wave 3 (more to be truthful about).
-
-### W6-4 · Benchmark credibility protocol — M
-- **WHAT:** retire the "3.23× vs dev-built PHP 8.6" number; re-measure vs **release PHP 8.5 (the
-  floor) with `opcache.enable_cli=1`, JIT on/off as two columns**, ≥3 workloads (scalar, object-heavy,
-  string/collection), spawn-per-sample caveat quantified, methodology doc, publish the ratio *range*;
-  optional CI job re-measuring against packaged PHP so the number can't rot. Includes LI-F7: port the
-  remaining benchforge benchmarks (Search, StringProcessing, ObjectGraph — unblocked by W2-11
-  field-base index-assign; in /stack/projects/phorj-app, no auto-commit there) + W6 large-data memory
-  stress completion.
-- **WHY:** G P1 ("HN's first comment writes itself"); post-wave3 plan's own rule: no public perf
-  claims before optimized-PHP baseline. DEPS: W2-11.
-
-### W6-5 · Normative spec + clause-tagged conformance — L
-- **WHAT:** `docs/spec/` normative chapters 01-lexical … 10-php-mapping (G Part 2 architecture;
-  chapter 10 — the transpile contract — is unique to Phorj and a marketing asset), each clause with a
-  stable ID; **spec-tag the conformance corpus** (`// conformance: §3.4.2` headers) + a build-time
-  coverage matrix as a failing test (every stable clause names ≥1 program or an explicit `untested`
-  marker); factor the duplicated PHP-oracle plumbing into a shared test-support module; version
-  front-matter + the M13 editions hook (`since:`/`edition:` fields). Source material: STABILITY.md
-  list, explain registry, guide-example prose (60% of the text exists). W2-13's should-error corpus
-  is the negative half. **The G-1.1 disclosure is a normative clause.**
-- **WHY:** G Part 2: "provably-correct upgrade of PHP" made checkable by outsiders; the corpus is
-  currently keyed to a bullet list, coverage unverifiable.
-- **ACCEPTANCE:** spec-coverage matrix green; a clause without a program fails CI.
-- **DEPS:** W2-13; best current after Wave 4 (spec the shipped surface).
-
-### W6-6 · GA hardening batches (LI-G1..G6) — XL (re-verify each; statuses stale)
-- **WHAT:** (a) **LI-G2** M8 security findings batch (15 items: git `--` separation, dep-name
-  traversal, serve `catch_unwind`, free-fn/PHP-builtin collision, promoted-field visibility,
-  stub-cache atomicity, vendor swap window, malformed Content-Length, slowloris/read timeout,
-  symlink escape, `E-VENDOR-TAMPERED` re-validation, lockfile hash verify, git-env isolation,
-  `write_atomic`, php_compat lints) — several likely already fixed (A-SEC-4/5 verified some);
-  **re-verify each before working it**; (b) **LI-G3** M9 hygiene leftovers (15 items — same
-  re-verify rule; several possibly closed by traces Slice 1 / M-DX ratchet / S7b-2); (c) **LI-G4**
-  M10/M11 residue: arm-unification null-typing, mangle injectivity, typed Header, library-package fn
-  values, block-body return inference, fn-type variance, **transitive git deps** (+ XL-027
-  workspaces rider); (d) **LI-G6** post-wave3 punch list: P1-c ext-policy denylist CI scan, P1-f
-  fuzz/no-panic EV-7 harness, P1-g loader-routed `check --json`, the P2 transpiler-fidelity cluster,
-  P3 batch; (e) **LI-G1** the 11 GA exit criteria as the wave's closing checklist.
-- **ACCEPTANCE:** per-item evidence (test or verified-already-fixed note); GA checklist green.
-
-### W6-7 · Release engineering (LI-G5, LI-F8, LI-F5) — L
-- **WHAT:** M12: language reference (= W6-5 spec), tour, migration guide, transpile-contract doc
-  (spec ch. 10), fuzzing, TextMate/tree-sitter grammar files, release automation + SHA-256 + the
-  1.0 bump; XL-021 semver-check flips to NOW here; **LI-F8** M2.5 Phase 3b `--sign`
-  (Authenticode + rcodesign notarize) + macOS stub + CI stub-registry productionization
-  (cert/SDK-blocked — track externally); **LI-F5** `phg build` merges `vendor/` (multi-file
-  projects), bytecode-payload flip decision, project-loader routing.
-- **DEPS:** W6-5/W6-6.
-
-### W6-8 · Editor + docs-site surface (G item 6; LI-F3, LI-F4) — M
-- **WHAT:** grammar additions (`empty`, `todo`, `unreachable`, `parent`, `html"` prefix), extension
-  version tracks phg, drop the committed `.vsix`; **LI-F4** LSP finish: member completion
-  (resolved-type index), lambda/match-pattern binders, cross-file *references*, incremental document
-  sync (ga-sequence L299), JetBrains plugin completion; **LI-F3** docs site + playground polish +
-  tutorial chapters (mega G1/G2).
-- **DEPS:** W6-5 (spec is the docs-site backbone).
+- **W4-1 · Named args + variadics + spread** (L, DESIGN) — param-renaming policy decided up front
+  (DEF-034); unblocks W3-5 variadic overload + the lifter on 8.0+ code.
+- **W4-2 · Generators/`yield` + iterator protocol** (XL, DESIGN) — corosensei substrate; design
+  must prove byte-identity vs PHP generators or explicitly extend G-1.1 (default: prove it).
+- **W4-3 · Printable/`__toString` + `__invoke`** (M) — explicit checked contract; W5-2 derive(Show)
+  auto-implements.
+- **W4-4 · Unicode-correct strings** (XL, DESIGN, draft exists) — RULED adopt (codepoints default;
+  bytes stay explicit on `Bytes`). **Known landmine from the draft: case-folding diverges from the
+  `php -n` tier-1 oracle** (`strtoupper("straße")` keeps ß vs Rust STRASSE) → LADDER-quarantine
+  candidate, surface at design time; ~12/35 Core.String natives change; `Value::Str` untouched
+  (UA-L4 is orthogonal). UA-1.1's Unicode-trim ruling is the first plank of this direction.
+- **W4-5 · Date/time breadth** (L) — IANA tz, formatting, DatePeriod, explicit-format parsing.
+- **W4-6 · Stdlib blitz** (L) — list/math long tail per charter; `zip` after tuples (W5-10).
+- **W4-7 · Lift Tier-2/3 depth + playground PHP input** (L) — after W4-1/W4-2/W3-5.
+- **W4-8 · General inert attributes** (M) — inert-only ruled; derive (W5-2) is the behavioral surface.
+- **W4-9 · Dynamic `Json`/`Any` boundary completion** (M).
+- **W4-10 · XML/DOM/XPath** (L, DESIGN-NEEDED) — **PENDING adjudication artifact recorded**
+  (2026-07-03): user-visible surface, developer's call; proposal + failing program + option
+  previews to be presented, not built autonomously. Phased, PHP-DOM-backed per the format recipe.
+- **W4-11 · Subprocess execution** (M, charter admission) — arg-vector only, no shell-string, ever.
+- **W4-12 · Compression/archives + regex breadth** (L) — preg_replace_callback rides HigherOrder;
+  **regex additions coordinate with UA-L3's analyzer.**
+- **W4-13 · BigInt + arbitrary precision + Money** (L, DESIGN).
 
 ---
 
-## 9. STDLIB CHARTER — the 259 GAP-unplanned rows
+## 8. WAVE 5 — BEYOND-PHP PROGRAMME
 
-Per M's bucketing recommendation (**✅ RULED §12: three buckets ADOPTED**).
-Every FN GAP-unplanned row from M §1.2 lands in exactly one bucket; the per-group counts reconcile
-to 259. Governance: **LI-D11** — the M4 charter's *enforcement half* (naming/shape/determinism-tier
-checks on new natives; charter spec `docs/specs/2026-06-29-m4-stdlib-charter.md` adopted, minimal
-checks unverified) ships as part of the first Wave-3 stdlib item and gates every row below.
-Per-module open decisions carried from the extended-scope plan (D-Stream/D-Test-Q1/D-Mock/D-Http/
-D-Cache/D-Db) resolve as each module is built (LI-D8 discipline).
+*All 13 ADOPT-NOW items ruled (Appendix B). Compressed index — per-item LENS/HOW in git history.*
 
-**Bucket 1 — ADOPT into waves/M-Batteries** (≈115 rows): everything itemized in Waves 3–4 (DB 10,
-CURL 13, SESS 10, FS ~30 incl. dirs — stream *handles* stay pending the resource-model design —,
-sprintf 7, HMAC/KDF 7, XML 12, subprocess 6, compression 8, regex 4, mb/iconv ~16 via M-text,
-DATE 8, ARR/STR/MATH long tail ~20, url/net log rows) + the LI-D8 module backlog on triggers:
-**Core.Serde** (after derive W5-2), **Core.Event**, **Core.Cli** (getopt — G-args), **Core.Template**
-(design vs `html"…"` overlap), **Core.Uuid** (v5/v3 pure now; v4 needs W3-4), **Caching/memoize**
-(needs purity signal — XL-037 trigger), **Core.Dump** (var_export-shape debug rendering —
-`inspect::render` is the seed).
+- **W5-1..W5-12**: interpolation format specifiers (grammar shared with W3-5) · closed derive
+  channel (`Equals/Show/Hash/Ord/Default`, wave 2 `Json`) · sealed hierarchies · doc-tests ·
+  opaque newtypes · Optional/Result combinators · compile-time-validated literals (regex literals
+  coordinate with UA-L3) · let-else · auto-import quickfix/organizer · tuples + multiple return ·
+  Printable (=W4-3) · labeled loops. `phg fix` = W2-1.
+- **W5-13 · VM debug symbols** (L) — scope IP ranges → named locals → per-line pause → DAP over
+  runvm; fixes the interpolation fault-line divergence (flip the W0-5 harness flag on).
+- **W5-14 · M-perf lane** (L) — CallMethod inline cache, CallValue captures borrow, static/const
+  borrow-keyed lookup; **the Rc-share `Value::Str` item is now UA-L4 (pulled forward, ruled)**;
+  IsInstance interning, dispatch, const-fold, peephole, lazy for-range; incremental compilation
+  (design). Every item: `phg benchmark` before/after.
+- **W5-15 · DX cluster** (L) — `phg repl`, `phg doc` (format co-designed with doc-tests), parser
+  multi-error recovery.
+- **W5-16 · Concurrency completion** (XL, DESIGN) — structured scopes, deterministic `select`,
+  deadlines, Task.all/race (colored async stays REJECTED); **M-Parallel = WORKER ISOLATES ruled**
+  (own heap/thread, channel messaging; shared-memory Arc rewrite REJECTED); deep plan first.
+- **W5-17 · Ruled checkpoints**: generics explicit type args BOTH sites ✅ ruled · UFCS
+  TYPE-SCOPED ✅ ruled (specificity ladder, CI rebind guard) · ternary stays deferred-not-rejected ·
+  the bulk-ratified six ✅.
+- **ADOPT-LATER charter (27 items)**: each activates on its named trigger (XL-018 defer/XL-019
+  using → first handle-based IO = W3-1; XL-021 semver-check → first tagged release; XL-024
+  deprecation-codemod → after W2-1; pattern-slice batch XL-029..032; etc.). Conflicts ruled:
+  comprehensions REJECT stands; FFI REJECT stands (`.d.phg` is the seam); open macros stay
+  rejected (derive is the sanctioned subset).
 
-**Bucket 2 — EXTENSION story** (≈75 rows): intl formatters/calendars/collation (ICU-weight), gd/image
-(~110-fn family), raw sockets, streams/wrappers zoo, SPL iterator-decorator zoo, finfo/MIME,
-readline/process-title. **Decision path:** these need the explicit extension-policy design (tier-3 of
-the determinism partition): options are (a) vetted-dep feature forks like regex/argon2 (DEC-009 per-dep
-authorization), (b) a `phg`-native plugin seam (rejected so far — RT-015 GD), (c) `.d.phg` declare-
-interop to PHP extensions on the PHP leg only (breaks native-first, DEC-005 — likely reject).
-DESIGN-NEEDED; until ruled, these rows count against parity honestly (they are in the §10 residual).
-
-**Bucket 3 — REJECT with reason** (≈69 rows, Appendix A carries them): mysqli-procedural aliases +
-the ~26 date procedural aliases (OO-only by design), legacy/deprecated fns (each/create_function/
-utf8_encode/money_format/fgetss/strftime…), superglobal-mutation APIs (filter_input, ob_* stack,
-ini_*, set_error_handler — conflict with value-level Request/compile-time config/three-tier errors),
-internal-pointer array cursor family, magic-quotes/addslashes family, similar_text/soundex/metaphone
-DWIM-linguistics (candidates for Bucket 1 admission only on demand evidence), weak refs/lazy objects
-(no tracing GC by design), mail() (DEF-031 — inject-prone; a future Core.Mail rides Bucket 1 on
-demand, never the PHP mail() shape).
-
----
-
-## 10. PERCENTAGE LEDGER
-
-Model: M §4 (COVERED×1 + PARTIAL×0.5) / (rows − N/A − GD); domain weights 35 SYN / 40 FN(usage-
-weighted) / 25 RT; Vision = 0.70×parity + 0.30×programme. Projections are **[Speculative — model-based;
-re-run the real arithmetic after each wave per §0.3]**; the wave-3 stdlib arithmetic is shown as the
-worked pattern.
-
-| After wave | What moves | SYN | FN (usage-wtd) | RT | **Parity** | Programme | **Vision** |
-|---|---|---|---|---|---|---|---|
-| baseline | — | 79.8% | 32.5% | 69.4% | **≈58%** | 64.4% | **≈60%** |
-| W0–W1 | repairs/docs/splits — no surface rows | 79.8% | 32.5% | 69.4% | **58%** | ~66% (hygiene milestones) | **≈61%** |
-| W2 | soundness rows + enforcement (a few SYN PARTIAL→C) | ~81% | 32.5% | 69.4% | **≈59%** | ~70% | **≈62%** |
-| W3 | DB+13 CURL+10 SESS+7 sprintf+25 FS+7 crypto+5 url ⇒ T1 score 124.5→168.5/303, T2 18.5→51.5/140 ⇒ weighted (3×168.5+2×51.5)/1264 = **48.1%**; RT +log/serve rows ~72% | 81% | 48.1% | 72% | 28.4+19.2+18.0 = **≈65%** | ~74% | **≈68%** |
-| W4 | named-args/variadics/generators/magic (+~7 SYN) ⇒ ~85%; M-text+date+arr+xml+proc+zlib+regex (+~65 FN rows) ⇒ ~58%; RT ~74% | 85% | 58% | 74% | 29.8+23.2+18.5 = **≈71%** | ~80% | **≈74%** |
-| W5 | beyond-PHP barely moves parity (attrs/iterator rows) | 86% | 59% | 74% | **≈72%** | ~90% | **≈78%** |
-| W6 | RT/ecosystem rows (docs, release, framework story) ~85% | 86% | 60% | 85% | 30.1+24.0+21.3 = **≈75%** | ~95% | **≈81%** |
-
-Residual after W6 (the honest gap to 100): Bucket-2 extension-tier stdlib (§9, pending the extension-
-policy ruling), the GAP-by-design rows (excluded from denominators by the model — Appendix A), and
-post-1.0 M13 editions. 100% *of the vision* is reached when Bucket 2 is ruled and executed or
-formally re-bucketed to reject.
+### §7-OPEN · The ONE open language question — user-facing `trait`
+Phorj shipped full multiple-inheritance (trait-like capability); the standalone `trait` keyword was
+never adopted or rejected. Developer's call (adjudication rule §15):
+- **Default (rec): SUBSUMED-BY-MI** — reject the keyword; record in Appendix A; FEATURES flips to
+  "delivered via MI".
+- **Alternative:** `trait` as front-end sugar over MI (muscle-memory; one keyword + lifter mapping).
+Until ruled, this record is the capture.
 
 ---
 
-## 11. APPENDICES
+## 9. WAVE 6 — SHOWCASE, SPEC & GA
+
+- **W6-1** Flagship promotion + ~300-line REST micro-service (post-Wave-3: + DB + sessions).
+- **W6-3** Truthful README rewrite — front-page truth is now largely §2.3's Bucket-3 pass; the
+  full marketing rewrite (status table, lift promoted, G-1.1 disclosure placement) stays here,
+  best after Wave 3.
+- **W6-4** Benchmark credibility protocol — retire the dev-PHP number; release PHP 8.5 +
+  opcache/JIT columns; methodology doc. DEPS: W2-11; UA-0.10 is the interim guard.
+- **W6-5** Normative spec + clause-tagged conformance — chapters grow FROM `docs/specs/
+  UNIFIED-SPEC.md` (the consolidation is the seed); spec-coverage matrix as a failing test;
+  the G-1.1 disclosure is a normative clause.
+- **W6-6** GA hardening batches (LI-G1..G6 — re-verify each first; several likely already fixed).
+- **W6-7** Release engineering (reference/tour/migration docs, fuzzing, grammar files, release
+  automation, `--sign`, semver-check).
+- **W6-8** Editor + docs-site surface — **= cleanup Phase 6**: LSP completion/hover for the new
+  natives + injected-type discipline; VSCode tmLanguage/snippets + PhpStorm re-targeted to the
+  final `:`/`=>` surface; drop dead verbs. **Gated on the corpus being clean (UA-1.5 + UA-L5).**
+
+---
+
+## 10. STDLIB CHARTER — the 259 GAP-unplanned rows
+
+Three-bucket model ratified (Appendix B); governance = the M4 charter's enforcement half
+(UNIFIED-SPEC, stdlib-charter section) gates every new native.
+
+- **Bucket 1 — ADOPT** (≈115 rows): itemized across Waves 3–4 + the triggered module backlog
+  (Core.Serde after derive, Core.Event, Core.Cli, Core.Template, Core.Uuid, Caching, Core.Dump).
+- **Bucket 2 — EXTENSION story** (≈75 rows: intl/ICU, gd/image, raw sockets, streams zoo, SPL
+  decorators, finfo, readline): DESIGN-NEEDED extension policy (vetted-dep forks vs plugin seam vs
+  `.d.phg`-PHP-leg-only); until ruled these rows count against parity honestly.
+- **Bucket 3 — REJECT with reason** (≈69 rows): procedural aliases, removed/deprecated fns,
+  superglobal-mutation APIs, array-cursor family, DWIM linguistics, weak refs, mail() shape —
+  carried in Appendix A.
+
+---
+
+## 11. PERCENTAGE LEDGER
+
+### 11.1 Model
+M §4 (`docs/research/full-audit/raw/M-gap-matrix.md`): coverage = (COVERED×1 + PARTIAL×0.5) /
+(rows − N/A − GAP-by-design), over **824 verdict rows** (173 SYN + 631 FN + 20 RT; net denominator
+665 = 129 + 518 + 18). Domain weights 35 SYN / 40 FN-usage-weighted / 25 RT (judgment, always
+quoted). Vision = 0.70 × parity + 0.30 × programme. Ratified + recompute-per-milestone rule
+(Appendix B).
+
+### 11.2 2026-07-03 re-score — the correction of the stale ≈58%/≈60% (audit B3-7)
+The 2026-07-02 baseline missed work shipped since. FN rows flipped, with evidence:
+
+| Group (tier) | Rows flipped | Why | Δ score |
+|---|---|---|---|
+| FN-HASH (×3) | hash_hmac, hash_equals, hkdf, pbkdf2: GP→COVERED (4 rows) | W3-4 `f4c4c1d` — RFC-KAT'd, byte-identical | +4.0 |
+| FN-MATH (×3) | random_int, random_bytes CSPRNG gap →COVERED (2 rows) | `Core.Random.secureInt/secureBytes` shipped (quarantined Tier-B — the model scores capability, quarantine ≠ absent) | +2.0 |
+| FN-FS (×3) | parse_ini: GU→COVERED (1 row) | `Core.Ini.parse` shipped `4f4f271`, byte-identical | +1.0 |
+| FN-RAND (×2) | engines row: PARTIAL→COVERED | the "no Secure/CSPRNG engine" caveat is gone | +0.5 |
+
+Not moved: NDJSON (no PHP-row counterpart — programme-side only); S0–S2 import redesign
+(discipline change, no parity row); W0-2/3/4 (soundness repairs on already-counted rows).
+
+**Arithmetic:** T1 124.5→131.5/303 · T2 18.5→19.0/140 · T3 0/75 ⇒ usage-weighted stdlib
+(3×131.5 + 2×19.0)/1264 = 432.5/1264 = **34.2%** (was 32.5%). Parity = 0.35×79.8 + 0.40×34.2 +
+0.25×69.4 = 27.9 + 13.7 + 17.4 ≈ **59%**. Programme: M8-crypto 60→70, M-Batteries 50→55
+(NDJSON/INI) ⇒ mean 1045/16 = 65.3%. Vision = 0.70×59.0 + 0.30×65.3 ≈ **61%**.
+
+**Grade: [Inferred]** — the flipped rows are Verified-shipped (gate-green commits named); the
+figure is a targeted delta on the ratified model, not a full 824-row re-pass. A full re-pass is
+due at the next milestone close (recompute rule). Raw row-parity floor moves to ≈39%.
+
+### 11.3 Projected per-wave gains (unchanged model, re-based)
+
+| After | What moves | Parity | Vision |
+|---|---|---|---|
+| baseline (2026-07-03) | — | **≈59%** | **≈61%** |
+| UA programme + W0/W1 | correctness/hygiene — few surface rows | ≈59% | ≈62% |
+| W2 | soundness/enforcement SYN rows | ≈60% | ≈63% |
+| W3 | DB + HTTP + sessions + format + FS + url | **≈65–66%** | ≈69% |
+| W4 | named-args/generators/magic + M-text + date + blitz | **≈71–72%** | ≈75% |
+| W5 | beyond-PHP (parity barely moves; programme jumps) | ≈72% | ≈79% |
+| W6 | RT/ecosystem rows | **≈75%** | **≈81%** |
+
+[Speculative — model-based projections; re-run real arithmetic per wave.] Residual to 100%:
+extension-tier stdlib (§10 Bucket 2, pending the extension-policy ruling), GAP-by-design rows
+(excluded by the model), post-1.0 editions.
+
+---
+
+## 12. DELIVERY ORDER (ROI-first — developer-agreed 2026-07-03, updated by the audit rulings)
+
+1. **Stage D/E of the unification audit** (NOW): this plan + UNIFIED-SPEC + Bucket-3 corrections →
+   Stage-E gate re-verify + archive the raw research (B3-12).
+2. **UA-0 free wins** (§2.1) — no design risk, immediate dev-speed + front-door payoff.
+3. **UA-1 byte-identity fixes** (1.1–1.4, 1.6–1.10) + **UA-1.5 `->` retirement sequence**
+   (fresh session) — restores Invariant 1 honesty.
+4. **UA-L1 spec + pilot** and **UA-L2 prelude/loader unification** — the two
+   fix-the-architecture-before-the-next-wave items. UA-L2 HARD-GATES W3-1/W3-2.
+5. **UA-L5 rename wave + UA-L6 additive wave** (corpus churn batched together) — then **W6-8
+   editor refresh** becomes unblocked (final surface).
+6. **W3-5** (blocker adjudication first) → **W3-1 SQL DBAL + W3-2 HTTP client** (the XL heart;
+   pure P0s `Core.Sql`/`Core.Url` first) → **W3-3/6/7/8** finish the spine.
+7. **W4-4 Unicode strings** (XL; UA-1.1 already set the direction) → **W4-6 + W4-5** → rest of W4.
+8. **UA-L3 ReDoS analyzer + UA-L4 Rc<str> refactor** — slot alongside W4 (independent lanes).
+9. W2 polish → W5 beyond-PHP → W6 GA.
+
+Ledger basis: W3 ≈+6, W4 ≈+6 parity points are the big movers (§11.3).
+
+---
+
+## 13. DECISIONS LOG — 2026-07-03 unification-audit rulings (all developer-ruled, final)
+
+- [2026-07-03] **B2-1a** `String.trim` family: **Unicode-aware trim stays canonical; PHP leg gets a
+  matching helper** (Option 2 — reversed from the synthesis rec on W4-4-direction evidence). → UA-1.1
+- [2026-07-03] **B2-1b** `String.reverse`: **char-wise both legs; mb-safe PHP helper** (Option 1). → UA-1.2
+- [2026-07-03] **B2-1c** empty-separator split → **EXPANDED: native-error checked-exception
+  taxonomy spec + 4-native pilot, staged rollout** (not a flag-day rewrite; not a lone fault fix). → UA-L1
+- [2026-07-03] **B2-1d** `Hash.pbkdf2`: **widen iteration counter to u64; no artificial u32 ceiling**
+  (Option 2 — reversed after the "fake ceiling" challenge; ~7 min at 10M ops/s, not years). → UA-1.3
+- [2026-07-03] **B2-2** injected preludes: **unify with the module loader NOW, before W3-1/W3-2.** → UA-L2
+- [2026-07-03] **B2-3** `->` retirement: **docs/help first, then parser-reject, then individual
+  gate-guided fixes; no bulk sed.** → UA-1.5
+- [2026-07-03] **B2-4** empty-Map literal: **extend the List empty-`[]` inference rule to Map**;
+  **PLUS `[...]` context-typed for Set** (Set has zero literal syntax today — same mechanism). → UA-1.6
+- [2026-07-03] **B2-5** `Hash.hmac`: **returns bytes** (breaking, deliberate — more-correct beats
+  PHP-familiar; blast radius verified: 1 example + 1 README line). → UA-1.4. **Standing
+  instruction adopted into G-4: default-recommend the more-correct option.**
+- [2026-07-03] **B2-6** `Math.clamp(min>max)`: **faults.** → UA-1.7
+- [2026-07-03] **B2-7** ReDoS asymmetry: **FULL mitigation — transpile-time static regex-complexity
+  analyzer** (not disclosure-only; needs its own design pass). → UA-L3
+- [2026-07-03] **B2-8** naming: **ONE rename wave, everything folded** (approved trio + all audit
+  candidates; crypto 3-module split KEPT + cross-ref docs). → UA-L5
+- [2026-07-03] **B2-9** fault messages: **canonicalize on `"Module.function: message"`** (~40
+  strings, differential-gated). → UA-1.8
+- [2026-07-03] **B2-10** VM strings: **`Rc<str>`/`Rc<String>` + COW `make_mut`** (full fix, not the
+  targeted patch; benchmark-evidenced). → UA-L4
+- [2026-07-03] **B2-11** stdlib additive: **one wave, approved + new candidates together.** → UA-L6
+- [2026-07-03] **B2-12** import-redesign guide example: **yes, add one + README row.** → UA-1.9
+- [2026-07-03] **B2-13** playground `forbid(unsafe_code)`: **try empirically first; recorded
+  INVARIANTS exemption only if wasm-bindgen genuinely needs unsafe.** → UA-1.10
+- [2026-07-03] **Frozen-specs fork:** **fold all 18 `docs/specs/*.md` into `docs/specs/
+  UNIFIED-SPEC.md`; update every CLAUDE.md pointer** to the relevant section. (Re-asked at the
+  developer's request after a timeout; final — do not re-litigate.)
+- [2026-07-03] Earlier same-day rulings carried from wave0-remainder: **W3-5 = `String.format`,
+  `{}`-grammar** (blocker pending, §6) · **dependency amendment rusqlite+rustls** · **SQL-DBAL
+  scope (SQLite+Postgres+MySQL sync; Oracle deferred; MongoDB separate LADDER item)** · **strict
+  per-type imports / member-imports preferred / functions never bare-importable** · **split gate
+  (pre-commit Rust-only, pre-push full oracle)** · **`->` removed entirely (no transition alias)** ·
+  **delivery order Option 1 ROI-first**.
+
+- [2026-07-04] **Toolchain-version config (DONE):** the gate's php-oracle path is now a single
+  editable knob in `scripts/toolchain.env` (`PHORJ_PHP="${PHORJ_PHP:-…php-8.5.8…}"`, exported
+  override still wins); `scripts/git-hooks/pre-push` sources it via `git rev-parse --show-toplevel`;
+  `CLAUDE.md` + this plan's cursor point at it. Triggered by the stack reload bumping the oracle
+  8.5.7→**8.5.8** (8.5.7 removed; `cargo-nextest` also wiped — pre-push has a `cargo test` fallback).
+  Rust stays pinned by `rust-toolchain.toml` (not duplicated). "A versions file" = this toolchain
+  knob, NOT a project-deps file — `src/manifest.rs` already owns deps (no second source of truth).
+- [2026-07-04] **`Core.Dotenv` — full Symfony-style cascade (NEW tracked design item, ruled,
+  NOT built):** developer chose the full `.env → .env.local → .env.$APP_ENV → .env.$APP_ENV.local`
+  cascade over the recommended simpler `Env.load(path)` (my footgun challenge is recorded; it's the
+  developer's language call per §ADJUDICATION). Layers on the EXISTING `Core.Environment`
+  (`.get`/`.all`, already impure/oracle-quarantined) — this is the `.env`-file-cascade+parser layer,
+  not new env reading. Design-spec must decide: the Symfony `test`-env "`.env.local` silently
+  skipped" special case (footgun — keep or drop?), `secret-type` integration (`.env` holds secrets →
+  avoid secret-in-logs), and the emitted PHP cascade helper for transpile parity (impure → no
+  byte-identical differential example, quarantined like the other ambient natives). Same tier as
+  UA-L1..L6 — needs its own design pass before code. → tracked as **UA-L7** (Wave-3 web-spine
+  adjacent; sequence with the DB/HTTP web work).
+
+---
+
+## APPENDICES
 
 ### Appendix A — REJECTED items (no silent scope drops)
 
-**A.1 · M's 49 GAP-by-design rows** (deliberate removals — the denominator exclusions; full row IDs
-in M Pass 1): eval/include/shell-string-exec (SYN-013/015; RCE + determinism), `$$x` variable-
-variables & compact/extract (SYN-019/021-023, DEF-021), references (SYN-065/093, DEF-006), `@`
-suppression (SYN-059, DEF-007), `goto` (SYN-076), `switch` fall-through (SYN-073 — exhaustive match
-covers), runtime magic `__get/__set/__call/__callStatic` + destructors + native object serialization
-(SYN-126..136, DEF-013/035), isset/empty truthiness (SYN-131/132/160, DEF-014), locale-sensitive core
-(FN-STR setlocale rows, DEF-015), mutable DateTime + strtotime DWIM (FN-DATE, DEF-011/039), pcntl
-fork/signals (FN-PROC — green threads model), ini/runtime config + error handlers (SYN-153/166,
-DEC-006), ICU Collator/Transliterator (FN-INTL — extension tier), func_get_args/get_defined_vars/
-class_exists-at-runtime (static model), dynamic extension .so model (RT-015).
+Carried unchanged from the 2026-07-02 plan (full row IDs in the M/F/C raw reports):
+- **A.1** M's 49 GAP-by-design rows (eval/include/shell-exec, variable-variables, references,
+  `@` suppression, goto, fall-through, runtime magic methods, isset/empty truthiness, locale-
+  sensitive core, mutable DateTime/strtotime, pcntl, ini/error-handler config, ICU collator tier,
+  func_get_args/class_exists, dynamic .so model).
+- **A.2** F's 26 cross-language rejects (colored async, open macros, comptime, decorators, operator
+  overloading, extension functions, scope functions, cascades, **comprehensions** (ruled, stands),
+  LINQ, implicit `it`, structural records, refinement/linear types, HKT, variance annotations,
+  const generics, GADTs, units, guaranteed TCO, method_missing, implicits, do-notation, chained
+  comparisons, hot reload) + **FFI** (`.d.phg` is the seam) + **shared run/VM IR** (ADR-0001).
+- **A.3** Register rejects (single-quote strings, `<=>`, `.` concat, ambient superglobals, loose
+  `==`, PL-theory vanity set).
+- **A.4** Stdlib Bucket-3 (≈69 rows, §10).
+- **A.5** (2026-07-03) **TypeScript utility types REJECTED** (Partial/Pick/Omit/etc. — structural
+  type-level programming alien to the nominal/PHP model; escape hatch: a native patch construct
+  only on real pain evidence).
 
-**A.2 · F's 26 cross-language rejects** (XL-041..066, reasons in F Tier 3): colored async/await ·
-open macros · comptime · decorators · user operator overloading · extension functions ·
-Kotlin scope functions · Dart cascades · **comprehensions** (also discharges mega B2/LI-E1 — REJECT
-RULED §12, W5 charter) · LINQ syntax · implicit `it`/`$0` · placeholder partial application · structural
-records · refinement/liquid types · typestate/linear types · HKT/typeclasses · variance annotations ·
-const generics · GADTs · units of measure · guaranteed TCO (spine violation) · method_missing ·
-implicits/givens · do-notation · chained comparisons · hot code reload. Plus **FFI** (mega H3/LI-E8 —
-SSOT §5 reject RULED §12, `.d.phg` is the seam).
+### Appendix B — 2026-07-02 RULINGS LEDGER (authoritative for the wave-0..6 roadmap)
 
-**A.3 · Register rejects** (C §10 representative bucket of 81): single-quote strings, `<=>`, `.`
-concat, ambient superglobals, loose `==`, plus the PL-theory vanity set — all re-graded under the
-craftsmanship-apex lens (DEC-004) and still rejected. Also **shared run/VM IR** (`src/ir.rs`,
-GA-roadmap Top-10 #6, whose descriptor-table was already dropped in M9) — rejected by **ADR-0001**
-(no shared run/VM IR: the two backends stay independent, validated by byte-identity, not a common IR).
-
-**A.4 · Stdlib Bucket-3 rejects**: §9 Bucket 3 (≈69 FN rows with per-family reasons).
-
-### Appendix B — Ruling cross-reference (every former ⏳ marker → §12)
-
-> All markers were RULED on 2026-07-02; the "Ruling" column is the §12 outcome (= the former default
-> path in every case **except UFCS**, which §12 changed to type-scoped). Retained as provenance —
-> nothing here is pending. Full ruling text + examples: §12 RULINGS LEDGER.
-
-| Former ⏳ id | Where in this plan | Ruling (§12) |
-|---|---|---|
-| R2-A generics explicit type args | W5-17a | adopt both sites |
-| R2-B UFCS stability policy | W5-17b | TYPE-SCOPED UFCS + specificity ranking + CI rebind guard |
-| R2-Q4 doc-reconciliation batch | W0-7 | batch as one task |
-| R2-C bulk-ratify six autonomous items | W5-17d | ratify all |
-| R3-1 DEC-133 concurrency-outside-oracle | G-1.1 (governance) | ratify + disclose in README/spec |
-| R3-2 `new` on enum variants | W2-14 | keep mandatory `new` |
-| R3-3 G-showcase roadmap (6 items) | W0-6, W6-1/3/4/5/8 | adopt all |
-| R3-4 F ADOPT-NOW batch (13) | W2-1, W5-1..12 | adopt all 13 |
-| R3-5 hooksPath repair | W0-1 | approve (one line) |
-| R3-6 anti-regrowth size rule | G-6, W1-6 | adopt |
-| R3-7 differential.rs split | W1-1 | adopt as step 0 |
-| R3-8 examples README restructure | W0-9d | adopt |
-| R3-9 KNOWN_ISSUES prune + codemod/dist cleanup | W0-9, W0-6d | adopt all three |
-| R3-10 E-drift fix batch (DRIFT-01..09) | W0-7 | one doc-hygiene task |
-| R3-11 A P2-security batch | W0-10 | adopt as one hardening task |
-| R3-12 VM perf pair | W5-14a | both, with `phg benchmark` evidence |
-| R4-M1 completion numbers + weight model | §0.3, §10 | ratify + recompute-per-milestone rule |
-| R4-M2 Unicode strings (DEF-016) | W4-4 | adopt Unicode-correct-by-default |
-| R4-M3 TOP-20 prioritization | Wave 3 ordering | web-app enablement spine as critical path |
-| R4-M4 3 partially-fixed DEFs | DEF-030→W3-2; DEF-024/037 → document-as-design (W6-5 spec wording) | as recommended |
-| R4-M5 GAP-unplanned bucketing | §9 | three buckets |
-| R4-P plan deletions (48) | W0-8 | approve after this plan lands |
-| R4-H1..H6 enforcement adoptions | W2-8 (H3 folded into W0-4) | H's recommendation column |
-| R4-Q CLAUDE.md rewrite | W0-7 part 3 | approve draft + relocation |
-| DEC-135 M-Parallel deep plan | W5-16c | actor model, plan-first |
-| comprehensions conflict (LI-E1 vs XL-049) | W5 charter / A.2 | REJECT stands |
-| FFI conflict (LI-E8 vs SSOT) | W5 charter / A.2 | REJECT stands; `.d.phg` seam |
-| R4-final master-plan approval + register bulk-ratify | this document | — |
-
-### Appendix C — Input-report index
-
-All under `docs/research/full-audit/raw/`: **M**-gap-matrix (824-row verdicts, %-model, TOP-20, DEF
-scorecard, 35-capability brag) · **P**-plan-verdicts (66-plan verdicts; the 56-item live inventory
-this plan absorbs; 48-file deletion command) · **B**-modularity (23-split decomposition spec + do-not-
-split list + size rule) · **F**-cross-language (66 candidates: 13/27/26) · **G**-showcase (adoption-
-surface audit + 6-item roadmap + spec architecture) · **H**-enforcement (~300 probes; P0 holes;
-missing-rule recs; 15-rule brag) · **A**-craftsmanship (P0 hooksPath; P2/P3 batches; CI verification)
-· **C**-decisions (141-row register, 10 conflicts, 33 supersessions) · **D**-php-surface (869 pinned
-PHP 8.5 rows — M's Pass-1 input) · **E**-phorj-surface (code-verified surface + DRIFT-01..09) ·
-**Q**-claude-md-draft (rules-only rewrite + relocation map + HISTORY skeleton). The session/adjudication
-plan (cursor + QUESTION CATALOG + Decisions Log) was consolidated into this file and removed; its full
-text is in git history at/before `60540fc`. The decision register `raw/C-decisions.md` (kept) is the
-canonical decision record.
-
-### Appendix D — The marketing arsenal
-
-**D.1 · H's 15 verified-enforced rules PHP lacks** (H §8, all probe-verified): checked exceptions
-that actually check · compile-time visibility (incl. lambdas/siblings) · no type juggling · deterministic
-overflow faults · compile-time exhaustive match · totality (`E-MISSING-RETURN`/`never`) · unknown-
-anything-is-a-compile-error with did-you-mean · immutable-by-default + const discipline · final-by-
-default + override-sig checking · null-safety as a type property · invariant generics (erased yet
-enforced) · whole-project + vendored-dep type-check · Secret taint-lite (W-SECRET) · four-backend
-divergence guards as language rules (E-SHADOW-*) · UFCS ambiguity is an error, not a resolution order.
-
-**D.2 · M's 35 beyond-PHP capabilities** (M Pass 2, each with the PHP pain removed): real generics ·
-compile-time null-safety · exhaustive pattern match · totality checking · three-tier error model ·
-flow narrowing · `decimal` primitive · `bytes`/`string` split · typed XSS-safe HTML · `Secret<T>` ·
-immutable-by-default + COW · checked arithmetic · uncolored green threads · byte-identity dual
-backends + PHP oracle (disclose G-1.1) · `phg build` cross-OS binaries · two-way migration bridge
-(lift + transpile) · `.d.phg` typed boundaries · toolchain-in-the-box · stable diagnostic codes +
-`phg explain` · must-use by default · method + return-type overloading · MI with compile-time
-conflict resolution · payload/generic enums · `[T; N]` static bounds · package hygiene as errors ·
-deterministic dependency model · deterministic test seam · profiles that cannot change behavior ·
-definite-assignment analysis · UFCS · expression-if/match · text blocks + raw strings · `with {}`
-record update · WASM playground · whole-project checking.
-
----
-
-*Maintenance: when an item completes, mark it `✅ <short-sha>` in place (never delete rows); when a ⏳
-resolves, replace the marker with the ruling + date; re-run §10 after every wave. This file is the
-single forward SSOT — `ROADMAP.md` and `docs/MILESTONES.md` point here after Wave 0's doc batch.*
-
----
-
-## 12. RULINGS LEDGER — 2026-07-02 full adjudication (supersedes the ⏳BLOCKED-ON markers above)
-
-Every pending marker in this plan was adjudicated interactively on 2026-07-02 (full re-ask, embedded
-examples). Where a ⏳ marker conflicts with this ledger, THE LEDGER WINS. Full ruling detail + the
-worked examples are in git history (the removed session plan's Decisions Log, at/before `60540fc`)
-and in the decision register `docs/research/full-audit/raw/C-decisions.md`.
+Every 2026-07-02 marker was adjudicated interactively; where old prose conflicts, THE LEDGER WINS.
+Full ruling text + worked examples: git history ≤`60540fc` + `raw/C-decisions.md`.
 
 | Ruling | Outcome |
 |---|---|
-| E-MATCH-BARE-TYPE | **ADOPTED** — hard error, bare PascalCase in pattern position + did-you-mean |
-| foreach vs for-in | **REPLACEMENT EXECUTED** — foreach only; `for` C-style only; E-RETIRED-SYNTAX + `phg fix` rewrite; repo codemod |
-| E-INTERSECT-SIG | **RELAXED** via shipped overload-resolution rules |
-| Generics explicit type args | **ADOPTED both sites** — `new Box<int>(…)` + `f<T>(…)` w/ lookahead |
-| UFCS | **TYPE-SCOPED** (developer design): same leaf legal across receiver types; specificity ranking (method > concrete > interface > generic); tie ⇒ E-UFCS-AMBIGUOUS; CI rebind/tie guard |
-| Core override | **REJECTED entirely** — Core sealed; UFCS extensions (incl. primitives, `1.xyz()`) are the extension story; test-seam design for Time/Random remains a Wave-5 item |
-| Capture writes | **E-CAPTURE-WRITE hard error + `Core.Ref<T>` box** (instance-handle sharing verified by probe) |
-| Ladder rule | **ADOPTED + in CLAUDE.md rule 14** — no-faithful-PHP-mapping ⇒ surface to developer; native-only + E-TRANSPILE-<FEATURE> + quarantine + disclosure; silent downgrade FORBIDDEN |
-| Concurrency PHP leg | **E-TRANSPILE-CONCURRENCY hard error + `--sequential-concurrency` explicit opt-in w/ warning** |
-| M-Parallel direction | **WORKER ISOLATES** (own heap/thread, channel messaging, nothing shared); shared-memory Arc rewrite REJECTED |
-| Messaging | **CO-HEADLINE**: enforcement ("compile ahead of PHP's runtime errors") + the two-way bridge |
-| Completion numbers | **RATIFIED** — parity ≈58% / vision ≈60%; recompute at every milestone close |
-| Unicode strings (DEF-016) | **ADOPTED** — Unicode-correct by default on `string`; bytes stay explicit via `bytes`; M-text Wave 4 |
-| Gap priority | **Web spine (Wave 3) then lifter-unblockers (Wave 4)**; generators DESIGN runs during Wave 3 |
-| Stdlib charter | **3-bucket ADOPTED** (A→M-Batteries · B→extension-policy-gated · C→rejected-with-reasons) |
-| E-IMPORT-UNKNOWN | **ADOPTED** — hard error + did-you-mean |
-| Core-package reservation | **loader-side enforcement ADOPTED** (revives E-RESERVED-PACKAGE/E-PKG-CASE on project paths) |
-| Enforcement batch 1 | **ADOPTED** — W-CATCH-NEVER-THROWN, W-UNUSED-{LOCAL,PARAM,IMPORT}, NaN→fault unify, +5 smaller |
-| Enforcement batch 2 | **ADOPTED all ten** (W-THROWS-NEVER scoped off interfaces/open, W-EMPTY-CATCH, E-INSTANCEOF-IMPOSSIBLE, W-USELESS-COALESCE/SAFE, E-DIV-ZERO-CONST, E-CONST-OVERFLOW, W-CONST-CONDITION, W-SELF-ASSIGN/COMPARE, W-DUPLICATE-CONDITION, W-IDENTICAL-BRANCHES) |
-| Enforcement batch 3 | **ADOPTED all 26** (2026-07-02 sign-off) — incl. live-verified E-FINALLY-CONTROL-FLOW + E-MAP-DUP-KEY; 16 rejects recorded w/ FP stories (raw/L-lint-batch3.md) |
-| Cross-language 13 | **ADOPTED all 13** — `phg fix` ships FIRST in Wave 2 |
-| Bulk-six autonomous items | **RATIFIED** (pattern-cluster, totality, invariance, COW index-assign, dogfood grammar, debugger surface) |
-| `new` on enum variants | **KEPT** — one construction rule; asymmetry powers E-MATCH-BARE-TYPE's did-you-mean |
-| Doc reconciliation | **BATCHED** — 7 stale records + DRIFT-01..09, one Wave-0 task |
-| Hygiene block | **ADOPTED** — anti-regrowth rule (soft 800/hard 1000 + size-gate CI), 23-split decomposition, examples-README restructure, KNOWN_ISSUES prune + cleanups, A-P2 fixes, VM perf pair |
-| Plan deletions | **EXECUTED** — 48 DELETE-VERIFIED plans removed (evidence: raw/P-plan-verdicts.md) |
-| CLAUDE.md rewrite | **APPLIED** — rules-only (15 invariants incl. ladder + adjudication rules); history → docs/HISTORY.md |
-| hooksPath P0 | **REPAIRED** — `core.hooksPath scripts/git-hooks` |
-| Showcase | **ALL SIX ADOPTED** (front door, flagship, truthful README, spec+conformance, honest benchmarks, editor refresh) |
-| Master plan | **SIGNED OFF by the developer, 2026-07-02** — this document is THE roadmap; next session: CLAUDE.md → here → Wave 0 item 1 |
-| Value/handle (DEF-024/037) | **Split KEPT** (unification via `&` references REJECTED after challenge); W-LOST-MUTATION + spec chapter + E-TRAIT-STATE-DUP now; Swift-style `&` inout params (copy-in/copy-out, `&` at both ends, no reference bindings) = ADOPT-LATER design item |
-| Wave-3 FS design | **Path value type, stateless IO**; errors: `throws FileError` default, `readOrNull()` explicit, probes never throw |
-| Wave-3 HTTP design | **Layered**: HttpClient engine (baseUrl/timeout/middleware/fake seam) + Http.get/post sugar over a stock client |
-| Reflection reach | **Opt-in `#[Reflectable]` registry, FQN-everywhere** (construct + className round-trip on "Pkg.Path.Type"; E-REFLECT-QUALIFY on bare names) |
+| E-MATCH-BARE-TYPE | ADOPTED — hard error + did-you-mean |
+| foreach vs for-in | REPLACEMENT — foreach only; `for` C-style only; codemod |
+| E-INTERSECT-SIG | RELAXED via overload-resolution rules |
+| Generics explicit type args | ADOPTED both sites |
+| UFCS | TYPE-SCOPED; specificity ladder (method > concrete > interface > generic); tie ⇒ E-UFCS-AMBIGUOUS; CI rebind guard |
+| Core override | REJECTED — Core sealed; UFCS extensions are the extension story |
+| Capture writes | E-CAPTURE-WRITE hard error + `Core.Ref<T>` box |
+| Ladder rule | ADOPTED (CLAUDE.md rule 14) — surface, never silently downgrade |
+| Concurrency PHP leg | hard error (shipped code: `E-CONCURRENCY-NO-PHP`) + `--sequential-concurrency` opt-in w/ warning |
+| M-Parallel | WORKER ISOLATES; shared-memory Arc REJECTED |
+| Messaging | CO-HEADLINE: enforcement + the two-way bridge |
+| Completion numbers | RATIFIED + recompute-per-milestone rule (now §11) |
+| Unicode strings | ADOPTED — Unicode-correct by default; bytes explicit (W4-4) |
+| Gap priority | Web spine (W3) then lifter-unblockers (W4) |
+| Stdlib charter | 3-bucket ADOPTED |
+| E-IMPORT-UNKNOWN | ADOPTED — hard error + did-you-mean |
+| Core-package reservation | loader-side enforcement ADOPTED (shipped, W0-4) |
+| Enforcement batches 1/2/3 | ADOPTED (batch 3: all 26; 16 rejects recorded w/ FP stories) |
+| Cross-language 13 | ADOPTED all — `phg fix` first in Wave 2 |
+| Bulk-six autonomous items | RATIFIED |
+| `new` on enum variants | KEPT mandatory |
+| Doc reconciliation / plan deletions / CLAUDE.md rewrite / hooksPath | EXECUTED (Wave-0) |
+| Showcase | ALL SIX ADOPTED |
+| Value/handle (DEF-024/037) | Split KEPT; W-LOST-MUTATION + spec chapter now; `&` inout = ADOPT-LATER design |
+| Wave-3 FS design | Path value type, stateless IO; `throws FileError` default, `readOrNull()` explicit |
+| Wave-3 HTTP design | Layered: HttpClient engine + Http.get/post sugar |
+| Reflection reach | Opt-in `#[Reflectable]` registry, FQN-everywhere |
+| Master plan | SIGNED OFF 2026-07-02 (that document now superseded by THIS unified plan, which carries every live item) |
+
+### Appendix C — Input-report index
+
+- **2026-07-03 unification audit:** `docs/research/2026-07-03-unification-audit/SYNTHESIS.md`
+  (Stage-B merge, 61 findings) + `raw/A1..A10.md` (Rust-src · phg-corpus/old-syntax ·
+  diagnostics/conformance · docs-crosscheck · stdlib-consistency/fuzz · performance · security ·
+  over-engineering · dev-env speed · UI/DX). Corpus audit: `docs/research/2026-07-03-corpus-audit.md`.
+- **2026-07-02 full audit:** `docs/research/full-audit/raw/` — M-gap-matrix (824 rows, the % model)
+  · P-plan-verdicts · B-modularity · F-cross-language · G-showcase · H-enforcement ·
+  A-craftsmanship · C-decisions (canonical register) · D-php-surface · E-phorj-surface ·
+  Q-claude-md-draft.
+- **Wave 3/4 design drafts:** `docs/research/wave3-4-drafts/` (SQL DBAL · HTTP client · Unicode strings).
+- Archival rule: once Stage E closes, the superseded raw dirs are archived per B3-12; SYNTHESIS +
+  this plan + UNIFIED-SPEC + the register are the retained layer.
+
+---
+
+*Maintenance: update §0 CURSOR every working session; mark items `✅ <short-sha>` in place (never
+delete rows); re-run §11 after every wave/milestone; new decisions append to §13 with date. This
+file is the single forward SSOT — ROADMAP.md and docs/MILESTONES.md point here.*

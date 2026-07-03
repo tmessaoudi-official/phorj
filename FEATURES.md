@@ -33,9 +33,11 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) => int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
 | `Map<K, V>` literals `[k => v]` + indexing `m[k]` | ✅ | keys are `int`/`bool`/`string`; insertion-ordered; a missing key faults cleanly; transpiles to a PHP `[k => v]` array (M-RT S3) |
 | `Core.Map` query: `keys`/`values`/`has`/`size`; `Core.List` `reverse`/`sum` | ✅ | the first generic stdlib natives — type params inferred at the call site, erased to PHP `array_keys`/`array_values`/`array_key_exists`/`count`/`array_reverse`/`array_sum` (M-RT S7b) |
-| `Set<T>`: `Core.Set` `of`/`contains`/`size` | ✅ | insertion-ordered, deduped (the Map discipline); generic, erases to `array_unique`/`in_array`/`count` (M-RT S7b) |
+| `Set<T>`: `Core.Set` `of`/`contains`/`size` + algebra `union`/`intersection`/`difference`/`isSubset` | ✅ | insertion-ordered, deduped (the Map discipline); generic, erases to `array_unique`/`in_array`/`count` (M-RT S7b); see `examples/guide/set-ops.phg` |
 | `Core.List` `map`/`filter`/`reduce` (higher-order) | ✅ | take a closure argument, run once per element via one shared native body (the interpreter wraps `call_closure`; the VM a re-entrant `call_closure_value` — no new `Op`); generic, erase to PHP `array_map`/`array_values(array_filter(…))`/`array_reduce` (M-RT S7b-3) |
-| tuples / map iteration; `Set` union & intersection | 🚧 M-RT | follow-ups on the shipped generic + higher-order native path |
+| tuples / map iteration | 🚧 M-RT | follow-ups on the shipped generic + higher-order native path |
+| `decimal` primitive (`1.50d`) | ✅ | exact decimal arithmetic, distinct from `float`; `Core.Decimal` natives (M-NUM) |
+| Security stdlib: `Core.Hash` `hmac`/`equals`/`hkdf`/`pbkdf2` + `Core.Random` `secureBytes`/`secureInt` | ✅ | MAC/KDF byte-identical to PHP (RFC KATs); CSPRNG quarantined from the PHP oracle (W3-4) |
 | Null safety / optionals (`T?`) | ✅ | `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; non-optional `T` is never null (compile-time) |
 | Pipe operator `\|>` | ✅ | `x \|> f ≡ f(x)`; left-associative, lowered to a call in the parser; transpiles to a plain PHP call |
 | Type test `instanceof` | ✅ | `value instanceof T` → `bool` where `T` is a class **or interface** (M-RT S2); smart-casts the operand inside `if (x instanceof T)`; transpiles to PHP `instanceof` |
@@ -43,16 +45,17 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Erased generics `<T>` on free functions | ✅ | `function id<T>(T x): T`, inferred at the call site (incl. `List<T>` and `(T) => T` parameters); no monomorphization — type params erase to PHP `mixed`/`array`/`\Closure` before any backend (M-RT S7) |
 | Erased generics `<T>` on methods | ✅ | `class U { function id<T>(T x): T … }`, inferred from the call's arguments; reuses the free-function machinery, erases identically (M-RT generics-all) |
 | Generic types/classes (`Box<T>`) | ✅ | `class Box<T> { … }`, `class Pair<A, B> { … }`; the type parameter is inferred at construction (`Box(7)` ⇒ `Box<int>`) and recovered at every use site (`Box(7).get()` is `int`); no monomorphization — `<T>` erases to PHP `mixed` before any backend, an instance carries no runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`) (M-RT generics-all) |
-| Cross-package types — `import type Pkg.Path.Type [as A]` | ✅ | a library package exports a `class`/`enum`/`interface`; another imports it by its terminal name; nominal subtyping, `instanceof`, enum `match` all cross-package; erases to namespaced PHP FQNs (`E-PKG-TYPE` retired) (M-RT) |
+| Cross-package types — unified `import Pkg.Path.Type [as A]` | ✅ | a library package exports a `class`/`enum`/`interface`; another imports it with the same `import` used for modules (the loader classifies module-vs-type by path; the old `import type` form was retired 2026-07-03 and now fails to parse); injected `Core` types follow the qualified-by-leaf discipline (`Http.Router`, enforced by `E-INJECTED-TYPE-BARE`); nominal subtyping, `instanceof`, enum `match` all cross-package; erases to namespaced PHP FQNs (M-RT) |
 | Union types `A \| B` + match-over-union | ✅ | `A \| B \| C` of classes/interfaces/primitives (`int \| string`); a value of any member flows in; reach a member via `instanceof` narrowing or **type patterns** `match s { Circle c => … }` (exhaustive over the member set, no new `Op` — reuses `Op::IsInstance`); transpiles to PHP 8.0 `A\|B` (M-RT S4) |
 | Intersection types `A & B` | ✅ | members are interfaces plus at most one concrete class (two distinct classes are uninhabited → `E-INTERSECT-MULTI-CLASS`); a value satisfying all members flows in, and every member's methods are in scope (member access searches all members); shared-method signatures must agree (no overloading yet → `E-INTERSECT-SIG`); no new `Op`; transpiles to PHP 8.1 `A&B` (M-RT S5) |
 | Method & function overloading (`foo(int)` / `foo(string)`) | ✅ | dynamic multiple dispatch on runtime argument types (also by arity); all overloads of a name share a return type (`E-OVERLOAD-RETURN`); lowers to one dispatching PHP method/function; byte-identical run≡runvm≡PHP (M-RT) |
 | Inheritance: `extends`, `open`/`final`, override, `abstract`, multiple parents | ✅ | final-by-default (a class/method must be `open` to extend/override); single + **multiple** inheritance with explicit `use`/rename/exclude resolution (`E-MI-CONFLICT`); `abstract` classes & methods (`E-ABSTRACT-INSTANTIATE`/`-UNIMPL`); MI lowers to PHP interface + trait decomposition (M-RT S6) |
 | Exceptions: `throws` / `throw` / `try`/`catch`/`finally` + `?`-propagation, `Result<T, E>` | ✅ | checked typed exceptions (a thrown type implements the built-in `Error` marker → PHP exception); `throws A \| B` declared sets, `?` propagates them, multi-`catch` dispatch by type; `Result<T, E>` value surface; faults/panics stay uncatchable (M-faults Slice 2) |
 | Mutation: reassignment, element/field/static writes, `with`, property hooks | ✅ | immutable-by-default, `mutable` opt-in; reassignment `x = e`, compound `+= … ??=`, element set `xs[i]=e`/`m[k]=e` (copy-on-write value semantics), instance fields `o.f=e` (shared-mutable handles), `static`/`static mutable` class fields, functional `obj with { … }`, PHP-8.4 property hooks — **no tracing GC** (value/handle split + COW + `Rc`/`Drop`) (M-mut) |
-| Traits, operator overloading | 🔲 future | Phorj-level `trait` construct (S8) and operator overloading are not yet a user-facing surface |
-| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phg vendor` + `phorj.lock`, offline) — shipped; transitive deps next |
-| Concurrency (`spawn` + channels) | 🔲 M6 | uncolored, green-threaded |
+| Traits (`trait` + `use` in classes, conflict resolution) | ✅ | shipped construct — see `examples/guide/traits.phg`, `trait-conflicts.phg`, `examples/project/mixins/`; final disposition tracked as MASTER-PLAN §7-OPEN |
+| Operator overloading | 🔲 future | not yet a user-facing surface |
+| Modules / packages | ✅ M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phg vendor` + `phorj.lock`, offline); transitive deps next |
+| Concurrency (`spawn` + channels) | ✅ | uncolored, green-threaded (`corosensei`); native-only — the PHP leg is a hard error (`E-CONCURRENCY-NO-PHP`), see `examples/guide/concurrency.phg` |
 | Identifier casing (enforced) | ✅ | camelCase functions/methods/params/vars (`E-NAME-CASE`), PascalCase classes/enums/variants/type aliases (`E-TYPE-CASE`), PascalCase package/folder + import segments + `as` aliases (`E-PKG-CASE`, 1:1 to PHP namespaces); front-end-only — never affects the generated PHP |
 
 ## Backends & tooling
@@ -64,7 +67,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phg benchmark` |
 | Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phg disassemble` |
 | Phorj → PHP transpiler (runs under real PHP) | ✅ | `phg transpile` |
-| Type-check / parse / lex inspection | ✅ | `phg check` / `parse` / `lex`; `phg check --json` emits machine-readable diagnostics (stage/severity/message/line/col/code/hint) for editors/LSP |
+| Type-check / parse / tokenize inspection | ✅ | `phg check` / `parse` / `tokenize`; `phg check --json` emits machine-readable diagnostics (stage/severity/message/line/col/code/hint) for editors/LSP |
 | `--version` / `--help`, plus per-command help with examples | ✅ | `phg -v` / `-h` / `phg <cmd> --help` |
 | Sharp diagnostics: caret-underlined span, did-you-mean hints, stable codes | ✅ | front-end errors |
 | Diagnostic dictionary (look up a code) | ✅ | `phg explain <CODE>` |
@@ -72,17 +75,19 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phg vendor` |
 | Test runner: `test "name" {}` blocks + `Core.Test` assertions (incl. `assertFaults`) | ✅ | `phg test [path…]` |
 | Formatter: canonical-form, comment-preserving, meaning-preserving (no reflow yet) | ✅ | `phg format [--check] [path… \| -]` |
-| HTTP server: `handle(Request) -> Response` (pure Phorj) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |
+| HTTP server: `handle(Request): Response` (pure Phorj) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |
 | Standalone executable (host) | ✅ | `phg build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |
 | Standalone executable (macOS) | 🔲 | reader ships; signed stub deferred to M2.5 Phase 3 |
-| PHP → Phorj migration | 🔲 M8 | the inverse of the transpiler |
-| Editor/LSP, formatter | 🔲 M7 | |
+| PHP → Phorj migration (inverse of the transpiler; best-effort draft, review required) | ✅ | `phg lift <file.php>` |
+| Language server (diagnostics, hover, go-to-def, completion, symbols) + editor integrations | ✅ | `phg lsp`; clients in `editors/vscode/`, `editors/phpstorm/` |
+| Debugger (interactive REPL + DAP transport) | ✅ | `phg debug [--dap]` |
 
 ## Project qualities
 
-- **Zero external runtime dependencies** — std-only Rust, nothing to download (see
-  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).
+- **Std-first with exactly four vetted, feature-gated dependencies** — `argon2` (Argon2id),
+  `regex` (`Core.Regex`), `ctrlc` (signals), `corosensei` (green threads); nothing else (see
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and `docs/specs/2026-06-27-dependency-policy.md`).
 - **No `unsafe`** — `#![forbid(unsafe_code)]` crate-wide.
 - **Never panics on input** — adversarial source *and* adversarial binaries are handled cleanly
   (invariant EV-7).

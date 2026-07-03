@@ -49,9 +49,9 @@ milestone; see "Module decomposition" below. The roles are unchanged.
 | `loader/` | multi-file project loader + cross-package name resolution |
 | `diagnostic.rs` | unified `Diagnostic { stage, message, line, col }` |
 | `limits.rs` | recursion/nesting caps + numeric-width policy |
-| `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `bench` |
+| `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `benchmark` |
 | `serve.rs` | M6 HTTP serve runtime — `Transport` seam + `TcpTransport`; the determinism quarantine (outside `tests/differential.rs`, covered by `tests/serve.rs`) |
-| `cli/` · `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
+| `cli/` · `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`tokenize`/`transpile`/`disassemble`/`benchmark`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
 
 ### Module decomposition (M-Decomp)
 
@@ -85,8 +85,9 @@ are opposite concepts (the rename in P3.5 removed the old name collision).
 
 ## Backends today vs. planned
 Three backends exist as **free functions** dispatched by a string `match` in `main.rs`
-(`cmd_run`/`cmd_runvm`/`cmd_transpile`). There is no `Backend` trait yet (`grep 'trait ' src/` = 0);
-it is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — see ecosystem
+(`cmd_run`/`cmd_runvm`/`cmd_transpile`). There is no `Backend` trait yet — `grep -rnE '^\s*(pub )?trait ' src/ | grep -v test`
+finds 4 traits (`Transport`, `DebugFrontend`, `Suspend`, `Task`), none a backend abstraction;
+the backend seam is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — see ecosystem
 spec E-1.
 
 ## Decision records

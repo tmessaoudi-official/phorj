@@ -127,12 +127,15 @@ the boundary is not negotiable per-file:
    `if`/`for`. The named set is single-sourced in `is_builtin_type_name` (`src/checker/common.rs`):
    `int float bool string bytes decimal double i8..i64 u8..u64 void never empty`, the containers
    `List Map Set`, the markers/handles `Error Channel Task`, and `Html Attr`. The **structural**
-   type forms are equally import-free: optional `T?`, function types `(A, B) -> R`, unions `A | B`,
+   type forms are equally import-free: optional `T?`, function types `(A, B) => R`, unions `A | B`,
    intersections `A & B`, ranges `a..b`. You never write `import Core.Types.int` — importing a
    primitive would break familiarity-first (no mainstream language does it) and buy nothing.
-2. **User / library types — `import type Pkg.Path.Name [as Alias];`.** A `class`/`enum`/`interface`
-   defined in another package is reached only through a selective type import (M-RT cross-package
-   types). No wildcard (PHP has no `use A\*`).
+2. **User / library types — `import Pkg.Path.Name [as Alias];`.** A `class`/`enum`/`interface`/`trait`
+   defined in another package is reached through a single `import` whose path resolves to a type —
+   the resolver then binds the **bare type name** (`import Acme.Geometry.Rect;` → `Rect`). The former
+   `import type` keyword was **removed** in the 2026-07-03 unified-import model and no longer parses
+   (see `docs/specs/UNIFIED-SPEC.md` §"Unified import and injected-type discipline"). No wildcard
+   (PHP has no `use A\*`).
 3. **Stdlib *functions* — `import Core.X;` then leaf-qualified calls (`X.fn(...)`).** e.g.
    `import Core.Output;` → `Output.printLine(...)`. Functions are always qualified; there is no bare
    global.

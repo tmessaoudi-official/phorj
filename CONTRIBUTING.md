@@ -12,7 +12,7 @@ in a large change, please open an issue to discuss it first (see [SUPPORT.md](SU
 ```sh
 git clone https://github.com/tmessaoudi-official/phorj
 cd phorj
-cargo build              # std-only — no dependencies to fetch
+cargo build              # cargo fetches the four vetted deps (argon2, regex, ctrlc, corosensei)
 cargo test               # run the full suite
 ```
 
@@ -63,7 +63,7 @@ load-bearing ones:
 4. **Never panic on input (EV-7).** Lexer/parser/checker and the object-file section readers must
    reject adversarial or malformed input cleanly (a diagnostic or `None`), never a panic/SIGABRT. All
    offset arithmetic in the readers uses `checked_add`/`checked_mul`.
-5. **Run a perf number before/after a perf change.** `phg bench <file>` measures both backends
+5. **Run a perf number before/after a perf change.** `phg benchmark <file>` measures both backends
    (median-of-N, output-identity gated).
 
 ## Architecture orientation

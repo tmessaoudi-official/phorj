@@ -85,7 +85,23 @@ can't autoload free functions, and Phorj is function-heavy).
 ## Scope
 
 Library packages export **functions and types** — a `class`/`enum`/`interface` in a library package
-is consumed cross-package via `import type Pkg.Path.TypeName;` (see `shapes/`). Git-based
+is consumed cross-package via `import Pkg.Path.TypeName;` (see `shapes/`). Git-based
 dependencies (`[require]` in `phorj.toml`), `phorj.lock`, and vendoring ship in M5 S3 (see
 `withdeps/`). Casing is enforced: package/folder segments are PascalCase (`E-PKG-CASE`), types are
 PascalCase, functions/variables are camelCase.
+
+## The other projects here
+
+`tempconv/` is the walkthrough above; each sibling project is self-contained, `phorj.toml`-discovered,
+and byte-identity-gated the same way:
+
+| Project | What it demonstrates |
+|---|---|
+| `funcvalues/` | **cross-package lambdas + first-class function values** (M3 S3) — a library package's functions use a lambda (calling a same-package function) and a bare function-value reference, both resolving across the package boundary |
+| `genericbox/` | **cross-package generic types** (M-RT generics-all) — a library package's generic class used from `Main` via the terminal `import Pkg.Path.TypeName;` form; type parameters infer and erase across the boundary |
+| `inherit/` | **cross-package inheritance + parent dispatch** (M-RT S6/B1a) — a `Main` class extends a library base, inherits its constructor and field, overrides an `open` method, and calls up via both the bare and the named-ancestor `parent` forms |
+| `jsonmulti/` | **`Core.Json` in a multi-package project** — building, stringifying, and parsing JSON from a `Main` entry that also imports a library package (the injected `Json` enum is a `Main` type, so its variants live in `\Main\`) |
+| `mixins/` | **cross-package traits** (M-RT S8) — compose two library-package traits into a `Main` class via `import Pkg.Path.TraitName` + `use TraitName;` (a trait is still not a type — `Loud x` as an annotation is `E-USE-AS-TYPE`) |
+| `shapes/` | **cross-package types** (M-RT) — a library package exports a `class` + `interface` + `enum`, consumed from `Main`; nominal subtyping, `instanceof`, and enum `match` all cross-package, erasing to namespaced PHP |
+| `visibility/` | **declaration visibility** — `public`/`internal`/`private` on top-level declarations, loader-enforced and erased from PHP (see `visibility/README.md`) |
+| `withdeps/` | a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorj.lock`, and an offline `vendor/` (see `withdeps/README.md`) |

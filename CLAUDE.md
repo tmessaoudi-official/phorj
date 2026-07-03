@@ -7,7 +7,7 @@
 
 Phorj is a statically-typed, PHP-inspired language implemented in Rust (edition 2021; core is
 std-only with four vetted, feature-gated exceptions — `argon2`, `regex`, `ctrlc`, `corosensei` —
-per `docs/specs/2026-06-27-dependency-policy.md`): lexer → parser → type-checker → tree-walking
+per `docs/specs/UNIFIED-SPEC.md` §"External dependency policy"): lexer → parser → type-checker → tree-walking
 interpreter (the reference oracle) + bytecode compiler/stack VM + Phorj→PHP transpiler, plus a
 PHP→Phorj lifter, LSP, formatter, test runner, and debugger. Single developer, commits direct to
 `master`, remote is GitHub (`tmessaoudi-official/phorj`). The binary is `phg`; sources are `.phg`.
@@ -26,10 +26,11 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
   (`[lints] warnings = "deny"`); `#![forbid(unsafe_code)]` on both crate roots; toolchain pinned
   by `rust-toolchain.toml`. Tracked pre-commit hook: `scripts/git-hooks/pre-commit`.
 - **Full correctness gate** (before claiming any feature done, and always before a push):
-  `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test --workspace`
-  — with `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips). Transpile floor =
-  **PHP 8.5**; the bare `php` on PATH is 8.6-dev and too permissive — never gate against it
-  (CI runs it only as a non-gating canary).
+  `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` — the oracle php
+  path lives in `scripts/toolchain.env` (the single editable knob; bump it there when the stack
+  php version changes). With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
+  Transpile floor = **PHP 8.5** (currently `php-8.5.8`); the bare `php` on PATH is 8.6-dev and too
+  permissive — never gate against it (CI runs it only as a non-gating canary).
 - **Perf:** `phg benchmark <file>` (median-of-N, output-identity gated) for before/after numbers;
   CI regression gate: `scripts/perf-gate.sh`.
 - **After each shipped feature:** `cargo build --release` and report the binary path
@@ -87,7 +88,7 @@ asking, when the quality gate above is green. Limits:
 12. **Naming in code Claude writes:** packages/types/type-params PascalCase (`package Main;`,
     `Core.` reserved); functions/natives camelCase (`Output.printLine`); keyword `function`
     (never `fn`), return types `: T`, mandatory `new` for construction, explicit `this.field`.
-    The naming SSOT is `docs/specs/2026-06-30-naming-overhaul-design.md`.
+    The naming SSOT is `docs/specs/UNIFIED-SPEC.md` §"Naming overhaul".
 13. **File-size anti-regrowth** (ratified 2026-07-02): soft cap 800 lines / hard cap 1000 per
     source file; past the cap, split by cohesion into `foo/mod.rs` + sub-files (M-Decomp
     pattern, `pub(super)` for moved methods) — never by line count alone.

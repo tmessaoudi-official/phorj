@@ -17,10 +17,11 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 ## Language constructs
 
 ### stable
-- **Modules & packages** — `package` declaration, `import`, `import type`, import aliasing (`as`),
-  folder = package path, the reserved `package Main` entry.
+- **Modules & packages** — `package` declaration, the unified `import` (modules and types alike;
+  the former `import type` form was retired 2026-07-03 and no longer parses), import aliasing
+  (`as`), folder = package path, the reserved `package Main` entry.
 - **Functions** — typed parameters, default parameters, return types, `void`/`never`, recursion,
-  lambdas (`fn`), first-class function values, the pipe operator `|>`.
+  lambdas (`function(int x) => …`), first-class function values, the pipe operator `|>`.
 - **Bindings & flow** — `var` local type inference, `type` aliases, immutable-by-default + `mutable`,
   `if`/`else`, expression-`if`, `for … in`, `foreach (… as …)`, `while`/`do`, C-`for`,
   `break`/`continue`, return-on-all-paths totality.
@@ -61,18 +62,24 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 
 ### experimental
 `Core.Regex` (depends on the `regex` crate), `Core.Crypto` (Argon2id; depends on `argon2`),
-`Core.Reflect`, `Core.Html`, `Core.Env`, `Core.Process`, `Core.Http` (the M6 web layer is in progress).
+`Core.Reflect`, `Core.Html`, `Core.Env`, `Core.Process`, `Core.Http` (the web layer is largely in
+place; refinement ongoing).
+
+Two further vetted dependencies power language-level surfaces rather than stdlib modules: `ctrlc`
+(signal handling) and `corosensei` (green-thread concurrency — `spawn`/channels). The full
+dependency set is exactly these four; see `docs/specs/2026-06-27-dependency-policy.md`.
 
 ## CLI commands
 
 ### stable
-`run`, `runvm`, `check`, `transpile`, `build`, `test`, `fmt`, `explain`, `bench`, `disasm`, `parse`,
-`lex`, plus the source forms (`<file>`, `-`/stdin, `-e`/`--eval`, `--`) and `-h`/`-v`.
+`run`, `runvm`, `check`, `transpile`, `build`, `test`, `format`, `explain`, `benchmark`,
+`disassemble`, `parse`, `tokenize`, plus the source forms (`<file>`, `-`/stdin, `-e`/`--eval`, `--`)
+and `-h`/`-v`.
 
 ### experimental
-`lift` (PHP → Phorj draft — *review required*, inherently lossy), `serve` (HTTP; M6 in progress),
+`lift` (PHP → Phorj draft — *review required*, inherently lossy), `serve` (HTTP server),
 `vendor` (git dependencies; transitive deps deferred), `lsp` (language server; the query layer is
-growing).
+growing), `debug` (interactive debugger REPL + DAP transport).
 
 ## deprecated
 
