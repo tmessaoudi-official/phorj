@@ -3148,3 +3148,51 @@ function main(): void {
         "s1_qualified_time_duration",
     );
 }
+
+// --- Import redesign S2 (stage A): member-imports (import Core.Http.Response etc.) -------------
+// A member-import triggers the injected prelude and binds the leaf type; a type whose prelude
+// self-references its module (Time's Instant.now -> Time.nowMilliseconds) is self-contained. Bare
+// usage stays byte-identical across run/runvm/PHP. Enforcement (bare-without-import) is stage C.
+
+#[test]
+fn s2a_http_member_import_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Http.Response;
+function main(): void {
+  Response r = Response.text(200, "hi");
+  Output.printLine("{r.status}");
+}"#,
+        "200\n",
+        "s2a_http_member_import",
+    );
+}
+
+#[test]
+fn s2a_time_member_import_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Time.Duration;
+function main(): void {
+  Duration d = Duration.milliseconds(250);
+  Output.printLine("{d.toMilliseconds()}ms");
+}"#,
+        "250ms\n",
+        "s2a_time_member_import",
+    );
+}
+
+#[test]
+fn s2a_time_instant_member_import_is_self_contained() {
+    // `Instant.now()` internally reads the clock via the module-native `Time.nowMilliseconds()`; a
+    // member-import of just `Instant` must still make it work (self-contained, hidden internal). The
+    // clock is non-deterministic, so assert only that it checks + runs identically on both backends.
+    let src = "package Main; import Core.Output; import Core.Time.Instant;\n\
+        function main(): void { Instant n = Instant.now(); Output.printLine(\"ok\"); }";
+    assert!(
+        cli::cmd_check(src).is_ok(),
+        "member-imported Instant must check"
+    );
+    assert_eq!(cli::cmd_run(src), cli::cmd_runvm(src), "run vs runvm");
+    assert_eq!(cli::cmd_run(src).unwrap(), "ok\n");
+}

@@ -5,6 +5,36 @@
 > SSOT = `docs/plans/MASTER-PLAN.md`. Gate = full PHP-oracle `cargo test --workspace` + clippy + fmt + build.
 
 ## Decisions Log
+- [2026-07-03] AGREED (developer, interactive — REFINES/SUPERSEDES the frozen S2 spec's injection
+  model): **STRICT per-type imports, self-contained types, no surprises.**
+  1. `import Core.Time.Duration` brings in **ONLY `Duration`** (bare). NOT Instant, NOT Date, NOT the
+     `Time.*` module natives. Want Instant? `import Core.Time.Instant`. Want the module + its
+     `Time.foo()` natives? `import Core.Time` (whole module).
+  2. **Types are self-contained**: importing `Core.Time.Instant` gives a fully working `Instant`
+     including `Instant.now()` — even though `now()` internally reads the clock via the module-native
+     `Time.nowMilliseconds()`. That internal is HIDDEN (the prelude is the declaring block); the user
+     does NOT gain the right to write bare `Time.nowMilliseconds()` (that still needs `import Core.Time`).
+  3. "No surprises": you get exactly what you name, nothing more.
+  **Build consequences** (materially bigger than the frozen spec, which assumed whole-module injection):
+  (a) prelude injection becomes **PER-TYPE**, pulling transitive TYPE-deps (`Instant` needs `Date` via
+      `Instant.toDate()`), but a dep injected for type-checking does NOT grant the user bare access
+      (enforcement gates bare access on IMPORTS, not on what's injected);
+  (b) a prelude type's internal module-native (`Time.nowMilliseconds()`) must resolve during checking
+      WITHOUT leaking the `Time.` qualifier into user scope — resolve for the declaring block, reject
+      user misuse via the pre-injection enforcement pass (advisor's user-program-before-injection point);
+  (c) FINDINGS: only `Time` self-references its module (`Instant.now`); `Http`/`Decimal` don't. Time
+      types cross-reference (`Instant`→`Date`). No always-available `Core.`-level clock native exists.
+- [2026-07-03] AGREED (developer): **S2 migration prefers MEMBER-IMPORTS + bare usage** over the
+  module-qualified form. I.e. `import Core.Http.Router; … new Router()` — NOT `import Core.Http; …
+  new Http.Router()`. Rationale (developer): "cleaner"; and it aligns with Phorj's "everything
+  imported, nothing in the wind" principle (every bare name explicitly imported). Practical win:
+  usage sites are already bare today, so migrating each example = change only its import line(s),
+  leaving every `Router`/`Request`/`#[Route]` usage untouched (~40 import edits vs qualifying ~125
+  annotation + 32 construction sites). Consequence: the **member-import machinery** (`import
+  Core.Http.X` → trigger prelude injection + bind the leaf bare + enforcement allows it, in BOTH the
+  single-file `cmd_run` path and the loader path) is the PRIMARY stage-(a) piece. Qualified
+  `new Http.Router()` + `#[Http.Route]` are still built for spec-completeness (the E-INJECTED-TYPE-BARE
+  fix-it offers them as the alternative), but examples use member-imports + bare.
 - [2026-07-03] AGREED (developer): **Delivery-speed strategy.** Started with "speed up tooling, keep
   full commit gate"; the developer then REVISED to also (a) move the PHP-oracle to pre-push only and
   (b) install `mold` (dev runs the sudo). Final design SHIPPED:

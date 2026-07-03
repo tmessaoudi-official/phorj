@@ -437,6 +437,21 @@ pub fn import_map(items: &[Item]) -> HashMap<String, String> {
             if let Some(q) = qualifier {
                 map.insert(q, path.join("."));
             }
+            // Import-redesign S2: a member-import of a multi-type injected Core module
+            // (`import Core.Time.Instant`, `import Core.Http.Router`, `import Core.Decimal.RoundingMode`)
+            // also makes that MODULE's native qualifier resolvable (`Time.`, `Http.`, `Decimal.`), so the
+            // injected prelude's own internal module-native calls type-check — e.g. `Instant.now()` calls
+            // `Time.nowMilliseconds()`, hidden from the user. User code that writes such a qualifier
+            // WITHOUT a whole-module import is rejected by the pre-injection enforcement pass (S2 stage C),
+            // so this implicit binding never lets user code reach the module natives "for free".
+            if alias.is_none()
+                && path.len() == 3
+                && path[0] == "Core"
+                && matches!(path[1].as_str(), "Http" | "Time" | "Decimal")
+            {
+                map.entry(path[1].clone())
+                    .or_insert_with(|| format!("Core.{}", path[1]));
+            }
         }
     }
     map

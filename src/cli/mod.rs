@@ -392,12 +392,21 @@ const ROUNDING_MODE_PRELUDE: &str =
 /// construct the variants (`new HalfUp()`) — the enum then flows through every backend as an ordinary
 /// enum. Mirrors [`inject_json_prelude`]: a no-op (borrowed) unless `Core.Decimal` is imported and no
 /// `RoundingMode` enum is already declared.
+/// True if the program imports the module `module` (e.g. `["Core", "Http"]`) either as a whole
+/// (`import Core.Http`) OR via a **member-import** of one of its types, one segment deeper
+/// (`import Core.Http.Router`). Import-redesign S2: a member-import must also pull in the injected
+/// prelude, since the leaf type it names is one of that prelude's classes/enums.
+fn imports_module_or_member(prog: &Program, module: &[&str]) -> bool {
+    prog.items.iter().any(|it| {
+        matches!(it, crate::ast::Item::Import { path, type_only: false, .. }
+            if (path.len() == module.len() || path.len() == module.len() + 1)
+                && path.iter().zip(module).all(|(a, b)| a == b))
+    })
+}
+
 fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
-    let imports_decimal = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, type_only: false, .. }
-            if path.len() == 2 && path[0] == "Core" && path[1] == "Decimal")
-    });
+    let imports_decimal = imports_module_or_member(prog, &["Core", "Decimal"]);
     let already_declared = prog
         .items
         .iter()
@@ -651,7 +660,9 @@ fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
             |it| matches!(it, Item::Import { path, type_only: false, .. } if path.join(".") == m),
         )
     };
-    if !imports("Core.Http") {
+    // S2: a member-import (`import Core.Http.Router`) pulls in the prelude too, not just the whole-
+    // module `import Core.Http`.
+    if !imports_module_or_member(prog, &["Core", "Http"]) {
         return std::borrow::Cow::Borrowed(prog);
     }
     let has_class = |n: &str| {
@@ -921,10 +932,7 @@ class Instant {
 
 fn inject_time_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
-    let imports_time = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, type_only: false, .. }
-            if path.len() == 2 && path[0] == "Core" && path[1] == "Time")
-    });
+    let imports_time = imports_module_or_member(prog, &["Core", "Time"]);
     if !imports_time {
         return std::borrow::Cow::Borrowed(prog);
     }
