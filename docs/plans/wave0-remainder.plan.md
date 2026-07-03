@@ -229,3 +229,17 @@ examples/guide/ — see challenge re: conformance-are-tests + WASM-run safety).
 
 ### XML (W4-10) — RECORD ONLY, do not build
 - Write the design proposal + minimal failing program + option previews; surface as closing AskUserQuestion.
+
+## AUDIT + CLEANUP DECISIONS (2026-07-03, developer — autonomous/marathon ON HOLD)
+- **`->` REMOVED entirely** (developer ruling): migrate all examples/docs to canonical `:` (return) /
+  `=>` (function types) via `phg format` + a doc script, THEN make the parser REJECT `->` (breaking;
+  pre-1.0 single-dev, cheap now). One canonical syntax — no transition alias.
+- **DEEP parallel audit** of conformance + examples + language surface (read-only) → one prioritized
+  issue list to decide on before fixing.
+- **Editor tooling refresh** (LSP + VSCode grammar/snippets + PhpStorm) AFTER the corpus is clean, so
+  the grammar targets the final `:`/`=>` surface. Includes: new natives (W3-4 crypto, take/drop, …),
+  injected-type discipline (S2), current syntax.
+- Clarified (NON-issues): `conformance/diagnostics/*` is an INTENTIONAL must-fail corpus (`.expected`
+  pairs) — `injected-variant-bare.phg` / `static-field-visibility.phg` are negative tests, not bugs.
+- Clarified (facts): UFCS `xs.take(2)` works; `take`=first-n / `drop`=rest (complementary, slice=from-variant);
+  `new X().m()` chains; `phg format` auto-rewrites `->`→`:`.
