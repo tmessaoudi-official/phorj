@@ -107,6 +107,43 @@
   deleted; examples/README "71 KB" = bytes not lines (289 long lines, real 72 KB monolith);
   CI supply-chain pins (A-CI-4/5/6) need external data — verify or record, never guess.
 
+## S2 build status + Stage C recipe (2026-07-03)
+- **Stage A ✅ SHIPPED `0cedcb8`**: member-import triggers prelude injection (`imports_module_or_member`
+  in `src/cli/mod.rs`, used by http/time/rounding_mode gates) + `native::import_map` binds a multi-type
+  Core module's qualifier on a member-import (so `Instant.now()`→`Time.nowMilliseconds()` resolves; hidden).
+- **Stage B ✅ SHIPPED `202ec2b`**: 19 examples/conformance `.phg` migrated to per-type member-imports
+  (import-only diffs, byte-identical). Migration analysis + script: `/tmp/migrate-s2b.sh`.
+- **Stage C ⏳ TODO — enforcement (the actual bug fix). Recipe (fully traced):**
+  1. New `src/checker/enforce_injected.rs`: `pub fn enforce_injected_discipline(prog: &Program) ->
+     Vec<Diagnostic>`. Registry = injected member types → module: {Request,Response,Route,Router}→Http,
+     {Duration,Date,Instant}→Time, {RoundingMode}→Decimal.
+  2. Collect member-imports from `Item::Import` paths `["Core", M, Type]` → set of imported bare names.
+  3. Walk (model on `collapse_injected.rs` for TYPE positions + add expr-walk for `new`):
+     - `Type::Named{name}` BARE (no dot) that is an injected member type AND not member-imported →
+       `E-INJECTED-TYPE-BARE` (dotted `M.Type` is OK — S1 collapses it). **Annotations MUST be enforced
+       here pre-injection** — S1 already collapsed them by checker time.
+     - `Expr::New(Call(callee,..))`: bare `Ident(name)` injected + not imported → error; `Member(M,name)`
+       qualified is OK. (Advisor: construction is the real blind spot — mirror E-INJECTED-VARIANT-BARE.)
+     - `#[Route]` attribute bare + Route not member-imported → error (fix-it: `import Core.Http.Route;`
+       or `#[Http.Route]`).
+  4. Fix-it hint: "member-import `import Core.M.Type;` or write it qualified as `M.Type`".
+  5. INTEGRATE at the TOP of `check_and_expand_reified` (`src/cli/mod.rs`, BEFORE `inject_json_prelude`)
+     on the RAW user program (excludes preludes automatically — advisor's key point). If non-empty:
+     `return Err(diags.iter().map(|e| e.render(diag_src)).collect::<Vec<_>>().join("\n"))`.
+     `Diagnostic::new(Stage::Check?, msg, line, col).with_code("E-INJECTED-TYPE-BARE").with_hint(..)` —
+     NOTE: need span→(line,col); see how `checker::err_coded` converts (may need `diag_src`/line index).
+  6. `src/cli/explain.rs`: add `E-INJECTED-TYPE-BARE` explanation (mirror `E-INJECTED-VARIANT-BARE` @1010).
+  7. Remove vestigial `type_only` field from `Item::Import` (S0 leftover; always false) — touches every
+     `Item::Import` match (grep: ~10 sites incl. import_map, collapse, casing, program.rs, collect.rs).
+  8. Tests: migrated examples PASS (differential green); NEW negative tests — bare `Router`/`#[Route]`/
+     `Duration` without member-import → `E-INJECTED-TYPE-BARE` (a faults README, per invariant 9).
+  9. Spec-completeness (LAST, examples don't need it): qualified `new Http.Router()` (checker dispatch at
+     `calls.rs:107` — add injected-class branch before the enum check) + `#[Http.Route]` (attr parser
+     dotted name `items.rs:440` + desugar_router match `"Route"`||`"Http.Route"` + validate_attributes).
+  10. Docs: `FEATURES.md` + `examples/README.md` to member-import form (README has a CI snippet check).
+- **KEY ASYMMETRY**: S1 collapses ANNOTATIONS pre-checker (enforce pre-injection); construction was NOT
+  collapsed (checker still sees `new Http.Router()` dotted). Enforce BOTH pre-injection for one coherent pass.
+
 ## Dependency-policy amendment (AGREED 2026-07-03, developer)
 - **APPROVED:** admit `rusqlite` (SQLite) + `rustls` (TLS) as new vetted domains — native-only,
   feature-gated (`db`/`tls`, off in WASM playground), spine-quarantined (corosensei/ctrlc shape),
