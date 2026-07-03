@@ -915,9 +915,9 @@ impl Printer<'_> {
                         Ok(format!("function({ps}){r} => {}", self.expr(e)?))
                     }
                     LambdaBody::Block(stmts) => {
-                        // Statement body: `function(params) -> Ret { … }` (the return type is required).
+                        // Statement body: `function(params): Ret { … }` (the return type is required).
                         let r = match ret {
-                            Some(t) => format!(" -> {}", ty(t)?),
+                            Some(t) => format!(": {}", ty(t)?),
                             None => String::new(),
                         };
                         // A lambda is an expression, so its block body is rendered on one line (v1 has
@@ -1223,7 +1223,7 @@ fn ty(t: &Type) -> Result<String, String> {
         }
         Type::Function { params, ret, .. } => {
             let ps: Result<Vec<_>, _> = params.iter().map(ty).collect();
-            Ok(format!("({}) -> {}", ps?.join(", "), ty(ret)?))
+            Ok(format!("({}) => {}", ps?.join(", "), ty(ret)?))
         }
         Type::FixedList { elem, len, .. } => Ok(format!("[{}; {len}]", ty(elem)?)),
         // `Type::Erased` is produced only by the post-check `erase_generics` pass, which `phg fmt`
