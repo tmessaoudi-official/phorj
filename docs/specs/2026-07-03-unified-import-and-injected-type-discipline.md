@@ -79,6 +79,36 @@ annotation resolves `Router` in the module bound to qualifier `Http`.
   name + `desugar_router` match). Migrate the injected preludes' user surface + ~40 `.phg`
   (examples/conformance) + docs (`FEATURES.md`, `examples/README.md`) to the qualified/member form. Gate.
 
+## S1 build recipe (mechanical — investigation done 2026-07-03)
+
+Fully traced; the next build is copy-paste. **Scope: type-ANNOTATION positions only** (params,
+returns, fields, ctor-params, locals, catch, hook, enum-variant payloads, interface/trait methods,
+test bodies) — the exact set `expand_aliases` covers. `new`/`instanceof`/`as` are expr-position →
+S2 (they ride the shipped `new Enum.Variant()` variant-qual machinery).
+
+1. **Parser** (`src/parser/types.rs`, `parse_type_atom` ~L141): after reading the first ident, while
+   the next token is `Dot`, consume `.Ident` and append → `name = "Http.Router"` (PRESERVE the dotted
+   form in `Type::Named{name}`; do NOT collapse at parse — `phg fmt` reads the pre-check AST and must
+   print the qualified form, and S2's migration must be fmt-idempotent). Additive: a `.` after a type
+   name is currently a parse error, so nothing regresses.
+2. **Collapse pass** — new `src/checker/collapse_injected.rs`, `pub fn collapse_injected_type_qualifiers(prog: Program) -> Program`.
+   Model the walker EXACTLY on `expand_aliases` (rewrite_alias.rs) — same rt/rparam/rstmt/rfunc/rmember
+   + Item assembly — but: (a) KEEP `Item::TypeAlias` (do NOT drop — runs before check); (b) the `rt`
+   Named-node rule: if `name` splits on `.` into `(qual, member)` and `INJECTED.get(qual)` contains
+   `member` → replace with `Type::Named{name: member, args, span}`. Registry (static, mirrors the
+   preludes): `Http`→{Request,Response,Route,Router}, `Time`→{Duration,Date,Instant},
+   `Decimal`→{RoundingMode}. (Single-type Json/Regex/Secret excluded — leaf==type.) *Consider DRY-ing
+   the three type-walkers (expand_aliases/erase_generics/this) into one `rewrite_type_names(prog, lookup)`
+   later; standalone is fine for now — matches the codebase's per-pass style.*
+3. **Wire** (`src/cli/mod.rs` `check_and_expand_reified` ~L980): insert AFTER `desugar_auto_router`,
+   BEFORE `check_resolutions` — `let routed = collapse_injected_type_qualifiers(routed);` — so both the
+   checker AND every backend see the bare `Router`. Register `mod collapse_injected;` + `pub use` in
+   `src/checker/mod.rs`.
+4. **Test** (integration, ZERO `.phg` edits): a program `import Core.Http; function f(Http.Router rt): void {}`
+   + construct via the `Http.autoRouter()` factory (no `new` — that's S2) — assert `cli::check` Ok and
+   `run`≡`runvm`≡PHP identical to the bare-`Router` version. Bare `Router` still works (no enforcement
+   until S2). Verify the differential gate is unchanged (no example touched).
+
 ## Acceptance
 
 - `import type` no longer parses; grep for it across the repo → 0.
