@@ -1098,6 +1098,28 @@ Two maintenance notes for the next session:
   `examples/` + `selftest/` **in the same commit** — otherwise `every_repo_phg_formats_idempotently_and_safely`
   goes red. Run `phg format examples selftest` as the last step of any such change.
 
+## Native faults on raw-PHP-builtin paths — latent byte-identity divergences (B-2d audit, 2026-07-05)
+
+Some user-facing native faults lower to a **raw PHP builtin** rather than a `__phorj_*` helper, so the
+Phorj fault text and PHP's own `ValueError`/`TypeError` **differ**. They are `FaultKind::Other`
+(text-compared) but **no example exercises the failing input**, so the differential is green today while
+the divergence is real. Confirmed (audit `docs/research/b2d-rich-error-audit.md`):
+
+- **`List.chunk(xs, 0)`** — run/runvm: `"List.chunk size must be at least 1"`; transpiled
+  `array_chunk($xs, 0)` throws a PHP `ValueError`. Different message.
+- **`Hash.hkdf(..., length > 8160)`** — run/runvm: `"Hash.hkdf: length must be 1..=8160"`; transpiled
+  `hash_hkdf(...)` throws a PHP `ValueError`. Different message.
+- **`Conversion.toString(<non-stringable>)`** (e.g. a closure) — type-checks clean, run/runvm:
+  `"Conversion.toString cannot convert function"`; transpiled `__phorj_str($v)` falls through to
+  `(string)$v` → **PHP Fatal `Object of class Closure could not be converted to string`**. The helper is
+  incomplete (no guard) — so even a `__phorj_*`-lowering fault can diverge; verify per-helper.
+
+These are **DEC-180 reclassification candidates** (normal-input failure → `Result`/`T?`, or a
+`__phorj_*` guard helper that throws the Phorj string so both legs agree, or match PHP's error). Each is
+a user-visible-surface §15 decision — surface to the developer, do not self-rule. The full method +
+regime table is in the B-2d audit. (Contrast: helper-regime faults like `Math.clamp`/`Random.intBetween`
+are byte-identical by construction — the helper throws the same string on both legs.)
+
 ## Behavioral quirks
 
 - **`List.append` copies — building a list by repeated append is O(n²).** Lists are immutable (COW),
