@@ -47,6 +47,26 @@ byte-identical.
   byte-identity break). The checker now rejects it up front (both the UFCS and qualified call forms), so
   every backend refuses in lockstep; `phg explain` entry + 3 checker tests.
 
+### Added — Wave B B-2c: variant imports (DEC-186)
+
+Bring a compiler-injected enum's variants into bare (or aliased) scope, so they need not be written
+qualified. Two parts:
+
+- **Part 1 (parser):** variant-path imports `import Core.Result.Success [as MyOk];` and path-first
+  brace **groups** `import Core.Result.{ Success, Failure as Xzs };` (single-level prefix; trailing
+  comma + multi-line allowed; empty group is `E-IMPORT-GROUP-EMPTY`). A group desugars to one
+  `Item::Import` per member (parser `pending_items` buffer).
+- **Part 2 (binding):** a pre-check pass (`resolve_variant_imports`, wired in `check_and_expand_reified`)
+  rewrites every imported-variant use — bare or `as`-aliased, in **construction** (`new Success(1)`) and
+  **`match` patterns** (`Success(v) =>`, `Fail(e) =>`) — to the qualified `Enum.Variant` form, reusing
+  the proven byte-identical qualified-variant machinery (so `unwrap_new` still emits the bare backend
+  variant; no bespoke rename). Zero-payload variants keep the existing parens rule in patterns
+  (`None()`). The checker rejects a bound name that collides with a local type or is imported twice
+  (`E-IMPORT-CONFLICT`) and a nonexistent variant (`E-IMPORT-UNKNOWN`). Un-imported injected variants
+  stay qualified-only (`E-INJECTED-VARIANT-BARE`). Example `guide/variant-imports.phg` (byte-identical
+  run/runvm/PHP) + 3 parser tests + 5 checker tests. `phg format` canonicalizes a group to one import
+  per line (a group has no dedicated AST node — it is N imports).
+
 ### Added — interactive debugger: `phg debug` (M-DX S5) — **M-DX COMPLETE**
 
 An **interpreter-only** pause/step/inspect debugger with two frontends over one shared engine —

@@ -136,3 +136,79 @@ fn result_to_option_with_both_imports_typechecks() {
         "toOption with both imports must typecheck"
     );
 }
+
+// ── Wave B B-2c (DEC-186): variant imports ──────────────────────────────────────────────────────
+
+/// A bare imported variant (`import Core.Result.Success;`) is usable bare in construction + patterns —
+/// the rewrite qualifies it, so it type-checks like `Result.Success`.
+#[test]
+fn bare_imported_variant_typechecks_in_construction_and_pattern() {
+    let src = "package Main; import Core.Result.Success; import Core.Result.Failure; \
+               function f(): string { \
+                   var r = new Success(1); \
+                   return match (r) { Success(v) => \"ok\", Failure(e) => \"no\" }; \
+               }";
+    let prog = prog_raw(src);
+    assert!(
+        crate::cli::check_and_expand(&prog, src).is_ok(),
+        "bare imported variants must type-check in construction + patterns"
+    );
+}
+
+/// An `as`-aliased imported variant binds the alias; the rewrite maps it to the real variant.
+#[test]
+fn aliased_imported_variant_typechecks() {
+    let src = "package Main; import Core.Result.Success; import Core.Result.Failure as Fail; \
+               function f(): string { \
+                   var r = new Fail(\"e\"); \
+                   return match (r) { Success(v) => \"ok\", Fail(e) => \"err\" }; \
+               }";
+    let prog = prog_raw(src);
+    assert!(
+        crate::cli::check_and_expand(&prog, src).is_ok(),
+        "aliased imported variant must type-check"
+    );
+}
+
+/// A grouped import (`import Core.Option.{ Some, None };`) binds each member.
+#[test]
+fn grouped_imported_variants_typecheck() {
+    let src = "package Main; import Core.Option.{ Some, None }; \
+               function f(): string { \
+                   var o = new Some(1); \
+                   return match (o) { Some(n) => \"some\", None() => \"none\" }; \
+               }";
+    let prog = prog_raw(src);
+    assert!(
+        crate::cli::check_and_expand(&prog, src).is_ok(),
+        "grouped imported variants must type-check"
+    );
+}
+
+/// A variant import whose bound name already names a local type is `E-IMPORT-CONFLICT`.
+#[test]
+fn variant_import_colliding_with_local_type_is_conflict() {
+    let src = "package Main; import Core.Result.Success; \
+               class Success { public int n = 0; } \
+               function main() -> void {}";
+    let prog = prog_raw(src);
+    let err = crate::cli::check_and_expand(&prog, src)
+        .expect_err("a variant import colliding with a local type must be rejected");
+    assert!(
+        err.contains("E-IMPORT-CONFLICT"),
+        "expected E-IMPORT-CONFLICT, got:\n{err}"
+    );
+}
+
+/// Importing a variant the enum does not declare is `E-IMPORT-UNKNOWN`.
+#[test]
+fn unknown_variant_import_is_rejected() {
+    let src = "package Main; import Core.Result.Nope; function main() -> void {}";
+    let prog = prog_raw(src);
+    let err = crate::cli::check_and_expand(&prog, src)
+        .expect_err("importing a nonexistent variant must be rejected");
+    assert!(
+        err.contains("E-IMPORT-UNKNOWN"),
+        "expected E-IMPORT-UNKNOWN, got:\n{err}"
+    );
+}

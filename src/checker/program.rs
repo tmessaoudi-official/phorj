@@ -153,6 +153,7 @@ impl Checker {
                 }
             }
         }
+        self.check_variant_import_collisions(program);
         // Feature B-static: type-check every static field's (now arbitrary) initializer, after all
         // classes + functions are collected, with no `this` — so an initializer may call a function or
         // read another static.
@@ -240,6 +241,69 @@ impl Checker {
     }
 
     /// Feature B-static: type-check each class's static-field initializers (now arbitrary expressions,
+    /// Validate variant imports (Wave B B-2c, DEC-186): `import Core.<Enum>.<Variant> [as A];`. The
+    /// pre-check rewrite (`resolve_variant_imports`) has already qualified the *resolvable* ones; here we
+    /// report the cases it deliberately left alone so nothing is mis-resolved silently:
+    /// - `E-IMPORT-UNKNOWN` — the enum owns no such variant (a mistyped variant import);
+    /// - `E-IMPORT-CONFLICT` — the bound name (alias, else the variant leaf) already names a type in this
+    ///   file, or two variant imports bind the same name (the rewrite skips both, so bare use would be
+    ///   ambiguous / wrongly shadow the local type — reject it, `as`-alias to disambiguate).
+    fn check_variant_import_collisions(&mut self, program: &crate::ast::Program) {
+        use crate::ast::Item;
+        let mut bound_seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for item in &program.items {
+            let Item::Import { path, alias, span } = item else {
+                continue;
+            };
+            if path.len() != 3 || path[0] != "Core" {
+                continue;
+            }
+            let (enum_name, variant) = (&path[1], &path[2]);
+            // Only a Core path whose middle segment is an enum this program declares/injects is a variant
+            // import; anything else (`Core.Http.Router`, `Core.Output.printLine`) is a different import kind.
+            let Some(info) = self.enums.get(enum_name) else {
+                continue;
+            };
+            if !info.variants.contains_key(variant.as_str()) {
+                self.err_coded(
+                    *span,
+                    format!("`Core.{enum_name}` has no variant `{variant}`"),
+                    "E-IMPORT-UNKNOWN",
+                    Some(format!(
+                        "check the spelling — import a variant `{enum_name}` actually declares"
+                    )),
+                );
+                continue;
+            }
+            let bound = alias.clone().unwrap_or_else(|| variant.clone());
+            if self.classes.contains_key(&bound)
+                || self.enums.contains_key(&bound)
+                || self.interfaces.contains_key(&bound)
+            {
+                self.err_coded(
+                    *span,
+                    format!("imported variant binds `{bound}`, which already names a type in this file"),
+                    "E-IMPORT-CONFLICT",
+                    Some(format!(
+                        "alias the import to a free name — `import Core.{enum_name}.{variant} as My{variant};`"
+                    )),
+                );
+                continue;
+            }
+            if !bound_seen.insert(bound.clone()) {
+                self.err_coded(
+                    *span,
+                    format!("`{bound}` is imported more than once"),
+                    "E-IMPORT-CONFLICT",
+                    Some(
+                        "alias one of the imports with `as` so each bound name is unique"
+                            .to_string(),
+                    ),
+                );
+            }
+        }
+    }
+
     /// not just literals), evaluated once at program start. Checked with **no `this`** (statics are
     /// class-level — referencing `this` errors) and after full collection, so an initializer may call a
     /// function or read another static. A type mismatch is `E-STATIC-INIT-TYPE`.

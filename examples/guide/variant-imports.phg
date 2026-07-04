@@ -1,0 +1,47 @@
+// Variant imports (Wave B B-2c, DEC-186) — bring a compiler-injected enum's variants into bare scope,
+// individually or in a path-first brace GROUP, with an optional `as` alias. Without an import, injected
+// variants must be written qualified (`Result.Success(…)`, `E-INJECTED-VARIANT-BARE` on bare use); an
+// import makes the bare (or aliased) name usable in BOTH construction and `match` patterns. It desugars to
+// the qualified form before any backend, so run/runvm and the transpiled PHP stay byte-identical.
+//
+//   import Core.Result.Success;                     // one variant, bare
+//   import Core.Result.Failure as Fail;             // aliased
+//   import Core.Option.{ Some, None };              // a group (single-level prefix, trailing comma OK)
+//
+// The group form is accepted input; `phg format` canonicalizes it to one import per line (below), since a
+// group is just sugar for N single imports. A bare zero-payload variant in a pattern still needs parens
+// (`None()`), exactly like a user enum's `Red()` — a bare `None =>` is a catch-all binding, not a variant
+// match (unchanged rule).
+package Main;
+
+import Core.Output;
+import Core.Result.Success;
+import Core.Result.Failure as Fail;
+import Core.Option.Some;
+import Core.Option.None;
+
+// `Result<int, string>` — construct with the bare `Success` / aliased `Fail`.
+function parse(string s): Result<int, string> {
+    return match (s) { "1" => new Success(1), "2" => new Success(2), _ => new Fail("bad: {s}") };
+}
+
+// Match with the bare / aliased variant heads (both rewrite to the qualified form for the checker + PHP).
+function describe(Result<int, string> r): string {
+    return match (r) { Success(v) => "ok {v}", Fail(e) => "err {e}" };
+}
+
+// `Option<int>` — bare `Some` (payload) + `None()` (zero-payload, parens).
+function firstOne(string s): Option<int> {
+    return match (s) { "1" => new Some(1), _ => new None() };
+}
+
+function main(): void {
+    Output.printLine(describe(parse("2")));
+    // ok 2
+    Output.printLine(describe(parse("z")));
+    // err bad: z
+    Output.printLine(match (firstOne("1")) { Some(n) => "some {n}", None() => "none" });
+    // some 1
+    Output.printLine(match (firstOne("x")) { Some(n) => "some {n}", None() => "none" });
+}
+// none

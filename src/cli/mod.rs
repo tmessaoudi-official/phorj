@@ -1110,6 +1110,12 @@ pub fn check_and_expand_reified(
     // Runs after `desugar_auto_router` (its generated `Router` construction is bare already) and before
     // `check_resolutions`.
     let routed = crate::checker::collapse_injected_type_qualifiers(routed);
+    // Wave B B-2c (DEC-186): resolve imported injected-enum variants (`import Core.Result.Success;` /
+    // `… as X;` / grouped) to their qualified `Enum.Variant` form, so the proven qualified construction +
+    // pattern paths handle them byte-identically. A no-op unless a variant import is present. Runs after
+    // the qualifier collapse (its output is bare injected TYPE names, disjoint from variant heads) and
+    // before `check_resolutions`.
+    let routed = crate::checker::resolve_variant_imports(routed);
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs, overload_renames, reified)) => {
