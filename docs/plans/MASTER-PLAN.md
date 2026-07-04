@@ -819,6 +819,15 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   DISCIPLINE (toOption lesson):** SEPARATE differential cases per form — (a) bare imported variant, (b)
   aliased variant in construction AND a match pattern in one program, (c) grouped import, (d) collision →
   E-IMPORT-CONFLICT. NO combined example (a combined one masks exactly the divergence class that just bit).
+  **⚠ NEWLY-FOUND TRAP (part-1 investigation, sharpens the pass): a ZERO-PAYLOAD variant used bare in a
+  PATTERN (`None =>`, no parens) parses as `Pattern::Binding` (a catch-all matching ANYTHING), NOT
+  `Pattern::Variant` — so an imported bare `None`/`Empty` pattern is invisible to a Variant-only rewrite
+  and would silently become a catch-all → wrong match semantics, run≡runvm≡PHP all AGREE on the WRONG
+  behaviour (not even a divergence — a correctness bug the differential won't flag). The pass MUST also
+  rewrite `Pattern::Binding{name}` whose name ∈ variant-imports AND is a zero-field variant → the
+  qualified zero-payload variant pattern (check how `Option.None =>` is represented first). Also:
+  `Pattern::Variant.fields` are NESTED patterns — recurse. This trap is why part 2 wants fresh context +
+  a zero-payload-pattern differential case, not just the 4 forms above.
 - [2026-07-04] **RULED — full width-aware `fmt` wrapping (DEC-187), sequenced AFTER B-2b combinators.**
   Developer chose the FULL feature (both rules together, not split), ordered after the combinators so the
   Wave B error-model marathon isn't blocked. **EXPAND-ONLY policy** (idempotent): fmt never COLLAPSES an
