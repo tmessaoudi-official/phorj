@@ -12,6 +12,7 @@
 //! unit-tested on the native target by `cargo test`. Only the thin `#[wasm_bindgen]` exports at the
 //! bottom are `wasm32`-gated. The browser bumps the wasm stack size at build time; the interpreter /
 //! checker / compiler depth guards (`phorj::limits`) keep recursion within it.
+#![forbid(unsafe_code)]
 
 use phorj::cli;
 use serde_json::{json, Value};
