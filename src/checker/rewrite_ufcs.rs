@@ -244,7 +244,27 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
                 fields: fields.into_iter().map(|(n, e)| (n, rexpr(e, u))).collect(),
                 span,
             },
-            Expr::New(inner, span) => Expr::New(Box::new(rexpr(*inner, u)), span),
+            // A `new` reaching here is inside a RELOCATED UFCS replacement subtree: the `ufcs` map
+            // captured the call site during checking, BEFORE `unwrap_new` ran, so its embedded
+            // receiver/argument subtrees still carry `Expr::New` wrappers (a `new` in the MAIN tree was
+            // already stripped — `unwrap_new` runs before this pass, and every `New` must be gone before
+            // any backend). Strip it exactly as `checker::rewrite_new::ue_expr` does: recurse first
+            // (nested UFCS / nested `new`), then erase the wrapper, collapsing a qualified variant
+            // construction `new Enum.Variant(args)` (a `Member` callee) to the bare `Variant(args)` every
+            // backend builds. Without this, `xs.map(function(x) => new C(x))` (any UFCS call with a
+            // constructing lambda/arg) panics the interpreter/compiler with a surviving `Expr::New`.
+            Expr::New(inner, _span) => {
+                let mut inner = rexpr(*inner, u);
+                if let Expr::Call { callee, .. } = &mut inner {
+                    if let Expr::Member {
+                        name, span: msp, ..
+                    } = callee.as_ref()
+                    {
+                        *callee.as_mut() = Expr::Ident(name.clone(), *msp);
+                    }
+                }
+                inner
+            }
             // `spawn <call>` (M6 W4): walk the nested call so a UFCS method call inside it rewrites.
             Expr::Spawn { call, span } => Expr::Spawn {
                 call: Box::new(rexpr(*call, u)),

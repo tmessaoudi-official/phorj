@@ -681,6 +681,12 @@ impl Checker {
             },
             (Ty::List(d), Ty::List(a)) | (Ty::Set(d), Ty::Set(a)) => self.unify(d, a, theta),
             (Ty::Optional(d), Ty::Optional(a)) => self.unify(d, a, theta),
+            // A non-null, non-optional argument against an `Optional(T)` parameter binds `T` from the
+            // inner type — `Option.ofNullable(42)` infers `T = int` (an `int` IS assignable to `int?`,
+            // so this just aligns `unify` with the existing `(other, Optional(t))` assignability rule).
+            // A bare `null` is deliberately excluded: it cannot determine `T` (falls through to plain
+            // assignability — `null` is assignable to any optional, but binds nothing).
+            (Ty::Optional(d), a) if !matches!(a, Ty::Null) => self.unify(d, a, theta),
             (Ty::Map(dk, dv), Ty::Map(ak, av)) => {
                 self.unify(dk, ak, theta) && self.unify(dv, av, theta)
             }

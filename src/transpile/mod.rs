@@ -235,6 +235,16 @@ struct Transpiler {
     uses_json_parse_lines: bool,
     uses_json_stringify_lines: bool,
     uses_ini_parse: bool,
+    /// Set per `Core.Option` combinator/conversion emitted (Wave B B-2a) — each defines its gated
+    /// `__phorj_option_*` helper once per file, operating over the injected `Some`/`None` PHP classes
+    /// (no PHP builtin analog). The higher-order ones take the transpiled closure as a PHP callable;
+    /// all bind the receiver to a param first, so an argument expression is never evaluated twice.
+    uses_option_map: bool,
+    uses_option_and_then: bool,
+    uses_option_filter: bool,
+    uses_option_get_or_else: bool,
+    uses_option_of_nullable: bool,
+    uses_option_to_nullable: bool,
     /// Set when `Core.Text.parseInt` is emitted — defines `__phorj_parse_int` once per file. The
     /// helper mirrors Rust's `i64::from_str` (optional sign, base-10 digits, i64 range, no surrounding
     /// whitespace) and returns `null` (Phorj `None`) otherwise — including on i64 overflow, which
@@ -536,6 +546,12 @@ impl Transpiler {
             uses_json_parse_lines: false,
             uses_json_stringify_lines: false,
             uses_ini_parse: false,
+            uses_option_map: false,
+            uses_option_and_then: false,
+            uses_option_filter: false,
+            uses_option_get_or_else: false,
+            uses_option_of_nullable: false,
+            uses_option_to_nullable: false,
             uses_text_parse_int: false,
             uses_list_sort: false,
             uses_list_sort_with: false,

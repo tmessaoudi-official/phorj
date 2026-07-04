@@ -6,6 +6,34 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Wave B foundation: canonical `Core.Option` / `Core.Result` (DEC-182)
+
+The two canonical error/absence types ship as **compiler-injected** enums (same pattern as
+`Core.Json`), gated on `import Core.Option;` / `import Core.Result;`. The first *generic* injected
+enums — `T`/`E` are checked as type parameters then erased before any backend, so run/runvm/PHP stay
+byte-identical.
+
+- **B-1 (types):** `inject_option_prelude` / `inject_result_prelude` (`src/cli/mod.rs`) inject
+  `enum Option<T> { None, Some(T value) }` and `enum Result<T, E> { Success(T value), Failure(E error) }`.
+  Variants are reached **qualified only** (`Option.Some`, `Result.Failure`; bare use is
+  `E-INJECTED-VARIANT-BARE`). A user-declared same-name enum shadows and skips the injection.
+  `Option<T>` is DISTINCT from the built-in `T?` (explicit conversion, no implicit coercion).
+  Examples `guide/core-option.phg` + `guide/core-result.phg`.
+- **B-2a (Option combinators + conversions):** `Core.Option` module natives (`src/native/option.rs`)
+  reached UFCS-style (`opt.map(f)` → `Option.map(opt, f)`, same dispatch as `list.map`, since enums
+  have no methods): `map` / `andThen` / `filter` (higher-order) + `getOrElse` (eager default) +
+  `Option.ofNullable(T?)` / `toNullable() -> T?` (the explicit `T?`↔`Option` bridge). Erase to gated
+  `__phorj_option_*` PHP helpers over the injected `Some`/`None` classes. Example
+  `guide/option-combinators.phg`.
+- **Fix (pre-existing crash, surfaced by `andThen`):** a `new` inside an argument subtree relocated by
+  the UFCS rewrite (`xs.map(function(x) => new C(x))`, any UFCS call with a constructing lambda/arg)
+  bypassed `unwrap_new` and panicked the interpreter/compiler with a surviving `Expr::New`.
+  `rewrite_ufcs`'s walker now strips `Expr::New` (incl. the qualified-variant callee rewrite) in
+  relocated subtrees.
+- **Inference:** `unify` now binds a type parameter from a non-null argument against an `Optional(T)`
+  parameter (`Option.ofNullable(42)` infers `T = int`), aligning it with the existing
+  `(other, Optional(t))` assignability rule.
+
 ### Added — interactive debugger: `phg debug` (M-DX S5) — **M-DX COMPLETE**
 
 An **interpreter-only** pause/step/inspect debugger with two frontends over one shared engine —

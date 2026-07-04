@@ -1,0 +1,52 @@
+// `Core.Option<T>` combinators + `T?`↔`Option` conversions (Wave B slice B-2a, DEC-182).
+//
+// Slice B-1 shipped the injected `Option<T>` TYPE; this adds its behaviour. Enums have no methods, so
+// the combinators are `Core.Option` module natives reached UFCS-style: `opt.map(f)` resolves to
+// `Option.map(opt, f)` (the same first-parameter dispatch as `list.map(f)`), and both `run`/`runvm`
+// and the transpiled PHP go through one shared body. They erase to gated `__phorj_option_*` PHP helpers.
+//
+//   map(Option<T>, (T) -> U)         -> Option<U>   apply to a Some payload; None passes through
+//   andThen(Option<T>, (T) -> Option<U>) -> Option<U>   monadic bind — f itself returns an Option
+//   filter(Option<T>, (T) -> bool)   -> Option<T>   keep a Some only if the predicate holds
+//   getOrElse(Option<T>, T)          -> T           the Some payload, else the (eager) default
+//   Option.ofNullable(T?)            -> Option<T>   lift a built-in nullable: null => None, x => Some(x)
+//   toNullable(Option<T>)            -> T?           the reverse bridge: Some(x) => x, None => null
+//
+// `getOrElse`'s default is evaluated eagerly (a plain value argument, unlike `??`'s lazy right side).
+package Main;
+
+import Core.Output;
+import Core.Option;
+
+function main(): void {
+    Option<int> some = new Option.Some(5);
+    Option<int> none = new Option.None();
+    // map — transform the payload of a Some, leave a None untouched.
+    Output.printLine("{some.map(function(int x) => x * 2).toNullable() ?? -1}");
+    // 10
+    Output.printLine("{none.map(function(int x) => x * 2).toNullable() ?? -1}");
+    // -1   — None mapped is still None (toNullable => null, so `?? -1`)
+    // getOrElse — unwrap or fall back. The result is a real `int`, usable directly in arithmetic
+    // (the inferred concrete type threads to the VM — no "erased generic operand" hazard here).
+    int doubled = some.getOrElse(0) + 1;
+    Output.printLine("{doubled}");
+    // 6
+    Output.printLine("{none.getOrElse(99)}");
+    // 99
+    // filter — a Some that fails the predicate becomes None.
+    Output.printLine("{some.filter(function(int x) => x > 3).toNullable() ?? -1}");
+    // 5
+    Output.printLine("{some.filter(function(int x) => x > 10).toNullable() ?? -1}");
+    // -1
+    // andThen — chain a step that itself returns an Option (here it constructs one in the lambda body).
+    var chained = some.andThen(function(int x) => new Option.Some(x + 100));
+    Output.printLine("{chained.toNullable() ?? -1}");
+    // 105
+    // ofNullable / toNullable — the explicit bridge to and from the built-in nullable `T?`.
+    int? present = 42;
+    int? absent = null;
+    Output.printLine("{Option.ofNullable(present).getOrElse(0)}");
+    // 42
+    Output.printLine("{Option.ofNullable(absent).getOrElse(-1)}");
+}
+// -1

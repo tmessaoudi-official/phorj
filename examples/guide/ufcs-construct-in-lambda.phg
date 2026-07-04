@@ -1,0 +1,32 @@
+// Regression guard: a `new` inside a lambda (or any argument) passed to a UFCS-method call.
+//
+// A UFCS method call `xs.map(f)` is rewritten to the free call `map(xs, f)` in a LATE pass that
+// relocates the original argument subtrees — a pass that used to run after `new`-stripping, so a
+// `new` buried inside a relocated lambda body survived to the backend and PANICKED the interpreter
+// and compiler ("Expr::New is unwrapped before …"). This is a NON-`Option` guard (plain classes), so
+// the fix stays protected independent of any stdlib type; the same fix also covers `f(new X()) as T`
+// (a cast argument flows through the same relocation). Byte-identical `run ≡ runvm ≡ real PHP`.
+package Main;
+
+import Core.Output;
+import Core.List;
+
+class Point {
+    constructor(public int x, public int y) {}
+    function sum(): int {
+        return this.x + this.y;
+    }
+}
+
+function main(): void {
+    // UFCS `.map` with a lambda that CONSTRUCTS a value in its body — the panicking shape.
+    List<Point> pts = [1, 2, 3].map(function(int n) => new Point(n, n * 10));
+    Output.printLine("{pts[0].sum()}");
+    // 11
+    Output.printLine("{pts[2].sum()}");
+    // 33
+    // A `new` as a UFCS argument (not in a lambda) — same relocation path.
+    List<int> sums = pts.map(function(Point p) => p.sum());
+    Output.printLine("{List.sum(sums)}");
+}
+// 66  — 11 + 22 + 33

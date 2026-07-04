@@ -165,6 +165,17 @@ impl Transpiler {
                         if nat.module == "Core.Ini" && nat.name == "parse" {
                             self.uses_ini_parse = true;
                         }
+                        if nat.module == "Core.Option" {
+                            match nat.name {
+                                "map" => self.uses_option_map = true,
+                                "andThen" => self.uses_option_and_then = true,
+                                "filter" => self.uses_option_filter = true,
+                                "getOrElse" => self.uses_option_get_or_else = true,
+                                "ofNullable" => self.uses_option_of_nullable = true,
+                                "toNullable" => self.uses_option_to_nullable = true,
+                                _ => {}
+                            }
+                        }
                         if nat.module == "Core.String" {
                             match nat.name {
                                 "parseInt" => self.uses_text_parse_int = true,

@@ -1409,6 +1409,51 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `Core.Option` combinators (Wave B B-2a) — over the injected `Some`/`None` PHP classes (no
+        // builtin analog). The receiver is a param, so it is bound once (no double-eval of the call-site
+        // argument expression). `map`/`filter` re-wrap; `andThen`'s `$f` itself returns an Option.
+        if self.uses_option_map {
+            self.line("function __phorj_option_map($o, $f) {");
+            self.indent += 1;
+            self.line("return $o instanceof Some ? new Some($f($o->value)) : $o;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_option_and_then {
+            self.line("function __phorj_option_and_then($o, $f) {");
+            self.indent += 1;
+            self.line("return $o instanceof Some ? $f($o->value) : $o;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_option_filter {
+            self.line("function __phorj_option_filter($o, $f) {");
+            self.indent += 1;
+            self.line("return ($o instanceof Some && $f($o->value)) ? $o : new None();");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_option_get_or_else {
+            self.line("function __phorj_option_get_or_else($o, $d) {");
+            self.indent += 1;
+            self.line("return $o instanceof Some ? $o->value : $d;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_option_of_nullable {
+            self.line("function __phorj_option_of_nullable($v) {");
+            self.indent += 1;
+            self.line("return $v === null ? new None() : new Some($v);");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_option_to_nullable {
+            self.line("function __phorj_option_to_nullable($o) {");
+            self.indent += 1;
+            self.line("return $o instanceof Some ? $o->value : null;");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// Emit `__phorj_reflect_of($v, $kind)` + its static table, built from the SAME `ClassTables` the

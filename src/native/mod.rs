@@ -37,6 +37,7 @@ mod json;
 mod list;
 mod map;
 mod math;
+mod option;
 mod path;
 mod process;
 mod random;
@@ -346,6 +347,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(csv::csv_natives());
     registry.extend(random::random_natives());
     registry.extend(json::json_natives());
+    registry.extend(option::option_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
     registry.extend(runtime::runtime_natives());
