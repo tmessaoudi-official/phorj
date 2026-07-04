@@ -167,3 +167,48 @@ fn type_pattern_nested_in_variant_is_accepted() {
         "{bad:?}"
     );
 }
+
+#[test]
+fn union_string_pattern_erased_ambig_rejected() {
+    // Byte-identity guard (G-1): a `string` type-pattern over a union that also holds a
+    // decimal/bytes/html/attr sibling is `E-MATCH-ERASED-AMBIG` — the transpiled `is_string()`
+    // can't tell an erased sibling from a real string (run/runvm distinguish by value kind).
+    let bad = errors_of(
+        "function f(string | decimal v) -> string { \
+               return match v { string s => s, _ => \"x\" }; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter().any(|e| e.code == Some("E-MATCH-ERASED-AMBIG")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn optional_union_string_pattern_erased_ambig_rejected() {
+    // Wave A slice 2: the erasure guard must see through an `Optional` — a `(string | decimal)?`
+    // (the `T?` a `List.first`/`Map.get` returns) is the same byte-identity hazard behind a `?`,
+    // and must not bypass `E-MATCH-ERASED-AMBIG`.
+    let bad = errors_of(
+        "function f((string | decimal)? v) -> string { \
+               return match v { string s => s, _ => \"x\" }; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter().any(|e| e.code == Some("E-MATCH-ERASED-AMBIG")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn optional_union_type_patterns_ok() {
+    // A clean `(int | string)?` — no erasing sibling — matches by primitive type-pattern plus a
+    // `_` catch-all without tripping the erasure guard (Wave A slice 2: the shape a union-element
+    // collection's `.first`/`Map.get` yields, consumed at the call site).
+    let ok = errors_of(
+        "function f((int | string)? v) -> string { \
+               return match v { int i => \"i\", string s => s, _ => \"n\" }; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}

@@ -328,7 +328,10 @@ impl Checker {
                     // a type that erases to a PHP `string` (decimal/bytes/html/attr), so reject it —
                     // `run`/`runvm` distinguish them by `Value` variant but the transpiled PHP cannot.
                     if matches!(prim, Ty::String) {
-                        if let Ty::Union(members) = scrut {
+                        // The union may sit behind an `Optional` (`(string | decimal)?`, e.g. the
+                        // `T?` a `List.first`/`Map.get` returns) — `union_members_of` unwraps it so
+                        // the guard isn't bypassed on that path (byte-identity hole, G-1).
+                        if let Some(members) = union_members_of(scrut) {
                             if members
                                 .iter()
                                 .any(|m| !matches!(m, Ty::String) && erases_to_php_string(m))
@@ -517,6 +520,23 @@ fn prim_ty_name(ty: &Ty) -> Option<&'static str> {
         Ty::String => Some("string"),
         Ty::Bool => Some("bool"),
         Ty::Null => Some("null"),
+        _ => None,
+    }
+}
+
+/// The union members a type-pattern arm tests against — for both a bare `Ty::Union` and an
+/// `Optional` wrapping one (`(A | B)?`, the `T?` a `List.first`/`Map.get`/`.last` returns). Threading
+/// through `Optional` keeps the `string`-erasure byte-identity guard (`E-MATCH-ERASED-AMBIG`) from
+/// being bypassed when the union sits behind a `?`: a decimal/bytes/html/attr sibling erases to a PHP
+/// string, so `is_string` in the transpiled leg can't tell it apart from a real `string` (G-1).
+/// Returns `None` for any other scrutinee.
+fn union_members_of(scrut: &Ty) -> Option<&[Ty]> {
+    match scrut {
+        Ty::Union(members) => Some(members),
+        Ty::Optional(inner) => match &**inner {
+            Ty::Union(members) => Some(members),
+            _ => None,
+        },
         _ => None,
     }
 }

@@ -1,0 +1,53 @@
+// Union-element collections (Wave A) — a `List<int | string>` is a real, usable collection: its
+// query methods thread the element UNION through, so `.filter`, `.map` and `.first` all keep the
+// full `int | string` shape and each element is discriminated the same way a bare union value is.
+//
+// The generic collection natives are typed `List.filter(List<T>, (T) -> bool) -> List<T>`,
+// `List.map(List<T>, (T) -> U) -> List<U>`, `List.first(List<T>) -> T?`. When `T` is itself a union,
+// the same call-site unifier binds `T = int | string` and substitutes it back into the result — no
+// erasure, no widening to a dynamic `mixed`. The lambda parameter is annotated with the union and
+// `match`-narrowed inside, exactly like a top-level union parameter.
+//
+// Everything here is byte-for-byte identical across `run`, `runvm`, and transpiled PHP: the per-
+// element discrimination is `is_int`/`is_string` and the `.first()` absence check is `=== null`.
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.String;
+
+// One narrowing helper, reused everywhere a union element is consumed — `match` binds each arm at
+// its concrete type (`n` is an `int`, `s` is a `string`).
+function describe(int | string x): string {
+    return match (x) {
+        int n => "int(" + (n as string) + ")",
+        string s => "str(" + s + ")",
+    };
+}
+
+function main(): void {
+    List<int | string> items = [1, "two", 3, "four", 5];
+
+    // .filter keeps the element type — the result is still `List<int | string>`, so it iterates and
+    // narrows just like the source. The predicate narrows each element to decide per shape.
+    var longish = items.filter(function(int | string x) => match (x) {
+        int n => n > 2,
+        string s => String.length(s) > 3,
+    });
+    for (int | string it in longish) {
+        Output.printLine("kept " + describe(it));
+    }
+
+    // .map narrows inside the lambda and returns `List<string>` (the callback's result type U).
+    var labels = items.map(function(int | string x) => describe(x));
+    Output.printLine("labels = " + String.join(labels, ", "));
+
+    // .first returns `(int | string)?` — the union behind a `?`. Consume it with a `null` arm for
+    // the empty case; the smart-cast binds the non-null remainder at the full union so `describe`
+    // narrows it in turn.
+    var head = items.first();
+    Output.printLine(match (head) {
+        null => "empty",
+        v => describe(v),
+    });
+}
