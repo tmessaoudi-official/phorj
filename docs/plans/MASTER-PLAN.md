@@ -853,6 +853,16 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   source access the printer deliberately lacks, and width-canonical is the industry norm + idempotent by
   construction). Surface this to the developer at the start of the fmt session — it revises DEC-187's
   expand-only framing. No bounded sub-increment exists; it's an atomic printer-core rewrite → fresh session.
+- [2026-07-04] **AMENDED — DEC-187 is now WIDTH-CANONICAL (Rule 2 only); Rule 1 "preserve author breaks" is
+  DROPPED (developer-ruled interactively at fmt-session start, this session).** Rationale accepted: (1)
+  width-canonical is idempotent by construction (`fmt(fmt(x))==fmt(x)`, the hard requirement + UA-0.8);
+  (2) it matches the print-from-AST invariant `printer.rs` already holds (no source-threading / span-diffing);
+  (3) industry norm (prettier/rustfmt/gofmt). Trade-off accepted: a gratuitously-broken SHORT chain is now
+  COLLAPSED to canonical form (fmt re-derives all layout from a fits-in-N-columns solver), not preserved —
+  reversible later via an explicit pragma if a per-chain break-control preference emerges. Build = Wadler-style
+  document IR (`text`/`line`/`softline`/`group`/`nest`) + fits solver + per-construct break rules (chain `.`,
+  call args, collection/map literals, import groups) replacing the flat single-line `expr()` printer. Corpus
+  test strengthened to `fmt(src)==src` on a multi-line width-canonical corpus.
 - [2026-07-04] **Build order (converged, developer-ruled):** B-2b combinators → DEC-187 fmt full wrapping
   → B-2c variant + grouped imports → B-2d rich-error audit + UA-1.8 → Wave C. Each gate-green + example +
   commit; NEVER push (developer pushes on green CI). **[REORDERED 2026-07-04 post-B-2b (developer-confirmed):

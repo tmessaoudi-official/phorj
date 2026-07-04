@@ -15,6 +15,7 @@
 //! Comments (which the token stream discards) are carried in via the lexer's `lex_with_comments`
 //! side-channel (F1) and interleaved by source span (F2b).
 
+use super::doc::{self, Doc};
 use crate::ast::{
     BinaryOp, CatchClause, ClassDecl, ClassMember, CtorParam, DestructureField, DestructurePat,
     EnumDecl, Expr, FieldPat, FunctionDecl, Item, LambdaBody, Modifier, Param, Pattern, Program,
@@ -776,65 +777,92 @@ impl Printer<'_> {
     // ── expressions ──
 
     fn expr(&self, e: &Expr) -> Result<String, String> {
+        // The flat rendering of an expression's layout Doc reproduces the legacy single-line form. All
+        // non-wrapping contexts (interpolation holes, decl headers, control-flow conditions, inlined
+        // lambda bodies) route through here, so their output is byte-for-byte unchanged.
+        Ok(doc::render_flat(&self.expr_doc(e)?))
+    }
+
+    /// Build the layout [`Doc`] for an expression — the width-canonical core (DEC-187). Flat rendering
+    /// reproduces the legacy single-line form byte-for-byte; the break points (call/`new`/`match`
+    /// args, collection and map literals, `match` arms) fire only when a statement value is rendered
+    /// through [`Self::render_expr`] and the enclosing [`doc::Group`] would overflow the width budget.
+    /// Contains NO hard break, so forced-flat rendering inside interpolation is always well defined.
+    fn expr_doc(&self, e: &Expr) -> Result<Doc, String> {
         match e {
-            Expr::Int(n, _) => Ok(n.to_string()),
-            Expr::Float(f, _) => Ok(format!("{f:?}")),
+            Expr::Int(n, _) => Ok(doc::text(n.to_string())),
+            Expr::Float(f, _) => Ok(doc::text(format!("{f:?}"))),
             // A `decimal` literal prints back as its rendered value + the `d` suffix (M-NUM S1) — the
             // round-trip-faithful surface form (`19.99d`).
             Expr::Decimal {
                 unscaled, scale, ..
-            } => Ok(format!("{}d", crate::value::fmt_decimal(*unscaled, *scale))),
-            Expr::Bool(b, _) => Ok(b.to_string()),
-            Expr::Null(_) => Ok("null".to_string()),
-            Expr::Str(parts, _) => self.str_lit(parts),
-            Expr::Ident(name, _) => Ok(name.clone()),
-            Expr::This(_) => Ok("this".to_string()),
+            } => Ok(doc::text(format!(
+                "{}d",
+                crate::value::fmt_decimal(*unscaled, *scale)
+            ))),
+            Expr::Bool(b, _) => Ok(doc::text(b.to_string())),
+            Expr::Null(_) => Ok(doc::text("null")),
+            Expr::Str(parts, _) => Ok(doc::text(self.str_lit(parts)?)),
+            Expr::Ident(name, _) => Ok(doc::text(name.clone())),
+            Expr::This(_) => Ok(doc::text("this")),
             Expr::List(items, _) => {
-                let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
-                Ok(format!("[{}]", xs?.join(", ")))
+                let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
+                Ok(bracketed("[", xs?, "]"))
             }
             Expr::Map(pairs, _) => {
                 let mut xs = Vec::new();
                 for (k, v) in pairs {
-                    xs.push(format!("{} => {}", self.expr(k)?, self.expr(v)?));
+                    xs.push(doc::concat(vec![
+                        self.expr_doc(k)?,
+                        doc::text(" => "),
+                        self.expr_doc(v)?,
+                    ]));
                 }
-                Ok(format!("[{}]", xs.join(", ")))
+                Ok(bracketed("[", xs, "]"))
             }
             Expr::Unary { op, expr, .. } => {
                 // Unary binds tighter than every binary op; a binary/range operand needs parens, and
                 // so does a nested unary (to avoid `--`/`~~` re-lexing as a multi-char token).
                 let needs = prec_of(expr) < PREC_UNARY || matches!(**expr, Expr::Unary { .. });
-                let inner = self.expr(expr)?;
-                let inner = if needs { format!("({inner})") } else { inner };
-                Ok(format!("{}{inner}", unary_op(*op)))
+                let inner = self.expr_doc(expr)?;
+                let inner = if needs { parens(inner) } else { inner };
+                Ok(doc::concat(vec![doc::text(unary_op(*op)), inner]))
             }
             Expr::Binary { op, lhs, rhs, .. } => {
                 let p = bin_prec(*op);
                 let right_assoc = matches!(op, BinaryOp::Pow);
-                let l = self.operand(lhs, p, false, right_assoc)?;
-                let r = self.operand(rhs, p, true, right_assoc)?;
-                Ok(format!("{l} {} {r}", binary_op(*op)))
+                let l = self.operand_doc(lhs, p, false, right_assoc)?;
+                let r = self.operand_doc(rhs, p, true, right_assoc)?;
+                Ok(doc::concat(vec![
+                    l,
+                    doc::text(format!(" {} ", binary_op(*op))),
+                    r,
+                ]))
             }
             Expr::InstanceOf {
                 value, type_name, ..
             } => {
                 // `instanceof` is a left-precedence-8 test; its value operand needs parens below 8.
-                let v = self.operand(value, 8, false, false)?;
-                Ok(format!("{v} instanceof {type_name}"))
+                let v = self.operand_doc(value, 8, false, false)?;
+                Ok(doc::concat(vec![
+                    v,
+                    doc::text(format!(" instanceof {type_name}")),
+                ]))
             }
             Expr::Cast {
                 value, type_name, ..
             } => {
                 // `as` is a left-precedence-8 cast (same level as `instanceof`); its value operand
                 // needs parens below 8.
-                let v = self.operand(value, 8, false, false)?;
-                Ok(format!("{v} as {type_name}"))
+                let v = self.operand_doc(value, 8, false, false)?;
+                Ok(doc::concat(vec![v, doc::text(format!(" as {type_name}"))]))
             }
             // `<Type>f(args)` — a return-overload selector prefix (Slice C1). Prints the selector type
             // in angle brackets immediately before its call (NOT a cast — `as` is the cast).
-            Expr::OverloadSelect { ty: t, call, .. } => {
-                Ok(format!("<{}>{}", ty(t)?, self.expr(call)?))
-            }
+            Expr::OverloadSelect { ty: t, call, .. } => Ok(doc::concat(vec![
+                doc::text(format!("<{}>", ty(t)?)),
+                self.expr_doc(call)?,
+            ])),
             // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).
             Expr::ParentCall {
                 ancestor,
@@ -846,30 +874,36 @@ impl Printer<'_> {
                     Some(a) => format!("parent({a})"),
                     None => "parent".to_string(),
                 };
-                let xs: Result<Vec<_>, _> = args.iter().map(|a| self.expr(a)).collect();
-                Ok(format!("{head}.{method}({})", xs?.join(", ")))
+                Ok(doc::concat(vec![
+                    doc::text(format!("{head}.{method}")),
+                    self.args_doc(args)?,
+                ]))
             }
-            Expr::Call { callee, args, .. } => {
-                let a: Result<Vec<_>, _> = args.iter().map(|x| self.expr(x)).collect();
-                Ok(format!(
-                    "{}({})",
-                    self.postfix_operand(callee)?,
-                    a?.join(", ")
-                ))
-            }
+            Expr::Call { callee, args, .. } => Ok(doc::concat(vec![
+                self.postfix_doc(callee)?,
+                self.args_doc(args)?,
+            ])),
             Expr::Member {
                 object, name, safe, ..
             } => {
                 let dot = if *safe { "?." } else { "." };
-                Ok(format!("{}{dot}{name}", self.postfix_operand(object)?))
+                Ok(doc::concat(vec![
+                    self.postfix_doc(object)?,
+                    doc::text(format!("{dot}{name}")),
+                ]))
             }
-            Expr::Index { object, index, .. } => Ok(format!(
-                "{}[{}]",
-                self.postfix_operand(object)?,
-                self.expr(index)?
-            )),
-            Expr::Force { inner, .. } => Ok(format!("{}!", self.postfix_operand(inner)?)),
-            Expr::Propagate { inner, .. } => Ok(format!("{}?", self.postfix_operand(inner)?)),
+            Expr::Index { object, index, .. } => Ok(doc::concat(vec![
+                self.postfix_doc(object)?,
+                doc::text("["),
+                self.expr_doc(index)?,
+                doc::text("]"),
+            ])),
+            Expr::Force { inner, .. } => {
+                Ok(doc::concat(vec![self.postfix_doc(inner)?, doc::text("!")]))
+            }
+            Expr::Propagate { inner, .. } => {
+                Ok(doc::concat(vec![self.postfix_doc(inner)?, doc::text("?")]))
+            }
             Expr::Range {
                 start,
                 end,
@@ -879,53 +913,69 @@ impl Printer<'_> {
                 // Range is the loosest expression (operands are full binaries); only a nested range
                 // operand needs parens.
                 let dots = if *inclusive { "..=" } else { ".." };
-                let wrap = |pr: &Self, e: &Expr| -> Result<String, String> {
-                    let s = pr.expr(e)?;
+                let wrap = |pr: &Self, e: &Expr| -> Result<Doc, String> {
+                    let d = pr.expr_doc(e)?;
                     // Only a nested range (the single loosest form) needs parens here.
                     Ok(if prec_of(e) == PREC_RANGE {
-                        format!("({s})")
+                        parens(d)
                     } else {
-                        s
+                        d
                     })
                 };
-                Ok(format!("{}{dots}{}", wrap(self, start)?, wrap(self, end)?))
+                Ok(doc::concat(vec![
+                    wrap(self, start)?,
+                    doc::text(dots),
+                    wrap(self, end)?,
+                ]))
             }
             Expr::If {
                 cond,
                 then_expr,
                 else_expr,
                 ..
-            } => Ok(format!(
+            } => Ok(doc::text(format!(
                 "if ({}) {{ {} }} else {{ {} }}",
                 self.expr(cond)?,
                 self.expr(then_expr)?,
                 self.expr(else_expr)?
-            )),
-            Expr::New(inner, _) => Ok(format!("new {}", self.expr(inner)?)),
+            ))),
+            Expr::New(inner, _) => Ok(doc::concat(vec![doc::text("new "), self.expr_doc(inner)?])),
             // `spawn <call>` (M6 W4) — contextual keyword, printed as a prefix on the call.
-            Expr::Spawn { call, .. } => Ok(format!("spawn {}", self.expr(call)?)),
+            Expr::Spawn { call, .. } => {
+                Ok(doc::concat(vec![doc::text("spawn "), self.expr_doc(call)?]))
+            }
             Expr::Match {
                 scrutinee, arms, ..
             } => {
-                let mut out = Vec::new();
+                let mut arm_docs = Vec::new();
                 for arm in arms {
                     let guard = match &arm.guard {
                         Some(g) => format!(" when {}", self.expr(g)?),
                         None => String::new(),
                     };
-                    out.push(format!(
-                        "{}{guard} => {}",
-                        self.pattern(&arm.pattern)?,
-                        self.expr(&arm.body)?
-                    ));
+                    arm_docs.push(doc::concat(vec![
+                        doc::text(format!("{}{guard} => ", self.pattern(&arm.pattern)?)),
+                        self.expr_doc(&arm.body)?,
+                    ]));
                 }
-                Ok(format!(
-                    "match ({}) {{ {} }}",
-                    self.expr(scrutinee)?,
-                    out.join(", ")
-                ))
+                // `match (s) { a => b, c => d }` flat; one arm per line when it overflows. The
+                // scrutinee stays on the head line (rendered flat via `self.expr`).
+                Ok(doc::concat(vec![
+                    doc::text(format!("match ({}) {{", self.expr(scrutinee)?)),
+                    doc::group(doc::concat(vec![
+                        doc::nest(
+                            4,
+                            doc::concat(vec![
+                                doc::line(),
+                                doc::join(arm_docs, doc::concat(vec![doc::text(","), doc::line()])),
+                            ]),
+                        ),
+                        doc::line(),
+                        doc::text("}"),
+                    ])),
+                ]))
             }
-            Expr::Bytes(bytes, _) => Ok(format!("b\"{}\"", escape_bytes(bytes))),
+            Expr::Bytes(bytes, _) => Ok(doc::text(format!("b\"{}\"", escape_bytes(bytes)))),
             Expr::Lambda {
                 params, ret, body, ..
             } => {
@@ -938,7 +988,10 @@ impl Printer<'_> {
                             Some(t) => format!(": {}", ty(t)?),
                             None => String::new(),
                         };
-                        Ok(format!("function({ps}){r} => {}", self.expr(e)?))
+                        Ok(doc::concat(vec![
+                            doc::text(format!("function({ps}){r} => ")),
+                            self.expr_doc(e)?,
+                        ]))
                     }
                     LambdaBody::Block(stmts) => {
                         // Statement body: `function(params): Ret { … }` (the return type is required).
@@ -948,10 +1001,10 @@ impl Printer<'_> {
                         };
                         // A lambda is an expression, so its block body is rendered on one line (v1 has
                         // no reflow). `inline_block` handles any statement, including control flow.
-                        Ok(format!(
+                        Ok(doc::text(format!(
                             "function({ps}){r} {{ {} }}",
                             self.inline_block(stmts)?
-                        ))
+                        )))
                     }
                 }
             }
@@ -959,13 +1012,17 @@ impl Printer<'_> {
                 // `obj with { field = value, … }` — the functional-update syntax uses `=`, not `:`.
                 let mut fs = Vec::new();
                 for (name, e) in fields {
-                    fs.push(format!("{name} = {}", self.expr(e)?));
+                    fs.push(doc::concat(vec![
+                        doc::text(format!("{name} = ")),
+                        self.expr_doc(e)?,
+                    ]));
                 }
-                Ok(format!(
-                    "{} with {{ {} }}",
-                    self.postfix_operand(object)?,
-                    fs.join(", ")
-                ))
+                Ok(doc::concat(vec![
+                    self.postfix_doc(object)?,
+                    doc::text(" with { "),
+                    doc::join(fs, doc::text(", ")),
+                    doc::text(" }"),
+                ]))
             }
             // `html"…"` literal — same segment model as a string, different delimiter.
             Expr::Html(parts, _) => {
@@ -979,7 +1036,7 @@ impl Printer<'_> {
                     }
                 }
                 s.push('"');
-                Ok(s)
+                Ok(doc::text(s))
             }
         }
     }
@@ -1144,36 +1201,41 @@ impl Printer<'_> {
         Ok(s)
     }
 
-    /// Print a binary operand, parenthesizing only when precedence/associativity requires it.
+    /// Layout doc for a comma-separated, parenthesized argument list (`(a, b, c)`) — the shared break
+    /// group behind calls, `parent.m(…)`, and `new`. Empty → `()`; otherwise flat as `(a, b)` and one
+    /// argument per line (indented) when the group overflows.
+    fn args_doc(&self, args: &[Expr]) -> Result<Doc, String> {
+        let xs: Result<Vec<_>, _> = args.iter().map(|a| self.expr_doc(a)).collect();
+        Ok(bracketed("(", xs?, ")"))
+    }
+
+    /// Layout doc for a binary operand, parenthesizing only when precedence/associativity requires it.
     /// `parent` is the operator's binding power; `is_right`/`right_assoc` pick the associativity
     /// side. Left-assoc: the right operand needs parens at equal precedence; right-assoc (`**`):
     /// the left operand does.
-    fn operand(
+    fn operand_doc(
         &self,
         e: &Expr,
         parent: u8,
         is_right: bool,
         right_assoc: bool,
-    ) -> Result<String, String> {
+    ) -> Result<Doc, String> {
         let cp = prec_of(e);
         let needs = if is_right == right_assoc {
             cp < parent
         } else {
             cp <= parent
         };
-        let s = self.expr(e)?;
-        Ok(if needs { format!("({s})") } else { s })
+        let d = self.expr_doc(e)?;
+        Ok(if needs { parens(d) } else { d })
     }
 
-    /// Print the receiver of a postfix operator (`.`/`[]`/call/`!`/`?`), which binds tighter than
-    /// every prefix/binary form — so a non-atomic receiver (a binary, unary, or range) needs parens.
-    fn postfix_operand(&self, e: &Expr) -> Result<String, String> {
-        let s = self.expr(e)?;
-        Ok(if prec_of(e) < PREC_ATOM {
-            format!("({s})")
-        } else {
-            s
-        })
+    /// Layout doc for the receiver of a postfix operator (`.`/`[]`/call/`!`/`?`), which binds tighter
+    /// than every prefix/binary form — so a non-atomic receiver (a binary, unary, or range) needs
+    /// parens.
+    fn postfix_doc(&self, e: &Expr) -> Result<Doc, String> {
+        let d = self.expr_doc(e)?;
+        Ok(if prec_of(e) < PREC_ATOM { parens(d) } else { d })
     }
 
     fn pattern(&self, p: &Pattern) -> Result<String, String> {
@@ -1223,6 +1285,32 @@ impl Printer<'_> {
             }
         }
     }
+}
+
+/// Wrap `d` in literal parentheses (precedence/associativity disambiguation — never a break point).
+fn parens(d: Doc) -> Doc {
+    doc::concat(vec![doc::text("("), d, doc::text(")")])
+}
+
+/// A comma-separated, delimiter-bracketed break group (`[a, b]`, `(a, b)`). Empty renders as
+/// `<open><close>`. Flat: `<open>a, b<close>` (byte-identical to the legacy `join(", ")` form).
+/// Broken: each item on its own line, indented four columns, the closer dedented to the group's base.
+fn bracketed(open: &str, items: Vec<Doc>, close: &str) -> Doc {
+    if items.is_empty() {
+        return doc::text(format!("{open}{close}"));
+    }
+    doc::group(doc::concat(vec![
+        doc::text(open),
+        doc::nest(
+            4,
+            doc::concat(vec![
+                doc::softline(),
+                doc::join(items, doc::concat(vec![doc::text(","), doc::line()])),
+            ]),
+        ),
+        doc::softline(),
+        doc::text(close),
+    ]))
 }
 
 /// Render a `Type`. `Type::Infer` prints as `var` (the local-inference keyword). `Err` for nodes the

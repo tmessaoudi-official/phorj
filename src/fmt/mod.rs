@@ -7,6 +7,7 @@
 //! (`fmt(fmt(x)) == fmt(x)`) and **never touches an unparseable file** (a parse error is returned, the
 //! source left alone).
 
+mod doc;
 mod printer;
 
 #[cfg(test)]
