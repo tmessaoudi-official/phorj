@@ -170,6 +170,9 @@ impl Transpiler {
                                 "parseInt" => self.uses_text_parse_int = true,
                                 "indexOf" => self.uses_text_index_of = true,
                                 "reverse" => self.uses_text_reverse = true,
+                                "trim" => self.uses_text_trim = true,
+                                "trimStart" => self.uses_text_trim_start = true,
+                                "trimEnd" => self.uses_text_trim_end = true,
                                 "parseFloat" => self.uses_text_parse_float = true,
                                 _ => {}
                             }

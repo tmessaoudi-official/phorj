@@ -402,7 +402,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_trim_start),
-            php: |a| format!("ltrim({})", parg(a, 0)),
+            php: |a| format!("__phorj_text_trim_start({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.String",
@@ -411,7 +411,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_trim_end),
-            php: |a| format!("rtrim({})", parg(a, 0)),
+            php: |a| format!("__phorj_text_trim_end({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.String",
@@ -456,7 +456,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_trim),
-            php: |a| format!("trim({})", parg(a, 0)),
+            php: |a| format!("__phorj_text_trim({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.String",

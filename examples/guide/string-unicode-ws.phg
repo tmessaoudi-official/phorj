@@ -1,0 +1,16 @@
+package Main;
+
+// Core.String trim family is Unicode-correct (UA-1.1): trim / trimStart / trimEnd strip Rust's
+// Unicode White_Space set, NOT PHP's ASCII-ish trim(). The string below wraps "x y" in
+// INVISIBLE whitespace: a leading NO-BREAK SPACE (U+00A0), IDEOGRAPHIC SPACE (U+3000) and FORM
+// FEED (U+000C), and the same three trailing. All are stripped identically on the interpreter,
+// the VM, and transpiled PHP (whereas PHP trim() would leave every one of them).
+import Core.Output;
+import Core.String;
+
+function main(): void {
+    string s = " 　x y　 ";
+    Output.printLine("trim      = [{String.trim(s)}]");
+    Output.printLine("trimStart = [{String.trimStart(s)}]");
+    Output.printLine("trimEnd   = [{String.trimEnd(s)}]");
+}

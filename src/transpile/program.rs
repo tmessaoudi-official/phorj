@@ -1204,6 +1204,33 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `trim`/`trimStart`/`trimEnd` strip Rust's Unicode White_Space set (`char::is_whitespace`) —
+        // NOT PHP's `trim`/`ltrim`/`rtrim`, whose default set is ASCII-ish and both misses the
+        // multibyte spaces (U+00A0/U+2028/U+3000/…) AND differs even in ASCII (Rust strips form-feed
+        // U+000C but not NUL; PHP is the reverse). The class below is exactly that set (verified
+        // byte-identical to `str::trim` across the multibyte + form-feed edges). UA-1.1.
+        const WS: &str = r"[\x{09}-\x{0D}\x{20}\x{85}\x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}]";
+        if self.uses_text_trim {
+            self.line("function __phorj_text_trim($s) {");
+            self.indent += 1;
+            self.line(&format!("return preg_replace('/^{WS}+|{WS}+$/u', '', $s);"));
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_text_trim_start {
+            self.line("function __phorj_text_trim_start($s) {");
+            self.indent += 1;
+            self.line(&format!("return preg_replace('/^{WS}+/u', '', $s);"));
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_text_trim_end {
+            self.line("function __phorj_text_trim_end($s) {");
+            self.indent += 1;
+            self.line(&format!("return preg_replace('/{WS}+$/u', '', $s);"));
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected

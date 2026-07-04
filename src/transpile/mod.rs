@@ -275,6 +275,12 @@ struct Transpiler {
     /// Unicode code point (matching Rust `str::chars().rev()`) instead of PHP `strrev`'s byte
     /// reversal, which mangles multibyte text (UA-1.2).
     uses_text_reverse: bool,
+    /// Set when `Core.String.trim`/`trimStart`/`trimEnd` is emitted — defines the `__phorj_text_trim*`
+    /// helpers that strip Rust's Unicode White_Space set (via PCRE `/u`), NOT PHP's ASCII-ish
+    /// `trim`/`ltrim`/`rtrim` (which miss U+00A0/U+3000/… and mishandle form-feed vs NUL) — UA-1.1.
+    uses_text_trim: bool,
+    uses_text_trim_start: bool,
+    uses_text_trim_end: bool,
     /// Set when `Core.Text.parseFloat` is emitted — defines `__phorj_parse_float`, which gates the
     /// float grammar (strict / permissive, rejecting inf/nan) then casts, mirroring the Rust kernel.
     uses_text_parse_float: bool,
@@ -545,6 +551,9 @@ impl Transpiler {
             uses_list_last_index_of: false,
             uses_text_index_of: false,
             uses_text_reverse: false,
+            uses_text_trim: false,
+            uses_text_trim_start: false,
+            uses_text_trim_end: false,
             uses_text_parse_float: false,
             uses_dec_add: false,
             uses_dec_rem: false,
