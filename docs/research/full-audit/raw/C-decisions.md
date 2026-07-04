@@ -233,6 +233,7 @@ AskUserQuestion with a verified failing/working program. Full narrative in MASTE
 | DEC-178 | 07-04 | **W3-5 mixed-type-args blocker RESOLVED** via option A (expected-type threading into list-literal call args), built in Wave A; `String.format` args use a CLOSED scalar form, not open `Any`. Folds in UA-1.6 (Set/Map literals — same mechanism) | verbose-now `List<union>` local; W4-1 variadics first | MASTER-PLAN §6 W3-5, §13.1 | ASKED | 📐 (Wave A/C) |
 | DEC-179 | 07-04 | **Type-System Completion programme (Wave A)** — usable union-element collections + primitive `match` type-patterns + primitive exhaustiveness + `is` flow-narrowing + is-refinement + **W5-3 sealed hierarchies** (exhaustive class unions too) + faithful transpile. Largest scope ("no half solutions"); reuses M-RT S4 engine | primitives-only (no sealed); collections+match-only phase-1 | MASTER-PLAN §2.7 Wave A, §13.1 | ASKED | 📐 |
 | DEC-180 | 07-04 | **Error model — HONOR the ratified 3-tier.** "Which error" solved by `Result<T,ErrorEnum>` + exhaustive variant match + typed try/catch (shipped). Complete Result/throws ergonomics + **audit/reclassify faulting natives** (normal-input → Result/throws/`T?`); faults stay uncatchable (bugs). NO catchable faults | reopen keystone → catchable fault subset; both | MASTER-PLAN §2.7 Wave B, §13.1 | ASKED (dev probed twice, reconsidered) | 📐 (Wave B) |
+| DEC-182 | 07-04 | **Canonical `Core.Result<T,E>` + `Core.Option<T>` — injected, explicitly-imported** (were user-defined per-file = "in the wind"). Same pattern as injected `Json` (prelude gated on import + `module_of` registry). `Option<T>` vs built-in `T?`: DISTINCT roles, explicit convert (`Option.ofNullable`/`.toNullable`), NO implicit coercion — `T?` = lightweight/stdlib default, `Option` = opt-in rich monadic. `Error` marker stays built-in; `E` = user enums | Option replaces T? in stdlib; implicit T?↔Option coercion; keep user-defined | MASTER-PLAN §2.7 Wave B, §13.1 | ASKED (dev challenged; reconsidered) | 📐 (Wave B) |
 | DEC-181 | 07-04 | **Editors — LSP-first symmetric, then full-native.** VSCode itself is LSP-first (all smarts via `phg lsp`). LSP-first both editors + thin native shells now (run/debug/test+DAP), THEN full native (rich VSCode ext + native IntelliJ/PSI plugin) as follow-on. **STANDING DoD: every feature → both editors same-change** | build native now (unverifiable here); LSP-only forever | MASTER-PLAN §2.7, §13.1 | ASKED | 📐 (native phase) |
 
 ---
@@ -332,7 +333,7 @@ briefing; `W-SEQUENCE-MUTATION` lint status unverified); DEC-057 D2 revisit (C-8
 
 ---
 
-*Register totals: 146 primary rows (DEC-001…DEC-181 numbering with gaps; +5 in the 2026-07-04 fork
+*Register totals: 147 primary rows (DEC-001…DEC-182 numbering with gaps; +6 in the 2026-07-04 fork
 adjudication §11) + 555 triage rows summarized
 by category (§10). Mode split over primary rows: ASKED ≈ 108 (incl. 2 RATIFIED overnight forks),
 AUTONOMOUS ≈ 25, UNCLEAR = 0 — ⊳ CORRECTED 2026-07-02 (row-by-row verification): every primary row
