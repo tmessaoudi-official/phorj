@@ -474,7 +474,9 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(text_reverse),
-            php: |a| format!("strrev({})", parg(a, 0)),
+            // Erases to `__phorj_text_reverse` (code-point reversal), NOT `strrev` (byte reversal
+            // mangles multibyte) — UA-1.2. Rust already reverses by `chars()`.
+            php: |a| format!("__phorj_text_reverse({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.String",

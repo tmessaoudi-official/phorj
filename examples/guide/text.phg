@@ -37,10 +37,12 @@ function main(): void {
     string ew = if (String.endsWith(greeting, "Phorj")) { "yes" } else { "no" };
     string bar = String.repeat("=", 5);
     Output.printLine("startsWith 'Hello' = {sw}, endsWith 'Phorj' = {ew}, bar = {bar}");
-    // M4 breadth (ASCII): reverse (→ strrev), and case-insensitive compare/contains
-    // (→ strcasecmp/stripos). Non-ASCII is a documented edge (no mbstring under `php -n`).
+    // `reverse` reverses by Unicode code point (UA-1.2) — multibyte text stays intact, unlike a
+    // byte reversal. Case-insensitive compare/contains fold ASCII letters (→ strcasecmp/stripos).
     string rev = String.reverse("phorj");
+    string revU = String.reverse("café · 日本語");
     bool sameCi = String.equalsIgnoreCase("PHORJ", "phorj");
     bool hasCi = String.containsIgnoreCase("Hello, Phorj", "phorj");
-    Output.printLine("reverse = {rev}, equalsIgnoreCase = {sameCi}, containsIgnoreCase = {hasCi}");
+    Output.printLine("reverse = {rev}, reverseUnicode = {revU}");
+    Output.printLine("equalsIgnoreCase = {sameCi}, containsIgnoreCase = {hasCi}");
 }

@@ -1192,6 +1192,18 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_text_reverse {
+            // Reverse by Unicode code point to match Rust `str::chars().rev()` — NOT `strrev`, whose
+            // byte reversal corrupts multibyte text (UA-1.2). `preg_split('//u')` yields code points
+            // without mbstring (absent under `php -n`); empty string → empty array → "".
+            self.line("function __phorj_text_reverse($s) {");
+            self.indent += 1;
+            self.line(
+                "return implode('', array_reverse(preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY)));",
+            );
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected

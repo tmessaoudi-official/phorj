@@ -169,6 +169,7 @@ impl Transpiler {
                             match nat.name {
                                 "parseInt" => self.uses_text_parse_int = true,
                                 "indexOf" => self.uses_text_index_of = true,
+                                "reverse" => self.uses_text_reverse = true,
                                 "parseFloat" => self.uses_text_parse_float = true,
                                 _ => {}
                             }

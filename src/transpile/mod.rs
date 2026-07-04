@@ -271,6 +271,10 @@ struct Transpiler {
     /// Set when `Core.Text.indexOf` is emitted — defines `__phorj_text_index_of`, mapping PHP
     /// `strpos`'s `false`-on-miss to `null` (the `int?` return).
     uses_text_index_of: bool,
+    /// Set when `Core.String.reverse` is emitted — defines `__phorj_text_reverse`, reversing by
+    /// Unicode code point (matching Rust `str::chars().rev()`) instead of PHP `strrev`'s byte
+    /// reversal, which mangles multibyte text (UA-1.2).
+    uses_text_reverse: bool,
     /// Set when `Core.Text.parseFloat` is emitted — defines `__phorj_parse_float`, which gates the
     /// float grammar (strict / permissive, rejecting inf/nan) then casts, mirroring the Rust kernel.
     uses_text_parse_float: bool,
@@ -540,6 +544,7 @@ impl Transpiler {
             uses_list_index_of: false,
             uses_list_last_index_of: false,
             uses_text_index_of: false,
+            uses_text_reverse: false,
             uses_text_parse_float: false,
             uses_dec_add: false,
             uses_dec_rem: false,
