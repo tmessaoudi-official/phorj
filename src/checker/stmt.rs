@@ -29,6 +29,53 @@ impl Checker {
         matches!(e, crate::ast::Expr::ParentCall { method, .. } if method == "constructor")
     }
 
+    /// Thread an EXPECTED `List<T>`/`Map<K,V>` type into a list/map literal (UA-1.6 / DEC-178): check
+    /// each member against `T` / `K,V` — allowing a **union** or subtype-upcast member — instead of the
+    /// bottom-up first-element/first-pair inference in `check_list`/`check_map` (which rejects
+    /// heterogeneous members as "must share one type"). Also supplies the element type for an empty
+    /// `[]`. Returns the expected collection type on a literal/type match, `None` otherwise (the caller
+    /// falls back to `check_expr`). Shared by the declaration initializer and the `return` value; the
+    /// generic-call-argument position (which needs bidirectional inference) is deferred to Wave C.
+    fn thread_literal_expected(&mut self, e: &crate::ast::Expr, expected: &Ty) -> Option<Ty> {
+        match (e, expected) {
+            (crate::ast::Expr::List(elems, _), Ty::List(elem_ty)) => {
+                for el in elems {
+                    let et = self.check_expr(el);
+                    if !self.ty_assignable(&et, elem_ty) {
+                        self.err_assign(Self::expr_span(el), &et, elem_ty);
+                    }
+                }
+                Some(Ty::List(elem_ty.clone()))
+            }
+            (crate::ast::Expr::Map(pairs, _), Ty::Map(key_ty, val_ty)) => {
+                // Keys must be the hashable subset (`int`/`bool`/`string`) — mirror `check_map`'s
+                // `E-MAP-KEY` guard, which this expected-type path bypasses.
+                if !matches!(&**key_ty, Ty::Int | Ty::Bool | Ty::String | Ty::Error) {
+                    self.err_coded(
+                        Self::expr_span(e),
+                        format!(
+                            "map key type must be `int`, `bool`, or `string`, found `{key_ty}`"
+                        ),
+                        "E-MAP-KEY",
+                        None,
+                    );
+                }
+                for (k, v) in pairs {
+                    let kt = self.check_expr(k);
+                    if !self.ty_assignable(&kt, key_ty) {
+                        self.err_assign(Self::expr_span(k), &kt, key_ty);
+                    }
+                    let vt = self.check_expr(v);
+                    if !self.ty_assignable(&vt, val_ty) {
+                        self.err_assign(Self::expr_span(v), &vt, val_ty);
+                    }
+                }
+                Some(Ty::Map(key_ty.clone(), val_ty.clone()))
+            }
+            _ => None,
+        }
+    }
+
     pub(super) fn check_stmt(&mut self, stmt: &crate::ast::Stmt) {
         use crate::ast::Stmt;
         match stmt {
@@ -109,59 +156,20 @@ impl Checker {
                     // `List` is invariant so `List<Sq>` is not assignable to `List<Shape>`. A
                     // non-`List` annotation (e.g. a fixed-length `[T; N]`) falls through to the
                     // normal path, which owns its own length/element checks.
-                    crate::ast::Expr::List(elems, _)
+                    // A list/map literal with a `List<T>`/`Map<K,V>` annotation is checked against the
+                    // declared element/value types (UA-1.6 / DEC-178) via `thread_literal_expected`:
+                    // each member must be assignable to `T` / `K,V`, which (a) supplies the element type
+                    // for an empty `[]`, (b) lets a heterogeneous list of subtypes upcast
+                    // (`List<Shape> = [new Sq(), new Tri()]`), and (c) lets a union value/element
+                    // type-check (`Map<string, int | string> = ["a" => 1, "b" => "two"]`) — none of which
+                    // the bottom-up `check_list`/`check_map` inference can. A non-collection annotation
+                    // (e.g. `[T; N]`) returns `None` and falls through to the normal path below.
+                    crate::ast::Expr::List(..) | crate::ast::Expr::Map(..)
                         if !matches!(ty, crate::ast::Type::Infer(_)) =>
                     {
-                        match declared_once.clone().unwrap_or(Ty::Error) {
-                            Ty::List(elem_ty) => {
-                                for e in elems {
-                                    let et = self.check_expr(e);
-                                    if !self.ty_assignable(&et, &elem_ty) {
-                                        self.err_assign(Self::expr_span(e), &et, &elem_ty);
-                                    }
-                                }
-                                Ty::List(elem_ty)
-                            }
-                            _ => self.check_expr(init),
-                        }
-                    }
-                    // A map literal with a `Map<K, V>` annotation is checked against those expected
-                    // key/value types (UA-1.6 / DEC-178 — the same expected-type threading as the list
-                    // arm above): each key assignable to `K`, each value to `V`. This lets a map with a
-                    // **union value** (`Map<string, int | string> m = ["a" => 1, "b" => "two"]`) or
-                    // subtype-upcast values type-check — which the post-hoc pair unification in
-                    // `check_map` (first-pair-wins) cannot. The runtime value is a plain heterogeneous
-                    // `Value::Map` regardless of `V` (erased), so no backend change — byte-identical.
-                    crate::ast::Expr::Map(pairs, _)
-                        if !matches!(ty, crate::ast::Type::Infer(_)) =>
-                    {
-                        match declared_once.clone().unwrap_or(Ty::Error) {
-                            Ty::Map(key_ty, val_ty) => {
-                                // Keys must be the hashable subset (`int`/`bool`/`string`) — mirror
-                                // `check_map`'s `E-MAP-KEY` guard, which this expected-type path bypasses.
-                                if !matches!(&*key_ty, Ty::Int | Ty::Bool | Ty::String | Ty::Error)
-                                {
-                                    self.err_coded(
-                                        *span,
-                                        format!("map key type must be `int`, `bool`, or `string`, found `{key_ty}`"),
-                                        "E-MAP-KEY",
-                                        None,
-                                    );
-                                }
-                                for (k, v) in pairs {
-                                    let kt = self.check_expr(k);
-                                    if !self.ty_assignable(&kt, &key_ty) {
-                                        self.err_assign(Self::expr_span(k), &kt, &key_ty);
-                                    }
-                                    let vt = self.check_expr(v);
-                                    if !self.ty_assignable(&vt, &val_ty) {
-                                        self.err_assign(Self::expr_span(v), &vt, &val_ty);
-                                    }
-                                }
-                                Ty::Map(key_ty, val_ty)
-                            }
-                            _ => self.check_expr(init),
-                        }
+                        let expected = declared_once.clone().unwrap_or(Ty::Error);
+                        self.thread_literal_expected(init, &expected)
+                            .unwrap_or_else(|| self.check_expr(init))
                     }
                     _ => self.check_expr(init),
                 };
@@ -275,14 +283,14 @@ impl Checker {
                         self.try_resolve_sink_overload(e, &want)
                             .unwrap_or(Ty::Error)
                     }
-                    // `return []` with a `-> List<T>` return type: same expected-type inference as the
-                    // decl site — the empty list takes its element type from the declared return type.
-                    Some(crate::ast::Expr::List(elems, _))
-                        if elems.is_empty() && matches!(want, Ty::List(_)) =>
-                    {
-                        want.clone()
-                    }
-                    Some(e) => self.check_expr(e),
+                    // `return <list/map literal>` against a `-> List<T>` / `-> Map<K,V>` return type:
+                    // thread the declared element/value type into the literal (UA-1.6 / DEC-178, the
+                    // same path as the decl initializer) — a union member (`return [1, "two"]` with
+                    // `-> List<int | string>`), a subtype-upcast, or an empty `[]` all type-check.
+                    // Non-literals / non-collection return types return `None` and fall to `check_expr`.
+                    Some(e) => self
+                        .thread_literal_expected(e, &want)
+                        .unwrap_or_else(|| self.check_expr(e)),
                     None => Ty::Void,
                 };
                 if !self.ty_assignable(&actual, &want) {

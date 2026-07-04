@@ -30,7 +30,16 @@ function headLabel(List<int | string> xs): string {
     return match (xs.first()) { int n => "int(" + (n as string) + ")", string s => "str(" + s + ")", null => "empty" };
 }
 
+// A union-collection literal type-checks in RETURN position too: the `-> List<int | string>` return
+// type is threaded into the `[…]` literal, so heterogeneous members are accepted (UA-1.6).
+function makeTokens(): List<int | string> {
+    return [1, "two", 3];
+}
+
 function main(): void {
+    for (int | string tok in makeTokens()) {
+        Output.printLine("token " + describe(tok));
+    }
     List<int | string> items = [1, "two", 3, "four", 5];
     Output.printLine("headLabel = " + headLabel(items));
     // .filter keeps the element type — the result is still `List<int | string>`, so it iterates and

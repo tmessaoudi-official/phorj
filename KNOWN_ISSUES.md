@@ -1068,17 +1068,17 @@ only read path). Deliberate scope edges:
   empty `[]` still errors with "cannot infer element type" — use a non-empty literal there. (This is
   the one place an expected type is threaded into expression checking; full bidirectional inference
   is deliberately out of scope.)
-- **Expected-type threading into `List`/`Map` literals is declaration-position only (UA-1.6, partial).**
-  A `List<A | B>` or `Map<K, A | B>` **declaration initializer** threads the declared element/value
-  union into the literal, so heterogeneous members type-check
-  (`Map<string, int | string> m = ["a" => 1, "b" => "two"]`, `List<Shape> xs = [new Sq(), new Tri()]`).
-  NOT yet threaded (each still uses bottom-up first-element/first-pair inference, so a union literal
-  errors "must share one type"): **`return` position** (`function f(): List<A|B> { return [a, b]; }`)
-  and **call-argument position** (`g([a, b])`, and `Set<A|B>` via `Set.of([a, b])` — Set has no
-  literal form). The call-argument case for a **generic** callee (`Set.of`, `String.format`) needs
-  bidirectional inference through the callee's type params and is sequenced with **W3-5 / Wave C**
-  (which rides this exact mechanism); return-position threading is a smaller pending parallel. Until
-  then, bind a union literal to a typed local first, or annotate.
+- **Expected-type threading into `List`/`Map` literals is statement-position only (UA-1.6, partial).**
+  A `List<A | B>` / `Map<K, A | B>` literal threads the declared element/value union in both a
+  **declaration initializer** (`Map<string, int | string> m = ["a" => 1, "b" => "two"]`,
+  `List<Shape> xs = [new Sq(), new Tri()]`) and a **`return`** (`function f(): List<A|B> { return
+  [a, b]; }`) — heterogeneous/subtype-upcast members type-check. NOT yet threaded (bottom-up
+  first-element/first-pair inference still applies, so a union literal errors "must share one type"):
+  **call-argument position** (`g([a, b])`; `Set<A|B>` via `Set.of([a, b])` — Set has no literal form)
+  and a **lambda expression body** (`function(): List<A|B> => [a, b]`). The call-argument case for a
+  **generic** callee (`Set.of`, `String.format`) needs bidirectional inference through the callee's
+  type params and is sequenced with **W3-5 / Wave C** (which rides this exact mechanism). Until then,
+  bind a union literal to a typed local first, or annotate.
 - **Zero-payload enum variants need call form.** A nullary variant `V` must be written `V()` both to
   construct **and** in a `match` pattern. A bare `V =>` arm is parsed as a catch-all *binding*, not a
   variant match — so it silently matches everything. Always use `V()` in patterns for nullary

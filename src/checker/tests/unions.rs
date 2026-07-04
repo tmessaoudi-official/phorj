@@ -513,3 +513,32 @@ fn annotated_map_literal_still_enforces_key_hashability() {
     let bad = errors_of("function main() -> void { Map<float, int> m = [1.5 => 1]; }");
     assert!(bad.iter().any(|e| e.code == Some("E-MAP-KEY")), "{bad:?}");
 }
+
+// ---- Wave A (UA-1.6): expected-type threading in RETURN position ----
+
+#[test]
+fn return_list_literal_threads_union() {
+    let ok = errors_of(
+        "function f() -> List<int | string> { return [1, \"two\"]; } function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn return_map_literal_threads_union_value() {
+    let ok = errors_of(
+        "function f() -> Map<string, int | string> { return [\"a\" => 1, \"b\" => \"two\"]; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn return_list_literal_wrong_element_rejected() {
+    let bad =
+        errors_of("function f() -> List<int> { return [1, \"x\"]; } function main() -> void {}");
+    assert!(
+        bad.iter().any(|e| e.message.contains("expected `int`")),
+        "{bad:?}"
+    );
+}
