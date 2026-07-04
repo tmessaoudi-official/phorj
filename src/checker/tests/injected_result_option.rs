@@ -200,6 +200,22 @@ fn variant_import_colliding_with_local_type_is_conflict() {
     );
 }
 
+/// A variant import whose bound name shadows a USER enum's variant is `E-IMPORT-CONFLICT` — otherwise the
+/// import would silently hijack that enum's bare construction/patterns (a baffling type mismatch).
+#[test]
+fn variant_import_shadowing_user_enum_variant_is_conflict() {
+    let src = "package Main; import Core.Result.Success; \
+               enum Local { Success(int n) } \
+               function f(): Local { return new Success(5); }";
+    let prog = prog_raw(src);
+    let err = crate::cli::check_and_expand(&prog, src)
+        .expect_err("a variant import shadowing a user enum variant must be rejected");
+    assert!(
+        err.contains("E-IMPORT-CONFLICT"),
+        "expected E-IMPORT-CONFLICT, got:\n{err}"
+    );
+}
+
 /// Importing a variant the enum does not declare is `E-IMPORT-UNKNOWN`.
 #[test]
 fn unknown_variant_import_is_rejected() {

@@ -290,6 +290,27 @@ impl Checker {
                 );
                 continue;
             }
+            // A bound name that shadows a USER enum's variant would silently hijack that enum's bare
+            // construction/pattern (`import Core.Result.Success;` + a local `enum Local { Success(..) }`),
+            // producing a baffling type mismatch — reject it. Injected enums are exempt (their variants
+            // are exactly what a variant import binds).
+            if self
+                .enums
+                .iter()
+                .any(|(_, info)| !info.injected && info.variants.contains_key(&bound))
+            {
+                self.err_coded(
+                    *span,
+                    format!(
+                        "imported variant binds `{bound}`, which already names a variant of an enum in this file"
+                    ),
+                    "E-IMPORT-CONFLICT",
+                    Some(format!(
+                        "alias the import — `import Core.{enum_name}.{variant} as My{variant};`"
+                    )),
+                );
+                continue;
+            }
             if !bound_seen.insert(bound.clone()) {
                 self.err_coded(
                     *span,

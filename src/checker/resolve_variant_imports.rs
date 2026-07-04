@@ -70,22 +70,37 @@ pub fn resolve_variant_imports(program: Program) -> Program {
     if bindings.is_empty() {
         return program;
     }
-    // A name that also denotes a top-level item (class/enum/interface/trait/function of the same name) is a
-    // collision — left UNresolved here so it is never silently mis-rewritten; the checker's `collect`
-    // reports `E-IMPORT-CONFLICT` and compilation stops. Two imports binding the same name likewise drop
-    // out (kept only if unique), so an ambiguous bare name is never rewritten to one arbitrary target.
-    let local: std::collections::HashSet<&str> = program
-        .items
-        .iter()
-        .filter_map(|it| match it {
-            Item::Class(c) => Some(c.name.as_str()),
-            Item::Enum(e) => Some(e.name.as_str()),
-            Item::Interface(i) => Some(i.name.as_str()),
-            Item::Trait(t) => Some(t.name.as_str()),
-            Item::Function(f) => Some(f.name.as_str()),
-            _ => None,
-        })
-        .collect();
+    // A name that also denotes a top-level item (class/enum/interface/trait/function) OR a variant of a
+    // USER (non-injected) enum is a collision — left UNresolved here so it is never silently mis-rewritten
+    // (else `import Core.Result.Success;` would hijack a local `enum Local { Success(..) }`'s bare
+    // `new Success(..)`); the checker's `check_variant_import_collisions` then reports `E-IMPORT-CONFLICT`
+    // and compilation stops. Injected enums are exempt from the variant side — their variants are exactly
+    // what a variant import binds. Two imports binding the same name likewise drop out (kept only if
+    // unique), so an ambiguous bare name is never rewritten to one arbitrary target.
+    let mut local: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for it in &program.items {
+        match it {
+            Item::Class(c) => {
+                local.insert(c.name.as_str());
+            }
+            Item::Enum(e) => {
+                local.insert(e.name.as_str());
+                if !e.injected {
+                    local.extend(e.variants.iter().map(|v| v.name.as_str()));
+                }
+            }
+            Item::Interface(i) => {
+                local.insert(i.name.as_str());
+            }
+            Item::Trait(t) => {
+                local.insert(t.name.as_str());
+            }
+            Item::Function(f) => {
+                local.insert(f.name.as_str());
+            }
+            _ => {}
+        }
+    }
     let mut seen: HashMap<&str, u32> = HashMap::new();
     for (b, _, _) in &bindings {
         *seen.entry(b.as_str()).or_default() += 1;
