@@ -22,10 +22,14 @@ permissions:
   pages: write
   id-token: write
 
-# One deploy at a time; cancel an in-progress run when a newer commit lands.
+# One deploy at a time. Do NOT cancel an in-progress run: cancelling a Pages deployment mid-flight
+# leaves GitHub's Pages backend with a half-finished deployment, and the next run then fails at the
+# status-poll stage with "Deployment failed, try again later". This mirrors GitHub's official Pages
+# workflow template (queued runs between the in-progress one and the latest are skipped; the running
+# production deploy is allowed to finish).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
