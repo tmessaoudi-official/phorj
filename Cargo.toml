@@ -24,13 +24,13 @@ path = "src/main.rs"
 
 # Phorj core is std-only. The exceptions are security-critical primitives where std has none and
 # rolling-your-own is the anti-pattern: audited crypto, and a ReDoS-safe regex engine. Each is behind
-# a feature so the WASM playground builds without it (docs/specs/2026-06-27-dependency-policy.md).
+# a feature so the WASM playground builds without it (docs/specs/UNIFIED-SPEC.md#external-dependency-policy).
 [features]
 default = ["crypto", "regex", "signals", "green"]
 crypto = ["dep:argon2"]
 regex = ["dep:regex"]
 # `phg serve` graceful shutdown (M6 W4 / S4.2): SIGINT/SIGTERM → drain in-flight → exit 0. Off for the
-# WASM playground (no sockets, no signals). See docs/specs/2026-06-27-dependency-policy.md (3rd domain).
+# WASM playground (no sockets, no signals). See docs/specs/UNIFIED-SPEC.md#external-dependency-policy (3rd domain).
 signals = ["dep:ctrlc"]
 # Green-thread cooperative concurrency (M6 W4 / S4.3): `spawn` + channels run each task on a stackful
 # coroutine driven by the shared `green::sched` scheduler. The coroutine primitive is `corosensei`
@@ -68,7 +68,7 @@ regex = { version = "1", optional = true }
 # `unsafe` `sigaction` handler — which would pierce the crate's `#![forbid(unsafe_code)]`. `ctrlc`
 # confines that unsafe to a tiny, widely-used, cross-platform crate, keeping phorj's own code
 # unsafe-free. Feature-gated off for the playground. A narrowly-scoped 3rd domain (OS-signal handling)
-# in docs/specs/2026-06-27-dependency-policy.md — NOT a general-purpose/convenience precedent.
+# in docs/specs/UNIFIED-SPEC.md#external-dependency-policy — NOT a general-purpose/convenience precedent.
 ctrlc = { version = "3", optional = true, features = ["termination"] }
 
 # Quality gate (M2 P3.5 Wave 0, Task 0.5): clippy-clean and warning-free become a *compile* gate,

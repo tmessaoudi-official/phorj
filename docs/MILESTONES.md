@@ -1,6 +1,6 @@
 # Phorj Milestones
 
-Living status doc. Frozen origin design lives in `docs/specs/2026-06-15-phorj-language-design.md`
+Living status doc. Frozen origin design lives in `docs/specs/UNIFIED-SPEC.md#founding-language-design`
 (§5 = roadmap). `examples/README.md` is the living showcase of the runnable language surface (every
 example byte-identical on both backends + the Phorj→PHP transpile bridge).
 
@@ -84,7 +84,7 @@ distribution via a **stub registry** (CI builds/signs per-target stubs once per 
 build` fetches+caches+`llvm-objcopy --add-section`s the payload); macOS signed+notarized **from
 Linux** via `rcodesign` (no Mac needed). std-only line = the produced binary + the hand-rolled
 section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
-`docs/specs/2026-06-16-m2.5-phorj-build-design.md`.
+`docs/specs/UNIFIED-SPEC.md#phg-build-master-design`.
 
 - **Phase 1 ✅ (2026-06-16)** — host `x86_64-linux-gnu`, no CI/signing:
   `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`. `src/bundle.rs` (CRC-32 + versioned
@@ -100,7 +100,7 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
   `aarch64-{gnu,musl}`, `x86_64-pc-windows-gnu`. Cross-parity gated by `tests/build.rs` (musl native
   exec + real windows-PE round-trip). macOS reader ships + is fixture-tested; the Mac *stub* (signing)
   is deferred to Phase 3, and apple/darwin `--target` is rejected with a clear message. Spec/plan:
-  `docs/specs/2026-06-16-m2.5-phase2-cross-os-design.md`, `docs/plans/2026-06-16-m2.5-phase2-cross-os.md`.
+  `docs/specs/UNIFIED-SPEC.md#phase-2-cross-os-builds`, `docs/plans/2026-06-16-m2.5-phase2-cross-os.md`.
   **Gotcha (verified):** `llvm-objcopy --add-section` on **PE** needs `--set-section-flags
   …=noload,readonly` or it writes a zero-data section; the flags are applied unconditionally (ELF + PE).
 - **Phase 3 🔲** — CI stub registry; final-artifact signing/notarization (opt-in `--sign`),
@@ -250,7 +250,7 @@ checked-everything mistake). `throws` is front-end-only (erases before the backe
 safe, no new `Op`); `try/catch` discharges the `throws` surface and the imported-PHP interop bridge.
 Examples use PascalCase packages (`package Main;`, `import Core.Console;`). Folds in the fault
 cause-chain and the test runner's `assertFaults`. Detailed rationale + examples in
-`docs/specs/2026-06-21-php-parity-and-beyond.md` §2.1.
+`docs/specs/UNIFIED-SPEC.md#php-parity-and-beyond-gap-audit` §2.1.
 
 ## M5 — Modules & packages — ✅ COMPLETE (2026-06-18)
 
@@ -306,7 +306,7 @@ the forward SSOT (Waves 0–6), which absorbed the earlier ga-roadmap plan and m
 **M10** erasure-first generics (`Ty::Var` — [ADR-0002](adr/0002-erasure-not-monomorphization.md)) → **M11**
 stdlib breadth (`core.list`/`json`, `Map`/`Set`) → **M12** release automation + 1.0.
 
-> **Superseded numbering:** the earlier ecosystem roadmap (`docs/specs/2026-06-15-ecosystem-roadmap-design.md`,
+> **Superseded numbering:** the earlier ecosystem roadmap (`docs/specs/UNIFIED-SPEC.md#ecosystem-strategy`,
 > M4 extension API → M5 modules → M6 concurrency+HTTP → M7 tooling → M8 migration) remains a historical
 > design exploration; the **GA roadmap above is the authoritative milestone sequence from M5 on.**
 
@@ -320,7 +320,7 @@ A one-shot 20-track (A–S + V) multi-agent gap review (41 agents) enumerated ev
 parity, beyond-PHP capability, DX/tooling, correctness, security, stdlib, numerics, i18n, testing,
 perf, build, observability, docs, and governance — the "stop finding gaps ad hoc" deliverable.
 **555 candidates → 290 adopt · 187 defer · 81 reject.** SSOT:
-**`docs/specs/2026-06-21-php-parity-and-beyond.md`** (deduplicated master triage table + per-milestone
+**`docs/specs/UNIFIED-SPEC.md#php-parity-and-beyond-gap-audit`** (deduplicated master triage table + per-milestone
 rollup + top-10 spine + reject-list-with-reasons + 10 cross-track themes); raw per-track reports under
 `docs/research/roadmap-completeness/`. Forward plan + new milestones folded into
 [`ROADMAP.md`](../ROADMAP.md).

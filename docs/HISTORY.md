@@ -80,7 +80,7 @@ S8 traits. Same-head generic-type invariance was fixed later (Soundness Batch B)
 
 ## Cross-cutting audits & clusters (2026-06-21 → 23)
 Roadmap-completeness audit (41 agents, 555 candidates → SSOT
-`docs/specs/2026-06-21-php-parity-and-beyond.md`); error model slice 2 (`throws`/`Result`/faults);
+`docs/specs/UNIFIED-SPEC.md#php-parity-and-beyond-gap-audit`); error model slice 2 (`throws`/`Result`/faults);
 pattern cluster (match guards, struct destructuring, flow-narrowing) + primitives sweep (number
 literal bases, bitwise ops); M-Decomp (whale files → cohesion `mod/` clusters, byte-identity-gated).
 

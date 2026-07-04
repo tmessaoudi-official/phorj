@@ -88,7 +88,7 @@ are typed, checker-enforced, and `?`-composable; lands as **M-faults Slice 2**.
 > **M7 = correctness closure ✅** and **M8+ = the road to GA 1.0**) and **[docs/plans/MASTER-PLAN.md](docs/plans/MASTER-PLAN.md)**
 > (the forward SSOT, Waves 0–6).
 
-The full ecosystem strategy is frozen in `docs/specs/2026-06-15-ecosystem-roadmap-design.md`: two
+The full ecosystem strategy is frozen in `docs/specs/UNIFIED-SPEC.md#ecosystem-strategy`: two
 backends (native VM + optional PHP-transpile) behind clean pluggable traits, with the PHP backend as a
 bootstrap-ecosystem lever. ROI-ranked:
 
@@ -110,7 +110,7 @@ beyond-PHP "upgrade" capability, DX/tooling, correctness, security, stdlib, nume
 perf, build, observability, docs, and governance — so gaps stop being found ad hoc. **555 candidates →
 290 adopt · 187 defer · 81 reject.** The deduplicated master triage table, per-milestone rollup,
 top-10 spine, reject-list-with-reasons, and 10 cross-track themes are the SSOT in
-**`docs/specs/2026-06-21-php-parity-and-beyond.md`** (raw per-track reports under
+**`docs/specs/UNIFIED-SPEC.md#php-parity-and-beyond-gap-audit`** (raw per-track reports under
 `docs/research/roadmap-completeness/`).
 
 **Top-10 spine (the immediate priority order):** (1) totality cluster · (2) generic enums →
@@ -124,7 +124,7 @@ I/O · (10) the GA governance doc-bundle (semver/BC/conformance-corpus/security-
 
 - **M4 — stdlib charter** (naming, subject-first arg-order, optional-vs-fault discipline, determinism
   tiers, native-vs-`.phg` policy) — *precedes* the M11 breadth push. **Adopted** (2026-06-29):
-  `docs/specs/2026-06-29-m4-stdlib-charter.md`.
+  `docs/specs/UNIFIED-SPEC.md#standard-library-charter`.
 - **M-NUM** — numerics & business data: typed **`decimal`/money** (float-for-currency becomes a compile
   error) + rounding modes, numeric parse, `intdiv`/conversions, `int`=i64 pinning, float predicates,
   numeric literals (hex/bin/octal, exponent). Defers `BigInt`, `Money`+currency to M-NUM-2.

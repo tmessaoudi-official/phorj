@@ -2,8 +2,10 @@
 
 > **One document, eighteen frozen designs.** Consolidated 2026-07-03 (unification-audit Stage D,
 > HEAD `0691228`) from every spec under `docs/specs/2026-*.md`, per the developer's ruling to fold
-> all of them into a single navigable SSOT. The original files are retained on disk pending archive;
-> **this document is the reference from now on** — external pointers target section anchors here.
+> all of them into a single navigable SSOT. The original files now live in
+> [`archive/`](archive/README.md) (2026-07-04) — each section's bare "Source: …md" citation names a
+> file under `archive/`; **this document is the reference from now on** — external pointers target
+> section anchors here.
 >
 > **Reading conventions**
 > - Every section opens with a **Status** line: `SHIPPED` (implemented, gated green) ·
@@ -1267,7 +1269,7 @@ unverifiable scaffolding — YAGNI on cert-gated code.
 
 ## Appendix A — source-file map and supersession chains
 
-| Original file (retained pending archive) | Section here | Status |
+| Original file (in `archive/`) | Section here | Status |
 |---|---|---|
 | `2026-06-15-phorj-language-design.md` | [Founding language design](#founding-language-design) | HISTORICAL (vision stands; surface details superseded inline) |
 | `2026-06-15-ecosystem-roadmap-design.md` | [Ecosystem strategy](#ecosystem-strategy) | HISTORICAL (strategy stands; milestone table → MASTER-PLAN) |

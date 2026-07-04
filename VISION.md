@@ -58,7 +58,7 @@ effort.**
    tool, not a slogan.
 4. **Std-first core with a minimal, vetted dependency surface.** Exactly four feature-gated
    external crates (`argon2`, `regex`, `ctrlc`, `corosensei`), each admitted only where rolling our
-   own would be the anti-pattern (see `docs/specs/2026-06-27-dependency-policy.md`). The whole
+   own would be the anti-pattern (see `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`). The whole
    language fits in one head, builds in seconds, and keeps the supply-chain surface deliberately tiny.
 5. **Approachable on the outside, rigorous on the inside.** A beginner should be able to read a Phorj
    program; a compiler engineer should respect how it's built.

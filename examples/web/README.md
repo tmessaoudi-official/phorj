@@ -16,7 +16,7 @@ a real socket — one native, one PHP — and both call the *same* `handle`.
 
 Secure password hashing follows the one inviolable rule — **never roll your own crypto**. Phorj
 implements it natively on the Rust backends via the audited RustCrypto **`argon2`** crate (the sole
-external dependency, admitted under `docs/specs/2026-06-27-dependency-policy.md`); the transpile
+external dependency, admitted under `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`); the transpile
 bridge emits PHP's `password_hash`/`password_verify` as a *peer* target. Both speak the standard PHC
 string (`$argon2id$…`), so **a hash made by either backend verifies in the other**.
 

@@ -67,7 +67,7 @@ place; refinement ongoing).
 
 Two further vetted dependencies power language-level surfaces rather than stdlib modules: `ctrlc`
 (signal handling) and `corosensei` (green-thread concurrency — `spawn`/channels). The full
-dependency set is exactly these four; see `docs/specs/2026-06-27-dependency-policy.md`.
+dependency set is exactly these four; see `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`.
 
 ## CLI commands
 

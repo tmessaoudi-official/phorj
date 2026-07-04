@@ -87,7 +87,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 
 - **Std-first with exactly four vetted, feature-gated dependencies** — `argon2` (Argon2id),
   `regex` (`Core.Regex`), `ctrlc` (signals), `corosensei` (green threads); nothing else (see
-  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and `docs/specs/2026-06-27-dependency-policy.md`).
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`).
 - **No `unsafe`** — `#![forbid(unsafe_code)]` crate-wide.
 - **Never panics on input** — adversarial source *and* adversarial binaries are handled cleanly
   (invariant EV-7).

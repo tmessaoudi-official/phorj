@@ -6,7 +6,7 @@ Phorj's **core is `std`-only**: built with `--no-default-features` it links **ze
 The default build enables four narrowly-scoped, **feature-gated** dependencies, admitted only for
 capabilities `std` cannot provide safely from phorj's own `#![forbid(unsafe_code)]` code — crypto,
 a ReDoS-safe regex engine, OS-signal handling, and stackful coroutines (the full policy and
-clause-by-clause justification live in `docs/specs/2026-06-27-dependency-policy.md`). All four are
+clause-by-clause justification live in `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`). All four are
 permissively dual-licensed (MIT OR Apache-2.0), compatible with Phorj's own license; each can be
 switched off at build time.
 

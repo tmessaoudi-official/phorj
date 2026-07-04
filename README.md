@@ -90,7 +90,7 @@ Toolchain: Rust (edition 2021). The core is std-first with **four vetted, featur
 dependencies** (`argon2` for Argon2id hashing, `regex` for `Core.Regex`, `ctrlc` for signal
 handling, `corosensei` for green threads) — cargo fetches them automatically; see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
-`docs/specs/2026-06-27-dependency-policy.md`.
+`docs/specs/UNIFIED-SPEC.md#external-dependency-policy`.
 
 ### Prebuilt binary
 
@@ -269,7 +269,7 @@ vim.lsp.start({ name = 'phorj', cmd = { 'phg', 'lsp' }, root_dir = vim.fn.getcwd
 
 A full capability matrix (implemented vs. planned) lives in [FEATURES.md](FEATURES.md); current
 limitations in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); the frozen language design in
-`docs/specs/2026-06-15-phorj-language-design.md`.
+`docs/specs/UNIFIED-SPEC.md#founding-language-design`.
 
 ## Examples
 
