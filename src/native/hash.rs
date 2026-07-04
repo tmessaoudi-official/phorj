@@ -487,7 +487,11 @@ fn two_bytes<'a>(args: &'a [Value], who: &str) -> Result<(&'a [u8], &'a [u8]), S
 
 fn hmac_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     let (key, data) = two_bytes(a, "hmac")?;
-    Ok(Value::Str(to_hex(&hmac_sha256(key, data))))
+    // Returns raw bytes (UA-1.4): hex is a transport concern, not a MAC's type — this makes
+    // hmac/hkdf/pbkdf2 uniformly `bytes`. Callers hex-encode for display via Encoding.hexEncode.
+    Ok(Value::Bytes(std::rc::Rc::new(
+        hmac_sha256(key, data).to_vec(),
+    )))
 }
 
 fn equals_native(a: &[Value], _: &mut String) -> Result<Value, String> {
@@ -559,10 +563,11 @@ pub(crate) fn hash_natives() -> Vec<NativeFn> {
             module: "Core.Hash",
             name: "hmac",
             params: vec![Ty::Bytes, Ty::Bytes],
-            ret: Ty::String,
+            ret: Ty::Bytes,
             pure: true,
             eval: NativeEval::Pure(hmac_native),
-            php: |a| format!("hash_hmac('sha256', {}, {})", parg(a, 1), parg(a, 0)),
+            // `true` = raw binary output (UA-1.4: hmac returns bytes, matching hkdf/pbkdf2).
+            php: |a| format!("hash_hmac('sha256', {}, {}, true)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
             module: "Core.Hash",

@@ -9,9 +9,9 @@ import Core.Hash;
 import Core.Encoding;
 
 function main(): void {
-    // HMAC-SHA256 — a keyed message authentication code, returned as a lowercase hex string.
-    string mac = Hash.hmac(b"secret-key", b"authenticated message");
-    Output.printLine("hmac   = {mac}");
+    // HMAC-SHA256 — a keyed message authentication code, returned as raw `bytes` (hex-encode to show).
+    bytes mac = Hash.hmac(b"secret-key", b"authenticated message");
+    Output.printLine("hmac   = {Encoding.hexEncode(mac)}");
     // Timing-safe comparison — use this to check a MAC or token, never `==` (which can leak timing).
     bool ok = Hash.equals(b"secret-key", b"secret-key");
     Output.printLine("equal  = {ok}");
