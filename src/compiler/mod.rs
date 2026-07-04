@@ -380,6 +380,23 @@ fn resolve_cty(ty: &Type) -> CTy {
     }
 }
 
+/// A bare type NAME (a `match` type-pattern head or an `is`/`instanceof` right operand) → its operand
+/// [`CTy`], mirroring [`resolve_cty`]'s `Type::Named` arm. Threads a discriminable primitive through
+/// as a first-class arithmetic operand so a *narrowed* primitive specializes on the VM
+/// (`match x { int i => i * 2 }`, `if (x is int) { x + 1 }` — the CTy-operand trap, Invariant 7).
+/// A non-primitive name is a class/interface. `bool`/`null` are never arithmetic operands (no
+/// dedicated `CTy` variant → `Other`).
+fn cty_of_type_name(name: &str) -> CTy {
+    match name {
+        "int" => CTy::Int,
+        "float" => CTy::Float,
+        "string" => CTy::Str,
+        "decimal" => CTy::Decimal,
+        "bool" | "null" => CTy::Other,
+        other => CTy::Class(other.to_string()),
+    }
+}
+
 /// A checker [`crate::types::Ty`] → operand [`CTy`], mirroring [`resolve_cty`] (which maps the AST
 /// `Type`). Used to give a native module-qualified call (`List.length(xs)`, `Text.parseInt(s)`) its
 /// return operand type, so its result is a valid arithmetic operand (`List.length(xs) - 1`) on the VM —

@@ -212,7 +212,11 @@ impl Compiler<'_> {
                 name: name.clone(),
                 match_slot: m_slot,
                 path: path.to_vec(),
-                ty: CTy::Class(type_name.clone()),
+                // A PRIMITIVE type-pattern (`int i =>`) binds a first-class arithmetic operand, so its
+                // `CTy` must be `Int`/`Float`/`Str`/… — not `Class("int")`, which read as a non-numeric
+                // operand and made `match x { int i => i * 2 }` compile-fail on the VM while the
+                // interpreter/PHP ran it (a shipped run≡runvm divergence — the CTy-operand trap).
+                ty: cty_of_type_name(type_name),
             }),
             _ => {} // wildcard / literals / `Type _` bind nothing
         }
