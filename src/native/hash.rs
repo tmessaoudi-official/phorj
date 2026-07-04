@@ -440,8 +440,10 @@ fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8], length: usize) -> Result<Ve
     Ok(okm)
 }
 
-/// PBKDF2-HMAC-SHA256 (RFC 8018 §5.2).
-fn pbkdf2_sha256(password: &[u8], salt: &[u8], iterations: u32, length: usize) -> Vec<u8> {
+/// PBKDF2-HMAC-SHA256 (RFC 8018 §5.2). `iterations` is `u64` (not `u32`): PHP's `hash_pbkdf2`
+/// takes the count as a native `int` (i64), so a `u32` cap would silently truncate a large
+/// iteration count and diverge from the PHP leg (UA-1.3). The RFC block counter stays `u32`.
+fn pbkdf2_sha256(password: &[u8], salt: &[u8], iterations: u64, length: usize) -> Vec<u8> {
     let mut out = Vec::with_capacity(length);
     let mut block_index: u32 = 1;
     while out.len() < length {
@@ -515,7 +517,7 @@ fn pbkdf2_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     match a {
         [Value::Bytes(pw), Value::Bytes(salt), Value::Int(iters), len] if *iters > 0 => {
             let length = nonneg_len(len, "pbkdf2")?;
-            let dk = pbkdf2_sha256(pw, salt, *iters as u32, length);
+            let dk = pbkdf2_sha256(pw, salt, *iters as u64, length);
             Ok(Value::Bytes(std::rc::Rc::new(dk)))
         }
         _ => Err(
