@@ -5,31 +5,31 @@ use crate::value::Value;
 fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Int(s.len() as i64)),
-        _ => Err("Text.length expects (string)".into()),
+        _ => Err("String.length expects (string)".into()),
     }
 }
 fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase())),
-        _ => Err("Text.uppercase expects (string)".into()),
+        _ => Err("String.uppercase expects (string)".into()),
     }
 }
 fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase())),
-        _ => Err("Text.lowercase expects (string)".into()),
+        _ => Err("String.lowercase expects (string)".into()),
     }
 }
 fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim().to_string())),
-        _ => Err("Text.trim expects (string)".into()),
+        _ => Err("String.trim expects (string)".into()),
     }
 }
 fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sub)] => Ok(Value::Bool(s.contains(sub.as_str()))),
-        _ => Err("Text.contains expects (string, string)".into()),
+        _ => Err("String.contains expects (string, string)".into()),
     }
 }
 // ASCII-oriented like the rest of Core.Text (PHP under `-n` has no mbstring). `reverse` reverses by
@@ -38,13 +38,13 @@ fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn text_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.chars().rev().collect())),
-        _ => Err("Text.reverse expects (string)".into()),
+        _ => Err("String.reverse expects (string)".into()),
     }
 }
 fn text_equals_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(a), Value::Str(b)] => Ok(Value::Bool(a.eq_ignore_ascii_case(b))),
-        _ => Err("Text.equalsIgnoreCase expects (string, string)".into()),
+        _ => Err("String.equalsIgnoreCase expects (string, string)".into()),
     }
 }
 fn text_contains_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -52,7 +52,7 @@ fn text_contains_ignore_case(args: &[Value], _: &mut String) -> Result<Value, St
         [Value::Str(h), Value::Str(n)] => Ok(Value::Bool(
             h.to_ascii_lowercase().contains(&n.to_ascii_lowercase()),
         )),
-        _ => Err("Text.containsIgnoreCase expects (string, string)".into()),
+        _ => Err("String.containsIgnoreCase expects (string, string)".into()),
     }
 }
 fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -64,7 +64,7 @@ fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
                 .collect();
             Ok(Value::List(std::rc::Rc::new(parts)))
         }
-        _ => Err("Text.split expects (string, string)".into()),
+        _ => Err("String.split expects (string, string)".into()),
     }
 }
 fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -78,7 +78,7 @@ fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
             };
             Ok(Value::List(std::rc::Rc::new(parts)))
         }
-        _ => Err("Text.split_once expects (string, string)".into()),
+        _ => Err("String.splitOnce expects (string, string)".into()),
     }
 }
 // `capitalize(string) -> string` — uppercase the first character if it is an ASCII lowercase letter,
@@ -97,7 +97,7 @@ fn text_capitalize(args: &[Value], _: &mut String) -> Result<Value, String> {
             };
             Ok(Value::Str(out))
         }
-        _ => Err("Text.capitalize expects (string)".into()),
+        _ => Err("String.capitalize expects (string)".into()),
     }
 }
 // `lines(string) -> List<string>` — split on `\n` (an embedded `\r` is left in the line, matching PHP
@@ -108,7 +108,7 @@ fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
             let parts: Vec<Value> = s.split('\n').map(|p| Value::Str(p.into())).collect();
             Ok(Value::List(std::rc::Rc::new(parts)))
         }
-        _ => Err("Text.lines expects (string)".into()),
+        _ => Err("String.lines expects (string)".into()),
     }
 }
 fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -120,7 +120,7 @@ fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
                     Value::Str(s) => parts.push(s.clone()),
                     other => {
                         return Err(format!(
-                            "Text.join expects List<string>, found element of type {}",
+                            "String.join expects List<string>, found element of type {}",
                             other.type_name()
                         ))
                     }
@@ -128,7 +128,7 @@ fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
             }
             Ok(Value::Str(parts.join(sep)))
         }
-        _ => Err("Text.join expects (List<string>, string)".into()),
+        _ => Err("String.join expects (List<string>, string)".into()),
     }
 }
 fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -136,19 +136,19 @@ fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(s), Value::Str(from), Value::Str(to)] => {
             Ok(Value::Str(s.replace(from.as_str(), to.as_str())))
         }
-        _ => Err("Text.replace expects (string, string, string)".into()),
+        _ => Err("String.replace expects (string, string, string)".into()),
     }
 }
 fn text_starts_with(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(pre)] => Ok(Value::Bool(s.starts_with(pre.as_str()))),
-        _ => Err("Text.startsWith expects (string, string)".into()),
+        _ => Err("String.startsWith expects (string, string)".into()),
     }
 }
 fn text_ends_with(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(suf)] => Ok(Value::Bool(s.ends_with(suf.as_str()))),
-        _ => Err("Text.endsWith expects (string, string)".into()),
+        _ => Err("String.endsWith expects (string, string)".into()),
     }
 }
 fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -157,11 +157,11 @@ fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
         // cleanly here (EV-7 — never panic; `n as usize` on a negative i64 would be a huge alloc).
         [Value::Str(s), Value::Int(n)] => {
             if *n < 0 {
-                return Err("Text.repeat count must be >= 0".into());
+                return Err("String.repeat count must be >= 0".into());
             }
             Ok(Value::Str(s.repeat(*n as usize)))
         }
-        _ => Err("Text.repeat expects (string, int)".into()),
+        _ => Err("String.repeat expects (string, int)".into()),
     }
 }
 /// Shared byte-level pad (PHP `str_pad`): if `s` is already >= `width` bytes (or `pad` is empty), `s`
@@ -176,7 +176,7 @@ fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String>
         return Ok(Value::Str(s.to_string()));
     }
     if pad.is_empty() {
-        return Err("Text.pad: pad string must not be empty".into());
+        return Err("String.pad: pad string must not be empty".into());
     }
     let needed = want - cur;
     let pb = pad.as_bytes();
@@ -191,18 +191,18 @@ fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String>
     }
     String::from_utf8(out)
         .map(Value::Str)
-        .map_err(|_| "Text.pad: pad split a multibyte character (use an ASCII pad)".into())
+        .map_err(|_| "String.pad: pad split a multibyte character (use an ASCII pad)".into())
 }
 fn text_pad_left(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Int(w), Value::Str(p)] => text_pad(s, *w, p, true),
-        _ => Err("Text.padLeft expects (string, int, string)".into()),
+        _ => Err("String.padLeft expects (string, int, string)".into()),
     }
 }
 fn text_pad_right(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Int(w), Value::Str(p)] => text_pad(s, *w, p, false),
-        _ => Err("Text.padRight expects (string, int, string)".into()),
+        _ => Err("String.padRight expects (string, int, string)".into()),
     }
 }
 /// `indexOf(string, string) -> int?` — the byte offset of the first occurrence of `needle`, else
@@ -212,7 +212,7 @@ fn text_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(s), Value::Str(needle)] => Ok(s
             .find(needle.as_str())
             .map_or(Value::Null, |i| Value::Int(i as i64))),
-        _ => Err("Text.indexOf expects (string, string)".into()),
+        _ => Err("String.indexOf expects (string, string)".into()),
     }
 }
 /// `lastIndexOf(string, string) -> int?` — the byte offset of the **last** occurrence of `needle`,
@@ -223,7 +223,7 @@ fn text_last_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(s), Value::Str(needle)] => Ok(s
             .rfind(needle.as_str())
             .map_or(Value::Null, |i| Value::Int(i as i64))),
-        _ => Err("Text.lastIndexOf expects (string, string)".into()),
+        _ => Err("String.lastIndexOf expects (string, string)".into()),
     }
 }
 /// `removePrefix(string, string) -> string` — drop a leading `prefix` if present, else return `s`
@@ -233,7 +233,7 @@ fn text_remove_prefix(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(s), Value::Str(pre)] => Ok(Value::Str(
             s.strip_prefix(pre.as_str()).unwrap_or(s).to_string(),
         )),
-        _ => Err("Text.removePrefix expects (string, string)".into()),
+        _ => Err("String.removePrefix expects (string, string)".into()),
     }
 }
 /// `removeSuffix(string, string) -> string` — drop a trailing `suffix` if present, else return `s`
@@ -243,7 +243,7 @@ fn text_remove_suffix(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(s), Value::Str(suf)] => Ok(Value::Str(
             s.strip_suffix(suf.as_str()).unwrap_or(s).to_string(),
         )),
-        _ => Err("Text.removeSuffix expects (string, string)".into()),
+        _ => Err("String.removeSuffix expects (string, string)".into()),
     }
 }
 /// The float grammar (M4 `parseFloat`): `[+-]? digits? (. digits?)? ([eE][+-]?digits)?` with the
@@ -314,7 +314,7 @@ fn text_parse_float(args: &[Value], _: &mut String) -> Result<Value, String> {
                 Ok(Value::Null)
             }
         }
-        _ => Err("Text.parseFloat expects (string, bool)".into()),
+        _ => Err("String.parseFloat expects (string, bool)".into()),
     }
 }
 /// `substring(string, int, int) -> string` — a byte-indexed slice mirroring PHP `substr($s, start,
@@ -337,9 +337,9 @@ fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
             };
             String::from_utf8(bytes[begin as usize..end as usize].to_vec())
                 .map(Value::Str)
-                .map_err(|_| "Text.substring split a multibyte character (byte-indexed)".into())
+                .map_err(|_| "String.substring split a multibyte character (byte-indexed)".into())
         }
-        _ => Err("Text.substring expects (string, int, int)".into()),
+        _ => Err("String.substring expects (string, int, int)".into()),
     }
 }
 
@@ -349,21 +349,21 @@ fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn text_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Bool(s.is_empty())),
-        _ => Err("Text.isEmpty expects (string)".into()),
+        _ => Err("String.isEmpty expects (string)".into()),
     }
 }
 
 fn text_trim_start(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim_start().to_string())),
-        _ => Err("Text.trimStart expects (string)".into()),
+        _ => Err("String.trimStart expects (string)".into()),
     }
 }
 
 fn text_trim_end(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim_end().to_string())),
-        _ => Err("Text.trimEnd expects (string)".into()),
+        _ => Err("String.trimEnd expects (string)".into()),
     }
 }
 
@@ -373,13 +373,13 @@ fn text_count(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sub)] => {
             if sub.is_empty() {
-                return Err("Text.count: the substring must not be empty".into());
+                return Err("String.count: the substring must not be empty".into());
             }
             Ok(Value::Int(
                 i64::try_from(s.matches(sub.as_str()).count()).unwrap_or(i64::MAX),
             ))
         }
-        _ => Err("Text.count expects (string, string)".into()),
+        _ => Err("String.count expects (string, string)".into()),
     }
 }
 
@@ -743,7 +743,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
 fn text_parse_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(s.parse::<i64>().map_or(Value::Null, Value::Int)),
-        _ => Err("Text.parseInt expects (string)".into()),
+        _ => Err("String.parseInt expects (string)".into()),
     }
 }
 
@@ -758,7 +758,7 @@ fn text_parse_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
             "false" => Value::Bool(false),
             _ => Value::Null,
         }),
-        _ => Err("Text.parseBool expects (string)".into()),
+        _ => Err("String.parseBool expects (string)".into()),
     }
 }
 

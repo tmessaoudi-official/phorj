@@ -72,7 +72,7 @@ fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn html_bool_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(name)] => Ok(Value::Str(format!(" {name}"))),
-        _ => Err("Html.bool_attr expects (string)".into()),
+        _ => Err("Html.booleanAttribute expects (string)".into()),
     }
 }
 
@@ -96,7 +96,7 @@ fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
             let a = html_join_fragments(attrs)?;
             Ok(Value::Str(format!("<{tag}{a}/>")))
         }
-        _ => Err("Html.void_el expects (string, List<Attr>)".into()),
+        _ => Err("Html.voidElement expects (string, List<Attr>)".into()),
     }
 }
 

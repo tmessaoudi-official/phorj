@@ -5,7 +5,7 @@ use crate::value::Value;
 fn bytes_from_string(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Bytes(std::rc::Rc::new(s.clone().into_bytes()))),
-        _ => Err("Bytes.from_string expects (string)".into()),
+        _ => Err("Bytes.fromString expects (string)".into()),
     }
 }
 fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -15,7 +15,7 @@ fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
             Ok(s) => Value::Str(s.to_string()),
             Err(_) => Value::Null,
         }),
-        _ => Err("Bytes.to_string expects (bytes)".into()),
+        _ => Err("Bytes.toString expects (bytes)".into()),
     }
 }
 fn bytes_len(args: &[Value], _: &mut String) -> Result<Value, String> {

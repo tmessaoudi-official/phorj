@@ -17,8 +17,8 @@ fn convert_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
         [v] => v
             .as_display()
             .map(Value::Str)
-            .ok_or_else(|| format!("Convert.toString cannot convert {}", v.type_name())),
-        _ => Err("Convert.toString expects (T)".into()),
+            .ok_or_else(|| format!("Conversion.toString cannot convert {}", v.type_name())),
+        _ => Err("Conversion.toString expects (T)".into()),
     }
 }
 
@@ -26,7 +26,7 @@ fn convert_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn convert_to_float(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(n)] => Ok(Value::Float(*n as f64)),
-        _ => Err("Convert.toFloat expects (int)".into()),
+        _ => Err("Conversion.toFloat expects (int)".into()),
     }
 }
 
@@ -34,7 +34,7 @@ fn convert_to_float(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn convert_truncate(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(f)] => Ok(Value::Int(*f as i64)),
-        _ => Err("Convert.truncate expects (float)".into()),
+        _ => Err("Conversion.truncate expects (float)".into()),
     }
 }
 
@@ -42,7 +42,7 @@ fn convert_truncate(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn convert_round(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(f)] => Ok(Value::Int(f.round() as i64)),
-        _ => Err("Convert.round expects (float)".into()),
+        _ => Err("Conversion.round expects (float)".into()),
     }
 }
 
@@ -52,7 +52,7 @@ fn convert_round(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn convert_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(f)] => Ok(crate::value::float_to_int(*f).map_or(Value::Null, Value::Int)),
-        _ => Err("Convert.toInt expects (float)".into()),
+        _ => Err("Conversion.toInt expects (float)".into()),
     }
 }
 
@@ -64,7 +64,7 @@ fn convert_int_to_decimal(args: &[Value], _: &mut String) -> Result<Value, Strin
             unscaled: i128::from(*n),
             scale: 0,
         }),
-        _ => Err("Convert.intToDecimal expects (int)".into()),
+        _ => Err("Conversion.intToDecimal expects (int)".into()),
     }
 }
 
@@ -76,13 +76,13 @@ fn convert_decimal_to_float(args: &[Value], _: &mut String) -> Result<Value, Str
         [v @ Value::Decimal { .. }] => {
             let s = v
                 .as_display()
-                .ok_or_else(|| "Convert.decimalToFloat: unrenderable decimal".to_string())?;
+                .ok_or_else(|| "Conversion.decimalToFloat: unrenderable decimal".to_string())?;
             let f: f64 = s
                 .parse()
-                .map_err(|_| "Convert.decimalToFloat: bad decimal string".to_string())?;
+                .map_err(|_| "Conversion.decimalToFloat: bad decimal string".to_string())?;
             Ok(Value::Float(f))
         }
-        _ => Err("Convert.decimalToFloat expects (decimal)".into()),
+        _ => Err("Conversion.decimalToFloat expects (decimal)".into()),
     }
 }
 
@@ -95,7 +95,7 @@ fn convert_decimal_to_int(args: &[Value], _: &mut String) -> Result<Value, Strin
         [v @ Value::Decimal { .. }] => {
             Ok(crate::value::decimal_to_int(v).map_or(Value::Null, Value::Int))
         }
-        _ => Err("Convert.decimalToInt expects (decimal)".into()),
+        _ => Err("Conversion.decimalToInt expects (decimal)".into()),
     }
 }
 
@@ -107,7 +107,7 @@ fn convert_float_to_int_exact(args: &[Value], _: &mut String) -> Result<Value, S
         [Value::Float(f)] => {
             Ok(crate::value::float_to_int_exact(*f).map_or(Value::Null, Value::Int))
         }
-        _ => Err("Convert.floatToIntExact expects (float)".into()),
+        _ => Err("Conversion.floatToIntExact expects (float)".into()),
     }
 }
 
@@ -119,7 +119,7 @@ fn convert_decimal_to_int_exact(args: &[Value], _: &mut String) -> Result<Value,
         [v @ Value::Decimal { .. }] => {
             Ok(crate::value::decimal_to_int_exact(v).map_or(Value::Null, Value::Int))
         }
-        _ => Err("Convert.decimalToIntExact expects (decimal)".into()),
+        _ => Err("Conversion.decimalToIntExact expects (decimal)".into()),
     }
 }
 
@@ -132,7 +132,7 @@ fn convert_as_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [v @ Value::Int(_)] => Ok(v.clone()),
         [_] => Ok(Value::Null),
-        _ => Err("Convert.asInt expects (T)".into()),
+        _ => Err("Conversion.asInt expects (T)".into()),
     }
 }
 
@@ -140,7 +140,7 @@ fn convert_as_float(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [v @ Value::Float(_)] => Ok(v.clone()),
         [_] => Ok(Value::Null),
-        _ => Err("Convert.asFloat expects (T)".into()),
+        _ => Err("Conversion.asFloat expects (T)".into()),
     }
 }
 
@@ -148,7 +148,7 @@ fn convert_as_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [v @ Value::Bool(_)] => Ok(v.clone()),
         [_] => Ok(Value::Null),
-        _ => Err("Convert.asBool expects (T)".into()),
+        _ => Err("Conversion.asBool expects (T)".into()),
     }
 }
 
@@ -164,7 +164,7 @@ fn convert_float_to_decimal(args: &[Value], _: &mut String) -> Result<Value, Str
             |(unscaled, scale)| Value::Decimal { unscaled, scale },
         )),
         [Value::Float(_)] => Ok(Value::Null), // NaN / ±∞
-        _ => Err("Convert.floatToDecimal expects (float)".into()),
+        _ => Err("Conversion.floatToDecimal expects (float)".into()),
     }
 }
 
@@ -173,35 +173,35 @@ fn convert_float_to_decimal(args: &[Value], _: &mut String) -> Result<Value, Str
 fn convert_int_to_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(n)] => Ok(Value::Bool(*n != 0)),
-        _ => Err("Convert.intToBool expects (int)".into()),
+        _ => Err("Conversion.intToBool expects (int)".into()),
     }
 }
 
 fn convert_float_to_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(f)] => Ok(Value::Bool(*f != 0.0)),
-        _ => Err("Convert.floatToBool expects (float)".into()),
+        _ => Err("Conversion.floatToBool expects (float)".into()),
     }
 }
 
 fn convert_decimal_to_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Decimal { unscaled, .. }] => Ok(Value::Bool(*unscaled != 0)),
-        _ => Err("Convert.decimalToBool expects (decimal)".into()),
+        _ => Err("Conversion.decimalToBool expects (decimal)".into()),
     }
 }
 
 fn convert_bool_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bool(b)] => Ok(Value::Int(i64::from(*b))),
-        _ => Err("Convert.boolToInt expects (bool)".into()),
+        _ => Err("Conversion.boolToInt expects (bool)".into()),
     }
 }
 
 fn convert_bool_to_float(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bool(b)] => Ok(Value::Float(if *b { 1.0 } else { 0.0 })),
-        _ => Err("Convert.boolToFloat expects (bool)".into()),
+        _ => Err("Conversion.boolToFloat expects (bool)".into()),
     }
 }
 
@@ -211,7 +211,7 @@ fn convert_bool_to_decimal(args: &[Value], _: &mut String) -> Result<Value, Stri
             unscaled: i128::from(*b),
             scale: 0,
         }),
-        _ => Err("Convert.boolToDecimal expects (bool)".into()),
+        _ => Err("Conversion.boolToDecimal expects (bool)".into()),
     }
 }
 

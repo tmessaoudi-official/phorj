@@ -52,7 +52,7 @@ fn is_hex(s: &str) -> bool {
 fn pred(args: &[Value], f: fn(&str) -> bool, who: &str) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Bool(f(s))),
-        _ => Err(format!("Validate.{who} expects (string)")),
+        _ => Err(format!("Validation.{who} expects (string)")),
     }
 }
 fn is_int_native(a: &[Value], _: &mut String) -> Result<Value, String> {
