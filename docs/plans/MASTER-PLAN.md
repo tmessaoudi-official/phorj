@@ -914,6 +914,15 @@ function lookup — NOT free functions "in the wind", NOT an audit miss (the win
 + stdlib FUNCTIONS, which stay module-qualified). Interface multi-`extends` composition works. Injected-enum
 shadowing (redeclare same-name enum ⇒ Core injection skipped) ships.
 
+- **DEC-194 — user-defined attributes (PHP `#[Attribute]` style).** Today attributes are built-in only
+  (`#[Route]`; every other name is `E-UNKNOWN-ATTRIBUTE`, `checker/program.rs:718`, and only on free
+  functions). Ruled: an attribute IS a class marked `#[Attribute]`, applied as `#[MyAttr(const-args)]` to
+  declarations (functions/classes/methods/fields), with **compile-time-const args** (fits config-compile-
+  time leaning), read via `Core.Reflect`. Reuses classes + reflection; PHP-familiar. **Design crux (own
+  §15 + ladder slice under DEC-189):** attribute READING must be byte-identical across run/runvm/PHP —
+  transpile to PHP attributes where faithful, else a native reflection table (mirrors Core.Reflect's
+  ClassTables pattern). Also expands attribute targets beyond free functions.
+
 ### 13.2 · Wave A slice-2 adjudications (surfaced + ruled 2026-07-04)
 
 Surfaced per §15 (a genuine fork, don't self-rule) during the marathon; **ruled interactively by the
