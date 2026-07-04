@@ -43,6 +43,14 @@ impl Checker {
                 // (M-faults 2a): detect it here and type it via `check_propagate` (the unwrapped `Ok`
                 // payload). Throws-mode `?` (a throwing call) is allowed in *any* position and tried
                 // first; it returns the call's normal type and erases the node (`try_throws_propagate`).
+                //
+                // Resolve the declared type ONCE (non-`Infer`), reused by the literal expected-type
+                // arms below and the final assignability check — a second `resolve_type(ty)` re-emits
+                // any resolution error (e.g. `E-TYPE-ARG-COUNT` for `Map<int>`) a second time.
+                let declared_once: Option<Ty> = match ty {
+                    crate::ast::Type::Infer(_) => None,
+                    _ => Some(self.resolve_type(ty)),
+                };
                 let actual = match init {
                     crate::ast::Expr::Propagate { inner, span: psp } => self
                         .try_throws_propagate(inner, *psp)
@@ -104,7 +112,7 @@ impl Checker {
                     crate::ast::Expr::List(elems, _)
                         if !matches!(ty, crate::ast::Type::Infer(_)) =>
                     {
-                        match self.resolve_type(ty) {
+                        match declared_once.clone().unwrap_or(Ty::Error) {
                             Ty::List(elem_ty) => {
                                 for e in elems {
                                     let et = self.check_expr(e);
@@ -113,6 +121,44 @@ impl Checker {
                                     }
                                 }
                                 Ty::List(elem_ty)
+                            }
+                            _ => self.check_expr(init),
+                        }
+                    }
+                    // A map literal with a `Map<K, V>` annotation is checked against those expected
+                    // key/value types (UA-1.6 / DEC-178 — the same expected-type threading as the list
+                    // arm above): each key assignable to `K`, each value to `V`. This lets a map with a
+                    // **union value** (`Map<string, int | string> m = ["a" => 1, "b" => "two"]`) or
+                    // subtype-upcast values type-check — which the post-hoc pair unification in
+                    // `check_map` (first-pair-wins) cannot. The runtime value is a plain heterogeneous
+                    // `Value::Map` regardless of `V` (erased), so no backend change — byte-identical.
+                    crate::ast::Expr::Map(pairs, _)
+                        if !matches!(ty, crate::ast::Type::Infer(_)) =>
+                    {
+                        match declared_once.clone().unwrap_or(Ty::Error) {
+                            Ty::Map(key_ty, val_ty) => {
+                                // Keys must be the hashable subset (`int`/`bool`/`string`) — mirror
+                                // `check_map`'s `E-MAP-KEY` guard, which this expected-type path bypasses.
+                                if !matches!(&*key_ty, Ty::Int | Ty::Bool | Ty::String | Ty::Error)
+                                {
+                                    self.err_coded(
+                                        *span,
+                                        format!("map key type must be `int`, `bool`, or `string`, found `{key_ty}`"),
+                                        "E-MAP-KEY",
+                                        None,
+                                    );
+                                }
+                                for (k, v) in pairs {
+                                    let kt = self.check_expr(k);
+                                    if !self.ty_assignable(&kt, &key_ty) {
+                                        self.err_assign(Self::expr_span(k), &kt, &key_ty);
+                                    }
+                                    let vt = self.check_expr(v);
+                                    if !self.ty_assignable(&vt, &val_ty) {
+                                        self.err_assign(Self::expr_span(v), &vt, &val_ty);
+                                    }
+                                }
+                                Ty::Map(key_ty, val_ty)
                             }
                             _ => self.check_expr(init),
                         }
@@ -136,7 +182,8 @@ impl Checker {
                         }
                     }
                     _ => {
-                        let declared = self.resolve_type(ty);
+                        // Reuse the single resolution from above (non-`Infer` ⇒ `Some`).
+                        let declared = declared_once.clone().unwrap_or(Ty::Error);
                         // `[T; N] p = [e0, e1, …]`: a list literal carries a known length, so the
                         // fixed-length is checked *here* (the literal is the one place the length is
                         // statically known) — `List` itself is length-erased, so this is the only

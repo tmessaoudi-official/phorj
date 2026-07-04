@@ -484,3 +484,32 @@ fn sealed_class_is_extensible() {
         "{ok:?}"
     );
 }
+
+// ---- Wave A (UA-1.6 / DEC-178): expected-type threading into a map literal (VarDecl position) ----
+
+#[test]
+fn annotated_map_literal_threads_union_value_type() {
+    // `Map<string, int | string>` accepts heterogeneous values — the declared value union is threaded
+    // into the literal (each value assignable to `int | string`), which bottom-up `check_map`
+    // (first-pair-wins) could not do.
+    let ok = errors_of(
+        "function main() -> void { Map<string, int | string> m = [\"a\" => 1, \"b\" => \"two\"]; }",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn annotated_map_literal_rejects_wrong_value() {
+    let bad = errors_of("function main() -> void { Map<string, int> m = [\"a\" => \"x\"]; }");
+    assert!(
+        bad.iter().any(|e| e.message.contains("expected `int`")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn annotated_map_literal_still_enforces_key_hashability() {
+    // The expected-type path must not bypass `check_map`'s `E-MAP-KEY` key-hashability guard.
+    let bad = errors_of("function main() -> void { Map<float, int> m = [1.5 => 1]; }");
+    assert!(bad.iter().any(|e| e.code == Some("E-MAP-KEY")), "{bad:?}");
+}
