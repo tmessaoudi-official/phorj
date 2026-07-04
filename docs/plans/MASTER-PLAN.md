@@ -752,12 +752,17 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   the ruling — `Core.String.format(spec, args)`, `{}`-grammar shared with W5-1 interpolation, closed
   scalar args via Wave A threading. Sequenced in **Wave C** (after Wave A + Wave B). No refinement.
 
-### 13.2 · PENDING adjudications recorded this session (Wave A slice 2 — NOT ruled)
+### 13.2 · Wave A slice-2 adjudications (surfaced + ruled 2026-07-04)
 
-Recorded per §15 (surface a genuine fork, don't self-rule) during the autonomous marathon. Ships a
-minimal current-syntax failing program + recommended semantics; the developer rules interactively.
+Surfaced per §15 (a genuine fork, don't self-rule) during the marathon; **ruled interactively by the
+developer** (AskUserQuestion, minimal failing program in the question). Register: DEC-183.
 
-- **[2026-07-04] PENDING — flat wildcard-free `match` over `T?` (exhaustive `Optional`).** Wave A
+- **[2026-07-04] RULED Option A (DEC-183) — flat wildcard-free `match` over `T?` IS exhaustive.**
+  Built as slice 2b: `Optional<T>` treated as `T | null` for match totality — member arms + a `null`
+  arm discharge it, no `_`. Bounded caveat kept: `Optional<enum>` still needs `_` (enum-variant
+  coverage not threaded through `?` — follow-up). Original fork write-up (for the record):
+
+  Wave A
   slice 2 verified that union-element collection methods are *already consumable*: `.filter` keeps
   `List<A|B>`, `.map` returns `List<U>`, and `.first()`→`(A|B)?` is consumed via a `null` arm +
   smart-cast, OR a `_` catch-all (both type-check + run byte-identical today — see

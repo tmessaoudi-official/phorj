@@ -173,40 +173,36 @@ impl Checker {
                 // type pattern naming it. A non-discriminable member (decimal/bytes/html/attr — erases
                 // to a PHP string) still can't be type-matched, so it always needs a `_`.
                 Ty::Union(members) => {
-                    let mut missing: Vec<String> = members
+                    self.report_union_nonexhaustive(members, &covered_types, &guarded_shapes, span);
+                }
+                // Wave A slice 2b (DEC-183): a flat exhaustive `match` over `T?`. `Optional<T>` is
+                // `T | null`, so the member arms plus a `null` arm discharge it — no `_` needed
+                // (`int?`, `Circle?`, `(A | B)?`). Reuses the union coverage over `T`'s members plus a
+                // synthetic `null` member (covered by a `null` arm — tracked in `null_seen` — or a
+                // `null` type-pattern in `covered_types`). Byte-identity holds: the arms lower to
+                // `is_int`/`is_string`/`=== null`, pattern-driven and scrutinee-type-agnostic on every
+                // backend. Caveat (ruled): an `Optional<enum>` (`Color?`) still needs a `_` — enum
+                // variant coverage isn't threaded through `?` yet (separate follow-up).
+                Ty::Optional(inner) => {
+                    let mut members: Vec<Ty> = match &**inner {
+                        Ty::Union(ms) => ms.clone(),
+                        other => vec![other.clone()],
+                    };
+                    let has_enum = members
                         .iter()
-                        .filter(|m| match m {
-                            Ty::Named(n, _) => !covered_types
-                                .iter()
-                                .any(|t| t == n || self.is_subtype(n, t)),
-                            _ => match prim_ty_name(m) {
-                                Some(name) => !covered_types.iter().any(|t| t == name),
-                                None => true,
-                            },
-                        })
-                        .map(std::string::ToString::to_string)
-                        .collect();
-                    missing.sort();
-                    if !missing.is_empty() {
-                        if missing.iter().any(|m| guarded_shapes.contains(m)) {
-                            self.err_coded(
-                                span,
-                                format!(
-                                    "non-exhaustive match: missing {} (covered only by guarded arms)",
-                                    missing.join(", ")
-                                ),
-                                "E-MATCH-GUARD-EXHAUST",
-                                Some(
-                                    "a `when`-guarded arm may fall through; add an unguarded arm for that shape"
-                                        .into(),
-                                ),
-                            );
-                        } else {
-                            self.err(
-                                span,
-                                format!("non-exhaustive match: missing {}", missing.join(", ")),
-                            );
+                        .any(|m| matches!(m, Ty::Named(n, _) if self.enums.contains_key(n)));
+                    if has_enum {
+                        self.err(
+                            span,
+                            "non-exhaustive match: add a `_` wildcard arm for non-enum scrutinees",
+                        );
+                    } else {
+                        members.push(Ty::Null);
+                        let mut ct = covered_types.clone();
+                        if null_seen {
+                            ct.push("null".to_string());
                         }
+                        self.report_union_nonexhaustive(&members, &ct, &guarded_shapes, span);
                     }
                 }
                 Ty::Error => {}
@@ -220,6 +216,56 @@ impl Checker {
         }
 
         result.unwrap_or(Ty::Error)
+    }
+
+    /// Emit the non-exhaustiveness diagnostic for a union-shaped scrutinee: which discriminable
+    /// members (a primitive type, or a class/interface reached by a covering supertype) are left
+    /// uncovered by the arms. A member reachable only through a `when`-guarded arm upgrades the
+    /// message to `E-MATCH-GUARD-EXHAUST`. Shared by the `Ty::Union` and `Ty::Optional` scrutinee
+    /// arms (Wave A) — the `Optional` caller appends a synthetic `null` member.
+    fn report_union_nonexhaustive(
+        &mut self,
+        members: &[Ty],
+        covered_types: &[String],
+        guarded_shapes: &[String],
+        span: Span,
+    ) {
+        let mut missing: Vec<String> = members
+            .iter()
+            .filter(|m| match m {
+                Ty::Named(n, _) => !covered_types
+                    .iter()
+                    .any(|t| t == n || self.is_subtype(n, t)),
+                _ => match prim_ty_name(m) {
+                    Some(name) => !covered_types.iter().any(|t| t == name),
+                    None => true,
+                },
+            })
+            .map(std::string::ToString::to_string)
+            .collect();
+        missing.sort();
+        if missing.is_empty() {
+            return;
+        }
+        if missing.iter().any(|m| guarded_shapes.contains(m)) {
+            self.err_coded(
+                span,
+                format!(
+                    "non-exhaustive match: missing {} (covered only by guarded arms)",
+                    missing.join(", ")
+                ),
+                "E-MATCH-GUARD-EXHAUST",
+                Some(
+                    "a `when`-guarded arm may fall through; add an unguarded arm for that shape"
+                        .into(),
+                ),
+            );
+        } else {
+            self.err(
+                span,
+                format!("non-exhaustive match: missing {}", missing.join(", ")),
+            );
+        }
     }
 
     /// Check a pattern against the scrutinee type, declaring its bindings into the

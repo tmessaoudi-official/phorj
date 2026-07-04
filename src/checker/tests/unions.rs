@@ -212,3 +212,96 @@ fn optional_union_type_patterns_ok() {
     );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
+
+#[test]
+fn optional_union_flat_exhaustive_ok() {
+    // DEC-183: `Optional<T>` is `T | null` for match totality — the member arms plus a `null` arm
+    // are exhaustive with NO `_` (`(int | string)?`, the shape a `List.first`/`Map.get` returns).
+    let ok = errors_of(
+        "function f((int | string)? v) -> string { \
+               return match v { int i => \"i\", string s => s, null => \"z\" }; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn optional_single_prim_flat_exhaustive_ok() {
+    // The `T | null` reading applies to a single-primitive optional too: `int?` is total with an
+    // `int` arm plus a `null` arm.
+    let ok = errors_of(
+        "function f(int? v) -> string { return match v { int i => \"i\", null => \"z\" }; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn optional_union_missing_null_arm_is_nonexhaustive() {
+    // The `null` case is a real member: omitting the `null` arm (and any `_`) is non-exhaustive.
+    let bad = errors_of(
+        "function f((int | string)? v) -> string { \
+               return match v { int i => \"i\", string s => s }; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter()
+            .any(|e| e.message.contains("non-exhaustive") && e.message.contains("null")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn optional_union_missing_member_lists_it() {
+    // A missing discriminable member is named even when `null` is covered.
+    let bad = errors_of(
+        "function f((int | string)? v) -> string { \
+               return match v { int i => \"i\", null => \"z\" }; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter()
+            .any(|e| e.message.contains("non-exhaustive") && e.message.contains("string")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn optional_enum_flat_still_needs_wildcard() {
+    // Ruled caveat (DEC-183): enum-variant coverage is NOT threaded through `?`, so an
+    // `Optional<enum>` matched by variant arms is still rejected (the flat form is primitives +
+    // classes/interfaces only).
+    let bad = errors_of(
+        "enum Color { Red, Green } \
+             function f(Color? c) -> string { \
+               return match c { Red() => \"r\", Green() => \"g\", null => \"z\" }; } \
+             function main() -> void {}",
+    );
+    assert!(!bad.is_empty(), "expected rejection, got clean");
+}
+
+#[test]
+fn optional_enum_null_first_still_rejected() {
+    // Pins the caveat under a `null`-first arm order: after the `null` arm the variant arms narrow to
+    // the bare enum and type-check, but the `Optional<enum>` scrutinee still isn't exhaustive-matchable
+    // (`has_enum` requires a `_`). Intentional — enum coverage through `?` is the separate follow-up.
+    let bad = errors_of(
+        "enum Color { Red, Green } \
+             function f(Color? c) -> string { \
+               return match c { null => \"z\", Red() => \"r\", Green() => \"g\" }; } \
+             function main() -> void {}",
+    );
+    assert!(!bad.is_empty(), "expected rejection, got clean");
+}
+
+#[test]
+fn optional_single_class_flat_ok() {
+    // DEC-183 class axis: a nullable single class `Circle?` is total with a `Circle c` type-pattern
+    // plus a `null` arm (the shape a `Map<K, Circle>.get` returns).
+    let ok = errors_of(&format!(
+        "{SHAPES} function f(Circle? c) -> int {{ \
+               return match c {{ Circle x => x.radius, null => 0 }}; }} \
+             function main() -> void {{}}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}

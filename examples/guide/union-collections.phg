@@ -25,8 +25,20 @@ function describe(int | string x): string {
     };
 }
 
+// The flat exhaustive match over `.first()`'s `(int | string)?` also works in RETURN position — a
+// distinct lowering (an `if ($x === null) … elseif (is_int($x)) …` chain) from the expression form,
+// so it earns its own byte-identity coverage.
+function headLabel(List<int | string> xs): string {
+    return match (xs.first()) {
+        int n => "int(" + (n as string) + ")",
+        string s => "str(" + s + ")",
+        null => "empty",
+    };
+}
+
 function main(): void {
     List<int | string> items = [1, "two", 3, "four", 5];
+    Output.printLine("headLabel = " + headLabel(items));
 
     // .filter keeps the element type — the result is still `List<int | string>`, so it iterates and
     // narrows just like the source. The predicate narrows each element to decide per shape.
@@ -42,12 +54,21 @@ function main(): void {
     var labels = items.map(function(int | string x) => describe(x));
     Output.printLine("labels = " + String.join(labels, ", "));
 
-    // .first returns `(int | string)?` — the union behind a `?`. Consume it with a `null` arm for
-    // the empty case; the smart-cast binds the non-null remainder at the full union so `describe`
-    // narrows it in turn.
+    // .first returns `(int | string)?` — the union behind a `?`. A flat `match` is total when the
+    // member arms plus a `null` arm are all present (DEC-183): `Optional<T>` is `T | null`, so no
+    // `_` is needed and the compiler still enforces that every case — including absence — is handled.
     var head = items.first();
     Output.printLine(match (head) {
+        int n => "head int(" + (n as string) + ")",
+        string s => "head str(" + s + ")",
         null => "empty",
-        v => describe(v),
+    });
+
+    // The same shape over an empty list takes the `null` arm.
+    List<int | string> none = [];
+    Output.printLine(match (none.first()) {
+        int n => "int(" + (n as string) + ")",
+        string s => "str(" + s + ")",
+        null => "empty",
     });
 }
