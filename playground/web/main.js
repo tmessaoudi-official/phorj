@@ -5,7 +5,13 @@
 // PHP, the examples picker, the URL-hash permalink, diagnostics + `explain`, and the 3-way
 // agreement badge. Everything is client-side; nothing is sent to a server.
 
-import { EditorView, basicSetup } from "https://esm.sh/codemirror@6.0.1";
+// CodeMirror is VENDORED (a single esbuild bundle in ./vendor/) rather than loaded from a CDN at
+// runtime. esm.sh (the previous source) builds transitive deps on demand and was returning sustained
+// 408 timeouts for `@codemirror/view`, so the editor never mounted and the page hung "loading". A CDN
+// that serves split modules (jsdelivr `/+esm`) instead loads two `@codemirror/state` copies and
+// crashes boot ("Unrecognized extension value"). Vendoring a single deduped bundle removes both
+// failure modes and the runtime network dependency. Rebuild: see vendor/README.md.
+import { EditorView, basicSetup } from "./vendor/codemirror.js";
 
 // --- DOM ---------------------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
