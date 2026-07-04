@@ -1,0 +1,29 @@
+package Main;
+
+// Phorj's import discipline (the S0–S2 unified import model). Two rules keep every name legible:
+//
+//   • FUNCTIONS are always called MODULE-QUALIFIED — `Output.printLine(...)`, `String.uppercase(...)`.
+//     A function is never bare-importable: a bare `printLine("hi")` is maximally "in the wind" and
+//     is rejected, so a reader always sees which module a call belongs to.
+//   • TYPES may be MEMBER-IMPORTED to a bare name — `import Core.Time.Instant;` then write `Instant`
+//     directly. (Import just the module — `import Core.Time;` — to reach the type qualified as
+//     `Time.Instant` instead.) Member imports go to any depth; there are no wildcard imports.
+//
+// The loader classifies each import by what it resolves to (a module vs a type leaf) — you never
+// write `import type`. This example uses only deterministic values, so it is byte-identical across
+// run / runvm / transpiled PHP.
+import Core.Output;
+import Core.String;
+import Core.Time.Instant;
+import Core.Time.Duration;
+
+function main(): void {
+    // Functions: module-qualified calls.
+    string shout = String.uppercase("phorj imports");
+    Output.printLine(shout);
+    // Types: member-imported, used bare (`Instant`, `Duration` — not `Time.Instant`).
+    Instant epoch = Instant.ofEpochSeconds(0);
+    Duration hour = Duration.hours(1);
+    Instant later = epoch.plus(hour);
+    Output.printLine("epoch + 1h = {later.epochSeconds()} s");
+}
