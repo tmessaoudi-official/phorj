@@ -49,6 +49,12 @@ pub struct Parser {
     /// iterable still parses; a top-level cast needs explicit parens (and is meaningless anyway — a
     /// cast yields `T?`, not an iterable). Mirrors Rust's no-struct-literal restriction in `if cond`.
     no_as_cast: bool,
+    /// Items produced by a desugaring that yields MORE than one top-level item from a single parse
+    /// step — currently only a grouped import `import Core.Result.{ A, B as C };`, which expands to N
+    /// `Item::Import`. `parse_import` returns the first and stashes the rest here; `parse_program`
+    /// drains this after each `parse_item`, preserving source order. `parse_item` is called only from
+    /// `parse_program`, so the buffer never leaks across parsing contexts.
+    pending_items: Vec<crate::ast::Item>,
 }
 
 // impl-cluster cohesion split (M-Decomp W3.1): one `impl Parser` block per cluster file.
@@ -66,6 +72,7 @@ impl Parser {
             pos: 0,
             depth: 0,
             no_as_cast: false,
+            pending_items: Vec::new(),
         }
     }
 

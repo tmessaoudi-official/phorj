@@ -151,6 +151,9 @@ impl Parser {
         let mut items = Vec::new();
         while !self.check(&TokenKind::Eof) {
             items.push(self.parse_item()?);
+            // Drain any items a desugaring produced beyond the one `parse_item` returned (a grouped
+            // import expands to N `Item::Import`); source order is preserved (returned first, rest here).
+            items.append(&mut self.pending_items);
         }
         Ok(Program {
             package,
@@ -181,6 +184,12 @@ impl Parser {
         // a module (call-qualifier) or a type (bare name) by resolving the path — no `type` keyword.
         let mut path = vec![self.expect_ident("a module path segment")?];
         while self.eat(&TokenKind::Dot) {
+            // A `{` after a `.` opens a grouped import `import Prefix.{ leaf, leaf as alias, … };`
+            // (DEC-186) — path-first braces (PHP group-use / Rust use-group shape), a single-level
+            // prefix listing the leaves under it. Expands to one `Item::Import` per member.
+            if self.check(&TokenKind::LBrace) {
+                return self.parse_import_group(path, sp);
+            }
             path.push(self.expect_ident("a module path segment after '.'")?);
         }
         let alias = if matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
@@ -196,6 +205,48 @@ impl Parser {
             // Vestigial since the unified-import spec: always false (the loader classifies by path).
             span: sp,
         })
+    }
+
+    /// Parse a grouped import's `{ leaf [as alias] (, …)* [,] }` body (the current token is `{`),
+    /// terminated by `;`, and expand it into one `Item::Import` per member: `path = prefix + [leaf]`.
+    /// Trailing comma and multi-line layout are accepted (newlines are plain whitespace). Returns the
+    /// FIRST member's `Item::Import` and stashes the rest in `pending_items` (drained by `parse_program`
+    /// in source order). An empty group `{}` is a parse error.
+    fn parse_import_group(&mut self, prefix: Vec<String>, sp: Span) -> Result<Item, Diagnostic> {
+        self.expect(&TokenKind::LBrace, "'{' to open an import group")?;
+        let mut members: Vec<(String, Option<String>)> = Vec::new();
+        while !self.check(&TokenKind::RBrace) {
+            let leaf = self.expect_ident("a name in the import group")?;
+            let alias = if matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
+                self.advance(); // consume `as`
+                Some(self.expect_ident("an alias after 'as'")?)
+            } else {
+                None
+            };
+            members.push((leaf, alias));
+            if !self.eat(&TokenKind::Comma) {
+                break; // no separator ⇒ the group must close now
+            }
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close the import group")?;
+        self.expect(&TokenKind::Semicolon, "';' after import")?;
+        if members.is_empty() {
+            return Err(self
+                .error("an import group `{ … }` must name at least one member")
+                .with_code("E-IMPORT-GROUP-EMPTY"));
+        }
+        let mut imports = members.into_iter().map(|(leaf, alias)| {
+            let mut path = prefix.clone();
+            path.push(leaf);
+            Item::Import {
+                path,
+                alias,
+                span: sp,
+            }
+        });
+        let first = imports.next().expect("group has ≥1 member");
+        self.pending_items.extend(imports);
+        Ok(first)
     }
 
     /// `type Name = Type;` — a top-level alias. Assumes the current token is `type`.

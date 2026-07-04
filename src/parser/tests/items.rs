@@ -452,6 +452,58 @@ fn parses_import() {
 }
 
 #[test]
+fn parses_multisegment_and_aliased_import() {
+    // A variant-path import (DEC-186) — three segments — parses to a full path.
+    match item("import Core.Result.Success;") {
+        Item::Import { path, alias, .. } => {
+            assert_eq!(path, vec!["Core", "Result", "Success"]);
+            assert_eq!(alias, None);
+        }
+        other => panic!("got {other:?}"),
+    }
+    match item("import Core.Result.Success as MyOk;") {
+        Item::Import { path, alias, .. } => {
+            assert_eq!(path, vec!["Core", "Result", "Success"]);
+            assert_eq!(alias, Some("MyOk".to_string()));
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_grouped_import_expands_to_one_per_member() {
+    // `import P.{ a, b as c };` (DEC-186) expands to one `Item::Import` per member, in source order,
+    // each with `path = prefix + [leaf]` and the per-item alias. Multi-line + trailing comma allowed.
+    let src = "package Main; import Core.Result.{ Success, Failure as Xzs }; \
+               import Core.Option.{\n  Some,\n  None,\n}; \
+               function main() -> void {}";
+    let prog = parser(src).parse_program().expect("parse ok");
+    let imports: Vec<(&Vec<String>, &Option<String>)> = prog
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Import { path, alias, .. } => Some((path, alias)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(imports.len(), 4, "two groups of two expand to four imports");
+    assert_eq!(imports[0].0, &vec!["Core", "Result", "Success"]);
+    assert_eq!(imports[0].1, &None);
+    assert_eq!(imports[1].0, &vec!["Core", "Result", "Failure"]);
+    assert_eq!(imports[1].1, &Some("Xzs".to_string()));
+    assert_eq!(imports[2].0, &vec!["Core", "Option", "Some"]);
+    assert_eq!(imports[3].0, &vec!["Core", "Option", "None"]);
+    assert_eq!(imports[3].1, &None);
+}
+
+#[test]
+fn empty_import_group_is_a_parse_error() {
+    assert!(parser("package Main; import Core.Result.{};")
+        .parse_program()
+        .is_err());
+}
+
+#[test]
 fn parses_package_declaration() {
     // `package a.b;` is captured on the Program, not as an Item (M5 S1).
     let prog = parser("package app.util; function main() -> void {}")

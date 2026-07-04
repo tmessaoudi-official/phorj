@@ -1035,6 +1035,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              unaffected. Single-type modules (`Core.Json`, `Core.Regex`, `Core.Secret`) are unaffected —\n\
              their leaf IS the type.\n"
         }
+        "E-IMPORT-GROUP-EMPTY" => {
+            "E-IMPORT-GROUP-EMPTY — a grouped import `import Prefix.{ … };` named no members.\n\n\
+             A brace group must list at least one name: `import Core.Result.{ Success, Failure };`\n\
+             (with an optional `as` alias per member, and a trailing comma allowed). An empty `{}`\n\
+             imports nothing — delete the group, or fill in the members you meant to import.\n"
+        }
         "E-RESULT-TOOPTION-NEEDS-OPTION" => {
             "E-RESULT-TOOPTION-NEEDS-OPTION — `Result.toOption` was used without importing `Core.Option`.\n\n\
              `Result.toOption(r)` (or `r.toOption()`) bridges a `Result<T, E>` to an `Option<T>` —\n\

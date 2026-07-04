@@ -802,6 +802,23 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   comma OK, multi-line OK, per-item `as`, single-leaf form still valid, **single-level prefix only** (no
   nested `Core.{Result.Success, Option.Some}`). TS-style `import {…} from …` REJECTED (inverts path-first
   order). Parser needs a `{`-group branch after the path; fmt renders groups sensibly.
+  **VALIDATED DESIGN (advisor 3C, not yet built):** (1) Parser desugars a group into N `Item::Import{path:
+  [Core,Enum,leaf], alias}` (needs `parse_import`→`Vec<Item>` or the item loop to `extend`); single/aliased
+  multi-seg ALREADY parse (`ast Import{path,alias}`). (2) `imports_module_or_member` +1 tolerance ⇒
+  `import Core.Result.Success` ALREADY triggers Result injection (verified against code). (3) Checker builds
+  a variant-import map `bare-or-alias → (Enum,Variant)` from `[Core,InjectedEnum,Variant]` paths; validates
+  enum-injected + variant-exists; collision (`import …Success` + local `Success`) → `E-IMPORT-CONFLICT`/
+  `-SHADOW`. (4) Resolution: in `try_variant_or_class_call` (calls.rs ~938, construction) AND `matches.rs`
+  (~356, patterns) — before `E-INJECTED-VARIANT-BARE`, if the bare name is an imported variant → allow
+  (resolve to the injected variant; `type_variant_construction` types it; a NON-aliased bare `Success`
+  works once the error is skipped, since backends already see bare variant names = the injected PHP class).
+  **⚠ CRUX — the ALIAS is a NEW rewrite, NOT the qualified-variant reuse:** the existing rewrite is
+  `Enum.Variant`(Member)→bare `Variant`; an alias is `X`(bare Ident)→`Success` — different AST shape, must
+  be applied in BOTH construction AND match-pattern paths (+ nested) or interp/VM resolve `Success` while
+  the backend sees `X` → divergence (the reified-operands-thread-all-paths gotcha in a new guise). **TEST
+  DISCIPLINE (toOption lesson):** SEPARATE differential cases per form — (a) bare imported variant, (b)
+  aliased variant in construction AND a match pattern in one program, (c) grouped import, (d) collision →
+  E-IMPORT-CONFLICT. NO combined example (a combined one masks exactly the divergence class that just bit).
 - [2026-07-04] **RULED — full width-aware `fmt` wrapping (DEC-187), sequenced AFTER B-2b combinators.**
   Developer chose the FULL feature (both rules together, not split), ordered after the combinators so the
   Wave B error-model marathon isn't blocked. **EXPAND-ONLY policy** (idempotent): fmt never COLLAPSES an
@@ -815,7 +832,14 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   slice; gate-green + examples + both-editor (fmt drives LSP formatting).
 - [2026-07-04] **Build order (converged, developer-ruled):** B-2b combinators → DEC-187 fmt full wrapping
   → B-2c variant + grouped imports → B-2d rich-error audit + UA-1.8 → Wave C. Each gate-green + example +
-  commit; NEVER push (developer pushes on green CI).
+  commit; NEVER push (developer pushes on green CI). **[REORDERED 2026-07-04 post-B-2b (developer-confirmed):
+  B-2b ✅ → B-2c variant/grouped imports (NEXT, this session) → DEC-187 fmt (this session, after B-2c) →
+  B-2d rich-error audit + UA-1.8 → Wave C.** Synergy: fmt's doc-IR rewrite then formats the already-shipped
+  grouped-import syntax in one unified pass; B-2c banks a clean win with injected-type context fresh.]
+- [2026-07-04] **CONFIRMED — `Result.toOption` requires `import Core.Option` (reject, not auto-provide).**
+  The shipped `E-RESULT-TOOPTION-NEEDS-OPTION` guard (B-2b, `5e41a16`) is the ruled behavior: developer
+  chose the safe/explicit default over the ergonomic auto-provide alternative, consistent with DEC-182's
+  explicit-separate-imports model. Reversible later if wanted.
 
 ### 13.2 · Wave A slice-2 adjudications (surfaced + ruled 2026-07-04)
 
