@@ -864,6 +864,56 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   chose the safe/explicit default over the ergonomic auto-provide alternative, consistent with DEC-182's
   explicit-separate-imports model. Reversible later if wanted.
 
+### 13.1.1 · 2026-07-04 design-seed adjudications (RULED interactively — NEXT-SESSION build queue, DEC-188…193)
+
+Six developer-seeded language/stdlib questions, surfaced + ruled this session (all §15, recommended-first
+with concrete examples). **None built yet — this is the design record + build queue.** All are LANGUAGE-
+SURFACE changes; several are BREAKING (migrate all examples + Core), so each is its own careful slice.
+
+- **DEC-188 — TS utility types stay REJECTED; use interface segregation.** The `extends Exclude<A,{x}>`
+  scenario doesn't justify `Exclude`/`Partial`/`Omit` (they need `keyof`/mapped-type machinery Phorj
+  lacks — reaffirms [[rejected-typescript-utility-types]] 2026-07-03). The real need ("an interface from
+  a subset") = **interface segregation**: declare small interfaces, compose UP with multi-`extends`
+  (`interface C extends A, B {}` — VERIFIED works). ADR escape hatch only if a real case can't be
+  segregated. No build.
+- **DEC-189 — stdlib/framework = a sequenced per-component DESIGN PROGRAMME.** Adopt the full "standard
+  library breadth" ambition, but each component earns its place: brainstorm + §15 ruling + §14 ladder
+  (build-native / native-only / reject) BEFORE building. **Selection principle:** prioritize the
+  standardized, decoupled, reused-everywhere components (Symfony-component / PSR style — HttpFoundation,
+  Console, EventDispatcher, Filesystem, Process, Cache, Validator, …); when a candidate is opinionated,
+  the design step extracts a reusable un-opinionated core (else native-only/reject). Ordered from the
+  HTTP foundation outward. Folds Wave D's W3-1 (DBAL) / W3-2 (HTTP) into this framing.
+- **DEC-190 — Core is extensible: all Core CLASSES `open`, all Core methods overridable.** (Developer
+  chose "all Core internals open," NOT a whole-language flip — USER code KEEPS final/closed-by-default +
+  the `open`/`open function` opt-in.) `class MyRequest extends Request { … }` + method override works on
+  any Core class. Made SAFE by the mandatory `override` marker (DEC-192). Call up with `parent.method(…)`
+  / `parent(Ancestor).method(…)`. Enum customization stays "redeclare same-name enum to shadow" (ships).
+  **CORRECTION recorded:** `Core.Result.Success` is an enum VARIANT, not a class — you never "extend a
+  variant"; enums are closed data types (shadow to customize). BREAKING-ish: mark Core classes `open`.
+- **DEC-191 — single `#[Entry]` attribute, role inferred from signature.** Replaces the magic `main`
+  (CLI) / `handle` (web) names: `#[Entry]` on any function; `(): void` (or `(List<string>): void`) ⇒ CLI
+  entry (`phg run`), `(Request): Response` ⇒ web handler (`phg serve`). >1 of a role ⇒ E-MULTIPLE-ENTRY.
+  BREAKING: migrate every example's `main`/`handle` + the `entry_point` resolver (`ast/classes.rs`).
+- **DEC-192 — mandatory `override function` keyword (the override enforcer).** Overriding a parent method
+  REQUIRES `override function foo()` (E-MISSING-OVERRIDE if absent); marking a non-override is
+  E-NOT-AN-OVERRIDE (typo/signature-drift guard). Keyword form (consistent with `open function`), the
+  C#/Kotlin/Swift model: **parent opts in (`open function`), child confirms (`override function`)**.
+  `parent.method(…)` still works (the marker only enforces intent). This is what makes DEC-190's all-open
+  Core safe (no accidental overrides). BREAKING: every existing override (examples + Core) needs the
+  keyword. **Interaction to resolve at build:** parent-side, USER methods are opt-in (`open function`, #4/
+  DEC-191-adjacent) while CORE methods are all-open (DEC-190) — Core is deliberately more-open than user
+  code; child-side `override function` is required in BOTH.
+- **DEC-193 — example-coverage audit = its own slice, LATER (after Wave B).** Enumerate every keyword +
+  feature, diff vs `examples/` + the playground `gen_examples`, fill every gap (faults → README capture);
+  INCLUDE HTML-output / templating showcases (`html"…"` + `Core.Html`, the "Phorj as a template" idea) in
+  the playground. G-5 keeps covering NEW features; this back-fills old ones. Don't interrupt the marathon.
+
+**Fact corrections recorded this session (not decisions):** `assert`/`panic`/`todo`/`unreachable` are
+deliberate built-in INTRINSICS (`checker/common.rs:11`), bare-callable like `throw`, recognized before any
+function lookup — NOT free functions "in the wind", NOT an audit miss (the wind-rule targets injected TYPES
++ stdlib FUNCTIONS, which stay module-qualified). Interface multi-`extends` composition works. Injected-enum
+shadowing (redeclare same-name enum ⇒ Core injection skipped) ships.
+
 ### 13.2 · Wave A slice-2 adjudications (surfaced + ruled 2026-07-04)
 
 Surfaced per §15 (a genuine fork, don't self-rule) during the marathon; **ruled interactively by the
