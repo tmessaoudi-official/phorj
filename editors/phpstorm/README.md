@@ -9,7 +9,7 @@ plugin — using two built-in/marketplace mechanisms:
 2. **Language intelligence** (diagnostics, hover, go-to-definition, completion, document symbols,
    references, rename, formatting) — the **LSP4IJ** plugin runs `phg lsp` as an external language server.
 
-This is the recommended, no-build path: identical behavior to the CLI (`phg check` / `phg fmt`) and to
+This is the recommended, no-build path: identical behavior to the CLI (`phg check` / `phg format`) and to
 the VSCode extension, because all three drive the *same* `phg lsp` server and the *same* grammar.
 
 > A natively-compiled JetBrains plugin (richer integration, marketplace one-click install) is tracked as
@@ -38,11 +38,11 @@ attributes). No VSCode required — the directory is just a standard TextMate-co
    - **Mappings → File name patterns:** `*.phg` → language id `phorj`
 3. Apply. Open any `.phg` file: diagnostics appear inline (identical to `phg check`), and hover,
    go-to-definition (`Ctrl/Cmd+Click`), completion, structure view (document symbols), find-usages
-   (references), rename, and reformat (`phg fmt`) all work through the server.
+   (references), rename, and reformat (`phg format`) all work through the server.
 
 ### Notes
 
-- **Formatting** routes to `phg fmt` (comment- and meaning-preserving); reformatting a file that does
+- **Formatting** routes to `phg format` (comment- and meaning-preserving); reformatting a file that does
   not parse is a no-op (the server never corrupts an in-progress buffer).
 - References / rename are **single-document** today (cross-file is a server follow-up).
 - The server is **off the byte-identity spine** — it never runs the three execution backends, so it

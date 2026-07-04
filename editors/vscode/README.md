@@ -18,7 +18,7 @@ launches the server over stdio. (The same grammar + server power the JetBrains/P
 - **Find references** + **document highlight** — every use of the symbol under the cursor
   (scope-accurate).
 - **Rename** — rename a symbol and all its uses.
-- **Formatting** — reformat via `phg fmt` (comment- and meaning-preserving).
+- **Formatting** — reformat via `phg format` (comment- and meaning-preserving).
 
 ## Prerequisites
 
@@ -40,8 +40,8 @@ Open any `.phg` file in the dev host; diagnostics, hover, and go-to-definition a
 ```sh
 npm install -g @vscode/vsce
 cd editors/vscode
-vsce package         # produces phorj-0.2.0.vsix
-code --install-extension phorj-0.2.0.vsix
+vsce package         # produces phorj-0.3.0.vsix
+code --install-extension phorj-0.3.0.vsix
 ```
 
 ## Configuration

@@ -1,7 +1,7 @@
 # Editor support
 
 Phorj's editor integration is **one language server + one grammar**, reused by every editor — so
-behavior is identical across IDEs and matches the CLI (`phg check`, `phg fmt`).
+behavior is identical across IDEs and matches the CLI (`phg check`, `phg format`).
 
 - **Language server:** `phg lsp` (`src/lsp/`) — diagnostics, hover, go-to-definition, completion,
   document symbols, find-references, document-highlight, rename, and formatting. Hand-rolled JSON-RPC,

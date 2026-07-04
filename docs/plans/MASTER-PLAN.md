@@ -20,12 +20,12 @@
 
 | | |
 |---|---|
-| **Date / HEAD** | 2026-07-04 · **AUTONOMOUS MARATHON IN PROGRESS (§2.7)**. HEAD `b77e50e`. M0 hygiene underway: `b3bd402` (examples.js determinism regen — script was already deterministic; committed the stale artifact) · `b77e50e` (UA-0.2 mold + UA-0.3 --help examples + UA-0.4 lsp/debug help parity). UA-0.1 premise found stale → deferred with evidence (see §2.1 row). Tree clean; several commits ahead of origin — push is developer-gated, never autonomous. Gate green on **php-8.5.8** (oracle path in `scripts/toolchain.env`). |
+| **Date / HEAD** | 2026-07-04 · **AUTONOMOUS MARATHON IN PROGRESS (§2.7)**. Commits this run: `b3bd402` (examples.js determinism regen) · `b77e50e` (M0 UA-0.2 mold + UA-0.3 --help examples + UA-0.4 lsp/debug help parity) · `6217698` (M0 archive 18 folded specs + repoint live pointers to UNIFIED-SPEC) · `58d7355` (M1 UA-1.3 pbkdf2 u64 — silent-truncation/byte-identity fix, oracle-verified) · M5 editor refresh (this commit). Also restored `cargo-nextest` (gate speed) + deferred UA-0.1 with evidence (§2.1). **Findings: three plan premises were stale (fresher than the plan** — UA-0.1 fmt fan-out already shipped; VSCode grammar ~95% already-current; PhpStorm no-build path already documented+working). Tree clean; several commits ahead of origin — push developer-gated, never autonomous. Gate green on **php-8.5.8** (oracle path in `scripts/toolchain.env`). |
 | **Completion** | **PHP-parity ≈ 59%** (domain-weighted 35 SYN / 40 FN-usage-weighted / 25 RT; raw row floor ≈39%) · **Vision ≈ 61%** (70% parity + 30% programme) — denominator = the M-gap-matrix **824 verdict rows** (665 net of N/A + GAP-by-design). [Inferred: 2026-07-03 FN re-score of the ratified 2026-07-02 model — row flips shown in §11.2; full 824-row re-pass due at next milestone close] |
 | **Current phase** | **DONE: cleanup/unification (Stages A–E) — committed `27ea7b8`.** Plan + `UNIFIED-SPEC.md` + all docs are now truthful; toolchain php path centralized. **NEXT: the AUTONOMOUS OVERNIGHT MARATHON (§2.7)** — the developer will restart the session to run it; it ships features + examples + updated VSCode/PhpStorm editor support for real-project testing. |
 | **Actively in progress** | Nothing mid-flight (clean handoff point). ALL audit code-findings are RULED-BUT-UNBUILT; the marathon (§2.7) implements them in order. |
 | **Next up (in order)** | **Follow the §2.7 marathon queue: M0 hygiene (archive the 18 specs + repoint · fix `gen_examples.py` non-determinism · Bucket-1 free wins) → M1 language self-consistency (UA-1.x) → M2 architecture (UA-L2 injected-prelude, UA-L4 Rc<str>) → M3 web spine (W3-5→W3-1 DB→W3-2 HTTP) → M4 stdlib breadth (UA-L5/L6/L1/L3) → M5 VSCode + PhpStorm extensions → M6 Core.Dotenv (UA-L7).** Each step: gate-green + example + commit. |
-| **Open adjudications** | W3-5 mixed-type-args blocker (3 options, §6 W3-5) · W4-10 XML design (recorded, not built) · §7-OPEN user-facing `trait` (the ONE open language question). Everything else is RULED (§13 + Appendix B). |
+| **Open adjudications** | W3-5 mixed-type-args blocker (3 options, §6 W3-5) · W4-10 XML design (recorded, not built) · §7-OPEN user-facing `trait` (the ONE open language question) · **NEW (2026-07-04, scope not language): M5 native PhpStorm plugin — build it, or keep the working no-build TextMate+LSP4IJ path? (recorded in §2.7 M5; recommend defer — the no-build path already delivers full features and a native plugin can't be verified without PhpStorm).** Everything else is RULED (§13 + Appendix B). |
 | **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt + release build (oracle php path = the single editable knob in `scripts/toolchain.env`, currently `php-8.5.8`). Pre-commit = Rust-only (`PHORJ_SKIP_PHP=1`); pre-push = full 8.5 oracle. |
 
 **Percentage protocol:** re-run the M §4 arithmetic (824 rows, weights 35/40/25) after every
@@ -332,10 +332,20 @@ Corpus 100% clean of syntactic `->` and `import type`; formatter idempotent; sin
     (`=>`/`:` not `->`, current keywords, unified `import`, `#[Http.Route]` attrs, decimal/bytes
     literals); confirm `extension.js` launches `phg lsp` as the LSP client (wire it if not); fix the
     README's dead verbs (`phg fmt`→`format`); bump version + rebuild the `.vsix`.
-  - **PhpStorm** (`editors/phpstorm/` — currently README-ONLY, no plugin): build a real plugin — at
-    minimum a TextMate-bundle grammar + file-type + LSP-client via the JetBrains LSP API (or document
-    the concrete manual install path if a full plugin is out of scope for one run). This is the
-    biggest single M5 lift — SURFACE scope via §15 if it balloons.
+  - **PhpStorm** (`editors/phpstorm/`): **FINDING (2026-07-04) — the "README-ONLY, no working path"
+    premise was stale.** `editors/phpstorm/README.md` already documents a complete, functional
+    NO-BUILD path that delivers the full feature set today: JetBrains' built-in **TextMate Bundle**
+    import (pointed at `editors/vscode/`, reusing the shared grammar) for highlighting + the
+    **LSP4IJ** marketplace plugin running `phg lsp` for diagnostics/hover/completion/rename/format.
+    Both editor READMEs already track the *natively-compiled marketplace plugin* as a follow-up.
+    Refreshed the docs (dead `phg fmt`→`phg format` verb) in this pass. **PENDING scope decision
+    (recorded per §15 "surface, don't self-rule" + "surface scope if it balloons"):** should the run
+    build a native Gradle/IntelliJ-Platform plugin? Analysis for the developer: (a) the no-build
+    path already delivers full functionality; (b) a native plugin is a large lift (Gradle +
+    IntelliJ-Platform SDK + Kotlin/plugin.xml) and **cannot be verified here** (needs a running
+    PhpStorm), so it would ship unproven — against the evidence-before-completion discipline;
+    (c) recommendation → **keep the no-build path as the supported story; defer the native plugin**
+    unless the developer wants to invest a large, here-untestable build. Not autonomously ruled.
   - Refresh `examples/guide/` walkthroughs referenced by both extensions; re-gen the playground.
 - **M6 — Core.Dotenv (UA-L7, developer-requested full Symfony cascade):** write the design spec first
   (taxonomy · the `test`-env "`.env.local` skipped" footgun decision · Secret-type integration · the
