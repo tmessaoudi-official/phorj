@@ -839,6 +839,20 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   import groups) into `src/fmt/` (today a flat collapse-printer). MUST stay idempotent (`fmt(fmt(x))==fmt(x)`)
   — strengthen the fmt corpus test to `fmt(src)==src` on a multi-line corpus (folds UA-0.8). Own dedicated
   slice; gate-green + examples + both-editor (fmt drives LSP formatting).
+  **ARCHITECTURE FINDINGS (2026-07-04 orientation, before the rewrite — READ before starting):**
+  `src/fmt/printer.rs` is 1475 lines; `Printer` holds only `{out, indent, comments, next_comment}` — **NO
+  raw source**, and `fn expr(&self, e) -> Result<String,String>` (printer.rs:778) produces a **flat
+  single-line String** (no column/width model; chains/calls/literals all collapse). Consequences: (1)
+  Rule 2 (width-wrap) = introduce a Wadler/prettier document IR (group/line/indent/softline) + fits-in-N
+  solver and rewrite `expr()` to emit multi-line — touches every expr arm. (2) Rule 1 (preserve author
+  breaks) is HARDER than it sounds AND fights the design: the AST discards whitespace and the printer has
+  no source, so "the author broke here" isn't recoverable without threading the source in + comparing
+  spans — against the stated "print from the AST, not by re-spacing tokens" invariant (fmt/mod.rs). **RE-
+  RECOMMEND on that evidence: do the WIDTH-based canonical form (Rule 2 only, prettier/rustfmt-style —
+  decide breaks from width deterministically), and DROP Rule 1's "preserve author breaks"** (it needs
+  source access the printer deliberately lacks, and width-canonical is the industry norm + idempotent by
+  construction). Surface this to the developer at the start of the fmt session — it revises DEC-187's
+  expand-only framing. No bounded sub-increment exists; it's an atomic printer-core rewrite → fresh session.
 - [2026-07-04] **Build order (converged, developer-ruled):** B-2b combinators → DEC-187 fmt full wrapping
   → B-2c variant + grouped imports → B-2d rich-error audit + UA-1.8 → Wave C. Each gate-green + example +
   commit; NEVER push (developer pushes on green CI). **[REORDERED 2026-07-04 post-B-2b (developer-confirmed):
