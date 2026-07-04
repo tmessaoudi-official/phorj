@@ -283,11 +283,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              form (`acme` → `Acme`).\n"
         }
         "E-INSTANCEOF-TYPE" => {
-            "E-INSTANCEOF-TYPE — an `instanceof` operand is not valid.\n\n\
-             `value instanceof T` tests whether a class instance is of class/interface `T`. The right\n\
-             operand must name a declared **class or interface** (M-RT S2 added interfaces); the left\n\
-             operand must be a class instance. The result is `bool`, and inside `if (x instanceof T)`\n\
-             the operand `x` is smart-cast to `T` in the then-block.\n"
+            "E-INSTANCEOF-TYPE — an `is` / `instanceof` type-test operand is not valid.\n\n\
+             `value is T` (equivalently `value instanceof T`) tests a value's runtime type. The right\n\
+             operand must name a declared **class or interface**, OR a **discriminable primitive**\n\
+             (`int`/`float`/`string`/`bool`/`null`) — `is`/`instanceof` are full synonyms and both\n\
+             accept either (DEC-184). `decimal`/`bytes`/`html`/`attr` can't be tested (they erase to a\n\
+             PHP string — `E-MATCH-TYPE-ERASED`). The result is `bool`, and inside `if (x is T)` the\n\
+             operand `x` is smart-cast to `T` in the then-block (a primitive narrows in the then-branch;\n\
+             a class narrows in then and else).\n"
         }
         "E-CAST-TYPE" => {
             "E-CAST-TYPE — an `as` cast operand is not valid.\n\n\

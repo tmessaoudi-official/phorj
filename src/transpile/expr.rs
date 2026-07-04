@@ -165,10 +165,23 @@ impl Transpiler {
                 value, type_name, ..
             } => {
                 let v = self.emit_expr(value)?;
-                let v = Self::paren_if_compound(value, v);
-                // M-RT S6c.3: against a decomposed MI ancestor, test its interface `I<name>` — the
-                // subtype `implements I<name>` (it does not `extends <name>`).
-                Ok(format!("{v} instanceof {}", self.type_pos_ref(type_name)))
+                // Slice 3 (DEC-184): a discriminable-primitive test lowers to PHP's `is_*` — byte
+                // identical to the interpreter/VM `Value`-variant dispatch and to the `match`
+                // type-pattern emission (transpile/matches.rs). The argument sits inside the call's
+                // parens, so no `paren_if_compound` is needed for the primitive forms.
+                Ok(match type_name.as_str() {
+                    "int" => format!("is_int({v})"),
+                    "float" => format!("is_float({v})"),
+                    "string" => format!("is_string({v})"),
+                    "bool" => format!("is_bool({v})"),
+                    "null" => format!("is_null({v})"),
+                    // M-RT S6c.3: against a decomposed MI ancestor, test its interface `I<name>` — the
+                    // subtype `implements I<name>` (it does not `extends <name>`).
+                    _ => {
+                        let v = Self::paren_if_compound(value, v);
+                        format!("{v} instanceof {}", self.type_pos_ref(type_name))
+                    }
+                })
             }
             // `value as TypeName` → the checked downcast (M4 casting axis 2), result `TypeName?`.
             // Lowered to an arrow-fn IIFE so `value` is evaluated EXACTLY ONCE (a naive

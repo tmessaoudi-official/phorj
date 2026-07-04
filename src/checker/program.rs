@@ -963,7 +963,22 @@ impl Checker {
         } = s
         {
             if self.block_terminates(then_block) {
-                return self.narrow_from_condition(cond, false);
+                let mut n = self.narrow_from_condition(cond, false);
+                // Lockstep bound (DEC-184): the VM compiler replicates only the DIRECT then-block
+                // primitive narrowing, not an early-return TAIL. A UNION variable narrowed to a
+                // discriminable primitive here (`if (!(x is int)) { return; }` ⇒ `x: int` for the
+                // tail) would therefore be checker-accepts/VM-rejects. Drop those — both backends then
+                // see the un-narrowed union in the tail and reject arithmetic on it identically. An
+                // OPTIONAL narrowed to its inner is kept (the optional local already carries the inner
+                // `CTy` on the VM), and a class narrowing is kept (member access resolves via the field
+                // table, no local-`CTy` narrowing needed). General fix tracked as W2-12.
+                n.retain(|(name, ty)| {
+                    let prim = matches!(ty, Ty::Int | Ty::Float | Ty::String | Ty::Bool | Ty::Null);
+                    let from_optional =
+                        matches!(self.lookup_binding(name), Some((Ty::Optional(_), _)));
+                    !prim || from_optional
+                });
+                return n;
             }
         }
         Vec::new()

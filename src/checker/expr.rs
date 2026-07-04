@@ -508,6 +508,42 @@ impl Checker {
         span: Span,
     ) -> Ty {
         let v = self.check_expr(value);
+        // Slice 3 (DEC-184): `is`/`instanceof` test a discriminable PRIMITIVE (`x is int`) as well as
+        // a class/interface. A primitive RHS is a runtime `Value`-variant test (interpreter/VM) →
+        // `is_int`/`is_float`/`is_string`/`is_bool`/`is_null` in the transpiled leg — byte-identical,
+        // and it accepts any left operand (a primitive value flows in), so it returns before the
+        // class-operand check below.
+        if let Some(prim) = prim_pat_ty(type_name) {
+            // Byte-identity guard (mirrors `match`'s E-MATCH-ERASED-AMBIG): a `string` test over a
+            // union (or optional-union) that also holds a PHP-string-erased sibling (decimal/bytes/
+            // html/attr) can't be told apart by the transpiled `is_string()`.
+            if matches!(prim, Ty::String) {
+                if let Some(members) = union_members_of(&v) {
+                    if members
+                        .iter()
+                        .any(|m| !matches!(m, Ty::String) && erases_to_php_string(m))
+                    {
+                        self.err_coded(
+                            span,
+                            "type test `string` is ambiguous here — the operand's type also holds a type that erases to a PHP string (decimal/bytes/html/attr), so the transpiled PHP can't distinguish them".to_string(),
+                            "E-MATCH-ERASED-AMBIG",
+                            Some("split the type or test a more specific one — run/runvm could tell them apart, but the PHP leg cannot".into()),
+                        );
+                    }
+                }
+            }
+            return Ty::Bool;
+        }
+        // decimal/bytes/html/attr erase to a PHP `string`, so a runtime test can't be byte-identical
+        // (LADDER-forced reject, mirroring E-MATCH-TYPE-ERASED for `match` type-patterns).
+        if matches!(type_name, "decimal" | "bytes" | "html" | "attr") {
+            return self.err_coded(
+                span,
+                format!("type test `{type_name}` can't be runtime-discriminated — it erases to a PHP string; only int/float/string/bool/null and classes/interfaces can be tested"),
+                "E-MATCH-TYPE-ERASED",
+                Some("test its wrapping form, or use a class/interface".into()),
+            );
+        }
         // M-RT S8: a trait is reuse, not a type — it cannot be an `instanceof` target (it is collected
         // into `classes` for member lookup, so this explicit guard is needed before the class check).
         if self.traits.contains(type_name) {
@@ -522,10 +558,10 @@ impl Checker {
             return self.err_coded(
                 span,
                 format!(
-                    "`instanceof` requires a class or interface name on the right, found `{type_name}`"
+                    "type test requires a class, interface, or discriminable primitive (int/float/string/bool/null) on the right, found `{type_name}`"
                 ),
                 "E-INSTANCEOF-TYPE",
-                Some("only a declared class or interface can be tested with `instanceof`".into()),
+                Some("only a declared class/interface or a discriminable primitive can be tested with `is`/`instanceof`".into()),
             );
         }
         match &v {

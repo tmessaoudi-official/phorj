@@ -319,9 +319,18 @@ not a panic:
   `A | (B?)`). Use `T?` for nullability. (Else/negative flow-narrowing now *does* narrow the else-branch
   — see the flow-narrowing row below.)
 - **Flow-narrowing (M-RT pattern cluster S5.3) — what narrows and what doesn't.** Narrows: `if (x
-  instanceof T)` (then → `T`, else → the remaining union members), `!(…)` / `&&` (true side) / `||`
-  (false side) composing those, and an **early-return guard** (`if (!(x instanceof T)) { return … }`
-  narrows the rest of the block). **Not narrowed** (deferred): the *true* side of `a || b` (a
+  instanceof T)` / `if (x is T)` — **`is` and `instanceof` are full synonyms and both test/narrow
+  primitives AND classes** (DEC-184: `x is int`, `s is Circle`) — (then → `T`, else → the remaining
+  union members for a **class** union), `!(…)` / `&&` (true side) / `||` (false side) composing those,
+  and an **early-return guard** (`if (!(x instanceof T)) { return … }` narrows the rest of the block).
+  A **primitive** then-branch narrows the tested variable to a first-class arithmetic operand
+  (`if (x is int) { x * 2 }` — real integer arithmetic on the VM, byte-identical). **`is null`**
+  narrows an optional to its non-null inner. **Not narrowed** (deferred): the **primitive complement**
+  — `if (x is int)`'s *else*, and the union-minus-tested-type in general — is NOT narrowed for
+  primitives (a union local is opaque on the VM, so narrowing it would be checker-accepts/VM-rejects);
+  reach it with a nested `is`/`match`. The general "erased/union value as a first-class VM operand" fix
+  is tracked as **W2-12**. (Classes narrow both directions; only the *primitive* complement is bound.)
+  Also not narrowed (deferred): the *true* side of `a || b` (a
   disjunction implies no single fact); **common-member access on a raw union** without narrowing;
   **`x == null` / equality-literal refinement** — Phorj rejects comparing an optional/union to a
   literal (`T? == null`, `int|string == "ok"`), so there is no such narrowing source (use if-let /

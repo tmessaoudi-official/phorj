@@ -699,6 +699,28 @@ impl Checker {
                 value, type_name, ..
             } => {
                 if let Expr::Ident(name, _) = &**value {
+                    // Slice 3 (DEC-184): a primitive type-test narrows the variable to the tested
+                    // primitive in the then-branch (`if (x is int)` ⇒ `x: int`). The VM compiler
+                    // replicates this exact then-branch narrowing (`compile_if`), so arithmetic on the
+                    // narrowed value (`x + 1`) is lockstep.
+                    if let Some(prim) = prim_pat_ty(type_name) {
+                        if polarity {
+                            out.push((name.clone(), prim));
+                        } else if let Some((Ty::Optional(inner), _)) = self.lookup_binding(name) {
+                            // `is null` over an optional: the complement is the non-null inner.
+                            // Lockstep-safe — an optional local already carries its inner `CTy` on the
+                            // VM (`resolve_cty`), so no compiler narrowing is needed to specialize it.
+                            if matches!(prim, Ty::Null) {
+                                out.push((name.clone(), *inner));
+                            }
+                        }
+                        // Deliberately NO union-minus-primitive complement (`(int | string)` else-branch
+                        // ⇒ `string`): the VM compiler can't derive it — a union local is `CTy::Other`
+                        // and the member set is lost — so narrowing it here would be a
+                        // checker-accepts/VM-rejects divergence. Reach the complement with a nested
+                        // `is`/`match`. General fix tracked as W2-12 (erased-operand dynamic fallback).
+                        return out;
+                    }
                     let known = self.classes.contains_key(type_name)
                         || self.interfaces.contains_key(type_name);
                     if !known {

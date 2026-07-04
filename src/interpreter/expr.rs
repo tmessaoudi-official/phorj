@@ -73,12 +73,23 @@ impl<'c> Interp<'c> {
                 // `instanceof`. The class name is single-sourced on `Value::Instance` (P4-4), so all
                 // three backends agree.
                 let v = self.eval(value)?;
-                let is = matches!(&v, Value::Instance(inst)
-                    if inst.class == *type_name
-                        || self
-                            .class_implements
-                            .get(&inst.class)
-                            .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
+                // Slice 3 (DEC-184): a discriminable-primitive test dispatches by `Value` variant —
+                // the same rule the VM (`Op::IsInstance`) and the `match` type-pattern path already
+                // use, so all three backends agree byte-for-byte. Class/interface falls to the
+                // `instanceof_table` oracle below.
+                let is = match type_name.as_str() {
+                    "int" => matches!(v, Value::Int(_)),
+                    "float" => matches!(v, Value::Float(_)),
+                    "string" => matches!(v, Value::Str(_)),
+                    "bool" => matches!(v, Value::Bool(_)),
+                    "null" => matches!(v, Value::Null),
+                    _ => matches!(&v, Value::Instance(inst)
+                        if inst.class == *type_name
+                            || self
+                                .class_implements
+                                .get(&inst.class)
+                                .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name))),
+                };
                 Ok(Value::Bool(is))
             }
             Expr::Cast {

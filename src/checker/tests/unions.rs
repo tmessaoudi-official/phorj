@@ -305,3 +305,95 @@ fn optional_single_class_flat_ok() {
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
+
+// ---- Wave A slice 3 (DEC-184): `is` / `instanceof` type-test + flow-narrowing ----
+
+#[test]
+fn is_int_then_branch_narrows_to_operand() {
+    // `if (x is int)` narrows `x` to `int` in the then-branch, so `x + 1` is valid arithmetic.
+    let ok = errors_of(
+        "function f(int | string x) -> int { if (x is int) { return x + 1; } return 0; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn is_and_instanceof_symmetric_over_primitive() {
+    // DEC-184 full symmetry: both operators test a primitive and both narrow.
+    let ok = errors_of(
+        "function f(int | string x) -> int { if (x instanceof int) { return x + 1; } return 0; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn is_over_class_narrows_like_instanceof() {
+    let ok = errors_of(&format!(
+        "{SHAPES} function f(Circle | Square s) -> int {{ if (s is Circle) {{ return s.radius; }} return 0; }} \
+             function main() -> void {{}}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn is_string_over_erased_union_rejected() {
+    // Same byte-identity guard as `match`: `is string` over a union holding a PHP-string-erased
+    // sibling is ambiguous.
+    let bad = errors_of(
+        "function f(string | decimal v) -> bool { return v is string; } function main() -> void {}",
+    );
+    assert!(
+        bad.iter().any(|e| e.code == Some("E-MATCH-ERASED-AMBIG")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn is_erased_type_rejected() {
+    let bad = errors_of(
+        "function f(decimal d) -> bool { return d is decimal; } function main() -> void {}",
+    );
+    assert!(
+        bad.iter().any(|e| e.code == Some("E-MATCH-TYPE-ERASED")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn is_unknown_type_rejected() {
+    let bad =
+        errors_of("function f(int x) -> bool { return x is Bogus; } function main() -> void {}");
+    assert!(
+        bad.iter().any(|e| e.code == Some("E-INSTANCEOF-TYPE")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn is_null_narrows_optional_in_early_return_tail() {
+    // `if (name is null) { return … }` narrows the tail to the non-null inner (lockstep-safe: an
+    // optional local already carries its inner operand type on the VM).
+    let ok = errors_of(
+        "function f(string? name) -> string { if (name is null) { return \"z\"; } return name + \"!\"; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn is_primitive_complement_not_narrowed_lockstep() {
+    // The ruled bound (DEC-184): a primitive is NOT narrowed in the complement (here a negated
+    // early-return tail over a union) — so `x + 1` on the un-narrowed union is a type error, the
+    // SAME rejection the VM compiler makes (lockstep, not a checker-accepts/VM-rejects divergence).
+    // The general union-operand fix is W2-12.
+    let bad = errors_of(
+        "function f(int | string x) -> int { if (!(x is int)) { return 0; } return x + 1; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter().any(|e| e.message.contains("arithmetic")),
+        "{bad:?}"
+    );
+}

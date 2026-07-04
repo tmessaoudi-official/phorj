@@ -87,7 +87,43 @@ impl Parser {
                         self.advance();
                         n
                     }
-                    _ => return Err(self.error("a class name after `instanceof`")),
+                    // `null` lexes as a keyword token, not an `Ident`; accept it as the discriminable
+                    // primitive `null` (DEC-184 — `x instanceof null` ≡ `x is null` ≡ `is_null`).
+                    TokenKind::Null => {
+                        self.advance();
+                        "null".to_string()
+                    }
+                    _ => return Err(self.error("a class name or primitive after `instanceof`")),
+                };
+                lhs = Expr::InstanceOf {
+                    value: Box::new(lhs),
+                    type_name,
+                    span: sp,
+                };
+                continue;
+            }
+            // `value is TypeName` — the type test (DEC-184), a full synonym for `instanceof` that
+            // also accepts a discriminable primitive (`x is int`). `is` is a *contextual* word (like
+            // `as`) — it lexes as `Ident("is")`; in infix position after an expression it is the
+            // type-test operator, so an identifier named `is` elsewhere is unaffected. Same
+            // precedence (8) and type-name RHS as `instanceof`; both lower to `Expr::InstanceOf`, so
+            // every downstream stage treats them identically. The checker validates the RHS
+            // (primitive or class/interface) and types it `bool`.
+            if matches!(self.peek(), TokenKind::Ident(s) if s == "is") && 8 >= min_bp {
+                let sp = self.peek_span();
+                self.advance(); // consume `is`
+                let type_name = match self.peek().clone() {
+                    TokenKind::Ident(n) => {
+                        self.advance();
+                        n
+                    }
+                    // `null` lexes as a keyword token, not an `Ident` — accept it as the `null`
+                    // primitive test (`x is null` ⇒ `is_null`), and narrow the optional in the branch.
+                    TokenKind::Null => {
+                        self.advance();
+                        "null".to_string()
+                    }
+                    _ => return Err(self.error("a type name after `is`")),
                 };
                 lhs = Expr::InstanceOf {
                     value: Box::new(lhs),

@@ -401,3 +401,46 @@ pub(super) fn is_php_reserved_symbol_name(name: &str, kind: &str) -> bool {
         _ => name == "var",
     }
 }
+
+/// The five PHP-`is_*`-discriminable primitives usable as a `match` type-pattern head (`int i`,
+/// `string s`, …) or an `is`/`instanceof` type-test target (`x is int`). Returns the bound `Ty`.
+/// `decimal`/`bytes`/`html`/`attr` are excluded — they erase to a PHP `string`, so a runtime
+/// type-test can't be byte-identical in the transpiled leg. Shared by the `match` cluster and the
+/// `is`/`instanceof` checker + narrowing (Wave A).
+pub(super) fn prim_pat_ty(name: &str) -> Option<Ty> {
+    match name {
+        "int" => Some(Ty::Int),
+        "float" => Some(Ty::Float),
+        "string" => Some(Ty::String),
+        "bool" => Some(Ty::Bool),
+        "null" => Some(Ty::Null),
+        _ => None,
+    }
+}
+
+/// The union members a type-pattern / type-test discriminates — for both a bare `Ty::Union` and an
+/// `Optional` wrapping one (`(A | B)?`, the `T?` a `List.first`/`Map.get`/`.last` returns). Threading
+/// through `Optional` keeps the `string`-erasure byte-identity guard (`E-MATCH-ERASED-AMBIG`) from
+/// being bypassed when the union sits behind a `?`: a decimal/bytes/html/attr sibling erases to a PHP
+/// string, so `is_string` in the transpiled leg can't tell it apart from a real `string` (G-1).
+/// Returns `None` for any other scrutinee.
+pub(super) fn union_members_of(scrut: &Ty) -> Option<&[Ty]> {
+    match scrut {
+        Ty::Union(members) => Some(members),
+        Ty::Optional(inner) => match &**inner {
+            Ty::Union(members) => Some(members),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A checker type that erases to a PHP `string` at transpile — so PHP's `is_string()` can't tell it
+/// apart from a real `string`. A `string` type-pattern / `is string` test over a union holding one
+/// of these is ambiguous (`E-MATCH-ERASED-AMBIG`).
+pub(super) fn erases_to_php_string(ty: &Ty) -> bool {
+    matches!(
+        ty,
+        Ty::String | Ty::Decimal | Ty::Bytes | Ty::Html | Ty::Attr
+    )
+}

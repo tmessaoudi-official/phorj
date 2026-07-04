@@ -543,20 +543,6 @@ fn collect_binds(pat: &crate::ast::Pattern, acc: &mut Vec<String>) {
     }
 }
 
-/// Wave A: the five PHP-`is_*`-discriminable primitives usable as a `match` type-pattern head
-/// (`int i`, `string s`, …). Returns the bound `Ty`. `decimal`/`bytes`/`html`/`attr` are excluded —
-/// they erase to a PHP `string`, so a runtime type-test can't be byte-identical in the transpiled leg.
-fn prim_pat_ty(name: &str) -> Option<Ty> {
-    match name {
-        "int" => Some(Ty::Int),
-        "float" => Some(Ty::Float),
-        "string" => Some(Ty::String),
-        "bool" => Some(Ty::Bool),
-        "null" => Some(Ty::Null),
-        _ => None,
-    }
-}
-
 /// The discriminable primitive's name, for exhaustiveness coverage of a union member (inverse of
 /// [`prim_pat_ty`]). A non-discriminable `Ty` returns `None` (still needs a `_`).
 fn prim_ty_name(ty: &Ty) -> Option<&'static str> {
@@ -568,30 +554,4 @@ fn prim_ty_name(ty: &Ty) -> Option<&'static str> {
         Ty::Null => Some("null"),
         _ => None,
     }
-}
-
-/// The union members a type-pattern arm tests against — for both a bare `Ty::Union` and an
-/// `Optional` wrapping one (`(A | B)?`, the `T?` a `List.first`/`Map.get`/`.last` returns). Threading
-/// through `Optional` keeps the `string`-erasure byte-identity guard (`E-MATCH-ERASED-AMBIG`) from
-/// being bypassed when the union sits behind a `?`: a decimal/bytes/html/attr sibling erases to a PHP
-/// string, so `is_string` in the transpiled leg can't tell it apart from a real `string` (G-1).
-/// Returns `None` for any other scrutinee.
-fn union_members_of(scrut: &Ty) -> Option<&[Ty]> {
-    match scrut {
-        Ty::Union(members) => Some(members),
-        Ty::Optional(inner) => match &**inner {
-            Ty::Union(members) => Some(members),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-/// A checker type that erases to a PHP `string` at transpile — so PHP's `is_string()` can't tell it
-/// apart from a real `string`. A `string` type-pattern over a union holding one of these is ambiguous.
-fn erases_to_php_string(ty: &Ty) -> bool {
-    matches!(
-        ty,
-        Ty::String | Ty::Decimal | Ty::Bytes | Ty::Html | Ty::Attr
-    )
 }

@@ -312,6 +312,43 @@ impl Compiler<'_> {
         }
     }
 
+    /// The positive primitive narrowings a condition installs in its THEN-block, as
+    /// `(local-slot, CTy)`. Mirrors the checker's then-branch `is`/`instanceof`-primitive narrowing
+    /// (DEC-184): the VM must give the narrowed local its concrete operand `CTy` so
+    /// `if (x is int) { x + 1 }` specializes the arithmetic (the CTy-operand trap, Invariant 7). Only
+    /// the named (then) direction is replicated — a class name resolves members via the field table
+    /// (no local-CTy narrowing needed), and the union complement stays `CTy::Other` (the checker
+    /// narrows no union complement either; general fix W2-12).
+    fn then_prim_narrowings(&self, cond: &Expr) -> Vec<(usize, CTy)> {
+        let mut out = Vec::new();
+        match cond {
+            Expr::InstanceOf {
+                value, type_name, ..
+            } => {
+                if let Expr::Ident(name, _) = &**value {
+                    let cty = cty_of_type_name(type_name);
+                    if matches!(cty, CTy::Int | CTy::Float | CTy::Str | CTy::Decimal) {
+                        if let Some(slot) = self.resolve_local(name) {
+                            out.push((slot, cty));
+                        }
+                    }
+                }
+            }
+            // `a && b` narrows the conjunction on its true side — the same recursion the checker uses.
+            Expr::Binary {
+                op: crate::ast::BinaryOp::And,
+                lhs,
+                rhs,
+                ..
+            } => {
+                out.extend(self.then_prim_narrowings(lhs));
+                out.extend(self.then_prim_narrowings(rhs));
+            }
+            _ => {}
+        }
+        out
+    }
+
     pub(super) fn compile_if(
         &mut self,
         cond: &Expr,
@@ -325,11 +362,26 @@ impl Compiler<'_> {
         }
         self.expr(cond)?;
         let else_jump = self.emit_jump(Op::JumpIfFalse(0), line); // pops cond
+                                                                  // Slice 3 (DEC-184): narrow primitive locals to their tested operand `CTy` for the THEN-block
+                                                                  // only, so arithmetic on the narrowed value specializes on the VM. Save the prior `CTy` and
+                                                                  // restore it after the block — the else/fall-through must never see the narrowed type (the
+                                                                  // checker narrows no union complement either, keeping the two in lockstep).
+        let narrowings = self.then_prim_narrowings(cond);
+        let saved: Vec<(usize, CTy)> = narrowings
+            .iter()
+            .map(|(slot, _)| (*slot, self.locals[*slot].ty.clone()))
+            .collect();
+        for (slot, cty) in &narrowings {
+            self.locals[*slot].ty = cty.clone();
+        }
         self.begin_scope();
         for s in then_block {
             self.stmt(s)?;
         }
         self.end_scope(line);
+        for (slot, cty) in saved {
+            self.locals[slot].ty = cty;
+        }
         let end_jump = self.emit_jump(Op::Jump(0), line);
         self.patch_jump(else_jump);
         if let Some(eb) = else_block {
