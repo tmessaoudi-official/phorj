@@ -15,6 +15,7 @@ mod entry_point;
 mod field_init;
 mod generics;
 mod inheritance;
+mod injected_result_option;
 mod interfaces;
 mod intersections;
 mod loops;

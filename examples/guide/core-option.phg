@@ -1,0 +1,52 @@
+// `Core.Option<T>` — the canonical, compiler-INJECTED absence type (DEC-182, Wave B foundation).
+//
+// `generic-enums.phg` shows how you *could* declare your own `enum Option<T>`. This example uses the
+// language's own canonical one: `import Core.Option;` injects `enum Option<T> { None, Some(T value) }`
+// so every program shares ONE `Option`, rather than each file inventing its own "in the wind" copy.
+//
+// Because it is an injected enum, its variants are reached QUALIFIED — `Option.Some(…)` / `Option.None()`,
+// never a bare `Some(…)` (that is `E-INJECTED-VARIANT-BARE`, the "nothing in the wind" rule). The bare
+// TYPE name `Option<int>` is fine once imported. `Option<T>` is the opt-in rich wrapper; it is DISTINCT
+// from the lightweight built-in `T?` (what stdlib returns) — you convert between them explicitly, with
+// no implicit coercion (combinators + `T?`↔`Option` conversions land in the next slice). It is a generic
+// injected enum, so `T` is inferred at the constructor
+// (`Option.Some(7)` ⇒ `Option<int>`), recovered at every `match`, and erased before any backend runs —
+// byte-for-byte identical output on `run`, `runvm`, and real PHP.
+package Main;
+
+import Core.Output;
+import Core.Option;
+
+// A variant that mentions no `T` (`None`) can't infer it — annotate the binding to fix `Option<int>`.
+function describe(Option<int> o): string {
+    return match (o) { Option.Some(n) => "some {n}", Option.None() => "none" };
+}
+
+// Straight-line use: build one of each variant and read them back through a `match`.
+function firstPositive(List<int> xs): Option<int> {
+    for (int x in xs) {
+        if (x > 0) {
+            return new Option.Some(x);
+        }
+    }
+    return new Option.None();
+}
+
+function main(): void {
+    var some = new Option.Some(7);
+    // Option<int> — T inferred from `7`
+    Option<int> none = new Option.None();
+    // None mentions no T — annotate to fix Option<int>
+    Output.printLine(describe(some));
+    // some 7
+    Output.printLine(describe(none));
+    // none
+    Output.printLine(describe(firstPositive([-3, -1, 4, 9])));
+    // some 4  — first positive element
+    Output.printLine(describe(firstPositive([-3, -1])));
+    // none    — nothing positive
+    // A string payload works the same way — T is inferred as `string` here.
+    var label = new Option.Some("phorj");
+    Output.printLine(match (label) { Option.Some(s) => "label {s}", Option.None() => "label none" });
+}
+// label phorj

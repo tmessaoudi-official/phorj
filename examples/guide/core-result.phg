@@ -1,0 +1,40 @@
+// `Core.Result<T, E>` — the canonical, compiler-INJECTED error-as-value type (DEC-182, Wave B foundation).
+//
+// `result.phg` shows a hand-declared `enum Result<T, E>`. This example uses the language's own canonical
+// one: `import Core.Result;` injects `enum Result<T, E> { Success(T value), Failure(E error) }` so every
+// program shares ONE `Result`. `Success(T)` is the happy value; `Failure(E)` carries the error, where the
+// error payload `E` is a user enum (or any type). This is the three-tier error model's *recoverable* tier:
+// failures you handle by matching — separate from unchecked faults (`panic`/`assert`), which stay
+// uncatchable bugs.
+//
+// Injected ⇒ variants are reached QUALIFIED — `Result.Success(…)` / `Result.Failure(…)`, never bare
+// (`E-INJECTED-VARIANT-BARE`). It is generic, so `T`/`E` are inferred at the constructor, recovered at
+// every `match`, and erased before any backend — byte-identical `run` / `runvm` / real PHP.
+package Main;
+
+import Core.Output;
+import Core.Result;
+
+// A dedicated error enum as the `E` payload — richer than a bare string, still exhaustively matchable.
+enum ParseFault { Missing, NotANumber(string text) }
+
+// Parse a tiny "positive int" field: report *why* it failed as a typed `Failure`, never a fault.
+function parsePositive(string s): Result<int, ParseFault> {
+    if (s == "") {
+        return new Result.Failure(new Missing());
+    }
+    return match (s) { "1" => new Result.Success(1), "2" => new Result.Success(2), "3" => new Result.Success(3), _ => new Result.Failure(new NotANumber(s)) };
+}
+
+function report(Result<int, ParseFault> r): string {
+    return match (r) { Result.Success(v) => "ok {v}", Result.Failure(e) => match (e) { Missing() => "err missing", NotANumber(t) => "err not-a-number: {t}" } };
+}
+
+function main(): void {
+    Output.printLine(report(parsePositive("2")));
+    // ok 2
+    Output.printLine(report(parsePositive("")));
+    // err missing
+    Output.printLine(report(parsePositive("xyz")));
+}
+// err not-a-number: xyz

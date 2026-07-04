@@ -453,6 +453,92 @@ fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program>
     }
 }
 
+/// The canonical `Core.Option<T>` value model (DEC-182, Wave B foundation), injected (below) when a
+/// program imports `Core.Option`. The opt-in rich absence type — distinct from the built-in `T?`
+/// (lightweight built-in absence + what stdlib returns); interconvert explicitly, never implicitly.
+/// The FIRST *generic* injected enum: `T` is checked as `Ty::Param` (the inject chain runs before
+/// `check_resolutions`) then erased by the downstream `erase_generics` — identical discipline to a
+/// user-declared `enum Option<T>`. Matches the canonical shape in `examples/guide/generic-enums.phg`.
+const OPTION_PRELUDE: &str = "enum Option<T> { None, Some(T value) }";
+
+/// Inject the `Option<T>` enum at the head of a program that imports `Core.Option`, so its variants
+/// can be constructed/`match`ed — qualified only (`Option.Some(…)`, `E-INJECTED-VARIANT-BARE` on
+/// bare use), the injected-enum "nothing in the wind" rule. A no-op (borrowed) unless `Core.Option`
+/// is imported and no `Option` enum is already declared (a user's own `Option` shadows + skips it).
+/// Mirrors [`inject_rounding_mode_prelude`]; the enum then flows through every backend as ordinary.
+fn inject_option_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports_option = imports_module_or_member(prog, &["Core", "Option"]);
+    let already_declared = prog
+        .items
+        .iter()
+        .any(|it| matches!(it, Item::Enum(e) if e.name == "Option"));
+    if !imports_option || already_declared {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    match lex_parse(OPTION_PRELUDE)
+        .ok()
+        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
+    {
+        Some(mut enum_item) => {
+            if let Item::Enum(e) = &mut enum_item {
+                e.injected = true;
+            }
+            let mut items = Vec::with_capacity(prog.items.len() + 1);
+            items.push(enum_item);
+            items.extend(prog.items.iter().cloned());
+            std::borrow::Cow::Owned(Program {
+                package: prog.package.clone(),
+                items,
+                span: prog.span,
+            })
+        }
+        None => std::borrow::Cow::Borrowed(prog), // unreachable: OPTION_PRELUDE is valid
+    }
+}
+
+/// The canonical `Core.Result<T, E>` value model (DEC-182, Wave B foundation), injected (below) when
+/// a program imports `Core.Result`. Error-as-value: `Success(T)` or `Failure(E)`, where the error
+/// payload `E` is a user enum. Pairs with the built-in `Error` marker + typed multi-catch; faults
+/// stay uncatchable (bugs only). A generic injected enum like [`OPTION_PRELUDE`] — `T`/`E` are
+/// erased downstream. Matches the canonical shape in `examples/guide/generic-enums.phg`.
+const RESULT_PRELUDE: &str = "enum Result<T, E> { Success(T value), Failure(E error) }";
+
+/// Inject the `Result<T, E>` enum at the head of a program that imports `Core.Result` (qualified
+/// variants `Result.Success(…)`/`Result.Failure(…)`, `E-INJECTED-VARIANT-BARE` on bare use). A no-op
+/// unless `Core.Result` is imported and no `Result` enum is already declared. Mirrors
+/// [`inject_option_prelude`]; the enum then flows through every backend as ordinary.
+fn inject_result_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports_result = imports_module_or_member(prog, &["Core", "Result"]);
+    let already_declared = prog
+        .items
+        .iter()
+        .any(|it| matches!(it, Item::Enum(e) if e.name == "Result"));
+    if !imports_result || already_declared {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    match lex_parse(RESULT_PRELUDE)
+        .ok()
+        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
+    {
+        Some(mut enum_item) => {
+            if let Item::Enum(e) = &mut enum_item {
+                e.injected = true;
+            }
+            let mut items = Vec::with_capacity(prog.items.len() + 1);
+            items.push(enum_item);
+            items.extend(prog.items.iter().cloned());
+            std::borrow::Cow::Owned(Program {
+                package: prog.package.clone(),
+                items,
+                span: prog.span,
+            })
+        }
+        None => std::borrow::Cow::Borrowed(prog), // unreachable: RESULT_PRELUDE is valid
+    }
+}
+
 /// The canonical `Core.Http` types, injected (below) when a program imports `Core.Http` (M6 W1 →
 /// stdlib). The portable handler model — `handle(Request): Response` — at the value level: `Request`
 /// and `Response` are immutable values; `Request.parse(bytes) -> Request?` and `resp.serialize()`
@@ -1007,7 +1093,9 @@ pub fn check_and_expand_reified(
     }
     let json_injected = inject_json_prelude(prog);
     let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
-    let http_injected = inject_http_prelude(rm_injected.as_ref());
+    let option_injected = inject_option_prelude(rm_injected.as_ref());
+    let result_injected = inject_result_prelude(option_injected.as_ref());
+    let http_injected = inject_http_prelude(result_injected.as_ref());
     let regex_injected = inject_regex_prelude(http_injected.as_ref());
     let secret_injected = inject_secret_prelude(regex_injected.as_ref());
     let injected = inject_time_prelude(secret_injected.as_ref());

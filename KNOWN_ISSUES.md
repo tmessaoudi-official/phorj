@@ -45,6 +45,16 @@ not a panic:
   collision); the built-in type words are already rejected by the alias arm. **Deferred corner:** a
   *method* named after a word PHP forbids as a method (none in the function/class sets are — PHP
   semi-reserves allow method names) is not specially handled; no known case.
+  **Two open gaps in this guard (byte-identity break, found Wave B B-1, fix scoped to a later F-m pass;
+  not introduced by B-1).** Both make `run`/`runvm` succeed while the transpiled PHP fails to parse or
+  load — a G-1.1-class break, disclosed here per G-7: (1) **enum *variant* names are not guarded** —
+  `reserved_symbol_decl` returns only the top-level item name, so a variant `Empty`/`List`/`Echo`
+  (which transpiles to `final class Empty extends …`) collides with the PHP keyword uncaught; (2) the
+  guard covers reserved *keywords* only, **not PHP *builtin class names*** (`ParseError`, `Error`,
+  `Exception`, `Closure`, `Generator`, `stdClass`, …) — an `enum ParseError`/`class Error` transpiles
+  to `abstract class ParseError` and PHP rejects it with "cannot redeclare class". Until fixed, avoid
+  naming an enum/enum-variant/class after a PHP keyword or builtin class (the shipped `examples/guide/
+  core-result.phg` sidesteps both — `ParseFault` + `Missing`, not `ParseError` + `Empty`).
 
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
