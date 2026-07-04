@@ -1029,6 +1029,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              `$a->staticMethod()`, but Phorj keeps the class/instance boundary explicit. Rewrite the call\n\
              with the class name: `Account.make(…)` rather than `a.make(…)`.\n"
         }
+        "E-STATIC-FIELD-VIA-INSTANCE" => {
+            "E-STATIC-FIELD-VIA-INSTANCE — a `static` field was read through an instance.\n\n\
+             A static field belongs to the class, not an instance, so it is read only as\n\
+             `ClassName.field` — never `instance.field`. This is the field sibling of\n\
+             E-STATIC-VIA-INSTANCE (static methods). Rewrite the access with the class name:\n\
+             `Account.count` rather than `a.count`.\n"
+        }
         "E-STATIC-THIS" => {
             "E-STATIC-THIS — a static method accessed instance state.\n\n\
              A `static` method belongs to the class, not an instance, so it has no `this` and cannot\n\

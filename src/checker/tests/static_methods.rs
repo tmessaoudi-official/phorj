@@ -164,12 +164,26 @@ fn inherited_instance_method_via_class_name_still_errors() {
 #[test]
 fn static_method_via_instance_is_error() {
     // W0-3: a static method reached through an instance value (`a.m()`) is rejected — the mirror of
-    // the already-enforced static-field-via-instance rule (`a.s` → "no field"). Static members are
-    // reachable only via the class name (`ClassName.m()`). Matches PHP's tolerance being narrowed to
-    // the developer's stated rule ("static not via instance").
+    // the static-field-via-instance rule (`a.s` → E-STATIC-FIELD-VIA-INSTANCE, UA-0.6). Static members
+    // are reachable only via the class name (`ClassName.m()`). Matches PHP's tolerance being narrowed
+    // to the developer's stated rule ("static not via instance").
     let src = "class A { static function m() -> int { return 7; } } \
                function main() -> void { var a = new A(); var x = a.m(); }";
     assert!(has(src, "E-STATIC-VIA-INSTANCE"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn static_field_via_instance_is_error() {
+    // UA-0.6: reading a static field through an instance (`a.count`) is a coded error — the field
+    // sibling of `static_method_via_instance_is_error`. Before, `a.count` fell through to the generic
+    // "type `A` has no field `count`" message; now it points at the correct `A.count` form.
+    let src = "class A { static int count = 5; } \
+               function main() -> void { var a = new A(); var x = a.count; }";
+    assert!(
+        has(src, "E-STATIC-FIELD-VIA-INSTANCE"),
+        "{:?}",
+        errors_of(src)
+    );
 }
 
 #[test]

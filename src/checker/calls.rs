@@ -1706,6 +1706,22 @@ impl Checker {
                             Some(format!("write `{cls}.{name}`")),
                         )
                     }
+                    // A `static` field is class-name-only too: reading it through an instance
+                    // (`a.count`) is rejected, mirroring the static-*method*-via-instance rule
+                    // (E-STATIC-VIA-INSTANCE) and the const sibling above (UA-0.6). Before this,
+                    // `a.staticField` fell through to the generic "has no field" message.
+                    None if self
+                        .classes
+                        .get(&cls)
+                        .is_some_and(|info| info.statics.contains_key(name)) =>
+                    {
+                        self.err_coded(
+                            span,
+                            format!("`{name}` is a static field of `{cls}` — read it as `{cls}.{name}`, not through an instance"),
+                            "E-STATIC-FIELD-VIA-INSTANCE",
+                            Some(format!("write `{cls}.{name}`")),
+                        )
+                    }
                     None => self.err(span, format!("type `{cls}` has no field `{name}`")),
                 }
             }
