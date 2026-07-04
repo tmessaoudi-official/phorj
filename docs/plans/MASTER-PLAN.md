@@ -20,13 +20,13 @@
 
 | | |
 |---|---|
-| **Date / HEAD** | 2026-07-04 · **AUTONOMOUS MARATHON — 18 green commits `b3bd402`→`7e5c389`, all full-oracle-gate verified (1661 tests, php-8.5.8), unpushed. Clean checkpoint: all CLEAR/unambiguous high-value work done; remaining items need the developer (design/§15/fresh-session) or are P2-with-investigation.** DONE this run: **M0** — examples.js determinism, mold, --help fixes (UA-0.2/0.3/0.4), 18 specs archived+repointed, UA-0.6 (E-STATIC-FIELD-VIA-INSTANCE diagnostic), UA-0.17 (2 ghost explain drops), UA-0.18 (Suspend doc), UA-0.14-partial (Core.String stale-ASCII fix + String.length/List.append disclosures), nextest restored · **M1** — all small/medium byte-identity fixes (UA-1.1 trim, 1.2 reverse, 1.3 pbkdf2, 1.4 hmac→bytes, 1.7 clamp) + UA-1.8-part1 (fault-string names) + 1.9 import example + 1.10 playground forbid · **M5** — editor refresh (VSCode 0.3.0 + PhpStorm no-build path confirmed working). Deferred w/ evidence: UA-0.1 (nextest was the real lever). Recorded PENDING/couplings: PhpStorm native plugin (scope), UA-1.6↔W3-5 (expected-type→literal threading — build once, unblock both). **NEXT (developer/fresh-context): UA-1.8 part-2 shapes (pick canonical format), UA-1.5 (→ retirement, NO bulk sed), M2 UA-L2 (prelude/loader unification — design pass, gates W3), M3 web spine (W3-5 §15 {}-grammar blocker first); P2 tail UA-0.5/0.7/0.9/0.10/0.11/0.13/0.15/0.16.** — original run note below. |
+| **Date / HEAD** | 2026-07-04 (later) · **FORK-BACKLOG ADJUDICATION PASS COMPLETE + Wave A starting.** Prior marathon (`f8b8cd1`) pushed by developer. This session cleared ALL open §15 forks interactively (§13.1 / DEC-177…181): trait BLESSED, W3-5 blocker→Wave A, error model→honor-3-tier, editors→LSP-first-then-native, UA-1.8 shape. Only W4-10 XML deferred. Rulings merged into this plan + `C-decisions.md`; temp session plan removed (one-SSOT rule). **NOW BUILDING Wave A (Type-System Completion).** — prior-run note below: **AUTONOMOUS MARATHON — 18 green commits `b3bd402`→`7e5c389`, all full-oracle-gate verified (1661 tests, php-8.5.8), unpushed. Clean checkpoint: all CLEAR/unambiguous high-value work done; remaining items need the developer (design/§15/fresh-session) or are P2-with-investigation.** DONE this run: **M0** — examples.js determinism, mold, --help fixes (UA-0.2/0.3/0.4), 18 specs archived+repointed, UA-0.6 (E-STATIC-FIELD-VIA-INSTANCE diagnostic), UA-0.17 (2 ghost explain drops), UA-0.18 (Suspend doc), UA-0.14-partial (Core.String stale-ASCII fix + String.length/List.append disclosures), nextest restored · **M1** — all small/medium byte-identity fixes (UA-1.1 trim, 1.2 reverse, 1.3 pbkdf2, 1.4 hmac→bytes, 1.7 clamp) + UA-1.8-part1 (fault-string names) + 1.9 import example + 1.10 playground forbid · **M5** — editor refresh (VSCode 0.3.0 + PhpStorm no-build path confirmed working). Deferred w/ evidence: UA-0.1 (nextest was the real lever). Recorded PENDING/couplings: PhpStorm native plugin (scope), UA-1.6↔W3-5 (expected-type→literal threading — build once, unblock both). **NEXT (developer/fresh-context): UA-1.8 part-2 shapes (pick canonical format), UA-1.5 (→ retirement, NO bulk sed), M2 UA-L2 (prelude/loader unification — design pass, gates W3), M3 web spine (W3-5 §15 {}-grammar blocker first); P2 tail UA-0.5/0.7/0.9/0.10/0.11/0.13/0.15/0.16.** — original run note below. |
 | **(prior)** | **AUTONOMOUS MARATHON IN PROGRESS (§2.7)**. Commits this run: `b3bd402` (examples.js determinism regen) · `b77e50e` (M0 UA-0.2 mold + UA-0.3 --help examples + UA-0.4 lsp/debug help parity) · `6217698` (M0 archive 18 folded specs + repoint live pointers to UNIFIED-SPEC) · `58d7355` (M1 UA-1.3 pbkdf2 u64 — silent-truncation/byte-identity fix, oracle-verified) · `80e93d9` (M5 editor refresh — VSCode grammar current + 0.3.0, dead verbs, PhpStorm no-build path confirmed) · `93628ef` (M1 UA-1.4 Hash.hmac→bytes, breaking, oracle-verified) · `d3d18bc` (M1 UA-1.7 Math.clamp faults on lo>hi — `__phorj_clamp` throwing helper mirrors `__phorj_gcd`; agree_err + selftest/faults capture; full oracle gate 1661 green). Also restored `cargo-nextest` (gate speed) + deferred UA-0.1 with evidence (§2.1). UA-1.6 found coupled to W3-5 (do together — §2.2 row). Then `ab5d398` (M1 UA-1.2 String.reverse by code point) · `e97f2d1` (M1 UA-1.1 trim/trimStart/trimEnd strip Rust's Unicode White_Space set — PCRE `/u` helpers, exact class verified byte-for-byte; ships string-unicode-ws.phg). **ALL small/medium M1 byte-identity fixes DONE: UA-1.1/1.2/1.3/1.4/1.7.** Remaining M1: UA-1.8 (fault-canon ~40-string sweep — canonical shape established by 1.7's `Math.clamp: …`; broad-but-mechanical), UA-1.6 (DEFERRED, coupled to W3-5 expected-type→literal threading), UA-1.9 (import-discipline example — cheap), UA-1.10 (playground forbid-unsafe — quick), UA-1.5 (→ retirement, fresh session). Then M2 (UA-L2 gates W3) / M3 web spine (XL). Gotcha logged: an unclassified native fault classifies to `Other(<msg incl. line>)`, so its agree_err program must keep the faulting call OUT of `"{…}"` interpolation (W0-5 VM line-skew would break the string compare). **Findings: three plan premises were stale (fresher than the plan** — UA-0.1 fmt fan-out already shipped; VSCode grammar ~95% already-current; PhpStorm no-build path already documented+working). Tree clean; several commits ahead of origin — push developer-gated, never autonomous. Gate green on **php-8.5.8** (oracle path in `scripts/toolchain.env`). |
 | **Completion** | **PHP-parity ≈ 59%** (domain-weighted 35 SYN / 40 FN-usage-weighted / 25 RT; raw row floor ≈39%) · **Vision ≈ 61%** (70% parity + 30% programme) — denominator = the M-gap-matrix **824 verdict rows** (665 net of N/A + GAP-by-design). [Inferred: 2026-07-03 FN re-score of the ratified 2026-07-02 model — row flips shown in §11.2; full 824-row re-pass due at next milestone close] |
-| **Current phase** | **DONE: cleanup/unification (Stages A–E) — committed `27ea7b8`.** Plan + `UNIFIED-SPEC.md` + all docs are now truthful; toolchain php path centralized. **NEXT: the AUTONOMOUS OVERNIGHT MARATHON (§2.7)** — the developer will restart the session to run it; it ships features + examples + updated VSCode/PhpStorm editor support for real-project testing. |
-| **Actively in progress** | Nothing mid-flight (clean handoff point). ALL audit code-findings are RULED-BUT-UNBUILT; the marathon (§2.7) implements them in order. |
-| **Next up (in order)** | **Follow the §2.7 marathon queue: M0 hygiene (archive the 18 specs + repoint · fix `gen_examples.py` non-determinism · Bucket-1 free wins) → M1 language self-consistency (UA-1.x) → M2 architecture (UA-L2 injected-prelude, UA-L4 Rc<str>) → M3 web spine (W3-5→W3-1 DB→W3-2 HTTP) → M4 stdlib breadth (UA-L5/L6/L1/L3) → M5 VSCode + PhpStorm extensions → M6 Core.Dotenv (UA-L7).** Each step: gate-green + example + commit. |
-| **Open adjudications** | W3-5 mixed-type-args blocker (3 options, §6 W3-5) · W4-10 XML design (recorded, not built) · §7-OPEN user-facing `trait` (the ONE open language question) · **NEW (2026-07-04, scope not language): M5 native PhpStorm plugin — build it, or keep the working no-build TextMate+LSP4IJ path? (recorded in §2.7 M5; recommend defer — the no-build path already delivers full features and a native plugin can't be verified without PhpStorm).** Everything else is RULED (§13 + Appendix B). |
+| **Current phase** | **FORK BACKLOG CLEARED (2026-07-04, §13.1 / DEC-177…181).** All open §15 adjudications resolved interactively (only W4-10 XML deferred). **NOW STARTING the feature marathon at Wave A** (Type-System Completion). Each step: gate-green (php-8.5.8 oracle) + Invariant-9 example + both-editor LSP support + commit; NEVER push. Keep THIS cursor current every working session (developer standing rule). |
+| **Actively in progress** | **Wave A — Type-System Completion (flagship), slice 1.** See §2.7 wave sequence. |
+| **Next up (in order)** | **THE WAVE SEQUENCE (post-fork-clearing, §2.7 A2.x): WAVE A** Type-System Completion — usable union-element collections (`List/Set/Map<A\|B>`) + primitive `match` patterns + primitive exhaustiveness + `is` flow-narrowing + **W5-3 sealed hierarchies** + faithful transpile (reuses M-RT S4 engine; folds UA-1.6). → **WAVE B** Error-Model Completion — rich error enums + `Result` ergonomics + typed multi-catch (baseline SHIPPED) + **audit/reclassify faulting natives** + UA-1.8 canonicalization; faults stay uncatchable. → **WAVE C** `String.format`/sprintf (W3-5, unblocked by Wave A threading). → **WAVE D** web spine (biggest parity mover): UA-L2 prelude/loader unification (build) → W3-1 SQL DBAL → W3-2 HTTP. Cross-cutting: every feature → BOTH editors via `phg lsp` same-change. Deferred: W4-10 XML, UA-1.5 `->` retirement (mechanical fresh-session), UA-L7 Core.Dotenv (Wave-D adjacent). |
+| **Open adjudications** | **BACKLOG CLEARED 2026-07-04 (§13.1, DEC-177…181).** Resolved: W3-5 blocker (→ Wave A expected-type threading), §7-OPEN `trait` (BLESSED w/ MI), error model (honor 3-tier), editors (LSP-first→full-native), UA-1.8 shape. **ONLY remaining open item: W4-10 XML design** (deferred to Wave-4 proximity — needs its own design proposal). Everything else RULED (§13/§13.1 + Appendix B). |
 | **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt + release build (oracle php path = the single editable knob in `scripts/toolchain.env`, currently `php-8.5.8`). Pre-commit = Rust-only (`PHORJ_SKIP_PHP=1`); pre-push = full 8.5 oracle. |
 
 **Percentage protocol:** re-run the M §4 arithmetic (824 rows, weights 35/40/25) after every
@@ -450,12 +450,10 @@ W3-1/W3-2 add stdlib types.**
   tracked: UA-1.3 (pbkdf2 u64), UA-1.4 (hmac→bytes), UA-0.16 (ConstantTimeEq).
 - **W3-5 · `String.format` (sprintf family)** — design RULED (developer, 2026-07-03): lives on
   `Core.String` (NOT a new `Fmt` module), Java-familiar `format(spec, args) -> string`, **`{}`-style
-  spec grammar shared with W5-1** interpolation specifiers (`%`-style rejected). **⏳ BLOCKER
-  pending adjudication:** mixed-type args don't type-check today (`List<T>` homogeneous; expected
-  types don't flow to list-literal call args). Options recorded: (A) thread expected types into
-  list-literal arguments (checker enhancement, broadly useful), (B) ship verbose-now (explicit
-  `List<string|float>` local), (C) W4-1 variadics first, then `format(spec, ...args)`.
-  **Surface to the developer before building** (§15 adjudication rule).
+  spec grammar shared with W5-1** interpolation specifiers (`%`-style rejected). **✅ BLOCKER RESOLVED
+  2026-07-04 (DEC-178):** option (A) chosen — expected-type threading into list-literal call args is
+  built as part of the **Type-System programme (Wave A / §2.7)**; `String.format` args use a CLOSED
+  scalar form (not open `Any`). W3-5 now rides Wave A (→ Wave C) and needs no further adjudication.
 - **W3-6 · Filesystem breadth + serve static-handle bridge** (L) — `Core.Directory`
   (mkdir/listDir/glob/…), fs-OOP question resolved (statics until streams demand handles); serve
   class-static `handle` entry. FS design ruled (Appendix B): Path value type, stateless IO,
@@ -528,13 +526,12 @@ W3-1/W3-2 add stdlib types.**
   comprehensions REJECT stands; FFI REJECT stands (`.d.phg` is the seam); open macros stay
   rejected (derive is the sanctioned subset).
 
-### §7-OPEN · The ONE open language question — user-facing `trait`
-Phorj shipped full multiple-inheritance (trait-like capability); the standalone `trait` keyword was
-never adopted or rejected. Developer's call (adjudication rule §15):
-- **Default (rec): SUBSUMED-BY-MI** — reject the keyword; record in Appendix A; FEATURES flips to
-  "delivered via MI".
-- **Alternative:** `trait` as front-end sugar over MI (muscle-memory; one keyword + lifter mapping).
-Until ruled, this record is the capture.
+### §7-CLOSED · `trait` — RULED 2026-07-04 (DEC-177): BLESSED alongside MI
+Resolved. The premise was stale: `trait` is NOT unadopted — it is fully wired (lexer keyword,
+parser construct with bodies + `use TraitName;`, `run≡runvm`≡transpiled PHP `trait`/`use`, verified
+end-to-end). Developer **blessed BOTH `trait` AND multiple-inheritance as first-class** — this
+mirrors PHP's own trait/composition duality (familiarity-first). Record in Appendix A as ADOPTED;
+FEATURES `trait` entry flips to delivered. No open language question remains here.
 
 ---
 
@@ -702,6 +699,44 @@ Ledger basis: W3 ≈+6, W4 ≈+6 parity points are the big movers (§11.3).
   byte-identical differential example, quarantined like the other ambient natives). Same tier as
   UA-L1..L6 — needs its own design pass before code. → tracked as **UA-L7** (Wave-3 web-spine
   adjacent; sequence with the DB/HTTP web work).
+
+### 13.1 · 2026-07-04 fork-backlog adjudication pass (developer-ruled, interactive — final)
+
+Cleared the entire open-fork backlog so the feature marathon runs without stalls. All six ruled
+interactively (AskUserQuestion), each with a verified failing/working program in the question. Also
+mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
+
+- [2026-07-04] **§7-OPEN trait → BLESSED (DEC-177).** `trait` is not unadopted — it's fully wired
+  (`run≡runvm`≡PHP `trait`/`use`, verified end-to-end). Developer blessed BOTH `trait` AND
+  multiple-inheritance as first-class (mirrors PHP's own trait/composition duality). → Appendix A
+  ADOPTED; FEATURES `trait` flips to delivered. **No longer an open question.**
+- [2026-07-04] **W3-5 blocker → RESOLVED via the Type-System programme (DEC-178).** The
+  mixed-type-args blocker is subsumed by expected-type threading in the narrowing programme (below);
+  `String.format` args use a closed scalar form, not open `Any`. **Folds in UA-1.6** (Set/Map
+  literals) — same expected-type mechanism. → Wave C rides Wave A.
+- [2026-07-04] **Type-System Completion programme → Wave A (DEC-179).** Developer chose the LARGEST
+  scope: usable union-element collections (`List/Set/Map<A|B>`) + primitive `match` type-patterns +
+  primitive exhaustiveness + `is` flow-narrowing + is-refinement + **W5-3 sealed hierarchies**
+  (exhaustive class unions too) + faithful transpile (`is_int()`/`match(true)`). Reuses the shipped
+  M-RT S4 match/exhaustiveness engine (class/enum) extended to primitives. "No half solutions."
+- [2026-07-04] **Error model → HONOR the ratified 3-tier (DEC-180).** Developer probed "how do I know
+  which error without catchable faults?" → answered by `Result<T, ErrorEnum>` + exhaustive variant
+  match (same engine as Wave A) + typed `try`/`catch`/union-catch (SHIPPED, M-faults Slice 2b, base =
+  `implements Error` marker). Ruled: complete Result/throws ergonomics + **AUDIT faulting natives —
+  reclassify normal-input failures to Result/throws/`T?`**; faults stay uncatchable (bugs only). NO
+  catchable faults (would re-add PHP's bug-swallowing footgun). → Wave B.
+- [2026-07-04] **Editors → LSP-first, symmetric, then full-native (DEC-181).** VSCode is itself
+  LSP-first (all smarts via `phg lsp`; v0.3.0, all 40 keywords in grammar). PhpStorm gets identical
+  features via LSP4IJ→`phg lsp`. Ruled: LSP-first + thin native shells now (run/debug/test + DAP —
+  what LSP can't do), THEN full native both editors (rich VSCode ext + native IntelliJ/PSI plugin) as
+  a follow-on (unverifiable here → developer tests those builds). **STANDING DoD: every shipped
+  feature reaches BOTH editors via `phg lsp` in the same change.**
+- [2026-07-04] **UA-1.8 shape confirmed/refined (→ DEC B2-9):** canonical =
+  `Module.function: lowercase message`; **PHP-mirroring faults (`division by zero`, …) stay
+  byte-exact** (value-kernel parity), sweep scopes to native stdlib strings only.
+- [2026-07-04] **W4-10 XML — DEFERRED, not adjudicated.** Needs its own design proposal near Wave 4;
+  stays the one recorded-but-open design item. **UA-L2 / UA-1.5 / UA-1.6 re-confirmed as already-ruled**
+  (build/execution tasks, not forks).
 
 ---
 
