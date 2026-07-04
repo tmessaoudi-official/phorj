@@ -25,7 +25,9 @@ function main(): void {
     Output.printLine("backTen  = {d.minusDays(10).toString()}");
     // Leap day and comparison.
     Date leap = Date.of(2024, 2, 29);
-    Output.printLine("leap day = {leap.toString()} leap?={leap.isLeapYear()} dow={leap.dayOfWeek()}");
+    Output.printLine(
+        "leap day = {leap.toString()} leap?={leap.isLeapYear()} dow={leap.dayOfWeek()}"
+    );
     Output.printLine("before?  = {d.isBefore(leap)}");
     Output.printLine("compare  = {d.compareTo(leap)}");
     // Far past — the algorithm is exact across centuries (Gregorian proleptic).

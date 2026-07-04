@@ -47,6 +47,8 @@ function main(): void {
     // none    — nothing positive
     // A string payload works the same way — T is inferred as `string` here.
     var label = new Option.Some("phorj");
-    Output.printLine(match (label) { Option.Some(s) => "label {s}", Option.None() => "label none" });
+    Output.printLine(
+        match (label) { Option.Some(s) => "label {s}", Option.None() => "label none" }
+    );
 }
 // label phorj

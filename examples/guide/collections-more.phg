@@ -24,5 +24,7 @@ function main(): void {
     // Set.isEmpty + Set.toList (insertion order, deduplicated).
     Set<int> s = Set.of([3, 1, 2, 1, 3]);
     List<int> back = Set.toList(s);
-    Output.printLine("set empty = {Set.isEmpty(s)}, toList length = {List.length(back)}, sum = {List.sum(back)}");
+    Output.printLine(
+        "set empty = {Set.isEmpty(s)}, toList length = {List.length(back)}, sum = {List.sum(back)}"
+    );
 }

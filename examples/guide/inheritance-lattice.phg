@@ -46,7 +46,9 @@ function describe(Animal a): string {
 function main(): void {
     Duck d = new Duck();
     // (1) `instanceof` against every ancestor in the lattice — all true.
-    Output.printLine("{d instanceof Duck} {d instanceof Fish} {d instanceof Bird} {d instanceof Animal}");
+    Output.printLine(
+        "{d instanceof Duck} {d instanceof Fish} {d instanceof Bird} {d instanceof Animal}"
+    );
     // (2) the Duck flows into ancestor-typed bindings; dispatch stays dynamic.
     Fish f = d;
     Animal a = d;

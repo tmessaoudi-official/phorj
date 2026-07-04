@@ -11,7 +11,13 @@ import Core.Json;
 import Acme.Meta;
 
 function main(): void {
-    Json doc = new Json.Object(["version" => new Json.String(Meta.version()), "count" => new Json.Int(42), "tags" => new Json.Array([new Json.String("a"), new Json.String("b")])]);
+    Json doc = new Json.Object(
+        [
+            "version" => new Json.String(Meta.version()),
+            "count" => new Json.Int(42),
+            "tags" => new Json.Array([new Json.String("a"), new Json.String("b")])
+        ]
+    );
     Output.printLine(Json.stringify(doc));
     var parsed = Json.parse("[1, 2, 3]");
     Output.printLine(Json.stringify(parsed ?? new Json.Null()));

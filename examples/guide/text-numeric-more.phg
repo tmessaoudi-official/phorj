@@ -10,7 +10,9 @@ function main(): void {
     // String.isEmpty
     string blank = "";
     string padded = "  hi  ";
-    Output.printLine("blank empty = {String.isEmpty(blank)}, padded empty = {String.isEmpty(padded)}");
+    Output.printLine(
+        "blank empty = {String.isEmpty(blank)}, padded empty = {String.isEmpty(padded)}"
+    );
     // String.trimStart / trimEnd (one-sided trims; ASCII whitespace, like String.trim)
     Output.printLine("trimStart = [{String.trimStart(padded)}]");
     Output.printLine("trimEnd   = [{String.trimEnd(padded)}]");

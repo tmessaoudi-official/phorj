@@ -33,7 +33,11 @@ class Triangle implements Shape {
 // Exhaustive over the sealed set — no `_`. Dropping any arm is a compile error naming the missing
 // subtype. Each arm narrows the value to its concrete type, so field access is direct.
 function area(Shape s): int {
-    return match (s) { Circle c => c.radius * c.radius, Square sq => sq.side * sq.side, Triangle t => t.base * t.height / 2 };
+    return match (s) {
+        Circle c => c.radius * c.radius,
+        Square sq => sq.side * sq.side,
+        Triangle t => t.base * t.height / 2
+    };
 }
 
 function name(Shape s): string {

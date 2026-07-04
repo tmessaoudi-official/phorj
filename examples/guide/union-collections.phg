@@ -27,7 +27,11 @@ function describe(int | string x): string {
 // distinct lowering (an `if ($x === null) … elseif (is_int($x)) …` chain) from the expression form,
 // so it earns its own byte-identity coverage.
 function headLabel(List<int | string> xs): string {
-    return match (xs.first()) { int n => "int(" + (n as string) + ")", string s => "str(" + s + ")", null => "empty" };
+    return match (xs.first()) {
+        int n => "int(" + (n as string) + ")",
+        string s => "str(" + s + ")",
+        null => "empty"
+    };
 }
 
 // A union-collection literal type-checks in RETURN position too: the `-> List<int | string>` return
@@ -44,7 +48,9 @@ function main(): void {
     Output.printLine("headLabel = " + headLabel(items));
     // .filter keeps the element type — the result is still `List<int | string>`, so it iterates and
     // narrows just like the source. The predicate narrows each element to decide per shape.
-    var longish = items.filter(function(int | string x) => match (x) { int n => n > 2, string s => String.length(s) > 3 });
+    var longish = items.filter(
+        function(int | string x) => match (x) { int n => n > 2, string s => String.length(s) > 3 }
+    );
     for (int | string it in longish) {
         Output.printLine("kept " + describe(it));
     }
@@ -55,10 +61,22 @@ function main(): void {
     // member arms plus a `null` arm are all present (DEC-183): `Optional<T>` is `T | null`, so no
     // `_` is needed and the compiler still enforces that every case — including absence — is handled.
     var head = items.first();
-    Output.printLine(match (head) { int n => "head int(" + (n as string) + ")", string s => "head str(" + s + ")", null => "empty" });
+    Output.printLine(
+        match (head) {
+            int n => "head int(" + (n as string) + ")",
+            string s => "head str(" + s + ")",
+            null => "empty"
+        }
+    );
     // The same shape over an empty list takes the `null` arm.
     List<int | string> none = [];
-    Output.printLine(match (none.first()) { int n => "int(" + (n as string) + ")", string s => "str(" + s + ")", null => "empty" });
+    Output.printLine(
+        match (none.first()) {
+            int n => "int(" + (n as string) + ")",
+            string s => "str(" + s + ")",
+            null => "empty"
+        }
+    );
     // A `Map` value type can be a union too: the declared `Map<string, int | string>` is threaded
     // into the literal, so heterogeneous values type-check (bottom-up first-pair inference could not),
     // and indexing back out yields the union to discriminate (UA-1.6).

@@ -22,12 +22,18 @@ function main(): void {
     // false (2 removed)
     // --- Map ergonomics ---
     Map<string, int> prices = ["apple" => 3, "pear" => 5];
-    Output.printLine("apple={Map.getOrDefault(prices, \"apple\", 0)} kiwi={Map.getOrDefault(prices, \"kiwi\", 0)}");
+    Output.printLine(
+        "apple={Map.getOrDefault(prices, \"apple\", 0)} kiwi={Map.getOrDefault(prices, \"kiwi\", 0)}"
+    );
     // merge: the second map wins a shared key ("pear"), new keys append.
     Map<string, int> updated = Map.merge(prices, ["pear" => 6, "plum" => 4]);
-    Output.printLine("pear={Map.getOrDefault(updated, \"pear\", 0)} plum={Map.getOrDefault(updated, \"plum\", 0)}");
+    Output.printLine(
+        "pear={Map.getOrDefault(updated, \"pear\", 0)} plum={Map.getOrDefault(updated, \"plum\", 0)}"
+    );
     // map over values (keys preserved), then filter the result.
     Map<string, int> cents = Map.map(updated, function(int p) => p * 100);
     Map<string, int> dear = Map.filter(cents, function(int c) => c >= 500);
-    Output.printLine("apple cents={Map.getOrDefault(cents, \"apple\", 0)} dear count={Map.size(dear)}");
+    Output.printLine(
+        "apple cents={Map.getOrDefault(cents, \"apple\", 0)} dear count={Map.size(dear)}"
+    );
 }

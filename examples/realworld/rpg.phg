@@ -14,12 +14,20 @@ class Character {
         return this.hp;
     }
     function act(Action a): Character {
-        return match (a) { Attack(d) => new Character(this.name, this.hp - d), Heal(h) => new Character(this.name, this.hp + h), Defend() => new Character(this.name, this.hp) };
+        return match (a) {
+            Attack(d) => new Character(this.name, this.hp - d),
+            Heal(h) => new Character(this.name, this.hp + h),
+            Defend() => new Character(this.name, this.hp)
+        };
     }
 }
 
 function resolve(Action a): string {
-    return match (a) { Attack(d) => "attacks for {d}", Heal(h) => "heals {h}", Defend() => "defends" };
+    return match (a) {
+        Attack(d) => "attacks for {d}",
+        Heal(h) => "heals {h}",
+        Defend() => "defends"
+    };
 }
 
 function main(): void {

@@ -6,6 +6,33 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `phg format` is now width-canonical (DEC-187)
+
+The formatter gained a **width-aware layout engine**: a new Wadler/prettier document IR
+(`src/fmt/doc.rs` — `Text`/`Line`/`SoftLine`/`Concat`/`Nest`/`Group` + a `fits` solver + a
+column-budget renderer) behind the printer's expression layer (`expr()` now builds a `Doc`; a thin
+flat wrapper keeps every non-wrapping context byte-identical). Statement values are rendered against a
+**100-column budget**: call / `new` / `parent` argument lists, collection and map literals, `match`
+arms, and `.`/`?.` **method chains** (≥2 links) break one element per line when the line overflows,
+and stay inline when they fit.
+
+This **revises DEC-187's original "expand-only" ruling** (developer-adjudicated at the start of this
+session): layout is re-derived purely from width like `prettier`/`rustfmt`/`gofmt` — author-inserted
+line breaks are **not** preserved (a gratuitously hand-broken short chain now collapses). The reason:
+width-canonical is idempotent by construction (`fmt(fmt(x)) == fmt(x)`) and needs no source access,
+which the print-from-AST design deliberately lacks; honouring author breaks would have fought that
+invariant. Interpolation holes (`"{…}"`) are **never** broken — a newline there would change the
+string value (meaning preservation wins over the budget). Statements, comments, and declaration
+headers stay imperative (the hybrid seam); declaration parameter lists, binary-operator chains, class
+headers, and control-flow conditions are tracked follow-ups (`KNOWN_ISSUES.md`).
+
+The whole example + selftest corpus was reformatted to canonical form (35 files), and the corpus
+dogfood (`tests/fmt.rs`) was strengthened from idempotency-only to `fmt(src) == src` (folds UA-0.8).
+Ships `examples/fmt/showcase.phg` + `examples/fmt/README.md`. `phg lsp` document formatting reuses
+`fmt::format`, so both editors get width-canonical formatting for free. Byte-identical
+`run ≡ runvm ≡ real PHP 8.5.8` across every reformatted example (differential harness); 8 doc-core
+unit tests + 4 width-canonical behaviour tests + the corpus dogfood, full gate green.
+
 ### Added — Wave B foundation: canonical `Core.Option` / `Core.Result` (DEC-182)
 
 The two canonical error/absence types ship as **compiler-injected** enums (same pattern as

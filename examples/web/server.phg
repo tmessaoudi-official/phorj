@@ -77,7 +77,11 @@ class Route {
 }
 
 function routes(): List<Route> {
-    return [new Route("GET", "/", new Home()), new Route("GET", "/greet", new Greet()), new Route("GET", "/health", new Health())];
+    return [
+        new Route("GET", "/", new Home()),
+        new Route("GET", "/greet", new Greet()),
+        new Route("GET", "/health", new Health())
+    ];
 }
 
 function matchRoute(string method, string path): Handler {
@@ -117,7 +121,12 @@ function badRequest(): Response {
 // The portable handler — the value unit that also round-trips to PHP (server.php calls this).
 function handle(Request req): Response {
     Handler tag = matchRoute(req.method, req.path);
-    return match (tag) { Home() => handleHome(req), Greet() => handleGreet(req), Health() => handleHealth(req), NotFound() => handleNotFound(req) };
+    return match (tag) {
+        Home() => handleHome(req),
+        Greet() => handleGreet(req),
+        Health() => handleHealth(req),
+        NotFound() => handleNotFound(req)
+    };
 }
 
 // The single entry the serve runtime calls per request: bytes in, bytes out. Malformed → 400.

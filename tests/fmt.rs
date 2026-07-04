@@ -154,6 +154,14 @@ fn assert_phg_fmt_safe(f: &Path) {
     // Formats without error.
     let once =
         cli::fmt_source(&src).unwrap_or_else(|e| panic!("fmt failed on {}:\n{e}", f.display()));
+    // Canonical: every tracked `.phg` is already in width-canonical form, so `fmt(src) == src`
+    // (UA-0.8 — the corpus test used to be idempotency-only, letting tracked files silently drift).
+    assert_eq!(
+        src,
+        once,
+        "not width-canonical (run `phg format {}`): fmt(src) != src",
+        f.display()
+    );
     // Idempotent.
     let twice = cli::fmt_source(&once).unwrap();
     assert_eq!(once, twice, "not idempotent: {}", f.display());

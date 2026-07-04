@@ -57,7 +57,16 @@ function show(Router rt, bytes raw): void {
 
 function main(): void {
     // `logging` applies to every route; the `/admin` group adds `requireAuth` to just its routes.
-    Router rt = new Router([], []).use(logging).route("GET", "/", home).group("/admin", function(Router r): Router { return r.use(requireAuth).route("GET", "/secret", secret); });
+    Router rt = new Router(
+        [],
+        []
+    )
+        .use(logging)
+        .route("GET", "/", home)
+        .group(
+            "/admin",
+            function(Router r): Router { return r.use(requireAuth).route("GET", "/secret", secret); }
+        );
     show(rt, b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");
     // logged, 200
     show(rt, b"GET /admin/secret HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");

@@ -17,7 +17,12 @@ enum Status { Code(int n) }
 
 // Several arms share the `Code` shape, separated by guards; the last is the unguarded fallback.
 function classify(Status s): string {
-    return match (s) { Code(n) when n >= 500 => "server error", Code(n) when n >= 400 => "client error", Code(n) when n >= 200 => "ok", Code(n) => "informational ({n})" };
+    return match (s) {
+        Code(n) when n >= 500 => "server error",
+        Code(n) when n >= 400 => "client error",
+        Code(n) when n >= 200 => "ok",
+        Code(n) => "informational ({n})"
+    };
 }
 
 class Circle {
@@ -30,7 +35,11 @@ class Square {
 
 // Guards on type-patterns over a union, reading a field in the guard condition.
 function describe(Circle | Square sh): string {
-    return match (sh) { Circle c when c.r > 1.0 => "big circle", Circle c => "small circle", Square s => "square" };
+    return match (sh) {
+        Circle c when c.r > 1.0 => "big circle",
+        Circle c => "small circle",
+        Square s => "square"
+    };
 }
 
 class Point {
@@ -70,7 +79,11 @@ enum Carrier { Holds(Animal a) }
 // a concrete class in one pattern. A refutable payload (`Holds(Cat c)`) does not discharge the
 // `Holds` variant, so a `Holds(other)` binding (irrefutable) is the fallback.
 function speak(Carrier c): string {
-    return match (c) { Holds(Cat cat) => "meow from {cat.name}", Holds(Dog dog) => "woof from {dog.name}", Holds(other) => "..." };
+    return match (c) {
+        Holds(Cat cat) => "meow from {cat.name}",
+        Holds(Dog dog) => "woof from {dog.name}",
+        Holds(other) => "..."
+    };
 }
 
 // Flow-narrowing (S5.3): an early-return guard narrows the rest of the function. After
@@ -120,7 +133,16 @@ enum Light { Red, Yellow, Green }
 // No fall-through, still exhaustive; alternatives must be binding-free (concrete patterns only).
 // Desugars to one arm per alternative — every backend sees ordinary arms.
 function band(int n): string {
-    return match (n) { 0 => "zero", 1 => "low", 2 => "low", 3 => "low", 7 => "high", 8 => "high", 9 => "high", _ => "mid" };
+    return match (n) {
+        0 => "zero",
+        1 => "low",
+        2 => "low",
+        3 => "low",
+        7 => "high",
+        8 => "high",
+        9 => "high",
+        _ => "mid"
+    };
 }
 
 // Or-patterns over enum variants (zero-payload variants use the `V()` call form).

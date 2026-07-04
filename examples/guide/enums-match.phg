@@ -8,7 +8,12 @@ import Core.Output;
 enum Json { JNull, JBool(bool b), JNum(int n), JStr(string s) }
 
 function show(Json j): string {
-    return match (j) { JNull() => "null", JBool(b) => "bool {b}", JNum(n) => "num {n}", JStr(s) => "str {s}" };
+    return match (j) {
+        JNull() => "null",
+        JBool(b) => "bool {b}",
+        JNum(n) => "num {n}",
+        JStr(s) => "str {s}"
+    };
 }
 
 // Literal pattern + binding pattern (catch-all) over a primitive scrutinee.

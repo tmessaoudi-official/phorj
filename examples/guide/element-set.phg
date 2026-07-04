@@ -29,6 +29,8 @@ function main(): void {
     for (mutable int i = 0; i < 5; i = i + 1) {
         squares[i] = i * i;
     }
-    Output.printLine("squares = [{squares[0]}, {squares[1]}, {squares[2]}, {squares[3]}, {squares[4]}]");
+    Output.printLine(
+        "squares = [{squares[0]}, {squares[1]}, {squares[2]}, {squares[3]}, {squares[4]}]"
+    );
 }
 // [0, 1, 4, 9, 16]

@@ -54,9 +54,13 @@ function main(): void {
     Output.printLine("10.00 / 3 (scale 4, HalfUp)   = {unit4}");
     // 3.3333
     // Exact division needs rounding only nominally: 1 / 8 = 0.125, scale 2.
-    Output.printLine("1 / 8 (scale 2, HalfEven) = {Decimal.divide(1d, 8d, 2, new RoundingMode.HalfEven())}");
+    Output.printLine(
+        "1 / 8 (scale 2, HalfEven) = {Decimal.divide(1d, 8d, 2, new RoundingMode.HalfEven())}"
+    );
     // 0.12
-    Output.printLine("1 / 8 (scale 2, HalfUp)   = {Decimal.divide(1d, 8d, 2, new RoundingMode.HalfUp())}");
+    Output.printLine(
+        "1 / 8 (scale 2, HalfUp)   = {Decimal.divide(1d, 8d, 2, new RoundingMode.HalfUp())}"
+    );
     // 0.13
     // Re-scaling UP is exact (no rounding): pad 2.5 to scale 3.
     Output.printLine("round 2.5 up to scale 3 = {Decimal.round(2.5d, 3, new RoundingMode.Down())}");

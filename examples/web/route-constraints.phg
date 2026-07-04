@@ -37,7 +37,13 @@ function show(Router rt, string method, string path): void {
 }
 
 function main(): void {
-    Router rt = new Router([], []).route("GET", "/users/\{id:\\d+\}", showUser).route("GET", "/users/\{name\}", showProfile).route("GET", "/archive/\{year:\\d\{4\}\}/\{month:\\d\{2\}\}", showArchive);
+    Router rt = new Router(
+        [],
+        []
+    )
+        .route("GET", "/users/\{id:\\d+\}", showUser)
+        .route("GET", "/users/\{name\}", showProfile)
+        .route("GET", "/archive/\{year:\\d\{4\}\}/\{month:\\d\{2\}\}", showArchive);
     // numeric id only
     // anything else
     show(rt, "GET", "/users/42");

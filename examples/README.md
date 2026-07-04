@@ -148,6 +148,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `bench/manual/stopwatch-and-memory.phg` | **manual benchmarking with `Core.Runtime`** (M-DOGFOOD W1) — a monotonic hi-res clock (`monotonicNanos` → PHP `hrtime(true)`) + resident-memory counters (`memoryBytes`/`peakMemoryBytes`/`resetPeakMemory` → PHP `memory_get_*`), and a copy-me `Stopwatch` class. `pure: false` ⇒ **quarantined** from the byte-identity gate (numbers vary per run); gated by `tests/runtime.rs`. Complements the automated `phg benchmark --vs-php` — see `bench/manual/README.md` |
 | `transpile/demo.phg` | the **Phorj → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phg build` — see `build/README.md` |
+| `fmt/showcase.phg` | the **width-canonical formatter** — `phg format` (DEC-187): lays out from the AST at a 100-column budget, breaking long call/`new` args, collection & map literals, `match` arms and `.`-chains one element per line while a form that fits stays inline (author line breaks are **not** preserved — it re-derives layout like `prettier`/`rustfmt`); idempotent (`fmt(fmt(x)) == fmt(x)`) and meaning-preserving; interpolation holes never break — see `fmt/README.md` |
 | `cli/demo.phg` | the **`phg` CLI** — source forms, `check`/`parse`/`tokenize`, diagnostics, `explain` — see `cli/README.md` |
 | `interop/builtins.phg` | **foreign-PHP functions** (M8.5 S1) — `declare function strtoupper(string) -> string;` etc.; calls existing PHP, type-checked, transpiling to `\strtoupper(...)`. **PHP-target-only**: `run`/`runvm` refuse (`E-FOREIGN-RUNTIME`), so it's quarantined from the byte-identity oracle and gated by `tests/interop.rs` (transpile → real PHP golden) — see `interop/README.md` |
 | `interop/classes.phg` | **foreign-PHP classes** (M8.5 S2) — `declare class DateTimeImmutable { constructor(...); function format(...) -> string; static function createFromFormat(...) -> DateTimeImmutable; }`; construction → `new \DateTimeImmutable(...)`, instance/static calls → `$d->format(...)` / `\DateTimeImmutable::createFromFormat(...)`. PHP-target-only, gated by `tests/interop.rs` |
@@ -234,6 +235,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | HTTP serve runtime: `phg serve` (native socket) + `php -S` front-controller, one `respond(bytes) -> bytes` entry | `web/server` |
 | Phorj → PHP transpile | `transpile/demo` |
 | standalone executable (`phg build`) | `build/app` |
+| width-canonical formatter (`phg format`, DEC-187): wrap by width, collapse short forms | `fmt/showcase` |
 | CLI: source forms, inspection (`check`/`parse`/`tokenize`), diagnostics, `explain` | `cli/demo` |
 | multi-file projects: packages, folder = path, cross-package imports + aliasing, namespaced PHP | `project/tempconv` |
 | git dependencies: `[require]`, `phg vendor`, `phorj.lock`, offline `vendor/` | `project/withdeps` |

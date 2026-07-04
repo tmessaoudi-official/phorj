@@ -15,12 +15,20 @@ class Account {
         return this.cents;
     }
     function apply(Tx t): Account {
-        return match (t) { Deposit(c) => new Account(this.owner, this.cents + c), Withdraw(c) => new Account(this.owner, this.cents - c), Transfer(c, to) => new Account(this.owner, this.cents - c) };
+        return match (t) {
+            Deposit(c) => new Account(this.owner, this.cents + c),
+            Withdraw(c) => new Account(this.owner, this.cents - c),
+            Transfer(c, to) => new Account(this.owner, this.cents - c)
+        };
     }
 }
 
 function describe(Tx t): string {
-    return match (t) { Deposit(c) => "deposit {c}c", Withdraw(c) => "withdraw {c}c", Transfer(c, to) => "transfer {c}c to {to}" };
+    return match (t) {
+        Deposit(c) => "deposit {c}c",
+        Withdraw(c) => "withdraw {c}c",
+        Transfer(c, to) => "transfer {c}c to {to}"
+    };
 }
 
 // Recursive integer compound interest: 5% per year, floored (no list folding needed).

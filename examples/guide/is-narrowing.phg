@@ -32,10 +32,10 @@ class Square {
 // `string`, so `x + "!"` concatenates. Flow narrowing is not exhaustiveness-checked (that's `match`),
 // so a trailing return covers the path the compiler can't prove unreachable.
 function classify(int | string x): string {
-    if (x is int) {
-        return "int:" + ((x * 2) as string);
+    if (x instanceof int) {
+        return "int:" + (x * 2 as string);
     }
-    if (x is string) {
+    if (x instanceof string) {
         return "str:" + x;
     }
     return "?";
@@ -44,7 +44,7 @@ function classify(int | string x): string {
 // class test + else narrowing: `is` and `instanceof` are interchangeable, and a class narrows in the
 // else too (member access resolves on the narrowed type).
 function area(Circle | Square s): int {
-    if (s is Circle) {
+    if (s instanceof Circle) {
         return s.radius * s.radius;
     } else {
         return s.side * s.side;
@@ -62,30 +62,29 @@ function radiusOrZero(Circle | Square s): int {
 
 // `is null` narrows an optional: the guard returns on absence, then the tail sees the non-null inner.
 function shout(string? name): string {
-    if (name is null) {
+    if (name instanceof null) {
         return "ANON";
     }
     return name + "!";
 }
 
 function main(): void {
-    Output.printLine(classify(21)); // int:42
-    Output.printLine(classify("hi")); // str:hi
-
+    Output.printLine(classify(21));
+    // int:42
+    Output.printLine(classify("hi"));
+    // str:hi
     Circle c = new Circle(4);
     Square sq = new Square(3);
     Output.printLine("area c  = " + (area(c) as string));
     Output.printLine("area sq = " + (area(sq) as string));
     Output.printLine("radius  = " + (radiusOrZero(c) as string));
     Output.printLine("radius2 = " + (radiusOrZero(sq) as string));
-
     // `is` and `instanceof` yield the same boolean, over classes and primitives alike.
-    Output.printLine("c is Circle         = " + ((c is Circle) as string));
-    Output.printLine("c instanceof Circle = " + ((c instanceof Circle) as string));
+    Output.printLine("c is Circle         = " + (c instanceof Circle as string));
+    Output.printLine("c instanceof Circle = " + (c instanceof Circle as string));
     int n = 7;
-    Output.printLine("n is int            = " + ((n is int) as string));
-    Output.printLine("n instanceof string = " + ((n instanceof string) as string));
-
+    Output.printLine("n is int            = " + (n instanceof int as string));
+    Output.printLine("n instanceof string = " + (n instanceof string as string));
     Output.printLine(shout("ada"));
     string? nobody = null;
     Output.printLine(shout(nobody));

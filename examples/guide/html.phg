@@ -18,7 +18,11 @@ function field(string label, string value): Html {
 
 // Wave-2 style: the same row built from typed fragments — no hand-written markup.
 function row(string label, string value): Html {
-    return Html.element("li", [Html.attribute("data-label", label)], [Html.text("{label}: "), Html.text(value)]);
+    return Html.element(
+        "li",
+        [Html.attribute("data-label", label)],
+        [Html.text("{label}: "), Html.text(value)]
+    );
 }
 
 // Wave-3 style: write the markup directly and interpolate by type. Each {hole} escapes
@@ -44,7 +48,11 @@ function main(): void {
     // <li>bio: &lt;script&gt;alert(1)&lt;/script&gt;</li>
     // --- Wave 2: typed element builders ---
     // An element with an attribute (value escaped) and escaped text children.
-    Html link = Html.element("a", [Html.attribute("href", "/p?x=1&y=2")], [Html.text("Tom & Jerry")]);
+    Html link = Html.element(
+        "a",
+        [Html.attribute("href", "/p?x=1&y=2")],
+        [Html.text("Tom & Jerry")]
+    );
     Output.printLine(Html.render(link));
     // <a href="/p?x=1&amp;y=2">Tom &amp; Jerry</a>
     // A no-attribute element — empty [] is accepted in call-argument position.
@@ -80,7 +88,10 @@ function main(): void {
     // --- Option 1: named per-tag helpers ---
     // Each tag is sugar over el/voidEl with the tag baked in: Html.divide(attrs, children),
     // Html.hr(attrs). Same auto-escaping (attribute values + text), same byte output.
-    Html bar = Html.nav([Html.attribute("class", "top")], [Html.a([Html.attribute("href", "/?a=1&b=2")], [Html.text("Home & Away")])]);
+    Html bar = Html.nav(
+        [Html.attribute("class", "top")],
+        [Html.a([Html.attribute("href", "/?a=1&b=2")], [Html.text("Home & Away")])]
+    );
     Output.printLine(Html.render(bar));
     // <nav class="top"><a href="/?a=1&amp;b=2">Home &amp; Away</a></nav>
     Html items = Html.ul([], [Html.li([], [Html.text(name)]), Html.li([], [Html.text(bio)])]);

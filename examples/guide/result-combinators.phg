@@ -22,7 +22,11 @@ import Core.String;
 
 // Parse a tiny "small positive int" field; report *why* it failed as a typed `Failure<string>`.
 function parse(string s): Result<int, string> {
-    return match (s) { "1" => new Result.Success(1), "2" => new Result.Success(2), _ => new Result.Failure("bad: {s}") };
+    return match (s) {
+        "1" => new Result.Success(1),
+        "2" => new Result.Success(2),
+        _ => new Result.Failure("bad: {s}")
+    };
 }
 
 function main(): void {
@@ -35,18 +39,28 @@ function main(): void {
     Output.printLine("{parse(\"1\").getOrElse(0) + 1}");
     // 2
     // andThen — bind a Success into a second Result (error type E = string is threaded through).
-    Output.printLine("{parse(\"2\").andThen(function(int x) => new Result.Success(x + 100)).getOrElse(0)}");
+    Output.printLine(
+        "{parse(\"2\").andThen(function(int x) => new Result.Success(x + 100)).getOrElse(0)}"
+    );
     // 102
-    Output.printLine("{parse(\"z\").andThen(function(int x) => new Result.Success(x + 100)).getOrElse(0)}");
+    Output.printLine(
+        "{parse(\"z\").andThen(function(int x) => new Result.Success(x + 100)).getOrElse(0)}"
+    );
     // 0   — a Failure short-circuits the bind
     // mapErr — remap the error type (string -> its length, so Result<int,string> -> Result<int,int>).
     var remapped = parse("z").mapErr(function(string e) => String.length(e));
-    Output.printLine(match (remapped) { Result.Success(v) => "ok {v}", Result.Failure(n) => "errlen {n}" });
+    Output.printLine(
+        match (remapped) { Result.Success(v) => "ok {v}", Result.Failure(n) => "errlen {n}" }
+    );
     // errlen 6   — "bad: z" is 6 code points
     // orElse — recover a Failure with a fallback Result; a Success passes through.
-    Output.printLine("{parse(\"z\").orElse(function(string e) => new Result.Success(-1)).getOrElse(0)}");
+    Output.printLine(
+        "{parse(\"z\").orElse(function(string e) => new Result.Success(-1)).getOrElse(0)}"
+    );
     // -1
-    Output.printLine("{parse(\"1\").orElse(function(string e) => new Result.Success(-1)).getOrElse(0)}");
+    Output.printLine(
+        "{parse(\"1\").orElse(function(string e) => new Result.Success(-1)).getOrElse(0)}"
+    );
     // 1
     // toOption — bridge to Option (the error is dropped), then use an Option combinator.
     Output.printLine("{parse(\"1\").toOption().getOrElse(-1)}");

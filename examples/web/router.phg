@@ -52,7 +52,15 @@ function showPost(Request req): Response {
 
 // Build the router once: registration order does not affect literal>param precedence.
 function app(): Router {
-    return new Router([], []).route("GET", "/", home).route("GET", "/health", health).route("GET", "/users/\{id\}", showUser).route("GET", "/users/me", currentUser).route("GET", "/posts/\{year\}/\{slug\}", showPost);
+    return new Router(
+        [],
+        []
+    )
+        .route("GET", "/", home)
+        .route("GET", "/health", health)
+        .route("GET", "/users/\{id\}", showUser)
+        .route("GET", "/users/me", currentUser)
+        .route("GET", "/posts/\{year\}/\{slug\}", showPost);
 }
 
 // Parse one raw request, route it, print a one-line summary: METHOD PATH -> STATUS: body.

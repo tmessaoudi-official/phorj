@@ -335,7 +335,10 @@ impl Printer<'_> {
             } => {
                 let mods = modifiers_str(modifiers);
                 match init {
-                    Some(e) => self.line(&format!("{mods}{} {name} = {};", ty(t)?, self.expr(e)?)),
+                    Some(e) => {
+                        let s = self.render_expr(&format!("{mods}{} {name} = ", ty(t)?), e, ";")?;
+                        self.line(&s);
+                    }
                     None => self.line(&format!("{mods}{} {name};", ty(t)?)),
                 }
                 Ok(())
@@ -366,7 +369,8 @@ impl Printer<'_> {
                 self.line(&format!("{} {name} {{", ty(t)?));
                 self.indent += 1;
                 if let Some(g) = get {
-                    self.line(&format!("get => {};", self.expr(g)?));
+                    let s = self.render_expr("get => ", g, ";")?;
+                    self.line(&s);
                 }
                 if let Some((param, body)) = set {
                     self.line(&format!("set({} {}) {{", ty(&param.ty)?, param.name));
@@ -445,16 +449,22 @@ impl Printer<'_> {
                 ..
             } => {
                 let m = if *mutable { "mutable " } else { "" };
-                self.line(&format!("{m}{} {name} = {};", ty(t)?, self.expr(init)?));
+                let s = self.render_expr(&format!("{m}{} {name} = ", ty(t)?), init, ";")?;
+                self.line(&s);
                 Ok(())
             }
             Stmt::Assign { target, value, .. } => {
-                self.line(&format!("{} = {};", self.expr(target)?, self.expr(value)?));
+                let prefix = format!("{} = ", self.expr(target)?);
+                let s = self.render_expr(&prefix, value, ";")?;
+                self.line(&s);
                 Ok(())
             }
             Stmt::Return { value, .. } => {
                 match value {
-                    Some(e) => self.line(&format!("return {};", self.expr(e)?)),
+                    Some(e) => {
+                        let s = self.render_expr("return ", e, ";")?;
+                        self.line(&s);
+                    }
                     None => self.line("return;"),
                 }
                 Ok(())
@@ -541,15 +551,18 @@ impl Printer<'_> {
             }
             Stmt::Block(stmts, _) => self.block_stmt("", stmts),
             Stmt::Expr(e, _) => {
-                self.line(&format!("{};", self.expr(e)?));
+                let s = self.render_expr("", e, ";")?;
+                self.line(&s);
                 Ok(())
             }
             Stmt::Discard(e, _) => {
-                self.line(&format!("discard {};", self.expr(e)?));
+                let s = self.render_expr("discard ", e, ";")?;
+                self.line(&s);
                 Ok(())
             }
             Stmt::Throw { value, .. } => {
-                self.line(&format!("throw {};", self.expr(value)?));
+                let s = self.render_expr("throw ", value, ";")?;
+                self.line(&s);
                 Ok(())
             }
             Stmt::Try {
@@ -789,6 +802,12 @@ impl Printer<'_> {
     /// through [`Self::render_expr`] and the enclosing [`doc::Group`] would overflow the width budget.
     /// Contains NO hard break, so forced-flat rendering inside interpolation is always well defined.
     fn expr_doc(&self, e: &Expr) -> Result<Doc, String> {
+        // A postfix "call chain" (≥2 member accesses on one spine) breaks before each `.`/`?.` as a
+        // single group when the line overflows — the flagship width-canonical case. Non-chains (and
+        // chains with <2 dots) fall through to the per-node arms below, unchanged.
+        if let Some(d) = self.chain_doc(e)? {
+            return Ok(d);
+        }
         match e {
             Expr::Int(n, _) => Ok(doc::text(n.to_string())),
             Expr::Float(f, _) => Ok(doc::text(format!("{f:?}"))),
@@ -1201,12 +1220,110 @@ impl Printer<'_> {
         Ok(s)
     }
 
+    /// Render a statement's value expression width-canonically: `<prefix><expr><suffix>` laid out so
+    /// the expression wraps (call/`new` args, collection/map literals, `match` arms, member chains)
+    /// when the whole line would exceed [`doc::MAX_WIDTH`]. `prefix`/`suffix` are the fixed statement
+    /// scaffolding (`return `…`;`) — the prefix stays on line 1 and its width counts against the
+    /// budget; broken continuation lines hang past the statement indent. The returned string's FIRST
+    /// line carries no leading indent (the caller's [`Self::line`] prepends it); continuation lines
+    /// carry their absolute indentation. Idempotent by construction: derived purely from the AST.
+    fn render_expr(&self, prefix: &str, e: &Expr, suffix: &str) -> Result<String, String> {
+        let base = self.indent * 4;
+        let start_col = base + prefix.chars().count();
+        let d = doc::concat(vec![self.expr_doc(e)?, doc::text(suffix)]);
+        Ok(format!(
+            "{prefix}{}",
+            doc::render(&d, doc::MAX_WIDTH, base, start_col, false)
+        ))
+    }
+
     /// Layout doc for a comma-separated, parenthesized argument list (`(a, b, c)`) — the shared break
     /// group behind calls, `parent.m(…)`, and `new`. Empty → `()`; otherwise flat as `(a, b)` and one
     /// argument per line (indented) when the group overflows.
     fn args_doc(&self, args: &[Expr]) -> Result<Doc, String> {
         let xs: Result<Vec<_>, _> = args.iter().map(|a| self.expr_doc(a)).collect();
         Ok(bracketed("(", xs?, ")"))
+    }
+
+    /// If `e` is a postfix "call chain" spine with ≥2 member accesses (`a.b(…).c(…)`), lay it out as a
+    /// single break group: the head (plus any leading `()`/`[]`/`!`/`?` before the first dot) stays on
+    /// line 1, then each `.`/`?.` link breaks onto its own line (indented four columns) when the chain
+    /// overflows. Flat form is byte-identical to the per-node concat, so idempotence and meaning are
+    /// preserved. Returns `None` for anything that is not a ≥2-dot chain (handled by the per-node arms).
+    fn chain_doc(&self, e: &Expr) -> Result<Option<Doc>, String> {
+        enum Seg<'a> {
+            Dot(&'a str, bool),
+            Args(&'a [Expr]),
+            Index(&'a Expr),
+            Force,
+            Propagate,
+        }
+        let mut segs: Vec<Seg> = Vec::new();
+        let mut cur = e;
+        loop {
+            match cur {
+                Expr::Member {
+                    object, name, safe, ..
+                } => {
+                    segs.push(Seg::Dot(name, *safe));
+                    cur = object;
+                }
+                Expr::Call { callee, args, .. } => {
+                    segs.push(Seg::Args(args));
+                    cur = callee;
+                }
+                Expr::Index { object, index, .. } => {
+                    segs.push(Seg::Index(index));
+                    cur = object;
+                }
+                Expr::Force { inner, .. } => {
+                    segs.push(Seg::Force);
+                    cur = inner;
+                }
+                Expr::Propagate { inner, .. } => {
+                    segs.push(Seg::Propagate);
+                    cur = inner;
+                }
+                _ => break,
+            }
+        }
+        if segs.iter().filter(|s| matches!(s, Seg::Dot(..))).count() < 2 {
+            return Ok(None);
+        }
+        segs.reverse();
+        let seg_doc = |pr: &Self, s: &Seg| -> Result<Doc, String> {
+            Ok(match s {
+                Seg::Dot(name, safe) => {
+                    doc::text(format!("{}{name}", if *safe { "?." } else { "." }))
+                }
+                Seg::Args(args) => pr.args_doc(args)?,
+                Seg::Index(ix) => {
+                    doc::concat(vec![doc::text("["), pr.expr_doc(ix)?, doc::text("]")])
+                }
+                Seg::Force => doc::text("!"),
+                Seg::Propagate => doc::text("?"),
+            })
+        };
+        // Head + any leading postfixes before the first `.` stay on the first line.
+        let mut head_line = vec![self.postfix_doc(cur)?];
+        let mut i = 0;
+        while i < segs.len() && !matches!(segs[i], Seg::Dot(..)) {
+            head_line.push(seg_doc(self, &segs[i])?);
+            i += 1;
+        }
+        // Remaining links: a soft break before every `.`/`?.`; trailing `()`/`[]`/`!`/`?` ride its line.
+        let mut chain = Vec::new();
+        while i < segs.len() {
+            if matches!(segs[i], Seg::Dot(..)) {
+                chain.push(doc::softline());
+            }
+            chain.push(seg_doc(self, &segs[i])?);
+            i += 1;
+        }
+        Ok(Some(doc::concat(vec![
+            doc::concat(head_line),
+            doc::group(doc::nest(4, doc::concat(chain))),
+        ])))
     }
 
     /// Layout doc for a binary operand, parenthesizing only when precedence/associativity requires it.

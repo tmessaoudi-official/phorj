@@ -107,6 +107,101 @@ fn comments_are_preserved() {
     assert_eq!(out, fmt(&out), "comment-bearing output must be idempotent");
 }
 
+// ── width-canonical wrapping (DEC-187) ─────────────────────────────────────────────────────────
+
+/// A statement value that overflows the column budget wraps; a short one stays on one line.
+#[test]
+fn long_call_args_wrap_short_stay_flat() {
+    let src = "package Main;\nfunction main(): void {\n\
+        var s = f(1, 2);\n\
+        var l = someHelperWithAVeryLongName(argumentOne, argumentTwo, argumentThree, argumentFour, argumentFive);\n\
+        }";
+    let out = fmt(src);
+    assert!(
+        out.contains("var s = f(1, 2);"),
+        "short call must stay flat:\n{out}"
+    );
+    assert!(
+        out.contains("var l = someHelperWithAVeryLongName(\n        argumentOne,\n"),
+        "long call args must wrap one per line:\n{out}"
+    );
+    assert_idempotent(src);
+}
+
+/// A long method chain breaks before each `.`; a gratuitously-broken SHORT chain collapses (the
+/// width-canonical behaviour DEC-187 chose over preserving author breaks).
+#[test]
+fn method_chains_wrap_by_width_not_author_breaks() {
+    // Long chain → breaks before each dot.
+    let long = "package Main;\nfunction main(): void {\n\
+        var r = source.mapEachValueWithCare(transformer).keepEveryMatching(predicate).collapseInto(combiner).done();\n\
+        }";
+    let out = fmt(long);
+    assert!(
+        out.contains("var r = source\n        .mapEachValueWithCare(transformer)\n"),
+        "long chain must break before each dot:\n{out}"
+    );
+    assert_idempotent(long);
+
+    // Gratuitously hand-broken SHORT chain → collapses to one line.
+    let broken = "package Main;\nfunction main(): void {\n\
+        var x = obj\n.a()\n.b();\n}";
+    let out = fmt(broken);
+    assert!(
+        out.contains("var x = obj.a().b();"),
+        "short chain must collapse:\n{out}"
+    );
+}
+
+/// CRITICAL: an interpolation hole never breaks, even when the whole line overflows — a newline
+/// inside `"{…}"` would change the string's value. The hole here is a *single call whose argument
+/// list exceeds 100 columns* — a construct that DOES carry a width break point (`args_doc`), so the
+/// test has teeth: if the hole were ever rendered width-aware (the plausible regression), those args
+/// would break across lines and this assertion would fail. Correct behaviour keeps it one physical
+/// line (the hole is emitted as flat `Text`).
+#[test]
+fn interpolation_holes_never_break() {
+    let src = "package Main;\n\
+        function main(): void {\n\
+        var wide = \"value is {computeThing(alphaValue, betaValue, gammaValue, deltaValue, epsilonValue, zetaValue)}\";\n\
+        }";
+    let out = fmt(src);
+    // The interpolated string literal must remain on a single physical line (no `\n` between the
+    // quotes): the one output line bearing the hole must open AND close the string on itself.
+    let hole_lines: Vec<&str> = out.lines().filter(|l| l.contains("value is {")).collect();
+    assert_eq!(
+        hole_lines.len(),
+        1,
+        "interpolation was split across lines:\n{out}"
+    );
+    assert!(
+        hole_lines[0].trim_end().ends_with("\";"),
+        "interpolation hole did not close on its own line:\n{}",
+        hole_lines[0]
+    );
+    assert!(
+        hole_lines[0].contains("zetaValue)}"),
+        "the last hole argument left its line (hole broke):\n{}",
+        hole_lines[0]
+    );
+    assert_idempotent(src);
+}
+
+/// A `match` expression that overflows wraps one arm per line; a short one stays inline.
+#[test]
+fn match_arms_wrap_by_width() {
+    let src = "package Main;\n\
+        function classify(int x): string {\n\
+        return match (x) { 0 => \"zero value here\", 1 => \"one value here\", 2 => \"two value here\", 3 => \"three\" };\n\
+        }";
+    let out = fmt(src);
+    assert!(
+        out.contains("return match (x) {\n        0 => \"zero value here\","),
+        "long match must wrap one arm per line:\n{out}"
+    );
+    assert_idempotent(src);
+}
+
 #[test]
 fn unparseable_source_is_refused_not_reformatted() {
     assert!(format("package Main;\nfunction (").is_err());

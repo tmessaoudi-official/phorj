@@ -1063,6 +1063,41 @@ only read path). Deliberate scope edges:
 - **Multi-package transpile is a follow-up** (same boundary as `Core.Json`/`Core.Regex`): the injected
   `Secret` class lives in the entry package; namespaced multi-package emission is untested.
 
+## `phg format` width-canonical wrapping (DEC-187) — deferred wrap scope
+
+The formatter lays out from the AST at a 100-column budget: it breaks a form that overflows and
+collapses one that fits, deterministically (idempotent + meaning-preserving; author line breaks are
+not preserved — see `examples/fmt/README.md`). The first slice wraps **call/`new`/`parent` argument
+lists, collection & map literals, `match` arms, and `.`/`?.` method chains** (≥2 links). The following
+constructs still stay on one line even past 100 columns — each is a self-contained extension of the
+same `src/fmt/doc.rs` document IR (add a `group`/`line` break group at that AST node), tracked here:
+
+- **Binary-operator chains** (`a + b + c + …`, `x && y && z`) — would break before each operator.
+- **Declaration parameter lists** (`function f(int a, …)`, `constructor(…)`) — would break one param
+  per line; note the arg-list already wraps, only the *declaration* side is deferred.
+- **Class / interface headers** (`class C extends A, B implements X, Y`) — would break the
+  `extends`/`implements` lists.
+- **Control-flow conditions** (`if (…)`, `while (…)`, `for (…)`, `do … while (…)`) — the head is
+  rendered flat; a long condition does not wrap.
+- **`var … = …` destructuring initializers** and **value-position `if`/lambda-block bodies** — the
+  initializer / inlined body stays flat.
+
+None affects correctness: an over-long line is still valid, idempotent, and byte-identical across
+backends; it is only a cosmetic budget miss. Interpolation holes are **intentionally never** broken
+(a newline inside `"{…}"` would change the string value) — that is a correctness rule, not a deferral.
+
+Two maintenance notes for the next session:
+
+- **`src/fmt/printer.rs` grew to ~1680 lines** (was 1475; still one of the G-6 over-cap files, gate
+  W1-6 not yet built). The cohesive split — move the whole expression layer (`expr_doc` +
+  `operand_doc`/`postfix_doc`/`args_doc`/`chain_doc`/`render_expr` + the free layout helpers) into a
+  `src/fmt/printer/expr.rs` sub-module (`pub(super)`) — would bring both files back under 1000. Tracked
+  follow-up (own commit; deferred to keep the DEC-187 change green and reviewable).
+- **The corpus dogfood now asserts `fmt(src) == src`** (UA-0.8). Any *new* break rule (param lists,
+  binary chains, class headers, control-flow conditions) MUST reformat every affected file under
+  `examples/` + `selftest/` **in the same commit** — otherwise `every_repo_phg_formats_idempotently_and_safely`
+  goes red. Run `phg format examples selftest` as the last step of any such change.
+
 ## Behavioral quirks
 
 - **`List.append` copies — building a list by repeated append is O(n²).** Lists are immutable (COW),

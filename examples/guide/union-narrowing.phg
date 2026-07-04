@@ -22,7 +22,7 @@ function render(int | float | string | bool value): string {
         int i => "int " + (i as string),
         float f => "float " + (f as string),
         string s => "string " + s,
-        bool b => "bool " + (b as string),
+        bool b => "bool " + (b as string)
     };
 }
 
@@ -30,10 +30,7 @@ function render(int | float | string | bool value): string {
 // `n * n` is real integer arithmetic (not an opaque-union access). This holds on the bytecode VM too
 // — the narrowed primitive carries its numeric operand type — so `run`, `runvm`, and PHP agree.
 function squareIfInt(int | string v): int {
-    return match (v) {
-        int n => n * n,
-        string s => 0,
-    };
+    return match (v) { int n => n * n, string s => 0 };
 }
 
 // Narrowing composes with everything else: here a `List` of a union type is iterated, and each
@@ -41,18 +38,18 @@ function squareIfInt(int | string v): int {
 function main(): void {
     Output.printLine(render(42));
     Output.printLine(render(3.14));
-    Output.printLine(render(4.0)); // whole-number float stays `float`, not `int`
+    Output.printLine(render(4.0));
+    // whole-number float stays `float`, not `int`
     Output.printLine(render("hello"));
     Output.printLine(render(true));
-
-    Output.printLine("square 9 = " + (squareIfInt(9) as string)); // 81 — arithmetic on a narrowed int
-    Output.printLine("square s = " + (squareIfInt("x") as string)); // 0
-
+    Output.printLine("square 9 = " + (squareIfInt(9) as string));
+    // 81 — arithmetic on a narrowed int
+    Output.printLine("square s = " + (squareIfInt("x") as string));
+    // 0
     List<int | string> items = [1, "two", 3, "four"];
     for (int | string item in items) {
-        Output.printLine(match (item) {
-            int n => "number " + (n as string),
-            string s => "word " + s,
-        });
+        Output.printLine(
+            match (item) { int n => "number " + (n as string), string s => "word " + s }
+        );
     }
 }

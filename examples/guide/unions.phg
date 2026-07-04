@@ -27,7 +27,11 @@ class Triangle {
 // match-over-union: one arm per member, each binding the narrowed instance. Exhaustive — no `_`
 // needed, exactly like an enum match.
 function area(Circle | Square | Triangle s): int {
-    return match (s) { Circle c => c.radius * c.radius, Square sq => sq.side * sq.side, Triangle t => t.base * t.height };
+    return match (s) {
+        Circle c => c.radius * c.radius,
+        Square sq => sq.side * sq.side,
+        Triangle t => t.base * t.height
+    };
 }
 
 // instanceof narrowing on a union operand: each `if` smart-casts `s` to the tested class in its body.

@@ -47,7 +47,13 @@ function errorBody(string message): bytes {
 function handle(Request req): Response {
     var parsed = Json.parse(Bytes.toString(req.body) ?? "");
     if (var doc = parsed) {
-        return match (doc) { Json.Array(items) => new Response(200, Bytes.fromString(Json.stringify(summarize(items)))), _ => new Response(400, errorBody("expected a JSON array")) };
+        return match (doc) {
+            Json.Array(items) => new Response(
+                200,
+                Bytes.fromString(Json.stringify(summarize(items)))
+            ),
+            _ => new Response(400, errorBody("expected a JSON array"))
+        };
     }
     return new Response(400, errorBody("invalid JSON"));
 }

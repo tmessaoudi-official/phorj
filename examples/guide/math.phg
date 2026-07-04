@@ -53,7 +53,9 @@ function main(): void {
     float c0 = Math.cos(0.0);
     float s0 = Math.sin(0.0);
     float t0 = Math.tan(0.0);
-    Output.printLine("exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}");
+    Output.printLine(
+        "exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}"
+    );
     // --- `numberFormat(value, decimals)` → a grouped string, rounded half-away-from-zero. It erases
     // to a `__phorj_number_format` helper (identical string-building on both legs), so it is the safe
     // way to *print* a real transcendental: formatting to a few decimals collapses any last-ULP noise. ---

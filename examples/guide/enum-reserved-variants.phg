@@ -14,7 +14,13 @@ import Core.Output;
 enum Node { Null, Bool(bool value), Int(int value), Float(float value), Str(string value) }
 
 function describe(Node n): string {
-    return match (n) { Null() => "null", Bool(b) => "bool:{b}", Int(i) => "int:{i}", Float(f) => "float:{f}", Str(s) => "str:{s}" };
+    return match (n) {
+        Null() => "null",
+        Bool(b) => "bool:{b}",
+        Int(i) => "int:{i}",
+        Float(f) => "float:{f}",
+        Str(s) => "str:{s}"
+    };
 }
 
 function main(): void {

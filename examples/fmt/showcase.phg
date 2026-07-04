@@ -1,0 +1,39 @@
+package Main;
+
+import Core.Output;
+
+// `phg format` lays out from the AST at a 100-column budget (DEC-187): a construct that fits stays on
+// one line; one that overflows breaks deterministically. The same source always canonicalises to the
+// same shape (`fmt(fmt(x)) == fmt(x)`); it never preserves an author's hand-inserted line breaks.
+function accumulateFiveNumbers(int a, int b, int c, int d, int e): int {
+    return a + b + c + d + e;
+}
+
+function grade(int score): string {
+    return match (score) {
+        0 => "no points at all",
+        1 => "a single point",
+        2 => "a pair of points",
+        3 => "the very top score",
+        _ => "some other score"
+    };
+}
+
+function main(): void {
+    var small = accumulateFiveNumbers(1, 2, 3, 4, 5);
+    var firstOperandValue = 10;
+    var secondOperandValue = 20;
+    var thirdOperandValue = 30;
+    var fourthOperandValue = 40;
+    var fifthOperandValue = 50;
+    var total = accumulateFiveNumbers(
+        firstOperandValue,
+        secondOperandValue,
+        thirdOperandValue,
+        fourthOperandValue,
+        fifthOperandValue
+    );
+    Output.printLine("small={small}");
+    Output.printLine("total={total}");
+    Output.printLine(grade(3));
+}

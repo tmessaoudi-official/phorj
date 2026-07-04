@@ -19,13 +19,30 @@ import Core.Json;
 
 // Render a parsed JSON value's top-level shape — demonstrates matching every variant.
 function shapeOf(Json j): string {
-    return match (j) { Json.Null() => "null", Json.Bool(b) => "bool", Json.Int(n) => "int", Json.Float(f) => "float", Json.String(s) => "string", Json.Array(xs) => "array", Json.Object(es) => "object" };
+    return match (j) {
+        Json.Null() => "null",
+        Json.Bool(b) => "bool",
+        Json.Int(n) => "int",
+        Json.Float(f) => "float",
+        Json.String(s) => "string",
+        Json.Array(xs) => "array",
+        Json.Object(es) => "object"
+    };
 }
 
 function main(): void {
     // Build a JSON document with the enum constructors. `Json` is compiler-injected, so its variants
     // are reached QUALIFIED (`Json.Object`, never a bare `Object` — "nothing in the wind").
-    Json doc = new Json.Object(["name" => new Json.String("phorj"), "stars" => new Json.Int(42), "ratio" => new Json.Float(0.5), "tags" => new Json.Array([new Json.String("lang"), new Json.String("php")]), "stable" => new Json.Bool(true), "parent" => new Json.Null()]);
+    Json doc = new Json.Object(
+        [
+            "name" => new Json.String("phorj"),
+            "stars" => new Json.Int(42),
+            "ratio" => new Json.Float(0.5),
+            "tags" => new Json.Array([new Json.String("lang"), new Json.String("php")]),
+            "stable" => new Json.Bool(true),
+            "parent" => new Json.Null()
+        ]
+    );
     Output.printLine(Json.stringify(doc));
     // compact, one line
     Output.printLine("---");

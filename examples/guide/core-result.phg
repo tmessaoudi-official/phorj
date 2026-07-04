@@ -23,11 +23,22 @@ function parsePositive(string s): Result<int, ParseFault> {
     if (s == "") {
         return new Result.Failure(new Missing());
     }
-    return match (s) { "1" => new Result.Success(1), "2" => new Result.Success(2), "3" => new Result.Success(3), _ => new Result.Failure(new NotANumber(s)) };
+    return match (s) {
+        "1" => new Result.Success(1),
+        "2" => new Result.Success(2),
+        "3" => new Result.Success(3),
+        _ => new Result.Failure(new NotANumber(s))
+    };
 }
 
 function report(Result<int, ParseFault> r): string {
-    return match (r) { Result.Success(v) => "ok {v}", Result.Failure(e) => match (e) { Missing() => "err missing", NotANumber(t) => "err not-a-number: {t}" } };
+    return match (r) {
+        Result.Success(v) => "ok {v}",
+        Result.Failure(e) => match (e) {
+            Missing() => "err missing",
+            NotANumber(t) => "err not-a-number: {t}"
+        }
+    };
 }
 
 function main(): void {
