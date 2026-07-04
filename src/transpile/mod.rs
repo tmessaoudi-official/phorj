@@ -245,6 +245,14 @@ struct Transpiler {
     uses_option_get_or_else: bool,
     uses_option_of_nullable: bool,
     uses_option_to_nullable: bool,
+    // `Core.Result` combinator helpers (Wave B B-2b, DEC-185); `isSuccess`/`isFailure` inline
+    // `instanceof` at the call site (no helper).
+    uses_result_map: bool,
+    uses_result_map_err: bool,
+    uses_result_and_then: bool,
+    uses_result_get_or_else: bool,
+    uses_result_or_else: bool,
+    uses_result_to_option: bool,
     /// Set when `Core.Text.parseInt` is emitted — defines `__phorj_parse_int` once per file. The
     /// helper mirrors Rust's `i64::from_str` (optional sign, base-10 digits, i64 range, no surrounding
     /// whitespace) and returns `null` (Phorj `None`) otherwise — including on i64 overflow, which
@@ -552,6 +560,12 @@ impl Transpiler {
             uses_option_get_or_else: false,
             uses_option_of_nullable: false,
             uses_option_to_nullable: false,
+            uses_result_map: false,
+            uses_result_map_err: false,
+            uses_result_and_then: false,
+            uses_result_get_or_else: false,
+            uses_result_or_else: false,
+            uses_result_to_option: false,
             uses_text_parse_int: false,
             uses_list_sort: false,
             uses_list_sort_with: false,

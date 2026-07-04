@@ -93,3 +93,46 @@ fn option_type_unavailable_without_import() {
         "Option must not resolve without `import Core.Option`"
     );
 }
+
+/// `Result.toOption` bridges to `Core.Option`, so it MUST be imported too (Wave B B-2b, DEC-185). Used
+/// UFCS-style without `import Core.Option`, the call would run on the Rust backends but fatal in the
+/// transpiled PHP (`class Some not found`) — a byte-identity break; the checker rejects it in lockstep.
+#[test]
+fn result_to_option_ufcs_without_option_import_is_rejected() {
+    let src = "package Main; import Core.Result; \
+               function main() -> void { var r = new Result.Success(1); var o = r.toOption(); }";
+    let prog = prog_raw(src);
+    let err = crate::cli::check_and_expand(&prog, src)
+        .expect_err("r.toOption() without import Core.Option must be rejected");
+    assert!(
+        err.contains("E-RESULT-TOOPTION-NEEDS-OPTION"),
+        "expected E-RESULT-TOOPTION-NEEDS-OPTION, got:\n{err}"
+    );
+}
+
+/// Same guard for the qualified call form `Result.toOption(r)`.
+#[test]
+fn result_to_option_qualified_without_option_import_is_rejected() {
+    let src = "package Main; import Core.Result; \
+               function main() -> void { var r = new Result.Success(1); var o = Result.toOption(r); }";
+    let prog = prog_raw(src);
+    let err = crate::cli::check_and_expand(&prog, src)
+        .expect_err("Result.toOption(r) without import Core.Option must be rejected");
+    assert!(
+        err.contains("E-RESULT-TOOPTION-NEEDS-OPTION"),
+        "expected E-RESULT-TOOPTION-NEEDS-OPTION, got:\n{err}"
+    );
+}
+
+/// With BOTH `Core.Result` and `Core.Option` imported, the bridge type-checks (the happy path the
+/// `result-combinators.phg` differential also exercises end-to-end).
+#[test]
+fn result_to_option_with_both_imports_typechecks() {
+    let src = "package Main; import Core.Result; import Core.Option; \
+               function main() -> void { var r = new Result.Success(1); var o = r.toOption(); }";
+    let prog = prog_raw(src);
+    assert!(
+        crate::cli::check_and_expand(&prog, src).is_ok(),
+        "toOption with both imports must typecheck"
+    );
+}

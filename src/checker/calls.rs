@@ -77,6 +77,7 @@ impl Checker {
                             if n.module == "Core.Reflection" && n.name == "typeName" {
                                 return self.check_reflect_type_name(q, args, span);
                             }
+                            self.require_option_for_result_bridge(n.module, n.name, span);
                             let ty = self.check_native_call(idx, args, span);
                             self.record_pending_fill(callee, args, span);
                             return ty;
@@ -1896,6 +1897,31 @@ impl Checker {
     /// (the caller then emits the original "no method" error). The receiver `recv_ty` is the
     /// already-checked, optional-peeled type — the receiver expression is *not* re-checked here, so a
     /// throwing-call receiver discharges exactly once.
+    /// `Result.toOption` (Wave B B-2b, DEC-185) bridges to `Core.Option`: its transpiled helper builds
+    /// `new Some(…)`/`new None()`, and those PHP classes exist ONLY when the Option prelude is injected
+    /// (gated on `import Core.Option;`). Used without that import, the call type-checks and runs on the
+    /// interpreter+VM (which build `Value::Enum(ty:"Option")` directly) but FATALS in the transpiled PHP
+    /// (`Class "Some" not found`) — a byte-identity break (Invariant #1). Reject it in the checker so all
+    /// three backends refuse in lockstep, matching DEC-182's explicit-import model. Called from both the
+    /// qualified (`Result.toOption(r)`) and UFCS (`r.toOption()`) native-resolution sites.
+    fn require_option_for_result_bridge(&mut self, module: &str, name: &str, span: Span) {
+        if module == "Core.Result"
+            && name == "toOption"
+            && !self.imports.values().any(|m| m == "Core.Option")
+        {
+            self.err_coded(
+                span,
+                "`Result.toOption` returns `Option<T>` but `Core.Option` is not imported"
+                    .to_string(),
+                "E-RESULT-TOOPTION-NEEDS-OPTION",
+                Some(
+                    "add `import Core.Option;` — the bridge produces a `Core.Option` value"
+                        .to_string(),
+                ),
+            );
+        }
+    }
+
     pub(super) fn try_ufcs(
         &mut self,
         object: &crate::ast::Expr,
@@ -1973,6 +1999,7 @@ impl Checker {
         }
         if let Some((idx, leaf)) = matched {
             let n = &crate::native::registry()[idx];
+            self.require_option_for_result_bridge(n.module, n.name, call_span);
             let label = format!("{leaf}.{name}");
             let ret = self.check_ufcs_call(&label, &n.params, &n.ret, recv_ty, args, call_span);
             return Some(self.finish_ufcs(

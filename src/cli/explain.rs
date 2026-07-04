@@ -1035,6 +1035,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              unaffected. Single-type modules (`Core.Json`, `Core.Regex`, `Core.Secret`) are unaffected —\n\
              their leaf IS the type.\n"
         }
+        "E-RESULT-TOOPTION-NEEDS-OPTION" => {
+            "E-RESULT-TOOPTION-NEEDS-OPTION — `Result.toOption` was used without importing `Core.Option`.\n\n\
+             `Result.toOption(r)` (or `r.toOption()`) bridges a `Result<T, E>` to an `Option<T>` —\n\
+             `Success(x)` becomes `Some(x)`, `Failure` becomes `None`. Its result IS a `Core.Option`\n\
+             value, and (like every injected Core type) `Option`'s `Some`/`None` are only available when\n\
+             you import the module. Add `import Core.Option;` alongside `import Core.Result;`. Without it\n\
+             the call would run on the interpreter/VM but fail once transpiled to PHP (the `Some`/`None`\n\
+             classes are never emitted), so the checker rejects it up front to keep every backend in step.\n"
+        }
         "E-VARIANT-QUALIFIER" => {
             "E-VARIANT-QUALIFIER — a qualified variant pattern named the wrong enum.\n\n\
              In a `match`, a qualified pattern `Enum.Variant(…)` must name the *scrutinee's* enum. If\n\

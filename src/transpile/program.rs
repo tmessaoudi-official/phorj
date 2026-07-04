@@ -1454,6 +1454,53 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `Core.Result` combinators (Wave B B-2b, DEC-185) over the injected `Success`/`Failure` PHP
+        // classes (`Success->value`, `Failure->error`). The receiver is a param (bound once, no
+        // double-eval). `map`/`mapErr` re-wrap the touched arm and pass the other through unchanged;
+        // `andThen`/`orElse` bind (the `$f` itself returns a Result). `toOption` bridges to the Option
+        // injection's `Some`/`None`. `isSuccess`/`isFailure` are emitted inline at the call site.
+        if self.uses_result_map {
+            self.line("function __phorj_result_map($r, $f) {");
+            self.indent += 1;
+            self.line("return $r instanceof Success ? new Success($f($r->value)) : $r;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_result_map_err {
+            self.line("function __phorj_result_map_err($r, $f) {");
+            self.indent += 1;
+            self.line("return $r instanceof Failure ? new Failure($f($r->error)) : $r;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_result_and_then {
+            self.line("function __phorj_result_and_then($r, $f) {");
+            self.indent += 1;
+            self.line("return $r instanceof Success ? $f($r->value) : $r;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_result_get_or_else {
+            self.line("function __phorj_result_get_or_else($r, $d) {");
+            self.indent += 1;
+            self.line("return $r instanceof Success ? $r->value : $d;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_result_or_else {
+            self.line("function __phorj_result_or_else($r, $f) {");
+            self.indent += 1;
+            self.line("return $r instanceof Success ? $r : $f($r->error);");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_result_to_option {
+            self.line("function __phorj_result_to_option($r) {");
+            self.indent += 1;
+            self.line("return $r instanceof Success ? new Some($r->value) : new None();");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// Emit `__phorj_reflect_of($v, $kind)` + its static table, built from the SAME `ClassTables` the

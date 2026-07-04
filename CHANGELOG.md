@@ -33,6 +33,19 @@ byte-identical.
 - **Inference:** `unify` now binds a type parameter from a non-null argument against an `Optional(T)`
   parameter (`Option.ofNullable(42)` infers `T = int`), aligning it with the existing
   `(other, Optional(t))` assignability rule.
+- **B-2b (Result combinators, DEC-185):** the full ruled `Core.Result` combinator set (`src/native/result.rs`),
+  reached UFCS-style (`res.map(f)` → `Result.map(res, f)`): `map((T)->U)` · `mapErr((E)->F)` (remaps the
+  error type) · `andThen((T)->Result<U,E>)` (success bind — threads the error `E` through the callback) ·
+  `orElse((E)->Result<T,F>)` (error bind / recovery) · `getOrElse(T)` (eager default) · `toOption() ->
+  Option<T>` (Result→Option bridge, drops the error) · `isSuccess()` / `isFailure()`. `filter` is
+  deliberately omitted (no error to synthesize on `false`). Erase to gated `__phorj_result_*` PHP helpers
+  over the injected `Success`/`Failure` classes (`isSuccess`/`isFailure` emit an inline `instanceof`).
+  Example `guide/result-combinators.phg` (byte-identical run/runvm/PHP), 7 native unit tests.
+- **Guard (`E-RESULT-TOOPTION-NEEDS-OPTION`):** `Result.toOption` produces a `Core.Option` value whose
+  `Some`/`None` PHP classes exist only when `Core.Option` is injected — so using it without
+  `import Core.Option;` type-checked and ran on the interpreter/VM but fataled in transpiled PHP (a
+  byte-identity break). The checker now rejects it up front (both the UFCS and qualified call forms), so
+  every backend refuses in lockstep; `phg explain` entry + 3 checker tests.
 
 ### Added — interactive debugger: `phg debug` (M-DX S5) — **M-DX COMPLETE**
 

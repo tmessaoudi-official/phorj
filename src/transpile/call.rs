@@ -176,6 +176,18 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        if nat.module == "Core.Result" {
+                            match nat.name {
+                                "map" => self.uses_result_map = true,
+                                "mapErr" => self.uses_result_map_err = true,
+                                "andThen" => self.uses_result_and_then = true,
+                                "getOrElse" => self.uses_result_get_or_else = true,
+                                "orElse" => self.uses_result_or_else = true,
+                                "toOption" => self.uses_result_to_option = true,
+                                // isSuccess/isFailure emit an inline `instanceof` (no helper).
+                                _ => {}
+                            }
+                        }
                         if nat.module == "Core.String" {
                             match nat.name {
                                 "parseInt" => self.uses_text_parse_int = true,

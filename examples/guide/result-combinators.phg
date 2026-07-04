@@ -1,0 +1,63 @@
+// `Core.Result<T, E>` combinators (Wave B B-2b, DEC-185) — the full ruled set, reached UFCS-style on the
+// compiler-injected `Result<T, E>` enum (`res.map(f)` resolves to `Result.map(res, f)`, the same
+// first-parameter dispatch as `list.map(f)`/`opt.map(f)`). Both `run`/`runvm` and the transpiled PHP are
+// byte-identical.
+//
+//   map(Result<T,E>, (T) -> U)          -> Result<U,E>   transform a Success; a Failure passes through
+//   mapErr(Result<T,E>, (E) -> F)       -> Result<T,F>   transform a Failure's error; a Success passes through
+//   andThen(Result<T,E>, (T)->Result<U,E>) -> Result<U,E>  bind on Success (flatMap); threads the error E
+//   orElse(Result<T,E>, (E)->Result<T,F>)  -> Result<T,F>  bind on Failure (recover); a Success passes through
+//   getOrElse(Result<T,E>, T)           -> T              the Success value, else an eager default
+//   toOption(Result<T,E>)               -> Option<T>      Success(x) => Some(x); Failure => None (error dropped)
+//   isSuccess(Result<T,E>) / isFailure(Result<T,E>) -> bool
+//
+// `filter` is intentionally absent: there is no error value to synthesize on a `false` predicate (Rust
+// omits `Result::filter` for the same reason).
+package Main;
+
+import Core.Output;
+import Core.Result;
+import Core.Option;
+import Core.String;
+
+// Parse a tiny "small positive int" field; report *why* it failed as a typed `Failure<string>`.
+function parse(string s): Result<int, string> {
+    return match (s) { "1" => new Result.Success(1), "2" => new Result.Success(2), _ => new Result.Failure("bad: {s}") };
+}
+
+function main(): void {
+    // map — transform a Success payload; a Failure passes through untouched.
+    Output.printLine("{parse(\"2\").map(function(int x) => x * 10).getOrElse(0)}");
+    // 20
+    Output.printLine("{parse(\"z\").map(function(int x) => x * 10).getOrElse(0)}");
+    // 0   — Failure mapped is still Failure (getOrElse => the default 0)
+    // Invariant-7 (CTy-operand): arithmetic directly on a getOrElse result must compile on the VM.
+    Output.printLine("{parse(\"1\").getOrElse(0) + 1}");
+    // 2
+    // andThen — bind a Success into a second Result (error type E = string is threaded through).
+    Output.printLine("{parse(\"2\").andThen(function(int x) => new Result.Success(x + 100)).getOrElse(0)}");
+    // 102
+    Output.printLine("{parse(\"z\").andThen(function(int x) => new Result.Success(x + 100)).getOrElse(0)}");
+    // 0   — a Failure short-circuits the bind
+    // mapErr — remap the error type (string -> its length, so Result<int,string> -> Result<int,int>).
+    var remapped = parse("z").mapErr(function(string e) => String.length(e));
+    Output.printLine(match (remapped) { Result.Success(v) => "ok {v}", Result.Failure(n) => "errlen {n}" });
+    // errlen 6   — "bad: z" is 6 code points
+    // orElse — recover a Failure with a fallback Result; a Success passes through.
+    Output.printLine("{parse(\"z\").orElse(function(string e) => new Result.Success(-1)).getOrElse(0)}");
+    // -1
+    Output.printLine("{parse(\"1\").orElse(function(string e) => new Result.Success(-1)).getOrElse(0)}");
+    // 1
+    // toOption — bridge to Option (the error is dropped), then use an Option combinator.
+    Output.printLine("{parse(\"1\").toOption().getOrElse(-1)}");
+    // 1
+    Output.printLine("{parse(\"z\").toOption().getOrElse(-1)}");
+    // -1
+    // isSuccess / isFailure — used in flow (avoids depending on bool interpolation formatting).
+    if (parse("1").isSuccess()) {
+        Output.printLine("first parsed");
+    }
+    if (parse("z").isFailure()) {
+        Output.printLine("second failed");
+    }
+}

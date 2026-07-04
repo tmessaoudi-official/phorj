@@ -246,6 +246,19 @@ not a panic:
   deferred: the *faulting expression's operands* (only frame locals are captured — the offending
   sub-values are usually among them); a Release artifact emits nothing by design.
 
+- **LSP diagnostics do not inject the Core preludes (pre-existing; affects every injected-type program).**
+  `phg lsp`'s `diagnostics_for` (`src/lsp/mod.rs`) runs the *raw* checker (`checker::check`) directly on
+  the parsed program — it does **not** run the `check_and_expand` front-end that injects the compiler
+  types (`Core.Json`'s `Json`, `Core.Decimal`'s `RoundingMode`, `Core.Option`/`Core.Result`,
+  `Core.Http`/`Core.Time` types). So an editor shows spurious `E-UNKNOWN-TYPE`/`E-UNKNOWN-IDENT` squiggles
+  on `Option<T>`/`Result<T,E>`/`Json`/`Router`/… even though `phg check`/`run`/`runvm` and the differential
+  are all clean on the same file. This is a **diagnostic-surface gap only** — the compiler is correct; the
+  editor is over-reporting. It predates the Wave B work (it hits B-1's `core-result.phg` and B-2a's
+  `option-combinators.phg` identically). Corrects the earlier "LSP DoD satisfied by construction" note:
+  that holds for the combinator **natives** (registry-driven, resolved by the raw checker) but NOT for the
+  injected **types**. Fix (a dedicated LSP slice): route `diagnostics_for` through the same prelude
+  injection the CLI uses, with a test asserting an injected-type program is LSP-clean, on both editors.
+
 - **Override signature checking — return covariance shipped (M-DX S1); parameters deferred.** An
   override's **return type** must now be the overridden type or a subtype of it (`E-OVERRIDE-SIG`) —
   a return-incompatible override previously type-checked clean then fatalled in transpiled PHP. Still
