@@ -49,7 +49,9 @@ pub fn help_text() -> String {
          benchmark  benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
          vendor     fetch [require] git deps into an offline vendor/ (writes phorj.lock)\n  \
-         serve      serve the program over HTTP (calls respond(bytes) -> bytes per request)\n  \
+         serve      serve the program over HTTP (calls respond(bytes): bytes per request)\n  \
+         lsp        run the language server over stdio (LSP; for editors)\n  \
+         debug      run the program under the interactive debugger (dev; --dap for DAP)\n  \
          test       discover and run `test` blocks (under tests/, or a given file/dir)\n  \
          format     format source to canonical form (--check for CI; - for stdin)\n  \
          explain    explain a diagnostic code (e.g. phg explain E-UNKNOWN-IDENT)\n\n\
@@ -74,15 +76,15 @@ pub fn help_for(cmd: &str) -> String {
                   usage:\n  phg run <file | - | -e code> [--]\n\n\
                   examples:\n  \
                   phg run hello.phg\n  \
-                  phg run -e 'function main() -> void { Output.printLine(\"hi\"); }'\n  \
-                  echo 'function main()-> void {Output.printLine(\"hi\");}' | phg run -\n"
+                  phg run -e 'package Main; import Core.Output; function main(): void { Output.printLine(\"hi\"); }'\n  \
+                  echo 'package Main; import Core.Output; function main(): void { Output.printLine(\"hi\"); }' | phg run -\n"
         }
         "runvm" => {
             "runvm — run the program on the bytecode VM (byte-identical to `run`).\n\n\
                     usage:\n  phg runvm <file | - | -e code>\n\n\
                     examples:\n  \
                     phg runvm hello.phg\n  \
-                    phg runvm -e 'function main() -> void { Output.printLine(\"{2 + 2}\"); }'\n"
+                    phg runvm -e 'package Main; import Core.Output; function main(): void { Output.printLine(\"{2 + 2}\"); }'\n"
         }
         "check" => {
             "check — type-check only; print OK or the type errors, run nothing.\n\n\
@@ -126,7 +128,7 @@ pub fn help_for(cmd: &str) -> String {
             "disassemble — print the compiled bytecode the VM will execute.\n\n\
                      usage:\n  phg disassemble <file | - | -e code>\n\n\
                      examples:\n  \
-                     phg disassemble -e 'function main() -> void { int x = 1 + 2; }'\n"
+                     phg disassemble -e 'package Main; function main(): void { int x = 1 + 2; }'\n"
         }
         "benchmark" => {
             "benchmark — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\
@@ -198,7 +200,7 @@ pub fn help_for(cmd: &str) -> String {
         }
         "serve" => {
             "serve — serve the program over HTTP/1.1.\n\n\
-                    The program must define `respond(bytes) -> bytes`: the runtime frames each\n\
+                    The program must define `respond(bytes): bytes`: the runtime frames each\n\
                     incoming request, calls `respond` (where the program's own `parse_request` /\n\
                     router / `serialize_response` live — all pure Phorj), and writes the bytes back\n\
                     (`Connection: close`, one request per connection). A request fault degrades to a\n\
@@ -219,6 +221,22 @@ pub fn help_for(cmd: &str) -> String {
                     examples:\n  \
                     phg serve examples/web/server.phg\n  \
                     phg serve app.phg --addr 0.0.0.0:3000 --timeout 15 --workers 8\n"
+        }
+        "lsp" => {
+            "lsp — run the Phorj language server over stdio (LSP for editors).\n\n\
+                   Speaks JSON-RPC on stdin/stdout; takes no source argument. Editors (VSCode,\n\
+                   PhpStorm, or any LSP client) launch `phg lsp` as the server command; it serves\n\
+                   diagnostics, hover, and completion backed by the checker.\n\n\
+                   usage:\n  phg lsp\n"
+        }
+        "debug" => {
+            "debug — run the program under the interactive debugger (dev-only, interpreter).\n\n\
+                     Reads debugger commands on stdin and writes the UI to stderr; `--dap` speaks the\n\
+                     Debug Adapter Protocol instead (for editor debug integration). Source load is\n\
+                     project-aware (nearest ancestor with a phorj.toml, else the current directory).\n\n\
+                     usage:\n  phg debug [--dap] <file>\n\n\
+                     examples:\n  \
+                     phg debug app.phg\n"
         }
         _ => return help_text(),
     };
@@ -436,7 +454,7 @@ fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program>
 }
 
 /// The canonical `Core.Http` types, injected (below) when a program imports `Core.Http` (M6 W1 →
-/// stdlib). The portable handler model — `handle(Request) -> Response` — at the value level: `Request`
+/// stdlib). The portable handler model — `handle(Request): Response` — at the value level: `Request`
 /// and `Response` are immutable values; `Request.parse(bytes) -> Request?` and `resp.serialize()`
 /// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.String` (so the prelude also
 /// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
@@ -635,8 +653,8 @@ class Router {
 }
 "#;
 
-/// The `phg serve` bridge: the runtime's `respond(bytes) -> bytes` entry, synthesized to wrap a
-/// user-defined `handle(Request) -> Response` (closes Batch-1 C). Injected only when `Core.Http` is
+/// The `phg serve` bridge: the runtime's `respond(bytes): bytes` entry, synthesized to wrap a
+/// user-defined `handle(Request): Response` (closes Batch-1 C). Injected only when `Core.Http` is
 /// imported, a `handle` exists, and the user hasn't written their own `respond`. A malformed request
 /// (parse returns null) becomes a 400 — HTTP policy lives here in Phorj, not in the Rust runtime.
 const HTTP_RESPOND_BRIDGE: &str = r#"

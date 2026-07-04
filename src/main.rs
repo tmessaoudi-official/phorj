@@ -298,7 +298,7 @@ fn main() {
         }
     }
     // `serve <file> [--addr ADDR]` runs the blocking HTTP server. The program is loaded
-    // project-aware (like `run`) and must define `respond(bytes) -> bytes`. The loop runs until the
+    // project-aware (like `run`) and must define `respond(bytes): bytes`. The loop runs until the
     // process is killed; only a bind/socket error returns (exit 1). Default addr 127.0.0.1:8080.
     if cmd == "serve" {
         let mut file: Option<&str> = None;
