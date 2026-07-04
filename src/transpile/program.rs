@@ -842,6 +842,19 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_math_clamp {
+            // `Math.clamp` — faults on `lo > hi` to match the native (UA-1.7); the fault text need
+            // not match Phorj's (a fault is never a byte-identity example — Invariant 9), only that
+            // both legs fault. Otherwise `max($lo, min($v, $hi))`, exactly the old inline form.
+            self.line("function __phorj_clamp($v, $lo, $hi) {");
+            self.indent += 1;
+            self.line(
+                "if ($lo > $hi) { throw new \\RuntimeException(\"Math.clamp: min ($lo) must not exceed max ($hi)\"); }",
+            );
+            self.line("return max($lo, min($v, $hi));");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_math_lcm {
             // `Math.lcm` — `|a|/gcd*|b|` over the magnitudes, inlining Euclid (so it needs no
             // `__phorj_gcd`). Mirrors the Rust `math_lcm` native for every in-range input; `lcm(_, 0)=0`.

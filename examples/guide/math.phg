@@ -29,7 +29,7 @@ function main(): void {
     int s2 = Math.sign(0);
     int s3 = Math.sign(42);
     Output.printLine("sign(-7) = {s1}, sign(0) = {s2}, sign(42) = {s3}");
-    // `clamp(v, lo, hi)` = max(lo, min(v, hi)) — never panics, even if lo > hi (mirrors PHP).
+    // `clamp(v, lo, hi)` = max(lo, min(v, hi)); requires lo <= hi (lo > hi faults — a caller bug).
     int c1 = Math.clamp(15, 0, 10);
     int c2 = Math.clamp(-3, 0, 10);
     int c3 = Math.clamp(5, 0, 10);

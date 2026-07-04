@@ -318,6 +318,9 @@ struct Transpiler {
     /// Set when `Math.gcd(int, int)` is emitted (M-NUM S4) — defines `__phorj_gcd` (Euclid over the
     /// magnitudes), since gmp is absent under `php -n`. Mirrors the Rust `math_gcd` native body.
     uses_math_gcd: bool,
+    /// Set when `Math.clamp(int, int, int)` is emitted (UA-1.7) — defines `__phorj_clamp`, which
+    /// faults on `lo > hi` (a caller bug) to match the native; the inline `max(min())` could not.
+    uses_math_clamp: bool,
     /// Set when `Math.lcm(int, int)` is emitted (M4) — defines `__phorj_lcm` (`x/gcd*y` over the
     /// magnitudes, inlining Euclid so it needs no `__phorj_gcd`). Mirrors the Rust `math_lcm` native.
     uses_math_lcm: bool,
@@ -551,6 +554,7 @@ impl Transpiler {
             uses_float_to_int_exact: false,
             uses_dec_to_int_exact: false,
             uses_math_gcd: false,
+            uses_math_clamp: false,
             uses_math_lcm: false,
             uses_math_number_format: false,
             uses_rng: false,

@@ -1,9 +1,16 @@
 package Main;
+
 import Core.Test;
+import Core.Math;
 
 // `Test.assertFaults(() -> T)` passes iff the closure faults — the way to test the error surface.
 function firstOf(List<int> xs): int {
     return xs[0];
+}
+
+test "Math.clamp with min > max faults (UA-1.7)" {
+    // `clamp(v, lo, hi)` requires lo <= hi; a reversed range is a caller bug, not a silent pick.
+    Test.assertFaults(function() => Math.clamp(5, 10, 0));
 }
 
 test "indexing past the end faults" {

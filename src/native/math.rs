@@ -132,8 +132,13 @@ fn math_sign(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 fn math_clamp(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        // `max(lo, min(v, hi))` — mirrors the PHP emission and never panics when lo > hi (Rust's
-        // `Ord::clamp` would). Identical to `(*v).min(*hi).max(*lo)`.
+        // `clamp(v, lo, hi)` requires `lo <= hi` — the module's precondition convention, and what
+        // Rust's own `Ord::clamp` demands. `lo > hi` is a caller bug, so it faults cleanly (UA-1.7)
+        // rather than silently picking `lo`. The PHP leg's `__phorj_clamp` helper faults in kind.
+        [Value::Int(_), Value::Int(lo), Value::Int(hi)] if lo > hi => {
+            Err(format!("Math.clamp: min ({lo}) must not exceed max ({hi})"))
+        }
+        // Otherwise `max(lo, min(v, hi))` — identical to `(*v).min(*hi).max(*lo)`.
         [Value::Int(v), Value::Int(lo), Value::Int(hi)] => Ok(Value::Int((*v).min(*hi).max(*lo))),
         _ => Err("Math.clamp expects (int, int, int)".into()),
     }
@@ -444,7 +449,16 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_clamp),
-            php: |a| format!("max({}, min({}, {}))", parg(a, 1), parg(a, 0), parg(a, 2)),
+            // Erases to a gated `__phorj_clamp` helper (UA-1.7): it must fault on `lo > hi` to match
+            // the native, which the inline `max(min())` could not express.
+            php: |a| {
+                format!(
+                    "__phorj_clamp({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
         },
         NativeFn {
             module: "Core.Math",

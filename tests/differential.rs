@@ -713,6 +713,21 @@ function main() -> void { List<int> xs = [1, 2]; Output.printLine("{xs[5]}"); }"
     );
 }
 
+/// `Math.clamp(v, lo, hi)` with `lo > hi` is a caller bug: it faults identically on both backends
+/// (UA-1.7), rather than silently picking `lo`. (The PHP leg's `__phorj_clamp` helper faults in
+/// kind — but a fault is never a byte-identity example, so it is captured in `selftest/faults.phg`.)
+/// The faulting call is kept OUT of a `"{…}"` interpolation on purpose: an unclassified native
+/// fault classifies to `Other(<full message incl. line>)`, and the W0-5 VM interpolation-line skew
+/// would otherwise make the `Other` strings differ (run "at 3" vs runvm "at 1").
+#[test]
+fn math_clamp_min_gt_max_faults_identically() {
+    agree_err(
+        r#"import Core.Output;
+import Core.Math;
+function main(): void { int c = Math.clamp(5, 10, 0); Output.printLine("{c}"); }"#,
+    );
+}
+
 /// An index *result* used as an arithmetic operand (`xs[0] + 1`). The compiler must know the list's
 /// element type to pick `AddI`/`AddF` — so `CTy` tracks `List<elem>` and `ctype(Index)` unwraps it.
 /// (Regression guard: un-rejecting indexing without this made the VM compile-reject `xs[0] + 1`

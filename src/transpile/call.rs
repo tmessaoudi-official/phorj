@@ -219,6 +219,7 @@ impl Transpiler {
                         if nat.module == "Core.Math" {
                             match nat.name {
                                 "gcd" => self.uses_math_gcd = true,
+                                "clamp" => self.uses_math_clamp = true,
                                 "lcm" => self.uses_math_lcm = true,
                                 "numberFormat" => self.uses_math_number_format = true,
                                 _ => {}

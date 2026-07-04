@@ -158,7 +158,7 @@ fn math_s4_breadth_eval_and_emit() {
         Ok(Value::Int(1))
     ));
 
-    // clamp = max(lo, min(v, hi)); never panics even when lo > hi
+    // clamp = max(lo, min(v, hi)) when lo <= hi
     assert!(matches!(
         math_clamp(&[Value::Int(15), Value::Int(0), Value::Int(10)], &mut out),
         Ok(Value::Int(10))
@@ -167,10 +167,8 @@ fn math_s4_breadth_eval_and_emit() {
         math_clamp(&[Value::Int(-3), Value::Int(0), Value::Int(10)], &mut out),
         Ok(Value::Int(0))
     ));
-    assert!(matches!(
-        math_clamp(&[Value::Int(5), Value::Int(10), Value::Int(0)], &mut out),
-        Ok(Value::Int(10))
-    ));
+    // lo > hi is a caller bug → a clean fault (UA-1.7), not a silent pick.
+    assert!(math_clamp(&[Value::Int(5), Value::Int(10), Value::Int(0)], &mut out).is_err());
 
     // gcd — Euclid over magnitudes; gcd(0,0)=0; i64::MIN magnitude overflow faults (EV-7)
     assert!(matches!(
@@ -252,7 +250,7 @@ fn math_s4_breadth_eval_and_emit() {
     assert_eq!(php("sign", &["$x"]), "($x <=> 0)");
     assert_eq!(
         php("clamp", &["$v", "$lo", "$hi"]),
-        "max($lo, min($v, $hi))"
+        "__phorj_clamp($v, $lo, $hi)"
     );
     assert_eq!(php("gcd", &["$a", "$b"]), "__phorj_gcd($a, $b)");
     assert_eq!(php("lcm", &["$a", "$b"]), "__phorj_lcm($a, $b)");
