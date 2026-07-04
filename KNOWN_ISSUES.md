@@ -919,14 +919,18 @@ gives the Pythonic `for (int i, T x in enumerate(xs))` (index→element `Map<int
   byte-wise) — they agree for ASCII. Non-ASCII char iteration would diverge run-vs-PHP, consistent with
   the rest of the String stdlib's tier-1 ASCII contract.
 
-## Core.String breadth (M4) — ASCII only
+## Core.String breadth (M4) — Unicode-correct trim/reverse; ASCII-fold case ops; byte length
 
-`String.reverse`/`equalsIgnoreCase`/`containsIgnoreCase` (like all of `Core.String`) are **ASCII-oriented** —
-the PHP oracle runs `php -n` (no mbstring), so they map to byte/ASCII core functions
-(`strrev`/`strcasecmp`/`stripos`). `reverse` reverses by chars (== bytes for ASCII; a non-ASCII string
-would byte-reverse differently in PHP `strrev`); the case-insensitive pair folds only ASCII letters.
-Shipped examples keep ASCII subjects, where all three backends agree. Codepoint-aware (Unicode) text ops
-are deferred to a future M-text milestone (would need an mbstring-or-equivalent strategy).
+`String.reverse` and the `trim`/`trimStart`/`trimEnd` family are **Unicode-correct** (UA-1.1/1.2):
+`reverse` reverses by Unicode code point, and `trim*` strip Rust's full Unicode White_Space set. Both
+stay byte-identical on the PHP leg via emitted helpers (`__phorj_text_reverse` /
+`__phorj_text_trim*`) that use PCRE `/u`, so no mbstring is needed under `php -n` — a byte reversal
+(`strrev`) or PHP's ASCII-ish `trim()` would diverge on multibyte input.
+
+Still ASCII-scoped: `equalsIgnoreCase`/`containsIgnoreCase` fold only ASCII letters
+(→ `strcasecmp`/`stripos`); Unicode case-folding is deferred to W4-4 (a known landmine —
+`strtoupper("straße")` diverges from Rust, a LADDER-quarantine candidate). And **`String.length`
+returns the byte length, not the code-point count**, until W4-4 (`length("café")` = 5, not 4).
 
 ## Public-surface file-naming rule — scope
 
@@ -1021,6 +1025,10 @@ only read path). Deliberate scope edges:
 
 ## Behavioral quirks
 
+- **`List.append` copies — building a list by repeated append is O(n²).** Lists are immutable (COW),
+  so `List.append(xs, v)` returns a *fresh* list (it clones the elements); appending N times to grow a
+  list from empty is therefore O(n²). For a hot build loop prefer a list literal `[a, b, c]` when the
+  size is known, or `List.fill` + index-set (O(1) per write) / `List.map(range, fn)`.
 - **Errors inside string interpolation report line 1 (W0-5 / H §5).** Because
   `parser::split_interpolation` re-lexes the inner expression with a fresh lexer that resets to line 1,
   anything raised *within* a `"{ … }"` interpolation loses its true line. Two cases:
