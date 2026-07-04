@@ -167,9 +167,11 @@ impl Checker {
                         }
                     }
                 }
-                // Match-over-union exhaustiveness (M-RT S4): every nominal member must be covered by a
-                // type pattern naming it OR a covering supertype/interface. A primitive member can't be
-                // type-matched, so a union containing one always needs a `_` (reported as missing).
+                // Match-over-union exhaustiveness (M-RT S4 + Wave A): every nominal member must be
+                // covered by a type pattern naming it OR a covering supertype/interface; a
+                // DISCRIMINABLE primitive member (int/float/string/bool/null) is covered by a primitive
+                // type pattern naming it. A non-discriminable member (decimal/bytes/html/attr — erases
+                // to a PHP string) still can't be type-matched, so it always needs a `_`.
                 Ty::Union(members) => {
                     let mut missing: Vec<String> = members
                         .iter()
@@ -177,7 +179,10 @@ impl Checker {
                             Ty::Named(n, _) => !covered_types
                                 .iter()
                                 .any(|t| t == n || self.is_subtype(n, t)),
-                            _ => true,
+                            _ => match prim_ty_name(m) {
+                                Some(name) => !covered_types.iter().any(|t| t == name),
+                                None => true,
+                            },
                         })
                         .map(std::string::ToString::to_string)
                         .collect();
@@ -315,33 +320,69 @@ impl Checker {
                 binding,
                 span,
             } => {
-                // M-RT S4 type pattern: the type must be a class or interface (the runtime test is
-                // `instanceof`, which is class/interface-only — an enum value is never an instance).
-                let known =
-                    self.classes.contains_key(type_name) || self.interfaces.contains_key(type_name);
-                if !known && !matches!(scrut, Ty::Error) {
-                    let hint = if self.enums.contains_key(type_name) {
-                        "an enum is a closed sum — match its variants directly, not via a type pattern"
-                    } else {
-                        "a type pattern matches a class or interface (as in a union scrutinee)"
-                    };
+                if let Some(prim) = prim_pat_ty(type_name) {
+                    // Wave A: a PRIMITIVE type pattern (`int i`, `string s`) over a union member.
+                    // Discriminated at runtime by `Value` variant (interpreter + VM `Op::IsInstance`)
+                    // and transpiled to `is_int()`/`is_float()`/`is_string()`/`is_bool()`/`is_null()`.
+                    // Byte-identity guard: `string` is ambiguous in the PHP leg if the union also holds
+                    // a type that erases to a PHP `string` (decimal/bytes/html/attr), so reject it —
+                    // `run`/`runvm` distinguish them by `Value` variant but the transpiled PHP cannot.
+                    if matches!(prim, Ty::String) {
+                        if let Ty::Union(members) = scrut {
+                            if members
+                                .iter()
+                                .any(|m| !matches!(m, Ty::String) && erases_to_php_string(m))
+                            {
+                                self.err_coded(
+                                    *span,
+                                    "type pattern `string` is ambiguous here — the union also holds a type that erases to a PHP string (decimal/bytes/html/attr), so the transpiled PHP can't distinguish them".to_string(),
+                                    "E-MATCH-ERASED-AMBIG",
+                                    Some("split the union or add a `_` arm — run/runvm could tell them apart, but the PHP leg cannot".into()),
+                                );
+                            }
+                        }
+                    }
+                    if let Some(name) = binding {
+                        self.declare(name, prim, *span);
+                    }
+                } else if matches!(type_name.as_str(), "decimal" | "bytes" | "html" | "attr") {
+                    // These erase to a PHP `string`, so a runtime type-test can't be byte-identical in
+                    // the transpiled leg (LADDER-forced: reject rather than silently diverge).
                     self.err_coded(
                         *span,
-                        format!("type pattern `{type_name}` must name a class or interface"),
-                        "E-MATCH-TYPE",
-                        Some(hint.into()),
+                        format!("type pattern `{type_name}` can't be runtime-discriminated — it erases to a PHP string; only int/float/string/bool/null and classes/interfaces can be type-tested"),
+                        "E-MATCH-TYPE-ERASED",
+                        Some("match its wrapping form, or use a class/interface".into()),
                     );
-                }
-                // Bind the narrowed value as the named type. A generic class carries erased (poison)
-                // arguments — `instanceof` keeps no type arguments at runtime, so its generic members
-                // read as `mixed`, mirroring the if/instanceof smart-cast (M-RT generics-all).
-                if let Some(name) = binding {
-                    let arity = self
-                        .classes
-                        .get(type_name)
-                        .map_or(0, |c| c.type_params.len());
-                    let args = vec![Ty::Error; arity];
-                    self.declare(name, Ty::Named(type_name.clone(), args), *span);
+                } else {
+                    // M-RT S4 type pattern: the type must be a class or interface (the runtime test is
+                    // `instanceof`, which is class/interface-only — an enum value is never an instance).
+                    let known = self.classes.contains_key(type_name)
+                        || self.interfaces.contains_key(type_name);
+                    if !known && !matches!(scrut, Ty::Error) {
+                        let hint = if self.enums.contains_key(type_name) {
+                            "an enum is a closed sum — match its variants directly, not via a type pattern"
+                        } else {
+                            "a type pattern matches a class or interface (as in a union scrutinee)"
+                        };
+                        self.err_coded(
+                            *span,
+                            format!("type pattern `{type_name}` must name a class or interface"),
+                            "E-MATCH-TYPE",
+                            Some(hint.into()),
+                        );
+                    }
+                    // Bind the narrowed value as the named type. A generic class carries erased (poison)
+                    // arguments — `instanceof` keeps no type arguments at runtime, so its generic members
+                    // read as `mixed`, mirroring the if/instanceof smart-cast (M-RT generics-all).
+                    if let Some(name) = binding {
+                        let arity = self
+                            .classes
+                            .get(type_name)
+                            .map_or(0, |c| c.type_params.len());
+                        let args = vec![Ty::Error; arity];
+                        self.declare(name, Ty::Named(type_name.clone(), args), *span);
+                    }
                 }
             }
             Pattern::Struct {
@@ -451,4 +492,40 @@ fn collect_binds(pat: &crate::ast::Pattern, acc: &mut Vec<String>) {
         }
         _ => {}
     }
+}
+
+/// Wave A: the five PHP-`is_*`-discriminable primitives usable as a `match` type-pattern head
+/// (`int i`, `string s`, …). Returns the bound `Ty`. `decimal`/`bytes`/`html`/`attr` are excluded —
+/// they erase to a PHP `string`, so a runtime type-test can't be byte-identical in the transpiled leg.
+fn prim_pat_ty(name: &str) -> Option<Ty> {
+    match name {
+        "int" => Some(Ty::Int),
+        "float" => Some(Ty::Float),
+        "string" => Some(Ty::String),
+        "bool" => Some(Ty::Bool),
+        "null" => Some(Ty::Null),
+        _ => None,
+    }
+}
+
+/// The discriminable primitive's name, for exhaustiveness coverage of a union member (inverse of
+/// [`prim_pat_ty`]). A non-discriminable `Ty` returns `None` (still needs a `_`).
+fn prim_ty_name(ty: &Ty) -> Option<&'static str> {
+    match ty {
+        Ty::Int => Some("int"),
+        Ty::Float => Some("float"),
+        Ty::String => Some("string"),
+        Ty::Bool => Some("bool"),
+        Ty::Null => Some("null"),
+        _ => None,
+    }
+}
+
+/// A checker type that erases to a PHP `string` at transpile — so PHP's `is_string()` can't tell it
+/// apart from a real `string`. A `string` type-pattern over a union holding one of these is ambiguous.
+fn erases_to_php_string(ty: &Ty) -> bool {
+    matches!(
+        ty,
+        Ty::String | Ty::Decimal | Ty::Bytes | Ty::Html | Ty::Attr
+    )
 }

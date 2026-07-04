@@ -952,11 +952,21 @@ fn match_pattern(
         Pattern::Type {
             type_name, binding, ..
         } => {
-            let is = matches!(value, Value::Instance(inst)
-                if inst.class == *type_name
-                    || implements
-                        .get(&inst.class)
-                        .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
+            // Wave A: a primitive type-pattern (`int i`, `string s`) dispatches by `Value` variant —
+            // the oracle for the VM's `Op::IsInstance` primitive arm and PHP's `is_int()`/`is_float()`
+            // /`is_string()`/`is_bool()`/`is_null()`. Anything else is the class/interface `instanceof`.
+            let is = match type_name.as_str() {
+                "int" => matches!(value, Value::Int(_)),
+                "float" => matches!(value, Value::Float(_)),
+                "string" => matches!(value, Value::Str(_)),
+                "bool" => matches!(value, Value::Bool(_)),
+                "null" => matches!(value, Value::Null),
+                _ => matches!(value, Value::Instance(inst)
+                    if inst.class == *type_name
+                        || implements
+                            .get(&inst.class)
+                            .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name))),
+            };
             if is {
                 if let Some(name) = binding {
                     out.push((name.clone(), value.clone()));

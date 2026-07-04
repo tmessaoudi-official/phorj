@@ -508,9 +508,27 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-MATCH-TYPE — a `match` type pattern is invalid.\n\n\
              A type pattern (`Circle c => …`, M-RT S4) matches when the scrutinee is an instance of the\n\
              named **class or interface** — the same runtime test as `instanceof`. The name must be a\n\
-             declared class or interface (not an enum — match an enum's variants directly), and a type\n\
-             pattern is allowed only at the **top level** of a match arm, not nested inside a variant\n\
-             pattern. Use it to match over a union scrutinee.\n"
+             declared class or interface (not an enum — match an enum's variants directly), OR one of the\n\
+             discriminable primitives `int`/`float`/`string`/`bool`/`null` (Wave A union narrowing). A\n\
+             type pattern is allowed only at the **top level** of a match arm, not nested inside a\n\
+             variant pattern. Use it to match over a union scrutinee.\n"
+        }
+        "E-MATCH-TYPE-ERASED" => {
+            "E-MATCH-TYPE-ERASED — a type pattern names a type that erases to a PHP `string`.\n\n\
+             Union narrowing (Wave A) discriminates a match arm by runtime type, and the transpiled PHP\n\
+             leg does it with `is_int`/`is_float`/`is_string`/`is_bool`/`is_null`. `decimal`, `bytes`,\n\
+             `html` and `attr` all erase to a PHP `string` at transpile, so `is_string` can't tell them\n\
+             apart from a real `string` — a type pattern naming one could not be byte-identical across\n\
+             `run`/`runvm`/PHP. Only `int`/`float`/`string`/`bool`/`null` and classes/interfaces can be\n\
+             type-tested; match the value's wrapping form, or use a class/interface, instead.\n"
+        }
+        "E-MATCH-ERASED-AMBIG" => {
+            "E-MATCH-ERASED-AMBIG — a `string` type pattern is ambiguous in this union.\n\n\
+             A `string` arm transpiles to PHP `is_string(...)`. If the union scrutinee ALSO holds a type\n\
+             that erases to a PHP `string` (`decimal`/`bytes`/`html`/`attr`), then `is_string` would\n\
+             match those too — the interpreter and VM distinguish them by runtime representation, but the\n\
+             transpiled PHP cannot, breaking byte-identity. Split the union so the `string` arm is\n\
+             unambiguous, or add a `_` arm and test the other members another way.\n"
         }
         "E-MATCH-GUARD-EXHAUST" => {
             "E-MATCH-GUARD-EXHAUST — a shape is covered only by guarded arms.\n\n\

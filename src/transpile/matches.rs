@@ -310,17 +310,32 @@ impl Transpiler {
             Pattern::Type {
                 type_name, binding, ..
             } => {
-                let tref = self.type_pos_ref(type_name);
+                // Wave A: a PRIMITIVE type-pattern transpiles to PHP's `is_int`/`is_float`/`is_string`/
+                // `is_bool`/`is_null` — byte-identical to the interpreter/VM `Value`-variant dispatch.
+                // A class/interface pattern stays an `instanceof` (M-RT S4; S6c.3 decomposed-MI ancestor).
+                let (test, kind) = match type_name.as_str() {
+                    "int" => (format!("is_int({subj})"), OpKind::Int),
+                    "float" => (format!("is_float({subj})"), OpKind::Float),
+                    "string" => (format!("is_string({subj})"), OpKind::Str),
+                    "bool" => (format!("is_bool({subj})"), OpKind::Bool),
+                    "null" => (format!("is_null({subj})"), OpKind::Other),
+                    _ => {
+                        let tref = self.type_pos_ref(type_name);
+                        (
+                            format!("{subj} instanceof {tref}"),
+                            OpKind::Class(type_name.clone()),
+                        )
+                    }
+                };
                 let binds = match binding {
                     Some(name) => {
-                        // T6b: the narrowed binding is an instance of the tested type → field reads
-                        // on it resolve.
-                        self.declare_kind(name, OpKind::Class(type_name.clone()));
+                        // T6b: the narrowed binding is the tested type → member reads on it resolve.
+                        self.declare_kind(name, kind);
                         vec![(name.clone(), subj.to_string())]
                     }
                     None => Vec::new(),
                 };
-                (vec![format!("{subj} instanceof {tref}")], binds)
+                (vec![test], binds)
             }
             Pattern::Variant {
                 name: vname,

@@ -1,0 +1,45 @@
+// Union narrowing (Wave A) — discriminate a `T1 | T2 | …` value by **primitive type-pattern** in
+// `match`. A union value can hold any of its member types; a type-pattern arm (`int i`, `string s`)
+// tests the runtime type and binds the value at its *concrete* type inside the arm, so it is
+// immediately usable (`i` is an `int`, `s` is a `string`). This is "flexible AND strict": flexible
+// because one value carries several shapes, strict because the compiler REQUIRES every member of the
+// union to be covered — a missing arm is `non-exhaustive match: missing <type>`, not a runtime crash.
+//
+// The discriminable set is `int` / `float` / `string` / `bool` / `null` — the types PHP's
+// `is_int()`/`is_float()`/`is_string()`/`is_bool()`/`is_null()` can tell apart. The interpreter, the
+// bytecode VM, and the transpiled PHP all dispatch on the same runtime type, so the output is
+// byte-for-byte identical across `run`, `runvm`, and real PHP.
+package Main;
+
+import Core.Output;
+
+// One value, four possible shapes. `match` narrows each arm to its concrete type; leaving any arm
+// out is a compile error — the union is closed and the match must be total. Note `int` vs `float`
+// stays exact even for a whole-number float (`4.0` prints `float 4`, never `int 4`) — the runtime
+// type is preserved across run/runvm/PHP (`is_int` vs `is_float`).
+function render(int | float | string | bool value): string {
+    return match (value) {
+        int i => "int " + (i as string),
+        float f => "float " + (f as string),
+        string s => "string " + s,
+        bool b => "bool " + (b as string),
+    };
+}
+
+// Narrowing composes with everything else: here a `List` of a union type is iterated, and each
+// element is discriminated in turn.
+function main(): void {
+    Output.printLine(render(42));
+    Output.printLine(render(3.14));
+    Output.printLine(render(4.0)); // whole-number float stays `float`, not `int`
+    Output.printLine(render("hello"));
+    Output.printLine(render(true));
+
+    List<int | string> items = [1, "two", 3, "four"];
+    for (int | string item in items) {
+        Output.printLine(match (item) {
+            int n => "number " + (n as string),
+            string s => "word " + s,
+        });
+    }
+}

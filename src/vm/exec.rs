@@ -647,14 +647,27 @@ impl<'a> Vm<'a> {
                 // supertypes — parent classes AND interfaces, via the shared `instanceof_table` oracle
                 // (stored in `class_implements`). A non-instance is `false`, never a fault —
                 // byte-identical to the interpreter (`Expr::InstanceOf`) and PHP's `instanceof`.
+                //
+                // Wave A also reuses this op for PRIMITIVE `match` type-patterns (`int i`, `string s`):
+                // the compiler emits `IsInstance("int")`, dispatched here by `Value` variant →
+                // byte-identical to the interpreter's `match_pattern` and PHP's `is_int()`/`is_float()`
+                // /`is_string()`/`is_bool()`/`is_null()`. (The checker forbids primitive `instanceof`
+                // expressions, so a primitive `name` here only ever comes from a type-pattern.)
                 let v = self.pop();
-                let is = matches!(&v, Value::Instance(inst)
-                    if inst.class == name
-                        || self
-                            .program
-                            .class_implements
-                            .get(&inst.class)
-                            .is_some_and(|ifaces| ifaces.contains(&name)));
+                let is = match name.as_str() {
+                    "int" => matches!(v, Value::Int(_)),
+                    "float" => matches!(v, Value::Float(_)),
+                    "string" => matches!(v, Value::Str(_)),
+                    "bool" => matches!(v, Value::Bool(_)),
+                    "null" => matches!(v, Value::Null),
+                    _ => matches!(&v, Value::Instance(inst)
+                        if inst.class == name
+                            || self
+                                .program
+                                .class_implements
+                                .get(&inst.class)
+                                .is_some_and(|ifaces| ifaces.contains(&name))),
+                };
                 self.stack.push(Value::Bool(is));
             }
 
