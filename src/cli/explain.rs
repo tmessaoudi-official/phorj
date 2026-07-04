@@ -89,12 +89,6 @@ pub fn explain_text(code: &str) -> Option<String> {
              their own function module, turn them into methods/static methods of the type, or mark them\n\
              `private`/`internal`. `main` files are exempt.\n"
         }
-        "E-PKG-TYPE" => {
-            "E-PKG-TYPE — a class/enum was declared in a library (non-`main`) package.\n\n\
-             M5 S2c namespaces *functions* across packages; cross-package types are a later slice.\n\
-             A library package may export functions only — move the `class`/`enum` to `package Main;`\n\
-             for now, or await the M5 type-namespacing follow-up.\n"
-        }
         "E-SHADOW-IMPORT" => {
             "E-SHADOW-IMPORT — a local binding shadows an imported module qualifier.\n\n\
              Everything is namespaced (\"nothing in the wind\"): after `import Core.Output;` the\n\
@@ -641,13 +635,6 @@ pub fn explain_text(code: &str) -> Option<String> {
              `f` has no overload returning that type — or `f` is not a return-type-overloaded free\n\
              function at all (the selector applies only to those; not to methods, parameter-overloaded\n\
              names, or ordinary functions). Use a return type one of the overloads actually declares.\n"
-        }
-        "E-OVERLOAD-SELECT-CONFLICT" => {
-            "E-OVERLOAD-SELECT-CONFLICT — a `<Type>` selector disagrees with the surrounding type.\n\n\
-             Both an inferable sink (a typed binding, return, etc.) and an explicit `<Type>` selector\n\
-             are present and demand different overloads (e.g. `string x = <int>parse(\"7\")`). Drop the\n\
-             selector, or make it agree with the expected type. (Raised once the inferable sinks land;\n\
-             until then the selector is always the sole context.)\n"
         }
         "E-OVERLOAD-DUPLICATE" => {
             "E-OVERLOAD-DUPLICATE — two overloads have identical parameter types.\n\n\

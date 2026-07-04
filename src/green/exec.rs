@@ -34,7 +34,8 @@ pub enum Step {
 /// own call stack (a `recv` on an empty channel / a `join` on an incomplete task / an explicit yield).
 /// Feature-agnostic on purpose: the native executor implements it over a `corosensei` yielder
 /// (`green::coro`), while the type stays free of any coroutine-crate dependency so the engines that
-/// hold a `&dyn Suspend` compile on every target (the wasm build supplies a frame-swap implementor).
+/// hold a `&dyn Suspend` compile on every target — that dependency-isolation is the reason for the
+/// trait, not any wasm-specific frame-swap implementor.
 /// `suspend` takes the engine's output fragment accumulated since the last resume (see the module-level
 /// output-ordering note) and returns once the scheduler resumes this task.
 pub trait Suspend {
