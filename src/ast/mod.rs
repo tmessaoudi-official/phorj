@@ -785,6 +785,11 @@ pub struct ClassDecl {
     /// `abstract` (bodyless) methods that a concrete subclass must implement (`E-ABSTRACT-UNIMPL`).
     /// Abstract implies extensible, so the parser also sets `open` for an abstract class.
     pub is_abstract: bool,
+    /// `sealed class` (W5-3) — a closed hierarchy: its permitted subtypes are exactly those declared
+    /// in the whole program, so a `match` over this class type is exhaustive with no `_` (DEC-179).
+    /// `sealed` implies `open` (a sealed class exists to be subclassed), and is compile-time-only —
+    /// it erases in PHP output (rides the `open` = non-`final` emission; PHP has no sealed classes).
+    pub sealed: bool,
     /// Explicit multi-inheritance resolution clauses (M-RT S6b), declared in the class body before/among
     /// members: `use P.m` (pick `P`'s `m` for the colliding name), `rename P.m as n` (rebind `P`'s `m`
     /// under a fresh name `n`, removing it from the collision), `exclude P.m` (drop `P`'s `m`). empty
@@ -873,6 +878,10 @@ pub struct InterfaceDecl {
     pub extends: Vec<String>,
     /// Method signatures (each a `FunctionDecl` with an empty body).
     pub methods: Vec<FunctionDecl>,
+    /// `sealed interface` (W5-3) — a closed hierarchy: its permitted implementors are exactly those
+    /// declared in the whole program, so a `match` over this interface type is exhaustive with no `_`
+    /// (DEC-179). Compile-time-only — PHP emits a plain `interface` (no sealed concept).
+    pub sealed: bool,
     pub span: Span,
 }
 

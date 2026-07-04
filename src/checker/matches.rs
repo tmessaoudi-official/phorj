@@ -167,6 +167,22 @@ impl Checker {
                         }
                     }
                 }
+                // W5-3 sealed hierarchies (Wave A): a scrutinee of a `sealed` class/interface is a
+                // CLOSED set — its permitted subtypes are exactly the whole-program concrete classes
+                // that are subtypes of it. So `match` over the sealed base is exhaustive without a `_`,
+                // reusing the union coverage rule (each subtype covered by a type-pattern naming it or a
+                // covering supertype). `sealed` erases before any backend — the arms lower to the same
+                // `instanceof` chain a written-out union match does, so this is purely a compile-time
+                // exhaustiveness gate (byte-identity by construction).
+                Ty::Named(base, _) if self.sealed_types.contains(base) => {
+                    let members = self.sealed_permitted_subtypes(base);
+                    self.report_union_nonexhaustive(
+                        &members,
+                        &covered_types,
+                        &guarded_shapes,
+                        span,
+                    );
+                }
                 // Match-over-union exhaustiveness (M-RT S4 + Wave A): every nominal member must be
                 // covered by a type pattern naming it OR a covering supertype/interface; a
                 // DISCRIMINABLE primitive member (int/float/string/bool/null) is covered by a primitive
@@ -266,6 +282,27 @@ impl Checker {
                 format!("non-exhaustive match: missing {}", missing.join(", ")),
             );
         }
+    }
+
+    /// The permitted concrete subtypes of a `sealed` base (W5-3), each as a `Ty::Named` "member" a
+    /// `match` must cover — every non-abstract class that is a subtype of `base`, plus `base` itself
+    /// when it is a concrete (instantiable) class (a value can then be exactly the base). Whole-program:
+    /// the compilation IS the closed set. Coverage reuses the union rule (a type-pattern naming a
+    /// subtype, or a covering supertype, discharges it), so an intermediate `open` subtype covers its
+    /// own descendants and Java-style `permits`/`non-sealed` transitivity is unnecessary.
+    fn sealed_permitted_subtypes(&self, base: &str) -> Vec<Ty> {
+        let mut out: Vec<Ty> = self
+            .classes
+            .iter()
+            .filter(|(name, info)| {
+                !info.is_abstract && name.as_str() != base && self.is_subtype(name, base)
+            })
+            .map(|(name, _)| Ty::Named(name.clone(), Vec::new()))
+            .collect();
+        if self.classes.get(base).is_some_and(|info| !info.is_abstract) {
+            out.push(Ty::Named(base.to_string(), Vec::new()));
+        }
+        out
     }
 
     /// Check a pattern against the scrutinee type, declaring its bindings into the

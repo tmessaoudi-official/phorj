@@ -836,6 +836,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "const" => Const,
         "open" => Open,
         "abstract" => Abstract,
+        "sealed" => Sealed,
         "public" => Public,
         "private" => Private,
         "protected" => Protected,

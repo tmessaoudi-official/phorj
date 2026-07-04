@@ -149,6 +149,8 @@ impl Lifter {
             // non-final PHP class lifts to `open` to preserve extensibility. `abstract` implies open.
             open: c.is_abstract || !c.is_final,
             is_abstract: c.is_abstract,
+            // PHP has no sealed classes — a lifted class is never sealed.
+            sealed: false,
             resolutions: Vec::new(),
             uses: Vec::new(),
             members,

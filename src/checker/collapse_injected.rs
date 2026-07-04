@@ -287,6 +287,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 implements: c.implements.clone(),
                 open: c.open,
                 is_abstract: c.is_abstract,
+                sealed: c.sealed,
                 resolutions: c.resolutions.clone(),
                 uses: c.uses.clone(),
                 members: c.members.iter().map(rmember).collect(),
@@ -303,6 +304,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 name: i.name.clone(),
                 extends: i.extends.clone(),
                 methods: i.methods.iter().map(rfunc).collect(),
+                sealed: i.sealed,
                 span: i.span,
             }),
             Item::Enum(e) => Item::Enum(EnumDecl {

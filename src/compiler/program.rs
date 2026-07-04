@@ -39,6 +39,7 @@ pub(super) fn compile_program_with(
                 implements: Vec::new(),
                 open: false,
                 is_abstract: true,
+                sealed: false,
                 resolutions: Vec::new(),
                 uses: Vec::new(),
                 members: t.members.clone(),

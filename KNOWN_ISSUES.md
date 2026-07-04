@@ -318,6 +318,14 @@ not a panic:
   and the **whole-union optional** `(A|B)?` (`?` is postfix on a single member; `A | B?` parses as
   `A | (B?)`). Use `T?` for nullability. (Else/negative flow-narrowing now *does* narrow the else-branch
   — see the flow-narrowing row below.)
+- **Sealed hierarchies (W5-3) are whole-program.** A `sealed class`/`sealed interface`'s permitted
+  subtype set is *every* subtype declared in the compilation — sound because Phorj flat-merges all
+  files (first-party + vendored) into one program before checking (there is no separate compilation).
+  Consequence/boundary: sealing is a **compile-time** guarantee for the program being built; a sealed
+  base carries no runtime "closed" marker (it erases to a plain PHP interface/class), so a *different*
+  program that extended it would not be constrained — Phorj does not ship pre-compiled libraries, so
+  this is a design property, not a runtime hole. A `permits`-style explicit set and cross-package
+  sealing enforcement are deliberately out of scope (the implicit whole-program set is the ruled model).
 - **Flow-narrowing (M-RT pattern cluster S5.3) — what narrows and what doesn't.** Narrows: `if (x
   instanceof T)` / `if (x is T)` — **`is` and `instanceof` are full synonyms and both test/narrow
   primitives AND classes** (DEC-184: `x is int`, `s is Circle`) — (then → `T`, else → the remaining

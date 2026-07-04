@@ -1,0 +1,53 @@
+// Sealed hierarchies (Wave A, W5-3) — a `sealed` class or interface declares a CLOSED set of
+// subtypes: its permitted implementors/subclasses are exactly those declared in the program. So a
+// `match` over the sealed base type is checked for exhaustiveness *over the whole set* and needs no
+// `_` catch-all — add a new subtype and every match site correctly becomes non-exhaustive until you
+// handle it. This is the class-hierarchy counterpart of enum exhaustiveness and of the written-out
+// `A | B | C` union match (which already works); `sealed` lets the BASE type carry the closed set so
+// callers don't repeat the union.
+//
+// `sealed` is compile-time-only: it erases in PHP output (PHP has no sealed classes — the base emits
+// as a plain interface/class, the match as the same `instanceof` chain), so `run`, `runvm`, and the
+// transpiled PHP are byte-for-byte identical. A `sealed` class is extensible (it exists to be
+// subclassed) — the closed set is enforced by exhaustiveness, not by forbidding extension.
+package Main;
+
+import Core.Output;
+
+// A sealed interface: exactly Circle / Square / Triangle implement it, program-wide.
+sealed interface Shape {
+}
+
+class Circle implements Shape {
+    constructor(public int radius) {}
+}
+
+class Square implements Shape {
+    constructor(public int side) {}
+}
+
+class Triangle implements Shape {
+    constructor(public int base, public int height) {}
+}
+
+// Exhaustive over the sealed set — no `_`. Dropping any arm is a compile error naming the missing
+// subtype. Each arm narrows the value to its concrete type, so field access is direct.
+function area(Shape s): int {
+    return match (s) { Circle c => c.radius * c.radius, Square sq => sq.side * sq.side, Triangle t => t.base * t.height / 2 };
+}
+
+function name(Shape s): string {
+    return match (s) { Circle c => "circle", Square sq => "square", Triangle t => "triangle" };
+}
+
+function main(): void {
+    Circle c = new Circle(4);
+    Square sq = new Square(3);
+    Triangle t = new Triangle(6, 4);
+    Output.printLine(name(c) + " area = " + (area(c) as string));
+    // circle area = 16
+    Output.printLine(name(sq) + " area = " + (area(sq) as string));
+    // square area = 9
+    Output.printLine(name(t) + " area = " + (area(t) as string));
+}
+// triangle area = 12

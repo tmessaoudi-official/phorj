@@ -550,6 +550,7 @@ pub fn erase_generics(program: Program) -> Program {
                     implements: c.implements,
                     open: c.open,
                     is_abstract: c.is_abstract,
+                    sealed: c.sealed,
                     resolutions: c.resolutions,
                     uses: c.uses,
                     members,

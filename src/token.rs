@@ -82,6 +82,12 @@ pub enum TokenKind {
     /// concrete subclass must implement (`E-ABSTRACT-UNIMPL`); an abstract method is implicitly `open`.
     /// Abstract implies extensible (sets `open`).
     Abstract,
+    /// `sealed` on a class or interface (W5-3) — a **closed hierarchy**: its permitted subtypes are
+    /// exactly those declared in the whole program, so a `match` over the sealed base type is
+    /// exhaustiveness-checked with no `_` (DEC-179; model = XL-003, "none beyond a keyword"). A sealed
+    /// class is extensible (implies `open`); the modifier itself is compile-time-only (PHP has no
+    /// sealed classes — it erases, like a type alias).
+    Sealed,
     Public,
     Private,
     Protected,

@@ -239,6 +239,7 @@ impl Checker {
             implements: Vec::new(),
             open: false,
             is_abstract: true,
+            sealed: false,
             resolutions: Vec::new(),
             uses: Vec::new(),
             members: t.members.clone(),
@@ -269,6 +270,11 @@ impl Checker {
                 Some("rename one declaration — a class/enum/interface/trait/type name must be unique".into()),
             );
             return;
+        }
+        // W5-3: record a `sealed` interface so a `match` over it is exhaustive over its whole-program
+        // permitted implementors (checked in `check_match`; compile-time-only).
+        if i.sealed {
+            self.sealed_types.insert(i.name.clone());
         }
         // Register the name first so a method signature may reference the interface itself.
         self.interfaces.insert(
@@ -1546,6 +1552,11 @@ impl Checker {
                 Some("rename one declaration — a class/enum/interface/trait/type name must be unique".into()),
             );
             return;
+        }
+        // W5-3: record a `sealed` class so a `match` over it is exhaustive over its whole-program
+        // permitted subtypes (checked in `check_match`; compile-time-only).
+        if c.sealed {
+            self.sealed_types.insert(c.name.clone());
         }
         // Register the name + type parameters first so members can reference the class type itself
         // (including a self-referential `Box<T> next` field) with correct arity (M-RT generics-all).

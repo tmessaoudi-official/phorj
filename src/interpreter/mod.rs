@@ -546,6 +546,7 @@ impl<'c> Interp<'c> {
                             implements: Vec::new(),
                             open: false,
                             is_abstract: true,
+                            sealed: false,
                             resolutions: Vec::new(),
                             uses: Vec::new(),
                             members: t.members.clone(),

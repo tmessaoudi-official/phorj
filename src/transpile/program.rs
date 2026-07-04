@@ -1809,6 +1809,7 @@ impl Transpiler {
             implements: Vec::new(),
             open: true,
             is_abstract: false,
+            sealed: false,
             resolutions: Vec::new(),
             uses: Vec::new(),
             members: t.members.clone(),

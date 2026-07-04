@@ -45,17 +45,25 @@ impl Parser {
         // also marks the class `open`.
         let mut is_open = false;
         let mut is_abstract = false;
+        let mut is_sealed = false;
         loop {
             if self.eat(&TokenKind::Open) {
                 is_open = true;
             } else if self.eat(&TokenKind::Abstract) {
                 is_abstract = true;
+            } else if self.eat(&TokenKind::Sealed) {
+                is_sealed = true;
             } else {
                 break;
             }
         }
         if (is_open || is_abstract) && !self.check(&TokenKind::Class) {
             return Err(self.error("only a class can be declared `open` or `abstract`"));
+        }
+        // `sealed` (W5-3) applies to a class OR an interface — both name a closed hierarchy. A sealed
+        // class is extensible (its subclasses are the closed set), so it implies `open`.
+        if is_sealed && !self.check(&TokenKind::Class) && !self.check(&TokenKind::Interface) {
+            return Err(self.error("only a class or interface can be declared `sealed`"));
         }
         // Attributes are free-function-only this slice — at the item keyword, anything but `function`
         // with attributes present is rejected (`E-ATTR-TARGET`).
@@ -85,10 +93,13 @@ impl Parser {
             }
             TokenKind::Function => Item::Function(self.parse_function(Vec::new(), attrs, sp)?),
             TokenKind::Enum => Item::Enum(self.parse_enum(sp)?),
-            TokenKind::Class => {
-                Item::Class(self.parse_class(sp, is_open || is_abstract, is_abstract)?)
-            }
-            TokenKind::Interface => Item::Interface(self.parse_interface(sp)?),
+            TokenKind::Class => Item::Class(self.parse_class(
+                sp,
+                is_open || is_abstract || is_sealed,
+                is_abstract,
+                is_sealed,
+            )?),
+            TokenKind::Interface => Item::Interface(self.parse_interface(sp, is_sealed)?),
             TokenKind::Trait => {
                 if vis != Visibility::Public {
                     return Err(self.error("a trait cannot carry a visibility modifier yet"));
@@ -419,6 +430,7 @@ impl Parser {
             implements,
             open: false,
             is_abstract: false,
+            sealed: false,
             resolutions: Vec::new(),
             uses: Vec::new(),
             members,
@@ -555,6 +567,7 @@ impl Parser {
         sp: Span,
         open: bool,
         is_abstract: bool,
+        sealed: bool,
     ) -> Result<ClassDecl, Diagnostic> {
         self.expect(&TokenKind::Class, "'class'")?;
         let name = self.expect_ident("a class name")?;
@@ -618,6 +631,7 @@ impl Parser {
             implements,
             open,
             is_abstract,
+            sealed,
             resolutions,
             uses,
             members,
@@ -711,6 +725,7 @@ impl Parser {
     pub(super) fn parse_interface(
         &mut self,
         sp: Span,
+        sealed: bool,
     ) -> Result<crate::ast::InterfaceDecl, Diagnostic> {
         self.expect(&TokenKind::Interface, "'interface'")?;
         let name = self.expect_ident("an interface name")?;
@@ -767,6 +782,7 @@ impl Parser {
             name,
             extends,
             methods,
+            sealed,
             span: sp,
         })
     }

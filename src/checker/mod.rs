@@ -270,6 +270,10 @@ pub struct Checker {
     enums: HashMap<String, EnumInfo>,
     classes: HashMap<String, ClassInfo>,
     interfaces: HashMap<String, InterfaceInfo>,
+    /// `sealed` class/interface names (W5-3). A `match` over a scrutinee of a sealed type is
+    /// exhaustiveness-checked over its whole-program permitted subtypes (every concrete class that is
+    /// a subtype), so no `_` is needed. Compile-time-only — never reaches a backend.
+    sealed_types: std::collections::BTreeSet<String>,
     /// Trait names (M-RT S8). A trait's members are collected into [`Self::classes`] under its name
     /// (so member lookup while checking the trait body and merging into a using class reuse the class
     /// machinery), but a trait is **not a type**: this set lets `resolve_type`/`instanceof`/construction
@@ -500,6 +504,7 @@ impl Checker {
             enums: HashMap::new(),
             classes: HashMap::new(),
             interfaces,
+            sealed_types: std::collections::BTreeSet::new(),
             traits: std::collections::HashSet::new(),
             prebound: std::collections::HashSet::new(),
             class_implements: std::collections::BTreeMap::new(),

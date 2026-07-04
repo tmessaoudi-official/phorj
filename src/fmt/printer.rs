@@ -147,7 +147,8 @@ impl Printer<'_> {
     }
 
     fn interface(&mut self, i: &crate::ast::InterfaceDecl) -> Result<(), String> {
-        let mut header = format!("{}interface {}", vis_str(i.vis), i.name);
+        let sealed = if i.sealed { "sealed " } else { "" };
+        let mut header = format!("{}{sealed}interface {}", vis_str(i.vis), i.name);
         if !i.extends.is_empty() {
             header.push_str(&format!(" extends {}", i.extends.join(", ")));
         }
@@ -239,14 +240,18 @@ impl Printer<'_> {
         if c.foreign {
             return self.declare_class(c);
         }
-        // `abstract` implies `open`, so emit only the stronger keyword.
-        let prefix = if c.is_abstract {
-            "abstract "
-        } else if c.open {
-            "open "
-        } else {
-            ""
-        };
+        // `abstract` and `sealed` both imply `open`, so emit `open` only when it is the sole
+        // extensibility marker. `sealed` composes with `abstract` (`sealed abstract class`).
+        let mut prefix = String::new();
+        if c.sealed {
+            prefix.push_str("sealed ");
+        }
+        if c.is_abstract {
+            prefix.push_str("abstract ");
+        } else if c.open && !c.sealed {
+            prefix.push_str("open ");
+        }
+        let prefix = prefix.as_str();
         let generics = if c.type_params.is_empty() {
             String::new()
         } else {

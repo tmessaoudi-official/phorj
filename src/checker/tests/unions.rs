@@ -397,3 +397,90 @@ fn is_primitive_complement_not_narrowed_lockstep() {
         "{bad:?}"
     );
 }
+
+// ---- Wave A slice 4 (W5-3): sealed hierarchies — exhaustive match over a closed subtype set ----
+
+#[test]
+fn sealed_interface_match_exhaustive_ok() {
+    // A sealed interface's implementors are the closed set — matching all of them is exhaustive, no `_`.
+    let ok = errors_of(
+        "sealed interface Shape {} \
+             class Circle implements Shape { constructor(public int r) {} } \
+             class Square implements Shape { constructor(public int s) {} } \
+             function area(Shape sh) -> int { return match sh { Circle c => c.r, Square s => s.s }; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn sealed_abstract_class_match_exhaustive_ok() {
+    let ok = errors_of(
+        "sealed abstract class Node {} \
+             class Leaf extends Node { constructor(public int v) {} } \
+             class Branch extends Node { constructor(public int n) {} } \
+             function sum(Node nd) -> int { return match nd { Leaf l => l.v, Branch b => b.n }; } \
+             function main() -> void {}",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn sealed_match_missing_subtype_is_nonexhaustive() {
+    let bad = errors_of(
+        "sealed interface Shape {} \
+             class Circle implements Shape { constructor(public int r) {} } \
+             class Square implements Shape { constructor(public int s) {} } \
+             function area(Shape sh) -> int { return match sh { Circle c => c.r }; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter()
+            .any(|e| e.message.contains("non-exhaustive") && e.message.contains("Square")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn non_sealed_base_match_still_needs_wildcard() {
+    // Sealed is opt-in: a plain `open` base is NOT a closed hierarchy, so a match over it still needs
+    // a `_` (a subtype could be declared anywhere).
+    let bad = errors_of(
+        "open class Base {} class A extends Base {} class B extends Base {} \
+             function f(Base x) -> int { return match x { A a => 1, B b => 2 }; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter().any(|e| e.message.contains("non-exhaustive")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn sealed_concrete_class_base_is_itself_a_member() {
+    // A CONCRETE (instantiable) sealed class can hold a base-typed value, so matching only its
+    // subclasses is non-exhaustive — the base itself must be covered.
+    let bad = errors_of(
+        "sealed class Shape { constructor(public int tag) {} } \
+             class Circle extends Shape {} \
+             function f(Shape s) -> int { return match s { Circle c => 1 }; } \
+             function main() -> void {}",
+    );
+    assert!(
+        bad.iter()
+            .any(|e| e.message.contains("non-exhaustive") && e.message.contains("Shape")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn sealed_class_is_extensible() {
+    // A sealed class exists to be subclassed — extending it is NOT `E-EXTEND-FINAL` (sealed implies open).
+    let ok = errors_of(
+        "sealed abstract class Node {} class Leaf extends Node {} function main() -> void {}",
+    );
+    assert!(
+        !ok.iter().any(|e| e.code == Some("E-EXTEND-FINAL")),
+        "{ok:?}"
+    );
+}
