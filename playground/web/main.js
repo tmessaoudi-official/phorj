@@ -276,7 +276,19 @@ function paneText(result) {
   if (!result) return "";
   if (result.ok) return result.stdout ?? "";
   if (result.fault) return "⚠ runtime fault:\n" + result.fault;
-  if (result.error) return "✗ rejected:\n" + result.error;
+  if (result.error) {
+    // A JS "Maximum call stack size exceeded" isn't a Phorj error — it's the browser's small stack
+    // hitting deep recursion (the playground runs the interpreter directly, without the native
+    // 256MB deep-stack worker). Surface it honestly instead of as a scary "✗ rejected".
+    if (/Maximum call stack size exceeded/i.test(result.error)) {
+      return (
+        "ℹ this program recurses too deeply for the browser's small stack.\n" +
+        "It runs fine locally: `phg run <file>` (the native build uses a 256MB stack).\n" +
+        "(Not a Phorj error — a browser-runtime limit.)"
+      );
+    }
+    return "✗ rejected:\n" + result.error;
+  }
   return "(no output)";
 }
 

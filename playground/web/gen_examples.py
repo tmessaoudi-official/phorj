@@ -7,11 +7,14 @@ build logs everything dropped and why):
   * SINGLE-FILE only. `examples/project/**` and multi-file `conformance/**` are cross-package
     projects; the playground editor holds one source and has no multi-file loader, so they cannot
     be entries.
-  * WASM-RUNNABLE only. The browser has no filesystem / sockets / process / OS-RNG, so an example
-    importing `Core.File`, `Core.Http`, `Core.Process`, `Core.Random`, or `Core.Cryptography` would
-    fault at runtime and is skipped. (Every kept example is already proven to run on the interp + VM
-    by the differential gate; those are the only backends the WASM build compiles, so the syscall
-    import-scan is a sound WASM-safety proxy.)
+  * WASM-RUNNABLE only. The browser has no filesystem / sockets / process / OS-RNG, and the playground
+    crate builds phorj with `default-features = false` (so the `crypto` (argon2) and `regex` features
+    are OFF). An example importing `Core.File`, `Core.Http`, `Core.Process`, `Core.Random`,
+    `Core.Cryptography`, or `Core.Regex` would fault (unknown module / missing capability) and is skipped.
+    (Every kept example is already proven to run on the interp + VM by the differential gate; those are
+    the only backends the WASM build compiles, so the import-scan is a sound WASM-safety proxy.)
+    NOTE: `Core.Regex` is excluded only until the playground build enables the `regex` feature (a
+    next-session WASM rebuild) — the regex crate compiles to wasm32 fine; then `guide/regex.phg` returns.
   * `interop/` and `lift/` are skipped: they depend on external PHP / are lift inputs, not
     standalone runnable showcases.
 
@@ -28,10 +31,25 @@ HERE = pathlib.Path(__file__).resolve().parent
 EXAMPLES = HERE.parent.parent / "examples"
 OUT = HERE / "examples.js"
 
-# Categories skipped wholesale (external-PHP / non-standalone / multi-file).
-SKIP_DIRS = {"project", "interop", "lift"}
-# Modules whose capabilities the browser WASM sandbox cannot provide → the example would fault.
-SYSCALL_IMPORTS = ("Core.File", "Core.Http", "Core.Process", "Core.Random", "Core.Cryptography")
+# Categories skipped wholesale (external-PHP / non-standalone / multi-file / not-a-showcase).
+# `bench` holds profiling workloads for `phg benchmark`, not browser "try-me" examples — and
+# `bench/workload.phg` recurses to depth 1000, overflowing the browser JS stack (the playground runs
+# the interpreter directly, without the native 256MB `on_deep_stack` worker). Excluding the category
+# avoids that AND avoids perturbing the perf baseline (`bench/baseline.json`) by editing the workload.
+SKIP_DIRS = {"project", "interop", "lift", "bench"}
+# Modules unavailable in the browser WASM build → the example would fault. Two causes: (1) no
+# syscall/OS capability (File/Http/Process/Random); (2) a feature disabled by the playground's
+# `default-features = false` (Cryptography→argon2, Regex→regex crate). `Core.Cryptography` was
+# already correctly excluded; `Core.Regex` was MISSING (→ regex.phg leaked into the playground and
+# faulted with an unknown-module error). Added `Core.Regex` 2026-07-05.
+SYSCALL_IMPORTS = (
+    "Core.File",
+    "Core.Http",
+    "Core.Process",
+    "Core.Random",
+    "Core.Cryptography",
+    "Core.Regex",
+)
 
 DEFAULT = """package Main;
 import Core.Output;
