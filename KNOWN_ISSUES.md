@@ -1098,21 +1098,22 @@ Two maintenance notes for the next session:
   `examples/` + `selftest/` **in the same commit** — otherwise `every_repo_phg_formats_idempotently_and_safely`
   goes red. Run `phg format examples selftest` as the last step of any such change.
 
-## Native faults on raw-PHP-builtin paths — latent byte-identity divergences (B-2d audit, 2026-07-05)
+## Native fault text differs from PHP's error text on builtin paths — NOT a divergence (B-2d, 2026-07-05)
 
-Some user-facing native faults lower to a **raw PHP builtin** rather than a `__phorj_*` helper, so the
-Phorj fault text and PHP's own `ValueError`/`TypeError` **differ**. They are `FaultKind::Other`
-(text-compared) but **no example exercises the failing input**, so the differential is green today while
-the divergence is real. Confirmed (audit `docs/research/b2d-rich-error-audit.md`):
+Some user-facing native faults lower to a **raw PHP builtin**, so the Phorj fault text and PHP's own
+`ValueError`/`TypeError`/`Fatal` differ (`List.chunk(xs,0)`→`array_chunk` `ValueError`; `Hash.hkdf(len>8160)`
+→`hash_hkdf` `ValueError`; `Conversion.toString(closure)`→`(string)$v` `Fatal`). **This is NOT a
+byte-identity divergence.** The fault-parity rule is: where Phorj faults, PHP must also **fault** (not
+silently succeed) — the *text need not match* (`agree_err` compares run≡runvm only; faults aren't
+byte-identity examples, Invariant 9 / G-1.1; the `__phorj_clamp` comment states this). All three DO fault
+in PHP → **behaviourally consistent**. (An earlier B-2d note called these "latent divergences" using the
+wrong text-match lens — retracted; see `docs/research/b2d-rich-error-audit.md`.)
 
-- **`List.chunk(xs, 0)`** — run/runvm: `"List.chunk size must be at least 1"`; transpiled
-  `array_chunk($xs, 0)` throws a PHP `ValueError`. Different message.
-- **`Hash.hkdf(..., length > 8160)`** — run/runvm: `"Hash.hkdf: length must be 1..=8160"`; transpiled
-  `hash_hkdf(...)` throws a PHP `ValueError`. Different message.
-- **`Conversion.toString(<non-stringable>)`** (e.g. a closure) — type-checks clean, run/runvm:
-  `"Conversion.toString cannot convert function"`; transpiled `__phorj_str($v)` falls through to
-  `(string)$v` → **PHP Fatal `Object of class Closure could not be converted to string`**. The helper is
-  incomplete (no guard) — so even a `__phorj_*`-lowering fault can diverge; verify per-helper.
+**The REAL hazard (untested, pass NOT yet run):** a faulting native that lowers to a PHP builtin which
+**returns a value instead of throwing** on bad input → Phorj faults but PHP silently succeeds (what
+pre-helper `Math.clamp` was). The correct-lens audit — transpile each fault-trigger and check PHP's
+**exit status** (non-zero=consistent, zero=real divergence needing a `__phorj_*` guard helper) — has not
+been performed. Tracked for a fresh-context pass.
 
 These are **DEC-180 reclassification candidates** (normal-input failure → `Result`/`T?`, or a
 `__phorj_*` guard helper that throws the Phorj string so both legs agree, or match PHP's error). Each is

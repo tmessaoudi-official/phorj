@@ -2,8 +2,22 @@
 
 **Date:** 2026-07-05 · **Status:** audit complete; implementation split into (safe/done) + (deferred,
 design-heavy). Governs DEC-180 (reclassify faulting natives) + UA-1.8 (fault-message canonicalization,
-DEC B2-9). Read alongside `docs/INVARIANTS.md` §4 (fault bodies are parity-affecting) and
-`tests/differential.rs` (`FaultKind` classification).
+DEC B2-9). Read alongside `docs/INVARIANTS.md` §1 (backend parity — faults compared run≡runvm by
+`FaultKind`) and `tests/differential.rs`.
+
+> **⚠ CORRECTION (2026-07-05, same day) — the "3 latent byte-identity divergences" below were WRONG and
+> are RETRACTED.** This audit's first pass used the wrong divergence criterion: it flagged
+> `List.chunk`/`Hash.hkdf`/`Conversion.toString` because the Phorj fault text ≠ the transpiled PHP's
+> error text. **Text-mismatch is NOT the project's fault-parity criterion.** Verified from primary
+> sources: `agree_err` (differential.rs:148) compares **run vs runvm ONLY** (never PHP); `run_php`
+> asserts **exit-0** (non-faulting stdout only); faulting programs are not examples (Invariant 9); and
+> the `__phorj_clamp` comment (transpile/program.rs:846) states outright *"a fault is never a
+> byte-identity example… only that both legs fault"*. **The real rule: where Phorj faults, PHP must
+> also FAULT (not silently succeed with a value); the text need not match.** All three cases DO fault in
+> PHP (`array_chunk`/`hash_hkdf` → `ValueError`; `(string)$closure` → `Fatal`) → **behaviourally
+> consistent, not divergences.** DEC-195's guard-helpers are therefore **cosmetic (PHP-error wording),
+> not a correctness fix** — see the retraction + the correct-lens re-frame at the end. The verify-regime,
+> bucket taxonomy, and "skip signature guards / value guards are reachable" findings below still stand.
 
 ## How native faults work (the verify regime — settle before editing any string)
 
@@ -13,22 +27,27 @@ DEC B2-9). Read alongside `docs/INVARIANTS.md` §4 (fault bodies are parity-affe
   `FaultKind`, NOT raw text**. A fault whose message matches a named arm (`integer overflow`,
   `division by zero`, `list index out of range`, force-unwrap, …) classifies to that kind; **anything
   else falls to `FaultKind::Other(full_message)`**, which IS text-compared.
-- **Consequence (the trap):** for a `FaultKind`-classified fault, changing the Rust string is
-  parity-safe but the gate gives **zero signal** — and the PHP-helper string can silently diverge. For
-  an `Other`-classified fault, run/runvm/PHP text must match (multi-site) and the differential WILL
-  catch a mismatch **iff an example exercises it**. "Full oracle gate green" is necessary but **not
-  sufficient** per-string: a classified or unexercised string can be wrong and stay green.
-- A user-facing native fault's text lives in **two** places that must agree for byte-identity: the Rust
-  native AND the transpiled PHP. Which PHP side emits it depends on lowering (see below).
+- **What is compared:** `agree_err` compares **run vs runvm ONLY** by `FaultKind`. **The PHP leg is NOT
+  compared for faults at all** (`run_php` asserts exit-0; faulting programs are not examples). So a
+  native fault's *text* is held to run≡runvm parity (and, for `Other`-classified faults, that text
+  compare is exact — hence the W0-5 interpolation-line-skew care), but **against PHP only the
+  *behaviour* matters: PHP must also fault, text irrelevant.**
+- **Consequence:** "full oracle gate green" is necessary but **not sufficient** per-string for the
+  run≡runvm leg — a `FaultKind`-classified or unexercised string can drift between the two Rust backends
+  and stay green; attach a per-string `agree_err`/assertion. But there is **no PHP-text obligation**.
 
-## Two lowering regimes for a faulting native (the key distinction)
+## Two lowering regimes for a faulting native — behaviour only (text never compared to PHP)
 
-Traced by `phg transpile` on a fault-triggering program:
+Traced by `phg transpile` on a fault-triggering program. **NOTE (corrected):** the "Byte-identity"
+column below originally read this backwards. What actually matters is the last column — *does PHP
+fault?* If PHP faults (any error), the program is behaviourally consistent regardless of text; the only
+real hazard is a builtin that **returns a value instead of throwing** (Phorj-faults-but-PHP-succeeds).
 
 | Regime | PHP leg | Fault text source | Byte-identity | Example |
 |---|---|---|---|---|
 | **Phorj-helper** | `__phorj_*` helper emitted into the PHP | the helper `throw`s the **same** string the Rust native returns | clean two-site; add an `agree_err` case | `Math.clamp`→`__phorj_clamp`, `Random.intBetween`→`__phorj_rng_int_between` |
-| **Raw PHP builtin** | a bare PHP builtin call (`array_chunk`, `hash_hkdf`) | **PHP's own** `ValueError`/`TypeError` — a *different* string | **DIVERGENT** — Phorj fault text ≠ PHP error text | `List.chunk`→`array_chunk`, `Hash.hkdf`→`hash_hkdf` |
+| **Raw PHP builtin (that THROWS on bad input)** | a bare PHP builtin call (`array_chunk`, `hash_hkdf`) | **PHP's own** `ValueError`/`TypeError` — different text | **CONSISTENT** (both fault; text differs, which is permitted) | `List.chunk`→`array_chunk`, `Hash.hkdf`→`hash_hkdf` |
+| **Raw PHP builtin (that RETURNS a value on bad input)** | a bare builtin that does NOT throw | — | **DIVERGENT** — Phorj faults, PHP silently succeeds (the real hazard; pre-helper `Math.clamp` was this) | *unknown — the correct-lens pass below was NOT run* |
 
 ## Fault-string buckets
 
@@ -77,35 +96,42 @@ Traced by `phg transpile` on a fault-triggering program:
 ## DEC-180 reclassification — the genuine residual work (design-heavy → developer adjudication)
 
 Ruling (DEC-180): reclassify **normal-input** native failures to `Result`/`throws`/`T?`; faults stay
-uncatchable (bugs only). The audit finds the actionable set is the **raw-PHP-builtin regime** faults —
-where the Phorj fault text and PHP's builtin error already **diverge** and are (so far) **untested**, so
-they are simultaneously (i) latent byte-identity bugs and (ii) reclassification candidates:
+uncatchable (bugs only).
 
-**Confirmed latent divergences (recorded in KNOWN_ISSUES):**
-- `List.chunk(xs, 0)` — run/runvm: `"List.chunk size must be at least 1"`; PHP `array_chunk($xs, 0)`:
-  a `ValueError`. Different text, `Other`-classified, no example exercises size 0 → green today, wrong.
-- `Hash.hkdf(..., len>8160)` — run/runvm: `"Hash.hkdf: length must be 1..=8160"`; PHP `hash_hkdf(...)`:
-  a PHP `ValueError`. Same shape of divergence.
-- `Conversion.toString(<non-stringable>)` (e.g. a closure) — run/runvm: `"Conversion.toString cannot
-  convert function"`; PHP `__phorj_str($v)` falls through to `(string)$v` → **PHP Fatal: "Object of
-  class Closure could not be converted to string"**. Worst of the three (an uncatchable PHP Fatal, not a
-  `ValueError`). **Important caveat this exposes: helper-regime is NOT automatically clean** — `__phorj_str`
-  is an *incomplete* helper (no guard before `(string)$v`). "Lowers to a `__phorj_*` helper" must be
-  verified to actually throw the Phorj string, not assumed.
+### RETRACTED — the "3 latent divergences" were a wrong-lens error (see the top banner)
 
-**Recommended method for the next session (fresh context — parity-sensitive):**
-1. Enumerate every reachable user-facing native fault; `phg transpile` each fault-trigger and label the
-   lowering regime (helper vs raw builtin) — the table above is the template.
-2. **Helper-regime** faults: already byte-identical by construction; only need an `agree_err` case if
-   one is missing (verify per-string — the gate is text-blind for classified kinds).
-3. **Raw-builtin-regime** faults: each is a design question — reclassify to `Result`/`T?`, or route
-   through a `__phorj_*` guard helper that throws the Phorj string (making both legs agree), or accept
-   PHP's error and match it. **These are §15 forks — surface to the developer, do not self-rule** (they
-   change user-visible API / error surface). Ship each with an `agree_err` case.
-4. Never infer per-string correctness from aggregate green — attach a named test (agree_err or direct
-   string-assertion) to each changed string.
+The three cases below were originally listed as "latent byte-identity divergences" because the Phorj
+fault text ≠ PHP's error text. **That is not the parity criterion.** All three **fault in PHP** →
+behaviourally consistent → **not divergences**:
+- `List.chunk(xs, 0)` — PHP `array_chunk($xs, 0)` throws `ValueError`. Both fault. **Consistent.**
+- `Hash.hkdf(..., len>8160)` — PHP `hash_hkdf(...)` throws `ValueError`. Both fault. **Consistent.**
+- `Conversion.toString(<non-stringable>)` — PHP `(string)$closure` throws `Fatal`. Both fault.
+  **Consistent.** (The `__phorj_str`-is-incomplete observation is real but harmless: an incomplete
+  helper that still FAULTS is fine; it would only matter if it returned a value.)
 
-## What did NOT change in this audit
-Docs-only. No native, backend, or fault string was edited (the safe, correct action given the buckets
-above). The value is the reframing + the two latent-bug findings + the verify-regime that de-risks the
-real implementation.
+**DEC-195 (guard-helper for these 3) is therefore OPTIONAL COSMETIC**, not a correctness fix — it would
+only make PHP's error wording Phorj-flavoured, which the spine does not require and which matters little
+given transpile is a bridge, not a runtime. The Rust-side string canonicalization (`List.chunk:` colon)
+is harmless UA-1.8 tidy but is attached to no bug. **Developer must re-decide DEC-195 on this accurate
+basis** (it was adjudicated on the wrong premise).
+
+### The correct-lens residual — NOT YET RUN (the genuinely valuable pass)
+
+The real byte-identity hazard is **Phorj-faults-but-PHP-SUCCEEDS**: a faulting native that lowers to a
+PHP builtin which **returns a value instead of throwing** on the bad input (exactly what pre-helper
+`Math.clamp` was — `max/min` computed a wrong value silently). Those are true divergences and are
+**untested** (faults aren't in the example corpus). **This pass was NOT performed** — the first audit
+searched for text-mismatch (the wrong signal) and never enumerated the succeed-vs-fault behaviour.
+
+**Recommended method (fresh context):** for every reachable user-facing native fault, `phg transpile`
+the fault-trigger and **run the transpiled PHP** — check the PHP **exit status**: non-zero (faults) →
+consistent, ignore text; zero (succeeds) → **real divergence**, needs a `__phorj_*` guard helper (à la
+clamp) so PHP faults too. Only that guard-helper work is correctness; text-matching is not.
+
+## What this audit produced (docs-only)
+No native/backend/fault string was edited. Net value after the same-day correction: (1) the verify
+regime — `agree_err` is run≡runvm-only, PHP faults are behaviour-not-text; (2) the bucket taxonomy
+(signature guards skip / value guards reachable); (3) UA-1.8 is done for the live surface bar the small
+(a′) value-guard tidy; (4) **the correct divergence lens (succeed-vs-fault) and an explicit note that
+that pass has not been run.** The retracted "3 divergences" are a cautionary example of asserting a
+criterion (text-match) without checking what the harness actually enforces.
