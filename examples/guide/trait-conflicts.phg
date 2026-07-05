@@ -8,7 +8,7 @@
 // These lower to PHP `use P, Q { P::m insteadof Q; P::m as n; }` — the awkward `insteadof`/`as`
 // mechanics that Phorj hides behind a clearer surface. PHP is the floor: the resolution is verified
 // by the checker (an UNresolved collision is `E-MI-CONFLICT`), then emitted as valid PHP. Byte-identical
-// on run / runvm / real PHP.
+// on both backends and real PHP.
 package Main;
 
 import Core.Output;

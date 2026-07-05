@@ -9,7 +9,7 @@
 //   * `resp.serialize() -> bytes`          — render to the HTTP/1.1 wire form
 // The application is a single `handle(Request) -> Response`. Under `phg serve`, Core.Http injects a
 // `respond(bytes) -> bytes` bridge that calls your `handle` (a malformed request → 400), so a bare
-// handler is directly servable. run/runvm/real PHP are byte-identical.
+// handler is directly servable. both backends and real PHP are byte-identical.
 package Main;
 
 import Core.Output;

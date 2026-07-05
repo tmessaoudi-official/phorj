@@ -7,7 +7,7 @@
 // callers don't repeat the union.
 //
 // `sealed` is compile-time-only: it erases in PHP output (PHP has no sealed classes — the base emits
-// as a plain interface/class, the match as the same `instanceof` chain), so `run`, `runvm`, and the
+// as a plain interface/class, the match as the same `instanceof` chain), so both backends and the
 // transpiled PHP are byte-for-byte identical. A `sealed` class is extensible (it exists to be
 // subclassed) — the closed set is enforced by exhaustiveness, not by forbidding extension.
 package Main;

@@ -5,7 +5,7 @@ import Core.String;
 import Core.Math;
 
 // More text + numeric helpers (M4 stdlib breadth). Each maps to an idiomatic PHP builtin
-// (empty-string test, ltrim/rtrim, substr_count, % parity), byte-identical on run/runvm/PHP.
+// (empty-string test, ltrim/rtrim, substr_count, % parity), byte-identical on both backends and PHP.
 function main(): void {
     // String.isEmpty
     string blank = "";

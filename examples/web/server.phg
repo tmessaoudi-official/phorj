@@ -9,7 +9,7 @@ package Main;
 // transpiles to PHP and runs under `php -S` via the front-controller in server.php (see README).
 //
 // `main()` exercises `respond` on canned `b"…"` requests so this example stays byte-identity-gated
-// on `run` / `runvm` (and round-trips through real PHP) like every example — the socket path is the
+// on both backends (and round-trips through real PHP) like every example — the socket path is the
 // only thing NOT exercised here (that lives in tests/serve.rs, outside the byte-identity spine).
 import Core.Output;
 import Core.Bytes;

@@ -3,7 +3,7 @@
 // Assignment into a nested place — `grid[i][j] = e`, `table[key][i] = e` — not just a bare-local
 // `xs[i] = e`. Copy-on-write is applied root-to-leaf (`make_mut` at each level), so value semantics
 // are preserved: mutating a nested container mutates only this binding's copy. The root must be a
-// mutable local. Unblocks in-place 2-D algorithms (e.g. a matrix). Byte-identical run/runvm/real PHP.
+// mutable local. Unblocks in-place 2-D algorithms (e.g. a matrix). Byte-identical both backends and real PHP.
 package Main;
 
 import Core.Output;

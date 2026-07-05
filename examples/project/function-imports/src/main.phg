@@ -4,7 +4,7 @@ package Main;
 // either QUALIFIED after a whole-module import (`import App.Text;` → `Text.banner(…)`) or BARE after a
 // member import (`import App.Text.banner;` → `banner(…)`), optionally `as`-aliased — exactly the
 // two-mode discipline Core stdlib functions already follow (slice 1). The loader rewrites a bare
-// imported call to the same mangled FQN a qualified call produces, so run ≡ runvm ≡ PHP is inherited
+// imported call to the same mangled FQN a qualified call produces, so interpreter ≡ VM ≡ PHP is inherited
 // from the proven qualified cross-package path.
 import Core.Output.printLine;
 import App.Text.banner;

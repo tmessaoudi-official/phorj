@@ -5,7 +5,7 @@ package Main;
 // path; `Http.autoRouter()` collects them and **desugars at compile time** into the exact same
 // `new Router([], []).route(...).route(...)` chain — there is NO runtime reflection. The attribute is a
 // front-end-only surface: the checker validates it (`E-UNKNOWN-ATTRIBUTE`, `E-ROUTE-*`) and the
-// desugar consumes it before any backend, so `run` / `runvm` / real PHP are byte-identical and the
+// desugar consumes it before any backend, so both backends and real PHP are byte-identical and the
 // emitted PHP contains explicit registration (not PHP attributes).
 //
 // Note: a pattern with a `{param}` must be a RAW string (`r"/users/{id}"`) — a normal string would

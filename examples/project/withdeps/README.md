@@ -21,8 +21,8 @@ withdeps/
 ## Run it
 
 ```sh
-phg run   src/main.phg          # tree-walking interpreter
-phg runvm src/main.phg          # bytecode VM (byte-identical)
+phg run   src/main.phg          # bytecode VM
+phg run --tree-walker src/main.phg   # tree-walking interpreter (byte-identical)
 phg transpile src/main.phg | php
 ```
 
@@ -52,7 +52,7 @@ pinning the **resolved commit SHA** plus a content hash:
 phg vendor            # fetch [require] deps into vendor/ + (re)write phorj.lock
 ```
 
-`vendor/` and `phorj.lock` are then **committed**. At run time `phg run`/`runvm`/`transpile`
+`vendor/` and `phorj.lock` are then **committed**. At run time `phg run`/`transpile`
 resolve dependencies **entirely offline** from the committed `vendor/` — they never fetch. This is
 what keeps every example (this one included) byte-identical on both backends and reproducible with
 zero network, the same determinism rule that defers URL/network features to M6.

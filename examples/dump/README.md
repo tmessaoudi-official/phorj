@@ -62,12 +62,12 @@ Note three things:
   secure renderer caps depth, element count, and length, so a huge or hostile value can't flood the
   terminal.
 - The dump is on **stderr** only; it never touches stdout, so it can't change a program's observable
-  output (`run ≡ runvm ≡ PHP` is untouched).
+  output (`interpreter ≡ VM ≡ PHP` is untouched).
 
 ## Backends
 
-The rich named-local dump is produced by the **interpreter** (`phg run`), which holds live
-`name → value` scopes at fault time. `phg runvm` shares the identical **backtrace** but not the
-locals section: the bytecode VM stores slot-indexed locals with no name table (mirroring the
+The rich named-local dump is produced by the **interpreter** (`phg run --tree-walker`), which holds live
+`name → value` scopes at fault time. The bytecode VM (`phg run`) shares the identical **backtrace** but not the
+locals section: the VM stores slot-indexed locals with no name table (mirroring the
 interpreter-only debugger — the parity spine guarantees the backends agree, so a dump taken on the
-interpreter faithfully reflects a `runvm` fault too). For the value-dump, prefer `phg run`.
+interpreter faithfully reflects a VM fault too). For the value-dump, prefer `phg run --tree-walker`.

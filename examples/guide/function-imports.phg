@@ -9,7 +9,7 @@
 //
 // The member form is strict: importing one function does NOT enable a qualified sibling (`Output.print`
 // still needs `import Core.Output;`). A bare member-imported call rewrites to the proven qualified form
-// before any backend, so run/runvm and the transpiled PHP stay byte-identical — including when the call
+// before any backend, so both backends and the transpiled PHP stay byte-identical — including when the call
 // is an arithmetic operand (`abs(-4) + 1`). A group canonicalizes to one import per line (`phg format`).
 package Main;
 
@@ -28,7 +28,7 @@ function main(): void {
     var n = abs(-4) + 1;
     printLine("abs(-4) + 1 = {n}");
     // A NON-Math bare native as an arithmetic operand — this routes through the general reified-operand
-    // path, the decisive run≡runvm check that the qualified rewrite keeps the original call span.
+    // path, the decisive check that both backends agree the qualified rewrite keeps the original call span.
     var m = length("hi") + 1;
     printLine("length hi + 1 = {m}");
     // A bare member-imported native with an omitted trailing DEFAULT arg — the default is folded into

@@ -48,7 +48,7 @@ process, and the output isn't a fixed golden anyway (it depends on your machine)
 So programs that import `Core.Process` / `Core.Env` are **quarantined**: the differential skips them
 (detected via the `pure: bool` marker on each native), and they are tested instead under a *controlled*
 environment in [`tests/process.rs`](../../tests/process.rs), which sets the args/env it asserts on. The
-`run ≡ runvm` half still holds (both Rust backends share one process) — only the PHP oracle is opted out.
+the both-backends half still holds (both Rust backends share one process) — only the PHP oracle is opted out.
 
 ## Notes
 

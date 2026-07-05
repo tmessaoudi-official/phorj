@@ -5,7 +5,7 @@ package Main;
 // `Paint`) to the library's type; functions still use the Go-qualified form (`pkg.function()`). Built-ins
 // (`int`, `List`, …) stay import-free. Everything erases to fully-qualified PHP
 // (`new \Acme\Geometry\Rect(…)`, `instanceof \Acme\Geometry\Shape`), byte-identical on
-// run / runvm / real PHP.
+// both backends and real PHP.
 import Core.Output;
 import Acme.Geometry.Shape;
 import Acme.Geometry.Rect;

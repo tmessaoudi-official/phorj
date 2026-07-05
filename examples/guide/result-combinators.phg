@@ -1,6 +1,6 @@
 // `Core.Result<T, E>` combinators (Wave B B-2b, DEC-185) — the full ruled set, reached UFCS-style on the
 // compiler-injected `Result<T, E>` enum (`res.map(f)` resolves to `Result.map(res, f)`, the same
-// first-parameter dispatch as `list.map(f)`/`opt.map(f)`). Both `run`/`runvm` and the transpiled PHP are
+// first-parameter dispatch as `list.map(f)`/`opt.map(f)`). Both backends and the transpiled PHP are
 // byte-identical.
 //
 //   map(Result<T,E>, (T) -> U)          -> Result<U,E>   transform a Success; a Failure passes through

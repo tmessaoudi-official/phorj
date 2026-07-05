@@ -3,7 +3,7 @@
 // `parse(string) -> List<string>` splits one CSV record into fields (RFC-4180: comma separator,
 // double-quote enclosure, doubled `""` for a literal quote), mirroring PHP `str_getcsv` with the
 // escape mechanism disabled. `format(List<string>) -> string` is the inverse: it quotes a field iff
-// it contains a comma, a quote, or a line break, doubling internal quotes. run/runvm/real PHP are
+// it contains a comma, a quote, or a line break, doubling internal quotes. both backends and real PHP are
 // byte-identical.
 package Main;
 

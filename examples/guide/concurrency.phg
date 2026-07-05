@@ -9,8 +9,8 @@ import Core.Output;
 // As of the S4.3 cutover this is GENUINELY cooperative: a spawned call is deferred (it does NOT run at
 // `spawn`), tasks run on stackful coroutines driven by a single deterministic scheduler, and a `recv`
 // on an empty channel (or a `join` on an unfinished task) SUSPENDS the task until a `send` / completion
-// wakes it. Both backends — the tree-walking interpreter (`run`) and the bytecode VM (`runvm`) — drive
-// the SAME scheduler, so task interleaving is byte-identical (the run≡runvm spine).
+// wakes it. Both backends — the tree-walking interpreter and the bytecode VM — drive
+// the SAME scheduler, so task interleaving is byte-identical (the interpreter ≡ VM spine).
 //
 // Green threads have NO PHP target (PHP has no green threads), so this program is quarantined from the
 // PHP oracle — it runs on the Phorj interpreter and VM, byte-identically. The transpiler rejects it

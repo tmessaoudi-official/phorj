@@ -13,7 +13,7 @@ tool; this page documents that mechanism.)
 | `allocateChain(1000)` | **Heap + stack** — 1000 `Cell` instances simultaneously live (each recursion frame keeps its `c` alive across the call) on the `Rc`-shared object heap, 1000-deep recursion. |
 | `for (Cell c in […])` | **Object access** — a method call + field read per list element. |
 
-It runs byte-identically on `phg run` and `phg runvm` (gated by `tests/differential.rs`, which
+It runs byte-identically on both backends (gated by `tests/differential.rs`, which
 globs `examples/**/*.phg`).
 
 ## Running it
@@ -22,8 +22,8 @@ globs `examples/**/*.phg`).
 phg benchmark  examples/benchmark/workload.phg            # per-phase wall-clock + memory
 phg benchmark --vs-php examples/benchmark/workload.phg    # + a 3-way comparison against transpiled PHP
 phg disassemble examples/benchmark/workload.phg           # the bytecode the VM executes
-phg run    examples/benchmark/workload.phg                # tree-walking interpreter
-phg runvm  examples/benchmark/workload.phg                # bytecode VM
+phg run --tree-walker examples/benchmark/workload.phg    # tree-walking interpreter oracle
+phg run    examples/benchmark/workload.phg                # bytecode VM
 ```
 
 `benchmark` runs the whole program **101×** (median of 101, one untimed warmup), so it takes several
@@ -52,7 +52,7 @@ vs PHP — PHP 8.6.0-dev (cli)
 **Read it honestly:** this is the Rust bytecode VM vs the PHP interpreter on the *same algorithm* —
 informative, but apples-to-oranges (different runtimes). The PHP timing includes process spawn and
 depends on whether opcache/JIT is enabled in your `php.ini` (the figure above is a debug PHP build, so
-a tuned PHP would close the gap). The number to trust most is the in-process `run`-vs-`runvm` verdict.
+a tuned PHP would close the gap). The number to trust most is the in-process interpreter-vs-VM verdict.
 
 ## How execution time is collected
 

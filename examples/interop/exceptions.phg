@@ -1,6 +1,6 @@
 // M8.5 S3a interop — catching an exception thrown by foreign PHP code.
 //
-// PHP-target-only (like all of examples/interop/): `phg run`/`runvm` refuse it (E-FOREIGN-RUNTIME);
+// PHP-target-only (like all of examples/interop/): the Rust backends refuse it (E-FOREIGN-RUNTIME);
 // build with `phg transpile exceptions.phg > out.php && php out.php`.
 //
 // A foreign PHP exception is described by a `declare class … implements Error` — `Error` is Phorj's

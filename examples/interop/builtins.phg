@@ -1,7 +1,7 @@
 // M8.5 interop — calling existing PHP from Phorj via `declare` (the migration bridge).
 //
 // IMPORTANT: this program is **PHP-target-only**. It declares foreign PHP functions, which live only in
-// the PHP runtime — so `phg run` / `phg runvm` refuse it (`E-FOREIGN-RUNTIME`). Build it with
+// the PHP runtime — so the Rust backends refuse it (`E-FOREIGN-RUNTIME`). Build it with
 // `phg transpile builtins.phg > out.php && php out.php`. The `declare` lines describe existing PHP
 // functions so Phorj type-checks the calls; they emit no PHP (PHP already has them) and each call
 // transpiles to the global form `\name(...)`.

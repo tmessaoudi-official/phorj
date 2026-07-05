@@ -43,6 +43,11 @@
   can beat PHP-no-JIT, JIT is only needed to beat PHP+JIT (sharpens the roadmap).
 - [2026-07-05] AGREED: **Perf premise** — the CLI rename is a UX win (fast engine by default, kills the
   7s tree-walk trap); it does NOT beat PHP. Only the JIT/AOT backend beats PHP.
+- [2026-07-05] AGREED: **`phg benchmark` headline = VM vs release-php+JIT** (tree-walk perf is
+  meaningless — it's the oracle). FOLDED INTO the harness step (step 2): benchmark-vs-php + migrating
+  `perf-gate.sh` off the tree÷VM machine-independent anchor onto a php baseline are the same effort as
+  the per-feature harness. Keep the tree-walk leg reachable as `--vs-oracle` until the harness lands so
+  CI keeps its anchor meanwhile.
 
 ## Measured baseline (2026-07-05) — the honest truth
 Pure execution, self-timed (phg `Runtime.monotonicNanos`, php `hrtime`), best-of-5, startup excluded.
@@ -105,6 +110,17 @@ beating release-php.
   from the oracle, yet the coop driver runs these loops). **Curve is flattening → JIT/AOT pivot fork
   surfaced to developer** (the ratified endgame; no bytecode-VM micro-opt under `forbid(unsafe)`
   closes the 26× gap — that needs native codegen).
+
+## Step 1 (CLI reshape) — execution log
+- Code DONE: `phg run`/bare → VM; `phg run --tree-walker` → interpreter; `runvm` command removed
+  (main.rs dispatch + help + usage). Tests fixed (cli.rs, build.rs → `run`; the dump-locals test uses
+  `--tree-walker` since the rich locals dump is an interpreter-only feature). Docs/examples sweep
+  (`phg runvm` → `phg run`, parity prose de-named, README command table) via subagent.
+- FOLLOW-UP COMMIT (approved 2026-07-05): **coherent internal rename** — the reshape made the backend
+  fn names lie (`cmd_run`=tree-walk while `phg run`=VM). Rename the PAIR: VM → `cmd_run`/`run_program`;
+  tree-walker → `cmd_treewalk`/`treewalk_program`. ~30-file mechanical, zero behavior change, its own
+  commit after the reshape lands green. (Can't just drop "runvm" — `cmd_run` is taken by the
+  tree-walker; must rename both.)
 
 ## Acceptance
 - Harness runs the full feature corpus, `runvm` vs release-php+JIT, ns/op, regression-gated.

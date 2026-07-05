@@ -7,7 +7,7 @@ package Main;
 // most specific, then a *constrained* param, then a bare `{name}` param — so `/users/{id:\d+}` wins
 // over `/users/{name}` for `/users/42`, while `/users/ada` (not digits) falls through to `{name}`.
 // Patterns are raw strings (`r"…"`) so `{...}` and `\d` are literal. Pure Phorj over Core.Regex; the
-// match is byte-identical on run / runvm / real PHP for ASCII patterns.
+// match is byte-identical on both backends and real PHP for ASCII patterns.
 import Core.Output;
 import Core.Bytes;
 import Core.Http.Request;

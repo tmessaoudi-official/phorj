@@ -6,7 +6,7 @@ package Main;
 // any `#[Route]` free functions) and compile-time-desugars each into a registration whose handler is
 // a `function(Request req) => ClassName.method(req)` lambda — so a class becomes a tidy namespace of route
 // handlers. Static is required (an instance controller has no routable receiver yet → a non-static
-// `#[Route]` method is `E-ROUTE-METHOD-STATIC`). No runtime reflection; byte-identical run/runvm/PHP.
+// `#[Route]` method is `E-ROUTE-METHOD-STATIC`). No runtime reflection; byte-identical across both backends and PHP.
 import Core.Output;
 import Core.Bytes;
 import Core.Http;

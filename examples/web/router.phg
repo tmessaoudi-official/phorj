@@ -16,7 +16,7 @@ package Main;
 //
 // There is NO socket here (that is W3's `phg serve`) and NO new language feature — `Router` is pure
 // Phorj over classes + lists + first-class functions, so the whole pipe is byte-identical on
-// `run` / `runvm` and round-trips through real PHP.
+// both backends and round-trips through real PHP.
 import Core.Output;
 import Core.Bytes;
 import Core.Http.Request;

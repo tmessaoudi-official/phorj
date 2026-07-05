@@ -7,7 +7,7 @@ import Core.Output;
 // specific named ancestor with `parent(A).m(…)`. Resolution is LEXICAL — relative to the class that
 // *writes* the call, not the receiver's runtime class — so it always reaches "the version above me".
 // Dispatch is non-virtual (it runs exactly that body, once); chaining further up is each method's own
-// choice. Transpiles to native PHP `parent::m(…)` / `A::m(…)`, byte-identical on run/runvm/real PHP.
+// choice. Transpiles to native PHP `parent::m(…)` / `A::m(…)`, byte-identical on both backends and real PHP.
 //
 // (Parent-constructor forwarding — `parent.constructor(…)` — is shown in `parent-constructor.phg`;
 // multiple inheritance is a follow-up.)

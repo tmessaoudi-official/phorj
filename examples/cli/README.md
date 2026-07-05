@@ -1,6 +1,6 @@
 # The `phorj` CLI — source forms, inspection, and diagnostics
 
-Beyond `run` / `runvm`, the CLI takes a program three ways, exposes the front-end stages, and ships a
+Beyond `run`, the CLI takes a program three ways, exposes the front-end stages, and ships a
 diagnostic dictionary. `demo.phg` is the program used below (and, like every example, it is in the
 byte-identity sweep). Run `phg <command> --help` for per-command help with worked examples.
 
@@ -19,7 +19,7 @@ n doubled = 12
 ```
 
 `run -- <file>` forces a literal path (for a filename that would otherwise look like a flag). The
-same source forms work for `runvm`, `check`, `parse`, `lex`, and `transpile`.
+same source forms work for `check`, `parse`, `lex`, and `transpile`.
 
 ## Inspecting the front end
 
@@ -92,7 +92,7 @@ package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }
 stack trace (most recent call first):
   → main               line 1
 
-$ phg runvm -e 'package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }'
+$ phg run --tree-walker -e 'package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }'
 runtime error at 1: division by zero
 package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }
 stack trace (most recent call first):
@@ -105,6 +105,6 @@ runtime error at 1: list index out of range
 Both backends fault on the same condition with the same message *body*, line, and exit code — the
 output is byte-identical (one documented exception: fault lines inside string interpolation, see
 [`KNOWN_ISSUES.md`](../../KNOWN_ISSUES.md)). The differential harness (`tests/differential.rs`) gates
-that `run` and `runvm` fault on exactly the same inputs — the same checked-arithmetic / bounds-checking
+that both backends fault on exactly the same inputs — the same checked-arithmetic / bounds-checking
 guarantee (integer overflow, division by zero, out-of-range indexing) that `guide/operators.phg`
 describes.

@@ -51,7 +51,7 @@ milestone; see "Module decomposition" below. The roles are unchanged.
 | `limits.rs` | recursion/nesting caps + numeric-width policy |
 | `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `benchmark` |
 | `serve.rs` | M6 HTTP serve runtime — `Transport` seam + `TcpTransport`; the determinism quarantine (outside `tests/differential.rs`, covered by `tests/serve.rs`) |
-| `cli/` · `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`tokenize`/`transpile`/`disassemble`/`benchmark`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
+| `cli/` · `main.rs` | command pipelines (`run`/`check`/`parse`/`tokenize`/`transpile`/`disassemble`/`benchmark`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
 
 ### Module decomposition (M-Decomp)
 

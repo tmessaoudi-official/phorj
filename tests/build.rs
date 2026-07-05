@@ -1,5 +1,5 @@
 //! M2.5: `phg build` produces a self-executing binary whose output is byte-identical to
-//! `phg runvm` on the same program (the parity spine extended to the distribution layer).
+//! `phg run` (the VM) on the same program (the parity spine extended to the distribution layer).
 //! Phase 1 = host; Phase 2 adds cross-target parity (toolchain-gated, graceful skip).
 use std::process::Command;
 
@@ -131,10 +131,7 @@ fn distributed_download_embed_run_matches_runvm() {
     let ran = Command::new(&out)
         .output()
         .expect("run downloaded-stub binary");
-    let runvm = Command::new(BIN)
-        .args(["runvm", src])
-        .output()
-        .expect("runvm");
+    let runvm = Command::new(BIN).args(["run", src]).output().expect("run");
     assert_eq!(
         ran.stdout, runvm.stdout,
         "downloaded-stub binary output != runvm"
@@ -162,10 +159,7 @@ fn cross_musl_binary_matches_runvm() {
         String::from_utf8_lossy(&built.stderr)
     );
     let ran = Command::new(&out).output().expect("run musl binary");
-    let runvm = Command::new(BIN)
-        .args(["runvm", src])
-        .output()
-        .expect("runvm");
+    let runvm = Command::new(BIN).args(["run", src]).output().expect("run");
     let _ = std::fs::remove_file(&out);
     assert_eq!(ran.stdout, runvm.stdout, "musl binary output != runvm");
 }
@@ -230,9 +224,9 @@ fn built_binary_matches_runvm() {
 
     let produced = Command::new(&out_bin).output().expect("run built binary");
     let expected = Command::new(BIN)
-        .args(["runvm", prog])
+        .args(["run", prog])
         .output()
-        .expect("spawn runvm");
+        .expect("spawn run");
     let _ = std::fs::remove_file(&out_bin);
 
     assert!(produced.status.success(), "built binary exited non-zero");

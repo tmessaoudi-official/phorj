@@ -4,7 +4,7 @@
 // parameter accepts the receiver. This is what lets stdlib calls chain fluently:
 // `xs.filter(p).map(g)` ≡ `List.map(List.filter(xs, p), g)`. UFCS is a type-directed front-end rewrite
 // (erased before any backend, like `type` aliases / generics / `html"…"`), so it adds no new `Op` and
-// stays byte-identical on run / runvm / real PHP.
+// stays byte-identical on both backends and real PHP.
 //
 // Integer arithmetic only (PHP's float `/` never enters); results are shown via `sum` / `length` /
 // indexing since PHP cannot `echo` a whole array.

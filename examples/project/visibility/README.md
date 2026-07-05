@@ -16,7 +16,7 @@ A reference from site **R** to declaration **D** is legal iff: **same file** →
 other file** → `D` must be `≥ internal`; **other package** → `D` must be `public`.
 
 Visibility is **loader-enforced and erased from the backend** — PHP has no file/package-private
-declarations, so the transpiler emits a normal `class`/`function`. The `run ≡ runvm ≡ real PHP`
+declarations, so the transpiler emits a normal `class`/`function`. The `interpreter ≡ VM ≡ real PHP`
 byte-identity spine is unaffected.
 
 ## This project
@@ -32,7 +32,7 @@ Run it (byte-identical on both backends and real PHP):
 
 ```
 phg run     src/main.phg     # area: 12
-phg runvm   src/main.phg     # area: 12
+phg run --tree-walker src/main.phg   # area: 12
 phg transpile src/main.phg | php   # area: 12
 ```
 

@@ -8,7 +8,7 @@
 // The discriminable set is `int` / `float` / `string` / `bool` / `null` — the types PHP's
 // `is_int()`/`is_float()`/`is_string()`/`is_bool()`/`is_null()` can tell apart. The interpreter, the
 // bytecode VM, and the transpiled PHP all dispatch on the same runtime type, so the output is
-// byte-for-byte identical across `run`, `runvm`, and real PHP.
+// byte-for-byte identical across both backends and real PHP.
 package Main;
 
 import Core.Output;
@@ -16,7 +16,7 @@ import Core.Output;
 // One value, four possible shapes. `match` narrows each arm to its concrete type; leaving any arm
 // out is a compile error — the union is closed and the match must be total. Note `int` vs `float`
 // stays exact even for a whole-number float (`4.0` prints `float 4`, never `int 4`) — the runtime
-// type is preserved across run/runvm/PHP (`is_int` vs `is_float`).
+// type is preserved across both backends and PHP (`is_int` vs `is_float`).
 function render(int | float | string | bool value): string {
     return match (value) {
         int i => "int " + (i as string),
@@ -28,7 +28,7 @@ function render(int | float | string | bool value): string {
 
 // A type-pattern binds the value at its *concrete* type, so the bound name is a first-class operand:
 // `n * n` is real integer arithmetic (not an opaque-union access). This holds on the bytecode VM too
-// — the narrowed primitive carries its numeric operand type — so `run`, `runvm`, and PHP agree.
+// — the narrowed primitive carries its numeric operand type — so both backends and PHP agree.
 function squareIfInt(int | string v): int {
     return match (v) { int n => n * n, string s => 0 };
 }

@@ -1,7 +1,7 @@
 // Entry — uses the ambient foreign symbols from `php.d.phg` directly (`strtoupper`, `strrev`) and a
 // library function that also relies on them (`Acme.Banner.rule`). Nothing is re-declared anywhere.
 //
-// PHP-target-only: `phg run`/`runvm` refuse it (E-FOREIGN-RUNTIME). Build it with
+// PHP-target-only: the Rust backends refuse it (E-FOREIGN-RUNTIME). Build it with
 //   phg transpile <project> > out.php && php out.php
 package Main;
 

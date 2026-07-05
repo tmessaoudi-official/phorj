@@ -9,7 +9,7 @@
 //
 // Injected ⇒ variants are reached QUALIFIED — `Result.Success(…)` / `Result.Failure(…)`, never bare
 // (`E-INJECTED-VARIANT-BARE`). It is generic, so `T`/`E` are inferred at the constructor, recovered at
-// every `match`, and erased before any backend — byte-identical `run` / `runvm` / real PHP.
+// every `match`, and erased before any backend — byte-identical on both backends and real PHP.
 package Main;
 
 import Core.Output;

@@ -1,9 +1,9 @@
 // Core.Random — a seeded pseudo-random generator.
 //
 // Byte-identity-gated: `Core.Random` is `pure: true` — the transpiler hand-rolls the *same* xorshift64
-// as the Rust kernel (`__phorj_rng_*`), so a seeded sequence is identical on `run`, `runvm`, and the
+// as the Rust kernel (`__phorj_rng_*`), so a seeded sequence is identical on both backends and the
 // transpiled PHP. (It used to be quarantined behind PHP's `mt_rand`; that divergence is gone.)
-// Reproducibility + `run ≡ runvm` are also covered in tests/random.rs.
+// Reproducibility + byte-identity across both backends are also covered in tests/random.rs.
 //
 // Run it:   phg run examples/random/dice.phg
 package Main;

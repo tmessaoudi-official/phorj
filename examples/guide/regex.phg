@@ -1,7 +1,7 @@
 // Core.Regex (Fork A) — a ReDoS-safe regular-expression engine. Backed by the `regex` crate (a
 // RE2-style finite automaton, linear-time / ReDoS-immune by construction), so patterns are compiled
 // once into a `Regex` value and reused. Its feature set is the *regular* subset PHP `preg_*` matches
-// identically, so run / runvm / real PHP all agree byte-for-byte; backreferences and lookaround are
+// identically, so both backends and real PHP all agree byte-for-byte; backreferences and lookaround are
 // rejected at `Regex.compile` (they would force backtracking — the ReDoS hazard the engine avoids).
 //
 // Patterns use RAW strings (`r"..."`): no `\` double-escaping, and — crucially — the `{n}` quantifier

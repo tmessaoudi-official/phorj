@@ -10,7 +10,7 @@
 // call also flows into an `empty` slot, so the two-type model stays ergonomic.
 //
 // Both are checker-only distinctions over the same runtime value, so this transpiles 1:1 and runs
-// byte-identically on `run`, `runvm`, and real PHP (`void` -> PHP `: void`; `empty` -> a plain
+// byte-identically on both backends and real PHP (`void` -> PHP `: void`; `empty` -> a plain
 // capturable value).
 package Main;
 

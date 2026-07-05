@@ -8,7 +8,7 @@
 // erasure, no widening to a dynamic `mixed`. The lambda parameter is annotated with the union and
 // `match`-narrowed inside, exactly like a top-level union parameter.
 //
-// Everything here is byte-for-byte identical across `run`, `runvm`, and transpiled PHP: the per-
+// Everything here is byte-for-byte identical across both backends and transpiled PHP: the per-
 // element discrimination is `is_int`/`is_string` and the `.first()` absence check is `=== null`.
 package Main;
 

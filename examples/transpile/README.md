@@ -10,7 +10,7 @@ php demo.php                           # run it under any PHP 8.x
 ```
 
 - `demo.phg` is a normal Phorj program — it also runs on both native backends
-  (`phg run demo.phg` / `phg runvm demo.phg`) and is in the byte-identity sweep.
+  (`phg run demo.phg`, `phg run --tree-walker demo.phg`) and is in the byte-identity sweep.
 - `demo.php` is the committed output of `phg transpile demo.phg`, kept in sync by a snapshot
   test (`tests/cli.rs::transpile_demo_matches_committed_php`) — regenerate it and re-commit if you
   change `demo.phg`.

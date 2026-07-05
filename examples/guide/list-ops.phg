@@ -5,7 +5,7 @@
 //   • `indexOf(xs, x) -> int?`            — index of the first equal element, else `null`.
 //   • `concat(a, b) -> List<T>`           — the two lists joined.
 //   • `first(xs)` / `last(xs) -> T?`      — head / tail, or `null` for an empty list.
-// Byte-identical on run / runvm / real PHP.
+// Byte-identical on both backends and real PHP.
 package Main;
 
 import Core.Output;

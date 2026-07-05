@@ -5,7 +5,7 @@
 // in those symbol positions. A value/param/field/method `var` maps to a legal PHP `$var` / `->var`.)
 //
 // Mutability is the separate, orthogonal `mutable` axis — `var` carries no mutability meaning.
-// Byte-identical on run / runvm / real PHP.
+// Byte-identical on both backends and real PHP.
 package Main;
 
 import Core.Output;

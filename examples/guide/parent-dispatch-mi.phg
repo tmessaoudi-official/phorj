@@ -7,8 +7,8 @@ import Core.Output;
 // A multiple-inheritance class has no single PHP parent, so `parent::m(…)` cannot name "the version
 // above me". Phorj resolves a parent-method call lexically to a specific ancestor and, in PHP, lowers
 // it through the trait decomposition: each ancestor is a `trait`, and the call becomes a `private`
-// trait alias (`use T { T::m as private __super_T_m; }` → `$this->__super_T_m(…)`). The run / runvm /
-// real-PHP backends all produce the same output.
+// trait alias (`use T { T::m as private __super_T_m; }` → `$this->__super_T_m(…)`). Both backends and
+// real PHP produce the same output.
 //
 // Use `parent(A).m(…)` to name which direct parent you mean (bare `parent.m(…)` is ambiguous when two
 // parents provide `m`). Inside a single-inheritance ancestor, plain `parent.m(…)` still reaches the

@@ -7,7 +7,7 @@ import Core.List;
 // Iteration protocol (B1) — `for (x in iterable)` walks any collection, not just a `List`. A `Set<T>`
 // iterates its insertion-ordered, deduplicated elements; a `string` iterates its characters (each a
 // 1-char string, ASCII domain); the same loop shape works over a `List<T>` and an integer range. All
-// are byte-identical on the interpreter (`run`), the VM (`runvm`), and transpiled PHP (a `Set` is a
+// are byte-identical on the interpreter and the VM, and transpiled PHP (a `Set` is a
 // deduped array; a string lowers to `str_split`, so PHP's `foreach` yields the same elements in order).
 // Count the vowels in a word by iterating its characters.
 function countVowels(string word): int {

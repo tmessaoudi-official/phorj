@@ -2,7 +2,7 @@
 //
 // Pure, deterministic, std-only digests over `bytes`, returned as lowercase hex `string`. Each is
 // byte-identical to a PHP core function (`hash("crc32b")` / `md5` / `sha1` / `hash("sha256")`), so
-// run/runvm/real PHP agree exactly. These are checksums/content digests — NOT password hashing
+// both backends and real PHP agree exactly. These are checksums/content digests — NOT password hashing
 // (that needs a salted, constant-time KDF, which is deliberately out of scope).
 package Main;
 

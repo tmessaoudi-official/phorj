@@ -7,7 +7,7 @@
 //   • `remove(m, k) -> Map<K, V>` — a new map without `k` (removing an absent key is a no-op).
 // Plain (non-numeric) string keys are used throughout: PHP coerces integer-like string and bool keys
 // to int keys, which would render differently from the Rust backends (KNOWN_ISSUES). Byte-identical
-// on run / runvm / real PHP.
+// on both backends and real PHP.
 package Main;
 
 import Core.Output;

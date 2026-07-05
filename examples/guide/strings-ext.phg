@@ -11,7 +11,7 @@
 //   * raw strings `r"…"` / `r#"…"#` — every byte literal, NO escapes and NO interpolation (for JSON,
 //     regex, templates); the `#`-run delimiter lets embedded `"` appear unescaped.
 //
-// All four are byte-identical on `run`, `runvm`, and real PHP.
+// All four are byte-identical on both backends and real PHP.
 package Main;
 
 import Core.Output;

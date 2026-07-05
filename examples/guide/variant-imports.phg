@@ -2,7 +2,7 @@
 // individually or in a path-first brace GROUP, with an optional `as` alias. Without an import, injected
 // variants must be written qualified (`Result.Success(…)`, `E-INJECTED-VARIANT-BARE` on bare use); an
 // import makes the bare (or aliased) name usable in BOTH construction and `match` patterns. It desugars to
-// the qualified form before any backend, so run/runvm and the transpiled PHP stay byte-identical.
+// the qualified form before any backend, so both backends and the transpiled PHP stay byte-identical.
 //
 //   import Core.Result.Success;                     // one variant, bare
 //   import Core.Result.Failure as Fail;             // aliased

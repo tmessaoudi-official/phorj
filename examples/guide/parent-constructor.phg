@@ -11,7 +11,7 @@ import Core.Output;
 // initializers, and its constructor body all apply to `this` before the subclass continues.
 //
 // `parent.constructor(…)` is a statement-only form, valid only inside a constructor body. It is lowered
-// (front-end) into the inlined parent-constructor effect, so run / runvm / real PHP stay byte-identical.
+// (front-end) into the inlined parent-constructor effect, so both backends and real PHP stay byte-identical.
 open class Animal {
     int legs = 4;
     mutable string note;

@@ -1,5 +1,5 @@
 // Core.Path (M4 stdlib breadth) — pure filesystem-*path* string manipulation. These functions never
-// touch the disk; they slice a path-as-string, so they are Tier 1 (byte-identical run / runvm / real
+// touch the disk; they slice a path-as-string, so they are Tier 1 (byte-identical both backends and real
 // PHP). Each maps to a PHP core builtin (basename / dirname / pathinfo), separator `/`.
 //
 //   baseName(p)      the final component (trailing slash stripped)

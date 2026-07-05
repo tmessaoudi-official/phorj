@@ -9,7 +9,7 @@
 // in a larger expression like `g(f()?)`, or a `return f()?;` — is a compile error (`E-PROPAGATE-POSITION`):
 // bind the result to a local first. On the two Phorj backends `?` early-returns mid-expression
 // directly; transpiled to PHP it lowers to `$t = f(); if ($t instanceof Failure) return $t; $x = $t->value;`
-// — byte-identical output on `run`, `runvm`, and real PHP.
+// — byte-identical output on both backends and real PHP.
 package Main;
 
 import Core.Output;

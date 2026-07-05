@@ -7,7 +7,7 @@ import Core.Output;
 // `match ($subj) { … }`; a *variant/type* match in expression position lowers to a native
 // `match (true) { <cond> => <body>, … }`. Statement-position matches keep the `if/elseif` chain —
 // PHP `if` is a statement and `match` is an expression, so each position uses PHP's natural
-// construct. All forms stay byte-identical on run/runvm/PHP.
+// construct. All forms stay byte-identical on both backends and PHP.
 enum Color { Red, Green, Blue }
 
 enum Box { Small(int n), Big(int n) }

@@ -2,7 +2,7 @@
 //
 // Slice B-1 shipped the injected `Option<T>` TYPE; this adds its behaviour. Enums have no methods, so
 // the combinators are `Core.Option` module natives reached UFCS-style: `opt.map(f)` resolves to
-// `Option.map(opt, f)` (the same first-parameter dispatch as `list.map(f)`), and both `run`/`runvm`
+// `Option.map(opt, f)` (the same first-parameter dispatch as `list.map(f)`), and both backends
 // and the transpiled PHP go through one shared body. They erase to gated `__phorj_option_*` PHP helpers.
 //
 //   map(Option<T>, (T) -> U)         -> Option<U>   apply to a Some payload; None passes through

@@ -1,7 +1,7 @@
 // Core.List + Core.Map query natives (M-RT S7b) — the first *generic* stdlib natives. Their
 // signatures carry type parameters (`List.reverse(List<T>) -> List<T>`, `Map.keys(Map<K,V>) ->
 // List<K>`), inferred at the call site by the same unifier as a generic free function — no
-// monomorphization, the type params never reach a backend. Byte-identical on run / runvm / real PHP.
+// monomorphization, the type params never reach a backend. Byte-identical on both backends and real PHP.
 //
 // Map keys here are plain (non-numeric) strings: PHP arrays coerce integer-like string keys and
 // bools to int keys, so `Map.keys` over such a map would render differently under PHP (KNOWN_ISSUES);

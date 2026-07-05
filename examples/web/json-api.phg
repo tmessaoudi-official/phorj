@@ -3,7 +3,7 @@
 // This is the portable, socket-free core of a web handler (the same shape `phg serve` drives over a
 // real socket in `server.phg`): a Request carries a JSON request body as `bytes`, `handle` parses it
 // with `Core.Json`, computes a result, and returns a Response whose body is a JSON document. Pure
-// value-in / value-out, so it runs byte-identically on `run` / `runvm` / real PHP.
+// value-in / value-out, so it runs byte-identically on both backends and real PHP.
 //
 // Endpoint contract: POST a JSON array of integers, get back `{"count": N, "sum": S}`; a non-array
 // body is `400 {"error": "expected a JSON array"}`; malformed JSON is `400 {"error": "invalid JSON"}`.

@@ -4,14 +4,14 @@ These examples are **PHP-target-only**. They use `declare` to describe existing 
 so Phorj can type-check calls into them and transpile to idiomatic PHP that uses them directly. This is
 the **migration bridge** — adopt Phorj incrementally over a PHP codebase.
 
-Because foreign PHP only exists in the PHP runtime, the Rust backends (`phg run` / `phg runvm`) **refuse**
+Because foreign PHP only exists in the PHP runtime, the Rust backends **refuse**
 a program that uses `declare` (`E-FOREIGN-RUNTIME`). Run them by transpiling:
 
 ```sh
 phg transpile builtins.phg > out.php && php out.php
 ```
 
-The pure-Phorj byte-identity spine (`run ≡ runvm ≡ real PHP`) is untouched: these programs are
+The pure-Phorj byte-identity spine (`interpreter ≡ VM ≡ real PHP`) is untouched: these programs are
 quarantined from the `differential.rs` example gate and validated instead by `tests/interop.rs`
 (transpile → real PHP → golden output, the sibling `.out`).
 
@@ -34,5 +34,5 @@ quarantined from the `differential.rs` example gate and validated instead by `te
 - A `*.d.phg` file holds only `declare`s, carries **no `package`**, and is loaded ambiently into the
   project (the `.d.ts` analog) — its presence in the source tree is the opt-in, so foreign symbols are
   declared once and shared by every file. See `withdecls/`.
-- `check` type-checks calls against the declared signatures; `transpile` emits the PHP; `run`/`runvm`
+- `check` type-checks calls against the declared signatures; `transpile` emits the PHP; the Rust backends
   refuse (foreign code needs the PHP runtime).

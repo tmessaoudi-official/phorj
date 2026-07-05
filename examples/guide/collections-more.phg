@@ -6,7 +6,7 @@ import Core.Map;
 import Core.Set;
 
 // More collection queries (M4 stdlib breadth) — emptiness tests, flattening, predicate counting, and a
-// set→list conversion. Each maps to an idiomatic PHP array operation, byte-identical on run/runvm/PHP.
+// set→list conversion. Each maps to an idiomatic PHP array operation, byte-identical on both backends and PHP.
 function main(): void {
     // List.isEmpty
     Output.printLine("empty []   = {List.isEmpty([])}");

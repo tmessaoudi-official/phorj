@@ -7,7 +7,7 @@ import Core.Output;
 // signature, differing only in RETURN type. PHP has no overloading and cannot see the caller's
 // expected type at runtime, so a return-overload is resolved entirely at COMPILE TIME and each member
 // is emitted as a distinct PHP method (`read__ret_int` / `read__ret_bool` / …). No new bytecode op —
-// `run`, `runvm`, and the transpiled PHP stay byte-identical.
+// both backends and the transpiled PHP stay byte-identical.
 //
 // Unlike free functions (which can resolve a bare call from a typed binding or `return`), a method
 // return-overload is resolved ONLY by an explicit `<Type>` selector this slice (C1 scope): an

@@ -11,7 +11,7 @@
 // no implicit coercion (combinators + `T?`↔`Option` conversions land in the next slice). It is a generic
 // injected enum, so `T` is inferred at the constructor
 // (`Option.Some(7)` ⇒ `Option<int>`), recovered at every `match`, and erased before any backend runs —
-// byte-for-byte identical output on `run`, `runvm`, and real PHP.
+// byte-for-byte identical output on both backends and real PHP.
 package Main;
 
 import Core.Output;

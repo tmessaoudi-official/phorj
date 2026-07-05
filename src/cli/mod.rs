@@ -38,15 +38,14 @@ pub fn help_text() -> String {
          usage:\n  \
          phg <command> <source> [options]\n\n\
          commands:\n  \
-         run        interpret the program (tree-walking)\n  \
-         runvm      run the program on the bytecode VM\n  \
+         run        run the program on the bytecode VM (--tree-walker for the interpreter oracle)\n  \
          check      type-check only\n  \
          parse      print the AST\n  \
          tokenize   print the token stream\n  \
          transpile  emit PHP\n  \
          lift       PHP -> a Phorj draft (review required; inverse of transpile)\n  \
          disassemble print the compiled bytecode\n  \
-         benchmark  benchmark run vs runvm (time + memory)\n  \
+         benchmark  benchmark the interpreter vs the VM (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
          vendor     fetch [require] git deps into an offline vendor/ (writes phorj.lock)\n  \
          serve      serve the program over HTTP (calls respond(bytes): bytes per request)\n  \
@@ -72,19 +71,15 @@ pub fn help_text() -> String {
 pub fn help_for(cmd: &str) -> String {
     let body = match cmd {
         "run" => {
-            "run — interpret the program with the tree-walking interpreter.\n\n\
-                  usage:\n  phg run <file | - | -e code> [--]\n\n\
+            "run — run the program on the bytecode VM (the runtime).\n\n\
+                  usage:\n  phg run <file | - | -e code> [--tree-walker] [--]\n\n\
+                  flags:\n  \
+                  --tree-walker   run on the tree-walking interpreter instead (the correctness\n                  \
+                  oracle — slow by design, byte-identical to the VM; for validation, not everyday use)\n\n\
                   examples:\n  \
                   phg run hello.phg\n  \
                   phg run -e 'package Main; import Core.Output; function main(): void { Output.printLine(\"hi\"); }'\n  \
                   echo 'package Main; import Core.Output; function main(): void { Output.printLine(\"hi\"); }' | phg run -\n"
-        }
-        "runvm" => {
-            "runvm — run the program on the bytecode VM (byte-identical to `run`).\n\n\
-                    usage:\n  phg runvm <file | - | -e code>\n\n\
-                    examples:\n  \
-                    phg runvm hello.phg\n  \
-                    phg runvm -e 'package Main; import Core.Output; function main(): void { Output.printLine(\"{2 + 2}\"); }'\n"
         }
         "check" => {
             "check — type-check only; print OK or the type errors, run nothing.\n\n\
@@ -131,7 +126,7 @@ pub fn help_for(cmd: &str) -> String {
                      phg disassemble -e 'package Main; function main(): void { int x = 1 + 2; }'\n"
         }
         "benchmark" => {
-            "benchmark — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\
+            "benchmark — benchmark the interpreter vs the VM (median wall-clock + memory).\n\n\
                     usage:\n  phg benchmark [--vs-php] <file | - | -e code>\n\n\
                     flags:\n  \
                     --vs-php   also transpile + median-time the PHP backend (3-way comparison;\n             \

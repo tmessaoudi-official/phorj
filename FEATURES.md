@@ -48,7 +48,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Cross-package types — unified `import Pkg.Path.Type [as A]` | ✅ | a library package exports a `class`/`enum`/`interface`; another imports it with the same `import` used for modules (the loader classifies module-vs-type by path; the old `import type` form was retired 2026-07-03 and now fails to parse); injected `Core` types follow the qualified-by-leaf discipline (`Http.Router`, enforced by `E-INJECTED-TYPE-BARE`); nominal subtyping, `instanceof`, enum `match` all cross-package; erases to namespaced PHP FQNs (M-RT) |
 | Union types `A \| B` + match-over-union | ✅ | `A \| B \| C` of classes/interfaces/primitives (`int \| string`); a value of any member flows in; reach a member via `instanceof` narrowing or **type patterns** `match s { Circle c => … }` (exhaustive over the member set, no new `Op` — reuses `Op::IsInstance`); transpiles to PHP 8.0 `A\|B` (M-RT S4) |
 | Intersection types `A & B` | ✅ | members are interfaces plus at most one concrete class (two distinct classes are uninhabited → `E-INTERSECT-MULTI-CLASS`); a value satisfying all members flows in, and every member's methods are in scope (member access searches all members); shared-method signatures must agree (no overloading yet → `E-INTERSECT-SIG`); no new `Op`; transpiles to PHP 8.1 `A&B` (M-RT S5) |
-| Method & function overloading (`foo(int)` / `foo(string)`) | ✅ | dynamic multiple dispatch on runtime argument types (also by arity); all overloads of a name share a return type (`E-OVERLOAD-RETURN`); lowers to one dispatching PHP method/function; byte-identical run≡runvm≡PHP (M-RT) |
+| Method & function overloading (`foo(int)` / `foo(string)`) | ✅ | dynamic multiple dispatch on runtime argument types (also by arity); all overloads of a name share a return type (`E-OVERLOAD-RETURN`); lowers to one dispatching PHP method/function; byte-identical interpreter ≡ VM ≡ PHP (M-RT) |
 | Inheritance: `extends`, `open`/`final`, override, `abstract`, multiple parents | ✅ | final-by-default (a class/method must be `open` to extend/override); single + **multiple** inheritance with explicit `use`/rename/exclude resolution (`E-MI-CONFLICT`); `abstract` classes & methods (`E-ABSTRACT-INSTANTIATE`/`-UNIMPL`); MI lowers to PHP interface + trait decomposition (M-RT S6) |
 | **Sealed hierarchies** `sealed class`/`sealed interface` | ✅ | a closed subtype set (permitted implementors/subclasses = those declared program-wide), so `match` over the sealed BASE type is exhaustiveness-checked with **no `_`** (W5-3, DEC-179); a sealed class is extensible (implies `open`); an abstract/interface base needs only its subtypes covered, a concrete sealed class is itself a member. Compile-time-only — **erases** in PHP (plain interface/class + the shared `instanceof` chain, byte-identical) |
 | Exceptions: `throws` / `throw` / `try`/`catch`/`finally` + `?`-propagation, `Result<T, E>` | ✅ | checked typed exceptions (a thrown type implements the built-in `Error` marker → PHP exception); `throws A \| B` declared sets, `?` propagates them, multi-`catch` dispatch by type; `Result<T, E>` value surface; faults/panics stay uncatchable (M-faults Slice 2) |
@@ -63,8 +63,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 
 | Capability | Status | Command |
 |---|---|---|
-| Tree-walking interpreter (reference semantics) | ✅ | `phg run` |
-| Bytecode compiler + stack VM (byte-identical) | ✅ | `phg runvm` |
+| Tree-walking interpreter (reference semantics) | ✅ | `phg run --tree-walker` |
+| Bytecode compiler + stack VM (byte-identical) | ✅ | `phg run` |
 | Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phg benchmark` |
 | Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phg disassemble` |
 | Phorj → PHP transpiler (runs under real PHP) | ✅ | `phg transpile` |

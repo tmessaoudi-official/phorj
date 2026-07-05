@@ -667,16 +667,16 @@ The single most important stdlib decision:
   `m[k]` (faults — "I know it's there") AND `Map.get` (`null` — "it might not be").
 - **`throws E` is the third tier** — a recoverable error carrying *information* (not just absence),
   enforced up the call chain. Never where `T?` suffices.
-- A fault message is a **compile-time string literal, byte-identical across `run`/`runvm`**
+- A fault message is a **compile-time string literal, byte-identical across both backends**
   (compared by `FaultKind` in the differential harness); the transpiled PHP throws a matching body.
 
 ### 4. Determinism tiers — what may enter `differential.rs`
 
-The byte-identical `run ≡ runvm ≡ real PHP` spine is sacred.
+The byte-identical `interpreter ≡ VM ≡ real PHP` spine is sacred.
 
 - **Tier 1 — pure & deterministic**: byte-identity-gated; MUST ship a runnable guide example.
 - **Tier 2 — deterministic but representation-sensitive** (float printing: irrationals, `NaN`/`inf`,
-  `1e20`): the `run ≡ runvm` spine is always identical (both Rust); only PHP's native formatter can
+  `1e20`): the `interpreter ≡ VM` spine is always identical (both Rust); only PHP's native formatter can
   differ. Never printed raw in an example — exercise through a predicate or formatter; documented in
   `KNOWN_ISSUES.md`.
 - **Tier 3 — impure/non-deterministic** (clock, external-state FS, network, randomness, env,
@@ -842,7 +842,7 @@ Anything outside the admitted domains requires revisiting this policy itself, no
 |---|---|---|---|---|
 | `argon2` (RustCrypto) 0.5.x | Argon2id password hashing | `Core.Cryptography` | `crypto` | OWASP #1 KDF; audited; emits standard PHC strings → interoperates with PHP `password_verify` |
 | `regex` (BurntSushi) 1.x | ReDoS-safe regex | `Core.Regex` | `regex` | RE2-style finite automaton, guaranteed linear-time, exhaustively fuzzed; its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; unsupported patterns rejected at `Regex.compile` |
-| `ctrlc` 3.x | OS signals (SIGINT/SIGTERM) | `phg serve` graceful shutdown | `signals` | Confines the unavoidable `unsafe`; serve is outside the byte-identity spine (quarantined), so this never touches `run≡runvm≡PHP` |
+| `ctrlc` 3.x | OS signals (SIGINT/SIGTERM) | `phg serve` graceful shutdown | `signals` | Confines the unavoidable `unsafe`; serve is outside the byte-identity spine (quarantined), so this never touches `interpreter ≡ VM ≡ PHP` |
 | `corosensei` 0.3.x | Stackful coroutines | `spawn`/channels (green threads) | `green` (non-wasm) | Miri-tested, by the hashbrown/parking_lot author; wasm32 has no native stack to switch (verified) — on wasm the interpreter delegates to the VM's frame-swap; green threads are quarantined from the PHP oracle |
 
 Transitive: argon2 → `password-hash`, `base64ct`, `rand_core`/`getrandom`; regex →
@@ -911,7 +911,7 @@ never an undefined-function fatal mid-run; (3) **transpile-time gate** — a `//
 header + `--php-target=baseline|full` where `baseline` (default/CI) rejects tier-3 use at transpile
 time. Also proposed: a denylist transpile-scan regression test (transpile every example, assert no
 `mb_*`/`ctype_*`/`gd_*`/`curl_*` in output) — the static analogue of the value oracle. Non-goals: a
-Cargo-feature matrix for Phorj's own build (YAGNI); vendoring PHP extensions; touching `run≡runvm`.
+Cargo-feature matrix for Phorj's own build (YAGNI); vendoring PHP extensions; touching `interpreter ≡ VM`.
 
 ## PHP parity and beyond gap audit
 
@@ -1197,7 +1197,7 @@ Test strategy (3 tiers, all still the pattern for this area): (1) offline synthe
 tests incl. adversarial truncation/overflow/wrong-endianness; (2) toolchain-gated real-binary
 round-trips (`cargo-zigbuild` → embed → `--dump-section` → decode == source), graceful skip when
 tooling is absent; (3) native execution where the host can run the artifact (musl on this box ⇒
-full byte-identity vs `runvm` across the gnu→musl libc boundary).
+full byte-identity vs the VM across the gnu→musl libc boundary).
 
 ## Phase 3a stub registry
 

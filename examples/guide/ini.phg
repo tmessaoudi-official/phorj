@@ -7,7 +7,7 @@
 // contain `=` (only the first splits); a later duplicate key overwrites (keeping its first position).
 //
 // Deliberately NOT PHP's `parse_ini_string`: values are ALWAYS strings — `on`/`yes`/`true`/`1` are
-// not coerced to bool/int. Phorj removes PHP's surprises. Byte-identical run/runvm/real PHP (the PHP
+// not coerced to bool/int. Phorj removes PHP's surprises. Byte-identical both backends and real PHP (the PHP
 // leg emits a matching hand-rolled parser, never the quirky `parse_ini_string`).
 package Main;
 

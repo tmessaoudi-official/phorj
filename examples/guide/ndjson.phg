@@ -4,7 +4,7 @@
 //   Core.Json.stringifyLines(List<Json>) -> string   // each value compact-encoded, joined by "\n"
 //
 // The de-facto format for log streams and record dumps: `jq`, `kubectl`, and most data pipelines emit
-// it. Empty/whitespace lines are skipped on parse. Byte-identical run/runvm/real PHP (each line goes
+// it. Empty/whitespace lines are skipped on parse. Byte-identical both backends and real PHP (each line goes
 // through the same `json_decode`/`json_encode` as `parse`/`stringify`).
 package Main;
 

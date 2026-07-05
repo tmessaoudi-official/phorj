@@ -1,7 +1,7 @@
 // Core.Encoding — base64 and hex codecs (native-stdlib wave).
 //
 // Pure, deterministic conversions between `bytes` and their text encodings. Each maps 1:1 to a PHP
-// core function (`base64_encode` / `base64_decode` / `bin2hex` / `hex2bin`), so run/runvm/real PHP
+// core function (`base64_encode` / `base64_decode` / `bin2hex` / `hex2bin`), so both backends and real PHP
 // are byte-identical. Encoders take `bytes` → `string`; decoders take `string` → `bytes?` (`null`
 // on malformed input — never a fault).
 package Main;

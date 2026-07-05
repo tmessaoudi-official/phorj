@@ -5,7 +5,7 @@
 // `new` buried inside a relocated lambda body survived to the backend and PANICKED the interpreter
 // and compiler ("Expr::New is unwrapped before …"). This is a NON-`Option` guard (plain classes), so
 // the fix stays protected independent of any stdlib type; the same fix also covers `f(new X()) as T`
-// (a cast argument flows through the same relocation). Byte-identical `run ≡ runvm ≡ real PHP`.
+// (a cast argument flows through the same relocation). Byte-identical `interpreter ≡ VM ≡ real PHP`.
 package Main;
 
 import Core.Output;

@@ -7,7 +7,7 @@ all transpiles to idiomatic namespaced PHP.
 
 Each subdirectory here is a self-contained project, discovered by its `phorj.toml`. Like every
 other example, each one runs byte-identically on both backends — `tests/differential.rs` finds every
-project root and asserts `run` ≡ `runvm` (and that it runs at all).
+project root and asserts both backends agree (and that it runs at all).
 
 ## `tempconv/` — a two-package Celsius→Fahrenheit converter
 
@@ -31,7 +31,7 @@ $ phg run examples/project/tempconv/src/main.phg
 freezing = 32F
 boiling = 212F
 
-$ phg runvm examples/project/tempconv/src/main.phg   # byte-identical
+$ phg run --tree-walker examples/project/tempconv/src/main.phg   # byte-identical (interpreter oracle)
 freezing = 32F
 boiling = 212F
 ```
@@ -79,7 +79,7 @@ can't autoload free functions, and Phorj is function-heavy).
 
 > The conversions use **exact integer arithmetic** (0→32, 100→212) on purpose: a non-whole result
 > would render differently under PHP's float `/` than under Phorj's integer `/`, so the example
-> sticks to values that are identical across all three. The `run` ≡ `runvm` spine is always identical
+> sticks to values that are identical across all three. The `interpreter ≡ VM` spine is always identical
 > regardless.
 
 ## Scope

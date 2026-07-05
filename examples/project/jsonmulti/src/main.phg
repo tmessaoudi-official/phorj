@@ -2,7 +2,7 @@
 // from a `package Main` entry that also imports a library package. The injected `Json` enum is a
 // `package Main` type, so in a namespaced program its variant classes live in `\Main\` (a
 // PHP-reserved name like `Object`/`String` is mangled to `Object_`/`String_`); the JSON runtime
-// helpers reference them there, so a multi-package program round-trips `run ≡ runvm ≡ real PHP`.
+// helpers reference them there, so a multi-package program round-trips interpreter ≡ VM ≡ real PHP.
 // Its variants are reached qualified (`Json.Object`) — the injected-enum "nothing in the wind" rule.
 package Main;
 

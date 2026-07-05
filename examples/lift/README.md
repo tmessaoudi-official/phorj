@@ -58,7 +58,7 @@ function main() -> void {
 ```
 
 Both print `Hello, Phorj! Counter starts at 41, next is 42.` The lifted `sample.phg` is part of the
-example suite, so it is byte-identity-gated on `run`, `runvm`, **and** real PHP like every other
+example suite, so it is byte-identity-gated on both backends **and** real PHP like every other
 example.
 
 ## What lift does (idiomatic, not a mirror)

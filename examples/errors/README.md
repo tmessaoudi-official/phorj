@@ -21,7 +21,7 @@ function main(): void {
 }
 ```
 
-Running it on **either backend** (`phg run` or `phg runvm`) prints a **byte-identical** trace to stderr
+Running it on **either backend** (`phg run` runs the VM; `phg run --tree-walker` the interpreter oracle) prints a **byte-identical** trace to stderr
 and exits non-zero:
 
 ```
@@ -32,8 +32,8 @@ stack trace (most recent call first):
     main               line 9
 ```
 
-The trace is the same on `run` and `runvm` by construction — the VM walks its real call frames and the
-tree-walking interpreter keeps a logical frame stack that mirrors them (enforced by a `run ≡ runvm`
+The trace is the same on both backends by construction — the VM walks its real call frames and the
+tree-walking interpreter keeps a logical frame stack that mirrors them (enforced by an `interpreter ≡ VM`
 trace-parity test). In a multi-file project, each frame shows its origin `file:line`; the caret line is
 drawn from that file's source.
 

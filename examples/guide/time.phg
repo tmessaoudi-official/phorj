@@ -1,7 +1,7 @@
 // Core.Time — instants and durations (M-TIME S1).
 //
 // `Instant` is a point in time (epoch-milliseconds, UTC); `Duration` is a span. All arithmetic is exact
-// integer math, so it is byte-identical on `run`/`runvm`/transpiled PHP. The wall clock is
+// integer math, so it is byte-identical on both backends and transpiled PHP. The wall clock is
 // non-deterministic, so we FREEZE it first — `Instant.now()` then returns the pinned value, making this
 // example reproducible (the `Core.Random` determinism pattern).
 package Main;

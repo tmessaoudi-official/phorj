@@ -1,10 +1,10 @@
 // Assertions — `assert(cond)` / `assert(cond, msg)` (M-DX S4).
 //
 // `assert` is an always-checked runtime guard: it evaluates its condition on EVERY run and, when the
-// condition is false, aborts with a clean `assertion failed` fault — byte-identical on `run`, `runvm`,
+// condition is false, aborts with a clean `assertion failed` fault — byte-identical on both backends
 // and the transpiled PHP (which lowers to a real `throw`, never PHP's `assert()`, so it cannot be
 // disabled by `zend.assertions`). Unlike C's `assert` / Rust's `debug_assert!`, it is NOT stripped in
-// a Release build: dropping the check would change control flow and break the `run ≡ runvm ≡ PHP`
+// a Release build: dropping the check would change control flow and break the `interpreter ≡ VM ≡ PHP`
 // spine, so a build profile may only make the *failure message* terser, never remove the check.
 //
 // On a *failing* assert, `phg run --dump-on-fault` (M-DX S3) prints the faulting frame's locals to

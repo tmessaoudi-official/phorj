@@ -49,7 +49,7 @@ function main(): void {
     // S2.1: a generic result whose return *echoes a parameter* (`identity<T>(T) -> T`, `firstOr` →
     // its fallback `T`) can be used **directly as an arithmetic operand** — the VM recovers the
     // erased result's operand type from the argument, so this specializes exactly as the interpreter
-    // evaluates it (previously `runvm` rejected `identity(7) + 1`).
+    // evaluates it (previously the VM rejected `identity(7) + 1`).
     int incd = identity(7) + 1;
     // 8
     int doubled = firstOr(xs, -1) * 2;

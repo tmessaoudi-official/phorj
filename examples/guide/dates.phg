@@ -2,7 +2,7 @@
 //
 // `Date` is a civil calendar date (UTC, day-resolution), stored as days since 1970-01-01. The calendar
 // math is Howard Hinnant's days-from-civil / civil-from-days, written in pure Phorj — so it runs on the
-// real backends and is byte-identical on `run`/`runvm`/transpiled PHP by construction.
+// real backends and is byte-identical on both backends and transpiled PHP by construction.
 package Main;
 
 import Core.Output;

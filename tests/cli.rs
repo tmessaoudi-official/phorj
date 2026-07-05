@@ -41,8 +41,10 @@ fn dump_on_fault_shows_redacted_locals_only_when_requested() {
     );
 
     // With the flag: the locals section appears, the Secret is redacted, and no plaintext leaks.
+    // The rich locals dump is an interpreter feature (the VM emits a backtrace without locals — see
+    // `dump_on_fault_vm_emits_backtrace_without_locals`), so this uses `--tree-walker`.
     let dumped = Command::new(BIN)
-        .args(["run", "--dump-on-fault", fixture])
+        .args(["run", "--tree-walker", "--dump-on-fault", fixture])
         .output()
         .expect("spawn phorj");
     let err = String::from_utf8_lossy(&dumped.stderr);
@@ -118,7 +120,7 @@ fn debug_repl_steps_inspects_and_continues() {
 #[test]
 fn dump_on_fault_vm_emits_backtrace_without_locals() {
     let out = Command::new(BIN)
-        .args(["runvm", "--dump-on-fault", "tests/fixtures/dump_fault.phg"])
+        .args(["run", "--dump-on-fault", "tests/fixtures/dump_fault.phg"])
         .output()
         .expect("spawn phorj");
     let err = String::from_utf8_lossy(&out.stderr);
@@ -371,7 +373,7 @@ import Core.Output;
 function main() -> void { Output.printLine("{1 + 1}"); }"#,
     );
     let out = Command::new(BIN)
-        .args(["runvm", path.to_str().unwrap()])
+        .args(["run", path.to_str().unwrap()])
         .output()
         .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
@@ -388,7 +390,7 @@ import Core.Output;
 function main() -> void { Output.printLine("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
-        .args(["runvm", path.to_str().unwrap()])
+        .args(["run", path.to_str().unwrap()])
         .output()
         .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
@@ -400,7 +402,6 @@ function main() -> void { Output.printLine("{1 / 0}"); }"#,
 fn per_command_help_prints_examples_exit_0() {
     for cmd in [
         "run",
-        "runvm",
         "check",
         "parse",
         "tokenize",

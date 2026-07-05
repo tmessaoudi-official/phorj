@@ -20,7 +20,7 @@ Phorj gives you two ways to benchmark:
 ## Why this is quarantined (and why that's correct)
 
 These natives read the live process, so their output changes every run — they are **non-deterministic**
-and marked `pure: false`. Phorj's correctness spine is that `run`, `runvm`, and the transpiled PHP
+and marked `pure: false`. Phorj's correctness spine is that both backends and the transpiled PHP
 produce **byte-identical** output; a benchmark reading can't satisfy that. So any program importing
 `Core.Runtime` is **excluded from the byte-identity example gate** (like `Core.Time` and
 `Core.Process`), and exercised instead in `tests/runtime.rs` under sanity assertions. Measurement is a

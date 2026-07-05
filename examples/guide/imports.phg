@@ -11,7 +11,7 @@ package Main;
 //
 // The loader classifies each import by what it resolves to (a module vs a type leaf) — you never
 // write `import type`. This example uses only deterministic values, so it is byte-identical across
-// run / runvm / transpiled PHP.
+// both backends and transpiled PHP.
 import Core.Output;
 import Core.String;
 import Core.Time.Instant;

@@ -2,7 +2,7 @@
 // declarations of one name, selected by the argument types at the call site. This is the static
 // companion to instance-method overloading; selection is runtime multiple dispatch, identical on the
 // interpreter and the VM, and the transpiled PHP emits the same `is_*`/`instanceof` dispatcher — so
-// `run`, `runvm`, and real PHP all pick the same body.
+// both backends and real PHP all pick the same body.
 //
 // (All overloads of one name must agree on `static`-ness — mixing a static and an instance overload
 // is E-OVERLOAD-STATIC-MIX, matching PHP, see the README.)

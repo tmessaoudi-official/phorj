@@ -8,7 +8,7 @@ value-inspection machinery is gated to the Dev profile, never a `Release` `phg b
 > under the differential sweep — this walkthrough is the surface.
 
 Why interpreter-only? The bytecode VM has no source-line/local-name table, so stepping it would need
-a debug-symbol subproject. The parity spine guarantees `run ≡ runvm ≡ real PHP`, so a debug session on
+a debug-symbol subproject. The parity spine guarantees `interpreter ≡ VM ≡ real PHP`, so a debug session on
 the interpreter **provably reflects** the other backends (the same rationale as the value-dump S3).
 
 ## Terminal REPL — `phg debug <file>`

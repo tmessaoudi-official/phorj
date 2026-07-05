@@ -16,7 +16,7 @@
 //
 // Using an intrinsic with no covering import is `E-UNIMPORTED`. This keeps "nothing in the wind": a
 // bare intrinsic call stays legible because an explicit member import names it. The qualified and
-// bare forms lower identically, so run / runvm / transpiled PHP stay byte-identical.
+// bare forms lower identically, so both backends and transpiled PHP stay byte-identical.
 package Main;
 
 import Core.Output;

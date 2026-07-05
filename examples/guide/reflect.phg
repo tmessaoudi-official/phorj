@@ -2,7 +2,7 @@
 //
 // `Reflection.kind(x) -> string` is the COARSE, erasure-stable type tag: exactly what the PHP backend
 // can still see after the Phorj→PHP transpiler erases the finer type distinctions. So it is
-// byte-identical across run / runvm / real PHP for every input:
+// byte-identical across both backends and real PHP for every input:
 //   * List / Map / Set all collapse to "array"   (PHP has one array type)
 //   * bytes collapses to "string"                 (bytes erases to a PHP string)
 //   * a class instance and an enum variant → "object"

@@ -125,8 +125,7 @@ phg <command> <source> [options]
 
 | Command | Does | On error |
 |---|---|---|
-| `run` | lex → parse → type-check → interpret (tree-walker) | exit 1 |
-| `runvm` | lex → parse → type-check → compile → stack VM | exit 1 |
+| `run` | lex → parse → type-check → compile → stack VM (`--tree-walker` selects the tree-walking interpreter oracle) | exit 1 |
 | `check` | type-check only, report success | exit 1 on type error |
 | `parse` | dump the AST | exit 1 on parse error |
 | `tokenize` | dump the token stream | exit 1 on lex error |
@@ -278,8 +277,8 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 `examples/realworld/` holds four real programs (a ledger, a shop, an RPG, a small library);
 `examples/guide/` holds focused tours of each feature.
 
-> **Byte-identity caveats (disclosed):** two exceptions to `run ≡ runvm ≡ transpiled PHP`. (1) *Concurrency*
-> (`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle — `run ≡ runvm` holds, the PHP leg is a
+> **Byte-identity caveats (disclosed):** two exceptions to `interpreter ≡ VM ≡ transpiled PHP`. (1) *Concurrency*
+> (`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle — both backends still agree, the PHP leg is a
 > hard error (`E-CONCURRENCY-NO-PHP`). (2) *Fault line numbers inside `"{…}"` interpolation* diverge on the
 > VM (reports line 1 vs. the true line) until **W5-13** — message, kind, and exit code still agree. See
 > [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) and [`docs/INVARIANTS.md`](docs/INVARIANTS.md).

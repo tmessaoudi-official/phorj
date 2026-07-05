@@ -2,7 +2,7 @@
 
 Phorj's web model is **`handle(Request) -> Response` at the value level** (PSR-7/15 shaped). The
 request/response types and the parse/route/serialize logic are **pure Phorj**, byte-identity-gated
-on `run` / `runvm` like every other example. Two thin, untranspiled runtimes carry those bytes over
+on both backends like every other example. Two thin, untranspiled runtimes carry those bytes over
 a real socket — one native, one PHP — and both call the *same* `handle`.
 
 | File | What it is |
@@ -45,7 +45,7 @@ function main(): void {
 - **Salt is internal.** You don't manage a salt (unlike a raw KDF) — Argon2id embeds it in the PHC
   string, and `verifyPassword` reads it back. Rotate cost params by re-hashing on next login.
 | `server.php` | **W4** — the PHP front-controller bridge: builds a `Request` from PHP superglobals, calls the transpiled `handle`, emits the `Response`. Runnable under `php -S`. |
-| `json-api.phg` | **`Core.Json` + the handler model** — a JSON endpoint: POST a JSON array of ints to get `{"count": N, "sum": S}`; a non-array body or malformed JSON returns `400` with a JSON `{"error": …}`. Bodies are JSON-in-`bytes`; `handle` parses with `Core.Json.parse`, branches with `match`, and answers with `Core.Json.stringify`. Pure value-in/value-out, byte-identical run/runvm/real PHP. |
+| `json-api.phg` | **`Core.Json` + the handler model** — a JSON endpoint: POST a JSON array of ints to get `{"count": N, "sum": S}`; a non-array body or malformed JSON returns `400` with a JSON `{"error": …}`. Bodies are JSON-in-`bytes`; `handle` parses with `Core.Json.parse`, branches with `match`, and answers with `Core.Json.stringify`. Pure value-in/value-out, byte-identical both backends and real PHP. |
 
 ## Run it natively — `phg serve`
 
@@ -89,7 +89,7 @@ non-`Send`, so a thread pool is impossible; true concurrency arrives with M6 gre
 this *unchanged* `handle(Request) -> Response` contract.
 
 `server.phg` also has a `main()` that exercises `respond` on canned `b"…"` requests, so the program
-stays byte-identical on `run` / `runvm` (and through real PHP) — the socket path is the only part
+stays byte-identical on both backends (and through real PHP) — the socket path is the only part
 not covered there. That path is covered by `tests/serve.rs`, deliberately **outside** the
 byte-identity spine (the determinism quarantine).
 
@@ -116,7 +116,7 @@ Hello phorj.dev
   serve` and `php -S` are interchangeable hosts for it; the byte path is identical because the
   Phorj backends are byte-identical and PHP round-trips the same logic.
 - **Determinism stays intact.** Everything testable (parse, route, serialize) is pure Phorj, gated
-  on `run ≡ runvm`. The non-deterministic socket is one quarantined module checked over an in-memory
+  on both backends. The non-deterministic socket is one quarantined module checked over an in-memory
   transport — it never touches `tests/differential.rs`.
 
 ## Deferred (Track A / later M6)

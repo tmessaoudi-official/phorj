@@ -10,7 +10,7 @@ import Core.Map;
 //   * Core.Map:  getOr(m, k, default) -> V  (safe access, never faults on a missing key),
 //                merge(a, b) -> Map<K,V>  (b's value wins a shared key, at a's position),
 //                map(m, (V)->W) -> Map<K,W> / filter(m, (V)->bool) -> Map<K,V>  (over VALUES, keys kept).
-// Pure + higher-order; byte-identical run / runvm / real PHP. No new Op/Value.
+// Pure + higher-order; byte-identical on both backends and real PHP. No new Op/Value.
 function main(): void {
     // --- Set ergonomics ---
     Set<int> base = Set.of([1, 2, 3]);

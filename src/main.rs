@@ -1,5 +1,6 @@
-//! Phorj CLI: `phg <run|runvm|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|explain>
-//! <file>`. Thin dispatcher over the testable `phorj::cli` module.
+//! Phorj CLI: `phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|explain>
+//! <file>`. Thin dispatcher over the testable `phorj::cli` module. `run` executes on the bytecode VM
+//! (the runtime); `run --tree-walker` selects the interpreter oracle.
 #![forbid(unsafe_code)]
 
 use std::process::exit;
@@ -7,7 +8,7 @@ use std::process::exit;
 use phorj::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|lsp|debug|test|format|explain> \
+    "usage: phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|lsp|debug|test|format|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -70,9 +71,9 @@ fn main() {
     }
     let cmd = match args.get(1).map(String::as_str) {
         Some(
-            c @ ("run" | "runvm" | "check" | "parse" | "tokenize" | "transpile" | "lift"
-            | "disassemble" | "benchmark" | "build" | "vendor" | "serve" | "lsp" | "test"
-            | "format" | "explain" | "debug"),
+            c @ ("run" | "check" | "parse" | "tokenize" | "transpile" | "lift" | "disassemble"
+            | "benchmark" | "build" | "vendor" | "serve" | "lsp" | "test" | "format"
+            | "explain" | "debug"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -412,12 +413,17 @@ fn main() {
     let bench_json = cmd == "benchmark" && args[2..].iter().any(|a| a == "--json");
     // `run`/`runvm --dump-on-fault` (M-DX S3): on an uncaught fault, dump the faulting frame's locals
     // to stderr. Dev-only + opt-in; the interpreter produces the rich dump (see `crate::dump`).
-    let dump_on_fault =
-        matches!(cmd, "run" | "runvm") && args[2..].iter().any(|a| a == "--dump-on-fault");
+    let dump_on_fault = cmd == "run" && args[2..].iter().any(|a| a == "--dump-on-fault");
+    // `phg run` executes on the bytecode VM by default (the runtime); `--tree-walker` selects the
+    // slow tree-walking interpreter — the correctness oracle, kept for validation, not everyday use.
+    let tree_walker = cmd == "run" && args[2..].iter().any(|a| a == "--tree-walker");
     let rest: Vec<String> = args[2..]
         .iter()
         .filter(|a| {
-            a.as_str() != "--vs-php" && a.as_str() != "--json" && a.as_str() != "--dump-on-fault"
+            a.as_str() != "--vs-php"
+                && a.as_str() != "--json"
+                && a.as_str() != "--dump-on-fault"
+                && a.as_str() != "--tree-walker"
         })
         .cloned()
         .collect();
@@ -425,7 +431,7 @@ fn main() {
     // project loader — a phorj.toml walk-up triggers multi-file merge + folder=path validation;
     // otherwise loose mode (single file, `package Main` only). `-e`/stdin are always loose. parse,
     // lex, disasm, and bench keep the single-file string path (they dump/measure one source).
-    let result = if matches!(cmd, "run" | "runvm" | "check" | "transpile") {
+    let result = if matches!(cmd, "run" | "check" | "transpile") {
         // Resolve the source AND the program argv (`-- a b c`); the argv feeds `Core.Process.args()`
         // and is only meaningful for run/runvm (check/transpile ignore it).
         let (spec, prog_args) = match cli::resolve_source_and_args(&rest) {
@@ -435,7 +441,7 @@ fn main() {
                 exit(2);
             }
         };
-        if matches!(cmd, "run" | "runvm") {
+        if cmd == "run" {
             phorj::native::set_process_args(prog_args);
             // M-DX S0/S3: the interactive run tool is the Dev profile; enable the value-dump when
             // `--dump-on-fault` was passed (Dev + opt-in — `dump::should_dump` re-checks the profile).
@@ -456,8 +462,9 @@ fn main() {
         };
         // run/runvm carry an exit code (Batch-1 B): `main`'s `int` return becomes the process exit
         // status. Print stdout, then exit with the code (errors already exit 1 above/below).
-        if matches!(cmd, "run" | "runvm") {
-            let outcome = if cmd == "run" {
+        if cmd == "run" {
+            // Default backend = the VM (the runtime); `--tree-walker` selects the interpreter oracle.
+            let outcome = if tree_walker {
                 cli::run_program_exit(&unit)
             } else {
                 cli::runvm_program_exit(&unit)

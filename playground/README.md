@@ -1,7 +1,7 @@
 # Phorj Playground
 
 A free, zero-backend, browser playground for Phorj. Edit code on the left; on the right you get the
-**interpreter** (`run`), the **bytecode VM** (`runvm`), the **transpiled PHP source**, and that PHP
+**interpreter**, the **bytecode VM**, the **transpiled PHP source**, and that PHP
 **executed in-browser** (php-wasm, PHP 8.4) — with a badge confirming all three backends produced
 byte-identical output (and a diff banner if they ever don't). Everything runs client-side; nothing is
 sent to a server.

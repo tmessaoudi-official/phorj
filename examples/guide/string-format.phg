@@ -5,7 +5,7 @@
 //
 // The phorj UPGRADE is in the rendering, not the syntax: `String.format` is STRICT — a `%d` given a
 // non-int is a clean fault, not PHP's silent `0` coercion. It transpiles to a guarded PHP helper that
-// faults the same way, so run/runvm/PHP stay byte-identical.
+// faults the same way, so both backends and PHP stay byte-identical.
 //
 // This first slice supports `%s` (any scalar → its string form), `%d` (an int) and `%%` (a literal
 // `%`). Width/precision/flags and `%f`/`%x`/… come in later slices; a value list may be heterogeneous.

@@ -4,7 +4,7 @@
 //   • `difference(a, b)`   — elements in `a` but not `b`.
 // A `Set<T>` is insertion-ordered + deduplicated; results follow the first set's order (then the
 // second set's new elements, for union). Contents are shown via `size`/`contains` (a set isn't a
-// list). Byte-identical on run / runvm / real PHP.
+// list). Byte-identical on both backends and real PHP.
 package Main;
 
 import Core.Output;

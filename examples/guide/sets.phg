@@ -1,7 +1,7 @@
 // Core.Set (M-RT S7b) — a generic set built from a list. `Set.of(List<T>) -> Set<T>` deduplicates
 // preserving first-occurrence order; `Set.contains(Set<T>, T) -> bool` and `Set.size(Set<T>) -> int`
 // query it. Like Map, a Set is insertion-ordered (not a HashSet) so it round-trips byte-identically
-// through PHP (a deduped array): run / runvm / real PHP all agree.
+// through PHP (a deduped array): both backends and real PHP all agree.
 //
 // Elements are the hashable subset (int / bool / string). The example uses int and string sets;
 // dedup matches PHP `array_unique(..., SORT_STRING)` for homogeneous element types.

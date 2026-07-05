@@ -5,7 +5,7 @@
 // class. The common shape is a **static factory** — a static method that constructs and returns an
 // instance (`Greeter.make("world")`). Calling an *instance* method this way is `E-STATIC-CALL`.
 //
-// Transpiles to PHP `Class::method(args)`; run/runvm/real PHP are byte-identical.
+// Transpiles to PHP `Class::method(args)`; both backends and real PHP are byte-identical.
 package Main;
 
 import Core.Output;
