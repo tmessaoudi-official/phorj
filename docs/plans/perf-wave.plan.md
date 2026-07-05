@@ -111,6 +111,22 @@ beating release-php.
   surfaced to developer** (the ratified endgame; no bytecode-VM micro-opt under `forbid(unsafe)`
   closes the 26× gap — that needs native codegen).
 
+## Deferred until the perf goal is met (developer, 2026-07-05)
+**Nothing else is tackled until phorj is measurably faster than PHP.** THEN pursue all three
+concurrency directions (researched 2026-07-05; the CLI reshape is orthogonal to all of them):
+1. **Real shared-memory parallelism leveraging immutability** — phorj's immutable/value semantics =
+   no data races = safe cross-thread sharing, a capability PHP structurally lacks. Needs `Rc`→`Arc`
+   on the shared `Value` heap (a JIT/AOT value-repr decision — `Value` currently can't cross an OS
+   thread, `KNOWN_ISSUES.md:249`) + a Ladder §14 call to drop `run≡runvm` interleaving-identity for
+   parallel code (tree-walker becomes a *sequential* semantics reference). The "beats PHP beyond
+   speed" story.
+2. **Strengthen the cooperative green threads** — finish the deferred `spawn` forms (method / closure /
+   overloaded currently run synchronous-degenerate, not truly concurrent); deterministic, stays
+   byte-identical, no §14 change.
+3. **Evaluate `async`/`await`** — currently none; leaning REJECT (function coloring fights phorj's
+   surprise-free philosophy; `spawn`/`Task`/`Channel` structured concurrency is better) — but research
+   the comparison when we get there.
+
 ## Step 1 (CLI reshape) — execution log
 - Code DONE: `phg run`/bare → VM; `phg run --tree-walker` → interpreter; `runvm` command removed
   (main.rs dispatch + help + usage). Tests fixed (cli.rs, build.rs → `run`; the dump-locals test uses
