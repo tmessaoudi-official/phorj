@@ -280,6 +280,27 @@ fn float_interpolation_emits_phorj_float_helper() {
 }
 
 #[test]
+fn string_format_helper_uses_tier1_functions_only() {
+    // Regression guard (CI hermetic-php break): `String.format`'s `__phorj_format` helper must use
+    // ONLY tier-1 core functions — it ran under a `php -n` build with `ctype` as a shared (unloaded)
+    // extension and fataled on `ctype_digit` (the `__phorj_float` guard above never exercised THIS
+    // helper). The digit scan now uses `strpos('0123456789', …)`, like the flag scan.
+    let out = php(
+        "function f() -> string { return String.format(\"%5d %-3s %.2f\", [42, \"x\", 3.5]); }",
+    );
+    assert!(
+        out.contains("function __phorj_format($spec, $args) {"),
+        "String.format emits the __phorj_format helper: {out}"
+    );
+    for forbidden in ["ctype_", "mb_", "iconv", "bcadd"] {
+        assert!(
+            !out.contains(forbidden),
+            "__phorj_format must use tier-1 functions only (hermetic `php -n`), found `{forbidden}`: {out}"
+        );
+    }
+}
+
+#[test]
 fn pure_string_literal_no_concat() {
     let out = php("function f() -> string { return \"hi\"; }");
     assert!(out.contains(r#"return "hi";"#), "{out}");

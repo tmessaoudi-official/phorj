@@ -928,9 +928,12 @@ impl Transpiler {
             self.line("if ($i < $n && $spec[$i] === '%') { $out .= '%'; $i++; continue; }");
             self.line("$start = $i - 1;");
             self.line("while ($i < $n && strpos('-0+', $spec[$i]) !== false) { $i++; }");
-            self.line("while ($i < $n && ctype_digit($spec[$i])) { $i++; }");
+            // Digit scan via `strpos` into a digit string (like the flag scan above), NOT `ctype_digit`:
+            // the ctype extension is not guaranteed under the hermetic `php -n` oracle (it is shared in
+            // some builds), and the transpile floor is tier-1 core functions only (extension policy).
+            self.line("while ($i < $n && strpos('0123456789', $spec[$i]) !== false) { $i++; }");
             self.line("$hasPrec = false;");
-            self.line("if ($i < $n && $spec[$i] === '.') { $hasPrec = true; $i++; while ($i < $n && ctype_digit($spec[$i])) { $i++; } }");
+            self.line("if ($i < $n && $spec[$i] === '.') { $hasPrec = true; $i++; while ($i < $n && strpos('0123456789', $spec[$i]) !== false) { $i++; } }");
             self.line(
                 "if ($i >= $n) { throw new \\RuntimeException('String.format: dangling %'); }",
             );
