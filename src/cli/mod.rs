@@ -207,9 +207,10 @@ pub fn help_for(cmd: &str) -> String {
                     --timeout so a slow/idle client cannot wedge a worker (slowloris). A per-connection\n\
                     read/write error never ends the server — it is logged and the next connection is\n\
                     served.\n\n\
-                    Requests run on the bytecode VM by default (~25x faster than the tree-walker,\n\
-                    byte-identical output); --tree-walker selects the interpreter oracle instead (and\n\
-                    is required to serve an overloaded `respond`, which the VM path rejects).\n\n\
+                    Requests run on the bytecode VM by default (faster than the tree-walker —\n\
+                    measured ~2.3x lower end-to-end latency on a representative handler, byte-identical\n\
+                    output); --tree-walker selects the interpreter oracle instead (and is required to\n\
+                    serve an overloaded `respond`, which the VM path rejects).\n\n\
                     usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS] [--workers N] [--tree-walker]\n\n\
                     options:\n  \
                     --addr ADDR        host:port to bind (default 127.0.0.1:8080)\n  \
@@ -1442,8 +1443,9 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
 
 /// `serve` on an already-loaded program (M6 W4): type-check, build the request handler factory, then
 /// run the blocking HTTP serve loop ([`crate::serve::serve_tcp`]) until the process is killed. Defaults
-/// to the **bytecode VM** (~25× faster than the tree-walker, byte-identical via [`Vm::run_entry`] ≡
-/// `call_named`); `tree_walker` selects the interpreter oracle (`phg serve --tree-walker`, the
+/// to the **bytecode VM** (faster than the tree-walker — measured ~2.3× lower end-to-end latency on a
+/// representative handler; byte-identical via [`Vm::run_entry`] ≡ `call_named`); `tree_walker` selects
+/// the interpreter oracle (`phg serve --tree-walker`, the
 /// exact pre-VM behaviour). The single-threaded path runs on the 256 MB deep-stack worker (native-stack
 /// headroom for re-entrant natives / the interpreter's deep recursion). Note: `--workers N` pool
 /// threads are plain `std::thread::spawn` (default ~8 MB stack), not the deep-stack worker — the VM is

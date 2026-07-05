@@ -91,8 +91,9 @@ pub fn interp_factory(program: std::sync::Arc<Program>) -> HandlerFactory {
     })
 }
 
-/// The bytecode-VM backend (the default `phg serve` — ~25× faster than the tree-walker, byte-identical
-/// by [`Vm::run_entry`] ≡ [`call_named`]). Validates the compile + resolves the `respond` entry index
+/// The bytecode-VM backend (the default `phg serve` — faster than the tree-walker, ~2.3× lower
+/// end-to-end latency measured on a representative handler; byte-identical by [`Vm::run_entry`] ≡
+/// [`call_named`]). Validates the compile + resolves the `respond` entry index
 /// **once up front** (surfacing any error before the socket binds), then hands back a factory whose
 /// handlers recompile per worker (deterministic ⇒ the same entry index). A fresh [`Vm`] per request
 /// re-seeds program statics, matching the interpreter's fresh-per-request state.

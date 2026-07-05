@@ -211,7 +211,8 @@ impl<'a> Vm<'a> {
     /// Invoke a single resolved top-level function `entry` with pre-built `args`, returning its return
     /// **value** plus captured stdout — the VM analog of [`crate::interpreter::call_named`], used by the
     /// serve runtime (`crate::serve`) to run `respond(bytes) -> bytes` once per request on the bytecode
-    /// backend instead of the tree-walker (perf: the VM is ~25× faster). `args` become slots
+    /// backend instead of the tree-walker (perf: the VM avoids the per-node tree-walk — measured
+    /// ~2.3× lower end-to-end serve latency on a representative handler). `args` become slots
     /// `0..arity` at the frame base, exactly as `Op::Call` lays out a callee's window. **Non-cooperative
     /// by design** — it mirrors `call_named` (which enters `run_call` directly, not the green-thread
     /// driver), so `run ≡ runvm` holds on the serve path; a `respond` body never uses concurrency.

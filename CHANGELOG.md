@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `phg serve` runs on the bytecode VM by default (`--tree-walker` for the interpreter)
+
+`phg serve` now compiles the program and runs each request's `respond(bytes): bytes` on the bytecode
+VM instead of the tree-walking interpreter — **byte-identical** output (asserted by dual-backend tests
+in `tests/serve.rs`, single-threaded AND through the multi-worker pool, since serve is outside the
+differential harness) and **faster**: measured **~2.3× lower end-to-end latency** per request on a
+representative handler over keep-alive (17.1 µs vs 39.6 µs median, release binary; the handler-compute
+gain is larger — the fixed socket round-trip is in both numbers). `--tree-walker` selects the
+interpreter oracle (also required to serve an *overloaded* `respond`, which the VM path rejects).
+
+New VM primitive `Vm::run_entry(entry, args) -> (Value, String)` — call a resolved top-level function
+by index with captured return value + stdout, the VM analog of `interpreter::call_named` (the shared
+dispatch loop is now `run_to_completion`, with `run_main` a thin wrapper — byte-identical, differential
+green). Each serve worker compiles its own program (a `BytecodeProgram` holds `Rc` state and can't
+cross threads), amortised over its requests. A serve/web program with no `main` (its entry is
+`respond`) gets an inert synthesized `main` so it compiles — never invoked. Still ~25× slower than a
+tuned PHP+JIT (the per-feature perf mandate is unmet until the JIT backend; `docs/plans/perf-wave.plan.md`).
+
 ### Added — call-argument expected-type threading for list/map literals (Wave C foundation)
 
 A list/map **literal** passed directly as a call argument now threads the parameter's collection type,

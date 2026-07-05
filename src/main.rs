@@ -313,7 +313,8 @@ fn main() {
         // single-threaded path. Resolved after parsing.
         let mut workers: usize = 0;
         // `--tree-walker` runs requests on the interpreter oracle instead of the (default) bytecode VM
-        // — mirrors `phg run --tree-walker`. The VM is ~25× faster and byte-identical; the interpreter
+        // — mirrors `phg run --tree-walker`. The VM is faster (measured ~2.3× lower serve latency on a
+        // representative handler) and byte-identical; the interpreter
         // is the correctness reference (and serves an overloaded `respond`, which the VM path rejects).
         let mut tree_walker = false;
         let mut i = 2;
