@@ -154,6 +154,21 @@ concurrency directions (researched 2026-07-05; the CLI reshape is orthogonal to 
   `phg benchmark` headline to VM-vs-php; migrate `perf-gate.sh` off the tree÷VM anchor to a php
   baseline. ⚠ canary: every php micro must report a plausible NONZERO ns/op (0 = JIT ate it).
 
+## Step 3 (VM ceiling test) — DONE, the interpreter ceiling is PROVEN
+Ran the `forbid(unsafe)` spike on branch `spike/unsafe-dispatch` (relaxed the crate lint; added
+`get_unchecked` on the validated-bytecode hot path — dispatch loops `functions[func]`/`code[ip]`/
+`frames[fr]`, plus `Const` const-pool and `GetLocal` stack indexing). Byte-identical to base (0 diffs
+on real examples → the number is real, not fast-because-broken). MEASURED (A/B vs base, best-of-8):
+**intadd −6.5%, methodcall −3.2%.** Removing EVERY validated bounds check — the single biggest
+remaining VM lever — buys **~3–6%**. **Spike REVERTED** (not worth breaking `#![forbid(unsafe_code)]`
+for ~5%; that invariant also deliberately reserves computed-goto/JIT dispatch).
+**CONCLUSION (airtight):** stack all VM levers — fix#1 −10%, frame-caching ~5%, bounds-checks ~5% —
+and the ceiling is **~20% total**, taking intadd from 154× → ~120× slower. The 61% dispatch tax is
+structural to interpretation. **No bytecode-VM tuning closes the 9–154× gap. Only native codegen
+(JIT/AOT) does.** The perf hunt's "why" is now empirically closed: phorj isn't faster than PHP because
+it interprets and PHP+JIT compiles to native — and the VM has been proven near its floor.
+**→ Next: Step 4, the JIT/AOT design (the only remaining path).**
+
 ## Acceptance
 - Harness runs the full feature corpus, `runvm` vs release-php+JIT, ns/op, regression-gated.
 - Every substrate fix has a measured before/after on the heavy matrix (time + memory).
