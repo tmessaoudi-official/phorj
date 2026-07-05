@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — call-argument expected-type threading for list/map literals (Wave C foundation)
+
+A list/map **literal** passed directly as a call argument now threads the parameter's collection type,
+so `f([1, "x"])` type-checks against a `List<int | string>` parameter (each element checked against
+the union) instead of being bottom-up inferred as `List<int>` and rejected with "elements must share
+one type." This is the call-argument counterpart of the existing declaration-initializer / return
+threading (DEC-178 / UA-1.6), and the foundation the upcoming `String.format` (W3-5) rides on. Only
+CONCRETE parameter types thread (guarded by `ty_has_param`); generic callees stay on the existing
+unification path — a homogeneous literal to a generic callee (`Set.of([1,2,3])`) works as before,
+while a heterogeneous one (`Set.of([1,"x"])`, needing bidirectional inference of `T`) stays deferred.
+Checker-only, byte-identical.
+
 ### Fixed — `String.split(s, "")` byte-identity + new `String.characters` (output-parity pass)
 
 The output-parity sweep found another latent byte-identity break: `String.split(s, "")` (empty

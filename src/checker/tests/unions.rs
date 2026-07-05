@@ -542,3 +542,76 @@ fn return_list_literal_wrong_element_rejected() {
         "{bad:?}"
     );
 }
+
+#[test]
+fn call_arg_list_literal_threads_union_param() {
+    // Wave C foundation (DEC-178): a heterogeneous list LITERAL passed straight to a `List<union>`
+    // parameter threads the element union — each element checked against `int | string` — rather than
+    // being bottom-up inferred as `List<int>` and rejected. Parallel to decl-init/return threading.
+    assert!(errors_of(
+        "import Core.List; \
+         function f(List<int | string> xs) -> int { return 1; } \
+         function main() -> void { int n = f([1, \"x\", 2]); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn call_arg_list_literal_still_rejects_off_union_element() {
+    // Threading is not a blanket accept: an element outside the union (`bool`) is still an error —
+    // now reported per-element against the expected union (aligned with decl/return), not as a
+    // whole-list mismatch.
+    let errs = errors_of(
+        "import Core.List; \
+         function f(List<int | string> xs) -> int { return 1; } \
+         function main() -> void { int n = f([1, true]); }",
+    );
+    assert!(!errs.is_empty(), "off-union element must still error");
+}
+
+#[test]
+fn call_arg_empty_list_to_generic_callee_still_binds() {
+    // REGRESSION LOCK (Wave C foundation): an empty `[]` passed to a GENERIC callee (`List<T>` param)
+    // must still type as `List<T>` so the unifier binds `T` from the other args — the `check_arg`
+    // empty-`[]` special-case must run BEFORE the concrete-only threading guard. (This exact case
+    // broke twice while building the slice: the guard dropped empty-`[]`→`List<T>` to `check_expr`,
+    // which cannot infer an empty literal's element type.) `List.isEmpty` is `List<T> -> bool`.
+    assert!(errors_of(
+        "import Core.Output; import Core.List; \
+         function main() -> void { Output.printLine(\"{List.isEmpty([])}\"); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn call_arg_generic_callee_via_variable_unaffected() {
+    // A generic callee (`List<T>`, `T` unbound) still resolves `T` from a bound variable exactly as
+    // before — the foundation slice threads LITERAL args only against CONCRETE collection params, so
+    // the generic bidirectional-inference path is untouched.
+    assert!(errors_of(
+        "import Core.List; \
+         function main() -> void { var xs = [1, 2, 3]; \
+          var ys = List.map(xs, function(int x) => x + 1); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn call_arg_generic_callee_heterogeneous_literal_still_deferred() {
+    // Documents the still-DEFERRED case: a HETEROGENEOUS literal passed to a GENERIC callee (`Set.of`
+    // is `List<T> -> Set<T>`) can't infer `T = int | string` bottom-up, so it stays "elements must
+    // share one type" (needs bidirectional inference through the callee's type param — a later Wave C
+    // slice). The `ty_has_param` guard keeps generic callees on this path; a HOMOGENEOUS literal
+    // (`Set.of([1,2,3])`) works as before via ordinary unification.
+    let errs =
+        errors_of("import Core.Set; function main() -> void { var s = Set.of([1, \"x\"]); }");
+    assert!(
+        !errs.is_empty(),
+        "heterogeneous literal to a generic callee is still deferred"
+    );
+    // The homogeneous case is unaffected (works).
+    assert!(
+        errors_of("import Core.Set; function main() -> void { var s = Set.of([1, 2, 3]); }")
+            .is_empty()
+    );
+}

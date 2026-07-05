@@ -36,7 +36,11 @@ impl Checker {
     /// `[]`. Returns the expected collection type on a literal/type match, `None` otherwise (the caller
     /// falls back to `check_expr`). Shared by the declaration initializer and the `return` value; the
     /// generic-call-argument position (which needs bidirectional inference) is deferred to Wave C.
-    fn thread_literal_expected(&mut self, e: &crate::ast::Expr, expected: &Ty) -> Option<Ty> {
+    pub(super) fn thread_literal_expected(
+        &mut self,
+        e: &crate::ast::Expr,
+        expected: &Ty,
+    ) -> Option<Ty> {
         match (e, expected) {
             (crate::ast::Expr::List(elems, _), Ty::List(elem_ty)) => {
                 for el in elems {

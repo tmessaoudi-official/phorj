@@ -46,6 +46,10 @@ function main(): void {
     }
     List<int | string> items = [1, "two", 3, "four", 5];
     Output.printLine("headLabel = " + headLabel(items));
+    // Call-argument threading (Wave C foundation): a heterogeneous list LITERAL passed straight to a
+    // `List<int | string>` parameter type-checks against the union — no intermediate binding needed
+    // (before, `[1, "x"]` alone was "elements must share one type"). Checker-only, byte-identical.
+    Output.printLine("headLabel(literal) = " + headLabel([9, "nine"]));
     // .filter keeps the element type — the result is still `List<int | string>`, so it iterates and
     // narrows just like the source. The predicate narrows each element to decide per shape.
     var longish = items.filter(

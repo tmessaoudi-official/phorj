@@ -806,11 +806,30 @@ impl Checker {
     /// declaration initializer, a `return`) still requires a non-empty literal. It lets the
     /// zero-attribute / zero-child HTML builders read naturally — `el("p", [], [text("hi")])`.
     pub(super) fn check_arg(&mut self, arg: &crate::ast::Expr, expected: &Ty) -> Ty {
+        // An EMPTY `[]` against any `List<T>` param (concrete OR generic `T`) types as that list — the
+        // original behavior, which lets a generic callee's unifier bind `T` from the other args
+        // (`SomeGeneric.of([])`). Must come first: the `ty_has_param` guard below would otherwise drop
+        // an empty-`[]`→`List<T>` arg to `check_expr`, which cannot infer an empty literal's element.
         if let crate::ast::Expr::List(elems, _) = arg {
             if elems.is_empty() {
                 if let Ty::List(inner) = expected {
                     return Ty::List(inner.clone());
                 }
+            }
+        }
+        // Thread a NON-empty list/map LITERAL against a CONCRETE collection type — so `f([1, "x"])`
+        // checks against a `List<int | string>` param (each element against the union), exactly like
+        // the declaration-initializer / return-position threading (UA-1.6 / DEC-178, Wave C
+        // foundation). Checker-only: the runtime value is already a `List`/`Map`, so every backend is
+        // unchanged (byte-identity-safe).
+        //
+        // CRITICAL: thread ONLY a CONCRETE expected type. A generic callee's param is `List<T>` with
+        // `T` an unbound `Ty::Param` — `thread_literal_expected` would still match `Ty::List(_)` and
+        // wrongly check each element against the unbound `T` (breaking `Set.of([1,2,3])`). The
+        // `ty_has_param` guard leaves every generic callee on the existing unify path (deferred).
+        if !ty_has_param(expected) {
+            if let Some(t) = self.thread_literal_expected(arg, expected) {
+                return t;
             }
         }
         self.check_expr(arg)
