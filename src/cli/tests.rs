@@ -118,7 +118,7 @@ fn resolve_source_rejects_bad_forms() {
 #[test]
 fn run_executes_sample() {
     assert_eq!(
-        cmd_run(SAMPLE).unwrap(),
+        cmd_treewalk(SAMPLE).unwrap(),
         "Hello Tak\narea = 12.56636\narea = 12\n"
     );
 }
@@ -128,13 +128,13 @@ fn run_reports_type_error_and_does_not_execute() {
     // `area` returns float; returning an int literal is a type error.
     let src = wp(r#"import Core.Output;
 function area(): float { return 1; } function main(): void { Output.printLine("{area()}"); }"#);
-    let err = cmd_run(&src).unwrap_err();
+    let err = cmd_treewalk(&src).unwrap_err();
     assert!(err.contains("type error"), "{err}");
 }
 
 #[test]
 fn run_reports_runtime_error() {
-    let err = cmd_run(&wp(r#"import Core.Output;
+    let err = cmd_treewalk(&wp(r#"import Core.Output;
 function main(): void { Output.printLine("{1 / 0}"); }"#))
     .unwrap_err();
     assert!(err.contains("runtime error"), "{err}");
@@ -142,7 +142,7 @@ function main(): void { Output.printLine("{1 / 0}"); }"#))
 
 #[test]
 fn run_reports_parse_error() {
-    let err = cmd_run(&wp("function main( {")).unwrap_err();
+    let err = cmd_treewalk(&wp("function main( {")).unwrap_err();
     assert!(err.contains("parse error"), "{err}");
 }
 
@@ -158,12 +158,12 @@ fn library_file_without_main_checks_and_transpiles_but_run_errors_clearly() {
             .contains("function helper"),
         "transpile should emit the library function"
     );
-    let run_err = cmd_run(&lib).unwrap_err();
+    let run_err = cmd_treewalk(&lib).unwrap_err();
     assert!(
         run_err.contains("no entry point") && run_err.contains("main"),
         "run error: {run_err}"
     );
-    let vm_err = cmd_runvm(&lib).unwrap_err();
+    let vm_err = cmd_run(&lib).unwrap_err();
     assert!(vm_err.contains("no entry point"), "runvm error: {vm_err}");
 }
 
@@ -229,19 +229,19 @@ fn cmd_lift_refuses_outside_tier1_loudly() {
 fn runvm_matches_run_on_simple_program() {
     let src = wp(r#"import Core.Output;
 function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
-    assert_eq!(cmd_runvm(&src).unwrap(), cmd_run(&src).unwrap());
-    assert_eq!(cmd_runvm(&src).unwrap(), "42\n");
+    assert_eq!(cmd_run(&src).unwrap(), cmd_treewalk(&src).unwrap());
+    assert_eq!(cmd_run(&src).unwrap(), "42\n");
 }
 
 #[test]
 fn runvm_reports_type_error_via_the_gate() {
-    let err = cmd_runvm(&wp(r#"function main(): void { int x = "no"; }"#)).unwrap_err();
+    let err = cmd_run(&wp(r#"function main(): void { int x = "no"; }"#)).unwrap_err();
     assert!(err.contains("type error"), "{err}");
 }
 
 #[test]
 fn runvm_reports_runtime_error_with_prefix() {
-    let err = cmd_runvm(&wp(r#"import Core.Output;
+    let err = cmd_run(&wp(r#"import Core.Output;
 function main(): void { Output.printLine("{1 / 0}"); }"#))
     .unwrap_err();
     assert!(err.contains("runtime error"), "{err}");
@@ -257,7 +257,7 @@ fn runvm_runtime_error_carries_source_line() {
     // fault inside `"{…}"` reports line 1 (a pre-existing interpolation-position limitation,
     // orthogonal to this task — see the M2 P3.5 roadmap decisions log).
     let src = wp("import Core.Output; function main(): void {\n    int z = 0;\n    int x = 1 / z;\n    Output.printLine(\"{x}\");\n}");
-    let err = cmd_runvm(&src).unwrap_err();
+    let err = cmd_run(&src).unwrap_err();
     assert!(err.contains("division by zero"), "{err}");
     assert!(err.starts_with("runtime error at 3:"), "{err}");
 }
@@ -268,7 +268,7 @@ fn run_runtime_error_carries_line_via_trace() {
     // logical call stack, so a runtime fault backfills the diagnostic line from the innermost
     // frame — the interpreter reports `runtime error at <line>: …`, matching the VM.
     let src = wp("import Core.Output; function main(): void {\n    int z = 0;\n    int x = 1 / z;\n    Output.printLine(\"{x}\");\n}");
-    let err = cmd_run(&src).unwrap_err();
+    let err = cmd_treewalk(&src).unwrap_err();
     assert!(err.contains("division by zero"), "{err}");
     assert!(err.starts_with("runtime error at 3:"), "{err}");
 }

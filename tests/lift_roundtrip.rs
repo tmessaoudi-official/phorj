@@ -11,7 +11,7 @@
 //! are duplicated from `differential.rs` rather than shared — integration test files here are each
 //! self-contained, the same pattern as `process.rs`/`serve.rs`.)
 
-use phorj::cli::{cmd_run, cmd_runvm};
+use phorj::cli::{cmd_run, cmd_treewalk};
 use phorj::{cli, lift};
 use std::process::Command;
 
@@ -104,7 +104,7 @@ fn roundtrip(php: &str, label: &str, php_src: &str) {
 
     let expected = run_php(php, php_src, &format!("{label}_orig"));
 
-    let interp = cmd_run(&phorj).unwrap_or_else(|e| {
+    let interp = cmd_treewalk(&phorj).unwrap_or_else(|e| {
         panic!("{label}: lifted Phorj failed on the interpreter: {e}\n--- phorj ---\n{phorj}")
     });
     assert_eq!(
@@ -113,7 +113,7 @@ fn roundtrip(php: &str, label: &str, php_src: &str) {
     );
 
     let vm =
-        cmd_runvm(&phorj).unwrap_or_else(|e| panic!("{label}: lifted Phorj failed on the VM: {e}"));
+        cmd_run(&phorj).unwrap_or_else(|e| panic!("{label}: lifted Phorj failed on the VM: {e}"));
     assert_eq!(vm, expected, "{label}: VM ≠ original PHP");
 
     let php_back = cli::cmd_transpile(&phorj)

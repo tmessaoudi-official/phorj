@@ -1,5 +1,5 @@
-//! Differential harness (M2 P3): the bytecode VM (`cmd_runvm`) must produce byte-identical
-//! stdout to the tree-walking interpreter (`cmd_run`) for every P1–P3-surface program. This is
+//! Differential harness (M2 P3): the bytecode VM (`cmd_run`) must produce byte-identical
+//! stdout to the tree-walking interpreter (`cmd_treewalk`) for every P1–P3-surface program. This is
 //! the M2 correctness spine (mirrors the transpiler round-trip-against-real-PHP technique).
 //!
 //! Parity covers *both* success and failure (M2 P3.5 Wave 0): `agree` checks the `Ok` output,
@@ -8,7 +8,7 @@
 //! bodies (e.g. `"division by zero"`) but the CLI wraps them with stage-specific prefixes
 //! (`"runtime error:"` vs `"compile error:"`), so a raw `assert_eq!` would spuriously fail.
 
-use phorj::cli::{cmd_run, cmd_run_exit, cmd_runvm, cmd_runvm_exit};
+use phorj::cli::{cmd_run, cmd_run_exit, cmd_treewalk, cmd_treewalk_exit};
 use phorj::{cli, loader};
 use std::process::Command;
 
@@ -49,8 +49,8 @@ fn with_pkg(src: &str) -> String {
 
 fn agree(src: &str) {
     let src = with_pkg(src);
-    let tree = cmd_run(&src);
-    let vm = cmd_runvm(&src);
+    let tree = cmd_treewalk(&src);
+    let vm = cmd_run(&src);
     assert_eq!(
         tree, vm,
         "backend mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}"
@@ -147,8 +147,8 @@ fn classify(err: &str) -> FaultKind {
 /// `Ok` classifies to `None`, so an `Ok`-vs-`Err` divergence is flagged too.
 fn agree_err(src: &str) {
     let src = with_pkg(src);
-    let tree = cmd_run(&src);
-    let vm = cmd_runvm(&src);
+    let tree = cmd_treewalk(&src);
+    let vm = cmd_run(&src);
     let tree_kind = tree.as_ref().err().map(|e| classify(e));
     let vm_kind = vm.as_ref().err().map(|e| classify(e));
     assert_eq!(
@@ -201,8 +201,8 @@ fn interpolation_fault_line_matches_between_backends() {
         ),
     ];
     for (src, want) in cases {
-        let run = cmd_run(src).expect_err("program must fault on run");
-        let vm = cmd_runvm(src).expect_err("program must fault on runvm");
+        let run = cmd_treewalk(src).expect_err("program must fault on run");
+        let vm = cmd_run(src).expect_err("program must fault on runvm");
         assert_eq!(
             fault_line(&run),
             Some(*want),
@@ -488,8 +488,8 @@ class Mid extends Left, Right {}"#,
 /// `agree` pass vacuously (both backends "agree" on the error). Auto-prepends `package Main;`.
 fn agree_out_php(src: &str, expected: &str, label: &str) {
     let src = with_pkg(src);
-    let tree = cmd_run(&src);
-    let vm = cmd_runvm(&src);
+    let tree = cmd_treewalk(&src);
+    let vm = cmd_run(&src);
     assert_eq!(
         tree, vm,
         "run vs runvm for {label}:\n  run={tree:?}\n  runvm={vm:?}"
@@ -1173,10 +1173,10 @@ fn all_examples_match_between_backends() {
                                                        // is vacuously green when both backends fail identically (e.g. a broken import), which would
                                                        // hide a malformed example; assert success explicitly so a regression surfaces loudly.
         assert!(
-            cmd_run(&src).is_ok(),
+            cmd_treewalk(&src).is_ok(),
             "example {} must run successfully, got {:?}",
             path.display(),
-            cmd_run(&src)
+            cmd_treewalk(&src)
         );
         agree(&src);
     }
@@ -1203,8 +1203,8 @@ fn all_example_projects_match_between_backends() {
         eprintln!("project: {} (entry {})", project.display(), entry.display());
         let unit = loader::load(&entry)
             .unwrap_or_else(|e| panic!("project {} must load: {e}", project.display()));
-        let run = cli::run_program(&unit);
-        let runvm = cli::runvm_program(&unit);
+        let run = cli::treewalk_program(&unit);
+        let runvm = cli::run_program(&unit);
         assert!(
             run.is_ok(),
             "project {} must run on the interpreter, got {run:?}",
@@ -1350,7 +1350,10 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
     // (Observing the null *value* needs the unwrap operators from later S2 tasks.) The exact-output
     // assertion is deliberate: `agree` alone passes vacuously if both backends share a rejection.
     let src = "import Core.Output; function main() -> void { int? x = null; int? y = 5; Output.printLine(\"optionals ok\"); }";
-    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("optionals ok\n"));
+    assert_eq!(
+        cmd_treewalk(&with_pkg(src)).as_deref(),
+        Ok("optionals ok\n")
+    );
     agree(src); // run ≡ runvm
 }
 
@@ -1358,11 +1361,11 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
 fn s2_coalesce_is_byte_identical() {
     // `??`: a null lhs falls through to the default; a present value is kept.
     let src = "import Core.Output; function main() -> void { int? x = null; Output.printLine(\"{x ?? 7}\"); int? y = 9; Output.printLine(\"{y ?? 0}\"); }";
-    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("7\n9\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(src)).as_deref(), Ok("7\n9\n"));
     agree(src);
     // Short-circuit: the default (a printing call) must not run when the lhs is non-null.
     let sc = "import Core.Output; function side() -> int { Output.printLine(\"SIDE\"); return 0; } function main() -> void { int? y = 9; Output.printLine(\"{y ?? side()}\"); }";
-    assert_eq!(cmd_run(&with_pkg(sc)).as_deref(), Ok("9\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(sc)).as_deref(), Ok("9\n"));
     agree(sc);
 }
 
@@ -1375,16 +1378,16 @@ fn s2_safe_access_is_byte_identical() {
     let cls = "class Box { constructor(public int v) {} function vOf() -> int { return this.v; } function plus(int n) -> int { return this.v + n; } }";
     let field = cls.to_string()
         + "import Core.Output;  function main() -> void { Box? a = null; Output.printLine(\"{(a?.v) ?? -1}\"); Box? b = new Box(7); Output.printLine(\"{(b?.v) ?? -1}\"); }";
-    assert_eq!(cmd_run(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
     agree(&field);
     let method = cls.to_string()
         + "import Core.Output;  function main() -> void { Box? a = null; Output.printLine(\"{(a?.vOf()) ?? -1}\"); Box? b = new Box(9); Output.printLine(\"{(b?.vOf()) ?? -1}\"); }";
-    assert_eq!(cmd_run(&with_pkg(&method)).as_deref(), Ok("-1\n9\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(&method)).as_deref(), Ok("-1\n9\n"));
     agree(&method);
     // short-circuit: a safe call on a null receiver must NOT evaluate its arguments (no "SIDE").
     let sc = cls.to_string()
         + "import Core.Output;  function side() -> int { Output.printLine(\"SIDE\"); return 0; } function main() -> void { Box? a = null; Output.printLine(\"{(a?.plus(side())) ?? -1}\"); }";
-    assert_eq!(cmd_run(&with_pkg(&sc)).as_deref(), Ok("-1\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(&sc)).as_deref(), Ok("-1\n"));
     agree(&sc);
 }
 
@@ -1394,17 +1397,17 @@ fn s2_if_let_is_byte_identical() {
     // optional is present; otherwise the else-branch runs.
     let present =
         "import Core.Output; function main() -> void { int? o = 5; if (var x = o) { Output.printLine(\"got {x}\"); } else { Output.printLine(\"none\"); } }";
-    assert_eq!(cmd_run(&with_pkg(present)).as_deref(), Ok("got 5\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(present)).as_deref(), Ok("got 5\n"));
     agree(present);
     let absent =
         "import Core.Output; function main() -> void { int? o = null; if (var x = o) { Output.printLine(\"got {x}\"); } else { Output.printLine(\"none\"); } }";
-    assert_eq!(cmd_run(&with_pkg(absent)).as_deref(), Ok("none\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(absent)).as_deref(), Ok("none\n"));
     agree(absent);
     // The smart-cast inner is a real arithmetic operand: `x + 1` must specialize identically on both
     // backends (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
         "import Core.Output; function main() -> void { int? o = 41; if (var x = o) { Output.printLine(\"{x + 1}\"); } else { Output.printLine(\"none\"); } }";
-    assert_eq!(cmd_run(&with_pkg(arith)).as_deref(), Ok("42\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
 
@@ -1413,13 +1416,13 @@ fn s2_force_unwrap_is_byte_identical() {
     // `opt!` on a present optional yields the inner value, identically on both backends.
     let present =
         "import Core.Output; function main() -> void { int? o = 5; Output.printLine(\"{o!}\"); }";
-    assert_eq!(cmd_run(&with_pkg(present)).as_deref(), Ok("5\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(present)).as_deref(), Ok("5\n"));
     agree(present);
     // The unwrapped value is a real arithmetic operand: `o! + 1` must specialize identically
     // (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
         "import Core.Output; function main() -> void { int? o = 41; Output.printLine(\"{o! + 1}\"); }";
-    assert_eq!(cmd_run(&with_pkg(arith)).as_deref(), Ok("42\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
 
@@ -1437,24 +1440,27 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
     // segment must not shift it. The interpreter is the oracle; the VM must match (not fault).
     let two_coalesce =
         "import Core.Output; function main() -> void { int? a = 5; int? b = null; Output.printLine(\"{a ?? -1} {b ?? -1}\"); }";
-    assert_eq!(cmd_run(&with_pkg(two_coalesce)).as_deref(), Ok("5 -1\n"));
+    assert_eq!(
+        cmd_treewalk(&with_pkg(two_coalesce)).as_deref(),
+        Ok("5 -1\n")
+    );
     agree(two_coalesce);
 
     let two_force = "import Core.Output; function main() -> void { int? a = 1; int? b = 2; Output.printLine(\"{a!} {b!}\"); }";
-    assert_eq!(cmd_run(&with_pkg(two_force)).as_deref(), Ok("1 2\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(two_force)).as_deref(), Ok("1 2\n"));
     agree(two_force);
 
     let cls =
         "class Box { constructor(private int v) {} function get() -> int { return this.v; } }";
     let two_safe = cls.to_string()
         + "import Core.Output;  function main() -> void { Box? a = new Box(7); Box? b = null; Output.printLine(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
-    assert_eq!(cmd_run(&with_pkg(&two_safe)).as_deref(), Ok("7 -1\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(&two_safe)).as_deref(), Ok("7 -1\n"));
     agree(&two_safe);
 
     // Mixed + nested: a coalesce whose default is itself a safe-access-coalesce, beside a force.
     let mixed = cls.to_string()
         + "import Core.Output;  function main() -> void { Box? a = null; int? b = 9; Output.printLine(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
-    assert_eq!(cmd_run(&with_pkg(&mixed)).as_deref(), Ok("9 9\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(&mixed)).as_deref(), Ok("9 9\n"));
     agree(&mixed);
 }
 
@@ -1464,7 +1470,7 @@ fn s2_match_over_optional_is_byte_identical() {
     // the non-null inner `int` (used here as an arithmetic operand — guards the operand-type gap).
     let src = "import Core.Output; function f(int? o) -> int { return match o { null => -1, v => v + 1 }; } \
                function main() -> void { int? a = null; int? b = 7; Output.printLine(\"{f(a)}\"); Output.printLine(\"{f(b)}\"); }";
-    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("-1\n8\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(src)).as_deref(), Ok("-1\n8\n"));
     agree(src);
 }
 
@@ -2149,8 +2155,8 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
 fn main_exit_code_is_byte_identical_across_backends() {
     let src = "package Main;\nimport Core.Output;\n\
                function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n}";
-    let run = cmd_run_exit(src).expect("run ok");
-    let runvm = cmd_runvm_exit(src).expect("runvm ok");
+    let run = cmd_treewalk_exit(src).expect("run ok");
+    let runvm = cmd_run_exit(src).expect("runvm ok");
     assert_eq!(run, runvm, "run vs runvm (stdout, exit)");
     assert_eq!(run, ("x\n".to_string(), 7));
     if let Some(php) = php_or_gate("main_exit_code") {
@@ -2179,8 +2185,8 @@ fn main_exit_code_is_byte_identical_across_backends() {
 fn class_static_main_exit_code_is_byte_identical_across_backends() {
     let src = "package Main;\nimport Core.Output;\n\
                class App {\n  static function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n  }\n}";
-    let run = cmd_run_exit(src).expect("run ok");
-    let runvm = cmd_runvm_exit(src).expect("runvm ok");
+    let run = cmd_treewalk_exit(src).expect("run ok");
+    let runvm = cmd_run_exit(src).expect("runvm ok");
     assert_eq!(run, runvm, "run vs runvm (stdout, exit)");
     assert_eq!(run, ("x\n".to_string(), 7));
     if let Some(php) = php_or_gate("class_static_main_exit_code") {
@@ -2224,7 +2230,7 @@ function main() -> void {
     Output.printLine(d.glide());
 }"#,
     );
-    let expected = cmd_run(&src).expect("interpreter runs");
+    let expected = cmd_treewalk(&src).expect("interpreter runs");
     let php_src = cli::cmd_transpile(&src).expect("transpiles");
     assert!(
         php_src.contains("insteadof") && php_src.contains("as glide"),
@@ -2237,7 +2243,7 @@ function main() -> void {
     );
 }
 
-/// Every runnable single-file example: transpiled PHP run by `php` prints exactly what `cmd_run`
+/// Every runnable single-file example: transpiled PHP run by `php` prints exactly what `cmd_treewalk`
 /// (the interpreter) prints. Globbed like `all_examples_match_between_backends`, so a new example is
 /// auto-gated. A non-`Ok` example is skipped here (it's gated by the run≡runvm glob); the oracle is
 /// stdout-parity on success only.
@@ -2259,7 +2265,7 @@ fn all_examples_transpile_and_match_php() {
         if uses_impure_native(&src) {
             continue;
         }
-        let expected = match cmd_run(&src) {
+        let expected = match cmd_treewalk(&src) {
             Ok(o) => o,
             Err(_) => continue, // non-runnable example — gated by the run≡runvm glob, not here
         };
@@ -2313,7 +2319,7 @@ fn all_example_projects_transpile_and_match_php() {
         let entry = find_main_phg(project);
         let label = project.display().to_string();
         let unit = loader::load(&entry).unwrap_or_else(|e| panic!("load {label}: {e}"));
-        let expected = cli::run_program(&unit).unwrap_or_else(|e| panic!("run {label}: {e}"));
+        let expected = cli::treewalk_program(&unit).unwrap_or_else(|e| panic!("run {label}: {e}"));
         let php_src = cli::transpile_program(&unit.program, &unit.diag_src)
             .unwrap_or_else(|e| panic!("transpile {label}: {e}"));
         let got = run_php(&php, &php_src, &label);
@@ -2383,7 +2389,7 @@ fn m7_emitter_uses_correctness_helpers() {
 #[test]
 fn m7_int_division_truncates_toward_zero() {
     let src = "import Core.Output; function main()-> void { Output.printLine(\"{7 / 2} {-7 / 2} {7 / -2} {-7 / -2}\"); }";
-    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("3 -3 -3 3\n"));
+    assert_eq!(cmd_treewalk(&with_pkg(src)).as_deref(), Ok("3 -3 -3 3\n"));
     agree(src);
 }
 
@@ -2479,8 +2485,8 @@ fn error_subtype_value_is_byte_identical() {
 class BadInput implements Error { constructor(public string message) {} }
 function main() -> void { BadInput e = new BadInput("bad input"); Output.printLine(e.message); }"#,
     );
-    let tree = cmd_run(&src);
-    let vm = cmd_runvm(&src);
+    let tree = cmd_treewalk(&src);
+    let vm = cmd_run(&src);
     assert_eq!(tree, vm, "run vs runvm:\n  run={tree:?}\n  runvm={vm:?}");
     if let Some(php) = php_or_gate("error_subtype_value_is_byte_identical") {
         let php_src = cli::cmd_transpile(&src).expect("transpile ok");
@@ -3167,13 +3173,13 @@ fn s1_qualified_form_checks_and_runs_identically_to_member_import() {
         "qualified form must check clean"
     );
     assert_eq!(
-        cli::cmd_run(member),
-        cli::cmd_run(qualified),
+        cli::cmd_treewalk(member),
+        cli::cmd_treewalk(qualified),
         "member-import vs qualified run output"
     );
     assert_eq!(
-        cli::cmd_runvm(member),
-        cli::cmd_runvm(qualified),
+        cli::cmd_run(member),
+        cli::cmd_run(qualified),
         "member-import vs qualified runvm output"
     );
 }
@@ -3241,8 +3247,8 @@ fn s2a_time_instant_member_import_is_self_contained() {
         cli::cmd_check(src).is_ok(),
         "member-imported Instant must check"
     );
-    assert_eq!(cli::cmd_run(src), cli::cmd_runvm(src), "run vs runvm");
-    assert_eq!(cli::cmd_run(src).unwrap(), "ok\n");
+    assert_eq!(cli::cmd_treewalk(src), cli::cmd_run(src), "run vs runvm");
+    assert_eq!(cli::cmd_treewalk(src).unwrap(), "ok\n");
 }
 
 // --- Import redesign S2 (stage C): E-INJECTED-TYPE-BARE enforcement ---------------------------

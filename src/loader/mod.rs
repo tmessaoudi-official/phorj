@@ -19,7 +19,7 @@
 //!   library package requires a project); folder = path is suspended.
 //!
 //! Enforcement and resolution live here (path-aware), never in the type checker, so
-//! `cli::cmd_run(&str)`, the differential harness, and the checker's package-agnostic tests are
+//! `cli::cmd_treewalk(&str)`, the differential harness, and the checker's package-agnostic tests are
 //! untouched. Library packages export **functions and types** (M-RT cross-package types): a non-`main`
 //! `class`/`enum`/`interface` is mangled like a function (`acme.geometry` + `Point` ⇒
 //! `Acme\Geometry\Point`) and a consuming file binds it with `import type a.b.C [as D];`; the same

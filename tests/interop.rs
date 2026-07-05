@@ -114,12 +114,12 @@ fn interop_examples_refuse_to_run_and_match_php_golden() {
         cli::cmd_check(&src).unwrap_or_else(|e| panic!("{label}: check failed:\n{e}"));
 
         // 2. The Rust backends must REFUSE it (foreign code needs the PHP runtime).
-        let run_err = cli::cmd_run(&src).expect_err("run must refuse a foreign program");
+        let run_err = cli::cmd_treewalk(&src).expect_err("run must refuse a foreign program");
         assert!(
             run_err.contains("E-FOREIGN-RUNTIME"),
             "{label}: run should fail with E-FOREIGN-RUNTIME, got:\n{run_err}"
         );
-        let vm_err = cli::cmd_runvm(&src).expect_err("runvm must refuse a foreign program");
+        let vm_err = cli::cmd_run(&src).expect_err("runvm must refuse a foreign program");
         assert!(
             vm_err.contains("E-FOREIGN-RUNTIME"),
             "{label}: runvm should fail with E-FOREIGN-RUNTIME, got:\n{vm_err}"
@@ -161,12 +161,12 @@ fn interop_projects_refuse_to_run_and_match_php_golden() {
             .unwrap_or_else(|e| panic!("{label}: check failed:\n{e}"));
 
         // 2. Both Rust backends REFUSE it (foreign code needs the PHP runtime).
-        let run_err = cli::run_program(&unit).expect_err("run must refuse a foreign project");
+        let run_err = cli::treewalk_program(&unit).expect_err("run must refuse a foreign project");
         assert!(
             run_err.contains("E-FOREIGN-RUNTIME"),
             "{label}: run should fail with E-FOREIGN-RUNTIME, got:\n{run_err}"
         );
-        let vm_err = cli::runvm_program(&unit).expect_err("runvm must refuse a foreign project");
+        let vm_err = cli::run_program(&unit).expect_err("runvm must refuse a foreign project");
         assert!(
             vm_err.contains("E-FOREIGN-RUNTIME"),
             "{label}: runvm should fail with E-FOREIGN-RUNTIME, got:\n{vm_err}"

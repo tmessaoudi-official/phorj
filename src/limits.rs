@@ -16,7 +16,7 @@
 ///
 /// The value is far below what the VM's heap-allocated frames could hold (it formerly capped at
 /// `64*1024`) because the interpreter recurses on the *native* Rust stack (~14 KB/frame in debug,
-/// so ~875 frames fit a default 12.2 MB stack). `cli::cmd_run`/`cmd_runvm` run the whole pipeline
+/// so ~875 frames fit a default 12.2 MB stack). `cli::cmd_treewalk`/`cmd_run` run the whole pipeline
 /// on a dedicated 256 MB-stack thread so this limit is reachable with >4× native margin.
 pub const MAX_CALL_DEPTH: usize = 4096;
 

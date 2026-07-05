@@ -10,8 +10,8 @@
 //! that, `b5053a4`); `recv`-on-empty / `join`-on-incomplete suspend via the coroutine yielder until the
 //! scheduler wakes the task. wasm keeps the eager model (corosensei has no native stack to switch).
 //!
-//! Wired into `cmd_run`/`cmd_run_exit` (S4.3 flip): a `uses_concurrency` program routes here, every
-//! other program stays on the unchanged synchronous interpreter. `cmd_runvm` routes to the VM twin
+//! Wired into `cmd_treewalk`/`cmd_treewalk_exit` (S4.3 flip): a `uses_concurrency` program routes here, every
+//! other program stays on the unchanged synchronous interpreter. `cmd_run` routes to the VM twin
 //! [`vm::coop`](crate::vm) in the same step, so the byte-identity spine (`run≡runvm`) holds.
 
 use super::*;

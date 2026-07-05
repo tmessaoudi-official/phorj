@@ -1179,7 +1179,7 @@ fn parse_checked(src: &str) -> Result<Program, String> {
 }
 
 /// Like [`parse_checked`], but also returns the checker's **reified-operand side-table** so a
-/// VM-running caller can [`compile_with`] it — the byte-identical path [`cmd_runvm`] uses. Without it,
+/// VM-running caller can [`compile_with`] it — the byte-identical path [`cmd_run`] uses. Without it,
 /// a method-call/field-read result used as an arithmetic operand (`a.join() + b.join()`,
 /// `box.get() + 1`) is rejected by the VM compiler (`ctype` falls through to `method_rets`) while the
 /// interpreter accepts it — a `run ≠ runvm` divergence. Any inline-source path that builds a
@@ -1230,7 +1230,7 @@ pub fn check_and_expand_for_debug(prog: &Program, diag_src: &str) -> Result<Prog
     Ok(checked)
 }
 
-pub fn cmd_run(src: &str) -> Result<String, String> {
+pub fn cmd_treewalk(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
         foreign_runtime_gate(&prog)?;
@@ -1249,8 +1249,8 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
 }
 
 /// `runvm`: lex -> parse -> check (gate) -> compile to bytecode -> VM -> captured stdout.
-/// The bytecode backend; must produce byte-identical output to `cmd_run` (differential).
-pub fn cmd_runvm(src: &str) -> Result<String, String> {
+/// The bytecode backend; must produce byte-identical output to `cmd_treewalk` (differential).
+pub fn cmd_run(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let parsed = lex_parse(src)?;
         let (prog, reified) = check_and_expand_reified(&parsed, src)?;
@@ -1266,9 +1266,9 @@ pub fn cmd_runvm(src: &str) -> Result<String, String> {
     })
 }
 
-/// Like [`cmd_run`], but also returns `main`'s exit code (Batch-1 B). The string source path
-/// (`-e`/stdin and standalone built binaries); the project-loader path is [`run_program_exit`].
-pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
+/// Like [`cmd_treewalk`], but also returns `main`'s exit code (Batch-1 B). The string source path
+/// (`-e`/stdin and standalone built binaries); the project-loader path is [`treewalk_program_exit`].
+pub fn cmd_treewalk_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
         foreign_runtime_gate(&prog)?;
@@ -1280,8 +1280,8 @@ pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
     })
 }
 
-/// Like [`cmd_runvm`], but also returns `main`'s exit code (Batch-1 B).
-pub fn cmd_runvm_exit(src: &str) -> Result<(String, i64), String> {
+/// Like [`cmd_run`], but also returns `main`'s exit code (Batch-1 B).
+pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let parsed = lex_parse(src)?;
         let (prog, reified) = check_and_expand_reified(&parsed, src)?;
@@ -1312,7 +1312,7 @@ pub fn cmd_check(src: &str) -> Result<String, String> {
 /// `run` on a loaded [`Unit`] (interpreter backend). A runtime fault is rendered **with its stack
 /// trace** (error-handling slice 1): frames are attributed to files via the unit's `fn_files`, and the
 /// caret is drawn against the innermost frame's source (project mode) or the single `diag_src` (loose).
-pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
+pub fn treewalk_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
@@ -1332,8 +1332,8 @@ pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
     })
 }
 
-/// `runvm` on a loaded [`Unit`] (bytecode + VM backend). Same trace rendering as [`run_program`].
-pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
+/// `runvm` on a loaded [`Unit`] (bytecode + VM backend). Same trace rendering as [`treewalk_program`].
+pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
         let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
@@ -1354,9 +1354,9 @@ pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
     })
 }
 
-/// Like [`run_program`], but also returns `main`'s exit code (Batch-1 B). `phg run <file>` uses this
-/// to set the process exit status; the stdout-only [`run_program`] stays for the differential.
-pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
+/// Like [`treewalk_program`], but also returns `main`'s exit code (Batch-1 B). `phg run <file>` uses this
+/// to set the process exit status; the stdout-only [`treewalk_program`] stays for the differential.
+pub fn treewalk_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
@@ -1374,8 +1374,8 @@ pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), Str
     })
 }
 
-/// Like [`runvm_program`], but also returns `main`'s exit code (Batch-1 B).
-pub fn runvm_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
+/// Like [`run_program`], but also returns `main`'s exit code (Batch-1 B).
+pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;

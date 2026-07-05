@@ -126,7 +126,7 @@ fn every_repo_phg_formats_idempotently_and_safely() {
         files.len()
     );
 
-    // The per-file work (two `cmd_run` pipelines, each on a deep-stack worker thread) is CPU-bound
+    // The per-file work (two `cmd_treewalk` pipelines, each on a deep-stack worker thread) is CPU-bound
     // and independent per file — and this single test otherwise dominates the whole suite's
     // wall-clock. Fan the corpus out across the cores with std scoped threads (no new dependency).
     // A failing file panics inside its worker; the panic propagates on scope join, so the test still
@@ -167,9 +167,9 @@ fn assert_phg_fmt_safe(f: &Path) {
     assert_eq!(once, twice, "not idempotent: {}", f.display());
     // Meaning preserved for a standalone-runnable program (skip multi-file project parts /
     // impure / fragment files, which don't run as a single source).
-    let before = cli::cmd_run(&src);
+    let before = cli::cmd_treewalk(&src);
     if before.is_ok() {
-        let after = cli::cmd_run(&once);
+        let after = cli::cmd_treewalk(&once);
         assert_eq!(before, after, "fmt changed behavior of {}", f.display());
     }
 }

@@ -6,7 +6,7 @@
 //! (plus seed reproducibility and bounds) is what this dedicated suite checks. The PHP leg is *not*
 //! checked here: the transpiled code uses PHP's `mt_rand`, whose sequence intentionally differs.
 
-use phorj::cli::{cmd_run, cmd_runvm};
+use phorj::cli::{cmd_run, cmd_treewalk};
 use std::sync::Mutex;
 
 /// `RANDOM_STATE` is a process global, so these tests must not interleave their seed/advance calls
@@ -27,15 +27,15 @@ function main() -> void {
     }
 }"#;
     // A fixed seed replays the same stream on repeated runs (the global is reset by `seed`).
-    let first = cmd_run(src).unwrap();
-    let again = cmd_run(src).unwrap();
+    let first = cmd_treewalk(src).unwrap();
+    let again = cmd_treewalk(src).unwrap();
     assert_eq!(
         first, again,
         "a fixed seed must be reproducible across runs"
     );
 
     // The two Rust backends share the generator, so they agree (only the PHP leg is quarantined).
-    let vm = cmd_runvm(src).unwrap();
+    let vm = cmd_run(src).unwrap();
     assert_eq!(first, vm, "run ≡ runvm under a shared generator");
 
     // Five rolls, each a valid d6.
@@ -61,9 +61,9 @@ function main() -> void {{
 }}"#
         )
     };
-    let a = cmd_run(&prog(1)).unwrap();
-    let b = cmd_run(&prog(2)).unwrap();
+    let a = cmd_treewalk(&prog(1)).unwrap();
+    let b = cmd_treewalk(&prog(2)).unwrap();
     assert_ne!(a, b, "distinct seeds should produce distinct output");
     // Each backend agrees with itself on the same seed.
-    assert_eq!(cmd_runvm(&prog(1)).unwrap(), a);
+    assert_eq!(cmd_run(&prog(1)).unwrap(), a);
 }

@@ -261,7 +261,7 @@ pub struct Interp<'c> {
 ///
 /// The tree-walker recurses on the native Rust stack, so deep recursion needs a generous stack for
 /// the `run_call` depth guard (not a native abort) to be what stops it. That stack is supplied by
-/// the caller — `cli::cmd_run` runs the whole pipeline on a 256 MB worker thread — keeping this
+/// the caller — `cli::cmd_treewalk` runs the whole pipeline on a 256 MB worker thread — keeping this
 /// function a plain recursive walk.
 pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
     interpret_main(program).map(|(out, _exit)| out)

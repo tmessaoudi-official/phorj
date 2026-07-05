@@ -1,11 +1,11 @@
 //! `phg format` tests. Two invariants gate the formatter:
-//!   * **meaning preservation** — for runnable programs, `cmd_run(src) == cmd_run(fmt(src))`;
+//!   * **meaning preservation** — for runnable programs, `cmd_treewalk(src) == cmd_treewalk(fmt(src))`;
 //!   * **idempotence** — `fmt(fmt(src)) == fmt(src)` (across the full language surface).
 //!
 //! Plus: comments survive, and an unparseable file is refused (never reformatted).
 
 use super::format;
-use crate::cli::cmd_run;
+use crate::cli::cmd_treewalk;
 
 fn fmt(src: &str) -> String {
     format(src).unwrap_or_else(|e| panic!("fmt failed: {e:?}\n--- src ---\n{src}"))
@@ -23,8 +23,8 @@ fn assert_idempotent(src: &str) {
 
 /// Formatting preserves runtime behavior: the program runs identically before and after.
 fn assert_meaning_preserved(src: &str) {
-    let before = cmd_run(src);
-    let after = cmd_run(&fmt(src));
+    let before = cmd_treewalk(src);
+    let after = cmd_treewalk(&fmt(src));
     assert_eq!(
         before, after,
         "behavior changed by fmt.\n--- before ---\n{before:?}\n--- after ---\n{after:?}\n--- fmt ---\n{}",

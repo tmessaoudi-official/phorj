@@ -23,7 +23,7 @@ fn main() {
         // real process arguments (everything after the program name).
         phorj::native::set_process_args(std::env::args().skip(1).collect());
         // Batch-1 B: a built binary honors `main`'s `int` return as its process exit status.
-        match cli::cmd_runvm_exit(&src) {
+        match cli::cmd_run_exit(&src) {
             Ok((text, code)) => {
                 print!("{text}");
                 exit(i32::try_from(code).unwrap_or(1));
@@ -465,9 +465,9 @@ fn main() {
         if cmd == "run" {
             // Default backend = the VM (the runtime); `--tree-walker` selects the interpreter oracle.
             let outcome = if tree_walker {
-                cli::run_program_exit(&unit)
+                cli::treewalk_program_exit(&unit)
             } else {
-                cli::runvm_program_exit(&unit)
+                cli::run_program_exit(&unit)
             };
             match outcome {
                 Ok((text, code)) => {

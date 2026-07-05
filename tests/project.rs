@@ -34,8 +34,8 @@ impl Drop for TempDir {
 
 fn run_both(entry: &Path) -> (String, String) {
     let unit = loader::load(entry).expect("project loads");
-    let run = cli::run_program(&unit).expect("interpreter runs");
-    let runvm = cli::runvm_program(&unit).expect("vm runs");
+    let run = cli::treewalk_program(&unit).expect("interpreter runs");
+    let runvm = cli::run_program(&unit).expect("vm runs");
     (run, runvm)
 }
 
@@ -121,8 +121,8 @@ fn unqualified_cross_package_call_is_rejected() {
     );
     let unit = loader::load(&entry).expect("project loads");
     // Both backends reject identically (the bare `compute` no longer names any function).
-    let run = cli::run_program(&unit);
-    let runvm = cli::runvm_program(&unit);
+    let run = cli::treewalk_program(&unit);
+    let runvm = cli::run_program(&unit);
     assert!(run.is_err(), "bare cross-package call must fail");
     assert!(
         runvm.is_err(),
@@ -147,8 +147,8 @@ fn library_package_type_is_usable_cross_package() {
     );
     let unit = loader::load(&entry).expect("project with a cross-package type loads");
     // Both backends agree (the type def + every reference were mangled before either backend ran).
-    let run = cli::run_program(&unit);
-    let runvm = cli::runvm_program(&unit);
+    let run = cli::treewalk_program(&unit);
+    let runvm = cli::run_program(&unit);
     assert_eq!(run.as_deref(), Ok("5\n"), "run output");
     assert_eq!(runvm.as_deref(), Ok("5\n"), "runvm output");
 }
@@ -341,7 +341,7 @@ fn cross_package_trait_used_as_type_is_rejected() {
         "package Acme.Mix;\ntrait Greet {\n  function hello() -> string { return \"hi\"; }\n}",
     );
     let unit = loader::load(&entry).expect("project loads (trait import resolves)");
-    let err = cli::run_program(&unit).unwrap_err();
+    let err = cli::treewalk_program(&unit).unwrap_err();
     assert!(err.contains("E-USE-AS-TYPE"), "got: {err}");
 }
 

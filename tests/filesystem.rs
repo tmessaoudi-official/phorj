@@ -8,7 +8,7 @@
 //! PHP leg is unreliable across a separate process, which is why these are quarantined from the oracle,
 //! not from run≡runvm).
 
-use phorj::cli::{cmd_run, cmd_runvm};
+use phorj::cli::{cmd_run, cmd_treewalk};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -37,8 +37,8 @@ impl Drop for TmpDir {
 
 /// Run `src` on both backends, assert they agree, and return the shared stdout.
 fn both(src: &str) -> String {
-    let r = cmd_run(src).expect("run ok");
-    assert_eq!(cmd_runvm(src).expect("runvm ok"), r, "run ≡ runvm");
+    let r = cmd_treewalk(src).expect("run ok");
+    assert_eq!(cmd_run(src).expect("runvm ok"), r, "run ≡ runvm");
     r
 }
 

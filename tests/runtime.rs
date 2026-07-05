@@ -8,7 +8,7 @@
 //! (2) the manual-benchmark shape works end to end. This also guards the shipped walkthrough example
 //! (`examples/benchmark/manual/`) against rot, since the differential harness never runs it.
 
-use phorj::cli::{cmd_run, cmd_runvm};
+use phorj::cli::{cmd_run, cmd_treewalk};
 
 /// A monotonic clock and memory counters used together — the manual-benchmark shape. Sanity booleans
 /// (not raw numbers) keep the assertion deterministic while proving the API is wired on both backends.
@@ -29,23 +29,23 @@ function main() -> void {
 
 #[test]
 fn runtime_bench_shape_runs_and_backends_agree() {
-    let run = cmd_run(BENCH_SHAPE).expect("run ok");
+    let run = cmd_treewalk(BENCH_SHAPE).expect("run ok");
     assert_eq!(
         run, "fib=75025\nelapsed_ok=true\nmem_ok=true\npeak_ok=true\n",
         "unexpected output: {run}"
     );
     // The Rust backends share the process, so they always agree even for impure natives.
-    assert_eq!(cmd_runvm(BENCH_SHAPE).expect("runvm ok"), run);
+    assert_eq!(cmd_run(BENCH_SHAPE).expect("runvm ok"), run);
 }
 
 #[test]
 fn shipped_manual_example_runs_on_both_backends() {
     let src = std::fs::read_to_string("examples/benchmark/manual/stopwatch-and-memory.phg")
         .expect("read shipped manual-bench example");
-    let run = cmd_run(&src).expect("shipped example must run");
+    let run = cmd_treewalk(&src).expect("shipped example must run");
     assert!(run.contains("fib(30)           = 832040"), "{run}");
     assert_eq!(
-        cmd_runvm(&src).expect("shipped example must run on the VM"),
+        cmd_run(&src).expect("shipped example must run on the VM"),
         run
     );
 }

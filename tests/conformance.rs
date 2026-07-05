@@ -13,7 +13,7 @@
 //! PHP gating mirrors `tests/differential.rs`: `PHORJ_PHP=<path>` overrides the binary;
 //! `PHORJ_REQUIRE_PHP=1` turns a missing `php` into a failure (CI) rather than a skip.
 
-use phorj::cli::{cmd_run, cmd_runvm, cmd_transpile};
+use phorj::cli::{cmd_run, cmd_transpile, cmd_treewalk};
 use phorj::{cli, loader};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -184,9 +184,9 @@ fn conformance_single_file_golden() {
         let out_path = path.with_extension("out");
         let expected = std::fs::read_to_string(&out_path)
             .unwrap_or_else(|e| panic!("missing golden output {}: {e}", out_path.display()));
-        let run = cmd_run(&src).unwrap_or_else(|e| panic!("{label}: run errored: {e}"));
+        let run = cmd_treewalk(&src).unwrap_or_else(|e| panic!("{label}: run errored: {e}"));
         assert_eq!(run, expected, "interpreter ≠ golden for {label}");
-        let runvm = cmd_runvm(&src).unwrap_or_else(|e| panic!("{label}: runvm errored: {e}"));
+        let runvm = cmd_run(&src).unwrap_or_else(|e| panic!("{label}: runvm errored: {e}"));
         assert_eq!(runvm, expected, "VM ≠ golden for {label}");
         if let Some(php) = php_or_gate(&label) {
             let php_src = cmd_transpile(&src).expect("transpile ok");
@@ -213,10 +213,11 @@ fn conformance_projects_golden() {
         let unit =
             loader::load(&entry).unwrap_or_else(|e| panic!("{label}: project must load: {e}"));
         let expected = read(&project.join("expected.out"));
-        let run = cli::run_program(&unit).unwrap_or_else(|e| panic!("{label}: run errored: {e}"));
+        let run =
+            cli::treewalk_program(&unit).unwrap_or_else(|e| panic!("{label}: run errored: {e}"));
         assert_eq!(run, expected, "interpreter ≠ golden for project {label}");
         let runvm =
-            cli::runvm_program(&unit).unwrap_or_else(|e| panic!("{label}: runvm errored: {e}"));
+            cli::run_program(&unit).unwrap_or_else(|e| panic!("{label}: runvm errored: {e}"));
         assert_eq!(runvm, expected, "VM ≠ golden for project {label}");
         if let Some(php) = php_or_gate(&label) {
             let php_src = cli::transpile_program(&unit.program, &unit.diag_src)

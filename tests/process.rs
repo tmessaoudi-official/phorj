@@ -6,8 +6,8 @@
 //! sets the args/env it expects. This crate is separate from the `#![forbid(unsafe_code)]` library,
 //! so it may call the (edition-2024-`unsafe`) `std::env::set_var`.
 
-use phorj::cli::cmd_run;
-use phorj::cli::{cmd_run_exit, cmd_runvm_exit};
+use phorj::cli::cmd_treewalk;
+use phorj::cli::{cmd_run_exit, cmd_treewalk_exit};
 use phorj::native::set_process_args;
 use std::sync::Mutex;
 
@@ -29,10 +29,13 @@ function main() -> void {
     Output.printLine("n={List.length(a)}");
     for (string s in a) { Output.printLine(s); }
 }"#;
-    assert_eq!(cmd_run(src).unwrap(), "n=2\nhello\nworld\n");
+    assert_eq!(cmd_treewalk(src).unwrap(), "n=2\nhello\nworld\n");
     // `runvm` shares the same process global, so it agrees (the Rust backends always do — only the
     // PHP leg is unreliable, which is why these are quarantined from the oracle, not from run≡runvm).
-    assert_eq!(phorj::cli::cmd_runvm(src).unwrap(), cmd_run(src).unwrap());
+    assert_eq!(
+        phorj::cli::cmd_run(src).unwrap(),
+        cmd_treewalk(src).unwrap()
+    );
     set_process_args(Vec::new());
 }
 
@@ -51,7 +54,7 @@ function main() -> void {
     Output.printLine(Environment.get("PHORJ_IT_PRESENT") ?? "<unset>");
     Output.printLine(Environment.get("PHORJ_IT_DEFINITELY_UNSET_XYZ") ?? "<unset>");
 }"#;
-    assert_eq!(cmd_run(get_src).unwrap(), "yes\n<unset>\n");
+    assert_eq!(cmd_treewalk(get_src).unwrap(), "yes\n<unset>\n");
 
     // all → a Map keyed by every env var; the set var is present, and keys come back sorted.
     let all_src = r#"package Main;
@@ -62,7 +65,7 @@ function main() -> void {
     var e = Environment.all();
     Output.printLine("has={Map.has(e, \"PHORJ_IT_PRESENT\")}");
 }"#;
-    assert_eq!(cmd_run(all_src).unwrap(), "has=true\n");
+    assert_eq!(cmd_treewalk(all_src).unwrap(), "has=true\n");
 
     unsafe { std::env::remove_var("PHORJ_IT_PRESENT") };
 }
@@ -79,8 +82,8 @@ function main(): int {
     Output.printLine("done");
     return 7;
 }"#;
+    assert_eq!(cmd_treewalk_exit(src).unwrap(), ("done\n".to_string(), 7));
     assert_eq!(cmd_run_exit(src).unwrap(), ("done\n".to_string(), 7));
-    assert_eq!(cmd_runvm_exit(src).unwrap(), ("done\n".to_string(), 7));
 }
 
 #[test]
@@ -88,8 +91,8 @@ fn main_void_exits_zero() {
     let src = r#"package Main;
 import Core.Output;
 function main(): void { Output.printLine("hi"); }"#;
+    assert_eq!(cmd_treewalk_exit(src).unwrap(), ("hi\n".to_string(), 0));
     assert_eq!(cmd_run_exit(src).unwrap(), ("hi\n".to_string(), 0));
-    assert_eq!(cmd_runvm_exit(src).unwrap(), ("hi\n".to_string(), 0));
 }
 
 #[test]
@@ -104,10 +107,10 @@ function main(List<string> args): int {
     for (string s in args) { Output.printLine(s); }
     return List.length(args);
 }"#;
-    assert_eq!(cmd_run_exit(src).unwrap(), ("a\nbb\nccc\n".to_string(), 3));
     assert_eq!(
-        cmd_runvm_exit(src).unwrap(),
+        cmd_treewalk_exit(src).unwrap(),
         ("a\nbb\nccc\n".to_string(), 3)
     );
+    assert_eq!(cmd_run_exit(src).unwrap(), ("a\nbb\nccc\n".to_string(), 3));
     set_process_args(Vec::new());
 }

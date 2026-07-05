@@ -238,7 +238,7 @@ pub(super) fn bench_report_opts(
 ) -> Result<String, String> {
     on_deep_stack(|| {
         // Thread the checker's reified-operand side-table into the VM compile (the byte-identical
-        // path `cmd_runvm` uses) so a program whose arithmetic operand is a method/field result
+        // path `cmd_run` uses) so a program whose arithmetic operand is a method/field result
         // (`a.join() + b.join()`, `box.get() + 1`) compiles here exactly as it runs — not rejected
         // by `ctype` falling through to `method_rets` (a run≠runvm divergence).
         let (prog, reified) = parse_checked_reified(src)?;

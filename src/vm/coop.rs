@@ -9,8 +9,8 @@
 //! that `Rc` ([`Vm::program_rc`]) so a `SpawnCall` can build a child task-VM coroutine. `spawn` defers
 //! (the function body is the coroutine root — no lambda); `recv`/`join` suspend via the yielder.
 //!
-//! Wired into `cmd_runvm`/`cmd_runvm_exit` (S4.3 flip): a `uses_concurrency` program routes here, in
-//! the same step `cmd_run` routes to the interpreter twin — so the byte-identity spine (`run≡runvm`)
+//! Wired into `cmd_run`/`cmd_run_exit` (S4.3 flip): a `uses_concurrency` program routes here, in
+//! the same step `cmd_treewalk` routes to the interpreter twin — so the byte-identity spine (`run≡runvm`)
 //! holds. Every non-concurrent program stays on the unchanged synchronous [`run_main`](Vm::run_main).
 
 use super::*;
@@ -117,7 +117,7 @@ pub fn run_cooperative_vm(program: &BytecodeProgram) -> Result<(String, i64), Di
 mod tests {
     use super::run_cooperative_vm;
 
-    /// Front-end (parse→check→expand→compile) then run on the cooperative VM. Mirrors `cmd_runvm`'s
+    /// Front-end (parse→check→expand→compile) then run on the cooperative VM. Mirrors `cmd_run`'s
     /// pipeline but routes the compiled program to the cooperative driver.
     fn coop_runvm(src: &str) -> Result<String, String> {
         let prog = crate::cli::parse_checked_program(src)?;
