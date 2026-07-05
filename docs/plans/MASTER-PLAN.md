@@ -84,6 +84,27 @@ W6-4/UA-0.10). The five doc false-claim families the audit found (zero-deps, `im
 dead CLI verbs, the wrong concurrency E-code, 🔲-on-shipped) are corrected in the Stage-D pass
 (§2.3) and must never be reintroduced.
 
+**G-8 · PERF MANDATE (developer, 2026-07-05, EMPHATIC — hard bar, not aspiration).** *"Either phorj is
+BETTER in performance than PHP, or it means nothing — it's garbage."* Phorj must be **measurably
+faster than PHP, proven PER-FEATURE**: `phg runvm` beats a **tuned RELEASE php (opcache+JIT)** on each
+feature's isolated microbenchmark. **Not equal — faster.** Consequences:
+(a) **`phg run` is the correctness ORACLE (Invariant 2) — SLOW BY DESIGN (tree-walker); NEVER a perf
+    number.** Perf = `runvm`. Transpiled-PHP *is* PHP ⇒ equal-by-construction — the migration BRIDGE,
+    not the perf story; the perf claim rides the VM.
+(b) The current whole-workload `phg benchmark` is **insufficient** — it cannot prove per-feature parity
+    nor catch a single-feature regression. **Build a per-feature MICROBENCHMARK suite** (one isolated
+    tight-loop bench per operation, in-process median-of-N + warmup, `runvm` vs release-php + helper-
+    overhead check on transpiled-php, ns/op, baseline-tracked, regression-gated via `scripts/perf-gate.sh`).
+(c) **Baseline must be VALID first (W6-4/UA-0.10):** a tuned RELEASE php (no Xdebug — the box php aborts
+    recursion >512 frames — opcache+JIT, clean ini). Until then NO publishable vs-php number, only
+    run-vs-runvm. (Measured 2026-07-05: VM 1.45ms vs debug-php 37ms on `workload.phg` — but that php is
+    invalid; a tuned php+JIT is the real target and is genuinely hard to beat.)
+(d) **Definition-of-done input:** a feature is not perf-"done" until its microbench shows the VM beating
+    release-php; a loss is a tracked **P0-perf bug** to optimize (VM dispatch/allocation/inline-caches).
+    If the VM cannot beat release-php+JIT on a hot path even after optimization → the native/AOT-backend
+    question is a **§15 fork** (surface to the developer, never decide alone). **This is the developer's
+    #1 stated priority.** Full diagnosis: memory `perf-benchmarking-truth`.
+
 ---
 
 ## 2. UNIFICATION-AUDIT EXECUTION PROGRAMME (2026-07-03) — the current work
