@@ -1,0 +1,27 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+
+// Microbench: closure (lambda) call. A lambda is built once, then invoked each iteration; the result
+// is folded into the checksum (indirect-call cost).
+function bench(int iters): int {
+    var f = function(int x) => x * 2 + 1;
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = acc + f(i % 100);
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("closurecall\t{d / iters + guard}\t{acc}");
+}

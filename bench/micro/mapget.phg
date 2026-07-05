@@ -1,0 +1,29 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+
+// Microbench: map lookup by key. A fixed map is built once; each iteration reads one of four keys
+// (chosen by `i % 4`) and folds the value into the checksum (hash-get cost, not map construction).
+function bench(int iters): int {
+    Map<string, int> m = ["a" => 10, "b" => 20, "c" => 30, "d" => 40];
+    List<string> keys = ["a", "b", "c", "d"];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        string k = keys[i % 4];
+        acc = acc + m[k];
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mapget\t{d / iters + guard}\t{acc}");
+}

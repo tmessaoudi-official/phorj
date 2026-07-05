@@ -1,0 +1,27 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+
+// Microbench: `match` expression dispatch on an int. Each iteration matches `i % 4` to a weight and
+// folds it into the checksum (arm-selection cost).
+function bench(int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        int w = match (i % 4) { 0 => 7, 1 => 3, 2 => 5, _ => 1 };
+        acc = acc + w;
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 3000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("match\t{d / iters + guard}\t{acc}");
+}

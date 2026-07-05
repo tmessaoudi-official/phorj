@@ -1,0 +1,30 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Conversion;
+
+// Microbench: float arithmetic (add + multiply). Each iteration folds `i * 0.5` into a running float
+// accumulator; the checksum is the truncated int (folding a float into `{acc}` would risk backend
+// float-formatting divergence — an int checksum keeps the output-identity gate exact, since f64 IEEE
+// arithmetic in the same order is bit-identical across both backends). Sums of exact halves stay in
+// f64's exact-integer range for these iters, so the truncation is deterministic.
+function bench(int iters): int {
+    mutable float acc = 0.0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = acc + Conversion.toFloat(i) * 0.5;
+        i = i + 1;
+    }
+    return Conversion.truncate(acc);
+}
+
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("floatarith\t{d / iters + guard}\t{acc}");
+}

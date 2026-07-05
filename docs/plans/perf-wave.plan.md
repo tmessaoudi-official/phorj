@@ -203,6 +203,26 @@ concurrency directions (researched 2026-07-05; the CLI reshape is orthogonal to 
   commit after the reshape lands green. (Can't just drop "runvm" — `cmd_run` is taken by the
   tree-walker; must rename both.)
 
+## Step 2 corpus expansion (2026-07-05, autonomous — developer chose this over the JIT amendment)
+Expanding `bench/micro/` beyond the 3 starter pairs (intadd/methodcall/objalloc) toward the plan's
+list — weighted alloc/builtin-heavy. Each pair's `.php` mirror MUST produce a byte-identical checksum
+(the harness output-identity gate). Constraints: keep every accumulator well under 2^63 (Phorj int is
+CHECKED — overflow FAULTS; PHP wraps to float — so an overflow is both a fault AND a checksum break);
+fold any float work into an INT checksum (truncate) to dodge float-format divergence; int→string in
+interpolation is identical across both legs (safe). Validated per-pair by running `phg run x.phg` vs
+local `php-8.5.8 x.php` and diffing the checksum field (Docker only needed for the perf ratio).
+
+**SHIPPED — corpus now 11 micros** (added 8: `floatarith`, `listindex`, `mapget`, `match`, `interp`,
+`stringconcat`, `closurecall`, `enum` — alongside `intadd`/`methodcall`/`objalloc`). Every pair's
+checksum is byte-identical VM≡php (harness output-identity gate — all 11 pass, no mismatch). First full
+table (VM ns/op vs release-php+JIT via Docker, best-of-3) — **every feature LOSES**, the honest G-8
+picture: objalloc ~3× slower (closest), enum/mapget/match/interp/methodcall/closurecall ~8–50×,
+pure-dispatch intadd/listindex/stringconcat ~100–300× (php+JIT ≈ free on those — corroborates
+callgrind's 61%-dispatch tax). This is the per-feature baseline the JIT must erase; it IS the JIT's
+measurement backbone. `enum`'s php mirror is the leanest tag-`match` (PHP has no payload enums → the
+hardest baseline). REMAINING follow-ups (separate, more invasive — deferred): `trycatch` micro;
+reshape `phg benchmark` headline to VM-vs-php; migrate `perf-gate.sh` off the tree÷VM anchor.
+
 ## Step 2 (per-feature harness) — execution log
 - MVP DONE: `scripts/microbench.sh` + `bench/micro/<name>.{phg,php}` pairs. phorj VM (`phg run`) vs
   **real release PHP 8.5.7+JIT via `docker run php:8.5-cli`**, best-of-K, self-timed (warmup call +

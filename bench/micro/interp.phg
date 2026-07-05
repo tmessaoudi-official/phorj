@@ -1,0 +1,29 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.String;
+
+// Microbench: string interpolation. Each iteration builds `"v={i}"` and folds its length into the
+// checksum (interpolation cost: int->string + concat). Length is `2 + digits(i)`, identical on both
+// backends because int->string rendering agrees for ints.
+function bench(int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        string s = "v={i}";
+        acc = acc + String.length(s);
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("interp\t{d / iters + guard}\t{acc}");
+}
