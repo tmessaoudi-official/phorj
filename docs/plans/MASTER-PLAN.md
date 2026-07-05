@@ -708,18 +708,31 @@ Ledger basis: W3 ≈+6, W4 ≈+6 parity points are the big movers (§11.3).
 > `import Core.Result;`→`Result.Success` OR `import Core.Result.Success;`→bare `Success`, the SAME must
 > apply to module functions: `import Core.Output;`→`Output.printLine(...)` (qualified, unchanged) OR
 > **`import Core.Output.printLine;`→bare `printLine(...)`**; same for `Output.print`, `String.format`, etc.
-> **This RE-REVERSES the 2026-07-03 "functions are NOT bare-importable" ruling** (UNIFIED-SPEC §400/318).
+> **Framing (developer, 2026-07-05): UNIFICATION, not a reversal** — extend the ONE two-mode principle
+> already shipped for types/variants/intrinsics to functions too, removing the lone "functions are the
+> exception" wart. It supersedes the 2026-07-03 "functions NOT bare-importable" stance (UNIFIED-SPEC
+> §400/318) as part of that unified rule.
 > ADDITIVE (existing qualified calls unchanged) + uniform (functions finally match types/variants/
 > intrinsics). **Couples to `String.format`:** format is a function, so how it's imported/called is
 > defined by THIS — so DEC-197 must be settled BEFORE String.format is built. Build shape (est.): a
 > pre-check rewrite qualifying a member-imported bare function call to its module native (mirrors
 > `resolve_intrinsic_imports`/`resolve_variant_imports`), grouped form `import Core.Output.{ print,
-> printLine };`, `ty_has_param`-style care on the checker/loader classification. **NOT built; scope
-> confirmation pending (Rule 12 challenge: the "nothing in the wind" tension — but the member import
-> NAMES the function, so a bare `printLine` after `import Core.Output.printLine;` is as legible as a bare
-> imported variant/intrinsic → the reversal is consistent, not a regression of the principle).** A full
-> fresh-context WAVE (parser + loader import-classification + checker resolution + all 5 backends +
-> corpus). See §0 cursor.
+> printLine };`, `ty_has_param`-style care on the checker/loader classification.
+> **RULINGS (developer, 2026-07-05):** (a) **SCOPE = ALL functions** — Core natives AND user-package
+> functions (`import App.Utils.helper;`→bare `helper()`). (b) **UFCS = COEXIST** — bare import, UFCS
+> (`x.trim()`), and qualified (`String.trim(x)`) all valid; author's choice. (c) **Collisions**
+> (bare `map` from two modules) **solved by `import … as`** — the alias syntax already PARSES
+> (types/variants use it); for FUNCTIONS it rides THIS wave (nothing to build separately): reuse the
+> `as` plumbing + `import_map`/`build_type_imports` alias handling + the **lowercase-leaf casing
+> carve-out already built for `Core.Assert`/`Core.Abort`** (a function leaf like `map` currently trips
+> `E-PKG-CASE` — same fix). (d) Grouped `import Core.Output.{ print, printLine };` included (DEC-186
+> machinery). Bare-name resolution order (proposed): local > user fn > imported native; ambiguity =
+> error. **Rule-12 challenge outcome:** the "nothing in the wind" tension is answered — a member import
+> NAMES the function, so bare `printLine` after `import Core.Output.printLine;` is as legible as a bare
+> imported variant/intrinsic; costs (cross-module leaf collisions, style drift with UFCS) are
+> manageable/opt-in. **Effectively RULED; only the BUILD remains** — a full fresh-context WAVE (parser
+> + loader import-classification + checker resolution + pre-check rewrite + all 5 backends + corpus),
+> and it GATES `String.format`. See §0 cursor.
 
 Cleared the entire open-fork backlog so the feature marathon runs without stalls. All six ruled
 interactively (AskUserQuestion), each with a verified failing/working program in the question. Also
