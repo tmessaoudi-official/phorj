@@ -10,6 +10,20 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
+- **`String.format` (W3-5) — RULED but BLOCKED on a surface collision (DEC-199 PENDING).** The formatter
+  is fully specified (DEC-197 import/call form; DEC-198 full Rust-style `{}` grammar, `%` rejected), but a
+  positional `String.format("{} {}", args)` spec cannot be written as an ordinary phorj string literal:
+  phorj strings already interpolate `{expr}`, so `"{}"` lexes as an *empty interpolation hole* (verified —
+  `String.format("val {}", [3])` is a **parse error** "expected an expression"), and `"{0}"` would
+  interpolate the integer `0`. DEC-198 ruled the `{}` grammar without accounting for phorj already owning
+  `{}`. This needs a developer ruling (DEC-199) on how the spec string carries `{}` — a raw/verbatim string
+  literal (`r"{} {}"`), format-via-interpolation only (`"{expr:spec}"` inline, no positional form), a
+  different positional placeholder, or a lexer "format-string mode". The compile-time desugar-to-
+  interpolation architecture is sound and waits behind this surface choice; no partial `format` ships until
+  ruled (no accept-but-fault). Today `String.format` is unresolved — a bare/qualified call is a clean
+  "unknown"/parse error, and string **interpolation** (`"{expr}"`, no specifiers yet) is the current
+  formatting surface.
+
 - **Static method call sites — shipped corners + deferrals.** `ClassName.method(args)` calls a `static`
   method directly on the class (the static-factory pattern, e.g. `Greeter.make("w")`); calling an
   *instance* method this way is `E-STATIC-CALL`. **Inherited / trait static methods now work**

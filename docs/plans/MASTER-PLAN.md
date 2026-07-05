@@ -464,6 +464,18 @@ W3-1/W3-2 add stdlib types.**
   `Core.String` native → member-importable bare `format(…)` or qualified `String.format(…)`).
   **BUILD = a fresh-context WAVE** (new spec-grammar parser + native + all 5 backends + the shared
   interpolation-specifier path; spine-sensitive → per the standing rule, do NOT tack onto a long session).
+  **⚠ SURFACE COLLISION FOUND 2026-07-05 (blocks the build — needs a developer ruling, DEC-199 PENDING):**
+  a `String.format("{} {}", args)` positional-`{}` spec CANNOT be written as an ordinary phorj string
+  literal — phorj strings ALREADY interpolate `{expr}`, so `"{}"` lexes as an EMPTY interpolation hole
+  (verified: `String.format("val {}", [3])` → *parse error* "expected an expression"), and `"{0}"` would
+  interpolate the integer literal `0`. DEC-198 ruled the `{}` grammar without accounting for phorj strings
+  owning `{}`. Resolution options for the developer (see the DEC-199 question / KNOWN_ISSUES): (a) a
+  RAW/verbatim string literal syntax for format specs (e.g. `r"{} {}"`) that suppresses interpolation;
+  (b) format-via-INTERPOLATION only — no positional `format(spec,args)`, instead `"{expr:spec}"` inline
+  (drops the positional/dynamic-spec use case); (c) a different positional placeholder that does not
+  collide; (d) a lexer "format-string mode". **Build deferred until ruled.** Prior architecture sketch
+  (compile-time desugar of a literal spec to an interpolation `Expr::Str`, reusing the proven spine) still
+  holds AFTER the surface is chosen — it was sound; the blocker is purely how the spec string is written.
 - **W3-6 · Filesystem breadth + serve static-handle bridge** (L) — `Core.Directory`
   (mkdir/listDir/glob/…), fs-OOP question resolved (statics until streams demand handles); serve
   class-static `handle` entry. FS design ruled (Appendix B): Path value type, stateless IO,
