@@ -1,10 +1,11 @@
 <?php
-// Idiomatic PHP counterpart of stringconcat.phg (hand-authored). Two fixed strings, concat length folded.
+// Idiomatic PHP counterpart of stringconcat.phg (hand-authored). Same index-varying operands so the
+// tracing JIT cannot hoist the concat (a loop-invariant concat folds to a constant — measuring nothing).
 function bench(int $iters): int {
-    $a = "hello"; $b = "world";
+    $parts = ["alpha", "beta", "gamma", "delta"];
     $acc = 0;
     for ($i = 0; $i < $iters; $i++) {
-        $s = $a . $b;
+        $s = $parts[$i % 4] . $parts[($i + 1) % 4];
         $acc = $acc + strlen($s);
     }
     return $acc;

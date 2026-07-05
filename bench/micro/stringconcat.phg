@@ -4,15 +4,15 @@ import Core.Output;
 import Core.Runtime;
 import Core.String;
 
-// Microbench: string concatenation (bounded — two fixed short strings per iteration, no O(n^2) growth;
-// unbounded accumulation is a separate footgun class). Folds the concatenated length into the checksum.
+// Microbench: string concatenation. Operands VARY with the loop index (`parts[i%4] + parts[(i+1)%4]`)
+// so neither backend can hoist the concat to a loop-invariant constant — measuring the actual per-op
+// concat cost. Bounded (two fixed short strings per iteration; no O(n^2) growth). Length folded.
 function bench(int iters): int {
-    string a = "hello";
-    string b = "world";
+    List<string> parts = ["alpha", "beta", "gamma", "delta"];
     mutable int acc = 0;
     mutable int i = 0;
     while (i < iters) {
-        string s = a + b;
+        string s = parts[i % 4] + parts[(i + 1) % 4];
         acc = acc + String.length(s);
         i = i + 1;
     }

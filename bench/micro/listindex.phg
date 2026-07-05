@@ -3,14 +3,15 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 
-// Microbench: list index read. A fixed list is built once; each iteration reads `xs[i % len]` and
-// folds it into the checksum (index-read cost, not list construction).
+// Microbench: list index read with a DATA-DEPENDENT index (`(i + acc) % 8`), so neither backend can
+// precompute the periodic sum to a closed form — measuring the actual dynamic index-read cost.
 function bench(int iters): int {
     List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];
     mutable int acc = 0;
     mutable int i = 0;
     while (i < iters) {
-        acc = acc + xs[i % 8];
+        int idx = (i + acc) % 8;
+        acc = acc + xs[idx];
         i = i + 1;
     }
     return acc;
