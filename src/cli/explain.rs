@@ -1370,6 +1370,38 @@ pub fn explain_text(code: &str) -> Option<String> {
              imported module qualifier. Alias the import with `as` to give it a distinct name, or\n\
              rename the local declaration.\n"
         }
+        "E-FORMAT-ARGS" => {
+            "E-FORMAT-ARGS — `String.format` was not called with exactly two arguments (W3-5).\n\n\
+             `String.format(spec, values)` takes a format string and a list of values:\n\
+             `String.format(\"%s = %d\", [name, count])`.\n"
+        }
+        "E-FORMAT-SPEC-TYPE" => {
+            "E-FORMAT-SPEC-TYPE — `String.format`'s first argument is not a `string` (W3-5).\n\n\
+             The format string must be a `string` (a literal, or a runtime `string` value for a\n\
+             dynamic/i18n template).\n"
+        }
+        "E-FORMAT-ARGS-TYPE" => {
+            "E-FORMAT-ARGS-TYPE — `String.format`'s second argument is not a list (W3-5).\n\n\
+             Pass the values as a list: `String.format(\"%s\", [x])`. `%s`/`%d` consume the list by\n\
+             position.\n"
+        }
+        "E-FORMAT-ARG-TYPE" => {
+            "E-FORMAT-ARG-TYPE — a `String.format` value is not a printable scalar (W3-5).\n\n\
+             The values must be `int`/`float`/`decimal`/`bool`/`string` — the types `%s`/`%d` can\n\
+             render. Convert a composite value to a string first.\n"
+        }
+        "E-FORMAT-ARG-COUNT" => {
+            "E-FORMAT-ARG-COUNT — a literal `String.format` spec's directive count ≠ value count (W3-5).\n\n\
+             Each `%s`/`%d` consumes one value (`%%` is a literal `%`, not a directive). Give exactly one\n\
+             value per directive. (Checked at compile time for a literal spec + literal list; a dynamic\n\
+             spec is checked at runtime.)\n"
+        }
+        "E-FORMAT-UNSUPPORTED" => {
+            "E-FORMAT-UNSUPPORTED — a literal `String.format` spec uses a directive not yet supported (W3-5).\n\n\
+             This version supports `%s`, `%d`, and `%%`. Width/precision/flags and `%f`/`%x`/`%o`/`%b`/\n\
+             `%e`/`%g` plus `%N$` positional forms are coming in later slices. (A dynamic runtime spec\n\
+             faults at render time on an unsupported directive instead.)\n"
+        }
         _ => return None,
     };
     Some(body.to_string())

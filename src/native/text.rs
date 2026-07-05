@@ -404,9 +404,87 @@ fn text_count(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// `String.format` (W3-5 / DEC-199 slice 1) — PHP-style `%` sprintf, rendered STRICTLY. This slice
+/// supports `%s` (any scalar → its display form, the interpolation kernel), `%d` (an int, else a clean
+/// fault — the phorj upgrade over PHP's silent coercion) and `%%` (a literal `%`). Any other directive
+/// (`%f`, flags, width, precision, `%N$` positional) is an unsupported-directive fault here — a LITERAL
+/// spec is gated earlier at compile time (`E-FORMAT-UNSUPPORTED`); a runtime spec faults here. The
+/// emitted PHP helper `__phorj_format` mirrors this byte-for-byte (see `emit_runtime_helpers`).
+fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
+    let (spec, items) = match args {
+        [Value::Str(spec), Value::List(items)] => (spec, items),
+        _ => return Err("String.format expects (string, list)".into()),
+    };
+    let mut out = String::new();
+    let mut chars = spec.chars().peekable();
+    let mut ai = 0usize;
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('%') => out.push('%'),
+            Some('s') => {
+                let v = items.get(ai).ok_or_else(|| {
+                    format!("String.format: the format string needs at least {} value(s)", ai + 1)
+                })?;
+                ai += 1;
+                match v.as_display() {
+                    Some(t) => out.push_str(&t),
+                    None => {
+                        return Err(format!("String.format: cannot format {} with %s", v.type_name()))
+                    }
+                }
+            }
+            Some('d') => {
+                let v = items.get(ai).ok_or_else(|| {
+                    format!("String.format: the format string needs at least {} value(s)", ai + 1)
+                })?;
+                ai += 1;
+                match v {
+                    Value::Int(n) => out.push_str(&n.to_string()),
+                    other => {
+                        return Err(format!(
+                            "String.format: %d expects an int, found {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Some(other) => {
+                return Err(format!(
+                    "String.format: unsupported directive `%{other}` (this version supports %s, %d, %%)"
+                ))
+            }
+            None => return Err("String.format: dangling `%` at the end of the format string".into()),
+        }
+    }
+    if ai != items.len() {
+        return Err(format!(
+            "String.format: the format string uses {ai} value(s) but {} were given",
+            items.len()
+        ));
+    }
+    Ok(Value::Str(out))
+}
+
 pub(crate) fn text_natives() -> Vec<NativeFn> {
     let s = || Ty::String;
     vec![
+        // W3-5 / DEC-199: `String.format(spec, args)` — PHP-style `%` sprintf. The checker
+        // special-cases it (`check_string_format`) for arg-type validation + a compile-time
+        // `E-FORMAT-UNSUPPORTED` gate on a literal spec, but (unlike the desugared `Reflect.typeName`)
+        // it is a REAL runtime native: `text_format` renders it and `__phorj_format` is the PHP mirror.
+        NativeFn {
+            module: "Core.String",
+            name: "format",
+            params: vec![s(), Ty::List(Box::new(s()))],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_format),
+            php: |a| format!("__phorj_format({}, {})", parg(a, 0), parg(a, 1)),
+        },
         NativeFn {
             module: "Core.String",
             name: "isEmpty",

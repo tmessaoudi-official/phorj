@@ -129,6 +129,12 @@ impl Transpiler {
                         // closure has no `&mut self` to set the flag, so set it here (the established
                         // gated-helper pattern — see `emit_runtime_helpers`).
                         let nat = &crate::native::registry()[idx];
+                        if nat.module == "Core.String" && nat.name == "format" {
+                            self.uses_string_format = true;
+                            // `__phorj_format`'s `%s` stringifies via `__phorj_str` (the same kernel
+                            // interpolation uses), so gate it in too.
+                            self.uses_str = true;
+                        }
                         if nat.module == "Core.Reflection" {
                             match nat.name {
                                 "kind" => self.uses_reflect_kind = true,

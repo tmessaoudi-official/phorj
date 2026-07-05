@@ -77,6 +77,13 @@ impl Checker {
                             if n.module == "Core.Reflection" && n.name == "typeName" {
                                 return self.check_reflect_type_name(q, args, span);
                             }
+                            // W3-5/DEC-199: `String.format(spec, args)` gets custom arg-type validation
+                            // + a compile-time `E-FORMAT-UNSUPPORTED` gate on a literal spec; it stays a
+                            // real runtime native (no rewrite), so the backends run `text_format` /
+                            // `__phorj_format`.
+                            if n.module == "Core.String" && n.name == "format" {
+                                return self.check_string_format(args, span);
+                            }
                             self.require_option_for_result_bridge(n.module, n.name, span);
                             let ty = self.check_native_call(idx, args, span);
                             self.record_pending_fill(callee, args, span);
@@ -266,6 +273,26 @@ impl Checker {
         args: &[crate::ast::Expr],
         span: Span,
     ) -> Ty {
+        // W3-5/DEC-199: a bare member-imported `format(spec, args)` gets `String.format`'s custom
+        // validation (`check_string_format`) AND the standard bare→qualified rewrite (so the backends
+        // resolve the real native via the `String.` qualifier, like every other bare fn import). The
+        // qualified Member-arm path needs no rewrite (the call is already qualified); only the bare path
+        // does — hence the rewrite is recorded here, not inside `check_string_format`.
+        if module == "Core.String" && real == "format" {
+            let ret = self.check_string_format(args, span);
+            let qualified = crate::ast::Expr::Call {
+                callee: Box::new(crate::ast::Expr::Member {
+                    object: Box::new(crate::ast::Expr::Ident("String".to_string(), span)),
+                    name: "format".to_string(),
+                    safe: false,
+                    span,
+                }),
+                args: args.to_vec(),
+                span,
+            };
+            self.ufcs_resolutions.insert(span.start, qualified);
+            return ret;
+        }
         let idx = crate::native::index_of(module, real)
             .expect("fn_imports entries are built from index_of matches");
         let ret = self.check_native_call(idx, args, span);
@@ -286,6 +313,119 @@ impl Checker {
         };
         self.ufcs_resolutions.insert(span.start, qualified);
         ret
+    }
+
+    /// W3-5 / DEC-199 slice 1: type-check `String.format(spec, args)` — a real `%`-sprintf native
+    /// (`text_format` / `__phorj_format`), NOT a desugar. Validates arg 0 is a `string` and arg 1 a
+    /// list, then — for a LITERAL spec — gates the directive set at compile time (`%s`/`%d`/`%%` this
+    /// slice; anything else, incl. width/precision/flags/`%f`/`%N$`, is `E-FORMAT-UNSUPPORTED`) and,
+    /// when the values are a list literal, checks the directive count (`E-FORMAT-ARG-COUNT`). A runtime
+    /// spec / non-literal list is left to the strict runtime renderer (which faults on a bad directive,
+    /// a `%d` type mismatch, or a count mismatch). Returns `Ty::String`.
+    pub(super) fn check_string_format(&mut self, args: &[crate::ast::Expr], span: Span) -> Ty {
+        use crate::ast::{Expr, StrPart};
+        if args.len() != 2 {
+            return self.err_coded(
+                span,
+                format!(
+                    "`String.format` expects 2 arguments (a format string and a list of values), found {}",
+                    args.len()
+                ),
+                "E-FORMAT-ARGS",
+                Some("call it as `String.format(\"%s = %d\", [name, count])`".into()),
+            );
+        }
+        let spec_ty = self.check_expr(&args[0]);
+        if !matches!(spec_ty, Ty::String | Ty::Error) {
+            self.err_coded(
+                Self::expr_span(&args[0]),
+                format!("`String.format`'s format string must be a `string`, found `{spec_ty}`"),
+                "E-FORMAT-SPEC-TYPE",
+                None,
+            );
+        }
+        // Values: a LIST LITERAL may be heterogeneous printable scalars (`["Ada", 3, 50]` — `%s`/`%d`
+        // consume them by position), so check each element individually rather than as a homogeneous
+        // `List<T>` (which would reject the mix / an empty `[]`). A non-literal list arg (a `List<T>`
+        // variable) is accepted by its list type; the strict runtime renderer enforces per-directive
+        // element types (`%d` needs an int) with clean faults.
+        let scalar_ok = |t: &Ty| {
+            matches!(
+                t,
+                Ty::Int | Ty::Float | Ty::Decimal | Ty::Bool | Ty::String | Ty::Error
+            )
+        };
+        match &args[1] {
+            Expr::List(items, _) => {
+                for it in items {
+                    let t = self.check_expr(it);
+                    if !scalar_ok(&t) {
+                        self.err_coded(
+                            Self::expr_span(it),
+                            format!(
+                                "`String.format` values must be printable scalars, found `{t}`"
+                            ),
+                            "E-FORMAT-ARG-TYPE",
+                            Some("`%s`/`%d` format `int`/`float`/`decimal`/`bool`/`string`".into()),
+                        );
+                    }
+                }
+            }
+            other => {
+                let t = self.check_expr(other);
+                if !matches!(t, Ty::List(_) | Ty::FixedList(..) | Ty::Error) {
+                    self.err_coded(
+                        Self::expr_span(other),
+                        format!("`String.format`'s values must be a list, found `{t}`"),
+                        "E-FORMAT-ARGS-TYPE",
+                        Some("pass the values as a list — `String.format(\"%s\", [x])`".into()),
+                    );
+                }
+            }
+        }
+        // Compile-time gate for a LITERAL spec (the common case): only `%s`/`%d`/`%%` this slice, and
+        // (against a list literal) an exact directive/value count. A runtime spec is validated at runtime.
+        if let Expr::Str(parts, _) = &args[0] {
+            if parts.iter().all(|p| matches!(p, StrPart::Literal(_))) {
+                let spec: String = parts
+                    .iter()
+                    .map(|p| match p {
+                        StrPart::Literal(s) => s.as_str(),
+                        StrPart::Expr(_) => "",
+                    })
+                    .collect();
+                match count_format_directives(&spec) {
+                    Ok(n) => {
+                        if let Expr::List(items, _) = &args[1] {
+                            if n != items.len() {
+                                self.err_coded(
+                                    span,
+                                    format!(
+                                        "`String.format` uses {n} directive(s) but was given {} value(s)",
+                                        items.len()
+                                    ),
+                                    "E-FORMAT-ARG-COUNT",
+                                    Some("give exactly one value per `%s`/`%d` (use `%%` for a literal `%`)".into()),
+                                );
+                            }
+                        }
+                    }
+                    Err(bad) => {
+                        self.err_coded(
+                            span,
+                            format!("unsupported `String.format` directive `{bad}`"),
+                            "E-FORMAT-UNSUPPORTED",
+                            Some(
+                                "this version supports `%s`, `%d`, and `%%`; width/precision/flags and \
+                                 `%f`/`%x`/… are coming"
+                                    .into(),
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        Ty::String
     }
 
     /// Check a `parent`/super dispatch call (M-RT super/parent). Validates the context (an instance
@@ -2223,4 +2363,24 @@ fn native_default_expr(d: crate::native::NativeDefault, span: Span) -> crate::as
         D::Str(s) => Expr::Str(vec![StrPart::Literal(s.to_string())], span),
         D::Null => Expr::Null(span),
     }
+}
+
+/// W3-5/DEC-199 slice 1: scan a LITERAL `String.format` spec — count `%s`/`%d` directives (`%%` is a
+/// literal `%`), or return the first unsupported directive (`%<c>`) for `E-FORMAT-UNSUPPORTED`. Mirrors
+/// `text_format`'s runtime scan so the compile-time gate and the renderer agree on the supported set.
+fn count_format_directives(spec: &str) -> Result<usize, String> {
+    let mut n = 0usize;
+    let mut chars = spec.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            continue;
+        }
+        match chars.next() {
+            Some('%') => {}
+            Some('s' | 'd') => n += 1,
+            Some(other) => return Err(format!("%{other}")),
+            None => return Err("% (dangling at end of the format string)".into()),
+        }
+    }
+    Ok(n)
 }

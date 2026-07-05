@@ -909,6 +909,45 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_string_format {
+            // `String.format` (W3-5/DEC-199) — PHP mirror of the strict `%`-sprintf renderer
+            // `text_format`: `%s`→`__phorj_str` (the interpolation kernel), `%d`→int-or-fault, `%%`→`%`;
+            // an unsupported directive / too-few / too-many values all FAULT (a fault is never a
+            // byte-identity example — Invariant 9 — so the text need not match, only that both legs
+            // fault). Byte scan: literal runs are copied verbatim and directive bytes are ASCII, so this
+            // matches the interpreter's char scan byte-for-byte.
+            self.line("function __phorj_format($spec, $args) {");
+            self.indent += 1;
+            self.line("$out = ''; $ai = 0; $i = 0; $n = strlen($spec); $c = count($args);");
+            self.line("while ($i < $n) {");
+            self.indent += 1;
+            self.line("$ch = $spec[$i]; $i++;");
+            self.line("if ($ch !== '%') { $out .= $ch; continue; }");
+            self.line(
+                "if ($i >= $n) { throw new \\RuntimeException('String.format: dangling %'); }",
+            );
+            self.line("$d = $spec[$i]; $i++;");
+            self.line("if ($d === '%') { $out .= '%'; }");
+            self.line("elseif ($d === 's') {");
+            self.indent += 1;
+            self.line("if ($ai >= $c) { throw new \\RuntimeException('String.format: not enough values'); }");
+            self.line("$out .= __phorj_str($args[$ai]); $ai++;");
+            self.indent -= 1;
+            self.line("} elseif ($d === 'd') {");
+            self.indent += 1;
+            self.line("if ($ai >= $c) { throw new \\RuntimeException('String.format: not enough values'); }");
+            self.line("$v = $args[$ai]; $ai++;");
+            self.line("if (!is_int($v)) { throw new \\RuntimeException('String.format: %d expects an int'); }");
+            self.line("$out .= (string)$v;");
+            self.indent -= 1;
+            self.line("} else { throw new \\RuntimeException(\"String.format: unsupported directive %$d\"); }");
+            self.indent -= 1;
+            self.line("}");
+            self.line("if ($ai !== $c) { throw new \\RuntimeException('String.format: value count mismatch'); }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_math_lcm {
             // `Math.lcm` — `|a|/gcd*|b|` over the magnitudes, inlining Euclid (so it needs no
             // `__phorj_gcd`). Mirrors the Rust `math_lcm` native for every in-range input; `lcm(_, 0)=0`.

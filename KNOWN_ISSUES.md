@@ -10,17 +10,15 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- **`String.format` (W3-5) — RULED (DEC-199), not yet built.** Syntax = **PHP-style `%` sprintf**
-  (`%s`/`%d`/`%08.2f`/`%1$s`), ruled 2026-07-05, superseding DEC-198's `{}` grammar. Rationale: positional
-  *literal* format is redundant with interpolation, so `String.format`'s only real job is a **runtime**
-  spec (i18n/templates) — which can't be statically checked in any syntax, so `{}` offered no advantage
-  over `%` and would only diverge from PHP; `%` also sidesteps the `{}`/`{expr}`-interpolation lexer
-  collision (a positional `{}` literal spec is a parse error — phorj strings own `{}`). Phorj upgrade
-  within the familiar syntax: **strict** rendering — a `%`/argument type mismatch is a clean runtime fault,
-  not PHP's silent coercion. Transpiles to a literal PHP `sprintf`. `{}` stays interpolation-only. Until
-  built, a `String.format` call is a clean "unknown"; string **interpolation** (`"{expr}"`, no specifiers
-  yet) is the current formatting surface. Build = a Rust `%`-sprintf renderer byte-identical to PHP
-  `sprintf`, sliced by conversion set (spine-sensitive, fresh-context wave).
+- **`String.format` (W3-5, DEC-199) — SLICE 1 shipped; more conversions deferred.** Syntax = **PHP-style
+  `%` sprintf** (superseding DEC-198's `{}`); rendered **strictly** (a `%d` given a non-int is a clean
+  fault, not PHP's silent `0`). **Shipped (`%s`/`%d`/`%%`):** any scalar via `%s`, an int via `%d`, a
+  literal `%` via `%%`; qualified `String.format` or bare `import Core.String.format;`; a (possibly
+  heterogeneous) value list. **Not yet supported (clean errors, not crashes):** width/precision/flags
+  (`%-8s`, `%08.2f`, `%+d`), `%f`/`%x`/`%o`/`%b`/`%e`/`%g`, and `%N$` positional — a LITERAL spec using one
+  is `E-FORMAT-UNSUPPORTED` at compile time; a dynamic (runtime) spec faults cleanly at render time. These
+  land in later slices (each a byte-match-PHP-`sprintf` increment). `{}` remains interpolation-only;
+  interpolation specifiers (`"{x:>8}"`) are a separate future decision (W5-1).
 
 - **Static method call sites — shipped corners + deferrals.** `ClassName.method(args)` calls a `static`
   method directly on the class (the static-factory pattern, e.g. `Greeter.make("w")`); calling an

@@ -357,6 +357,11 @@ struct Transpiler {
     /// Set when `Math.clamp(int, int, int)` is emitted (UA-1.7) — defines `__phorj_clamp`, which
     /// faults on `lo > hi` (a caller bug) to match the native; the inline `max(min())` could not.
     uses_math_clamp: bool,
+    /// Set when `String.format(spec, args)` is emitted (W3-5/DEC-199) — defines `__phorj_format`, the
+    /// PHP mirror of the strict `%`-sprintf renderer (`text_format`): `%s`→`__phorj_str`, `%d`→int-or-
+    /// fault, `%%`→`%`, any other directive / count mismatch → a fault, byte-for-byte the same as the
+    /// interpreter and VM.
+    uses_string_format: bool,
     /// Set when `Math.lcm(int, int)` is emitted (M4) — defines `__phorj_lcm` (`x/gcd*y` over the
     /// magnitudes, inlining Euclid so it needs no `__phorj_gcd`). Mirrors the Rust `math_lcm` native.
     uses_math_lcm: bool,
@@ -609,6 +614,7 @@ impl Transpiler {
             uses_dec_to_int_exact: false,
             uses_math_gcd: false,
             uses_math_clamp: false,
+            uses_string_format: false,
             uses_math_lcm: false,
             uses_math_number_format: false,
             uses_rng: false,

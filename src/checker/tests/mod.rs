@@ -31,6 +31,7 @@ mod parent_dispatch;
 mod reflect;
 mod secret;
 mod static_methods;
+mod string_format;
 mod support;
 mod throws;
 mod totality;
