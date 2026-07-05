@@ -18,6 +18,31 @@
 - [2026-07-05] AGREED: **Profiler = Docker + callgrind** on the existing release binary (perf blocked:
   `perf_event_paranoid=4`, no CAP_PERFMON, host sudo denied; valgrind absent on host). Deterministic,
   no rebuild, no host perms.
+- [2026-07-05] AGREED: **JIT/AOT is the path (Option 1)** — VM micro-opt curve flattened (fix#1 −10%,
+  safe wins −0%, frame-caching ≤5%); no bytecode-VM tuning under `forbid(unsafe)` closes the 26× gap.
+  Beating PHP needs native codegen. **Harness (Option 4) co-runs** as the JIT measurement backbone AND
+  the playground perf-number source. `forbid(unsafe)` question folds INTO the JIT design (JIT needs
+  unsafe/Cranelift). Frame-caching (Option 3) DROPPED.
+- [2026-07-05] AGREED: **PHP execution model = bytecode VM (= `phg runvm`) + optional JIT.** PHP is
+  NEVER a tree-walker. So the honest races are `runvm` vs `php-no-JIT` (VM vs VM) and phorj-JIT vs
+  `php+JIT` (native vs native). `phg run` (tree-walk) races nothing in PHP — it's the oracle only.
+- [2026-07-05] AGREED: **CLI reshape.** `phg run` and bare `phg <file>` → the **VM** (then JIT).
+  `phg run --tree-walker` → the interpreter. **`phg runvm` REMOVED entirely** (docs/scripts swept same
+  change; the distributed binary already dispatches via `cmd_runvm`, so the runtime default is
+  unchanged — only the CLI surface). Tests still run both backends + compare (unchanged).
+- [2026-07-05] AGREED: **Keep the tree-walker as the correctness oracle** (independent 2nd
+  implementation; validates the whole compile pipeline; total coverage incl. concurrency; the
+  executable spec). Not user-facing. Its value rises with the JIT. Bounded maintenance via
+  single-sourced kernels. PHP is a bonus 3rd oracle, cannot replace it.
+- [2026-07-05] AGREED: **Playground perf display = precomputed NATIVE numbers, 4 engines**
+  (tree-walk / VM / PHP+JIT / transpiled-PHP-under-real-php), time + peak memory, per-example + a
+  global summary. NO live in-browser timing (php-wasm has no JIT → misleading). Harness computes them;
+  frontend-only display (no WASM rebuild; `wasm-pack` absent locally).
+- [2026-07-05] AGREED: **Explore Option 2 (VM ceiling)** — research how close a hard-tuned VM
+  (possibly relaxing `forbid(unsafe)` for validated-bytecode indexing) gets to PHP-no-JIT; if the VM
+  can beat PHP-no-JIT, JIT is only needed to beat PHP+JIT (sharpens the roadmap).
+- [2026-07-05] AGREED: **Perf premise** — the CLI rename is a UX win (fast engine by default, kills the
+  7s tree-walk trap); it does NOT beat PHP. Only the JIT/AOT backend beats PHP.
 
 ## Measured baseline (2026-07-05) — the honest truth
 Pure execution, self-timed (phg `Runtime.monotonicNanos`, php `hrtime`), best-of-5, startup excluded.
@@ -67,6 +92,19 @@ beating release-php.
   A/B, best-of-8, identical load): **fib −10.5%, heap −6.6%**; callgrind confirms `Op::clone` gone,
   instruction count **1,534M → 1,339M (−12.8%)**. Full gate green (build+clippy+fmt+`PHORJ_REQUIRE_PHP=1
   cargo test --workspace`). Modest ~8% as scoped — the 61% dispatch machinery is the next target.
+
+- **Stage 1 diminishing-returns signal (2026-07-05)** — line-level callgrind (debug-info release,
+  source-mounted) on the fix#1 binary: biggest *addressable* cost is bounds-checked indexing
+  (`slice/index.rs` 6.84% run_main + 3.11% exec_op ≈ 10%), but `forbid(unsafe_code)` blocks
+  `get_unchecked`. Tried the two zero-risk wins (pre-reserve stack/frames; guard `do_return`'s
+  `handlers.retain`): **measured ~0%** (fib +0.4%, heap −0.3% — the `raw_vec` grow cost was
+  warm-up-only, amortized away in steady-state heavy workloads; handler-guard saves nothing with no
+  handlers). **Reverted** (Invariant 11 — no perf commit without a measured gain). Cumulative tally:
+  fix#1 −10%, safe wins −0%. Frame-context caching predicted only ~3-5% (bounds checks on
+  `ip`/`code[ip]` remain) with two-loop spine risk + a gate blind spot (concurrency is quarantined
+  from the oracle, yet the coop driver runs these loops). **Curve is flattening → JIT/AOT pivot fork
+  surfaced to developer** (the ratified endgame; no bytecode-VM micro-opt under `forbid(unsafe)`
+  closes the 26× gap — that needs native codegen).
 
 ## Acceptance
 - Harness runs the full feature corpus, `runvm` vs release-php+JIT, ns/op, regression-gated.

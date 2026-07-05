@@ -105,6 +105,21 @@ feature's isolated microbenchmark. **Not equal — faster.** Consequences:
     question is a **§15 fork** (surface to the developer, never decide alone). **This is the developer's
     #1 stated priority.** Full diagnosis: memory `perf-benchmarking-truth`.
 
+**G-8 UPDATE (2026-07-05, measured + adjudicated — working plan `docs/plans/perf-wave.plan.md`).**
+Honest baseline landed (phg runvm vs **real release PHP 8.5.7+JIT via Docker**, self-timed pure-exec):
+fib(30) **~28× slower**, heap-alloc **~10× slower**, ~6× memory. (The prior "runvm 25× faster" was a
+light-workload/DEBUG-php artifact — corrected.) callgrind root-caused it: 61% dispatch machinery, 8%
+per-op clone (FIXED `f277113`, −10%), ~15% stack traffic. **VM micro-opt curve flattened → the §15
+fork is RULED: build the JIT/AOT backend** (the only path past the interpretation floor; PHP is a
+bytecode VM + JIT, so `runvm`↔`php-no-JIT` and phorj-JIT↔`php+JIT` are the real races). Ruled with it:
+(i) **CLI reshape** — `phg run`/bare `phg <file>` → the VM (then JIT); `phg run --tree-walker` → the
+interpreter; **`runvm` command REMOVED**; tree-walker KEPT as the (now non-user-facing) correctness
+oracle. (ii) **Per-feature microbench harness** (runvm vs release-php+JIT, ns/op, regression-gated) —
+co-runs as JIT measurement backbone + playground data source; subsumes W6-4/UA-0.10. (iii) **Playground**
+shows precomputed NATIVE 4-engine perf (tree-walk/VM/PHP+JIT/transpiled-PHP, time+mem, per-example +
+global). (iv) **Explore** the tuned-VM-vs-PHP-no-JIT ceiling (possibly relax `forbid(unsafe)` for
+validated-bytecode indexing — folds into JIT design). `forbid(unsafe)` will relax for JIT codegen.
+
 ---
 
 ## 2. UNIFICATION-AUDIT EXECUTION PROGRAMME (2026-07-03) — the current work
