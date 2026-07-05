@@ -1444,8 +1444,11 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
 /// run the blocking HTTP serve loop ([`crate::serve::serve_tcp`]) until the process is killed. Defaults
 /// to the **bytecode VM** (~25× faster than the tree-walker, byte-identical via [`Vm::run_entry`] ≡
 /// `call_named`); `tree_walker` selects the interpreter oracle (`phg serve --tree-walker`, the
-/// exact pre-VM behaviour). Runs on the 256 MB deep-stack worker so re-entrant natives (and the
-/// interpreter's `MAX_CALL_DEPTH` guard) have the same native-stack headroom `run` relies on.
+/// exact pre-VM behaviour). The single-threaded path runs on the 256 MB deep-stack worker (native-stack
+/// headroom for re-entrant natives / the interpreter's deep recursion). Note: `--workers N` pool
+/// threads are plain `std::thread::spawn` (default ~8 MB stack), not the deep-stack worker — the VM is
+/// iterative so it is far less exposed than the tree-walker was, but a `--tree-walker` pool worker has
+/// less headroom than the single-threaded path (pre-existing; unchanged by this slice).
 pub fn serve_program(
     prog: &Program,
     diag_src: &str,

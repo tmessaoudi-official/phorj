@@ -555,6 +555,47 @@ fn pool_serves_concurrent_connections() {
     }
 }
 
+/// The **default** `phg serve` (no `--workers`) runs the VM through the multi-worker POOL — a path
+/// the single-threaded byte-identity test above does not cover. Each worker calls `compile_with`
+/// itself (the compiled `Rc`-bearing program can't cross threads), so this also proves concurrent
+/// per-worker compilation is race-free. 24 clients / 4 VM workers; every response must be the exact
+/// `home` bytes (byte-identical to the interpreter, so the same expectation the interp pool test uses).
+#[test]
+fn pool_serves_concurrent_connections_on_the_vm() {
+    use phorj::serve::serve_pool;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("addr");
+    // Detached 4-worker VM pool — each worker compiles its own program concurrently at startup.
+    std::thread::spawn(move || {
+        let _ = serve_pool(listener, vfac(SERVE_PROGRAM), None, false, 4);
+    });
+
+    let expected = http("HTTP/1.1 200 OK", "home");
+    let clients: Vec<_> = (0..24)
+        .map(|_| {
+            std::thread::spawn(move || {
+                let mut s = TcpStream::connect(addr).expect("connect");
+                s.write_all(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+                    .expect("write");
+                let mut resp = Vec::new();
+                s.read_to_end(&mut resp).expect("read");
+                resp
+            })
+        })
+        .collect();
+
+    for (i, c) in clients.into_iter().enumerate() {
+        let resp = c.join().expect("client thread");
+        assert_eq!(
+            resp, expected,
+            "concurrent VM client {i} got the wrong response"
+        );
+    }
+}
+
 /// S4.2 — graceful shutdown: after a request is served, flipping the shutdown flag makes
 /// `serve_pool_with` stop accepting, drain in-flight work, **join every worker**, and return `Ok` —
 /// no abrupt cut, no hang. (The `join` blocks the test until the drain completes, so a regression that
