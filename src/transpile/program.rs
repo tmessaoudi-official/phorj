@@ -911,11 +911,13 @@ impl Transpiler {
         }
         if self.uses_string_format {
             // `String.format` (W3-5/DEC-199) — PHP mirror of the strict `%`-sprintf renderer
-            // `text_format`: `%s`→`__phorj_str` (the interpolation kernel), `%d`→int-or-fault, `%%`→`%`;
-            // an unsupported directive / too-few / too-many values all FAULT (a fault is never a
-            // byte-identity example — Invariant 9 — so the text need not match, only that both legs
-            // fault). Byte scan: literal runs are copied verbatim and directive bytes are ASCII, so this
-            // matches the interpreter's char scan byte-for-byte.
+            // `text_format`. Each directive's raw text is captured and DELEGATED to PHP's own `sprintf`
+            // (so flag/width/precision + `%f` rounding are canonical PHP), with the value chosen to keep
+            // phorj semantics: `%s`→`__phorj_str($v)` (interpolation kernel — a bool is "true", not
+            // sprintf's "1"), `%d`→int-or-fault, `%f`→int|float-or-fault. Precision on `%s`/`%d`, an
+            // unknown conversion, a dangling `%`, and too-few/too-many values all FAULT (a fault is never
+            // a byte-identity example — Invariant 9 — only that both legs fault). Byte scan matches the
+            // interpreter's char scan (literal runs verbatim, directive bytes ASCII).
             self.line("function __phorj_format($spec, $args) {");
             self.indent += 1;
             self.line("$out = ''; $ai = 0; $i = 0; $n = strlen($spec); $c = count($args);");
@@ -923,24 +925,36 @@ impl Transpiler {
             self.indent += 1;
             self.line("$ch = $spec[$i]; $i++;");
             self.line("if ($ch !== '%') { $out .= $ch; continue; }");
+            self.line("if ($i < $n && $spec[$i] === '%') { $out .= '%'; $i++; continue; }");
+            self.line("$start = $i - 1;");
+            self.line("while ($i < $n && strpos('-0+', $spec[$i]) !== false) { $i++; }");
+            self.line("while ($i < $n && ctype_digit($spec[$i])) { $i++; }");
+            self.line("$hasPrec = false;");
+            self.line("if ($i < $n && $spec[$i] === '.') { $hasPrec = true; $i++; while ($i < $n && ctype_digit($spec[$i])) { $i++; } }");
             self.line(
                 "if ($i >= $n) { throw new \\RuntimeException('String.format: dangling %'); }",
             );
-            self.line("$d = $spec[$i]; $i++;");
-            self.line("if ($d === '%') { $out .= '%'; }");
-            self.line("elseif ($d === 's') {");
-            self.indent += 1;
-            self.line("if ($ai >= $c) { throw new \\RuntimeException('String.format: not enough values'); }");
-            self.line("$out .= __phorj_str($args[$ai]); $ai++;");
-            self.indent -= 1;
-            self.line("} elseif ($d === 'd') {");
-            self.indent += 1;
+            self.line("$conv = $spec[$i]; $i++;");
+            self.line("$dir = substr($spec, $start, $i - $start);");
             self.line("if ($ai >= $c) { throw new \\RuntimeException('String.format: not enough values'); }");
             self.line("$v = $args[$ai]; $ai++;");
-            self.line("if (!is_int($v)) { throw new \\RuntimeException('String.format: %d expects an int'); }");
-            self.line("$out .= (string)$v;");
+            self.line("if ($conv === 's') {");
+            self.indent += 1;
+            self.line("if ($hasPrec) { throw new \\RuntimeException('String.format: precision on %s not supported'); }");
+            self.line("$out .= sprintf($dir, __phorj_str($v));");
             self.indent -= 1;
-            self.line("} else { throw new \\RuntimeException(\"String.format: unsupported directive %$d\"); }");
+            self.line("} elseif ($conv === 'd') {");
+            self.indent += 1;
+            self.line("if ($hasPrec) { throw new \\RuntimeException('String.format: precision on %d not supported'); }");
+            self.line("if (!is_int($v)) { throw new \\RuntimeException('String.format: %d expects an int'); }");
+            self.line("$out .= sprintf($dir, $v);");
+            self.indent -= 1;
+            self.line("} elseif ($conv === 'f') {");
+            self.indent += 1;
+            self.line("if (!is_int($v) && !is_float($v)) { throw new \\RuntimeException('String.format: %f expects a number'); }");
+            self.line("$out .= sprintf($dir, (float)$v);");
+            self.indent -= 1;
+            self.line("} else { throw new \\RuntimeException(\"String.format: unsupported directive %$conv\"); }");
             self.indent -= 1;
             self.line("}");
             self.line("if ($ai !== $c) { throw new \\RuntimeException('String.format: value count mismatch'); }");

@@ -64,11 +64,12 @@ fn percent_percent_is_a_literal_not_a_directive() {
 
 #[test]
 fn unsupported_directive_is_rejected_for_a_literal_spec() {
+    // `%x` (hex) is not supported yet — `%s`/`%d`/`%f`/`%%` are.
     let err = expand(
         "package Main; import Core.String; \
-         function main(): void { var s = String.format(\"%f\", [1.5]); }",
+         function main(): void { var s = String.format(\"%x\", [255]); }",
     )
-    .expect_err("%f is not supported in this slice");
+    .expect_err("%x is not supported in this slice");
     assert!(err.contains("E-FORMAT-UNSUPPORTED"), "got:\n{err}");
 }
 
@@ -90,6 +91,30 @@ fn non_list_values_arg_is_rejected() {
     )
     .expect_err("the values argument must be a list");
     assert!(err.contains("E-FORMAT-ARGS-TYPE"), "got:\n{err}");
+}
+
+#[test]
+fn slice2_flags_width_precision_type_check() {
+    // Flags (`-`/`0`/`+`), width, and `%f` precision are accepted (slice 2).
+    assert!(
+        expand(
+            "package Main; import Core.String; \
+             function main(): void { var s = String.format(\"%-5d %08.2f %+d %.3f\", [1, 2.5, 3, 4.0]); }"
+        )
+        .is_ok(),
+        "flags/width/%f-precision should type-check"
+    );
+}
+
+#[test]
+fn precision_on_string_is_unsupported() {
+    // Precision on `%s` (and `%d`) is deferred — a literal spec using it is E-FORMAT-UNSUPPORTED.
+    let err = expand(
+        "package Main; import Core.String; \
+         function main(): void { var s = String.format(\"%.2s\", [\"abcd\"]); }",
+    )
+    .expect_err("precision on %s is not supported this slice");
+    assert!(err.contains("E-FORMAT-UNSUPPORTED"), "got:\n{err}");
 }
 
 #[test]

@@ -413,11 +413,11 @@ impl Checker {
                     Err(bad) => {
                         self.err_coded(
                             span,
-                            format!("unsupported `String.format` directive `{bad}`"),
+                            bad,
                             "E-FORMAT-UNSUPPORTED",
                             Some(
-                                "this version supports `%s`, `%d`, and `%%`; width/precision/flags and \
-                                 `%f`/`%x`/… are coming"
+                                "this version supports `%s`/`%d`/`%f`/`%%` with flags `-`/`0`/`+`, width, \
+                                 and `%f` precision; `%x`/`%o`/`%b`/`%e`/`%g` and `%N$` positional are coming"
                                     .into(),
                             ),
                         );
@@ -2365,9 +2365,11 @@ fn native_default_expr(d: crate::native::NativeDefault, span: Span) -> crate::as
     }
 }
 
-/// W3-5/DEC-199 slice 1: scan a LITERAL `String.format` spec — count `%s`/`%d` directives (`%%` is a
-/// literal `%`), or return the first unsupported directive (`%<c>`) for `E-FORMAT-UNSUPPORTED`. Mirrors
-/// `text_format`'s runtime scan so the compile-time gate and the renderer agree on the supported set.
+/// W3-5/DEC-199: scan a LITERAL `String.format` spec — count `%…` directives (`%%` is a literal `%`),
+/// or return the first unsupported-directive message for `E-FORMAT-UNSUPPORTED`. Uses the SAME
+/// [`crate::native::parse_format_directive`] the runtime renderer uses, so the compile-time gate and
+/// `text_format` accept exactly the same specs (this slice: flags `-`/`0`/`+`, width, `%f` precision,
+/// conversions `s`/`d`/`f`).
 fn count_format_directives(spec: &str) -> Result<usize, String> {
     let mut n = 0usize;
     let mut chars = spec.chars().peekable();
@@ -2375,12 +2377,12 @@ fn count_format_directives(spec: &str) -> Result<usize, String> {
         if c != '%' {
             continue;
         }
-        match chars.next() {
-            Some('%') => {}
-            Some('s' | 'd') => n += 1,
-            Some(other) => return Err(format!("%{other}")),
-            None => return Err("% (dangling at end of the format string)".into()),
+        if chars.peek() == Some(&'%') {
+            chars.next();
+            continue;
         }
+        crate::native::parse_format_directive(&mut chars)?;
+        n += 1;
     }
     Ok(n)
 }

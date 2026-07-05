@@ -1398,9 +1398,10 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-FORMAT-UNSUPPORTED" => {
             "E-FORMAT-UNSUPPORTED — a literal `String.format` spec uses a directive not yet supported (W3-5).\n\n\
-             This version supports `%s`, `%d`, and `%%`. Width/precision/flags and `%f`/`%x`/`%o`/`%b`/\n\
-             `%e`/`%g` plus `%N$` positional forms are coming in later slices. (A dynamic runtime spec\n\
-             faults at render time on an unsupported directive instead.)\n"
+             This version supports `%s`/`%d`/`%f`/`%%` with flags `-`/`0`/`+`, a width, and a `.precision`\n\
+             on `%f` (default 6). Still coming: `%x`/`%o`/`%b`/`%e`/`%g`, precision on `%s`/`%d`, and\n\
+             `%N$` positional args. (A dynamic runtime spec faults at render time on an unsupported\n\
+             directive instead of at compile time.)\n"
         }
         _ => return None,
     };

@@ -10,15 +10,18 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- **`String.format` (W3-5, DEC-199) — SLICE 1 shipped; more conversions deferred.** Syntax = **PHP-style
-  `%` sprintf** (superseding DEC-198's `{}`); rendered **strictly** (a `%d` given a non-int is a clean
-  fault, not PHP's silent `0`). **Shipped (`%s`/`%d`/`%%`):** any scalar via `%s`, an int via `%d`, a
-  literal `%` via `%%`; qualified `String.format` or bare `import Core.String.format;`; a (possibly
-  heterogeneous) value list. **Not yet supported (clean errors, not crashes):** width/precision/flags
-  (`%-8s`, `%08.2f`, `%+d`), `%f`/`%x`/`%o`/`%b`/`%e`/`%g`, and `%N$` positional — a LITERAL spec using one
-  is `E-FORMAT-UNSUPPORTED` at compile time; a dynamic (runtime) spec faults cleanly at render time. These
-  land in later slices (each a byte-match-PHP-`sprintf` increment). `{}` remains interpolation-only;
-  interpolation specifiers (`"{x:>8}"`) are a separate future decision (W5-1).
+- **`String.format` (W3-5, DEC-199) — slices 1+2 shipped; more conversions deferred.** Syntax = **PHP-style
+  `%` sprintf** (superseding DEC-198's `{}`); rendered **strictly** (a `%d`/`%f` given the wrong type is a
+  clean fault, not PHP's silent coercion). **Shipped:** `%s` (any scalar), `%d` (int), `%f` (int/float,
+  round-half-to-even matching PHP), `%%`; flags `-`/`0`/`+`, a width, and a `.precision` on `%f` (default
+  6) — e.g. `%-8s`, `%08.2f`, `%+d`, `%.4f`. Qualified `String.format` or bare `import Core.String.format;`;
+  a (possibly heterogeneous) value list. **Not yet supported (clean errors, not crashes):** `%x`/`%o`/`%b`/
+  `%e`/`%g`, precision on `%s`/`%d`, and `%N$` positional — a LITERAL spec using one is
+  `E-FORMAT-UNSUPPORTED` at compile time; a dynamic (runtime) spec faults cleanly at render time. **A
+  `decimal` is NOT yet formattable by `%f`/`%d`** — it faults cleanly on all backends (consistent, not a
+  divergence); use `%s` for a decimal (`19.99d` → "19.99"), or convert it first. These land in later slices
+  (each a byte-match-PHP-`sprintf` increment). `{}` remains interpolation-only; interpolation specifiers
+  (`"{x:>8}"`) are a separate future decision (W5-1).
 
 - **Static method call sites — shipped corners + deferrals.** `ClassName.method(args)` calls a `static`
   method directly on the class (the static-factory pattern, e.g. `Greeter.make("w")`); calling an

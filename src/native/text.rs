@@ -404,12 +404,107 @@ fn text_count(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-/// `String.format` (W3-5 / DEC-199 slice 1) — PHP-style `%` sprintf, rendered STRICTLY. This slice
-/// supports `%s` (any scalar → its display form, the interpolation kernel), `%d` (an int, else a clean
-/// fault — the phorj upgrade over PHP's silent coercion) and `%%` (a literal `%`). Any other directive
-/// (`%f`, flags, width, precision, `%N$` positional) is an unsupported-directive fault here — a LITERAL
-/// spec is gated earlier at compile time (`E-FORMAT-UNSUPPORTED`); a runtime spec faults here. The
-/// emitted PHP helper `__phorj_format` mirrors this byte-for-byte (see `emit_runtime_helpers`).
+/// One parsed `%…` directive: flags + width + optional precision + conversion char. Shared shape for
+/// the Rust renderer here and the compile-time gate (`count_format_directives`) so they agree exactly.
+pub(crate) struct FormatDirective {
+    pub minus: bool,
+    pub zero: bool,
+    pub plus: bool,
+    pub width: usize,
+    pub precision: Option<usize>,
+    pub conv: char,
+}
+
+/// Parse a `%…` directive body (the caller has consumed the `%`, and `%%` is handled separately). The
+/// iterator is advanced past `[flags][width][.precision]conv`. Returns the directive, or an error
+/// string for a dangling `%` or an unsupported shape (precision on `%s`/`%d`, an unknown conversion) —
+/// so the runtime renderer and the compile-time gate reject exactly the same specs (this slice: flags
+/// `-`/`0`/`+`, width, `%f`-only precision, conversions `s`/`d`/`f`).
+pub(crate) fn parse_format_directive(
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+) -> Result<FormatDirective, String> {
+    let (mut minus, mut zero, mut plus) = (false, false, false);
+    while let Some(&c) = chars.peek() {
+        match c {
+            '-' => minus = true,
+            '0' => zero = true,
+            '+' => plus = true,
+            _ => break,
+        }
+        chars.next();
+    }
+    let mut width = 0usize;
+    while let Some(&c) = chars.peek() {
+        if let Some(d) = c.to_digit(10) {
+            width = width * 10 + d as usize;
+            chars.next();
+        } else {
+            break;
+        }
+    }
+    let mut precision = None;
+    if chars.peek() == Some(&'.') {
+        chars.next();
+        let mut p = 0usize;
+        while let Some(&c) = chars.peek() {
+            if let Some(d) = c.to_digit(10) {
+                p = p * 10 + d as usize;
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        precision = Some(p);
+    }
+    let conv = chars
+        .next()
+        .ok_or_else(|| "String.format: dangling `%` at the end of the format string".to_string())?;
+    match conv {
+        's' | 'd' if precision.is_some() => Err(format!(
+            "String.format: precision on `%{conv}` is not supported yet (only `%f` takes a precision \
+             this version)"
+        )),
+        's' | 'd' | 'f' => Ok(FormatDirective {
+            minus,
+            zero,
+            plus,
+            width,
+            precision,
+            conv,
+        }),
+        other => Err(format!(
+            "String.format: unsupported directive `%{other}` (this version supports %s, %d, %f, %%)"
+        )),
+    }
+}
+
+/// Pad a rendered numeric/string body to `width` per the flags — matching PHP `sprintf`: left-justify
+/// (`-`) beats zero-pad; zero-pad puts the pad *after* the sign (`%05d` of -42 → `-0042`); otherwise
+/// space-pad on the left. `sign` is the already-computed sign prefix (`""`/`"-"`/`"+"`); for `%s` it is
+/// empty. Widths are byte-based (PHP semantics); the pad chars are single-byte, so this stays
+/// byte-identical for multi-byte bodies too.
+fn pad_format(sign: &str, body: &str, d: &FormatDirective) -> String {
+    let cur = sign.len() + body.len();
+    if cur >= d.width {
+        return format!("{sign}{body}");
+    }
+    let fill = d.width - cur;
+    if d.minus {
+        format!("{sign}{body}{}", " ".repeat(fill))
+    } else if d.zero {
+        format!("{sign}{}{body}", "0".repeat(fill))
+    } else {
+        format!("{}{sign}{body}", " ".repeat(fill))
+    }
+}
+
+/// `String.format` (W3-5 / DEC-199) — PHP-style `%` sprintf, rendered STRICTLY. Slice 1 shipped
+/// `%s`/`%d`/`%%`; slice 2 adds flags (`-`/`0`/`+`), width, and `%f` (with `.precision`, default 6).
+/// `%s` renders any scalar via the interpolation kernel (`as_display`); `%d` requires an int (else a
+/// clean fault — the phorj upgrade over PHP's silent coercion); `%f` an int/float. The float rounding
+/// is Rust `format!("{:.p}", x)` which is round-half-to-even, matching PHP `sprintf` exactly (verified).
+/// The emitted PHP helper `__phorj_format` mirrors this byte-for-byte (it delegates `%d`/`%f` to real
+/// `sprintf` and hand-pads `%s`); see `emit_runtime_helpers`.
 fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
     let (spec, items) = match args {
         [Value::Str(spec), Value::List(items)] => (spec, items),
@@ -423,41 +518,67 @@ fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
             out.push(c);
             continue;
         }
-        match chars.next() {
-            Some('%') => out.push('%'),
-            Some('s') => {
-                let v = items.get(ai).ok_or_else(|| {
-                    format!("String.format: the format string needs at least {} value(s)", ai + 1)
+        if chars.peek() == Some(&'%') {
+            chars.next();
+            out.push('%');
+            continue;
+        }
+        let d = parse_format_directive(&mut chars)?;
+        let v = items.get(ai).ok_or_else(|| {
+            format!(
+                "String.format: the format string needs at least {} value(s)",
+                ai + 1
+            )
+        })?;
+        ai += 1;
+        match d.conv {
+            's' => {
+                let body = v.as_display().ok_or_else(|| {
+                    format!("String.format: cannot format {} with %s", v.type_name())
                 })?;
-                ai += 1;
-                match v.as_display() {
-                    Some(t) => out.push_str(&t),
-                    None => {
-                        return Err(format!("String.format: cannot format {} with %s", v.type_name()))
-                    }
-                }
+                out.push_str(&pad_format("", &body, &d));
             }
-            Some('d') => {
-                let v = items.get(ai).ok_or_else(|| {
-                    format!("String.format: the format string needs at least {} value(s)", ai + 1)
-                })?;
-                ai += 1;
-                match v {
-                    Value::Int(n) => out.push_str(&n.to_string()),
+            'd' => {
+                let n = match v {
+                    Value::Int(n) => *n,
                     other => {
                         return Err(format!(
                             "String.format: %d expects an int, found {}",
                             other.type_name()
                         ))
                     }
-                }
+                };
+                let sign = if n < 0 {
+                    "-"
+                } else if d.plus {
+                    "+"
+                } else {
+                    ""
+                };
+                out.push_str(&pad_format(sign, &n.unsigned_abs().to_string(), &d));
             }
-            Some(other) => {
-                return Err(format!(
-                    "String.format: unsupported directive `%{other}` (this version supports %s, %d, %%)"
-                ))
+            'f' => {
+                let f = match v {
+                    Value::Int(n) => *n as f64,
+                    Value::Float(x) => *x,
+                    other => {
+                        return Err(format!(
+                            "String.format: %f expects a number, found {}",
+                            other.type_name()
+                        ))
+                    }
+                };
+                let sign = if f.is_sign_negative() {
+                    "-"
+                } else if d.plus {
+                    "+"
+                } else {
+                    ""
+                };
+                let mag = format!("{:.*}", d.precision.unwrap_or(6), f.abs());
+                out.push_str(&pad_format(sign, &mag, &d));
             }
-            None => return Err("String.format: dangling `%` at the end of the format string".into()),
+            _ => unreachable!("parse_format_directive only returns s/d/f"),
         }
     }
     if ai != items.len() {

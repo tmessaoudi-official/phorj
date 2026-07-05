@@ -51,6 +51,7 @@ mod regex;
 mod set;
 mod test;
 mod text;
+pub(crate) use text::parse_format_directive;
 mod time;
 mod url;
 mod validate;

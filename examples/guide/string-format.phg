@@ -25,6 +25,11 @@ function main(): void {
     // %s renders any scalar via the same kernel as interpolation — including a whole-number float
     // (`4.0` → "4"), a bool (→ "true"/"false", not PHP's raw "1"/""), and a decimal — byte-identically.
     Output.printLine(String.format("%s | %s | %s | %s", [4.0, 0.5, true, 19.99d]));
+    // Flags/width/precision (slice 2): `-` left-justify, `0` zero-pad, `+` force sign, a width, and a
+    // `.precision` on %f (round-half-to-even, matching PHP). Sign sits before zero-padding (`%05d`).
+    Output.printLine(String.format("[%5d][%-5d][%05d][%+d]", [42, 42, 42, 7]));
+    Output.printLine(String.format("[%8.2f][%08.2f][%-8.2f] pi=%.4f", [3.5, 3.5, 3.5, 3.14159]));
+    Output.printLine(String.format("[%6s][%-6s]", ["hi", "hi"]));
     // A format string with no directives passes through unchanged (empty value list).
     Output.printLine(String.format("no placeholders here", []));
 }
