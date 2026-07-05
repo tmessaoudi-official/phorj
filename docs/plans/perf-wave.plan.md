@@ -124,7 +124,9 @@ beating release-php.
   first gate of the Cranelift build. Reject LLVM. Reject C (transpile→rustc) as the shipped answer
   (production-only).
 - **NEAR-TERM WIN (ruled): `phg serve` → VM.** serve currently runs requests via `call_named` (the
-  tree-walk INTERPRETER, ~150× slower than php+JIT) — switch to the VM (~25× faster, byte-identical).
+  tree-walk INTERPRETER) — switch to the VM (faster + byte-identical; measured ~2.3× lower serve
+  latency — see the execution log below; the pre-build guess was "~25×", the fib figure, wrong for a
+  native-call-heavy handler).
   ALSO add `phg serve --tree-walker <file>` (mirrors `phg run --tree-walker`): serve defaults to the
   VM, `--tree-walker` selects the interpreter oracle.
 - **Staged Cranelift plan** (post-amendment): emit Cranelift IR for arithmetic/control-flow core →
