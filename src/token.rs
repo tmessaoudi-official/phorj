@@ -11,7 +11,7 @@ pub struct Span {
 }
 
 /// A source comment, captured by the lexer's [`crate::lexer::lex_with_comments`] side-channel (the
-/// formatter `phg fmt` needs comments, which the normal token stream discards). `text` is the raw
+/// formatter `phg format` needs comments, which the normal token stream discards). `text` is the raw
 /// comment including its `//` or `/* */` markers (trailing whitespace trimmed for a line comment).
 /// `own_line` is true when only whitespace precedes the comment on its source line (an own-line
 /// comment formats above the following node; otherwise it is a trailing comment on the prior node).

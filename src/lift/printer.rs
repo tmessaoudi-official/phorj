@@ -1,7 +1,7 @@
 //! M-Lift L3 — a Phorj AST → `.phg` source **pretty-printer**, the inverse of what the transpiler
 //! does for PHP. Scoped to the **subset the L4 lifter emits** (functions/classes/enums + the Tier-1
 //! statement and expression set); any node outside that subset returns a clear `Err` rather than
-//! guessing at syntax. (Growing this into a full `phg fmt` is a later, independent expansion.)
+//! guessing at syntax. (Growing this into a full `phg format` is a later, independent expansion.)
 //!
 //! Correctness discipline: strings are escaped (incl. `{`/`}` → `\{`/`\}`, since a bare `{` opens a
 //! Phorj interpolation) and binary/unary expressions are parenthesized **only where precedence or

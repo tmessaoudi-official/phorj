@@ -1,9 +1,9 @@
-//! `phg fmt` — a comment-preserving, **full-surface** Phorj AST → `.phg` source printer. Unlike the
+//! `phg format` — a comment-preserving, **full-surface** Phorj AST → `.phg` source printer. Unlike the
 //! Tier-1-subset lift printer (`src/lift/printer.rs`), this one covers the *entire* language so it can
 //! format any parseable program. Its matches are exhaustive — the Rust compiler proves completeness,
 //! so it can never silently mis-handle a node — and the only `Err` arms are for AST shapes that a
 //! *parsed* program can never contain (e.g. `Type::Erased`, which is produced only by a post-check
-//! pass `phg fmt` never runs).
+//! pass `phg format` never runs).
 //!
 //! Correctness discipline (the formatter's one hard rule — meaning preservation): strings are escaped
 //! (incl. `{`/`}` → `\{`/`\}`, since a bare `{` opens an interpolation); binary/unary expressions are
@@ -1457,7 +1457,7 @@ fn ty(t: &Type) -> Result<String, String> {
             Ok(format!("({}) => {}", ps?.join(", "), ty(ret)?))
         }
         Type::FixedList { elem, len, .. } => Ok(format!("[{}; {len}]", ty(elem)?)),
-        // `Type::Erased` is produced only by the post-check `erase_generics` pass, which `phg fmt`
+        // `Type::Erased` is produced only by the post-check `erase_generics` pass, which `phg format`
         // (parse → print, no checking) never runs — so a parsed program cannot contain it.
         Type::Erased(_) => Err("printer: Type::Erased cannot occur in a parsed program".into()),
     }

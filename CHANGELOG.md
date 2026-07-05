@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Housekeeping — examples/ layout + doc-name reconciliation (DEC-196 Q1)
+
+Cleanup pass from the 2026-07-05 examples/conformance audit:
+
+- Renamed `examples/fmt/` → `examples/format/` and `examples/bench/` (incl. `manual/`) →
+  `examples/benchmark/`, matching the real CLI verbs (`phg format`, `phg benchmark`). Updated every
+  reference (`bench/baseline.json`, `playground/web/gen_examples.py` `SKIP_DIRS`, `tests/runtime.rs`,
+  `examples/README.md`, `docs/MILESTONES.md`) and regenerated `playground/web/examples.js`.
+- `phg benchmark`'s report header now prints `phg benchmark — …` (was `phg bench — …`).
+- Swept dead-verb prose (`phg fmt`/`phg bench`/`phg disasm`) → full verbs in `src/**` rustdoc and the
+  moved example READMEs/comments (module/file/function names unchanged).
+- `examples/web/core-http.phg` now imports `Core.String` explicitly (was relying on the Http prelude).
+- `STABILITY.md` module names reconciled to the real registry names (`Core.Output`/`String`/
+  `Conversion`/`Validation`/`Reflection`/`Environment`/`Cryptography`).
+- Removed the superseded `docs/plans/wave0-remainder.plan.md` straggler (MASTER-PLAN is the sole SSOT).
+
 ### Changed — `phg format` is now width-canonical (DEC-187)
 
 The formatter gained a **width-aware layout engine**: a new Wadler/prettier document IR
@@ -28,7 +44,7 @@ headers, and control-flow conditions are tracked follow-ups (`KNOWN_ISSUES.md`).
 
 The whole example + selftest corpus was reformatted to canonical form (35 files), and the corpus
 dogfood (`tests/fmt.rs`) was strengthened from idempotency-only to `fmt(src) == src` (folds UA-0.8).
-Ships `examples/fmt/showcase.phg` + `examples/fmt/README.md`. `phg lsp` document formatting reuses
+Ships `examples/format/showcase.phg` + `examples/format/README.md`. `phg lsp` document formatting reuses
 `fmt::format`, so both editors get width-canonical formatting for free. Byte-identical
 `run ≡ runvm ≡ real PHP 8.5.8` across every reformatted example (differential harness); 8 doc-core
 unit tests + 4 width-canonical behaviour tests + the corpus dogfood, full gate green.

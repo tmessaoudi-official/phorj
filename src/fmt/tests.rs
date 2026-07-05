@@ -1,4 +1,4 @@
-//! `phg fmt` tests. Two invariants gate the formatter:
+//! `phg format` tests. Two invariants gate the formatter:
 //!   * **meaning preservation** — for runnable programs, `cmd_run(src) == cmd_run(fmt(src))`;
 //!   * **idempotence** — `fmt(fmt(src)) == fmt(src)` (across the full language surface).
 //!

@@ -111,7 +111,7 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
 - `phg benchmark` reports **memory** (cold-execution peak-RSS growth + process `VmHWM`/`VmRSS`) next to
   its timing, via a std-only Linux `/proc` sampler (`src/mem.rs`); non-Linux prints "unavailable".
 - `phg disassemble <source>` dumps the compiled bytecode (per-function listings + descriptor tables).
-- `examples/bench/workload.phg` (+ `examples/bench/README.md`) is the profiling showcase, auto
+- `examples/benchmark/workload.phg` (+ `examples/benchmark/README.md`) is the profiling showcase, auto
   byte-identity-gated like every example.
 
 ## M3 — Language enrichment — 🔨 IN PROGRESS

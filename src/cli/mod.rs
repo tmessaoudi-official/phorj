@@ -137,8 +137,8 @@ pub fn help_for(cmd: &str) -> String {
                     --vs-php   also transpile + median-time the PHP backend (3-way comparison;\n             \
                                requires `php` on PATH; output-identity-gated)\n\n\
                     examples:\n  \
-                    phg benchmark examples/bench/workload.phg\n  \
-                    phg benchmark --vs-php examples/bench/workload.phg\n"
+                    phg benchmark examples/benchmark/workload.phg\n  \
+                    phg benchmark --vs-php examples/benchmark/workload.phg\n"
         }
         "build" => {
             "build — compile to a standalone executable (embeds the program source).\n\n\

@@ -32,11 +32,11 @@ EXAMPLES = HERE.parent.parent / "examples"
 OUT = HERE / "examples.js"
 
 # Categories skipped wholesale (external-PHP / non-standalone / multi-file / not-a-showcase).
-# `bench` holds profiling workloads for `phg benchmark`, not browser "try-me" examples — and
-# `bench/workload.phg` recurses to depth 1000, overflowing the browser JS stack (the playground runs
+# `benchmark` holds profiling workloads for `phg benchmark`, not browser "try-me" examples — and
+# `benchmark/workload.phg` recurses to depth 1000, overflowing the browser JS stack (the playground runs
 # the interpreter directly, without the native 256MB `on_deep_stack` worker). Excluding the category
 # avoids that AND avoids perturbing the perf baseline (`bench/baseline.json`) by editing the workload.
-SKIP_DIRS = {"project", "interop", "lift", "bench"}
+SKIP_DIRS = {"project", "interop", "lift", "benchmark"}
 # Modules unavailable in the browser WASM build → the example would fault. Two causes: (1) no
 # syscall/OS capability (File/Http/Process/Random); (2) a feature disabled by the playground's
 # `default-features = false` (Cryptography→argon2, Regex→regex crate). `Core.Cryptography` was

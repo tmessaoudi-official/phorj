@@ -19,14 +19,14 @@ globs `examples/**/*.phg`).
 ## Running it
 
 ```sh
-phg bench  examples/bench/workload.phg            # per-phase wall-clock + memory
-phg bench --vs-php examples/bench/workload.phg    # + a 3-way comparison against transpiled PHP
-phg disasm examples/bench/workload.phg            # the bytecode the VM executes
-phg run    examples/bench/workload.phg            # tree-walking interpreter
-phg runvm  examples/bench/workload.phg            # bytecode VM
+phg benchmark  examples/benchmark/workload.phg            # per-phase wall-clock + memory
+phg benchmark --vs-php examples/benchmark/workload.phg    # + a 3-way comparison against transpiled PHP
+phg disassemble examples/benchmark/workload.phg           # the bytecode the VM executes
+phg run    examples/benchmark/workload.phg                # tree-walking interpreter
+phg runvm  examples/benchmark/workload.phg                # bytecode VM
 ```
 
-`bench` runs the whole program **101×** (median of 101, one untimed warmup), so it takes several
+`benchmark` runs the whole program **101×** (median of 101, one untimed warmup), so it takes several
 seconds — that's the sampling cost, not the program's runtime.
 
 ## `--vs-php` — who's the winner?

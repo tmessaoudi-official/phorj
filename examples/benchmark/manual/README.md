@@ -33,7 +33,7 @@ weakening the guarantee.
 over `Runtime.monotonicNanos()` and times a `fib(30)` workload. Run it:
 
 ```
-phg run examples/bench/manual/stopwatch-and-memory.phg
+phg run examples/benchmark/manual/stopwatch-and-memory.phg
 ```
 
 In your own benchmark you'd print the raw numbers, e.g.:

@@ -14,6 +14,7 @@ package Main;
 
 import Core.Output;
 import Core.Bytes;
+import Core.String;
 import Core.Http.Request;
 import Core.Http.Response;
 

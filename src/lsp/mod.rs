@@ -13,7 +13,7 @@
 //! formatting** — top-level *and* local/parameter resolution (the query layer lives in `scope.rs` +
 //! `symbols.rs`, all front-end-only). References/highlight/rename share one scope-accurate `occurrences`
 //! engine (same-name idents filtered to those resolving to the same declaration); formatting reuses
-//! `crate::fmt::format`, so editor-format equals `phg fmt`. **Go-to-definition and hover are
+//! `crate::fmt::format`, so editor-format equals `phg format`. **Go-to-definition and hover are
 //! cross-file** over the open buffer set: a name resolving to neither a local nor a same-file top-level
 //! symbol is looked up in the other open documents (a same-package sibling file). Member completion and
 //! lambda/match-pattern binders, and cross-file *references* (which need project-aware file merging to
@@ -373,9 +373,9 @@ impl Server {
         )
     }
 
-    /// `textDocument/formatting` — run `phg fmt`'s formatter on the buffer and return a single
+    /// `textDocument/formatting` — run `phg format`'s formatter on the buffer and return a single
     /// whole-document `TextEdit[]`. Reuses [`crate::fmt::format`] (comment-preserving, meaning-
-    /// preserving), so editor-format equals `phg fmt`. Returns `[]` (no edit) if the buffer doesn't
+    /// preserving), so editor-format equals `phg format`. Returns `[]` (no edit) if the buffer doesn't
     /// parse — never corrupts an in-progress file.
     fn formatting(&self, msg: &Json) -> String {
         let Some(uri) = doc_uri(msg) else {

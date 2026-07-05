@@ -7,7 +7,7 @@ use crate::vm::Vm;
 
 use super::*;
 
-/// Default sample count for `phg bench`. Odd, so the median is a real observed sample rather
+/// Default sample count for `phg benchmark`. Odd, so the median is a real observed sample rather
 /// than an average of two; large enough to damp scheduler jitter on the small M2 corpus without
 /// making the CLI feel slow.
 const BENCH_DEFAULT_ITERS: usize = 101;
@@ -336,7 +336,7 @@ pub(super) fn bench_report_opts(
 
         let mut out = String::new();
         out.push_str(&format!(
-            "phg bench — median of {iters} (warmup 1, std Instant)\n"
+            "phg benchmark — median of {iters} (warmup 1, std Instant)\n"
         ));
         out.push_str(&format!(
             "output: {} bytes, identical on both backends\n\n",

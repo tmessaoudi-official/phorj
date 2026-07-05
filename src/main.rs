@@ -116,7 +116,7 @@ fn main() {
     // `fmt [--check] [path… | -]` formats source (M-fmt). Like `test`, it takes paths/flags, not a
     // single program source, so it is handled before the source-resolving run-family path.
     if cmd == "format" {
-        // `phg fmt -` (or `--check -`) reads stdin → formats → stdout.
+        // `phg format -` (or `--check -`) reads stdin → formats → stdout.
         if args[2..].iter().any(|a| a == "-") {
             let src = read_stdin();
             match cli::fmt_source(&src) {

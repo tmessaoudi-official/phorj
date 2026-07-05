@@ -326,7 +326,7 @@ function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
     // Without --vs-php, php_ns is null; the human report headers must be absent.
     assert!(out.contains("\"php_ns\":null"), "{out}");
     assert!(
-        !out.contains("phg bench —"),
+        !out.contains("phg benchmark —"),
         "json must not include the text header: {out}"
     );
 }
@@ -546,7 +546,7 @@ fn bench_default_entry_uses_101_samples() {
     let out = cmd_bench(&wp(r#"import Core.Output;
 function main(): void { Output.printLine("hi"); }"#))
     .expect("bench");
-    assert!(out.starts_with("phg bench — median of 101"), "{out}");
+    assert!(out.starts_with("phg benchmark — median of 101"), "{out}");
 }
 
 #[test]

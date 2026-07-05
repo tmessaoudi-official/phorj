@@ -5,7 +5,7 @@
 //! therefore QUARANTINED from the byte-identity differential (exactly like `Core.Time` /
 //! `Core.Process`): its output varies per run, so it cannot be a gated example. This is the
 //! sanctioned "roll your own benchmark harness" seam that complements the external
-//! `phg bench --vs-php` — the user asked to time and measure memory from inside a program, and this
+//! `phg benchmark --vs-php` — the user asked to time and measure memory from inside a program, and this
 //! is how without breaking the `run ≡ runvm ≡ PHP` spine (quarantine, not identity).
 //!
 //! PHP emission is best-effort-EQUIVALENT, not byte-identical (the quarantine makes identity moot):

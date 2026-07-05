@@ -1,8 +1,8 @@
 //! A minimal Wadler/prettier-style document IR + fits solver — the width-canonical core of
-//! `phg fmt`. The expression printer (`printer::expr_doc`) builds a [`Doc`]; [`render`] lays it out
+//! `phg format`. The expression printer (`printer::expr_doc`) builds a [`Doc`]; [`render`] lays it out
 //! against a column budget, breaking a [`Doc::Group`] only when its flat form would overflow.
 //!
-//! **Why this makes `phg fmt` idempotent by construction:** a `Doc` is derived purely from the parsed
+//! **Why this makes `phg format` idempotent by construction:** a `Doc` is derived purely from the parsed
 //! AST (never from the source's whitespace), and [`render`] is a deterministic function of
 //! `(doc, width, base_indent, start_col)`. Re-parsing the formatter's output rebuilds the *same* AST
 //! → the same `Doc` → the same bytes. This is why DEC-187 dropped "preserve author breaks" (Rule 1):

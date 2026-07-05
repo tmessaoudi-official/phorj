@@ -1067,7 +1067,7 @@ only read path). Deliberate scope edges:
 
 The formatter lays out from the AST at a 100-column budget: it breaks a form that overflows and
 collapses one that fits, deterministically (idempotent + meaning-preserving; author line breaks are
-not preserved — see `examples/fmt/README.md`). The first slice wraps **call/`new`/`parent` argument
+not preserved — see `examples/format/README.md`). The first slice wraps **call/`new`/`parent` argument
 lists, collection & map literals, `match` arms, and `.`/`?.` method chains** (≥2 links). The following
 constructs still stay on one line even past 100 columns — each is a self-contained extension of the
 same `src/fmt/doc.rs` document IR (add a `group`/`line` break group at that AST node), tracked here:

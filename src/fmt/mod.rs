@@ -1,4 +1,4 @@
-//! `phg fmt` — the canonical-form source formatter (GA rock 2 tooling). A full-surface,
+//! `phg format` — the canonical-form source formatter (GA rock 2 tooling). A full-surface,
 //! comment-preserving AST printer (`printer`) plus the `format` entry that lexes → parses → prints.
 //!
 //! The formatter's one hard rule is **meaning preservation**: it prints from the parsed AST (not by

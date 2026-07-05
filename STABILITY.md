@@ -43,7 +43,7 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 
 ### experimental
 - **HTML templating** — `Core.Html` + the `html"…"` template literal (XSS-safe builders).
-- **Reflection** — `Core.Reflect` (runtime kind/type queries).
+- **Reflection** — `Core.Reflection` (runtime kind/type queries).
 - **Cast operator** — `value as Type` over the full primitive/union matrix (fallibility-typed).
 - **`Secret<T>`** — the opaque, non-printable wrapper (security primitive; surface still settling).
 - **HTTP router, middleware & route attributes** — the `Core.Http` `Router` (path params, literal>param
@@ -56,13 +56,13 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 ## Stdlib modules
 
 ### stable
-`Core.Console`, `Core.Math`, `Core.Text`, `Core.Bytes`, `Core.Convert`, `Core.Decimal`, `Core.List`,
-`Core.Map`, `Core.Set`, `Core.Json`, `Core.Hash`, `Core.Encoding`, `Core.Url`, `Core.Validate`,
+`Core.Output`, `Core.Math`, `Core.String`, `Core.Bytes`, `Core.Conversion`, `Core.Decimal`, `Core.List`,
+`Core.Map`, `Core.Set`, `Core.Json`, `Core.Hash`, `Core.Encoding`, `Core.Url`, `Core.Validation`,
 `Core.Csv`, `Core.Random`, `Core.File`.
 
 ### experimental
-`Core.Regex` (depends on the `regex` crate), `Core.Crypto` (Argon2id; depends on `argon2`),
-`Core.Reflect`, `Core.Html`, `Core.Env`, `Core.Process`, `Core.Http` (the web layer is largely in
+`Core.Regex` (depends on the `regex` crate), `Core.Cryptography` (Argon2id; depends on `argon2`),
+`Core.Reflection`, `Core.Html`, `Core.Environment`, `Core.Process`, `Core.Http` (the web layer is largely in
 place; refinement ongoing).
 
 Two further vetted dependencies power language-level surfaces rather than stdlib modules: `ctrlc`

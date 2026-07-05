@@ -6,7 +6,7 @@
 //! instead, asserting: (1) both Rust backends agree (they share the process, so run ≡ runvm always
 //! holds — only the PHP leg is unreliable, which is why the oracle is skipped, not run≡runvm), and
 //! (2) the manual-benchmark shape works end to end. This also guards the shipped walkthrough example
-//! (`examples/bench/manual/`) against rot, since the differential harness never runs it.
+//! (`examples/benchmark/manual/`) against rot, since the differential harness never runs it.
 
 use phorj::cli::{cmd_run, cmd_runvm};
 
@@ -40,7 +40,7 @@ fn runtime_bench_shape_runs_and_backends_agree() {
 
 #[test]
 fn shipped_manual_example_runs_on_both_backends() {
-    let src = std::fs::read_to_string("examples/bench/manual/stopwatch-and-memory.phg")
+    let src = std::fs::read_to_string("examples/benchmark/manual/stopwatch-and-memory.phg")
         .expect("read shipped manual-bench example");
     let run = cmd_run(&src).expect("shipped example must run");
     assert!(run.contains("fib(30)           = 832040"), "{run}");

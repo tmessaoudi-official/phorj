@@ -10,7 +10,7 @@ phg format - < in.phg      # format stdin → stdout
 ```
 
 `showcase.phg` in this directory is a runnable program already in canonical form
-(`phg run examples/fmt/showcase.phg` → `small=15` / `total=150` / `the very top score`).
+(`phg run examples/format/showcase.phg` → `small=15` / `total=150` / `the very top score`).
 
 ## What "width-canonical" means
 

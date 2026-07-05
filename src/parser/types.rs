@@ -148,7 +148,7 @@ impl Parser {
         // Import-redesign S1: a **dotted** type name (`Http.Router`, `Time.Duration`) is a qualifier-
         // qualified reference to an injected/exported type. Consume the `.Ident` chain and PRESERVE the
         // dotted form in `Type::Named { name }` — the checker's `collapse_injected_type_qualifiers` pass
-        // rewrites a registered `Qual.Member` to its bare type, and `phg fmt` reads this pre-check AST
+        // rewrites a registered `Qual.Member` to its bare type, and `phg format` reads this pre-check AST
         // and must print the qualified spelling. Additive: a `.` after a type name was previously a
         // parse error, so no existing program regresses. (Only `Dot`, never `DotDot`/`DotDotEq`.)
         while self.check(&TokenKind::Dot) {

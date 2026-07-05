@@ -614,7 +614,7 @@ fn decimal_literal_overflow_is_a_lex_error() {
     assert!(e.message.contains("out of range"), "{}", e.message);
 }
 
-// --- phg fmt F1: comment capture side-channel ---------------------------------------------------
+// --- phg format F1: comment capture side-channel ---------------------------------------------------
 
 #[test]
 fn lex_with_comments_captures_line_and_block() {

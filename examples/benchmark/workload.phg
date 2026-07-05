@@ -2,12 +2,12 @@ package Main;
 
 import Core.Output;
 
-// A focused profiling workload for `phg bench` and `phg disasm`. It mixes the two cost
+// A focused profiling workload for `phg benchmark` and `phg disassemble`. It mixes the two cost
 // centers the M2 backends care about: CPU-bound recursion (large call volume) and heap allocation
 // (many simultaneously-live objects on the Rc-shared object heap). Run it with
-//   phg bench examples/bench/workload.phg     # per-phase wall-clock + peak-RSS growth
-//   phg disasm examples/bench/workload.phg    # the bytecode the VM executes
-// See examples/bench/README.md for how the time and memory numbers are collected.
+//   phg benchmark examples/benchmark/workload.phg     # per-phase wall-clock + peak-RSS growth
+//   phg disassemble examples/benchmark/workload.phg   # the bytecode the VM executes
+// See examples/benchmark/README.md for how the time and memory numbers are collected.
 // One small heap object, allocated thousands of times below. Constructor promotion gives it a
 // single int field; `squared` exercises a method call + field read per instance.
 class Cell {

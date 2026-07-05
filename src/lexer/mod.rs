@@ -914,12 +914,12 @@ fn dedent_block(body: &[u8], closing_indent: usize) -> Vec<u8> {
 }
 
 /// Tokenize `src`. Comments are **discarded** (the parser never sees them). Use
-/// [`lex_with_comments`] when a tool (the formatter `phg fmt`) needs the trivia.
+/// [`lex_with_comments`] when a tool (the formatter `phg format`) needs the trivia.
 pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
     lex_inner(src, &mut Vec::new())
 }
 
-/// Like [`lex`], but also returns every comment captured in source order (the `phg fmt`
+/// Like [`lex`], but also returns every comment captured in source order (the `phg format`
 /// side-channel — F1). The token stream is identical to [`lex`]'s; comments are collected, not
 /// emitted as tokens, so the parser/AST are unchanged.
 pub fn lex_with_comments(src: &str) -> Result<(Vec<Token>, Vec<Comment>), Diagnostic> {

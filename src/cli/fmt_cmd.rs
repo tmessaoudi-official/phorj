@@ -1,9 +1,9 @@
-//! `phg fmt` — the formatter CLI (M-fmt F3). Mirrors `gofmt`/`cargo fmt`:
-//!   * `phg fmt <file|dir>…` — format in place (write only when the content actually changes).
-//!   * `phg fmt --check [paths…]` — report files that are not already formatted; exit 1 if any. No
+//! `phg format` — the formatter CLI (M-fmt F3). Mirrors `gofmt`/`cargo fmt`:
+//!   * `phg format <file|dir>…` — format in place (write only when the content actually changes).
+//!   * `phg format --check [paths…]` — report files that are not already formatted; exit 1 if any. No
 //!     writes (the CI gate).
-//!   * `phg fmt` (no path) — format every `*.phg` under the current directory, recursively.
-//!   * `phg fmt -` (stdin) — handled by `main.rs` via [`fmt_source`].
+//!   * `phg format` (no path) — format every `*.phg` under the current directory, recursively.
+//!   * `phg format -` (stdin) — handled by `main.rs` via [`fmt_source`].
 //!
 //! An unparseable file is **never** rewritten — its diagnostic is reported and the file left intact
 //! (exit 2), so the formatter can never corrupt broken source.
@@ -18,7 +18,7 @@ pub fn fmt_source(src: &str) -> Result<String, String> {
     fmt::format(src).map_err(|d| d.render(src))
 }
 
-/// Run `phg fmt` over `paths` (empty ⇒ recursively under the current directory). `check` is the
+/// Run `phg format` over `paths` (empty ⇒ recursively under the current directory). `check` is the
 /// no-write CI mode. Returns the report and the exit code: `2` if any file failed to parse, else `1`
 /// in `--check` mode when a file would change, else `0`.
 pub fn cmd_fmt(paths: &[String], check: bool) -> (String, i64) {
