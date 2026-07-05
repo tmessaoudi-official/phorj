@@ -129,18 +129,17 @@ impl Checker {
                 path, alias, span, ..
             } = item
             {
-                // DEC-196 Q3 carve-out: a member import of a fault intrinsic
-                // (`import Core.Abort.panic;`, `import Core.Assert.assert;`) has a deliberately
-                // lowercase leaf — the intrinsic's name — so the leaf is exempt from the PascalCase
-                // rule. The `Core`/`Assert`/`Abort` prefix segments are still checked (they are
-                // PascalCase). Leaf validity (is it a real intrinsic of that module?) is enforced by
-                // `enforce_intrinsic_discipline`, not here.
-                let intrinsic_member_leaf = path.len() == 3
-                    && path[0] == "Core"
-                    && matches!(path[1].as_str(), "Assert" | "Abort");
+                // Carve-out for member imports naming a VALUE (a function or a fault intrinsic):
+                // `import Core.Output.printLine;` / `import Core.Abort.panic;` deliberately end in a
+                // camelCase leaf — the value's name — so the LEAF is exempt from the PascalCase segment
+                // rule (DEC-196 intrinsics + DEC-197 module functions). Prefix segments are still checked
+                // (`Core`/`Output` are PascalCase). Leaf validity (is it a real function/intrinsic of that
+                // module?) is enforced by `resolve_function_imports`/`resolve_intrinsic_imports`, not here.
+                // A type/variant member import keeps a PascalCase leaf and is checked as usual.
+                let member_value_leaf = path.len() >= 3 && path.last().is_some_and(|l| is_camel(l));
                 let last = path.len().saturating_sub(1);
                 for (i, seg) in path.iter().enumerate() {
-                    if intrinsic_member_leaf && i == last {
+                    if member_value_leaf && i == last {
                         continue;
                     }
                     if !is_pascal(seg) {
@@ -152,10 +151,23 @@ impl Checker {
                         );
                     }
                 }
-                // An alias renames the call-site qualifier (`import A.B as C;`), so it occupies a
-                // package-leaf position and follows the same PascalCase rule.
+                // An alias renames the call-site name (`import A.B as C;`). For a value-leaf import the
+                // alias is a value identifier (camelCase, like the function it renames — DEC-197
+                // `import Core.List.map as listMap;`); otherwise it occupies a package-qualifier position
+                // and follows the same PascalCase rule as the segments.
                 if let Some(a) = alias {
-                    if !is_pascal(a) {
+                    if member_value_leaf {
+                        if !is_camel(a) {
+                            self.err_coded(
+                                *span,
+                                format!(
+                                    "import alias `{a}` must be camelCase (it renames a function)"
+                                ),
+                                "E-NAME-CASE",
+                                Some(format!("did you mean `as {}`?", to_camel(a))),
+                            );
+                        }
+                    } else if !is_pascal(a) {
                         self.err_coded(
                             *span,
                             format!("import alias `{a}` must be PascalCase"),
@@ -167,6 +179,7 @@ impl Checker {
             }
         }
         self.check_variant_import_collisions(program);
+        self.check_function_import_collisions(program);
         // Feature B-static: type-check every static field's (now arbitrary) initializer, after all
         // classes + functions are collected, with no `this` — so an initializer may call a function or
         // read another static.
@@ -333,6 +346,31 @@ impl Checker {
                         "alias one of the imports with `as` so each bound name is unique"
                             .to_string(),
                     ),
+                );
+            }
+        }
+    }
+
+    /// DEC-197 collision guard: two member imports binding the same bare function name (`import
+    /// Core.List.map;` + another module's `map`) are ambiguous — reject with `E-IMPORT-CONFLICT` and
+    /// point at `as`-aliasing (the ruled resolution for collisions). A bare import that shadows a
+    /// user function or a local wins deterministically by the resolution order (`local > user fn >
+    /// imported native`, enforced in `check_named_call`), so it is NOT a conflict here. Runs alongside
+    /// `check_variant_import_collisions`; the underlying binding set is the single-source
+    /// [`function_imports::function_import_bindings`], so it never diverges from what `fn_imports` maps.
+    fn check_function_import_collisions(&mut self, program: &crate::ast::Program) {
+        let bindings = super::function_imports::function_import_bindings(&program.items);
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for (bound, _, _, span) in &bindings {
+            if !seen.insert(bound.clone()) {
+                self.err_coded(
+                    *span,
+                    format!("`{bound}` is imported as a function more than once"),
+                    "E-IMPORT-CONFLICT",
+                    Some(format!(
+                        "two modules export `{bound}` — alias one with `as`, e.g. \
+                         `import <Module>.{bound} as {bound}2;`"
+                    )),
                 );
             }
         }

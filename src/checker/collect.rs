@@ -87,6 +87,14 @@ impl Checker {
     pub(super) fn collect(&mut self, program: &Program) {
         use crate::ast::Item;
         self.imports = crate::native::import_map(&program.items);
+        // DEC-197: bare-name → (module, native) map for member-imported module functions. Last-write
+        // wins on a duplicate bound name; that duplicate is separately reported as `E-IMPORT-CONFLICT`
+        // (`check_function_import_collisions`), which stops compilation — so the arbitrary pick is never
+        // observed. Empty unless the program member-imports a stdlib function.
+        self.fn_imports = super::function_imports::function_import_bindings(&program.items)
+            .into_iter()
+            .map(|(bound, module, real, _)| (bound, (module, real)))
+            .collect();
         // Pre-bind all type names so member/annotation resolution is order-independent (forward +
         // cross-file references). Must run before the per-item collect loop resolves any type.
         self.prebind_types(program);

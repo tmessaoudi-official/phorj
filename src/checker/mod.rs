@@ -15,6 +15,7 @@ use crate::types::Ty;
 mod collapse_injected;
 mod desugar_router;
 mod enforce_injected;
+mod function_imports;
 mod inline_parent_ctor;
 mod intrinsic_imports;
 mod overloads;
@@ -380,6 +381,13 @@ pub struct Checker {
     /// Drives namespaced native-call resolution (`console.println`) and the shadowing guard that
     /// keeps an imported qualifier disjoint from every value binding (M3 Wave 1).
     imports: HashMap<String, String>,
+    /// DEC-197: bare call-site name → (native module, real leaf) for member-imported module
+    /// FUNCTIONS (`import Core.Output.printLine [as p];` ⇒ `p`/`printLine` → (`Core.Output`,
+    /// `printLine`)). Built in `collect` from [`function_imports::function_import_bindings`];
+    /// consumed by `check_named_call` to resolve a bare call to its native (after user functions —
+    /// `local > user fn > imported native`) and record the qualified rewrite `rewrite_ufcs` applies.
+    /// Empty unless the program member-imports a stdlib function.
+    fn_imports: HashMap<String, (String, String)>,
     /// Span-keyed node substitutions applied by [`resolve_html`] after a successful check, so the
     /// backend-facing AST is free of front-end-only nodes. Keyed by `Span.start` (byte offset —
     /// unique per source occurrence in a single file). Two producers share it:
@@ -535,6 +543,7 @@ impl Checker {
             alias_stack: Vec::new(),
             alias_cycle_reported: std::collections::HashSet::new(),
             imports: HashMap::new(),
+            fn_imports: HashMap::new(),
             html_resolutions: HashMap::new(),
             ufcs_resolutions: HashMap::new(),
             default_fills: HashMap::new(),

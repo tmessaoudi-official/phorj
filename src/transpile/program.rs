@@ -180,6 +180,20 @@ impl Transpiler {
                     if let Some(leaf) = path.last() {
                         self.imports.insert(leaf.clone(), path.join("."));
                     }
+                    // DEC-197: a member import of a module FUNCTION (`import Core.Output.printLine;`)
+                    // also binds the MODULE qualifier (`Output` → `Core.Output`), so the checker's
+                    // bare→qualified rewrite (`Output.printLine(x)`) resolves here through the import
+                    // map — mirroring `native::import_map`'s Http/Time/Decimal member-type binding. The
+                    // checker rejects an un-imported qualified sibling upstream, so this never resolves
+                    // a call the checker did not bless. `entry` keeps a whole-module import's binding.
+                    if path.len() >= 3 {
+                        let module = path[..path.len() - 1].join(".");
+                        if crate::native::index_of(&module, &path[path.len() - 1]).is_some() {
+                            self.imports
+                                .entry(path[path.len() - 2].clone())
+                                .or_insert(module);
+                        }
+                    }
                 }
                 // M-RT S8: a trait is emitted as a native PHP `trait` in pass 2; it needs no call/
                 // construction resolution index (it is never called or constructed by name).

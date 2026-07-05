@@ -266,6 +266,24 @@ not a panic:
   dedicated LSP slice (route `diagnostics_for` through `check_and_expand`).
   Fix (a dedicated LSP slice): route `diagnostics_for` through the same prelude
   injection the CLI uses, with a test asserting an injected-type program is LSP-clean, on both editors.
+  **Same class, DEC-197 (2026-07-05):** a bare member-imported module function (`printLine(x)` after
+  `import Core.Output.printLine;`) resolves in the raw checker (`calls.rs` bare-call arm, driven by the
+  `fn_imports` map built in `collect`), so it is LSP-clean; but the qualified whole-module form
+  (`Output.printLine(x)`) resolves through the shared `import_map` and IS clean too — no new LSP gap
+  beyond the injected-type one already listed. Folded into the same dedicated LSP slice.
+
+- **DEC-197 — a non-callable local shadowing an imported function name resolves to the import.** The
+  resolution order is `local > user fn > imported native`, but `check_call` only diverts a bare `name(…)`
+  to a local when that local has a **function** type (`self.lookup(name) == Some(Ty::Function(..))`). A
+  local of a *non-callable* type with the same spelling as a member-imported function
+  (`import Core.Output.printLine; var printLine = 5; printLine("x");`) therefore falls through to the
+  import and resolves to the native, rather than erroring "cannot call a non-function local". This is a
+  narrow naming edge (a non-callable local named exactly like an imported function) and is **not a
+  byte-identity divergence** — the bare→qualified rewrite is recorded once and every backend sees the
+  same AST. The clean fix threads the full lexical binding set (not just function-typed locals) into the
+  bare-call arm; it is deferred with the same scope as the "local > imported" question for slice 2's
+  **user-package** function imports (the loader is pre-scope, so honoring the order there is the harder
+  version of this same gap — to be decided deliberately at that layer, not inherited silently).
 
 - **Override signature checking — return covariance shipped (M-DX S1); parameters deferred.** An
   override's **return type** must now be the overridden type or a subtype of it (`E-OVERRIDE-SIG`) —

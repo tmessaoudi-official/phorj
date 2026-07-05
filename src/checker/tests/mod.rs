@@ -13,6 +13,7 @@ mod default_params;
 mod destructuring;
 mod entry_point;
 mod field_init;
+mod function_imports;
 mod generics;
 mod inheritance;
 mod injected_result_option;

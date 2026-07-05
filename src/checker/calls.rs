@@ -199,6 +199,12 @@ impl Checker {
         let sigs = match self.funcs.get(name) {
             Some(s) => s.clone(),
             None => {
+                // DEC-197: a bare call to a member-imported module function (`import Core.Output.printLine;`
+                // ⇒ `printLine(x)`). Resolved AFTER user functions, so `local > user fn > imported native`
+                // holds (locals are handled earlier in `check_call`, user funcs in the `Some` arm above).
+                if let Some((module, real)) = self.fn_imports.get(name).cloned() {
+                    return self.resolve_bare_fn_import(&module, &real, args, span);
+                }
                 for a in args {
                     self.check_expr(a);
                 }
@@ -242,6 +248,44 @@ impl Checker {
         // monomorphic. The call's result is the shared return type (`E-OVERLOAD-RETURN`); resolution
         // here is *static* (for typing) — the runtime dispatch is byte-identical by construction.
         self.check_overload_call(name, &sigs, args, span, skip_throws)
+    }
+
+    /// DEC-197: type a bare call to a member-imported module function and record the qualified rewrite
+    /// (`printLine(x)` → `Output.printLine(x)`) that every backend already lowers. `module`/`real` come
+    /// from the `fn_imports` map (built from `index_of` matches, so the native exists). Types via the
+    /// SAME [`Self::check_native_call`] the qualified path uses, so arity/generics/defaults/deprecation
+    /// warnings are identical. The rewrite REUSES the original call `span` (its `span.start` keys both
+    /// the replacement and the reified-operand side-table) so `native(x) + 1` types on the VM exactly as
+    /// the interpreter accepts it (Invariant 6/7). Any trailing default omitted by the call (`pending_fill`
+    /// set inside `check_native_call`) is folded into the rewritten argument list, so the recorded call is
+    /// full-arity — one merged rewrite, never a separate default-fill collision on the same span.
+    pub(super) fn resolve_bare_fn_import(
+        &mut self,
+        module: &str,
+        real: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        let idx = crate::native::index_of(module, real)
+            .expect("fn_imports entries are built from index_of matches");
+        let ret = self.check_native_call(idx, args, span);
+        let mut full = args.to_vec();
+        if let Some(defaults) = self.pending_fill.take() {
+            full.extend(defaults);
+        }
+        let leaf = module.rsplit('.').next().unwrap_or(module);
+        let qualified = crate::ast::Expr::Call {
+            callee: Box::new(crate::ast::Expr::Member {
+                object: Box::new(crate::ast::Expr::Ident(leaf.to_string(), span)),
+                name: real.to_string(),
+                safe: false,
+                span,
+            }),
+            args: full,
+            span,
+        };
+        self.ufcs_resolutions.insert(span.start, qualified);
+        ret
     }
 
     /// Check a `parent`/super dispatch call (M-RT super/parent). Validates the context (an instance

@@ -1,0 +1,45 @@
+// Function imports (Wave — DEC-197) — module FUNCTIONS follow the SAME two-mode import discipline as
+// types, variants and intrinsics. A whole-module import keeps the QUALIFIED call form; a member import
+// enables the BARE form; an `as` alias renames it; and UFCS (`x.method()`) coexists — the author picks.
+//
+//   import Core.Output;                 // whole module  → qualified  Output.printLine(x)  (+ UFCS)
+//   import Core.Output.printLine;       // member import → bare        printLine(x)
+//   import Core.String.trim as clean;   // aliased        → bare        clean(x)
+//   import Core.Math.{ abs, max };      // a group        → bare        abs(x) / max(a, b)
+//
+// The member form is strict: importing one function does NOT enable a qualified sibling (`Output.print`
+// still needs `import Core.Output;`). A bare member-imported call rewrites to the proven qualified form
+// before any backend, so run/runvm and the transpiled PHP stay byte-identical — including when the call
+// is an arithmetic operand (`abs(-4) + 1`). A group canonicalizes to one import per line (`phg format`).
+package Main;
+
+import Core.Output.printLine;
+import Core.String.trim as clean;
+import Core.String.length;
+import Core.String.parseFloat;
+import Core.Math.abs;
+import Core.Math.max;
+import Core.List;
+
+function main(): void {
+    // Bare member-imported calls (printLine, and clean = String.trim aliased).
+    printLine(clean("  hello  "));
+    // A bare Math native used as an ARITHMETIC OPERAND (Math is VM-special-cased).
+    var n = abs(-4) + 1;
+    printLine("abs(-4) + 1 = {n}");
+    // A NON-Math bare native as an arithmetic operand — this routes through the general reified-operand
+    // path, the decisive run≡runvm check that the qualified rewrite keeps the original call span.
+    var m = length("hi") + 1;
+    printLine("length hi + 1 = {m}");
+    // A bare member-imported native with an omitted trailing DEFAULT arg — the default is folded into
+    // the rewrite so every backend sees the full-arity call (`parseFloat("1.5", false)`).
+    var f = parseFloat("1.5") ?? 0.0;
+    printLine("parseFloat = {f}");
+    // Bare grouped import, two args.
+    printLine("max(2, 9) = {max(2, 9)}");
+    // Whole-module import → QUALIFIED form.
+    var xs = [3, 1, 2];
+    printLine("length (qualified) = {List.length(xs)}");
+    // Whole-module import → UFCS form (coexists with the qualified form).
+    printLine("length (UFCS) = {xs.length()}");
+}
