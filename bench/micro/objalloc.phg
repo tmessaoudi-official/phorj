@@ -1,0 +1,34 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+
+// Microbench: object allocation (allocation/heap-heavy — where the per-feature *implementation* cost
+// lives, not just dispatch). Each iteration allocates a `Cell`, calls a method, folds into the sum.
+class Cell {
+    constructor(private int v) {}
+    function sq(): int {
+        return this.v * this.v;
+    }
+}
+
+function bench(int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Cell c = new Cell(i);
+        acc = acc + c.sq();
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("objalloc\t{d / iters + guard}\t{acc}");
+}

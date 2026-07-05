@@ -138,6 +138,22 @@ concurrency directions (researched 2026-07-05; the CLI reshape is orthogonal to 
   commit after the reshape lands green. (Can't just drop "runvm" — `cmd_run` is taken by the
   tree-walker; must rename both.)
 
+## Step 2 (per-feature harness) — execution log
+- MVP DONE: `scripts/microbench.sh` + `bench/micro/<name>.{phg,php}` pairs. phorj VM (`phg run`) vs
+  **real release PHP 8.5.7+JIT via `docker run php:8.5-cli`**, best-of-K, self-timed (warmup call +
+  timed call), checksum defeats DCE AND gates output-identity. Idiomatic PHP is **hand-authored** (NOT
+  transpiled — transpiled carries `__phorj_*` helper weight → false wins; advisor catch). Table +
+  `--json`. Starter corpus: intadd, methodcall, objalloc.
+- FIRST HONEST PER-FEATURE NUMBERS (VM vs php+JIT, ns/op, best-of-3): intadd ~180 vs 1 (**~154×**);
+  methodcall ~280 vs 6 (**~45×**); objalloc ~435 vs 50 (**~9×**). Pattern: pure-dispatch ops show the
+  full ~150× gap (what the JIT must erase — corroborates callgrind's 61% dispatch); the more real
+  work/op (allocation), the smaller the gap. Confirms empirically: **no bytecode-VM tuning closes
+  this — it's the JIT case.**
+- FOLLOW-UPS: expand corpus (float/decimal arith, string concat/interp/%-format, list-index, map
+  get/put, set, closure-call, match, enum, try/catch — weight toward alloc/builtin-heavy); reshape
+  `phg benchmark` headline to VM-vs-php; migrate `perf-gate.sh` off the tree÷VM anchor to a php
+  baseline. ⚠ canary: every php micro must report a plausible NONZERO ns/op (0 = JIT ate it).
+
 ## Acceptance
 - Harness runs the full feature corpus, `runvm` vs release-php+JIT, ns/op, regression-gated.
 - Every substrate fix has a measured before/after on the heavy matrix (time + memory).
