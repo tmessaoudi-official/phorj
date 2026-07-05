@@ -2327,38 +2327,326 @@ fn all_example_projects_transpile_and_match_php() {
     }
 }
 
-/// Hermetic-`php -n` guard — **php-INDEPENDENT** (runs even with no `php` on PATH). This is the gate
-/// the oracle above CANNOT be trusted to enforce locally: the byte-identity oracle only fails on a
-/// non-tier-1 function when the *local* php lacks that extension, but a dev php (phpbrew) compiles
-/// `ctype`/etc. IN statically, so `php -n` still has them → a hermetic break passes locally and only
-/// fails in CI (where setup-php ships them shared). That false-green shipped `ctype_digit` in
-/// String.format's `__phorj_format`. This scans every example's transpiled PHP statically and asserts
-/// it uses ONLY the tier-1 surface: PHP core + standard + PCRE (`preg_*`, non-removable) + JSON (core
-/// since 8.0) + the ONE sanctioned shared extension **BCMath** (`bc*`, loaded via `-d extension=bcmath`
-/// in `php_n_args`/ci.yml). Any OTHER shared extension is unavailable under `php -n` and fatals in CI.
-/// If the transpiler ever legitimately needs a new extension, add it here AND to ci.yml + `php_n_args`.
+/// The tier-1 PHP function surface the transpiler is PERMITTED to emit: PHP core + standard + PCRE
+/// (`preg_*`, non-removable since 7.3) + JSON (core since 8.0) + the ONE sanctioned shared extension
+/// **BCMath** (`bc*`, loaded via `-d extension=bcmath` in `php_n_args`/ci.yml). This is the allowlist
+/// the emission-layer guard enforces DEFAULT-DENY: anything not here (and not locally defined / a PHP
+/// construct) fails the gate. Add a name ONLY when the transpiler legitimately emits it AND it is
+/// core/PCRE/JSON/BCMath; a NEW shared extension beyond BCMath ALSO needs ci.yml `extensions:` +
+/// `php_n_args` (see the transpile hermetic-extension policy).
+const TIER1_PHP: &[&str] = &[
+    // arrays / iterables
+    "array_chunk",
+    "array_column",
+    "array_diff",
+    "array_fill",
+    "array_filter",
+    "array_flip",
+    "array_intersect",
+    "array_key_exists",
+    "array_keys",
+    "array_map",
+    "array_merge",
+    "array_pop",
+    "array_push",
+    "array_reduce",
+    "array_reverse",
+    "array_search",
+    "array_shift",
+    "array_slice",
+    "array_sum",
+    "array_unique",
+    "array_unshift",
+    "array_values",
+    "count",
+    "end",
+    "in_array",
+    "ksort",
+    "sort",
+    "uasort",
+    "usort",
+    // math / numeric
+    "abs",
+    "ceil",
+    "cos",
+    "exp",
+    "fdiv",
+    "floor",
+    "fmod",
+    "intdiv",
+    "log",
+    "log10",
+    "max",
+    "min",
+    "pow",
+    "range",
+    "round",
+    "sin",
+    "sqrt",
+    "tan",
+    // bcmath (sanctioned, -d-loaded)
+    "bcadd",
+    "bccomp",
+    "bcdiv",
+    "bcmod",
+    "bcmul",
+    "bcpow",
+    "bcsub",
+    // strings (core/standard)
+    "chr",
+    "explode",
+    "htmlspecialchars",
+    "implode",
+    "lcfirst",
+    "ltrim",
+    "number_format",
+    "ord",
+    "rtrim",
+    "sprintf",
+    "str_contains",
+    "str_ends_with",
+    "str_getcsv",
+    "str_pad",
+    "str_repeat",
+    "str_replace",
+    "str_split",
+    "str_starts_with",
+    "strcasecmp",
+    "strcmp",
+    "stripos",
+    "strlen",
+    "strpbrk",
+    "strpos",
+    "strrpos",
+    "strtolower",
+    "strtoupper",
+    "substr",
+    "substr_count",
+    "trim",
+    "ucfirst",
+    // encoding / URL (core standard)
+    "base64_decode",
+    "base64_encode",
+    "bin2hex",
+    "hex2bin",
+    "rawurldecode",
+    "rawurlencode",
+    "urldecode",
+    "urlencode",
+    // filesystem / path / env (core; used by impure Core.File/Core.Env examples, not oracle-gated)
+    "basename",
+    "copy",
+    "dirname",
+    "file_exists",
+    "file_get_contents",
+    "file_put_contents",
+    "filesize",
+    "getenv",
+    "pathinfo",
+    "rename",
+    "unlink",
+    // hash (core, non-disableable since 7.4) + password (core)
+    "hash",
+    "hash_equals",
+    "hash_hkdf",
+    "hash_hmac",
+    "hash_pbkdf2",
+    "md5",
+    "password_verify",
+    "sha1",
+    // PCRE (always compiled)
+    "preg_match",
+    "preg_match_all",
+    "preg_quote",
+    "preg_replace",
+    "preg_split",
+    // JSON (core since 8.0)
+    "json_decode",
+    "json_encode",
+    "json_last_error",
+    // type predicates / reflection (core)
+    "get_class",
+    "get_object_vars",
+    "gettype",
+    "is_array",
+    "is_bool",
+    "is_callable",
+    "is_finite",
+    "is_float",
+    "is_infinite",
+    "is_int",
+    "is_nan",
+    "is_null",
+    "is_object",
+    "is_string",
+    "boolval",
+    "floatval",
+    "intval",
+    "strval",
+    // runtime clock/memory (Core.Runtime → hrtime/memory_*, all Zend core)
+    "hrtime",
+    "memory_get_peak_usage",
+    "memory_get_usage",
+    "memory_reset_peak_usage",
+    "microtime",
+    "time",
+];
+
+/// PHP language constructs that appear as bareword-before-`(` but are NOT extension functions.
+const PHP_CONSTRUCTS: &[&str] = &[
+    "if",
+    "elseif",
+    "while",
+    "for",
+    "foreach",
+    "switch",
+    "match",
+    "catch",
+    "function",
+    "fn",
+    "return",
+    "echo",
+    "print",
+    "isset",
+    "empty",
+    "unset",
+    "exit",
+    "die",
+    "list",
+    "array",
+    "new",
+    "clone",
+    "instanceof",
+    "throw",
+    "and",
+    "or",
+    "xor",
+    "global",
+    "static",
+    "use",
+    "else",
+    "do",
+    "try",
+    "finally",
+    "yield",
+    "include",
+    "require",
+    // PHP 8.4 property-hook accessors — `set(Type $v) { … }` / `get`, contextual keywords, not calls.
+    "set",
+    "get",
+];
+
+/// Every locally-defined NAME in emitted PHP: functions/methods (`function NAME`, incl. the injected
+/// `__phorj_*` helpers) AND type names (`class`/`interface`/`trait`/`enum NAME`, so a `new ClassName(`
+/// instantiation is not mistaken for a builtin call). Keyed so a bareword call/`new` to one is skipped.
+fn locally_defined_fns(php: &str) -> std::collections::HashSet<String> {
+    let b = php.as_bytes();
+    let mut out = std::collections::HashSet::new();
+    for kw in ["function ", "class ", "interface ", "trait ", "enum "] {
+        let mut i = 0;
+        while let Some(rel) = php[i..].find(kw) {
+            let mut j = i + rel + kw.len();
+            while j < b.len() && (b[j] == b' ' || b[j] == b'&') {
+                j += 1;
+            }
+            let start = j;
+            while j < b.len() && (b[j].is_ascii_alphanumeric() || b[j] == b'_') {
+                j += 1;
+            }
+            if j > start {
+                out.insert(php[start..j].to_string());
+            }
+            i = i + rel + kw.len();
+        }
+    }
+    out
+}
+
+/// Every **bareword** function call in emitted PHP — an identifier immediately followed by `(`, NOT
+/// preceded by `->` / `::` / `$` (method / static-method / variable-function calls resolve elsewhere)
+/// nor part of a longer identifier. **Skips string-literal content** (`'…'` and `"…"`, honoring `\`
+/// escapes) so a `word(` inside a string — e.g. `"chain(1000) = "` — is not mistaken for a call.
+/// These are builtins or top-level (locally-defined) calls.
+fn bareword_calls(php: &str) -> Vec<String> {
+    let b = php.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'\'' | b'"' => {
+                // Skip the string body up to the matching unescaped quote.
+                let quote = b[i];
+                i += 1;
+                while i < b.len() && b[i] != quote {
+                    i += if b[i] == b'\\' { 2 } else { 1 };
+                }
+                i += 1; // past the closing quote
+            }
+            c if c.is_ascii_alphabetic() || c == b'_' => {
+                let start = i;
+                while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+                    i += 1;
+                }
+                let mut j = i;
+                while j < b.len() && (b[j] == b' ' || b[j] == b'\t') {
+                    j += 1;
+                }
+                if j < b.len() && b[j] == b'(' {
+                    let prev = if start == 0 { 0 } else { b[start - 1] };
+                    let is_member = prev == b'>' || prev == b':'; // ->name / ::name
+                    let is_var = prev == b'$';
+                    let is_ident = prev.is_ascii_alphanumeric() || prev == b'_';
+                    // A `\`-qualified reference is an explicitly-global core symbol (the transpiler
+                    // uses it for core classes like `\RuntimeException`/`\UnhandledMatchError`), never
+                    // a bare extension call like the `ctype_digit` bug — out of the guard's scope.
+                    let is_qualified = prev == b'\\';
+                    // A constructor `new X(...)` is not a bareword function call — the guard targets
+                    // extension *functions*. Look back past whitespace for the `new` keyword.
+                    let mut k = start;
+                    while k > 0 && (b[k - 1] == b' ' || b[k - 1] == b'\t' || b[k - 1] == b'\n') {
+                        k -= 1;
+                    }
+                    let word_end = k;
+                    while k > 0 && (b[k - 1].is_ascii_alphanumeric() || b[k - 1] == b'_') {
+                        k -= 1;
+                    }
+                    let is_new = &php[k..word_end] == "new";
+                    if !is_member && !is_var && !is_ident && !is_new && !is_qualified {
+                        out.push(php[start..i].to_string());
+                    }
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    out
+}
+
+/// Hermetic-`php -n` emission guard — **php-INDEPENDENT** (runs with no `php` on PATH). The gate the
+/// byte-identity oracle CANNOT enforce locally: it only fails on a non-tier-1 function when the *local*
+/// php lacks that extension, but a dev php (phpbrew) compiles `ctype`/etc. IN statically, so `php -n`
+/// still has them → a hermetic break passes locally and only fails in CI (setup-php ships them shared).
+/// That false-green shipped `ctype_digit` in String.format's `__phorj_format`. This is DEFAULT-DENY:
+/// every bareword call in every example's transpiled PHP must be a locally-defined function, a PHP
+/// construct, or in [`TIER1_PHP`] — so a NEW shared extension (openssl_/mb_/gmp_/…) cannot slip in
+/// unnoticed, not just the eight a denylist would name. (Coverage is still the transpiled emit of the
+/// example corpus; a helper no example triggers is not emitted here — the residual example-coverage gap
+/// the guard shares with the oracle, closed only by triggering every helper.)
 #[test]
-fn transpiled_examples_use_only_hermetic_php_functions() {
-    // Shared extensions NOT guaranteed under `php -n` (BCMath is the sanctioned exception, `-d`-loaded).
-    const FORBIDDEN: &[&str] = &[
-        "ctype_",
-        "mb_",
-        "iconv",
-        "gmp_",
-        "grapheme_",
-        "normalizer_",
-        "collator_",
-        "transliterator_",
-    ];
-    let scan = |label: &str, php: &str| {
-        for bad in FORBIDDEN {
-            assert!(
-                !php.contains(bad),
-                "example `{label}` transpiles to PHP using `{bad}*`, a shared extension NOT available \
-                 under the hermetic `php -n` oracle (CI loads only BCMath) — it fatals in CI while \
-                 passing on a dev php that compiles the extension in statically. Use a tier-1 core / \
-                 PCRE function instead.\n--- transpiled php ---\n{php}"
-            );
+fn transpiled_examples_use_only_tier1_php_functions() {
+    let mut offenders: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    let mut scan = |label: &str, php: &str| {
+        let local = locally_defined_fns(php);
+        for call in bareword_calls(php) {
+            if call.starts_with("__phorj_")
+                || local.contains(&call)
+                || PHP_CONSTRUCTS.contains(&call.as_str())
+                || TIER1_PHP.contains(&call.as_str())
+            {
+                continue;
+            }
+            offenders.entry(call).or_insert_with(|| label.to_string());
         }
     };
 
@@ -2391,6 +2679,18 @@ fn transpiled_examples_use_only_hermetic_php_functions() {
     assert!(
         scanned >= 3,
         "expected transpilable examples to scan, found {scanned}"
+    );
+    assert!(
+        offenders.is_empty(),
+        "transpiled PHP calls non-tier-1 bareword functions (unavailable under the hermetic `php -n` \
+         oracle → CI fatal, like `ctype_digit` did). Each must be added to TIER1_PHP if it is truly \
+         core/standard/PCRE/JSON/BCMath, or replaced; a shared extension also needs ci.yml + \
+         php_n_args:\n{}",
+        offenders
+            .iter()
+            .map(|(f, ex)| format!("  {f}()  (first seen in {ex})"))
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
