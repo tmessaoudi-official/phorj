@@ -6,8 +6,13 @@ impl<'a> Vm<'a> {
     /// Execute one instruction in the current frame (`fr` = top of `frames`, in function `func`).
     /// Returns `Flow::Done` once `main` returns (program complete), `Flow::Next` otherwise. A
     /// fault carries only its body string; `run` attaches the source position from `Chunk.lines`.
-    pub(super) fn exec_op(&mut self, op: Op, fr: usize, func: usize) -> Result<Flow, String> {
-        match op {
+    pub(super) fn exec_op(&mut self, op: &Op, fr: usize, func: usize) -> Result<Flow, String> {
+        // `op` is borrowed from `program.functions[..].chunk.code` (lifetime `'a`, independent of
+        // `self`) — the dispatch loops pass `&code[ip]` instead of cloning it (M-perf: the per-op
+        // `Op::clone` was ~8% of all executed instructions in a call-heavy profile). Matching `*op`
+        // binds the `Copy` operands (indices / bools) by value, so the arms are unchanged; the only
+        // two non-`Copy` payloads (`Fault(FaultMsg)`, `IsInstance(String)`) bind by `ref`.
+        match *op {
             Op::Const(i) => {
                 let v = self.program.functions[func].chunk.consts[i].clone();
                 self.stack.push(v);
@@ -139,7 +144,7 @@ impl<'a> Vm<'a> {
             Op::Lt | Op::Gt | Op::Le | Op::Ge => {
                 let b = self.pop();
                 let a = self.pop();
-                self.stack.push(Value::Bool(compare(&op, &a, &b)?));
+                self.stack.push(Value::Bool(compare(op, &a, &b)?));
             }
 
             Op::Pop => {
@@ -527,7 +532,7 @@ impl<'a> Vm<'a> {
             // A fixed runtime fault (match-exhaustiveness backstop or `opt!`-on-null), byte-identical
             // to the interpreter's fault for the same cause (the `agree_err` oracle classifies by
             // body). The message is single-sourced on `FaultMsg` (M3 S2.5).
-            Op::Fault(m) => return Err(m.message()),
+            Op::Fault(ref m) => return Err(m.message()),
 
             // --- P4b: classes ---
             Op::MakeInstance(idx) => {
@@ -641,7 +646,7 @@ impl<'a> Vm<'a> {
                 // `ClassName.field = e` (M-mut.7): pop the value into the program-level static slot.
                 self.statics[idx] = self.pop();
             }
-            Op::IsInstance(name) => {
+            Op::IsInstance(ref name) => {
                 // `value instanceof name` (M-RT S1; interfaces S2; class ancestors S6c.3): true iff the
                 // popped value is an instance whose class equals `name` OR has `name` among its
                 // supertypes — parent classes AND interfaces, via the shared `instanceof_table` oracle
@@ -661,12 +666,12 @@ impl<'a> Vm<'a> {
                     "bool" => matches!(v, Value::Bool(_)),
                     "null" => matches!(v, Value::Null),
                     _ => matches!(&v, Value::Instance(inst)
-                        if inst.class == name
+                        if &inst.class == name
                             || self
                                 .program
                                 .class_implements
                                 .get(&inst.class)
-                                .is_some_and(|ifaces| ifaces.contains(&name))),
+                                .is_some_and(|ifaces| ifaces.contains(name))),
                 };
                 self.stack.push(Value::Bool(is));
             }

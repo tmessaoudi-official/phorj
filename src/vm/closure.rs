@@ -87,16 +87,19 @@ impl<'a> Vm<'a> {
     /// captures output and returns it. A fault propagates as a raw `String` — the outer `run` loop
     /// (still executing the `CallNative` op) attaches the source line, exactly as for any native fault.
     pub(super) fn run_until(&mut self, target_depth: usize) -> Result<(), String> {
+        // See the main loop in `mod.rs`: copy the `&'a` program reference out of `self` so `op` can
+        // be borrowed from it (not cloned) while `self` is free for the `&mut` `exec_op` call.
+        let program = self.program;
         while self.frames.len() > target_depth {
             let fr = self.frames.len() - 1;
             let func = self.frames[fr].func;
             let ip = self.frames[fr].ip;
-            let code = &self.program.functions[func].chunk.code;
+            let code = &program.functions[func].chunk.code;
             if ip >= code.len() {
                 self.do_return(Value::Unit);
                 continue;
             }
-            let op = code[ip].clone();
+            let op = &code[ip];
             self.frames[fr].ip += 1;
             match self.exec_op(op, fr, func) {
                 Ok(Flow::Next) => {}

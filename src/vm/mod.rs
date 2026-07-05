@@ -201,11 +201,15 @@ impl<'a> Vm<'a> {
             ip: 0,
             slot_base: 0,
         });
+        // Copy the program reference out of `self` (it is `&'a`, so this is a pointer copy, not a
+        // borrow of `self`): `code`/`op` below then borrow `program` (lifetime `'a`), leaving `self`
+        // free for the `&mut` `exec_op` call — so the op need not be cloned each fetch (M-perf).
+        let program = self.program;
         loop {
             let fr = self.frames.len() - 1;
             let func = self.frames[fr].func;
             let ip = self.frames[fr].ip;
-            let code = &self.program.functions[func].chunk.code;
+            let code = &program.functions[func].chunk.code;
             if ip >= code.len() {
                 // The compiler emits a trailing `Return` for every function (P3-7); reaching
                 // the end without one is a compiler bug — treat as an implicit `Unit` return.
@@ -215,9 +219,8 @@ impl<'a> Vm<'a> {
                 }
                 continue;
             }
-            // Clone the op (cheap) so we don't hold a borrow of `self.program` across the
-            // mutable stack operations below.
-            let op = code[ip].clone();
+            // Borrow the op from `program` (no clone — see the note on `exec_op`).
+            let op = &code[ip];
             self.frames[fr].ip += 1;
             // `ip` is the *pre-increment* index — the op that actually executes. On a fault,
             // locate it via this function's `Chunk.lines[ip]` and surface a positioned runtime
