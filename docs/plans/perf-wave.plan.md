@@ -111,6 +111,26 @@ beating release-php.
   surfaced to developer** (the ratified endgame; no bytecode-VM micro-opt under `forbid(unsafe)`
   closes the 26× gap — that needs native codegen).
 
+## Step 4 RULED (developer, 2026-07-05) — Cranelift JIT, native proven 3× faster than php
+- **SPIKE RESULT (thesis PROVEN):** hand-written native fib(30), `rustc -O`: **`Rc`-boxed-`Value`
+  (naive transpile, NO unboxing) = 3.21 ms vs php+JIT 9.6 ms = ~3× FASTER**; native-`i64` (unboxed) =
+  ~0 ms (rustc const-folded — the ceiling). **Native codegen beats php+JIT even with phorj's boxed
+  Value repr.** Unboxing is a bonus, not a requirement. (`docs/research/jit-aot-design-exploration.md`)
+- **RULED: Cranelift JIT** (fast EVERYWHERE — `phg run`/`serve`/`build` all beat php+JIT via one
+  runtime-JIT backend). NOT a production-only AOT (that would leave interactive `phg run` on the VM).
+  **Requires amending the dependency policy** to admit a codegen crate (currently *explicitly excluded*
+  — performance domain) — feature-gated, non-wasm, corosensei-shaped `unsafe` confinement. The formal
+  amendment (UNIFIED-SPEC §External-dep-policy table entry + CHANGELOG + wasm feature-gate check) is the
+  first gate of the Cranelift build. Reject LLVM. Reject C (transpile→rustc) as the shipped answer
+  (production-only).
+- **NEAR-TERM WIN (ruled): `phg serve` → VM.** serve currently runs requests via `call_named` (the
+  tree-walk INTERPRETER, ~150× slower than php+JIT) — switch to the VM (~25× faster, byte-identical).
+  ALSO add `phg serve --tree-walker <file>` (mirrors `phg run --tree-walker`): serve defaults to the
+  VM, `--tree-walker` selects the interpreter oracle.
+- **Staged Cranelift plan** (post-amendment): emit Cranelift IR for arithmetic/control-flow core →
+  Value runtime (boxed first — already beats php) → wire JIT into `phg run`/`serve` (hot-fn compile) →
+  AOT-all for `phg build` → unboxing pass for the statically-typed hot paths (the bonus).
+
 ## Deferred until the perf goal is met (developer, 2026-07-05)
 **Nothing else is tackled until phorj is measurably faster than PHP.** THEN pursue all three
 concurrency directions (researched 2026-07-05; the CLI reshape is orthogonal to all of them):
