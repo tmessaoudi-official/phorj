@@ -2327,6 +2327,73 @@ fn all_example_projects_transpile_and_match_php() {
     }
 }
 
+/// Hermetic-`php -n` guard — **php-INDEPENDENT** (runs even with no `php` on PATH). This is the gate
+/// the oracle above CANNOT be trusted to enforce locally: the byte-identity oracle only fails on a
+/// non-tier-1 function when the *local* php lacks that extension, but a dev php (phpbrew) compiles
+/// `ctype`/etc. IN statically, so `php -n` still has them → a hermetic break passes locally and only
+/// fails in CI (where setup-php ships them shared). That false-green shipped `ctype_digit` in
+/// String.format's `__phorj_format`. This scans every example's transpiled PHP statically and asserts
+/// it uses ONLY the tier-1 surface: PHP core + standard + PCRE (`preg_*`, non-removable) + JSON (core
+/// since 8.0) + the ONE sanctioned shared extension **BCMath** (`bc*`, loaded via `-d extension=bcmath`
+/// in `php_n_args`/ci.yml). Any OTHER shared extension is unavailable under `php -n` and fatals in CI.
+/// If the transpiler ever legitimately needs a new extension, add it here AND to ci.yml + `php_n_args`.
+#[test]
+fn transpiled_examples_use_only_hermetic_php_functions() {
+    // Shared extensions NOT guaranteed under `php -n` (BCMath is the sanctioned exception, `-d`-loaded).
+    const FORBIDDEN: &[&str] = &[
+        "ctype_",
+        "mb_",
+        "iconv",
+        "gmp_",
+        "grapheme_",
+        "normalizer_",
+        "collator_",
+        "transliterator_",
+    ];
+    let scan = |label: &str, php: &str| {
+        for bad in FORBIDDEN {
+            assert!(
+                !php.contains(bad),
+                "example `{label}` transpiles to PHP using `{bad}*`, a shared extension NOT available \
+                 under the hermetic `php -n` oracle (CI loads only BCMath) — it fatals in CI while \
+                 passing on a dev php that compiles the extension in statically. Use a tier-1 core / \
+                 PCRE function instead.\n--- transpiled php ---\n{php}"
+            );
+        }
+    };
+
+    let mut scanned = 0usize;
+    // Single-file examples (skip the non-transpilable ones: concurrency / M11-deferred constructs).
+    let mut files = Vec::new();
+    collect_phg(std::path::Path::new("examples"), &mut files);
+    files.sort();
+    for path in &files {
+        let label = path.display().to_string();
+        let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {label}: {e}"));
+        if let Ok(php) = cli::cmd_transpile(&src) {
+            scan(&label, &php);
+            scanned += 1;
+        }
+    }
+    // Multi-file projects (assembled through the loader).
+    let mut projects = Vec::new();
+    collect_projects(std::path::Path::new("examples"), &mut projects);
+    projects.sort();
+    for project in &projects {
+        let label = project.display().to_string();
+        if let Ok(unit) = loader::load(&find_main_phg(project)) {
+            if let Ok(php) = cli::transpile_program(&unit.program, &unit.diag_src) {
+                scan(&label, &php);
+                scanned += 1;
+            }
+        }
+    }
+    assert!(
+        scanned >= 3,
+        "expected transpilable examples to scan, found {scanned}"
+    );
+}
+
 // ── M7: divergence-class regression guards ───────────────────────────────────────────────────────
 
 /// P0-1/P0-2/P0-4/QW-13: the emitter handles `/`, `%`, interpolation, compound operands, and ranges
