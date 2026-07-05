@@ -201,6 +201,52 @@ impl<'a> Vm<'a> {
             ip: 0,
             slot_base: 0,
         });
+        self.run_to_completion()?;
+        // `main`'s return value was stashed into `exit_value` by its `Op::Return` (or left `Unit` for a
+        // `void` `main`); the CLI maps the code to the process exit status.
+        let exit = exit_code_of(&self.exit_value);
+        Ok((self.out, exit))
+    }
+
+    /// Invoke a single resolved top-level function `entry` with pre-built `args`, returning its return
+    /// **value** plus captured stdout — the VM analog of [`crate::interpreter::call_named`], used by the
+    /// serve runtime (`crate::serve`) to run `respond(bytes) -> bytes` once per request on the bytecode
+    /// backend instead of the tree-walker (perf: the VM is ~25× faster). `args` become slots
+    /// `0..arity` at the frame base, exactly as `Op::Call` lays out a callee's window. **Non-cooperative
+    /// by design** — it mirrors `call_named` (which enters `run_call` directly, not the green-thread
+    /// driver), so `run ≡ runvm` holds on the serve path; a `respond` body never uses concurrency.
+    /// A fresh [`Vm`] per call re-seeds `statics` from `static_inits`, so each request starts from the
+    /// once-at-load static state — identical to `call_named` building a fresh interpreter each call.
+    pub fn run_entry(
+        mut self,
+        entry: usize,
+        args: Vec<Value>,
+    ) -> Result<(Value, String), Diagnostic> {
+        self.program.validate().map_err(Diagnostic::runtime)?;
+        // The callee window: args occupy slots `0..arity` at `slot_base = 0` (the entry frame is the
+        // bottom frame, so its base is the empty stack). The compiler laid out `entry`'s body to read
+        // its parameters from exactly these slots.
+        for a in args {
+            self.stack.push(a);
+        }
+        self.frames.push(Frame {
+            func: entry,
+            ip: 0,
+            slot_base: 0,
+        });
+        self.run_to_completion()?;
+        // `entry`'s `Op::Return` fired with `frames.len() == 1` (it is the bottom frame), so its return
+        // value is in `exit_value`. (An entry that fell off the end without a `Return` — a compiler bug,
+        // never emitted — would leave `Unit`, which the serve bridge degrades to a 500. Fine.)
+        Ok((self.exit_value, self.out))
+    }
+
+    /// Drive the frame stack to completion: fetch/execute ops until the bottom frame returns (or an
+    /// `Op` signals [`Flow::Done`]), leaving captured stdout in `self.out` and the entry frame's return
+    /// value in `self.exit_value`. Shared by [`run_main`](Vm::run_main) and [`run_entry`](Vm::run_entry)
+    /// — the caller sets up the entry frame + args, then reads the results it wants. Returns a
+    /// positioned runtime `Diagnostic` on an uncaught fault.
+    fn run_to_completion(&mut self) -> Result<(), Diagnostic> {
         // Copy the program reference out of `self` (it is `&'a`, so this is a pointer copy, not a
         // borrow of `self`): `code`/`op` below then borrow `program` (lifetime `'a`), leaving `self`
         // free for the `&mut` `exec_op` call — so the op need not be cloned each fetch (M-perf).
@@ -215,7 +261,7 @@ impl<'a> Vm<'a> {
                 // the end without one is a compiler bug — treat as an implicit `Unit` return.
                 self.do_return(Value::Unit);
                 if self.frames.is_empty() {
-                    return Ok((self.out, exit_code_of(&self.exit_value)));
+                    return Ok(());
                 }
                 continue;
             }
@@ -228,7 +274,7 @@ impl<'a> Vm<'a> {
             // asymmetry the `agree_err` oracle tolerates: it classifies by fault body, not text.)
             match self.exec_op(op, fr, func) {
                 Ok(Flow::Next) => {}
-                Ok(Flow::Done) => return Ok((self.out, exit_code_of(&self.exit_value))),
+                Ok(Flow::Done) => return Ok(()),
                 Err(msg) => {
                     // A thrown exception: unwind to the nearest handler (any handler, floor 0) and
                     // resume at its catch landing pad. If none exists, it escapes `main` uncaught —

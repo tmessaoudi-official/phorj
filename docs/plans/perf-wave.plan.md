@@ -131,6 +131,39 @@ beating release-php.
   Value runtime (boxed first — already beats php) → wire JIT into `phg run`/`serve` (hot-fn compile) →
   AOT-all for `phg build` → unboxing pass for the statically-typed hot paths (the bonus).
 
+## Step "serve → VM" (near-term win) — execution log (2026-07-05, autonomous)
+Chosen as the bounded autonomous slice after the developer push (Cranelift is a multi-session marathon
+gated on the dep-policy amendment; serve→VM is ruled, self-contained, ships a real relative win, and
+builds the VM `run_entry` — call-by-name + return-value capture — the JIT will need anyway).
+- **Verified facts** (before design): the one interpreter call-site is `serve.rs:111`
+  `call_named(prog,"respond",[bytes])`. Free functions are compiled FIRST in `functions`, bare-named
+  (no package mangling) → `respond` is findable by name. `Op::Return` already stashes the entry frame's
+  return `Value` into `exit_value` when `frames.len()==1` — so a VM entry needs only: push args → push
+  entry Frame → run loop → read `exit_value`+`out`. `Program` and `Ty` are both `Send+Sync` (no `Rc`)
+  but `BytecodeProgram` holds `Rc` (class layouts) → NOT `Send` → cannot be shared across worker
+  threads; each worker must compile its own from the shared `Arc<Program>`.
+- **Design (2 commits):**
+  1. VM `run_entry(entry, args) -> (Value, String)` + extract the shared dispatch loop into
+     `run_to_completion(&mut self)`; `run_main` becomes a thin wrapper (byte-identical). `run_entry` is
+     NON-cooperative — mirrors `call_named` (which runs `run_call` directly), so run≡runvm holds on the
+     serve path; do NOT copy `cmd_run`'s `uses_concurrency` coop branch. Verified by full differential
+     (proves `run_main` unchanged) + a unit test asserting `run_entry` ≡ `call_named` for a sample fn.
+  2. serve cutover. serve.rs stays compiler-free: it takes a `HandlerFactory` (a `Send+Sync`
+     `Fn() -> Box<dyn FnMut(&[u8]) -> Result<(Value,String), Diagnostic>>`) the CLI supplies; each
+     worker (and the single-thread path) calls it once to build its own non-`Send` handler that OWNS
+     its per-thread compiled `BytecodeProgram` (VM) or an `Arc<Program>` clone (interp). The factory,
+     built in `cli::serve_program`, captures `Arc<Program>`(checked+expanded)+`Arc<reified>` and does
+     `compile_with` inside (per worker) → no `Rc` crosses a thread, no compiler import in serve.rs.
+     `serve --tree-walker` selects the interp factory. Entry resolution: single free `respond` by name
+     (arity-guarded); an overloaded `respond` is unsupported on the VM path (errors clearly — use
+     `--tree-walker`) — degenerate config, documented, no silent divergence.
+- **Validation** (serve is OUTSIDE the differential — the gate won't catch a VM≠interp break): new
+  dual-backend tests in `tests/serve.rs` drive a fixed request set through BOTH engines asserting
+  byte-equal response bytes (normal path + production 500; the dev error page is explicitly outside the
+  byte-identity value contract — not gated). Plus measure per-request latency both backends (Inv-11 /
+  G-8) and report before/after — framed honestly: ~150×→~25× slower than php+JIT (a real relative win,
+  NOT perf-mandate completion; the mandate needs the JIT).
+
 ## Deferred until the perf goal is met (developer, 2026-07-05)
 **Nothing else is tackled until phorj is measurably faster than PHP.** THEN pursue all three
 concurrency directions (researched 2026-07-05; the CLI reshape is orthogonal to all of them):

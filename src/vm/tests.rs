@@ -46,6 +46,64 @@ fn run_and_runvm_traces_match() {
     }
 }
 
+/// `run_entry` (the serve VM bridge) must return byte-identical value AND stdout to the interpreter's
+/// `call_named` for the same named entry + args — the invariant `phg serve --tree-walker` vs the VM
+/// serve path rides. Covers the `bytes -> bytes` shape serve uses, plus a stdout-emitting body.
+#[test]
+fn run_entry_matches_call_named() {
+    let src = "package Main;\n\
+         import Core.Output;\n\
+         function twice(int x) -> int { Output.printLine(\"tick\"); return x * 2 + 1; }\n\
+         function passthrough(bytes b) -> bytes { return b; }\n\
+         function main() -> void {}";
+    let unit = crate::loader::load_loose_src(src).unwrap();
+    let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();
+    let program = crate::compiler::compile(&checked).unwrap();
+    let idx = |name: &str| {
+        program
+            .functions
+            .iter()
+            .position(|f| f.name == name)
+            .unwrap_or_else(|| panic!("no compiled function `{name}`"))
+    };
+
+    // `Value` has no `PartialEq` (closures/`Rc`) — compare by matching the concrete variants.
+    let as_int = |v: &Value| match v {
+        Value::Int(n) => *n,
+        other => panic!("expected int, got {}", other.type_name()),
+    };
+    let as_bytes = |v: &Value| match v {
+        Value::Bytes(b) => b.as_ref().clone(),
+        other => panic!("expected bytes, got {}", other.type_name()),
+    };
+
+    // int -> int, with stdout.
+    let (iv, iout) =
+        crate::interpreter::call_named(&checked, "twice", vec![Value::Int(20)]).unwrap();
+    let (vv, vout) = Vm::new(&program)
+        .run_entry(idx("twice"), vec![Value::Int(20)])
+        .unwrap();
+    assert_eq!(as_int(&iv), as_int(&vv), "twice return value: interp vs VM");
+    assert_eq!(iout, vout, "twice stdout: interp vs VM");
+    assert_eq!(as_int(&vv), 41);
+    assert_eq!(vout, "tick\n");
+
+    // bytes -> bytes (the serve `respond` shape): value survives the `exit_value` capture.
+    let raw = std::rc::Rc::new(b"GET / HTTP/1.1".to_vec());
+    let (iv, _) =
+        crate::interpreter::call_named(&checked, "passthrough", vec![Value::Bytes(raw.clone())])
+            .unwrap();
+    let (vv, _) = Vm::new(&program)
+        .run_entry(idx("passthrough"), vec![Value::Bytes(raw.clone())])
+        .unwrap();
+    assert_eq!(
+        as_bytes(&iv),
+        as_bytes(&vv),
+        "passthrough return value: interp vs VM"
+    );
+    assert_eq!(as_bytes(&vv), *raw.as_ref());
+}
+
 /// Emit the standard function terminator: push `Unit`, then `Return` (P3-7).
 fn term(c: &mut Chunk) {
     let u = c.add_const(Value::Unit);
