@@ -669,6 +669,34 @@ pub struct FunctionDecl {
     pub span: Span,
 }
 
+/// A synthetic, inert `function main(): void {}` item. The bytecode compiler requires an entry
+/// (`ast::entry_point`), but a serve/web program legitimately has none — its entry is `respond`, run
+/// via [`crate::vm::Vm::run_entry`], never `main`. Injecting this satisfies the compiler while staying
+/// byte-inert: the synthetic `main` is never invoked, exactly as the interpreter's `call_named` never
+/// runs `main`. (The future JIT's library/serve compile will reuse it.)
+#[must_use]
+pub fn synth_empty_main() -> Item {
+    Item::Function(FunctionDecl {
+        modifiers: Vec::new(),
+        attrs: Vec::new(),
+        vis: Visibility::Public,
+        name: "main".to_string(),
+        type_params: Vec::new(),
+        params: Vec::new(),
+        ret: None,
+        throws: Vec::new(),
+        body: Vec::new(),
+        foreign: false,
+        generic_ret_from_param: None,
+        span: Span {
+            start: 0,
+            len: 0,
+            line: 1,
+            col: 1,
+        },
+    })
+}
+
 /// A PHP-8-style item attribute — `#[Name(arg, …)]` (M6 W2). Parsed generally (any `Name` + any
 /// expression args); only `Route` is given semantics this slice (every other name is a hard
 /// `E-UNKNOWN-ATTRIBUTE`). Attributes are front-end metadata: validated by the checker and consumed by

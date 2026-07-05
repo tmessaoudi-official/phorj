@@ -163,6 +163,16 @@ builds the VM `run_entry` — call-by-name + return-value capture — the JIT wi
   byte-identity value contract — not gated). Plus measure per-request latency both backends (Inv-11 /
   G-8) and report before/after — framed honestly: ~150×→~25× slower than php+JIT (a real relative win,
   NOT perf-mandate completion; the mandate needs the JIT).
+- **SHIPPED — measured (release binary, keep-alive socket, representative parse+route+build `respond`,
+  best-of per-request over 3590 samples):** VM (default) **17.1 µs median/request** (best 15.2) vs
+  tree-walker **39.6 µs median** (best 33.3) = **~2.3× faster end-to-end**. The ratio understates the
+  handler-compute gain — the fixed loopback socket round-trip is inside both numbers. Two commits:
+  `caabfc4` (VM `run_entry`) + the serve cutover (this one). Gotchas hit + resolved: (1) the VM
+  compiler requires an entry, but serve/web programs legitimately have no `main` (interp `call_named`
+  never needs one) → new `ast::synth_empty_main()` injected in `vm_factory` (inert; never invoked). (2)
+  `MAX_REQUESTS_PER_CONN=100` closes a keep-alive socket after 100 requests (a benchmark-client gotcha,
+  not a serve bug). Still ~25× slower than php+JIT — the mandate is unmet until the JIT; serve→VM is
+  the right infra + a real relative win.
 
 ## Deferred until the perf goal is met (developer, 2026-07-05)
 **Nothing else is tackled until phorj is measurably faster than PHP.** THEN pursue all three

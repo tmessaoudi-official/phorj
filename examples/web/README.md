@@ -54,6 +54,15 @@ request, calls `respond` once per request, and writes the bytes back. All HTTP l
 routing, the 400-on-malformed — lives in `respond`, in pure Phorj; the runtime (`src/serve.rs`) is
 the thinnest possible glue and knows nothing about the `Request`/`Response` layout.
 
+**Backend:** `respond` runs on the **bytecode VM by default** — byte-identical to the interpreter
+(`Vm::run_entry` ≡ `call_named`, asserted in `tests/serve.rs`) and materially faster per request
+(measured ~2.3× lower end-to-end latency than the tree-walker on a representative handler; the pure
+handler-compute gain is larger — the fixed socket round-trip is in both numbers). `--tree-walker`
+selects the interpreter oracle instead (also required to serve an *overloaded* `respond`, which the
+VM path rejects). Each worker compiles its own copy of the program once at startup (the compiled
+program holds `Rc` state and can't cross threads); the compile cost is amortised over every request
+that worker serves.
+
 **HTTP/1.1 keep-alive (M6 W4 / S4.1):** with a `--timeout` set, a connection is reused for multiple
 requests (every response carries `Content-Length`, so it is self-delimiting) until the client sends
 `Connection: close`, the per-connection cap (100) is reached, or the idle read-timeout fires. The
@@ -84,9 +93,10 @@ $ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/missing
 404
 ```
 
-The server is **single-threaded by design**: the `Rc`-shared object heap makes runtime values
-non-`Send`, so a thread pool is impossible; true concurrency arrives with M6 green-threads under
-this *unchanged* `handle(Request) -> Response` contract.
+**Concurrency (`--workers N`):** the server runs a bounded OS-thread pool by default (one request per
+worker, each with its own `Rc` value heap — values never cross threads, and the immutable program is
+shared via `Arc`); `--workers 1` keeps the single-threaded path. The same *unchanged*
+`handle(Request) -> Response` contract holds on every worker.
 
 `server.phg` also has a `main()` that exercises `respond` on canned `b"…"` requests, so the program
 stays byte-identical on both backends (and through real PHP) — the socket path is the only part

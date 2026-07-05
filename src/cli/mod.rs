@@ -207,11 +207,15 @@ pub fn help_for(cmd: &str) -> String {
                     --timeout so a slow/idle client cannot wedge a worker (slowloris). A per-connection\n\
                     read/write error never ends the server — it is logged and the next connection is\n\
                     served.\n\n\
-                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS] [--workers N]\n\n\
+                    Requests run on the bytecode VM by default (~25x faster than the tree-walker,\n\
+                    byte-identical output); --tree-walker selects the interpreter oracle instead (and\n\
+                    is required to serve an overloaded `respond`, which the VM path rejects).\n\n\
+                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS] [--workers N] [--tree-walker]\n\n\
                     options:\n  \
                     --addr ADDR        host:port to bind (default 127.0.0.1:8080)\n  \
                     --timeout SECONDS  per-connection read/write timeout; 0 = none (default 30)\n  \
                     --workers N        request concurrency; 1 = single-threaded (default = CPU cores)\n  \
+                    --tree-walker      run requests on the interpreter oracle, not the (default) VM\n  \
                     --dev              rich HTML error page on an uncaught fault (DEV ONLY; prod = bare 500)\n\n\
                     examples:\n  \
                     phg serve examples/web/server.phg\n  \
@@ -1200,6 +1204,16 @@ pub fn parse_checked_program(src: &str) -> Result<Program, String> {
     parse_checked(src)
 }
 
+/// Like [`parse_checked_program`], but also returns the reified-operand side-table — so a caller (e.g.
+/// `tests/serve.rs`) can build the VM serve factory ([`crate::serve::vm_factory`]) on the exact
+/// byte-identical path the CLI uses.
+#[allow(clippy::type_complexity)]
+pub fn parse_checked_program_reified(
+    src: &str,
+) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+    parse_checked_reified(src)
+}
+
 /// `run`: lex -> parse -> check (gate) -> interpret -> captured stdout.
 /// M8.5 interop: refuse to *execute* a program that uses foreign `declare` symbols. The Rust backends
 /// (interpreter/VM) have no PHP runtime, so a foreign call cannot run — the program is PHP-target-only.
@@ -1426,10 +1440,12 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
     })
 }
 
-/// `serve` on an already-loaded program (M6 W4): type-check, then run the blocking HTTP serve loop
-/// ([`crate::serve::serve_tcp`]) until the process is killed. Runs on the 256 MB deep-stack worker so
-/// the interpreter's `MAX_CALL_DEPTH` guard has the same headroom `run`/`runvm` rely on (the
-/// per-request `call_named` walks the native stack). Returns only on a bind/socket error.
+/// `serve` on an already-loaded program (M6 W4): type-check, build the request handler factory, then
+/// run the blocking HTTP serve loop ([`crate::serve::serve_tcp`]) until the process is killed. Defaults
+/// to the **bytecode VM** (~25× faster than the tree-walker, byte-identical via [`Vm::run_entry`] ≡
+/// `call_named`); `tree_walker` selects the interpreter oracle (`phg serve --tree-walker`, the
+/// exact pre-VM behaviour). Runs on the 256 MB deep-stack worker so re-entrant natives (and the
+/// interpreter's `MAX_CALL_DEPTH` guard) have the same native-stack headroom `run` relies on.
 pub fn serve_program(
     prog: &Program,
     diag_src: &str,
@@ -1437,10 +1453,19 @@ pub fn serve_program(
     timeout: Option<std::time::Duration>,
     profile: crate::profile::Profile,
     workers: usize,
+    tree_walker: bool,
 ) -> Result<String, String> {
     on_deep_stack(|| {
-        let checked = check_and_expand(prog, diag_src)?;
-        crate::serve::serve_tcp(&checked, addr, timeout, profile, workers)
+        // Reified side-table is threaded into the VM compile (Invariant 6); the interp path ignores it.
+        let (checked, reified) = check_and_expand_reified(prog, diag_src)?;
+        let checked = std::sync::Arc::new(checked);
+        let factory = if tree_walker {
+            crate::serve::interp_factory(checked)
+        } else {
+            crate::serve::vm_factory(checked, std::sync::Arc::new(reified))
+                .map_err(|e| e.to_string())?
+        };
+        crate::serve::serve_tcp(factory, addr, timeout, profile, workers)
             .map_err(|e| format!("serve: {e}"))?;
         Ok(String::new())
     })

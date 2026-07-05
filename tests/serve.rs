@@ -8,9 +8,25 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 
+use std::sync::Arc;
+
 use phorj::interpreter::call_named;
-use phorj::serve::{serve, Transport};
+use phorj::serve::{serve, HandlerFactory, Transport};
 use phorj::value::Value;
+
+/// Build the interpreter-backend request factory from a checked program — the pre-VM serve behaviour,
+/// and the byte-identity reference every existing test below asserts against.
+fn ifac(prog: &phorj::ast::Program) -> HandlerFactory {
+    phorj::serve::interp_factory(Arc::new(prog.clone()))
+}
+
+/// Build the bytecode-VM factory from inline source (the default `phg serve` backend). Uses the same
+/// reified-operand path the CLI does, so `Vm::run_entry` ≡ `call_named` on the served `respond`.
+fn vfac(src: &str) -> HandlerFactory {
+    let (prog, reified) =
+        phorj::cli::parse_checked_program_reified(src).expect("serve program type-checks");
+    phorj::serve::vm_factory(Arc::new(prog), Arc::new(reified)).expect("serve program compiles")
+}
 
 /// A small but complete serve program: W1-style parse/serialize + a 2-route dispatch + the single
 /// `respond(bytes) -> bytes` entry (malformed → 400, all in pure Phorj). `main` keeps it a valid
@@ -156,7 +172,7 @@ fn serves_known_unknown_and_malformed() {
         get_missing.clone(),
         malformed.clone(),
     ]);
-    serve(&prog, &mut fx, false).expect("serve loop completes");
+    serve(&ifac(&prog), &mut fx, false).expect("serve loop completes");
 
     assert_eq!(fx.sent.len(), 3, "one response per request");
     assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
@@ -179,6 +195,58 @@ fn serves_known_unknown_and_malformed() {
     }
 }
 
+/// The default VM serve path must produce **byte-identical** responses to the interpreter path
+/// (`--tree-walker`). serve is deliberately OUTSIDE the differential harness (the determinism
+/// quarantine), so this is where `run ≡ runvm` is asserted for the served `respond` entry — covering
+/// the normal 200/404/400 routes, the production (non-dev) 500, and the injected Core.Http bridge.
+#[test]
+fn vm_serve_is_byte_identical_to_interpreter() {
+    // Drive the same requests through both backends over the deterministic fixture transport.
+    let run = |factory: &HandlerFactory, requests: Vec<Vec<u8>>| {
+        let mut fx = FixtureTransport::new(requests);
+        serve(factory, &mut fx, false).expect("serve loop completes");
+        fx.sent
+    };
+    let routes = || {
+        vec![
+            b"GET / HTTP/1.1\r\nHost: x\r\n\r\n".to_vec(),
+            b"GET /missing HTTP/1.1\r\nHost: x\r\n\r\n".to_vec(),
+            b"GET / HTTP/1.1 no terminator".to_vec(), // malformed → 400
+        ]
+    };
+
+    // Normal routes: 200 / 404 / 400.
+    let prog = program();
+    let interp = run(&ifac(&prog), routes());
+    let vm = run(&vfac(SERVE_PROGRAM), routes());
+    assert_eq!(
+        interp, vm,
+        "VM serve responses must byte-match the interpreter"
+    );
+    assert_eq!(vm.len(), 3, "three responses (not both empty/broken)");
+    assert_eq!(vm[0], http("HTTP/1.1 200 OK", "home"));
+    assert_eq!(vm[2], http("HTTP/1.1 400 Bad Request", "bad request"));
+
+    // Production 500: a `respond` that faults degrades to the bare 500 on BOTH backends (dev = false).
+    let fault = "package Main;\n\
+         function respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n";
+    let req = || vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()];
+    let i500 = run(&ifac(&checked(fault)), req());
+    let v500 = run(&vfac(fault), req());
+    assert_eq!(i500, v500, "production 500 must byte-match across backends");
+    assert!(v500[0].starts_with(b"HTTP/1.1 500 Internal Server Error"));
+
+    // The injected Core.Http `respond` bridge is resolved + served identically on the VM.
+    let hp = phorj::cli::parse_checked_program(HTTP_HANDLE_PROGRAM).expect("http program checks");
+    let ihttp = run(&ifac(&hp), routes());
+    let vhttp = run(&vfac(HTTP_HANDLE_PROGRAM), routes());
+    assert_eq!(
+        ihttp, vhttp,
+        "injected-bridge serve must byte-match across backends"
+    );
+    assert_eq!(vhttp[0], http("HTTP/1.1 200 OK", "home"));
+}
+
 #[test]
 fn core_http_handle_is_servable_via_injected_respond_bridge() {
     // The program has no `respond` of its own — the Core.Http injection supplies it, wrapping `handle`.
@@ -193,7 +261,7 @@ fn core_http_handle_is_servable_via_injected_respond_bridge() {
         get_missing.clone(),
         malformed.clone(),
     ]);
-    serve(&prog, &mut fx, false).expect("serve loop completes");
+    serve(&ifac(&prog), &mut fx, false).expect("serve loop completes");
 
     assert_eq!(fx.sent.len(), 3, "one response per request");
     assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
@@ -241,7 +309,8 @@ fn recv_error_does_not_kill_the_loop() {
         ]),
         sent: Vec::new(),
     };
-    serve(&prog, &mut t, false).expect("loop survives per-connection errors and ends cleanly");
+    serve(&ifac(&prog), &mut t, false)
+        .expect("loop survives per-connection errors and ends cleanly");
     assert_eq!(
         t.sent.len(),
         1,
@@ -263,7 +332,7 @@ fn unrecoverable_listener_eventually_stops() {
         sent: Vec::new(),
     };
     assert!(
-        serve(&prog, &mut t, false).is_err(),
+        serve(&ifac(&prog), &mut t, false).is_err(),
         "a listener that only errors must eventually end the loop"
     );
     assert!(t.sent.is_empty(), "nothing could be served");
@@ -278,7 +347,7 @@ fn respond_fault_degrades_to_500_and_loop_continues() {
     );
     let req = b"GET / HTTP/1.1\r\n\r\n".to_vec();
     let mut fx = FixtureTransport::new(vec![req.clone(), req]);
-    serve(&prog, &mut fx, false).expect("loop completes despite per-request faults");
+    serve(&ifac(&prog), &mut fx, false).expect("loop completes despite per-request faults");
     assert_eq!(
         fx.sent.len(),
         2,
@@ -306,7 +375,7 @@ fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
 
     // Dev profile → rich HTML page.
     let mut dev_fx = FixtureTransport::new(vec![req.clone()]);
-    serve(&prog, &mut dev_fx, Profile::Dev.is_dev()).expect("loop completes");
+    serve(&ifac(&prog), &mut dev_fx, Profile::Dev.is_dev()).expect("loop completes");
     let dev_resp = String::from_utf8_lossy(&dev_fx.sent[0]);
     assert!(
         dev_resp.starts_with("HTTP/1.1 500 Internal Server Error"),
@@ -327,7 +396,7 @@ fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
 
     // Release profile → bare plain-text 500, no trace/source leak.
     let mut rel_fx = FixtureTransport::new(vec![req]);
-    serve(&prog, &mut rel_fx, Profile::Release.is_dev()).expect("loop completes");
+    serve(&ifac(&prog), &mut rel_fx, Profile::Release.is_dev()).expect("loop completes");
     let rel_resp = String::from_utf8_lossy(&rel_fx.sent[0]);
     assert!(
         rel_resp.starts_with("HTTP/1.1 500 Internal Server Error"),
@@ -349,7 +418,7 @@ fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
 fn respond_non_bytes_return_degrades_to_500() {
     let prog = checked("package Main;\nfunction respond(bytes raw) -> int { return 7; }\n");
     let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()]);
-    serve(&prog, &mut fx, false).expect("loop completes");
+    serve(&ifac(&prog), &mut fx, false).expect("loop completes");
     assert_eq!(fx.sent.len(), 1);
     assert!(fx.sent[0].starts_with(b"HTTP/1.1 500 Internal Server Error"));
 }
@@ -373,7 +442,7 @@ fn tcp_smoke() {
     // Detached server thread: serves the one connection we make, then blocks on the next accept
     // (harmless — the process exits at end of test).
     std::thread::spawn(move || {
-        let _ = serve(&prog, &mut t, false);
+        let _ = serve(&ifac(&prog), &mut t, false);
     });
 
     let mut s = TcpStream::connect(addr).expect("connect");
@@ -400,7 +469,7 @@ fn tcp_keepalive_serves_two_requests_on_one_socket() {
     t.set_timeout(Some(Duration::from_secs(5))); // keep-alive only with a timeout (idle guard)
     let addr = t.local_addr().expect("addr");
     std::thread::spawn(move || {
-        let _ = serve(&prog, &mut t, false);
+        let _ = serve(&ifac(&prog), &mut t, false);
     });
 
     let expected = http("HTTP/1.1 200 OK", "home");
@@ -432,7 +501,7 @@ fn tcp_connection_close_closes_after_one_response() {
     t.set_timeout(Some(Duration::from_secs(5)));
     let addr = t.local_addr().expect("addr");
     std::thread::spawn(move || {
-        let _ = serve(&prog, &mut t, false);
+        let _ = serve(&ifac(&prog), &mut t, false);
     });
 
     let mut s = TcpStream::connect(addr).expect("connect");
@@ -460,7 +529,7 @@ fn pool_serves_concurrent_connections() {
     let addr = listener.local_addr().expect("addr");
     // Detached 4-worker pool (blocks forever in accept; the process exits at end of test).
     std::thread::spawn(move || {
-        let _ = serve_pool(listener, &prog, None, false, 4);
+        let _ = serve_pool(listener, ifac(&prog), None, false, 4);
     });
 
     let expected = http("HTTP/1.1 200 OK", "home");
@@ -507,7 +576,7 @@ fn pool_graceful_shutdown_drains_and_returns() {
     let server = std::thread::spawn(move || {
         serve_pool_with(
             listener,
-            &prog,
+            ifac(&prog),
             Some(Duration::from_secs(5)),
             false,
             2,
@@ -548,7 +617,13 @@ fn pool_keepalive_serves_two_requests_on_one_socket() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
     let addr = listener.local_addr().expect("addr");
     std::thread::spawn(move || {
-        let _ = serve_pool(listener, &prog, Some(Duration::from_secs(5)), false, 2);
+        let _ = serve_pool(
+            listener,
+            ifac(&prog),
+            Some(Duration::from_secs(5)),
+            false,
+            2,
+        );
     });
 
     let expected = http("HTTP/1.1 200 OK", "home");

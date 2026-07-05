@@ -15,8 +15,12 @@
 //! plan (which would have been single-core + needs unstable/unsafe std machinery) — see
 //! `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md`.
 use crate::ast::Program;
+use crate::chunk::BytecodeProgram;
+use crate::compiler::compile_with;
+use crate::diagnostic::Diagnostic;
 use crate::interpreter::call_named;
 use crate::value::Value;
+use crate::vm::Vm;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::rc::Rc;
@@ -53,6 +57,102 @@ pub fn install_shutdown_handler() -> Arc<AtomicBool> {
 /// The default Phorj entry the runtime calls per request: `respond(bytes) -> bytes`.
 pub const SERVE_ENTRY: &str = "respond";
 
+/// The checker's reified-operand side-table (`expr span → Ty`), threaded into [`compile_with`] so the
+/// VM specializes arithmetic operands exactly as the byte-identical `phg run` path does (Invariant 6).
+pub type Reified = std::collections::HashMap<usize, crate::types::Ty>;
+
+/// A per-thread request handler: given the raw request bytes, invoke the served program's
+/// `respond(bytes) -> bytes` entry, returning its value + captured stdout (or a runtime fault). It is
+/// **not** `Send` — the VM handler owns an `Rc`-bearing compiled [`BytecodeProgram`], and values never
+/// cross threads — so exactly one is built **per worker thread** (never shared).
+pub type Handler = Box<dyn FnMut(&[u8]) -> Result<(Value, String), Diagnostic>>;
+
+/// A `Send + Sync` factory the CLI (or a test) supplies; each worker — and the single-threaded loop —
+/// calls it once to build its own [`Handler`]. The VM factory does the per-thread `compile_with`
+/// **inside** the produced handler, so no `Rc`-bearing state ever crosses a thread boundary — only the
+/// factory itself (which captures the `Send + Sync` checked [`Program`] + [`Reified`] table) does. This
+/// is why serve compiles once per worker rather than sharing one bytecode program: a `BytecodeProgram`
+/// holds `Rc` class layouts and is not `Send`.
+pub type HandlerFactory = Box<dyn Fn() -> Handler + Send + Sync>;
+
+/// The tree-walking-interpreter backend (the correctness oracle; `phg serve --tree-walker`). Each
+/// request builds a fresh interpreter via [`call_named`] — verbatim the pre-VM serve behaviour.
+#[must_use]
+pub fn interp_factory(program: std::sync::Arc<Program>) -> HandlerFactory {
+    Box::new(move || {
+        let program = std::sync::Arc::clone(&program);
+        Box::new(move |raw: &[u8]| {
+            call_named(
+                &program,
+                SERVE_ENTRY,
+                vec![Value::Bytes(Rc::new(raw.to_vec()))],
+            )
+        })
+    })
+}
+
+/// The bytecode-VM backend (the default `phg serve` — ~25× faster than the tree-walker, byte-identical
+/// by [`Vm::run_entry`] ≡ [`call_named`]). Validates the compile + resolves the `respond` entry index
+/// **once up front** (surfacing any error before the socket binds), then hands back a factory whose
+/// handlers recompile per worker (deterministic ⇒ the same entry index). A fresh [`Vm`] per request
+/// re-seeds program statics, matching the interpreter's fresh-per-request state.
+///
+/// An **overloaded** `respond` is rejected here (the entry is a single fixed `bytes -> bytes`
+/// contract) — a degenerate config; `phg serve --tree-walker` still serves it. A missing `respond`
+/// is likewise a startup error.
+pub fn vm_factory(
+    program: std::sync::Arc<Program>,
+    reified: std::sync::Arc<Reified>,
+) -> Result<HandlerFactory, Diagnostic> {
+    use crate::ast::Item;
+    let respond_defs = program
+        .items
+        .iter()
+        .filter(|it| matches!(it, Item::Function(f) if f.name == SERVE_ENTRY))
+        .count();
+    if respond_defs > 1 {
+        return Err(Diagnostic::runtime(format!(
+            "serve entry `{SERVE_ENTRY}` cannot be overloaded on the VM backend — run \
+             `phg serve --tree-walker` to serve an overloaded entry"
+        )));
+    }
+    // The bytecode compiler requires an entry, but a serve/web program legitimately has no `main`
+    // (its entry is `respond`). Inject an inert one so it compiles — never invoked, so byte-inert and
+    // matching the interpreter's `call_named`, which never runs `main` either. Do it on the shared
+    // program the factory captures, so every per-worker recompile sees the same entry.
+    let program = if crate::ast::entry_point(&program, "main").is_none() {
+        let mut p = (*program).clone();
+        p.items.push(crate::ast::synth_empty_main());
+        std::sync::Arc::new(p)
+    } else {
+        program
+    };
+    // Compile once up front: validates it (a checked program should always compile) AND resolves the
+    // stable free-function index of `respond`. Free functions compile first and bare-named, so a
+    // by-name `position` finds the free `respond` (never a method of the same name — those come after).
+    let compiled =
+        compile_with(&program, &reified).map_err(|e| Diagnostic::runtime(e.to_string()))?;
+    let entry = compiled
+        .functions
+        .iter()
+        .position(|f| f.name == SERVE_ENTRY)
+        .ok_or_else(|| {
+            Diagnostic::runtime(format!(
+                "serve needs a `{SERVE_ENTRY}(bytes): bytes` entry (define one, or `import Core.Http` \
+                 and a `handle(Request): Response`)"
+            ))
+        })?;
+    Ok(Box::new(move || {
+        // Per-worker compile from the shared (Send+Sync) checked program: the resulting Rc-bearing
+        // `BytecodeProgram` stays owned by this handler, on this thread. Deterministic ⇒ `entry` holds.
+        let compiled: BytecodeProgram =
+            compile_with(&program, &reified).expect("serve program compiled cleanly at startup");
+        Box::new(move |raw: &[u8]| {
+            Vm::new(&compiled).run_entry(entry, vec![Value::Bytes(Rc::new(raw.to_vec()))])
+        })
+    }))
+}
+
 /// Seam between the serve loop and the world. [`TcpTransport`] is the real socket; `tests/serve.rs`
 /// swaps an in-memory transport (the env-update HTTP-fixture-seam pattern) so the loop needs no port
 /// and stays deterministic.
@@ -75,13 +175,19 @@ const MAX_CONSECUTIVE_TRANSPORT_ERRORS: usize = 64;
 /// `recv` error (e.g. a transient `accept()`) is logged and retried — only `MAX_CONSECUTIVE_…` recv
 /// errors in a row with no progress ends the loop. Returns `Ok` when the transport reports
 /// exhaustion (`recv` → `Ok(None)`).
-pub fn serve<T: Transport>(program: &Program, transport: &mut T, dev: bool) -> io::Result<()> {
+pub fn serve<T: Transport>(
+    factory: &HandlerFactory,
+    transport: &mut T,
+    dev: bool,
+) -> io::Result<()> {
+    // Single-threaded loop: build this loop's one handler once, reuse it for every request.
+    let mut handler = factory();
     let mut consecutive_errors = 0usize;
     loop {
         match transport.recv() {
             Ok(Some(raw)) => {
                 consecutive_errors = 0;
-                let response = respond_once(program, &raw, dev);
+                let response = respond_once(&mut handler, &raw, dev);
                 if let Err(e) = transport.send(&response) {
                     // One client's broken pipe / reset must not end the server.
                     eprintln!("serve: send failed (connection dropped): {e}");
@@ -106,9 +212,8 @@ pub fn serve<T: Transport>(program: &Program, transport: &mut T, dev: bool) -> i
 /// Invoke `respond(bytes) -> bytes` once. Any captured stdout (a handler calling `Output.printLine`)
 /// is treated as a server log line and written to stderr, keeping the HTTP response body clean.
 /// A non-`bytes` return or a runtime fault degrades to a 500 — never a panic (EV-7).
-fn respond_once(program: &Program, raw: &[u8], dev: bool) -> Vec<u8> {
-    let arg = Value::Bytes(Rc::new(raw.to_vec()));
-    match call_named(program, SERVE_ENTRY, vec![arg]) {
+fn respond_once(handler: &mut Handler, raw: &[u8], dev: bool) -> Vec<u8> {
+    match handler(raw) {
         Ok((Value::Bytes(b), out)) => {
             if !out.is_empty() {
                 eprint!("{out}");
@@ -347,7 +452,7 @@ impl Transport for TcpTransport {
 /// runs an OS-thread pool, one request per worker thread, each with its own `Rc` `Value` heap
 /// (`ast::Program` is `Send + Sync` and values never cross threads — M6 W3 design).
 pub fn serve_tcp(
-    program: &Program,
+    factory: HandlerFactory,
     addr: &str,
     timeout: Option<Duration>,
     profile: crate::profile::Profile,
@@ -364,9 +469,9 @@ pub fn serve_tcp(
         t.set_shutdown(Arc::clone(&shutdown));
         eprintln!("phg serve: listening on http://{}", t.local_addr()?);
         serve_banner(timeout, dev, 1);
-        return serve(program, &mut t, dev);
+        return serve(&factory, &mut t, dev);
     }
-    serve_tcp_pool(program, addr, timeout, dev, workers, shutdown)
+    serve_tcp_pool(factory, addr, timeout, dev, workers, shutdown)
 }
 
 /// The startup banner (bind/timeout/workers + the untrusted-network note).
@@ -399,7 +504,7 @@ fn serve_banner(timeout: Option<Duration>, dev: bool, workers: usize) {
 /// immutable program is shared via `Arc` (`Program: Send + Sync`); a worker panic is caught so one bad
 /// request never kills a worker.
 fn serve_tcp_pool(
-    program: &Program,
+    factory: HandlerFactory,
     addr: &str,
     timeout: Option<Duration>,
     dev: bool,
@@ -409,7 +514,7 @@ fn serve_tcp_pool(
     let listener = TcpListener::bind(addr)?;
     eprintln!("phg serve: listening on http://{}", listener.local_addr()?);
     serve_banner(timeout, dev, workers);
-    serve_pool_with(listener, program, timeout, dev, workers, Some(shutdown))
+    serve_pool_with(listener, factory, timeout, dev, workers, Some(shutdown))
 }
 
 /// The pool accept-loop over an already-bound `listener` — the testable seam (a test binds
@@ -417,12 +522,12 @@ fn serve_tcp_pool(
 /// Runs until killed (no shutdown flag); for the graceful-shutdown path use [`serve_pool_with`].
 pub fn serve_pool(
     listener: TcpListener,
-    program: &Program,
+    factory: HandlerFactory,
     timeout: Option<Duration>,
     dev: bool,
     workers: usize,
 ) -> io::Result<()> {
-    serve_pool_with(listener, program, timeout, dev, workers, None)
+    serve_pool_with(listener, factory, timeout, dev, workers, None)
 }
 
 /// [`serve_pool`] plus the S4.2 graceful-shutdown flag. When the flag flips, the accept loop stops,
@@ -432,21 +537,23 @@ pub fn serve_pool(
 /// present the listener is non-blocking and the loop polls it every [`ACCEPT_POLL_INTERVAL`].
 pub fn serve_pool_with(
     listener: TcpListener,
-    program: &Program,
+    factory: HandlerFactory,
     timeout: Option<Duration>,
     dev: bool,
     workers: usize,
     shutdown: Option<Arc<AtomicBool>>,
 ) -> io::Result<()> {
-    let program = Arc::new(program.clone());
+    // The factory is `Send + Sync`; share it across workers, each of which calls it once to build its
+    // own (non-`Send`) per-thread handler — the VM handler compiles its own `Rc`-bearing program there.
+    let factory = Arc::new(factory);
     let (tx, rx) = sync_channel::<TcpStream>(workers);
     let rx = Arc::new(Mutex::new(rx));
     let mut handles = Vec::with_capacity(workers);
     for _ in 0..workers {
-        let program = Arc::clone(&program);
+        let factory = Arc::clone(&factory);
         let rx = Arc::clone(&rx);
         handles.push(std::thread::spawn(move || {
-            worker_loop(&program, &rx, timeout, dev);
+            worker_loop(&factory, &rx, timeout, dev);
         }));
     }
 
@@ -498,11 +605,14 @@ pub fn serve_pool_with(
 /// belt-and-suspenders guard so an unexpected interpreter panic (e.g. a stack-depth edge) recovers
 /// the worker instead of silently shrinking the pool.
 fn worker_loop(
-    program: &Program,
+    factory: &HandlerFactory,
     rx: &Mutex<std::sync::mpsc::Receiver<TcpStream>>,
     timeout: Option<Duration>,
     dev: bool,
 ) {
+    // Build this worker's own handler once (its own compiled program for the VM backend), reused for
+    // every connection + request this thread handles — the whole point of compiling per worker.
+    let mut handler = factory();
     loop {
         // Hold the lock only to dequeue; release it before handling so workers run concurrently.
         let stream = {
@@ -528,7 +638,7 @@ fn worker_loop(
                     // kept-alive socket; on a fresh one it flows to `parse_request` → 400 (served == 0).
                     Ok(raw) if served > 0 && raw.is_empty() => break,
                     Ok(raw) => {
-                        let response = respond_once(program, &raw, dev);
+                        let response = respond_once(&mut handler, &raw, dev);
                         if let Err(e) = stream.write_all(&response).and_then(|()| stream.flush()) {
                             eprintln!("serve: send failed (connection dropped): {e}");
                             break;

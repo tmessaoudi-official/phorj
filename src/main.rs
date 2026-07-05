@@ -312,6 +312,10 @@ fn main() {
         // `--workers N` request concurrency (M6 W3). 0 (the sentinel) = auto = CPU cores; 1 = the
         // single-threaded path. Resolved after parsing.
         let mut workers: usize = 0;
+        // `--tree-walker` runs requests on the interpreter oracle instead of the (default) bytecode VM
+        // — mirrors `phg run --tree-walker`. The VM is ~25× faster and byte-identical; the interpreter
+        // is the correctness reference (and serves an overloaded `respond`, which the VM path rejects).
+        let mut tree_walker = false;
         let mut i = 2;
         while i < args.len() {
             match args[i].as_str() {
@@ -334,6 +338,10 @@ fn main() {
                 }
                 "--dev" => {
                     dev = true;
+                    i += 1;
+                }
+                "--tree-walker" => {
+                    tree_walker = true;
                     i += 1;
                 }
                 "--workers" => {
@@ -359,7 +367,7 @@ fn main() {
         }
         let file = file.unwrap_or_else(|| {
             eprintln!(
-                "usage: phg serve <file> [--addr 127.0.0.1:8080] [--timeout 30] [--workers N]"
+                "usage: phg serve <file> [--addr 127.0.0.1:8080] [--timeout 30] [--workers N] [--tree-walker]"
             );
             exit(2);
         });
@@ -393,6 +401,7 @@ fn main() {
             timeout,
             profile,
             workers,
+            tree_walker,
         ) {
             Ok(text) => {
                 print!("{text}");
