@@ -877,9 +877,12 @@ mirrored into the canonical register (`C-decisions.md` DEC-177…DEC-181).
   aren't byte-identity examples per Invariant 9 / G-1.1; `__phorj_clamp` comment: *"a fault is never a
   byte-identity example… only that both legs fault"*). All 3 **fault in PHP** (`ValueError`/`Fatal`) →
   behaviourally consistent, NOT divergences. So the guard-helpers are **cosmetic** (PHP-error wording),
-  not correctness — declined pending re-decision. The only real fault-parity hazard is
-  **Phorj-faults-but-PHP-SUCCEEDS** (builtin returns a value instead of throwing — pre-helper `clamp`);
-  that correct-lens pass was NOT run. See `docs/research/b2d-rich-error-audit.md` (top banner + retraction).
+  not correctness. **RE-DECIDED 2026-07-05 (developer, on the corrected basis): DROP DEC-195 entirely —
+  behaviour stays as-is (nothing removed; both legs already fault), no helpers, no string change.**
+  Sanctioned next work instead = the **correct-lens fault-parity pass**: enumerate faulting natives,
+  transpile each fault-trigger, run the PHP, and check its **exit status** — non-zero = consistent
+  (ignore text), **zero = a real divergence** (Phorj faults but PHP silently succeeds, à la pre-helper
+  `clamp`) needing a `__phorj_*` guard helper. Untested; fresh-context. See `docs/research/b2d-rich-error-audit.md`.
 - [2026-07-04] **CONFIRMED — `Result.toOption` requires `import Core.Option` (reject, not auto-provide).**
   The shipped `E-RESULT-TOOPTION-NEEDS-OPTION` guard (B-2b, `5e41a16`) is the ruled behavior: developer
   chose the safe/explicit default over the ergonomic auto-provide alternative, consistent with DEC-182's
