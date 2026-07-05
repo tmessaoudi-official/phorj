@@ -215,11 +215,15 @@ local `php-8.5.8 x.php` and diffing the checksum field (Docker only needed for t
 **SHIPPED — corpus now 11 micros** (added 8: `floatarith`, `listindex`, `mapget`, `match`, `interp`,
 `stringconcat`, `closurecall`, `enum` — alongside `intadd`/`methodcall`/`objalloc`). Every pair's
 checksum is byte-identical VM≡php (harness output-identity gate — all 11 pass, no mismatch). First full
-table (VM ns/op vs release-php+JIT via Docker, best-of-3) — **every feature LOSES**, the honest G-8
-picture: objalloc ~3× slower (closest), enum/mapget/match/interp/methodcall/closurecall ~8–50×,
-pure-dispatch intadd/listindex/stringconcat ~100–300× (php+JIT ≈ free on those — corroborates
-callgrind's 61%-dispatch tax). This is the per-feature baseline the JIT must erase; it IS the JIT's
-measurement backbone. `enum`'s php mirror is the leanest tag-`match` (PHP has no payload enums → the
+table (VM ns/op vs release-php+JIT via Docker, best-of-3, noisy host) — **every feature LOSES**, the
+honest G-8 picture: closurecall ~0.37× (closest), objalloc/enum/interp ~0.1–0.16×, and the cheapest
+ops (intadd, mapget, methodcall, listindex, floatarith, match, stringconcat) ~0.01–0.07× (php+JIT
+near-free on those — corroborates callgrind's 61%-dispatch tax). This is the per-feature baseline the
+JIT must erase; it IS the JIT's measurement backbone. **Canary caught (6C):** `stringconcat` +
+`listindex` first shipped with loop-invariant/precomputable operands → php+JIT hoisted them to 1 ns/op
+(measuring NOTHING; the checksum gate can't detect this — the plan's "php micro must report nonzero
+ns/op" canary does). Fixed to index-varying / data-dependent operands (`15124eb`); php+JIT now reports
+plausible 16/6 ns/op. `enum`'s php mirror is the leanest tag-`match` (PHP has no payload enums → the
 hardest baseline). REMAINING follow-ups (separate, more invasive — deferred): `trycatch` micro;
 reshape `phg benchmark` headline to VM-vs-php; migrate `perf-gate.sh` off the tree÷VM anchor.
 
