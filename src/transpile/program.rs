@@ -776,6 +776,46 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_trunc {
+            // `Convert.truncate($f) -> int`: truncate toward zero, FAULT on NaN/±∞/out-of-i64-range
+            // (fault-parity pass — the raw `(int)` cast diverged: Rust saturates, PHP wraps + warns).
+            // Same bounds as `__phorj_float_to_int`; throws instead of returning null. Mirrors the Rust
+            // `convert_truncate`; the fault text need not match Phorj's (a fault is never a byte-identity
+            // example — Invariant 9), only that both legs fault.
+            self.line("function __phorj_trunc($f) {");
+            self.indent += 1;
+            self.line(
+                "if (!is_finite($f)) { throw new \\RuntimeException(\"Conversion.truncate: float is out of int range\"); }",
+            );
+            self.line("$t = ($f < 0) ? ceil($f) : floor($f);");
+            self.line(
+                "if ($t >= -9.2233720368547758E18 && $t < 9.2233720368547758E18) { return (int)$t; }",
+            );
+            self.line(
+                "throw new \\RuntimeException(\"Conversion.truncate: float is out of int range\");",
+            );
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_round {
+            // `Convert.round($f) -> int`: round half-away-from-zero (PHP `round()` default ≡ Rust
+            // `f.round()`), then range-check the ROUNDED value; FAULT on NaN/±∞/out-of-i64-range.
+            // Mirrors the Rust `convert_round`.
+            self.line("function __phorj_round($f) {");
+            self.indent += 1;
+            self.line(
+                "if (!is_finite($f)) { throw new \\RuntimeException(\"Conversion.round: float is out of int range\"); }",
+            );
+            self.line("$r = round($f);");
+            self.line(
+                "if ($r >= -9.2233720368547758E18 && $r < 9.2233720368547758E18) { return (int)$r; }",
+            );
+            self.line(
+                "throw new \\RuntimeException(\"Conversion.round: float is out of int range\");",
+            );
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_dec_to_int {
             // `Convert.decimalToInt($s) -> int?`: the carrier string's integer part (before the dot),
             // truncated toward zero, or null if outside i64 range. Mirrors `value::decimal_to_int`

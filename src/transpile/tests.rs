@@ -542,3 +542,29 @@ fn transpiles_named_fn_reference() {
         "first-class callable: {php_out}"
     );
 }
+
+#[test]
+fn truncate_round_out_of_range_php_helper_throws() {
+    // Fault-parity pass 2026-07-05: `Conversion.truncate`/`round` emit throwing helpers (NOT a raw
+    // `(int)` cast, which silently diverged — Rust saturates, PHP wraps on out-of-range). The emitted
+    // PHP must define `__phorj_trunc`/`__phorj_round` and each must `throw` on the out-of-range branch,
+    // so the PHP leg faults in lockstep with the Rust backends (byte-identity on faults).
+    let t = php("package Main; import Core.Output; import Core.Conversion; function main() -> void { int n = Conversion.truncate(1.0e30); Output.printLine(\"{n}\"); }");
+    assert!(t.contains("function __phorj_trunc("), "{t}");
+    assert!(
+        t.contains("__phorj_trunc(1.0E+30)") || t.contains("__phorj_trunc("),
+        "{t}"
+    );
+    assert!(
+        t.contains(
+            "throw new \\RuntimeException(\"Conversion.truncate: float is out of int range\")"
+        ),
+        "truncate helper must throw on out-of-range: {t}"
+    );
+    let r = php("package Main; import Core.Output; import Core.Conversion; function main() -> void { int n = Conversion.round(1.0e30); Output.printLine(\"{n}\"); }");
+    assert!(r.contains("function __phorj_round("), "{r}");
+    assert!(
+        r.contains("throw new \\RuntimeException(\"Conversion.round: float is out of int range\")"),
+        "round helper must throw on out-of-range: {r}"
+    );
+}

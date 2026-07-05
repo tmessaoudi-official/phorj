@@ -33,15 +33,24 @@ fn convert_to_float(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `Convert.truncate(float) -> int` — toward zero (Rust `as i64` ≡ PHP `(int)`). Lossy, named.
 fn convert_truncate(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Float(f)] => Ok(Value::Int(*f as i64)),
+        // Truncate toward zero, then require the result fit i64 — a float too big/small (or NaN/±∞)
+        // has NO int value, so it FAULTS rather than silently returning a saturated-or-wrapped answer
+        // (fault-parity pass 2026-07-05: the raw `(int)` cast diverged — Rust saturated, PHP wrapped).
+        // `Convert.toInt` (→ `int?`) is the graceful path. Single-sourced with `value::float_to_int`.
+        [Value::Float(f)] => crate::value::float_to_int(*f)
+            .map(Value::Int)
+            .ok_or_else(|| "Conversion.truncate: float is out of int range".into()),
         _ => Err("Conversion.truncate expects (float)".into()),
     }
 }
 
-/// `Convert.round(float) -> int` — half away from zero (Rust `f.round()` ≡ PHP `round()` default).
+/// `Convert.round(float) -> int` — half away from zero (Rust `f.round()` ≡ PHP `round()` default),
+/// then range-checked: an out-of-i64-range (or NaN/±∞) result FAULTS (see `convert_truncate`).
 fn convert_round(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Float(f)] => Ok(Value::Int(f.round() as i64)),
+        [Value::Float(f)] => crate::value::float_to_int(f.round())
+            .map(Value::Int)
+            .ok_or_else(|| "Conversion.round: float is out of int range".into()),
         _ => Err("Conversion.round expects (float)".into()),
     }
 }
@@ -243,7 +252,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(convert_truncate),
-            php: |a| format!("(int)({})", parg(a, 0)),
+            php: |a| format!("__phorj_trunc({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Conversion",
@@ -252,7 +261,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(convert_round),
-            php: |a| format!("(int)round({})", parg(a, 0)),
+            php: |a| format!("__phorj_round({})", parg(a, 0)),
         },
         // --- Numeric conversions (M-NUM S3) ---
         NativeFn {

@@ -339,6 +339,14 @@ struct Transpiler {
     /// `__phorj_float_to_int_exact`: the integral-or-null kernel (`3.0→3`, `3.9→null`). Mirrors Rust
     /// `value::float_to_int_exact`.
     uses_float_to_int_exact: bool,
+    /// Set when `Convert.truncate(float)` is emitted (fault-parity pass 2026-07-05) — defines
+    /// `__phorj_trunc`: truncate toward zero, FAULT on NaN/±∞/out-of-i64-range (the raw `(int)` cast
+    /// diverged — Rust saturates, PHP wraps). Mirrors Rust `convert_truncate` (`value::float_to_int`).
+    uses_trunc: bool,
+    /// Set when `Convert.round(float)` is emitted — defines `__phorj_round`: round half-away-from-zero
+    /// (PHP `round()` default ≡ Rust `f.round()`), FAULT on NaN/±∞/out-of-i64-range. Mirrors
+    /// `convert_round`.
+    uses_round: bool,
     /// Set when `Convert.decimalToIntExact(decimal)` is emitted (M4 as-matrix `decimal as int`) —
     /// defines `__phorj_dec_to_int_exact`: integral-or-null over the carrier string. Mirrors Rust
     /// `value::decimal_to_int_exact`.
@@ -594,6 +602,8 @@ impl Transpiler {
             uses_dec_div: false,
             uses_dec_round: false,
             uses_float_to_int: false,
+            uses_trunc: false,
+            uses_round: false,
             uses_dec_to_int: false,
             uses_float_to_int_exact: false,
             uses_dec_to_int_exact: false,

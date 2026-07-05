@@ -5,8 +5,13 @@
 //
 //   toString(T) -> string     // any scalar → its text form (bool → "true"/"false")
 //   toFloat(int) -> float      // widening, total
-//   truncate(float) -> int     // toward zero (lossy — named)
-//   round(float) -> int        // half away from zero (lossy — named)
+//   truncate(float) -> int     // toward zero (lossy — named); FAULTS on NaN/Inf/out-of-int-range
+//   round(float) -> int        // half away from zero (lossy — named); FAULTS on NaN/Inf/out-of-range
+//
+// `truncate`/`round` always return an `int`, so an un-representable float (NaN, ±Inf, or a magnitude
+// past the i64 range like `1e30`) has no answer and FAULTS rather than silently returning a wrong int.
+// Need to handle overflow gracefully instead of faulting? Use `toInt(float) -> int?` (null on
+// out-of-range) — see `numeric-convert.phg`. (This example only converts in-range values.)
 //
 // Because UFCS ships, `Conversion.toFloat(n)` and `n.toFloat()` are the same call — module API and
 // method API in one. (The type *cast* — reinterpreting a value's type — is the separate `as` operator.)

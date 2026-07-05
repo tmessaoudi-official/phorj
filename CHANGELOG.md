@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `Conversion.truncate`/`round` byte-identity on out-of-range floats (fault-parity pass)
+
+The correct-lens fault-parity pass found a latent byte-identity break: `Conversion.truncate`/`round`
+emitted a raw `(int)`/`(int)round` cast, so an out-of-i64-range float (e.g. `1.0e30`) produced
+DIFFERENT output — the Rust backends saturated (`i64::MAX`) while transpiled PHP wrapped
+(`5076964154930102272` + a warning). Now both `truncate` and `round` **fault** on NaN/±∞/out-of-range
+(consistent with `floatToIntExact`; via throwing `__phorj_trunc`/`__phorj_round` PHP helpers), so
+`run ≡ runvm ≡ real PHP`. In-range conversions are unchanged. Callers wanting graceful overflow handling
+use `toInt(float) -> int?` (null on out-of-range) — unchanged. Behavior change: `truncate`/`round` are
+now partial (can fault) instead of silently returning a wrong int. (Findings:
+`docs/research/fault-parity-pass-2026-07-05.md`.)
+
 ### Changed — fault intrinsics now require an explicit import (DEC-196 Q3, breaking)
 
 The four fault intrinsics are no longer import-free. They live in two reserved language-core modules

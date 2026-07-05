@@ -994,6 +994,22 @@ class Box { public int tag; constructor(public int x) {} }
     );
 }
 
+/// Fault-parity pass 2026-07-05: `Conversion.truncate`/`round` on an out-of-i64-range float FAULT on
+/// both Rust backends (previously the raw `(int)` cast silently diverged — Rust saturated to i64::MAX,
+/// PHP wrapped). The transpiled PHP faults too (via the throwing `__phorj_trunc`/`__phorj_round`
+/// helpers — asserted by `truncate_round_out_of_range_php_helper_throws`), so byte-identity holds. The
+/// faulting call is kept OUT of `"{…}"` interpolation (W0-5 VM line-skew would break a string compare;
+/// `agree_err` is FaultKind-based, but this keeps the classification clean).
+#[test]
+fn convert_truncate_round_out_of_range_faults_identically() {
+    agree_err("import Core.Output; import Core.Conversion; function main() -> void { int n = Conversion.truncate(1.0e30); Output.printLine(\"{n}\"); }");
+    agree_err("import Core.Output; import Core.Conversion; function main() -> void { int n = Conversion.round(-1.0e30); Output.printLine(\"{n}\"); }");
+    // Boundary case (advisor-flagged): `2^63` is the exclusive upper bound — both legs use the same
+    // `9.2233720368547758E18` cutoff, so `truncate(2^63)` faults identically (the in-range value one
+    // ULP below, `9223372036854774784.0`, converts to the same int on all three backends — verified).
+    agree_err("import Core.Output; import Core.Conversion; function main() -> void { int n = Conversion.truncate(9223372036854775808.0); Output.printLine(\"{n}\"); }");
+}
+
 /// P4c: instance methods + `this`. Method dispatch is on the receiver's runtime class; a method
 /// body reads fields by bare name (resolved against the current class) or via `this`. Each must run
 /// identically on both backends. (No `agree_err` case: like P4a's exhaustiveness, method existence

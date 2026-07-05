@@ -177,6 +177,33 @@ fn convert_natives_registered_and_emit() {
     assert_eq!(php("intToDecimal", &["$i"]), "(string)($i)");
     assert_eq!(php("decimalToFloat", &["$d"]), "(float)($d)");
     assert_eq!(php("decimalToInt", &["$d"]), "__phorj_dec_to_int($d)");
+    // Fault-parity pass: `truncate`/`round` emit throwing helpers (NOT a raw `(int)` cast, which
+    // silently diverged — Rust saturates vs PHP wraps on out-of-range).
+    assert_eq!(php("truncate", &["$f"]), "__phorj_trunc($f)");
+    assert_eq!(php("round", &["$f"]), "__phorj_round($f)");
+}
+
+#[test]
+fn convert_truncate_round_fault_out_of_range() {
+    // Fault-parity pass 2026-07-05: an out-of-i64-range (or NaN/±∞) float has NO int value, so
+    // `truncate`/`round` FAULT rather than silently returning a saturated-or-wrapped answer. The safe
+    // graceful path is `toInt` (→ `int?`). In-range values still convert normally.
+    let mut o = String::new();
+    assert!(convert_truncate(&[Value::Float(1.0e30)], &mut o).is_err());
+    assert!(convert_truncate(&[Value::Float(-1.0e30)], &mut o).is_err());
+    assert!(convert_truncate(&[Value::Float(f64::NAN)], &mut o).is_err());
+    assert!(convert_truncate(&[Value::Float(f64::INFINITY)], &mut o).is_err());
+    assert!(convert_round(&[Value::Float(1.0e30)], &mut o).is_err());
+    assert!(convert_round(&[Value::Float(f64::NEG_INFINITY)], &mut o).is_err());
+    // In-range still works.
+    assert!(matches!(
+        convert_truncate(&[Value::Float(3.7)], &mut o),
+        Ok(Value::Int(3))
+    ));
+    assert!(matches!(
+        convert_round(&[Value::Float(2.5)], &mut o),
+        Ok(Value::Int(3))
+    ));
 }
 
 #[test]

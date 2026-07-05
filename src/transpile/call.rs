@@ -228,6 +228,8 @@ impl Transpiler {
                             match nat.name {
                                 "toString" => self.uses_str = true,
                                 "toInt" => self.uses_float_to_int = true,
+                                "truncate" => self.uses_trunc = true,
+                                "round" => self.uses_round = true,
                                 "decimalToInt" => self.uses_dec_to_int = true,
                                 "floatToIntExact" => self.uses_float_to_int_exact = true,
                                 "decimalToIntExact" => self.uses_dec_to_int_exact = true,
