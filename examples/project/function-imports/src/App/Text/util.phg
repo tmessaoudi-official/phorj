@@ -1,0 +1,23 @@
+package App.Text;
+
+// A small function module in a library package. Its (default-public) functions are consumed
+// cross-package by `Main` — either QUALIFIED after `import App.Text;` (`Text.banner(…)`) or, per
+// DEC-197, BARE after a member import `import App.Text.banner;`. A file may hold free functions XOR
+// one public type (public-surface rule), so a lowercase function-module filename (`util.phg`) is right.
+function banner(string title): string {
+    return "== {title} ==";
+}
+
+function shout(string s): string {
+    return "{s}!";
+}
+
+function addUp(int a, int b): int {
+    return a + b;
+}
+
+// A `private` helper — file-scoped, so NOT cross-package importable (the visibility gate on function
+// imports rejects `import App.Text.secret;` with E-VIS-PRIVATE).
+private function secret(): string {
+    return "hidden";
+}

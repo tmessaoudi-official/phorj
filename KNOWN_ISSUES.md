@@ -281,9 +281,20 @@ not a panic:
   narrow naming edge (a non-callable local named exactly like an imported function) and is **not a
   byte-identity divergence** — the bare→qualified rewrite is recorded once and every backend sees the
   same AST. The clean fix threads the full lexical binding set (not just function-typed locals) into the
-  bare-call arm; it is deferred with the same scope as the "local > imported" question for slice 2's
-  **user-package** function imports (the loader is pre-scope, so honoring the order there is the harder
-  version of this same gap — to be decided deliberately at that layer, not inherited silently).
+  bare-call arm; it is deferred with the same scope as the loader-layer version below.
+
+- **DEC-197 slice 2 (user-package function imports) — the loader layer inherits the same pre-scope
+  shadow limitation.** Slice 2 resolves a bare member-imported cross-package function
+  (`import App.Text.banner; banner(…)` / `var f = banner;`) in the loader (`build_function_imports` +
+  `resolve_call`/`resolve_expr`), rewriting it to the same mangled FQN a qualified `Text.banner(…)` call
+  produces (byte-identity inherited from the proven qualified cross-package path — run≡runvm structural,
+  PHP manually verified since the project differential is run≡runvm-only). The loader is **pre-scope**, so
+  it cannot honor `local > imported` for a local that shadows an imported function name — but this is the
+  SAME limitation the loader already has for **same-package** function calls (a local `foo` shadowing a
+  same-package `function foo` is likewise rewritten), so slice 2 is no worse than the status quo, and for
+  `package Main` the mangle is identity (bare name preserved). Deliberately resolved at the loader layer
+  for consistency with the existing same-package/qualified function resolution; the checker-layer full fix
+  (threading lexical scope) would close both this and the slice-1 native gap above together.
 
 - **Override signature checking — return covariance shipped (M-DX S1); parameters deferred.** An
   override's **return type** must now be the overridden type or a subtype of it (`E-OVERRIDE-SIG`) —

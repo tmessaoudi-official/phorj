@@ -384,14 +384,17 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
             unit_package = prog.package.clone();
             unit_span = prog.span;
         }
-        let user_imports = user_import_map(&prog.items, &types);
+        let user_imports = user_import_map(&prog.items, &types, &defined);
         let type_imports = build_type_imports(&prog, &types, &prov_types, &user_imports, &file)?;
+        let function_imports =
+            build_function_imports(&prog, &defined, &prov_fns, &user_imports, &file)?;
         let ctx = ResolveCtx {
             package: prog.package.clone(),
             user_imports,
             defined: &defined,
             types: &types,
             type_imports,
+            function_imports,
             file: &file,
             prov_types: &prov_types,
             prov_fns: &prov_fns,
@@ -480,6 +483,7 @@ fn pascal(s: &str) -> String {
 fn user_import_map(
     items: &[Item],
     types: &HashMap<(String, String), String>,
+    defined: &HashMap<(String, String), String>,
 ) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
     for item in items {
@@ -487,10 +491,12 @@ fn user_import_map(
             if path.first().map(String::as_str) == Some("Core") {
                 continue;
             }
-            // Unified-import classification (2026-07-03 spec): a path whose last segment is a type
-            // the package exports is a *type* import (bound bare by `build_type_imports`), NOT a
-            // module qualifier — skip it here so the two maps stay disjoint.
-            if is_type_import_path(path, types) {
+            // Unified-import classification (2026-07-03 spec + DEC-197): a path whose last segment is a
+            // type the package exports is a *type* import (bound bare by `build_type_imports`), and one
+            // whose leaf is an exported *function* is a *function* import (bound bare by
+            // `build_function_imports`) — neither is a module qualifier, so skip both here to keep the
+            // three import maps disjoint.
+            if is_type_import_path(path, types) || is_function_import_path(path, defined) {
                 continue;
             }
             let qualifier = alias.clone().or_else(|| path.last().cloned());
@@ -510,6 +516,89 @@ fn is_type_import_path(path: &[String], types: &HashMap<(String, String), String
         Some((leaf, pkg)) if !pkg.is_empty() => types.contains_key(&(pkg.join("."), leaf.clone())),
         _ => false,
     }
+}
+
+/// DEC-197: a `import Pkg.Path.fn` path resolves to a known FUNCTION iff its last segment is a
+/// function exported by the package formed from the preceding segments. Such an import binds a bare
+/// function name (like a member variant/type import binds a bare name); every other import binds a
+/// module call-qualifier. Disjoint from [`is_type_import_path`] (a name is a type XOR a function in a
+/// package, `E-TYPE-IMPORT-SHADOW`), so the three import maps never overlap.
+fn is_function_import_path(path: &[String], defined: &HashMap<(String, String), String>) -> bool {
+    match path.split_last() {
+        Some((leaf, pkg)) if !pkg.is_empty() => {
+            defined.contains_key(&(pkg.join("."), leaf.clone()))
+        }
+        _ => false,
+    }
+}
+
+/// DEC-197: build a file's **function-import map** — bare name (or `as` alias) ⇒ the mangled FQN of a
+/// cross-package FUNCTION, from each `import a.b.fn [as g];` whose leaf is a function package `a.b`
+/// exports. The function analog of [`build_type_imports`]: it consults the `defined` function table
+/// (not `types`) and `prov_fns` for visibility. A bare imported function call is resolved to this FQN
+/// by `resolve_call` AFTER a same-package function of the same name — the `local > user fn > imported`
+/// order means a same-name same-package definition deterministically wins, so it is NOT a conflict
+/// here. Errors:
+/// - a visibility violation — a cross-package import may only reach a `public`/`internal`-visible fn;
+/// - `E-IMPORT-SHADOW` — the bound name collides with an imported module qualifier (the import kinds
+///   stay disjoint; function imports are already excluded from `user_import_map`, so this only fires on
+///   a genuine module-qualifier clash);
+/// - `E-IMPORT-CONFLICT` — two function imports bind the same bare name (alias one with `as`).
+fn build_function_imports(
+    prog: &Program,
+    defined: &HashMap<(String, String), String>,
+    prov_fns: &HashMap<(String, String), DefInfo>,
+    user_imports: &HashMap<String, Vec<String>>,
+    file: &Path,
+) -> Result<HashMap<String, String>, String> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    for item in &prog.items {
+        let Item::Import { path, alias, .. } = item else {
+            continue;
+        };
+        // Core natives are member-imported at the checker layer (`fn_imports`), not here.
+        if path.first().map(String::as_str) == Some("Core") {
+            continue;
+        }
+        let (leaf, pkg_segs) = match path.split_last() {
+            Some((leaf, pkg)) if !pkg.is_empty() => (leaf, pkg),
+            _ => continue, // single-segment ⇒ module import
+        };
+        let pkg = pkg_segs.join(".");
+        let Some(mangled) = defined.get(&(pkg.clone(), leaf.clone())) else {
+            // Leaf isn't a function this package exports — a type import (handled by
+            // `build_type_imports`) or a module import (handled by `user_import_map`). Skip.
+            continue;
+        };
+        // Visibility: a cross-package function import may only reach a visible function.
+        if let Some(info) = prov_fns.get(&(pkg.clone(), leaf.clone())) {
+            if let Some(code) = vis_violation(info, file, &prog.package.join(".")) {
+                return Err(format!(
+                    "{}: function `{leaf}` is not visible from package `{}` — it is `{}` in package \
+                     `{pkg}`; mark it `public` to export it [{code}]",
+                    file.display(),
+                    prog.package.join("."),
+                    vis_word(info.vis),
+                ));
+            }
+        }
+        let bound = alias.clone().unwrap_or_else(|| leaf.clone());
+        if user_imports.contains_key(&bound) {
+            return Err(format!(
+                "{}: imported function `{bound}` shadows an imported module qualifier — alias it \
+                 with `as` [E-IMPORT-SHADOW]",
+                file.display()
+            ));
+        }
+        if map.insert(bound.clone(), mangled.clone()).is_some() {
+            return Err(format!(
+                "{}: two imports bind the function name `{bound}` — alias one with `as` \
+                 [E-IMPORT-CONFLICT]",
+                file.display()
+            ));
+        }
+    }
+    Ok(map)
 }
 
 /// Build a file's **type-import map**: bare name (or `as` alias) ⇒ the mangled FQN of a cross-package
@@ -633,6 +722,9 @@ struct ResolveCtx<'a> {
     types: &'a HashMap<(String, String), String>,
     /// This file's terminal type imports: bare name (or `as` alias) ⇒ mangled FQN.
     type_imports: HashMap<String, String>,
+    /// DEC-197: this file's member FUNCTION imports: bare name (or `as` alias) ⇒ mangled FQN of a
+    /// cross-package function, resolved by `resolve_call` after a same-package function of that name.
+    function_imports: HashMap<String, String>,
     /// The file currently being resolved (the referrer side of the visibility lattice).
     file: &'a Path,
     /// Visibility provenance for type and function definitions (visibility modifiers).

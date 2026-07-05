@@ -174,6 +174,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `project/inherit/` | **cross-package inheritance + parent dispatch** (M-RT S6/B1a) — a `package Main` class extends a library base, inherits its constructor and field, overrides an `open` method, and calls up via both the bare and the named-ancestor `parent` forms |
 | `project/jsonmulti/` | **`Core.Json` in a multi-package project** — building, stringifying, and parsing JSON from a `package Main` entry that also imports a library package (the injected `Json` enum is a `Main` type, so its variant classes live in `\Main\`) |
 | `project/mixins/` | **cross-package traits** (M-RT S8) — compose two library-package traits into a `package Main` class via `import Pkg.Path.TraitName` + `use TraitName;` (a trait is still not a type — `Loud x` as an annotation is `E-USE-AS-TYPE`) |
+| `project/function-imports/` | **cross-package function imports** (DEC-197, slice 2) — a library package's functions are called BARE after a member import (`import App.Text.banner;` → `banner(…)`), aliased (`import App.Text.shout as yell;`), or QUALIFIED after a whole-module import (`import App.Text;` → `Text.banner(…)`); the loader rewrites a bare imported call to the same mangled FQN a qualified call produces, so run/runvm/PHP are byte-identical (incl. as an arithmetic operand `addUp(1,2)+1`); `private` functions stay non-importable (`E-VIS-PRIVATE`), a duplicate bound name is `E-IMPORT-CONFLICT` (alias with `as`) |
 
 ## Coverage matrix (the runnable surface)
 

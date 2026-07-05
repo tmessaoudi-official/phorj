@@ -492,6 +492,13 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
                 // enforced exactly as for a same-package call.
                 check_fn_visibility(ctx, &ctx.package.join("."), &n);
                 Expr::Ident(f, sp)
+            } else if let Some(mangled) = ctx.function_imports.get(&n).cloned() {
+                // DEC-197: a bare member-imported cross-package function used as a VALUE
+                // (`import App.Text.banner; var f = banner;`) — the value-position mirror of the
+                // call-position arm in `resolve_call`, so "scope = all functions" holds for first-class
+                // references too. Resolves AFTER the same-package table (`local > user fn > imported`);
+                // visibility was enforced when the import map was built (`build_function_imports`).
+                Expr::Ident(mangled, sp)
             } else {
                 Expr::Ident(n, sp)
             }
@@ -598,6 +605,13 @@ pub(super) fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &Reso
                 // Same-package function: enforce file-scoped `private` (visibility modifiers).
                 check_fn_visibility(ctx, &ctx.package.join("."), &n);
                 f
+            } else if let Some(mangled) = ctx.function_imports.get(&n).cloned() {
+                // DEC-197: a bare member-imported cross-package function (`import App.Utils.helper;`
+                // ⇒ `helper(…)`). Resolved AFTER the same-package table (`local > user fn > imported`);
+                // visibility was already enforced when the import map was built (`build_function_imports`),
+                // and the rewrite target is the SAME mangled FQN a qualified `Utils.helper(…)` call
+                // produces, so byte-identity is inherited from the proven qualified cross-package path.
+                mangled
             } else {
                 n
             };

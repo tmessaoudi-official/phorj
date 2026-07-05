@@ -1,0 +1,26 @@
+package Main;
+
+// Function imports across a PACKAGE boundary (DEC-197, slice 2). A cross-package function is reached
+// either QUALIFIED after a whole-module import (`import App.Text;` → `Text.banner(…)`) or BARE after a
+// member import (`import App.Text.banner;` → `banner(…)`), optionally `as`-aliased — exactly the
+// two-mode discipline Core stdlib functions already follow (slice 1). The loader rewrites a bare
+// imported call to the same mangled FQN a qualified call produces, so run ≡ runvm ≡ PHP is inherited
+// from the proven qualified cross-package path.
+import Core.Output.printLine;
+import App.Text.banner;
+import App.Text.shout as yell;
+import App.Text.addUp;
+
+function main(): void {
+    // Bare cross-package function calls (banner, and yell = App.Text.shout aliased).
+    printLine(banner("Function imports"));
+    printLine(yell("cross-package bare"));
+    // A bare-imported cross-package function as an ARITHMETIC OPERAND — the mangled-FQN rewrite keeps
+    // the value shape, so the VM types `addUp(1, 2) + 1` exactly as the interpreter (and PHP) does.
+    var n = addUp(1, 2) + 1;
+    printLine("addUp(1, 2) + 1 = {n}");
+    // A bare-imported function referenced as a first-class VALUE (not just called directly) — resolves
+    // in value position too, so "scope = all functions" holds for function references.
+    var mk = banner;
+    printLine(mk("as a value"));
+}
