@@ -1336,7 +1336,22 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-IMPORT-UNKNOWN — an `import` names a type a known package does not export.\n\n\
              `import Acme.Geometry.Point [as P];` names a public type a package actually exports. This\n\
              fires when the package is known (it exports other types) but not the named one — a mistyped\n\
-             type import. Check the package path and the type name.\n"
+             type import. Check the package path and the type name. It also fires for a fault-intrinsic\n\
+             member import that names a non-member — `import Core.Abort.bogus;` (the intrinsics are\n\
+             `Core.Assert.assert` and `Core.Abort.{ panic, todo, unreachable }`).\n"
+        }
+        "E-UNIMPORTED" => {
+            "E-UNIMPORTED — a fault intrinsic is called without a covering import (DEC-196 Q3).\n\n\
+             The four fault intrinsics live in two reserved modules — `Core.Assert` (`assert`) and\n\
+             `Core.Abort` (`panic`/`todo`/`unreachable`) — and follow the two-mode import discipline:\n\
+             \n\
+               * a WHOLE-MODULE import enables the QUALIFIED call — `import Core.Assert;` then\n\
+                 `Assert.assert(cond)`;\n\
+               * a MEMBER import enables the BARE call — `import Core.Abort.panic;` then `panic(\"m\")`\n\
+                 (groups work: `import Core.Abort.{ panic, todo };`).\n\
+             \n\
+             A bare `assert(...)` needs the member import; a qualified `Assert.assert(...)` needs the\n\
+             module import. Add the matching import to the file.\n"
         }
         "E-IMPORT-BUILTIN" => {
             "E-IMPORT-BUILTIN — an `import` names a built-in type.\n\n\

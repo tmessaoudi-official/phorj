@@ -1091,6 +1091,19 @@ pub fn check_and_expand_reified(
             .collect();
         return Err(lines.join("\n"));
     }
+    // DEC-196 Q3: fault-intrinsic import discipline (`Core.Assert`/`Core.Abort`). On the RAW program
+    // (bare-vs-qualified still distinguishable): validate that every intrinsic call is covered by the
+    // matching import (`E-UNIMPORTED` otherwise) AND normalize the qualified form `Assert.assert(x)`
+    // down to the bare intrinsic `assert(x)` every backend already lowers. A no-op unless an intrinsic
+    // module is touched, so intrinsic-free programs are byte-for-byte unchanged.
+    let intrinsic_rewritten = match crate::checker::resolve_intrinsic_imports(prog.clone()) {
+        Ok(p) => p,
+        Err(ds) => {
+            let lines: Vec<String> = ds.iter().map(|e| e.render(diag_src)).collect();
+            return Err(lines.join("\n"));
+        }
+    };
+    let prog = &intrinsic_rewritten;
     let json_injected = inject_json_prelude(prog);
     let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
     let option_injected = inject_option_prelude(rm_injected.as_ref());

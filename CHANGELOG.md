@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — fault intrinsics now require an explicit import (DEC-196 Q3, breaking)
+
+The four fault intrinsics are no longer import-free. They live in two reserved language-core modules
+and follow the same two-mode discipline as types and enum variants:
+
+- **`Core.Assert`** = { `assert` } — the conditional runtime check.
+- **`Core.Abort`** = { `panic`, `todo`, `unreachable` } — the unconditional aborts.
+
+Two import modes:
+
+- **whole-module import → QUALIFIED call:** `import Core.Assert;` → `Assert.assert(cond)`;
+  `import Core.Abort;` → `Abort.panic("m")` / `Abort.todo()` / `Abort.unreachable()`.
+- **member import → BARE call:** `import Core.Abort.panic;` → `panic("m")` (grouped:
+  `import Core.Abort.{ panic, todo };`).
+
+Any intrinsic call not covered by the matching import is **`E-UNIMPORTED`** (this keeps "nothing in
+the wind": a bare intrinsic requires an explicit member import naming it). The two forms lower
+identically — the qualified form is normalized to the bare intrinsic before any backend — so
+`run ≡ runvm ≡ real PHP` byte-identity is preserved. `assert` stays distinct from the `Core.Test.assert`
+unit-test native. New example `examples/guide/intrinsic-imports.phg`; `phg explain E-UNIMPORTED`.
+
 ### Changed — `String.uppercase`/`lowercase` renamed to `upperCase`/`lowerCase` (DEC-196 Q2, breaking)
 
 Enforcing camelCase everywhere (Invariant 12): the two all-lowercase compound native names

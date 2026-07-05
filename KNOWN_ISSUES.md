@@ -256,7 +256,15 @@ not a panic:
   editor is over-reporting. It predates the Wave B work (it hits B-1's `core-result.phg` and B-2a's
   `option-combinators.phg` identically). Corrects the earlier "LSP DoD satisfied by construction" note:
   that holds for the combinator **natives** (registry-driven, resolved by the raw checker) but NOT for the
-  injected **types**. Fix (a dedicated LSP slice): route `diagnostics_for` through the same prelude
+  injected **types**. **Same class, added by DEC-196 Q3 (2026-07-05):** the fault-intrinsic import
+  discipline (`resolve_intrinsic_imports`) also lives only in `check_and_expand`, so the LSP raw checker
+  never runs it — a valid QUALIFIED intrinsic call (`Assert.assert(x)` after `import Core.Assert;`) shows
+  a spurious squiggle in-editor (the raw checker tries to resolve `Assert.assert` as a member/native and
+  fails), even though `phg check`/`run`/`runvm`/differential are clean. The BARE form (`panic(...)` after
+  a member import) is unaffected (the intrinsic resolves in the raw checker at `calls.rs`). So DEC-196 Q3's
+  "editors free by construction" holds only for the bare form, not the qualified one — folded into the same
+  dedicated LSP slice (route `diagnostics_for` through `check_and_expand`).
+  Fix (a dedicated LSP slice): route `diagnostics_for` through the same prelude
   injection the CLI uses, with a test asserting an injected-type program is LSP-clean, on both editors.
 
 - **Override signature checking — return covariance shipped (M-DX S1); parameters deferred.** An

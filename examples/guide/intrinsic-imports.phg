@@ -1,0 +1,62 @@
+// Fault-intrinsic imports — the two-mode discipline (DEC-196 Q3).
+//
+// The four fault intrinsics are no longer import-free. They live in two reserved language-core
+// modules and follow the SAME two-mode import discipline as types and enum variants:
+//
+//   * Core.Assert = { assert }                     — the conditional runtime check.
+//   * Core.Abort  = { panic, todo, unreachable }   — the unconditional aborts (never-typed).
+//
+// Two ways to bring an intrinsic into scope:
+//
+//   * WHOLE-MODULE import  -> QUALIFIED call:  `import Core.Assert;`       => `Assert.assert(cond)`
+//   * MEMBER import        -> BARE call:       `import Core.Abort.panic;`  => `panic("msg")`
+//
+// A member import may be grouped like any other (`import Core.Abort.{ panic, todo };`); `phg format`
+// canonicalizes a group to one import per line, which is why the imports below are written out singly.
+//
+// Using an intrinsic with no covering import is `E-UNIMPORTED`. This keeps "nothing in the wind": a
+// bare intrinsic call stays legible because an explicit member import names it. The qualified and
+// bare forms lower identically, so run / runvm / transpiled PHP stay byte-identical.
+package Main;
+
+import Core.Output;
+
+// Whole-module import — enables the QUALIFIED form `Assert.assert(...)`.
+import Core.Assert;
+
+// Member imports — enable the BARE forms `panic(...)` and `unreachable(...)`.
+import Core.Abort.panic;
+import Core.Abort.unreachable;
+
+// Qualified `assert` (whole-module import). Checked on every call; the invariant holds here.
+function half(int n): int {
+    Assert.assert(n >= 0);
+    return n / 2;
+}
+
+// Bare `panic` (member import) guards the unhappy path — a real, typed call site this example's
+// inputs never reach.
+function positive(int n): int {
+    if (n <= 0) {
+        panic("expected a positive number");
+    }
+    return n;
+}
+
+// Bare `unreachable` (member import) closes a tail the logic guarantees is never reached (every
+// `bool` is handled above it).
+function describe(bool flag): string {
+    if (flag) {
+        return "on";
+    }
+    if (!flag) {
+        return "off";
+    }
+    unreachable();
+}
+
+function main(): void {
+    Output.printLine("half(10)       = {half(10)}");
+    Output.printLine("positive(7)    = {positive(7)}");
+    Output.printLine("describe(true) = {describe(true)}");
+}

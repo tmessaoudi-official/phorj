@@ -18,6 +18,7 @@ mod inheritance;
 mod injected_result_option;
 mod interfaces;
 mod intersections;
+mod intrinsic_imports;
 mod loops;
 mod matching;
 mod mtest;

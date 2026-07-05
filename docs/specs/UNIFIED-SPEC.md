@@ -272,11 +272,12 @@ coordinates (manifest `module`, vendor dirs) stay lowercase. Key commits: `4eec4
 
 ## Nothing in the wind
 
-**Status: PRINCIPLE IN FORCE; implementation PARTIALLY SUPERSEDED / PARTIALLY PENDING (W2-6).**
+**Status: PRINCIPLE IN FORCE; fault-intrinsic imports SHIPPED (DEC-196 Q3, 2026-07-05).**
 Design-locked 2026-07-01. The import-mechanics half was **superseded by the
 [unified import model](#unified-import-and-injected-type-discipline)** (2026-07-03), which also
-*reversed* one decision (bare function imports). The intrinsics/de-reservation half is
-**designed-not-implemented**, tracked as MASTER-PLAN **W2-6**. Source:
+*reversed* one decision (bare function imports). The intrinsics half **shipped 2026-07-05** as the
+two-mode `Core.Assert`/`Core.Abort` model (decision 1 below) — the original single-`import Core;`
+qualified-only proposal was superseded by developer ruling. Source:
 `2026-07-01-no-wind-namespace-and-language-surface-design.md`.
 
 ### The governing principle (developer's definition — authoritative, still in force)
@@ -294,14 +295,24 @@ maximally in-the-wind even when imported; functions stay module-qualified or UFC
 
 ### Decisions and their fate
 
-1. **Fault intrinsics behind `import Core;`, called qualified** — `Core.assert(cond[, "msg"])`,
-   `Core.panic("msg")`, `Core.todo()`, `Core.unreachable()`; use without the import =
-   **`E-UNIMPORTED`**. The synthesis: *qualified (attributed to the core) AND imported (nothing in
-   the wind)*, preserving their special semantics (`never`-typing; compile-time literal message for
-   `--dump-on-fault`; guaranteed-not-stripped; lowers to PHP `throw`). Also resolves the collision
-   with `Core.Test.assert`. `Core` becomes a reserved importable language-core module.
-   **NOT YET IMPLEMENTED** — at HEAD the intrinsics are still import-free (`is_intrinsic_name`;
-   `E-UNIMPORTED` has zero src occurrences). Tracked as W2-6, breaking codemod via W2-1.
+1. **Fault intrinsics behind explicit imports (two-mode) — ✅ SHIPPED (DEC-196 Q3, 2026-07-05).**
+   The four intrinsics live in two reserved language-core modules — **`Core.Assert`** = { `assert` }
+   and **`Core.Abort`** = { `panic`, `todo`, `unreachable` } — and follow the SAME two-mode discipline
+   as types/variants (the model the developer ruled after this section's original *single-`import Core;`,
+   qualified-only* proposal was surfaced as conflicting with DEC-196 Q3):
+   - **whole-module import → QUALIFIED call:** `import Core.Assert;` ⇒ `Assert.assert(cond[, "msg"])`;
+     `import Core.Abort;` ⇒ `Abort.panic("msg")` / `Abort.todo()` / `Abort.unreachable()`.
+   - **member import → BARE call:** `import Core.Abort.panic;` ⇒ `panic("msg")` (grouped:
+     `import Core.Abort.{ panic, todo };`, DEC-186 syntax).
+   Any intrinsic call not covered by the matching import = **`E-UNIMPORTED`**. This honors *nothing in
+   the wind* (a bare intrinsic requires an explicit member import naming it; the module import gives the
+   attributed qualified form), preserving the special semantics (`never`-typing; compile-time literal
+   message for `--dump-on-fault`; guaranteed-not-stripped; lowers to PHP `throw`) and staying disjoint
+   from `Core.Test.assert`. Implemented as a raw-program pass (`resolve_intrinsic_imports`) that
+   validates coverage and normalizes the qualified form to the bare intrinsic every backend already
+   lowers — backends unchanged, byte-identity preserved. `is_intrinsic_name` still reserves the four
+   names against user-function shadowing. The earlier "single `import Core;`, qualified-only" text is
+   superseded by this (broader) two-mode model.
 2. **Deep imports + dual call form** — `import Core.A.B.C` to any depth; no wildcards. The
    *type*-leaf case shipped via the unified import model (member-imports). The *function*-leaf case
    (`import Core.List.doThis` → bare `doThis(...)`) was **REVERSED** — functions are not

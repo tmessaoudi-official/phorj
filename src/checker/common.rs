@@ -5,10 +5,23 @@ use super::*;
 
 /// Classic two-row Levenshtein edit distance (ASCII-oriented; M1 identifiers are ASCII), used to
 /// suggest the nearest in-scope name for an unknown identifier.
+/// The intrinsic-provider module that owns a fault intrinsic (DEC-196 Q3). `Core.Assert` holds the
+/// conditional check `assert`; `Core.Abort` holds the unconditional aborts `panic`/`todo`/
+/// `unreachable`. Importing the whole module enables the QUALIFIED call form (`Assert.assert(...)`);
+/// a member import (`import Core.Abort.panic;`) enables the BARE form (`panic(...)`). Returns `None`
+/// for non-intrinsic names. This is the single source of truth for the intrinsic name set.
+pub(crate) fn intrinsic_module_of(name: &str) -> Option<&'static str> {
+    match name {
+        "assert" => Some("Core.Assert"),
+        "panic" | "todo" | "unreachable" => Some("Core.Abort"),
+        _ => None,
+    }
+}
+
 /// The reserved fault-intrinsic names (M-faults 2a) — `panic`/`todo`/`unreachable` (`never`) and
 /// `assert` (`unit`). Recognized at call sites and rejected as user function names.
 pub(super) fn is_intrinsic_name(name: &str) -> bool {
-    matches!(name, "panic" | "todo" | "unreachable" | "assert")
+    intrinsic_module_of(name).is_some()
 }
 
 pub(super) fn levenshtein(a: &str, b: &str) -> usize {

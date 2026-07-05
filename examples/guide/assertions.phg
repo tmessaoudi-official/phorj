@@ -15,6 +15,11 @@ package Main;
 
 import Core.Output;
 
+// `assert` lives in the reserved `Core.Assert` module (DEC-196 Q3). Member-importing the intrinsic
+// unlocks the BARE call form used throughout this example (`assert(cond)`); alternatively
+// `import Core.Assert;` (the whole module) enables the qualified form `Assert.assert(cond)`.
+import Core.Assert.assert;
+
 // Preconditions: guard the argument range, then use it. Both asserts hold for every call below.
 function percent(int n): int {
     assert(n >= 0, "percent must be non-negative");

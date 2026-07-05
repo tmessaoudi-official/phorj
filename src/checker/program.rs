@@ -129,7 +129,20 @@ impl Checker {
                 path, alias, span, ..
             } = item
             {
-                for seg in path {
+                // DEC-196 Q3 carve-out: a member import of a fault intrinsic
+                // (`import Core.Abort.panic;`, `import Core.Assert.assert;`) has a deliberately
+                // lowercase leaf — the intrinsic's name — so the leaf is exempt from the PascalCase
+                // rule. The `Core`/`Assert`/`Abort` prefix segments are still checked (they are
+                // PascalCase). Leaf validity (is it a real intrinsic of that module?) is enforced by
+                // `enforce_intrinsic_discipline`, not here.
+                let intrinsic_member_leaf = path.len() == 3
+                    && path[0] == "Core"
+                    && matches!(path[1].as_str(), "Assert" | "Abort");
+                let last = path.len().saturating_sub(1);
+                for (i, seg) in path.iter().enumerate() {
+                    if intrinsic_member_leaf && i == last {
+                        continue;
+                    }
                     if !is_pascal(seg) {
                         self.err_coded(
                             *span,
