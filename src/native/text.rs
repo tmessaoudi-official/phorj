@@ -58,6 +58,13 @@ fn text_contains_ignore_case(args: &[Value], _: &mut String) -> Result<Value, St
 fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sep)] => {
+            // An empty separator is ill-defined and FAULTS (output-parity pass 2026-07-05): PHP
+            // `explode("")` hard-throws `ValueError`, while Rust `str::split("")` would return a
+            // per-char-with-empty-ends list — a byte-identity break. To split into characters use
+            // `String.characters` (code-point-safe).
+            if sep.is_empty() {
+                return Err("String.split: separator must not be empty".into());
+            }
             let parts: Vec<Value> = s
                 .split(sep.as_str())
                 .map(|p| Value::Str(p.into()))
@@ -67,6 +74,20 @@ fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("String.split expects (string, string)".into()),
     }
 }
+/// `String.characters(string) -> List<string>` — each Unicode CODE POINT as its own one-char string
+/// (`"café"` → `["c","a","f","é"]`, not broken UTF-8). The named, code-point-safe way to split into
+/// characters (parallels `String.lines`); `split(s, "")` faults. Empty string → empty list. Erases to
+/// PHP `preg_split('//u', …, PREG_SPLIT_NO_EMPTY)` (code points without mbstring — same kernel as
+/// `__phorj_text_reverse`).
+fn text_characters(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::List(std::rc::Rc::new(
+            s.chars().map(|c| Value::Str(c.to_string())).collect(),
+        ))),
+        _ => Err("String.characters expects (string)".into()),
+    }
+}
+
 fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Split on the FIRST occurrence → `[head, tail]`; `[whole]` (1 elem) if `sep` is absent.
@@ -503,8 +524,20 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Pure(text_split),
-            // PHP `explode(separator, string)` — separator first.
+            // PHP `explode(separator, string)` — separator first. `explode("")` throws (empty
+            // delimiter), matching the Rust empty-separator fault; non-empty splits agree.
             php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        // `characters(string) -> List<string>` — each Unicode code point (parallels `lines`). The named
+        // way to split into chars now that `split(s, "")` faults. Code-point-safe via PCRE `/u`.
+        NativeFn {
+            module: "Core.String",
+            name: "characters",
+            params: vec![s()],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            eval: NativeEval::Pure(text_characters),
+            php: |a| format!("preg_split('//u', {}, -1, PREG_SPLIT_NO_EMPTY)", parg(a, 0)),
         },
         // `capitalize(string) -> string` — ASCII `ucfirst` (Tier-1, byte-identical).
         NativeFn {

@@ -1010,6 +1010,15 @@ fn convert_truncate_round_out_of_range_faults_identically() {
     agree_err("import Core.Output; import Core.Conversion; function main() -> void { int n = Conversion.truncate(9223372036854775808.0); Output.printLine(\"{n}\"); }");
 }
 
+/// Output-parity pass 2026-07-05: `String.split(s, "")` (empty separator) faults on both Rust backends
+/// — Rust `str::split("")` would return per-char-with-empty-ends but PHP `explode("")` hard-throws, a
+/// byte-identity break. Both now fault; `String.characters` is the code-point-safe way to split into
+/// chars (byte-identity-gated via `examples/guide/text.phg`).
+#[test]
+fn split_empty_separator_faults_identically() {
+    agree_err("import Core.Output; import Core.String; import Core.List; function main() -> void { var xs = String.split(\"abc\", \"\"); Output.printLine(\"{xs.length()}\"); }");
+}
+
 /// P4c: instance methods + `this`. Method dispatch is on the receiver's runtime class; a method
 /// body reads fields by bare name (resolved against the current class) or via `this`. Each must run
 /// identically on both backends. (No `agree_err` case: like P4a's exhaustiveness, method existence

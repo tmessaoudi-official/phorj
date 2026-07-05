@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — `String.split(s, "")` byte-identity + new `String.characters` (output-parity pass)
+
+The output-parity sweep found another latent byte-identity break: `String.split(s, "")` (empty
+separator) returned a per-char-with-empty-ends list on the Rust backends but **faulted** in transpiled
+PHP (`explode("")` throws `ValueError`). An empty separator is ill-defined, so it now **faults** on all
+backends (consistent with PHP). To split a string into its characters, use the new
+**`String.characters(s) -> List<string>`** — code-point-safe (`"café"` → `["c","a","f","é"]`, like
+`String.reverse`; erases to `preg_split('//u', …)`), parallel to `String.lines`. Non-empty separators
+are unchanged.
+
 ### Fixed — `Conversion.truncate`/`round` byte-identity on out-of-range floats (fault-parity pass)
 
 The correct-lens fault-parity pass found a latent byte-identity break: `Conversion.truncate`/`round`

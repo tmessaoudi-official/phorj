@@ -433,3 +433,39 @@ fn text_is_empty_trims_and_count() {
     // empty needle is a clean fault (matches PHP substr_count rejecting it)
     assert!(text_count(&[Value::Str("x".into()), Value::Str("".into())], &mut o).is_err());
 }
+
+#[test]
+fn text_split_empty_separator_faults() {
+    // Output-parity pass 2026-07-05: an empty separator FAULTS (PHP `explode("")` throws; Rust's
+    // per-char-with-empty-ends result would diverge). Non-empty separators are unaffected.
+    let mut o = String::new();
+    assert!(text_split(&[Value::Str("abc".into()), Value::Str("".into())], &mut o).is_err());
+    // A normal split still works.
+    assert!(matches!(
+        text_split(&[Value::Str("a,b".into()), Value::Str(",".into())], &mut o),
+        Ok(Value::List(xs)) if xs.len() == 2
+    ));
+}
+
+#[test]
+fn text_characters_splits_by_code_point() {
+    // `String.characters` — each Unicode code point as a one-char string (the named, code-point-safe
+    // way to split into chars now that `split(s, "")` faults). `"café"` → 4 (the `é` is one char).
+    let mut o = String::new();
+    let mut chars = |s: &str| match text_characters(&[Value::Str(s.into())], &mut o).unwrap() {
+        Value::List(xs) => xs
+            .iter()
+            .map(|v| match v {
+                Value::Str(c) => c.to_string(),
+                other => panic!("characters element {other:?}"),
+            })
+            .collect::<Vec<_>>(),
+        other => panic!("characters returned {other:?}"),
+    };
+    assert_eq!(chars("café"), vec!["c", "a", "f", "é"]);
+    assert_eq!(chars("abc"), vec!["a", "b", "c"]);
+    assert!(chars("").is_empty());
+    // Astral-plane (4-byte UTF-8) code points: one `char` each, matching PHP `preg_split('//u')`
+    // (verified byte-identical run≡runvm≡php). This is the edge a code-point splitter gets wrong.
+    assert_eq!(chars("😀a🎉"), vec!["😀", "a", "🎉"]);
+}

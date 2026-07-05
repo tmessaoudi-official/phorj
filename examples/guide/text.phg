@@ -26,6 +26,11 @@ function main(): void {
     // lines → split on "\n" (→ explode). Index the resulting List<string> directly.
     List<string> rows = String.lines("one\ntwo\nthree");
     Output.printLine("first row = {rows[0]}, third row = {rows[2]}");
+    // characters → each Unicode code point (parallels `lines`); the named way to split into chars now
+    // that `split(s, "")` faults. Code-point-safe, so "café" is 4 chars (the "é" stays intact).
+    List<string> chars = String.characters("café");
+    string joinedChars = String.join(chars, "-");
+    Output.printLine("chars = {joinedChars}");
     // capitalize → ASCII ucfirst (uppercase the first letter; multibyte first char unchanged).
     string capped = String.capitalize("phorj");
     Output.printLine("capitalize = {capped}");

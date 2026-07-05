@@ -60,9 +60,20 @@ fault (like `*Exact`); or emit a `__phorj_trunc`/`__phorj_round` helper that sat
 Rust; or another rule. Once ruled, the fix is a `__phorj_*` guarded emit + a differential case with an
 out-of-range input (`truncate(1e30) + 0`), same-commit.
 
-## Not covered (larger follow-up, fresh context)
+## Output-parity sweep (2026-07-05, follow-up) — high-risk raw-builtin natives
 
-This pass covered the reachable *value-guard fault* set (exit-status lens) + spot-checked the
-highest-risk *output* family (Conversion). A systematic OUTPUT-parity sweep of every native with a raw
-lenient-PHP-builtin emit (beyond Conversion) is the larger follow-up — best in a fresh, focused context
-(spine-sensitive).
+Probed the highest-risk raw-builtin emits for OUTPUT divergence (both succeed, different stdout) and
+FAULT divergence (one faults, one doesn't), comparing `run`/`runvm`/`php-8.5.8`:
+
+| native | emit | edge input | verdict |
+|---|---|---|---|
+| `String.substring` | `substr` | start past end / len past end / negative start | **AGREE** (PHP `substr` clamps like Rust) |
+| `Math.integerDivide` | `intdiv` | `i64::MIN / -1` (overflow) | **AGREE** (both fault: PHP `ArithmeticError`, Rust checked) |
+| `Math.pow` | `pow` | `pow(0.0, -1.0)` | **AGREE on value** (`inf`); PHP adds a *deprecation warning* only — the known **UA-0.14** disclosure, not a stdout-value divergence |
+| `Math.pow` | `pow` | `pow(-8.0, 0.5)` | **AGREE** (`NaN` both) |
+| `String.split` | `explode` | `split(s, "")` empty separator | **DIVERGENCE** — Rust returns `["","a","b","c",""]`; PHP `explode("")` **faults** (ValueError). Phorj succeeds, PHP faults. **FIX → surfaced (Invariant 15).** |
+
+Not exhaustive: this covered the highest-risk numeric/string raw-builtins. ~50 more raw-builtin emits
+(array ops, libm math, hash, path, url) are lower-risk (type-safe homogeneous collections; shared
+IEEE-754 / libc semantics) but NOT individually probed — the remaining systematic sweep is still a
+fresh-context follow-up.
