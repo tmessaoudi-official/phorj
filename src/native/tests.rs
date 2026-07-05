@@ -67,6 +67,14 @@ fn charter_module_names_are_core_pascalcase() {
 
 #[test]
 fn charter_function_names_are_lowercamel() {
+    // A curated regression guard: multi-word native names that were mistakenly written
+    // all-lowercase and must be camelCased (DEC-196 Q2 fixed `uppercase`/`lowercase`). Note the
+    // audit's framing — "catch multi-word-all-lowercase" — is NOT mechanically decidable: an
+    // all-lowercase, alphanumeric name is legitimate for genuine single words (`substring`,
+    // `capitalize`, `contains`, `reverse`) and indistinguishable from a squashed compound without
+    // an English dictionary. So the structural check below stays first-char-lowercase, and this
+    // seeded set is what keeps the specific compounds the audit found from silently returning.
+    const DISALLOWED_LOWERCASE_COMPOUNDS: &[&str] = &["uppercase", "lowercase"];
     for n in registry() {
         let mut chars = n.name.chars();
         let ok = chars.next().is_some_and(|c| c.is_ascii_lowercase())
@@ -75,6 +83,12 @@ fn charter_function_names_are_lowercamel() {
             ok,
             "native `{}.{}` name must be lowerCamelCase",
             n.module, n.name
+        );
+        assert!(
+            !DISALLOWED_LOWERCASE_COMPOUNDS.contains(&n.name),
+            "native `{}.{}` is an all-lowercase compound — camelCase it (Invariant 12, DEC-196 Q2)",
+            n.module,
+            n.name
         );
     }
 }

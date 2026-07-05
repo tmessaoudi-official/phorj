@@ -39,20 +39,20 @@ function main(): void {
     var seven = 7;
     Output.printLine("triple     = {seven.triple()}");
     // 21
-    // String native UFCS: `s.uppercase()` ≡ `String.uppercase(s)`, `s.repeat(n)` ≡ `String.repeat(s, n)`.
+    // String native UFCS: `s.upperCase()` ≡ `String.upperCase(s)`, `s.repeat(n)` ≡ `String.repeat(s, n)`.
     var name = "phorj";
-    Output.printLine("upper      = {name.uppercase()}");
+    Output.printLine("upper      = {name.upperCase()}");
     // PHORJ
     Output.printLine("repeat     = {name.repeat(2)}");
     // phorjphorj
     // Null-safe UFCS (`?.`): short-circuits to null on a null receiver, otherwise applies the
     // free/native fn to the unwrapped value (lowers to a `match` over the optional — no new `Op`).
     string? maybe = "hi";
-    string shout = maybe?.uppercase() ?? "(none)";
+    string shout = maybe?.upperCase() ?? "(none)";
     Output.printLine("safe-some  = {shout}");
     // HI
     string? nothing = null;
-    string fallback = nothing?.uppercase() ?? "(none)";
+    string fallback = nothing?.upperCase() ?? "(none)";
     Output.printLine("safe-null  = {fallback}");
     // (none)
     // Method-first: `Boxed` declares `describe`, so this is a method call, not a UFCS rewrite.

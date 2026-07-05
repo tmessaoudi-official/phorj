@@ -351,10 +351,10 @@ fn ufcs_unresolved_still_errors() {
 
 #[test]
 fn ufcs_string_native() {
-    // `s.uppercase()` ≡ `String.uppercase(s)`; `s.repeat(n)` ≡ `String.repeat(s, n)`.
+    // `s.upperCase()` ≡ `String.upperCase(s)`; `s.repeat(n)` ≡ `String.repeat(s, n)`.
     assert!(errors_of(
         "import Core.String; \
-         function main() -> void { var s = \"hi\"; string u = s.uppercase(); string r = s.repeat(2); }"
+         function main() -> void { var s = \"hi\"; string u = s.upperCase(); string r = s.repeat(2); }"
     )
     .is_empty());
 }
@@ -378,7 +378,7 @@ fn ufcs_safe_nav_on_optional() {
     // yields an optional result (lowered to a `match` over the optional, F-002).
     assert!(errors_of(
         "import Core.String; \
-         function main() -> void { string? s = \"hi\"; string u = s?.uppercase() ?? \"x\"; }"
+         function main() -> void { string? s = \"hi\"; string u = s?.upperCase() ?? \"x\"; }"
     )
     .is_empty());
 }
@@ -388,7 +388,7 @@ fn ufcs_safe_nav_result_is_optional() {
     // The `?.` UFCS result is optional, so binding it to a non-optional type without `??` is an error.
     let errs = errors_of(
         "import Core.String; \
-         function main() -> void { string? s = \"hi\"; string u = s?.uppercase(); }",
+         function main() -> void { string? s = \"hi\"; string u = s?.upperCase(); }",
     );
     assert!(
         !errs.is_empty(),

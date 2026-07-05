@@ -47,7 +47,7 @@ fn t6d_index_native_call_and_const_reads_specialize() {
     // T6d: a native-call result carries its declared return type — `String.upper` → string, so the
     // interpolation hole concatenates directly (no `__phorj_str`).
     let nat = php(
-        "import Core.Output; import Core.String; function main() -> void { Output.printLine(\"got {String.uppercase(\\\"hi\\\")}\"); }",
+        "import Core.Output; import Core.String; function main() -> void { Output.printLine(\"got {String.upperCase(\\\"hi\\\")}\"); }",
     );
     assert!(nat.contains("strtoupper(\"hi\")"), "{nat}");
     assert!(!nat.contains("__phorj_str(strtoupper"), "{nat}");

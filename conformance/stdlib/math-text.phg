@@ -10,7 +10,7 @@ function main(): void {
     Output.printLine("sqrt={Math.sqrt(16.0)} pow={Math.pow(2.0, 3.0)}");
     string s = "Hello, World";
     Output.printLine("len={String.length(s)}");
-    Output.printLine("upper={String.uppercase(s)}");
+    Output.printLine("upper={String.upperCase(s)}");
     bool hasWorld = String.contains(s, "World");
     Output.printLine("contains={hasWorld}");
     List<string> parts = String.split("a,b,c", ",");

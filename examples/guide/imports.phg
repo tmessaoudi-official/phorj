@@ -2,7 +2,7 @@ package Main;
 
 // Phorj's import discipline (the S0–S2 unified import model). Two rules keep every name legible:
 //
-//   • FUNCTIONS are always called MODULE-QUALIFIED — `Output.printLine(...)`, `String.uppercase(...)`.
+//   • FUNCTIONS are always called MODULE-QUALIFIED — `Output.printLine(...)`, `String.upperCase(...)`.
 //     A function is never bare-importable: a bare `printLine("hi")` is maximally "in the wind" and
 //     is rejected, so a reader always sees which module a call belongs to.
 //   • TYPES may be MEMBER-IMPORTED to a bare name — `import Core.Time.Instant;` then write `Instant`
@@ -19,7 +19,7 @@ import Core.Time.Duration;
 
 function main(): void {
     // Functions: module-qualified calls.
-    string shout = String.uppercase("phorj imports");
+    string shout = String.upperCase("phorj imports");
     Output.printLine(shout);
     // Types: member-imported, used bare (`Instant`, `Duration` — not `Time.Instant`).
     Instant epoch = Instant.ofEpochSeconds(0);

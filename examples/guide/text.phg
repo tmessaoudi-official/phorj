@@ -12,8 +12,8 @@ import Core.String;
 function main(): void {
     string greeting = "Hello, Phorj";
     int n = String.length(greeting);
-    string up = String.uppercase(greeting);
-    string down = String.lowercase(greeting);
+    string up = String.upperCase(greeting);
+    string down = String.lowerCase(greeting);
     string padded = String.trim("   padded   ");
     Output.printLine("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
     // `contains` returns a bool; render it through an expression-`if` so the output is a string.

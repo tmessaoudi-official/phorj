@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `String.uppercase`/`lowercase` renamed to `upperCase`/`lowerCase` (DEC-196 Q2, breaking)
+
+Enforcing camelCase everywhere (Invariant 12): the two all-lowercase compound native names
+`String.uppercase` and `String.lowercase` are renamed to `String.upperCase` / `String.lowerCase`.
+Behaviour is unchanged — the PHP transpile still emits `strtoupper`/`strtolower` and the interpreter
+logic is untouched; this is a name-only breaking change. UFCS calls follow (`s.upperCase()`). The
+`.phg` corpus was already 100% camelCase-clean (constants stay `SCREAMING_SNAKE_CASE`), so the change
+collapsed to these two natives. The `charter_function_names_are_lowercamel` test gained a curated
+regression guard so these specific compounds cannot silently return (`substring`/`capitalize` etc.
+remain legitimate single words — an all-lowercase name is not mechanically decidable as a compound).
+
 ### Housekeeping — examples/ layout + doc-name reconciliation (DEC-196 Q1)
 
 Cleanup pass from the 2026-07-05 examples/conformance audit:

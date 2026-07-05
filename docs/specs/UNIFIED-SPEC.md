@@ -249,7 +249,7 @@ module, NOT a `Process.environment.*` object path, rejected D-L9). Kept: `Math F
 Map Set Json Time Http Regex Path Process Random Encoding Hash Url Csv Decimal Test`.
 
 **Native functions** (per module): Output `println`→`printLine`; String `upper`/`lower`→
-`uppercase`/`lowercase`; Html `el`→`element`, `voidEl`→`voidElement`, `attr`→`attribute`,
+`upperCase`/`lowerCase`; Html `el`→`element`, `voidEl`→`voidElement`, `attr`→`attribute`,
 `boolAttr`→`booleanAttribute`; Decimal `div`→`divide`; Math `ipow`→`integerPower`,
 `intdiv`→`integerDivide`, `negInfinity`→`negativeInfinity`, `isNan`→`isNaN`; Path
 `basename`→`baseName`, `dirname`→`directoryName`, `stem`→`fileStem`; Process `args`→`arguments`;
