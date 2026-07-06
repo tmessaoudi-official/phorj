@@ -5,6 +5,27 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-06] AGREED (developer, interactive): **JIT slice 1(b) design LOCKED.** (1) **Native→native
+  calls** (Cranelift cross-`FuncId` relocations, incl. self-recursion resolved at
+  `finalize_definitions`) — NOT a runtime-call bridge (a bridge taxes every call and fib is
+  call-dominated → would lose; the bridge would be throwaway). So **recursive `fib` JITs in 1(b)**.
+  (2) **Eager compile-all-eligible** into one program-lifetime `JITModule` (the matched pair for native
+  calls: a native call needs the callee compiled+finalized in the same module) — **no user `--lazy`
+  CLI flag** (compilation policy is internal, not a user knob; steady-state speed is trigger-identical;
+  the real best-perf policy is **hot-count triggering deferred to JIT-3**, matching php+JIT; a dev-only
+  env seam can A/B later if needed). (3) **Module lifetime** = program lifetime, `free_memory()` once at
+  end — ruled by cranelift source (no `Drop` on `JITModule`; drop leaks the mmap; verified
+  `src/backend.rs`). (4) **Operand representation = a memory operand stack in the JIT context** (spill
+  operands to a Rust-side `Vec<Value>`; Cranelift emits native control-flow + direct calls to `value.rs`
+  kernel helpers) — sidesteps stack-VM→SSA phi/block-param complexity and any short-circuit/ternary
+  stack-at-boundary hazard, keeps byte-identity by construction; SSA-register operands + unboxing are
+  JIT-5. Removes the ~61% match-dispatch/fetch tax; helper-call + memory-traffic overhead remains →
+  **measure fib honestly, do not assume the spike's 3×** (advisor: opaque kernel `call`s don't inline;
+  a short measurement is the signal for whether unboxing must come sooner). Build 1(b) as green
+  sub-commits: (b1) codegen over the memory stack + comparisons/`Neg`/`SetLocal`/branches/loops
+  (unit-tested, unwired) → (b2) native calls + recursion (unit-tested) → (b3) eligibility predicate +
+  `phg run` wiring (VM fallback) + JIT-hitting differential examples (loop + recursive fib) + honest
+  fib measurement. (b3) is spine-sensitive → fresh advisor byte-identity review before commit.
 - [2026-07-06] AGREED (developer, interactive): **JIT marathon execution order LOCKED = Option A —
   ruled staged, breadth-first (boxed Value runtime first, unboxing LAST).** Sequence: (JIT-1) arith/
   control-flow IR emit + `cranelift-jit` dep + `forbid→deny` + `#![allow]` island, wired into `phg run`
@@ -153,6 +174,22 @@ beating release-php.
   still `#![forbid(unsafe_code)]`, unsafe-free, compiles clean). NEXT (fresh session — the heavy
   marathon): add the `cranelift-jit` crate + `forbid`→`deny` + the `#![allow]` island + first Cranelift
   IR emit for arithmetic/control-flow, wired into `phg run`.
+- **JIT-1 leak fix DONE (2026-07-06, `c780540`)** — `JITModule` has NO `Drop` (verified cranelift-jit
+  0.133 `src/backend.rs`); `compile_and_run` now calls `unsafe free_memory()` after the entry returns
+  instead of leaking the code mmap on `drop`. Gate green (`-p phorj --features jit` = 1795).
+- **1(b) build-notes (VM seams captured 2026-07-06 — mirror EXACTLY for byte-identity):** the memory-
+  operand-stack design's helpers must reproduce these VM `exec.rs` arms/kernels: `Neg` int → `value::
+  int_neg` (checked; `i64::MIN` → "integer overflow"), Float → `-x`; `Not` Bool → `!b` (else "cannot
+  apply ! to {type}"); `Eq`/`Ne` → `Value::eq_val` (value.rs:489, pub); `Lt/Gt/Le/Ge` → `vm::compare`
+  (src/vm/mod.rs:467 — `Result<bool,String>`; maps `value::compare_ord`; NOT pub → either `pub(crate)`
+  it or replicate its exact op→ordering→bool + None-handling); `GetLocal(slot)`/`SetLocal(slot)` index
+  `stack[slot_base+slot]` (VM grows the stack; there is NO static slot-count field on `Function` —
+  chunk.rs:476 — so the eligibility scan sizes the JIT frame's locals region as `1 + max(slot)` over
+  GetLocal/SetLocal); `JumpIfFalse` pops, `Bool(false)`→jump / `Bool(true)`→fall-through / else "expected
+  bool, found {type}"; `Jump(t)` sets ip=t. `Call(idx)`/`Return`: mirror `exec.rs:431`/`do_return`
+  (shared value stack + `slot_base`; native→native = Cranelift call to the callee's declared `FuncId`,
+  args pre-pushed on the shared stack). Fault propagation across native frames: each `Call` site checks
+  the callee's returned status (like the arith null-check) and branches to the fault-exit.
 - **JIT-1 codegen slice (a) DONE (2026-07-06)** — the boxed-via-kernels substrate shipped, gate-green,
   unpushed. `cranelift`/`cranelift-jit`/`cranelift-module` 0.133 behind the non-default `jit` feature
   (non-wasm; verified building on the 1.96.0 pin). **Unsafe island landed:** `forbid`→`deny` on both
