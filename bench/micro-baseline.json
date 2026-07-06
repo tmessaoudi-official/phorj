@@ -1,0 +1,53 @@
+{
+  "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT (docker php:8.5-cli). The gate BLOCKS on identity breaks and WIN->LOSS flips (ratio crossing 1.0 downward) — NOT on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after the JIT lands a WIN so the flip check protects it. ratio<1 = the VM still LOSES to php (the JIT is the lever).",
+  "features": {
+    "closurecall": {
+      "ratio": 0.036,
+      "identical": true
+    },
+    "enum": {
+      "ratio": 0.011,
+      "identical": true
+    },
+    "floatarith": {
+      "ratio": 0.028,
+      "identical": true
+    },
+    "intadd": {
+      "ratio": 0.007,
+      "identical": true
+    },
+    "interp": {
+      "ratio": 0.119,
+      "identical": true
+    },
+    "listindex": {
+      "ratio": 0.024,
+      "identical": true
+    },
+    "mapget": {
+      "ratio": 0.013,
+      "identical": true
+    },
+    "match": {
+      "ratio": 0.047,
+      "identical": true
+    },
+    "methodcall": {
+      "ratio": 0.025,
+      "identical": true
+    },
+    "objalloc": {
+      "ratio": 0.117,
+      "identical": true
+    },
+    "stringconcat": {
+      "ratio": 0.034,
+      "identical": true
+    },
+    "trycatch": {
+      "ratio": 0.416,
+      "identical": true
+    }
+  }
+}

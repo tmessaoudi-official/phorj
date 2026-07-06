@@ -138,9 +138,22 @@ beating release-php.
   trycatch VM 356 vs php+JIT 167 = **0.47×** (closest-to-win); others 0.01–0.11×. Confirms G-8 is
   missed across the board (the JIT is the lever). ⇒ the **mandate gate must be a RATCHET** (baseline
   current per-feature ratios in `bench/micro-baseline.json`, fail on regression / flip WIN→LOSS), NOT
-  a "require WIN" gate — else it red-fails on day one. Gate wiring + baseline snapshot = the remaining
-  A1 piece (needs docker; `microbench.sh --gate` mode + a CI/pre-push lane). `phg benchmark` headline
-  reshape (cosmetic; move tree÷VM behind `--vs-oracle`) is the lowest-priority remaining bit.
+  a "require WIN" gate — else it red-fails on day one.
+- **A1 mandate gate DONE (2026-07-06)** — `scripts/microbench-gate.sh` (+ `--emit` + a
+  `MICROBENCH_GATE_JSON`/`MICROBENCH_BASELINE` docker-free test seam) gates against
+  `bench/micro-baseline.json` (12 features). ⚠ DESIGN CORRECTED BY EMPIRICAL EVIDENCE: the first cut
+  ratcheted on absolute VM ns/op (ceiling = baseline*1.7) — it FALSE-FAILED under machine load
+  (stringconcat/trycatch swung 3–4× at load avg ~7, NO code change). Absolute native-VM-vs-docker-php
+  ns/ratio is too noisy to BLOCK on. So the gate now BLOCKS only on the two LOAD-INSENSITIVE signals:
+  (1) output-identity break (VM≠php checksum — bench micros aren't in the differential, so this is
+  their only parity check), (2) WIN→LOSS flip (a feature whose baseline ratio ≥1 now <1 — the real
+  G-8 ratchet: keep beating php once you beat it). Ratio deltas are REPORTED, not blocked. VM-perf
+  regression stays covered ROBUSTLY by `perf-gate.sh` (same-process tree÷VM, load-immune) — the two
+  gates are complementary. All 12 currently LOSE → the gate today enforces identity + arms the flip
+  ratchet for when the JIT lands wins. Self-skips (exit 0) on absent docker/release-binary. Wired into
+  pre-push after the oracle. Verified: 3 seam logic-tests (no-flip→pass, flip→fail, identity→fail) +
+  real baseline → PASS. RATCHET: re-`--emit` after a JIT win. ONLY remaining A1 bit: the cosmetic
+  `phg benchmark` headline reshape (move tree÷VM behind `--vs-oracle`) — low priority.
 - **Stage 0a DONE** — callgrind (Docker, fib28, 1.53B Ir) root-caused the gap: exec_op 35% + run_main
   26% (= 61% dispatch machinery), `Op::clone` 8%, stack traffic (push/pop_int) ~15%, Value clone/drop
   ~5%. 100%-confidence root cause: non-threaded match dispatch + per-op work.
