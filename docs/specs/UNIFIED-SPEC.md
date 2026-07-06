@@ -798,10 +798,11 @@ escaping — a later wave (`Html.url_attr`/typed URLs; gap-audit row K-html-cont
 
 ## External dependency policy
 
-**Status: ADOPTED 2026-06-27; AMENDED 2026-07-03 (SQL driver + TLS domains approved).** This policy
-is why "zero external dependencies" claims in older docs are **false and must not be repeated**:
-Phorj's *core stays `std`-only*, but four vetted, feature-gated crates ship **by default**, and two
-more domains are approved. Source: `2026-06-27-dependency-policy.md`.
+**Status: ADOPTED 2026-06-27; AMENDED 2026-07-03 (SQL driver + TLS domains) and 2026-07-06 (native
+codegen / JIT — domain #7).** This policy is why "zero external dependencies" claims in older docs are
+**false and must not be repeated**: Phorj's *core stays `std`-only*, but four vetted, feature-gated
+crates ship **by default**, and three more domains are approved. Source:
+`2026-06-27-dependency-policy.md`.
 
 ### The rule
 
@@ -823,9 +824,17 @@ Phorj's core (lexer, parser, checker, interpreter, VM, transpiler, loader, bundl
      A low-level primitive, NOT an async runtime (tokio et al. remain disallowed).
    - **Embedded SQL engine + SQL drivers** (2026-07-03 amendment) — see below.
    - **TLS** (2026-07-03 amendment) — see below.
+   - **Native codegen (JIT/AOT)** (2026-07-06 amendment) — see below. Admitted as a *mandate-driven*
+     exception to the "no performance crates" rule directly below: `std` has no codegen primitive, and
+     hand-emitting machine code is the unsafe-est possible hand-rolling — a vetted codegen crate
+     (`cranelift`) is strictly safer than rolling one.
 
    Convenience, performance, general-purpose, or *format-parsing* crates (JSON, TOML, YAML, HTTP
-   parsing) do **not** qualify — those are done in `std`.
+   parsing) do **not** qualify — those are done in `std`. The **one exception** is *native codegen*
+   (domain #7, 2026-07-06): admitted not for "performance" convenience but because the G-8 mandate —
+   *the VM must beat release-php+JIT, per feature* — is provably impossible on a `std`-only bytecode VM
+   under `forbid(unsafe)`, so beating PHP is a committed requirement `std` cannot meet. See the
+   amendment below.
 2. **The crate is independently audited / widely vetted** with an active maintenance record. An
    unaudited crypto implementation is *more* dangerous than the dependency — never admitted.
 3. **No `std`-only path is both secure and Phorj-native.** Delegating to the PHP transpile target is
@@ -844,6 +853,7 @@ Anything outside the admitted domains requires revisiting this policy itself, no
 | `regex` (BurntSushi) 1.x | ReDoS-safe regex | `Core.Regex` | `regex` | RE2-style finite automaton, guaranteed linear-time, exhaustively fuzzed; its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; unsupported patterns rejected at `Regex.compile` |
 | `ctrlc` 3.x | OS signals (SIGINT/SIGTERM) | `phg serve` graceful shutdown | `signals` | Confines the unavoidable `unsafe`; serve is outside the byte-identity spine (quarantined), so this never touches `interpreter ≡ VM ≡ PHP` |
 | `corosensei` 0.3.x | Stackful coroutines | `spawn`/channels (green threads) | `green` (non-wasm) | Miri-tested, by the hashbrown/parking_lot author; wasm32 has no native stack to switch (verified) — on wasm the interpreter delegates to the VM's frame-swap; green threads are quarantined from the PHP oracle |
+| `cranelift-*` (Bytecode Alliance) | Native codegen (JIT) | `phg run`/`serve`/`build` hot paths | `jit` (non-wasm) | The G-8 lever — native codegen beats php+JIT (a spike showed ~3× even with boxed `Value`); `std` has no codegen and hand-emitting machine code is the unsafe-est hand-rolling. phorj's FIRST **first-party** `unsafe`, confined to the `src/jit/` island (crate root `forbid`→`deny`; CI-enforced). **Not yet in the tree** — enters with the first codegen slice |
 
 Transitive: argon2 → `password-hash`, `base64ct`, `rand_core`/`getrandom`; regex →
 `regex-automata`, `regex-syntax`, `aho-corasick` — same audit umbrellas. Full list:
@@ -865,6 +875,33 @@ SQLite (P1) + Postgres (`postgres` sync) + MySQL/MariaDB (`mysql` sync) — ALL 
 (non-SQL, no PDO analog → native-only `E-TRANSPILE-MONGO`; async-driver problem) requiring its own
 future design. Both W3-1/W3-2 ship a pure zero-dep P0 first (`Core.Sql` Tier-A value; `Core.Url`).
 Design drafts: `docs/research/wave3-4-drafts/`.
+
+### 2026-07-06 amendment (developer-ruled)
+
+**Admitted domain #7 — native codegen (`cranelift-jit`).** The ruled path to the G-8 perf mandate: the
+bytecode VM is ~28× slower than release-php+JIT on hot numeric loops (measured), and no `std`-only
+bytecode-VM micro-opt under `forbid(unsafe)` closes that — only native codegen does (a spike proved
+boxed-`Value` native fib is already ~3× faster than php+JIT; `docs/research/jit-aot-design-exploration.md`).
+Unlike domains #1–#6, this introduces phorj's **first first-party `unsafe`**: a JIT's call path
+(`finalize → transmute(buf → fn ptr) → call`) is unsafe in phorj's own code, not confined to a
+third-party crate. Ruled mechanism:
+
+- **In-tree, `src/jit/`** — NOT a separate `phorj-jit` crate. The JIT couples to `Op`/`Value`/chunk
+  (invariants #3/#4/#6), all in the single `phorj` lib crate, and the CLI dispatch +
+  bench/disassemble/playground compile paths are lib code; a separate crate would force those `pub`
+  and create a `phorj → phorj-jit → phorj` cycle whose cleanest fix is a vtable in the hot path.
+- **`#![forbid(unsafe_code)]` → `#![deny(unsafe_code)]`** at the crate root, with a single audited
+  `#![allow(unsafe_code)]` island in `src/jit/`. `deny` (unlike `forbid`) permits that scoped `allow`;
+  the CI `unsafe-island` gate (`.github/workflows/ci.yml`) fails the build if an `allow(unsafe_code)`
+  escape hatch appears anywhere outside `src/jit/`, machine-enforcing "first-party unsafe lives only in
+  the JIT."
+- **Feature-gated `jit`, non-wasm** — the WASM playground stays on the VM.
+- **The crate + the `forbid`→`deny` change land WITH the first codegen slice** — at HEAD only this
+  policy, the CI gate, and an empty `src/jit/` scaffold exist (the crate is unsafe-free until then).
+- Staged build: Cranelift IR for arithmetic/control-flow → boxed-`Value` runtime → wire into
+  `phg run`/`serve` (hot-fn compile) → AOT for `phg build` → unboxing for statically-typed hot paths.
+  Reject LLVM; reject C-transpile-as-the-shipped-answer (production-only). Plan:
+  `docs/plans/perf-wave.plan.md`.
 
 ### Process to admit the next one
 

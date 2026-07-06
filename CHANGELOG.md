@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — dependency policy amended: native codegen (JIT) admitted as domain #7 (scaffold only)
+
+The external dependency policy (`docs/specs/UNIFIED-SPEC.md` §"External dependency policy") gains a
+**7th admitted domain — native codegen (`cranelift-jit`)** — the ruled path to the G-8 perf mandate
+(the bytecode VM is ~28× slower than release-php+JIT on hot numeric loops; only native codegen closes
+it). This is a *mandate-driven* exception to the policy's "no performance crates" rule: beating
+release-php+JIT per feature is provably impossible on a `std`-only bytecode VM under `forbid(unsafe)`.
+The JIT lives **in-tree** at `src/jit/` (it couples to `Op`/`Value`/chunk — a separate crate would
+force those `pub` + create a dependency cycle) and introduces phorj's **first first-party `unsafe`**,
+confined to a `src/jit/` island: the crate root drops `#![forbid(unsafe_code)]` → `#![deny(unsafe_code)]`
+with a single audited `#![allow(unsafe_code)]` there, and a CI `unsafe-island` gate fails the build if
+an `allow(unsafe_code)` escape appears anywhere outside `src/jit/`. **At HEAD only the policy, the CI
+gate, and an empty `src/jit/` scaffold exist** — the `cranelift` crate and the `forbid`→`deny` change
+land with the first codegen slice, so the crate is still `#![forbid(unsafe_code)]` and unsafe-free.
+See `docs/plans/perf-wave.plan.md`.
+
 ### Changed — `phg serve` runs on the bytecode VM by default (`--tree-walker` for the interpreter)
 
 `phg serve` now compiles the program and runs each request's `respond(bytes): bytes` on the bytecode

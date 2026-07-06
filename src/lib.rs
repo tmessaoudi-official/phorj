@@ -17,6 +17,7 @@ pub mod format;
 pub mod green;
 pub mod inspect;
 pub mod interpreter;
+pub mod jit;
 pub mod json;
 pub mod lift;
 pub mod limits;

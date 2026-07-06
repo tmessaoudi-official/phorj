@@ -86,6 +86,27 @@ jobs:
       - name: Run perf gate
         run: bash scripts/perf-gate.sh
 
+  unsafe-island:
+    # Domain #7 (native codegen / JIT) will carry phorj's only first-party `unsafe`, confined to
+    # src/jit/ via a crate-root `#![deny(unsafe_code)]` + a single `#![allow(unsafe_code)]` island.
+    # `deny` (unlike `forbid`) permits a scoped allow, so this gate machine-enforces the confinement:
+    # it fails if an `allow(unsafe_code)` escape hatch appears anywhere outside src/jit/. At HEAD the
+    # root is still `#![forbid(unsafe_code)]` with no allow anywhere, so it passes trivially — it arms
+    # for the forbid->deny downgrade that lands with the first codegen slice.
+    name: unsafe-island (first-party unsafe confined to src/jit/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: No allow(unsafe_code) outside src/jit/
+        run: |
+          hits="$(grep -rnE 'allow[[:space:]]*\([[:space:]]*unsafe_code' src --include='*.rs' | grep -v '^src/jit/' || true)"
+          if [ -n "$hits" ]; then
+            echo "unsafe-island: FAIL — allow(unsafe_code) outside src/jit/ (first-party unsafe must live only in the JIT island):" >&2
+            echo "$hits" >&2
+            exit 1
+          fi
+          echo "unsafe-island: OK — no allow(unsafe_code) escape outside src/jit/"
+
   oracle-nightly:
     # Non-gating canary: run the PHP oracle against the in-development 8.6 so bleeding-edge breakage
     # surfaces early. continue-on-error keeps a flaky/unavailable dev build from failing CI — the 8.5

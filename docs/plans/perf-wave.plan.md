@@ -132,6 +132,14 @@ candidate levers from the code read (confirm/re-rank with callgrind first):
 beating release-php.
 
 ## Progress
+- **JIT gate-1 (dep-policy amendment + scaffold) DONE (2026-07-06)** — the ruled FIRST gate of the
+  Cranelift build shipped: UNIFIED-SPEC §dep-policy admits **domain #7 (native codegen)** with the
+  clause-1 "performance-excluded" carve-out + an admitted-deps table row (`cranelift`, *not yet in
+  tree*); CHANGELOG entry; a CI `unsafe-island` job (fails if `allow(unsafe_code)` appears outside
+  `src/jit/` — arms for the `forbid`→`deny` downgrade); and an empty `src/jit/mod.rs` scaffold (crate
+  still `#![forbid(unsafe_code)]`, unsafe-free, compiles clean). NEXT (fresh session — the heavy
+  marathon): add the `cranelift-jit` crate + `forbid`→`deny` + the `#![allow]` island + first Cranelift
+  IR emit for arithmetic/control-flow, wired into `phg run`.
 - **A1 trycatch micro DONE (2026-07-06)** — `bench/micro/trycatch.{phg,php}` added (native
   `class Odd implements Error` + `throws`/`try`/`catch`; output-identical checksum `8999994`).
   Corpus now **12**. Honest matrix (docker `php:8.5-cli` release+JIT, this host): **ALL 12 LOSE** —
