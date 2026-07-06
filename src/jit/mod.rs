@@ -346,8 +346,14 @@ pub fn compile_and_run(
         fault: None,
     };
     let status = entry(&mut call_ctx);
-    // `module` owns the JIT memory `entry` points into; keep it alive until after the call, then drop.
-    drop(module);
+    // `JITModule` has NO `Drop` impl (verified against cranelift-jit 0.133 `src/backend.rs`) — merely
+    // dropping it LEAKS the code mmap; memory is reclaimed only by the explicit `free_memory`. `entry`
+    // has already returned and its pointer is never used again, so freeing now satisfies the method's
+    // contract (no compiled fn executing, no fn-ptr called afterward). `call_ctx` is independent Rust
+    // heap, unaffected. (When the wiring slice caches compiled functions, the module instead lives for
+    // the program's lifetime and frees once at the end.)
+    // SAFETY: no outstanding use of any pointer into `module` past this point — see above.
+    unsafe { module.free_memory() };
 
     if status == 0 {
         Ok(JitRun::Value(call_ctx.result))
