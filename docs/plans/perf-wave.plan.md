@@ -49,6 +49,32 @@
   the per-feature harness. Keep the tree-walk leg reachable as `--vs-oracle` until the harness lands so
   CI keeps its anchor meanwhile.
 
+- [2026-07-06] RULED (developer, 2026-07-06): **JIT dependency-policy amendment.**
+  Realized while surfacing that this is NOT a table-row add: (a) it introduces phorj's **FIRST
+  first-party `unsafe`** — all four current exceptions confine unsafe to *third-party* crates, but a
+  JIT's call site (`finalize → transmute(buf→fn ptr) → call`) is unsafe **in phorj's own code**,
+  colliding with `#![forbid(unsafe_code)]` (src/lib.rs:3, src/main.rs:4); (b) it **amends dependency-
+  policy clause 1**, which currently *excludes* performance/codegen crates (UNIFIED-SPEC:827) and says
+  anything outside the listed domains "requires revisiting this policy itself." Fork surfaced to the
+  developer: (1) **VM-ceiling first** — small auditable first-party unsafe (bytecode-index bounds
+  elision in the hot loop), NO Cranelift, NO policy amendment; measure vs PHP-no-JIT (~9× headroom just
+  to match) before the big commitment [recommended — lowest-regret, decouples the reversible small step
+  from the irreversible one, matches the prior "explore VM ceiling" agreement]; (2) **full amendment
+  now, separate `phorj-jit` crate** — core `phorj`/`phg` keep `#![forbid]` literally intact; cost =
+  exposing `Op`/`Value`/chunk internals across a `pub` boundary; (3) **full amendment now, in-tree
+  `src/jit/`** — root `forbid`→`deny` + one `#[allow]` island; simpler, tighter coupling, but pierces
+  the crate-root forbid invariant.
+  RULING (developer, 2026-07-06): full amendment now (VM-ceiling-first DECLINED); layout = option (3)
+  **in-tree `src/jit/`**. Rationale: the JIT is a 4th backend coupled to `Op`/`Value`/chunk (inv
+  #3/#4/#6), all in the single `phorj` lib crate; dispatch (`src/cli/mod.rs`) + bench/disasm/playground
+  compile-paths are lib code, so a separate crate forces those internals `pub` + creates a
+  `phorj -> phorj-jit -> phorj` cycle (cleanest fix = a vtable in the perf hot path, self-defeating).
+  Mechanism: crate-root `#![forbid(unsafe_code)]` -> `#![deny(unsafe_code)]` + ONE `#[allow(unsafe_code)]`
+  island in `src/jit/`, enforced by a CI gate that fails the build if `unsafe` appears outside
+  `src/jit/`; admit dependency-policy **domain #7 - native codegen via `cranelift-jit`**, feature-gated
+  `jit` (non-wasm; playground stays VM). Ratified amendment files (UNIFIED-SPEC §dep-policy clause 1 +
+  admitted-deps table, CHANGELOG, ci.yml gate) to be written WHEN the JIT work starts - not now.
+
 ## Measured baseline (2026-07-05) — the honest truth
 Pure execution, self-timed (phg `Runtime.monotonicNanos`, php `hrtime`), best-of-5, startup excluded.
 phg runvm (release) vs **real release PHP 8.5.7 NTS via `docker run php:8.5-cli`** (all 3 local php
