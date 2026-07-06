@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# perf-gate.sh — Lane 2 W1: fail on a gross VM performance regression.
+# perf-gate.sh — Lane 2 W1: fail on a gross VM *regression*.
 #
-# Gates on `vm_speedup` (tree-walk ÷ VM ratio) from `phg benchmark --json`. The ratio is
-# machine-independent — both backends run on the same CPU in the same process, so a faster/slower host
-# scales them together and the ratio stays put — whereas absolute nanoseconds swing wildly across
-# machines and CI runners.
+# THIS IS A VM-HEALTH REGRESSION SIGNAL, NOT A PERFORMANCE-VS-PHP CLAIM. It gates on `vm_speedup`
+# (tree-walk ÷ VM ratio) from `phg benchmark --json`: a machine-independent measure — both backends
+# run on the same CPU in the same process, so a faster/slower host scales them together and the ratio
+# stays put, whereas absolute nanoseconds swing wildly across machines and CI runners. It flags when
+# the VM slows *relative to a fixed reference* (the tree-walker); it makes NO claim about beating PHP.
+#
+# The G-8 MANDATE ("the VM is faster than release-php+JIT, per feature") is gated SEPARATELY by
+# scripts/microbench.sh (VM vs `docker run php:8.5-cli`, per-feature WIN-count) — that is the honest
+# perf-vs-PHP bar. This gate and that one measure different things; keep both.
 #
 # Timing noise is ONE-directional: the scheduler, GC, and thermal throttling only ever *slow* a run,
 # never speed it up past the true achievable time. (Empirically a run measured 3.27 against a ~22 true

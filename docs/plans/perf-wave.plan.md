@@ -75,6 +75,24 @@
   `jit` (non-wasm; playground stays VM). Ratified amendment files (UNIFIED-SPEC §dep-policy clause 1 +
   admitted-deps table, CHANGELOG, ci.yml gate) to be written WHEN the JIT work starts - not now.
 
+- [2026-07-06] AGREED (developer) — **A1 measurement-harness reshape, scoped after discovery.**
+  DISCOVERY: `scripts/microbench.sh` ALREADY is the honest per-feature harness (phorj VM vs
+  release-php+JIT via `docker run php:8.5-cli`, ns/op, checksum output-identity gate, WIN=VM faster).
+  Corpus = 11 pairs in `bench/micro/`. So A1's hard part exists. **Perf-gate anchor RULING (reframes
+  the earlier "migrate off tree÷VM" ruling, which predated the microbench discovery):** KEEP
+  `perf-gate.sh`'s tree÷VM `vm_speedup` as the **machine-independent VM-regression backstop**
+  (relabelled: VM-health, NOT a php claim — `perf-gate.sh` header + `bench/baseline.json` `_comment`
+  DONE 2026-07-06) + ADD microbench WIN-count as a SEPARATE G-8 mandate gate. Rationale: perf-gate
+  runs on a noisy shared `ubuntu-latest` runner (ci.yml:68) where tree÷VM's machine-independence is
+  load-bearing; microbench needs docker; the two metrics measure different things — keep both.
+  **Remaining A1 (not yet done, needs docker + a cold release rebuild — `target/` was cleaned):**
+  (a) `bench/micro/trycatch.{phg,php}` micro (needs NATIVE phorj try/throw/catch that runs on the VM —
+  `examples/interop/exceptions.phg` is PHP-only/E-FOREIGN-RUNTIME, find/author a native throwable);
+  (b) `phg benchmark` headline → VM-vs-php primary, tree÷VM behind `--vs-oracle` (MUST preserve the
+  `vm_speedup` JSON field — `perf-gate.sh:43` reads it), keep local-`php` `--vs-php` as indicative;
+  (c) wire the microbench WIN-count mandate gate (a `microbench.sh --gate` mode + baseline, then a CI
+  job on the docker-capable lane, or pre-push/local to keep CI docker-free — sub-decision open).
+
 ## Measured baseline (2026-07-05) — the honest truth
 Pure execution, self-timed (phg `Runtime.monotonicNanos`, php `hrtime`), best-of-5, startup excluded.
 phg runvm (release) vs **real release PHP 8.5.7 NTS via `docker run php:8.5-cli`** (all 3 local php
