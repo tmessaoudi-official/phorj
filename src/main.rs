@@ -1,7 +1,9 @@
 //! Phorj CLI: `phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|explain>
 //! <file>`. Thin dispatcher over the testable `phorj::cli` module. `run` executes on the bytecode VM
 //! (the runtime); `run --tree-walker` selects the interpreter oracle.
-#![forbid(unsafe_code)]
+// `deny`, not `forbid`: first-party `unsafe` is confined to the JIT island (`src/jit/`); see the
+// crate-root note in `src/lib.rs`. The `phg` binary itself contains no `unsafe`.
+#![deny(unsafe_code)]
 
 use std::process::exit;
 

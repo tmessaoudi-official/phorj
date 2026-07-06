@@ -6,6 +6,35 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — JIT codegen slice 1 (Cranelift): pure-int leaf functions compile & run natively
+
+First codegen of the Cranelift JIT backend (dependency-policy domain #7, perf mandate G-8). `src/jit/`
+gains `compile_and_run`: it lowers a **default-deny int-arithmetic leaf subset** of a compiled
+function's bytecode — `Const`(int) / `GetLocal` / `AddI` / `SubI` / `MulI` / `DivI` / `RemI` /
+`Return`, straight-line — to native machine code via Cranelift, then runs it through the
+`finalize -> transmute -> call` path. Arithmetic threads **boxed `Value`s through the single-sourced
+`value.rs` kernels** (`int_add`, …), so overflow / divide-by-zero faults carry the **same canonical
+strings as the VM by construction** (Invariant 4); anything outside the subset is rejected with
+`JitError::Unsupported` (the caller falls back to the VM — the seed of the eligibility predicate).
+**Not yet wired into `phg run`** — the `phg run` cutover plus control-flow branches/loops and a
+differential example that provably exercises the JIT are the next (wiring) slice; this commit is the
+substrate and its verification only.
+
+- **Deps:** `cranelift` / `cranelift-jit` / `cranelift-module` 0.133, behind the non-default `jit`
+  feature, non-wasm target (mirrors `corosensei`). Verified building on the pinned toolchain (1.96.0).
+- **Unsafe island landed:** crate roots `#![forbid(unsafe_code)]` -> `#![deny(unsafe_code)]`
+  (`src/lib.rs`, `src/main.rs`); the single audited allow-island lives in `src/jit/mod.rs`. The CI
+  `unsafe-island` gate confines it.
+- **CI:** a new `jit` job builds + lints + tests `-p phorj --features jit`. The default `gate` job's
+  `cargo test --workspace` does **not** compile the `jit` feature, so without this job the JIT code
+  would rot unverified — a structural false-green. `-p phorj` (not `--workspace`) because the
+  `playground` member has no `jit` feature.
+- **Tests (`--features jit`):** JIT value matches the VM oracle for int arithmetic; integer overflow
+  and divide-by-zero surface the exact single-sourced kernel fault strings; a non-int function is
+  default-denied.
+- **Perf:** none claimed. The code is unwired and unmeasured; the design spike's ~3×-over-php+JIT is a
+  *hypothesis* for the wired path, to be measured under `phg run` in the wiring slice (Invariant 11).
+
 ### Changed — dependency policy amended: native codegen (JIT) admitted as domain #7 (scaffold only)
 
 The external dependency policy (`docs/specs/UNIFIED-SPEC.md` §"External dependency policy") gains a
@@ -17,10 +46,9 @@ The JIT lives **in-tree** at `src/jit/` (it couples to `Op`/`Value`/chunk — a 
 force those `pub` + create a dependency cycle) and introduces phorj's **first first-party `unsafe`**,
 confined to a `src/jit/` island: the crate root drops `#![forbid(unsafe_code)]` → `#![deny(unsafe_code)]`
 with a single audited `#![allow(unsafe_code)]` there, and a CI `unsafe-island` gate fails the build if
-an `allow(unsafe_code)` escape appears anywhere outside `src/jit/`. **At HEAD only the policy, the CI
-gate, and an empty `src/jit/` scaffold exist** — the `cranelift` crate and the `forbid`→`deny` change
-land with the first codegen slice, so the crate is still `#![forbid(unsafe_code)]` and unsafe-free.
-See `docs/plans/perf-wave.plan.md`.
+an `allow(unsafe_code)` escape appears anywhere outside `src/jit/`. **That scaffold commit added only
+the policy, the CI gate, and an empty `src/jit/`** — the `cranelift` crate and the `forbid`→`deny`
+change then landed with JIT codegen slice 1 (see the entry above). See `docs/plans/perf-wave.plan.md`.
 
 ### Changed — `phg serve` runs on the bytecode VM by default (`--tree-walker` for the interpreter)
 

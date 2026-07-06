@@ -853,7 +853,7 @@ Anything outside the admitted domains requires revisiting this policy itself, no
 | `regex` (BurntSushi) 1.x | ReDoS-safe regex | `Core.Regex` | `regex` | RE2-style finite automaton, guaranteed linear-time, exhaustively fuzzed; its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; unsupported patterns rejected at `Regex.compile` |
 | `ctrlc` 3.x | OS signals (SIGINT/SIGTERM) | `phg serve` graceful shutdown | `signals` | Confines the unavoidable `unsafe`; serve is outside the byte-identity spine (quarantined), so this never touches `interpreter ≡ VM ≡ PHP` |
 | `corosensei` 0.3.x | Stackful coroutines | `spawn`/channels (green threads) | `green` (non-wasm) | Miri-tested, by the hashbrown/parking_lot author; wasm32 has no native stack to switch (verified) — on wasm the interpreter delegates to the VM's frame-swap; green threads are quarantined from the PHP oracle |
-| `cranelift-*` (Bytecode Alliance) | Native codegen (JIT) | `phg run`/`serve`/`build` hot paths | `jit` (non-wasm) | The G-8 lever — native codegen beats php+JIT (a spike showed ~3× even with boxed `Value`); `std` has no codegen and hand-emitting machine code is the unsafe-est hand-rolling. phorj's FIRST **first-party** `unsafe`, confined to the `src/jit/` island (crate root `forbid`→`deny`; CI-enforced). **Not yet in the tree** — enters with the first codegen slice |
+| `cranelift-*` (Bytecode Alliance) | Native codegen (JIT) | `phg run`/`serve`/`build` hot paths | `jit` (non-wasm) | The G-8 lever — native codegen beats php+JIT (a spike showed ~3× even with boxed `Value`); `std` has no codegen and hand-emitting machine code is the unsafe-est hand-rolling. phorj's FIRST **first-party** `unsafe`, confined to the `src/jit/` island (crate root `forbid`→`deny`; CI-enforced). **In tree since codegen slice 1** (2026-07-06, `jit` feature; pure-int leaf codegen, not yet wired into `phg run`) |
 
 Transitive: argon2 → `password-hash`, `base64ct`, `rand_core`/`getrandom`; regex →
 `regex-automata`, `regex-syntax`, `aho-corasick` — same audit umbrellas. Full list:
@@ -896,8 +896,10 @@ third-party crate. Ruled mechanism:
   escape hatch appears anywhere outside `src/jit/`, machine-enforcing "first-party unsafe lives only in
   the JIT."
 - **Feature-gated `jit`, non-wasm** — the WASM playground stays on the VM.
-- **The crate + the `forbid`→`deny` change land WITH the first codegen slice** — at HEAD only this
-  policy, the CI gate, and an empty `src/jit/` scaffold exist (the crate is unsafe-free until then).
+- **The crate + the `forbid`→`deny` change landed WITH JIT codegen slice 1** (2026-07-06): `cranelift`
+  0.133 is in-tree behind the `jit` feature, the crate roots are `#![deny(unsafe_code)]`, and the sole
+  `src/jit/` allow-island carries the first codegen (pure-int leaf functions; not yet wired into
+  `phg run`). A dedicated `jit` CI job builds + lints + tests `-p phorj --features jit`.
 - Staged build: Cranelift IR for arithmetic/control-flow → boxed-`Value` runtime → wire into
   `phg run`/`serve` (hot-fn compile) → AOT for `phg build` → unboxing for statically-typed hot paths.
   Reject LLVM; reject C-transpile-as-the-shipped-answer (production-only). Plan:

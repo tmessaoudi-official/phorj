@@ -40,6 +40,14 @@ signals = ["dep:ctrlc"]
 # so the feature is off for the WASM playground, where the interpreter delegates task execution to the
 # VM's frame-swap instead. See docs/specs/2026-06-29-m6-w4-green-threads-design.md §4b.
 green = ["dep:corosensei"]
+# Native codegen JIT backend (perf mandate G-8): Cranelift lowers hot bytecode functions to native
+# machine code — the bytecode VM is ~28× slower than release-php+JIT on hot numeric loops, and no
+# tuning under `#![forbid(unsafe_code)]` closes that (only native codegen does). OFF by default and
+# OFF for wasm (no native JIT target). This is phorj's FIRST first-party `unsafe` (the
+# finalize→transmute→fn-ptr call), confined to `src/jit/` behind a CI-enforced island — the crate
+# roots relax from `forbid(unsafe_code)` to `deny(unsafe_code)` so that one module can carry a scoped
+# `#![allow]`. 7th external-dependency domain — see docs/specs/UNIFIED-SPEC.md#external-dependency-policy.
+jit = ["dep:cranelift", "dep:cranelift-jit", "dep:cranelift-module"]
 
 [dependencies]
 # FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
@@ -56,6 +64,17 @@ argon2 = { version = "0.5", optional = true, features = ["std"] }
 # corosensei fails to compile there), so the dep is gated to non-wasm targets and the `green` feature.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 corosensei = { version = "0.3", optional = true }
+
+# SEVENTH external-dependency domain (native codegen, developer-authorized 2026-07-06). Cranelift
+# (Bytecode Alliance — the wasmtime code generator, fuzzed + production-hardened) is the JIT backend
+# for the G-8 perf mandate. Chosen over LLVM (heavyweight C++ build dependency, slow compiles) and
+# over a C-transpile→rustc AOT (production-only — it would leave interactive `phg run` on the slow
+# VM). Feature-gated (`jit`) and non-wasm (wasm32 has no native JIT target). Its
+# finalize→transmute→fn-ptr call is phorj's first first-party `unsafe`, confined to `src/jit/` behind
+# the CI `unsafe-island` gate. See docs/specs/UNIFIED-SPEC.md#external-dependency-policy.
+cranelift = { version = "0.133", optional = true }
+cranelift-jit = { version = "0.133", optional = true }
+cranelift-module = { version = "0.133", optional = true }
 
 # SECOND external dependency (Rust project / BurntSushi, exhaustively fuzzed). Powers `Core.Regex` —
 # a RE2-style finite-automaton engine with guaranteed linear-time matching (ReDoS-immune by

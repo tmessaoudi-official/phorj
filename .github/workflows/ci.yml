@@ -90,9 +90,9 @@ jobs:
     # Domain #7 (native codegen / JIT) will carry phorj's only first-party `unsafe`, confined to
     # src/jit/ via a crate-root `#![deny(unsafe_code)]` + a single `#![allow(unsafe_code)]` island.
     # `deny` (unlike `forbid`) permits a scoped allow, so this gate machine-enforces the confinement:
-    # it fails if an `allow(unsafe_code)` escape hatch appears anywhere outside src/jit/. At HEAD the
-    # root is still `#![forbid(unsafe_code)]` with no allow anywhere, so it passes trivially — it arms
-    # for the forbid->deny downgrade that lands with the first codegen slice.
+    # it fails if an `allow(unsafe_code)` escape hatch appears anywhere outside src/jit/. The crate
+    # roots are now `#![deny(unsafe_code)]` with the single audited island in src/jit/mod.rs (landed
+    # with JIT codegen slice 1) — this gate keeps that confinement from ever widening.
     name: unsafe-island (first-party unsafe confined to src/jit/)
     runs-on: ubuntu-latest
     steps:
@@ -106,6 +106,27 @@ jobs:
             exit 1
           fi
           echo "unsafe-island: OK — no allow(unsafe_code) escape outside src/jit/"
+
+  jit:
+    # The Cranelift JIT backend (dep-policy domain #7) lives behind the non-default `jit` feature, so
+    # the `gate` job's `cargo test --workspace` NEVER compiles it — src/jit/ would rot unverified and a
+    # workspace change could break JIT codegen while CI stayed green (the structural false-green pattern
+    # this project keeps guarding against). This job closes that hole: it lints and runs the JIT tests
+    # with the feature on. `-p phorj` (not --workspace) because the playground member has no `jit`
+    # feature. No PHP: the JIT tests cross-check native output against the in-process VM oracle, which
+    # the `gate` job already validates against real PHP — so the transitive byte-identity chain holds.
+    name: jit (Cranelift feature build + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: cargo clippy -p phorj --features jit --all-targets -- -D warnings
+        run: cargo clippy -p phorj --features jit --all-targets -- -D warnings
+      - name: cargo test -p phorj --features jit
+        run: cargo test -p phorj --features jit
 
   oracle-nightly:
     # Non-gating canary: run the PHP oracle against the in-development 8.6 so bleeding-edge breakage

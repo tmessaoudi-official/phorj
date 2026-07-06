@@ -5,6 +5,19 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-06] AGREED (developer, interactive): **JIT marathon execution order LOCKED = Option A —
+  ruled staged, breadth-first (boxed Value runtime first, unboxing LAST).** Sequence: (JIT-1) arith/
+  control-flow IR emit + `cranelift-jit` dep + `forbid→deny` + `#![allow]` island, wired into `phg run`
+  → (JIT-2) boxed `Value` runtime → (JIT-3) hot-fn compile wired into `phg run` + `serve` → (JIT-4)
+  AOT-all for `phg build` → (JIT-5) unboxing pass for statically-typed hot paths → (Stage 2) re-measure
+  the 12-feature matrix → (Stage 3) per-feature sweep (each straggler beats php+JIT or a §14 ladder
+  ceiling call — surfaced, not autonomous) → (Stage 4) mandate gate GREEN (G-8 MET). Rationale
+  (developer-endorsed): the spike proved boxed codegen already ~3× > php+JIT, so breadth wins G-8 on the
+  widest surface fastest and unboxing self-prunes into Stage-3 stragglers; the gap is uniform (61%
+  dispatch tax) so one native-codegen lever lifts all; coverage-gated ordering rejected (microbench
+  ratios are load-noisy — that's why the mandate gate blocks only on identity + WIN→LOSS flips).
+  Autonomous marathon: each slice a green+measured commit, ratchet re-`--emit`'d per win, stop at §14
+  ladder forks (Stage 3) + surface the first `unsafe`-island landing; **never push** (developer pushes).
 - [2026-07-05] AGREED: The **endgame is a JIT/AOT backend** — truly beating PHP+JIT on hot numeric
   loops requires native codegen. Push the bytecode VM as far as it goes first (closes most of the gap);
   open the §15 JIT/AOT fork when a feature provably cannot beat release-php+JIT after VM optimization.
@@ -140,6 +153,24 @@ beating release-php.
   still `#![forbid(unsafe_code)]`, unsafe-free, compiles clean). NEXT (fresh session — the heavy
   marathon): add the `cranelift-jit` crate + `forbid`→`deny` + the `#![allow]` island + first Cranelift
   IR emit for arithmetic/control-flow, wired into `phg run`.
+- **JIT-1 codegen slice (a) DONE (2026-07-06)** — the boxed-via-kernels substrate shipped, gate-green,
+  unpushed. `cranelift`/`cranelift-jit`/`cranelift-module` 0.133 behind the non-default `jit` feature
+  (non-wasm; verified building on the 1.96.0 pin). **Unsafe island landed:** `forbid`→`deny` on both
+  crate roots + the single `#![allow(unsafe_code)]` in `src/jit/mod.rs`. `src/jit::compile_and_run`
+  lowers a **default-deny int-arith leaf subset** (`Const`(int)/`GetLocal`/`AddI`/`SubI`/`MulI`/`DivI`/
+  `RemI`/`Return`, straight-line) to native code via Cranelift, run through `finalize→transmute→call`;
+  arithmetic dispatches the single-sourced `value.rs` kernels, so overflow/div-zero faults are
+  byte-identical to the VM by construction (Invariant 4). Anything else → `JitError::Unsupported` (the
+  seed of the eligibility predicate). 4 tests (`--features jit`): value ≡ VM oracle for int arithmetic;
+  overflow + divide-by-zero surface the exact kernel strings; a non-int function is default-denied. NEW
+  CI `jit` job builds/lints/tests `-p phorj --features jit` — the `--workspace` gate never compiles the
+  feature, so without it src/jit/ would rot unverified (a structural false-green; advisor-caught).
+  **⚠ The full gate is now `--workspace` (PHP oracle) PLUS `-p phorj --features jit` — a green that
+  skipped the feature did NOT exercise the JIT.** NOT wired into `phg run`: commit (b) does the wiring
+  behind the eligibility predicate + control-flow (branches/loops for fib) + a differential example
+  that provably hits the JIT (avoids the run≡runvm false-green). **No perf claimed** — unwired and
+  unmeasured; the spike's ~3×-over-php+JIT is a hypothesis for the wired path, measured under `phg run`
+  in (b) (Invariant 11). Marathon order = Option A (Decisions Log 2026-07-06).
 - **A1 trycatch micro DONE (2026-07-06)** — `bench/micro/trycatch.{phg,php}` added (native
   `class Odd implements Error` + `throws`/`try`/`catch`; output-identical checksum `8999994`).
   Corpus now **12**. Honest matrix (docker `php:8.5-cli` release+JIT, this host): **ALL 12 LOSE** —
