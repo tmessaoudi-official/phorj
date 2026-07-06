@@ -111,10 +111,18 @@ jobs:
     # The Cranelift JIT backend (dep-policy domain #7) lives behind the non-default `jit` feature, so
     # the `gate` job's `cargo test --workspace` NEVER compiles it — src/jit/ would rot unverified and a
     # workspace change could break JIT codegen while CI stayed green (the structural false-green pattern
-    # this project keeps guarding against). This job closes that hole: it lints and runs the JIT tests
-    # with the feature on. `-p phorj` (not --workspace) because the playground member has no `jit`
-    # feature. No PHP: the JIT tests cross-check native output against the in-process VM oracle, which
-    # the `gate` job already validates against real PHP — so the transitive byte-identity chain holds.
+    # this project keeps guarding against). This job closes that hole. `-p phorj` (not --workspace)
+    # because the playground member has no `jit` feature.
+    #
+    # clippy runs `--all-targets` under the feature, so it COMPILES every target (incl. the integration
+    # tests) — full compile-rot coverage for the feature. The test step is deliberately SCOPED to the
+    # JIT lib tests (`--lib jit::`) and installs NO PHP: the full suite's conformance/differential
+    # integration tests transpile Phorj to PHP and run it under `php`, which needs the 8.5 transpile
+    # floor the `gate` job installs via setup-php. Running them here (no PHP) would pick up the runner's
+    # stale system php and fail on 8.4+ transpiled syntax (e.g. property hooks) — that PHP-oracle
+    # coverage is the `gate` job's job, not this one. The JIT lib tests are self-contained: they
+    # cross-check JIT output against the in-process VM oracle, which the `gate` job validates against
+    # real PHP, so the transitive byte-identity chain holds without PHP here.
     name: jit (Cranelift feature build + test)
     runs-on: ubuntu-latest
     steps:
@@ -125,8 +133,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: cargo clippy -p phorj --features jit --all-targets -- -D warnings
         run: cargo clippy -p phorj --features jit --all-targets -- -D warnings
-      - name: cargo test -p phorj --features jit
-        run: cargo test -p phorj --features jit
+      # Quoted: the `jit::` test filter ends in a colon, which an unquoted YAML scalar parses as a
+      # mapping key ("mapping values are not allowed here"). Runs ONLY the src/jit/ lib tests.
+      - name: "cargo test — JIT lib tests (no PHP)"
+        run: "cargo test -p phorj --features jit --lib jit::"
 
   oracle-nightly:
     # Non-gating canary: run the PHP oracle against the in-development 8.6 so bleeding-edge breakage
