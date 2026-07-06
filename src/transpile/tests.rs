@@ -1,6 +1,6 @@
 use super::emit;
-use crate::lexer::lex;
 use crate::parser::Parser;
+use crate::tokenizer::lex;
 
 fn php(src: &str) -> String {
     let tokens = lex(src).expect("lex");

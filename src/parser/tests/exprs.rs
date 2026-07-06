@@ -196,7 +196,7 @@ fn rejects_mixed_list_map_separators() {
 
 #[test]
 fn parses_propagate_postfix() {
-    // Postfix `?` is error propagation (M-faults 2a). The lexer munches `??`/`?.` separately, so a
+    // Postfix `?` is error propagation (M-faults 2a). The tokenizer munches `??`/`?.` separately, so a
     // lone `?` here is unambiguous and `a?.b` still parses as a safe Member, not propagation.
     assert!(matches!(expr("a?"), Expr::Propagate { .. }));
     assert!(matches!(expr("f(x)?"), Expr::Propagate { .. }));
@@ -288,7 +288,7 @@ fn parses_string_interpolation() {
 
 #[test]
 fn unterminated_interpolation_errors() {
-    // The lexer owns the interpolation split (so `\{` literal braces are unambiguous), so an
+    // The tokenizer owns the interpolation split (so `\{` literal braces are unambiguous), so an
     // unterminated interpolation is caught at lex stage rather than parse. Since M-DOGFOOD W2 a `"`
     // inside `{…}` opens a NESTED string, so `"Hello {name"` (missing `}`) now surfaces as an
     // unterminated nested string — still a lex error naming the interpolation, still at the right spot.

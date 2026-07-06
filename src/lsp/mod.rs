@@ -13,7 +13,7 @@
 //! formatting** — top-level *and* local/parameter resolution (the query layer lives in `scope.rs` +
 //! `symbols.rs`, all front-end-only). References/highlight/rename share one scope-accurate `occurrences`
 //! engine (same-name idents filtered to those resolving to the same declaration); formatting reuses
-//! `crate::fmt::format`, so editor-format equals `phg format`. **Go-to-definition and hover are
+//! `crate::format::format`, so editor-format equals `phg format`. **Go-to-definition and hover are
 //! cross-file** over the open buffer set: a name resolving to neither a local nor a same-file top-level
 //! symbol is looked up in the other open documents (a same-package sibling file). Member completion and
 //! lambda/match-pattern binders, and cross-file *references* (which need project-aware file merging to
@@ -26,8 +26,8 @@ mod tests;
 
 use crate::diagnostic::Diagnostic;
 use crate::json::Json;
-use crate::lexer::lex;
 use crate::parser::Parser;
+use crate::tokenizer::lex;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 
@@ -136,7 +136,7 @@ impl Server {
         let character = num(pos.get("character"))?;
         let offset = symbols::offset_at(text, line, character)?;
         let name = symbols::ident_at(text, offset);
-        let tokens = crate::lexer::lex(text).ok()?;
+        let tokens = crate::tokenizer::lex(text).ok()?;
         let program = Parser::new(tokens).parse_program().ok()?;
         Some((text.clone(), offset, name, program))
     }
@@ -160,7 +160,7 @@ impl Server {
         uris.sort();
         for uri in uris {
             let text = &self.docs[uri];
-            let Ok(tokens) = crate::lexer::lex(text) else {
+            let Ok(tokens) = crate::tokenizer::lex(text) else {
                 continue;
             };
             let Ok(program) = Parser::new(tokens).parse_program() else {
@@ -374,7 +374,7 @@ impl Server {
     }
 
     /// `textDocument/formatting` — run `phg format`'s formatter on the buffer and return a single
-    /// whole-document `TextEdit[]`. Reuses [`crate::fmt::format`] (comment-preserving, meaning-
+    /// whole-document `TextEdit[]`. Reuses [`crate::format::format`] (comment-preserving, meaning-
     /// preserving), so editor-format equals `phg format`. Returns `[]` (no edit) if the buffer doesn't
     /// parse — never corrupts an in-progress file.
     fn formatting(&self, msg: &Json) -> String {
@@ -384,7 +384,7 @@ impl Server {
         let Some(text) = self.docs.get(&uri) else {
             return "[]".to_string();
         };
-        let Ok(formatted) = crate::fmt::format(text) else {
+        let Ok(formatted) = crate::format::format(text) else {
             return "[]".to_string();
         };
         if formatted == *text {
@@ -408,7 +408,7 @@ impl Server {
         let Some(text) = self.docs.get(&uri) else {
             return "[]".to_string();
         };
-        let Ok(tokens) = crate::lexer::lex(text) else {
+        let Ok(tokens) = crate::tokenizer::lex(text) else {
             return "[]".to_string();
         };
         let Ok(program) = Parser::new(tokens).parse_program() else {

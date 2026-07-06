@@ -1,6 +1,6 @@
 use phorj::ast::{Expr, Pattern};
-use phorj::lexer::lex;
 use phorj::parser::Parser;
+use phorj::tokenizer::lex;
 
 fn parse_expr(src: &str) -> Expr {
     let tokens = lex(src).expect("lex ok");

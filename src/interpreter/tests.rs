@@ -1,6 +1,6 @@
 use super::*;
-use crate::lexer::lex;
 use crate::parser::Parser;
+use crate::tokenizer::lex;
 
 /// Lex + parse + interpret; return captured stdout or the runtime error. Auto-prepends the
 /// reserved `package Main;` (M5 S1) so existing test programs need no per-case edit; the

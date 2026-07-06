@@ -9,7 +9,7 @@ the load-bearing decisions see `docs/adr/`, and for the fuller design rationale 
 ```
 source .phg
   │
-  ▼  lexer.rs        (iterative; &str → Vec<Token>)
+  ▼  tokenizer/      (iterative; &str → Vec<Token>)
 tokens
   │
   ▼  parser.rs       (recursive descent; Vec<Token> → ast::Program)   depth-guarded: MAX_NEST_DEPTH
@@ -36,7 +36,7 @@ milestone; see "Module decomposition" below. The roles are unchanged.
 
 | Module | Role |
 |------|------|
-| `lexer/` · `token.rs` | source → tokens; `Span` = source-position truth |
+| `tokenizer/` · `token.rs` | source → tokens; `Span` = source-position truth |
 | `parser/` · `ast/` | tokens → untyped AST |
 | `checker/` | type-check gate (no annotation) |
 | `interpreter/` | tree-walking evaluator — the reference semantics |
@@ -74,7 +74,7 @@ smoke check). Layout:
 
 **Tests mirror the split** as sealed child modules (`#[cfg(test)] #[path] mod`), one file per concept —
 **by language feature** for the cross-cutting `checker/tests/` (integration tests through `check()`), and
-**by construct** for `parser/tests/` (which mirror the source clusters). `lexer/` (621 lines, one cohesive
+**by construct** for `parser/tests/` (which mirror the source clusters). `tokenizer/` (621 lines, one cohesive
 scanner) and `chunk.rs` (shared `Op`/`validate` contract) are deliberately left single.
 
 ## Two `Frame`s — not the same thing

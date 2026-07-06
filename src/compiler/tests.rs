@@ -1,6 +1,6 @@
 use super::*;
-use crate::lexer::lex;
 use crate::parser::Parser;
+use crate::tokenizer::lex;
 use crate::vm::Vm;
 
 /// Compile + run a program on the VM, returning captured output. Auto-prepends the reserved

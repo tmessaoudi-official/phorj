@@ -16,7 +16,7 @@ fn lift_err(php: &str) -> String {
 
 /// The lifted output must be valid Phorj (re-lexes + re-parses without error).
 fn assert_reparses(phg: &str) {
-    let toks = crate::lexer::lex(phg)
+    let toks = crate::tokenizer::lex(phg)
         .unwrap_or_else(|e| panic!("lifted output failed to lex: {e:?}\n{phg}"));
     Parser::new(toks)
         .parse_program()

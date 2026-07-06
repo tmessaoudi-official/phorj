@@ -1,4 +1,4 @@
-//! `phg fmt` CLI integration tests (M-fmt F3) — in-place write, `--check` exit codes, parse-error
+//! `phg format` CLI integration tests (M-fmt F3) — in-place write, `--check` exit codes, parse-error
 //! safety (file untouched, exit 2), and idempotence at the CLI layer.
 
 use std::path::{Path, PathBuf};
@@ -41,7 +41,7 @@ fn check_reports_unformatted_then_clean_after_write() {
     let f = d.write("a.phg", MESSY);
 
     // --check on a messy file: exit 1, no write.
-    let (report, code) = cli::cmd_fmt(&[f.display().to_string()], true);
+    let (report, code) = cli::cmd_format(&[f.display().to_string()], true);
     assert_eq!(code, 1, "{report}");
     assert!(report.contains("would reformat"), "{report}");
     assert_eq!(
@@ -51,14 +51,14 @@ fn check_reports_unformatted_then_clean_after_write() {
     );
 
     // format in place: exit 0, file rewritten.
-    let (report, code) = cli::cmd_fmt(&[f.display().to_string()], false);
+    let (report, code) = cli::cmd_format(&[f.display().to_string()], false);
     assert_eq!(code, 0, "{report}");
     let formatted = std::fs::read_to_string(&f).unwrap();
     assert_ne!(formatted, MESSY);
     assert!(formatted.contains("int x = 1 + 2;"), "{formatted}");
 
     // now --check is clean: exit 0.
-    let (_r, code) = cli::cmd_fmt(&[f.display().to_string()], true);
+    let (_r, code) = cli::cmd_format(&[f.display().to_string()], true);
     assert_eq!(code, 0);
 }
 
@@ -67,7 +67,7 @@ fn unparseable_file_is_left_untouched_exit_2() {
     let d = TempDir::new("broken");
     let broken = "package Main;\nfunction (\n";
     let f = d.write("bad.phg", broken);
-    let (report, code) = cli::cmd_fmt(&[f.display().to_string()], false);
+    let (report, code) = cli::cmd_format(&[f.display().to_string()], false);
     assert_eq!(code, 2, "{report}");
     assert!(report.contains("did not parse"), "{report}");
     assert_eq!(
@@ -82,17 +82,17 @@ fn directory_formats_all_phg_recursively() {
     let d = TempDir::new("dir");
     d.write("a.phg", MESSY);
     d.write("b.phg", MESSY);
-    let (report, code) = cli::cmd_fmt(&[d.path().display().to_string()], false);
+    let (report, code) = cli::cmd_format(&[d.path().display().to_string()], false);
     assert_eq!(code, 0, "{report}");
     assert!(report.contains("2 file(s) formatted"), "{report}");
 }
 
 #[test]
 fn stdin_path_formats_a_source_string() {
-    let out = cli::fmt_source(MESSY).expect("formats");
+    let out = cli::format_source(MESSY).expect("formats");
     assert!(out.contains("function main(): void {"), "{out}");
     // idempotent at the source level.
-    assert_eq!(out, cli::fmt_source(&out).unwrap());
+    assert_eq!(out, cli::format_source(&out).unwrap());
 }
 
 /// Recursively collect every `*.phg` under `dir`.
@@ -153,7 +153,7 @@ fn assert_phg_fmt_safe(f: &Path) {
     let src = std::fs::read_to_string(f).unwrap();
     // Formats without error.
     let once =
-        cli::fmt_source(&src).unwrap_or_else(|e| panic!("fmt failed on {}:\n{e}", f.display()));
+        cli::format_source(&src).unwrap_or_else(|e| panic!("fmt failed on {}:\n{e}", f.display()));
     // Canonical: every tracked `.phg` is already in width-canonical form, so `fmt(src) == src`
     // (UA-0.8 — the corpus test used to be idempotency-only, letting tracked files silently drift).
     assert_eq!(
@@ -163,7 +163,7 @@ fn assert_phg_fmt_safe(f: &Path) {
         f.display()
     );
     // Idempotent.
-    let twice = cli::fmt_source(&once).unwrap();
+    let twice = cli::format_source(&once).unwrap();
     assert_eq!(once, twice, "not idempotent: {}", f.display());
     // Meaning preserved for a standalone-runnable program (skip multi-file project parts /
     // impure / fragment files, which don't run as a single source).

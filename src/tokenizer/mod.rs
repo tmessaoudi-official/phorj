@@ -1,4 +1,4 @@
-//! Hand-written lexer: source `&str` → `Vec<Token>`. Iterative (no recursion), so unlike the
+//! Hand-written tokenizer: source `&str` → `Vec<Token>`. Iterative (no recursion), so unlike the
 //! parser/checker it never contributes to the recursion-depth budget those stages guard. Faults
 //! surface as a unified `diagnostic::Diagnostic` (`Stage::Lex`) carrying line/col.
 
@@ -509,7 +509,7 @@ impl<'a> Lexer<'a> {
             TokenKind::Str(s) => s,
             _ => unreachable!("scan_string yields a Str token"),
         };
-        // Make interpolation offsets file-unique: the sub-lexer numbered them from 0 within the
+        // Make interpolation offsets file-unique: the sub-tokenizer numbered them from 0 within the
         // wrapped body; shift by this block's source start (the block occupies a unique source range,
         // and the dedented body is no longer than the source, so `start + off` stays within it).
         for seg in &mut segs {
@@ -811,7 +811,7 @@ impl<'a> Lexer<'a> {
 /// `"100"`, `"1_000.5"`) into `(unscaled, scale)` (M-NUM S1). Underscore separators are stripped (a
 /// source literal may use them, unlike the runtime `Decimal.of` grammar). The scale is the count of
 /// fractional digits, so trailing zeros are preserved. Returns `None` if the unscaled value overflows
-/// `i128` (a compile-time error, not a runtime fault). No sign handling — the lexer scans the
+/// `i128` (a compile-time error, not a runtime fault). No sign handling — the tokenizer scans the
 /// magnitude; a leading `-` is the unary-minus operator on the literal.
 fn parse_decimal_literal(text: &str) -> Option<(i128, u8)> {
     let cleaned: String = text.chars().filter(|c| *c != '_').collect();

@@ -3,31 +3,31 @@
 //!   * `phg format --check [paths…]` — report files that are not already formatted; exit 1 if any. No
 //!     writes (the CI gate).
 //!   * `phg format` (no path) — format every `*.phg` under the current directory, recursively.
-//!   * `phg format -` (stdin) — handled by `main.rs` via [`fmt_source`].
+//!   * `phg format -` (stdin) — handled by `main.rs` via [`format_source`].
 //!
 //! An unparseable file is **never** rewritten — its diagnostic is reported and the file left intact
 //! (exit 2), so the formatter can never corrupt broken source.
 
 use std::path::{Path, PathBuf};
 
-use crate::fmt;
+use crate::format;
 use crate::loader;
 
 /// Format one source string (the stdin path). Returns the formatted text or a rendered diagnostic.
-pub fn fmt_source(src: &str) -> Result<String, String> {
-    fmt::format(src).map_err(|d| d.render(src))
+pub fn format_source(src: &str) -> Result<String, String> {
+    format::format(src).map_err(|d| d.render(src))
 }
 
 /// Run `phg format` over `paths` (empty ⇒ recursively under the current directory). `check` is the
 /// no-write CI mode. Returns the report and the exit code: `2` if any file failed to parse, else `1`
 /// in `--check` mode when a file would change, else `0`.
-pub fn cmd_fmt(paths: &[String], check: bool) -> (String, i64) {
+pub fn cmd_format(paths: &[String], check: bool) -> (String, i64) {
     let files = match discover(paths) {
         Ok(f) => f,
-        Err(e) => return (format!("fmt: {e}\n"), 2),
+        Err(e) => return (format!("format: {e}\n"), 2),
     };
     if files.is_empty() {
-        return ("fmt: no `*.phg` files found\n".to_string(), 0);
+        return ("format: no `*.phg` files found\n".to_string(), 0);
     }
 
     let mut out = String::new();
@@ -37,12 +37,12 @@ pub fn cmd_fmt(paths: &[String], check: bool) -> (String, i64) {
         let src = match std::fs::read_to_string(file) {
             Ok(s) => s,
             Err(e) => {
-                out.push_str(&format!("fmt: cannot read {}: {e}\n", file.display()));
+                out.push_str(&format!("format: cannot read {}: {e}\n", file.display()));
                 errors += 1;
                 continue;
             }
         };
-        match fmt::format(&src) {
+        match format::format(&src) {
             Ok(formatted) => {
                 if formatted == src {
                     continue; // already canonical
@@ -54,7 +54,10 @@ pub fn cmd_fmt(paths: &[String], check: bool) -> (String, i64) {
                     match std::fs::write(file, &formatted) {
                         Ok(()) => out.push_str(&format!("formatted {}\n", file.display())),
                         Err(e) => {
-                            out.push_str(&format!("fmt: cannot write {}: {e}\n", file.display()));
+                            out.push_str(&format!(
+                                "format: cannot write {}: {e}\n",
+                                file.display()
+                            ));
                             errors += 1;
                         }
                     }
@@ -64,7 +67,7 @@ pub fn cmd_fmt(paths: &[String], check: bool) -> (String, i64) {
                 // Parse/lex failure — leave the file untouched, report the diagnostic.
                 errors += 1;
                 out.push_str(&format!(
-                    "fmt: {} did not parse (left unchanged):\n{}\n",
+                    "format: {} did not parse (left unchanged):\n{}\n",
                     file.display(),
                     diag.render(&src)
                 ));

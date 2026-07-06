@@ -379,7 +379,7 @@ impl Parser {
                         span: sp,
                     };
                 }
-                // Postfix `?` is error propagation (M-faults Slice 2a). The lexer munches `??`/`?.`
+                // Postfix `?` is error propagation (M-faults Slice 2a). The tokenizer munches `??`/`?.`
                 // into `QuestionQuestion`/`QuestionDot`, so a lone `Question` here is unambiguous.
                 TokenKind::Question => {
                     self.advance();
@@ -602,8 +602,8 @@ impl Parser {
         }
     }
 
-    /// Turn the lexer's pre-split string segments into `StrPart`s: a `Lit` becomes a literal run
-    /// (escapes, incl. `\{`, already expanded by the lexer); an `Interp` carries raw expression
+    /// Turn the tokenizer's pre-split string segments into `StrPart`s: a `Lit` becomes a literal run
+    /// (escapes, incl. `\{`, already expanded by the tokenizer); an `Interp` carries raw expression
     /// source that is re-lexed + parsed here. An all-empty input yields a single empty literal. This
     /// is the `Str` path; `html"…"` still uses [`Self::split_interpolation`] on its flat body.
     pub(super) fn segments_to_parts(
@@ -617,7 +617,7 @@ impl Parser {
             match seg {
                 StrSeg::Lit(s) => parts.push(StrPart::Literal(s)),
                 StrSeg::Interp(src, base) => {
-                    let mut sub_tokens = crate::lexer::lex(&src).map_err(|e| {
+                    let mut sub_tokens = crate::tokenizer::lex(&src).map_err(|e| {
                         Diagnostic::new(
                             Stage::Parse,
                             format!("in interpolation: {}", e.message),
@@ -625,10 +625,10 @@ impl Parser {
                             sp.col,
                         )
                     })?;
-                    // The sub-lexer restarts spans at 0; shift every token's `start` to its absolute
+                    // The sub-tokenizer restarts spans at 0; shift every token's `start` to its absolute
                     // position in the original source so interpolated expressions carry globally-unique
                     // offsets (a span-keyed rewrite like UFCS keys on `start`). `line`/`col` keep the
-                    // sub-lexer's values, so interpolation diagnostics are unchanged.
+                    // sub-tokenizer's values, so interpolation diagnostics are unchanged.
                     for t in &mut sub_tokens {
                         t.span.start += base;
                     }
@@ -680,7 +680,7 @@ impl Parser {
                             sp.col,
                         ));
                     }
-                    let sub_tokens = crate::lexer::lex(&inner).map_err(|e| {
+                    let sub_tokens = crate::tokenizer::lex(&inner).map_err(|e| {
                         Diagnostic::new(
                             Stage::Parse,
                             format!("in interpolation: {}", e.message),

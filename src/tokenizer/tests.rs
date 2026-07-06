@@ -164,7 +164,7 @@ fn integer_overflow_is_error_not_panic() {
 #[test]
 fn float_overflow_is_error_not_panic() {
     // A literal whose integer part alone exceeds f64::MAX (~1.8e308) overflows to inf, which the
-    // lexer rejects as out-of-range (rather than panicking or yielding a non-finite value).
+    // tokenizer rejects as out-of-range (rather than panicking or yielding a non-finite value).
     let huge = format!("{}.0", "9".repeat(320));
     let err = lex(&huge).unwrap_err();
     assert!(err.message.contains("out of range"), "got: {}", err.message);
@@ -273,7 +273,7 @@ fn string_literals() {
     assert_eq!(kinds("\"hello\""), vec![lit("hello"), Eof]);
     // escapes
     assert_eq!(kinds("\"a\\nb\\t\\\"c\""), vec![lit("a\nb\t\"c"), Eof]);
-    // interpolation is now split by the lexer into literal + interp segments.
+    // interpolation is now split by the tokenizer into literal + interp segments.
     assert_eq!(
         kinds("\"Hello {name}\""),
         vec![

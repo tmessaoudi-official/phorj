@@ -1,6 +1,6 @@
 use phorj::ast::{ClassMember, Item};
-use phorj::lexer::lex;
 use phorj::parser::Parser;
+use phorj::tokenizer::lex;
 
 /// The complete sample program from the design spec (§6), verbatim.
 const SAMPLE: &str = r#"

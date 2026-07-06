@@ -1,4 +1,4 @@
-//! Token kinds + `Span` (byte range plus line/col), produced by the lexer and consumed by the
+//! Token kinds + `Span` (byte range plus line/col), produced by the tokenizer and consumed by the
 //! parser. `Span` is the single source of source-position truth threaded into
 //! `diagnostic::Diagnostic` for every front-end stage.
 
@@ -10,7 +10,7 @@ pub struct Span {
     pub col: u32,  // 1-based
 }
 
-/// A source comment, captured by the lexer's [`crate::lexer::lex_with_comments`] side-channel (the
+/// A source comment, captured by the tokenizer's [`crate::tokenizer::lex_with_comments`] side-channel (the
 /// formatter `phg format` needs comments, which the normal token stream discards). `text` is the raw
 /// comment including its `//` or `/* */` markers (trailing whitespace trimmed for a line comment).
 /// `own_line` is true when only whitespace precedes the comment on its source line (an own-line
@@ -31,8 +31,8 @@ pub enum CommentKind {
     Block,
 }
 
-/// One segment of a lexed string literal. The lexer splits interpolation (`{expr}`) from literal
-/// runs because only the lexer knows whether a `{` is a real interpolation brace or a `\{` literal
+/// One segment of a lexed string literal. The tokenizer splits interpolation (`{expr}`) from literal
+/// runs because only the tokenizer knows whether a `{` is a real interpolation brace or a `\{` literal
 /// escape — a parser-side split on a flat, escape-expanded value couldn't tell them apart (a literal
 /// `\{` and a `\\{` collapse to the same bytes). Literal runs have their escapes already expanded
 /// (`\n`, `\u{…}`, `\{`→`{`, …); interpolation segments carry the **raw** inner expression source,
@@ -44,9 +44,9 @@ pub enum StrSeg {
     /// The raw source between `{` and `}` — a Phorj expression the parser re-lexes and parses — plus
     /// the **absolute byte offset** of that inner source in the original file. The parser adds this
     /// offset to every re-lexed token's `Span.start`, so an interpolated expression's nodes carry
-    /// globally-unique source positions (a fresh sub-lexer would otherwise restart spans at 0, making
+    /// globally-unique source positions (a fresh sub-tokenizer would otherwise restart spans at 0, making
     /// two interpolations' nodes collide — fatal for any span-keyed rewrite, e.g. UFCS Slice 6). Only
-    /// `start` is offset; `line`/`col` keep the sub-lexer's values (diagnostics inside interpolation
+    /// `start` is offset; `line`/`col` keep the sub-tokenizer's values (diagnostics inside interpolation
     /// are unchanged). With an escaped char before a token the offset is approximate but still unique.
     Interp(String, usize),
 }
@@ -60,7 +60,7 @@ pub enum TokenKind {
     /// trailing zeros set the scale. Lexed when a numeric literal is immediately followed by `d` (no
     /// space, no exponent — `1e3d` is rejected).
     Decimal(i128, u8),
-    /// A string literal, pre-split into literal + interpolation segments (the lexer owns the split
+    /// A string literal, pre-split into literal + interpolation segments (the tokenizer owns the split
     /// so `\{` literal braces are unambiguous). Empty vec = the empty string `""`.
     Str(Vec<StrSeg>),
     Bytes(Vec<u8>), // `b"…"` raw byte-string literal (no interpolation)
@@ -116,7 +116,7 @@ pub enum TokenKind {
     Implements,
     Extends,
     // (`var` is a contextual keyword — it lexes as `Ident("var")`, not a dedicated token; see the
-    // lexer keyword table and `Parser::at_var_decl`.)
+    // tokenizer keyword table and `Parser::at_var_decl`.)
     Mutable,
     Static,
     With,
@@ -127,7 +127,7 @@ pub enum TokenKind {
     Catch,
     Finally,
     /// `throws T (| T)*` clause on a function signature (M-faults 2b). Distinct from `throw` (the
-    /// statement); the lexer matches the full word so `throws` never lexes as `throw` + `s`.
+    /// statement); the tokenizer matches the full word so `throws` never lexes as `throw` + `s`.
     Throws,
     // punctuation / operators
     Dot,
@@ -143,11 +143,11 @@ pub enum TokenKind {
     FatArrow,
     Pipe,
     /// A lone `|` — the union-type separator `A | B` (M-RT S4). Distinct from `|>` (`Pipe`) and
-    /// `||` (`OrOr`); the lexer's two-char dispatch claims those first, so a bare `|` falls through
+    /// `||` (`OrOr`); the tokenizer's two-char dispatch claims those first, so a bare `|` falls through
     /// to this single-char token.
     Bar,
     /// A lone `&` — the intersection-type separator `A & B` (M-RT S5). Distinct from `&&` (`AndAnd`),
-    /// which the lexer's two-char dispatch claims first, so a bare `&` falls through to this
+    /// which the tokenizer's two-char dispatch claims first, so a bare `&` falls through to this
     /// single-char token. Binds tighter than `|` in `parse_type` (`A | B & C` ≡ `A | (B & C)`).
     /// In *expression* position `&` is bitwise-AND (primitives P2); type-vs-expr is decided by the
     /// parsing context, never the token.

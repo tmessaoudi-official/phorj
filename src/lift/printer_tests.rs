@@ -7,7 +7,7 @@ use crate::parser::Parser;
 
 /// Parse Phorj source into a program (panics on lex/parse error — tests use valid input).
 fn phorj(src: &str) -> crate::ast::Program {
-    let toks = crate::lexer::lex(src).expect("lex");
+    let toks = crate::tokenizer::lex(src).expect("lex");
     Parser::new(toks).parse_program().expect("parse")
 }
 

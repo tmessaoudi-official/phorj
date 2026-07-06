@@ -114,13 +114,13 @@ fn main() {
         print!("{report}");
         exit(code as i32);
     }
-    // `fmt [--check] [path… | -]` formats source (M-fmt). Like `test`, it takes paths/flags, not a
+    // `format [--check] [path… | -]` formats source (M-fmt). Like `test`, it takes paths/flags, not a
     // single program source, so it is handled before the source-resolving run-family path.
     if cmd == "format" {
         // `phg format -` (or `--check -`) reads stdin → formats → stdout.
         if args[2..].iter().any(|a| a == "-") {
             let src = read_stdin();
-            match cli::fmt_source(&src) {
+            match cli::format_source(&src) {
                 Ok(out) => {
                     print!("{out}");
                     return;
@@ -139,7 +139,7 @@ fn main() {
                 other => paths.push(other.to_string()),
             }
         }
-        let (report, code) = cli::cmd_fmt(&paths, check);
+        let (report, code) = cli::cmd_format(&paths, check);
         print!("{report}");
         exit(code as i32);
     }
@@ -518,13 +518,13 @@ fn main() {
         };
         match cmd {
             "parse" => cli::cmd_parse(&src),
-            "tokenize" => cli::cmd_lex(&src),
+            "tokenize" => cli::cmd_tokenize(&src),
             "lift" => cli::cmd_lift(&src),
-            "disassemble" => cli::cmd_disasm(&src),
-            "benchmark" if bench_vs_php && bench_json => cli::cmd_bench_vs_php_json(&src),
-            "benchmark" if bench_vs_php => cli::cmd_bench_vs_php(&src),
-            "benchmark" if bench_json => cli::cmd_bench_json(&src),
-            "benchmark" => cli::cmd_bench(&src),
+            "disassemble" => cli::cmd_disassemble(&src),
+            "benchmark" if bench_vs_php && bench_json => cli::cmd_benchmark_vs_php_json(&src),
+            "benchmark" if bench_vs_php => cli::cmd_benchmark_vs_php(&src),
+            "benchmark" if bench_json => cli::cmd_benchmark_json(&src),
+            "benchmark" => cli::cmd_benchmark(&src),
             _ => unreachable!("validated above"),
         }
     };

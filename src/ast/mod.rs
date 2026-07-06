@@ -291,7 +291,7 @@ pub enum Expr {
     /// NOT a value cast (`as` is): `ty` names which overload of `call` (a return-overloaded free
     /// function) to select by its return type. Front-end-only — the checker resolves the member and the
     /// `rewrite_ufcs` pass replaces this node with the mangled `Expr::Call` it chose, so no backend ever
-    /// sees an `OverloadSelect` (only the `fmt` printer + AST walk handle it directly).
+    /// sees an `OverloadSelect` (only the `format` printer + AST walk handle it directly).
     OverloadSelect {
         ty: Type,
         call: Box<Expr>,
@@ -301,7 +301,7 @@ pub enum Expr {
     /// `Ok(v)` to `v`, or early-`return`s the `Err(e)` from the enclosing function (which the checker
     /// requires to return `Result<_, E'>` with `E <: E'`). Lowers on both backends to the existing
     /// variant-tag test + `return` (no new `Op`); the `throws`-call mode is added in Slice 2b. Note the
-    /// lexer munches `??`/`?.` into their own tokens, so a lone `Question` in postfix position is
+    /// tokenizer munches `??`/`?.` into their own tokens, so a lone `Question` in postfix position is
     /// unambiguously this operator.
     Propagate {
         inner: Box<Expr>,

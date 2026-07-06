@@ -35,10 +35,10 @@ use crate::ast::{
     ClassMember, Expr, Item, LambdaBody, MatchArm, Param, Program, Stmt, StrPart, Type, Visibility,
 };
 use crate::diagnostic::Diagnostic;
-use crate::lexer::lex;
 use crate::manifest::{validate_path_component, Project};
 use crate::parser::Parser;
 use crate::token::Span;
+use crate::tokenizer::lex;
 
 // Cohesion split (M-Decomp W3.2): resolution walkers + fs helpers in sibling files.
 mod fs;

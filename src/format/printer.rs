@@ -12,7 +12,7 @@
 //! clauses, function `throws`, …) is printed. The invariants `parse(fmt(x)) ≡ parse(x)` and
 //! `fmt(fmt(x)) == fmt(x)` are asserted by the round-trip tests.
 //!
-//! Comments (which the token stream discards) are carried in via the lexer's `lex_with_comments`
+//! Comments (which the token stream discards) are carried in via the tokenizer's `lex_with_comments`
 //! side-channel (F1) and interleaved by source span (F2b).
 
 use super::doc::{self, Doc};
@@ -24,7 +24,7 @@ use crate::ast::{
 use crate::token::Comment;
 
 /// Format a whole program (already parsed) to canonical `.phg` source, interleaving `comments`
-/// (from [`crate::lexer::lex_with_comments`]) by source position. `Err` only for an AST a parsed
+/// (from [`crate::tokenizer::lex_with_comments`]) by source position. `Err` only for an AST a parsed
 /// program cannot contain (see the module docs).
 pub fn format_program(p: &Program, comments: &[Comment]) -> Result<String, String> {
     let mut pr = Printer {
@@ -1610,7 +1610,7 @@ fn stmt_start(s: &Stmt) -> usize {
     }
 }
 
-/// Escape the printed text of an interpolation hole's expression so the lexer re-captures it intact:
+/// Escape the printed text of an interpolation hole's expression so the tokenizer re-captures it intact:
 /// `\` → `\\`, `"` → `\"` (else it closes the surrounding string), `}` → `\}` (else it closes the
 /// hole early). A `{` needs no escape — inside an open interpolation it does not start a nested hole.
 fn escape_interp(s: &str) -> String {

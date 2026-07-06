@@ -1,4 +1,4 @@
-//! Recursive-descent + Pratt parser: turns the lexer's token stream into the AST.
+//! Recursive-descent + Pratt parser: turns the tokenizer's token stream into the AST.
 
 use crate::ast::{
     Attribute, BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FieldPat,
@@ -66,7 +66,7 @@ mod types;
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        // The lexer always terminates the stream with Eof, so `tokens` is non-empty.
+        // The tokenizer always terminates the stream with Eof, so `tokens` is non-empty.
         Parser {
             tokens,
             pos: 0,

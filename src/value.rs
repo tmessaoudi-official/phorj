@@ -1331,7 +1331,7 @@ pub fn fmt_decimal(unscaled: i128, scale: u8) -> String {
 }
 
 /// Parse the `decimal` literal grammar at runtime for `Decimal.of(string)` (M-NUM S1) — the SAME
-/// grammar the lexer accepts for a `…d` literal, returning `(unscaled, scale)` or `None` on a
+/// grammar the tokenizer accepts for a `…d` literal, returning `(unscaled, scale)` or `None` on a
 /// malformed string or i128 overflow (so `Decimal.of` is `decimal?`). Grammar: optional sign, then
 /// digits with an optional single fractional part (`12`, `12.34`, `.5`, `-0.50`); NO exponent, NO
 /// underscores (a runtime string is exact, unlike a source literal), NO surrounding whitespace. The
@@ -1355,7 +1355,7 @@ pub fn decimal_of(s: &str) -> Option<(i128, u8)> {
         None => (rest, None),
     };
     // At least one digit overall; each part must be all ASCII digits (an empty integer part like `.5`
-    // is allowed, but a trailing `12.` with an empty fractional part is not — matches the lexer, which
+    // is allowed, but a trailing `12.` with an empty fractional part is not — matches the tokenizer, which
     // requires a digit after the dot to treat it as a fraction).
     if let Some(f) = frac_part {
         if f.is_empty() || !f.bytes().all(|c| c.is_ascii_digit()) {

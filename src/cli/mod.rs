@@ -7,22 +7,24 @@ use crate::ast::Program;
 use crate::chunk::{BytecodeProgram, Chunk, Op};
 use crate::compiler::compile_with;
 use crate::interpreter::{interpret, interpret_main};
-use crate::lexer::lex;
 use crate::parser::Parser;
+use crate::tokenizer::lex;
 use crate::vm::Vm;
 
 // Self-contained command groups (M-Decomp W1.2): the `explain` diagnostic-code table and the
 // `bench` profiling suite. Re-exported so callers keep referring to `cli::cmd_explain` etc.
-mod bench;
+mod benchmark;
 mod debug_repl;
 mod explain;
-mod fmt_cmd;
+mod format_cmd;
 mod rewrite_new;
 mod test_runner;
-pub use bench::{cmd_bench, cmd_bench_json, cmd_bench_vs_php, cmd_bench_vs_php_json};
+pub use benchmark::{
+    cmd_benchmark, cmd_benchmark_json, cmd_benchmark_vs_php, cmd_benchmark_vs_php_json,
+};
 pub use debug_repl::run_repl;
 pub use explain::{cmd_explain, explain_text};
-pub use fmt_cmd::{cmd_fmt, fmt_source};
+pub use format_cmd::{cmd_format, format_source};
 pub use rewrite_new::cmd_rewrite_new;
 pub use test_runner::cmd_test;
 
@@ -309,7 +311,7 @@ pub fn resolve_source_and_args(rest: &[String]) -> Option<(SourceSpec, Vec<Strin
     Some((spec, args))
 }
 
-/// Run a pipeline closure on a worker thread with a large (256 MB) stack. The lexer is iterative,
+/// Run a pipeline closure on a worker thread with a large (256 MB) stack. The tokenizer is iterative,
 /// but the parser, checker, compiler, and tree-walking interpreter all recurse on the native stack
 /// in proportion to expression/call nesting. A generous, *known* stack makes the explicit depth
 /// limits (`limits::MAX_NEST_DEPTH`, `limits::MAX_CALL_DEPTH`) — not Rust's ambient frame budget —
@@ -1509,7 +1511,7 @@ pub fn cmd_parse(src: &str) -> Result<String, String> {
 }
 
 /// `lex`: dump the token stream.
-pub fn cmd_lex(src: &str) -> Result<String, String> {
+pub fn cmd_tokenize(src: &str) -> Result<String, String> {
     let tokens = lex(src).map_err(|e| e.to_string())?;
     let mut out = String::new();
     for t in tokens {
@@ -1543,7 +1545,7 @@ pub fn cmd_transpile(src: &str) -> Result<String, String> {
 /// `Op` variant appears here automatically with no second match surface to drift out of lockstep
 /// (see memory `op-variant-match-coupling`); the per-op annotation is display-only with a `_`
 /// fall-through, so an un-annotated new op simply shows no comment rather than failing to compile.
-pub fn cmd_disasm(src: &str) -> Result<String, String> {
+pub fn cmd_disassemble(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let (prog, reified) = parse_checked_reified(src)?;
         let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;

@@ -1,6 +1,6 @@
 //! Symbol resolution for LSP hover + go-to-definition (Item D). A lightweight, robust v1: rather than
 //! a full position→type index over the checker, it finds the **identifier token** at the cursor (via
-//! the lexer's spans) and resolves that *name* to a top-level declaration (function / class / enum /
+//! the tokenizer's spans) and resolves that *name* to a top-level declaration (function / class / enum /
 //! interface / trait / type alias). This covers the high-value cases — jump to / hover a named symbol
 //! — without instrumenting the checker. Locals and field-vs-name collisions are a v2 refinement.
 //!
@@ -9,8 +9,8 @@
 
 use super::scope;
 use crate::ast::{ClassMember, Item, Program};
-use crate::lexer::lex;
 use crate::token::{Span, TokenKind};
+use crate::tokenizer::lex;
 
 /// Convert an LSP 0-based `(line, character)` to a byte offset into `text`. `character` is counted in
 /// Unicode scalars (correct for ASCII/BMP code; astral-plane columns may differ from a UTF-16 client,

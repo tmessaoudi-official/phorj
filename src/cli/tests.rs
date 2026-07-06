@@ -1,6 +1,6 @@
 use super::*;
 // bench_report helpers moved to the bench submodule (M-Decomp W1.2); the timing tests call them.
-use super::bench::{bench_report, bench_report_opts};
+use super::benchmark::{bench_report, bench_report_opts};
 
 /// Prepend the reserved `package Main;` (M5 S1: every file is packaged, never inferred) unless
 /// already declared, so the CLI command tests need no per-case package boilerplate. The segment
@@ -187,7 +187,7 @@ fn parse_dumps_ast() {
 
 #[test]
 fn lex_dumps_tokens() {
-    let out = cmd_lex(r#"function main(): void {}"#).unwrap();
+    let out = cmd_tokenize(r#"function main(): void {}"#).unwrap();
     assert!(out.contains("@ 1:1"), "{out}");
 }
 
@@ -253,7 +253,7 @@ fn runvm_runtime_error_carries_source_line() {
     // and renders `runtime error at 3: …`, while the canonical body ("division by zero")
     // stays intact so the differential `agree_err` oracle still classifies it identically.
     // NB: the division is *not* inside string interpolation — `split_interpolation`
-    // re-lexes interpolated sub-expressions with a fresh lexer that resets to line 1, so a
+    // re-lexes interpolated sub-expressions with a fresh tokenizer that resets to line 1, so a
     // fault inside `"{…}"` reports line 1 (a pre-existing interpolation-position limitation,
     // orthogonal to this task — see the M2 P3.5 roadmap decisions log).
     let src = wp("import Core.Output; function main(): void {\n    int z = 0;\n    int x = 1 / z;\n    Output.printLine(\"{x}\");\n}");
@@ -346,7 +346,7 @@ function main(): void { Output.printLine("hi"); }"#);
 fn disasm_dumps_bytecode_with_mnemonics_and_annotations() {
     // The disassembler names the function, prints the type-specialized int-add op, the native
     // call op (the migrated former `Print`), and annotates a constant load with its value.
-    let out = cmd_disasm(&wp(
+    let out = cmd_disassemble(&wp(
         r#"import Core.Output; function main(): void { int x = 1 + 2; Output.printLine("{x}"); }"#,
     ))
     .expect("disasm");
@@ -529,7 +529,7 @@ fn explain_covers_lambda_this_code() {
 #[test]
 fn disasm_propagates_type_error() {
     // A program that fails the gate can't be disassembled — the type error surfaces instead.
-    let err = cmd_disasm(&wp(r#"function main(): void { int x = "no"; }"#)).unwrap_err();
+    let err = cmd_disassemble(&wp(r#"function main(): void { int x = "no"; }"#)).unwrap_err();
     assert!(err.contains("type error"), "{err}");
 }
 
@@ -542,8 +542,8 @@ fn bench_propagates_type_error_without_timing() {
 
 #[test]
 fn bench_default_entry_uses_101_samples() {
-    // The public entry runs the default-N path end to end (smoke test of `cmd_bench`).
-    let out = cmd_bench(&wp(r#"import Core.Output;
+    // The public entry runs the default-N path end to end (smoke test of `cmd_benchmark`).
+    let out = cmd_benchmark(&wp(r#"import Core.Output;
 function main(): void { Output.printLine("hi"); }"#))
     .expect("bench");
     assert!(out.starts_with("phg benchmark — median of 101"), "{out}");

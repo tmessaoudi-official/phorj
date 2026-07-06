@@ -26,7 +26,7 @@ impl Parser {
             TokenKind::Str(segs) => {
                 self.advance();
                 // A string pattern must be a plain literal — interpolation makes no sense in a
-                // pattern. The lexer pre-split the literal; require exactly one (or zero, the empty
+                // pattern. The tokenizer pre-split the literal; require exactly one (or zero, the empty
                 // string) literal segment.
                 use crate::token::StrSeg;
                 match segs.as_slice() {

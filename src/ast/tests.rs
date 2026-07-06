@@ -202,7 +202,7 @@ fn class_field_layout_unions_promoted_explicit_inherited_and_trait_fields() {
         open class Base { constructor(public int id) {} }\n\
         class Derived extends Base { use Timestamped; int note = 0; constructor(public int id, public string name) {} function getName(): string { return this.name; } }\n\
         function main(): void {}";
-    let tokens = crate::lexer::lex(src).expect("lex");
+    let tokens = crate::tokenizer::lex(src).expect("lex");
     let prog = crate::parser::Parser::new(tokens)
         .parse_program()
         .expect("parse");

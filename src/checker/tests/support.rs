@@ -2,8 +2,8 @@
 //! by-feature test file needs only `use super::support::*;`.
 
 pub(super) use super::super::*;
-use crate::lexer::lex;
 use crate::parser::Parser;
+use crate::tokenizer::lex;
 
 /// Lex + parse `src` into a Program, panicking on lex/parse failure (tests here only care
 /// about type-checking). Auto-prepends the reserved `package Main;` (M5 S1, line-preserving)

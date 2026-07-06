@@ -16,7 +16,7 @@ use std::process::Command;
 /// `package Main;` if absent. Used to test checker rejections without running a backend.
 fn check_errs(src: &str) -> Vec<phorj::diagnostic::Diagnostic> {
     let src = with_pkg(src);
-    let tokens = phorj::lexer::lex(&src).expect("lex ok");
+    let tokens = phorj::tokenizer::lex(&src).expect("lex ok");
     let prog = phorj::parser::Parser::new(tokens)
         .parse_program()
         .expect("parse ok");

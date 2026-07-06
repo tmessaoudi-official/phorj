@@ -6,7 +6,7 @@
 //! the [`Stage`] they came from and rendered uniformly. This single shape is also the seam a
 //! future `--json` / LSP layer hangs off (one place to add a serializer).
 //!
-//! Position is `line`/`col` (1-based; `0` means "unknown"), not the lexer's full
+//! Position is `line`/`col` (1-based; `0` means "unknown"), not the tokenizer's full
 //! [`crate::token::Span`] — no error renderer consumes the span's byte offsets, and every
 //! construction site already has a line/col in hand.
 

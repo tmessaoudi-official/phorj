@@ -18,23 +18,23 @@ const BENCH_DEFAULT_ITERS: usize = 101;
 /// speedup verdict. Establishes the baseline that turns every later perf claim (Copy-on-`Op`,
 /// deep-copy elimination, hot-path micro-perf) from Speculative into Verified — no perf-motivated
 /// change should ship without a before/after number from this harness.
-pub fn cmd_bench(src: &str) -> Result<String, String> {
+pub fn cmd_benchmark(src: &str) -> Result<String, String> {
     bench_report(src, BENCH_DEFAULT_ITERS)
 }
 
 /// `bench --vs-php`: the standard bench report plus a transpile-and-time-PHP comparison (Track D).
-pub fn cmd_bench_vs_php(src: &str) -> Result<String, String> {
+pub fn cmd_benchmark_vs_php(src: &str) -> Result<String, String> {
     bench_report_opts(src, BENCH_DEFAULT_ITERS, true, false)
 }
 
 /// `bench --json`: the same measurements as a machine-readable JSON object (for cross-language
 /// diffing / CI), instead of the human report (M-DOGFOOD W9).
-pub fn cmd_bench_json(src: &str) -> Result<String, String> {
+pub fn cmd_benchmark_json(src: &str) -> Result<String, String> {
     bench_report_opts(src, BENCH_DEFAULT_ITERS, false, true)
 }
 
 /// `bench --vs-php --json`: JSON output including the PHP median (M-DOGFOOD W9).
-pub fn cmd_bench_vs_php_json(src: &str) -> Result<String, String> {
+pub fn cmd_benchmark_vs_php_json(src: &str) -> Result<String, String> {
     bench_report_opts(src, BENCH_DEFAULT_ITERS, true, true)
 }
 
@@ -220,7 +220,7 @@ fn fmt_kb(kb: Option<u64>) -> String {
     }
 }
 
-/// The bench engine (separated from [`cmd_bench`] so tests can pass a small `iters`). Runs on the
+/// The bench engine (separated from [`cmd_benchmark`] so tests can pass a small `iters`). Runs on the
 /// deep-stack worker like every other pipeline command.
 pub(super) fn bench_report(src: &str, iters: usize) -> Result<String, String> {
     bench_report_opts(src, iters, false, false)

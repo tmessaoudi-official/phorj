@@ -5,7 +5,7 @@ pub(super) use super::super::*;
 pub(super) use crate::ast::{
     ClassMember, Expr, Item, Modifier, Pattern, Stmt, StrPart, Type, Visibility,
 };
-pub(super) use crate::lexer::lex;
+pub(super) use crate::tokenizer::lex;
 
 /// Helper: lex `src` and build a parser over the tokens.
 pub(super) fn parser(src: &str) -> Parser {
