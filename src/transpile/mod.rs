@@ -433,12 +433,83 @@ fn last_segment(name: &str) -> &str {
 /// never a PHP class name, so program stdout is unaffected. Comparison is case-insensitive (PHP class
 /// names are). `array`/`callable`/`list` ARE rejected as class names by PHP 8.5 (verified) and so are
 /// mangled; `enum` is the one type-ish word PHP still accepts as a class name, left untouched.
+///
+/// Three groups (all verified rejected as a `class` name vs PHP 8.5.8):
+///   1. **value-type words** (`int`/`float`/… — the original set);
+///   2. **keyword-as-class-name words** — reserved words / language constructs PHP forbids in a class
+///      position (`empty`/`echo`/`print`/`match`/`fn`/… — e.g. a variant `Empty` ⇒ `final class Empty`
+///      is `Parse error: unexpected token "empty"`). This group closes the F-m byte-identity break
+///      (`run ≡ run --tree-walker` succeeded while the transpiled PHP failed to parse);
+///   3. **always-present PHP builtin class/interface names** (`Exception`/`Error`/`Closure`/… — a
+///      variant `Exception` ⇒ `final class Exception` is a "cannot redeclare class" fatal). This group
+///      is the always-loaded engine core (no extension required); the *unbounded* extension-loaded tail
+///      (`PDO`, `SplStack`, …) is not enumerable and stays caught by the transpile→real-PHP oracle —
+///      an honest, bounded reduction, acceptable because mangling is invisible and free.
 fn php_variant_name(variant: &str) -> String {
     // The trailing segment is the actual PHP class name (`\Ns\Int` ⇒ `Int`); mangle only that.
     let leaf = last_segment(variant);
     const RESERVED: &[&str] = &[
-        "int", "float", "bool", "string", "true", "false", "null", "void", "iterable", "object",
-        "mixed", "never", "self", "parent", "static", "array", "list", "callable",
+        // 1. value-type words
+        "int",
+        "float",
+        "bool",
+        "string",
+        "true",
+        "false",
+        "null",
+        "void",
+        "iterable",
+        "object",
+        "mixed",
+        "never",
+        "self",
+        "parent",
+        "static",
+        "array",
+        "list",
+        "callable",
+        // 2. keyword-as-class-name words (PHP rejects these in a class position)
+        "empty",
+        "echo",
+        "print",
+        "unset",
+        "isset",
+        "eval",
+        "exit",
+        "die",
+        "clone",
+        "goto",
+        "and",
+        "or",
+        "xor",
+        "yield",
+        "use",
+        "namespace",
+        "switch",
+        "case",
+        "default",
+        "foreach",
+        "match",
+        "fn",
+        "readonly",
+        // 3. always-present PHP builtin class/interface names (engine core, no extension needed)
+        "exception",
+        "error",
+        "throwable",
+        "typeerror",
+        "valueerror",
+        "parseerror",
+        "arithmeticerror",
+        "divisionbyzeroerror",
+        "argumentcounterror",
+        "closure",
+        "generator",
+        "stdclass",
+        "stringable",
+        "countable",
+        "iterator",
+        "traversable",
+        "arrayaccess",
     ];
     if RESERVED.contains(&leaf.to_ascii_lowercase().as_str()) {
         format!("{variant}_")

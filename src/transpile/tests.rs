@@ -401,6 +401,27 @@ fn reserved_enum_variant_names_are_mangled_in_php() {
     assert!(out.contains("final class Str extends Tok {"), "{out}");
 }
 
+// Slice B (F-m byte-identity fix): the keyword-as-class-name words (`empty`/`echo`/`match`/…) and the
+// always-present PHP builtin class names (`Exception`/`Closure`/`Generator`/…) are ALSO reserved as PHP
+// class names, so a variant named after one must be mangled identically. Previously only the value-type
+// words were covered, so `enum { Empty }` transpiled to `final class Empty extends …` — a PHP parse
+// error — while `run`/`run --tree-walker` succeeded: an Invariant-1 (byte-identity spine) break.
+const RESERVED_ENUM_KW: &str =
+    "enum Kw { Empty(), Echo(), Match(), Exception(), Closure(), Generator(), Plain(int v) }";
+
+#[test]
+fn reserved_keyword_and_builtin_variant_names_are_mangled_in_php() {
+    let out = php(RESERVED_ENUM_KW);
+    assert!(out.contains("final class Empty_ extends Kw {"), "{out}");
+    assert!(out.contains("final class Echo_ extends Kw {"), "{out}");
+    assert!(out.contains("final class Match_ extends Kw {"), "{out}");
+    assert!(out.contains("final class Exception_ extends Kw {"), "{out}");
+    assert!(out.contains("final class Closure_ extends Kw {"), "{out}");
+    assert!(out.contains("final class Generator_ extends Kw {"), "{out}");
+    // A non-reserved variant name is left untouched.
+    assert!(out.contains("final class Plain extends Kw {"), "{out}");
+}
+
 #[test]
 fn reserved_variant_construction_and_instanceof_are_mangled() {
     let src = format!(

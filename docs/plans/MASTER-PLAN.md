@@ -1046,6 +1046,41 @@ shadowing (redeclare same-name enum ⇒ Core injection skipped) ships.
   transpile to PHP attributes where faithful, else a native reflection table (mirrors Core.Reflect's
   ClassTables pattern). Also expands attribute targets beyond free functions.
 
+- **DEC-200 — top-level type named after a PHP-reserved-as-class word (PENDING adjudication, surfaced 2026-07-06).**
+  Not yet ruled — **surface to the developer via AskUserQuestion before building** (§15). The enum-*variant*
+  leg of this hazard is CLOSED (invisible mangle, `examples/guide/enum-reserved-variants.phg`); this is the
+  remaining top-level leg. The checker rejects a top-level `class`/`enum`/`interface`/`trait` named after the
+  reserved words **in its guard lists** (`class int`/`enum Empty` → `E-RESERVED-NAME`) but MISSES two groups
+  PHP also rejects as class names (verified vs PHP 8.5.8): (a) a keyword subset outside the guard (e.g.
+  `Fn`/`Match`/`Static`/`Null`/`True`/`False` — derive the full set empirically at implementation); and
+  (b) all PHP *builtin class names* (`Exception`/`Error`/`ParseError`/`Closure`/…). Both transpile to
+  invalid PHP while `run`/`run --tree-walker` succeed — a G-1.1 byte-identity break. (The three options
+  below fold over both groups unchanged.)
+
+  Minimal current-syntax failing program (embed in the question):
+  ```phorj
+  package Main;
+  import Core.Output;
+  enum ParseError { Missing, Bad(string s) }        // ⇒ PHP `abstract class ParseError` → "cannot redeclare class"
+  function main(): void { Output.printLine("ok"); }  // run/run --tree-walker print "ok"; transpiled PHP fatals
+  ```
+
+  Three-way fork (options, recommended first):
+  - **(A) Reject with `E-RESERVED-NAME`** *(recommended)* — extend `is_php_reserved_symbol_name` with the
+    always-present builtin-class core. Consistent with the existing keyword rejection, legible, no-surprises
+    (the user renames `ParseError`→`ParseFault`). After-state: a clean compile-time error at the declaration.
+  - **(B) Mangle invisibly** (like the injected `RoundingMode`→`RoundingMode_`) — `class Exception` emits
+    `class Exception_`. Zero user friction, but a silent rename of a user-chosen symbol (surprising on interop;
+    cuts against legibility).
+  - **(C) Namespace all output** (`\Main\Exception`) — the structural fix: `package Main` emits a real PHP
+    `namespace Main;` so a user `Exception` is `\Main\Exception`, no global collision, name preserved. Largest
+    blast radius (touches all emission), but removes the whole hazard class (variants included) rather than
+    guarding names. 
+
+  Caveat for all three: the PHP builtin-class space is extension-dependent (**unbounded**) — (A)/(B) cover
+  the always-loaded engine core with the tail oracle-caught; only (C) is exhaustive. Guard: `is_php_reserved_symbol_name`
+  (`src/checker/common.rs:357`); the variant mangle single-source is `php_variant_name` (`src/transpile/mod.rs`).
+
 ### 13.2 · Wave A slice-2 adjudications (surfaced + ruled 2026-07-04)
 
 Surfaced per §15 (a genuine fork, don't self-rule) during the marathon; **ruled interactively by the

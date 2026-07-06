@@ -1,11 +1,13 @@
 // Enum variants named after PHP-reserved words.
 //
-// Phorj does not reserve `int`/`float`/`bool`/`null` as identifiers, so they make perfectly good
-// enum *variant* names. PHP, however, reserves them as *class* names — and an enum variant transpiles
-// to `final class <Variant> extends <Enum>`. The transpiler resolves this invisibly by mangling a
-// reserved variant's PHP class name (`Int` → `Int_`), at the declaration, construction, and
-// `instanceof` sites alike. This is transpile-only: both backends address a variant by its Phorj
-// name, so the program behaves and prints identically on all three backends.
+// Phorj does not reserve `int`/`float`/`bool`/`null` — nor language keywords like `empty`/`match`, nor
+// PHP builtin class names like `Exception`/`Closure` — as identifiers, so they all make perfectly good
+// enum *variant* names. PHP, however, reserves every one of them as a *class* name, and an enum variant
+// transpiles to `final class <Variant> extends <Enum>`. The transpiler resolves this invisibly by
+// mangling a reserved variant's PHP class name (`Int` → `Int_`, `Empty` → `Empty_`,
+// `Exception` → `Exception_`), at the declaration, construction, and `instanceof` sites alike. This is
+// transpile-only: both backends address a variant by its Phorj name, so the program behaves and prints
+// identically on all three backends.
 package Main;
 
 import Core.Output;
@@ -23,6 +25,20 @@ function describe(Node n): string {
     };
 }
 
+// A second group: `Empty`/`Match` are PHP *keywords* (illegal as a class name → parse error without
+// mangling); `Exception`/`Closure` are PHP *builtin classes* (illegal to redeclare → fatal without
+// mangling). Each is a fine Phorj variant name, mangled invisibly on the PHP side.
+enum Tok { Empty, Match(string pat), Exception(string msg), Closure(int arity) }
+
+function render(Tok t): string {
+    return match (t) {
+        Empty() => "empty",
+        Match(p) => "match:{p}",
+        Exception(m) => "exc:{m}",
+        Closure(a) => "closure/{a}"
+    };
+}
+
 function main(): void {
     Output.printLine(describe(new Null()));
     // null
@@ -33,5 +49,13 @@ function main(): void {
     Output.printLine(describe(new Float(3.5)));
     // float:3.5
     Output.printLine(describe(new Str("hi")));
+    // str:hi
+    Output.printLine(render(new Empty()));
+    // empty
+    Output.printLine(render(new Match("a*")));
+    // match:a*
+    Output.printLine(render(new Exception("boom")));
+    // exc:boom
+    Output.printLine(render(new Closure(2)));
 }
-// str:hi
+// closure/2

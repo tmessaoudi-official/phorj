@@ -58,16 +58,29 @@ not a panic:
   collision); the built-in type words are already rejected by the alias arm. **Deferred corner:** a
   *method* named after a word PHP forbids as a method (none in the function/class sets are — PHP
   semi-reserves allow method names) is not specially handled; no known case.
-  **Two open gaps in this guard (byte-identity break, found Wave B B-1, fix scoped to a later F-m pass;
-  not introduced by B-1).** Both make `run`/`runvm` succeed while the transpiled PHP fails to parse or
-  load — a G-1.1-class break, disclosed here per G-7: (1) **enum *variant* names are not guarded** —
-  `reserved_symbol_decl` returns only the top-level item name, so a variant `Empty`/`List`/`Echo`
-  (which transpiles to `final class Empty extends …`) collides with the PHP keyword uncaught; (2) the
-  guard covers reserved *keywords* only, **not PHP *builtin class names*** (`ParseError`, `Error`,
-  `Exception`, `Closure`, `Generator`, `stdClass`, …) — an `enum ParseError`/`class Error` transpiles
-  to `abstract class ParseError` and PHP rejects it with "cannot redeclare class". Until fixed, avoid
-  naming an enum/enum-variant/class after a PHP keyword or builtin class (the shipped `examples/guide/
-  core-result.phg` sidesteps both — `ParseFault` + `Missing`, not `ParseError` + `Empty`).
+  **Guard status (F-m, updated 2026-07-06).** (1) **Enum *variant* names — CLOSED.** A variant
+  transpiles to `final class <V> extends <Enum>`, so a variant named after a PHP-reserved word would
+  emit invalid PHP while `run`/`run --tree-walker` succeeded (a G-1.1 byte-identity break). This is
+  fixed by *invisible mangling* (not rejection) in `php_variant_name` (`src/transpile/mod.rs`), which
+  now covers all three groups verified-rejected vs PHP 8.5.8 — value-type words (`Int`→`Int_`),
+  language keywords (`Empty`→`Empty_`, `Match`→`Match_`), and always-present builtin class names
+  (`Exception`→`Exception_`, `Closure`→`Closure_`). Transpile-only (the Rust backends address a variant
+  by its Phorj name), so `run ≡ run --tree-walker ≡ real PHP` (`examples/guide/enum-reserved-variants.phg`).
+  (2) **Top-level type names after a PHP-reserved-as-class word — OPEN, deferred to adjudication.** The
+  checker guard `is_php_reserved_symbol_name` rejects a top-level `class`/`enum`/`interface`/`trait`
+  named after the reserved words **in its lists** (`Empty`/`Echo`/`Print`/`int` → `E-RESERVED-NAME`),
+  but **misses two groups that PHP also rejects as class names** (verified vs PHP 8.5.8): (a) a keyword
+  subset outside the guard (e.g. `Fn`/`Match`/`Static`/`Null`/`True`/`False` — derive the full set
+  empirically at implementation); and (b) all PHP *builtin class names*
+  (`enum ParseError`/`class Exception` → `abstract class …`, which PHP rejects "cannot redeclare
+  class"). For both, `run`/`run --tree-walker` succeed while the transpiled PHP fails to parse/load.
+  Unlike variants, the fix is user-visible and three-way (reject like the guarded keywords / mangle
+  like the injected `RoundingMode` / namespace all output as `\Main\…`), so it is a **PENDING
+  adjudication question** (DEC-200, MASTER-PLAN §13.1.1), not an autonomous ruling. The builtin-class
+  space is also extension-dependent (unbounded); any guard/mangle covers the always-loaded engine core,
+  with the tail oracle-caught. Until ruled, avoid naming a top-level `class`/`enum` after a PHP builtin
+  class or a non-guarded reserved keyword (e.g. `Fn`/`Match`/`Static`/`Null`/`True`/`False`)
+  (`examples/guide/core-result.phg` sidesteps it — `ParseFault`, not `ParseError`).
 
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
