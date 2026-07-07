@@ -5,6 +5,50 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] PROGRESS: **b2 SHIPPED (pending commit) — green.** `compile_and_run` now compiles a
+  multi-function module (`collect_functions` BFS + transitive reachable-only eligibility); every
+  compiled fn is `extern "C" fn(*mut JitCtx, i64 slot_base) -> i64`; `Op::Call` lowers to
+  `rt_depth_check`(→`"stack overflow"` at MAX_CALL_DEPTH, oracle-checked vs VM) → `rt_frame_base` →
+  direct native call (self-recursion resolves at finalize) → status-propagation. `ctx.result` removed;
+  uniform `rt_return`(truncate+push) mirrors `vm::do_return`. **14 JIT tests** (`--features jit`; +5:
+  recursive fib, cross-fn call, self-recursive-AND-cross-call, callee-fault propagation, deep-recursion
+  overflow on a 64MB thread) — that is the ENTIRE empirical b2 coverage (`cargo test --workspace` does
+  NOT compile the `jit` feature, so the 1511 lib + 144 differential gate proves only NO REGRESSION
+  outside the feature-gated `src/jit/`, not b2 itself). clippy(jit)/fmt/release all green.
+  ⚠ **b3 MUST-VERIFY FIRST (advisor 6C, spine hazard):** JIT faults carry only a bare kernel string —
+  NO source-line/position — whereas the VM/interpreter track `ip`→line per frame and the differential
+  compares FULL RENDERED output. The moment b3 wires `phg run`, a JITted fault whose rendered form
+  lacks the VM's line annotation is a byte-identity MISMATCH no b2 unit test can see (b2 asserts with a
+  `.contains()` substring check, which papers over exactly this). Before wiring: check what phorj's
+  rendered runtime fault includes and design b3's fault path to reproduce it (or restrict JIT
+  eligibility to fault-free/position-independent paths). This is the "green-gate-is-false-green,
+  advisor-review-catches-it" class the fresh-context norm exists for.
+  NEXT = **b3** (spine-sensitive: eligibility predicate + wire `phg run` VM-fallback + JIT-hitting
+  differential examples + honest fib measure vs release php+JIT). P3 note: `"stack overflow"` is a bare
+  literal across vm/closure/interpreter — NOT single-sourced in value.rs; a shared const would be a
+  small follow-up (the b2 test guards drift meanwhile).
+- [2026-07-08] EXECUTION (autonomous marathon, developer "100% autonomous through the night"):
+  **b2 concrete design — native→native calls + self-recursion.** `compile_and_run` goes from
+  single-function to a **multi-function module**: BFS the call graph over `Op::Call(idx)` from the
+  entry, transitive-eligibility-check the whole set (any op outside the subset → `Unsupported`, VM
+  fallback), declare a Cranelift FuncId per phorj function, define every body (bodies cross-reference
+  FuncIds), `finalize_definitions` ONCE, run the entry. Self-recursion = a native `call` to the
+  function's own FuncId, resolved at finalize. **Signature change:** every compiled function becomes
+  `extern "C" fn(*mut JitCtx, slot_base: i64) -> i64` (status). Frame-relative helpers gain slot_base:
+  `rt_get_local(ctx,sb,slot)`/`rt_set_local(ctx,sb,slot)`. **Return convention (uniform, replaces b1's
+  `ctx.result`):** `rt_return(ctx,sb)` pops rv, `depth-=1`, `stack.truncate(sb)`, `push(rv)` — mirrors
+  `vm::do_return` exactly, so a nested call's net stack effect is (pop arity args, push 1 rv); the entry
+  result is then `ctx.stack.pop()`. `ctx.result` field REMOVED; `ctx.depth: usize` ADDED (seeded 1 =
+  entry frame). **`Op::Call(idx)` codegen:** `sb = rt_precall(ctx, arity)` → checks `depth>=MAX_CALL_DEPTH`
+  (=4096) → records `"stack overflow"` + returns `-1` sentinel, else `depth+=1` and returns
+  `stack.len()-arity`; compiled code: `brif sb<0 → fault-exit`; else `status = callee(ctx, sb)`;
+  `brif status!=0 → fault-exit`; continue (rv on stack top). Mirrors `vm::exec Op::Call` (depth check
+  BEFORE push) → the `"stack overflow"` fault is byte-identical. **Native-stack safety:** 4096 native
+  frames must not blow the OS stack before the depth counter fires — happy-path tests recurse shallow;
+  the overflow test runs on an explicit 64MB `thread::Builder` and asserts INSIDE the closure (`Value`
+  holds `Rc` = not `Send`, so the JitRun can't cross the thread boundary — extract a bool/String there).
+  Subset ADDS only `Op::Call(idx)` (direct static call); `CallNative`/`CallOverload`/`CallValue`/`CallMethod`
+  stay Unsupported. b2 stays UNWIRED (test-only); b3 wires `phg run` + honest fib measure.
 - [2026-07-08] CHECKPOINT (developer, ask-human): **b1 committed `9b7f597` (green, unpushed); b2
   deferred to a FRESH session** per the project norm "spine-sensitive slices → fresh context" (b2 =
   native→native calls + self-recursion; b3 = wire `phg run`, both spine-sensitive). Resume pointer:

@@ -1,8 +1,9 @@
 //! Slice-1 JIT tests (run under `--features jit`). They prove the codegen substrate end-to-end: a
-//! pure-int leaf function compiles to native code and produces the SAME value the VM oracle does, a
-//! kernel fault surfaces with the SAME canonical string, and anything outside the subset is
-//! default-denied. Byte-identity-under-`phg run` is the *next* (wiring) slice — these establish the
-//! substrate the wiring rides on.
+//! pure-int function (leaf or recursive) compiles to native code and produces the SAME value the VM
+//! oracle does, a kernel fault surfaces with the SAME canonical string, calls compose across the
+//! shared value stack, deep recursion faults with the VM's `"stack overflow"` at the same depth, and
+//! anything outside the subset is default-denied. Byte-identity-under-`phg run` is the *next* (wiring)
+//! slice — these establish the substrate the wiring rides on.
 
 use super::{compile_and_run, JitError, JitRun};
 use crate::chunk::BytecodeProgram;
@@ -248,5 +249,142 @@ fn non_int_function_is_default_denied() {
             Err(JitError::Unsupported(_))
         ),
         "a function outside the subset must be Unsupported, not compiled"
+    );
+}
+
+// --- slice 1(b2): native→native calls + self-recursion ---
+
+#[test]
+fn jits_recursive_fib_matches_vm_oracle() {
+    // The headline b2 case: `fib` calls itself twice (`Call(self)` at two ips), so the whole thing
+    // rides the native self-call path (FuncId resolved at finalize) + the shared value stack. Every
+    // value is checked against the VM oracle across the base-case edge (n < 2) and the recursive one.
+    let program = compile_source(
+        "package Main;\n\
+         function fib(int n) -> int {\n\
+           if (n < 2) { return n; }\n\
+           return fib(n - 1) + fib(n - 2);\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "fib");
+    for n in [0_i64, 1, 2, 3, 5, 10, 15] {
+        let jit = jit_int(&program, f, &[Value::Int(n)]);
+        assert_eq!(
+            jit,
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "fib({n}) JIT must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn jits_cross_function_call_matches_vm_oracle() {
+    // Two DISTINCT functions in one module — `useAdd` calls `add1` twice (a cross-`FuncId` native
+    // call, not just self-recursion), proving the multi-function module + the (pop arity, push result)
+    // net stack effect composes for a non-recursive callee.
+    let program = compile_source(
+        "package Main;\n\
+         function add1(int x) -> int { return x + 1; }\n\
+         function useAdd(int x) -> int { return add1(x) + add1(x); }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "useAdd");
+    for x in [0_i64, 1, 7, -3] {
+        let jit = jit_int(&program, f, &[Value::Int(x)]);
+        assert_eq!(
+            jit,
+            vm_int(&program, f, vec![Value::Int(x)]),
+            "useAdd({x}) JIT must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn jits_self_recursive_and_cross_call_together() {
+    // A function that is BOTH self-recursive AND calls a second function in the same body — the union
+    // of the fib and useAdd paths, which they exercise only separately. The machinery is uniform, but
+    // this proves the two call kinds compose in one frame. Checked against the VM oracle.
+    let program = compile_source(
+        "package Main;\n\
+         function base(int n) -> int { return n + 100; }\n\
+         function rec(int n) -> int {\n\
+           if (n < 1) { return base(n); }\n\
+           return rec(n - 1) + base(n);\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "rec");
+    for n in [0_i64, 1, 2, 4, 8] {
+        let jit = jit_int(&program, f, &[Value::Int(n)]);
+        assert_eq!(
+            jit,
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "rec({n}) JIT must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn jit_propagates_a_callee_fault() {
+    // A fault raised inside a callee (`boom` divides by zero) must propagate up through the caller's
+    // post-call status check (`status != 0` → fault-exit) unchanged — the distinct b2 branch from the
+    // depth cap. Checked against the VM oracle's rendering, like the direct div-by-zero test.
+    let program = compile_source(
+        "package Main;\n\
+         function boom(int a, int b) -> int { return a / b; }\n\
+         function callsBoom(int a) -> int { return boom(a, 0); }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "callsBoom");
+    let vm_fault = crate::vm::Vm::new(&program)
+        .run_entry(f, vec![Value::Int(10)])
+        .expect_err("VM must fault: the callee divides by zero");
+
+    match compile_and_run(&program, f, &[Value::Int(10)]).expect("callsBoom is eligible") {
+        JitRun::Fault(msg) => assert!(
+            vm_fault.render("").contains(&msg),
+            "JIT callee-propagated fault `{msg}` must match the VM oracle trace:\n{}",
+            vm_fault.render("")
+        ),
+        JitRun::Value(v) => panic!(
+            "expected a propagated divide-by-zero fault, got {}",
+            as_int(&v)
+        ),
+    }
+}
+
+#[test]
+fn jit_deep_recursion_faults_like_the_vm_stack_overflow() {
+    // Native recursion (unlike the VM's heap `frames`) would exhaust the OS stack — the `depth` cap
+    // must fire first with the VM's `"stack overflow"` string. Runs on a 64 MB stack so 4096 native
+    // frames fit, and asserts INSIDE the closure because `Value`/`JitRun` hold `Rc` (not `Send`) — the
+    // program is rebuilt in-thread and only two `String`s cross the join. The fault is oracle-checked
+    // against the VM (the string is a bare literal, not single-sourced, so drift must be caught here).
+    const SRC: &str = "package Main;\n\
+        function forever(int n) -> int { return forever(n + 1); }\n\
+        function main() -> void {}";
+    let handle = std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            let program = compile_source(SRC);
+            let f = func_index(&program, "forever");
+            let vm_fault = crate::vm::Vm::new(&program)
+                .run_entry(f, vec![Value::Int(0)])
+                .expect_err("VM must fault with stack overflow")
+                .render("");
+            let jit = match compile_and_run(&program, f, &[Value::Int(0)])
+                .expect("forever is eligible")
+            {
+                JitRun::Fault(m) => m,
+                JitRun::Value(v) => panic!("expected stack overflow, got {}", as_int(&v)),
+            };
+            (vm_fault, jit)
+        })
+        .expect("spawn big-stack thread");
+    let (vm_fault, jit) = handle.join().expect("big-stack thread panicked");
+    assert!(
+        vm_fault.contains(&jit),
+        "JIT stack-overflow fault `{jit}` must match the VM oracle trace:\n{vm_fault}"
     );
 }
