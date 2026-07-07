@@ -5,6 +5,42 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] EXECUTION START (developer said "continue autonomously", picked JIT 1(b) via ask-human):
+  **b1 concrete design** (memory operand stack — the locked-design realization). The current 1(a)
+  codegen threads `*mut Value` pointers as compile-time SSA `Vec<ClValue>` + an arena for pointer
+  stability; b1 REPLACES that with a runtime memory operand stack so branches need no SSA
+  phi/block-params. `JitCtx` becomes `{ locals: Vec<Value>, stack: Vec<Value>, result, fault }`
+  (arena + args-pointer machinery deleted — locals[0..nparams] hold arg clones). Bridge helpers take
+  ONLY `*mut JitCtx` and operate on `ctx.stack`/`ctx.locals` directly (no pointer threading):
+  `rt_push_int(ctx,k)` void; `rt_get_local(ctx,slot)`/`rt_set_local(ctx,slot)`/`rt_pop(ctx)` void;
+  `rt_arith(ctx,code)->i64` (AddI..RemI, code 0..4), `rt_neg(ctx)->i64`, `rt_not(ctx)->i64`,
+  `rt_cmp(ctx,code)->i64` (Lt/Gt/Le/Ge) — all fallible, return 0=ok/1=fault (set ctx.fault);
+  `rt_eqne(ctx,negate)` void (infallible via `eq_val`); `rt_jump_if_false(ctx)->i64` returns
+  0=true(fall-through)/1=false(jump)/2=fault; `rt_ret(ctx)` void. **Control flow**: leader-block scan
+  (ip0 + every Jump/JumpIfFalse target + instruction after a Jump/JumpIfFalse/Return), one Cranelift
+  block per leader, explicit `jump` on fall-through (Cranelift blocks don't fall through), one shared
+  fault-exit block (returns status 1). **Locals region** = `1 + max(slot)` over Get/SetLocal (VM has
+  NO static slot-count on `Function`, chunk.rs:476), filler `Value::Unit` (checker's definite-assign
+  guarantees filler never observed). **Eligibility (default-deny)** b1 subset: `Const`(int)/AddI..RemI/
+  Neg/Not/Eq/Ne/Lt/Gt/Le/Ge/Pop/GetLocal/SetLocal/Jump/JumpIfFalse/Return — everything else
+  `Unsupported`. Faults mirror exec.rs EXACTLY (`int_neg` i64::MIN→"integer overflow"; Not non-bool→
+  "cannot apply ! to {type}"; `vm::compare` via `compare_ord`; JumpIfFalse non-bool→"expected bool,
+  found {type}"). Still UNWIRED (single-shot compile_and_run kept); b2 adds native calls, b3 wires
+  `phg run` + honest fib. NO perf claim in b1 (Invariant 11).
+  **DISASSEMBLE FINDINGS (2026-07-08, verified via `phg disassemble` on real b1 test fns) — REQUIRED
+  a design refinement:** (i) the compiler appends a DEAD `Const(Unit); Return` tail to EVERY function
+  (e.g. `sumTo` ip17-18 after the real `Return` at ip16) → naive all-op eligibility rejected every
+  function on `Const(non-int)`; (ii) `pick` (if/else) has a dead `Jump(9)` (ip6, after a `Return`) and
+  an ORPHAN `block@9` reachable only via that dead jump → materializing it would use the entry-block
+  `ctx` param without SSA dominance = Cranelift verifier error. FIX: a **reachability BFS pre-pass**
+  from ip0 (follow Jump/JumpIfFalse targets + non-terminator fall-through); leaders + emitted ops are
+  the REACHABLE set only; dead ops/orphan blocks are never created. `Const(Value::Unit)` added to the
+  eligible subset (+`rt_push_unit`) for reachable void tails/`main`. Locals size scans ALL ops for
+  `max(nparams, 1+max_slot)` (over-size is harmless, under-size is the bug — advisor trap 2). Leaders
+  = reachable `{0} ∪ {branch targets} ∪ {i+1 after JumpIfFalse}` (NOT after unconditional Jump/Return
+  — advisor trap 1). if/else test returns DISTINGUISHABLE ints checked vs VM oracle (advisor trap 3);
+  loop test uses `while` (not `for-in` → avoids IterElems/Index/MakeRange). Gate = `-p phorj
+  --features jit` test+clippy+fmt (workspace never compiles jit = false-green).
 - [2026-07-06] AGREED (developer, interactive): **JIT slice 1(b) design LOCKED.** (1) **Native→native
   calls** (Cranelift cross-`FuncId` relocations, incl. self-recursion resolved at
   `finalize_definitions`) — NOT a runtime-call bridge (a bridge taxes every call and fib is
@@ -208,6 +244,30 @@ beating release-php.
   that provably hits the JIT (avoids the run≡runvm false-green). **No perf claimed** — unwired and
   unmeasured; the spike's ~3×-over-php+JIT is a hypothesis for the wired path, measured under `phg run`
   in (b) (Invariant 11). Marathon order = Option A (Decisions Log 2026-07-06).
+- **JIT-1 codegen slice (b1) DONE (2026-07-08)** — the codegen model switched from 1(a)'s compile-time
+  SSA-pointer stack to a **runtime memory operand stack** in `JitCtx` (a single `Vec<Value>` that also
+  holds the frame's locals — this VM's locals ARE stack slots, `stack[slot_base+slot]`, slot_base=0 for
+  a leaf; seeded from the args). This enables **branches + loops** with plain native control flow (no
+  SSA phis / block params). Subset extended to `Neg`/`Not`/`Eq`/`Ne`/`Lt`/`Gt`/`Le`/`Ge`/
+  `SetLocal`/`Jump`/`JumpIfFalse` + `Const(Unit)`; helpers mirror `exec.rs` exactly (byte-identical
+  faults: `int_neg` overflow, `compare_ord` NaN→false, "cannot apply ! to …", "expected bool, found …").
+  **Reachability BFS pre-pass** (from ip0, following branch targets + non-terminator fall-through) so
+  the compiler's dead `Const(Unit);Return` tail + dead-`Jump` orphan blocks are never materialized —
+  which also keeps every emitted block reachable-from-entry (entry-block `ctx` param dominates every
+  use, no SSA-dominance violation). A dedicated param-only entry block jumps to a param-less ip0 block
+  so a `while`-at-function-top `Jump(0)` back-edge has no block-arg mismatch. All popping helpers set
+  `ctx.fault` + return a status instead of panicking (a panic through `extern "C"` aborts the process).
+  Still UNWIRED (single-shot `compile_and_run` kept). 8 tests (`-p phorj --features jit`): the 4 from
+  (a) + while-loop, if/else (distinguishable per-branch values vs VM oracle), Gt/Ge/Eq/Ne/Not (one
+  bitmask `cmps` fn, both edges of each vs oracle — a transposed dispatch code is caught),
+  unused-param seeding, Neg overflow. **Model bug caught by the while-loop oracle test** (separate-
+  locals array → `GetLocal` read `Unit` filler → "cannot compare unit and int"; the disassemble/
+  differential discipline earned its keep). **`Pop` DROPPED from the subset** (advisor 6C): a
+  discarded expression statement (`a + b;`) is rejected by the checker (unused value), so `Pop` is
+  not producible in a b1-eligible int-leaf function — an accept arm with no possible test is a latent
+  transposition risk; re-add it WITH a test in b2 if discarded call-results make it reachable. Gate:
+  9 jit tests + clippy `--features jit` + fmt clean + release build clean + full workspace/PHP-oracle
+  (1511 lib + 144 differential). NEXT = b2 (native→native calls + self-recursion, so recursive fib JITs).
 - **A1 trycatch micro DONE (2026-07-06)** — `bench/micro/trycatch.{phg,php}` added (native
   `class Odd implements Error` + `throws`/`try`/`catch`; output-identical checksum `8999994`).
   Corpus now **12**. Honest matrix (docker `php:8.5-cli` release+JIT, this host): **ALL 12 LOSE** —
