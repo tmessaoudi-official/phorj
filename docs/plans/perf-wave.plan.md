@@ -5,6 +5,11 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] CHECKPOINT (developer, ask-human): **b1 committed `9b7f597` (green, unpushed); b2
+  deferred to a FRESH session** per the project norm "spine-sensitive slices → fresh context" (b2 =
+  native→native calls + self-recursion; b3 = wire `phg run`, both spine-sensitive). Resume pointer:
+  memory [[jit-slice1b1-memory-stack]] + the b1 Progress entry below. b2 design already locked (see the
+  1(b) LOCKED entry). Nothing to push (developer pushes).
 - [2026-07-08] EXECUTION START (developer said "continue autonomously", picked JIT 1(b) via ask-human):
   **b1 concrete design** (memory operand stack — the locked-design realization). The current 1(a)
   codegen threads `*mut Value` pointers as compile-time SSA `Vec<ClValue>` + an arena for pointer
