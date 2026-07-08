@@ -5,6 +5,31 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] ✅ **RULED (developer, int-overflow fork) — NEXT BUILD SLICE = "ovf-spec": speculative
+  unchecked int arithmetic + sticky-overflow-flag + VM-redo-on-overflow.** Resolves why intadd LOSES
+  (per-op `*_overflow`+branch) WITHOUT sacrificing phorj's integer-overflow detection (the feature PHP
+  lacks — PHP silently promotes to float). Mirrors PHP's own JIT deopt, adapted to phorj's fault
+  semantics, and fits the existing side-effect-free / VM-fallback model.
+  **DESIGN SKETCH (for the fresh-context build — advisor-review before commit):**
+  - **Codegen (`build_body_unboxed`):** replace `AddI/SubI/MulI` per-op `*_overflow`+`fault_if` with
+    WRAPPING `iadd`/`isub`/`imul` PLUS OR-ing each op's overflow bit into a sticky-flag Variable (no
+    per-op branch). `Neg` MIN and `Div/Rem` MIN/-1 → fold into the sticky flag too. **KEEP the div/rem
+    ZERO check as a real per-op branch** (hardware traps on divide-by-zero — cannot speculate it; rare,
+    so the branch is cheap).
+  - **Exit:** at every `Return`, if the sticky flag ≠ 0 → return a NEW code (e.g. 5 = "speculation
+    overflowed, redo on VM") instead of `(value,0)`; else `(value,0)` as today.
+  - **`run_unboxed` + `Op::Call` hook (b3b):** code 5 → a new `JitRun::RedoOnVm` (distinct from
+    `Fault`); the hook re-runs the callee on the VM, which does per-op CHECKED arithmetic and produces
+    the EXACT byte-identical fault (phorj faults per-op, so redo is always correct even for a
+    transient/cancelling overflow). Sound because JIT-eligible ⇒ side-effect-free (re-run is safe — the
+    same invariant b3b already relies on).
+  - **Byte-identity proof obligation (TDD):** a loop that overflows mid-iteration → RedoOnVm → SAME
+    fault+line as the pure VM; a non-overflowing loop → wrapping==checked value; MIN/-1 div & rem;
+    neg-MIN; div-by-zero still faults DIRECTLY (not via redo).
+  - **Then re-measure intadd** — target LOSS→WIN (per-op branches gone, feature intact).
+  ⚠ **SPINE-SENSITIVE → FRESH CONTEXT** (fault-semantics + Op::Call ABI change; advisor byte-identity
+  review is the real gate). AFTER ovf-spec: floats (f64, no fault-check tension) → §15 jit-default flip
+  → strings/collections.
 - [2026-07-08] AGREED (developer, §15 + next-direction, post-widen-1 re-measure):
   **(A) jit-on-by-default in stock `phg` = Option 3 — on by default + a `--no-jit` runtime escape**
   (fail-closed to VM, byte-identical; adds Cranelift + the unsafe-island to the DEFAULT non-wasm build;
@@ -38,8 +63,14 @@
   to loops (byte-identical, tested, a prerequisite for any int-loop perf) — the perf mandate for intadd
   is simply not yet met. ✅ microbench.sh FIXED (total-ns; the fix revealed this truth — the floored
   `1.00×` was hiding a LOSS, not a win). ⛔ HARD MANDATE: intadd LOSS = a P0-perf item (overflow-check
-  elision is the fix). **RE-OPENS the next-direction order — overflow-check elision likely precedes
-  floats/strings; surface to developer.**
+  elision is the fix). **RE-OPENS the next-direction order (surface to developer):** int-loop overflow-check elision
+  is TANGLED with Invariant 4 (fault parity) — the per-op `*_overflow` checks reproduce `value.rs`'s
+  checked-int faults byte-identically, so they can't just be dropped; a real int-loop win needs
+  range/no-overflow analysis (hard) or a cheaper parity-preserving check idiom. **Corollary that
+  VALIDATES the confirmed floats-before-hard-stuff order:** f64 arithmetic does NOT trap/fault (no per-op
+  overflow check), so a JIT'd FLOAT loop should beat php+JIT MORE easily than int — `floatarith` (0.02×
+  now) is likely the first real loop WIN, precisely where int loses. Floats next is right; int
+  overflow-elision is its own later (fault-parity-constrained) design.
 - [2026-07-08] PROGRESS: **widen-1 c1+c2+c3 SHIPPED (unboxed mutable locals + loops), unpushed.**
   c1 `c55f6f8` (locals→Variables), c2 `f82d6e9` (straight-line mutable locals via the depth-indexed
   model + `unboxed_analyze`), c3 (this commit — dropped the `t<=ip` guard → int loops JIT unboxed).
