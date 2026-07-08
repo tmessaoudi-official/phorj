@@ -5,7 +5,7 @@
 //! anything outside the subset is default-denied. Byte-identity-under-`phg run` is the *next* (wiring)
 //! slice — these establish the substrate the wiring rides on.
 
-use super::{compile_and_run, JitError, JitRun};
+use super::{compile_and_run, Compiled, JitError, JitRun};
 use crate::chunk::BytecodeProgram;
 use crate::value::Value;
 
@@ -352,6 +352,73 @@ fn jit_propagates_a_callee_fault() {
             as_int(&v)
         ),
     }
+}
+
+#[test]
+fn measures_fib_native_jit_vs_vm() {
+    // The G-8 mandate signal: is the (boxed, kernel-call) JIT actually faster than the VM on recursive
+    // fib, and how close to release php+JIT? Native-JIT vs VM, IDENTICAL workload, best-of-N wall time.
+    // Compile cost is reported SEPARATELY (never folded into the per-run number). PRINT-ONLY on timing —
+    // a timing assertion would be a flaky, load-dependent gate; the ONLY assertion is that the native
+    // value equals the VM oracle (a timing is meaningless until the value is proven identical). PHP+JIT
+    // baseline: the recorded ~9.6 ms for fib(30) under Docker `php:8.5-cli` (release, JIT on) — the
+    // on-box php is ZTS-debug JIT-off and unusable as a baseline (memory perf-benchmarking-truth). Peak
+    // memory (the mandate's other column) is deferred to the proper `phg benchmark` JIT wiring.
+    use std::time::Instant;
+    let program = compile_source(
+        "package Main;\n\
+         function fib(int n) -> int {\n\
+           if (n < 2) { return n; }\n\
+           return fib(n - 1) + fib(n - 2);\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "fib");
+    const N: i64 = 30;
+
+    let t = Instant::now();
+    let compiled = Compiled::compile(&program, f).expect("fib is JIT-eligible");
+    let compile_ns = t.elapsed().as_nanos();
+
+    let jit_val = match compiled.run(&[Value::Int(N)], 1) {
+        JitRun::Value(v) => as_int(&v),
+        JitRun::Fault(m) => panic!("unexpected fib fault: {m}"),
+    };
+    assert_eq!(
+        jit_val,
+        vm_int(&program, f, vec![Value::Int(N)]),
+        "fib({N}) native-JIT value must equal the VM oracle before any timing is meaningful"
+    );
+
+    let best_native = (0..10)
+        .map(|_| {
+            let s = Instant::now();
+            let _ = compiled.run(&[Value::Int(N)], 1);
+            s.elapsed().as_nanos()
+        })
+        .min()
+        .unwrap();
+    let best_vm = (0..5)
+        .map(|_| {
+            let s = Instant::now();
+            let _ = crate::vm::Vm::new(&program).run_entry(f, vec![Value::Int(N)]);
+            s.elapsed().as_nanos()
+        })
+        .min()
+        .unwrap();
+
+    eprintln!(
+        "[jit-bench] fib({N}) best-of-N wall time:\n  \
+         compile     = {:.3} ms (one-time)\n  \
+         native JIT  = {:.3} ms (best of 10)\n  \
+         VM          = {:.3} ms (best of 5)\n  \
+         php+JIT     = ~9.6 ms (recorded, Docker php:8.5-cli, release+JIT)\n  \
+         speedup native-JIT vs VM = {:.2}x",
+        compile_ns as f64 / 1e6,
+        best_native as f64 / 1e6,
+        best_vm as f64 / 1e6,
+        best_vm as f64 / best_native as f64,
+    );
 }
 
 #[test]

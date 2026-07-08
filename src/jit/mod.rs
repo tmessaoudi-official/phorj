@@ -1,12 +1,16 @@
-//! # JIT backend (Cranelift) — codegen slice 1(b2)
+//! # JIT backend (Cranelift) — codegen slice 1(b3a)
 //!
-//! **Status: NATIVE→NATIVE CALLS + SELF-RECURSION — int functions with control flow AND calls, not
-//! yet wired into `phg run`.** This extends 1(b1)'s single-function memory-operand-stack codegen to a
-//! **multi-function module**: the call graph reachable from the entry (via `Op::Call`) is compiled as
-//! one `JITModule`, each phorj function to its own Cranelift function, so a `Call` lowers to a direct
-//! native call to the callee's `FuncId` (self-recursion included — resolved at
-//! `finalize_definitions`). Recursive `fib` now JITs. Wiring into `phg run` + honest fib measurement is
-//! 1(b3). See `docs/plans/perf-wave.plan.md`, the locked 1(b) design + the b2 execution entry.
+//! **Status: NATIVE→NATIVE CALLS + SELF-RECURSION, compile-once [`Compiled`] handle, honest fib
+//! measurement — not yet wired into `phg run`.** 1(b2) extended 1(b1)'s single-function
+//! memory-operand-stack codegen to a **multi-function module**: the call graph reachable from the entry
+//! (via `Op::Call`) is compiled as one `JITModule`, each phorj function to its own Cranelift function,
+//! so a `Call` lowers to a direct native call to the callee's `FuncId` (self-recursion included —
+//! resolved at `finalize_definitions`); recursive `fib` JITs. 1(b3a) split *compile* from *run* into
+//! the [`Compiled`] handle (compile once, run many — the seam the honest benchmark and the future
+//! `phg run` hot-function cache both need) and added [`is_eligible`] + [`Compiled::run`]'s `start_depth`
+//! (the VM's live frame count at the invocation site — see its doc for the under-fault hazard the b3b
+//! wiring hangs on). The b3b VM `Op::Call` speculative hook + fault-fallback is next. See
+//! `docs/plans/perf-wave.plan.md`, the locked 1(b) design + the b2/b3 execution entries.
 //!
 //! ## The shared value stack + per-frame `slot_base` (mirrors `vm::exec` exactly)
 //!
@@ -782,133 +786,186 @@ fn build_body(
     Ok(())
 }
 
-/// JIT-compile the function at `entry_idx` in `program` (and every function it transitively calls, if
-/// the whole set is in the supported subset) and run it with `args`, returning its return value or a
-/// clean runtime fault.
+/// True iff `entry_idx` and every function it transitively (reachably) calls are in the JIT subset —
+/// the cheap predicate a caller checks before committing to [`Compiled::compile`] (it runs the same
+/// default-deny walk without building any code).
 ///
-/// Returns [`JitError::Unsupported`] if the entry or any transitively-called function contains an op /
-/// const / closure capture outside the int + control-flow + direct-call subset — the default-deny
-/// contract that keeps callers falling back to the VM.
+/// **INVARIANT — the whole speculative-execution model rests on this: every JIT-eligible op is
+/// side-effect-free** (no output, no shared-state mutation). That is what makes the `phg run` fallback
+/// sound: on a JIT fault (or an under-fault the VM would catch) the function is re-executed on the VM,
+/// which would DOUBLE any side effect the JIT had already performed. Never add an op with observable
+/// effects (a print, a global/field write, an allocation the caller can observe) to the subset in
+/// `collect_functions` without redesigning the fallback contract.
+pub fn is_eligible(program: &BytecodeProgram, entry_idx: usize) -> bool {
+    collect_functions(program, entry_idx).is_ok()
+}
+
+/// A JIT-compiled function graph: the `entry` plus every function it transitively calls, all defined
+/// and finalized in one [`JITModule`]. Separating *compile* from *run* is the seam the honest
+/// benchmark (compile once, time many native runs) and the future `phg run` hot-function cache both
+/// need — recompiling per call would dwarf the native speed the JIT exists to deliver.
+pub struct Compiled {
+    /// `Option` only so [`Drop`] can `take()` the module and hand it to `free_memory(self)`, which
+    /// consumes it. Always `Some` between `compile` and drop.
+    module: Option<JITModule>,
+    /// The finalized entry code. It lives at a fixed address inside the module's executable mmap (NOT
+    /// inside the `JITModule` struct), so moving the struct into this handle leaves the pointer valid;
+    /// it stays valid for as long as `module` is alive (i.e. until this handle drops).
+    entry: *const u8,
+}
+
+impl Compiled {
+    /// JIT-compile `entry_idx` and its transitive (reachable) call graph. Returns
+    /// [`JitError::Unsupported`] if any function in that set contains an op / const / closure capture
+    /// outside the int + control-flow + direct-call subset — the default-deny contract that keeps
+    /// callers falling back to the VM.
+    pub fn compile(program: &BytecodeProgram, entry_idx: usize) -> Result<Compiled, JitError> {
+        // --- transitive eligibility + the set of functions to compile (default-deny, reachable-only) ---
+        let order = collect_functions(program, entry_idx)?;
+
+        // --- module + host ISA, with the bridge helpers registered as symbols ---
+        let mut builder = JITBuilder::new(default_libcall_names())
+            .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
+        builder.symbol("rt_push_int", rt_push_int as *const u8);
+        builder.symbol("rt_push_unit", rt_push_unit as *const u8);
+        builder.symbol("rt_get_local", rt_get_local as *const u8);
+        builder.symbol("rt_set_local", rt_set_local as *const u8);
+        builder.symbol("rt_arith", rt_arith as *const u8);
+        builder.symbol("rt_neg", rt_neg as *const u8);
+        builder.symbol("rt_not", rt_not as *const u8);
+        builder.symbol("rt_eqne", rt_eqne as *const u8);
+        builder.symbol("rt_cmp", rt_cmp as *const u8);
+        builder.symbol("rt_jump_if_false", rt_jump_if_false as *const u8);
+        builder.symbol("rt_depth_check", rt_depth_check as *const u8);
+        builder.symbol("rt_frame_base", rt_frame_base as *const u8);
+        builder.symbol("rt_return", rt_return as *const u8);
+        let mut module = JITModule::new(builder);
+        let ptr = module.target_config().pointer_type();
+
+        // --- declare the imported bridge helpers ---
+        let sig_push_int = make_sig(&module, &[ptr, types::I64], None); // rt_push_int
+        let sig_void = make_sig(&module, &[ptr], None); // rt_push_unit
+        let sig_local = make_sig(&module, &[ptr, types::I64, types::I64], Some(types::I64)); // get/set_local
+        let sig_code = make_sig(&module, &[ptr, types::I64], Some(types::I64)); // arith/cmp/eqne/frame_base/ret
+        let sig_status = make_sig(&module, &[ptr], Some(types::I64)); // neg/not/jump_if_false/depth_check
+        let declare = |m: &mut JITModule, name: &str, sig: &Signature| {
+            m.declare_function(name, Linkage::Import, sig)
+                .map_err(|e| JitError::Codegen(format!("declare {name}: {e}")))
+        };
+        let helpers = Helpers {
+            push_int: declare(&mut module, "rt_push_int", &sig_push_int)?,
+            push_unit: declare(&mut module, "rt_push_unit", &sig_void)?,
+            get_local: declare(&mut module, "rt_get_local", &sig_local)?,
+            set_local: declare(&mut module, "rt_set_local", &sig_local)?,
+            arith: declare(&mut module, "rt_arith", &sig_code)?,
+            neg: declare(&mut module, "rt_neg", &sig_status)?,
+            not: declare(&mut module, "rt_not", &sig_status)?,
+            eqne: declare(&mut module, "rt_eqne", &sig_code)?,
+            cmp: declare(&mut module, "rt_cmp", &sig_code)?,
+            jif: declare(&mut module, "rt_jump_if_false", &sig_status)?,
+            depth_check: declare(&mut module, "rt_depth_check", &sig_status)?,
+            frame_base: declare(&mut module, "rt_frame_base", &sig_code)?,
+            ret: declare(&mut module, "rt_return", &sig_code)?,
+        };
+
+        // --- declare a FuncId per phorj function (so bodies can cross-reference, incl. self) ---
+        // Every compiled function has the signature `extern "C" fn(*mut JitCtx, slot_base: i64) -> i64`.
+        let mut phorj_sig = module.make_signature();
+        phorj_sig.params.push(AbiParam::new(ptr));
+        phorj_sig.params.push(AbiParam::new(types::I64));
+        phorj_sig.returns.push(AbiParam::new(types::I64));
+        let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
+        for &fi in &order {
+            let id = module
+                .declare_function(&format!("phorj_fn_{fi}"), Linkage::Export, &phorj_sig)
+                .map_err(|e| JitError::Codegen(format!("declare fn {fi}: {e}")))?;
+            func_ids[fi] = Some(id);
+        }
+
+        // --- define every body ---
+        for &fi in &order {
+            let mut cl_ctx = module.make_context();
+            cl_ctx.func.signature = phorj_sig.clone();
+            build_body(&mut module, &mut cl_ctx, program, fi, &func_ids, &helpers)?;
+            module
+                .define_function(func_ids[fi].expect("declared above"), &mut cl_ctx)
+                .map_err(|e| JitError::Codegen(format!("define fn {fi}: {e}")))?;
+            module.clear_context(&mut cl_ctx);
+        }
+        module
+            .finalize_definitions()
+            .map_err(|e| JitError::Codegen(format!("finalize: {e}")))?;
+        let entry =
+            module.get_finalized_function(func_ids[entry_idx].expect("entry declared above"));
+
+        Ok(Compiled {
+            module: Some(module),
+            entry,
+        })
+    }
+
+    /// Run the compiled entry with `args`, seeding the operand stack as its slots `0..arity` at
+    /// `slot_base = 0`. `start_depth` seeds the frame-depth counter that produces the `"stack
+    /// overflow"` fault: it MUST equal the number of live frames at the invocation site so the fault
+    /// fires at the VM's exact threshold. A top-level entry (tests / benchmark / `run_entry` parity)
+    /// passes `start_depth = 1` (the VM's single entry frame); a mid-execution `phg run` hook (b3b)
+    /// passes the VM's live `frames.len()`, so an eligible function reached at VM-depth D faults after
+    /// `MAX_CALL_DEPTH - D` more frames — NOT `MAX_CALL_DEPTH`, which would under-fault (return a value
+    /// where the VM faults, a happy-path disagreement the caller's fault-fallback cannot catch).
+    pub fn run(&self, args: &[Value], start_depth: usize) -> JitRun {
+        // SAFETY: `self.entry` is the finalized machine code for a function compiled with exactly the
+        // signature `extern "C" fn(*mut JitCtx, i64) -> i64` — the sole first-party `unsafe` this whole
+        // effort exists to confine. `self.module` (which owns the executable memory) is alive for the
+        // duration of the call (this handle is not dropped until after `run` returns). Every native
+        // callee reached through it shares that same signature + the one `ctx` pointer.
+        let entry: extern "C" fn(*mut JitCtx, i64) -> i64 = unsafe {
+            std::mem::transmute::<*const u8, extern "C" fn(*mut JitCtx, i64) -> i64>(self.entry)
+        };
+        let mut call_ctx = JitCtx {
+            stack: args.to_vec(),
+            depth: start_depth,
+            fault: None,
+        };
+        let status = entry(&mut call_ctx, 0);
+        if status == 0 {
+            // The entry's `rt_return` truncated to slot_base 0 and pushed the return value, so it is the
+            // sole remaining stack element.
+            JitRun::Value(call_ctx.stack.pop().unwrap_or(Value::Unit))
+        } else {
+            JitRun::Fault(
+                call_ctx
+                    .fault
+                    .unwrap_or_else(|| "jit: unknown fault".to_string()),
+            )
+        }
+    }
+}
+
+impl Drop for Compiled {
+    fn drop(&mut self) {
+        // `JITModule` has NO `Drop` impl (verified against cranelift-jit 0.133 `src/backend.rs`) —
+        // merely dropping it LEAKS the code mmap; memory is reclaimed only by the explicit
+        // `free_memory`, which consumes the module by value (hence the `Option::take`).
+        if let Some(module) = self.module.take() {
+            // SAFETY: this handle is being destroyed, so no `run` is in progress (each `run` borrows
+            // `&self` and returns before drop) and `self.entry` is never used again. That satisfies
+            // `free_memory`'s contract: no compiled function executing, no function pointer called
+            // afterward.
+            unsafe { module.free_memory() };
+        }
+    }
+}
+
+/// Compile the function at `entry_idx` (+ its transitive call graph) and run it once with `args`. A
+/// convenience over [`Compiled::compile`] + [`Compiled::run`] for the common single-shot case (the
+/// unit tests); the compiled module is freed when the temporary [`Compiled`] drops. `start_depth` is
+/// 1 — a top-level entry, matching the VM's single entry frame.
 pub fn compile_and_run(
     program: &BytecodeProgram,
     entry_idx: usize,
     args: &[Value],
 ) -> Result<JitRun, JitError> {
-    // --- transitive eligibility + the set of functions to compile (default-deny, reachable-only) ---
-    let order = collect_functions(program, entry_idx)?;
-
-    // --- module + host ISA, with the bridge helpers registered as symbols ---
-    let mut builder = JITBuilder::new(default_libcall_names())
-        .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
-    builder.symbol("rt_push_int", rt_push_int as *const u8);
-    builder.symbol("rt_push_unit", rt_push_unit as *const u8);
-    builder.symbol("rt_get_local", rt_get_local as *const u8);
-    builder.symbol("rt_set_local", rt_set_local as *const u8);
-    builder.symbol("rt_arith", rt_arith as *const u8);
-    builder.symbol("rt_neg", rt_neg as *const u8);
-    builder.symbol("rt_not", rt_not as *const u8);
-    builder.symbol("rt_eqne", rt_eqne as *const u8);
-    builder.symbol("rt_cmp", rt_cmp as *const u8);
-    builder.symbol("rt_jump_if_false", rt_jump_if_false as *const u8);
-    builder.symbol("rt_depth_check", rt_depth_check as *const u8);
-    builder.symbol("rt_frame_base", rt_frame_base as *const u8);
-    builder.symbol("rt_return", rt_return as *const u8);
-    let mut module = JITModule::new(builder);
-    let ptr = module.target_config().pointer_type();
-
-    // --- declare the imported bridge helpers ---
-    let sig_push_int = make_sig(&module, &[ptr, types::I64], None); // rt_push_int
-    let sig_void = make_sig(&module, &[ptr], None); // rt_push_unit
-    let sig_local = make_sig(&module, &[ptr, types::I64, types::I64], Some(types::I64)); // get/set_local
-    let sig_code = make_sig(&module, &[ptr, types::I64], Some(types::I64)); // arith/cmp/eqne/frame_base/ret
-    let sig_status = make_sig(&module, &[ptr], Some(types::I64)); // neg/not/jump_if_false/depth_check
-    let declare = |m: &mut JITModule, name: &str, sig: &Signature| {
-        m.declare_function(name, Linkage::Import, sig)
-            .map_err(|e| JitError::Codegen(format!("declare {name}: {e}")))
-    };
-    let helpers = Helpers {
-        push_int: declare(&mut module, "rt_push_int", &sig_push_int)?,
-        push_unit: declare(&mut module, "rt_push_unit", &sig_void)?,
-        get_local: declare(&mut module, "rt_get_local", &sig_local)?,
-        set_local: declare(&mut module, "rt_set_local", &sig_local)?,
-        arith: declare(&mut module, "rt_arith", &sig_code)?,
-        neg: declare(&mut module, "rt_neg", &sig_status)?,
-        not: declare(&mut module, "rt_not", &sig_status)?,
-        eqne: declare(&mut module, "rt_eqne", &sig_code)?,
-        cmp: declare(&mut module, "rt_cmp", &sig_code)?,
-        jif: declare(&mut module, "rt_jump_if_false", &sig_status)?,
-        depth_check: declare(&mut module, "rt_depth_check", &sig_status)?,
-        frame_base: declare(&mut module, "rt_frame_base", &sig_code)?,
-        ret: declare(&mut module, "rt_return", &sig_code)?,
-    };
-
-    // --- declare a FuncId per phorj function to compile (so bodies can cross-reference, incl. self) ---
-    // Every compiled function has the signature `extern "C" fn(*mut JitCtx, slot_base: i64) -> i64`.
-    let mut phorj_sig = module.make_signature();
-    phorj_sig.params.push(AbiParam::new(ptr));
-    phorj_sig.params.push(AbiParam::new(types::I64));
-    phorj_sig.returns.push(AbiParam::new(types::I64));
-    let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
-    for &fi in &order {
-        let id = module
-            .declare_function(&format!("phorj_fn_{fi}"), Linkage::Export, &phorj_sig)
-            .map_err(|e| JitError::Codegen(format!("declare fn {fi}: {e}")))?;
-        func_ids[fi] = Some(id);
-    }
-
-    // --- define every body ---
-    for &fi in &order {
-        let mut cl_ctx = module.make_context();
-        cl_ctx.func.signature = phorj_sig.clone();
-        build_body(&mut module, &mut cl_ctx, program, fi, &func_ids, &helpers)?;
-        module
-            .define_function(func_ids[fi].expect("declared above"), &mut cl_ctx)
-            .map_err(|e| JitError::Codegen(format!("define fn {fi}: {e}")))?;
-        module.clear_context(&mut cl_ctx);
-    }
-    module
-        .finalize_definitions()
-        .map_err(|e| JitError::Codegen(format!("finalize: {e}")))?;
-    let entry_code =
-        module.get_finalized_function(func_ids[entry_idx].expect("entry declared above"));
-
-    // --- run it ---
-    // SAFETY: `entry_code` is the finalized machine code for a function compiled with exactly the
-    // signature `extern "C" fn(*mut JitCtx, i64) -> i64` — the sole first-party `unsafe` this whole
-    // effort exists to confine. `module` (which owns the executable memory) is kept alive across the
-    // call. Every native callee reached through it shares that same signature + the one `ctx` pointer.
-    let entry: extern "C" fn(*mut JitCtx, i64) -> i64 = unsafe {
-        std::mem::transmute::<*const u8, extern "C" fn(*mut JitCtx, i64) -> i64>(entry_code)
-    };
-
-    // Seed the unified stack with the arguments (the entry frame's slots `0..arity` at `slot_base = 0`);
-    // local declarations self-seed their slots as they execute, operands stack on top.
-    let mut call_ctx = JitCtx {
-        stack: args.to_vec(),
-        depth: 1,
-        fault: None,
-    };
-    let status = entry(&mut call_ctx, 0);
-    // `JITModule` has NO `Drop` impl (verified against cranelift-jit 0.133 `src/backend.rs`) — merely
-    // dropping it LEAKS the code mmap; memory is reclaimed only by the explicit `free_memory`. `entry`
-    // has already returned and no pointer into the module is used again, so freeing now satisfies the
-    // method's contract (no compiled fn executing, no fn-ptr called afterward). `call_ctx` is
-    // independent Rust heap, unaffected. (When the wiring slice caches compiled functions, the module
-    // instead lives for the program's lifetime and frees once at the end.)
-    // SAFETY: no outstanding use of any pointer into `module` past this point — see above.
-    unsafe { module.free_memory() };
-
-    if status == 0 {
-        // The entry's `rt_return` truncated to slot_base 0 and pushed the return value, so it is the
-        // sole remaining stack element.
-        Ok(JitRun::Value(call_ctx.stack.pop().unwrap_or(Value::Unit)))
-    } else {
-        Ok(JitRun::Fault(
-            call_ctx
-                .fault
-                .unwrap_or_else(|| "jit: unknown fault".to_string()),
-        ))
-    }
+    Ok(Compiled::compile(program, entry_idx)?.run(args, 1))
 }
 
 #[cfg(test)]

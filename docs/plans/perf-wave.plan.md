@@ -5,6 +5,47 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] 🚨 **HONEST fib(30) MEASUREMENT (b3a `measures_fib_native_jit_vs_vm`, best-of-N wall,
+  this box) — CORRECTS the Option-A premise:** VM **1694 ms**, native-JIT (boxed) **520 ms**, php+JIT
+  **~9.6 ms** (recorded Docker php:8.5 release+JIT; on-box php unusable). Native-JIT is **3.26× faster
+  than the VM** (matches the spike) BUT **~54× SLOWER than php+JIT**. ⚠ **The locked Option-A rationale
+  ("the spike proved boxed codegen already ~3× > php+JIT, so breadth wins G-8") is FALSIFIED** — the
+  spike's "3×" was native-vs-VM (real: 3.26×), MIS-attributed as vs-php+JIT (the same false-baseline
+  pattern as the 2026-07-05 "25× faster" retraction — memory [[perf-benchmarking-truth]]). The boxed,
+  one-`extern "C"`-helper-call-per-op model CANNOT beat php+JIT: fib(30) ≈ 27M helper calls, and the
+  call + `Vec` push/pop + `Value` box traffic dominate (compile was only 26 ms — codegen is not the
+  cost). **Implication (advisor-pending): unboxing (was JIT-5, LAST) is the ONLY lever that reaches
+  the mandate and must move MUCH earlier.** Breadth-first over a boxed substrate lifts the whole matrix
+  from 28×→~9× slower but never crosses php+JIT. Re-rank the marathon around this before more breadth.
+- [2026-07-08] PROGRESS: **b3a SHIPPED (pending commit) — green.** Refactored `compile_and_run` into a
+  compile-once `Compiled` handle (`compile()`→`run(args, start_depth)`; `Drop` frees via
+  `Option<JITModule>::take()` since `free_memory(self)` consumes) + `is_eligible()` predicate (documents
+  the side-effect-free invariant) + the honest fib measurement test (print-only timing, correctness
+  asserted vs VM oracle). `compile_and_run` kept as a thin single-shot wrapper (existing tests
+  unchanged). 15 jit tests + full workspace/PHP-oracle (1511 lib + 144 differential, php-8.5.8) +
+  clippy(jit)/fmt/non-jit-build green. Still UNWIRED. `run`'s `start_depth` param is the b3b seam
+  (mid-execution JIT must seed from the VM's live `frames.len()` or it under-faults — see Decisions).
+- [2026-07-08] AGREED (autonomous, advisor-certified 3C): **b3 SPLIT into b3a (safe) + b3b (spine).**
+  b3 is large + spine-touching, so: **b3a** = refactor `compile_and_run` into a compile-once `Compiled`
+  handle (`compile()` → `run(args, start_depth)`; Drop frees via `Option<JITModule>::take()` since
+  `free_memory(self)` consumes) + a jit-gated **honest fib measurement** (native JIT vs VM vs
+  release-php+JIT). Zero spine risk, answers the mandate question. **b3b** = VM `Op::Call` speculative
+  hook + fault-fallback + differential-under-jit. THREE certified design rulings baked in:
+  (1) **`run(args, start_depth)` — depth counter seeds from the VM's live `frames.len()`, NOT always 1.**
+  A mid-execution JIT (b3b) invoked at VM-depth D must fault after `MAX_CALL_DEPTH - D` more frames, not
+  `MAX_CALL_DEPTH`; seeding from 1 would UNDER-fault (return a value where the VM faults) — a happy-path
+  disagreement the fault-fallback cannot catch. b3a uses `start_depth = 1` (matches `run_entry`'s single
+  entry frame). (2) **INVARIANT: JIT-eligibility ⇒ side-effect-free.** The speculative model is sound
+  ONLY because the subset has no output/shared-state mutation — on a JIT fault the function re-executes
+  on the VM (fault-*rendering* parity: line/trace from the VM), which would DOUBLE any side effect.
+  Documented on `is_eligible`; never add an observable-effect op to the subset without redesigning the
+  fallback. Depth-seeding gives fault-*threshold* parity; fallback gives fault-*rendering* parity — both
+  needed, they compose. Over-faulting is safe (fallback re-runs, VM succeeds); under-faulting is the only
+  dangerous direction, closed by depth-seeding. (3) **b3b MUST prove the JIT path is hit** (hit-counter/
+  debug assert) — a silent fallback-to-VM would pass the jit-differential identically and prove nothing.
+  Fault rendering confirmed empirically: `phg run` prints `runtime error at <line>: <msg>` + source line
+  + per-frame stack trace w/ line numbers; a bare JIT fault string has none → the fallback (not the JIT)
+  must own all fault rendering.
 - [2026-07-08] PROGRESS: **b2 SHIPPED (pending commit) — green.** `compile_and_run` now compiles a
   multi-function module (`collect_functions` BFS + transitive reachable-only eligibility); every
   compiled fn is `extern "C" fn(*mut JitCtx, i64 slot_base) -> i64`; `Op::Call` lowers to
