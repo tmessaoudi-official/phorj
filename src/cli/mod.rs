@@ -1267,6 +1267,22 @@ pub fn cmd_treewalk(src: &str) -> Result<String, String> {
 
 /// `runvm`: lex -> parse -> check (gate) -> compile to bytecode -> VM -> captured stdout.
 /// The bytecode backend; must produce byte-identical output to `cmd_treewalk` (differential).
+/// Build a `Vm` for `program`, attaching a fresh JIT hot-function cache when the `jit` feature is on
+/// (b3b — wire `phg run` to the JIT). A fresh cache per program run keeps the compile-once cache
+/// correctly scoped to the one program's bytecode. On a non-jit build this is exactly `Vm::new`.
+fn vm_for(program: &BytecodeProgram) -> Vm<'_> {
+    #[cfg(feature = "jit")]
+    {
+        Vm::new(program).with_jit(std::rc::Rc::new(std::cell::RefCell::new(
+            crate::vm::JitCache::new(),
+        )))
+    }
+    #[cfg(not(feature = "jit"))]
+    {
+        Vm::new(program)
+    }
+}
+
 pub fn cmd_run(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let parsed = lex_parse(src)?;
@@ -1279,7 +1295,7 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
                 .map(|(out, _exit)| out)
                 .map_err(|e| e.to_string());
         }
-        Vm::new(&program).run().map_err(|e| e.to_string())
+        vm_for(&program).run().map_err(|e| e.to_string())
     })
 }
 
@@ -1308,7 +1324,7 @@ pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
         if crate::ast::uses_concurrency(&prog) {
             return crate::vm::run_cooperative_vm(&program).map_err(|e| e.to_string());
         }
-        Vm::new(&program).run_main().map_err(|e| e.to_string())
+        vm_for(&program).run_main().map_err(|e| e.to_string())
     })
 }
 
@@ -1364,7 +1380,7 @@ pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
                     e.render(&src)
                 });
         }
-        Vm::new(&program).run().map_err(|mut e| {
+        vm_for(&program).run().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
         })
@@ -1404,7 +1420,7 @@ pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), Str
                 e.render(&src)
             });
         }
-        Vm::new(&program).run_main().map_err(|mut e| {
+        vm_for(&program).run_main().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
         })

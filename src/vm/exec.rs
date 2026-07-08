@@ -433,6 +433,47 @@ impl<'a> Vm<'a> {
                     return Err("stack overflow".to_string());
                 }
                 let arity = self.program.functions[idx].arity;
+                // JIT hot-function hook (b3b): if a shared cache is wired and this callee (+ its
+                // transitive graph) is unboxed-eligible, run it natively instead of pushing a VM
+                // frame. On any fault we fall through to the VM, which re-executes the
+                // (side-effect-free — the eligibility invariant) function and renders the fault WITH
+                // the source line / stack trace the bare JIT fault string lacks. Placed AFTER the
+                // depth guard so the caller's frame is accounted for in `start_depth`.
+                #[cfg(feature = "jit")]
+                if let Some(cache_rc) = self.jit.clone() {
+                    // Compile-once: attempt Cranelift codegen only the first time this idx is seen;
+                    // `None` records a proven-ineligible function so we never retry it.
+                    let compiled = cache_rc
+                        .borrow_mut()
+                        .compiled
+                        .entry(idx)
+                        .or_insert_with(|| {
+                            crate::jit::Compiled::compile_unboxed(self.program, idx)
+                                .ok()
+                                .map(Rc::new)
+                        })
+                        .clone();
+                    if let Some(c) = compiled {
+                        let n = self.stack.len();
+                        let args: Vec<Value> = self.stack[n - arity..].to_vec();
+                        // The callee is not yet pushed and the caller frames are still live, so the
+                        // JIT entry is frame `frames.len() + 1`; its depth counter must equal
+                        // live-frames-including-itself (under-fault is the one divergence the
+                        // fallback cannot catch).
+                        let start_depth = self.frames.len() + 1;
+                        match c.run_unboxed(&args, start_depth) {
+                            crate::jit::JitRun::Value(v) => {
+                                // Net stack effect mirrors `do_return`: consume the `arity` args,
+                                // push the return value.
+                                self.stack.truncate(n - arity);
+                                self.stack.push(v);
+                                cache_rc.borrow_mut().hits += 1;
+                                return Ok(Flow::Next);
+                            }
+                            crate::jit::JitRun::Fault(_) => { /* fall through to the VM */ }
+                        }
+                    }
+                }
                 let slot_base = self.pop_n_start(arity);
                 self.frames.push(Frame {
                     func: idx,

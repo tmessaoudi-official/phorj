@@ -24,6 +24,46 @@ enum Flow {
     Done,
 }
 
+/// The JIT hot-function cache (b3b — wire `phg run` to the JIT). Shared across every `Vm` built for
+/// one program via `Rc<RefCell<_>>`, so a function's native code is compiled **once per program**,
+/// not once per `Vm` — critical for `phg benchmark`, which spins a fresh `Vm` each iteration (a
+/// per-`Vm` cache would time cold Cranelift compilation against php's warmed JIT and erase the win).
+///
+/// Sharing across `Vm`s is sound because a [`crate::jit::Compiled`] is stateless: all run state is
+/// the per-call `JitCtx` inside `run_unboxed`, so no cross-`Vm` leakage. The cache is keyed by
+/// function index and is only valid for the one program it was built against (each program run gets
+/// a fresh cache).
+///
+/// Only the UNBOXED path is cached/routed — it is the proven perf win. The boxed codegen stays the
+/// byte-identity oracle, never a runtime (kernel-call-per-op would add fault/depth risk for no gain).
+#[cfg(feature = "jit")]
+pub struct JitCache {
+    /// `idx → Some(compiled)` if the function (+ its transitive call graph) is unboxed-eligible,
+    /// `idx → None` if a compile attempt proved it ineligible. A missing key means "not yet tried".
+    compiled: std::collections::HashMap<usize, Option<Rc<crate::jit::Compiled>>>,
+    /// Number of `Op::Call` sites served natively by the JIT this program run. A VM-integration test
+    /// asserts this `> 0` on a known-eligible program — a silent 100%-fallback would otherwise pass
+    /// the differential identically and prove the JIT path was never hit.
+    pub hits: u64,
+}
+
+#[cfg(feature = "jit")]
+impl JitCache {
+    pub fn new() -> Self {
+        Self {
+            compiled: std::collections::HashMap::new(),
+            hits: 0,
+        }
+    }
+}
+
+#[cfg(feature = "jit")]
+impl Default for JitCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // Call-frame depth is capped by the shared `limits::MAX_CALL_DEPTH` (same limit the interpreter
 // enforces, keeping the backends parity-identical). Exceeding it is a clean `"stack overflow"`
 // runtime error rather than an OOM/abort (decision P3-4).
@@ -108,6 +148,11 @@ pub struct Vm<'a> {
         allow(dead_code)
     )]
     program_rc: Option<std::rc::Rc<BytecodeProgram>>,
+    /// The JIT hot-function cache (b3b), shared across `Vm`s built for the same program. `None` on
+    /// the default path (no JIT wired, or the `jit` feature is off) → the VM interprets every call.
+    /// Set via [`with_jit`](Vm::with_jit) by `cmd_run`/`benchmark` when the feature is on.
+    #[cfg(feature = "jit")]
+    jit: Option<Rc<RefCell<JitCache>>>,
 }
 
 /// One inline-cache slot (M-perf S2): the `ClassLayout` pointer last seen at a field site and the
@@ -153,7 +198,20 @@ impl<'a> Vm<'a> {
             coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
             coop_suspend: None,
             program_rc: None,
+            #[cfg(feature = "jit")]
+            jit: None,
         }
+    }
+
+    /// Attach a shared JIT hot-function cache (b3b). Eligible `Op::Call` targets are then compiled
+    /// (once, on first call) to native code and run through the unboxed path, with a VM-fallback on
+    /// any fault. Pass the SAME `Rc` to every `Vm` built for one program (e.g. across `benchmark`'s
+    /// timed iterations) so compilation is amortized. Builder-style so non-JIT call sites are
+    /// untouched.
+    #[cfg(feature = "jit")]
+    pub fn with_jit(mut self, cache: Rc<RefCell<JitCache>>) -> Self {
+        self.jit = Some(cache);
+        self
     }
 
     /// Build a VM for a cooperative green task (S4.3): same as [`new`](Vm::new) but with a suspension

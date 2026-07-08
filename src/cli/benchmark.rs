@@ -252,11 +252,30 @@ pub(super) fn bench_report_opts(
         // fresh process per backend — out of scope here).
         let cold_alloc = peak_growth_of(|| interpret(&prog).map_err(|e| e.to_string()))?;
 
+        // JIT hot-function cache (b3b), shared across the parity gate AND every timed iteration so
+        // Cranelift compilation happens ONCE — at the untimed parity gate below — and the timed loop
+        // measures warm native runs (a per-`Vm` cache would time cold compile against php's warmed
+        // JIT and erase the win). On a non-jit build `make_vm` is just `Vm::new`.
+        #[cfg(feature = "jit")]
+        let jit_cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+        let make_vm = || {
+            #[cfg(feature = "jit")]
+            {
+                Vm::new(&program).with_jit(jit_cache.clone())
+            }
+            #[cfg(not(feature = "jit"))]
+            {
+                Vm::new(&program)
+            }
+        };
+
         // Output-identity gate: comparing the speed of two backends that *disagree* is
         // meaningless. This is the differential harness's parity contract, enforced here at run
         // time before any timing — if it ever fails, the divergence (not the timing) is the news.
+        // (Sharing `make_vm` here also compiles the JIT graph once, untimed, and verifies the
+        // jit-accelerated output matches the tree-walker.)
         let tw_out = interpret(&prog).map_err(|e| e.to_string())?;
-        let vm_out = Vm::new(&program).run().map_err(|e| e.to_string())?;
+        let vm_out = make_vm().run().map_err(|e| e.to_string())?;
         if tw_out != vm_out {
             return Err(format!(
                 "bench aborted: backends disagree — tree-walk produced {} bytes, vm {} bytes; \
@@ -271,7 +290,7 @@ pub(super) fn bench_report_opts(
             compile_with(&prog, &reified).map_err(|e| e.to_string())
         })?;
         let tw = median_of(iters, || interpret(&prog).map_err(|e| e.to_string()))?;
-        let vm = median_of(iters, || Vm::new(&program).run().map_err(|e| e.to_string()))?;
+        let vm = median_of(iters, || make_vm().run().map_err(|e| e.to_string()))?;
 
         // Branch on integer nanos (no float equality); convert to f64 only for the ratio display.
         let tw_ns = tw.as_nanos();

@@ -91,3 +91,36 @@ and writing files under `/proc/self`:
 On any non-Linux host (including the cross-built Windows/macOS binaries), `/proc` is absent: every
 sampling function returns `None` and `bench` prints `memory: unavailable on this platform` instead
 of failing.
+
+## Beating PHP: the JIT (`phg run`, feature `jit`)
+
+The perf mandate (G-8) is *phorj must be faster than PHP, per feature*. The lever is the Cranelift
+JIT (`src/jit/`): built with `--features jit`, `phg run` compiles unboxed-eligible functions —
+self/cross-recursive `int` functions with no mutable locals (no `SetLocal`) whose every return is a
+provably-`int` operand — to native code, routing the VM's `Op::Call` to it (with a VM-fallback on any
+fault so error rendering is unchanged). `examples/fib.phg`'s `fib` is the canonical eligible shape.
+
+The honest comparison is **`scripts/microbench.sh`**: the phorj VM (your jit binary) vs a *real*
+release **`php:8.5-cli` with opcache+JIT in Docker** (the on-box php builds are ZTS-debug, JIT off —
+not a valid baseline). Each micro self-times and prints a checksum that gates output-identity before
+any timing is trusted.
+
+```console
+$ cargo build --release --features jit
+$ PHG_BIN=target/release/phg bash scripts/microbench.sh
+feature              VM ns/op      php+JIT     ratio  verdict
+fibrec               14259872     33920305     2.38x  WIN      # recursive fib(32), native
+intadd                    239            1     0.00x  LOSS     # iterative — still on the VM
+...
+```
+
+**`fibrec` (recursive `int` fib) is a WIN vs release php+JIT** — ~2.4× best-case on a shared box;
+the robust claim is the WIN itself (per-feature WIN/LOSS is the gated signal — absolute ratios swing
+with machine load, so `microbench-gate.sh` ratchets WIN→LOSS flips, not magnitude). The other micros
+still LOSE because they are *iterative* (`mutable`/`while` = `SetLocal`, outside the current unboxed
+subset) and so still run on the VM — widening the subset to loops is future work.
+
+> Use `microbench.sh` / `phg run` for the php comparison, **not** `phg benchmark`: a self-timing
+> micro like `fibrec` emits a different nanosecond count each run, which trips `phg benchmark`'s
+> output-identity gate. `phg benchmark` compares phorj's own backends on a *deterministic* program
+> (e.g. `phg benchmark examples/fib.phg`); it also honours the JIT under a jit binary.

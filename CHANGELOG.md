@@ -6,6 +6,41 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — JIT slice b3b: `phg run` wired to the JIT (the perf win reaches the CLI)
+
+The unboxed JIT is now reachable from `phg run` / `phg benchmark` — the native codegen that **beats
+release php+JIT on recursive-int workloads** is no longer test-only. The VM's `Op::Call` gained a
+hot-function hook (feature
+`jit`): when a callee (and its transitive call graph) is unboxed-eligible, it is compiled **once per
+program** to native code and run through the unboxed path instead of pushing a VM frame. `fib` in
+`examples/fib.phg` now executes natively under a jit-built binary.
+
+- **Unboxed-only, by design.** Only the unboxed path is routed (the actual perf win); the boxed
+  codegen stays the byte-identity oracle, never a runtime — kernel-call-per-op would add fault/depth
+  risk for no speedup. `main` prints, so it is never eligible; the `Op::Call` hook is what reaches the
+  hot leaf.
+- **VM-fallback owns all fault rendering.** On any JIT fault the (side-effect-free, per the
+  eligibility invariant) function is re-executed on the VM, which reproduces the fault *with* the
+  source line and stack trace a bare JIT fault string lacks. Over-faulting is safe; the one lethal
+  case — an under-fault that returns a value where the VM overflows — is closed by seeding the JIT
+  depth counter from the VM's live frame count (`start_depth = frames.len() + 1`, now threaded into
+  `run_unboxed`).
+- **Compile-once cache.** A shared `JitCache` (`Rc<RefCell<_>>`) amortizes Cranelift compilation
+  across every `Vm` built for one program — `phg benchmark` spins a fresh `Vm` per iteration, so a
+  per-`Vm` cache would time cold compile against php's warmed JIT.
+- **Result.** `scripts/microbench.sh` (phorj vs a real `php:8.5-cli`+JIT in Docker, output-identity
+  gated): the recursive-fib micro `fibrec` is a **WIN vs release php+JIT** (~2.4× best-case on a
+  shared box — the robust claim is the WIN, not the magnitude; per-feature WIN/LOSS is what the G-8
+  ratchet gates). The iterative micros still LOSE because they use `mutable`/`while` (`SetLocal`,
+  outside the unboxed subset) and remain on the VM — widening the subset is future work.
+- **Verification.** The differential harness runs byte-identically under `--features jit` (144 examples,
+  run ≡ tree-walker ≡ PHP 8.5.8) — every eligible call is now exercised through the JIT. A hit-counter
+  test proves the native path is actually taken (a silent 100%-fallback would false-green), and a
+  linear-recursion test bracketing `MAX_CALL_DEPTH` through the real `cmd_run` path proves the
+  overflow threshold matches the interpreter oracle (and that 4096 native frames don't blow the
+  production stack). Still `#[cfg(feature = "jit")]`; the stock non-jit `phg` is byte-for-byte
+  unchanged. (Open, developer-owned: ship jit-on-by-default?)
+
 ### Added — JIT codegen slice 1 (Cranelift): pure-int leaf functions compile & run natively
 
 First codegen of the Cranelift JIT backend (dependency-policy domain #7, perf mandate G-8). `src/jit/`

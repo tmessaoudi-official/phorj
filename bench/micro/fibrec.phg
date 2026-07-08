@@ -1,0 +1,26 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+
+// Microbench: recursive integer Fibonacci — the canonical exponential-call, pure-int workload. This
+// is the shape the unboxed JIT (slice b3b) actually accelerates: `fib` is self-recursive, every path
+// returns a provably-int operand, no mutable locals — so `phg run` compiles it to native code and the
+// VM's `Op::Call` hook routes here instead of interpreting. (The iterative micros use `mutable`/`while`
+// = `SetLocal`, outside the current unboxed subset, so they still run on the VM.)
+function fib(int n): int {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+function main(): void {
+    int n = 32;
+    int warm = fib(n);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = fib(n);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("fibrec\t{d + guard}\t{acc}");
+}

@@ -464,7 +464,7 @@ fn jit_deep_recursion_faults_like_the_vm_stack_overflow() {
 fn ub_int(program: &BytecodeProgram, f: usize, args: &[Value]) -> i64 {
     match Compiled::compile_unboxed(program, f)
         .expect("function must be unboxed-eligible")
-        .run_unboxed(args)
+        .run_unboxed(args, 1)
     {
         JitRun::Value(v) => as_int(&v),
         JitRun::Fault(m) => panic!("unexpected unboxed fault: {m}"),
@@ -539,7 +539,7 @@ fn unboxed_overflow_faults_like_the_kernel() {
     let f = func_index(&program, "mul");
     match Compiled::compile_unboxed(&program, f)
         .expect("mul is unboxed-eligible")
-        .run_unboxed(&[Value::Int(i64::MAX), Value::Int(2)])
+        .run_unboxed(&[Value::Int(i64::MAX), Value::Int(2)], 1)
     {
         JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_INT_OVERFLOW),
         JitRun::Value(v) => panic!("expected overflow, got {}", as_int(&v)),
@@ -560,14 +560,14 @@ fn unboxed_div_zero_and_mod_zero_are_distinct_faults() {
     let md = func_index(&program, "modi");
     match Compiled::compile_unboxed(&program, dv)
         .expect("divi eligible")
-        .run_unboxed(&[Value::Int(1), Value::Int(0)])
+        .run_unboxed(&[Value::Int(1), Value::Int(0)], 1)
     {
         JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_DIV_ZERO, "div-by-zero string"),
         JitRun::Value(v) => panic!("expected div-zero, got {}", as_int(&v)),
     }
     match Compiled::compile_unboxed(&program, md)
         .expect("modi eligible")
-        .run_unboxed(&[Value::Int(1), Value::Int(0)])
+        .run_unboxed(&[Value::Int(1), Value::Int(0)], 1)
     {
         JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_MOD_ZERO, "mod-by-zero string"),
         JitRun::Value(v) => panic!("expected mod-zero, got {}", as_int(&v)),
@@ -598,7 +598,7 @@ fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
             .render("");
         match Compiled::compile_unboxed(&program, f)
             .expect("eligible")
-            .run_unboxed(&args)
+            .run_unboxed(&args, 1)
         {
             JitRun::Fault(m) => {
                 assert_eq!(
@@ -688,7 +688,7 @@ fn unboxed_add_and_sub_overflow_fault_like_the_kernel() {
         let f = func_index(&program, name);
         match Compiled::compile_unboxed(&program, f)
             .expect("eligible")
-            .run_unboxed(&args)
+            .run_unboxed(&args, 1)
         {
             JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_INT_OVERFLOW, "{name} overflow"),
             JitRun::Value(v) => panic!("{name}: expected overflow, got {}", as_int(&v)),
@@ -739,7 +739,7 @@ fn unboxed_deep_recursion_faults_like_the_vm_stack_overflow() {
                 .render("");
             let jit = match Compiled::compile_unboxed(&program, f)
                 .expect("forever is unboxed-eligible")
-                .run_unboxed(&[Value::Int(0)])
+                .run_unboxed(&[Value::Int(0)], 1)
             {
                 JitRun::Fault(m) => m,
                 JitRun::Value(v) => panic!("expected stack overflow, got {}", as_int(&v)),
@@ -777,7 +777,7 @@ fn measures_unboxed_fib_vs_vm_and_php() {
     let compiled = Compiled::compile_unboxed(&program, f).expect("fib is unboxed-eligible");
     let compile_ns = t.elapsed().as_nanos();
 
-    let jit_val = match compiled.run_unboxed(&[Value::Int(N)]) {
+    let jit_val = match compiled.run_unboxed(&[Value::Int(N)], 1) {
         JitRun::Value(v) => as_int(&v),
         JitRun::Fault(m) => panic!("unexpected fib fault: {m}"),
     };
@@ -790,7 +790,7 @@ fn measures_unboxed_fib_vs_vm_and_php() {
     let best_unboxed = (0..10)
         .map(|_| {
             let s = Instant::now();
-            let _ = compiled.run_unboxed(&[Value::Int(N)]);
+            let _ = compiled.run_unboxed(&[Value::Int(N)], 1);
             s.elapsed().as_nanos()
         })
         .min()
@@ -859,7 +859,7 @@ fn unboxed_cross_call_propagates_a_callee_fault() {
         .expect_err("VM must fault: the cross-callee divides by zero");
     match Compiled::compile_unboxed(&program, f)
         .expect("callbad is unboxed-eligible")
-        .run_unboxed(&[Value::Int(10)])
+        .run_unboxed(&[Value::Int(10)], 1)
     {
         JitRun::Fault(m) => {
             assert_eq!(
@@ -897,5 +897,67 @@ fn unboxed_ineligible_callee_sinks_the_whole_graph() {
             ),
             "`{name}`: an ineligible reached callee must sink the whole graph (Unsupported), not miscompile"
         );
+    }
+}
+
+// --- slice b3b: `phg run` wiring — the JIT hook on `Op::Call`, VM-fallback, depth parity ---
+
+#[test]
+fn phg_run_hook_actually_hits_the_jit() {
+    // A silent 100%-fallback to the VM would pass every byte-identity check identically and prove
+    // nothing — so this asserts the hit counter is non-zero, i.e. the native path genuinely ran.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }\n\
+        function main() -> void { Output.printLine(\"{fib(10)}\"); }";
+    // Byte-identity: the jit-wired run must match the interpreter oracle (Invariant 2).
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "jit-wired output must match the interpreter oracle"
+    );
+    // Prove the JIT path was actually hit (build a Vm with an inspectable shared cache).
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual jit-wired output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the JIT path must actually be hit — a silent fallback false-greens byte-identity"
+    );
+}
+
+#[test]
+fn jit_stack_overflow_threshold_matches_the_oracle() {
+    // The ONE correctness vector the fault-fallback cannot catch: an under-fault (wrong
+    // `start_depth`) makes the JIT RETURN A VALUE where the VM overflows — no fault, so no re-run.
+    // A LINEAR eligible recursion bracketing `MAX_CALL_DEPTH`: under `--features jit`, cmd_run routes
+    // `countdown` through the JIT; the interpreter (cmd_treewalk) is never JITted, so it is the pure
+    // depth oracle (Invariant 2). Running through the real cmd_run path (its `on_deep_stack` 256MB
+    // thread) also proves 4096 native JIT frames don't blow the production stack.
+    use crate::limits::MAX_CALL_DEPTH;
+    for n in (MAX_CALL_DEPTH - 3)..=(MAX_CALL_DEPTH + 2) {
+        let src = format!(
+            "package Main;\n\
+             import Core.Output;\n\
+             function countdown(int n) -> int {{ if (n <= 0) {{ return 0; }} return countdown(n - 1); }}\n\
+             function main() -> void {{ Output.printLine(\"{{countdown({n})}}\"); }}"
+        );
+        let jit = crate::cli::cmd_run(&src);
+        let oracle = crate::cli::cmd_treewalk(&src);
+        match (&jit, &oracle) {
+            (Ok(a), Ok(b)) => assert_eq!(a, b, "countdown({n}): jit output must match the oracle"),
+            (Err(a), Err(b)) => assert_eq!(a, b, "countdown({n}): jit fault must match the oracle"),
+            _ => panic!(
+                "countdown({n}): jit/oracle disagree on success-vs-fault: jit={jit:?}, oracle={oracle:?}"
+            ),
+        }
     }
 }

@@ -5,6 +5,45 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] PROGRESS: **b3b SHIPPED (pending commit) — `phg run` is JIT-wired; the perf win reaches
+  the CLI.** `Op::Call` hook routes unboxed-eligible callees to native code (compile-once shared
+  `JitCache`), VM-fallback on any fault. `phg run examples/fib.phg` now runs `fib` natively.
+  Green: differential under `--features jit` + PHP-8.5.8 oracle = 144 examples byte-identical
+  (run≡treewalk≡php); plain workspace oracle = no regression; jit unit+integration = 30 pass
+  (hit-counter>0 proves the path is hit; linear-recursion-through-cmd_run proves the overflow
+  threshold matches the oracle AND 4096 native frames don't blow the production stack); clippy(both
+  configs)+fmt clean; `cargo build --release --features jit` → `target/release/phg`. Added
+  `bench/micro/fibrec.{phg,php}` (recursive-fib micro — the eligible shape) for the honest
+  vs-release-php+JIT comparison via `scripts/microbench.sh`. NOTE: the iterative micros use
+  `mutable`/`while` (`SetLocal`, outside the unboxed subset) → still VM → the full 12-feature matrix
+  re-measure (Next-2) will show the JIT helps only where eligible; widening the subset (loops/mutable)
+  is future work. Follow-ups: `microbench-gate.sh --emit` to ratchet fibrec once WIN-confirmed
+  (currently reported-not-blocked); §15 PENDING: ship jit-on-by-default in stock `phg`?
+- [2026-07-08] EXECUTION (b3b — wire `phg run` to the JIT, fresh session, advisor-certified 3C):
+  **unboxed-only `Op::Call` hook, compile-once cache, VM-fallback.** Route ONLY the unboxed path
+  (the proven 2.2× win); boxed-through-JIT is kernel-call-per-op → adds fault/depth risk and would
+  likely *regress* (helper-call-per-op slower than VM dispatch), so boxed stays the oracle, not a
+  runtime. The hook is necessary, not over-engineering: `main` prints → never eligible → entry-level
+  JIT can't reach `fib`; only the `Op::Call` hook reaches the hot leaf. Three certified points:
+  (1) **Compile once per PROGRAM, not per Vm.** `benchmark.rs` makes a fresh Vm per iteration; a
+  per-Vm cache would time cold compile against php's warmed JIT and erase the win. Cache is a shared
+  `Rc<RefCell<JitCache>>` (idx → `Option<Rc<Compiled>>`, None = ineligible) attached to each Vm;
+  benchmark shares ONE across the parity gate + timed loop so compile happens untimed. Code is
+  stateless (run state is the per-call `JitCtx`) → cross-Vm sharing is sound.
+  (2) **`start_depth = frames.len() + 1`** (the doc's bare "frames.len()" was off-by-one in the
+  LETHAL direction). At the hook the caller frame is still live (main=1) and the callee is not yet
+  pushed, so the JIT entry is frame D+1; its depth counter must equal live-frames-including-itself.
+  Threaded into `run_unboxed` (was hardcoded D0=1). Under-fault (JIT returns a value where the VM
+  overflows) is the ONE divergence the fallback can't catch (no fault → no re-run); over-fault is
+  safe. Verified by a LINEAR eligible recursion near MAX_CALL_DEPTH run through the real `cmd_run`
+  path (also proves 4096 native frames don't blow the production stack — the old overflow test dodged
+  it with a 64MB thread). If ever ambiguous, seed HIGHER.
+  (3) **Prove the JIT ran** — a hit counter in the cache, asserted `>0` in a VM-integration test; a
+  silent 100%-fallback passes the differential identically and proves nothing.
+  Gate = plain workspace/PHP-oracle (no-jit no-regression) PLUS `cargo test -p phorj --features jit`
+  (the DIFFERENTIAL under jit, the real judge — not just the 28 unit tests). Numbers use the Docker
+  release-php+JIT baseline. Kept `#[cfg(feature="jit")]`; demo binary built `--features jit`.
+  **PENDING (§15, do-not-self-rule):** ship jit-on-by-default in the stock `phg`? — user-visible.
 - [2026-07-08] PROGRESS: **u2b SHIPPED (pending commit) — general multi-function unboxed calls.**
   Generalized u2a from self-only to arbitrary call graphs: `collect_functions_unboxed` (BFS over
   reachable `Call` edges, op-subset per function), per-function FuncId sigs (`fn(depth, a_i…)->(i64,i64)`,

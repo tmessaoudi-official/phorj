@@ -1494,11 +1494,19 @@ impl Compiled {
     }
 
     /// Run an UNBOXED-compiled entry (from [`Compiled::compile_unboxed`]). The ABI is
-    /// `extern "C" fn(depth: i64, a0…: i64) -> (i64 value, i64 code)`; the top-level call passes
-    /// `depth = 1` (the VM's single entry frame), args as native `i64` (a bool arg is its `0/1`). On
-    /// `code == 0` the returned `i64` is the (int) value; otherwise the code maps to the single-sourced
-    /// `value::FAULT_*` string (or `"stack overflow"`, code 4) — byte-identical to the VM.
-    pub fn run_unboxed(&self, args: &[Value]) -> JitRun {
+    /// `extern "C" fn(depth: i64, a0…: i64) -> (i64 value, i64 code)`; args are passed as native `i64`
+    /// (a bool arg is its `0/1`). On `code == 0` the returned `i64` is the (int) value; otherwise the
+    /// code maps to the single-sourced `value::FAULT_*` string (or `"stack overflow"`, code 4) —
+    /// byte-identical to the VM.
+    ///
+    /// `start_depth` seeds the frame-depth counter producing the `"stack overflow"` fault — the SAME
+    /// contract as [`Compiled::run`]: a top-level entry (tests / benchmark / parity) passes `1` (the
+    /// VM's single entry frame); a mid-execution `phg run` hook (b3b) passes `frames.len() + 1` (the
+    /// caller frames still live, plus this not-yet-pushed callee), so an eligible function reached at
+    /// VM-depth D faults after `MAX_CALL_DEPTH - D` more frames — NOT `MAX_CALL_DEPTH`, which would
+    /// UNDER-fault (return a value where the VM faults — the one happy-path divergence the caller's
+    /// fault-fallback cannot catch, because there is no fault to fall back on).
+    pub fn run_unboxed(&self, args: &[Value], start_depth: usize) -> JitRun {
         debug_assert!(
             self.unboxed,
             "run_unboxed() requires unboxed code; use run()"
@@ -1522,30 +1530,30 @@ impl Compiled {
                 _ => 0,
             })
             .collect();
-        const D0: i64 = 1; // top-level entry frame depth (matches the VM's single entry frame)
-                           // SAFETY: `self.entry` is finalized machine code with signature
-                           // `extern "C" fn(i64 depth, i64… /* arity */) -> (i64, i64)`; we transmute to the arity-specific
-                           // type and pass depth + exactly `arity` i64 args. `self.module` owns the code, alive across the
-                           // call.
+        let d0: i64 = start_depth as i64; // live-frames-including-this-entry (see doc above)
+                                          // SAFETY: `self.entry` is finalized machine code with signature
+                                          // `extern "C" fn(i64 depth, i64… /* arity */) -> (i64, i64)`; we transmute to the arity-specific
+                                          // type and pass depth + exactly `arity` i64 args. `self.module` owns the code, alive across the
+                                          // call.
         let ret: UnboxedRet = unsafe {
             match self.arity {
                 0 => {
                     let f: extern "C" fn(i64) -> UnboxedRet = std::mem::transmute(self.entry);
-                    f(D0)
+                    f(d0)
                 }
                 1 => {
                     let f: extern "C" fn(i64, i64) -> UnboxedRet = std::mem::transmute(self.entry);
-                    f(D0, ia[0])
+                    f(d0, ia[0])
                 }
                 2 => {
                     let f: extern "C" fn(i64, i64, i64) -> UnboxedRet =
                         std::mem::transmute(self.entry);
-                    f(D0, ia[0], ia[1])
+                    f(d0, ia[0], ia[1])
                 }
                 3 => {
                     let f: extern "C" fn(i64, i64, i64, i64) -> UnboxedRet =
                         std::mem::transmute(self.entry);
-                    f(D0, ia[0], ia[1], ia[2])
+                    f(d0, ia[0], ia[1], ia[2])
                 }
                 other => {
                     return JitRun::Fault(format!("jit: unboxed arity {other} unsupported"));
