@@ -5,6 +5,25 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] 🔧 CORRECTION (widen-1, disasm-verified — the LOCKED design's local model was WRONG).
+  `phg disassemble` + `vm/exec.rs` + the boxed `rt_get_local` prove locals do NOT live in separate
+  storage: **a local slot IS a frame-stack position** (`GetLocal(slot)` = read `stack[base+slot]` and DUP
+  to top; `SetLocal(slot)` = pop into `stack[base+slot]`). A declaration `mutable int a = expr` emits NO
+  `SetLocal` — it just leaves `expr` on the stack as the next slot. Params occupy slots `0..arity` at the
+  frame base, so the frame stack STARTS non-empty. ⇒ the locked "SetLocal→def_var, GetLocal→use_var,
+  operand stack empty at leaders" model is unsound (empty-at-leaders is false once any local is live).
+  **CORRECTED MODEL (advisor-certified): pure depth-indexed Cranelift Variables** — every stack cell is
+  `var[depth]`; `push`=`def_var(var[depth])`, `pop`=`use_var(var[depth-1])`, `GetLocal(slot)`=DUP
+  `push(use_var(var[slot]))`, `SetLocal(slot)`=`def_var(var[slot], pop)`. Pre-declare `max_depth`
+  Variables (abstract-interp over ALL ops), seed all with filler `iconst 0` at entry, overwrite
+  `var[0..arity]` with the args. Cranelift + the existing `seal_all_blocks()` inserts every phi (if/else
+  merges AND loop back-edges) — no manual block params. The `unboxed_slot_kinds` fixpoint is DISCARDED
+  (it modelled the wrong separate-locals world); replaced by `unboxed_analyze` — one forward CFG pass
+  recording `(depth, kinds)` at each leader, ASSERTING every edge into a leader carries the same
+  (depth,kinds) (mismatch → `Unsupported`/VM-fallback, never miscompile). This REPLACES the
+  empty-at-leaders invariant. Return-operand-must-be-Int check unchanged. Commit 1 (`c55f6f8`) stands —
+  it is this model restricted to the bottom `arity` cells. Staging preserved: c2 keeps the `t<=ip` guard
+  (DAG → trivial merges), c3 drops it (back-edge consistency assert + cranelift phis carry the loop).
 - [2026-07-08] EXECUTION (widen-1, autonomous marathon, advisor-3C clean). Building the locked design as
   3 verifiable commits. Advisor pinned the one silent-miscompile trap: the `unboxed_slot_kinds` pre-pass
   MUST mirror codegen's operand-stack effects op-for-op — `Call` pops the callee arity + pushes Int (NOT

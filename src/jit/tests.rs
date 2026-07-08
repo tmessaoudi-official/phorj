@@ -617,12 +617,13 @@ fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
 }
 
 #[test]
-fn unboxed_rejects_non_int_return_and_setlocal() {
+fn unboxed_rejects_non_int_return_and_loops() {
     // The type-erasure guard + the unboxed subset: a bool return (would mis-map to Value::Int), a bare
     // UNPROVEN-int param return (`identity` — n is never an int-arith operand, so unprovable), a
-    // returned bool PARAM (`retb` — proves the provenance pass does NOT over-mark), and a SetLocal
-    // (mutable local / loop) all fall back — compile_unboxed must return Unsupported, never miscompile.
-    // (Self- AND cross-recursive int functions are now eligible — see the fib / cross-call tests.)
+    // returned bool PARAM (`retb` — proves the provenance pass does NOT over-mark), and a `while` LOOP
+    // (`sumTo` — backward branch, rejected by the temporary loop guard until the loops slice) all fall
+    // back — compile_unboxed must return Unsupported, never miscompile. (Straight-line mutable locals
+    // ARE now eligible — see the mutable-local tests below; self-/cross-recursive int functions too.)
     let program = compile_source(
         "package Main;\n\
          function isSmall(int n) -> bool { return n < 10; }\n\
@@ -638,7 +639,72 @@ fn unboxed_rejects_non_int_return_and_setlocal() {
                 Compiled::compile_unboxed(&program, f),
                 Err(JitError::Unsupported(_))
             ),
-            "unboxed must reject `{name}` (non-int-return / SetLocal), not miscompile"
+            "unboxed must reject `{name}` (non-int-return / loop), not miscompile"
+        );
+    }
+}
+
+// --- widen-1 c2: UNBOXED straight-line mutable locals (SetLocal + local decls; loops still rejected) ---
+
+#[test]
+fn unboxed_straightline_mutable_local_matches_vm() {
+    // A mutable local (SetLocal + GetLocal of slot >= arity), straight-line (no loop), int-returning.
+    // Locals are Cranelift Variables; the slot-kind pre-pass proves `a` int (every assignment is int),
+    // so `return a` is accepted. Oracle-checked.
+    let program = compile_source(
+        "package Main;\n\
+         function f(int x) -> int { mutable int a = x * 2; a = a + 3; return a; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "f");
+    for x in [0_i64, 1, -4, 100, -100] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(x)]),
+            vm_int(&program, f, vec![Value::Int(x)]),
+            "unboxed f({x}) with a mutable local must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_bool_local_not_returned_is_eligible() {
+    // A mutable BOOL local (SetLocal from a comparison → Kind::Bool), used only in a bool context
+    // (JumpIfFalse), NOT returned; the function returns an int. The slot-kind pre-pass must label the
+    // slot Bool (so it can never be mis-returned as Value::Int) yet keep the function eligible.
+    // Oracle-checked — the advisor's loop-carried-Bool shape, straight-line variant.
+    let program = compile_source(
+        "package Main;\n\
+         function f(int a, int b) -> int { mutable bool flag = a < b; if (flag) { return 1; } return 0; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "f");
+    for (a, b) in [(1_i64, 2_i64), (2, 1), (5, 5), (-3, 0)] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(a), Value::Int(b)]),
+            vm_int(&program, f, vec![Value::Int(a), Value::Int(b)]),
+            "unboxed f({a},{b}) with a bool local must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_call_result_into_local_matches_vm() {
+    // Call → SetLocal → return-that-local: the slot-kind pre-pass must pop the callee's arity and push
+    // Int for a Call (NOT clear the abstract stack), or `r` is mislabeled and the function over-rejects.
+    // `r + g(x)` also places a Call directly after a GetLocal, exercising the arity-pop mid-expression.
+    // Oracle-checked — the advisor's arity-pop desync catcher.
+    let program = compile_source(
+        "package Main;\n\
+         function g(int x) -> int { return x + 1; }\n\
+         function f(int x) -> int { mutable int r = g(x); return r + g(x); }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "f");
+    for x in [0_i64, 3, -5, 41] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(x)]),
+            vm_int(&program, f, vec![Value::Int(x)]),
+            "unboxed f({x}) storing a call result must match the VM oracle"
         );
     }
 }

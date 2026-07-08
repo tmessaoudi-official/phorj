@@ -438,6 +438,43 @@ fn reachable(code: &[Op]) -> Vec<bool> {
     reach
 }
 
+/// Basic-block leaders for the UNBOXED codegen: ip 0, every (reachable) branch target, and the
+/// fall-through after every `JumpIfFalse`. This is the SINGLE definition of the block structure —
+/// both `build_body_unboxed` (which creates one Cranelift block per leader) and `unboxed_slot_kinds`
+/// (which clears its abstract operand stack at each leader, mirroring the empty-at-leaders invariant)
+/// drive off it, so the two can never drift apart. NOTE: the fall-through after an unconditional
+/// `Jump` / a `Return` is NOT a leader (it is only reachable via an explicit branch, which adds it as
+/// a target if live) — matching `reachable`.
+fn leaders(code: &[Op], reach: &[bool]) -> Vec<bool> {
+    let n = code.len();
+    let mut is_leader = vec![false; n];
+    if n > 0 {
+        is_leader[0] = true;
+    }
+    for (ip, op) in code.iter().enumerate() {
+        if !reach[ip] {
+            continue;
+        }
+        match op {
+            Op::Jump(t) => {
+                if *t < n {
+                    is_leader[*t] = true;
+                }
+            }
+            Op::JumpIfFalse(t) => {
+                if *t < n {
+                    is_leader[*t] = true;
+                }
+                if ip + 1 < n {
+                    is_leader[ip + 1] = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    is_leader
+}
+
 /// After a call whose result `res` is a `0 = ok / 1 = fault` status, branch to the shared fault-exit
 /// block on fault and continue in a fresh block (the sequential-execution successor).
 fn emit_fault_check(b: &mut FunctionBuilder, res: ClValue, fault_block: &mut Option<Block>) {
@@ -807,14 +844,6 @@ enum Kind {
     Unknown,
 }
 
-/// Pop one operand, turning the "can't happen" underflow (validate guarantees balance) into a
-/// `Codegen` error rather than a panic.
-fn upop(stack: &mut Vec<(ClValue, Kind)>) -> Result<(ClValue, Kind), JitError> {
-    stack
-        .pop()
-        .ok_or_else(|| JitError::Codegen("unboxed: operand stack underflow".to_string()))
-}
-
 /// Provenance of an operand-stack entry for the provenance pre-pass ONLY (not codegen): `Param(slot)`
 /// = a bare `GetLocal(slot)` result; `Other` = anything else (a `Const`, an arithmetic/comparison
 /// result, a call result).
@@ -890,16 +919,194 @@ fn unboxed_proven_int_params(func: &crate::chunk::Function) -> Vec<bool> {
     proven
 }
 
+/// Push an SSA value + its kind onto the unboxed operand stack, which is realized as depth-indexed
+/// Cranelift `Variable`s (`vars[depth]`): the value is stored with `def_var` (cranelift turns
+/// within-block def/use into plain SSA and inserts phis at merges / loop back-edges), the kind is
+/// tracked compile-time in `kinds` (whose length IS the current depth). Fails `Codegen` if the depth
+/// exceeds the pre-declared `max_depth` (an abstract-interp miscount — the actual bug, never silent).
+fn ub_push(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    v: ClValue,
+    k: Kind,
+) -> Result<(), JitError> {
+    let d = kinds.len();
+    let var = *vars.get(d).ok_or_else(|| {
+        JitError::Codegen(format!(
+            "unboxed: stack depth {d} exceeds max {}",
+            vars.len()
+        ))
+    })?;
+    b.def_var(var, v);
+    kinds.push(k);
+    Ok(())
+}
+
+/// Pop the top of the depth-indexed operand stack, returning its SSA value (`use_var`) + tracked kind.
+fn ub_pop(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(ClValue, Kind), JitError> {
+    let k = kinds
+        .pop()
+        .ok_or_else(|| JitError::Codegen("unboxed: operand stack underflow".to_string()))?;
+    let d = kinds.len();
+    Ok((b.use_var(vars[d]), k))
+}
+
+/// Forward CFG pass computing the abstract operand-stack KINDS at every block leader for the unboxed
+/// path, plus the maximum stack depth (for `Variable` pre-declaration). Mirrors codegen's per-op stack
+/// effects EXACTLY (a `Call` pops the callee arity + pushes `Int`; `GetLocal(slot)` DUPs slot `slot`'s
+/// kind; `SetLocal(slot)` writes it; comparisons/`Not` push `Bool`, arithmetic pushes `Int`).
+///
+/// This REPLACES the old "empty-at-leaders" invariant. Because a local is a frame-stack position (a
+/// declaration leaves its initializer on the stack, no `SetLocal`), the stack is NOT empty at a leader
+/// once any local is live; instead every edge into a leader must carry the SAME `(depth, kinds)`. The
+/// pass records a leader's state on first arrival and ASSERTS a match on every later edge (the if/else
+/// merge, the loop back-edge); a mismatch — or a stack underflow / write past the top — returns
+/// `Unsupported` (VM fallback), never a miscompile. Only the compile-time kinds+depth are checked here;
+/// the VALUES are carried by the depth-indexed Variables, whose phis Cranelift inserts on its own.
+/// Per-ip abstract operand-stack KINDS at each block leader (`None` = not a leader / unreached).
+type LeaderStates = Vec<Option<Vec<Kind>>>;
+
+fn unboxed_analyze(
+    program: &BytecodeProgram,
+    func_idx: usize,
+    param_kinds: &[Kind],
+) -> Result<(LeaderStates, usize), JitError> {
+    let code = &program.functions[func_idx].chunk.code;
+    let n = code.len();
+    let reach = reachable(code);
+    let is_leader = leaders(code, &reach);
+
+    let mut leader_state: LeaderStates = vec![None; n];
+    let mut max_depth = param_kinds.len();
+    if n == 0 {
+        return Ok((leader_state, max_depth));
+    }
+    // ip 0 (the entry leader) starts with the params on the stack: slots 0..arity at the frame base.
+    leader_state[0] = Some(param_kinds.to_vec());
+    let mut work = vec![0usize];
+
+    // Record/assert an edge carrying `out` into leader `target`.
+    let propagate = |leader_state: &mut LeaderStates,
+                     work: &mut Vec<usize>,
+                     target: usize,
+                     out: &[Kind]|
+     -> Result<(), JitError> {
+        match &leader_state[target] {
+            None => {
+                leader_state[target] = Some(out.to_vec());
+                work.push(target);
+            }
+            Some(existing) if existing.as_slice() != out => {
+                return Err(JitError::Unsupported(format!(
+                    "unboxed: inconsistent operand stack at leader ip {target} ({existing:?} vs {out:?})"
+                )));
+            }
+            Some(_) => {}
+        }
+        Ok(())
+    };
+
+    while let Some(l) = work.pop() {
+        let mut kinds = leader_state[l]
+            .clone()
+            .expect("a queued leader always has a recorded state");
+        let mut ip = l;
+        loop {
+            match &code[ip] {
+                Op::Const(_) => kinds.push(Kind::Int),
+                Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => {
+                    kinds.pop();
+                    kinds.pop();
+                    kinds.push(Kind::Int);
+                }
+                Op::Neg => {
+                    kinds.pop();
+                    kinds.push(Kind::Int);
+                }
+                Op::Not => {
+                    kinds.pop();
+                    kinds.push(Kind::Bool);
+                }
+                Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
+                    kinds.pop();
+                    kinds.pop();
+                    kinds.push(Kind::Bool);
+                }
+                Op::GetLocal(slot) => {
+                    let k = *kinds.get(*slot).ok_or_else(|| {
+                        JitError::Codegen(format!(
+                            "unboxed analyze: GetLocal slot {slot} underflow"
+                        ))
+                    })?;
+                    kinds.push(k);
+                }
+                Op::SetLocal(slot) => {
+                    let k = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: SetLocal underflow".to_string())
+                    })?;
+                    if *slot >= kinds.len() {
+                        return Err(JitError::Codegen(format!(
+                            "unboxed analyze: SetLocal slot {slot} past top {}",
+                            kinds.len()
+                        )));
+                    }
+                    kinds[*slot] = k;
+                }
+                Op::Call(callee) => {
+                    for _ in 0..program.functions[*callee].arity {
+                        kinds.pop();
+                    }
+                    kinds.push(Kind::Int);
+                }
+                Op::Jump(t) => {
+                    propagate(&mut leader_state, &mut work, *t, &kinds)?;
+                    break;
+                }
+                Op::JumpIfFalse(t) => {
+                    kinds.pop(); // the bool condition
+                    propagate(&mut leader_state, &mut work, *t, &kinds)?;
+                    propagate(&mut leader_state, &mut work, ip + 1, &kinds)?;
+                    break;
+                }
+                Op::Return => {
+                    break;
+                }
+                other => {
+                    return Err(JitError::Unsupported(format!("unboxed analyze: {other:?}")));
+                }
+            }
+            max_depth = max_depth.max(kinds.len());
+            let next = ip + 1;
+            if next >= n {
+                break;
+            }
+            if is_leader[next] {
+                propagate(&mut leader_state, &mut work, next, &kinds)?;
+                break;
+            }
+            ip = next;
+        }
+    }
+    Ok((leader_state, max_depth))
+}
+
 /// Collect the set of functions to compile for the UNBOXED path: the entry plus every function it
 /// transitively (reachably) calls (via `Op::Call`), in discovery order. Enforces the unboxed op-subset
-/// per function (default-deny): a closure capture, a non-int `Const`, a `SetLocal` or a
-/// `GetLocal(slot >= arity)` (local declaration — the unboxed path reads params directly via
-/// block-param dominance and has no slots beyond them), or any op outside the subset makes the WHOLE
-/// compilation `Unsupported` (so the caller falls back), because a native call needs its callee
-/// compiled in the same module. `Call` (self OR cross-function) is allowed — the whole reached graph
-/// is collected. Only reachable ops are inspected. (The provably-int-`Return` check stays in
-/// `build_body_unboxed`; a non-int return anywhere fails the build and thus the whole compile — the
-/// fixpoint's "reject the whole graph if any function is ineligible".)
+/// per function (default-deny): a closure capture, a non-int `Const`, a BACKWARD branch (a loop — a
+/// temporary guard until the loops slice), or any op outside the subset makes the WHOLE compilation
+/// `Unsupported` (so the caller falls back), because a native call needs its callee compiled in the
+/// same module. Mutable locals — `GetLocal`/`SetLocal` of any slot, including declared locals `>= arity`
+/// — ARE in the subset (a slot is a frame-stack position, realized as a depth-indexed Cranelift
+/// Variable in `build_body_unboxed`). `Call` (self OR cross-function) is allowed — the whole reached
+/// graph is collected. Only reachable ops are inspected. (The provably-int-`Return` check + the
+/// operand-stack-shape validation stay in `unboxed_analyze`/`build_body_unboxed`; a non-int return or an
+/// inconsistent-stack leader anywhere fails the build and thus the whole compile — the fixpoint's
+/// "reject the whole graph if any function is ineligible".)
 fn collect_functions_unboxed(
     program: &BytecodeProgram,
     entry_idx: usize,
@@ -951,15 +1158,12 @@ fn collect_functions_unboxed(
                 | Op::Jump(_)
                 | Op::JumpIfFalse(_)
                 | Op::Return => {}
-                Op::GetLocal(slot) if *slot < func.arity => {}
-                Op::GetLocal(slot) => {
-                    return Err(JitError::Unsupported(format!(
-                        "unboxed: local slot {slot} >= arity {} (local declaration)",
-                        func.arity
-                    )));
-                }
+                // Mutable locals: a read of any slot and a write (SetLocal) are both in the subset.
+                // Slots are Cranelift Variables (widen-1 c1); their int-ness is proven by the
+                // `unboxed_slot_kinds` fixpoint, and a non-int-typed local reaching a `Return` fails
+                // the build (whole-graph fallback).
+                Op::GetLocal(_) | Op::SetLocal(_) => {}
                 Op::Call(callee) => work.push(*callee),
-                // SetLocal and everything else fall back.
                 other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
             }
         }
@@ -969,14 +1173,19 @@ fn collect_functions_unboxed(
 }
 
 /// Emit UNBOXED native code for one int function (self- or cross-recursive) into `cl_ctx.func`
-/// (signature already `extern "C" fn(a0..a_arity: i64) -> (i64 value, i64 code)` — a multi-return, so
-/// no fault-cell pointer / no memory store on any path). Success returns `(value, 0)`; a fault returns
-/// `(0, code)` (1 overflow / 2 div-zero / 3 mod-zero). Fault CONDITIONS mirror the `value.rs` int
-/// kernels EXACTLY (div/rem check zero BEFORE `i64::MIN / -1`, matching `int_div`/`int_rem`); the
-/// STRINGS are mapped from the code in [`Compiled::run_unboxed`] via the single-sourced `value::FAULT_*`
-/// consts. Returns `Unsupported` for `SetLocal` / `Call` / a non-`Int` `Return` operand, and `Codegen`
-/// for a non-empty operand stack at a leader (guards against a future non-structured op silently
-/// breaking the empty-at-leaders invariant).
+/// (signature already `extern "C" fn(depth, a0..a_arity: i64) -> (i64 value, i64 code)` — a
+/// multi-return, so no fault-cell pointer / no memory store on any path). Success returns `(value, 0)`;
+/// a fault returns `(0, code)` (1 overflow / 2 div-zero / 3 mod-zero / 4 stack-overflow). Fault
+/// CONDITIONS mirror the `value.rs` int kernels EXACTLY (div/rem check zero BEFORE `i64::MIN / -1`,
+/// matching `int_div`/`int_rem`); the STRINGS are mapped from the code in [`Compiled::run_unboxed`] via
+/// the single-sourced `value::FAULT_*` consts.
+///
+/// The frame value-stack (locals at the base — slots `0..arity` are the params — plus temporaries on
+/// top) is realized as depth-indexed Cranelift `Variable`s (`vars[depth]`): a declaration leaves its
+/// initializer on the stack with no `SetLocal`, so locals and temporaries are ONE stack, exactly as the
+/// VM models it. `unboxed_analyze` fixes the compile-time depth+kinds at each leader (and validates
+/// edge consistency); Cranelift + `seal_all_blocks` inserts the phis for merges and loop back-edges.
+/// Returns `Unsupported` for a non-`Int` `Return` operand or an inconsistent-stack leader.
 fn build_body_unboxed(
     module: &mut JITModule,
     cl_ctx: &mut cranelift::codegen::Context,
@@ -989,6 +1198,20 @@ fn build_body_unboxed(
     let code = &func.chunk.code;
     let n = code.len();
     let reach = reachable(code);
+
+    // Param slots read as `Int` iff proven int by usage (so a bare-param `Return`, e.g. fib's base case,
+    // types correctly); otherwise `Unknown` → a bare return of one is rejected. These seed the entry
+    // stack for the analysis, which then fixes every leader's (depth, kinds) and the max stack depth.
+    let param_kinds: Vec<Kind> = (0..func.arity)
+        .map(|s| {
+            if s < proven.len() && proven[s] {
+                Kind::Int
+            } else {
+                Kind::Unknown
+            }
+        })
+        .collect();
+    let (leader_state, max_depth) = unboxed_analyze(program, func_idx, &param_kinds)?;
 
     let mut fbctx = FunctionBuilderContext::new();
     let mut b = FunctionBuilder::new(&mut cl_ctx.func, &mut fbctx);
@@ -1004,64 +1227,54 @@ fn build_body_unboxed(
 
     // Entry block: `[depth, a0, a1, …]`. `depth` is the live frame count at the call site (the caller
     // passes `depth + 1`; the top-level entry gets 1) — a `Call` checks `depth >= MAX_CALL_DEPTH`
-    // BEFORE recursing to reproduce the VM's `"stack overflow"` at the exact threshold. Args are read
-    // directly wherever needed — defined in the entry block, which dominates the whole body (no
-    // `SetLocal`, and the only back-edge — a self-call — is a native call, not a CFG edge, so a local's
-    // value never needs a phi).
+    // BEFORE recursing to reproduce the VM's `"stack overflow"` at the exact threshold.
     let entry = b.create_block();
     b.append_block_params_for_function_params(entry);
     b.switch_to_block(entry);
     let entry_params: Vec<ClValue> = b.block_params(entry).to_vec();
     let depth = entry_params[0];
     let args: Vec<ClValue> = entry_params[1..].to_vec();
-    // Locals live in Cranelift `Variable`s (slot s → `vars[s]`), defined at entry from the params.
-    // For the current subset (no `SetLocal`, no loops — enforced by `collect_functions_unboxed`) the
-    // only def of each var is here in the entry block, which dominates the whole body, so `use_var`
-    // is exactly equivalent to reading the entry param. This is the substrate the mutable-locals +
-    // loops slices (widen-1) build on: `SetLocal` becomes `def_var`, and Cranelift's own SSA
-    // construction (with `seal_all_blocks` below) inserts the loop-carried phis for free.
-    let mut vars: Vec<Variable> = Vec::with_capacity(args.len());
-    for &a in &args {
+    // Every stack cell is a Cranelift `Variable` (`vars[d]` = stack depth d), all DECLARED AND DEFINED
+    // in the entry block — which dominates the whole body — so every `use_var`, including a loop-header
+    // read reached via a back-edge, is dominated by a definition; Cranelift's SSA construction +
+    // `seal_all_blocks` then inserts the phis. The bottom `arity` cells are seeded from the incoming
+    // args (the frame's slots 0..arity); the rest get a filler `0` that is always overwritten before it
+    // is read (structured control flow + definite-assignment; same argument as the boxed `Value::Unit`
+    // filler). Within a block, def/use of these Variables optimizes to plain SSA — no memory traffic.
+    let mut vars: Vec<Variable> = Vec::with_capacity(max_depth);
+    for s in 0..max_depth {
         let var = b.declare_var(types::I64);
-        b.def_var(var, a);
+        let init = if s < args.len() {
+            args[s]
+        } else {
+            b.ins().iconst(types::I64, 0)
+        };
+        b.def_var(var, init);
         vars.push(var);
     }
 
-    // One Cranelift block per reachable leader (same shape as the boxed builder).
+    // One Cranelift block per reachable leader — the SAME leader set `unboxed_analyze` used, so the two
+    // views of the block structure can never drift.
+    let is_leader = leaders(code, &reach);
     let mut blocks: Vec<Option<Block>> = vec![None; n];
-    let start = b.create_block();
-    blocks[0] = Some(start);
-    for (ip, op) in code.iter().enumerate() {
-        if !reach[ip] {
-            continue;
-        }
-        match op {
-            Op::Jump(t) => {
-                if blocks[*t].is_none() {
-                    blocks[*t] = Some(b.create_block());
-                }
-            }
-            Op::JumpIfFalse(t) => {
-                if blocks[*t].is_none() {
-                    blocks[*t] = Some(b.create_block());
-                }
-                if ip + 1 < n && blocks[ip + 1].is_none() {
-                    blocks[ip + 1] = Some(b.create_block());
-                }
-            }
-            _ => {}
+    for ip in 0..n {
+        if reach[ip] && is_leader[ip] {
+            blocks[ip] = Some(b.create_block());
         }
     }
+    let start = blocks[0].expect("ip 0 is always a leader");
 
-    // Shared fault-exit: takes the fault code as a block param, stores it to `*fault_cell`, returns 0.
+    // Shared fault-exit: takes the fault code as a block param, returns (0, code).
     let fault_exit = b.create_block();
     b.append_block_param(fault_exit, types::I64);
 
     b.ins().jump(start, &[]);
     b.switch_to_block(start);
     let mut current: Option<Block> = Some(start);
-    // Compile-time operand stack of (SSA value, kind). EMPTY at every leader (asserted on entry).
-    let mut stack: Vec<(ClValue, Kind)> = Vec::new();
+    // Compile-time KIND stack; its length is the current stack depth. Reset from `leader_state` at every
+    // block leader (the values are carried by the depth-indexed Variables). The entry block starts with
+    // the params on the stack.
+    let mut kinds: Vec<Kind> = param_kinds.clone();
 
     // Emit "if `flag` (i8, nonzero) then fault with `code` else continue in a fresh block".
     let fault_if = |b: &mut FunctionBuilder, flag: ClValue, code: i64| {
@@ -1078,18 +1291,17 @@ fn build_body_unboxed(
         if ip != 0 {
             if let Some(blk) = blocks[ip] {
                 if current.is_some() {
-                    b.ins().jump(blk, &[]);
-                }
-                if !stack.is_empty() {
-                    // A non-empty operand stack at a block boundary (e.g. a ternary/short-circuit that
-                    // leaves a value across the merge) is outside u1's structured subset → fall back.
-                    return Err(JitError::Unsupported(format!(
-                        "unboxed: operand stack not empty ({}) at leader ip {ip}",
-                        stack.len()
-                    )));
+                    b.ins().jump(blk, &[]); // fall-through edge into this leader
                 }
                 b.switch_to_block(blk);
                 current = Some(blk);
+                // The values are carried by the depth-indexed Variables (Cranelift phis them); reset the
+                // compile-time KIND stack to this leader's recorded shape (validated by `unboxed_analyze`).
+                kinds = leader_state[ip].clone().ok_or_else(|| {
+                    JitError::Codegen(format!(
+                        "unboxed: block leader ip {ip} has no analyzed state"
+                    ))
+                })?;
             }
         }
         if current.is_none() {
@@ -1100,24 +1312,24 @@ fn build_body_unboxed(
             Op::Const(idx) => match func.chunk.consts.get(*idx) {
                 Some(Value::Int(k)) => {
                     let v = b.ins().iconst(types::I64, *k);
-                    stack.push((v, Kind::Int));
+                    ub_push(&mut b, &vars, &mut kinds, v, Kind::Int)?;
                 }
                 other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
             },
             Op::AddI | Op::SubI | Op::MulI => {
-                let (bv, _) = upop(&mut stack)?;
-                let (av, _) = upop(&mut stack)?;
+                let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 let (res, overflow) = match op {
                     Op::AddI => b.ins().sadd_overflow(av, bv),
                     Op::SubI => b.ins().ssub_overflow(av, bv),
                     _ => b.ins().smul_overflow(av, bv),
                 };
                 fault_if(&mut b, overflow, 1); // 1 → FAULT_INT_OVERFLOW
-                stack.push((res, Kind::Int));
+                ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
             }
             Op::DivI | Op::RemI => {
-                let (bv, _) = upop(&mut stack)?;
-                let (av, _) = upop(&mut stack)?;
+                let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 // Zero FIRST (matches value::int_div / int_rem): code 2 (div) / 3 (rem).
                 let zero = b.ins().iconst(types::I64, 0);
                 let is_zero = b.ins().icmp(IntCC::Equal, bv, zero);
@@ -1134,25 +1346,25 @@ fn build_body_unboxed(
                 } else {
                     b.ins().srem(av, bv)
                 };
-                stack.push((res, Kind::Int));
+                ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
             }
             Op::Neg => {
-                let (av, _) = upop(&mut stack)?;
+                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 let imin = b.ins().iconst(types::I64, i64::MIN);
                 let is_min = b.ins().icmp(IntCC::Equal, av, imin);
                 fault_if(&mut b, is_min, 1); // -i64::MIN → FAULT_INT_OVERFLOW
                 let res = b.ins().ineg(av);
-                stack.push((res, Kind::Int));
+                ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
             }
             Op::Not => {
-                let (av, _) = upop(&mut stack)?;
+                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 let r = b.ins().icmp_imm(IntCC::Equal, av, 0); // 1 iff false
                 let r64 = b.ins().uextend(types::I64, r);
-                stack.push((r64, Kind::Bool));
+                ub_push(&mut b, &vars, &mut kinds, r64, Kind::Bool)?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
-                let (bv, _) = upop(&mut stack)?;
-                let (av, _) = upop(&mut stack)?;
+                let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 let cc = match op {
                     Op::Eq => IntCC::Equal,
                     Op::Ne => IntCC::NotEqual,
@@ -1163,25 +1375,41 @@ fn build_body_unboxed(
                 };
                 let r = b.ins().icmp(cc, av, bv);
                 let r64 = b.ins().uextend(types::I64, r);
-                stack.push((r64, Kind::Bool));
+                ub_push(&mut b, &vars, &mut kinds, r64, Kind::Bool)?;
             }
             Op::GetLocal(slot) => {
+                // DUP: read the frame-stack cell at `slot` (a Variable) and push a copy on top, carrying
+                // that cell's CURRENT kind (a proven-int param, or whatever was last stored there).
                 let var = *vars.get(*slot).ok_or_else(|| {
                     JitError::Codegen(format!(
-                        "unboxed GetLocal slot {slot} out of range (locals {})",
+                        "unboxed GetLocal slot {slot} out of range (max_depth {})",
                         vars.len()
                     ))
                 })?;
+                let kind = *kinds.get(*slot).ok_or_else(|| {
+                    JitError::Codegen(format!("unboxed GetLocal slot {slot} above stack top"))
+                })?;
                 let v = b.use_var(var);
-                // A param proven int by the provenance pre-pass reads as Int (so a bare-param return
-                // types correctly, e.g. fib's base case); otherwise Unknown → a bare return of it is
-                // rejected at `Return`.
-                let kind = if *slot < proven.len() && proven[*slot] {
-                    Kind::Int
-                } else {
-                    Kind::Unknown
-                };
-                stack.push((v, kind));
+                ub_push(&mut b, &vars, &mut kinds, v, kind)?;
+            }
+            Op::SetLocal(slot) => {
+                // Pop the top and store it into the frame-stack cell at `slot`, updating that cell's
+                // tracked kind. A back-edge assignment feeds Cranelift's loop-header phi via `def_var`.
+                let (v, k) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let var = *vars.get(*slot).ok_or_else(|| {
+                    JitError::Codegen(format!(
+                        "unboxed SetLocal slot {slot} out of range (max_depth {})",
+                        vars.len()
+                    ))
+                })?;
+                if *slot >= kinds.len() {
+                    return Err(JitError::Codegen(format!(
+                        "unboxed SetLocal slot {slot} above stack top {}",
+                        kinds.len()
+                    )));
+                }
+                b.def_var(var, v);
+                kinds[*slot] = k;
             }
             Op::Call(callee) => {
                 // Self OR cross-function call. Reproduce the VM's pre-push depth guard, then a direct
@@ -1198,7 +1426,7 @@ fn build_body_unboxed(
                 let arity = program.functions[*callee].arity;
                 let mut cargs: Vec<ClValue> = Vec::with_capacity(arity);
                 for _ in 0..arity {
-                    let (v, _) = upop(&mut stack)?;
+                    let (v, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                     cargs.push(v);
                 }
                 cargs.reverse();
@@ -1214,14 +1442,9 @@ fn build_body_unboxed(
                 b.ins()
                     .brif(is_fault, fault_exit, &[ccode.into()], cont, &[]);
                 b.switch_to_block(cont);
-                stack.push((value, Kind::Int));
+                ub_push(&mut b, &vars, &mut kinds, value, Kind::Int)?;
             }
             Op::Jump(t) => {
-                if !stack.is_empty() {
-                    return Err(JitError::Unsupported(
-                        "unboxed: non-empty operand stack at Jump".to_string(),
-                    ));
-                }
                 let tb = blocks[*t].ok_or_else(|| {
                     JitError::Codegen(format!("unboxed jump to non-leader ip {t}"))
                 })?;
@@ -1229,12 +1452,7 @@ fn build_body_unboxed(
                 current = None;
             }
             Op::JumpIfFalse(t) => {
-                let (cond, _) = upop(&mut stack)?;
-                if !stack.is_empty() {
-                    return Err(JitError::Unsupported(
-                        "unboxed: non-empty operand stack at JumpIfFalse".to_string(),
-                    ));
-                }
+                let (cond, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 let tb = blocks[*t].ok_or_else(|| {
                     JitError::Codegen(format!("unboxed JumpIfFalse target ip {t}"))
                 })?;
@@ -1246,7 +1464,7 @@ fn build_body_unboxed(
                 current = None;
             }
             Op::Return => {
-                let (v, kind) = upop(&mut stack)?;
+                let (v, kind) = ub_pop(&mut b, &vars, &mut kinds)?;
                 if kind != Kind::Int {
                     // A bool/unknown return would be mis-mapped to Value::Int — reject to VM/boxed.
                     return Err(JitError::Unsupported(format!(
@@ -1255,14 +1473,9 @@ fn build_body_unboxed(
                 }
                 let ok = b.ins().iconst(types::I64, 0);
                 b.ins().return_(&[v, ok]); // (value, code=0)
-                if !stack.is_empty() {
-                    return Err(JitError::Codegen(
-                        "unboxed: non-empty operand stack after Return".to_string(),
-                    ));
-                }
                 current = None;
             }
-            // u1 is leaf + provably-int-return only; everything else falls back to the VM/boxed path.
+            // Everything else falls back to the VM/boxed path.
             other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
         }
     }
