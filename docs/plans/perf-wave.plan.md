@@ -5,6 +5,31 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] ✅✅ **CEILING CONFIRMED — native codegen BEATS php+JIT (throwaway unboxed spike, advisor-
+  directed).** Hand-written UNBOXED native fib(30) (i64 in registers, native `isub`/`iadd`/`icmp`,
+  native recursion, no `Vec`/no per-op `extern "C"` call/no overflow checks) = **5.03 ms**, vs a FRESHLY
+  RE-MEASURED php+JIT (Docker `php:8.5-cli`, `opcache.jit=tracing`, 64M buffer, best-of-10) = **10.01
+  ms** (confirms the recorded ~9.6). So **unboxed native phorj ≈ 2.0× FASTER than php+JIT on fib** —
+  the G-8 mandate is ACHIEVABLE. Boxed JIT was 520 ms (≈103× slower than unboxed, ≈52× slower than php)
+  → the entire gap is the boxing/`Vec`/helper-call tax, NOT Cranelift codegen (compile 26 ms). Spike
+  asserted `fib(30)==832040` before timing; then REVERTED (not a slice). ⇒ **Unboxing is THE mechanism
+  to meet the mandate, and the critical path.**
+- [2026-07-08] ⏸️ **PENDING (developer's call — do NOT self-rule; recorded per §15 for the autonomous
+  session): re-order the JIT marathon to bring UNBOXING forward (was JIT-5, LAST).** The locked "Option
+  A — boxed first, unboxing last" was justified by "the spike proved boxed already ~3× > php+JIT, so
+  breadth wins G-8" — that premise is now FALSIFIED by two honest measurements (boxed is 52× SLOWER than
+  php+JIT; the "3×" was native-vs-VM, mis-attributed). Breadth over a boxed substrate can NEVER cross
+  php+JIT. **Recommendation:** make unboxing the critical path; KEEP the boxed codegen as the
+  byte-identity ORACLE (it calls the single-sourced kernels, so unboxed output is validated boxed≡VM≡
+  unboxed) rather than discarding it; b3b's `phg run` wiring is codegen-agnostic and slots under either.
+  The developer may veto (e.g. prefers the safe breadth-first path, or wants unboxing's fault-parity
+  risk deferred). ⚠ Unboxing's HARD part (why it was scheduled last): native arithmetic must reproduce
+  the kernel fault strings EXACTLY — `int_add`/`int_mul` overflow, `int_div` div-by-zero AND `i64::MIN /
+  -1`, `int_rem` mod-zero + overflow, `int_neg` of `i64::MIN` — direct tension with Invariant 4
+  (kernels single-sourced). Every unboxing slice gets its own fault-parity 3C + a differential case per
+  fault. Autonomous-session stance: proceeding to build unboxing (user tonight: "do the most possible
+  for perf and JIT, keep moving") WITH the boxed+VM+differential oracles as the byte-identity net; this
+  PENDING is the developer's to ratify/veto in the morning.
 - [2026-07-08] 🚨 **HONEST fib(30) MEASUREMENT (b3a `measures_fib_native_jit_vs_vm`, best-of-N wall,
   this box) — CORRECTS the Option-A premise:** VM **1694 ms**, native-JIT (boxed) **520 ms**, php+JIT
   **~9.6 ms** (recorded Docker php:8.5 release+JIT; on-box php unusable). Native-JIT is **3.26× faster
