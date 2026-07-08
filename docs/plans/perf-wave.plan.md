@@ -5,6 +5,29 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] 🔬 **ovf-spec GROUNDING + DESIGN REFINEMENT (fresh code-read of `src/jit/mod.rs`
+  `build_body_unboxed`, lines ~1181–1451) — BEFORE the sketch is implemented, advisor-3C pending.**
+  Confirmed the current unboxed path faults IMMEDIATELY at each op via `fault_if(cond,code) → fault_exit`
+  → returns `(0,code)` (1 ovf / 2 div-zero / 3 mod-zero / 4 stack-ovf), in exact execution order — THAT
+  is what makes it VM-byte-identical (first fault wins, same order as the VM's per-op checked arith).
+  **BYTE-IDENTITY BUG in the original sketch (found during grounding):** the sketch defers overflow to a
+  sticky flag but keeps div-zero/mod-zero/stack-ovf as IMMEDIATE direct codes 2/3/4. If a (now-deferred)
+  overflow PRECEDES a div-by-zero in execution order, the VM faults at the overflow FIRST, but the sketch
+  would return the div-zero code → WRONG fault string. Fault ORDERING is parity-affecting.
+  **REFINED DESIGN (supersedes the sketch's "div-zero returns 2/3 directly"):** make EVERY fault exit with
+  **code 5 = redo-on-VM**. Overflow (AddI/SubI/MulI: wrapping `iadd/isub/imul` + OR the `*_overflow` carry
+  into a sticky-flag Variable, no branch; Neg-MIN + Div/Rem-MIN÷-1: OR into sticky BUT still branch since
+  MIN÷-1 hardware-traps → those branch to `exit(5)`) → at `Return`, sticky≠0 ⇒ `(0,5)` else `(value,0)`.
+  Div/rem ZERO + Op::Call stack-overflow → still branch (mandatory: hardware trap / unbounded recursion)
+  but to `exit(5)`, NOT their own code. Op::Call callee `ccode≠0` ⇒ propagate as `exit(5)`. Net: the
+  unboxed path returns ONLY `(value,0)` or `(_,5)`; codes 1/2/3/4 vanish from it; the **VM redo is the
+  single source of fault truth** — reproduces the true first fault in correct order (sound: eligible ⇒
+  side-effect-free ⇒ deterministic re-run; also handles transient/cancelling overflow — wrapped success
+  with sticky set still redoes → VM faults at the real overflow op). `JitRun` gains `RedoOnVm`; the b3b
+  `Op::Call` hook (vm/exec.rs) maps code 5 → run the callee on the VM (reuses the existing VM-fallback
+  path). TDD proof obligations: overflow-mid-loop → same fault+line as VM; div-zero-AFTER-overflow →
+  OVERFLOW fault (ordering!); pure div-zero (no prior ovf) → div-zero fault; MIN÷-1; neg-MIN; non-overflow
+  loop → wrapping==checked value. **STILL spine-sensitive; advisor byte-identity review is the real gate.**
 - [2026-07-08] ✅ **AGREED (developer) — commit-gate speed: root-caused to opt-level-0 + 2 monster
   sweeps; NOT test-less-often. FINAL: deps-opt2 + workspace-opt1 + nextest + speed-tier + `--features jit`.**
   Measured pain: per-commit `cargo test` = **126s SERIAL** (8 cores). Diagnosis (Rule 14 applied to test

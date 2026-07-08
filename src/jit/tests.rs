@@ -664,6 +664,91 @@ fn unboxed_straightline_mutable_local_matches_vm() {
     }
 }
 
+// --- ovf-spec byte-identity GUARDS (lock the fault behavior the speculative-overflow slice MUST
+// preserve). Green under the CURRENT immediate-fault codegen; they go RED if a future wrapping +
+// sticky-flag + VM-redo rewrite gets fault ORDERING or transient-overflow wrong. See the ovf-spec
+// design + refinement in docs/plans/perf-wave.plan.md (all faults must funnel to a VM redo so the VM
+// stays the single source of fault truth, preserving which fault fires and in what order). ---
+
+#[test]
+fn jit_overflow_before_div_zero_faults_with_overflow_not_div_zero() {
+    // `a * a / b` with a*a overflowing AND b == 0: the VM faults at the OVERFLOW (a*a) and never
+    // reaches the divide-by-zero. The JIT must produce that SAME first fault (overflow), NOT div-by-zero
+    // — the fault-ORDERING invariant. A wrapping+sticky rewrite that emitted div-zero directly (because
+    // the overflow was only recorded in the sticky flag) would break this; funnelling every fault to a
+    // VM redo is what keeps it correct.
+    let program = compile_source(
+        "package Main;\n\
+         function f(int a, int b) -> int { return a * a / b; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "f");
+    let args = vec![Value::Int(4_000_000_000), Value::Int(0)]; // 4e9 * 4e9 = 1.6e19 > i64::MAX
+
+    // Sanity: the VM's FIRST fault here is overflow (proves a*a precedes /b in execution order).
+    let vm_fault = crate::vm::Vm::new(&program)
+        .run_entry(f, args.clone())
+        .expect_err("VM must fault");
+    assert!(
+        vm_fault
+            .render("")
+            .contains(crate::value::FAULT_INT_OVERFLOW),
+        "sanity: the VM's first fault must be overflow, got:\n{}",
+        vm_fault.render("")
+    );
+
+    match compile_and_run(&program, f, &args).expect("f must be JIT-eligible") {
+        JitRun::Fault(msg) => assert_eq!(
+            msg,
+            crate::value::FAULT_INT_OVERFLOW,
+            "JIT must fault OVERFLOW (order: a*a before /b), not divide-by-zero"
+        ),
+        JitRun::Value(v) => panic!("expected an overflow fault, got value {}", as_int(&v)),
+    }
+}
+
+#[test]
+fn jit_transient_cancelling_overflow_still_faults() {
+    // `a * b - a * c` with b == c and a*b overflowing: under WRAPPING the two products cancel to 0, but
+    // the VM faults at the first (checked) `a * b`. The JIT must fault too — a sticky-overflow flag that
+    // forces a VM redo preserves this; a naive wrapping rewrite would silently return the wrapped 0.
+    // Distinct params (b, c) defeat any CSE so both multiplies are genuinely emitted.
+    let program = compile_source(
+        "package Main;\n\
+         function f(int a, int b, int c) -> int { return a * b - a * c; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "f");
+    let args = vec![
+        Value::Int(4_000_000_000),
+        Value::Int(4_000_000_000),
+        Value::Int(4_000_000_000),
+    ];
+
+    let vm_fault = crate::vm::Vm::new(&program)
+        .run_entry(f, args.clone())
+        .expect_err("VM must fault on the overflowing product");
+    assert!(
+        vm_fault
+            .render("")
+            .contains(crate::value::FAULT_INT_OVERFLOW),
+        "sanity: VM must fault overflow, got:\n{}",
+        vm_fault.render("")
+    );
+
+    match compile_and_run(&program, f, &args).expect("f must be JIT-eligible") {
+        JitRun::Fault(msg) => assert_eq!(
+            msg,
+            crate::value::FAULT_INT_OVERFLOW,
+            "JIT must fault on the (cancelling) overflow, not silently return the wrapped 0"
+        ),
+        JitRun::Value(v) => panic!(
+            "expected an overflow fault, got wrapped value {}",
+            as_int(&v)
+        ),
+    }
+}
+
 #[test]
 fn unboxed_bool_local_not_returned_is_eligible() {
     // A mutable BOOL local (SetLocal from a comparison → Kind::Bool), used only in a bool context
