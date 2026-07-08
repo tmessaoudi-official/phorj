@@ -5,6 +5,44 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] DESIGN LOCKED (widen-1: unboxed mutable locals + loops). Orientation found the change
+  is NARROW — `Jump`/`JumpIfFalse` are already in the unboxed subset (`collect_functions_unboxed`
+  allows them) and `build_body_unboxed` already calls `seal_all_blocks()` before finalize, so loop
+  back-edges + automatic phi insertion work *for free* once locals become mutable. The ONLY two
+  blockers are `SetLocal` and `GetLocal(slot >= arity)` (local declarations), both currently
+  `Unsupported`.
+  **Plan:**
+  1. **Eligibility** (`collect_functions_unboxed`): allow `SetLocal(slot)` and `GetLocal(slot>=arity)`.
+     Compute `n_locals = 1 + max(slot)` over all Get/SetLocal (no `Function.n_locals` field exists).
+  2. **Codegen** (`build_body_unboxed`): stop threading args as immutable SSA (`args[s]`); instead
+     declare a Cranelift `Variable` per local slot (I64), `def_var(s, args[s])` for params at entry,
+     `GetLocal(s)→use_var(s)` (push), `SetLocal(s)→def_var(s, pop)`. Cranelift's `use_var`/`def_var`
+     + the existing `seal_all_blocks()` insert the loop phis; NO manual block params.
+  3. **Kind tracking**: a parallel `Vec<Kind>` per slot — `SetLocal` sets it from the popped operand's
+     kind; `GetLocal` pushes `(use_var, kind[slot])`. A local feeding a `Return` must be `Int` (the
+     proven-int analysis already gates returns; extend it so a local is int iff every assignment is).
+  4. **Invariant preserved**: operand stack still EMPTY at every leader — a structured `while`/`for`
+     re-evaluates its condition each iteration and keeps the accumulator in a Variable, not on the
+     operand stack, so the existing empty-at-leaders guard holds.
+  **ADVISOR 3C SHARPENING (2026-07-08):** (i) the slice is ATOMIC not incremental — `SetLocal`
+  enabling loops in the same change removes the "commit each small step" cushion. To regain it, add a
+  temporary `backward Jump → Unsupported` guard: ship the Variables refactor ALONE (behavior-
+  preserving, proven by the existing jit-differential since no loops yet) → then `SetLocal` straight-
+  line → then DROP the guard to light up loops. 3 verifiable commits vs 1 all-or-nothing. (ii) The
+  real risk is the KIND analysis, not the SSA: MUST seed `kind[]` for PARAM slots at entry from the
+  existing param-kind inference (params are never `SetLocal`'d → a set-only-on-SetLocal model leaves
+  them blank). (iii) Discriminating test = the accumulator shape `mutable int acc=0; while(c){acc=acc+f(x);} return acc;`
+  — `acc` must resolve int for eligibility AND return, and the loop-header first-read must be
+  dominated by the pre-loop def (definite-assignment guarantees it; this is the one case that would
+  break `finalize()`). Write it FIRST + assert hit-counter>0 (not a silent fallback). (iv) `intadd`'s
+  source must actually be an int `while` (not `for-in`, which drags list ops → stays Unsupported).
+  **Risks (byte-identity, MUST-verify):** (a) a loop counter/accumulator overflow must fault with the
+  SAME `value.rs` string at the SAME iteration — the `sadd_overflow`/etc checks already do this
+  per-op, but a differential loop case that overflows mid-iteration is required; (b) div/rem-by-zero
+  inside a loop; (c) a bool local (not just int). TDD: failing differential-style tests FIRST
+  (mutable-accumulator `while`, a `for`-lowered loop, an overflowing loop, a div-by-zero loop),
+  oracle-checked vs the VM. Target: flip `intadd` (+ other iterative int micros) from LOSS→WIN;
+  `webish` stays LOSS (needs strings/collections — the honest next ceiling).
 - [2026-07-08] BASELINE (post-b3b matrix, jit binary vs docker php:8.5-cli+JIT, output-identity gated;
   the "before" for the widening campaign). 14 features:
   ```
