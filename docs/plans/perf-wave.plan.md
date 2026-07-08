@@ -5,6 +5,30 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] DESIGN (durable groundwork for the fresh-context unboxed slice — NOT built here; the
+  reordering it depends on is developer-PENDING above). **Unboxed int codegen (the ~5 ms fib path):**
+  operands = compile-time SSA `i64` values (`Vec<ClValue>`), NOT the boxed `Vec<Value>` — no per-op
+  `extern "C"` call. **SSA-merge solution:** locals → Cranelift `Variable`s (`declare_var`/`def_var`/
+  `use_var`; the builder auto-inserts phis at merges); the operand stack is EMPTY at every basic-block
+  leader for the current structured subset (verified on fib's disasm: `JumpIfFalse` consumes the bool,
+  both edges start empty; `Jump`/`Return` follow a balanced statement) — so intermediate SSA operands
+  never cross blocks. ASSERT stack-empty at each leader → `Codegen` error if violated (guards against a
+  future ternary/short-circuit op silently breaking it). **Fault channel (unboxed has no `JitCtx`):**
+  signature `extern "C" fn(ctx: *mut UnboxedCtx, a0..a_arity: i64) -> (i64 value, i64 status)`
+  (multi-return; status in a register, not a memory load). Args arrive as native params → seed local
+  Variables `0..arity`. On success: `return_(&[value, 0])`. On fault: a cold-path helper
+  `rt_ub_fault(ctx, code)` sets `ctx.fault` to the single-sourced kernel const string, then
+  `return_(&[0, 1])`. Caller after a native call: `brif status → fault-exit`. **Inline fault checks
+  (byte-identical to value.rs — conditions re-derived, STRINGS single-sourced via the consts):**
+  Add/Sub/Mul → `sadd/ssub/smul_overflow` → overflow flag → `FAULT_INT_OVERFLOW`; Div → `b==0`→
+  `FAULT_DIV_ZERO` FIRST, then `a==i64::MIN && b==-1`→`FAULT_INT_OVERFLOW`, else `sdiv`; Rem → `b==0`→
+  `FAULT_MOD_ZERO` first, then MIN/-1→`FAULT_INT_OVERFLOW`, else `srem`; Neg → `n==i64::MIN`→
+  `FAULT_INT_OVERFLOW`, else `ineg`. (Order matters: div/rem check zero before overflow — matches
+  `value::int_div`/`int_rem`.) Cmp/Not/locals/Jump/JumpIfFalse fault-free. **Own fault-parity 3C + a
+  differential case per fault** (overflow, div-zero, mod-zero, MIN/-1 div, MIN/-1 rem, neg-MIN). KEEP
+  the boxed codegen as the byte-identity ORACLE: test unboxed ≡ boxed ≡ VM. Slices: u1 leaf int (fault
+  parity is the deliverable) → u2 native calls+recursion (fib, re-measure → expect ~5 ms) → u3 = b3b
+  wiring (codegen-agnostic). Depends on the PENDING reordering being ratified.
 - [2026-07-08] ✅✅ **CEILING CONFIRMED — native codegen BEATS php+JIT (throwaway unboxed spike, advisor-
   directed).** Hand-written UNBOXED native fib(30) (i64 in registers, native `isub`/`iadd`/`icmp`,
   native recursion, no `Vec`/no per-op `extern "C"` call/no overflow checks) = **5.03 ms**, vs a FRESHLY
