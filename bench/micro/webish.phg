@@ -34,5 +34,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("webish\t{d / iters + guard}\t{acc}");
+    Output.printLine("webish\t{d + guard}\t{acc}");
 }

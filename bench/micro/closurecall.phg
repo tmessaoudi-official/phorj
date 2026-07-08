@@ -23,5 +23,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("closurecall\t{d / iters + guard}\t{acc}");
+    Output.printLine("closurecall\t{d + guard}\t{acc}");
 }

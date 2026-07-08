@@ -22,4 +22,4 @@ $guard = $warm - $warm;
 $t = hrtime(true);
 $acc = bench($iters);
 $d = hrtime(true) - $t;
-printf("objalloc\t%d\t%d\n", intdiv($d, $iters) + $guard, $acc);
+printf("objalloc\t%d\t%d\n", $d + $guard, $acc);

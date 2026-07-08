@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# microbench.sh — per-feature phorj-VM vs release-PHP+JIT (ns/op), the G-8 measurement harness.
+# microbench.sh — per-feature phorj-VM vs release-PHP+JIT (total self-timed ns), the G-8 harness.
 #
 # For each feature `bench/micro/<name>.phg` (with a hand-authored idiomatic `bench/micro/<name>.php`):
 #   - phorj: `phg run <name>.phg`  (the VM) — best-of-K on this host.
 #   - PHP:   `<name>.php` under `docker run php:8.5-cli` with opcache+JIT (a REAL release php — the
 #            local builds are all ZTS DEBUG, JIT off, so they are NOT a valid baseline).
-# Each micro self-times (warmup call + timed call) and prints `name<TAB>ns_per_op<TAB>checksum`; the
-# checksum defeats dead-code elimination AND gates output-identity (VM and PHP must agree before a
-# timing is trusted). Ratio = php_ns / vm_ns; WIN means the VM is faster (the G-8 bar).
+# Each micro self-times (warmup call + timed call) and prints `name<TAB>total_ns<TAB>checksum` — TOTAL
+# self-timed nanoseconds, NOT ns/op: the old integer per-op (`d / iters`) floored sub-2ns/op workloads
+# to `1`, collapsing distinct timings to a meaningless 1.00× tie (it masked intadd's true verdict). The
+# ratio is scale-invariant (iters cancels — both legs run the same count), so total-ns gives full
+# resolution. The checksum defeats dead-code elimination AND gates output-identity (VM and PHP must
+# agree before a timing is trusted). Ratio = php_ns / vm_ns; WIN means the VM is faster (the G-8 bar).
 #
 # Env: PHG_BIN (default target/release/phg), MICROBENCH_RUNS (K, default 3),
 #      MICROBENCH_PHP_IMAGE (default php:8.5-cli). Flags: --json.
@@ -23,20 +26,30 @@ JIT_FLAGS="-dopcache.enable_cli=1 -dopcache.jit_buffer_size=128M -dopcache.jit=t
 JSON=0
 [[ "${1:-}" == "--json" ]] && JSON=1
 
-command -v docker >/dev/null 2>&1 || { echo "microbench: docker required (real release-php baseline)" >&2; exit 2; }
-[[ -x "$BIN" ]] || { echo "microbench: binary not found at $BIN — run: cargo build --release" >&2; exit 2; }
+command -v docker >/dev/null 2>&1 || {
+  echo "microbench: docker required (real release-php baseline)" >&2
+  exit 2
+}
+[[ -x "$BIN" ]] || {
+  echo "microbench: binary not found at $BIN — run: cargo build --release" >&2
+  exit 2
+}
 
 features=()
 for f in "$MICRO"/*.phg; do
   name="$(basename "$f" .phg)"
   [[ -f "$MICRO/$name.php" ]] && features+=("$name")
 done
-[[ ${#features[@]} -gt 0 ]] || { echo "microbench: no paired *.phg/*.php micros in $MICRO" >&2; exit 2; }
+[[ ${#features[@]} -gt 0 ]] || {
+  echo "microbench: no paired *.phg/*.php micros in $MICRO" >&2
+  exit 2
+}
 
 # Phase 1 — phorj VM, best-of-K per feature (on this host).
 declare -A vm_ns vm_sum
 for name in "${features[@]}"; do
-  best=""; cs=""
+  best=""
+  cs=""
   for ((k = 0; k < K; k++)); do
     line="$("$BIN" run "$MICRO/$name.phg")"
     ns="$(printf '%s' "$line" | cut -f2)"
@@ -77,7 +90,10 @@ if [[ "$JSON" == 1 ]]; then
   printf '['
   first=1
   for name in "${features[@]}"; do
-    v="${vm_ns[$name]:-0}"; p="${php_ns[$name]:-0}"; vs="${vm_sum[$name]:-x}"; ps="${php_sum[$name]:-y}"
+    v="${vm_ns[$name]:-0}"
+    p="${php_ns[$name]:-0}"
+    vs="${vm_sum[$name]:-x}"
+    ps="${php_sum[$name]:-y}"
     ok=$([[ "$vs" == "$ps" ]] && echo true || echo false)
     ratio="$(awk -v v="$v" -v p="$p" 'BEGIN{if(v>0)printf "%.3f",p/v; else print 0}')"
     [[ $first == 1 ]] || printf ','
@@ -88,10 +104,13 @@ if [[ "$JSON" == 1 ]]; then
   exit 0
 fi
 
-printf '%-16s %12s %12s %9s  %s\n' feature "VM ns/op" "php+JIT" ratio verdict
+printf '%-16s %12s %12s %9s  %s\n' feature "VM ns" "php+JIT ns" ratio verdict
 printf '%-16s %12s %12s %9s  %s\n' "----" "----" "----" "----" "----"
 for name in "${features[@]}"; do
-  v="${vm_ns[$name]:-?}"; p="${php_ns[$name]:-?}"; vs="${vm_sum[$name]:-x}"; ps="${php_sum[$name]:-y}"
+  v="${vm_ns[$name]:-?}"
+  p="${php_ns[$name]:-?}"
+  vs="${vm_sum[$name]:-x}"
+  ps="${php_sum[$name]:-y}"
   if [[ "$vs" != "$ps" ]]; then
     printf '%-16s %12s %12s %9s  CHECKSUM MISMATCH (vm=%s php=%s)\n' "$name" "$v" "$p" "-" "$vs" "$ps"
     continue

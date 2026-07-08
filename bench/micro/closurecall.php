@@ -11,4 +11,4 @@ function bench(int $iters): int {
 $iters = 3000000;
 $warm = bench($iters); $guard = $warm - $warm;
 $t = hrtime(true); $acc = bench($iters); $d = hrtime(true) - $t;
-printf("closurecall\t%d\t%d\n", intdiv($d, $iters) + $guard, $acc);
+printf("closurecall\t%d\t%d\n", $d + $guard, $acc);

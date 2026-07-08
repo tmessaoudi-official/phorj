@@ -13,4 +13,4 @@ function bench(int $iters): int {
 $iters = 2000000;
 $warm = bench($iters); $guard = $warm - $warm;
 $t = hrtime(true); $acc = bench($iters); $d = hrtime(true) - $t;
-printf("stringconcat\t%d\t%d\n", intdiv($d, $iters) + $guard, $acc);
+printf("stringconcat\t%d\t%d\n", $d + $guard, $acc);

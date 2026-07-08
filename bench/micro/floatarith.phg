@@ -26,5 +26,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("floatarith\t{d / iters + guard}\t{acc}");
+    Output.printLine("floatarith\t{d + guard}\t{acc}");
 }

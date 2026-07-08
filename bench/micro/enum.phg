@@ -30,5 +30,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("enum\t{d / iters + guard}\t{acc}");
+    Output.printLine("enum\t{d + guard}\t{acc}");
 }

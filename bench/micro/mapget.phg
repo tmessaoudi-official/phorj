@@ -25,5 +25,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("mapget\t{d / iters + guard}\t{acc}");
+    Output.printLine("mapget\t{d + guard}\t{acc}");
 }

@@ -25,5 +25,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("interp\t{d / iters + guard}\t{acc}");
+    Output.printLine("interp\t{d + guard}\t{acc}");
 }

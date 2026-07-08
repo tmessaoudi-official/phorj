@@ -23,5 +23,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("match\t{d / iters + guard}\t{acc}");
+    Output.printLine("match\t{d + guard}\t{acc}");
 }

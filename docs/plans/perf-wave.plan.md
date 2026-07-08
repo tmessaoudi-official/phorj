@@ -5,24 +5,41 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
-- [2026-07-08] ✅ **widen-1 RE-MEASURE — `intadd` FLIPPED LOSS→WIN (~4.3× vs php+JIT), delivery proven.**
-  Commits c1 `c55f6f8`, c2 `f82d6e9`, c3 `ee3078e`, delivery-path test `511a981`. Full-resolution
-  measurement (identical checksums `37499987500000`; jit release binary vs docker `php:8.5-cli`
-  +opcache.jit=tracing; best-of-5): phorj-jit **6.63 ms** vs php+JIT **28.28 ms** = **~4.3× FASTER** —
-  intadd went 0.01× → 4.3×. `fibrec` holds 3.05× WIN. Delivery PROVEN not just mechanism: intadd's loop
-  lives in `bench(iters)` (called by main) → JITs through the `Op::Call` hook; the new test
-  `phg_run_hook_hits_the_jit_on_an_int_loop` asserts `JitCache.hits > 0` for exactly this shape at the
-  `cmd_run` path (a silent VM fallback would false-green byte-identity). advisor-6C concerns all closed:
-  (1) loop in a callee not `main`; (2)+(3) hit>0 proven at CLI; (4) no eligible value-across-merge
-  construct exists (phorj has no `? :` ternary; `&&`/`||` emit a `Bool` const → unboxed-ineligible →
-  VM). The other 12 micros still LOSE (strings/collections/floats/objects/closures/`try` — outside the
-  unboxed i64 subset; `floatarith` needs `AddF`, not in the subset). Matrix now: **2 WIN (fibrec,
-  intadd) / 12 LOSS**.
-  ⚠ **HARNESS DEFECT (follow-up):** `scripts/microbench.sh` reports intadd as `1.00× LOSS` because the
-  `.phg`/`.php` micros print `d / iters` in INTEGER nanoseconds — for a ~1.3 ns/op workload both engines
-  floor to `1`, erasing a real 4.3× gap. Fix: print total `d` (or use float ns) and divide in the
-  harness. Until fixed, microbench.sh UNDER-reports wins on fast iterative micros — do not trust its
-  intadd verdict; the full-resolution total-nanos measurement above is the truth.
+- [2026-07-08] AGREED (developer, §15 + next-direction, post-widen-1 re-measure):
+  **(A) jit-on-by-default in stock `phg` = Option 3 — on by default + a `--no-jit` runtime escape**
+  (fail-closed to VM, byte-identical; adds Cranelift + the unsafe-island to the DEFAULT non-wasm build;
+  wasm/playground stay VM). Rationale: identical hot path to plain on-by-default, plus a free field
+  escape + A/B lever, and it makes the fast path the default so every future subset-widening auto-ships
+  to users. **(B) Execution order = gate-fix → §15 flip → floats → strings:** (1) fix `microbench.sh`
+  resolution (the gate currently LIES — intadd reads 1.00× LOSS, is 4.3× WIN; honest gate is a
+  prerequisite for trusting every later verdict); (2) ship the jit default (A); (3) float-loop unboxed
+  subset (`Kind::Float` + native `fadd`/`fsub`/… , f64 in the SSA ABI — a scoped mirror of the int
+  path, flips `floatarith`); (4) strings/collections (the big lever — webish/stringconcat/mapget — needs
+  HEAP/boxed values in the unboxed path → large fresh-context design + likely §14 ladder fork).
+  **(C) ⛔ STANDING CONSTRAINT (developer, emphatic): the perf hunt must NOT sacrifice any phorj
+  stronghold** — strong static typing, real compile/interpret-time error detection, or ANY phorj feature
+  that PHP lacks. If a perf slice would compromise one, STOP and ask (do not self-rule) — same gate as
+  §14/§15. (The JIT already honors this: it runs AFTER the checker, and eligibility is a runtime
+  fast-path that fails closed to the fully-checked VM — zero type/error-detection surface change.)
+  Floats + strings are spine-sensitive → each gets a FRESH context (advisor byte-identity review).
+- [2026-07-08] 🔧 **CORRECTION — widen-1 does NOT flip intadd to a WIN (false-baseline error retracted).**
+  An earlier entry here claimed "intadd ~4.3× WIN"; that was WRONG — it compared phorj-jit (~6.6M ns)
+  against an anomalously SLOW php baseline (28.28M ns) from one loaded manual `docker run`. The
+  `perf-benchmarking-truth` trap exactly: never trust a single php baseline; ratios swing 3-4× at load.
+  **HONEST re-measure (after the microbench.sh total-ns fix, jit binary vs docker php:8.5-cli+JIT):**
+  intadd php+JIT **5.24M ns** vs phorj-jit **9.57M ns** = **0.55× LOSS** (best-of-3); confirmed best-of-10
+  on a loaded box (php 13.18M < phorj 19.12M, same direction). **intadd JITs correctly and is
+  byte-identical** (was ~0.01× on the pure VM → the JIT is ~30-50× faster than the VM, delivery proven
+  via `hits>0`), **but still LOSES to php+JIT ~0.6×.** ROOT CAUSE (hypothesis, [Inferred]): phorj emits a
+  per-op overflow check (`sadd/ssub/smul_overflow` + branch to fault_exit) on EVERY `AddI/SubI/MulI`;
+  php's tracing JIT specializes and elides them. So the real next perf lever is **overflow-check
+  elision** (range/provably-non-overflowing analysis), NOT more subset-widening. Matrix now (honest):
+  **1 WIN (fibrec ~1.55×) / 13 LOSS.** widen-1's VALUE stands: it correctly widened the unboxed subset
+  to loops (byte-identical, tested, a prerequisite for any int-loop perf) — the perf mandate for intadd
+  is simply not yet met. ✅ microbench.sh FIXED (total-ns; the fix revealed this truth — the floored
+  `1.00×` was hiding a LOSS, not a win). ⛔ HARD MANDATE: intadd LOSS = a P0-perf item (overflow-check
+  elision is the fix). **RE-OPENS the next-direction order — overflow-check elision likely precedes
+  floats/strings; surface to developer.**
 - [2026-07-08] PROGRESS: **widen-1 c1+c2+c3 SHIPPED (unboxed mutable locals + loops), unpushed.**
   c1 `c55f6f8` (locals→Variables), c2 `f82d6e9` (straight-line mutable locals via the depth-indexed
   model + `unboxed_analyze`), c3 (this commit — dropped the `t<=ip` guard → int loops JIT unboxed).

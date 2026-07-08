@@ -30,5 +30,5 @@ function main(): void {
     int t = Runtime.monotonicNanos();
     int acc = bench(iters);
     int d = Runtime.monotonicNanos() - t;
-    Output.printLine("objalloc\t{d / iters + guard}\t{acc}");
+    Output.printLine("objalloc\t{d + guard}\t{acc}");
 }
