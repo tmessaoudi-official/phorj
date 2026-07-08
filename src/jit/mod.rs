@@ -85,7 +85,7 @@ use crate::value::Value;
 use cranelift::codegen::ir::{FuncRef, Signature, Type};
 use cranelift::prelude::{
     types, AbiParam, Block, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
-    Value as ClValue,
+    Value as ClValue, Variable,
 };
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, FuncId, Linkage, Module};
@@ -927,6 +927,14 @@ fn collect_functions_unboxed(
                     Some(Value::Int(_)) => {}
                     other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
                 },
+                // TEMPORARY (widen-1 commit 1/2): a backward branch is a loop. Loops need mutable
+                // locals (Variables + phis), landed in the loops slice; until then reject them cleanly
+                // so the VM owns any loop. Forward branches (if/else) are `t > ip` and stay eligible.
+                Op::Jump(t) | Op::JumpIfFalse(t) if *t <= ip => {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: backward branch to ip {t} (loop) not yet supported"
+                    )));
+                }
                 Op::AddI
                 | Op::SubI
                 | Op::MulI
@@ -1005,7 +1013,19 @@ fn build_body_unboxed(
     b.switch_to_block(entry);
     let entry_params: Vec<ClValue> = b.block_params(entry).to_vec();
     let depth = entry_params[0];
-    let args: Vec<ClValue> = entry_params[1..].to_vec(); // local slot s == args[s]
+    let args: Vec<ClValue> = entry_params[1..].to_vec();
+    // Locals live in Cranelift `Variable`s (slot s → `vars[s]`), defined at entry from the params.
+    // For the current subset (no `SetLocal`, no loops — enforced by `collect_functions_unboxed`) the
+    // only def of each var is here in the entry block, which dominates the whole body, so `use_var`
+    // is exactly equivalent to reading the entry param. This is the substrate the mutable-locals +
+    // loops slices (widen-1) build on: `SetLocal` becomes `def_var`, and Cranelift's own SSA
+    // construction (with `seal_all_blocks` below) inserts the loop-carried phis for free.
+    let mut vars: Vec<Variable> = Vec::with_capacity(args.len());
+    for &a in &args {
+        let var = b.declare_var(types::I64);
+        b.def_var(var, a);
+        vars.push(var);
+    }
 
     // One Cranelift block per reachable leader (same shape as the boxed builder).
     let mut blocks: Vec<Option<Block>> = vec![None; n];
@@ -1146,12 +1166,13 @@ fn build_body_unboxed(
                 stack.push((r64, Kind::Bool));
             }
             Op::GetLocal(slot) => {
-                let v = *args.get(*slot).ok_or_else(|| {
+                let var = *vars.get(*slot).ok_or_else(|| {
                     JitError::Codegen(format!(
-                        "unboxed GetLocal slot {slot} out of range (arity {})",
-                        args.len()
+                        "unboxed GetLocal slot {slot} out of range (locals {})",
+                        vars.len()
                     ))
                 })?;
+                let v = b.use_var(var);
                 // A param proven int by the provenance pre-pass reads as Int (so a bare-param return
                 // types correctly, e.g. fib's base case); otherwise Unknown → a bare return of it is
                 // rejected at `Return`.

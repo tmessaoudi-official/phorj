@@ -5,6 +5,16 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] EXECUTION (widen-1, autonomous marathon, advisor-3C clean). Building the locked design as
+  3 verifiable commits. Advisor pinned the one silent-miscompile trap: the `unboxed_slot_kinds` pre-pass
+  MUST mirror codegen's operand-stack effects op-for-op — `Call` pops the callee arity + pushes Int (NOT
+  `clear()` like `unboxed_proven_int_params`); leader set shared via one `leaders()` helper used by both
+  codegen and the pre-pass. Extra commit-3 tests: loop-carried Bool (`go = i<n` as `while` cond, not
+  returned, int accumulator returned) + `Call → SetLocal → return-that-local` (arity-pop desync). Kind is
+  consumed ONLY at `Return` (arith/cmp/Call arms discard operand kind) ⇒ a sound-toward-Int per-slot
+  fixpoint preserves byte-identity; over-rejection falls back to the VM. `t <= ip` isolates back-edges,
+  rejects zero currently-eligible fns ⇒ commit 1 is verifiably behavior-preserving (differential stays
+  144, eligible set unchanged).
 - [2026-07-08] DESIGN LOCKED (widen-1: unboxed mutable locals + loops). Orientation found the change
   is NARROW — `Jump`/`JumpIfFalse` are already in the unboxed subset (`collect_functions_unboxed`
   allows them) and `build_body_unboxed` already calls `seal_all_blocks()` before finalize, so loop
