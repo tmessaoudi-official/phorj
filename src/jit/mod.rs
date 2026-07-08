@@ -1134,14 +1134,6 @@ fn collect_functions_unboxed(
                     Some(Value::Int(_)) => {}
                     other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
                 },
-                // TEMPORARY (widen-1 commit 1/2): a backward branch is a loop. Loops need mutable
-                // locals (Variables + phis), landed in the loops slice; until then reject them cleanly
-                // so the VM owns any loop. Forward branches (if/else) are `t > ip` and stay eligible.
-                Op::Jump(t) | Op::JumpIfFalse(t) if *t <= ip => {
-                    return Err(JitError::Unsupported(format!(
-                        "unboxed: backward branch to ip {t} (loop) not yet supported"
-                    )));
-                }
                 Op::AddI
                 | Op::SubI
                 | Op::MulI

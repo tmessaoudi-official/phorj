@@ -617,29 +617,27 @@ fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
 }
 
 #[test]
-fn unboxed_rejects_non_int_return_and_loops() {
-    // The type-erasure guard + the unboxed subset: a bool return (would mis-map to Value::Int), a bare
-    // UNPROVEN-int param return (`identity` — n is never an int-arith operand, so unprovable), a
-    // returned bool PARAM (`retb` — proves the provenance pass does NOT over-mark), and a `while` LOOP
-    // (`sumTo` — backward branch, rejected by the temporary loop guard until the loops slice) all fall
-    // back — compile_unboxed must return Unsupported, never miscompile. (Straight-line mutable locals
-    // ARE now eligible — see the mutable-local tests below; self-/cross-recursive int functions too.)
+fn unboxed_rejects_non_int_return() {
+    // The type-erasure guard: a bool return (would mis-map to Value::Int), a bare UNPROVEN-int param
+    // return (`identity` — n is never an int-arith operand, so unprovable), and a returned bool PARAM
+    // (`retb` — proves the provenance pass does NOT over-mark) all fall back — compile_unboxed must
+    // return Unsupported, never miscompile. (Mutable locals AND int loops are now eligible — see the
+    // mutable-local + loop tests; self-/cross-recursive int functions too.)
     let program = compile_source(
         "package Main;\n\
          function isSmall(int n) -> bool { return n < 10; }\n\
          function identity(int n) -> int { return n; }\n\
          function retb(bool b, int n) -> bool { if (n > 0) { return b; } return b; }\n\
-         function sumTo(int n) -> int { mutable int s = 0; mutable int i = 1; while (i <= n) { s = s + i; i = i + 1; } return s; }\n\
          function main() -> void {}",
     );
-    for name in ["isSmall", "identity", "retb", "sumTo"] {
+    for name in ["isSmall", "identity", "retb"] {
         let f = func_index(&program, name);
         assert!(
             matches!(
                 Compiled::compile_unboxed(&program, f),
                 Err(JitError::Unsupported(_))
             ),
-            "unboxed must reject `{name}` (non-int-return / loop), not miscompile"
+            "unboxed must reject `{name}` (non-int-return), not miscompile"
         );
     }
 }
@@ -706,6 +704,139 @@ fn unboxed_call_result_into_local_matches_vm() {
             vm_int(&program, f, vec![Value::Int(x)]),
             "unboxed f({x}) storing a call result must match the VM oracle"
         );
+    }
+}
+
+// --- widen-1 c3: UNBOXED loops (back-edges + loop-carried Variables via Cranelift phis) ---
+
+#[test]
+fn unboxed_while_accumulator_matches_vm() {
+    // The discriminating loop test: a mutable int accumulator + counter across a `while` back-edge.
+    // `s` and `i` are loop-carried Variables whose header reads are dominated by the pre-loop def and
+    // phi'd with the body's `SetLocal` — the whole point of the loops slice. compile_unboxed MUST accept
+    // it (not fall back) AND match the VM oracle.
+    let program = compile_source(
+        "package Main;\n\
+         function sumTo(int n) -> int {\n\
+           mutable int s = 0;\n\
+           mutable int i = 1;\n\
+           while (i <= n) { s = s + i; i = i + 1; }\n\
+           return s;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "sumTo");
+    // Must be unboxed-eligible now (a silent VM fallback would pass the value assert but prove nothing).
+    assert!(
+        Compiled::compile_unboxed(&program, f).is_ok(),
+        "an int `while` accumulator must be unboxed-eligible after the loops slice"
+    );
+    for n in [0_i64, 1, 5, 10, 100] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "unboxed sumTo({n}) must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_loop_carried_bool_matches_vm() {
+    // A loop-carried BOOL local (`go`, reassigned in-loop from a comparison → Kind::Bool) used as the
+    // `while` condition, NOT returned; the function returns an int accumulator. Exercises a Bool
+    // Variable phi'd across the back-edge AND the kind analysis keeping `go` non-Int (so it can never be
+    // mis-returned) while `acc` stays Int. Oracle-checked (the advisor's loop-carried-Bool shape).
+    let program = compile_source(
+        "package Main;\n\
+         function f(int n) -> int {\n\
+           mutable int acc = 0;\n\
+           mutable int i = 0;\n\
+           mutable bool go = i < n;\n\
+           while (go) { acc = acc + i; i = i + 1; go = i < n; }\n\
+           return acc;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "f");
+    assert!(
+        Compiled::compile_unboxed(&program, f).is_ok(),
+        "an int accumulator with a loop-carried bool condition must be unboxed-eligible"
+    );
+    for n in [0_i64, 1, 3, 7] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "unboxed f({n}) with a loop-carried bool must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_overflow_mid_loop_faults_like_vm() {
+    // A loop that overflows at a specific iteration must fault with the SAME kernel string at the SAME
+    // iteration as the VM (the `smul_overflow` check fires per-iteration). `p = p * 2` overflows well
+    // before i reaches 100.
+    let program = compile_source(
+        "package Main;\n\
+         function powish(int n) -> int {\n\
+           mutable int p = 1;\n\
+           mutable int i = 0;\n\
+           while (i < n) { p = p * 2; i = i + 1; }\n\
+           return p;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "powish");
+    let vm_fault = crate::vm::Vm::new(&program)
+        .run_entry(f, vec![Value::Int(100)])
+        .expect_err("VM must overflow in the loop");
+    match Compiled::compile_unboxed(&program, f)
+        .expect("int while is eligible")
+        .run_unboxed(&[Value::Int(100)], 1)
+    {
+        JitRun::Fault(msg) => assert!(
+            vm_fault.render("").contains(&msg),
+            "unboxed loop overflow `{msg}` must match the VM oracle:\n{}",
+            vm_fault.render("")
+        ),
+        JitRun::Value(v) => panic!("expected overflow, got {}", as_int(&v)),
+    }
+    // And a non-overflowing run still matches the oracle exactly.
+    assert_eq!(
+        ub_int(&program, f, &[Value::Int(10)]),
+        vm_int(&program, f, vec![Value::Int(10)]),
+        "unboxed powish(10) must match the VM oracle"
+    );
+}
+
+#[test]
+fn unboxed_div_zero_mid_loop_faults_like_vm() {
+    // A divide-by-zero reached only on a specific loop iteration (when `n - i` hits 0) must fault with
+    // the same kernel string as the VM — the fault is inside the back-edge body, not the straight line.
+    let program = compile_source(
+        "package Main;\n\
+         function acc(int n) -> int {\n\
+           mutable int a = 0;\n\
+           mutable int i = 0;\n\
+           while (i <= n) { a = a + 100 / (n - i); i = i + 1; }\n\
+           return a;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "acc");
+    let vm_fault = crate::vm::Vm::new(&program)
+        .run_entry(f, vec![Value::Int(3)])
+        .expect_err("VM must divide by zero when i == n");
+    match Compiled::compile_unboxed(&program, f)
+        .expect("int while is eligible")
+        .run_unboxed(&[Value::Int(3)], 1)
+    {
+        JitRun::Fault(msg) => assert!(
+            vm_fault.render("").contains(&msg),
+            "unboxed loop div-by-zero `{msg}` must match the VM oracle:\n{}",
+            vm_fault.render("")
+        ),
+        JitRun::Value(v) => panic!("expected div-by-zero, got {}", as_int(&v)),
     }
 }
 

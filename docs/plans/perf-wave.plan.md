@@ -5,6 +5,20 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] PROGRESS: **widen-1 c1+c2+c3 SHIPPED (unboxed mutable locals + loops), unpushed.**
+  c1 `c55f6f8` (locals→Variables), c2 `f82d6e9` (straight-line mutable locals via the depth-indexed
+  model + `unboxed_analyze`), c3 (this commit — dropped the `t<=ip` guard → int loops JIT unboxed).
+  Gate each slice: differential --features jit + php-8.5.8 = 144 byte-identical, workspace 1804,
+  jit unit 37 (+4 c3 loop: while-accumulator+is_ok(), loop-carried-bool, overflow-mid-loop-vs-VM,
+  div-zero-mid-loop-vs-VM), clippy(both)+fmt clean. advisor-6C: commit is correct (depth-indexed model
+  sound, fail-closed to VM on any inconsistency). **OPEN before declaring the flip (do NOT report a WIN
+  on wall-clock alone):** the JIT fires only at the VM `Op::Call` hook, so a loop JITs through `phg run`
+  ONLY when it lives in a CALLED function (`main` prints → never eligible → entry-level JIT can't reach
+  its body). MUST: (1) grep `bench/micro/intadd.phg` — loop in `main` or a called helper? restructure if
+  in `main`; (2) prove the JitCache hit-counter fires (hit>0) on intadd at the CLI — wall-clock alone
+  can't distinguish a real flip from a silent VM fallback; (3) confirm a differential example drives an
+  int loop through `phg run`→`Op::Call`→`run_unboxed`; (4) spot-check a short-circuit/ternary (newly
+  eligible now empty-at-leaders is gone). THEN re-measure the 14-feature matrix.
 - [2026-07-08] 🔧 CORRECTION (widen-1, disasm-verified — the LOCKED design's local model was WRONG).
   `phg disassemble` + `vm/exec.rs` + the boxed `rt_get_local` prove locals do NOT live in separate
   storage: **a local slot IS a frame-stack position** (`GetLocal(slot)` = read `stack[base+slot]` and DUP
