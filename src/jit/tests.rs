@@ -355,6 +355,7 @@ fn jit_propagates_a_callee_fault() {
 }
 
 #[test]
+#[ignore = "timing measurement (best-of-N over VM fib(30) ≈ seconds); run manually with --ignored"]
 fn measures_fib_native_jit_vs_vm() {
     // The G-8 mandate signal: is the (boxed, kernel-call) JIT actually faster than the VM on recursive
     // fib, and how close to release php+JIT? Native-JIT vs VM, IDENTICAL workload, best-of-N wall time.
@@ -616,26 +617,30 @@ fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
 }
 
 #[test]
-fn unboxed_rejects_non_int_return_and_setlocal_and_call() {
-    // The type-erasure guard + the u1 leaf scope: a bool return (would mis-map to Value::Int), a bare
-    // param return (unprovable Int without types), a SetLocal (mutable local), and a Call all fall
-    // back — compile_unboxed must return Unsupported, never miscompile.
+fn unboxed_rejects_non_int_return_and_setlocal_and_non_self_call() {
+    // The type-erasure guard + the u2a scope: a bool return (would mis-map to Value::Int), a bare
+    // UNPROVEN-int param return (`identity` — n is never an int-arith operand, so unprovable), a
+    // returned bool PARAM (`retb` — proves the provenance pass does NOT over-mark), a SetLocal (mutable
+    // local / loop), and a non-self Call all fall back — compile_unboxed must return Unsupported, never
+    // miscompile. (Self-recursive `fib` is now eligible — see unboxed_recursive_fib_matches_vm_oracle.)
     let program = compile_source(
         "package Main;\n\
          function isSmall(int n) -> bool { return n < 10; }\n\
          function identity(int n) -> int { return n; }\n\
+         function retb(bool b, int n) -> bool { if (n > 0) { return b; } return b; }\n\
          function sumTo(int n) -> int { mutable int s = 0; mutable int i = 1; while (i <= n) { s = s + i; i = i + 1; } return s; }\n\
-         function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }\n\
+         function helper(int n) -> int { return n + 1; }\n\
+         function caller(int n) -> int { return helper(n) + helper(n); }\n\
          function main() -> void {}",
     );
-    for name in ["isSmall", "identity", "sumTo", "fib"] {
+    for name in ["isSmall", "identity", "retb", "sumTo", "caller"] {
         let f = func_index(&program, name);
         assert!(
             matches!(
                 Compiled::compile_unboxed(&program, f),
                 Err(JitError::Unsupported(_))
             ),
-            "unboxed must reject `{name}` (non-int-return / SetLocal / Call), not miscompile"
+            "unboxed must reject `{name}` (non-int-return / SetLocal / non-self Call), not miscompile"
         );
     }
 }
@@ -691,4 +696,127 @@ fn unboxed_add_and_sub_overflow_fault_like_the_kernel() {
             JitRun::Value(v) => panic!("{name}: expected overflow, got {}", as_int(&v)),
         }
     }
+}
+
+// --- slice u2a: UNBOXED self-recursion (fib JITs unboxed) ---
+
+#[test]
+fn unboxed_recursive_fib_matches_vm_oracle() {
+    // The headline: recursive fib through the UNBOXED path (native i64, native self-call, no boxed Vec).
+    // `n` is proven int via `n - 1` (SubI) so the base-case `return n` types as Int. Checked vs the VM
+    // oracle across the base-case edge and the recursion.
+    let program = compile_source(
+        "package Main;\n\
+         function fib(int n) -> int {\n\
+           if (n < 2) { return n; }\n\
+           return fib(n - 1) + fib(n - 2);\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "fib");
+    for n in [0_i64, 1, 2, 3, 5, 10, 15, 20] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "unboxed fib({n}) must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_deep_recursion_faults_like_the_vm_stack_overflow() {
+    // Unboxed native recursion must cap at MAX_CALL_DEPTH with the VM's "stack overflow" (code 4), not
+    // segfault. Big stack (native frames); assert INSIDE the closure (Value/JitRun hold Rc = not Send).
+    const SRC: &str = "package Main;\n\
+        function forever(int n) -> int { return forever(n + 1); }\n\
+        function main() -> void {}";
+    let handle = std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            let program = compile_source(SRC);
+            let f = func_index(&program, "forever");
+            let vm_fault = crate::vm::Vm::new(&program)
+                .run_entry(f, vec![Value::Int(0)])
+                .expect_err("VM must fault with stack overflow")
+                .render("");
+            let jit = match Compiled::compile_unboxed(&program, f)
+                .expect("forever is unboxed-eligible")
+                .run_unboxed(&[Value::Int(0)])
+            {
+                JitRun::Fault(m) => m,
+                JitRun::Value(v) => panic!("expected stack overflow, got {}", as_int(&v)),
+            };
+            (vm_fault, jit)
+        })
+        .expect("spawn big-stack thread");
+    let (vm_fault, jit) = handle.join().expect("big-stack thread panicked");
+    assert!(
+        vm_fault.contains(&jit),
+        "unboxed stack-overflow fault `{jit}` must match the VM oracle:\n{vm_fault}"
+    );
+}
+
+#[test]
+#[ignore = "timing measurement (best-of-N over VM fib(30) ≈ seconds); run manually with --ignored"]
+fn measures_unboxed_fib_vs_vm_and_php() {
+    // The G-8 deliverable: does UNBOXED recursive fib beat php+JIT? Best-of-N wall, compile reported
+    // separately, PRINT-ONLY on timing (correctness asserted vs the VM oracle first). php+JIT baseline:
+    // recorded ~10 ms fib(30) under Docker php:8.5 release+JIT (measured 2026-07-08). Bar = beats php,
+    // NOT the 5 ms spike (u2a adds a depth check + multi-return + code-check per call).
+    use std::time::Instant;
+    let program = compile_source(
+        "package Main;\n\
+         function fib(int n) -> int {\n\
+           if (n < 2) { return n; }\n\
+           return fib(n - 1) + fib(n - 2);\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "fib");
+    const N: i64 = 30;
+
+    let t = Instant::now();
+    let compiled = Compiled::compile_unboxed(&program, f).expect("fib is unboxed-eligible");
+    let compile_ns = t.elapsed().as_nanos();
+
+    let jit_val = match compiled.run_unboxed(&[Value::Int(N)]) {
+        JitRun::Value(v) => as_int(&v),
+        JitRun::Fault(m) => panic!("unexpected fib fault: {m}"),
+    };
+    assert_eq!(
+        jit_val,
+        vm_int(&program, f, vec![Value::Int(N)]),
+        "unboxed fib({N}) must equal the VM oracle before timing is meaningful"
+    );
+
+    let best_unboxed = (0..10)
+        .map(|_| {
+            let s = Instant::now();
+            let _ = compiled.run_unboxed(&[Value::Int(N)]);
+            s.elapsed().as_nanos()
+        })
+        .min()
+        .unwrap();
+    let best_vm = (0..5)
+        .map(|_| {
+            let s = Instant::now();
+            let _ = crate::vm::Vm::new(&program).run_entry(f, vec![Value::Int(N)]);
+            s.elapsed().as_nanos()
+        })
+        .min()
+        .unwrap();
+
+    eprintln!(
+        "[jit-unboxed] fib({N}) best-of-N wall time:\n  \
+         compile       = {:.3} ms (one-time)\n  \
+         UNBOXED JIT   = {:.4} ms (best of 10)\n  \
+         VM            = {:.3} ms (best of 5)\n  \
+         php+JIT       = ~10 ms (recorded, Docker php:8.5-cli release+JIT)\n  \
+         speedup unboxed-JIT vs VM = {:.1}x  | vs php+JIT (~10ms) = {:.1}x",
+        compile_ns as f64 / 1e6,
+        best_unboxed as f64 / 1e6,
+        best_vm as f64 / 1e6,
+        best_vm as f64 / best_unboxed as f64,
+        10.0 / (best_unboxed as f64 / 1e6),
+    );
 }

@@ -5,6 +5,42 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] 🎉 **u2a SHIPPED (pending commit) — G-8 MECHANISM PROVEN (fib, in isolation).** Native
+  codegen beats php+JIT — but this is the MECHANISM proven in committed unit-tested code, NOT yet
+  DELIVERED: the JIT is still UNWIRED, so a user running `phg` hits the VM. End-to-end delivery + the
+  full-rendered-output byte-identity check are b3b. Unboxed SELF-recursive codegen: recursive `fib`
+  JITs unboxed. **MEASURED (committed code, best-of-N): unboxed fib(30) = 4.63 ms vs php+JIT ~10 ms =
+  ~2.2× FASTER** (321× faster than the VM's 1488 ms); compile 3.5 ms reported separately. Even beats the 5.03 ms throwaway spike, WITH the full depth-check + multi-return
+  + fault machinery — so the per-call overhead the advisor flagged is negligible. ABI now
+  `extern "C" fn(depth: i64, a0…: i64) -> (i64 value, i64 code)`; `Call` (self-only for u2a) = depth
+  guard (`depth >= MAX_CALL_DEPTH` → code 4 `"stack overflow"`, checked PER-CALL-SITE not at entry —
+  byte-identity: base case returns `n` at any depth without a Call) → native self-call(`depth+1`,args)
+  → propagate `(value,code)`. Bare-param returns typed via `unboxed_proven_int_params` (a param
+  consumed by an int-arith op is provably int — fib's `n` via `n-1`), NO declared-type source needed.
+  27 jit tests (+3 u2a: recursive fib vs VM oracle; deep-recursion overflow=code 4 on a 64MB thread vs
+  VM; the honest measurement) + full workspace/PHP-oracle (1804 passed) + clippy(jit)/fmt/non-jit-build
+  green. Still UNWIRED. NEXT = **u2b** (general multi-fn unboxed calls — non-self `Call`, BFS graph like
+  b2; the fixpoint "Call=Int + reject-whole-graph-if-any-ineligible" already designed) → then wire
+  `phg run` (b3b, codegen-agnostic) → re-measure the 12-feature matrix → per-feature sweep.
+- [2026-07-08] DESIGN (u2 — unboxed native calls + recursion → fib JITs unboxed). **No type-source
+  struct change needed** (avoids the ~20-site `Function` field churn): infer int-ness from USAGE.
+  (1) **Provenance pre-pass:** track a param's provenance on the operand stack; when an int-arith op
+  (`AddI`/`SubI`/`MulI`/`DivI`/`RemI`/`Neg`) consumes an operand that is a bare `GetLocal(slot)`, mark
+  `slot` proven-int (SOUND: the compiler only emits those ops for int operands; float uses `AddF`). So
+  `fib`'s `n` is proven int via `n - 1` (`SubI`), and `return n` types as Int. A param never used in an
+  int-arith op stays Unknown → a bare-param return of it is rejected (fall back). (2) **Call results
+  type as Int** (optimistic) and eligibility requires EVERY reachable function (transitive via `Call`)
+  to have all-provably-Int returns — a sound fixpoint: if any function returned bool it'd be a
+  comparison/`Not` (Bool) → rejected → whole graph ineligible; so an eligible graph provably returns int
+  everywhere. (3) **Native call ABI:** `Call(idx)` → native call to the callee's unboxed `FuncId`
+  passing i64 args directly (fast, spike-like), receiving `(value, code)`; `brif code != 0` →
+  caller's fault-exit propagating that same code (byte-identical fault). Multi-function module like b2
+  (BFS graph, per-fn FuncId, finalize once; self-call resolves at finalize). ⚠ Args as direct i64
+  params means per-arity callee sigs (fine, built per fn) + the entry transmute already handles arity.
+  Own fault-parity confirmation: fib faults (deep-overflow) still map to the kernel string; a
+  differential/measurement re-check that unboxed fib beats php (~5 ms). Depth cap: unboxed native
+  recursion needs the `"stack overflow"` guard too (a depth counter threaded like b2, OR reuse the
+  boxed depth mechanism) — MUST-CHECK in u2's 3C.
 - [2026-07-08] PROGRESS: **u1 SHIPPED (pending commit) — green.** Unboxed LEAF int codegen alongside
   the boxed path (boxed kept as byte-identity oracle). `Compiled::compile_unboxed` + `run_unboxed`;
   operands are compile-time SSA `i64` (no boxed `Vec`, no per-op helper call); args read via entry

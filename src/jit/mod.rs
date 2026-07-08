@@ -815,6 +815,80 @@ fn upop(stack: &mut Vec<(ClValue, Kind)>) -> Result<(ClValue, Kind), JitError> {
         .ok_or_else(|| JitError::Codegen("unboxed: operand stack underflow".to_string()))
 }
 
+/// Provenance of an operand-stack entry for the provenance pre-pass ONLY (not codegen): `Param(slot)`
+/// = a bare `GetLocal(slot)` result; `Other` = anything else (a `Const`, an arithmetic/comparison
+/// result, a call result).
+#[derive(Clone, Copy)]
+enum Prov {
+    Param(usize),
+    Other,
+}
+
+/// Which param slots are provably `int` — i.e. consumed (while still a bare `GetLocal`) by an
+/// int-arith op (`AddI`/`SubI`/`MulI`/`DivI`/`RemI`/`Neg`), which the compiler emits ONLY for int
+/// operands (float uses `AddF`, …). This lets a bare-param `Return` (e.g. `fib`'s base case
+/// `return n`) type as `Int` WITHOUT a declared-type source. It MUST be a separate pre-pass: the
+/// base-case `return n` can PRECEDE the `n - 1` (`SubI`) that proves `n` int, so a single forward pass
+/// would reject it. SOUND and one-directional — a slot is marked only on hard evidence; imprecision
+/// (a missed mark) only over-rejects (falls back), never mis-accepts. The operand stack is cleared at
+/// terminators so no provenance leaks across a basic-block boundary; `self.arity` args are popped for
+/// a `Call` (u2a calls are self-recursive, so the callee arity equals this function's).
+fn unboxed_proven_int_params(func: &crate::chunk::Function) -> Vec<bool> {
+    let code = &func.chunk.code;
+    let reach = reachable(code);
+    let mut proven = vec![false; func.arity];
+    let mut stack: Vec<Prov> = Vec::new();
+    for (ip, op) in code.iter().enumerate() {
+        if !reach[ip] {
+            continue;
+        }
+        match op {
+            Op::GetLocal(slot) => stack.push(Prov::Param(*slot)),
+            Op::Const(_) => stack.push(Prov::Other),
+            Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => {
+                for _ in 0..2 {
+                    if let Some(Prov::Param(slot)) = stack.pop() {
+                        if slot < proven.len() {
+                            proven[slot] = true;
+                        }
+                    }
+                }
+                stack.push(Prov::Other);
+            }
+            Op::Neg => {
+                if let Some(Prov::Param(slot)) = stack.pop() {
+                    if slot < proven.len() {
+                        proven[slot] = true;
+                    }
+                }
+                stack.push(Prov::Other);
+            }
+            Op::Not => {
+                stack.pop();
+                stack.push(Prov::Other);
+            }
+            Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
+                stack.pop();
+                stack.pop();
+                stack.push(Prov::Other);
+            }
+            Op::Call(_) => {
+                for _ in 0..func.arity {
+                    stack.pop();
+                }
+                stack.push(Prov::Other);
+            }
+            Op::JumpIfFalse(_) => {
+                stack.pop();
+                stack.clear();
+            }
+            Op::Jump(_) | Op::Return => stack.clear(),
+            _ => stack.clear(),
+        }
+    }
+    proven
+}
+
 /// Cheap pre-pass eligibility for the unboxed LEAF int subset (u1), over reachable ops only. Rejects
 /// (as `Unsupported`, so the caller falls back to the VM/boxed path) anything u1 can't lower: a
 /// `SetLocal` or a `GetLocal(slot >= arity)` (both signal a local declaration — u1 has no local slots
@@ -822,7 +896,7 @@ fn upop(stack: &mut Vec<(ClValue, Kind)>) -> Result<(ClValue, Kind), JitError> {
 /// or any op outside the subset. Runs BEFORE codegen so an out-of-subset function yields a clean
 /// `Unsupported`, not a mid-build `Codegen` error. (The return-kind-is-`Int` check stays in
 /// `build_body_unboxed`, where the operand kind is tracked.)
-fn unboxed_leaf_eligible(func: &crate::chunk::Function) -> Result<(), JitError> {
+fn unboxed_eligible(func: &crate::chunk::Function, self_idx: usize) -> Result<(), JitError> {
     let code = &func.chunk.code;
     let reach = reachable(code);
     for (ip, op) in code.iter().enumerate() {
@@ -857,7 +931,10 @@ fn unboxed_leaf_eligible(func: &crate::chunk::Function) -> Result<(), JitError> 
                     func.arity
                 )));
             }
-            // SetLocal, Call, and everything else fall back.
+            // u2a: self-recursion only. A call to a different function is deferred to u2b (general
+            // multi-function unboxed calls) → fall back for now.
+            Op::Call(idx) if *idx == self_idx => {}
+            // SetLocal, non-self Call, and everything else fall back.
             other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
         }
     }
@@ -874,8 +951,11 @@ fn unboxed_leaf_eligible(func: &crate::chunk::Function) -> Result<(), JitError> 
 /// for a non-empty operand stack at a leader (guards against a future non-structured op silently
 /// breaking the empty-at-leaders invariant).
 fn build_body_unboxed(
+    module: &mut JITModule,
     cl_ctx: &mut cranelift::codegen::Context,
     func: &crate::chunk::Function,
+    self_id: FuncId,
+    proven: &[bool],
 ) -> Result<(), JitError> {
     let code = &func.chunk.code;
     let n = code.len();
@@ -883,14 +963,21 @@ fn build_body_unboxed(
 
     let mut fbctx = FunctionBuilderContext::new();
     let mut b = FunctionBuilder::new(&mut cl_ctx.func, &mut fbctx);
+    // For self-recursion (u2a): a native call to this function's own FuncId, resolved at finalize.
+    let self_ref = module.declare_func_in_func(self_id, b.func);
 
-    // Entry block: `[fault_cell, a0, a1, …]`. Args are read directly wherever needed — they are
-    // defined in the entry block which dominates the whole body (u1 has no `SetLocal` and no back-edge,
-    // so a local's value never changes and never needs a phi).
+    // Entry block: `[depth, a0, a1, …]`. `depth` is the live frame count at the call site (the caller
+    // passes `depth + 1`; the top-level entry gets 1) — a `Call` checks `depth >= MAX_CALL_DEPTH`
+    // BEFORE recursing to reproduce the VM's `"stack overflow"` at the exact threshold. Args are read
+    // directly wherever needed — defined in the entry block, which dominates the whole body (no
+    // `SetLocal`, and the only back-edge — a self-call — is a native call, not a CFG edge, so a local's
+    // value never needs a phi).
     let entry = b.create_block();
     b.append_block_params_for_function_params(entry);
     b.switch_to_block(entry);
-    let args: Vec<ClValue> = b.block_params(entry).to_vec(); // local slot s == args[s]
+    let entry_params: Vec<ClValue> = b.block_params(entry).to_vec();
+    let depth = entry_params[0];
+    let args: Vec<ClValue> = entry_params[1..].to_vec(); // local slot s == args[s]
 
     // One Cranelift block per reachable leader (same shape as the boxed builder).
     let mut blocks: Vec<Option<Block>> = vec![None; n];
@@ -1037,7 +1124,46 @@ fn build_body_unboxed(
                         args.len()
                     ))
                 })?;
-                stack.push((v, Kind::Unknown));
+                // A param proven int by the provenance pre-pass reads as Int (so a bare-param return
+                // types correctly, e.g. fib's base case); otherwise Unknown → a bare return of it is
+                // rejected at `Return`.
+                let kind = if *slot < proven.len() && proven[*slot] {
+                    Kind::Int
+                } else {
+                    Kind::Unknown
+                };
+                stack.push((v, kind));
+            }
+            Op::Call(_) => {
+                // u2a: self-recursion only (eligibility already rejected non-self calls). Reproduce
+                // the VM's pre-push depth guard, then a direct native call to this function's own
+                // FuncId, passing `depth + 1` + the `arity` args already on the operand stack;
+                // propagate the callee's `(value, code)`.
+                let dmax = b.ins().iconst(types::I64, MAX_CALL_DEPTH as i64);
+                let too_deep = b.ins().icmp(IntCC::SignedGreaterThanOrEqual, depth, dmax);
+                fault_if(&mut b, too_deep, 4); // 4 → "stack overflow"
+                let d1 = b.ins().iadd_imm(depth, 1);
+                // Pop `arity` args (top is the last arg); rebuild in declaration order.
+                let arity = func.arity;
+                let mut cargs: Vec<ClValue> = Vec::with_capacity(arity);
+                for _ in 0..arity {
+                    let (v, _) = upop(&mut stack)?;
+                    cargs.push(v);
+                }
+                cargs.reverse();
+                let mut call_args: Vec<ClValue> = Vec::with_capacity(arity + 1);
+                call_args.push(d1);
+                call_args.extend(cargs);
+                let call = b.ins().call(self_ref, &call_args);
+                let results = b.inst_results(call);
+                let (value, ccode) = (results[0], results[1]);
+                // code != 0 → propagate the callee's exact code to the shared fault-exit.
+                let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
+                let cont = b.create_block();
+                b.ins()
+                    .brif(is_fault, fault_exit, &[ccode.into()], cont, &[]);
+                b.switch_to_block(cont);
+                stack.push((value, Kind::Int));
             }
             Op::Jump(t) => {
                 if !stack.is_empty() {
@@ -1227,11 +1353,13 @@ impl Compiled {
         })
     }
 
-    /// JIT-compile `entry_idx` with the UNBOXED codegen (slice u1): a LEAF int function (no
-    /// `SetLocal`, no `Call`) whose every reachable `Return` yields a provably-`Int` operand. Returns
-    /// [`JitError::Unsupported`] otherwise — the caller falls back to the VM (or the boxed
-    /// [`Compiled::compile`]). No `rt_*` helpers are registered: unboxed code is pure register
-    /// arithmetic with inline fault checks, its only external touch a single `*mut i64` fault cell.
+    /// JIT-compile `entry_idx` with the UNBOXED codegen (slice u2a): an int function that may be
+    /// SELF-recursive (no `SetLocal`, no local decls, no non-self `Call`) whose every reachable
+    /// `Return` yields a provably-`Int` operand (a param proven int by usage, an arithmetic result, or
+    /// a self-call result). Returns [`JitError::Unsupported`] otherwise — the caller falls back to the
+    /// VM (or the boxed [`Compiled::compile`]). No `rt_*` helpers are registered: unboxed code is pure
+    /// register arithmetic + native self-calls with inline fault checks; faults travel in the `(value,
+    /// code)` multi-return, mapped to the single-sourced kernel strings in [`Compiled::run_unboxed`].
     pub fn compile_unboxed(
         program: &BytecodeProgram,
         entry_idx: usize,
@@ -1240,25 +1368,28 @@ impl Compiled {
         if func.n_captures != 0 {
             return Err(JitError::Unsupported("closure with captures".to_string()));
         }
-        unboxed_leaf_eligible(func)?;
+        unboxed_eligible(func, entry_idx)?;
+        let proven = unboxed_proven_int_params(func);
         let builder = JITBuilder::new(default_libcall_names())
             .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
         let mut module = JITModule::new(builder);
 
-        // extern "C" fn(a0..a_arity: i64) -> (i64 value, i64 code)  [multi-return; no fault cell]
+        // extern "C" fn(depth: i64, a0..a_arity: i64) -> (i64 value, i64 code)  [multi-return]
         let mut sig = module.make_signature();
+        sig.params.push(AbiParam::new(types::I64)); // depth (frame count at the call site)
         for _ in 0..func.arity {
             sig.params.push(AbiParam::new(types::I64));
         }
         sig.returns.push(AbiParam::new(types::I64)); // value
         sig.returns.push(AbiParam::new(types::I64)); // fault code (0 = ok)
+                                                     // Declared BEFORE the body so a self-call can reference this same FuncId (resolved at finalize).
         let func_id = module
             .declare_function("phorj_unboxed_entry", Linkage::Export, &sig)
             .map_err(|e| JitError::Codegen(format!("declare unboxed entry: {e}")))?;
 
         let mut cl_ctx = module.make_context();
         cl_ctx.func.signature = sig;
-        build_body_unboxed(&mut cl_ctx, func)?;
+        build_body_unboxed(&mut module, &mut cl_ctx, func, func_id, &proven)?;
         module
             .define_function(func_id, &mut cl_ctx)
             .map_err(|e| JitError::Codegen(format!("define unboxed: {e}")))?;
@@ -1316,10 +1447,11 @@ impl Compiled {
         }
     }
 
-    /// Run an UNBOXED-compiled entry (from [`Compiled::compile_unboxed`]). Args are passed as native
-    /// `i64` params (a bool arg is its `0/1`), a `*mut i64` fault cell is threaded, and the result maps
-    /// back to a [`Value`]: on `*fault_cell == 0` the returned `i64` is the (int) value; otherwise the
-    /// fault code maps to the single-sourced `value::FAULT_*` string — byte-identical to the VM.
+    /// Run an UNBOXED-compiled entry (from [`Compiled::compile_unboxed`]). The ABI is
+    /// `extern "C" fn(depth: i64, a0…: i64) -> (i64 value, i64 code)`; the top-level call passes
+    /// `depth = 1` (the VM's single entry frame), args as native `i64` (a bool arg is its `0/1`). On
+    /// `code == 0` the returned `i64` is the (int) value; otherwise the code maps to the single-sourced
+    /// `value::FAULT_*` string (or `"stack overflow"`, code 4) — byte-identical to the VM.
     pub fn run_unboxed(&self, args: &[Value]) -> JitRun {
         debug_assert!(
             self.unboxed,
@@ -1344,27 +1476,30 @@ impl Compiled {
                 _ => 0,
             })
             .collect();
-        // SAFETY: `self.entry` is finalized machine code with signature
-        // `extern "C" fn(i64… /* arity */) -> (i64, i64)`; we transmute to the arity-specific type and
-        // pass exactly `arity` i64 args. `self.module` owns the code and is alive across the call.
+        const D0: i64 = 1; // top-level entry frame depth (matches the VM's single entry frame)
+                           // SAFETY: `self.entry` is finalized machine code with signature
+                           // `extern "C" fn(i64 depth, i64… /* arity */) -> (i64, i64)`; we transmute to the arity-specific
+                           // type and pass depth + exactly `arity` i64 args. `self.module` owns the code, alive across the
+                           // call.
         let ret: UnboxedRet = unsafe {
             match self.arity {
                 0 => {
-                    let f: extern "C" fn() -> UnboxedRet = std::mem::transmute(self.entry);
-                    f()
+                    let f: extern "C" fn(i64) -> UnboxedRet = std::mem::transmute(self.entry);
+                    f(D0)
                 }
                 1 => {
-                    let f: extern "C" fn(i64) -> UnboxedRet = std::mem::transmute(self.entry);
-                    f(ia[0])
+                    let f: extern "C" fn(i64, i64) -> UnboxedRet = std::mem::transmute(self.entry);
+                    f(D0, ia[0])
                 }
                 2 => {
-                    let f: extern "C" fn(i64, i64) -> UnboxedRet = std::mem::transmute(self.entry);
-                    f(ia[0], ia[1])
-                }
-                3 => {
                     let f: extern "C" fn(i64, i64, i64) -> UnboxedRet =
                         std::mem::transmute(self.entry);
-                    f(ia[0], ia[1], ia[2])
+                    f(D0, ia[0], ia[1])
+                }
+                3 => {
+                    let f: extern "C" fn(i64, i64, i64, i64) -> UnboxedRet =
+                        std::mem::transmute(self.entry);
+                    f(D0, ia[0], ia[1], ia[2])
                 }
                 other => {
                     return JitRun::Fault(format!("jit: unboxed arity {other} unsupported"));
@@ -1376,6 +1511,7 @@ impl Compiled {
             1 => JitRun::Fault(crate::value::FAULT_INT_OVERFLOW.to_string()),
             2 => JitRun::Fault(crate::value::FAULT_DIV_ZERO.to_string()),
             3 => JitRun::Fault(crate::value::FAULT_MOD_ZERO.to_string()),
+            4 => JitRun::Fault("stack overflow".to_string()),
             other => JitRun::Fault(format!("jit: unboxed unknown fault code {other}")),
         }
     }
