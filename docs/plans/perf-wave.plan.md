@@ -31,17 +31,19 @@
   ovf-spec, reproduced on clean HEAD via stash):** the decimal conformance PHP-oracle test fails —
   `bcmul()` undefined because php-8.5.8 loads bcmath as a SHARED ext, and the harness runs php `-n -d
   extension=bcmath` WITHOUT an `extension_dir`, so the `.so` never loads. See PENDING-DECISION below.
-- [2026-07-09] 🅿️ **PENDING-DECISION: bcmath conformance-oracle gap (pre-existing, blocks the FULL
-  `PHORJ_REQUIRE_PHP=1` oracle on decimal).** `tests/conformance.rs::php_n_args` runs php with `-n`
-  (no ini) and, when bcmath is not a BUILT-IN (static) extension, adds `-d extension=bcmath` — but this
-  phpbrew php-8.5.8 build has bcmath as a shared `.so`, which needs `-d extension_dir=<dir>` to load
-  under `-n`. Repro: `PHORJ_REQUIRE_PHP=1 cargo test -p phorj --test conformance` → `Call to undefined
-  function bcmul()`. Options for the developer: (A) harness adds `-d extension_dir=$(<oracle-php> -i |
-  grep extension_dir)` when falling back — RECOMMENDED, keeps `-n` determinism, one-line-ish fix; (B)
-  rebuild php-8.5.8 with `--enable-bcmath` static (toolchain change, heavier); (C) quarantine the
-  decimal transpile-conformance case under a "no-bcmath" skip with a loud SKIP (loses oracle coverage
-  for decimal). I did NOT self-rule (it touches the PHP-oracle spine); for the overnight run I treat
-  this ONE failure as a known HEAD baseline and gate later slices on "no NEW oracle failures vs it".
+- [2026-07-09] ✅ **RESOLVED (was "bcmath PENDING") — root cause was NOT bcmath; it was a missing
+  `export` in `scripts/toolchain.env`.** Rule-14 investigation: the decimal conformance `bcmul()`
+  "failure" reproduced only under the DOCUMENTED manual gate usage (`source scripts/toolchain.env &&
+  cargo test`). Root cause [Verified]: `toolchain.env` ASSIGNED `PHORJ_PHP` but did not `export` it, so
+  the cargo child process never saw it → `php_bin()` fell back to the on-PATH `/bin/php` (**8.5.4, NO
+  bcmath**) instead of the 8.5.8 floor (has static bcmath). Proof: the exact fixture
+  `conformance/lang/decimal.phg` transpiles + runs CLEAN under `php-8.5.8 -n` (bcmul/bcpow/bccomp all
+  defined, output correct); and with `export PHORJ_PHP=8.5.8` the conformance suite passes 2/2. The
+  pre-push hook re-exports defensively (so IT was fine), but every MANUAL full-gate run was silently
+  oracle-ing against the wrong php — a real gate-integrity bug beyond the perf wave. Fix: `export
+  PHORJ_PHP=…` in `toolchain.env` (one line + rationale comment). ⇒ **ovf-spec's FULL oracle gate is now
+  genuinely green** (2/2 conformance, 1556 lib, differential, clippy both, fmt, release). No known-HEAD
+  baseline red remains; later slices gate on a fully-green oracle.
 - [2026-07-09] 🔬 **ovf-spec ADVISOR-3C REFINEMENT (fresh context, pre-codegen) — Concern A confirmed
   BLOCKING; back-edge sticky guard added to the minimal slice.** The advisor killed the "speculative
   wrapping non-termination is only pathological/astronomical" rationalization with a trivial eligible
