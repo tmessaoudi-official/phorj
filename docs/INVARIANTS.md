@@ -144,3 +144,27 @@ Corollary (rejected designs, M-DOGFOOD): **no forced import of primitives** and 
 `Float`/`Decimal` object wrappers** — method-on-primitive is UFCS (`n.abs()`), nullability is `T?`,
 primitives-in-generics already work (`List<int>`), and `decimal` is already a primitive. A wrapper
 tier would be Java autoboxing: redundant capability plus surprise.
+
+## 13. JIT unboxed speculation — every faulting op sets sticky OR branches to code 5 (MUST-CHECK)
+The unboxed JIT codegen (`build_body_unboxed`, `--features jit`) is **speculative**: int arithmetic
+uses WRAPPING ops and records overflow in a sticky-flag Cranelift `Variable` instead of branching
+per-op (the "ovf-spec" slice). Correctness rests on a coupling invariant, the same class as the
+`Op`-variant and CTy-operand MUST-CHECKs:
+
+- **Every faulting op in the unboxed subset must either OR its fault condition into `sticky` (for
+  non-trapping ops — arith overflow, `ineg` of `MIN`) or branch to the shared fault-exit with code 5
+  (for hardware-trapping ops — `sdiv`/`srem` zero and `MIN/-1`, and the `Op::Call` depth cap).** At
+  every loop **back-edge** AND every `Return`, `sticky != 0` ⇒ exit code 5.
+- Code 5 = "redo on VM": `run_unboxed` maps it to `JitRun::Fault(REDO_ON_VM)`; the b3b `Op::Call` hook
+  (`src/vm/exec.rs`) re-runs the callee on the VM, whose per-op CHECKED arithmetic is the single
+  source of fault truth (renders the exact, correctly-ordered fault + line). The unboxed path never
+  emits a user-facing fault string itself.
+- **Widening the subset to a new faulting op (shift, checked `as`, `pow`, float faults, …) that
+  forgets this = a SILENT byte-identity P0**: a speculatively-wrapped success would mask a VM fault
+  (return a wrong value where the VM faults). Add the sticky/branch AND a differential/end-to-end case
+  in the SAME commit.
+- **The back-edge guard is mandatory, not optional hardening.** Without it, speculation can extend a
+  loop past the VM's fault point and even non-terminate where the VM faults (`while (i != 0) { i = i *
+  3; }`: `3^k mod 2^64` is never 0 → infinite native loop vs a ~40-iter VM overflow fault). The guard
+  bounds native to ≤1 partial iteration past the first overflow. Guard tests:
+  `ovf_spec_*` in `src/jit/tests.rs` (end-to-end `cmd_run` vs `cmd_treewalk`).

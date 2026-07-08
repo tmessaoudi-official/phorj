@@ -5,7 +5,7 @@
 //! anything outside the subset is default-denied. Byte-identity-under-`phg run` is the *next* (wiring)
 //! slice — these establish the substrate the wiring rides on.
 
-use super::{compile_and_run, Compiled, JitError, JitRun};
+use super::{compile_and_run, Compiled, JitError, JitRun, REDO_ON_VM};
 use crate::chunk::BytecodeProgram;
 use crate::value::Value;
 
@@ -530,7 +530,11 @@ fn unboxed_bool_param_is_handled_natively() {
 }
 
 #[test]
-fn unboxed_overflow_faults_like_the_kernel() {
+fn unboxed_overflow_funnels_to_vm_redo() {
+    // ovf-spec: the unboxed path speculates (wrapping + sticky), so an overflow no longer produces the
+    // kernel string directly — it returns code 5 = REDO_ON_VM, and the hook re-runs on the VM (which
+    // renders FAULT_INT_OVERFLOW). This asserts the low-level funnel; the end-to-end kernel-string
+    // parity is covered by `ovf_spec_*` below. (Also proves the wrapping mul did NOT crash the process.)
     let program = compile_source(
         "package Main;\n\
          function mul(int a, int b) -> int { return a * b; }\n\
@@ -541,43 +545,44 @@ fn unboxed_overflow_faults_like_the_kernel() {
         .expect("mul is unboxed-eligible")
         .run_unboxed(&[Value::Int(i64::MAX), Value::Int(2)], 1)
     {
-        JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_INT_OVERFLOW),
-        JitRun::Value(v) => panic!("expected overflow, got {}", as_int(&v)),
+        JitRun::Fault(m) => assert_eq!(m, REDO_ON_VM, "overflow must funnel to the VM redo"),
+        JitRun::Value(v) => panic!("expected redo (code 5), got value {}", as_int(&v)),
     }
 }
 
 #[test]
-fn unboxed_div_zero_and_mod_zero_are_distinct_faults() {
-    // The fault CODE→string mapping is the b1 transposition risk — a 2↔3 swap only shows if div-zero
-    // and mod-zero are asserted as SEPARATE cases with their DISTINCT strings (advisor).
+fn unboxed_div_zero_and_mod_zero_both_funnel_to_redo() {
+    // ovf-spec: div-zero and mod-zero KEEP their per-op branch (sdiv/srem hardware-trap), but both now
+    // funnel to code 5 = REDO_ON_VM rather than emitting distinct codes 2/3. The b1 code→string
+    // transposition risk therefore MOVES to the VM redo — its DISTINCTNESS is asserted end-to-end in
+    // `ovf_spec_div_zero_and_mod_zero_render_distinct_faults` below. Here: both must funnel (no trap).
     let program = compile_source(
         "package Main;\n\
          function divi(int a, int b) -> int { return a / b; }\n\
          function modi(int a, int b) -> int { return a % b; }\n\
          function main() -> void {}",
     );
-    let dv = func_index(&program, "divi");
-    let md = func_index(&program, "modi");
-    match Compiled::compile_unboxed(&program, dv)
-        .expect("divi eligible")
-        .run_unboxed(&[Value::Int(1), Value::Int(0)], 1)
-    {
-        JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_DIV_ZERO, "div-by-zero string"),
-        JitRun::Value(v) => panic!("expected div-zero, got {}", as_int(&v)),
-    }
-    match Compiled::compile_unboxed(&program, md)
-        .expect("modi eligible")
-        .run_unboxed(&[Value::Int(1), Value::Int(0)], 1)
-    {
-        JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_MOD_ZERO, "mod-by-zero string"),
-        JitRun::Value(v) => panic!("expected mod-zero, got {}", as_int(&v)),
+    for name in ["divi", "modi"] {
+        let f = func_index(&program, name);
+        match Compiled::compile_unboxed(&program, f)
+            .expect("eligible")
+            .run_unboxed(&[Value::Int(1), Value::Int(0)], 1)
+        {
+            JitRun::Fault(m) => {
+                assert_eq!(m, REDO_ON_VM, "{name}: zero-divisor must funnel to redo")
+            }
+            JitRun::Value(v) => panic!("{name}: expected redo, got {}", as_int(&v)),
+        }
     }
 }
 
 #[test]
-fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
-    // The signed-overflow edge of div/rem and negation — i64::MIN / -1, i64::MIN % -1, -i64::MIN — all
-    // clean FAULT_INT_OVERFLOW (never a native trap that would abort the process).
+fn unboxed_min_over_neg_one_and_neg_min_funnel_to_redo_without_trapping() {
+    // The signed-overflow edge — i64::MIN / -1, i64::MIN % -1, -i64::MIN. The CRITICAL property this
+    // guards is unchanged by ovf-spec: the native code must NOT hardware-trap (SIGFPE/abort) on these,
+    // it must RETURN. Under ovf-spec they all return code 5 = REDO_ON_VM (div/rem via their kept branch,
+    // neg via the sticky flag since `ineg` wraps); the VM redo then renders FAULT_INT_OVERFLOW (asserted
+    // end-to-end below). A process crash here would fail the test by aborting, not by a bad assertion.
     let program = compile_source(
         "package Main;\n\
          function divi(int a, int b) -> int { return a / b; }\n\
@@ -591,27 +596,12 @@ fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
         ("neg", vec![Value::Int(i64::MIN)]),
     ] {
         let f = func_index(&program, name);
-        // The VM oracle faults the same way (byte-identity of the edge).
-        let vm_fault = crate::vm::Vm::new(&program)
-            .run_entry(f, args.clone())
-            .expect_err("VM must fault at the signed-overflow edge")
-            .render("");
         match Compiled::compile_unboxed(&program, f)
             .expect("eligible")
             .run_unboxed(&args, 1)
         {
-            JitRun::Fault(m) => {
-                assert_eq!(
-                    m,
-                    crate::value::FAULT_INT_OVERFLOW,
-                    "{name} overflow string"
-                );
-                assert!(
-                    vm_fault.contains(&m),
-                    "{name}: unboxed fault must match VM oracle"
-                );
-            }
-            JitRun::Value(v) => panic!("{name}: expected overflow, got {}", as_int(&v)),
+            JitRun::Fault(m) => assert_eq!(m, REDO_ON_VM, "{name}: MIN-edge must funnel to redo"),
+            JitRun::Value(v) => panic!("{name}: expected redo, got {}", as_int(&v)),
         }
     }
 }
@@ -749,6 +739,149 @@ fn jit_transient_cancelling_overflow_still_faults() {
     }
 }
 
+// --- ovf-spec END-TO-END byte-identity (the coverage the boxed guards above CANNOT provide: they run
+// the boxed path, unchanged by ovf-spec). These drive the real `phg run` path — `cmd_run` (VM + JIT
+// hook) vs `cmd_treewalk` (pure interpreter oracle, never JITted, Invariant 2) — and assert identical
+// observable behaviour. Each asserts the JIT-target is unboxed-eligible so a silent VM fallback cannot
+// false-green the test (the failure the widen-1 hit-counter discipline exists to prevent). ---
+
+/// Assert `name` is unboxed-eligible in `src` — proves the `Op::Call` hook WILL engage it, so the test
+/// genuinely exercises the ovf-spec codegen rather than trivially running on the VM.
+fn assert_unboxed_eligible(src: &str, name: &str) {
+    let program = compile_source(src);
+    let f = func_index(&program, name);
+    assert!(
+        Compiled::compile_unboxed(&program, f).is_ok(),
+        "`{name}` must be unboxed-eligible so the JIT path is actually taken (else the test false-greens)"
+    );
+}
+
+#[test]
+fn ovf_spec_overflow_in_loop_redoes_to_byte_identical_fault() {
+    // Concern A (advisor): speculative wrapping in a loop whose exit test reads the wrapped value must
+    // NOT diverge from the VM. `3^k mod 2^64` is always odd → never 0 → without the back-edge sticky
+    // guard the native `spin` loops FOREVER while the VM faults overflow in ~40 iters. WITH the guard,
+    // the first overflow trips the back-edge check → redo on VM → byte-identical overflow fault. If this
+    // test ever hangs (CI timeout) rather than fails, the back-edge guard has regressed.
+    // The loop var must be initialized from a CONSTANT (proven int) — a bare param is not proven-int
+    // unless used as an arith operand, so `spin(int seed){ i = seed; ...}` is ineligible. Arity-0 form
+    // (the advisor's exact counterexample) keeps `i` proven-int and unboxed-eligible.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function spin() -> int { mutable int i = 1; while (i != 0) { i = i * 3; } return i; }\n\
+        function main() -> void { Output.printLine(\"{spin()}\"); }";
+    assert_unboxed_eligible(SRC, "spin");
+    let jit = crate::cli::cmd_run(SRC);
+    let oracle = crate::cli::cmd_treewalk(SRC);
+    match (&jit, &oracle) {
+        (Err(a), Err(b)) => {
+            assert_eq!(a, b, "spin: jit fault must match the interpreter oracle");
+            assert!(
+                a.contains(crate::value::FAULT_INT_OVERFLOW),
+                "spin must fault overflow (via the VM redo), got:\n{a}"
+            );
+        }
+        _ => panic!("spin: both must fault overflow; jit={jit:?}, oracle={oracle:?}"),
+    }
+}
+
+#[test]
+fn ovf_spec_overflow_before_div_zero_orders_correctly() {
+    // Fault ORDERING through the JIT: `a * a / b` with a*a overflowing AND b == 0. The VM faults at the
+    // OVERFLOW (a*a precedes /b) and never reaches the divide. The JIT sets sticky at a*a, then its
+    // div-zero branch trips — but it emits code 5 (redo), NOT div-zero, so the VM redo reproduces the
+    // true first fault: overflow. A design that emitted div-zero directly would fail here.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function f(int a, int b) -> int { return a * a / b; }\n\
+        function main() -> void { Output.printLine(\"{f(4000000000, 0)}\"); }";
+    assert_unboxed_eligible(SRC, "f");
+    let jit = crate::cli::cmd_run(SRC);
+    let oracle = crate::cli::cmd_treewalk(SRC);
+    match (&jit, &oracle) {
+        (Err(a), Err(b)) => {
+            assert_eq!(a, b, "ordering: jit fault must match oracle");
+            assert!(
+                a.contains(crate::value::FAULT_INT_OVERFLOW),
+                "must fault OVERFLOW (a*a before /b), not divide-by-zero, got:\n{a}"
+            );
+        }
+        _ => panic!("ordering: both must fault overflow; jit={jit:?}, oracle={oracle:?}"),
+    }
+}
+
+#[test]
+fn ovf_spec_transient_cancelling_overflow_still_faults() {
+    // `a * b - a * c` with b == c: under wrapping the products cancel to 0, but the VM faults at the
+    // first (checked) `a * b`. The sticky flag forces a redo even though the wrapped result is a clean 0
+    // — a naive wrapping rewrite would silently return 0.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function f(int a, int b, int c) -> int { return a * b - a * c; }\n\
+        function main() -> void { Output.printLine(\"{f(4000000000, 4000000000, 4000000000)}\"); }";
+    assert_unboxed_eligible(SRC, "f");
+    let jit = crate::cli::cmd_run(SRC);
+    let oracle = crate::cli::cmd_treewalk(SRC);
+    match (&jit, &oracle) {
+        (Err(a), Err(b)) => {
+            assert_eq!(a, b, "transient: jit fault must match oracle");
+            assert!(
+                a.contains(crate::value::FAULT_INT_OVERFLOW),
+                "must fault on the cancelling overflow, not return wrapped 0, got:\n{a}"
+            );
+        }
+        _ => panic!("transient: both must fault overflow; jit={jit:?}, oracle={oracle:?}"),
+    }
+}
+
+#[test]
+fn ovf_spec_div_zero_and_mod_zero_render_distinct_faults() {
+    // The b1 code→string transposition risk (2↔3) moved from `run_unboxed` (now both → code 5) to the
+    // VM redo — so assert the DISTINCTNESS end-to-end: a pure div-by-zero (no prior overflow) renders
+    // FAULT_DIV_ZERO and a pure mod-by-zero renders FAULT_MOD_ZERO, each byte-identical to the oracle.
+    const DIV: &str = "package Main;\n\
+        import Core.Output;\n\
+        function dz(int a, int b) -> int { return a / b; }\n\
+        function main() -> void { Output.printLine(\"{dz(1, 0)}\"); }";
+    const MOD: &str = "package Main;\n\
+        import Core.Output;\n\
+        function mz(int a, int b) -> int { return a % b; }\n\
+        function main() -> void { Output.printLine(\"{mz(1, 0)}\"); }";
+    assert_unboxed_eligible(DIV, "dz");
+    assert_unboxed_eligible(MOD, "mz");
+    for (src, kernel, label) in [
+        (DIV, crate::value::FAULT_DIV_ZERO, "div-zero"),
+        (MOD, crate::value::FAULT_MOD_ZERO, "mod-zero"),
+    ] {
+        let jit = crate::cli::cmd_run(src);
+        let oracle = crate::cli::cmd_treewalk(src);
+        match (&jit, &oracle) {
+            (Err(a), Err(b)) => {
+                assert_eq!(a, b, "{label}: jit fault must match oracle");
+                assert!(
+                    a.contains(kernel),
+                    "{label}: expected `{kernel}`, got:\n{a}"
+                );
+            }
+            _ => panic!("{label}: both must fault; jit={jit:?}, oracle={oracle:?}"),
+        }
+    }
+}
+
+#[test]
+fn ovf_spec_non_overflowing_loop_returns_the_checked_value() {
+    // The happy path: a loop that never overflows must return the SAME value as the VM (wrapping ==
+    // checked when no carry ever fires; sticky stays 0 → Return selects code 0 → the real value).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function sumsq(int n) -> int { mutable int s = 0; mutable int i = 1; while (i <= n) { s = s + i * i; i = i + 1; } return s; }\n\
+        function main() -> void { Output.printLine(\"{sumsq(100)}\"); }";
+    assert_unboxed_eligible(SRC, "sumsq");
+    let jit = crate::cli::cmd_run(SRC).expect("no-overflow loop must succeed under jit");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");
+    assert_eq!(jit, oracle, "no-overflow loop value must match the oracle");
+}
+
 #[test]
 fn unboxed_bool_local_not_returned_is_eligible() {
     // A mutable BOOL local (SetLocal from a comparison → Kind::Bool), used only in a bool context
@@ -872,19 +1005,15 @@ fn unboxed_overflow_mid_loop_faults_like_vm() {
          function main() -> void {}",
     );
     let f = func_index(&program, "powish");
-    let vm_fault = crate::vm::Vm::new(&program)
-        .run_entry(f, vec![Value::Int(100)])
-        .expect_err("VM must overflow in the loop");
+    // ovf-spec: an in-loop overflow funnels to code 5 = REDO_ON_VM (the back-edge sticky guard trips on
+    // the overflowing iteration). Byte-identity with the VM is proven end-to-end in
+    // `ovf_spec_overflow_in_loop_redoes_to_byte_identical_fault`.
     match Compiled::compile_unboxed(&program, f)
         .expect("int while is eligible")
         .run_unboxed(&[Value::Int(100)], 1)
     {
-        JitRun::Fault(msg) => assert!(
-            vm_fault.render("").contains(&msg),
-            "unboxed loop overflow `{msg}` must match the VM oracle:\n{}",
-            vm_fault.render("")
-        ),
-        JitRun::Value(v) => panic!("expected overflow, got {}", as_int(&v)),
+        JitRun::Fault(msg) => assert_eq!(msg, REDO_ON_VM, "in-loop overflow must funnel to redo"),
+        JitRun::Value(v) => panic!("expected redo, got {}", as_int(&v)),
     }
     // And a non-overflowing run still matches the oracle exactly.
     assert_eq!(
@@ -909,19 +1038,16 @@ fn unboxed_div_zero_mid_loop_faults_like_vm() {
          function main() -> void {}",
     );
     let f = func_index(&program, "acc");
-    let vm_fault = crate::vm::Vm::new(&program)
-        .run_entry(f, vec![Value::Int(3)])
-        .expect_err("VM must divide by zero when i == n");
+    // ovf-spec: the in-loop divide-by-zero keeps its per-op branch (sdiv traps) but funnels to code 5 =
+    // REDO_ON_VM; byte-identity is proven end-to-end in `ovf_spec_div_zero_and_mod_zero_render_distinct_faults`.
     match Compiled::compile_unboxed(&program, f)
         .expect("int while is eligible")
         .run_unboxed(&[Value::Int(3)], 1)
     {
-        JitRun::Fault(msg) => assert!(
-            vm_fault.render("").contains(&msg),
-            "unboxed loop div-by-zero `{msg}` must match the VM oracle:\n{}",
-            vm_fault.render("")
-        ),
-        JitRun::Value(v) => panic!("expected div-by-zero, got {}", as_int(&v)),
+        JitRun::Fault(msg) => {
+            assert_eq!(msg, REDO_ON_VM, "in-loop div-by-zero must funnel to redo")
+        }
+        JitRun::Value(v) => panic!("expected redo, got {}", as_int(&v)),
     }
 }
 
@@ -972,8 +1098,8 @@ fn unboxed_add_and_sub_overflow_fault_like_the_kernel() {
             .expect("eligible")
             .run_unboxed(&args, 1)
         {
-            JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_INT_OVERFLOW, "{name} overflow"),
-            JitRun::Value(v) => panic!("{name}: expected overflow, got {}", as_int(&v)),
+            JitRun::Fault(m) => assert_eq!(m, REDO_ON_VM, "{name} overflow must funnel to redo"),
+            JitRun::Value(v) => panic!("{name}: expected redo, got {}", as_int(&v)),
         }
     }
 }
@@ -1004,9 +1130,12 @@ fn unboxed_recursive_fib_matches_vm_oracle() {
 }
 
 #[test]
-fn unboxed_deep_recursion_faults_like_the_vm_stack_overflow() {
-    // Unboxed native recursion must cap at MAX_CALL_DEPTH with the VM's "stack overflow" (code 4), not
-    // segfault. Big stack (native frames); assert INSIDE the closure (Value/JitRun hold Rc = not Send).
+fn unboxed_deep_recursion_caps_at_depth_and_funnels_to_redo() {
+    // Unboxed native recursion must cap at MAX_CALL_DEPTH (the depth-guard branch fires) and RETURN,
+    // NOT segfault the process. Under ovf-spec that cap funnels to code 5 = REDO_ON_VM; the byte-identical
+    // "stack overflow" string is covered end-to-end by `jit_stack_overflow_threshold_matches_the_oracle`
+    // (countdown bracketing MAX_CALL_DEPTH through the real hook). Big stack (native frames); assert
+    // INSIDE the closure (Value/JitRun hold Rc = not Send). If this segfaulted, the thread would abort.
     const SRC: &str = "package Main;\n\
         function forever(int n) -> int { return forever(n + 1); }\n\
         function main() -> void {}";
@@ -1015,24 +1144,19 @@ fn unboxed_deep_recursion_faults_like_the_vm_stack_overflow() {
         .spawn(|| {
             let program = compile_source(SRC);
             let f = func_index(&program, "forever");
-            let vm_fault = crate::vm::Vm::new(&program)
-                .run_entry(f, vec![Value::Int(0)])
-                .expect_err("VM must fault with stack overflow")
-                .render("");
-            let jit = match Compiled::compile_unboxed(&program, f)
+            match Compiled::compile_unboxed(&program, f)
                 .expect("forever is unboxed-eligible")
                 .run_unboxed(&[Value::Int(0)], 1)
             {
                 JitRun::Fault(m) => m,
-                JitRun::Value(v) => panic!("expected stack overflow, got {}", as_int(&v)),
-            };
-            (vm_fault, jit)
+                JitRun::Value(v) => panic!("expected redo (depth cap), got {}", as_int(&v)),
+            }
         })
         .expect("spawn big-stack thread");
-    let (vm_fault, jit) = handle.join().expect("big-stack thread panicked");
-    assert!(
-        vm_fault.contains(&jit),
-        "unboxed stack-overflow fault `{jit}` must match the VM oracle:\n{vm_fault}"
+    let jit = handle.join().expect("big-stack thread panicked");
+    assert_eq!(
+        jit, REDO_ON_VM,
+        "the depth cap must fire and funnel to the VM redo (not segfault, not return a value)"
     );
 }
 
@@ -1136,25 +1260,16 @@ fn unboxed_cross_call_propagates_a_callee_fault() {
          function main() -> void {}",
     );
     let f = func_index(&program, "callbad");
-    let vm_fault = crate::vm::Vm::new(&program)
-        .run_entry(f, vec![Value::Int(10)])
-        .expect_err("VM must fault: the cross-callee divides by zero");
+    // ovf-spec: the callee `bad` faults (div-zero → code 5); `callbad` propagates the callee's non-zero
+    // code as code 5 = REDO_ON_VM. This asserts the CROSS-CALL fault propagation still fires (a callee
+    // fault is not swallowed); the byte-identical div-zero string is the VM redo's job (covered
+    // end-to-end in `ovf_spec_div_zero_and_mod_zero_render_distinct_faults`).
     match Compiled::compile_unboxed(&program, f)
         .expect("callbad is unboxed-eligible")
         .run_unboxed(&[Value::Int(10)], 1)
     {
-        JitRun::Fault(m) => {
-            assert_eq!(
-                m,
-                crate::value::FAULT_DIV_ZERO,
-                "propagated div-zero string"
-            );
-            assert!(
-                vm_fault.render("").contains(&m),
-                "unboxed propagated fault must match the VM oracle"
-            );
-        }
-        JitRun::Value(v) => panic!("expected a propagated div-zero fault, got {}", as_int(&v)),
+        JitRun::Fault(m) => assert_eq!(m, REDO_ON_VM, "a callee fault must propagate as a redo"),
+        JitRun::Value(v) => panic!("expected a propagated redo, got {}", as_int(&v)),
     }
 }
 

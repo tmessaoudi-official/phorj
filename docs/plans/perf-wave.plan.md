@@ -5,6 +5,35 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🏁 **MARATHON START (developer: "very big perf wave, finish all of it") — full autonomous
+  run of the queued sequence ovf-spec → floats → §15 jit-default flip → strings; AUTO-COMMIT each green
+  slice, NO push (developer pushes). Stop only on a genuine §14/§15 fork or a 5-round advisor cap.**
+- [2026-07-09] 🔬 **ovf-spec ADVISOR-3C REFINEMENT (fresh context, pre-codegen) — Concern A confirmed
+  BLOCKING; back-edge sticky guard added to the minimal slice.** The advisor killed the "speculative
+  wrapping non-termination is only pathological/astronomical" rationalization with a trivial eligible
+  counterexample: `function spin() -> int { mutable int i = 1; while (i != 0) { i = i * 3; } return i; }`
+  — VM (checked) faults overflow in ~40 iters; native wrapping `3^k mod 2^64` is always odd, never 0 →
+  the `i != 0` back-edge never falls false → **infinite hang** (never reaches Return, never checks sticky,
+  never redoes). A byte-identity spine violation ("identical failure behaviour"), not a slowdown. ROOT:
+  the unboxed subset admits a loop whose exit test reads a speculatively-wrapped value (SetLocal @1387 +
+  back-edge Jump @1439 + Ne @1357, all widen-1). **FIX (mandatory, not optional hardening): sticky-check
+  at EVERY back-edge on EVERY compiled fn** — at `Jump(t)`/`JumpIfFalse(t)` with `t <= ip`, emit
+  `fault_if(sticky_nonzero, 5)` before the branch. Bounds native to ≤1 partial iteration past the first
+  overflow → redo on VM → true fault in correct order. **PERF honesty (carry into measurement):**
+  recursion (fib-shaped, depth-bounded, no back-edge) stays fully branchless → clean win; a tight
+  single-accumulator loop (intadd) gets ~1 branch/iter back → **ovf-spec may NOT flip intadd** — that is
+  the range/no-overflow-analysis trigger (plan line ~48), NOT a reason to weaken the guard. **Plumbing
+  (advisor-confirmed sound):** code 5 → `run_unboxed` returns `JitRun::Fault(REDO marker)`; the b3b hook
+  (`exec.rs:473`) already redoes on ANY `Fault` → VM renders the true fault+line. `run_unboxed`'s ONLY
+  production caller is `exec.rs:464` (the marker string never reaches a user — asserted in a comment).
+  `compile_and_run` is BOXED, never sees code 5 → its named tests stay green untouched; the boxed guards
+  at tests.rs:673-750 lock the ORACLE but don't exercise the rewrite → **coverage gap closed by NEW
+  end-to-end tests** (`cmd_run` vs `cmd_treewalk`, `Err==Err`, modelled on
+  `jit_stack_overflow_threshold_matches_the_oracle`) incl. the hang counterexample (asserts eligibility
+  so it can't false-green via silent VM skip). Correct design bits (don't second-guess): Neg-MIN
+  branchless (`ineg` doesn't hardware-trap, unlike `sdiv`) via `is_min`→sticky OR; Div/Rem KEEP both
+  branches (zero + MIN/-1) redirected to exit(5); sticky = Cranelift Variable seeded 0 in entry (required
+  for the loop-header phi); sticky-select at every Return arm. `3C round 1 → advisor: clean`.
 - [2026-07-08] 🔬 **ovf-spec GROUNDING + DESIGN REFINEMENT (fresh code-read of `src/jit/mod.rs`
   `build_body_unboxed`, lines ~1181–1451) — BEFORE the sketch is implemented, advisor-3C pending.**
   Confirmed the current unboxed path faults IMMEDIATELY at each op via `fault_if(cond,code) → fault_exit`

@@ -162,6 +162,14 @@ const FAULT_UNDERFLOW: &str = "jit: operand stack underflow";
 /// any VM-side drift is caught.
 const FAULT_STACK_OVERFLOW: &str = "stack overflow";
 
+/// ovf-spec code 5 marker. The unboxed codegen speculates (wrapping arith + a sticky flag), so it can
+/// never render the true fault (which one fired, in what order) — it only signals "I overflowed
+/// somewhere, redo on the VM". `run_unboxed`'s ONLY production caller is the b3b `Op::Call` hook
+/// (`src/vm/exec.rs`), which treats ANY [`JitRun::Fault`] as "fall through and re-execute the callee on
+/// the VM" — so this string is NEVER surfaced to a user; it exists only to make the direct unit tests
+/// legible. The VM's per-op checked arithmetic is the single source of fault truth (Invariant 2).
+pub(crate) const REDO_ON_VM: &str = "jit: speculation overflowed — redo on VM";
+
 /// Reborrow the context pointer the compiled code threads to every helper.
 ///
 /// SAFETY: `ctx` is the single `&mut JitCtx` that [`compile_and_run`] passes as the first argument to
@@ -1245,6 +1253,16 @@ fn build_body_unboxed(
         vars.push(var);
     }
 
+    // ovf-spec: the speculation sticky flag. A Cranelift `Variable` (NOT an SSA value) so a loop
+    // back-edge phis it at the loop header — the same reason the stack cells are Variables. Declared
+    // AND seeded to 0 in the entry block (which dominates the whole body). Each speculatively-wrapped
+    // op ORs its overflow carry in (no per-op branch); at every loop back-edge AND every `Return`,
+    // `sticky != 0` ⇒ exit code 5 = "redo on VM", where the VM's per-op CHECKED arithmetic reproduces
+    // the true first fault in the correct order (the single source of fault truth — Invariant 2).
+    let sticky = b.declare_var(types::I64);
+    let sticky_seed = b.ins().iconst(types::I64, 0);
+    b.def_var(sticky, sticky_seed);
+
     // One Cranelift block per reachable leader — the SAME leader set `unboxed_analyze` used, so the two
     // views of the block structure can never drift.
     let is_leader = leaders(code, &reach);
@@ -1274,6 +1292,15 @@ fn build_body_unboxed(
         let cont = b.create_block();
         b.ins().brif(flag, fault_exit, &[cv.into()], cont, &[]);
         b.switch_to_block(cont);
+    };
+
+    // ovf-spec: OR a boolean overflow `flag` (i8, 0/1 from `*_overflow` / an `is_min` compare) into the
+    // sticky Variable — no branch, so the hot no-overflow path costs only the OR. Zero-extends to i64.
+    let accumulate_sticky = |b: &mut FunctionBuilder, flag: ClValue| {
+        let cur = b.use_var(sticky);
+        let ext = b.ins().uextend(types::I64, flag);
+        let next = b.ins().bor(cur, ext);
+        b.def_var(sticky, next);
     };
 
     for (ip, op) in code.iter().enumerate() {
@@ -1311,28 +1338,33 @@ fn build_body_unboxed(
             Op::AddI | Op::SubI | Op::MulI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                // ovf-spec: WRAPPING result + OR the overflow carry into sticky — NO per-op branch (the
+                // per-op `*_overflow`+branch was the intadd perf loss). `sadd_overflow`'s result[0] IS the
+                // two's-complement wrapped value; push it, fold result[1] (the carry) into sticky.
                 let (res, overflow) = match op {
                     Op::AddI => b.ins().sadd_overflow(av, bv),
                     Op::SubI => b.ins().ssub_overflow(av, bv),
                     _ => b.ins().smul_overflow(av, bv),
                 };
-                fault_if(&mut b, overflow, 1); // 1 → FAULT_INT_OVERFLOW
+                accumulate_sticky(&mut b, overflow);
                 ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
             }
             Op::DivI | Op::RemI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                // Zero FIRST (matches value::int_div / int_rem): code 2 (div) / 3 (rem).
+                // ovf-spec: div/rem CANNOT be speculated — `sdiv`/`srem` hardware-trap (SIGFPE) on both
+                // divide-by-zero AND i64::MIN / -1. So KEEP both as real per-op branches (rare → cheap),
+                // but funnel them to code 5 (redo on VM) like every other fault; the VM redo renders the
+                // exact div-zero / mod-zero / overflow string in correct order.
                 let zero = b.ins().iconst(types::I64, 0);
                 let is_zero = b.ins().icmp(IntCC::Equal, bv, zero);
-                fault_if(&mut b, is_zero, if matches!(op, Op::DivI) { 2 } else { 3 });
-                // Then i64::MIN / -1 → overflow (code 1).
+                fault_if(&mut b, is_zero, 5);
                 let imin = b.ins().iconst(types::I64, i64::MIN);
                 let a_is_min = b.ins().icmp(IntCC::Equal, av, imin);
                 let neg1 = b.ins().iconst(types::I64, -1);
                 let b_is_neg1 = b.ins().icmp(IntCC::Equal, bv, neg1);
                 let both = b.ins().band(a_is_min, b_is_neg1);
-                fault_if(&mut b, both, 1);
+                fault_if(&mut b, both, 5);
                 let res = if matches!(op, Op::DivI) {
                     b.ins().sdiv(av, bv)
                 } else {
@@ -1342,9 +1374,12 @@ fn build_body_unboxed(
             }
             Op::Neg => {
                 let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                // ovf-spec: -i64::MIN overflows on the VM, but `ineg` does NOT hardware-trap (it wraps
+                // MIN→MIN) — unlike div — so we speculate: fold `av == MIN` into sticky (no branch) and
+                // emit the wrapping `ineg`. A set sticky forces the redo at the next back-edge / Return.
                 let imin = b.ins().iconst(types::I64, i64::MIN);
                 let is_min = b.ins().icmp(IntCC::Equal, av, imin);
-                fault_if(&mut b, is_min, 1); // -i64::MIN → FAULT_INT_OVERFLOW
+                accumulate_sticky(&mut b, is_min);
                 let res = b.ins().ineg(av);
                 ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
             }
@@ -1412,7 +1447,7 @@ fn build_body_unboxed(
                 })?;
                 let dmax = b.ins().iconst(types::I64, MAX_CALL_DEPTH as i64);
                 let too_deep = b.ins().icmp(IntCC::SignedGreaterThanOrEqual, depth, dmax);
-                fault_if(&mut b, too_deep, 4); // 4 → "stack overflow"
+                fault_if(&mut b, too_deep, 5); // ovf-spec: stack-overflow → redo on VM (code 5)
                 let d1 = b.ins().iadd_imm(depth, 1);
                 // Pop the CALLEE's `arity` args (top is the last arg); rebuild in declaration order.
                 let arity = program.functions[*callee].arity;
@@ -1428,7 +1463,8 @@ fn build_body_unboxed(
                 let call = b.ins().call(callee_ref, &call_args);
                 let results = b.inst_results(call);
                 let (value, ccode) = (results[0], results[1]);
-                // code != 0 → propagate the callee's exact code to the shared fault-exit.
+                // ovf-spec: a callee (also ovf-spec) returns code 0 or 5; code != 0 ⇒ propagate 5 to the
+                // shared fault-exit → this whole graph redoes on the VM.
                 let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
                 let cont = b.create_block();
                 b.ins()
@@ -1440,6 +1476,16 @@ fn build_body_unboxed(
                 let tb = blocks[*t].ok_or_else(|| {
                     JitError::Codegen(format!("unboxed jump to non-leader ip {t}"))
                 })?;
+                // ovf-spec back-edge guard: a `Jump` to an earlier ip closes a loop. If speculation
+                // overflowed, bail to the VM redo HERE (≤1 partial iteration past the overflow) rather
+                // than loop on wrapped values, which can diverge from the VM's fault — e.g.
+                // `while (i != 0) { i = i * 3; }`: `3^k mod 2^64` is always odd, never 0, so wrapping
+                // loops forever while the VM faults overflow in ~40 iters (a byte-identity spine
+                // violation, not a slowdown). Forward jumps can't extend execution past a fault → no guard.
+                if *t <= ip {
+                    let s = b.use_var(sticky);
+                    fault_if(&mut b, s, 5);
+                }
                 b.ins().jump(tb, &[]);
                 current = None;
             }
@@ -1451,6 +1497,14 @@ fn build_body_unboxed(
                 let fallb = blocks[ip + 1].ok_or_else(|| {
                     JitError::Codegen(format!("unboxed JumpIfFalse fall-through ip {}", ip + 1))
                 })?;
+                // ovf-spec back-edge guard (see `Op::Jump`): if this conditional can branch backward
+                // (a loop back-edge), redo on the VM when speculation overflowed. Conservatively guards
+                // both edges when the taken-target is backward — redo is always sound; the common
+                // while-loop uses a forward `JumpIfFalse` (exit) + a backward `Jump`, so this rarely fires.
+                if *t <= ip {
+                    let s = b.use_var(sticky);
+                    fault_if(&mut b, s, 5);
+                }
                 // cond nonzero (true) → fall through; zero (false) → take the jump.
                 b.ins().brif(cond, fallb, &[], tb, &[]);
                 current = None;
@@ -1463,8 +1517,14 @@ fn build_body_unboxed(
                         "unboxed: non-int return (kind {kind:?})"
                     )));
                 }
-                let ok = b.ins().iconst(types::I64, 0);
-                b.ins().return_(&[v, ok]); // (value, code=0)
+                // ovf-spec: if speculation overflowed anywhere on this path, return code 5 (redo on VM)
+                // instead of the wrapped value; else (value, 0). `select` keeps the hot no-overflow path
+                // branchless. The value operand is ignored by `run_unboxed` when code != 0.
+                let s = b.use_var(sticky);
+                let five = b.ins().iconst(types::I64, 5);
+                let zero = b.ins().iconst(types::I64, 0);
+                let code = b.ins().select(s, five, zero);
+                b.ins().return_(&[v, code]);
                 current = None;
             }
             // Everything else falls back to the VM/boxed path.
@@ -1788,10 +1848,10 @@ impl Compiled {
         };
         match ret.code {
             0 => JitRun::Value(Value::Int(ret.value)),
-            1 => JitRun::Fault(crate::value::FAULT_INT_OVERFLOW.to_string()),
-            2 => JitRun::Fault(crate::value::FAULT_DIV_ZERO.to_string()),
-            3 => JitRun::Fault(crate::value::FAULT_MOD_ZERO.to_string()),
-            4 => JitRun::Fault("stack overflow".to_string()),
+            // ovf-spec: EVERY unboxed fault now funnels to code 5 = "redo on VM" (codes 1/2/3/4 are no
+            // longer emitted). The hook re-executes the callee on the VM, which renders the exact,
+            // correctly-ordered fault string + source line. See [`REDO_ON_VM`].
+            5 => JitRun::Fault(REDO_ON_VM.to_string()),
             other => JitRun::Fault(format!("jit: unboxed unknown fault code {other}")),
         }
     }
