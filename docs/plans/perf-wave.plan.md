@@ -5,6 +5,31 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] ✅ **AGREED (developer) — commit-gate speed: root-caused to opt-level-0 + 2 monster
+  sweeps; NOT test-less-often. FINAL: deps-opt2 + workspace-opt1 + nextest + speed-tier + `--features jit`.**
+  Measured pain: per-commit `cargo test` = **126s SERIAL** (8 cores). Diagnosis (Rule 14 applied to test
+  perf — the initial "nextest → ~30s" estimate was WRONG and retracted):
+  • nextest alone = 126s→100s (1.26×) — Amdahl-capped by ONE 100s test.
+  • **The whole suite MINUS 2 tests = 8.0s.** The cost is 2 workspace-compute-bound monsters:
+    `format::every_repo_phg_formats_idempotently_and_safely` (formatter dogfood over every repo `.phg`,
+    ~100–180s, variable) and `runtime::shipped_manual_example_runs_on_both_backends` (one impure
+    `fib(30)` example on both backends, ~35–69s; `differential.rs` already SKIPS it — impure).
+  • argon2 (24.8s) + registry (27.4s) were **opt-level-0 artifacts** — Cargo.toml had NO `[profile]`,
+    so every dep + workspace crate built unoptimized. Fixed by `[profile.dev.package."*"] opt-level=2`
+    (deps: near-free, rarely recompiled) + `[profile.dev] opt-level=1` (workspace: cheap tier, speeds
+    interpreter/formatter dispatch; fast tier 27.5s→8s). opt-level is behaviour-invariant; release
+    profile untouched (shipped binary + correctness gate unchanged). Reversible in one line if the JIT
+    compile loop feels sluggish (developer chose opt1 over reverting — the 8s is measured, the 395s
+    rebuild is sunk, opt1 is milder than the opt3 already shipped).
+  • **Gate gap fixed:** `jit` is NOT a default feature, so the old hook (`cargo nextest run`) never
+    tested the JIT. Per-commit now runs `--features jit` → ovf-spec's TDD is gated per-commit.
+  DESIGN: per-commit = `fmt --check` + `nextest --features jit` fast tier (exclude the 2 monsters);
+  pre-push = full `nextest --features jit` (incl. the 2 monsters) + clippy (moved here — lint batches
+  cleanly, was only 0.13s warm) + PHP oracle (8.5) + microbench-gate. Net **126s → ~9s/commit (~14×)**,
+  full coverage retained at the pre-push boundary the developer already hits every ~10-20 commits.
+  Rejected the "run pre-commit every 10-20 commits / write-but-don't-run tests" proposal: bisection cost
+  is linear in the deferral window, correctness regressions don't bulk-fix (they interact), solo-direct-
+  to-master makes these hooks the ONLY gate, and unrun TDD tests can be tautological (Rule 7).
 - [2026-07-08] ✅ **RULED (developer, int-overflow fork) — NEXT BUILD SLICE = "ovf-spec": speculative
   unchecked int arithmetic + sticky-overflow-flag + VM-redo-on-overflow.** Resolves why intadd LOSES
   (per-op `*_overflow`+branch) WITHOUT sacrificing phorj's integer-overflow detection (the feature PHP

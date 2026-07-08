@@ -14,6 +14,22 @@ repository = "https://github.com/tmessaoudi-official/phorj"
 # developed and verified on the toolchain pinned in `rust-toolchain.toml`.
 rust-version = "1.74"
 
+# Test/dev build-speed profile (perf, 2026-07-08). The test suite ran ~126s because EVERYTHING
+# compiled at opt-level 0: memory-hard `argon2` verify alone took ~25s, and the workspace-code
+# sweeps (Wadler formatter dogfood, both-backend example runner, std-only sha256) ran the
+# interpreter/formatter unoptimized. Fix, per the canonical cargo idiom:
+#   - deps at opt-level 2: argon2/cranelift/regex are near-never recompiled, so optimizing them is
+#     essentially free on incremental builds and reclaims the KDF + codegen time outright;
+#   - workspace at opt-level 1: a light tier that speeds the interpreter/VM/formatter dispatch loops
+#     (the sweep bottleneck) at a modest incremental-compile cost.
+# Behaviour is opt-level-invariant (byte-identity unaffected); `[profile.release]` is untouched, so the
+# shipped binary and the correctness gate's release build are unchanged.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+
 [lib]
 name = "phorj"
 path = "src/lib.rs"

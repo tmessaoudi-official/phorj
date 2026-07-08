@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 # Phorj pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
 #   git config core.hooksPath scripts/git-hooks
-# Zero HARD dependencies — just the cargo toolchain. Blocks a commit unless formatting,
-# clippy (all lints denied, matching Cargo.toml), and the RUST-ONLY test suite all pass.
-# cargo-nextest is used as a FASTER (parallel) test runner when present; the hook falls back to
-# plain `cargo test` when it is absent, so it still works on a machine without nextest.
+# Zero HARD dependencies — just the cargo toolchain. Blocks a commit unless formatting and the
+# RUST-ONLY test suite (fast tier) pass. cargo-nextest is used as a FASTER (parallel) test runner
+# when present; the hook falls back to plain `cargo test` when it is absent.
 #
 # SPEED SPLIT (developer, 2026-07-03): the PHP-oracle differential (byte-identity spine check —
-# one `php` subprocess per case) moved to the PRE-PUSH hook. Pre-commit runs the deterministic
-# Rust-only gate (run == runvm parity + every unit/integration test), which is fast and never
-# depends on whichever `php` is on PATH (the system php here is 8.6-dev, the wrong floor). The
-# full oracle against the 8.5 floor runs once before publishing — see scripts/git-hooks/pre-push.
+# one `php` subprocess per case) runs at PRE-PUSH. Pre-commit runs the deterministic Rust-only gate
+# (run == runvm parity + every unit/integration test), fast and php-version-independent.
+#
+# SPEED TIER (developer, 2026-07-08 — measured 126s→~12s): two workspace-compute-bound sweeps
+# dominate the wall clock — `every_repo_phg_formats_idempotently_and_safely` (formatter dogfood over
+# every repo .phg) and `shipped_manual_example_runs_on_both_backends` (one impure fib(30) example on
+# both backends; `differential.rs` already skips it). Both run at PRE-PUSH; everything else (the whole
+# suite MINUS those two = ~11s) runs here every commit. `clippy` also moved to PRE-PUSH (a lint is
+# zero correctness-risk and batches cleanly). `--features jit` gates the JIT backend (not a default
+# feature) per-commit — the old bare `cargo nextest run` never tested it. See scripts/git-hooks/pre-push.
+# opt-level (deps=2, workspace=1) lives in Cargo.toml [profile.dev]; it is what makes the fast tier ~11s.
 set -euo pipefail
 
 # The toolchain lives outside the default PATH on this machine; prepend it only if cargo is
@@ -23,20 +29,22 @@ export PHORJ_SKIP_PHP=1
 echo "[pre-commit] cargo fmt --check"
 cargo fmt --check
 
-echo "[pre-commit] cargo clippy --all-targets -- -D warnings"
-cargo clippy --all-targets -- -D warnings
+# The two heavy sweeps run at pre-push (see header). nextest filterset excludes them by test name;
+# the `cargo test` fallback uses libtest `--skip` (substring match on the same names).
+_GS_FAST_EXCLUDE='not (test(every_repo_phg_formats) | test(shipped_manual_example_runs))'
 
 if cargo nextest --version >/dev/null 2>&1; then
-  # nextest runs each test in its own process, in parallel — the big win here is the PHP-oracle
-  # differential suite (one `php` subprocess per case). It does NOT run doctests, so the cheap
+  # nextest runs each test in its own process, in parallel. It does NOT run doctests, so the cheap
   # doc-test pass below covers those (currently zero, but future-proofed).
-  echo "[pre-commit] cargo nextest run (parallel)"
-  cargo nextest run --status-level fail
-  echo "[pre-commit] cargo test --doc"
-  cargo test --doc --quiet
+  echo "[pre-commit] cargo nextest run --features jit (parallel, fast tier)"
+  cargo nextest run --features jit -E "$_GS_FAST_EXCLUDE" --status-level fail
+  echo "[pre-commit] cargo test --doc --features jit"
+  cargo test --doc --features jit --quiet
 else
-  echo "[pre-commit] cargo test (nextest absent — fallback)"
-  cargo test --quiet
+  echo "[pre-commit] cargo test --features jit (nextest absent — fallback, fast tier)"
+  cargo test --features jit --quiet -- \
+    --skip every_repo_phg_formats_idempotently_and_safely \
+    --skip shipped_manual_example_runs_on_both_backends
 fi
 
 echo "[pre-commit] OK"

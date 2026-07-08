@@ -21,12 +21,19 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
 ## Toolchain & quality gate
 
 - `export PATH=/stack/tools/cargo/bin:$PATH`.
-- **Green means ALL of:** `cargo test --workspace` + `cargo clippy --all-targets` +
-  `cargo fmt --check` + `cargo build --release`, clean. Warnings fail the build
-  (`[lints] warnings = "deny"`); `#![forbid(unsafe_code)]` on both crate roots; toolchain pinned
-  by `rust-toolchain.toml`. Tracked pre-commit hook: `scripts/git-hooks/pre-commit`.
+- **Green means ALL of:** `cargo test --workspace --features jit` + `cargo clippy --all-targets --features jit`
+  + `cargo fmt --check` + `cargo build --release`, clean. **`--features jit` is REQUIRED** — the JIT
+  backend is NOT a default feature, so bare `cargo test --workspace` silently skips every JIT test.
+  Warnings fail the build (`[lints] warnings = "deny"`); `#![forbid(unsafe_code)]` on both crate roots;
+  toolchain pinned by `rust-toolchain.toml`.
+- **Tiered git hooks** (speed, 2026-07-08 — `scripts/git-hooks/{pre-commit,pre-push}`): **pre-commit**
+  runs the fast Rust-only tier (`fmt` + `nextest --features jit`, EXCLUDING the two heavy sweeps
+  `every_repo_phg_formats_idempotently_and_safely` + `shipped_manual_example_runs_on_both_backends`) —
+  ~12s vs ~126s. **pre-push** runs the FULL suite (those two included) + `clippy` (both feature configs)
+  + the PHP-oracle spine check + `microbench-gate`. Test-speed rests on `Cargo.toml [profile.dev]`
+  (deps opt-2, workspace opt-1); `cargo-nextest` is the parallel runner (fallback: `cargo test`).
 - **Full correctness gate** (before claiming any feature done, and always before a push):
-  `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` — the oracle php
+  `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace --features jit` — the oracle php
   path lives in `scripts/toolchain.env` (the single editable knob; bump it there when the stack
   php version changes). With `PHORJ_REQUIRE_PHP=1` a missing `php` FAILS the oracle (never skips).
   Transpile floor = **PHP 8.5** (currently `php-8.5.8`); the bare `php` on PATH is 8.6-dev and too

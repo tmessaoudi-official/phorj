@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Phorj pre-push gate — the byte-identity SPINE check (developer, 2026-07-03 speed split).
 #
-# Pre-commit runs the fast Rust-only gate (run == runvm parity + every unit/integration test).
-# THIS hook runs the FULL PHP-oracle differential against the 8.5 transpile floor before anything
-# is published to the remote: with PHORJ_REQUIRE_PHP=1 a missing php FAILS the run (never silently
-# skips), so a push can never bypass the spine check. fmt + clippy re-run too (cheap; a push is the
-# publish boundary and may carry --no-verify commits). cargo-nextest is preferred with a fallback
-# to plain `cargo test`, same as pre-commit — zero hard dependency.
+# Pre-commit runs the fast Rust-only gate (fast tier: run == runvm parity + every unit/integration
+# test EXCEPT the two heavy sweeps). THIS hook runs the FULL suite — including those two sweeps
+# (`every_repo_phg_formats_idempotently_and_safely` + `shipped_manual_example_runs_on_both_backends`)
+# — plus the PHP-oracle differential against the 8.5 transpile floor before anything is published:
+# with PHORJ_REQUIRE_PHP=1 a missing php FAILS the run (never silently skips), so a push can never
+# bypass the spine check. `--features jit` gates the JIT backend (not a default feature). `clippy`
+# lives HERE now (moved off pre-commit 2026-07-08 — a lint is zero correctness-risk and batches
+# cleanly at this ~10-20-commit boundary); both feature configs are linted. cargo-nextest is preferred
+# with a `cargo test` fallback — zero hard dependency.
 set -euo pipefail
 
 # git feeds the pushed-ref list on stdin; we gate the whole push, not per-ref, so drain it.
@@ -28,17 +31,21 @@ export PHORJ_REQUIRE_PHP=1
 echo "[pre-push] cargo fmt --check"
 cargo fmt --check
 
+# Lint both feature configs (default + jit) — the JIT code is only compiled under `--features jit`,
+# and pre-commit no longer runs clippy, so this is the sole clippy gate.
 echo "[pre-push] cargo clippy --all-targets -- -D warnings"
 cargo clippy --all-targets -- -D warnings
+echo "[pre-push] cargo clippy --all-targets --features jit -- -D warnings"
+cargo clippy --all-targets --features jit -- -D warnings
 
 if cargo nextest --version >/dev/null 2>&1; then
-  echo "[pre-push] cargo nextest run (full PHP oracle, 8.5 floor)"
-  cargo nextest run --status-level fail
-  echo "[pre-push] cargo test --doc"
-  cargo test --doc --quiet
+  echo "[pre-push] cargo nextest run --features jit (FULL suite + PHP oracle, 8.5 floor)"
+  cargo nextest run --features jit --status-level fail
+  echo "[pre-push] cargo test --doc --features jit"
+  cargo test --doc --features jit --quiet
 else
-  echo "[pre-push] cargo test (nextest absent — fallback, full PHP oracle)"
-  cargo test --quiet
+  echo "[pre-push] cargo test --features jit (nextest absent — fallback, FULL suite + PHP oracle)"
+  cargo test --features jit --quiet
 fi
 
 echo "[pre-push] microbench-gate (G-8 mandate ratchet — no WIN->LOSS flip, output-identity holds)"
