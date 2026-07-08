@@ -1132,6 +1132,45 @@ fn phg_run_hook_actually_hits_the_jit() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_an_int_loop() {
+    // widen-1 DELIVERY-PATH proof (loops): an int `while` loop in a CALLED function must JIT through the
+    // `Op::Call` hook. (A loop in `main` never JITs — `main` prints, so it is ineligible, and the
+    // entry-level JIT cannot reach its body; the loop MUST live in a callee, exactly the
+    // `bench/micro/intadd.phg` shape.) Byte-identity alone can't prove the flip — a silent VM fallback
+    // false-greens it — so this asserts the hit counter fires, i.e. the widened subset genuinely runs
+    // native at the CLI.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters) -> int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
+          return acc;\n\
+        }\n\
+        function main() -> void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "int-loop jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual int-loop jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "an int loop in a called function must actually hit the JIT — else the perf flip is unproven"
+    );
+}
+
+#[test]
 fn jit_stack_overflow_threshold_matches_the_oracle() {
     // The ONE correctness vector the fault-fallback cannot catch: an under-fault (wrong
     // `start_depth`) makes the JIT RETURN A VALUE where the VM overflows — no fault, so no re-run.
