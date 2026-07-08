@@ -786,6 +786,321 @@ fn build_body(
     Ok(())
 }
 
+// ===========================================================================================
+// Unboxed int codegen (slice u1) — the ~2×-over-php path. Operands are compile-time SSA `i64`
+// values (NO boxed `Vec<Value>`, NO per-op `extern "C"` helper call); native `iadd`/`icmp`/etc. run
+// in registers. The boxed path above stays as the byte-identity ORACLE (unboxed ≡ boxed ≡ VM).
+// ===========================================================================================
+
+/// The kind of a compile-time operand-stack entry. The bytecode is type-erased, so this is tracked to
+/// map `Return` correctly WITHOUT a type source: `Const`/arithmetic/`Neg` → `Int`, comparisons/`Not`
+/// → `Bool`, a bare local (param) read → `Unknown`. u1 accepts a function ONLY if every reachable
+/// `Return` yields `Int` — so a `bool`-returning function (which would else be mis-mapped to
+/// `Value::Int`) and a bare-param return (unprovable-`Int` without types) fall back to the VM/boxed
+/// path. Bool *params* are fine: they arrive as `0/1` i64 and are only ever consumed in bool contexts
+/// (`Not`, `JumpIfFalse`, comparison operands) natively. Types + bare-param returns (so `fib`'s
+/// `return n` JITs) come in u2 with a real type source.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Kind {
+    Int,
+    Bool,
+    Unknown,
+}
+
+/// Pop one operand, turning the "can't happen" underflow (validate guarantees balance) into a
+/// `Codegen` error rather than a panic.
+fn upop(stack: &mut Vec<(ClValue, Kind)>) -> Result<(ClValue, Kind), JitError> {
+    stack
+        .pop()
+        .ok_or_else(|| JitError::Codegen("unboxed: operand stack underflow".to_string()))
+}
+
+/// Cheap pre-pass eligibility for the unboxed LEAF int subset (u1), over reachable ops only. Rejects
+/// (as `Unsupported`, so the caller falls back to the VM/boxed path) anything u1 can't lower: a
+/// `SetLocal` or a `GetLocal(slot >= arity)` (both signal a local declaration — u1 has no local slots
+/// beyond the params, which are read directly via block-param dominance), a `Call`, a non-int `Const`,
+/// or any op outside the subset. Runs BEFORE codegen so an out-of-subset function yields a clean
+/// `Unsupported`, not a mid-build `Codegen` error. (The return-kind-is-`Int` check stays in
+/// `build_body_unboxed`, where the operand kind is tracked.)
+fn unboxed_leaf_eligible(func: &crate::chunk::Function) -> Result<(), JitError> {
+    let code = &func.chunk.code;
+    let reach = reachable(code);
+    for (ip, op) in code.iter().enumerate() {
+        if !reach[ip] {
+            continue;
+        }
+        match op {
+            Op::Const(idx) => match func.chunk.consts.get(*idx) {
+                Some(Value::Int(_)) => {}
+                other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
+            },
+            Op::AddI
+            | Op::SubI
+            | Op::MulI
+            | Op::DivI
+            | Op::RemI
+            | Op::Neg
+            | Op::Not
+            | Op::Eq
+            | Op::Ne
+            | Op::Lt
+            | Op::Gt
+            | Op::Le
+            | Op::Ge
+            | Op::Jump(_)
+            | Op::JumpIfFalse(_)
+            | Op::Return => {}
+            Op::GetLocal(slot) if *slot < func.arity => {}
+            Op::GetLocal(slot) => {
+                return Err(JitError::Unsupported(format!(
+                    "unboxed: local slot {slot} >= arity {} (local declaration)",
+                    func.arity
+                )));
+            }
+            // SetLocal, Call, and everything else fall back.
+            other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
+        }
+    }
+    Ok(())
+}
+
+/// Emit UNBOXED native code for one LEAF int function (no `SetLocal`, no `Call`) into `cl_ctx.func`
+/// (signature already `extern "C" fn(a0..a_arity: i64) -> (i64 value, i64 code)` — a multi-return, so
+/// no fault-cell pointer / no memory store on any path). Success returns `(value, 0)`; a fault returns
+/// `(0, code)` (1 overflow / 2 div-zero / 3 mod-zero). Fault CONDITIONS mirror the `value.rs` int
+/// kernels EXACTLY (div/rem check zero BEFORE `i64::MIN / -1`, matching `int_div`/`int_rem`); the
+/// STRINGS are mapped from the code in [`Compiled::run_unboxed`] via the single-sourced `value::FAULT_*`
+/// consts. Returns `Unsupported` for `SetLocal` / `Call` / a non-`Int` `Return` operand, and `Codegen`
+/// for a non-empty operand stack at a leader (guards against a future non-structured op silently
+/// breaking the empty-at-leaders invariant).
+fn build_body_unboxed(
+    cl_ctx: &mut cranelift::codegen::Context,
+    func: &crate::chunk::Function,
+) -> Result<(), JitError> {
+    let code = &func.chunk.code;
+    let n = code.len();
+    let reach = reachable(code);
+
+    let mut fbctx = FunctionBuilderContext::new();
+    let mut b = FunctionBuilder::new(&mut cl_ctx.func, &mut fbctx);
+
+    // Entry block: `[fault_cell, a0, a1, …]`. Args are read directly wherever needed — they are
+    // defined in the entry block which dominates the whole body (u1 has no `SetLocal` and no back-edge,
+    // so a local's value never changes and never needs a phi).
+    let entry = b.create_block();
+    b.append_block_params_for_function_params(entry);
+    b.switch_to_block(entry);
+    let args: Vec<ClValue> = b.block_params(entry).to_vec(); // local slot s == args[s]
+
+    // One Cranelift block per reachable leader (same shape as the boxed builder).
+    let mut blocks: Vec<Option<Block>> = vec![None; n];
+    let start = b.create_block();
+    blocks[0] = Some(start);
+    for (ip, op) in code.iter().enumerate() {
+        if !reach[ip] {
+            continue;
+        }
+        match op {
+            Op::Jump(t) => {
+                if blocks[*t].is_none() {
+                    blocks[*t] = Some(b.create_block());
+                }
+            }
+            Op::JumpIfFalse(t) => {
+                if blocks[*t].is_none() {
+                    blocks[*t] = Some(b.create_block());
+                }
+                if ip + 1 < n && blocks[ip + 1].is_none() {
+                    blocks[ip + 1] = Some(b.create_block());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Shared fault-exit: takes the fault code as a block param, stores it to `*fault_cell`, returns 0.
+    let fault_exit = b.create_block();
+    b.append_block_param(fault_exit, types::I64);
+
+    b.ins().jump(start, &[]);
+    b.switch_to_block(start);
+    let mut current: Option<Block> = Some(start);
+    // Compile-time operand stack of (SSA value, kind). EMPTY at every leader (asserted on entry).
+    let mut stack: Vec<(ClValue, Kind)> = Vec::new();
+
+    // Emit "if `flag` (i8, nonzero) then fault with `code` else continue in a fresh block".
+    let fault_if = |b: &mut FunctionBuilder, flag: ClValue, code: i64| {
+        let cv = b.ins().iconst(types::I64, code);
+        let cont = b.create_block();
+        b.ins().brif(flag, fault_exit, &[cv.into()], cont, &[]);
+        b.switch_to_block(cont);
+    };
+
+    for (ip, op) in code.iter().enumerate() {
+        if !reach[ip] {
+            continue;
+        }
+        if ip != 0 {
+            if let Some(blk) = blocks[ip] {
+                if current.is_some() {
+                    b.ins().jump(blk, &[]);
+                }
+                if !stack.is_empty() {
+                    // A non-empty operand stack at a block boundary (e.g. a ternary/short-circuit that
+                    // leaves a value across the merge) is outside u1's structured subset → fall back.
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: operand stack not empty ({}) at leader ip {ip}",
+                        stack.len()
+                    )));
+                }
+                b.switch_to_block(blk);
+                current = Some(blk);
+            }
+        }
+        if current.is_none() {
+            continue;
+        }
+
+        match op {
+            Op::Const(idx) => match func.chunk.consts.get(*idx) {
+                Some(Value::Int(k)) => {
+                    let v = b.ins().iconst(types::I64, *k);
+                    stack.push((v, Kind::Int));
+                }
+                other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
+            },
+            Op::AddI | Op::SubI | Op::MulI => {
+                let (bv, _) = upop(&mut stack)?;
+                let (av, _) = upop(&mut stack)?;
+                let (res, overflow) = match op {
+                    Op::AddI => b.ins().sadd_overflow(av, bv),
+                    Op::SubI => b.ins().ssub_overflow(av, bv),
+                    _ => b.ins().smul_overflow(av, bv),
+                };
+                fault_if(&mut b, overflow, 1); // 1 → FAULT_INT_OVERFLOW
+                stack.push((res, Kind::Int));
+            }
+            Op::DivI | Op::RemI => {
+                let (bv, _) = upop(&mut stack)?;
+                let (av, _) = upop(&mut stack)?;
+                // Zero FIRST (matches value::int_div / int_rem): code 2 (div) / 3 (rem).
+                let zero = b.ins().iconst(types::I64, 0);
+                let is_zero = b.ins().icmp(IntCC::Equal, bv, zero);
+                fault_if(&mut b, is_zero, if matches!(op, Op::DivI) { 2 } else { 3 });
+                // Then i64::MIN / -1 → overflow (code 1).
+                let imin = b.ins().iconst(types::I64, i64::MIN);
+                let a_is_min = b.ins().icmp(IntCC::Equal, av, imin);
+                let neg1 = b.ins().iconst(types::I64, -1);
+                let b_is_neg1 = b.ins().icmp(IntCC::Equal, bv, neg1);
+                let both = b.ins().band(a_is_min, b_is_neg1);
+                fault_if(&mut b, both, 1);
+                let res = if matches!(op, Op::DivI) {
+                    b.ins().sdiv(av, bv)
+                } else {
+                    b.ins().srem(av, bv)
+                };
+                stack.push((res, Kind::Int));
+            }
+            Op::Neg => {
+                let (av, _) = upop(&mut stack)?;
+                let imin = b.ins().iconst(types::I64, i64::MIN);
+                let is_min = b.ins().icmp(IntCC::Equal, av, imin);
+                fault_if(&mut b, is_min, 1); // -i64::MIN → FAULT_INT_OVERFLOW
+                let res = b.ins().ineg(av);
+                stack.push((res, Kind::Int));
+            }
+            Op::Not => {
+                let (av, _) = upop(&mut stack)?;
+                let r = b.ins().icmp_imm(IntCC::Equal, av, 0); // 1 iff false
+                let r64 = b.ins().uextend(types::I64, r);
+                stack.push((r64, Kind::Bool));
+            }
+            Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
+                let (bv, _) = upop(&mut stack)?;
+                let (av, _) = upop(&mut stack)?;
+                let cc = match op {
+                    Op::Eq => IntCC::Equal,
+                    Op::Ne => IntCC::NotEqual,
+                    Op::Lt => IntCC::SignedLessThan,
+                    Op::Gt => IntCC::SignedGreaterThan,
+                    Op::Le => IntCC::SignedLessThanOrEqual,
+                    _ => IntCC::SignedGreaterThanOrEqual,
+                };
+                let r = b.ins().icmp(cc, av, bv);
+                let r64 = b.ins().uextend(types::I64, r);
+                stack.push((r64, Kind::Bool));
+            }
+            Op::GetLocal(slot) => {
+                let v = *args.get(*slot).ok_or_else(|| {
+                    JitError::Codegen(format!(
+                        "unboxed GetLocal slot {slot} out of range (arity {})",
+                        args.len()
+                    ))
+                })?;
+                stack.push((v, Kind::Unknown));
+            }
+            Op::Jump(t) => {
+                if !stack.is_empty() {
+                    return Err(JitError::Unsupported(
+                        "unboxed: non-empty operand stack at Jump".to_string(),
+                    ));
+                }
+                let tb = blocks[*t].ok_or_else(|| {
+                    JitError::Codegen(format!("unboxed jump to non-leader ip {t}"))
+                })?;
+                b.ins().jump(tb, &[]);
+                current = None;
+            }
+            Op::JumpIfFalse(t) => {
+                let (cond, _) = upop(&mut stack)?;
+                if !stack.is_empty() {
+                    return Err(JitError::Unsupported(
+                        "unboxed: non-empty operand stack at JumpIfFalse".to_string(),
+                    ));
+                }
+                let tb = blocks[*t].ok_or_else(|| {
+                    JitError::Codegen(format!("unboxed JumpIfFalse target ip {t}"))
+                })?;
+                let fallb = blocks[ip + 1].ok_or_else(|| {
+                    JitError::Codegen(format!("unboxed JumpIfFalse fall-through ip {}", ip + 1))
+                })?;
+                // cond nonzero (true) → fall through; zero (false) → take the jump.
+                b.ins().brif(cond, fallb, &[], tb, &[]);
+                current = None;
+            }
+            Op::Return => {
+                let (v, kind) = upop(&mut stack)?;
+                if kind != Kind::Int {
+                    // A bool/unknown return would be mis-mapped to Value::Int — reject to VM/boxed.
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: non-int return (kind {kind:?})"
+                    )));
+                }
+                let ok = b.ins().iconst(types::I64, 0);
+                b.ins().return_(&[v, ok]); // (value, code=0)
+                if !stack.is_empty() {
+                    return Err(JitError::Codegen(
+                        "unboxed: non-empty operand stack after Return".to_string(),
+                    ));
+                }
+                current = None;
+            }
+            // u1 is leaf + provably-int-return only; everything else falls back to the VM/boxed path.
+            other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
+        }
+    }
+
+    // Fault-exit (shared): return (0, code).
+    b.switch_to_block(fault_exit);
+    let code_param = b.block_params(fault_exit)[0];
+    let zero = b.ins().iconst(types::I64, 0);
+    b.ins().return_(&[zero, code_param]);
+
+    b.seal_all_blocks();
+    b.finalize();
+    Ok(())
+}
+
 /// True iff `entry_idx` and every function it transitively (reachably) calls are in the JIT subset —
 /// the cheap predicate a caller checks before committing to [`Compiled::compile`] (it runs the same
 /// default-deny walk without building any code).
@@ -812,6 +1127,12 @@ pub struct Compiled {
     /// inside the `JITModule` struct), so moving the struct into this handle leaves the pointer valid;
     /// it stays valid for as long as `module` is alive (i.e. until this handle drops).
     entry: *const u8,
+    /// Which codegen produced `entry`, selecting the run ABI: `false` = boxed ([`Compiled::run`],
+    /// `fn(*mut JitCtx, i64)`); `true` = unboxed ([`Compiled::run_unboxed`], `fn(*mut i64, i64…)`).
+    unboxed: bool,
+    /// The entry's arity — needed only by the unboxed ABI (its args are native `i64` params, so the
+    /// call site transmutes to the arity-specific function type). Unused for the boxed ABI.
+    arity: usize,
 }
 
 impl Compiled {
@@ -901,6 +1222,57 @@ impl Compiled {
         Ok(Compiled {
             module: Some(module),
             entry,
+            unboxed: false,
+            arity: 0,
+        })
+    }
+
+    /// JIT-compile `entry_idx` with the UNBOXED codegen (slice u1): a LEAF int function (no
+    /// `SetLocal`, no `Call`) whose every reachable `Return` yields a provably-`Int` operand. Returns
+    /// [`JitError::Unsupported`] otherwise — the caller falls back to the VM (or the boxed
+    /// [`Compiled::compile`]). No `rt_*` helpers are registered: unboxed code is pure register
+    /// arithmetic with inline fault checks, its only external touch a single `*mut i64` fault cell.
+    pub fn compile_unboxed(
+        program: &BytecodeProgram,
+        entry_idx: usize,
+    ) -> Result<Compiled, JitError> {
+        let func = &program.functions[entry_idx];
+        if func.n_captures != 0 {
+            return Err(JitError::Unsupported("closure with captures".to_string()));
+        }
+        unboxed_leaf_eligible(func)?;
+        let builder = JITBuilder::new(default_libcall_names())
+            .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
+        let mut module = JITModule::new(builder);
+
+        // extern "C" fn(a0..a_arity: i64) -> (i64 value, i64 code)  [multi-return; no fault cell]
+        let mut sig = module.make_signature();
+        for _ in 0..func.arity {
+            sig.params.push(AbiParam::new(types::I64));
+        }
+        sig.returns.push(AbiParam::new(types::I64)); // value
+        sig.returns.push(AbiParam::new(types::I64)); // fault code (0 = ok)
+        let func_id = module
+            .declare_function("phorj_unboxed_entry", Linkage::Export, &sig)
+            .map_err(|e| JitError::Codegen(format!("declare unboxed entry: {e}")))?;
+
+        let mut cl_ctx = module.make_context();
+        cl_ctx.func.signature = sig;
+        build_body_unboxed(&mut cl_ctx, func)?;
+        module
+            .define_function(func_id, &mut cl_ctx)
+            .map_err(|e| JitError::Codegen(format!("define unboxed: {e}")))?;
+        module.clear_context(&mut cl_ctx);
+        module
+            .finalize_definitions()
+            .map_err(|e| JitError::Codegen(format!("finalize unboxed: {e}")))?;
+        let entry = module.get_finalized_function(func_id);
+
+        Ok(Compiled {
+            module: Some(module),
+            entry,
+            unboxed: true,
+            arity: func.arity,
         })
     }
 
@@ -913,6 +1285,10 @@ impl Compiled {
     /// `MAX_CALL_DEPTH - D` more frames — NOT `MAX_CALL_DEPTH`, which would under-fault (return a value
     /// where the VM faults, a happy-path disagreement the caller's fault-fallback cannot catch).
     pub fn run(&self, args: &[Value], start_depth: usize) -> JitRun {
+        debug_assert!(
+            !self.unboxed,
+            "run() is the boxed ABI; use run_unboxed() for unboxed code"
+        );
         // SAFETY: `self.entry` is the finalized machine code for a function compiled with exactly the
         // signature `extern "C" fn(*mut JitCtx, i64) -> i64` — the sole first-party `unsafe` this whole
         // effort exists to confine. `self.module` (which owns the executable memory) is alive for the
@@ -937,6 +1313,70 @@ impl Compiled {
                     .fault
                     .unwrap_or_else(|| "jit: unknown fault".to_string()),
             )
+        }
+    }
+
+    /// Run an UNBOXED-compiled entry (from [`Compiled::compile_unboxed`]). Args are passed as native
+    /// `i64` params (a bool arg is its `0/1`), a `*mut i64` fault cell is threaded, and the result maps
+    /// back to a [`Value`]: on `*fault_cell == 0` the returned `i64` is the (int) value; otherwise the
+    /// fault code maps to the single-sourced `value::FAULT_*` string — byte-identical to the VM.
+    pub fn run_unboxed(&self, args: &[Value]) -> JitRun {
+        debug_assert!(
+            self.unboxed,
+            "run_unboxed() requires unboxed code; use run()"
+        );
+        // The `#[repr(C)]` two-i64 return matching Cranelift's `returns = [i64, i64]`: on SysV
+        // x86-64 both come back in rax:rdx, and a C struct of two eightbytes returns the same way (on
+        // AArch64, x0:x1 likewise). The unit tests assert value AND fault against the VM oracle, so an
+        // ABI mismatch would surface loudly rather than silently corrupt.
+        #[repr(C)]
+        struct UnboxedRet {
+            value: i64,
+            code: i64,
+        }
+        // Bool args are represented as 0/1 i64 (see `Kind` — bool params are only consumed in bool
+        // contexts natively). A non-int/bool arg can't reach an eligible unboxed function.
+        let ia: Vec<i64> = args
+            .iter()
+            .map(|v| match v {
+                Value::Int(n) => *n,
+                Value::Bool(b) => *b as i64,
+                _ => 0,
+            })
+            .collect();
+        // SAFETY: `self.entry` is finalized machine code with signature
+        // `extern "C" fn(i64… /* arity */) -> (i64, i64)`; we transmute to the arity-specific type and
+        // pass exactly `arity` i64 args. `self.module` owns the code and is alive across the call.
+        let ret: UnboxedRet = unsafe {
+            match self.arity {
+                0 => {
+                    let f: extern "C" fn() -> UnboxedRet = std::mem::transmute(self.entry);
+                    f()
+                }
+                1 => {
+                    let f: extern "C" fn(i64) -> UnboxedRet = std::mem::transmute(self.entry);
+                    f(ia[0])
+                }
+                2 => {
+                    let f: extern "C" fn(i64, i64) -> UnboxedRet = std::mem::transmute(self.entry);
+                    f(ia[0], ia[1])
+                }
+                3 => {
+                    let f: extern "C" fn(i64, i64, i64) -> UnboxedRet =
+                        std::mem::transmute(self.entry);
+                    f(ia[0], ia[1], ia[2])
+                }
+                other => {
+                    return JitRun::Fault(format!("jit: unboxed arity {other} unsupported"));
+                }
+            }
+        };
+        match ret.code {
+            0 => JitRun::Value(Value::Int(ret.value)),
+            1 => JitRun::Fault(crate::value::FAULT_INT_OVERFLOW.to_string()),
+            2 => JitRun::Fault(crate::value::FAULT_DIV_ZERO.to_string()),
+            3 => JitRun::Fault(crate::value::FAULT_MOD_ZERO.to_string()),
+            other => JitRun::Fault(format!("jit: unboxed unknown fault code {other}")),
         }
     }
 }

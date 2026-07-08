@@ -5,6 +5,18 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] PROGRESS: **u1 SHIPPED (pending commit) — green.** Unboxed LEAF int codegen alongside
+  the boxed path (boxed kept as byte-identity oracle). `Compiled::compile_unboxed` + `run_unboxed`;
+  operands are compile-time SSA `i64` (no boxed `Vec`, no per-op helper call); args read via entry
+  block-param dominance; ABI = `extern "C" fn(i64…) -> (i64 value, i64 code)` multi-return mapped to a
+  `#[repr(C)]` struct (ABI empirically confirmed by the passing value+fault tests). Fault parity inline
+  + byte-identical to `value.rs` (Add/Sub/Mul `*_overflow`; Div/Rem zero-BEFORE-`i64::MIN/-1`; Neg MIN)
+  → codes 1/2/3 mapped to the single-sourced `FAULT_*` consts in `run_unboxed`. Type-erasure gap
+  (advisor) handled WITHOUT a type source: operand-kind tracking (Int/Bool/Unknown) + reject any
+  non-`Int` `Return`; a `unboxed_leaf_eligible` pre-pass cleanly rejects `SetLocal`/`Call`/local-decls
+  (`GetLocal slot>=arity`) as `Unsupported`. 22 jit tests (+7 u1) + full workspace/PHP-oracle (1804
+  passed) + clippy(jit)/fmt/non-jit-build green. NEXT = **u2** (unboxed native calls + recursion + the
+  type source for bare-param returns → fib JITs unboxed → re-measure, expect ~5 ms & beating php).
 - [2026-07-08] DESIGN (durable groundwork for the fresh-context unboxed slice — NOT built here; the
   reordering it depends on is developer-PENDING above). **Unboxed int codegen (the ~5 ms fib path):**
   operands = compile-time SSA `i64` values (`Vec<ClValue>`), NOT the boxed `Vec<Value>` — no per-op
@@ -38,8 +50,14 @@
   → the entire gap is the boxing/`Vec`/helper-call tax, NOT Cranelift codegen (compile 26 ms). Spike
   asserted `fib(30)==832040` before timing; then REVERTED (not a slice). ⇒ **Unboxing is THE mechanism
   to meet the mandate, and the critical path.**
-- [2026-07-08] ⏸️ **PENDING (developer's call — do NOT self-rule; recorded per §15 for the autonomous
-  session): re-order the JIT marathon to bring UNBOXING forward (was JIT-5, LAST).** The locked "Option
+- [2026-07-08] ✅ **RATIFIED (developer, interactive): re-order — UNBOXING is now the CRITICAL PATH,
+  brought forward from LAST.** Order: unbox int codegen (u1 leaf → u2 calls/fib → measure) → wire
+  `phg run` → re-measure the 12-feature matrix → per-feature sweep until EVERY feature beats php+JIT
+  ("more perf hunting till there is nothing left"). THEN language features/sugar (developer available →
+  ask live on new user-visible surface per §15, build RULED items). Keep boxed codegen as the
+  byte-identity ORACLE. Supersedes the PENDING entry below.
+- [2026-07-08] ⏸️ **(SUPERSEDED — now RATIFIED above) PENDING: re-order the JIT marathon to bring
+  UNBOXING forward (was JIT-5, LAST).** The locked "Option
   A — boxed first, unboxing last" was justified by "the spike proved boxed already ~3× > php+JIT, so
   breadth wins G-8" — that premise is now FALSIFIED by two honest measurements (boxed is 52× SLOWER than
   php+JIT; the "3×" was native-vs-VM, mis-attributed). Breadth over a boxed substrate can NEVER cross

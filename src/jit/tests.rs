@@ -455,3 +455,240 @@ fn jit_deep_recursion_faults_like_the_vm_stack_overflow() {
         "JIT stack-overflow fault `{jit}` must match the VM oracle trace:\n{vm_fault}"
     );
 }
+
+// --- slice u1: UNBOXED leaf int codegen + fault parity (unboxed ≡ VM oracle; boxed stays the ref) ---
+
+/// Compile+run a function through the UNBOXED path, unwrapping its int value (panicking on
+/// fault/ineligibility). Distinct from `jit_int`, which drives the boxed path.
+fn ub_int(program: &BytecodeProgram, f: usize, args: &[Value]) -> i64 {
+    match Compiled::compile_unboxed(program, f)
+        .expect("function must be unboxed-eligible")
+        .run_unboxed(args)
+    {
+        JitRun::Value(v) => as_int(&v),
+        JitRun::Fault(m) => panic!("unexpected unboxed fault: {m}"),
+    }
+}
+
+#[test]
+fn unboxed_arithmetic_matches_vm_oracle() {
+    // Pure int arithmetic through native registers (no boxed Vec, no helper calls). Checked against
+    // the VM oracle across sign combinations.
+    let program = compile_source(
+        "package Main;\n\
+         function calc(int a, int b) -> int { return a * b + a - b; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "calc");
+    for (a, b) in [(6_i64, 7_i64), (0, 0), (-3, 5), (5, -3), (1000000, 1000000)] {
+        let ub = ub_int(&program, f, &[Value::Int(a), Value::Int(b)]);
+        assert_eq!(
+            ub,
+            vm_int(&program, f, vec![Value::Int(a), Value::Int(b)]),
+            "unboxed calc({a},{b}) must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_if_else_and_comparison_match_vm_oracle() {
+    // Comparison (Lt) → JumpIfFalse → distinguishable int Consts per branch (a swapped edge changes
+    // the result). Exercises native icmp + control flow, all int-returning.
+    let program = compile_source(
+        "package Main;\n\
+         function pick(int a) -> int { if (a < 10) { return 111; } else { return 222; } }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "pick");
+    for a in [3_i64, 9, 10, 42, -1] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(a)]),
+            vm_int(&program, f, vec![Value::Int(a)]),
+            "unboxed pick({a}) branch must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_bool_param_is_handled_natively() {
+    // A `bool` PARAM (arrives as 0/1 i64, consumed only in a bool context — `if (b)`) is fine in the
+    // unboxed path even though a bool *return* is rejected. Both int-returning branches checked.
+    let program = compile_source(
+        "package Main;\n\
+         function choose(bool b, int n) -> int { if (b) { return n + 1; } return n + 2; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "choose");
+    for (b, n) in [(true, 5_i64), (false, 5), (true, -1), (false, 100)] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Bool(b), Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Bool(b), Value::Int(n)]),
+            "unboxed choose({b},{n}) must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_overflow_faults_like_the_kernel() {
+    let program = compile_source(
+        "package Main;\n\
+         function mul(int a, int b) -> int { return a * b; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "mul");
+    match Compiled::compile_unboxed(&program, f)
+        .expect("mul is unboxed-eligible")
+        .run_unboxed(&[Value::Int(i64::MAX), Value::Int(2)])
+    {
+        JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_INT_OVERFLOW),
+        JitRun::Value(v) => panic!("expected overflow, got {}", as_int(&v)),
+    }
+}
+
+#[test]
+fn unboxed_div_zero_and_mod_zero_are_distinct_faults() {
+    // The fault CODE→string mapping is the b1 transposition risk — a 2↔3 swap only shows if div-zero
+    // and mod-zero are asserted as SEPARATE cases with their DISTINCT strings (advisor).
+    let program = compile_source(
+        "package Main;\n\
+         function divi(int a, int b) -> int { return a / b; }\n\
+         function modi(int a, int b) -> int { return a % b; }\n\
+         function main() -> void {}",
+    );
+    let dv = func_index(&program, "divi");
+    let md = func_index(&program, "modi");
+    match Compiled::compile_unboxed(&program, dv)
+        .expect("divi eligible")
+        .run_unboxed(&[Value::Int(1), Value::Int(0)])
+    {
+        JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_DIV_ZERO, "div-by-zero string"),
+        JitRun::Value(v) => panic!("expected div-zero, got {}", as_int(&v)),
+    }
+    match Compiled::compile_unboxed(&program, md)
+        .expect("modi eligible")
+        .run_unboxed(&[Value::Int(1), Value::Int(0)])
+    {
+        JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_MOD_ZERO, "mod-by-zero string"),
+        JitRun::Value(v) => panic!("expected mod-zero, got {}", as_int(&v)),
+    }
+}
+
+#[test]
+fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
+    // The signed-overflow edge of div/rem and negation — i64::MIN / -1, i64::MIN % -1, -i64::MIN — all
+    // clean FAULT_INT_OVERFLOW (never a native trap that would abort the process).
+    let program = compile_source(
+        "package Main;\n\
+         function divi(int a, int b) -> int { return a / b; }\n\
+         function modi(int a, int b) -> int { return a % b; }\n\
+         function neg(int a) -> int { return -a; }\n\
+         function main() -> void {}",
+    );
+    for (name, args) in [
+        ("divi", vec![Value::Int(i64::MIN), Value::Int(-1)]),
+        ("modi", vec![Value::Int(i64::MIN), Value::Int(-1)]),
+        ("neg", vec![Value::Int(i64::MIN)]),
+    ] {
+        let f = func_index(&program, name);
+        // The VM oracle faults the same way (byte-identity of the edge).
+        let vm_fault = crate::vm::Vm::new(&program)
+            .run_entry(f, args.clone())
+            .expect_err("VM must fault at the signed-overflow edge")
+            .render("");
+        match Compiled::compile_unboxed(&program, f)
+            .expect("eligible")
+            .run_unboxed(&args)
+        {
+            JitRun::Fault(m) => {
+                assert_eq!(
+                    m,
+                    crate::value::FAULT_INT_OVERFLOW,
+                    "{name} overflow string"
+                );
+                assert!(
+                    vm_fault.contains(&m),
+                    "{name}: unboxed fault must match VM oracle"
+                );
+            }
+            JitRun::Value(v) => panic!("{name}: expected overflow, got {}", as_int(&v)),
+        }
+    }
+}
+
+#[test]
+fn unboxed_rejects_non_int_return_and_setlocal_and_call() {
+    // The type-erasure guard + the u1 leaf scope: a bool return (would mis-map to Value::Int), a bare
+    // param return (unprovable Int without types), a SetLocal (mutable local), and a Call all fall
+    // back — compile_unboxed must return Unsupported, never miscompile.
+    let program = compile_source(
+        "package Main;\n\
+         function isSmall(int n) -> bool { return n < 10; }\n\
+         function identity(int n) -> int { return n; }\n\
+         function sumTo(int n) -> int { mutable int s = 0; mutable int i = 1; while (i <= n) { s = s + i; i = i + 1; } return s; }\n\
+         function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }\n\
+         function main() -> void {}",
+    );
+    for name in ["isSmall", "identity", "sumTo", "fib"] {
+        let f = func_index(&program, name);
+        assert!(
+            matches!(
+                Compiled::compile_unboxed(&program, f),
+                Err(JitError::Unsupported(_))
+            ),
+            "unboxed must reject `{name}` (non-int-return / SetLocal / Call), not miscompile"
+        );
+    }
+}
+
+#[test]
+fn unboxed_all_comparisons_and_not_match_vm_oracle() {
+    // Every comparison arm (Gt/Ge/Le/Eq/Ne + Lt via `nt`'s `!(a<b)`) and `Not` — each a hand-written
+    // `Op → IntCC` mapping, the b1 transposition-trap family. Branch-return leaf form (u1-legal: no
+    // SetLocal), distinguishable per edge, oracle-checked vs the VM. A Le↔Ge / Eq↔Ne swap or an
+    // operand-order flip changes a result and is caught here.
+    let program = compile_source(
+        "package Main;\n\
+         function gt(int a, int b) -> int { if (a > b) { return 1; } return 0; }\n\
+         function ge(int a, int b) -> int { if (a >= b) { return 1; } return 0; }\n\
+         function le(int a, int b) -> int { if (a <= b) { return 1; } return 0; }\n\
+         function eq(int a, int b) -> int { if (a == b) { return 1; } return 0; }\n\
+         function ne(int a, int b) -> int { if (a != b) { return 1; } return 0; }\n\
+         function nt(int a, int b) -> int { if (!(a < b)) { return 1; } return 0; }\n\
+         function main() -> void {}",
+    );
+    for name in ["gt", "ge", "le", "eq", "ne", "nt"] {
+        let f = func_index(&program, name);
+        for (a, b) in [(5_i64, 3_i64), (3, 5), (4, 4), (-2, 7), (7, -2)] {
+            assert_eq!(
+                ub_int(&program, f, &[Value::Int(a), Value::Int(b)]),
+                vm_int(&program, f, vec![Value::Int(a), Value::Int(b)]),
+                "unboxed {name}({a},{b}) must match the VM oracle"
+            );
+        }
+    }
+}
+
+#[test]
+fn unboxed_add_and_sub_overflow_fault_like_the_kernel() {
+    // Independent overflow coverage for Add and Sub (Mul is covered separately) — a per-op `*_overflow`
+    // wiring slip would else ship silently.
+    let program = compile_source(
+        "package Main;\n\
+         function add(int a, int b) -> int { return a + b; }\n\
+         function sub(int a, int b) -> int { return a - b; }\n\
+         function main() -> void {}",
+    );
+    for (name, args) in [
+        ("add", [Value::Int(i64::MAX), Value::Int(1)]),
+        ("sub", [Value::Int(i64::MIN), Value::Int(1)]),
+    ] {
+        let f = func_index(&program, name);
+        match Compiled::compile_unboxed(&program, f)
+            .expect("eligible")
+            .run_unboxed(&args)
+        {
+            JitRun::Fault(m) => assert_eq!(m, crate::value::FAULT_INT_OVERFLOW, "{name} overflow"),
+            JitRun::Value(v) => panic!("{name}: expected overflow, got {}", as_int(&v)),
+        }
+    }
+}
