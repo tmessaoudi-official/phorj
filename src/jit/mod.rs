@@ -873,9 +873,10 @@ fn unboxed_proven_int_params(func: &crate::chunk::Function) -> Vec<bool> {
                 stack.push(Prov::Other);
             }
             Op::Call(_) => {
-                for _ in 0..func.arity {
-                    stack.pop();
-                }
+                // A call consumes the callee's args (whose count we don't track here) and yields a
+                // result. Clear conservatively: losing provenance for operands below the args only
+                // over-rejects (a missed mark), never mis-marks — and the call result is `Other`.
+                stack.clear();
                 stack.push(Prov::Other);
             }
             Op::JumpIfFalse(_) => {
@@ -889,59 +890,77 @@ fn unboxed_proven_int_params(func: &crate::chunk::Function) -> Vec<bool> {
     proven
 }
 
-/// Cheap pre-pass eligibility for the unboxed LEAF int subset (u1), over reachable ops only. Rejects
-/// (as `Unsupported`, so the caller falls back to the VM/boxed path) anything u1 can't lower: a
-/// `SetLocal` or a `GetLocal(slot >= arity)` (both signal a local declaration — u1 has no local slots
-/// beyond the params, which are read directly via block-param dominance), a `Call`, a non-int `Const`,
-/// or any op outside the subset. Runs BEFORE codegen so an out-of-subset function yields a clean
-/// `Unsupported`, not a mid-build `Codegen` error. (The return-kind-is-`Int` check stays in
-/// `build_body_unboxed`, where the operand kind is tracked.)
-fn unboxed_eligible(func: &crate::chunk::Function, self_idx: usize) -> Result<(), JitError> {
-    let code = &func.chunk.code;
-    let reach = reachable(code);
-    for (ip, op) in code.iter().enumerate() {
-        if !reach[ip] {
+/// Collect the set of functions to compile for the UNBOXED path: the entry plus every function it
+/// transitively (reachably) calls (via `Op::Call`), in discovery order. Enforces the unboxed op-subset
+/// per function (default-deny): a closure capture, a non-int `Const`, a `SetLocal` or a
+/// `GetLocal(slot >= arity)` (local declaration — the unboxed path reads params directly via
+/// block-param dominance and has no slots beyond them), or any op outside the subset makes the WHOLE
+/// compilation `Unsupported` (so the caller falls back), because a native call needs its callee
+/// compiled in the same module. `Call` (self OR cross-function) is allowed — the whole reached graph
+/// is collected. Only reachable ops are inspected. (The provably-int-`Return` check stays in
+/// `build_body_unboxed`; a non-int return anywhere fails the build and thus the whole compile — the
+/// fixpoint's "reject the whole graph if any function is ineligible".)
+fn collect_functions_unboxed(
+    program: &BytecodeProgram,
+    entry_idx: usize,
+) -> Result<Vec<usize>, JitError> {
+    let mut order = Vec::new();
+    let mut seen = vec![false; program.functions.len()];
+    let mut work = vec![entry_idx];
+    while let Some(fi) = work.pop() {
+        if seen[fi] {
             continue;
         }
-        match op {
-            Op::Const(idx) => match func.chunk.consts.get(*idx) {
-                Some(Value::Int(_)) => {}
-                other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
-            },
-            Op::AddI
-            | Op::SubI
-            | Op::MulI
-            | Op::DivI
-            | Op::RemI
-            | Op::Neg
-            | Op::Not
-            | Op::Eq
-            | Op::Ne
-            | Op::Lt
-            | Op::Gt
-            | Op::Le
-            | Op::Ge
-            | Op::Jump(_)
-            | Op::JumpIfFalse(_)
-            | Op::Return => {}
-            Op::GetLocal(slot) if *slot < func.arity => {}
-            Op::GetLocal(slot) => {
-                return Err(JitError::Unsupported(format!(
-                    "unboxed: local slot {slot} >= arity {} (local declaration)",
-                    func.arity
-                )));
-            }
-            // u2a: self-recursion only. A call to a different function is deferred to u2b (general
-            // multi-function unboxed calls) → fall back for now.
-            Op::Call(idx) if *idx == self_idx => {}
-            // SetLocal, non-self Call, and everything else fall back.
-            other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
+        seen[fi] = true;
+        let func = &program.functions[fi];
+        if func.n_captures != 0 {
+            return Err(JitError::Unsupported("closure with captures".to_string()));
         }
+        let code = &func.chunk.code;
+        let reach = reachable(code);
+        for (ip, op) in code.iter().enumerate() {
+            if !reach[ip] {
+                continue;
+            }
+            match op {
+                Op::Const(idx) => match func.chunk.consts.get(*idx) {
+                    Some(Value::Int(_)) => {}
+                    other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
+                },
+                Op::AddI
+                | Op::SubI
+                | Op::MulI
+                | Op::DivI
+                | Op::RemI
+                | Op::Neg
+                | Op::Not
+                | Op::Eq
+                | Op::Ne
+                | Op::Lt
+                | Op::Gt
+                | Op::Le
+                | Op::Ge
+                | Op::Jump(_)
+                | Op::JumpIfFalse(_)
+                | Op::Return => {}
+                Op::GetLocal(slot) if *slot < func.arity => {}
+                Op::GetLocal(slot) => {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: local slot {slot} >= arity {} (local declaration)",
+                        func.arity
+                    )));
+                }
+                Op::Call(callee) => work.push(*callee),
+                // SetLocal and everything else fall back.
+                other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
+            }
+        }
+        order.push(fi);
     }
-    Ok(())
+    Ok(order)
 }
 
-/// Emit UNBOXED native code for one LEAF int function (no `SetLocal`, no `Call`) into `cl_ctx.func`
+/// Emit UNBOXED native code for one int function (self- or cross-recursive) into `cl_ctx.func`
 /// (signature already `extern "C" fn(a0..a_arity: i64) -> (i64 value, i64 code)` — a multi-return, so
 /// no fault-cell pointer / no memory store on any path). Success returns `(value, 0)`; a fault returns
 /// `(0, code)` (1 overflow / 2 div-zero / 3 mod-zero). Fault CONDITIONS mirror the `value.rs` int
@@ -953,18 +972,27 @@ fn unboxed_eligible(func: &crate::chunk::Function, self_idx: usize) -> Result<()
 fn build_body_unboxed(
     module: &mut JITModule,
     cl_ctx: &mut cranelift::codegen::Context,
-    func: &crate::chunk::Function,
-    self_id: FuncId,
+    program: &BytecodeProgram,
+    func_idx: usize,
+    func_ids: &[Option<FuncId>],
     proven: &[bool],
 ) -> Result<(), JitError> {
+    let func = &program.functions[func_idx];
     let code = &func.chunk.code;
     let n = code.len();
     let reach = reachable(code);
 
     let mut fbctx = FunctionBuilderContext::new();
     let mut b = FunctionBuilder::new(&mut cl_ctx.func, &mut fbctx);
-    // For self-recursion (u2a): a native call to this function's own FuncId, resolved at finalize.
-    let self_ref = module.declare_func_in_func(self_id, b.func);
+    // A `Call` (self OR cross-function) lowers to a native call to the callee's FuncId (resolved at
+    // finalize). Pre-declare every compiled function's ref into this body (unused refs are harmless —
+    // a relocation is emitted only for a ref actually `call`ed).
+    let mut fn_refs: Vec<Option<FuncRef>> = vec![None; func_ids.len()];
+    for (i, id) in func_ids.iter().enumerate() {
+        if let Some(fid) = id {
+            fn_refs[i] = Some(module.declare_func_in_func(*fid, b.func));
+        }
+    }
 
     // Entry block: `[depth, a0, a1, …]`. `depth` is the live frame count at the call site (the caller
     // passes `depth + 1`; the top-level entry gets 1) — a `Call` checks `depth >= MAX_CALL_DEPTH`
@@ -1134,17 +1162,19 @@ fn build_body_unboxed(
                 };
                 stack.push((v, kind));
             }
-            Op::Call(_) => {
-                // u2a: self-recursion only (eligibility already rejected non-self calls). Reproduce
-                // the VM's pre-push depth guard, then a direct native call to this function's own
-                // FuncId, passing `depth + 1` + the `arity` args already on the operand stack;
-                // propagate the callee's `(value, code)`.
+            Op::Call(callee) => {
+                // Self OR cross-function call. Reproduce the VM's pre-push depth guard, then a direct
+                // native call to the callee's FuncId, passing `depth + 1` + the callee's `arity` args
+                // already on the operand stack; propagate the callee's `(value, code)`.
+                let callee_ref = fn_refs[*callee].ok_or_else(|| {
+                    JitError::Codegen(format!("unboxed: call to uncompiled fn {callee}"))
+                })?;
                 let dmax = b.ins().iconst(types::I64, MAX_CALL_DEPTH as i64);
                 let too_deep = b.ins().icmp(IntCC::SignedGreaterThanOrEqual, depth, dmax);
                 fault_if(&mut b, too_deep, 4); // 4 → "stack overflow"
                 let d1 = b.ins().iadd_imm(depth, 1);
-                // Pop `arity` args (top is the last arg); rebuild in declaration order.
-                let arity = func.arity;
+                // Pop the CALLEE's `arity` args (top is the last arg); rebuild in declaration order.
+                let arity = program.functions[*callee].arity;
                 let mut cargs: Vec<ClValue> = Vec::with_capacity(arity);
                 for _ in 0..arity {
                     let (v, _) = upop(&mut stack)?;
@@ -1154,7 +1184,7 @@ fn build_body_unboxed(
                 let mut call_args: Vec<ClValue> = Vec::with_capacity(arity + 1);
                 call_args.push(d1);
                 call_args.extend(cargs);
-                let call = b.ins().call(self_ref, &call_args);
+                let call = b.ins().call(callee_ref, &call_args);
                 let results = b.inst_results(call);
                 let (value, ccode) = (results[0], results[1]);
                 // code != 0 → propagate the callee's exact code to the shared fault-exit.
@@ -1353,57 +1383,73 @@ impl Compiled {
         })
     }
 
-    /// JIT-compile `entry_idx` with the UNBOXED codegen (slice u2a): an int function that may be
-    /// SELF-recursive (no `SetLocal`, no local decls, no non-self `Call`) whose every reachable
-    /// `Return` yields a provably-`Int` operand (a param proven int by usage, an arithmetic result, or
-    /// a self-call result). Returns [`JitError::Unsupported`] otherwise — the caller falls back to the
-    /// VM (or the boxed [`Compiled::compile`]). No `rt_*` helpers are registered: unboxed code is pure
-    /// register arithmetic + native self-calls with inline fault checks; faults travel in the `(value,
-    /// code)` multi-return, mapped to the single-sourced kernel strings in [`Compiled::run_unboxed`].
+    /// JIT-compile `entry_idx` (+ its transitive call graph) with the UNBOXED codegen (slice u2b): int
+    /// functions that may be self- OR cross-recursive (no `SetLocal`, no local decls) whose every
+    /// reachable `Return` yields a provably-`Int` operand (a param proven int by usage, an arithmetic
+    /// result, or a call result). Returns [`JitError::Unsupported`] if any function in the reached graph
+    /// is out-of-subset or has a non-int return (the whole graph falls back to the VM / boxed path). No
+    /// `rt_*` helpers are registered: unboxed code is pure register arithmetic + native calls with
+    /// inline fault checks; faults travel in the `(value, code)` multi-return, mapped to the
+    /// single-sourced kernel strings in [`Compiled::run_unboxed`].
     pub fn compile_unboxed(
         program: &BytecodeProgram,
         entry_idx: usize,
     ) -> Result<Compiled, JitError> {
-        let func = &program.functions[entry_idx];
-        if func.n_captures != 0 {
-            return Err(JitError::Unsupported("closure with captures".to_string()));
-        }
-        unboxed_eligible(func, entry_idx)?;
-        let proven = unboxed_proven_int_params(func);
+        // Transitive op-subset eligibility + the set of functions to compile (reachable-only).
+        let order = collect_functions_unboxed(program, entry_idx)?;
+
         let builder = JITBuilder::new(default_libcall_names())
             .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
         let mut module = JITModule::new(builder);
 
-        // extern "C" fn(depth: i64, a0..a_arity: i64) -> (i64 value, i64 code)  [multi-return]
-        let mut sig = module.make_signature();
-        sig.params.push(AbiParam::new(types::I64)); // depth (frame count at the call site)
-        for _ in 0..func.arity {
-            sig.params.push(AbiParam::new(types::I64));
+        // Declare a FuncId per function: `extern "C" fn(depth: i64, a0..a_arity: i64) -> (i64, i64)`.
+        // Per-function arity, so each has its own signature (declared BEFORE any body so calls — self
+        // or cross — resolve at finalize).
+        let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
+        for &fi in &order {
+            let mut sig = module.make_signature();
+            sig.params.push(AbiParam::new(types::I64)); // depth
+            for _ in 0..program.functions[fi].arity {
+                sig.params.push(AbiParam::new(types::I64));
+            }
+            sig.returns.push(AbiParam::new(types::I64)); // value
+            sig.returns.push(AbiParam::new(types::I64)); // fault code (0 = ok)
+            let id = module
+                .declare_function(&format!("phorj_unboxed_fn_{fi}"), Linkage::Export, &sig)
+                .map_err(|e| JitError::Codegen(format!("declare unboxed fn {fi}: {e}")))?;
+            func_ids[fi] = Some(id);
         }
-        sig.returns.push(AbiParam::new(types::I64)); // value
-        sig.returns.push(AbiParam::new(types::I64)); // fault code (0 = ok)
-                                                     // Declared BEFORE the body so a self-call can reference this same FuncId (resolved at finalize).
-        let func_id = module
-            .declare_function("phorj_unboxed_entry", Linkage::Export, &sig)
-            .map_err(|e| JitError::Codegen(format!("declare unboxed entry: {e}")))?;
 
-        let mut cl_ctx = module.make_context();
-        cl_ctx.func.signature = sig;
-        build_body_unboxed(&mut module, &mut cl_ctx, func, func_id, &proven)?;
-        module
-            .define_function(func_id, &mut cl_ctx)
-            .map_err(|e| JitError::Codegen(format!("define unboxed: {e}")))?;
-        module.clear_context(&mut cl_ctx);
+        // Define every body. A non-int `Return` (the provably-int check in build_body) fails the whole
+        // compile here — the fixpoint's "reject the whole graph if any function is ineligible".
+        for &fi in &order {
+            let proven = unboxed_proven_int_params(&program.functions[fi]);
+            let mut cl_ctx = module.make_context();
+            let mut sig = module.make_signature();
+            sig.params.push(AbiParam::new(types::I64));
+            for _ in 0..program.functions[fi].arity {
+                sig.params.push(AbiParam::new(types::I64));
+            }
+            sig.returns.push(AbiParam::new(types::I64));
+            sig.returns.push(AbiParam::new(types::I64));
+            cl_ctx.func.signature = sig;
+            build_body_unboxed(&mut module, &mut cl_ctx, program, fi, &func_ids, &proven)?;
+            module
+                .define_function(func_ids[fi].expect("declared above"), &mut cl_ctx)
+                .map_err(|e| JitError::Codegen(format!("define unboxed fn {fi}: {e}")))?;
+            module.clear_context(&mut cl_ctx);
+        }
         module
             .finalize_definitions()
             .map_err(|e| JitError::Codegen(format!("finalize unboxed: {e}")))?;
-        let entry = module.get_finalized_function(func_id);
+        let entry =
+            module.get_finalized_function(func_ids[entry_idx].expect("entry declared above"));
 
         Ok(Compiled {
             module: Some(module),
             entry,
             unboxed: true,
-            arity: func.arity,
+            arity: program.functions[entry_idx].arity,
         })
     }
 

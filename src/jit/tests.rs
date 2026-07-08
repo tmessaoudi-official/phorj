@@ -617,30 +617,28 @@ fn unboxed_min_over_neg_one_and_neg_min_overflow_like_the_kernel() {
 }
 
 #[test]
-fn unboxed_rejects_non_int_return_and_setlocal_and_non_self_call() {
-    // The type-erasure guard + the u2a scope: a bool return (would mis-map to Value::Int), a bare
+fn unboxed_rejects_non_int_return_and_setlocal() {
+    // The type-erasure guard + the unboxed subset: a bool return (would mis-map to Value::Int), a bare
     // UNPROVEN-int param return (`identity` — n is never an int-arith operand, so unprovable), a
-    // returned bool PARAM (`retb` — proves the provenance pass does NOT over-mark), a SetLocal (mutable
-    // local / loop), and a non-self Call all fall back — compile_unboxed must return Unsupported, never
-    // miscompile. (Self-recursive `fib` is now eligible — see unboxed_recursive_fib_matches_vm_oracle.)
+    // returned bool PARAM (`retb` — proves the provenance pass does NOT over-mark), and a SetLocal
+    // (mutable local / loop) all fall back — compile_unboxed must return Unsupported, never miscompile.
+    // (Self- AND cross-recursive int functions are now eligible — see the fib / cross-call tests.)
     let program = compile_source(
         "package Main;\n\
          function isSmall(int n) -> bool { return n < 10; }\n\
          function identity(int n) -> int { return n; }\n\
          function retb(bool b, int n) -> bool { if (n > 0) { return b; } return b; }\n\
          function sumTo(int n) -> int { mutable int s = 0; mutable int i = 1; while (i <= n) { s = s + i; i = i + 1; } return s; }\n\
-         function helper(int n) -> int { return n + 1; }\n\
-         function caller(int n) -> int { return helper(n) + helper(n); }\n\
          function main() -> void {}",
     );
-    for name in ["isSmall", "identity", "retb", "sumTo", "caller"] {
+    for name in ["isSmall", "identity", "retb", "sumTo"] {
         let f = func_index(&program, name);
         assert!(
             matches!(
                 Compiled::compile_unboxed(&program, f),
                 Err(JitError::Unsupported(_))
             ),
-            "unboxed must reject `{name}` (non-int-return / SetLocal / non-self Call), not miscompile"
+            "unboxed must reject `{name}` (non-int-return / SetLocal), not miscompile"
         );
     }
 }
@@ -819,4 +817,85 @@ fn measures_unboxed_fib_vs_vm_and_php() {
         best_vm as f64 / best_unboxed as f64,
         10.0 / (best_unboxed as f64 / 1e6),
     );
+}
+
+// --- slice u2b: general multi-function UNBOXED calls (non-self) ---
+
+#[test]
+fn unboxed_cross_function_calls_match_vm_oracle() {
+    // A transitive call graph a → b → c (all int, non-self) compiled into one module; cross-`FuncId`
+    // native calls with the (depth+1, args) → (value, code) ABI. Checked vs the VM oracle.
+    let program = compile_source(
+        "package Main;\n\
+         function c(int n) -> int { return n + n; }\n\
+         function b(int n) -> int { return c(n) * 2; }\n\
+         function a(int n) -> int { return b(n) + 1; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "a");
+    for n in [0_i64, 1, 3, 7, -4] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "unboxed a({n}) [a→b→c] must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn unboxed_cross_call_propagates_a_callee_fault() {
+    // A fault raised in a CROSS-called callee (`bad` divides by zero) propagates up through the
+    // caller's post-call `code != 0` edge unchanged (code 2 = div-zero, not the depth code 4) — the
+    // shared fault_exit carries the callee's exact code. Checked vs the VM oracle.
+    let program = compile_source(
+        "package Main;\n\
+         function bad(int a, int b) -> int { return a / b; }\n\
+         function callbad(int n) -> int { return bad(n, 0); }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "callbad");
+    let vm_fault = crate::vm::Vm::new(&program)
+        .run_entry(f, vec![Value::Int(10)])
+        .expect_err("VM must fault: the cross-callee divides by zero");
+    match Compiled::compile_unboxed(&program, f)
+        .expect("callbad is unboxed-eligible")
+        .run_unboxed(&[Value::Int(10)])
+    {
+        JitRun::Fault(m) => {
+            assert_eq!(
+                m,
+                crate::value::FAULT_DIV_ZERO,
+                "propagated div-zero string"
+            );
+            assert!(
+                vm_fault.render("").contains(&m),
+                "unboxed propagated fault must match the VM oracle"
+            );
+        }
+        JitRun::Value(v) => panic!("expected a propagated div-zero fault, got {}", as_int(&v)),
+    }
+}
+
+#[test]
+fn unboxed_ineligible_callee_sinks_the_whole_graph() {
+    // The fixpoint's core guarantee: an entry eligible ON ITS OWN, but which REACHES an ineligible
+    // callee, must fail the whole compile (atomic whole-graph rejection) — never miscompile. `leaf`
+    // returns a bare param `m` never used in an int-arith op → unprovable Int → ineligible; `top` is
+    // fine alone but calls `leaf`.
+    let program = compile_source(
+        "package Main;\n\
+         function leaf(int n, int m) -> int { return m; }\n\
+         function top(int n) -> int { return leaf(n, n); }\n\
+         function main() -> void {}",
+    );
+    for name in ["leaf", "top"] {
+        let f = func_index(&program, name);
+        assert!(
+            matches!(
+                Compiled::compile_unboxed(&program, f),
+                Err(JitError::Unsupported(_))
+            ),
+            "`{name}`: an ineligible reached callee must sink the whole graph (Unsupported), not miscompile"
+        );
+    }
 }

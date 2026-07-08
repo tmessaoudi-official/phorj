@@ -5,6 +5,18 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-08] PROGRESS: **u2b SHIPPED (pending commit) — general multi-function unboxed calls.**
+  Generalized u2a from self-only to arbitrary call graphs: `collect_functions_unboxed` (BFS over
+  reachable `Call` edges, op-subset per function), per-function FuncId sigs (`fn(depth, a_i…)->(i64,i64)`,
+  declared before any body so self+cross calls resolve at finalize), `build_body_unboxed` takes
+  `func_ids` + `program` (callee ref + callee arity per `Call`). The fixpoint "Call result = Int + reject
+  the whole graph if any function is ineligible" is enforced by build failing atomically on any non-int
+  return. Provenance clears on `Call` (safe over-reject). 27 jit tests (+2 u2b: a→b→c cross-function
+  chain vs VM oracle; cross-call fault propagation carrying the callee's code 2 through the shared
+  fault_exit) + full workspace/PHP-oracle (1804 passed) + clippy(jit)/fmt/non-jit-build green. Still
+  UNWIRED. NEXT = **b3b** (wire `phg run` — THE spine slice; advisor: take FRESH context; VM-fallback
+  owns fault rendering, `start_depth` from VM `frames.len()`, prove-the-JIT-path-is-hit) → re-measure
+  the 12-feature matrix → per-feature sweep.
 - [2026-07-08] 🎉 **u2a SHIPPED (pending commit) — G-8 MECHANISM PROVEN (fib, in isolation).** Native
   codegen beats php+JIT — but this is the MECHANISM proven in committed unit-tested code, NOT yet
   DELIVERED: the JIT is still UNWIRED, so a user running `phg` hits the VM. End-to-end delivery + the
