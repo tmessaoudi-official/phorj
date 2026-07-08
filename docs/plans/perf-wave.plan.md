@@ -5,6 +5,18 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 📊 **ovf-spec MEASURED (honest, fresh docker `php:8.5-cli`+JIT, best-of-3, release
+  `--features jit`).** Matrix: **fibrec 2.18× WIN** (recursion — branchless ovf-spec, clean); **intadd
+  0.77× LOSS** (was 0.55× at widen-1 → ovf-spec IMPROVED it, but still LOSS); 12 others LOSS (VM-only,
+  not JIT-eligible yet). Gate: `microbench-gate PASS` — 1 WIN / 13 LOSS, **0 flips, 0 blocking
+  regressions, all output-identical** (byte-identity holds on every micro). Baseline re-emitted (14
+  features) to LOCK fibrec's WIN into the ratchet. **VERDICT [Verified]:** ovf-spec is correct + a real
+  improvement (intadd 0.55→0.77, fibrec win preserved) but did NOT flip intadd — exactly the advisor's
+  prediction (loop-carried sticky OR + 1 back-edge branch/iter). **intadd LOSS is NOT a feature defect:**
+  php wins it only by LACKING overflow detection (silently promotes to float); phorj does strictly more
+  work. Per §14 the fix is NOT dropping the check but **range/no-overflow analysis** (prove a loop can't
+  overflow → drop its sticky+guard safely). TRACKED as the next int lever `RANGE-ANALYSIS` (deferred
+  behind the sequence). Do NOT weaken the back-edge guard to recover the loss.
 - [2026-07-09] 🌙 **OVERNIGHT AUTONOMY DIRECTIVE (developer, going offline until morning).** Standing
   orders, override the "stop on fork" rule: **(1) NO STOP until the developer returns** — work
   continuously, rely on auto-compaction, keep everything durable (commit each green slice, keep this
