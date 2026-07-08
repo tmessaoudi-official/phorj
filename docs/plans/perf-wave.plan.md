@@ -5,7 +5,29 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
-- [2026-07-08] PROGRESS: **b3b SHIPPED (pending commit) — `phg run` is JIT-wired; the perf win reaches
+- [2026-07-08] BASELINE (post-b3b matrix, jit binary vs docker php:8.5-cli+JIT, output-identity gated;
+  the "before" for the widening campaign). 14 features:
+  ```
+  fibrec        2.67x  WIN   (only unboxed-eligible feature)
+  webish        0.11x  LOSS  (realistic macro: VM 597ns vs php+JIT 67ns — the I/O-bound-challenge compass)
+  trycatch      0.47x  LOSS   interp 0.13  objalloc 0.12  match 0.06  closurecall 0.04
+  stringconcat  0.04x  LOSS   listindex/methodcall/floatarith 0.03  mapget 0.02  intadd/enum 0.01
+  ```
+  Every non-fibrec feature LOSES because it's outside the unboxed subset (loops/mutable/strings/etc →
+  VM). `webish` (route+template+fold, the realistic web-CPU slice) is ~9× behind php+JIT and will stay
+  VM-bound until the subset reaches strings+collections — int-loop widening alone won't move it. All
+  checksums identical vs docker php (output-identity holds). Ratios are best-of-3 on a shared box —
+  gate on WIN/LOSS, not magnitude. NEXT: mutable-locals slice → re-measure this matrix.
+- [2026-07-08] AGREED (developer): **NEXT = incrementally widen the unboxed subset, mutable locals
+  FIRST**, then `while`, then `for` — snapshot baseline at step 0, measure the 12-feature matrix +
+  commit after each construct (one green slice each, marathon rhythm). Rationale: spine-sensitive
+  codegen; isolating one construct per commit makes a byte-identity break findable (vs a big-bang
+  bundle). Ceiling / risk / realistic-workload strategy discussion opened before coding starts.
+- [2026-07-08] AGREED (developer, §15): **jit-on-by-default in stock `phg` — DECIDE AFTER the matrix
+  re-measure**, with data on how many real programs actually benefit from the widened subset. Until
+  then the JIT stays `--features jit` opt-in. Next direction: **combine widen-subset + re-measure**
+  (developer wants both; explanation of "unboxed subset" requested first before starting).
+- [2026-07-08] PROGRESS: **b3b SHIPPED (`2b506e8`) — `phg run` is JIT-wired; the perf win reaches
   the CLI.** `Op::Call` hook routes unboxed-eligible callees to native code (compile-once shared
   `JitCache`), VM-fallback on any fault. `phg run examples/fib.phg` now runs `fib` natively.
   Green: differential under `--features jit` + PHP-8.5.8 oracle = 144 examples byte-identical

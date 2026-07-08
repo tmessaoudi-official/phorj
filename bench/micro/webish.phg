@@ -1,0 +1,38 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.String;
+
+// Macro/realistic workload (NOT a single-feature microbench): a CPU-realistic slice of a web
+// response — route a path (map lookup), render a small templated string, fold the rendered length +
+// handler id into a checksum. Mixes map-get, list-index, string interpolation, a method call
+// (String.length), arithmetic, and a loop with mutable accumulators — i.e. the CPU a real request
+// spends OUTSIDE I/O (templating / serialization / routing). Deterministic; Core.Runtime only
+// brackets the timing, it is not part of the work. This is the "does JIT widening move a realistic
+// program?" compass: it stays VM-bound until the unboxed subset reaches strings + collections (int
+// loops alone won't touch it), which is exactly the honest signal for the web perf story.
+function bench(int iters): int {
+    Map<string, int> routes = ["/" => 1, "/users" => 2, "/posts" => 3, "/about" => 4];
+    List<string> paths = ["/", "/users", "/posts", "/about"];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        string path = paths[i % 4];
+        int handler = routes[path];
+        string body = "handler={handler} path={path}";
+        acc = acc + String.length(body) + handler;
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("webish\t{d / iters + guard}\t{acc}");
+}
