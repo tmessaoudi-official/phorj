@@ -28,6 +28,25 @@
   path). TDD proof obligations: overflow-mid-loop → same fault+line as VM; div-zero-AFTER-overflow →
   OVERFLOW fault (ordering!); pure div-zero (no prior ovf) → div-zero fault; MIN÷-1; neg-MIN; non-overflow
   loop → wrapping==checked value. **STILL spine-sensitive; advisor byte-identity review is the real gate.**
+  **STATUS 2026-07-08:** design certified (advisor-3C clean); the two ORDERING/transient guards landed
+  green (`4867b2d`, `src/jit/tests.rs`). CODEGEN deferred to FRESH context. **IMPL CHECKLIST (advisor-3C):**
+  (1) `RedoOnVm` resolved INTERNALLY at the two entries (`compile_and_run` + the b3b `Op::Call` hook both
+  re-run the callee on the VM) so the PUBLIC `JitRun` stays `Value`/`Fault` — existing entry tests
+  (`jit_overflow_faults…`, `jit_division_by_zero…`) must stay green. If `JitRun` gains a variant anyway,
+  `grep 'JitRun::'` every match (tests/benchmark/disassemble/playground) — no `_` arm (Op-variant coupling).
+  (2) Seed the sticky Variable to 0 on the entry block, all paths (like the filler-0 locals seed) — an
+  unseeded read = verifier fail / spurious redo. (3) `sadd_overflow`'s result[0] IS the wrapped value —
+  push it, OR result[1] into sticky; DELETE the `fault_if`, do NOT add a separate `iadd`. Keep the diff
+  tiny. (4) Verify the redo re-runs the callee from the ORIGINAL args (the hook must not have consumed/
+  mutated the operand-stack args before deciding to redo). (5) **COUPLING INVARIANT (write into
+  INVARIANTS.md):** every faulting op in the unboxed subset MUST set sticky or exit(5); a future subset
+  widening to a new faulting op (shift, checked `as`, pow) that forgets this = a SILENT byte-identity P0
+  (wrapped success masks a VM fault) — same class as the Op-variant / CTy-operand MUST-CHECKs.
+  **PERF (the whole point):** the sticky OR is a loop-carried dependency (phi at the loop header, serial
+  chain). After green, re-measure `intadd` vs a FRESH docker `php:8.5-cli`+JIT baseline (do NOT reuse a
+  stale one — that trap already bit once this session); gate WIN/LOSS not magnitude. If intadd still
+  LOSES, the sticky chain is the prime suspect → next lever = accumulate-at-loop-exit or range/no-overflow
+  analysis, NOT more widening.
 - [2026-07-08] ✅ **AGREED (developer) — commit-gate speed: root-caused to opt-level-0 + 2 monster
   sweeps; NOT test-less-often. FINAL: deps-opt2 + workspace-opt1 + nextest + speed-tier + `--features jit`.**
   Measured pain: per-commit `cargo test` = **126s SERIAL** (8 cores). Diagnosis (Rule 14 applied to test
