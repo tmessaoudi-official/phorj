@@ -5,9 +5,43 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🌙 **OVERNIGHT AUTONOMY DIRECTIVE (developer, going offline until morning).** Standing
+  orders, override the "stop on fork" rule: **(1) NO STOP until the developer returns** — work
+  continuously, rely on auto-compaction, keep everything durable (commit each green slice, keep this
+  plan + MEMORY current every slice so nothing is lost). **(2) NEVER ask** — design forks / §15
+  adjudication questions are PARKED here as `PENDING-DECISION` (minimal failing program + option
+  previews per §15) and I move to the next buildable item; do NOT block. **(3) Scope:** finish the perf
+  sequence (floats → §15 jit-default flip → strings), THEN take the CLEAR (ruled, unblocked) MASTER-PLAN
+  sections + MORE SUGAR. **(4) HARD BAR:** every feature must be BETTER than PHP, or at least EQUAL —
+  never worse. Security + typing + error-detection + every non-PHP feature are non-negotiable (§14
+  ladder: surface+PENDING, never silent downgrade; no perf win at their expense). **(5) Perf claims**
+  only vs a FRESH docker php:8.5-cli+JIT baseline, gate WIN/LOSS not magnitude ([[perf-benchmarking-truth]]).
+  Advisor (the reviewer tool, not the developer) stays IN the loop for spine-sensitive slices; a 5-round
+  advisor cap → park the finding as PENDING and continue (don't ask).
 - [2026-07-09] 🏁 **MARATHON START (developer: "very big perf wave, finish all of it") — full autonomous
   run of the queued sequence ovf-spec → floats → §15 jit-default flip → strings; AUTO-COMMIT each green
   slice, NO push (developer pushes). Stop only on a genuine §14/§15 fork or a 5-round advisor cap.**
+- [2026-07-09] ✅ **ovf-spec CODEGEN SHIPPED (`2b77b9b`, gate-green, unpushed).** Speculative wrapping
+  int arith + sticky-flag Variable + back-edge guard + code-5 VM-redo, exactly as the advisor-3C design.
+  45 jit tests (5 new end-to-end `ovf_spec_*` + 8 re-pointed funnel tests) + full workspace (1556 lib +
+  differential + conformance-minus-decimal + 12 + 27) + clippy(both) + fmt + release, green. INVARIANTS
+  #13 records the coupling MUST-CHECK. NEXT: honest re-measure intadd vs FRESH docker php+JIT (advisor
+  predicts it may NOT flip — back-edge guard adds ~1 branch/iter to tight single-accum loops; that is
+  the RANGE/no-overflow-analysis trigger, NOT a reason to weaken the guard). ⚠ **PRE-EXISTING RED (NOT
+  ovf-spec, reproduced on clean HEAD via stash):** the decimal conformance PHP-oracle test fails —
+  `bcmul()` undefined because php-8.5.8 loads bcmath as a SHARED ext, and the harness runs php `-n -d
+  extension=bcmath` WITHOUT an `extension_dir`, so the `.so` never loads. See PENDING-DECISION below.
+- [2026-07-09] 🅿️ **PENDING-DECISION: bcmath conformance-oracle gap (pre-existing, blocks the FULL
+  `PHORJ_REQUIRE_PHP=1` oracle on decimal).** `tests/conformance.rs::php_n_args` runs php with `-n`
+  (no ini) and, when bcmath is not a BUILT-IN (static) extension, adds `-d extension=bcmath` — but this
+  phpbrew php-8.5.8 build has bcmath as a shared `.so`, which needs `-d extension_dir=<dir>` to load
+  under `-n`. Repro: `PHORJ_REQUIRE_PHP=1 cargo test -p phorj --test conformance` → `Call to undefined
+  function bcmul()`. Options for the developer: (A) harness adds `-d extension_dir=$(<oracle-php> -i |
+  grep extension_dir)` when falling back — RECOMMENDED, keeps `-n` determinism, one-line-ish fix; (B)
+  rebuild php-8.5.8 with `--enable-bcmath` static (toolchain change, heavier); (C) quarantine the
+  decimal transpile-conformance case under a "no-bcmath" skip with a loud SKIP (loses oracle coverage
+  for decimal). I did NOT self-rule (it touches the PHP-oracle spine); for the overnight run I treat
+  this ONE failure as a known HEAD baseline and gate later slices on "no NEW oracle failures vs it".
 - [2026-07-09] 🔬 **ovf-spec ADVISOR-3C REFINEMENT (fresh context, pre-codegen) — Concern A confirmed
   BLOCKING; back-edge sticky guard added to the minimal slice.** The advisor killed the "speculative
   wrapping non-termination is only pathological/astronomical" rationalization with a trivial eligible
