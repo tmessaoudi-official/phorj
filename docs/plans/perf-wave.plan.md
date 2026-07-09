@@ -5,6 +5,29 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🎯 **NEXT LEVER AGREED (developer): RANGE-ANALYSIS.** ⚠️ **HONEST SCOPE (corrected — I
+  over-claimed "flips BOTH floatmul AND intadd" in the ask; it does NOT):**
+  • **floatmul → WIN (definite):** its residual is the LOOP COUNTER `i=i+1` guarded by `i<iters` — a
+    classic induction variable, provably bounded (`i ≤ iters ≤ i64::MAX` at the increment). Drop its
+    ovf-spec guard + the back-edge sticky check soundly → floatmul flips parity→WIN.
+  • **intadd → PARTIAL only:** its overhead is the ACCUMULATOR `acc+=step`, unbounded across iterations
+    with unbounded params → NOT statically provable-safe in general. Range-analysis drops intadd's
+    *counter* guard (an improvement) but NOT the accumulator's. Full intadd parity/win needs the opt-in
+    `unchecked` (plan part 4) or the §14 safety-adjusted framing — NOT range-analysis.
+  **DESIGN SKETCH (for the fresh-context build):** a sound prove-or-keep pre-pass (shape like
+  `unboxed_proven_param_kinds`) flagging per-int-op "provably-no-overflow". Highest-value first case =
+  INDUCTION VARIABLES: an increment `iv = iv + c` (small const `c`) DOMINATED by a loop guard
+  `iv </<=/>/>= bound` is bounded by `bound` ⇒ `iv+c` can't overflow when `bound ≤ i64::MAX` (always) —
+  covers every `for`/`while` counter, incl. floatmul's. build_body_unboxed then emits plain `iadd` (no
+  `sadd_overflow`, no `accumulate_sticky`) for flagged ops, and OMITS the back-edge `fault_if(sticky)`
+  only when NO unproven speculated op remains on that loop's carried path. **SOUND/CONSERVATIVE:**
+  unprovable ⇒ keep the check (status quo); never weaken (§14). **MUST-CHECK guards:** (a) the `spin()`
+  non-termination case still faults (its wrapping op is NOT induction-bounded ⇒ keeps its guard);
+  (b) differential where a PROVEN-safe counter coexists with an UNPROVABLE accumulator — only the
+  counter's guard drops, the accumulator still faults on overflow in correct order. Spine-sensitive
+  (checker/pre-pass + compiler + JIT guard-dropping) → FRESH context + advisor 3C on the concrete
+  pre-pass design + full `PHORJ_REQUIRE_PHP=1` gate + re-dump asm (confirm counter guard gone) +
+  interleaved re-measure. Effort MEDIUM-LARGE.
 - [2026-07-09] ✅📊 **STEP 2b SHIPPED + MEASURED — dual-space (ivars/fvars) float value model
   (`5112967`, full gate green, unpushed).** Each stack depth now has TWO Cranelift Variables:
   `vars[d]` (I64) + `fvars[d]` (F64); `kinds[]` selects the live space per depth (edge-consistency
