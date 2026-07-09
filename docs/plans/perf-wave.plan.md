@@ -5,6 +5,52 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🔬✅ **STEP 1 DONE — floatmul 4.5× ROOT-CAUSED [Verified] via native VCode dump.**
+  Temporary `PHORJ_JIT_DUMP` seam (set_disasm + compiled_code().vcode; reverted clean, mod.rs pristine)
+  dumped `bench`'s register-allocated asm. The hot loop (`block4`) does **6 `vmovq` GPR↔XMM domain
+  crossings per iteration** + **rematerializes the loop-invariant `0.5` (`movabsq`) every iteration** +
+  shuttles `r` GPR→XMM every iteration. ROOT CAUSE [Verified]: the `float-as-i64-bits` uniform-cell
+  design (`vars` all `types::I64`, mod.rs:1294) pins every float in a GPR; each `MulF`/`AddF` bitcasts
+  I64→F64 (a `vmovq`), ops, bitcasts back — and Cranelift baseline (no LICM) never hoists the invariant
+  const/param. PHP keeps `acc`/`r`/`0.5` resident in XMM (mulsd/addsd only, ~4 insns, zero crossings) →
+  the whole 4.5×. NOT a VM↔JIT bounce (advisor's guess) and NOT reassociation/vectorization (which is
+  byte-identity-FORBIDDEN). **FIX (Step 2, spine-sensitive): keep always-float slots in an XMM (F64)
+  register**, bitcast only at the I64 ABI boundary (entry params + Return), not per-op.
+  **Byte-identity-SAFE** — same ops, same order, correct register file (no FP reorder). ⚠️ **SPINE P0
+  (advisor-caught) — the fix is NOT "float cells F64":** `vars` are indexed by stack DEPTH, not source
+  variable, so a depth slot is NOT monomorphic in kind (`int a=f()+1; float b=g()+1.0;` reuses depths
+  0/1 for int THEN float). Cranelift `Variable`s are single-typed → `def_var` I64 then F64 on one slot =
+  a verifier type-conflict. floatmul passes ONLY because its slots are monomorphic → the green gate
+  would MASK this. Correct scope = **(a) monomorphic-slot-aware F64** (F64 only for slots always-float
+  across the fn; keep I64+bitcast for any polymorphic slot — degrades gracefully, sound by construction,
+  RECOMMENDED) or **(b) parallel ivars[d]/fvars[d] spaces** selected by `kinds[d]`. **MANDATORY
+  differential case: a program reusing ONE stack depth for both an int and a float.** NECESSARY≠
+  SUFFICIENT: Cranelift baseline won't LICM the invariant `0.5`/`r` — the `movabsq`-per-iter may persist
+  as a cheaper XMM materialization; RE-DUMP asm + RE-MEASURE vs fresh docker php:8.5+JIT before claiming
+  float parity (likely reveals a 2nd hand-LICM lever). Int RANGE-ANALYSIS compounds here (removes the
+  `seto/or/test/jnz` counter-guard machinery visible in block4). Do in FRESH context + advisor review.
+- [2026-07-09] 🔒 **PLAN LOCKED (developer, live): 3-part "never-worse, sacrifice-nothing" plan.**
+  Sequence: **(1)** Rule-14 diagnose floatmul's 4.5× FIRST (disassemble both sides, confirm per-iteration
+  VM↔JIT overhead hypothesis — cheap, evidence before any codegen bet); **(2)** range-analysis auto-drop
+  (checker proves no-overflow → drop check+back-edge-guard → native speed + full safety, the workhorse
+  that closes the int gap where provable — the static-typing win PHP can't have); **(3)** adaptive
+  tiering (pick fastest of {VM,JIT,AOT} per fn/loop = never-worse-than-our-own-best engine); **(4)**
+  opt-in `unchecked`/`wrapping` arithmetic as the escape hatch for the unprovable residual (Rust model —
+  default stays SAFE, user ELECTS raw speed per-site). Rationale = the residual trilemma: (a) literal
+  never-worse + (b) always-safe + (c) zero-opt-in can't all hold for provably-undecidable overflow; the
+  plan bends (c) so the DEFAULT sacrifices nothing. Float unroll/vectorize FORBIDDEN (FP reassociation →
+  Inv #1). AOT (C) is the strategic endgame that tiering grows into. Commit each green slice.
+- [2026-07-09] ⭐ **GOVERNING CONSTRAINT (developer, live): "everything faster OR AT LEAST THE SAME —
+  NEVER worse."** Bar tightened from "better than PHP" to **never-worse-than-PHP, per feature, no
+  exceptions.** This is a stronger but cleaner target: it is an *adaptive-tiering* problem (pick the
+  fastest of {VM, JIT, AOT} per fn/loop → never worse than our own best) + closing the two measured
+  identical-/near-semantics gaps, NOT a single-lever race. The ONE genuine collision: overflow checking
+  (PHP is faster on intadd ONLY by silently promoting overflow to float — doing less). Resolution is a
+  §15 call re-asked to the developer (range-analysis auto-drop + Rust-model opt-in unchecked/release
+  overflow-off, vs safety-adjusted bar). MANDATORY groundwork regardless of the fork: (1) Rule-14
+  diagnose floatmul's UNDIAGNOSED 4.5× (identical fadd/fmul yet ~4.5× slower ⇒ per-iteration VM↔JIT
+  overhead suspected, NOT codegen) BEFORE any codegen bet; (2) adaptive tiering as the never-worse
+  engine. Float unroll/vectorize is byte-identity-FORBIDDEN (FP reassociation → different bits, Inv #1).
 - [2026-07-09] ✅ **6C: float comparison-guard VERIFIED sound.** The advisor flagged one unverified link
   (could a known-Int operand pair with an Unknown-FLOAT param → `icmp` on float bits?). CHECKED: the
   checker REJECTS `float < int` ("comparison requires matching int or float operands", checker/…) — so a
