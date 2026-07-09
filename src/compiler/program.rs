@@ -562,6 +562,13 @@ pub(super) fn compile_program_with(
             name: f.name.clone(),
             arity: f.params.len(),
             n_captures: 0, // named free functions are never constructed as closures
+            // `#[Unchecked]` (import Core.Unchecked): the single source of the wrap fact — the checker has
+            // already validated the attribute (recognized + import-gated), so its mere presence flips the
+            // whole function's int arithmetic to the wrapping kernels on every backend.
+            unchecked: f
+                .attrs
+                .iter()
+                .any(|a| matches!(a.name.as_str(), "Unchecked" | "Core.Unchecked")),
             chunk: c.chunk,
         });
         // Drain any lambda sub-functions emitted during this body's compilation.
@@ -774,7 +781,8 @@ pub(super) fn compile_constructor<'a>(
         Function {
             name: format!("{}::new", c.name),
             arity: all_params.len(),
-            n_captures: 0, // constructors are never closures
+            n_captures: 0,    // constructors are never closures
+            unchecked: false, // `#[Unchecked]` is free-function-only (parser rejects it on methods/ctors)
             chunk: comp.chunk,
         },
         comp.extra_functions,
@@ -854,7 +862,8 @@ pub(super) fn compile_method<'a>(
         Function {
             name: format!("{class_name}::{}", f.name),
             arity: 1 + f.params.len(),
-            n_captures: 0, // methods are never closures
+            n_captures: 0,    // methods are never closures
+            unchecked: false, // `#[Unchecked]` is free-function-only (parser rejects it on methods)
             chunk: comp.chunk,
         },
         comp.extra_functions,

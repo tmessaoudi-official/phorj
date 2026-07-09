@@ -22,17 +22,36 @@ impl<'a> Vm<'a> {
             // calls the *same* functions, so the checked-op / div-zero / overflow fault path
             // is structurally identical across both backends (the Wave 0 `Op::Neg` divergence
             // class can no longer reopen).
+            // `#[Unchecked]` (import Core.Unchecked): a function marked unchecked WRAPS int `+`/`-`/`*`
+            // (and unary `-`) on overflow instead of faulting — the single fn-level flag is read here,
+            // the interp reads the same flag, and both call the same `value::int_wrapping_*` kernel, so
+            // wrapping is byte-identical across backends (Inv-4). `Ok(..)` reuses `push_i` (never errors).
             Op::AddI => {
                 let (a, b) = self.pop2_int()?;
-                self.push_i(crate::value::int_add(a, b))?;
+                let r = if self.program.functions[func].unchecked {
+                    Ok(crate::value::int_wrapping_add(a, b))
+                } else {
+                    crate::value::int_add(a, b)
+                };
+                self.push_i(r)?;
             }
             Op::SubI => {
                 let (a, b) = self.pop2_int()?;
-                self.push_i(crate::value::int_sub(a, b))?;
+                let r = if self.program.functions[func].unchecked {
+                    Ok(crate::value::int_wrapping_sub(a, b))
+                } else {
+                    crate::value::int_sub(a, b)
+                };
+                self.push_i(r)?;
             }
             Op::MulI => {
                 let (a, b) = self.pop2_int()?;
-                self.push_i(crate::value::int_mul(a, b))?;
+                let r = if self.program.functions[func].unchecked {
+                    Ok(crate::value::int_wrapping_mul(a, b))
+                } else {
+                    crate::value::int_mul(a, b)
+                };
+                self.push_i(r)?;
             }
             Op::DivI => {
                 let (a, b) = self.pop2_int()?;
@@ -114,6 +133,10 @@ impl<'a> Vm<'a> {
             Op::Neg => match self.pop() {
                 // `value::int_neg` is shared with the interpreter (`eval_unary`): negating
                 // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
+                // `#[Unchecked]`: wrap (`-i64::MIN` → `i64::MIN`) instead of faulting.
+                Value::Int(n) if self.program.functions[func].unchecked => {
+                    self.push_i(Ok(crate::value::int_wrapping_neg(n)))?
+                }
                 Value::Int(n) => self.push_i(crate::value::int_neg(n))?,
                 Value::Float(x) => self.stack.push(Value::Float(-x)),
                 // `decimal` negation via the shared kernel (M-NUM S1): checked, never `-0`.

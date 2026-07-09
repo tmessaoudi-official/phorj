@@ -690,6 +690,29 @@ pub fn int_neg(n: i64) -> Result<i64, String> {
     n.checked_neg()
         .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
 }
+
+// --- `#[Unchecked]` wrapping kernels (perf-wave): two's-complement wrapping arithmetic for a function
+// marked `#[Unchecked]` (import Core.Unchecked). Overflow WRAPS (never faults) — the opt-in escape hatch.
+// Single-sourced like the checked kernels (Inv-4): interp, VM, and JIT all call these for an unchecked fn,
+// so the wrapping result is byte-identical across backends by construction. Div/Rem stay CHECKED even in
+// an unchecked fn (div-by-zero must always fault) — no wrapping sibling. `#[Unchecked]` has no faithful
+// PHP analog (PHP overflow→float), so a using function is `E-TRANSPILE-UNCHECKED` (§14 LADDER).
+/// Wrapping integer addition (`#[Unchecked]`): `i64::MAX + 1` → `i64::MIN`, never faults.
+pub fn int_wrapping_add(a: i64, b: i64) -> i64 {
+    a.wrapping_add(b)
+}
+/// Wrapping integer subtraction (`#[Unchecked]`).
+pub fn int_wrapping_sub(a: i64, b: i64) -> i64 {
+    a.wrapping_sub(b)
+}
+/// Wrapping integer multiplication (`#[Unchecked]`).
+pub fn int_wrapping_mul(a: i64, b: i64) -> i64 {
+    a.wrapping_mul(b)
+}
+/// Wrapping integer negation (`#[Unchecked]`): `-i64::MIN` → `i64::MIN`, never faults.
+pub fn int_wrapping_neg(n: i64) -> i64 {
+    n.wrapping_neg()
+}
 /// `Math.integerDivide(a, b)` (M-NUM S3): integer division truncating toward zero (PHP `intdiv`). `b == 0`
 /// is [`FAULT_DIV_ZERO`]; `i64::MIN / -1` overflows ([`FAULT_INT_OVERFLOW`]) — both clean faults, never
 /// a panic (EV-7). Distinct from [`int_div`] only in name/intent (both truncate toward zero); kept

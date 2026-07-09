@@ -35,6 +35,50 @@
     them at fault-construction (more than a text tweak). Keep `agree_err` green.
   • Suggested slice order: (a) `Math.try*` + message [smaller] → (b) `unchecked {}` [the spine slice,
     fresh context, advisor 3C on the Op decision]. intadd WIN lands with (b).
+  **FINAL DESIGN (developer revised 2026-07-09): `#[Unchecked]` ATTRIBUTE, whole-function, import-gated
+  `import Core.Unchecked;` — NOT the block.** Whole-function granularity ⇒ the wrap fact is a SINGLE
+  bool on the function (`unchecked`), set by the checker from the attribute, READ by interp/VM/JIT/
+  transpile. This DELETES the per-arith-node marking AND the 4 new Ops: no `Expr::Binary` field (no 43
+  construction sites), no `AddIWrap` variants (no Inv-3 trio churn). Implementation: (1) `Core.Unchecked`
+  importable attribute; checker recognizes `#[Unchecked]` (import-gated) → sets `FunctionDecl.unchecked`;
+  (2) compiler copies the flag to the bytecode `Function`; (3) `value.rs` `wrapping_{add,sub,mul,neg}`
+  kernels (Inv-4); (4) interp: an unchecked function's int `+`/`-`/`*`/unary-`-` use wrapping kernels
+  (read the fn flag); (5) VM `exec_op` AddI/SubI/MulI/Neg: read the current frame's fn flag → wrapping vs
+  checked (one predictable branch; VM isn't the perf target); (6) JIT `build_body_unboxed`: if
+  `func.unchecked`, treat ALL int arith as range-proven (plain `iadd`, not `speculated()` → needs_sticky
+  false) — reuses the range-analysis machinery, NO new code path; (7) transpile: an `#[Unchecked]` fn →
+  `E-TRANSPILE-UNCHECKED` + differential quarantine (run≡runvm only). Div/Rem stay checked (div-zero
+  always faults). Single-source (one fn bool, all backends read it) ⇒ no interp/compiler divergence. THE
+  test: run≡runvm on an unchecked fn exercising `+`/`-`/`*`/`-` incl. an overflowing case (wraps, no
+  fault) + a checked sibling fn that still faults. intadd WIN = mark its hot fn `#[Unchecked]` (prove
+  hits>0, --features jit, interleaved). Get an advisor byte-identity review before the spine commit.
+  **[SUPERSEDED below: the block + per-node-mark + 4-Ops plan.]**
+  **REFINED DESIGN (advisor-3C 2026-07-09, developer chose build-in-this-context + accepted the masked-P0
+  risk → mitigate via single-source + advisor byte-identity review before commit):**
+  ⭐ **SINGLE-SOURCE THE WRAP FACT (Inv-5, `ast-field-carries-checker-fact-to-compiler`)** — do NOT use two
+  independent depth-trackers (interp runtime depth + compiler compile depth); their must-agree is the
+  masked-P0 surface. Instead: the CHECKER (knows types + lexical nesting) marks each INT `+`/`-`/`*`/`Neg`
+  AST node inside an `unchecked` region with `wrapping=true`; interp reads the flag (→ wrapping kernel),
+  compiler reads it (→ `AddIWrap`/…), transpiler reads it (→ `E-TRANSPILE-UNCHECKED`). One decision, all
+  backends consume it → interp/compiler divergence CANNOT happen (strictly better than post-hoc agreement).
+  Compound-assign `+=` becomes desugaring-order-proof (the mark rides the final arith node). Div/Rem stay
+  checked inside `unchecked` (div-zero must always fault); Neg IS covered (`-MIN` faulting inside
+  `unchecked` would be surprising). Decide+document whether `unchecked {}` opens a lexical scope (make
+  checker/interp/compiler agree; not P0).
+  **New-op site list (miss one → false-green):** Inv-3 trio (`vm::exec_op` + `chunk::validate` +
+  `compiler::stack_effect`) + `collect_functions_unboxed` (ELIGIBILITY — miss → silent VM fallback, no
+  WIN) + `unboxed_analyze` stack-effect + `build_body_unboxed` arm (treat like a range-proven AddI: plain
+  `iadd`, NOT `speculated()` → does not force `needs_sticky`) + the interp arith + value.rs kernels.
+  **THE certification test (not `acc=acc+i`):** a differential putting EVERY arith form inside `unchecked`
+  — compound `+=`, call-arg subexpr `f(a+b)`, nested `(a+b)*c`, `Neg` — asserting run≡runvm.
+  **Commit sequence:** (1) minimal subset intadd needs → intadd LOSS→WIN (prove `hits>0`, `--features jit`
+  binary, interleaved measure — the floatmul lesson); (2) extend arith coverage. INVARIANT per commit:
+  interp + compiler cover the IDENTICAL subset (a not-yet-covered form stays checked in BOTH — safe
+  partial, never one-but-not-the-other). Verify the differential quarantine actually skips the PHP leg for
+  `E-TRANSPILE-UNCHECKED` BEFORE committing an unchecked example. `Math.try*` PHP helper must detect the
+  i64 boundary (result went float / > PHP_INT_MAX) → null; test `tryAdd(PHP_INT_MAX,1)` on the real PHP leg.
+  NOTE: the checked+wrap mix in one JIT fn = the SAME shape as the already-tested proven-counter/unproven-
+  accumulator coexist case (wrap = no-sticky like proven; checked = sticky) → redo contract already proven.
 - [2026-07-09] 🧭 **AGREED (developer, interactive): PERF-FIRST — do BOTH (1) ship opt-in `unchecked` →
   flip intadd LOSS→WIN, then (2) Tier-2 JIT breadth. Language/sugar DEFERRED** (accepted the challenge:
   11/15 micros lose to php; sugar adds VM-only losses + is fresh-context spine work). Next action = the

@@ -2279,6 +2279,14 @@ fn all_examples_transpile_and_match_php() {
                 eprintln!("SKIP (concurrency/quarantined) {label}");
                 continue;
             }
+            // `#[Unchecked]` (Core.Unchecked) wrapping int arithmetic has NO PHP target
+            // (`E-TRANSPILE-UNCHECKED`, §14 LADDER) — PHP overflows int→float, which would diverge from
+            // the VM's two's-complement wrap. Quarantined from the oracle like `spawn`; run≡runvm still
+            // gates it byte-identically.
+            Err(e) if e.contains("E-TRANSPILE-UNCHECKED") => {
+                eprintln!("SKIP (unchecked/quarantined) {label}");
+                continue;
+            }
             // A transpiler feature the backend explicitly defers (e.g. literal `match` patterns,
             // expr-position `match`, `is` — all scheduled for M11). This is NOT a silent skip: it's
             // logged + counted, and a genuine transpile regression (any other error) still panics.

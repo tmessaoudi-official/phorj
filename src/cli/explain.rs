@@ -1176,6 +1176,22 @@ pub fn explain_text(code: &str) -> Option<String> {
              spine. So `spawn`/channel programs run on `phg run` / `phg runvm` only (byte-identically),\n\
              and `phg transpile` rejects them rather than emitting misleading PHP (M6 W4).\n"
         }
+        "E-TRANSPILE-UNCHECKED" => {
+            "E-TRANSPILE-UNCHECKED — an `#[Unchecked]` function cannot be transpiled to PHP.\n\n\
+             `#[Unchecked]` (import Core.Unchecked) makes a function's int `+`/`-`/`*`/unary-`-` WRAP on\n\
+             overflow (two's-complement, like C/Rust) instead of faulting. PHP has no wrapping int — it\n\
+             silently promotes an overflowing int to float — so a transpiled `#[Unchecked]` program would\n\
+             behave differently under PHP than on the Phorj VM/interpreter, breaking the byte-identical\n\
+             spine (§14 LADDER). So `#[Unchecked]` functions run on `phg run` / `phg run --tree-walker`\n\
+             only (byte-identically), and `phg transpile` rejects them rather than emitting misleading\n\
+             PHP. If you want PHP-transpilable code, drop `#[Unchecked]` (the default faults on overflow),\n\
+             or handle overflow explicitly with `Math.tryAdd/trySub/tryMul(a, b): int?`.\n"
+        }
+        "E-UNCHECKED-ARGS" => {
+            "E-UNCHECKED-ARGS — `#[Unchecked]` was given arguments.\n\n\
+             `#[Unchecked]` is a bare marker attribute — it takes no arguments. Write it as `#[Unchecked]`\n\
+             directly above a top-level `function` (with `import Core.Unchecked;`).\n"
+        }
         "E-SPAWN-NOT-CALL" => {
             "E-SPAWN-NOT-CALL — `spawn` was applied to something that is not a call.\n\n\
              `spawn` starts a green task from a function/method call: `spawn work(x)`. It cannot wrap a\n\

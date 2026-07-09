@@ -46,6 +46,7 @@ impl<'c> Interp<'c> {
             frame: CallScopes::new(),
             this: None,
             cur_class: None,
+            cur_unchecked: false,
             parent_parents: std::collections::BTreeMap::new(),
             parent_mro: std::collections::BTreeMap::new(),
             out: String::new(),
@@ -127,7 +128,9 @@ fn run_task_call(
     body: &[Stmt],
     args: Vec<Value>,
 ) -> Result<Value, String> {
-    match task.run_call(fn_name, names, body, args, None, None) {
+    // Concurrency is run≡runvm-only + LADDER-excluded from PHP; `#[Unchecked]` inside a spawned task is
+    // not supported this slice (no decl/attrs threaded here) → checked. Documented in KNOWN_ISSUES.
+    match task.run_call(fn_name, names, body, args, None, None, false) {
         Ok(v) => Ok(v),
         Err(Signal::Return(v)) => Ok(v),
         Err(Signal::Runtime(d)) => Err(d.message),

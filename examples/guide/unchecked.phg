@@ -1,0 +1,39 @@
+package Main;
+
+import Core.Output;
+import Core.Unchecked;
+
+// `#[Unchecked]` (import Core.Unchecked) opts a WHOLE function into two's-complement WRAPPING integer
+// arithmetic: `+ - *` and unary `-` wrap on overflow (like C/Rust) instead of faulting. The DEFAULT —
+// any function without the attribute — treats integer overflow as a clean fatal fault (Phorj never
+// silently corrupts an int the way PHP does by promoting to float). `#[Unchecked]` is the explicit,
+// per-function escape hatch: use it for a hot loop where you have proven overflow cannot happen (the
+// JIT then drops the overflow guard for full native speed), or where you genuinely want wraparound.
+//
+// It has NO faithful PHP mapping (PHP overflow → float would diverge from the VM), so an `#[Unchecked]`
+// function is a hard `E-TRANSPILE-UNCHECKED` on the transpile leg and runs on the Phorj VM/interpreter
+// only — `phg run` ≡ `phg run --tree-walker` stay byte-identical; the PHP oracle is quarantined.
+#[Unchecked]
+function wrapAtMax(int start): int {
+    // At `i64::MAX` this wraps to `i64::MIN` instead of faulting.
+    return start + 1;
+}
+
+#[Unchecked]
+function sumWrapping(int n): int {
+    // A counted accumulator loop — the shape that wins on the VM/JIT once the overflow guard is dropped.
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < n) {
+        acc = acc + i;
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    Output.printLine("{wrapAtMax(9223372036854775807)}");
+    // -9223372036854775808 (wrapped, no fault)
+    Output.printLine("{sumWrapping(100)}");
+}
+// 4950 (no overflow — same as the checked default)

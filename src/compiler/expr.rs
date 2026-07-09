@@ -1050,6 +1050,8 @@ impl Compiler<'_> {
             name: format!("<lambda@{line}>"),
             arity: n_captures + params.len(),
             n_captures,
+
+            unchecked: false,
             chunk: sub.chunk,
         };
         self.extra_functions.push(lambda_fn);

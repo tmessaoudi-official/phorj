@@ -1784,3 +1784,51 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
         JitRun::Value(v) => panic!("expected redo (accumulator overflow), got {}", as_int(&v)),
     }
 }
+
+// --- `#[Unchecked]` (import Core.Unchecked): whole-function two's-complement wrapping int arithmetic.
+// The fn-level `unchecked` flag makes the JIT emit plain `iadd`/`isub`/`imul`/`ineg` (no overflow guard,
+// no sticky) — the WIN path (intadd LOSS→WIN) — and the result must be byte-identical to the VM, which
+// reads the same flag and calls the same `value::int_wrapping_*` kernels. ---
+
+#[test]
+fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
+    let program = compile_source(
+        "package Main;\n\
+         import Core.Unchecked;\n\
+         #[Unchecked]\n\
+         function wadd(int a, int b) -> int { return a + b; }\n\
+         #[Unchecked]\n\
+         function wsub(int a, int b) -> int { return a - b; }\n\
+         #[Unchecked]\n\
+         function wmul(int a, int b) -> int { return a * b; }\n\
+         function main() -> void {}",
+    );
+    // The overflow edges that WOULD fault in a checked function must WRAP here (no redo, no fault).
+    let cases: &[(&str, i64, i64, i64)] = &[
+        ("wadd", i64::MAX, 1, i64::MIN), // MAX + 1 wraps
+        ("wsub", i64::MIN, 1, i64::MAX), // MIN - 1 wraps
+        ("wmul", i64::MAX, 2, i64::MAX.wrapping_mul(2)),
+    ];
+    for &(name, a, b, want) in cases {
+        let f = func_index(&program, name);
+        match Compiled::compile_unboxed(&program, f)
+            .expect("an #[Unchecked] int fn is unboxed-eligible")
+            .run_unboxed(&[Value::Int(a), Value::Int(b)], 1)
+        {
+            JitRun::Value(v) => assert_eq!(
+                as_int(&v),
+                want,
+                "unchecked {name}({a},{b}) must WRAP to {want}, not fault"
+            ),
+            JitRun::Fault(m) => panic!("unchecked {name} must NOT fault (wraps), got {m}"),
+        }
+        // Byte-identity vs the VM oracle across the edges + an ordinary value.
+        for &(a, b) in &[(a, b), (2, 3), (-7, 5)] {
+            assert_eq!(
+                ub_int(&program, f, &[Value::Int(a), Value::Int(b)]),
+                vm_int(&program, f, vec![Value::Int(a), Value::Int(b)]),
+                "unchecked {name}({a},{b}) JIT must match the VM oracle"
+            );
+        }
+    }
+}

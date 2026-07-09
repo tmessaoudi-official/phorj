@@ -385,6 +385,10 @@ impl<'c> Interp<'c> {
     pub(super) fn eval_unary(&mut self, op: UnaryOp, expr: &Expr) -> R<Value> {
         let v = self.eval(expr)?;
         match (op, v) {
+            // `#[Unchecked]`: wrap (`-i64::MIN` → `i64::MIN`) instead of faulting; else checked.
+            (UnaryOp::Neg, Value::Int(n)) if self.cur_unchecked => {
+                Ok(Value::Int(crate::value::int_wrapping_neg(n)))
+            }
             (UnaryOp::Neg, Value::Int(n)) => match crate::value::int_neg(n) {
                 Ok(v) => Ok(Value::Int(v)),
                 Err(msg) => rt(msg),
@@ -425,7 +429,7 @@ impl<'c> Interp<'c> {
         let l = self.eval(lhs)?;
         let r = self.eval(rhs)?;
         match op {
-            Add | Sub | Mul | Pow | Div | Rem => arith(op, l, r),
+            Add | Sub | Mul | Pow | Div | Rem => arith(op, l, r, self.cur_unchecked),
             BitAnd | BitOr | BitXor | Shl | Shr => bitwise(op, l, r),
             Eq => Ok(Value::Bool(l.eq_val(&r))),
             NotEq => Ok(Value::Bool(!l.eq_val(&r))),

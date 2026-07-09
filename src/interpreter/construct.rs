@@ -118,6 +118,7 @@ impl<'c> Interp<'c> {
                 slice,
                 Some(Value::Instance(rc.clone())),
                 Some(rc.class.as_str()),
+                false, // constructors are never `#[Unchecked]` (free-function-only attribute)
             )?;
         }
         Ok(Value::Instance(rc))

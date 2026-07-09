@@ -393,6 +393,12 @@ pub struct Function {
     /// Number of captured values this closure pops off the enclosing stack at construction time
     /// (`Op::MakeClosure`). Always 0 for named functions, constructors, and methods.
     pub n_captures: usize,
+    /// `#[Unchecked]` (import Core.Unchecked): int `+`/`-`/`*`/unary-`-` in this function WRAP on overflow
+    /// (call the `value::int_wrapping_*` kernels) instead of faulting. Single source of the wrap fact —
+    /// interp, VM (`exec_op`), and JIT all read it; div/rem stay checked. A `true` function is
+    /// `E-TRANSPILE-UNCHECKED` (no PHP analog, §14 LADDER) and quarantined from the differential's PHP leg.
+    /// `false` for every function without the attribute (the common case).
+    pub unchecked: bool,
     pub chunk: Chunk,
 }
 
@@ -707,6 +713,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -735,6 +743,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -765,6 +775,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -810,6 +822,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -839,6 +853,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -867,6 +883,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c2,
             }],
             main: 0,
@@ -893,6 +911,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c3,
             }],
             main: 0,
@@ -919,6 +939,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c4,
             }],
             main: 0,
@@ -947,6 +969,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -978,6 +1002,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -1012,6 +1038,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,
@@ -1039,6 +1067,8 @@ mod tests {
                 name: "main".into(),
                 arity: 0,
                 n_captures: 0,
+
+                unchecked: false,
                 chunk: c,
             }],
             main: 0,

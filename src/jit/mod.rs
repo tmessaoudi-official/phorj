@@ -1381,10 +1381,16 @@ fn build_body_unboxed(
     //     never-jumped-to block would be a dangling exit — avoid it).
     let proven_ops = range_proven_ops(func);
     let speculated = |op: &Op| matches!(op, Op::AddI | Op::SubI | Op::MulI | Op::Neg);
-    let needs_sticky = code
-        .iter()
-        .enumerate()
-        .any(|(ip, op)| reach[ip] && speculated(op) && !proven_ops[ip]);
+    // `#[Unchecked]` (Core.Unchecked): the whole function's int arith WRAPS — every `AddI`/`SubI`/`MulI`/
+    // `Neg` becomes a plain wrapping op (no overflow check, no sticky), exactly like a range-proven
+    // counter but function-wide. So nothing speculates → `needs_sticky` is false, and the guard/back-edge/
+    // Return-select machinery is omitted entirely (the same WIN the range-analysis lever produces, but
+    // guaranteed here rather than proven). Div/Rem stay checked (div-zero must always fault).
+    let needs_sticky = !func.unchecked
+        && code
+            .iter()
+            .enumerate()
+            .any(|(ip, op)| reach[ip] && speculated(op) && !proven_ops[ip]);
     // `DivF` also branches to the fault-exit (a zero divisor → code 5), as do `DivI`/`RemI` (hardware
     // trap) and `Call` (depth guard + fault propagation) — every op that emits a `fault_if`/direct
     // `brif` to the shared exit must be counted here, or the block won't exist when it is needed.
@@ -1558,12 +1564,15 @@ fn build_body_unboxed(
             Op::AddI | Op::SubI | Op::MulI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                if proven_ops[ip] {
-                    // range-analysis: a provably-no-overflow induction increment (`AddI` only — see
-                    // `range_proven_ops`). Emit a plain `iadd`: its two's-complement result equals
-                    // `sadd_overflow`'s result[0] bit-for-bit (byte-identity ✓), but the overflow can
-                    // never occur, so no carry to fold and no sticky. This drops the counter's guard.
-                    let res = b.ins().iadd(av, bv);
+                // Plain (wrapping-free) when: `#[Unchecked]` (the whole fn wraps — all of AddI/SubI/MulI),
+                // OR a range-proven induction `AddI`. The two's-complement `iadd`/`isub`/`imul` result is
+                // bit-identical to `*_overflow`'s result[0] (byte-identity ✓); no fault, no sticky.
+                if func.unchecked || (matches!(op, Op::AddI) && proven_ops[ip]) {
+                    let res = match op {
+                        Op::AddI => b.ins().iadd(av, bv),
+                        Op::SubI => b.ins().isub(av, bv),
+                        _ => b.ins().imul(av, bv),
+                    };
                     ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
                 } else {
                     // ovf-spec: WRAPPING result + OR the overflow carry into sticky — NO per-op branch (the
@@ -1635,9 +1644,13 @@ fn build_body_unboxed(
                 // ovf-spec: -i64::MIN overflows on the VM, but `ineg` does NOT hardware-trap (it wraps
                 // MIN→MIN) — unlike div — so we speculate: fold `av == MIN` into sticky (no branch) and
                 // emit the wrapping `ineg`. A set sticky forces the redo at the next back-edge / Return.
-                let imin = b.ins().iconst(types::I64, i64::MIN);
-                let is_min = b.ins().icmp(IntCC::Equal, av, imin);
-                accumulate_sticky(&mut b, is_min);
+                // `#[Unchecked]`: `-i64::MIN` wraps to `i64::MIN` — plain `ineg`, no sticky. Else speculate
+                // (fold `av == MIN` into sticky) as before.
+                if !func.unchecked {
+                    let imin = b.ins().iconst(types::I64, i64::MIN);
+                    let is_min = b.ins().icmp(IntCC::Equal, av, imin);
+                    accumulate_sticky(&mut b, is_min);
+                }
                 let res = b.ins().ineg(av);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
             }

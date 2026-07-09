@@ -766,15 +766,30 @@ impl Checker {
     /// the route into a `.route(…)` registration). Front-end-only — attributes never reach a backend.
     pub(super) fn check_attributes(&mut self, f: &crate::ast::FunctionDecl) {
         for attr in &f.attrs {
+            // `#[Unchecked]` (import Core.Unchecked, perf-wave): marks the whole free function's int
+            // `+`/`-`/`*`/unary-`-` as WRAPPING (no overflow fault) — the opt-in perf escape hatch. Takes
+            // no arguments. The compiler reads the attribute's presence directly (single source of the
+            // wrap fact); a using function is `E-TRANSPILE-UNCHECKED` (no PHP analog, §14 LADDER).
+            if matches!(attr.name.as_str(), "Unchecked" | "Core.Unchecked") {
+                if !attr.args.is_empty() {
+                    self.err_coded(
+                        attr.span,
+                        "`#[Unchecked]` takes no arguments".to_string(),
+                        "E-UNCHECKED-ARGS",
+                        Some("write it bare: `#[Unchecked]`".into()),
+                    );
+                }
+                continue;
+            }
             if !matches!(attr.name.as_str(), "Route" | "Http.Route") {
                 self.err_coded(
                     attr.span,
                     format!(
-                        "unknown attribute `#[{}]` — only `#[Route(...)]` is supported",
+                        "unknown attribute `#[{}]` — only `#[Route(...)]` and `#[Unchecked]` are supported",
                         attr.name
                     ),
                     "E-UNKNOWN-ATTRIBUTE",
-                    Some("remove it, or use `#[Route(\"GET\", \"/path\")]`".into()),
+                    Some("remove it, or use `#[Route(\"GET\", \"/path\")]` / `#[Unchecked]`".into()),
                 );
                 continue;
             }

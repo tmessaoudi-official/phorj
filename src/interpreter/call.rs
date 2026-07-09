@@ -132,7 +132,8 @@ impl<'c> Interp<'c> {
                     ));
                 }
                 let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-                return self.run_call(&f.name, &names, &f.body, argv, None, None);
+                let unchecked = super::attrs_unchecked(&f.attrs);
+                return self.run_call(&f.name, &names, &f.body, argv, None, None, unchecked);
             }
             if let Some((enum_name, arity)) = self.variants.get(name).cloned() {
                 if argv.len() != arity {
@@ -235,7 +236,10 @@ impl<'c> Interp<'c> {
                     ));
                 }
                 let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-                self.run_call(&f.name, &names, &f.body, args, None, None)
+                // A closure over a named `#[Unchecked]` free function must wrap on this leg too (byte-
+                // identity with the VM, which reads the callee's fn flag); a plain lambda has no attrs.
+                let unchecked = super::attrs_unchecked(&f.attrs);
+                self.run_call(&f.name, &names, &f.body, args, None, None, unchecked)
             }
             ClosureData::Byte { .. } => {
                 // A VM-compiled closure that somehow ended up in the tree-walker is a compiler
@@ -364,7 +368,15 @@ impl<'c> Interp<'c> {
         };
         let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
         let mname = format!("{decl}::{m}");
-        self.run_call(&mname, &names, &f.body, args, Some(recv), Some(&decl))
+        self.run_call(
+            &mname,
+            &names,
+            &f.body,
+            args,
+            Some(recv),
+            Some(&decl),
+            false,
+        )
     }
 
     pub(super) fn call_method(&mut self, recv: Value, name: &str, args: Vec<Value>) -> R<Value> {
@@ -508,6 +520,7 @@ impl<'c> Interp<'c> {
             args,
             Some(Value::Instance(inst)),
             origin_class.as_deref(),
+            false, // `#[Unchecked]` is free-function-only — a method is never unchecked
         )
     }
 
@@ -583,6 +596,6 @@ impl<'c> Interp<'c> {
         }
         let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
         let mname = format!("{cls}::{name}");
-        self.run_call(&mname, &names, &f.body, args, None, Some(cls))
+        self.run_call(&mname, &names, &f.body, args, None, Some(cls), false)
     }
 }

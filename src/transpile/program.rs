@@ -1682,6 +1682,20 @@ impl Transpiler {
         is_method: bool,
         name_override: Option<&str>,
     ) -> Result<(), String> {
+        // `#[Unchecked]` (Core.Unchecked, §14 LADDER): two's-complement wrapping int arithmetic has NO
+        // faithful PHP target — PHP silently promotes an overflowing int to float, which would make the
+        // transpiled program behave differently than the VM/interpreter (breaking the byte-identity
+        // spine). So an `#[Unchecked]` function is a HARD transpile error (never a silent checked/float
+        // lowering); such a program is quarantined from the PHP oracle, exactly like `spawn`.
+        if f.attrs
+            .iter()
+            .any(|a| matches!(a.name.as_str(), "Unchecked" | "Core.Unchecked"))
+        {
+            return Err(format!(
+                "E-TRANSPILE-UNCHECKED: `#[Unchecked]` function `{}` uses wrapping integer arithmetic, which has no PHP equivalent (PHP overflows int→float) — it runs on the Phorj VM/interpreter only",
+                f.name
+            ));
+        }
         let params: Vec<String> = f
             .params
             .iter()

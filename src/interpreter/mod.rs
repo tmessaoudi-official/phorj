@@ -210,6 +210,12 @@ pub struct Interp<'c> {
     /// not keyed on the receiver's runtime class). `None` in a free function. Saved/restored by
     /// `run_call` alongside `this`.
     cur_class: Option<String>,
+    /// `#[Unchecked]` (import Core.Unchecked): true while the currently-executing free-function body is
+    /// marked unchecked → int `+`/`-`/`*`/unary-`-` WRAP instead of faulting (via the `value::int_wrapping_*`
+    /// kernels the VM also calls, so byte-identical). The single source of the wrap fact for the interp,
+    /// set from the callee's attributes and saved/restored by `run_call` exactly like `cur_class`. Always
+    /// `false` in a method/constructor (attributes are free-function-only).
+    cur_unchecked: bool,
     /// Inheritance tables for `parent`/super resolution, cached once at load (mirrors `method_origins`).
     parent_parents: std::collections::BTreeMap<String, Vec<String>>,
     parent_mro: std::collections::BTreeMap<String, Vec<String>>,
@@ -302,6 +308,7 @@ fn run_program_main(
         frame: CallScopes::new(),
         this: None,
         cur_class: None,
+        cur_unchecked: false,
         parent_parents: std::collections::BTreeMap::new(),
         parent_mro: std::collections::BTreeMap::new(),
         out: String::new(),
@@ -350,7 +357,15 @@ fn run_program_main(
         Some(c) => format!("{c}::main"),
         None => "main".to_string(),
     };
-    match interp.run_call(&call_name, &names, &main.body, args, None, None) {
+    match interp.run_call(
+        &call_name,
+        &names,
+        &main.body,
+        args,
+        None,
+        None,
+        attrs_unchecked(&main.attrs),
+    ) {
         // `run_call` converts `main`'s `return n` into `Ok(Value::Int(n))` (and a fall-off-the-end
         // `void` `main` into `Ok(Value::Unit)`); `exit_code_of` maps both to the exit status.
         Ok(v) => Ok((interp.out, exit_code_of(&v))),
@@ -428,6 +443,7 @@ pub fn call_named(
         frame: CallScopes::new(),
         this: None,
         cur_class: None,
+        cur_unchecked: false,
         parent_parents: std::collections::BTreeMap::new(),
         parent_mro: std::collections::BTreeMap::new(),
         out: String::new(),
@@ -459,7 +475,15 @@ pub fn call_named(
         )));
     }
     let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-    match interp.run_call(&f.name, &names, &f.body, args, None, None) {
+    match interp.run_call(
+        &f.name,
+        &names,
+        &f.body,
+        args,
+        None,
+        None,
+        attrs_unchecked(&f.attrs),
+    ) {
         Ok(v) => Ok((v, interp.out)),
         Err(Signal::Return(v)) => Ok((v, interp.out)),
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
@@ -671,6 +695,7 @@ impl<'c> Interp<'c> {
     /// Run a callable body in a fresh frame: bind `args` to `names` in the base
     /// scope, set `this`, execute, restore caller state. A `Return` becomes the
     /// value; falling off the end yields `Unit`.
+    #[allow(clippy::too_many_arguments)]
     fn run_call(
         &mut self,
         fn_name: &str,
@@ -679,6 +704,10 @@ impl<'c> Interp<'c> {
         args: Vec<Value>,
         this: Option<Value>,
         lexical_class: Option<&str>,
+        // `#[Unchecked]`: does the callee's body wrap int arithmetic? Derived from the callee's attributes
+        // by the caller (free functions only; always `false` for methods/constructors). Saved/restored
+        // like `cur_class` so nested calls into a checked function re-enable checking.
+        unchecked: bool,
     ) -> R<Value> {
         // Mirror the VM's frame cap: past the shared limit, fault cleanly instead of letting
         // native recursion abort the process. Checked before incrementing, so the guard path
@@ -700,6 +729,7 @@ impl<'c> Interp<'c> {
         // M-RT super/parent: the running body's lexical class (the declaring class, for `parent`
         // resolution). `None` for a free function. Saved/restored exactly like `this`.
         let saved_class = std::mem::replace(&mut self.cur_class, lexical_class.map(str::to_string));
+        let saved_unchecked = std::mem::replace(&mut self.cur_unchecked, unchecked);
         for (n, a) in names.iter().zip(args) {
             self.frame.declare(n, a);
         }
@@ -721,6 +751,7 @@ impl<'c> Interp<'c> {
         self.frame = saved_frame;
         self.this = saved_this;
         self.cur_class = saved_class;
+        self.cur_unchecked = saved_unchecked;
         self.depth -= 1;
         match result {
             Ok(()) => {
@@ -785,20 +816,34 @@ impl<'c> Interp<'c> {
     }
 }
 
-fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
+/// True iff `#[Unchecked]` (or `#[Core.Unchecked]`) is among a free function's attributes — the single
+/// source of the wrap fact, read at the `run_call` boundary. The checker has already validated the
+/// attribute (recognized + import-gated), so presence alone is authoritative here.
+pub(super) fn attrs_unchecked(attrs: &[crate::ast::Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|a| matches!(a.name.as_str(), "Unchecked" | "Core.Unchecked"))
+}
+
+fn arith(op: BinaryOp, l: Value, r: Value, unchecked: bool) -> R<Value> {
     use BinaryOp::*;
     match (l, r) {
         (Value::Int(a), Value::Int(b)) => {
             // Checked ops via the single-sourced `value` kernels: overflow / div-zero / mod-zero are
             // faults the type system can't catch, so they become a Diagnostic, never a panic
             // (EV-7). The VM dispatches into the *same* kernels, so the fault path can't diverge.
-            let v = match op {
-                Add => crate::value::int_add(a, b),
-                Sub => crate::value::int_sub(a, b),
-                Mul => crate::value::int_mul(a, b),
-                Pow => crate::value::int_pow(a, b),
-                Div => crate::value::int_div(a, b),
-                Rem => crate::value::int_rem(a, b),
+            // `#[Unchecked]`: int `+`/`-`/`*` WRAP (the `int_wrapping_*` kernels the VM also calls) —
+            // div/rem stay checked (div-zero must always fault). `Ok(..)` so the match below is uniform.
+            let v = match (op, unchecked) {
+                (Add, true) => Ok(crate::value::int_wrapping_add(a, b)),
+                (Sub, true) => Ok(crate::value::int_wrapping_sub(a, b)),
+                (Mul, true) => Ok(crate::value::int_wrapping_mul(a, b)),
+                (Add, false) => crate::value::int_add(a, b),
+                (Sub, false) => crate::value::int_sub(a, b),
+                (Mul, false) => crate::value::int_mul(a, b),
+                (Pow, _) => crate::value::int_pow(a, b),
+                (Div, _) => crate::value::int_div(a, b),
+                (Rem, _) => crate::value::int_rem(a, b),
                 _ => unreachable!("arith only called with +-*/%**"),
             };
             match v {
