@@ -65,18 +65,23 @@ impl Parser {
         if is_sealed && !self.check(&TokenKind::Class) && !self.check(&TokenKind::Interface) {
             return Err(self.error("only a class or interface can be declared `sealed`"));
         }
-        // Attributes are free-function-only this slice — at the item keyword, anything but `function`
-        // with attributes present is rejected (`E-ATTR-TARGET`).
-        if !attrs.is_empty() && !self.check(&TokenKind::Function) {
+        // Attribute targets (DEC-194 slice 2a): a top-level `function` or `class` may carry `#[…]`
+        // attributes. Other item keywords (enum/interface/trait/import/type) are rejected here
+        // (`E-ATTR-TARGET`) until their target slices land.
+        if !attrs.is_empty() && !self.check(&TokenKind::Function) && !self.check(&TokenKind::Class)
+        {
             let asp = attrs[0].span;
             return Err(Diagnostic::new(
                 Stage::Parse,
-                "attributes (`#[…]`) are only allowed on a free function".to_string(),
+                "attributes (`#[…]`) are only allowed on a top-level `function` or `class`"
+                    .to_string(),
                 asp.line,
                 asp.col,
             )
             .with_code("E-ATTR-TARGET")
-            .with_hint("place the `#[…]` attribute directly above a top-level `function`"));
+            .with_hint(
+                "place the `#[…]` attribute directly above a top-level `function` or `class`",
+            ));
         }
         let item = match self.peek() {
             TokenKind::Import => {
@@ -98,6 +103,7 @@ impl Parser {
                 is_open || is_abstract || is_sealed,
                 is_abstract,
                 is_sealed,
+                attrs,
             )?),
             TokenKind::Interface => Item::Interface(self.parse_interface(sp, is_sealed)?),
             TokenKind::Trait => {
@@ -475,6 +481,7 @@ impl Parser {
         self.expect(&TokenKind::RBrace, "'}' to close the foreign class")?;
         Ok(Item::Class(ClassDecl {
             vis: Visibility::Public,
+            attrs: Vec::new(), // a foreign `declare` rejects attributes (checked above)
             name,
             type_params: Vec::new(),
             extends,
@@ -619,6 +626,7 @@ impl Parser {
         open: bool,
         is_abstract: bool,
         sealed: bool,
+        attrs: Vec<Attribute>,
     ) -> Result<ClassDecl, Diagnostic> {
         self.expect(&TokenKind::Class, "'class'")?;
         let name = self.expect_ident("a class name")?;
@@ -676,6 +684,7 @@ impl Parser {
         self.expect(&TokenKind::RBrace, "'}' to close class")?;
         Ok(ClassDecl {
             vis: Visibility::Public,
+            attrs,
             name,
             type_params,
             extends,

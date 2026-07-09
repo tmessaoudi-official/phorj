@@ -227,7 +227,10 @@ impl Checker {
                 // in PHP) — skip body/definite-assignment/totality validation. It is still registered for
                 // member-call resolution by the collect pass, so `new Name(…)` / `o.m(…)` type-check.
                 Item::Class(c) if c.foreign => {}
-                Item::Class(c) => self.check_type_body(&c.name, &c.type_params, &c.members),
+                Item::Class(c) => {
+                    self.check_class_attributes(c);
+                    self.check_type_body(&c.name, &c.type_params, &c.members);
+                }
                 // M-RT S8: a trait's method/ctor/hook bodies are checked once, in trait context
                 // (correct spans, no double-reporting), with the trait's own collected members as
                 // `this`. A trait has no type parameters this slice.
@@ -755,6 +758,30 @@ impl Checker {
         // `foreign` (`declare`) function (M8.5) is likewise bodyless — its body lives in PHP.
         if !f.modifiers.contains(&crate::ast::Modifier::Abstract) && !f.foreign {
             self.check_return_totality(&ret, &f.body, f.span);
+        }
+    }
+
+    /// Validate a class declaration's `#[…]` attributes (DEC-194 slice 2a). Attributes now PARSE on a
+    /// class, but no attribute currently *targets* a class — the built-ins `#[Route]` (route handler) and
+    /// `#[UncheckedOverflow]` (free function) are not class-valid, and user-declared attributes (which
+    /// will be able to target a class) arrive in a later DEC-194 slice. So every class attribute is a
+    /// clean `E-ATTR-TARGET` for now: a class attribute is always *validated*, never silently accepted,
+    /// keeping the surface strict as the target set grows.
+    pub(super) fn check_class_attributes(&mut self, c: &crate::ast::ClassDecl) {
+        for attr in &c.attrs {
+            self.err_coded(
+                attr.span,
+                format!(
+                    "attribute `#[{}]` is not valid on a class — no class-target attribute exists yet",
+                    attr.name
+                ),
+                "E-ATTR-TARGET",
+                Some(
+                    "attributes currently target a free function (`#[UncheckedOverflow]`) or a route \
+                     handler (`#[Route]`); user-declarable attributes arrive in a later slice"
+                        .into(),
+                ),
+            );
         }
     }
 

@@ -141,6 +141,7 @@ impl Lifter {
         }
         Ok(ClassDecl {
             vis: crate::ast::Visibility::Public,
+            attrs: Vec::new(), // PHP→Phorj attribute lifting deferred (DEC-194 later slice)
             name: c.name.clone(),
             type_params: Vec::new(),
             extends: c.extends.clone().into_iter().collect(),

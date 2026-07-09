@@ -281,6 +281,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
             Item::Function(f) => Item::Function(rfunc(f)),
             Item::Class(c) => Item::Class(ClassDecl {
                 vis: c.vis,
+                attrs: c.attrs.clone(),
                 name: c.name.clone(),
                 type_params: c.type_params.clone(),
                 extends: c.extends.clone(),

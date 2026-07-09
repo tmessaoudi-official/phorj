@@ -33,6 +33,7 @@ pub(super) fn compile_program_with(
         .filter_map(|it| match it {
             Item::Trait(t) => Some(ClassDecl {
                 vis: crate::ast::Visibility::Public,
+                attrs: Vec::new(), // synthetic trait→class carries no attributes
                 name: t.name.clone(),
                 type_params: Vec::new(),
                 extends: Vec::new(),

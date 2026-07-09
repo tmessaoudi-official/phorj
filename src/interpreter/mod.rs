@@ -564,6 +564,7 @@ impl<'c> Interp<'c> {
                         t.name.clone(),
                         crate::ast::ClassDecl {
                             vis: crate::ast::Visibility::Public,
+                            attrs: Vec::new(), // synthetic trait→class carries no attributes
                             name: t.name.clone(),
                             type_params: Vec::new(),
                             extends: Vec::new(),

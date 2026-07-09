@@ -544,6 +544,7 @@ pub fn erase_generics(program: Program) -> Program {
                     .collect();
                 Item::Class(ClassDecl {
                     vis: c.vis,
+                    attrs: c.attrs,
                     name: c.name,
                     type_params: Vec::new(), // erased
                     extends: c.extends,

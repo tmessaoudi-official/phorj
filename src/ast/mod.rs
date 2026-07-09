@@ -803,6 +803,10 @@ pub enum ClassMember {
 pub struct ClassDecl {
     /// Declaration-level visibility (default `Public`). Loader-enforced; see [`Visibility`].
     pub vis: Visibility,
+    /// Leading `#[…]` attributes on the class declaration (DEC-194 user-attribute system, slice 2a).
+    /// Inert metadata until a later slice reads them via reflection; the checker validates each attribute
+    /// is recognized (a built-in or, later, a declared user attribute) and legal on a class target.
+    pub attrs: Vec<Attribute>,
     pub name: String,
     /// Generic type parameters, in declaration order — `["T"]` for `class Box<T>`, `["A", "B"]` for
     /// `class Pair<A, B>` (M-RT generics-all). empty for a non-generic class — the common case. While

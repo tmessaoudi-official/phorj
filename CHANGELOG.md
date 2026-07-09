@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — attributes parse on `class` declarations (DEC-194 user-attribute system, slice 2a)
+
+Groundwork for the user-defined attribute system. `#[…]` attributes previously parsed only on a free
+`function` (and, inside a class, a method); they now also parse on a top-level **`class`** declaration
+and are carried on `ClassDecl.attrs`. No attribute *targets* a class yet — the built-ins `#[Route]`
+(route handler) and `#[UncheckedOverflow]` (free function) are not class-valid, and user-declarable
+attributes land in a later slice — so a class attribute is **validated and rejected** with a check-stage
+`E-ATTR-TARGET` (moved from the old parse-stage rejection), never silently accepted. Attributes on an
+enum/interface/trait/import still parse-reject until their target slices land. Pure plumbing: no runtime
+behaviour change; every existing program is unaffected.
+
 ### Changed — `#[Unchecked]` renamed to `#[UncheckedOverflow]` under `Core.Runtime.*`
 
 The opt-in wrapping-integer-arithmetic attribute moved from the flat `Core.Unchecked` marker module to

@@ -746,10 +746,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              every overload `static`, or none of them, or rename one declaration.\n"
         }
         "E-ATTR-TARGET" => {
-            "E-ATTR-TARGET — an attribute is attached to something other than a free function.\n\n\
-             A `#[…]` attribute (M6 W2) may currently sit only directly above a top-level `function`.\n\
-             Attributes on a class, enum, interface, method, or import are not yet supported. Move the\n\
-             `#[Route(...)]` to the handler function it describes.\n"
+            "E-ATTR-TARGET — an attribute is attached to an unsupported target.\n\n\
+             A `#[…]` attribute may sit above a top-level `function` or `class` (DEC-194 slice 2a) — and\n\
+             a `#[Route]` above a static method. Attributes on an enum, interface, trait, or import are\n\
+             rejected at parse stage (their target slices are not built yet). A class attribute now\n\
+             PARSES, but no attribute *targets* a class yet, so it is rejected at check stage until\n\
+             user-declarable attributes land in a later DEC-194 slice.\n"
         }
         "E-FOREIGN-RUNTIME" => {
             "E-FOREIGN-RUNTIME — a program using foreign PHP `declare` symbols was run on a Rust backend.\n\n\

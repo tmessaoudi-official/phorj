@@ -284,6 +284,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             Item::Function(f) => Some(Item::Function(rfunc(f, &aliases))),
             Item::Class(c) => Some(Item::Class(ClassDecl {
                 vis: c.vis,
+                attrs: c.attrs.clone(),
                 name: c.name.clone(),
                 type_params: c.type_params.clone(),
                 extends: c.extends.clone(),

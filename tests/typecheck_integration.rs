@@ -185,12 +185,27 @@ fn route_on_instance_method_requires_static() {
 }
 
 #[test]
-fn attribute_on_non_function_is_a_parse_error() {
-    // E-ATTR-TARGET is a parse-stage error, so it surfaces before the checker.
+fn attribute_on_a_class_parses_then_fails_at_check_as_a_target_error() {
+    // DEC-194 slice 2a: attributes now PARSE on a class (the plumbing the user-attribute system builds
+    // on), but no attribute *targets* a class yet, so the rejection moved from a parse-stage error to a
+    // CHECK-stage `E-ATTR-TARGET` — the class attribute is validated, never silently accepted.
     let src = "package Main;\n#[Route(\"GET\", \"/\")]\nclass Foo {}\nfunction main() -> void {}\n";
+    let tokens = lex(src).expect("lex ok");
+    Parser::new(tokens)
+        .parse_program()
+        .expect("a `#[…]` on a class now PARSES (2a)");
+    let errs =
+        check_src(src).expect_err("no class-target attribute exists yet → must fail at check");
+    assert!(has_code(&errs, "E-ATTR-TARGET"), "{errs:?}");
+}
+
+#[test]
+fn attribute_on_a_non_function_non_class_item_is_still_a_parse_error() {
+    // enum/interface/trait/etc. keep the parse-stage rejection until their target slices land.
+    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nenum E { A }\nfunction main() -> void {}\n";
     let tokens = lex(src).expect("lex ok");
     let err = Parser::new(tokens)
         .parse_program()
-        .expect_err("attribute on a class must fail to parse");
+        .expect_err("attribute on an enum must fail to parse");
     assert_eq!(err.code, Some("E-ATTR-TARGET"), "{err:?}");
 }
