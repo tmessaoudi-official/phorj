@@ -745,6 +745,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              runtime rejects. (PHP also forbids a static and an instance method sharing a name.) Make\n\
              every overload `static`, or none of them, or rename one declaration.\n"
         }
+        "E-ATTRIBUTE-ARGS" => {
+            "E-ATTRIBUTE-ARGS — the `#[Attribute]` marker was given arguments it does not accept yet.\n\n\
+             `#[Attribute]` (import Core.Runtime.Attribute) declares the class it sits on as a user-defined\n\
+             attribute (DEC-194). The bare marker is accepted now — the class becomes an attribute valid on\n\
+             all targets, non-repeatable. The `targets: […]` and `repeatable` arguments arrive in a later\n\
+             slice; until then, use the bare `#[Attribute]`.\n"
+        }
         "E-ATTR-TARGET" => {
             "E-ATTR-TARGET — an attribute is attached to an unsupported target.\n\n\
              A `#[…]` attribute may sit above a top-level `function` or `class` (DEC-194 slice 2a) — and\n\

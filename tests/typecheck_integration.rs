@@ -1,4 +1,5 @@
 use phorj::checker::check;
+use phorj::checker::enforce_injected_discipline;
 use phorj::parser::Parser;
 use phorj::tokenizer::lex;
 
@@ -197,6 +198,42 @@ fn attribute_on_a_class_parses_then_fails_at_check_as_a_target_error() {
     let errs =
         check_src(src).expect_err("no class-target attribute exists yet → must fail at check");
     assert!(has_code(&errs, "E-ATTR-TARGET"), "{errs:?}");
+}
+
+// ── DEC-194 slice 2b-1: the `#[Attribute]` marker declares a class as a user attribute ──────────
+
+#[test]
+fn attribute_marker_declares_a_class_attribute_and_checks_clean() {
+    // A class carrying the bare `#[Attribute]` marker IS a user-defined attribute — accepted on a class
+    // (the one class-target attribute so far), not `E-ATTR-TARGET`. (The raw `check` path does not
+    // enforce the import; import-gating is asserted separately below.)
+    let src = "package Main;\n#[Attribute]\nclass Tag { constructor(public string label) {} }\nfunction main() -> void {}\n";
+    assert!(check_src(src).is_ok(), "{:?}", check_src(src));
+}
+
+#[test]
+fn attribute_marker_with_arguments_is_not_yet_supported() {
+    // 2b-1 accepts only the BARE marker; `targets`/`repeatable` arguments arrive in 2b-2, so a marker
+    // with arguments is a clean, explicit `E-ATTRIBUTE-ARGS` rather than silent tolerance.
+    let src = "package Main;\n#[Attribute(repeatable)]\nclass Tag {}\nfunction main() -> void {}\n";
+    let errs = check_src(src).expect_err("marker with args must fail (2b-1)");
+    assert!(has_code(&errs, "E-ATTRIBUTE-ARGS"), "{errs:?}");
+}
+
+#[test]
+fn attribute_marker_bare_without_import_is_rejected() {
+    // The marker obeys "nothing in the wind": bare `#[Attribute]` needs `import Core.Runtime.Attribute;`.
+    // Import-gating lives in `enforce_injected_discipline` (the `check_and_expand` path), so assert it
+    // directly here.
+    let src = "package Main;\n#[Attribute]\nclass Tag {}\nfunction main() -> void {}\n";
+    let prog = Parser::new(lex(src).expect("lex ok"))
+        .parse_program()
+        .expect("parse ok");
+    let errs = enforce_injected_discipline(&prog);
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-INJECTED-TYPE-BARE")),
+        "{errs:?}"
+    );
 }
 
 #[test]

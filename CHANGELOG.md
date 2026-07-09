@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — the `#[Attribute]` marker declares a user attribute (DEC-194 slice 2b-1)
+
+A class carrying the built-in `#[Attribute]` marker (`import Core.Runtime.Attribute;`, or the qualified
+`#[Runtime.Attribute]` via `import Core.Runtime;`) is now recognized as a **user-defined attribute type** —
+the one attribute that legally targets a class. It obeys the two-mode "nothing in the wind" import
+discipline (a bare unimported `#[Attribute]` is `E-INJECTED-TYPE-BARE`), single-sourced in
+`Attribute::is_attribute_marker`, and `enforce_injected` now walks class-level attributes (closing the gap
+where a class's own `#[…]` skipped the import check). This slice accepts the **bare** marker (the class
+becomes an attribute valid on all targets, non-repeatable); the `targets: […]` / `repeatable` arguments
+are a clean `E-ATTRIBUTE-ARGS` "not yet" (2b-2), and *using* a declared attribute (`#[Tag]` on a target)
+plus reflection/transpile land in later slices. No runtime behaviour change — attributes remain inert
+metadata.
+
 ### Added — attributes parse on `class` declarations (DEC-194 user-attribute system, slice 2a)
 
 Groundwork for the user-defined attribute system. `#[…]` attributes previously parsed only on a free

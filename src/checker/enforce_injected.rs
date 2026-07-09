@@ -47,6 +47,14 @@ pub fn enforce_injected_discipline(prog: &Program) -> Vec<Diagnostic> {
         match it {
             Item::Function(f) => ctx.walk_fn(f, &mut errs),
             Item::Class(c) => {
+                // Class-level `#[…]` attributes (DEC-194 2a/2b) obey the same nothing-in-the-wind rule
+                // as a function's: a bare injected attribute (e.g. `#[Attribute]`) must be imported.
+                for attr in &c.attrs {
+                    ctx.check_name(&attr.name, attr.span, &mut errs);
+                    for a in &attr.args {
+                        ctx.walk_expr(a, &mut errs);
+                    }
+                }
                 for m in &c.members {
                     ctx.walk_member(m, &mut errs);
                 }
@@ -88,6 +96,10 @@ pub(super) fn module_of(name: &str) -> Option<&'static str> {
         // `module_of` returns the dotted module path; the hint/qualified forms interpolate it fine
         // (`import Core.Runtime.Integer.UncheckedOverflow;` / qualified `Integer.UncheckedOverflow`).
         "UncheckedOverflow" => "Runtime.Integer",
+        // `#[Attribute]` marker (DEC-194 2b): a class carrying `#[Attribute]` IS a user-defined attribute.
+        // Lives at `Core.Runtime.Attribute` (1-deep module `Runtime`) — `import Core.Runtime.Attribute;`
+        // gates bare `#[Attribute]`, or `import Core.Runtime;` → qualified `#[Runtime.Attribute]`.
+        "Attribute" => "Runtime",
         _ => return None,
     })
 }

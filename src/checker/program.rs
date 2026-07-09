@@ -769,16 +769,39 @@ impl Checker {
     /// keeping the surface strict as the target set grows.
     pub(super) fn check_class_attributes(&mut self, c: &crate::ast::ClassDecl) {
         for attr in &c.attrs {
+            // `#[Attribute]` (DEC-194 2b) DECLARES this class as a user-defined attribute type — the one
+            // attribute that legally targets a class. Import-gated by the injected-type discipline
+            // (`import Core.Runtime.Attribute;` bare, or `import Core.Runtime;` → `#[Runtime.Attribute]`).
+            if attr.is_attribute_marker() {
+                // 2b-1 accepts the BARE marker (the class is an attribute, valid on all targets,
+                // non-repeatable). The `targets: […]` / `repeatable` arguments land in 2b-2; until then a
+                // marker with arguments is a clean, explicit "not yet" rather than silent tolerance.
+                if !attr.args.is_empty() {
+                    self.err_coded(
+                        attr.span,
+                        "`#[Attribute]` arguments (`targets: […]`, `repeatable`) are not supported yet"
+                            .to_string(),
+                        "E-ATTRIBUTE-ARGS",
+                        Some(
+                            "use the bare marker `#[Attribute]` for now — it declares an attribute \
+                             valid on all targets; target restriction + `repeatable` arrive next slice"
+                                .into(),
+                        ),
+                    );
+                }
+                continue;
+            }
             self.err_coded(
                 attr.span,
                 format!(
-                    "attribute `#[{}]` is not valid on a class — no class-target attribute exists yet",
+                    "attribute `#[{}]` is not valid on a class — only `#[Attribute]` (declaring the class \
+                     as a user attribute) targets a class so far",
                     attr.name
                 ),
                 "E-ATTR-TARGET",
                 Some(
-                    "attributes currently target a free function (`#[UncheckedOverflow]`) or a route \
-                     handler (`#[Route]`); user-declarable attributes arrive in a later slice"
+                    "mark a class as an attribute with `#[Attribute]` (import Core.Runtime.Attribute); \
+                     the built-ins `#[Route]`/`#[UncheckedOverflow]` target functions/methods"
                         .into(),
                 ),
             );

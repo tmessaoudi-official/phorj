@@ -722,6 +722,14 @@ impl Attribute {
             "UncheckedOverflow" | "Integer.UncheckedOverflow"
         )
     }
+
+    /// True iff this is the built-in `#[Attribute]` marker (DEC-194) — a class carrying it IS a
+    /// user-defined attribute type. Recognized in both "nothing in the wind" forms: bare `Attribute`
+    /// (member-import `import Core.Runtime.Attribute;`) or qualified `Runtime.Attribute` (module import
+    /// `import Core.Runtime;`). Single source of the marker recognition.
+    pub fn is_attribute_marker(&self) -> bool {
+        matches!(self.name.as_str(), "Attribute" | "Runtime.Attribute")
+    }
 }
 
 /// One variant of an enum, with optional associated data fields (`Circle(float radius)`).
