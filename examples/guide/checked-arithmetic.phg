@@ -1,0 +1,29 @@
+package Main;
+
+import Core.Output;
+import Core.Math;
+
+// The DEFAULT for integer overflow is FAIL-FAST: it is a fatal fault, never a silent wrong number (PHP
+// quietly promotes an overflowing int to float — Phorj refuses to). When you want to HANDLE overflow
+// rather than crash — parsing untrusted input, a calculator that must degrade gracefully — reach for the
+// checked `Math.tryAdd/trySub/tryMul(int, int): int?` family: each returns `null` on overflow, so you
+// recover LOCALLY and by TYPE (`??` or `match`), not with a catch-that-hides-the-bug. (For raw wrapping
+// speed in a proven-safe hot loop, see `#[Unchecked]` in guide/unchecked.phg instead.)
+function safeSum(int a, int b): int {
+    // `??` turns the `int?` into a plain int with a fallback of your choosing.
+    return Math.tryAdd(a, b) ?? 0;
+}
+
+function main(): void {
+    Output.printLine("{Math.tryAdd(2, 3) ?? 0}");
+    // 5
+    Output.printLine("{Math.tryAdd(9223372036854775807, 1) ?? 0}");
+    // 0 — overflow → null → fallback
+    Output.printLine("{Math.tryMul(1000000, 1000000) ?? 0}");
+    // 1000000000000
+    Output.printLine("{safeSum(9223372036854775807, 9223372036854775807)}");
+    // 0 — overflow recovered
+    // Or handle both arms explicitly with `match` (int? = int | null, exhaustive):
+    string label = match (Math.trySub(10, 4)) { int v => "got {v}", null => "overflow" };
+    Output.printLine(label);
+}

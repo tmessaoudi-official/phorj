@@ -56,6 +56,35 @@ fn math_max(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Math.max expects (int, int)".into()),
     }
 }
+// `Math.tryAdd/trySub/tryMul(int, int): int?` — CHECKED integer arithmetic that returns `null` on
+// overflow instead of faulting (the type-driven recovery path; the fail-fast fault stays the default,
+// `#[Unchecked]` is the wrap-instead escape hatch). Overflow → `null` maps the same i64 boundary the
+// single-sourced `value::int_*` kernels detect, so the PHP leg (which returns float on overflow) agrees
+// via an `is_int` guard — byte-identical across all three backends.
+fn math_try_add(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(a), Value::Int(b)] => Ok(crate::value::int_add(*a, *b)
+            .ok()
+            .map_or(Value::Null, Value::Int)),
+        _ => Err("Math.tryAdd expects (int, int)".into()),
+    }
+}
+fn math_try_sub(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(a), Value::Int(b)] => Ok(crate::value::int_sub(*a, *b)
+            .ok()
+            .map_or(Value::Null, Value::Int)),
+        _ => Err("Math.trySub expects (int, int)".into()),
+    }
+}
+fn math_try_mul(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(a), Value::Int(b)] => Ok(crate::value::int_mul(*a, *b)
+            .ok()
+            .map_or(Value::Null, Value::Int)),
+        _ => Err("Math.tryMul expects (int, int)".into()),
+    }
+}
 fn math_round(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // PHP `round()` defaults to round-half-away-from-zero, matching Rust `f64::round`; the `(int)`
@@ -281,6 +310,55 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(math_is_odd),
             php: |a| format!("({}) % 2 !== 0", parg(a, 0)),
+        },
+        // `Math.tryAdd/trySub/tryMul(int, int): int?` — checked arithmetic returning `null` on overflow
+        // (the type-driven recovery for the fail-fast default). PHP int overflow yields a float, so the
+        // IIFE returns the int only when it stayed an int (`is_int`), else `null` — the exact i64
+        // boundary the Rust `value::int_*` kernels detect, so all three backends agree.
+        NativeFn {
+            module: "Core.Math",
+            name: "tryAdd",
+            params: vec![Ty::Int, Ty::Int],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(math_try_add),
+            php: |a| {
+                format!(
+                    "(function($x, $y) {{ $r = $x + $y; return is_int($r) ? $r : null; }})({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "trySub",
+            params: vec![Ty::Int, Ty::Int],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(math_try_sub),
+            php: |a| {
+                format!(
+                    "(function($x, $y) {{ $r = $x - $y; return is_int($r) ? $r : null; }})({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "tryMul",
+            params: vec![Ty::Int, Ty::Int],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(math_try_mul),
+            php: |a| {
+                format!(
+                    "(function($x, $y) {{ $r = $x * $y; return is_int($r) ? $r : null; }})({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
         },
         NativeFn {
             module: "Core.Math",
