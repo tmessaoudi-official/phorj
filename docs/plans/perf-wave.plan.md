@@ -5,6 +5,28 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🎨✅ **2b SYNTAX RULED (developer) + PHP-coverage/better-than-PHP analysis.** Declaration =
+  **option 1: `#[Attribute(targets: […], repeatable)]` marker on a class**, legible named-args + `Target`
+  enum list + bare `repeatable` (NOT PHP bitflags). Self-consistent (the marker is itself an attribute,
+  reusing 2a). **PHP COVERAGE [Verified: parse_attributes]:** have — stacked `#[A]#[B]` (repeatable form),
+  positional args, qualified names, decl-targets (via 2b). **GAPS (deferred, all PHP-parity sugar):** grouped
+  `#[A,B]` (sugar for stacked), named-args-in-use `#[Foo(x:1)]` (arg loop is positional-only), enum/enum-case
+  targets. **BETTER-THAN-PHP (free from the typed-class model, build into 2b):** (1) COMPILE-TIME target
+  checking (PHP checks at `newInstance` only); (2) COMPILE-TIME typed-arg checking (attribute = class w/ typed
+  ctor); (3) strict no-silent-ignore. **Debatable extras PARKED (over-engineering risk, not built unless
+  dev asks):** repeatable-with-max, required-on-target, explicit inheritance policy. **2b BUILD SCOPE:**
+  `#[Attribute(...)]` marker + `Target` enum + registry pre-pass + compile-time target-legality & typed-arg
+  checking. **DEFERRED sub-slices:** 2b+ grouped/named-args, enum-case targets; 2d reflection
+  (`Core.Reflect.getAttributes`); 2e transpile → PHP `#[Attribute]`/`getAttributes`.
+- [2026-07-09] ✅🏗️ **SLICE 2a SHIPPED — attributes parse on `class` declarations (`d8d956e`, gate-green
+  1864).** `ClassDecl` gained `attrs` (compiler-enforced at all 10 construction sites: rewrite passes carry
+  `c.attrs`, synths/lift/foreign empty, `parse_class` threads the parsed attrs); parser allows `#[…]` on a
+  top-level `class` (E-ATTR-TARGET moved from parse-stage to CHECK-stage via new `check_class_attributes` —
+  no class-target attribute exists yet so every class attr is a clean `E-ATTR-TARGET`, never silently
+  accepted). Inert field (no backend reads `ClassDecl.attrs`) → byte-identity trivially preserved. Enum/
+  interface/trait/import still parse-reject. Advisor 6C not needed (no codegen/byte-identity surface — pure
+  plumbing; compiler-enforced completeness + full oracle gate suffice). **NEXT: 2b needs a §15 SYNTAX RULING
+  (surfaced, NOT self-ruled) — how a user MARKS a class as an attribute + declares targets/repeatable.**
 - [2026-07-09] 🔭🏗️ **SLICE 2 (DEC-194 user attributes) — LANDSCAPE MAPPED, decomposition set (warm-restart
   handoff; a context boundary falls here after slice 1 shipped — advisor-endorsed).** [Verified: grep of
   parser/native/reflect] Current state: (a) attributes PARSE only on FREE FUNCTIONS — `parser/items.rs:68-79`
