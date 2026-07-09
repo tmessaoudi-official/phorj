@@ -5,6 +5,58 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅📊 **#4 SLICE 1 SHIPPED — VM `MakeInstance` drops the per-instance `ClassDesc` clone
+  (gate-green, unpushed).** The old arm `let desc = self.program.class_descs[idx].clone()` cloned the
+  whole descriptor (incl. `fields: Vec<String>` + each field-name String) per `new`, though `fields`
+  is used only transiently (never stored in `Instance`). Restructured: `split_off` first (needs only
+  the field count, a scoped borrow), then re-borrow the desc immutably; only the cheap `layout` Rc bump
+  + the one genuinely-stored class-name clone remain. **~2 fewer allocs/instance** (Cell: fields Vec +
+  "v" String). **MEASURED [Verified: interleaved before/after, preserved before-binary, self-timed VM,
+  14 pairs — median 1.152× (13.2%), min 1.060× (5.7%) faster; output byte-identical, acc unchanged].**
+  Gate: **1881 passed / 0 failed** (`--features jit`, `PHORJ_REQUIRE_PHP=1` oracle php-8.5.8, 144-case
+  differential incl. all object examples), clippy both configs, fmt, release. **HONEST: objalloc stays
+  a heavy LOSS (0.34×→~0.36×) — this slice does NOT flip its WIN/LOSS status; it removes provable waste
+  at zero risk.** Confirms the calibration: representation alone won't flip a 3× gap → **#3 (JIT the
+  object-construction/method path) is the real lever.** Blast radius = one match arm (`src/vm/exec.rs`);
+  no type/Op/kernel change. FOLLOW-UP (batch when resumed): `class: String → Rc<str>` kills the last
+  per-instance class-String clone AND is the SAME change enum needs (`EnumVal.ty/variant`, the 0.01×
+  worst loss) — one `Rc<str>` slice, wider blast radius (~45 `.class` sites), spine-sensitive.
+- [2026-07-09] 🎯✅ **#4 REDIRECTED → representation fix (developer ruled, evidence-backed).** The Rule-14
+  profile (perf blocked at paranoid=4 → source-read + reasoning) found: objalloc (0.34×) is genuinely
+  alloc-heavy (2M `new Cell` iterations, each = `Rc<Instance>` + `fields: Vec` + **`class: String`**) on an
+  OTHERWISE-GOOD shape model (shared `Rc<ClassLayout>`, slot-indexed, FNV, S2 inline cache — NOT naive
+  HashMap-per-instance). **The redundant piece = `Instance.class: String` allocated fresh per instance**
+  [Verified: interp `Instance::new(class_name.to_string(),…)` construct.rs:62; VM `class: desc.class`
+  exec.rs:618]. **RULING: fix #4 as "allocate FEWER" not "allocate FASTER" — `class: String → Rc<str>`
+  (or share the name via the per-class `Rc<ClassLayout>`), std-only, NO dependency-policy ruling needed.**
+  Fast-allocator dep (mimalloc) kept as a documented FALLBACK only if representation doesn't close the gap.
+  Honest calibration [Speculative, advisor]: one representation fix rarely fully flips a 3× gap → this is a
+  cheap partial win; the FULL objalloc flip likely needs #3 (JIT the object-construction/method path).
+  Spine-sensitive: `class` is read by eq/reflect/fault-rendering → byte-identity-affecting → advisor review
+  + full oracle gate + measured before/after (Inv #11) mandatory.
+- [2026-07-09] 🧭✅ **CONSTRAINT WALKTHROUGH + SESSION LEVERS RULED (developer, interactive).** Walked all 8
+  perf-blocking constraints (byte-identity Inv #1 · default overflow-check Inv #3 · JIT-subset narrowness ·
+  std-only dep policy · Inv #13 float leaf-only/compare limits · `deny(unsafe_code)` · jit-default-off ·
+  determinism). **Two rulings made:**
+  **(1) floatmul 🚩 → RESOLVED as PARITY (option A).** Accept parity as the "never-worse" floor; FP-reassoc
+  (the only lever that beats php) is Inv #1-forbidden and NOT worth a LADDER escape hatch here. Scoreboard
+  row updated 🚩→✅. No new language surface. (B `#[Reassoc]`/C AOT-SIMD rejected for floatmul.)
+  **↳ `#[Reassoc]` opt-in explicitly RULED OUT (developer, after full asymmetry analysis):** NOT built.
+  Unlike `#[Unchecked]` (wrapping is deterministic → `run≡runvm` holds inside the region, only PHP leg
+  quarantined), `#[Reassoc]` would break byte-identity between OUR OWN backends (interp serial vs VM
+  vectorized) AND be per-CPU/per-machine non-deterministic (violates Inv #10 too, not just Inv #1) — a
+  category worse. Payoff also uncertain (Cranelift baseline no-egraph, `opt_level=speed` already a no-op
+  for floatmul). Decision: **defer fast-math to the AOT backend** (real vectorizer, opt-in + quarantined
+  there); not a JIT attribute. "Not-now/not-in-JIT", not "never".
+  **(2) SESSION LEVERS GREENLIT (all four, developer wants them pursued one-by-one):** #3 JIT breadth
+  (one Tier-2 category) · #4 admit a fast allocator (dep-policy domain #8 ruling — needs a Rule-14 profile
+  FIRST) · #5 param-types-in-bytecode (lifts JIT float leaf-only + compare limits) · #7 jit-default-on +
+  call-count hotness threshold (delivers existing wins to users; resolves the parked §15 decision).
+  **IMMOVABLE (relaxing un-makes the project):** Inv #1 globally · overflow-checked-by-default · memory-safe
+  core. **RECOMMENDED SEQUENCE [Speculative — my ordering, not yet ruled]:** (a) Rule-14 VM/alloc profile
+  [cheap, informs #4 AND which category #3 attacks] → (b) #4 allocator ruling → (c) #7 jit-default+hotness
+  [bankable, self-contained] → (d) #5 param-types → (e) #3 one JIT category. Honest scope: one session will
+  NOT finish all four; each is medium-large + spine-sensitive.
 - [2026-07-09] 🛑🤝 **SESSION CLOSE + FRESH-SESSION HANDOFF (developer restarting clean).** Shipped this
   session (all gate-green php-8.5.8, clippy both, fmt, release --features jit — UNPUSHED): range-analysis
   (`21465d8`), `#[Unchecked]`→intadd WIN 1.99× (`64ddf17`), `Math.try*(): int?` (`0a9fbe1`), + docs.
@@ -1079,7 +1131,7 @@ adjudicates via AskUserQuestion — NEVER self-ruled).
 | Micro | Status | Ratio php/phorj | Evidence / notes |
 |---|---|---|---|
 | fibrec | **WIN** | ~1.7–2.9× | recursion/calls — phorj's structural strength (`ovf-spec` shipped) |
-| floatmul | **🚩FLAGGED** | ~0.99 (parity) | Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php identical chain → parity is the ceiling. **Irreducible without FP-reassociation/unroll = byte-identity-FORBIDDEN (Inv #1).** |
+| floatmul | **PARITY (accepted)** | ~0.99 (parity) | 🚩→✅ **DEVELOPER RULED (2026-07-09): option A — accept parity as the never-worse floor.** Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php has the identical chain → parity is the ceiling. The ONLY lever that beats php is FP-reassociation/unroll = **byte-identity-FORBIDDEN (Inv #1)**. Developer accepted PARITY as satisfying the "never worse than PHP" bar; no new language surface, Inv #1 fully preserved. Irreducible-by-design. (Options B `#[Reassoc]` LADDER / C AOT-SIMD were considered and NOT chosen.) |
 | intadd (default) | **LOSS** | ~0.67 (1.48× slower) | [Verified: interleaved 8-pair, JIT binary — phorj 12.14M vs php 8.17M ns, 0/8]. The accumulator's overflow guard is on the (short, ~1-cyc) critical path → the guard IS the LOSS. The safe default; fixed on demand ↓. |
 | intadd `#[Unchecked]` | **WIN** | **~1.99 (2× faster)** | [Verified: interleaved 8-pair, JIT release binary, fresh docker php:8.5+JIT, checksums identical — phorj **3,225,621** vs php **6,410,498** ns, 8/8]. `#[Unchecked]` (`64ddf17`) drops the guard → the overflow check WAS the whole gap. Opt-in wrapping; `E-TRANSPILE-UNCHECKED` (LADDER). This is the intadd fork RESOLVED (developer ruled `#[Unchecked]`), not a self-rule. |
 | ~11 VM-only cats | **LOSS (heavy)** | 0.01×–0.39× | [Verified: `microbench.sh` batched-indicative 2026-07-09] closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07 · methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05. **All run on the plain VM — NOT JIT-eligible** (ops outside the int/float unboxed subset) → 3–100× slower than php+JIT. Fix = Tier-2 JIT-subset breadth (per category; several need §14/§15 rulings — e.g. trycatch, strings). floatarith specifically = tracked float lever (toFloat/truncate inline). |

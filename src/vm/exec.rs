@@ -600,10 +600,16 @@ impl<'a> Vm<'a> {
 
             // --- P4b: classes ---
             Op::MakeInstance(idx) => {
-                // Clone the descriptor's class + field names so the `&self.program` borrow ends
-                // before `split_off` takes `&mut self` (mirrors `MakeEnum`).
-                let desc = self.program.class_descs[idx].clone();
-                let values = self.split_off(desc.fields.len());
+                // Split the field values off the stack first — this needs only the field COUNT
+                // (a scoped immutable borrow that ends immediately), so `split_off`'s `&mut self`
+                // has no outstanding borrow. Then re-borrow the descriptor immutably to map
+                // name→slot. This avoids cloning the whole `ClassDesc` on every construction: its
+                // `fields: Vec<String>` is used only transiently here (never stored in `Instance`),
+                // so the old per-instance `.clone()` allocated a throwaway Vec + one String per
+                // field for nothing. Only the cheap `layout` Rc bump + the one class-name clone
+                // (both genuinely stored) remain. Output is byte-identical (same `Instance` built).
+                let values = self.split_off(self.program.class_descs[idx].fields.len());
+                let desc = &self.program.class_descs[idx];
                 // M-perf S1b: place each promoted-field value at its slot in the shared layout. The
                 // field push order (`desc.fields`) need not match slot order — `slot(name)` maps it —
                 // so construction and access agree regardless of order (the MI-offset hazard is moot).
@@ -614,8 +620,9 @@ impl<'a> Vm<'a> {
                         slots[i] = Some(val);
                     }
                 }
+                let class = desc.class.clone();
                 self.stack.push(Value::Instance(Rc::new(Instance {
-                    class: desc.class,
+                    class,
                     layout,
                     fields: RefCell::new(slots),
                 })));
