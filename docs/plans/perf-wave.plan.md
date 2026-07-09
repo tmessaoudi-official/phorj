@@ -5,6 +5,27 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅ **6C: float comparison-guard VERIFIED sound.** The advisor flagged one unverified link
+  (could a known-Int operand pair with an Unknown-FLOAT param → `icmp` on float bits?). CHECKED: the
+  checker REJECTS `float < int` ("comparison requires matching int or float operands", checker/…) — so a
+  comparison's operands are ALWAYS homogeneous; a known-Int operand ⇒ both int ⇒ `icmp` correct; two
+  float params ⇒ neither is known-Int ⇒ rejected. The P0 is unreachable by construction. (Can't add a
+  compiling regression test — `float<int` doesn't typecheck; the guarantee lives in the checker.)
+- [2026-07-09] 🅿️ **PENDING-DECISION: §15 jit-default flip needs a HOTNESS THRESHOLD (cold-function
+  regression risk).** §15 Option 3 (jit-on-by-default + `--no-jit`) is RULED, but the b3b hook compiles
+  an eligible function on its FIRST `Op::Call` with NO hotness threshold (php's tracing JIT compiles only
+  after a hot-loop threshold). So flipping jit-on-by-default could make a COLD short-lived eligible
+  function SLOWER than the VM (cranelift compile cost ~10µs–ms > interpret savings for few iterations) —
+  a "never worse" violation for cold-heavy workloads. The hot path is a clear win (JIT ≫ VM, measured
+  ~10-22× on loops/recursion). **Options for the developer:** (A) add a call-count threshold (compile
+  after N≈2-50 calls) before the flip — RECOMMENDED, matches php's model, removes the cold regression;
+  (B) flip now accepting cold-function regression (simplest, but risks "worse than VM" on cold code);
+  (C) keep jit feature-gated (status quo — no default-on). I did NOT self-rule (user-visible default
+  execution behavior + a "never worse" trade-off). Precondition for ANY flip: measure JIT-vs-VM on the
+  SAME program (not floatmul-vs-floatarith) across eligible shapes incl. a COLD one. Perf sequence
+  PAUSED here; the tight-loop gap (`tight-loop-opt`, the now-dominant int+float lever) + strings (§14
+  ladder fork) are the other big perf items — both large/fork-y, deferred. Pivoting to SUGAR + clear
+  MASTER-PLAN sections per the overnight directive.
 - [2026-07-09] ✅📊 **FLOAT SLICE v1 SHIPPED + MEASURED (`5d91d78`, gate-green, unpushed).** Unboxed
   Const(Float)/AddF/SubF/MulF/DivF, leaf-only, floats as f64-bits in the i64 ABI (bitcast at ops),
   `Compiled.ret_kind` decode, DivF zero→code-5 redo, RemF/float-compares/float+Call deferred. Full gate
