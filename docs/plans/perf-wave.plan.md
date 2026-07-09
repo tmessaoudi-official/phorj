@@ -5,6 +5,26 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🛑🤝 **SESSION CLOSE + FRESH-SESSION HANDOFF (developer restarting clean).** Shipped this
+  session (all gate-green php-8.5.8, clippy both, fmt, release --features jit — UNPUSHED): range-analysis
+  (`21465d8`), `#[Unchecked]`→intadd WIN 1.99× (`64ddf17`), `Math.try*(): int?` (`0a9fbe1`), + docs.
+  **FRESH-SESSION PICKUP (recommended order):** (1) **floatmul 🚩 ruling** — developer deferred the A/B/C
+  decision to the fresh session (A=accept parity [recommended], B=opt-in `@reassoc` fast-math LADDER,
+  C=AOT SIMD); the FLAG stays OPEN, do NOT self-rule. (2) **overflow-message enrichment** — small
+  render-only UX polish (point the `integer overflow` fault at `unchecked{}`/`Math.tryAdd`); the ONLY
+  remaining piece of the ruled fault-model package. (3) **Tier-2 JIT breadth** — the big multi-session
+  slog: make the ~11 VM-only categories (closures/enums/strings/lists/maps/objects/methods/try-catch/
+  match) JIT-eligible; they lose 3-100× because they run on the plain VM (not JIT-compiled). Start in
+  FRESH context (spine-sensitive). **HONEST PERF TRUTH (measured, interleaved fresh docker php:8.5+JIT):
+  phorj WINS/matches on the JIT-covered compute core (fibrec WIN, intadd WIN via `#[Unchecked]`, floatmul
+  PARITY) = 3 of 15 micros; LOSES 3-100× on the ~11 VM-only categories the JIT doesn't cover yet. The
+  G-8 per-feature mandate is MET for the JIT-covered core, UNMET for the breadth — Tier-2 is the frontier.**
+- [2026-07-09] ✅ **`Math.tryAdd/trySub/tryMul(int,int): int?` SHIPPED (`0a9fbe1`, gate-green, unpushed)
+  — the type-driven recovery half of the ruled fault model.** Checked int arith → `null` on overflow
+  (dispatches the single-sourced `value::int_*` kernels; PHP leg = inline `is_int`-guarded IIFE, 3-leg
+  byte-identical). `examples/guide/checked-arithmetic.phg` (PHP-oracle'd, verified) + README. The fault
+  model as ruled is now delivered EXCEPT the overflow-message enrichment (point the fault text at
+  `unchecked{}`/`Math.tryAdd`) — small render-only UX polish, STILL TODO. Recommended-order item #1 done.
 - [2026-07-09] 🏁✅ **`#[Unchecked]` SHIPPED → intadd LOSS→WIN (`64ddf17`, full oracle gate green,
   unpushed).** The developer-adjudicated design built end-to-end: `#[Unchecked]` attribute (import
   `Core.Unchecked`, whole-function, single fn-level `unchecked` bool read by interp/VM/JIT/transpile) →
