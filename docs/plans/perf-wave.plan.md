@@ -5,6 +5,24 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🏁🚩 **"DONE" DEFINED (developer): WIN-OR-FLAG — combine bars 1+2.** Strive to strictly
+  BEAT php:8.5+JIT on EVERY benchmark by ANY method (JIT / VM-opt / range-analysis / AOT / native
+  reimpl). Anything that genuinely CANNOT be optimized to beat PHP by a known method must be **FLAGGED
+  for the developer to adjudicate** (never silently accepted as a loss or parity) — this is the §14
+  LADDER discipline applied to PERF: no silent degradation; every irreducible item is a surfaced
+  decision. **MECHANISM — the PERF-PARITY REGISTER (maintain in §"Scoreboard" below):** every benchmark
+  is exactly one of `WIN` / `PARITY` / `🚩FLAGGED`. A `🚩FLAGGED` entry MUST carry: (a) the measured
+  gap, (b) WHY it can't be beaten by the methods tried (with asm/measurement evidence), (c) 2-3 options
+  for how to handle (accept-parity-as-safety-flex / AOT / native-C-equivalent impl / algorithmic change)
+  — presented to the developer via AskUserQuestion, recommended-first. NEVER self-rule a flag. **ETA
+  [Speculative, in focused sessions]:** Tier-1 compute-core WIN (range-analysis + opt-in unchecked +
+  tiering-for-compute) ~2-4; Tier-2 breadth to WIN-or-flag across the ~11 VM-only categories (strings,
+  list, map, object/method, closure, enum, try/catch) ~8-15 (many need JIT extension OR VM inline-cache
+  work; some will FLAG → likely AOT/native-impl); the FLAGGED items become their own decisions (AOT
+  endgame = weeks+). Honest framing carried forward: phorj's structural wins are recursion/calls (done),
+  no-JIT-warmup (short programs), static-typing AOT, and correctness (catches what PHP corrupts); PHP's
+  hardest paths (tracing-JIT tight loops, optimized-C builtins sort/preg/array_*) are where FLAGs will
+  concentrate.
 - [2026-07-09] 🎯 **NEXT LEVER AGREED (developer): RANGE-ANALYSIS.** ⚠️ **HONEST SCOPE (corrected — I
   over-claimed "flips BOTH floatmul AND intadd" in the ask; it does NOT):**
   • **floatmul → WIN (definite):** its residual is the LOOP COUNTER `i=i+1` guarded by `i<iters` — a
