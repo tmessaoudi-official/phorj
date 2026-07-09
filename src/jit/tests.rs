@@ -1597,3 +1597,190 @@ fn jit_stack_overflow_threshold_matches_the_oracle() {
         }
     }
 }
+
+// --- range-analysis (docs/plans/perf-wave.plan.md): the induction-counter overflow-guard drop. These
+// UNIT-TEST the `range_proven_ops` recognizer directly (the soundness surface) — a counter can't be run
+// to 2^63 to observe an overflow fault, so correctness is proven structurally (which ops are proven) +
+// by byte-identity vs the VM oracle on the emitted code. The ONE unsound spot is the guard↔increment
+// link, so the rejection cases (wrong slot, `<=`, `!=`, double-write, nested) are the load-bearing ones:
+// each must NOT prove, so it keeps its overflow guard. ---
+
+/// How many `AddI` ops the range analysis proves as no-overflow induction increments in `name`.
+fn proven_count(program: &BytecodeProgram, name: &str) -> usize {
+    let f = func_index(program, name);
+    super::range_proven_ops(&program.functions[f])
+        .iter()
+        .filter(|&&p| p)
+        .count()
+}
+
+#[test]
+fn range_analysis_proves_strict_lt_plus_one_counter() {
+    // The canonical counted loop `while (i < n) { i = i + 1; }`: strict `<`, `+1`, single writer, guard
+    // on the induction slot at the loop header → PROVEN (exactly one). Byte-identical to the VM oracle.
+    let program = compile_source(
+        "package Main;\n\
+         function count(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; } return i; }\n\
+         function main() -> void {}",
+    );
+    assert_eq!(
+        proven_count(&program, "count"),
+        1,
+        "the strict-`<` `+1` counter must be range-proven (overflow guard droppable)"
+    );
+    let f = func_index(&program, "count");
+    assert!(
+        Compiled::compile_unboxed(&program, f).is_ok(),
+        "must stay unboxed-eligible"
+    );
+    for n in [0_i64, 1, 5, 100, -3] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "range-proven counter count({n}) must still match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn range_analysis_rejects_le_ne_and_wrong_slot_guards() {
+    // Each is a real bound on the counter that the recognizer INTENTIONALLY does not prove (fail closed),
+    // so each keeps its overflow guard: `<=` (`+1` at `i64::MAX` would overflow), `!=` (not `<`), and a
+    // guard on a DIFFERENT slot than the increment (`n < 100` guards `n`, not `i`). None may be proven.
+    let program = compile_source(
+        "package Main;\n\
+         function le(int n)    -> int { mutable int i = 0; while (i <= n)   { i = i + 1; } return i; }\n\
+         function ne(int n)    -> int { mutable int i = 0; while (i != n)   { i = i + 1; } return i; }\n\
+         function wrong(int n) -> int { mutable int i = 0; while (n < 100)  { i = i + 1; } return i; }\n\
+         function main() -> void {}",
+    );
+    for name in ["le", "ne", "wrong"] {
+        assert_eq!(
+            proven_count(&program, name),
+            0,
+            "`{name}` must NOT be range-proven — it keeps its overflow guard (sound)"
+        );
+    }
+    // `le`/`ne` terminate and must stay byte-identical (the guard they kept is harmless here).
+    for (name, n) in [("le", 5_i64), ("ne", 5)] {
+        let f = func_index(&program, name);
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "unproven-counter {name}({n}) must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn range_analysis_rejects_double_write_and_nested_loop() {
+    // Double-write: two `SetLocal(i)` → single-writer fails → not proven. Nested: the outer counter's
+    // guarded body contains an inner back-edge → condition (4) fails → outer not proven; the inner `!=`
+    // counter is not proven either → zero proven total.
+    let program = compile_source(
+        "package Main;\n\
+         function dbl(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; i = i + 1; } return i; }\n\
+         function nest(int n) -> int {\n\
+           mutable int i = 0;\n\
+           while (i < n) {\n\
+             mutable int j = 0;\n\
+             while (j != n) { j = j + 1; }\n\
+             i = i + 1;\n\
+           }\n\
+           return i;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    // The soundness-critical assertion is that NEITHER counter is proven (both keep their overflow
+    // guards). `dbl`/`nest` are not necessarily unboxed-eligible (the block-local `j` / statement shape
+    // introduces a `Pop`), so they run on the VM — byte-identity of unproven counters is covered by the
+    // `le`/`ne` cases and the existing loop suite; here we only pin the recognizer's rejection.
+    assert_eq!(
+        proven_count(&program, "dbl"),
+        0,
+        "double-write counter must not be proven"
+    );
+    assert_eq!(
+        proven_count(&program, "nest"),
+        0,
+        "a counter with a nested loop in its body must not be proven"
+    );
+}
+
+#[test]
+fn range_analysis_float_counted_loop_matches_vm_and_drops_guard() {
+    // The floatmul WIN shape: a float accumulator + a strict-`<` `+1` int counter. The counter is the
+    // ONLY int-arith op → it is proven AND `needs_sticky` becomes false → all sticky machinery is gone.
+    // Correctness = bit-exact float result vs the VM oracle (the WIN itself is measured separately).
+    let program = compile_source(
+        "package Main;\n\
+         function bench(int iters, float r) -> float {\n\
+           mutable float acc = 0.0;\n\
+           mutable int i = 0;\n\
+           while (i < iters) { acc = acc * r + 0.5; i = i + 1; }\n\
+           return acc;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    assert_eq!(
+        proven_count(&program, "bench"),
+        1,
+        "the float loop's int counter must be range-proven"
+    );
+    let f = func_index(&program, "bench");
+    assert!(
+        Compiled::compile_unboxed(&program, f).is_ok(),
+        "float counted loop must be unboxed-eligible"
+    );
+    for iters in [0_i64, 1, 10, 1000] {
+        let jit = ub_float(&program, f, &[Value::Int(iters), Value::Float(1.0000001)]);
+        let vm = vm_float(
+            &program,
+            f,
+            vec![Value::Int(iters), Value::Float(1.0000001)],
+        );
+        assert_eq!(
+            jit.to_bits(),
+            vm.to_bits(),
+            "bench({iters}) must be bit-exact vs the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
+    // intadd-PARTIAL + the fault-preservation guard: a strict-`<` `+1` counter (PROVEN → plain `iadd`)
+    // sharing a loop with `s = s * 3` (a `MulI`, never proven → keeps its overflow guard). Exactly one
+    // op proven (the counter). Byte-identical for small n; and for n past the overflow point the UNPROVEN
+    // multiply must STILL funnel to the VM redo — proving dropping the counter's guard did not drop the
+    // accumulator's (3^40 > i64::MAX, so the VM faults overflow around i=39).
+    let program = compile_source(
+        "package Main;\n\
+         function f(int n) -> int { mutable int s = 1; mutable int i = 0; while (i < n) { s = s * 3; i = i + 1; } return s; }\n\
+         function main() -> void {}",
+    );
+    assert_eq!(
+        proven_count(&program, "f"),
+        1,
+        "only the counter is proven; the `*3` accumulator is not"
+    );
+    let f = func_index(&program, "f");
+    for n in [0_i64, 1, 5, 20] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "coexist f({n}) (no overflow) must match the VM oracle"
+        );
+    }
+    // n = 50 overflows the `*3` accumulator: the unproven op's guard must still fire → VM redo.
+    match Compiled::compile_unboxed(&program, f)
+        .expect("eligible")
+        .run_unboxed(&[Value::Int(50)], 1)
+    {
+        JitRun::Fault(m) => assert_eq!(
+            m, REDO_ON_VM,
+            "the unproven `*3` overflow must still funnel to redo"
+        ),
+        JitRun::Value(v) => panic!("expected redo (accumulator overflow), got {}", as_int(&v)),
+    }
+}

@@ -5,6 +5,38 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🔒✅ **RANGE-ANALYSIS DESIGN LOCKED (advisor-3C clean, round 1) — building.** Goal: drop the
+  induction-counter overflow guard so floatmul flips PARITY→WIN (its sole int-arith op is the counter →
+  `needs_sticky`→false → ALL sticky machinery gone). Verified target [Verified: disassembled
+  `bench/micro/floatmul.phg` — header ip2 `GetLocal(3);GetLocal(0);Lt;JumpIfFalse(17)`, increment ip12-15
+  `GetLocal(3);Const(Int 1);AddI;SetLocal(3)`, back-edge `Jump(2)` ip16, single `SetLocal(3)`].
+  **SOUNDNESS CORE (advisor-tightened, narrower than the plan sketch):** an `AddI` is range-proven iff
+  ALL of — (1) exact shape `GetLocal(s);Const(Int 1);AddI;SetLocal(s)` (c==1, matching slot); (2) `s` has
+  EXACTLY ONE `SetLocal(s)` in the whole reachable code (this one) — its other def is the pre-loop
+  initializer; (3) the increment's innermost enclosing loop's HEADER `H` (target of a backward `Jump(H)`,
+  `H<ip<e`) LEADS with the strict-`<` guard on `s`: `code[H]==GetLocal(s)`, `code[H+1]∈{GetLocal,Const}`,
+  `code[H+2]==Lt`, `code[H+3]==JumpIfFalse(x)` with `x>e` (forward exit past the back-edge); (4) the
+  guarded loop body `(H,e)` contains NO other backward branch (no nesting — fail-closed against the
+  inner-loop-unbounded-counter trap). **WHY sound:** header guard `s < V` (signed, any i64 V) ⇒ at the
+  guard `s ≤ V−1 ≤ i64::MAX−1`; single-writer keeps `s` unchanged from guard to increment ⇒ `s+1 ≤
+  i64::MAX`, no overflow. The BOUND OPERAND IS IRRELEVANT (advisor) — no need to analyze it. Keying off
+  `code[H]==GetLocal(s)` (induction var on the LEFT/deeper operand) captures ONLY the sound orientation
+  (`s<V`, not `V<s`). **THE ONE UNSOUND SPOT** = the guard↔increment control-dependence link; everywhere
+  else a bug → MISS → keep guard → safe. So (3)+(4) are the rigorous, adversarially-tested checks; every
+  condition a positive conjunction, fails closed. **CODEGEN:** proven `AddI`→plain `iadd` (no
+  `sadd_overflow`, no `accumulate_sticky`); function-level `needs_sticky = any reachable {AddI,SubI,MulI,
+  Neg} NOT range-proven`; `needs_fault_exit = needs_sticky || any{DivI,RemI,Call}`. When `!needs_sticky`:
+  no sticky var, back-edge is a plain jump, Return is `(v,0)`. When `!needs_fault_exit`: don't create the
+  `fault_exit` block (advisor: avoid an unreferenced block tripping finalize). `collect_functions`/
+  `is_eligible` UNCHANGED (a fn stays eligible, just gets fewer guards). **SCOPE:** floatmul→WIN;
+  intadd→PARTIAL (counter's guard drops, accumulator's stays — needs opt-in `unchecked`, plan part 4).
+  Only `+1`/strict-`<` this slice (`<=`/`+c>1`/`-1` MISS → safe; add later). **TESTS (unit-test the
+  analysis fn directly — can't run a counter to 2^63):** expose `range_proven_ops`; assert PROVEN for
+  `i<n`+`i=i+1`, NOT-proven for `i<=n` (`sumTo`, existing), `i!=n`, `spin`(no guard), double-write,
+  nested-loop; byte-identity vs VM for float-counter loop + coexisting proven-counter/unproven-accumulator
+  (intadd-PARTIAL) + accumulator-overflow-still-faults; full ovf-spec suite unchanged. **EVIDENCE:**
+  re-dump asm (prove `seto/or`+back-edge gone) + interleaved fresh-docker php:8.5+JIT (prove parity→WIN,
+  not "asm looks right"). Spine-sensitive → each condition tested, commit when full gate green.
 - [2026-07-09] 🏁🚩 **"DONE" DEFINED (developer): WIN-OR-FLAG — combine bars 1+2.** Strive to strictly
   BEAT php:8.5+JIT on EVERY benchmark by ANY method (JIT / VM-opt / range-analysis / AOT / native
   reimpl). Anything that genuinely CANNOT be optimized to beat PHP by a known method must be **FLAGGED

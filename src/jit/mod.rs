@@ -947,6 +947,105 @@ fn unboxed_proven_param_kinds(func: &crate::chunk::Function) -> Vec<Option<Kind>
     proven
 }
 
+/// Range-analysis pre-pass (docs/plans/perf-wave.plan.md): which `AddI` ops are PROVABLY-no-overflow
+/// induction-variable increments, so `build_body_unboxed` can emit a plain wrapping-free `iadd` (no
+/// `sadd_overflow`, no sticky accumulation) for them — the lever that lets a counted-loop's counter
+/// stop paying for an overflow guard the VM would never actually fault on. Returns a `Vec<bool>` indexed
+/// by ip (`true` = proven safe). SOUND + CONSERVATIVE: an unprovable op stays `false` (keeps the guard);
+/// imprecision (a missed mark) only over-keeps a guard (a perf miss), never mis-accepts (a miscompile).
+///
+/// An `AddI` at ip `k` is proven iff ALL of these hold (positive conjunction — any doubt fails closed):
+///  1. **shape** `GetLocal(s); Const(Int 1); AddI; SetLocal(s)` at `[k-2 ..= k+1]` (step `+1`, same slot `s`);
+///  2. **single writer** — slot `s` has EXACTLY ONE reachable `SetLocal(s)` in the function (this one), so
+///     `s` cannot be mutated between the guard and the increment (its other def is the pre-loop init);
+///  3. **guarded** — the increment's innermost enclosing loop's header `H` (target of a backward branch
+///     at `e`, `H < k < e`) LEADS with the strict-`<` guard on `s`: `code[H]==GetLocal(s)`,
+///     `code[H+1] ∈ {GetLocal, Const(Int)}`, `code[H+2]==Lt`, `code[H+3]==JumpIfFalse(x)` with `x > e`
+///     (the loop exit is forward, past the back-edge);
+///  4. **not nested** — the guarded body `[H, e]` contains exactly ONE backward branch (this one), so the
+///     counter is re-checked every iteration (rules out the inner-loop-runs-unbounded-for-fixed-`s` trap).
+///
+/// SOUNDNESS: the header guard `s < V` (signed `Lt`, `s` the LEFT/deeper operand — condition 3 keys off
+/// `code[H]==GetLocal(s)`, so ONLY that orientation is accepted, never `V < s`) gives `s ≤ V-1 ≤
+/// i64::MAX-1` whenever the body runs; single-writer (condition 2) keeps `s` unchanged from the guard to
+/// the increment ⇒ `s+1 ≤ i64::MAX`, no overflow. The bound `V` is irrelevant to the proof (any i64
+/// works), so it is not analyzed. The one place a bug flips safe→unsound is the guard↔increment link
+/// (conditions 3+4); everywhere else a bug degrades to a missed mark (safe).
+fn range_proven_ops(func: &crate::chunk::Function) -> Vec<bool> {
+    let code = &func.chunk.code;
+    let n = code.len();
+    let reach = reachable(code);
+    let mut proven = vec![false; n];
+
+    // All reachable backward branches as `(source e, target/header H)`, H < e.
+    let backs: Vec<(usize, usize)> = code
+        .iter()
+        .enumerate()
+        .filter(|&(ip, _)| reach[ip])
+        .filter_map(|(ip, op)| match op {
+            Op::Jump(t) | Op::JumpIfFalse(t) if *t < ip => Some((ip, *t)),
+            _ => None,
+        })
+        .collect();
+
+    for k in 0..n {
+        if !reach[k] || !matches!(code[k], Op::AddI) || k < 2 || k + 1 >= n {
+            continue;
+        }
+        // (1) shape `GetLocal(s); Const(Int 1); AddI; SetLocal(s)`.
+        let s = match code[k - 2] {
+            Op::GetLocal(s) => s,
+            _ => continue,
+        };
+        let is_one = matches!(code[k - 1], Op::Const(ci)
+            if matches!(func.chunk.consts.get(ci), Some(Value::Int(1))));
+        if !is_one || !matches!(code[k + 1], Op::SetLocal(t) if t == s) {
+            continue;
+        }
+        // (2) single writer: exactly one reachable SetLocal(s) (this one).
+        let writers = code
+            .iter()
+            .enumerate()
+            .filter(|&(ip, op)| reach[ip] && matches!(op, Op::SetLocal(t) if *t == s))
+            .count();
+        if writers != 1 {
+            continue;
+        }
+        // Innermost enclosing loop: exactly one backward branch (e, H) with H < k < e. Zero → not in a
+        // loop; more than one → nested loops around k (fail closed — this slice does not prove nested).
+        let enclosing: Vec<(usize, usize)> = backs
+            .iter()
+            .copied()
+            .filter(|&(e, h)| h < k && k < e)
+            .collect();
+        if enclosing.len() != 1 {
+            continue;
+        }
+        let (e, h) = enclosing[0];
+        // (4) not nested: the ONLY backward branch whose source lies in [H, e] is this one.
+        if backs.iter().any(|&(e2, _)| e2 != e && h <= e2 && e2 <= e) {
+            continue;
+        }
+        // (3) header H leads with the strict-`<` guard on `s`:
+        //   GetLocal(s); {GetLocal(_) | Const(Int _)}; Lt; JumpIfFalse(x)  with x > e (forward exit).
+        if h + 3 >= n {
+            continue;
+        }
+        let head_slot_ok = matches!(code[h], Op::GetLocal(g) if g == s);
+        let bound_ok = matches!(code[h + 1], Op::GetLocal(_))
+            || matches!(code[h + 1], Op::Const(ci)
+                if matches!(func.chunk.consts.get(ci), Some(Value::Int(_))));
+        if !(head_slot_ok && bound_ok && matches!(code[h + 2], Op::Lt)) {
+            continue;
+        }
+        if !matches!(code[h + 3], Op::JumpIfFalse(x) if x > e) {
+            continue;
+        }
+        proven[k] = true;
+    }
+    proven
+}
+
 /// Push an SSA value + its kind onto the unboxed operand stack, which is realized as depth-indexed
 /// Cranelift `Variable`s (`vars[depth]`): the value is stored with `def_var` (cranelift turns
 /// within-block def/use into plain SSA and inserts phis at merges / loop back-edges), the kind is
@@ -1271,6 +1370,29 @@ fn build_body_unboxed(
         .collect();
     let (leader_state, max_depth) = unboxed_analyze(program, func_idx, &param_kinds)?;
 
+    // Range analysis (docs/plans/perf-wave.plan.md): `proven_ops[ip]` = an `AddI` that is a provably-
+    // no-overflow induction-variable increment → emit a plain wrapping-free `iadd`, no sticky. From it:
+    //   `needs_sticky` — is any reachable speculated overflow op (`AddI`/`SubI`/`MulI`/`Neg`) NOT proven?
+    //     If NO, the speculation sticky flag + its back-edge/Return checks are dead → omit them entirely
+    //     (Cranelift's baseline `opt_level=none` does NOT DCE the loop-carried sticky phi, so omitting is
+    //     what actually turns a proven counted loop's PARITY into a WIN).
+    //   `needs_fault_exit` — is there ANY path to the shared fault-exit (a sticky redo, OR a `DivI`/
+    //     `RemI`/`Call` per-op fault branch)? If NO, don't create the block at all (an unreferenced,
+    //     never-jumped-to block would be a dangling exit — avoid it).
+    let proven_ops = range_proven_ops(func);
+    let speculated = |op: &Op| matches!(op, Op::AddI | Op::SubI | Op::MulI | Op::Neg);
+    let needs_sticky = code
+        .iter()
+        .enumerate()
+        .any(|(ip, op)| reach[ip] && speculated(op) && !proven_ops[ip]);
+    // `DivF` also branches to the fault-exit (a zero divisor → code 5), as do `DivI`/`RemI` (hardware
+    // trap) and `Call` (depth guard + fault propagation) — every op that emits a `fault_if`/direct
+    // `brif` to the shared exit must be counted here, or the block won't exist when it is needed.
+    let needs_fault_exit = needs_sticky
+        || code.iter().enumerate().any(|(ip, op)| {
+            reach[ip] && matches!(op, Op::DivI | Op::RemI | Op::DivF | Op::Call(_))
+        });
+
     let mut fbctx = FunctionBuilderContext::new();
     let mut b = FunctionBuilder::new(&mut cl_ctx.func, &mut fbctx);
     // A `Call` (self OR cross-function) lowers to a native call to the callee's FuncId (resolved at
@@ -1333,9 +1455,16 @@ fn build_body_unboxed(
     // op ORs its overflow carry in (no per-op branch); at every loop back-edge AND every `Return`,
     // `sticky != 0` ⇒ exit code 5 = "redo on VM", where the VM's per-op CHECKED arithmetic reproduces
     // the true first fault in the correct order (the single source of fault truth — Invariant 2).
-    let sticky = b.declare_var(types::I64);
-    let sticky_seed = b.ins().iconst(types::I64, 0);
-    b.def_var(sticky, sticky_seed);
+    // Only declared when at least one unproven speculated op needs it (else the whole sticky chain is
+    // dead — and Cranelift baseline won't DCE the loop-carried phi, so omitting is the actual win).
+    let sticky = if needs_sticky {
+        let v = b.declare_var(types::I64);
+        let sticky_seed = b.ins().iconst(types::I64, 0);
+        b.def_var(v, sticky_seed);
+        Some(v)
+    } else {
+        None
+    };
 
     // One Cranelift block per reachable leader — the SAME leader set `unboxed_analyze` used, so the two
     // views of the block structure can never drift.
@@ -1348,9 +1477,16 @@ fn build_body_unboxed(
     }
     let start = blocks[0].expect("ip 0 is always a leader");
 
-    // Shared fault-exit: takes the fault code as a block param, returns (0, code).
-    let fault_exit = b.create_block();
-    b.append_block_param(fault_exit, types::I64);
+    // Shared fault-exit: takes the fault code as a block param, returns (0, code). Created only when a
+    // fault path exists (a sticky redo, or a div/rem/call per-op branch); otherwise there is nothing to
+    // jump to it and creating it would leave a dangling block.
+    let fault_exit = if needs_fault_exit {
+        let fx = b.create_block();
+        b.append_block_param(fx, types::I64);
+        Some(fx)
+    } else {
+        None
+    };
 
     b.ins().jump(start, &[]);
     b.switch_to_block(start);
@@ -1360,21 +1496,26 @@ fn build_body_unboxed(
     // the params on the stack.
     let mut kinds: Vec<Kind> = param_kinds.clone();
 
-    // Emit "if `flag` (i8, nonzero) then fault with `code` else continue in a fresh block".
+    // Emit "if `flag` (i8, nonzero) then fault with `code` else continue in a fresh block". Only ever
+    // called on a path that needs the fault-exit (div/rem/call/depth or a sticky redo), so `fault_exit`
+    // is guaranteed `Some` here (`needs_fault_exit`).
     let fault_if = |b: &mut FunctionBuilder, flag: ClValue, code: i64| {
+        let fx = fault_exit.expect("fault_if requires a fault-exit block (needs_fault_exit)");
         let cv = b.ins().iconst(types::I64, code);
         let cont = b.create_block();
-        b.ins().brif(flag, fault_exit, &[cv.into()], cont, &[]);
+        b.ins().brif(flag, fx, &[cv.into()], cont, &[]);
         b.switch_to_block(cont);
     };
 
     // ovf-spec: OR a boolean overflow `flag` (i8, 0/1 from `*_overflow` / an `is_min` compare) into the
     // sticky Variable — no branch, so the hot no-overflow path costs only the OR. Zero-extends to i64.
+    // Only called for an UNPROVEN speculated op, so `sticky` is `Some` here (`needs_sticky`).
     let accumulate_sticky = |b: &mut FunctionBuilder, flag: ClValue| {
-        let cur = b.use_var(sticky);
+        let sv = sticky.expect("accumulate_sticky requires the sticky var (needs_sticky)");
+        let cur = b.use_var(sv);
         let ext = b.ins().uextend(types::I64, flag);
         let next = b.ins().bor(cur, ext);
-        b.def_var(sticky, next);
+        b.def_var(sv, next);
     };
 
     for (ip, op) in code.iter().enumerate() {
@@ -1417,16 +1558,25 @@ fn build_body_unboxed(
             Op::AddI | Op::SubI | Op::MulI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                // ovf-spec: WRAPPING result + OR the overflow carry into sticky — NO per-op branch (the
-                // per-op `*_overflow`+branch was the intadd perf loss). `sadd_overflow`'s result[0] IS the
-                // two's-complement wrapped value; push it, fold result[1] (the carry) into sticky.
-                let (res, overflow) = match op {
-                    Op::AddI => b.ins().sadd_overflow(av, bv),
-                    Op::SubI => b.ins().ssub_overflow(av, bv),
-                    _ => b.ins().smul_overflow(av, bv),
-                };
-                accumulate_sticky(&mut b, overflow);
-                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
+                if proven_ops[ip] {
+                    // range-analysis: a provably-no-overflow induction increment (`AddI` only — see
+                    // `range_proven_ops`). Emit a plain `iadd`: its two's-complement result equals
+                    // `sadd_overflow`'s result[0] bit-for-bit (byte-identity ✓), but the overflow can
+                    // never occur, so no carry to fold and no sticky. This drops the counter's guard.
+                    let res = b.ins().iadd(av, bv);
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
+                } else {
+                    // ovf-spec: WRAPPING result + OR the overflow carry into sticky — NO per-op branch (the
+                    // per-op `*_overflow`+branch was the intadd perf loss). `sadd_overflow`'s result[0] IS
+                    // the two's-complement wrapped value; push it, fold result[1] (the carry) into sticky.
+                    let (res, overflow) = match op {
+                        Op::AddI => b.ins().sadd_overflow(av, bv),
+                        Op::SubI => b.ins().ssub_overflow(av, bv),
+                        _ => b.ins().smul_overflow(av, bv),
+                    };
+                    accumulate_sticky(&mut b, overflow);
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
+                }
             }
             Op::DivI | Op::RemI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
@@ -1595,8 +1745,9 @@ fn build_body_unboxed(
                 // shared fault-exit → this whole graph redoes on the VM.
                 let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
                 let cont = b.create_block();
-                b.ins()
-                    .brif(is_fault, fault_exit, &[ccode.into()], cont, &[]);
+                // A `Call` is in the `needs_fault_exit` set, so `fault_exit` is `Some` here.
+                let fx = fault_exit.expect("Call requires a fault-exit block (needs_fault_exit)");
+                b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
                 b.switch_to_block(cont);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, value, Kind::Int)?;
             }
@@ -1611,8 +1762,10 @@ fn build_body_unboxed(
                 // loops forever while the VM faults overflow in ~40 iters (a byte-identity spine
                 // violation, not a slowdown). Forward jumps can't extend execution past a fault → no guard.
                 if *t <= ip {
-                    let s = b.use_var(sticky);
-                    fault_if(&mut b, s, 5);
+                    if let Some(sv) = sticky {
+                        let s = b.use_var(sv);
+                        fault_if(&mut b, s, 5);
+                    }
                 }
                 b.ins().jump(tb, &[]);
                 current = None;
@@ -1630,8 +1783,10 @@ fn build_body_unboxed(
                 // both edges when the taken-target is backward — redo is always sound; the common
                 // while-loop uses a forward `JumpIfFalse` (exit) + a backward `Jump`, so this rarely fires.
                 if *t <= ip {
-                    let s = b.use_var(sticky);
-                    fault_if(&mut b, s, 5);
+                    if let Some(sv) = sticky {
+                        let s = b.use_var(sv);
+                        fault_if(&mut b, s, 5);
+                    }
                 }
                 // cond nonzero (true) → fall through; zero (false) → take the jump.
                 b.ins().brif(cond, fallb, &[], tb, &[]);
@@ -1667,11 +1822,17 @@ fn build_body_unboxed(
                 };
                 // ovf-spec: if speculation overflowed anywhere on this path, return code 5 (redo on VM)
                 // instead of the wrapped value; else (value, 0). `select` keeps the hot no-overflow path
-                // branchless. The value operand is ignored by `run_unboxed` when code != 0.
-                let s = b.use_var(sticky);
-                let five = b.ins().iconst(types::I64, 5);
-                let zero = b.ins().iconst(types::I64, 0);
-                let code = b.ins().select(s, five, zero);
+                // branchless. The value operand is ignored by `run_unboxed` when code != 0. When there is
+                // no sticky flag (every speculated op proven / none present), the code is a constant 0 —
+                // no phi, no select — which is what lets a proven counted loop return with zero overhead.
+                let code = if let Some(sv) = sticky {
+                    let s = b.use_var(sv);
+                    let five = b.ins().iconst(types::I64, 5);
+                    let zero = b.ins().iconst(types::I64, 0);
+                    b.ins().select(s, five, zero)
+                } else {
+                    b.ins().iconst(types::I64, 0)
+                };
                 b.ins().return_(&[vbits, code]);
                 current = None;
             }
@@ -1680,11 +1841,14 @@ fn build_body_unboxed(
         }
     }
 
-    // Fault-exit (shared): return (0, code).
-    b.switch_to_block(fault_exit);
-    let code_param = b.block_params(fault_exit)[0];
-    let zero = b.ins().iconst(types::I64, 0);
-    b.ins().return_(&[zero, code_param]);
+    // Fault-exit (shared): return (0, code). Only emitted when a fault path actually targets it (else it
+    // was never created — see `needs_fault_exit`).
+    if let Some(fx) = fault_exit {
+        b.switch_to_block(fx);
+        let code_param = b.block_params(fx)[0];
+        let zero = b.ins().iconst(types::I64, 0);
+        b.ins().return_(&[zero, code_param]);
+    }
 
     b.seal_all_blocks();
     b.finalize();
