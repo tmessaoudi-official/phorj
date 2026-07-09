@@ -971,7 +971,23 @@ adjudicates via AskUserQuestion — NEVER self-ruled).
 | fibrec | **WIN** | ~1.7–2.9× | recursion/calls — phorj's structural strength (`ovf-spec` shipped) |
 | floatmul | **🚩FLAGGED** | ~0.99 (parity) | Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php identical chain → parity is the ceiling. **Irreducible without FP-reassociation/unroll = byte-identity-FORBIDDEN (Inv #1).** |
 | intadd | **LOSS** (fork-blocked) | ~0.67 (1.48× slower) | [Verified: interleaved 8-pair, JIT binary — phorj 12.14M vs php 8.17M ns, 0/8, checksums identical]. Counter now plain `iadd`, but the ACCUMULATOR (`acc+=…`) keeps its overflow guard (unprovable). Unlike floatmul the int accumulator chain is short (~1 cyc), so the `sadd_overflow`+sticky IS on the critical path → the guard is the LOSS. **Fixable only by opt-in `unchecked` = §15 user-facing-language fork → PENDING dev (perf-wave part 4); not self-ruled.** |
-| ~11 VM-only cats | untriaged | — | strings/list/map/object/closure/enum/try-catch — need JIT extension or VM inline-cache work (Tier-2 breadth) |
+| ~11 VM-only cats | **LOSS (heavy)** | 0.01×–0.39× | [Verified: `microbench.sh` batched-indicative 2026-07-09] closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07 · methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05. **All run on the plain VM — NOT JIT-eligible** (ops outside the int/float unboxed subset) → 3–100× slower than php+JIT. Fix = Tier-2 JIT-subset breadth (per category; several need §14/§15 rulings — e.g. trycatch, strings). floatarith specifically = tracked float lever (toFloat/truncate inline). |
+
+> ⚠️ **Batched vs interleaved:** the table above (except floatmul/intadd/fibrec) is from `microbench.sh`
+> which is BATCHED (Phase-1-all-phorj then Phase-2-all-php) → indicative only, subject to the ~1.5×
+> load-noise floor. The heavy LOSSes (≤0.4×) are far outside noise so the verdict is safe; near-parity
+> rows MUST be interleave-confirmed (batched reported floatmul as 1.13× "WIN" — INTERLEAVED it is 0.99×
+> PARITY; trust interleaved). fibrec/floatmul/intadd rows above are the interleaved values.
+
+**Honest standing of range-analysis (`21465d8`):** it produces **ZERO measured WIN on any current
+benchmark** — floatmul is dependency-bound (guard off the critical path), intadd's real cost is the
+accumulator guard it can't prove. Kept anyway because it is sound, harmless, byte-identity-preserving,
+and is the *safe-by-proof* half of the counter/accumulator split (it frees the provable counter without
+forcing the user to widen `unchecked` over it). The "will matter for a genuinely int-throughput-bound
+loop where the counter IS on the critical path" claim is **[Speculative]** — no current micro
+demonstrates it. Codegen note: the sticky/fault-exit-as-`Option` change touches EVERY unboxed function's
+codegen (a fn with no proven counter takes the unchanged path); fully covered by the green jit+oracle
+suite (the DivF fault-exit edge was the one real case, caught by the existing float-div test).
 
 **🚩 floatmul — OPEN DECISION for the developer (PENDING, do NOT self-rule):** floatmul cannot beat php on
 this box by any byte-identity-preserving method (the float dependency chain is the shared ceiling).
