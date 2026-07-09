@@ -42,7 +42,12 @@ path = "src/main.rs"
 # rolling-your-own is the anti-pattern: audited crypto, and a ReDoS-safe regex engine. Each is behind
 # a feature so the WASM playground builds without it (docs/specs/UNIFIED-SPEC.md#external-dependency-policy).
 [features]
-default = ["crypto", "regex", "signals", "green"]
+# `jit` is default (developer-ruled 2026-07-09): the shipped binary compiles hot functions to native
+# code so `phg run` is fast out of the box (opt out with `phg run --no-jit`). Safe for the WASM
+# playground, which builds with `default-features = false` (see playground/Cargo.toml) and whose
+# Cranelift deps are non-wasm target-gated anyway. Build without native codegen via
+# `--no-default-features` (re-add crypto/regex/signals/green as needed).
+default = ["crypto", "regex", "signals", "green", "jit"]
 crypto = ["dep:argon2"]
 regex = ["dep:regex"]
 # `phg serve` graceful shutdown (M6 W4 / S4.2): SIGINT/SIGTERM → drain in-flight → exit 0. Off for the

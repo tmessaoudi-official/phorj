@@ -21,11 +21,14 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
 ## Toolchain & quality gate
 
 - `export PATH=/stack/tools/cargo/bin:$PATH`.
-- **Green means ALL of:** `cargo test --workspace --features jit` + `cargo clippy --all-targets --features jit`
-  + `cargo fmt --check` + `cargo build --release`, clean. **`--features jit` is REQUIRED** — the JIT
-  backend is NOT a default feature, so bare `cargo test --workspace` silently skips every JIT test.
-  Warnings fail the build (`[lints] warnings = "deny"`); `#![forbid(unsafe_code)]` on both crate roots;
-  toolchain pinned by `rust-toolchain.toml`.
+- **Green means ALL of:** `cargo test --workspace` + `cargo clippy --all-targets`
+  + `cargo fmt --check` + `cargo build --release`, clean. **`jit` is a DEFAULT feature** (developer-ruled
+  2026-07-09) — so bare `cargo test`/`build`/`clippy` include the JIT (the `--features jit` still written
+  in the hooks/commands below is now a harmless redundant no-op). Also verify the jit-off path still
+  compiles: `cargo check --no-default-features`. Run without native codegen via `phg run --no-jit`
+  (byte-identical VM fallback, no rebuild). Warnings fail the build (`[lints] warnings = "deny"`);
+  `#![deny(unsafe_code)]` on both crate roots — the JIT's audited `unsafe` (confined to `src/jit/`) is the
+  sole island; toolchain pinned by `rust-toolchain.toml`.
 - **Tiered git hooks** (speed, 2026-07-08 — `scripts/git-hooks/{pre-commit,pre-push}`): **pre-commit**
   runs the fast Rust-only tier (`fmt` + `nextest --features jit`, EXCLUDING the two heavy sweeps
   `every_repo_phg_formats_idempotently_and_safely` + `shipped_manual_example_runs_on_both_backends`) —

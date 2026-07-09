@@ -107,11 +107,15 @@ structurally from the declared `Type` annotations — the compiler via `compiler
 `obj.field`/`obj.m()`/class-typed payloads resolve). Don't assume a node carries a resolved type.
 
 ## 10. The quality gate is a compile-time + pre-commit invariant
-`#![forbid(unsafe_code)]` on both crate roots; `[lints] warnings = "deny"` + `clippy.all = "deny"`
-in `Cargo.toml` (so a warning *fails the build*); the toolchain is pinned (`rust-toolchain.toml`)
-to keep that gate reproducible. The tracked `scripts/git-hooks/pre-commit` runs
-`fmt --check` + `clippy -Dwarnings` + `test`. Green means: `cargo test` + `cargo clippy
---all-targets` + `cargo fmt --check` + `cargo build --release`, all clean.
+`#![deny(unsafe_code)]` on both crate roots (relaxed from `forbid` for the JIT: its
+finalize→transmute→fn-ptr `unsafe` is the sole first-party island, confined to `src/jit/` behind the
+CI `unsafe-island` gate); `[lints] warnings = "deny"` + `clippy.all = "deny"` in `Cargo.toml` (so a
+warning *fails the build*); the toolchain is pinned (`rust-toolchain.toml`) to keep that gate
+reproducible. The tracked `scripts/git-hooks/pre-commit` runs `fmt --check` + `clippy -Dwarnings` +
+`test`. Green means: `cargo test` + `cargo clippy --all-targets` + `cargo fmt --check` + `cargo build
+--release`, all clean. As of 2026-07-09 `jit` is a **default feature**, so those bare commands include
+native codegen; additionally verify the jit-off path with `cargo check --no-default-features` (with
+`jit` off the only way to build, that path can otherwise bit-rot).
 
 ## 11. No perf change without a measured before/after
 `phg benchmark <file>` (median-of-N, output-identity gated) is the baseline tool. Any

@@ -895,7 +895,15 @@ third-party crate. Ruled mechanism:
   the CI `unsafe-island` gate (`.github/workflows/ci.yml`) fails the build if an `allow(unsafe_code)`
   escape hatch appears anywhere outside `src/jit/`, machine-enforcing "first-party unsafe lives only in
   the JIT."
-- **Feature-gated `jit`, non-wasm** — the WASM playground stays on the VM.
+- **`jit` is a DEFAULT feature (AMENDED 2026-07-09, developer-ruled).** Originally admitted
+  feature-gated; promoted to a default feature so the shipped binary JITs hot functions out of the box
+  (the default `cargo build --release` fibrec dropped ~695ms→~14ms, ~49×, vs the previous JIT-less
+  default — the same php-beating wins now ship without a build flag). Non-wasm still holds: the WASM
+  playground builds with `default-features = false` and the Cranelift deps are non-wasm target-gated, so
+  the flip cannot reach it. Opt out at runtime with `phg run --no-jit` (byte-identical VM fallback, no
+  rebuild) or at build time with `--no-default-features` (a jit-off build is verified to still compile
+  via `cargo check --no-default-features`). This makes Cranelift's `unsafe` island part of every default
+  build (still confined to `src/jit/`, still CI-`unsafe-island`-gated).
 - **The crate + the `forbid`→`deny` change landed WITH JIT codegen slice 1** (2026-07-06): `cranelift`
   0.133 is in-tree behind the `jit` feature, the crate roots are `#![deny(unsafe_code)]`, and the sole
   `src/jit/` allow-island carries the first codegen (pure-int leaf functions; not yet wired into

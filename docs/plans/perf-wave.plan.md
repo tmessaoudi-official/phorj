@@ -5,6 +5,28 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅🚀 **#7 SHIPPED (two commits) — loop-aware JIT hotness threshold + jit-default-on
+  (developer-ruled the full flip; gate-green, unpushed).**
+  **Commit 1 (`a22ae7a`) — hotness threshold:** the `Op::Call` hook compiled a callee on its FIRST call
+  → cold one-shot loopless fns paid the Cranelift compile cost (a default-on regression). Now: LOOP-
+  containing fns compile eagerly (a hot loop can live in a fn called once — `bench(iters)`), LOOPLESS
+  fns only after `JIT_HOTNESS_THRESHOLD`=2 calls. Byte-identity-safe (VM≡JIT → which path serves a call
+  never changes output) → no-regression INSURANCE, not a speedup (no micro exercises the cold-skip). 3
+  hits>0 tests stay green (2 loops eager, fib(10)=~177 calls). `JitCache.attempts` + `function_has_loop`
+  (mirrors the JIT's backward-branch scan).
+  **Commit 2 — jit-default flip:** `default += ["jit"]`; `phg run --no-jit` runtime opt-out (global
+  `set_jit_enabled`, byte-identical VM fallback); `--no-default-features` jit-off path verified to still
+  compile. **MEASURED [Verified: median-of-5, output byte-identical fibrec=2178309]: the DEFAULT
+  `cargo build --release` binary — previously JIT-LESS (VM) — fibrec ~695ms → ~14ms = ~49× faster.**
+  This is a DELIVERY win (the existing php-beating JIT wins now ship WITHOUT a `--features jit` flag),
+  NOT a new php win. Safe for wasm: playground uses `default-features=false` + Cranelift is non-wasm
+  target-gated [Verified: config]. Dep-policy AMENDED (Cranelift feature-gated→default, developer-ruled)
+  in UNIFIED-SPEC; CLAUDE.md + INVARIANTS #10 updated (the "`--features jit` REQUIRED / bare test skips
+  JIT" claim is now false; `forbid`→`deny` corrected). ⚠️ **wasm/Pages-CI safety is [Inferred, not
+  locally verifiable] — wasm-pack absent + `dep:cranelift`-under-target-gate is a known Cargo wrinkle →
+  developer should WATCH CI after push.** DEFERRED: dispatch-key maps → `Rc<str>` (flips methodcall);
+  #3 JIT the object/enum construction+dispatch path (the real objalloc/enum flipper, spine-sensitive,
+  fresh context).
 - [2026-07-09] ✅📊 **#4 SLICE 2 SHIPPED — `class`/`ty`/`variant` → `Rc<str>` (gate-green, unpushed).**
   Migrated `Instance.class`, `EnumVal.ty`/`variant`, `ClassDesc.class`, `EnumDesc.ty`/`variant` from
   `String` to `Rc<str>`: names are built ONCE in the compiler pre-pass (`.into()`), so per-construction

@@ -74,10 +74,12 @@ pub fn help_for(cmd: &str) -> String {
     let body = match cmd {
         "run" => {
             "run — run the program on the bytecode VM (the runtime).\n\n\
-                  usage:\n  phg run <file | - | -e code> [--tree-walker] [--]\n\n\
+                  usage:\n  phg run <file | - | -e code> [--tree-walker] [--no-jit] [--]\n\n\
                   flags:\n  \
                   --tree-walker   run on the tree-walking interpreter instead (the correctness\n                  \
-                  oracle — slow by design, byte-identical to the VM; for validation, not everyday use)\n\n\
+                  oracle — slow by design, byte-identical to the VM; for validation, not everyday use)\n  \
+                  --no-jit        run on the pure VM without native codegen (JIT is on by default;\n                  \
+                  byte-identical to the JIT — an escape hatch, no rebuild needed)\n\n\
                   examples:\n  \
                   phg run hello.phg\n  \
                   phg run -e 'package Main; import Core.Output; function main(): void { Output.printLine(\"hi\"); }'\n  \
@@ -1273,9 +1275,16 @@ pub fn cmd_treewalk(src: &str) -> Result<String, String> {
 fn vm_for(program: &BytecodeProgram) -> Vm<'_> {
     #[cfg(feature = "jit")]
     {
-        Vm::new(program).with_jit(std::rc::Rc::new(std::cell::RefCell::new(
-            crate::vm::JitCache::new(),
-        )))
+        // JIT by default; `phg run --no-jit` (crate::vm::set_jit_enabled(false)) falls back to the
+        // pure VM without a rebuild — the byte-identical oracle path, an escape hatch for a suspected
+        // JIT issue.
+        if crate::vm::jit_enabled() {
+            Vm::new(program).with_jit(std::rc::Rc::new(std::cell::RefCell::new(
+                crate::vm::JitCache::new(),
+            )))
+        } else {
+            Vm::new(program)
+        }
     }
     #[cfg(not(feature = "jit"))]
     {

@@ -429,6 +429,11 @@ fn main() {
     // `phg run` executes on the bytecode VM by default (the runtime); `--tree-walker` selects the
     // slow tree-walking interpreter — the correctness oracle, kept for validation, not everyday use.
     let tree_walker = cmd == "run" && args[2..].iter().any(|a| a == "--tree-walker");
+    // `phg run --no-jit` runs on the pure VM (no native codegen) — an escape hatch without a rebuild.
+    // A no-op on a `--no-default-features` (jit-off) build; harmless to set unconditionally.
+    if cmd == "run" && args[2..].iter().any(|a| a == "--no-jit") {
+        phorj::vm::set_jit_enabled(false);
+    }
     let rest: Vec<String> = args[2..]
         .iter()
         .filter(|a| {
@@ -436,6 +441,7 @@ fn main() {
                 && a.as_str() != "--json"
                 && a.as_str() != "--dump-on-fault"
                 && a.as_str() != "--tree-walker"
+                && a.as_str() != "--no-jit"
         })
         .cloned()
         .collect();

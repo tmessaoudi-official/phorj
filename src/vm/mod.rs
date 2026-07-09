@@ -63,6 +63,23 @@ pub struct JitCache {
 #[cfg(feature = "jit")]
 pub const JIT_HOTNESS_THRESHOLD: u32 = 2;
 
+/// Runtime opt-out for the native JIT (`phg run --no-jit`). Default ON — the shipped binary JITs hot
+/// functions out of the box. Read by [`crate::cli`]'s `vm_for` only when the `jit` feature is compiled;
+/// a no-op on a `--no-default-features` (jit-off) build. Lets a user fall back to the pure VM without a
+/// rebuild — an escape hatch for a suspected JIT issue (the VM is the byte-identical oracle). Not
+/// feature-gated so `main` can set it unconditionally regardless of the compiled feature set.
+static JIT_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Disable/enable the native JIT for this process (see [`static@JIT_ENABLED`]).
+pub fn set_jit_enabled(on: bool) {
+    JIT_ENABLED.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the native JIT is enabled for this process (default `true`; `phg run --no-jit` clears it).
+pub fn jit_enabled() -> bool {
+    JIT_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[cfg(feature = "jit")]
 impl JitCache {
     pub fn new() -> Self {
