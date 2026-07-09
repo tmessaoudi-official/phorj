@@ -168,3 +168,17 @@ per-op (the "ovf-spec" slice). Correctness rests on a coupling invariant, the sa
   3; }`: `3^k mod 2^64` is never 0 → infinite native loop vs a ~40-iter VM overflow fault). The guard
   bounds native to ≤1 partial iteration past the first overflow. Guard tests:
   `ovf_spec_*` in `src/jit/tests.rs` (end-to-end `cmd_run` vs `cmd_treewalk`).
+
+**Float ops (slice v1).** Floats live in the unboxed `vars` as their f64 BITS (an i64); code `bitcast`s
+I64↔F64 only at the float op. `AddF/SubF/MulF` are TOTAL (overflow → inf, never a fault) → NO sticky,
+NO branch. `DivF` faults ONLY on a zero divisor (`value::float_div`: `b == 0.0`, incl. `-0.0`) →
+`fcmp Equal b, 0.0` → the same code-5 redo (NaN/inf divisors do NOT fault: `fcmp Equal` is false for
+NaN, matching `Ok(a/b)`). `RemF` is EXCLUDED (no native Cranelift `frem`; `fmod` libcall deferred).
+Two soundness limits the untyped bytecode forces (v1): **(a) leaf-only** — a function with any float op
+must have no `Op::Call` (the Call arm models a callee return as `Int`, so a float through a call would
+mis-decode); **(b) comparisons need a known-non-float operand** — `icmp` is only valid on integer bits,
+and a float param used only in a comparison is `Unknown` (bytecode-identical to an int one), so a
+comparison is rejected unless ≥1 operand is a KNOWN `Int`/`Bool` (else `icmp` on f64 bits = silent
+byte-identity bug). Both limits lift once param types are threaded into the bytecode. `Return` accepts
+`Float` and records `Compiled.ret_kind` (asserted consistent across all reachable entry Returns) — the
+sole signal telling `run_unboxed` to decode the i64 return as `Value::Float(from_bits)` vs `Value::Int`.

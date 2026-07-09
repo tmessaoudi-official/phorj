@@ -5,6 +5,49 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅📊 **FLOAT SLICE v1 SHIPPED + MEASURED (`5d91d78`, gate-green, unpushed).** Unboxed
+  Const(Float)/AddF/SubF/MulF/DivF, leaf-only, floats as f64-bits in the i64 ABI (bitcast at ops),
+  `Compiled.ret_kind` decode, DivF zero→code-5 redo, RemF/float-compares/float+Call deferred. Full gate
+  green: 50 jit tests + 1561 lib + 144 differential + conformance 2/2 + clippy(both) + fmt + release.
+  **MEASURED (fresh docker php:8.5+JIT, new micro `floatmul` = IIR `acc=acc*r+0.5`):** floatmul **0.22–
+  0.82× LOSS** (load-noisy, consistently <1) vs php+JIT — BUT the JIT float path (~18M ns) is **~10–22×
+  faster than the VM-only float path** (`floatarith` ~400M, VM-only because its conversions block JIT).
+  So **JIT float ≫ VM float ⇒ the §15 jit-default flip stays SAFE/beneficial for floats** (enabling JIT
+  is a big net win over the VM, never worse), but float arith does NOT yet beat php+JIT on a TIGHT LOOP.
+  **VERDICT [Verified]:** exactly the advisor's prediction — float carries no overflow check (unlike
+  intadd) so `fadd/fmul` == php's ops; the remaining ~4-5× gap is the SAME tight-loop tracing-JIT gap
+  intadd hits (0.28–0.77×), NOT the overflow-check gap. It's a LOOP-OPTIMIZATION lever (LICM/unroll/
+  vectorize — php's tracing JIT does this, cranelift baseline codegen doesn't), DISTINCT from int
+  range-analysis. fibrec (recursion, no tight loop) still WINS (1.66–2.9×). Matrix: 2 WIN / 13 LOSS, 0
+  flips, byte-identical. Baseline re-emitted (15 features, floatmul locked). **HONEST: "float JITs now"
+  ≠ "we win floats" — it's a real VM→native win + flip-safety, not a php win.** TRACKED follow-ups:
+  (a) `float-conversions` (toFloat/truncate as CallNative → inline fcvt, flips the real `floatarith`);
+  (b) `param-types-in-bytecode` (thread checker param types → restores param-vs-param int comparisons
+  AND enables float comparisons + cross-fn float — removes the leaf-only + comparison-guard limits);
+  (c) `tight-loop-opt` (the int+float shared tracing-JIT gap — the big lever, likely §14-adjacent).
+- [2026-07-09] 🔨 **FLOAT SLICE v1 — DESIGN CHECKPOINT (advisor-3C clean; implementing).** Extends the
+  unboxed JIT subset to PURE float arithmetic. Scope decided by reading `bench/micro/floatarith.phg`:
+  that micro needs `Conversion.toFloat`/`truncate` which compile to `Op::CallNative` (default-denied, a
+  bigger slice with `truncate`'s OOR fault) → floatarith stays VM (tracked follow-up "float-conversions").
+  v1 target = a NEW pure-float micro `bench/micro/floatmul.{phg,php}` (Horner shape:
+  `mutable float acc=0.0; while(i<n){ acc = acc*x + c; i=i+1; } return acc;` — pure AddF/MulF, INT loop
+  counter, float return, NO conversions/compares). **DESIGN (bits-in-I64, no ABI change):** floats live
+  as i64 bits in `vars` (all I64); `bitcast` F64↔I64 only at float ops. `Const(Float)`→f64 bits→push
+  Float. `AddF/SubF/MulF`→`fadd/fsub/fmul` (no fault, no sticky). `DivF`→`fcmp Equal b,0.0` (catches ±0,
+  NaN→false→no-fault→fdiv=NaN, matches `float_div`) → `fault_if(5)` → `fdiv`. **`RemF` EXCLUDED** (no
+  native Cranelift frem; fmod libcall deferred). **Float-operand COMPARISONS REJECTED in build_body**
+  (`Unsupported` → VM fallback) — the arm does unconditional `icmp`; an fcmp path is deferred (removes
+  the NaN surface; my micro uses int compares). `Return` accepts Float, records `Compiled.ret_kind`
+  (Int|Float) — ASSERT consistent across all reachable entry Returns (else Codegen error). Provenance
+  `unboxed_proven_int_params` → per-param `Option<Kind>` (float-arith operand ⇒ Float). `unboxed_analyze`
+  threads Kind::Float. `run_unboxed`: float arg → `f.to_bits()`, return decode via ret_kind
+  (`Value::Float(f64::from_bits)`). `collect_functions_unboxed`: add Const(Float)+AddF/SubF/MulF/DivF;
+  RemF + CallNative + coercions stay denied. Sticky-select at Return STAYS (a float fn with int arith
+  can overflow→redo). **Expectation (advisor, honest bar):** float arith carries NO overflow check
+  (unlike intadd) so `fadd/fmul` == what php emits → better parity odds than intadd; likely JIT ≥ VM
+  (flip-safe for §15) but maybe still < php+JIT on a tight loop (tracing/vectorization gap, a DIFFERENT
+  lever than int range-analysis). Record honestly; "it JITs" ≠ "we win floats". Confirm floatmul's hot
+  fn is CALLED + assert eligibility + hits (no false-green).
 - [2026-07-09] 📊 **ovf-spec MEASURED (honest, fresh docker `php:8.5-cli`+JIT, best-of-3, release
   `--features jit`).** Matrix: **fibrec 2.18× WIN** (recursion — branchless ovf-spec, clean); **intadd
   0.77× LOSS** (was 0.55× at widen-1 → ovf-spec IMPROVED it, but still LOSS); 12 others LOSS (VM-only,

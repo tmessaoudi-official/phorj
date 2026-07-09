@@ -2,59 +2,63 @@
   "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT (docker php:8.5-cli). The gate BLOCKS on identity breaks and WIN->LOSS flips (ratio crossing 1.0 downward) — NOT on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after the JIT lands a WIN so the flip check protects it. ratio<1 = the VM still LOSES to php (the JIT is the lever).",
   "features": {
     "closurecall": {
-      "ratio": 0.033,
+      "ratio": 0.037,
       "identical": true
     },
     "enum": {
-      "ratio": 0.011,
+      "ratio": 0.012,
       "identical": true
     },
     "fibrec": {
-      "ratio": 1.726,
+      "ratio": 1.218,
       "identical": true
     },
     "floatarith": {
-      "ratio": 0.024,
+      "ratio": 0.012,
+      "identical": true
+    },
+    "floatmul": {
+      "ratio": 0.155,
       "identical": true
     },
     "intadd": {
-      "ratio": 0.521,
+      "ratio": 0.205,
       "identical": true
     },
     "interp": {
-      "ratio": 0.067,
+      "ratio": 0.122,
       "identical": true
     },
     "listindex": {
-      "ratio": 0.025,
+      "ratio": 0.028,
       "identical": true
     },
     "mapget": {
-      "ratio": 0.015,
+      "ratio": 0.017,
       "identical": true
     },
     "match": {
-      "ratio": 0.035,
+      "ratio": 0.050,
       "identical": true
     },
     "methodcall": {
-      "ratio": 0.027,
+      "ratio": 0.036,
       "identical": true
     },
     "objalloc": {
-      "ratio": 0.111,
+      "ratio": 0.129,
       "identical": true
     },
     "stringconcat": {
-      "ratio": 0.033,
+      "ratio": 0.041,
       "identical": true
     },
     "trycatch": {
-      "ratio": 0.419,
+      "ratio": 0.322,
       "identical": true
     },
     "webish": {
-      "ratio": 0.064,
+      "ratio": 0.093,
       "identical": true
     }
   }
