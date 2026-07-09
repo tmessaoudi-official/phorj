@@ -5,6 +5,28 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 📊🚩 **RANGE-ANALYSIS SHIPPED + MEASURED — CORRECT but floatmul stays PARITY → 🚩FLAGGED
+  (`21465d8`, full gate green, unpushed).** The pre-pass works exactly as designed and the counter guard
+  DROPPED in machine code [Verified — asm dump via a temp `PHORJ_JIT_DUMP` seam, reverted clean]:
+  floatmul `bench`'s hot loop is now `vmulsd; vaddsd (%rip); leaq 1(%rdi),%rdi; jmp` — the `i=i+1` is a
+  **plain `leaq`** (was `sadd_overflow`+`seto`+sticky-OR) and the back-edge is a **plain `jmp`** (was a
+  sticky compare+branch). **BUT the measured result is unchanged — still PARITY, not WIN**
+  [Verified — interleaved 8-pair fresh docker php:8.5+JIT, JIT release binary: phorj median 6,958,406 ns
+  vs php 6,889,534 ns, ratio 0.990, phorj faster 3/8, checksums identical]. **ROOT CAUSE — the plan's
+  premise was WRONG: the counter guard was NEVER floatmul's residual.** floatmul is bound by the
+  loop-carried FLOAT dependency chain `acc = acc*r + 0.5` (`vmulsd`→`vaddsd` through xmm7, ~8-9 cyc/iter,
+  loop-carried); the integer counter runs IN PARALLEL on separate ports and was never on the critical
+  path, so dropping its guard freed integer throughput but did not shorten the bound. php's JIT has the
+  identical float chain → parity is the CEILING. **Beating it requires breaking the float dependency
+  (unroll + FP reassociation) → byte-identity-FORBIDDEN (Inv #1).** ⇒ **floatmul is IRREDUCIBLE by any
+  byte-identity-preserving method → 🚩FLAGGED for the developer** (never self-ruled; see §Scoreboard).
+  ⚠️ **METHOD GOTCHA (cost me a full false measurement):** `cargo build --release` (no `--features jit`)
+  produces a JIT-LESS binary → `phg run` used the plain VM (245 ms, ~60× "loss" — meaningless). The perf
+  artifact MUST be `cargo build --release --features jit`. **VALUE of the shipped lever:** range-analysis
+  is sound and real; it will matter where the counter IS on the critical path (pure-int throughput
+  loops), just not for these dependency-chain-bound micros. NEXT per WIN-OR-FLAG + autonomy: park the
+  floatmul FLAG as PENDING-DECISION and pivot (the queued `unchecked` lever is a §15 user-facing-language
+  fork = also park; adaptive tiering won't help a parity-with-no-AOT case) → language/sugar queue.
 - [2026-07-09] 🔒✅ **RANGE-ANALYSIS DESIGN LOCKED (advisor-3C clean, round 1) — building.** Goal: drop the
   induction-counter overflow guard so floatmul flips PARITY→WIN (its sole int-arith op is the counter →
   `needs_sticky`→false → ALL sticky machinery gone). Verified target [Verified: disassembled
@@ -936,6 +958,29 @@
   `vm_speedup` JSON field — `perf-gate.sh:43` reads it), keep local-`php` `--vs-php` as indicative;
   (c) wire the microbench WIN-count mandate gate (a `microbench.sh --gate` mode + baseline, then a CI
   job on the docker-capable lane, or pre-push/local to keep CI docker-free — sub-decision open).
+
+## Scoreboard — the PERF-PARITY REGISTER (WIN-OR-FLAG, developer 2026-07-09)
+
+Every microbench is exactly one of `WIN` / `PARITY` / `🚩FLAGGED`. Measured interleaved (never batched —
+~1.5× load-noise floor) vs FRESH docker php:8.5+JIT, JIT release binary (`--features jit`),
+output-identity gated. A `🚩FLAGGED` row carries: gap · WHY-irreducible (evidence) · options (developer
+adjudicates via AskUserQuestion — NEVER self-ruled).
+
+| Micro | Status | Ratio php/phorj | Evidence / notes |
+|---|---|---|---|
+| fibrec | **WIN** | ~1.7–2.9× | recursion/calls — phorj's structural strength (`ovf-spec` shipped) |
+| floatmul | **🚩FLAGGED** | ~0.99 (parity) | Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php identical chain → parity is the ceiling. **Irreducible without FP-reassociation/unroll = byte-identity-FORBIDDEN (Inv #1).** |
+| intadd | LOSS→? | (unremeasured post-range-analysis) | counter now plain `iadd` but the ACCUMULATOR (`acc+=step`) keeps its guard (unprovable) → likely still accumulator-dependency-bound. Needs opt-in `unchecked` (§15 fork) or re-measure. |
+| ~11 VM-only cats | untriaged | — | strings/list/map/object/closure/enum/try-catch — need JIT extension or VM inline-cache work (Tier-2 breadth) |
+
+**🚩 floatmul — OPEN DECISION for the developer (PENDING, do NOT self-rule):** floatmul cannot beat php on
+this box by any byte-identity-preserving method (the float dependency chain is the shared ceiling).
+Options: (A) **accept PARITY as the WIN bar for latency-bound float loops** (never-worse holds; recommended
+— parity IS "at least the same") · (B) allow an **opt-in fast-math / `@reassoc` per-site** that permits FP
+reassociation+unroll (breaks byte-identity → needs a §14 LADDER disclosure + differential quarantine) ·
+(C) a **native-C-equivalent / AOT vectorized kernel** (large, and still can't reorder FP without (B)).
+Recommendation: **(A)** — parity is the honest ceiling for byte-identical float; spend effort where the
+guard IS on the critical path.
 
 ## Measured baseline (2026-07-05) — the honest truth
 Pure execution, self-timed (phg `Runtime.monotonicNanos`, php `hrtime`), best-of-5, startup excluded.
