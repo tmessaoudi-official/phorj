@@ -5,6 +5,26 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅📊 **STEP 2b SHIPPED + MEASURED — dual-space (ivars/fvars) float value model
+  (`5112967`, full gate green, unpushed).** Each stack depth now has TWO Cranelift Variables:
+  `vars[d]` (I64) + `fvars[d]` (F64); `kinds[]` selects the live space per depth (edge-consistency
+  already enforced by `unboxed_analyze`). Float const/arith/DivF flow native f64 with NO per-op
+  bitcast; a float phi stays in XMM across the back-edge; bitcast ONLY at the i64 ABI boundary (float
+  param seed + float Return). Int-only fns DCE the dead fvars → identical int codegen (no regression).
+  **ASM [Verified] (load-independent):** floatmul's loop is now `vmulsd`/`vaddsd` on XMM with ZERO
+  GPR↔XMM crossings — identical SHAPE to php's JIT (was 6 crossings/iter + `movabsq` remat).
+  **MEASURED [Verified] (INTERLEAVED phorj/php, 6 pairs, fresh docker php:8.5+JIT tracing):** medians
+  phorj **5,683,135** vs php **5,689,775** ns = **DEAD PARITY (0.1%)**, phorj wins 3/php wins 3,
+  checksums identical. Was **4.5× LOSS → PARITY**. ⚠️ **HONEST:** the earlier BATCHED 1.07× "win" was
+  LOAD-NOISE (this box has a ~1.5× noise floor — advisor-caught; interleaving is mandatory). Parity
+  satisfies "at least the same" (never-worse ✓). The residual per-iter cost capping it at parity-not-win
+  is the **int-counter overflow guard** (`seto/orq`+back-edge, visible in the asm) → **RANGE-ANALYSIS
+  is the lever that turns float parity into a WIN.** Full gate: 51 jit + 1855 workspace w/
+  `PHORJ_REQUIRE_PHP=1` oracle + clippy(both) + fmt. Guard test
+  `unboxed_float_loop_mixes_int_and_float_at_shared_depths_bit_exact` (mixed kind-per-depth, ub==vm
+  bit-exact) locks the dual-space soundness. **NEXT float levers (tracked):** `float-conversions`
+  (toFloat/truncate inline → flips real `floatarith`), `param-types-in-bytecode` (float compares +
+  cross-fn float, removes leaf-only + comparison-guard limits).
 - [2026-07-09] 🔬❌ **STEP 2a (cheap lever) — `opt_level=speed` is a DEAD END for float [Verified].**
   Discovered the JITBuilder uses Cranelift DEFAULTS (`opt_level=none`, no egraph mid-end) — hypothesized
   that enabling `opt_level=speed` (via `JITBuilder::with_flags(&[("opt_level","speed")], …)`, the clean
