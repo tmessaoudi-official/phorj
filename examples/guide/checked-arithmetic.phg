@@ -8,7 +8,7 @@ import Core.Math;
 // rather than crash — parsing untrusted input, a calculator that must degrade gracefully — reach for the
 // checked `Math.tryAdd/trySub/tryMul(int, int): int?` family: each returns `null` on overflow, so you
 // recover LOCALLY and by TYPE (`??` or `match`), not with a catch-that-hides-the-bug. (For raw wrapping
-// speed in a proven-safe hot loop, see `#[Unchecked]` in guide/unchecked.phg instead.)
+// speed in a proven-safe hot loop, see `#[UncheckedOverflow]` in guide/unchecked.phg instead.)
 function safeSum(int a, int b): int {
     // `??` turns the `int?` into a plain int with a fallback of your choosing.
     return Math.tryAdd(a, b) ?? 0;

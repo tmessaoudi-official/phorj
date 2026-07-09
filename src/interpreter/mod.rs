@@ -210,7 +210,7 @@ pub struct Interp<'c> {
     /// not keyed on the receiver's runtime class). `None` in a free function. Saved/restored by
     /// `run_call` alongside `this`.
     cur_class: Option<String>,
-    /// `#[Unchecked]` (import Core.Unchecked): true while the currently-executing free-function body is
+    /// `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow): true while the currently-executing free-function body is
     /// marked unchecked → int `+`/`-`/`*`/unary-`-` WRAP instead of faulting (via the `value::int_wrapping_*`
     /// kernels the VM also calls, so byte-identical). The single source of the wrap fact for the interp,
     /// set from the callee's attributes and saved/restored by `run_call` exactly like `cur_class`. Always
@@ -704,7 +704,7 @@ impl<'c> Interp<'c> {
         args: Vec<Value>,
         this: Option<Value>,
         lexical_class: Option<&str>,
-        // `#[Unchecked]`: does the callee's body wrap int arithmetic? Derived from the callee's attributes
+        // `#[UncheckedOverflow]`: does the callee's body wrap int arithmetic? Derived from the callee's attributes
         // by the caller (free functions only; always `false` for methods/constructors). Saved/restored
         // like `cur_class` so nested calls into a checked function re-enable checking.
         unchecked: bool,
@@ -816,13 +816,11 @@ impl<'c> Interp<'c> {
     }
 }
 
-/// True iff `#[Unchecked]` (or `#[Core.Unchecked]`) is among a free function's attributes — the single
+/// True iff `#[UncheckedOverflow]` (or `#[Core.Runtime.Integer.UncheckedOverflow]`) is among a free function's attributes — the single
 /// source of the wrap fact, read at the `run_call` boundary. The checker has already validated the
 /// attribute (recognized + import-gated), so presence alone is authoritative here.
 pub(super) fn attrs_unchecked(attrs: &[crate::ast::Attribute]) -> bool {
-    attrs
-        .iter()
-        .any(|a| matches!(a.name.as_str(), "Unchecked" | "Core.Unchecked"))
+    attrs.iter().any(|a| a.is_unchecked_overflow())
 }
 
 fn arith(op: BinaryOp, l: Value, r: Value, unchecked: bool) -> R<Value> {
@@ -832,7 +830,7 @@ fn arith(op: BinaryOp, l: Value, r: Value, unchecked: bool) -> R<Value> {
             // Checked ops via the single-sourced `value` kernels: overflow / div-zero / mod-zero are
             // faults the type system can't catch, so they become a Diagnostic, never a panic
             // (EV-7). The VM dispatches into the *same* kernels, so the fault path can't diverge.
-            // `#[Unchecked]`: int `+`/`-`/`*` WRAP (the `int_wrapping_*` kernels the VM also calls) —
+            // `#[UncheckedOverflow]`: int `+`/`-`/`*` WRAP (the `int_wrapping_*` kernels the VM also calls) —
             // div/rem stay checked (div-zero must always fault). `Ok(..)` so the match below is uniform.
             let v = match (op, unchecked) {
                 (Add, true) => Ok(crate::value::int_wrapping_add(a, b)),

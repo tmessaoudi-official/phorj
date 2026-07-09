@@ -708,6 +708,22 @@ pub struct Attribute {
     pub span: Span,
 }
 
+impl Attribute {
+    /// True iff this is the `#[UncheckedOverflow]` opt-in — whole-function two's-complement WRAPPING
+    /// integer arithmetic (the perf escape hatch; `Core.Runtime.Integer.UncheckedOverflow`). Recognized
+    /// in both "nothing in the wind" import forms: **bare** `UncheckedOverflow` (leaf member-import
+    /// `import Core.Runtime.Integer.UncheckedOverflow;`) or **qualified** `Integer.UncheckedOverflow`
+    /// (module import `import Core.Runtime.Integer;`). SINGLE SOURCE of the recognition — the checker
+    /// gate, the compiler `unchecked` flag, the interpreter, and the transpile `E-TRANSPILE-UNCHECKED`
+    /// gate all consult this one predicate, so the four can never drift.
+    pub fn is_unchecked_overflow(&self) -> bool {
+        matches!(
+            self.name.as_str(),
+            "UncheckedOverflow" | "Integer.UncheckedOverflow"
+        )
+    }
+}
+
 /// One variant of an enum, with optional associated data fields (`Circle(float radius)`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumVariant {

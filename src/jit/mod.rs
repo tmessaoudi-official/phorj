@@ -1381,7 +1381,7 @@ fn build_body_unboxed(
     //     never-jumped-to block would be a dangling exit — avoid it).
     let proven_ops = range_proven_ops(func);
     let speculated = |op: &Op| matches!(op, Op::AddI | Op::SubI | Op::MulI | Op::Neg);
-    // `#[Unchecked]` (Core.Unchecked): the whole function's int arith WRAPS — every `AddI`/`SubI`/`MulI`/
+    // `#[UncheckedOverflow]` (Core.Runtime.Integer.UncheckedOverflow): the whole function's int arith WRAPS — every `AddI`/`SubI`/`MulI`/
     // `Neg` becomes a plain wrapping op (no overflow check, no sticky), exactly like a range-proven
     // counter but function-wide. So nothing speculates → `needs_sticky` is false, and the guard/back-edge/
     // Return-select machinery is omitted entirely (the same WIN the range-analysis lever produces, but
@@ -1564,7 +1564,7 @@ fn build_body_unboxed(
             Op::AddI | Op::SubI | Op::MulI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                // Plain (wrapping-free) when: `#[Unchecked]` (the whole fn wraps — all of AddI/SubI/MulI),
+                // Plain (wrapping-free) when: `#[UncheckedOverflow]` (the whole fn wraps — all of AddI/SubI/MulI),
                 // OR a range-proven induction `AddI`. The two's-complement `iadd`/`isub`/`imul` result is
                 // bit-identical to `*_overflow`'s result[0] (byte-identity ✓); no fault, no sticky.
                 if func.unchecked || (matches!(op, Op::AddI) && proven_ops[ip]) {
@@ -1644,7 +1644,7 @@ fn build_body_unboxed(
                 // ovf-spec: -i64::MIN overflows on the VM, but `ineg` does NOT hardware-trap (it wraps
                 // MIN→MIN) — unlike div — so we speculate: fold `av == MIN` into sticky (no branch) and
                 // emit the wrapping `ineg`. A set sticky forces the redo at the next back-edge / Return.
-                // `#[Unchecked]`: `-i64::MIN` wraps to `i64::MIN` — plain `ineg`, no sticky. Else speculate
+                // `#[UncheckedOverflow]`: `-i64::MIN` wraps to `i64::MIN` — plain `ineg`, no sticky. Else speculate
                 // (fold `av == MIN` into sticky) as before.
                 if !func.unchecked {
                     let imin = b.ins().iconst(types::I64, i64::MIN);

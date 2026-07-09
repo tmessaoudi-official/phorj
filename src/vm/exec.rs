@@ -22,7 +22,7 @@ impl<'a> Vm<'a> {
             // calls the *same* functions, so the checked-op / div-zero / overflow fault path
             // is structurally identical across both backends (the Wave 0 `Op::Neg` divergence
             // class can no longer reopen).
-            // `#[Unchecked]` (import Core.Unchecked): a function marked unchecked WRAPS int `+`/`-`/`*`
+            // `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow): a function marked unchecked WRAPS int `+`/`-`/`*`
             // (and unary `-`) on overflow instead of faulting — the single fn-level flag is read here,
             // the interp reads the same flag, and both call the same `value::int_wrapping_*` kernel, so
             // wrapping is byte-identical across backends (Inv-4). `Ok(..)` reuses `push_i` (never errors).
@@ -133,7 +133,7 @@ impl<'a> Vm<'a> {
             Op::Neg => match self.pop() {
                 // `value::int_neg` is shared with the interpreter (`eval_unary`): negating
                 // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
-                // `#[Unchecked]`: wrap (`-i64::MIN` → `i64::MIN`) instead of faulting.
+                // `#[UncheckedOverflow]`: wrap (`-i64::MIN` → `i64::MIN`) instead of faulting.
                 Value::Int(n) if self.program.functions[func].unchecked => {
                     self.push_i(Ok(crate::value::int_wrapping_neg(n)))?
                 }

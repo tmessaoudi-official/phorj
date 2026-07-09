@@ -24,9 +24,14 @@ pub fn enforce_injected_discipline(prog: &Program) -> Vec<Diagnostic> {
     };
     for it in &prog.items {
         match it {
-            // Member-import `import Core.<Module>.<Type>;` binds the leaf bare.
-            Item::Import { path, .. } if path.len() == 3 && path[0] == "Core" => {
-                ctx.imported.insert(path[2].clone());
+            // Member-import `import Core.<Module…>.<Type>;` binds the leaf bare. `>= 3` covers deeper
+            // modules too (e.g. `import Core.Runtime.Integer.UncheckedOverflow;` → binds
+            // `UncheckedOverflow`); registering a module-import leaf (`Core.Runtime.Integer` → `Integer`)
+            // is harmless (nothing bare-checks a module name against `module_of`).
+            Item::Import { path, .. } if path.len() >= 3 && path[0] == "Core" => {
+                if let Some(leaf) = path.last() {
+                    ctx.imported.insert(leaf.clone());
+                }
             }
             Item::Class(c) => drop(ctx.user_types.insert(c.name.clone())),
             Item::Enum(e) => drop(ctx.user_types.insert(e.name.clone())),
@@ -79,6 +84,10 @@ pub(super) fn module_of(name: &str) -> Option<&'static str> {
         "Request" | "Response" | "Route" | "Router" => "Http",
         "Duration" | "Date" | "Instant" => "Time",
         "RoundingMode" => "Decimal",
+        // `#[UncheckedOverflow]` attribute-type (perf-wave): a 2-deep module `Core.Runtime.Integer`.
+        // `module_of` returns the dotted module path; the hint/qualified forms interpolate it fine
+        // (`import Core.Runtime.Integer.UncheckedOverflow;` / qualified `Integer.UncheckedOverflow`).
+        "UncheckedOverflow" => "Runtime.Integer",
         _ => return None,
     })
 }

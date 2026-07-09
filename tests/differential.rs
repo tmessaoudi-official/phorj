@@ -2279,7 +2279,7 @@ fn all_examples_transpile_and_match_php() {
                 eprintln!("SKIP (concurrency/quarantined) {label}");
                 continue;
             }
-            // `#[Unchecked]` (Core.Unchecked) wrapping int arithmetic has NO PHP target
+            // `#[UncheckedOverflow]` (Core.Runtime.Integer.UncheckedOverflow) wrapping int arithmetic has NO PHP target
             // (`E-TRANSPILE-UNCHECKED`, §14 LADDER) — PHP overflows int→float, which would diverge from
             // the VM's two's-complement wrap. Quarantined from the oracle like `spawn`; run≡runvm still
             // gates it byte-identically.

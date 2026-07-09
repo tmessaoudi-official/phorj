@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `#[Unchecked]` renamed to `#[UncheckedOverflow]` under `Core.Runtime.*`
+
+The opt-in wrapping-integer-arithmetic attribute moved from the flat `Core.Unchecked` marker module to
+the structured `Core.Runtime.Integer.UncheckedOverflow` (perf/runtime knobs now live under a
+`Core.Runtime.*` namespace; `Core.Runtime` already held `monotonicNanos`). The attribute is now a
+proper injected attribute-**type** (like `#[Route]`), gated by the ratified two-mode "nothing in the
+wind" import discipline instead of a bespoke string match:
+
+- **member import → bare:** `import Core.Runtime.Integer.UncheckedOverflow;` → `#[UncheckedOverflow]`
+- **module import → qualified:** `import Core.Runtime.Integer;` → `#[Integer.UncheckedOverflow]`
+- unimported bare use → `E-INJECTED-TYPE-BARE`; the old `#[Unchecked]` → `E-UNKNOWN-ATTRIBUTE`.
+
+The rename is legibility-only — the leaf `UncheckedOverflow` is self-sufficient and signals the safety
+opt-out (a check is removed), where bare `Unchecked` was ambiguous. Semantics, codegen, faults, and the
+`E-TRANSPILE-UNCHECKED` §14 quarantine are unchanged; attribute recognition is single-sourced in
+`Attribute::is_unchecked_overflow` (checker, compiler, interpreter, transpiler all consult it, so the
+four can never drift). `examples/guide/unchecked.phg` + docs migrated. Byte-identity preserved.
+
 ### Added — JIT slice b3b: `phg run` wired to the JIT (the perf win reaches the CLI)
 
 The unboxed JIT is now reachable from `phg run` / `phg benchmark` — the native codegen that **beats

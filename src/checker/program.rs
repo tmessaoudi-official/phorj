@@ -766,17 +766,19 @@ impl Checker {
     /// the route into a `.route(…)` registration). Front-end-only — attributes never reach a backend.
     pub(super) fn check_attributes(&mut self, f: &crate::ast::FunctionDecl) {
         for attr in &f.attrs {
-            // `#[Unchecked]` (import Core.Unchecked, perf-wave): marks the whole free function's int
-            // `+`/`-`/`*`/unary-`-` as WRAPPING (no overflow fault) — the opt-in perf escape hatch. Takes
-            // no arguments. The compiler reads the attribute's presence directly (single source of the
-            // wrap fact); a using function is `E-TRANSPILE-UNCHECKED` (no PHP analog, §14 LADDER).
-            if matches!(attr.name.as_str(), "Unchecked" | "Core.Unchecked") {
+            // `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow, perf-wave): marks the
+            // whole free function's int `+`/`-`/`*`/unary-`-` as WRAPPING (no overflow fault) — the opt-in
+            // perf escape hatch. Takes no arguments. Recognition is single-sourced in
+            // `Attribute::is_unchecked_overflow` (checker/compiler/interp/transpile agree); import-gated by
+            // the injected-type discipline (`enforce_injected`); a using function is `E-TRANSPILE-UNCHECKED`
+            // (no PHP analog, §14 LADDER).
+            if attr.is_unchecked_overflow() {
                 if !attr.args.is_empty() {
                     self.err_coded(
                         attr.span,
-                        "`#[Unchecked]` takes no arguments".to_string(),
+                        "`#[UncheckedOverflow]` takes no arguments".to_string(),
                         "E-UNCHECKED-ARGS",
-                        Some("write it bare: `#[Unchecked]`".into()),
+                        Some("write it bare: `#[UncheckedOverflow]`".into()),
                     );
                 }
                 continue;
@@ -785,11 +787,11 @@ impl Checker {
                 self.err_coded(
                     attr.span,
                     format!(
-                        "unknown attribute `#[{}]` — only `#[Route(...)]` and `#[Unchecked]` are supported",
+                        "unknown attribute `#[{}]` — only `#[Route(...)]` and `#[UncheckedOverflow]` are supported",
                         attr.name
                     ),
                     "E-UNKNOWN-ATTRIBUTE",
-                    Some("remove it, or use `#[Route(\"GET\", \"/path\")]` / `#[Unchecked]`".into()),
+                    Some("remove it, or use `#[Route(\"GET\", \"/path\")]` / `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow)".into()),
                 );
                 continue;
             }

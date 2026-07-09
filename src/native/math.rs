@@ -58,7 +58,7 @@ fn math_max(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 // `Math.tryAdd/trySub/tryMul(int, int): int?` — CHECKED integer arithmetic that returns `null` on
 // overflow instead of faulting (the type-driven recovery path; the fail-fast fault stays the default,
-// `#[Unchecked]` is the wrap-instead escape hatch). Overflow → `null` maps the same i64 boundary the
+// `#[UncheckedOverflow]` is the wrap-instead escape hatch). Overflow → `null` maps the same i64 boundary the
 // single-sourced `value::int_*` kernels detect, so the PHP leg (which returns float on overflow) agrees
 // via an `is_int` guard — byte-identical across all three backends.
 fn math_try_add(args: &[Value], _: &mut String) -> Result<Value, String> {

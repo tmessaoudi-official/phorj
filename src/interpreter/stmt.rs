@@ -99,7 +99,7 @@ impl<'c> Interp<'c> {
                                     vec![v],
                                     Some(Value::Instance(inst)),
                                     Some(cls.as_ref()),
-                                    false, // a property hook setter is a method — never `#[Unchecked]`
+                                    false, // a property hook setter is a method — never `#[UncheckedOverflow]`
                                 )?;
                                 return Ok(());
                             }

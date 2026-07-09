@@ -236,7 +236,7 @@ impl<'c> Interp<'c> {
                     ));
                 }
                 let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-                // A closure over a named `#[Unchecked]` free function must wrap on this leg too (byte-
+                // A closure over a named `#[UncheckedOverflow]` free function must wrap on this leg too (byte-
                 // identity with the VM, which reads the callee's fn flag); a plain lambda has no attrs.
                 let unchecked = super::attrs_unchecked(&f.attrs);
                 self.run_call(&f.name, &names, &f.body, args, None, None, unchecked)
@@ -520,7 +520,7 @@ impl<'c> Interp<'c> {
             args,
             Some(Value::Instance(inst)),
             origin_class.as_deref(),
-            false, // `#[Unchecked]` is free-function-only — a method is never unchecked
+            false, // `#[UncheckedOverflow]` is free-function-only — a method is never unchecked
         )
     }
 

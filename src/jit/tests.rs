@@ -1785,7 +1785,7 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
     }
 }
 
-// --- `#[Unchecked]` (import Core.Unchecked): whole-function two's-complement wrapping int arithmetic.
+// --- `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow): whole-function two's-complement wrapping int arithmetic.
 // The fn-level `unchecked` flag makes the JIT emit plain `iadd`/`isub`/`imul`/`ineg` (no overflow guard,
 // no sticky) — the WIN path (intadd LOSS→WIN) — and the result must be byte-identical to the VM, which
 // reads the same flag and calls the same `value::int_wrapping_*` kernels. ---
@@ -1794,12 +1794,12 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
 fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
     let program = compile_source(
         "package Main;\n\
-         import Core.Unchecked;\n\
-         #[Unchecked]\n\
+         import Core.Runtime.Integer.UncheckedOverflow;\n\
+         #[UncheckedOverflow]\n\
          function wadd(int a, int b) -> int { return a + b; }\n\
-         #[Unchecked]\n\
+         #[UncheckedOverflow]\n\
          function wsub(int a, int b) -> int { return a - b; }\n\
-         #[Unchecked]\n\
+         #[UncheckedOverflow]\n\
          function wmul(int a, int b) -> int { return a * b; }\n\
          function main() -> void {}",
     );
@@ -1812,7 +1812,7 @@ fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
     for &(name, a, b, want) in cases {
         let f = func_index(&program, name);
         match Compiled::compile_unboxed(&program, f)
-            .expect("an #[Unchecked] int fn is unboxed-eligible")
+            .expect("an #[UncheckedOverflow] int fn is unboxed-eligible")
             .run_unboxed(&[Value::Int(a), Value::Int(b)], 1)
         {
             JitRun::Value(v) => assert_eq!(
@@ -1840,40 +1840,40 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
     // the leaf tests above, so a future refactor that dropped the save/restore would only fail HERE.
     // Both directions asserted run≡runvm (`cmd_run` = VM+JIT vs `cmd_treewalk` = interp oracle).
 
-    // (1) `#[Unchecked]` outer calling a CHECKED inner: the checked inner must STILL fault on overflow
+    // (1) `#[UncheckedOverflow]` outer calling a CHECKED inner: the checked inner must STILL fault on overflow
     // even though the caller wraps — the callee's own flag governs, not the caller's.
     const A: &str = "package Main;\n\
         import Core.Output;\n\
-        import Core.Unchecked;\n\
+        import Core.Runtime.Integer.UncheckedOverflow;\n\
         function inner(int n) -> int { return n + 1; }\n\
-        #[Unchecked] function outer(int n) -> int { return inner(n); }\n\
+        #[UncheckedOverflow] function outer(int n) -> int { return inner(n); }\n\
         function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let a_jit = crate::cli::cmd_run(A);
     let a_oracle = crate::cli::cmd_treewalk(A);
     match (&a_jit, &a_oracle) {
         (Err(a), Err(b)) => assert_eq!(
             a, b,
-            "checked inner under an #[Unchecked] outer must FAULT identically on both backends"
+            "checked inner under an #[UncheckedOverflow] outer must FAULT identically on both backends"
         ),
         _ => panic!("checked inner must fault on BOTH backends: jit={a_jit:?} oracle={a_oracle:?}"),
     }
 
-    // (2) reverse — a CHECKED outer calling an `#[Unchecked]` inner: the inner WRAPS (its own flag),
+    // (2) reverse — a CHECKED outer calling an `#[UncheckedOverflow]` inner: the inner WRAPS (its own flag),
     // and re-entering the checked outer afterward must restore checking (the save/restore).
     const B: &str = "package Main;\n\
         import Core.Output;\n\
-        import Core.Unchecked;\n\
-        #[Unchecked] function inner(int n) -> int { return n + 1; }\n\
+        import Core.Runtime.Integer.UncheckedOverflow;\n\
+        #[UncheckedOverflow] function inner(int n) -> int { return n + 1; }\n\
         function outer(int n) -> int { return inner(n); }\n\
         function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let b_jit = crate::cli::cmd_run(B).expect("wrapping inner returns a value");
     let b_oracle = crate::cli::cmd_treewalk(B).expect("wrapping inner returns a value");
     assert_eq!(
         b_jit, b_oracle,
-        "#[Unchecked] inner under a checked outer must WRAP identically on both backends"
+        "#[UncheckedOverflow] inner under a checked outer must WRAP identically on both backends"
     );
     assert!(
         b_jit.contains("-9223372036854775808"),
-        "the #[Unchecked] inner must wrap MAX+1 -> MIN, got {b_jit}"
+        "the #[UncheckedOverflow] inner must wrap MAX+1 -> MIN, got {b_jit}"
     );
 }
