@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — user-defined attributes are usable (DEC-194 slice 2b-3)
+
+A class marked `#[Attribute]` can now be **applied** as `#[Tag("...")]` on a class or function, and the
+use is validated: the argument count must match the attribute class's constructor (`E-ATTRIBUTE-ARITY`,
+checked at **compile time** — stronger than PHP, which only fails when the attribute is reflected), and an
+undeclared attribute is `E-UNKNOWN-ATTRIBUTE`. `ClassInfo` gained `is_user_attribute` (set in the collect
+pass); a shared `check_user_attribute_use` handles both the function/method and class attribute-check sites.
+Attributes remain inert metadata (no runtime effect yet), so `phg run` ≡ `phg runvm` ≡ transpiled PHP stay
+byte-identical — the transpiler drops the (unread) attribute. Valid on all targets this slice; per-target
+restriction rides the `#[Attribute(targets: […])]` form (needs named arguments). Ships
+`examples/guide/user-attributes.phg`. **Fix:** the formatter now emits **class-level** attributes (a shared
+`item_attrs` printer for functions and classes) — a 2a regression where `phg format` silently stripped a
+class's `#[…]`, which the fmt-idempotence gate guards against.
+
 ### Added — the `#[Attribute]` marker declares a user attribute (DEC-194 slice 2b-1)
 
 A class carrying the built-in `#[Attribute]` marker (`import Core.Runtime.Attribute;`, or the qualified

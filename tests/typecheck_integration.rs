@@ -237,6 +237,35 @@ fn attribute_marker_bare_without_import_is_rejected() {
 }
 
 #[test]
+fn user_attribute_declared_and_applied_to_class_and_function_checks_clean() {
+    // DEC-194 2b-3: a class marked `#[Attribute]` is usable as `#[Tag(...)]` on any target (all-targets
+    // default this slice), validated against its constructor. (Raw `check` skips import-gating.)
+    let src = "package Main;\n\
+        #[Attribute]\n\
+        class Tag { constructor(public string label) {} }\n\
+        #[Tag(\"widget\")]\n\
+        class Widget {}\n\
+        #[Tag(\"handler\")]\n\
+        function process() -> void {}\n\
+        function main() -> void { process(); }\n";
+    assert!(check_src(src).is_ok(), "{:?}", check_src(src));
+}
+
+#[test]
+fn user_attribute_wrong_argument_count_is_rejected() {
+    // The attribute use is validated against the attribute class's constructor arity (compile-time —
+    // the better-than-PHP guarantee).
+    let src = "package Main;\n\
+        #[Attribute]\n\
+        class Tag { constructor(public string label) {} }\n\
+        #[Tag()]\n\
+        class Widget {}\n\
+        function main() -> void {}\n";
+    let errs = check_src(src).expect_err("wrong attribute arity must fail");
+    assert!(has_code(&errs, "E-ATTRIBUTE-ARITY"), "{errs:?}");
+}
+
+#[test]
 fn attribute_on_a_non_function_non_class_item_is_still_a_parse_error() {
     // enum/interface/trait/etc. keep the parse-stage rejection until their target slices land.
     let src = "package Main;\n#[Route(\"GET\", \"/\")]\nenum E { A }\nfunction main() -> void {}\n";

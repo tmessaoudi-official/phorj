@@ -745,6 +745,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              runtime rejects. (PHP also forbids a static and an instance method sharing a name.) Make\n\
              every overload `static`, or none of them, or rename one declaration.\n"
         }
+        "E-ATTRIBUTE-ARITY" => {
+            "E-ATTRIBUTE-ARITY — a user attribute was applied with the wrong number of arguments.\n\n\
+             A user-defined attribute (a class marked `#[Attribute]`) is applied like a constructor call:\n\
+             `#[Tag(\"api\")]` runs `Tag`'s constructor. The argument count must match the attribute class's\n\
+             constructor parameters — this is checked at compile time (a stronger guarantee than PHP, which\n\
+             only fails when the attribute is reflected at runtime).\n"
+        }
         "E-ATTRIBUTE-ARGS" => {
             "E-ATTRIBUTE-ARGS — the `#[Attribute]` marker was given arguments it does not accept yet.\n\n\
              `#[Attribute]` (import Core.Runtime.Attribute) declares the class it sits on as a user-defined\n\

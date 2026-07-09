@@ -5,6 +5,35 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅🏗️ **SLICE 2b-3 SHIPPED — user attributes are USABLE.** `#[Attribute]`-marked class →
+  applied as `#[Tag("...")]` on a class OR function; use validated (`ClassInfo.is_user_attribute` set in
+  collect; shared `check_user_attribute_use` at both the function/method + class attr sites): arg-count vs
+  the attribute class's ctor (`E-ATTRIBUTE-ARITY`, COMPILE-TIME — the better-than-PHP win), undeclared →
+  `E-UNKNOWN-ATTRIBUTE`. Valid on all targets this slice (per-target restriction rides `targets:` = needs
+  named args). Inert metadata → run≡runvm≡php byte-identical (transpiler drops the unread attr). Ships
+  `examples/guide/user-attributes.phg` (3-way byte-identical "Widget handled") + README + `E-ATTRIBUTE-ARITY`
+  explain. **FIX (2a regression):** the formatter silently STRIPPED class-level attrs (`ClassDecl.attrs` not
+  printed) → shared `item_attrs` printer for functions+classes now emits them; fmt-idempotence gate guards it.
+  ⚠️ **§14 COUPLING for 2d/2e:** transpile currently DROPS class/function attrs (safe while inert/unread).
+  Once reflection (2d, `getAttributes`) reads them, transpile MUST emit them as PHP attributes (2e) or the
+  reflecting program is §14-quarantined — else the PHP leg has no attrs to reflect (byte-identity break).
+  **FULL-ARG-TYPE-CHECK follow-up (2b-3b):** currently arg COUNT only; typing each arg vs the ctor param
+  types needs expression-typing in the attr context — a tracked follow-up. **REMAINING:** NA (named args,
+  large, fresh) → 2b-2 (targets/repeatable, needs NA) → 2d reflection → 2e transpile-emit → #3 perf.
+- [2026-07-09] 🎨✅ **NAMED ARGUMENTS RULED (developer) — general, PHP-parity (calls + constructors +
+  attributes).** phorj has NO named args today [Verified: `greet(name: "hi")` = parse error]; developer chose
+  to add them GENERALLY (over positional-only or attributes-only) — a real PHP 8 feature + closes a parity
+  gap + makes the ruled `#[Attribute(targets: […], repeatable: true)]` work. **DESIGN = COMPILE-TIME
+  EXPANSION TO POSITIONAL (Invariant 5, the sugar chokepoint):** the checker knows each callee's param
+  order, so a named-arg call is REORDERED to positional + omitted-with-default params filled BEFORE any
+  backend → interp/VM/transpile see pure positional → **byte-identity by construction, ZERO backend
+  changes** (the differential proves `f(name: x)` ≡ `f(x)`). Contains the spine risk. **SUB-SLICES:** (NA-1)
+  parser + AST — arg lists accept `name: value`; the call/ctor/attribute AST arg carries `Option<name>`.
+  (NA-2) checker expansion pass + validation (unknown param name, duplicate, positional-after-named
+  rejected like PHP, missing-required, type-check) → lowers to positional for backends. (NA-3 folds in) the
+  attribute marker + any use then get named args for free. **ORDER:** NA-1 → NA-2 (unblocks 2b-2
+  targets/repeatable); 2b-3 use-validation is INDEPENDENT (default all-targets, no args) and can land in
+  parallel. Building NA-1 next.
 - [2026-07-09] ✅🏗️ **SLICE 2b-1 SHIPPED — `#[Attribute]` marker declares a class as a user attribute
   (`92d9761`, gate-green 1867).** Bare marker recognized on a class (the one class-target attribute),
   import-gated two-mode (`Core.Runtime.Attribute`), single-sourced `Attribute::is_attribute_marker`; closed

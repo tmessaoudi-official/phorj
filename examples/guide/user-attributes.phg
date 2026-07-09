@@ -1,0 +1,40 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime.Attribute;
+
+// DEC-194: define your OWN attributes. A class marked `#[Attribute]` (import Core.Runtime.Attribute)
+// becomes a user-defined attribute — applied like `#[Tag("...")]`, it is checked at COMPILE time: the
+// argument count must match the attribute class's constructor (a stronger guarantee than PHP, which only
+// fails when the attribute is reflected at runtime), and applying an undeclared attribute is a clean
+// error. Attributes are inert metadata for now — declaring and applying them type-checks and runs; READING
+// them back (reflection) and emitting them through the PHP transpile are later slices.
+#[Attribute]
+class Tag {
+    constructor(public string label) {}
+}
+
+#[Attribute]
+class Doc {
+    constructor(public string summary) {}
+}
+
+// A user attribute can sit on a class…
+#[Tag("model")]
+#[Doc("a product in the catalogue")]
+class Product {
+    constructor(public string name) {}
+}
+
+// …and on a function (all targets are valid this slice; per-target restriction arrives with the
+// `#[Attribute(targets: […])]` form once named arguments land).
+#[Tag("endpoint")]
+function handle(): void {
+    Output.printLine("handled");
+}
+
+function main(): void {
+    Product p = new Product("Widget");
+    Output.printLine(p.name);
+    handle();
+}

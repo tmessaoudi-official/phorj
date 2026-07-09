@@ -761,6 +761,37 @@ impl Checker {
         }
     }
 
+    /// DEC-194 2b-3: if `attr` names a user-defined attribute — a class carrying `#[Attribute]` — validate
+    /// the use and return `true` (handled). The attribute name is a class leaf (bare `Tag`, or qualified
+    /// `Pkg.Tag` — resolved by its last segment). Arguments are checked against the attribute class's
+    /// constructor ARITY; full argument TYPE-checking is a tracked follow-up (2b-3b). A user attribute is
+    /// legal on EVERY target this slice — target restriction rides the `targets:` marker arguments, which
+    /// need named arguments (a later slice). Returns `false` if `attr` is not a user attribute (the caller
+    /// then falls through to the built-in handling / unknown-attribute error).
+    pub(super) fn check_user_attribute_use(&mut self, attr: &crate::ast::Attribute) -> bool {
+        let leaf = attr.name.rsplit('.').next().unwrap_or(attr.name.as_str());
+        let arity = match self.classes.get(leaf) {
+            Some(info) if info.is_user_attribute => info.ctor.len(),
+            _ => return false,
+        };
+        if attr.args.len() != arity {
+            self.err_coded(
+                attr.span,
+                format!(
+                    "attribute `#[{}]` takes {arity} argument(s), got {}",
+                    attr.name,
+                    attr.args.len()
+                ),
+                "E-ATTRIBUTE-ARITY",
+                Some(
+                    "an attribute's arguments must match its attribute class's constructor parameters"
+                        .into(),
+                ),
+            );
+        }
+        true
+    }
+
     /// Validate a class declaration's `#[…]` attributes (DEC-194 slice 2a). Attributes now PARSE on a
     /// class, but no attribute currently *targets* a class — the built-ins `#[Route]` (route handler) and
     /// `#[UncheckedOverflow]` (free function) are not class-valid, and user-declared attributes (which
@@ -791,11 +822,16 @@ impl Checker {
                 }
                 continue;
             }
+            // DEC-194 2b-3: a user-defined attribute (`#[Tag]`, where `Tag` carries `#[Attribute]`) is a
+            // legal use on a class (valid on all targets this slice); validated against its constructor.
+            if self.check_user_attribute_use(attr) {
+                continue;
+            }
             self.err_coded(
                 attr.span,
                 format!(
-                    "attribute `#[{}]` is not valid on a class — only `#[Attribute]` (declaring the class \
-                     as a user attribute) targets a class so far",
+                    "attribute `#[{}]` is not valid on a class — mark a class as an attribute with \
+                     `#[Attribute]`, or use a declared user attribute",
                     attr.name
                 ),
                 "E-ATTR-TARGET",
@@ -833,11 +869,16 @@ impl Checker {
                 }
                 continue;
             }
+            // DEC-194 2b-3: a user-defined attribute (`#[Tag]`, where `Tag` carries `#[Attribute]`) is a
+            // legal use on a function/method (valid on all targets this slice); validated against its ctor.
+            if self.check_user_attribute_use(attr) {
+                continue;
+            }
             if !matches!(attr.name.as_str(), "Route" | "Http.Route") {
                 self.err_coded(
                     attr.span,
                     format!(
-                        "unknown attribute `#[{}]` — only `#[Route(...)]` and `#[UncheckedOverflow]` are supported",
+                        "unknown attribute `#[{}]` — use a declared user attribute, `#[Route(...)]`, or `#[UncheckedOverflow]`",
                         attr.name
                     ),
                     "E-UNKNOWN-ATTRIBUTE",

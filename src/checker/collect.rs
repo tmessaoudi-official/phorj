@@ -1582,6 +1582,7 @@ impl Checker {
                 hooks: HashMap::new(),
                 ctor: Vec::new(),
                 has_ctor: false,
+                is_user_attribute: c.attrs.iter().any(|a| a.is_attribute_marker()),
                 ctor_vis: MemberVis::Public,
                 ctor_owner: c.name.clone(),
                 type_params: c.type_params.clone(),

@@ -132,6 +132,9 @@ struct ClassInfo {
     /// with a zero-arg ctor from one with no ctor at all (both leave `ctor` empty) — `merge_inherited`
     /// inherits a single parent's `ctor` only into a class that has none of its own (M-RT S6c.2a).
     has_ctor: bool,
+    /// DEC-194 2b: this class carries the `#[Attribute]` marker → it is a user-defined attribute type,
+    /// so `#[ClassName(...)]` is a legal attribute use (validated against `ctor`). Set in `collect_class`.
+    is_user_attribute: bool,
     /// Constructor member visibility (Soundness Batch A) — `public` (default) unless the `constructor`
     /// keyword carries `private`/`protected`. Enforced at the construction site (`new C(...)`) so a
     /// private/protected ctor blocks external construction (the factory/singleton pattern), the 7th
@@ -235,6 +238,7 @@ impl ClassInfo {
             hooks: HashMap::new(),
             ctor: Vec::new(),
             has_ctor: false,
+            is_user_attribute: false, // placeholder; overwritten by `collect_class`
             ctor_vis: MemberVis::Public,
             ctor_owner: String::new(),
             type_params,

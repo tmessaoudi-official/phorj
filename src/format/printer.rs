@@ -205,9 +205,11 @@ impl Printer<'_> {
         ))
     }
 
-    fn function(&mut self, f: &FunctionDecl) -> Result<(), String> {
-        // Item attributes (`#[Route("GET", "/p")]`, M6 W2) print one per line above the signature.
-        for attr in &f.attrs {
+    /// Item attributes (`#[Route("GET", "/p")]`, `#[UncheckedOverflow]`, `#[Attribute]`, a user `#[Tag(…)]`)
+    /// print one per line above the declaration they annotate. Single source for functions AND classes so
+    /// the two never drift (a class attribute dropped here would silently corrupt `fmt` idempotence).
+    fn item_attrs(&mut self, attrs: &[crate::ast::Attribute]) -> Result<(), String> {
+        for attr in attrs {
             if attr.args.is_empty() {
                 self.line(&format!("#[{}]", attr.name));
             } else {
@@ -215,6 +217,11 @@ impl Printer<'_> {
                 self.line(&format!("#[{}({})]", attr.name, args?.join(", ")));
             }
         }
+        Ok(())
+    }
+
+    fn function(&mut self, f: &FunctionDecl) -> Result<(), String> {
+        self.item_attrs(&f.attrs)?;
         let sig = self.fn_signature(f)?;
         if f.foreign {
             // A foreign `declare function …;` (M8.5) — a bodyless signature, prefixed with `declare`.
@@ -237,10 +244,12 @@ impl Printer<'_> {
     }
 
     fn class(&mut self, c: &ClassDecl) -> Result<(), String> {
-        // M8.5: a foreign `declare class` prints as bodyless member signatures.
+        // M8.5: a foreign `declare class` prints as bodyless member signatures (attrs rejected on those).
         if c.foreign {
             return self.declare_class(c);
         }
+        // DEC-194: class-level attributes (`#[Attribute]`, a user `#[Tag(…)]`) print above the header.
+        self.item_attrs(&c.attrs)?;
         // `abstract` and `sealed` both imply `open`, so emit `open` only when it is the sole
         // extensibility marker. `sealed` composes with `abstract` (`sealed abstract class`).
         let mut prefix = String::new();
