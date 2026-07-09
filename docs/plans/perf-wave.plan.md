@@ -970,7 +970,7 @@ adjudicates via AskUserQuestion — NEVER self-ruled).
 |---|---|---|---|
 | fibrec | **WIN** | ~1.7–2.9× | recursion/calls — phorj's structural strength (`ovf-spec` shipped) |
 | floatmul | **🚩FLAGGED** | ~0.99 (parity) | Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php identical chain → parity is the ceiling. **Irreducible without FP-reassociation/unroll = byte-identity-FORBIDDEN (Inv #1).** |
-| intadd | LOSS→? | (unremeasured post-range-analysis) | counter now plain `iadd` but the ACCUMULATOR (`acc+=step`) keeps its guard (unprovable) → likely still accumulator-dependency-bound. Needs opt-in `unchecked` (§15 fork) or re-measure. |
+| intadd | **LOSS** (fork-blocked) | ~0.67 (1.48× slower) | [Verified: interleaved 8-pair, JIT binary — phorj 12.14M vs php 8.17M ns, 0/8, checksums identical]. Counter now plain `iadd`, but the ACCUMULATOR (`acc+=…`) keeps its overflow guard (unprovable). Unlike floatmul the int accumulator chain is short (~1 cyc), so the `sadd_overflow`+sticky IS on the critical path → the guard is the LOSS. **Fixable only by opt-in `unchecked` = §15 user-facing-language fork → PENDING dev (perf-wave part 4); not self-ruled.** |
 | ~11 VM-only cats | untriaged | — | strings/list/map/object/closure/enum/try-catch — need JIT extension or VM inline-cache work (Tier-2 breadth) |
 
 **🚩 floatmul — OPEN DECISION for the developer (PENDING, do NOT self-rule):** floatmul cannot beat php on
