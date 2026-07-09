@@ -464,18 +464,33 @@ impl<'a> Vm<'a> {
                 // depth guard so the caller's frame is accounted for in `start_depth`.
                 #[cfg(feature = "jit")]
                 if let Some(cache_rc) = self.jit.clone() {
-                    // Compile-once: attempt Cranelift codegen only the first time this idx is seen;
-                    // `None` records a proven-ineligible function so we never retry it.
-                    let compiled = cache_rc
-                        .borrow_mut()
-                        .compiled
-                        .entry(idx)
-                        .or_insert_with(|| {
-                            crate::jit::Compiled::compile_unboxed(self.program, idx)
-                                .ok()
-                                .map(Rc::new)
-                        })
-                        .clone();
+                    // Compile-once, gated by the hotness threshold: a loop-containing function compiles
+                    // eagerly on its first call (a hot loop can live in a function called once), while a
+                    // loopless function compiles only after `JIT_HOTNESS_THRESHOLD` calls — so a cold
+                    // one-shot leaf never pays the Cranelift compile cost. `Some(_)` = eligible+compiled,
+                    // `None` (present) = proven ineligible (never retried), absent = below threshold
+                    // (run on the VM this call, re-decide next call). Byte-identity holds either way.
+                    let compiled = {
+                        let mut cache = cache_rc.borrow_mut();
+                        if let Some(slot) = cache.compiled.get(&idx) {
+                            slot.clone()
+                        } else {
+                            let compile_now = function_has_loop(self.program, idx) || {
+                                let n = cache.attempts.entry(idx).or_insert(0);
+                                *n += 1;
+                                *n >= crate::vm::JIT_HOTNESS_THRESHOLD
+                            };
+                            if compile_now {
+                                let comp = crate::jit::Compiled::compile_unboxed(self.program, idx)
+                                    .ok()
+                                    .map(Rc::new);
+                                cache.compiled.insert(idx, comp.clone());
+                                comp
+                            } else {
+                                None
+                            }
+                        }
+                    };
                     if let Some(c) = compiled {
                         let n = self.stack.len();
                         let args: Vec<Value> = self.stack[n - arity..].to_vec();
@@ -897,4 +912,19 @@ impl<'a> Vm<'a> {
         }
         Ok(Flow::Next)
     }
+}
+
+/// A function "has a loop" iff it contains a backward branch — a `Jump`/`JumpIfFalse` whose absolute
+/// target precedes it. Drives the JIT hotness gate (`JitCache::attempts`): a loop-containing function
+/// is compiled eagerly (a hot loop can live in a function called once, e.g. `bench(iters)`), while a
+/// loopless function waits for `JIT_HOTNESS_THRESHOLD` calls so a cold one-shot leaf never pays the
+/// compile cost. Mirrors the JIT's own backward-branch scan (`src/jit/mod.rs`).
+#[cfg(feature = "jit")]
+fn function_has_loop(program: &BytecodeProgram, idx: usize) -> bool {
+    program.functions[idx]
+        .chunk
+        .code
+        .iter()
+        .enumerate()
+        .any(|(ip, op)| matches!(op, Op::Jump(t) | Op::JumpIfFalse(t) if *t < ip))
 }

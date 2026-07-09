@@ -41,17 +41,34 @@ pub struct JitCache {
     /// `idx → Some(compiled)` if the function (+ its transitive call graph) is unboxed-eligible,
     /// `idx → None` if a compile attempt proved it ineligible. A missing key means "not yet tried".
     compiled: std::collections::HashMap<usize, Option<Rc<crate::jit::Compiled>>>,
+    /// Per-callee call counter driving the **hotness threshold**. A LOOPLESS function is compiled only
+    /// after it has been called [`JIT_HOTNESS_THRESHOLD`] times, so a cold one-shot leaf never pays the
+    /// Cranelift compile cost — the "never worse than the VM on cold code" guard that makes jit-by-
+    /// default safe. A loop-containing function is compiled EAGERLY on its first call (a hot loop can
+    /// live in a function called once — `bench(iters)` — so a call-count gate alone would wrongly skip
+    /// it and lose the win). Correctness is unaffected either way: the VM and JIT are byte-identical
+    /// (Invariant 1 / ovf-spec), so *which* path serves a call never changes output.
+    attempts: std::collections::HashMap<usize, u32>,
     /// Number of `Op::Call` sites served natively by the JIT this program run. A VM-integration test
     /// asserts this `> 0` on a known-eligible program — a silent 100%-fallback would otherwise pass
     /// the differential identically and prove the JIT path was never hit.
     pub hits: u64,
 }
 
+/// How many times a **loopless** function must be called before it is JIT-compiled (loop-containing
+/// functions compile eagerly on the first call — see [`JitCache::attempts`]). Small: recursion
+/// (thousands of calls) and hot loops are unaffected; the guard exists only to spare cold one-shot
+/// leaves the compile cost. Tunable — raise it to spare lukewarm (called-a-handful-of-times) functions
+/// too, at the cost of delaying a genuinely-hot loopless function's compilation by a few calls.
+#[cfg(feature = "jit")]
+pub const JIT_HOTNESS_THRESHOLD: u32 = 2;
+
 #[cfg(feature = "jit")]
 impl JitCache {
     pub fn new() -> Self {
         Self {
             compiled: std::collections::HashMap::new(),
+            attempts: std::collections::HashMap::new(),
             hits: 0,
         }
     }
