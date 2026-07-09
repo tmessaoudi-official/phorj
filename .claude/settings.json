@@ -3,7 +3,11 @@
     "defaultMode": "auto",
     "allow": [
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(cargo:*)",
+      "Bash(docker run --rm:*)",
+      "Bash(source scripts/toolchain.env:*)",
+      "Bash(./target/release/phg:*)"
     ]
   }
 }
