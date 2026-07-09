@@ -5,6 +5,52 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🏗️🤝 **RULED (developer): BUILD BOTH THIS SESSION — heard the opportunity cost, chose max
+  output.** Order (autonomous, commit each green slice): **(1) `UncheckedOverflow` namespace rename** [ruled,
+  small — `Core.Unchecked`→`Core.Runtime.Integer.UncheckedOverflow`, route the checker gate through the
+  two-mode injected-type mechanism like `#[Route]`, migrate examples/docs/`E-TRANSPILE-UNCHECKED`]. **(2)
+  User-attribute system (DEC-194)** [large — declaration targets only, repeatable flag, `Core.Reflect`→PHP
+  `getAttributes()`; instruction/local-var EXCLUDED]. **(3) #3 JIT object/enum/method** [perf — the biggest
+  remaining PHP-beating lever]. Per-instruction `#[UncheckedOverflow]` DEFERRED (same §14/per-node wall, no
+  new perf). Realistic: one session likely won't fully finish all three — durable plan+commits carry the rest.
+- [2026-07-09] 🎨📐 **USER-DEFINED ATTRIBUTE SYSTEM — final design + honest verdict (developer asked; feeds
+  ruled-but-unbuilt DEC-194). NOT yet a build decision — surfaced as opportunity-cost reask (see below).**
+  Developer wants: create attributes in phorj, decide targets (class/method/var/instruction…), repeatable
+  or not, PHP-style. **THE CHALLENGE (advisor-vetted, holds):** two DIFFERENT features are being conflated —
+  **(A) inert user METADATA attributes** (PHP-style: attached to declarations, read via `Core.Reflect`, do
+  NOTHING on their own — a framework reading them gives meaning; PHP attributes NEVER change codegen) vs
+  **(B) compiler-privileged SEMANTIC directives** (`#[UncheckedOverflow]`, `#[Route]` — the compiler
+  recognizes them and changes what it emits). A user can declare (A) but can NEVER write a (B) — semantic
+  behavior needs compiler support. **This is PARITY WITH PHP, not a phorj gap** (PHP user attributes are
+  inert too). **`instruction`/local-var TARGETS = the trap:** PHP targets DECLARATIONS only (class/method/
+  function/property/parameter/class-const); a statement is not a reflectable entity → an instruction-level
+  metadata attribute is meaningless AND has no PHP analog → §14 LADDER quarantine (loses transpile fidelity).
+  **VERDICT "possible without losing anything?":** (A) on DECLARATION targets + repeatable flag + `Core.Reflect`
+  → PHP `getAttributes()` = YES, no INVARIANT/CORRECTNESS loss (additive, byte-identity-mappable, deterministic
+  enum order) — but NOT zero runtime cost: attributes are a RUNTIME feature (must survive to runtime as
+  reflectable data — the OPPOSITE of Inv-5 sugar-expansion; `#[Route]` sets the precedent so it's fine, but
+  it's a representation + reflection surface). Instruction/local-var targets = NO (§14 wall). User semantic
+  attributes = impossible (compiler privilege; = PHP). **PER-INSTRUCTION `#[UncheckedOverflow]` hits the SAME
+  wall both ways:** as a compiler built-in = the expensive per-node path (4 Ops + Inv-3 trio + certification,
+  NO new perf); as a general attribute target = the instruction-target §14 wall. Answer: NOT now, either way.
+  **IF BUILD (DEC-194 scope):** declaration targets only (class/method/function/property/parameter/class-const),
+  repeatable flag, `Core.Reflect` read → PHP `getAttributes`; instruction targets EXCLUDED.
+  **⚠ OPPORTUNITY COST (advisor-surfaced, the real decision):** this is a LARGE multi-slice feature that
+  displaces #3 (the biggest remaining PHP-beating lever: enum 0.01× · objalloc 0.34× · methodcall 0.05×) —
+  untouched all session. Session opened as a PERF marathon. Reask = build attributes NOW (displaces #3) vs
+  record this design as ruled DEC-194 and return to #3. Developer steers with the cost showing.
+- [2026-07-09] ✅📛 **RULED (developer, AskUserQuestion) — `Core.Runtime.*` NAMESPACE = option A: module path +
+  short attribute.** (Name FINALIZED `UncheckedOverflow` — developer ruled 2026-07-09; leaf self-sufficient,
+  natural word order, safety-opt-out signal; `Wrapping` rejected as too benign, bare `Unchecked` too vague.
+  Usage = ratified "Nothing in the wind" two-mode discipline: `import Core.Runtime.Integer.UncheckedOverflow;`
+  → bare `#[UncheckedOverflow]`, OR `import Core.Runtime.Integer;` → qualified `#[Integer.UncheckedOverflow]`;
+  never bare-unimported = `E-UNIMPORTED`. Current `#[Unchecked]` bespoke string-match VIOLATES this → migration
+  routes it through the injected-type mechanism like `#[Route]`.) `import Core.Runtime.Integer;` + `#[Unchecked]` (attribute name unchanged, import path
+  structured). Tree: `Core.Runtime` = timing (monotonicNanos) + umbrella; `Core.Runtime.Integer` = overflow
+  mode; `Core.Runtime.Float` reserved (post-AOT). MIGRATION to build: rename the import module `Core.Unchecked`
+  → `Core.Runtime.Integer` (checker import-gate + loader); `#[Unchecked]` attribute stays; move
+  `examples/guide/unchecked.phg` import + `E-TRANSPILE-UNCHECKED` docs + intadd-unchecked references. Byte-identity
+  unaffected (import-name only; the `unchecked` fn bool + codegen unchanged). [SUPERSEDED the PENDING below.]
 - [2026-07-09] 🅿️📛 **PENDING-DECISION (§15, user-visible naming — surfaced to developer, NOT self-ruled):
   `Core.Runtime.*` NAMESPACE for perf/runtime knobs.** Developer-requested (e.g. `Core.Runtime.Integer.Check`).
   CURRENT SURFACE: `import Core.Unchecked;` + `#[Unchecked]` (flat); `Core.Runtime.monotonicNanos()` already
