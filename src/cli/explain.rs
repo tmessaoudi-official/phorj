@@ -745,6 +745,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              runtime rejects. (PHP also forbids a static and an instance method sharing a name.) Make\n\
              every overload `static`, or none of them, or rename one declaration.\n"
         }
+        "E-ATTRIBUTE-ARG-TYPE" => {
+            "E-ATTRIBUTE-ARG-TYPE — a user attribute argument has the wrong type.\n\n\
+             A user attribute (`#[Tag(\"api\")]`) is applied like its constructor, so each argument must be\n\
+             assignable to the matching `#[Attribute]` class constructor parameter — checked at COMPILE\n\
+             time (PHP only fails when the attribute is reflected). e.g. `#[Tag(123)]` where `Tag` takes a\n\
+             `string` is rejected here; pass a `string`.\n"
+        }
         "E-ATTRIBUTE-ARITY" => {
             "E-ATTRIBUTE-ARITY — a user attribute was applied with the wrong number of arguments.\n\n\
              A user-defined attribute (a class marked `#[Attribute]`) is applied like a constructor call:\n\

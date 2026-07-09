@@ -266,6 +266,20 @@ fn user_attribute_wrong_argument_count_is_rejected() {
 }
 
 #[test]
+fn user_attribute_wrong_argument_type_is_rejected() {
+    // 2b-3b: each attribute argument is type-checked against the attribute class's constructor parameter
+    // at COMPILE time (the better-than-PHP guarantee). `#[Tag(123)]` where `Tag(string label)` is rejected.
+    let src = "package Main;\n\
+        #[Attribute]\n\
+        class Tag { constructor(public string label) {} }\n\
+        #[Tag(123)]\n\
+        class Widget {}\n\
+        function main() -> void {}\n";
+    let errs = check_src(src).expect_err("wrong attribute arg type must fail");
+    assert!(has_code(&errs, "E-ATTRIBUTE-ARG-TYPE"), "{errs:?}");
+}
+
+#[test]
 fn attribute_on_a_non_function_non_class_item_is_still_a_parse_error() {
     // enum/interface/trait/etc. keep the parse-stage rejection until their target slices land.
     let src = "package Main;\n#[Route(\"GET\", \"/\")]\nenum E { A }\nfunction main() -> void {}\n";

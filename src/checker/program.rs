@@ -770,16 +770,19 @@ impl Checker {
     /// then falls through to the built-in handling / unknown-attribute error).
     pub(super) fn check_user_attribute_use(&mut self, attr: &crate::ast::Attribute) -> bool {
         let leaf = attr.name.rsplit('.').next().unwrap_or(attr.name.as_str());
-        let arity = match self.classes.get(leaf) {
-            Some(info) if info.is_user_attribute => info.ctor.len(),
+        // Clone the constructor param types out (small) so the `self.classes` borrow ends before the
+        // `&mut self` type-checking calls below.
+        let params: Vec<Ty> = match self.classes.get(leaf) {
+            Some(info) if info.is_user_attribute => info.ctor.clone(),
             _ => return false,
         };
-        if attr.args.len() != arity {
+        if attr.args.len() != params.len() {
             self.err_coded(
                 attr.span,
                 format!(
-                    "attribute `#[{}]` takes {arity} argument(s), got {}",
+                    "attribute `#[{}]` takes {} argument(s), got {}",
                     attr.name,
+                    params.len(),
                     attr.args.len()
                 ),
                 "E-ATTRIBUTE-ARITY",
@@ -788,6 +791,29 @@ impl Checker {
                         .into(),
                 ),
             );
+        }
+        // 2b-3b: type-check each provided argument against the corresponding constructor parameter —
+        // the COMPILE-TIME typed-argument guarantee (PHP only fails when the attribute is reflected).
+        // `check_arg` types the argument (with the same literal-threading a `new Tag(…)` call gets); the
+        // assignability check + error mirror `check_args_defaulted`. Surplus args (already flagged by the
+        // arity error) are dropped by `zip`; a missing arg is covered by the arity error.
+        for (i, (arg, pty)) in attr.args.iter().zip(params.iter()).enumerate() {
+            let at = self.check_arg(arg, pty);
+            if !self.ty_assignable(&at, pty) {
+                self.err_coded(
+                    attr.span,
+                    format!(
+                        "attribute `#[{}]` argument {} expects `{pty}`, found `{at}`",
+                        attr.name,
+                        i + 1
+                    ),
+                    "E-ATTRIBUTE-ARG-TYPE",
+                    Some(
+                        "an attribute argument must match its attribute class's constructor parameter type"
+                            .into(),
+                    ),
+                );
+            }
         }
         true
     }

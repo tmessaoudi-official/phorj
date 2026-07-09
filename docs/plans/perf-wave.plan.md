@@ -5,6 +5,11 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅🏗️ **SLICE 2b-3b SHIPPED — full arg-TYPE checking on attribute uses.** `check_user_attribute_use`
+  now type-checks each attribute argument against the attribute class's constructor parameter (`check_arg` +
+  `ty_assignable`, mirroring `check_args_defaulted`) → `E-ATTRIBUTE-ARG-TYPE` (e.g. `#[Tag(123)]` where
+  `Tag(string label)` → "argument 1 expects `string`, found `int`"). Completes the COMPILE-TIME typed-argument
+  guarantee (the better-than-PHP win — PHP only fails at reflection). Explain + test added.
 - [2026-07-09] ✅🏗️ **SLICE 2b-3 SHIPPED — user attributes are USABLE.** `#[Attribute]`-marked class →
   applied as `#[Tag("...")]` on a class OR function; use validated (`ClassInfo.is_user_attribute` set in
   collect; shared `check_user_attribute_use` at both the function/method + class attr sites): arg-count vs

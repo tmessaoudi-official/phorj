@@ -9,9 +9,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 ### Added — user-defined attributes are usable (DEC-194 slice 2b-3)
 
 A class marked `#[Attribute]` can now be **applied** as `#[Tag("...")]` on a class or function, and the
-use is validated: the argument count must match the attribute class's constructor (`E-ATTRIBUTE-ARITY`,
-checked at **compile time** — stronger than PHP, which only fails when the attribute is reflected), and an
-undeclared attribute is `E-UNKNOWN-ATTRIBUTE`. `ClassInfo` gained `is_user_attribute` (set in the collect
+use is fully validated at **compile time** (stronger than PHP, which only fails when the attribute is
+reflected): the argument count must match the attribute class's constructor (`E-ATTRIBUTE-ARITY`) **and each
+argument's type must be assignable to the matching constructor parameter** (`E-ATTRIBUTE-ARG-TYPE` — e.g.
+`#[Tag(123)]` where `Tag(string label)` is rejected), and an undeclared attribute is `E-UNKNOWN-ATTRIBUTE`. `ClassInfo` gained `is_user_attribute` (set in the collect
 pass); a shared `check_user_attribute_use` handles both the function/method and class attribute-check sites.
 Attributes remain inert metadata (no runtime effect yet), so `phg run` ≡ `phg runvm` ≡ transpiled PHP stay
 byte-identical — the transpiler drops the (unread) attribute. Valid on all targets this slice; per-target
