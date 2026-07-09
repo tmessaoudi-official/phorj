@@ -984,6 +984,36 @@ fn unboxed_float_comparison_is_rejected_to_vm() {
 }
 
 #[test]
+fn unboxed_float_loop_mixes_int_and_float_at_shared_depths_bit_exact() {
+    // MANDATORY guard for the dual-space (ivars/fvars) value model: a float accumulator loop driven by
+    // an INT counter. The int comparison `i < n` and the float arith `acc = acc*x + 0.5` reuse the SAME
+    // operand-stack DEPTHS for DIFFERENT kinds (Int/Bool vs Float) — the mixed-kind-per-depth case a
+    // single-typed Variable cannot hold. If the value model ever reads the wrong space for a shared
+    // depth (e.g. the counter as a float, or acc as an int-bit), the loop count or accumulation goes
+    // wrong. Result must be BIT-IDENTICAL to the VM oracle across empty/one/many-iteration loops.
+    let program = compile_source(
+        "package Main;\n\
+         function accum(int n, float x) -> float {\n\
+           mutable float acc = 0.0;\n\
+           mutable int i = 0;\n\
+           while (i < n) { acc = acc * x + 0.5; i = i + 1; }\n\
+           return acc;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "accum");
+    for (n, x) in [(0_i64, 1.5_f64), (1, 2.0), (10, 1.0000001), (100, 0.999)] {
+        let jit = ub_float(&program, f, &[Value::Int(n), Value::Float(x)]);
+        let vm = vm_float(&program, f, vec![Value::Int(n), Value::Float(x)]);
+        assert_eq!(
+            jit.to_bits(),
+            vm.to_bits(),
+            "accum({n},{x}) unboxed must bit-match the VM oracle (jit={jit}, vm={vm})"
+        );
+    }
+}
+
+#[test]
 fn unboxed_float_with_call_is_rejected_leaf_only() {
     // Float slice v1 is LEAF-only: a function that touches floats AND calls must fall back (the Call arm
     // models a callee return as Int, so a float flowing through a call would mis-decode).

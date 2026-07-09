@@ -955,15 +955,22 @@ fn unboxed_proven_param_kinds(func: &crate::chunk::Function) -> Vec<Option<Kind>
 fn ub_push(
     b: &mut FunctionBuilder,
     vars: &[Variable],
+    fvars: &[Variable],
     kinds: &mut Vec<Kind>,
     v: ClValue,
     k: Kind,
 ) -> Result<(), JitError> {
     let d = kinds.len();
-    let var = *vars.get(d).ok_or_else(|| {
+    // Dual-space: a Float value lives in the F64 space (`fvars`) so a loop-carried float stays in an
+    // XMM register across the back-edge — no per-iteration GPR↔XMM bitcast (the floatmul 4.5× root
+    // cause, docs/plans/perf-wave.plan.md). Int/Bool/Unknown live in the I64 space (`vars`). The two
+    // spaces share the depth index; `kinds` selects which is live at each depth (edge-consistency
+    // enforced by `unboxed_analyze`, so a given depth is never both spaces at one program point).
+    let space = if k == Kind::Float { fvars } else { vars };
+    let var = *space.get(d).ok_or_else(|| {
         JitError::Codegen(format!(
             "unboxed: stack depth {d} exceeds max {}",
-            vars.len()
+            space.len()
         ))
     })?;
     b.def_var(var, v);
@@ -975,13 +982,16 @@ fn ub_push(
 fn ub_pop(
     b: &mut FunctionBuilder,
     vars: &[Variable],
+    fvars: &[Variable],
     kinds: &mut Vec<Kind>,
 ) -> Result<(ClValue, Kind), JitError> {
     let k = kinds
         .pop()
         .ok_or_else(|| JitError::Codegen("unboxed: operand stack underflow".to_string()))?;
     let d = kinds.len();
-    Ok((b.use_var(vars[d]), k))
+    // Dual-space (see `ub_push`): read from the space matching the popped entry's kind.
+    let space = if k == Kind::Float { fvars } else { vars };
+    Ok((b.use_var(space[d]), k))
 }
 
 /// Forward CFG pass computing the abstract operand-stack KINDS at every block leader for the unboxed
@@ -1289,16 +1299,32 @@ fn build_body_unboxed(
     // args (the frame's slots 0..arity); the rest get a filler `0` that is always overwritten before it
     // is read (structured control flow + definite-assignment; same argument as the boxed `Value::Unit`
     // filler). Within a block, def/use of these Variables optimizes to plain SSA — no memory traffic.
+    // Dual-space stack cells: `vars[d]` = the I64 space (ints/bools/bits), `fvars[d]` = the F64 space
+    // (floats stay in XMM, so a loop-carried float phi never round-trips through a GPR). Both are
+    // declared+seeded in the entry block (which dominates the body). A float PARAM arrives as its i64
+    // bits (uniform i64 ABI) → bitcast to F64 ONCE here, not per-op. The space NOT matching a slot's
+    // initial kind gets a type-correct filler that definite-assignment guarantees is overwritten before
+    // read, but must exist to dominate any (dead-then-DCE'd) use.
     let mut vars: Vec<Variable> = Vec::with_capacity(max_depth);
+    let mut fvars: Vec<Variable> = Vec::with_capacity(max_depth);
+    let i_zero = b.ins().iconst(types::I64, 0);
+    let f_zero = b.ins().f64const(0.0);
     for s in 0..max_depth {
-        let var = b.declare_var(types::I64);
-        let init = if s < args.len() {
-            args[s]
+        let ivar = b.declare_var(types::I64);
+        let fvar = b.declare_var(types::F64);
+        if s < args.len() && matches!(param_kinds.get(s), Some(Kind::Float)) {
+            let fbits = b.ins().bitcast(types::F64, MemFlagsData::new(), args[s]);
+            b.def_var(fvar, fbits);
+            b.def_var(ivar, i_zero);
+        } else if s < args.len() {
+            b.def_var(ivar, args[s]);
+            b.def_var(fvar, f_zero);
         } else {
-            b.ins().iconst(types::I64, 0)
-        };
-        b.def_var(var, init);
-        vars.push(var);
+            b.def_var(ivar, i_zero);
+            b.def_var(fvar, f_zero);
+        }
+        vars.push(ivar);
+        fvars.push(fvar);
     }
 
     // ovf-spec: the speculation sticky flag. A Cranelift `Variable` (NOT an SSA value) so a loop
@@ -1379,19 +1405,18 @@ fn build_body_unboxed(
             Op::Const(idx) => match func.chunk.consts.get(*idx) {
                 Some(Value::Int(k)) => {
                     let v = b.ins().iconst(types::I64, *k);
-                    ub_push(&mut b, &vars, &mut kinds, v, Kind::Int)?;
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, v, Kind::Int)?;
                 }
                 Some(Value::Float(f)) => {
-                    // A float lives as its f64 BITS in the I64 cell (bitcast to F64 only at the float op
-                    // that consumes it). Store the bits directly — no f64const+bitcast round-trip.
-                    let bits = b.ins().iconst(types::I64, f.to_bits() as i64);
-                    ub_push(&mut b, &vars, &mut kinds, bits, Kind::Float)?;
+                    // Dual-space: push the native f64 into the F64 space (no bits-in-i64 round-trip).
+                    let fv = b.ins().f64const(*f);
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, fv, Kind::Float)?;
                 }
                 other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
             },
             Op::AddI | Op::SubI | Op::MulI => {
-                let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 // ovf-spec: WRAPPING result + OR the overflow carry into sticky — NO per-op branch (the
                 // per-op `*_overflow`+branch was the intadd perf loss). `sadd_overflow`'s result[0] IS the
                 // two's-complement wrapped value; push it, fold result[1] (the carry) into sticky.
@@ -1401,11 +1426,11 @@ fn build_body_unboxed(
                     _ => b.ins().smul_overflow(av, bv),
                 };
                 accumulate_sticky(&mut b, overflow);
-                ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
             }
             Op::DivI | Op::RemI => {
-                let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 // ovf-spec: div/rem CANNOT be speculated — `sdiv`/`srem` hardware-trap (SIGFPE) on both
                 // divide-by-zero AND i64::MIN / -1. So KEEP both as real per-op branches (rare → cheap),
                 // but funnel them to code 5 (redo on VM) like every other fault; the VM redo renders the
@@ -1424,43 +1449,39 @@ fn build_body_unboxed(
                 } else {
                     b.ins().srem(av, bv)
                 };
-                ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
             }
             Op::AddF | Op::SubF | Op::MulF => {
-                // Float arith: pop bits → bitcast to f64 → op → bitcast result to bits. NO fault, NO
-                // sticky — IEEE arith is total (overflow yields inf, not a fault), matching value::float_
-                // {add,sub,mul}. (`RemF` is NOT in the subset: Cranelift has no native frem — fmod libcall
-                // deferred — so it never reaches here; `collect_functions_unboxed` default-denies it.)
-                let (bb, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let (ab, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let af = b.ins().bitcast(types::F64, MemFlagsData::new(), ab);
-                let bf = b.ins().bitcast(types::F64, MemFlagsData::new(), bb);
+                // Dual-space float arith: operands arrive from the F64 space already as f64 (NO per-op
+                // bitcast), op, push the f64 result to the F64 space. NO fault, NO sticky — IEEE arith is
+                // total (overflow yields inf, not a fault), matching value::float_{add,sub,mul}. Same ops
+                // in the same order ⇒ bit-identical to the VM oracle (Invariant #1). (`RemF` is NOT in the
+                // subset: Cranelift has no native frem — fmod libcall deferred; `collect_functions_unboxed`
+                // default-denies it, so it never reaches here.)
+                let (bf, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (af, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let rf = match op {
                     Op::AddF => b.ins().fadd(af, bf),
                     Op::SubF => b.ins().fsub(af, bf),
                     _ => b.ins().fmul(af, bf),
                 };
-                let rbits = b.ins().bitcast(types::I64, MemFlagsData::new(), rf);
-                ub_push(&mut b, &vars, &mut kinds, rbits, Kind::Float)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, rf, Kind::Float)?;
             }
             Op::DivF => {
                 // Float division: a ZERO divisor faults (value::float_div: `b == 0.0`, incl. -0.0) — no
                 // hardware trap, but a semantic fault → branch to code 5 (redo on VM renders FAULT_DIV_
                 // ZERO). `fcmp Equal` is false for NaN, so a NaN/inf divisor does NOT fault → fdiv yields
                 // NaN/inf, matching float_div's `Ok(a / b)`.
-                let (bb, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let (ab, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let af = b.ins().bitcast(types::F64, MemFlagsData::new(), ab);
-                let bf = b.ins().bitcast(types::F64, MemFlagsData::new(), bb);
+                let (bf, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (af, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let zero = b.ins().f64const(0.0);
                 let is_zero = b.ins().fcmp(FloatCC::Equal, bf, zero);
                 fault_if(&mut b, is_zero, 5);
                 let rf = b.ins().fdiv(af, bf);
-                let rbits = b.ins().bitcast(types::I64, MemFlagsData::new(), rf);
-                ub_push(&mut b, &vars, &mut kinds, rbits, Kind::Float)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, rf, Kind::Float)?;
             }
             Op::Neg => {
-                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 // ovf-spec: -i64::MIN overflows on the VM, but `ineg` does NOT hardware-trap (it wraps
                 // MIN→MIN) — unlike div — so we speculate: fold `av == MIN` into sticky (no branch) and
                 // emit the wrapping `ineg`. A set sticky forces the redo at the next back-edge / Return.
@@ -1468,17 +1489,17 @@ fn build_body_unboxed(
                 let is_min = b.ins().icmp(IntCC::Equal, av, imin);
                 accumulate_sticky(&mut b, is_min);
                 let res = b.ins().ineg(av);
-                ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
             }
             Op::Not => {
-                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let r = b.ins().icmp_imm(IntCC::Equal, av, 0); // 1 iff false
                 let r64 = b.ins().uextend(types::I64, r);
-                ub_push(&mut b, &vars, &mut kinds, r64, Kind::Bool)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, r64, Kind::Bool)?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
-                let (bv, bk) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let (av, ak) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (bv, bk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 // `icmp` is only correct on integer bit-patterns. Reject unless BOTH operands are safely
                 // non-float. A known `Float` → reject. An `Unknown` operand is AMBIGUOUS (a float param
                 // used only in comparisons is never proven Float — the trap this guards): require the
@@ -1504,31 +1525,36 @@ fn build_body_unboxed(
                 };
                 let r = b.ins().icmp(cc, av, bv);
                 let r64 = b.ins().uextend(types::I64, r);
-                ub_push(&mut b, &vars, &mut kinds, r64, Kind::Bool)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, r64, Kind::Bool)?;
             }
             Op::GetLocal(slot) => {
-                // DUP: read the frame-stack cell at `slot` (a Variable) and push a copy on top, carrying
-                // that cell's CURRENT kind (a proven-int param, or whatever was last stored there).
-                let var = *vars.get(*slot).ok_or_else(|| {
-                    JitError::Codegen(format!(
-                        "unboxed GetLocal slot {slot} out of range (max_depth {})",
-                        vars.len()
-                    ))
-                })?;
+                // DUP: read the frame-stack cell at `slot` and push a copy on top, carrying that cell's
+                // CURRENT kind (a proven-numeric param, or whatever was last stored there). Dual-space:
+                // read from the space matching that kind (a Float local from `fvars`).
                 let kind = *kinds.get(*slot).ok_or_else(|| {
                     JitError::Codegen(format!("unboxed GetLocal slot {slot} above stack top"))
                 })?;
+                let space = if kind == Kind::Float { &fvars } else { &vars };
+                let var = *space.get(*slot).ok_or_else(|| {
+                    JitError::Codegen(format!(
+                        "unboxed GetLocal slot {slot} out of range (max_depth {})",
+                        space.len()
+                    ))
+                })?;
                 let v = b.use_var(var);
-                ub_push(&mut b, &vars, &mut kinds, v, kind)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, v, kind)?;
             }
             Op::SetLocal(slot) => {
                 // Pop the top and store it into the frame-stack cell at `slot`, updating that cell's
                 // tracked kind. A back-edge assignment feeds Cranelift's loop-header phi via `def_var`.
-                let (v, k) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let var = *vars.get(*slot).ok_or_else(|| {
+                // Dual-space: store into the space matching the popped value's kind (a Float feeds the
+                // F64 phi → the loop-carried float stays in XMM across the back-edge).
+                let (v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let space = if k == Kind::Float { &fvars } else { &vars };
+                let var = *space.get(*slot).ok_or_else(|| {
                     JitError::Codegen(format!(
                         "unboxed SetLocal slot {slot} out of range (max_depth {})",
-                        vars.len()
+                        space.len()
                     ))
                 })?;
                 if *slot >= kinds.len() {
@@ -1555,7 +1581,7 @@ fn build_body_unboxed(
                 let arity = program.functions[*callee].arity;
                 let mut cargs: Vec<ClValue> = Vec::with_capacity(arity);
                 for _ in 0..arity {
-                    let (v, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                    let (v, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                     cargs.push(v);
                 }
                 cargs.reverse();
@@ -1572,7 +1598,7 @@ fn build_body_unboxed(
                 b.ins()
                     .brif(is_fault, fault_exit, &[ccode.into()], cont, &[]);
                 b.switch_to_block(cont);
-                ub_push(&mut b, &vars, &mut kinds, value, Kind::Int)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, value, Kind::Int)?;
             }
             Op::Jump(t) => {
                 let tb = blocks[*t].ok_or_else(|| {
@@ -1592,7 +1618,7 @@ fn build_body_unboxed(
                 current = None;
             }
             Op::JumpIfFalse(t) => {
-                let (cond, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (cond, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let tb = blocks[*t].ok_or_else(|| {
                     JitError::Codegen(format!("unboxed JumpIfFalse target ip {t}"))
                 })?;
@@ -1612,7 +1638,7 @@ fn build_body_unboxed(
                 current = None;
             }
             Op::Return => {
-                let (v, kind) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (v, kind) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 if kind != Kind::Int && kind != Kind::Float {
                     // A bool/unknown return would be mis-decoded — reject to VM/boxed.
                     return Err(JitError::Unsupported(format!(
@@ -1632,6 +1658,13 @@ fn build_body_unboxed(
                     }
                     Some(_) => {}
                 }
+                // Dual-space: a float return is a native f64 → bitcast to its i64 bits for the uniform
+                // i64 ABI (`run_unboxed` decodes back via `ret_kind`). Int/Bool are already i64.
+                let vbits = if kind == Kind::Float {
+                    b.ins().bitcast(types::I64, MemFlagsData::new(), v)
+                } else {
+                    v
+                };
                 // ovf-spec: if speculation overflowed anywhere on this path, return code 5 (redo on VM)
                 // instead of the wrapped value; else (value, 0). `select` keeps the hot no-overflow path
                 // branchless. The value operand is ignored by `run_unboxed` when code != 0.
@@ -1639,7 +1672,7 @@ fn build_body_unboxed(
                 let five = b.ins().iconst(types::I64, 5);
                 let zero = b.ins().iconst(types::I64, 0);
                 let code = b.ins().select(s, five, zero);
-                b.ins().return_(&[v, code]);
+                b.ins().return_(&[vbits, code]);
                 current = None;
             }
             // Everything else falls back to the VM/boxed path.
