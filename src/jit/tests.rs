@@ -882,23 +882,186 @@ fn ovf_spec_non_overflowing_loop_returns_the_checked_value() {
     assert_eq!(jit, oracle, "no-overflow loop value must match the oracle");
 }
 
+// --- float slice v1: pure float arith (Const(Float) + AddF/SubF/MulF/DivF), leaf-only, no float
+// comparisons (deferred). Floats travel as f64 BITS through the i64 ABI; run_unboxed decodes via
+// ret_kind. Byte-identity vs the VM oracle is bit-exact (same f64 ops, same order). ---
+
+fn as_float(v: &Value) -> f64 {
+    match v {
+        Value::Float(f) => *f,
+        other => panic!("expected float, got {}", other.type_name()),
+    }
+}
+
+/// Unboxed-JIT a float-returning function and unwrap its f64 (bit-compared to the VM oracle).
+fn ub_float(program: &BytecodeProgram, f: usize, args: &[Value]) -> f64 {
+    match Compiled::compile_unboxed(program, f)
+        .expect("function must be unboxed-eligible")
+        .run_unboxed(args, 1)
+    {
+        JitRun::Value(v) => as_float(&v),
+        JitRun::Fault(m) => panic!("unexpected unboxed float fault: {m}"),
+    }
+}
+
+fn vm_float(program: &BytecodeProgram, f: usize, args: Vec<Value>) -> f64 {
+    let (v, _stdout) = crate::vm::Vm::new(program)
+        .run_entry(f, args)
+        .expect("VM run_entry");
+    as_float(&v)
+}
+
+#[test]
+fn unboxed_float_arith_leaf_matches_vm_oracle_bit_exact() {
+    // A pure-float leaf: `a*b + a - b` (MulF/AddF/SubF) returning float. The JIT stores floats as bits
+    // and bitcasts at each op; the result must be BIT-IDENTICAL to the VM oracle (same f64 ops, order).
+    let program = compile_source(
+        "package Main;\n\
+         function calc(float a, float b) -> float { return a * b + a - b; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "calc");
+    for (a, b) in [(6.0_f64, 7.0_f64), (0.5, 0.25), (-3.5, 2.0), (1e300, 1e-8)] {
+        let jit = ub_float(&program, f, &[Value::Float(a), Value::Float(b)]);
+        let vm = vm_float(&program, f, vec![Value::Float(a), Value::Float(b)]);
+        assert_eq!(
+            jit.to_bits(),
+            vm.to_bits(),
+            "calc({a},{b}) unboxed float must bit-match the VM oracle (jit={jit}, vm={vm})"
+        );
+    }
+}
+
+#[test]
+fn unboxed_float_div_by_zero_funnels_to_redo_but_nan_inf_do_not() {
+    // Float div: a ZERO divisor faults (value::float_div) → code 5 = REDO_ON_VM. A NaN or inf divisor
+    // does NOT fault (fcmp Equal is false for NaN; inf != 0) → a real f64 result, bit-matching the VM.
+    let program = compile_source(
+        "package Main;\n\
+         function div(float a, float b) -> float { return a / b; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "div");
+    // +0.0 and -0.0 both fault → redo.
+    for z in [0.0_f64, -0.0_f64] {
+        match Compiled::compile_unboxed(&program, f)
+            .expect("div eligible")
+            .run_unboxed(&[Value::Float(1.0), Value::Float(z)], 1)
+        {
+            JitRun::Fault(m) => assert_eq!(m, REDO_ON_VM, "float /{z} must funnel to redo"),
+            JitRun::Value(v) => panic!("expected redo for /{z}, got {}", as_float(&v)),
+        }
+    }
+    // A non-zero (incl. inf) divisor does NOT fault; matches the VM bit-for-bit (inf → 0.0, etc.).
+    for (a, b) in [(6.0_f64, 2.0_f64), (1.0, f64::INFINITY), (1.0, 4.0)] {
+        let jit = ub_float(&program, f, &[Value::Float(a), Value::Float(b)]);
+        let vm = vm_float(&program, f, vec![Value::Float(a), Value::Float(b)]);
+        assert_eq!(
+            jit.to_bits(),
+            vm.to_bits(),
+            "div({a},{b}) must bit-match VM"
+        );
+    }
+}
+
+#[test]
+fn unboxed_float_comparison_is_rejected_to_vm() {
+    // Float comparisons (fcmp/NaN) are DEFERRED — a function comparing floats must fall back (Unsupported),
+    // NOT icmp the raw bits. `less` returns int so the only disqualifier is the float compare itself.
+    let program = compile_source(
+        "package Main;\n\
+         function less(float a, float b) -> int { if (a < b) { return 1; } return 0; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "less");
+    assert!(
+        matches!(
+            Compiled::compile_unboxed(&program, f),
+            Err(JitError::Unsupported(_))
+        ),
+        "a float comparison must be rejected to the VM, never icmp'd on bits"
+    );
+}
+
+#[test]
+fn unboxed_float_with_call_is_rejected_leaf_only() {
+    // Float slice v1 is LEAF-only: a function that touches floats AND calls must fall back (the Call arm
+    // models a callee return as Int, so a float flowing through a call would mis-decode).
+    let program = compile_source(
+        "package Main;\n\
+         function twice(float x) -> float { return x + x; }\n\
+         function useit(float x) -> float { return twice(x) + 1.0; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "useit");
+    assert!(
+        matches!(
+            Compiled::compile_unboxed(&program, f),
+            Err(JitError::Unsupported(_))
+        ),
+        "float ops + Call in one function must fall back (v1 leaf-only)"
+    );
+}
+
+#[test]
+fn floatmul_micro_jits_and_matches_the_oracle() {
+    // The float slice's measurement target: the `floatmul` micro shape (IIR recurrence, pure MulF/AddF,
+    // int loop) must JIT through the `Op::Call` hook AND match the interpreter oracle. Asserts the hot
+    // fn is eligible + the hit counter fires (no false-green via a silent VM fallback).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Conversion;\n\
+        function bench(int iters, float r) -> float {\n\
+          mutable float acc = 0.0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) { acc = acc * r + 0.5; i = i + 1; }\n\
+          return acc;\n\
+        }\n\
+        function main() -> void { Output.printLine(\"{Conversion.truncate(bench(5000, 1.0000001))}\"); }";
+    // `bench` must be unboxed-eligible so the JIT path is genuinely taken.
+    let program = compile_source(SRC);
+    let bench = func_index(&program, "bench");
+    assert!(
+        Compiled::compile_unboxed(&program, bench).is_ok(),
+        "float `bench` must be unboxed-eligible (else the flip is unmeasurable / false-green)"
+    );
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "floatmul jit output must match the oracle");
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual floatmul jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the float `bench` must actually hit the JIT — else the float flip is unproven"
+    );
+}
+
 #[test]
 fn unboxed_bool_local_not_returned_is_eligible() {
     // A mutable BOOL local (SetLocal from a comparison → Kind::Bool), used only in a bool context
     // (JumpIfFalse), NOT returned; the function returns an int. The slot-kind pre-pass must label the
     // slot Bool (so it can never be mis-returned as Value::Int) yet keep the function eligible.
-    // Oracle-checked — the advisor's loop-carried-Bool shape, straight-line variant.
+    // Oracle-checked — the advisor's loop-carried-Bool shape, straight-line variant. (`a < 4`, param-vs-
+    // const, so the comparison has a known-Int operand — see the float-slice guard in
+    // `unboxed_all_comparisons_and_not_match_vm_oracle`.)
     let program = compile_source(
         "package Main;\n\
-         function f(int a, int b) -> int { mutable bool flag = a < b; if (flag) { return 1; } return 0; }\n\
+         function f(int a) -> int { mutable bool flag = a < 4; if (flag) { return 1; } return 0; }\n\
          function main() -> void {}",
     );
     let f = func_index(&program, "f");
-    for (a, b) in [(1_i64, 2_i64), (2, 1), (5, 5), (-3, 0)] {
+    for a in [1_i64, 2, 5, -3, 4] {
         assert_eq!(
-            ub_int(&program, f, &[Value::Int(a), Value::Int(b)]),
-            vm_int(&program, f, vec![Value::Int(a), Value::Int(b)]),
-            "unboxed f({a},{b}) with a bool local must match the VM oracle"
+            ub_int(&program, f, &[Value::Int(a)]),
+            vm_int(&program, f, vec![Value::Int(a)]),
+            "unboxed f({a}) with a bool local must match the VM oracle"
         );
     }
 }
@@ -1053,27 +1216,34 @@ fn unboxed_div_zero_mid_loop_faults_like_vm() {
 
 #[test]
 fn unboxed_all_comparisons_and_not_match_vm_oracle() {
-    // Every comparison arm (Gt/Ge/Le/Eq/Ne + Lt via `nt`'s `!(a<b)`) and `Not` — each a hand-written
-    // `Op → IntCC` mapping, the b1 transposition-trap family. Branch-return leaf form (u1-legal: no
-    // SetLocal), distinguishable per edge, oracle-checked vs the VM. A Le↔Ge / Eq↔Ne swap or an
-    // operand-order flip changes a result and is caught here.
+    // Every comparison arm (Gt/Ge/Le/Eq/Ne + Lt via `nt`'s `!(a<4)`) and `Not` — each a hand-written
+    // `Op → IntCC` mapping, the b1 transposition-trap family. Branch-return leaf form, distinguishable
+    // per edge (varying `a` around the constant `4`), oracle-checked vs the VM. A Le↔Ge / Eq↔Ne swap or
+    // an operand-order flip changes a result and is caught here.
+    //
+    // Operand form is param-VS-CONST (`a op 4`), NOT param-vs-param (`a op b`): the float slice added a
+    // soundness guard rejecting a comparison unless ≥1 operand is a KNOWN non-float (Int/Bool) — because
+    // an `Unknown` operand (a param used only in a comparison) is kind-ambiguous (a float param compared
+    // is bytecode-identical to an int one; `icmp` on float bits would be a silent byte-identity bug). The
+    // const `4` is that known-Int operand. Restoring param-vs-param int comparisons (and float compares)
+    // needs param types threaded into the bytecode — a tracked follow-up.
     let program = compile_source(
         "package Main;\n\
-         function gt(int a, int b) -> int { if (a > b) { return 1; } return 0; }\n\
-         function ge(int a, int b) -> int { if (a >= b) { return 1; } return 0; }\n\
-         function le(int a, int b) -> int { if (a <= b) { return 1; } return 0; }\n\
-         function eq(int a, int b) -> int { if (a == b) { return 1; } return 0; }\n\
-         function ne(int a, int b) -> int { if (a != b) { return 1; } return 0; }\n\
-         function nt(int a, int b) -> int { if (!(a < b)) { return 1; } return 0; }\n\
+         function gt(int a) -> int { if (a > 4) { return 1; } return 0; }\n\
+         function ge(int a) -> int { if (a >= 4) { return 1; } return 0; }\n\
+         function le(int a) -> int { if (a <= 4) { return 1; } return 0; }\n\
+         function eq(int a) -> int { if (a == 4) { return 1; } return 0; }\n\
+         function ne(int a) -> int { if (a != 4) { return 1; } return 0; }\n\
+         function nt(int a) -> int { if (!(a < 4)) { return 1; } return 0; }\n\
          function main() -> void {}",
     );
     for name in ["gt", "ge", "le", "eq", "ne", "nt"] {
         let f = func_index(&program, name);
-        for (a, b) in [(5_i64, 3_i64), (3, 5), (4, 4), (-2, 7), (7, -2)] {
+        for a in [5_i64, 3, 4, -2, 7] {
             assert_eq!(
-                ub_int(&program, f, &[Value::Int(a), Value::Int(b)]),
-                vm_int(&program, f, vec![Value::Int(a), Value::Int(b)]),
-                "unboxed {name}({a},{b}) must match the VM oracle"
+                ub_int(&program, f, &[Value::Int(a)]),
+                vm_int(&program, f, vec![Value::Int(a)]),
+                "unboxed {name}({a}) must match the VM oracle"
             );
         }
     }

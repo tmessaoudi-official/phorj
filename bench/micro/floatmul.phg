@@ -1,0 +1,33 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Conversion;
+
+// Microbench: float multiply+add as an IIR-style recurrence `acc = acc*r + 0.5` — a loop-carried f64
+// dependency (so neither backend can constant-fold it) that stays finite for these iters. Pure
+// `MulF`/`AddF` with an INT loop counter, so `bench` is UNBOXED-JIT-eligible (float slice v1). The
+// checksum is `truncate(acc)` — an int: f64 IEEE arithmetic in the SAME order is bit-identical across
+// both backends, so the truncation is deterministic and the output-identity gate stays exact (folding a
+// raw float into `{...}` would risk backend float-formatting divergence, as in floatarith.phg).
+function bench(int iters, float r): float {
+    mutable float acc = 0.0;
+    mutable int i = 0;
+    while (i < iters) {
+        acc = acc * r + 0.5;
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 2000000;
+    float r = 1.0000001;
+    float warm = bench(iters, r);
+    int guard = Conversion.truncate(warm - warm);
+    int t = Runtime.monotonicNanos();
+    float acc = bench(iters, r);
+    int d = Runtime.monotonicNanos() - t;
+    int cs = Conversion.truncate(acc);
+    Output.printLine("floatmul\t{d + guard}\t{cs}");
+}

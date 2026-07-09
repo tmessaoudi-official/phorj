@@ -82,9 +82,9 @@
 use crate::chunk::{BytecodeProgram, Op};
 use crate::limits::MAX_CALL_DEPTH;
 use crate::value::Value;
-use cranelift::codegen::ir::{FuncRef, Signature, Type};
+use cranelift::codegen::ir::{FuncRef, MemFlagsData, Signature, Type};
 use cranelift::prelude::{
-    types, AbiParam, Block, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
+    types, AbiParam, Block, FloatCC, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
     Value as ClValue, Variable,
 };
 use cranelift_jit::{JITBuilder, JITModule};
@@ -848,6 +848,12 @@ fn build_body(
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Kind {
     Int,
+    /// A float operand, stored in a `vars` cell as its `f64` BITS (an `i64`); code `bitcast`s I64↔F64
+    /// only at the float op that consumes/produces it, so the operand stack + local model stay
+    /// uniformly `I64` and the ABI is unchanged (a float arg is passed as its bits, a float return
+    /// decoded via [`Compiled::ret_kind`]). Float arithmetic never overflows (no sticky); only a
+    /// zero-divisor `DivF` faults (→ code 5, redo on VM).
+    Float,
     Bool,
     Unknown,
 }
@@ -861,19 +867,30 @@ enum Prov {
     Other,
 }
 
-/// Which param slots are provably `int` — i.e. consumed (while still a bare `GetLocal`) by an
-/// int-arith op (`AddI`/`SubI`/`MulI`/`DivI`/`RemI`/`Neg`), which the compiler emits ONLY for int
-/// operands (float uses `AddF`, …). This lets a bare-param `Return` (e.g. `fib`'s base case
-/// `return n`) type as `Int` WITHOUT a declared-type source. It MUST be a separate pre-pass: the
+/// Which param slots are provably numeric AND their kind — `Some(Int)` if consumed (while still a bare
+/// `GetLocal`) by an int-arith op (`AddI`/`SubI`/`MulI`/`DivI`/`RemI`/`Neg`), `Some(Float)` if consumed
+/// by a float-arith op (`AddF`/`SubF`/`MulF`/`DivF`); the compiler emits each family ONLY for its
+/// operand type. `None` = unprovable (falls back to `Unknown`). This lets a bare-param `Return` (e.g.
+/// `fib`'s base case `return n`, or a float leaf's `return x`) type WITHOUT a declared-type source. It
+/// MUST be a separate pre-pass: the
 /// base-case `return n` can PRECEDE the `n - 1` (`SubI`) that proves `n` int, so a single forward pass
 /// would reject it. SOUND and one-directional — a slot is marked only on hard evidence; imprecision
 /// (a missed mark) only over-rejects (falls back), never mis-accepts. The operand stack is cleared at
 /// terminators so no provenance leaks across a basic-block boundary; `self.arity` args are popped for
 /// a `Call` (u2a calls are self-recursive, so the callee arity equals this function's).
-fn unboxed_proven_int_params(func: &crate::chunk::Function) -> Vec<bool> {
+fn unboxed_proven_param_kinds(func: &crate::chunk::Function) -> Vec<Option<Kind>> {
     let code = &func.chunk.code;
     let reach = reachable(code);
-    let mut proven = vec![false; func.arity];
+    let mut proven: Vec<Option<Kind>> = vec![None; func.arity];
+    let mark = |proven: &mut Vec<Option<Kind>>, p: Prov, k: Kind| {
+        if let Prov::Param(slot) = p {
+            if slot < proven.len() {
+                // A param has exactly one static type (the checker), so int- and float-proof can never
+                // conflict on the same slot; the assignment is unambiguous.
+                proven[slot] = Some(k);
+            }
+        }
+    };
     let mut stack: Vec<Prov> = Vec::new();
     for (ip, op) in code.iter().enumerate() {
         if !reach[ip] {
@@ -884,20 +901,23 @@ fn unboxed_proven_int_params(func: &crate::chunk::Function) -> Vec<bool> {
             Op::Const(_) => stack.push(Prov::Other),
             Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => {
                 for _ in 0..2 {
-                    if let Some(Prov::Param(slot)) = stack.pop() {
-                        if slot < proven.len() {
-                            proven[slot] = true;
-                        }
-                    }
+                    let p = stack.pop().unwrap_or(Prov::Other);
+                    mark(&mut proven, p, Kind::Int);
+                }
+                stack.push(Prov::Other);
+            }
+            Op::AddF | Op::SubF | Op::MulF | Op::DivF => {
+                // Float arith (the compiler emits these ONLY for float operands) proves a bare-param
+                // operand `float` — so a float leaf's bare-param `return x` types as Float.
+                for _ in 0..2 {
+                    let p = stack.pop().unwrap_or(Prov::Other);
+                    mark(&mut proven, p, Kind::Float);
                 }
                 stack.push(Prov::Other);
             }
             Op::Neg => {
-                if let Some(Prov::Param(slot)) = stack.pop() {
-                    if slot < proven.len() {
-                        proven[slot] = true;
-                    }
-                }
+                let p = stack.pop().unwrap_or(Prov::Other);
+                mark(&mut proven, p, Kind::Int);
                 stack.push(Prov::Other);
             }
             Op::Not => {
@@ -1026,11 +1046,24 @@ fn unboxed_analyze(
         let mut ip = l;
         loop {
             match &code[ip] {
-                Op::Const(_) => kinds.push(Kind::Int),
+                Op::Const(idx) => {
+                    // Kind follows the const's type (Int vs Float) — MUST mirror build_body, which pushes
+                    // Float for a float const so a downstream `AddF`/`Return` types correctly.
+                    let k = match program.functions[func_idx].chunk.consts.get(*idx) {
+                        Some(Value::Float(_)) => Kind::Float,
+                        _ => Kind::Int,
+                    };
+                    kinds.push(k);
+                }
                 Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => {
                     kinds.pop();
                     kinds.pop();
                     kinds.push(Kind::Int);
+                }
+                Op::AddF | Op::SubF | Op::MulF | Op::DivF => {
+                    kinds.pop();
+                    kinds.pop();
+                    kinds.push(Kind::Float);
                 }
                 Op::Neg => {
                     kinds.pop();
@@ -1133,6 +1166,12 @@ fn collect_functions_unboxed(
         }
         let code = &func.chunk.code;
         let reach = reachable(code);
+        // Float slice v1 is LEAF-only: the `Op::Call` arm models a callee's return as `Int`, so a float
+        // value flowing through a call would mis-decode (a callee returning float, or a float arg). A
+        // function that both touches floats AND calls is rejected (sound over-rejection; cross-function
+        // float is a follow-up). Tracked per-function.
+        let mut has_float = false;
+        let mut has_call = false;
         for (ip, op) in code.iter().enumerate() {
             if !reach[ip] {
                 continue;
@@ -1140,6 +1179,7 @@ fn collect_functions_unboxed(
             match op {
                 Op::Const(idx) => match func.chunk.consts.get(*idx) {
                     Some(Value::Int(_)) => {}
+                    Some(Value::Float(_)) => has_float = true,
                     other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
                 },
                 Op::AddI
@@ -1158,14 +1198,27 @@ fn collect_functions_unboxed(
                 | Op::Jump(_)
                 | Op::JumpIfFalse(_)
                 | Op::Return => {}
+                // Float arith (v1): AddF/SubF/MulF/DivF. RemF is NOT included (no native Cranelift frem;
+                // fmod libcall deferred) → default-denied by the `other` arm. Float COMPARISONS are
+                // op-allowed above (Eq..Ge) but REJECTED at build time when the operands are float
+                // (fcmp/NaN deferred) — a build-time fallback, sound.
+                Op::AddF | Op::SubF | Op::MulF | Op::DivF => has_float = true,
                 // Mutable locals: a read of any slot and a write (SetLocal) are both in the subset.
-                // Slots are Cranelift Variables (widen-1 c1); their int-ness is proven by the
-                // `unboxed_slot_kinds` fixpoint, and a non-int-typed local reaching a `Return` fails
-                // the build (whole-graph fallback).
+                // Slots are Cranelift Variables (widen-1 c1); their kind is proven by the analyze pass,
+                // and a non-numeric-typed local reaching a `Return` fails the build (whole-graph fallback).
                 Op::GetLocal(_) | Op::SetLocal(_) => {}
-                Op::Call(callee) => work.push(*callee),
+                Op::Call(callee) => {
+                    has_call = true;
+                    work.push(*callee);
+                }
                 other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
             }
+        }
+        if has_float && has_call {
+            return Err(JitError::Unsupported(
+                "unboxed: float ops + Call in one function (v1 float subset is leaf-only)"
+                    .to_string(),
+            ));
         }
         order.push(fi);
     }
@@ -1192,7 +1245,8 @@ fn build_body_unboxed(
     program: &BytecodeProgram,
     func_idx: usize,
     func_ids: &[Option<FuncId>],
-    proven: &[bool],
+    proven: &[Option<Kind>],
+    ret_kind_out: &mut Option<Kind>,
 ) -> Result<(), JitError> {
     let func = &program.functions[func_idx];
     let code = &func.chunk.code;
@@ -1203,13 +1257,7 @@ fn build_body_unboxed(
     // types correctly); otherwise `Unknown` → a bare return of one is rejected. These seed the entry
     // stack for the analysis, which then fixes every leader's (depth, kinds) and the max stack depth.
     let param_kinds: Vec<Kind> = (0..func.arity)
-        .map(|s| {
-            if s < proven.len() && proven[s] {
-                Kind::Int
-            } else {
-                Kind::Unknown
-            }
-        })
+        .map(|s| proven.get(s).copied().flatten().unwrap_or(Kind::Unknown))
         .collect();
     let (leader_state, max_depth) = unboxed_analyze(program, func_idx, &param_kinds)?;
 
@@ -1333,6 +1381,12 @@ fn build_body_unboxed(
                     let v = b.ins().iconst(types::I64, *k);
                     ub_push(&mut b, &vars, &mut kinds, v, Kind::Int)?;
                 }
+                Some(Value::Float(f)) => {
+                    // A float lives as its f64 BITS in the I64 cell (bitcast to F64 only at the float op
+                    // that consumes it). Store the bits directly — no f64const+bitcast round-trip.
+                    let bits = b.ins().iconst(types::I64, f.to_bits() as i64);
+                    ub_push(&mut b, &vars, &mut kinds, bits, Kind::Float)?;
+                }
                 other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
             },
             Op::AddI | Op::SubI | Op::MulI => {
@@ -1372,6 +1426,39 @@ fn build_body_unboxed(
                 };
                 ub_push(&mut b, &vars, &mut kinds, res, Kind::Int)?;
             }
+            Op::AddF | Op::SubF | Op::MulF => {
+                // Float arith: pop bits → bitcast to f64 → op → bitcast result to bits. NO fault, NO
+                // sticky — IEEE arith is total (overflow yields inf, not a fault), matching value::float_
+                // {add,sub,mul}. (`RemF` is NOT in the subset: Cranelift has no native frem — fmod libcall
+                // deferred — so it never reaches here; `collect_functions_unboxed` default-denies it.)
+                let (bb, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (ab, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let af = b.ins().bitcast(types::F64, MemFlagsData::new(), ab);
+                let bf = b.ins().bitcast(types::F64, MemFlagsData::new(), bb);
+                let rf = match op {
+                    Op::AddF => b.ins().fadd(af, bf),
+                    Op::SubF => b.ins().fsub(af, bf),
+                    _ => b.ins().fmul(af, bf),
+                };
+                let rbits = b.ins().bitcast(types::I64, MemFlagsData::new(), rf);
+                ub_push(&mut b, &vars, &mut kinds, rbits, Kind::Float)?;
+            }
+            Op::DivF => {
+                // Float division: a ZERO divisor faults (value::float_div: `b == 0.0`, incl. -0.0) — no
+                // hardware trap, but a semantic fault → branch to code 5 (redo on VM renders FAULT_DIV_
+                // ZERO). `fcmp Equal` is false for NaN, so a NaN/inf divisor does NOT fault → fdiv yields
+                // NaN/inf, matching float_div's `Ok(a / b)`.
+                let (bb, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (ab, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let af = b.ins().bitcast(types::F64, MemFlagsData::new(), ab);
+                let bf = b.ins().bitcast(types::F64, MemFlagsData::new(), bb);
+                let zero = b.ins().f64const(0.0);
+                let is_zero = b.ins().fcmp(FloatCC::Equal, bf, zero);
+                fault_if(&mut b, is_zero, 5);
+                let rf = b.ins().fdiv(af, bf);
+                let rbits = b.ins().bitcast(types::I64, MemFlagsData::new(), rf);
+                ub_push(&mut b, &vars, &mut kinds, rbits, Kind::Float)?;
+            }
             Op::Neg => {
                 let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
                 // ovf-spec: -i64::MIN overflows on the VM, but `ineg` does NOT hardware-trap (it wraps
@@ -1390,8 +1477,23 @@ fn build_body_unboxed(
                 ub_push(&mut b, &vars, &mut kinds, r64, Kind::Bool)?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
-                let (bv, _) = ub_pop(&mut b, &vars, &mut kinds)?;
-                let (av, _) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (bv, bk) = ub_pop(&mut b, &vars, &mut kinds)?;
+                let (av, ak) = ub_pop(&mut b, &vars, &mut kinds)?;
+                // `icmp` is only correct on integer bit-patterns. Reject unless BOTH operands are safely
+                // non-float. A known `Float` → reject. An `Unknown` operand is AMBIGUOUS (a float param
+                // used only in comparisons is never proven Float — the trap this guards): require the
+                // OTHER operand to be a KNOWN non-float (Int/Bool); the checker's homogeneous-comparison
+                // rule then guarantees the Unknown is the same non-float type. Both-Unknown → reject (VM
+                // fallback). Float comparisons (fcmp/NaN) are deferred to a later slice (INVARIANTS #13).
+                let known_nonfloat = |k: Kind| matches!(k, Kind::Int | Kind::Bool);
+                if ak == Kind::Float
+                    || bk == Kind::Float
+                    || !(known_nonfloat(ak) || known_nonfloat(bk))
+                {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: float/ambiguous comparison operands ({ak:?}, {bk:?}) — deferred"
+                    )));
+                }
                 let cc = match op {
                     Op::Eq => IntCC::Equal,
                     Op::Ne => IntCC::NotEqual,
@@ -1511,11 +1613,24 @@ fn build_body_unboxed(
             }
             Op::Return => {
                 let (v, kind) = ub_pop(&mut b, &vars, &mut kinds)?;
-                if kind != Kind::Int {
-                    // A bool/unknown return would be mis-mapped to Value::Int — reject to VM/boxed.
+                if kind != Kind::Int && kind != Kind::Float {
+                    // A bool/unknown return would be mis-decoded — reject to VM/boxed.
                     return Err(JitError::Unsupported(format!(
-                        "unboxed: non-int return (kind {kind:?})"
+                        "unboxed: non-numeric return (kind {kind:?})"
                     )));
+                }
+                // Record the return kind for `run_unboxed`'s Int-vs-Float decode; ASSERT every reachable
+                // Return in THIS function agrees — a mixed Int/Float would decode the i64 return-bits
+                // wrong (advisor 3C). The value operand is the same i64 bits either way; only the decode
+                // differs, so consistency here is load-bearing.
+                match ret_kind_out {
+                    None => *ret_kind_out = Some(kind),
+                    Some(prev) if *prev != kind => {
+                        return Err(JitError::Codegen(format!(
+                            "unboxed: inconsistent return kind ({prev:?} vs {kind:?})"
+                        )));
+                    }
+                    Some(_) => {}
                 }
                 // ovf-spec: if speculation overflowed anywhere on this path, return code 5 (redo on VM)
                 // instead of the wrapped value; else (value, 0). `select` keeps the hot no-overflow path
@@ -1575,6 +1690,11 @@ pub struct Compiled {
     /// The entry's arity — needed only by the unboxed ABI (its args are native `i64` params, so the
     /// call site transmutes to the arity-specific function type). Unused for the boxed ABI.
     arity: usize,
+    /// The entry's return kind (unboxed ABI only): `Int` → decode the returned i64 as `Value::Int`,
+    /// `Float` → `Value::Float(f64::from_bits)`. Floats travel as their bits through the uniform i64
+    /// ABI, so this is the sole signal telling `run_unboxed` how to decode. Ignored for the boxed ABI
+    /// (which decodes via the boxed `Value` stack). Always `Int`/`Float` for unboxed (asserted at build).
+    ret_kind: Kind,
 }
 
 impl Compiled {
@@ -1666,6 +1786,7 @@ impl Compiled {
             entry,
             unboxed: false,
             arity: 0,
+            ret_kind: Kind::Int, // unused by the boxed `run()` (decodes via the boxed Value stack)
         })
     }
 
@@ -1706,10 +1827,13 @@ impl Compiled {
             func_ids[fi] = Some(id);
         }
 
-        // Define every body. A non-int `Return` (the provably-int check in build_body) fails the whole
-        // compile here — the fixpoint's "reject the whole graph if any function is ineligible".
+        // Define every body. A non-numeric `Return` (the provably-Int/Float check in build_body) fails
+        // the whole compile here — the fixpoint's "reject the whole graph if any function is ineligible".
+        // Capture the ENTRY's return kind for `run_unboxed`'s Int-vs-Float decode.
+        let mut entry_ret_kind: Option<Kind> = None;
         for &fi in &order {
-            let proven = unboxed_proven_int_params(&program.functions[fi]);
+            let proven = unboxed_proven_param_kinds(&program.functions[fi]);
+            let mut ret_kind: Option<Kind> = None;
             let mut cl_ctx = module.make_context();
             let mut sig = module.make_signature();
             sig.params.push(AbiParam::new(types::I64));
@@ -1719,11 +1843,22 @@ impl Compiled {
             sig.returns.push(AbiParam::new(types::I64));
             sig.returns.push(AbiParam::new(types::I64));
             cl_ctx.func.signature = sig;
-            build_body_unboxed(&mut module, &mut cl_ctx, program, fi, &func_ids, &proven)?;
+            build_body_unboxed(
+                &mut module,
+                &mut cl_ctx,
+                program,
+                fi,
+                &func_ids,
+                &proven,
+                &mut ret_kind,
+            )?;
             module
                 .define_function(func_ids[fi].expect("declared above"), &mut cl_ctx)
                 .map_err(|e| JitError::Codegen(format!("define unboxed fn {fi}: {e}")))?;
             module.clear_context(&mut cl_ctx);
+            if fi == entry_idx {
+                entry_ret_kind = ret_kind;
+            }
         }
         module
             .finalize_definitions()
@@ -1736,6 +1871,9 @@ impl Compiled {
             entry,
             unboxed: true,
             arity: program.functions[entry_idx].arity,
+            // Every eligible function has ≥1 reachable Return (else no value is produced), so the entry's
+            // kind is always set; default to Int defensively.
+            ret_kind: entry_ret_kind.unwrap_or(Kind::Int),
         })
     }
 
@@ -1813,6 +1951,9 @@ impl Compiled {
             .map(|v| match v {
                 Value::Int(n) => *n,
                 Value::Bool(b) => *b as i64,
+                // A float arg travels as its f64 BITS through the uniform i64 ABI (decoded back at the
+                // callee's float ops via bitcast). Matches the `Kind::Float` bits-in-I64 representation.
+                Value::Float(f) => f.to_bits() as i64,
                 _ => 0,
             })
             .collect();
@@ -1847,7 +1988,11 @@ impl Compiled {
             }
         };
         match ret.code {
-            0 => JitRun::Value(Value::Int(ret.value)),
+            // Decode the returned i64 by the entry's return kind: Int verbatim, Float from its bits.
+            0 => match self.ret_kind {
+                Kind::Float => JitRun::Value(Value::Float(f64::from_bits(ret.value as u64))),
+                _ => JitRun::Value(Value::Int(ret.value)),
+            },
             // ovf-spec: EVERY unboxed fault now funnels to code 5 = "redo on VM" (codes 1/2/3/4 are no
             // longer emitted). The hook re-executes the callee on the VM, which renders the exact,
             // correctly-ordered fault string + source line. See [`REDO_ON_VM`].
