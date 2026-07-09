@@ -5,6 +5,97 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🅿️📛 **PENDING-DECISION (§15, user-visible naming — surfaced to developer, NOT self-ruled):
+  `Core.Runtime.*` NAMESPACE for perf/runtime knobs.** Developer-requested (e.g. `Core.Runtime.Integer.Check`).
+  CURRENT SURFACE: `import Core.Unchecked;` + `#[Unchecked]` (flat); `Core.Runtime.monotonicNanos()` already
+  exists (so `Core.Runtime` is an established umbrella). PROPOSED TREE: `Core.Runtime` = timing (monotonicNanos)
+  + umbrella; `Core.Runtime.Integer` = integer-overflow mode (`#[Unchecked]`, future `#[Checked]` scoped
+  override); future `Core.Runtime.Float` reserved (post-AOT `#[Reassoc]`, currently NOT built). MIGRATION not
+  greenfield: `Core.Unchecked` has shipped examples (`examples/guide/unchecked.phg`) + `E-TRANSPILE-UNCHECKED`.
+  OPTIONS (asked via AskUserQuestion): (A recommended) `import Core.Runtime.Integer;` + short `#[Unchecked]`
+  (module path structured, attribute short/legible) · (B) fully-qualified `#[Core.Runtime.Integer.Unchecked]`
+  (most self-documenting, verbose, no import) · (C) keep flat `Core.Unchecked` (no migration — baseline).
+  Recommendation A. AWAITING developer ruling before building the migration.
+- [2026-07-09] 🔬❌ **S1 STEP 2 — CHECKED-CODEGEN TIGHTENING PROBED → ABANDONED (evidence-backed; VALIDATES
+  keeping the model).** The go/no-go question (advisor-framed): does Cranelift 0.133 lower a per-op
+  `brif(overflow → cold redo)` to `add; jo` (cheap ~1 µop, real win) or `add; seto; test; jnz` (materializes
+  the flag, worse than sticky)? **PROBED via a temp `PHORJ_JIT_DUMP` VCode seam + a temp `PHORJ_JIT_BRIF`
+  per-op-branch path (both REVERTED clean — `git diff src/jit/mod.rs` empty).** [Verified: VCode dump, both
+  modes] **RESULT = NO-GO.** Sticky loop: each arith op → `imulq/subq/addq; seto %cl; movzbq %cl,%rcx; orq
+  %rcx,%r9` (3 µops × 3 ops + one back-edge `testq;jnz`). Per-op-brif loop: `imulq; seto %r8b; testb;jnz` per
+  op — Cranelift **MATERIALIZES** the overflow flag (`seto`) identically to sticky, THEN adds a per-op branch
+  AND splits the loop into 9 blocks (block4→…→12) → strictly WORSE than sticky. The `add; jo` shape is
+  **UNREACHABLE** via `sadd_overflow`+`brif`; the only Cranelift path to `jo` is `*_overflow_trap`, which
+  ABORTS the process (unusable for a clean VM-redo — precisely why div/rem pre-check with `brif` rather than
+  trap). **CONCLUSION: default checked int arithmetic cannot beat php on a pure-accumulator loop by any
+  Cranelift-reachable means** — the `seto` materialization is intrinsic to the non-trapping overflow API,
+  and php is faster only because it does strictly less work (no i64 overflow detection). This is NOT a new
+  FLAG: the developer's morning ruling (keep checked-default, `#[Unchecked]` opt-in = bend constraint (c))
+  IS the answer — the default LOSS on pure-accumulator loops is the accepted price of safety, recovered
+  per-site via `#[Unchecked]` (2.16× WIN, shipped) or auto via range-analysis where provable. The tightening
+  was "the one S1 piece allowed to come back empty" (advisor pacing) — it did, cleanly, and the result
+  confirms the model. **PIVOT (advisor pacing): namespace design PARKED as §15 PENDING (user-visible naming),
+  fault-message enrichment DEFERRED (needs context-threading — the div-MIN/-1 case shares the string and
+  `#[Unchecked]` is wrong advice there; low value), → move to #3 (JIT object/enum/method — far bigger
+  aggregate: enum 0.01× · objalloc 0.34× · methodcall 0.05×). #3 is SSOT-mandated fresh-context.**
+- [2026-07-09] 📊✅ **S1 STEP 1 — INTERLEAVED checked-vs-unchecked-vs-php MEASURED → GREEN LIGHT for the
+  checked-codegen tightening experiment.** [Verified: 9-round INTERLEAVED (checked/unchecked/php rotated),
+  release binary (jit default), fresh docker php:8.5-cli+JIT tracing, checksums identical 37499987500000]:
+  **unchecked phg 2.55M ns (2.16× WIN) · php+JIT 5.51M ns · checked phg 7.73M ns (0.71× LOSS, 1.40× slower).**
+  KEY FINDING: **php sits BETWEEN our unchecked and checked** — php carries its OWN ~2.16× overhead over a
+  raw add, so checked does NOT need to reach the raw-add floor to beat php; it needs only a **1.40× speedup**.
+  The guard costs 3.03× vs unchecked; a chunk is the **loop-carried `sticky` OR chain** (`sticky = sticky |
+  carry`, a Cranelift Variable phi'd across the back-edge → a SECOND serializing loop-carried dependency
+  parallel to the accumulator). That is an attackable target, NOT the "php does plain add → unbeatable"
+  ceiling. HYPOTHESIS to test (spine-sensitive, advisor-3C first): replace the loop-carried sticky OR with a
+  per-op branch to a COLD out-of-line fault-exit (`add; jo cold_redo`), removing the sticky phi. ⚠️ PRIOR ART
+  (`src/jit/mod.rs:1578` comment): "the per-op `*_overflow`+branch was the intadd perf loss" — so a NAIVE
+  per-op branch was already tried and rejected; the experiment must understand WHY (inline vs cold block?
+  block-arg materialization?) before repeating it. If tightening can't reach php parity → accept
+  checked-parity/loss + `#[Unchecked]` opt-in (the shipped model already delivers the 2.16× hot-loop win).
+- [2026-07-09] 🏁🤝 **NEW MARATHON — developer home, "all autonomous, recommended order" + overflow-model
+  fork RULED (interactive, then full-marathon execution).** Developer proposed inverting to
+  unchecked-default + `#[Checked]` + "warning/try-catch"; I challenged (it reverses the ruled-IMMOVABLE
+  `overflow-checked-by-default` from this same morning, line 95; reopens the uncatchable-fault +
+  `Math.try*` rulings; and "warn ON overflow" is runtime-contradictory — detecting to warn re-introduces
+  the exact guard cost). **GROUND-TRUTH added to the challenge [Verified: src/jit/mod.rs:1564-1584]:** the
+  default checked path is ALREADY past the naive per-op branch — it speculatively wraps (`sadd_overflow`),
+  pushes with NO per-op branch, ORs the carry into a loop-carried `sticky` flag, realizes the fault at the
+  back-edge via VM-redo (comment: *"the per-op `*_overflow`+branch was the intadd perf loss"*). So the
+  residual ~3× (0.67× vs 1.99×) is closer to intrinsic (seto+uextend+bor into a serializing sticky chain)
+  than a quick fix → "make checked fast" is a **research bet, may not fully close** [Speculative].
+  **RULINGS (developer, via AskUserQuestion with the `PHP_INT_MAX+1` program embedded + per-option previews):**
+  **(1) OVERFLOW MODEL = KEEP CHECKED-DEFAULT + MEASURE/TIGHTEN (option A, recommended).** No inversion.
+  `overflow-checked-by-default` stays IMMOVABLE. Wave slice 1 = measure the TRUE checked-vs-unchecked gap
+  INTERLEAVED in one session (the shipped 3.76× is cross-session/load-noisy — advisor-caught), attempt
+  tighter checked codegen, WIDEN range-analysis (more induction shapes: `<=`, step≠1, `>`/`>=`, decreasing
+  counters). Change the model ONLY if measurement proves checked irreducibly too slow. `#[Unchecked]` stays
+  the hot-loop opt-in (already ships the 1.99× win). (Options B invert / C Rust debug-release-split / D
+  bignum-promote were presented with costs and NOT chosen.)
+  **(2) OVERFLOW RECOVERY = KEEP UNCATCHABLE + `Math.try*()`** — try/catch for overflow NOT reopened;
+  recovery stays type-driven (`int?` + `??`/`match`). Confirms the morning ruling.
+  **(3) `Core.Runtime.*` NAMESPACE (developer-requested improvement) — design the WHOLE runtime/perf-knob
+  tree at once, migrate the live `Core.Unchecked` surface** (it has examples + `E-TRANSPILE-UNCHECKED` →
+  migration, not greenfield). Proposed shape e.g. `Core.Runtime.Integer.Unchecked` / `.Checked`.
+  **(4) SCOPE HONESTY:** "all four levers" = #7 + #4-representation ALREADY SHIPPED; remaining = the ordered
+  queue below.
+  **AUTONOMOUS ORDER (developer: "give me the recommended order.. all autonomous"):**
+  **(S1) Integer/runtime slice** — interleaved checked-vs-unchecked measurement → tighter checked codegen
+  attempt + widened range-analysis → `Core.Runtime.*` namespace migration → overflow-message enrichment
+  (point the `integer overflow` fault at `#[Unchecked]`/`Math.tryAdd`; last piece of the fault-model package).
+  **(S2) #5 param-types-in-bytecode** — thread checker param types into bytecode; lifts the JIT leaf-only +
+  float-compare limits; foundational enabler that unblocks #3's method dispatch.
+  **(S3) #3 JIT object/enum/method** — the headline breadth lever (enum 0.01×, objalloc 0.34×, methodcall
+  0.05×); shared construction/dispatch machinery; spine-sensitive → fresh context + advisor byte-identity
+  review + adversarial `.phg` probes.
+  **(S4) Rule-14 VM/alloc profile → #4 allocator** — ONLY if the profile still shows alloc-bound after the
+  representation slices already shipped.
+  **MARATHON RULES (re-affirmed):** commit each green slice (full oracle gate php-8.5.8 + `--features jit` +
+  clippy both configs + fmt + release; `cargo check --no-default-features` for the jit-off path), NEVER push
+  (developer pushes), keep this plan + MEMORY current every slice, advisor in the loop for spine slices,
+  5-round advisor cap → park as PENDING and pivot. Perf claims ONLY vs FRESH docker php:8.5+JIT, INTERLEAVED,
+  gate on WIN/LOSS not magnitude. **floatmul = RESOLVED PARITY (option A) — NOT an open fork** (the
+  MASTER-PLAN cursor top-line still saying "OPEN" is stale; tidy in S1).
 - [2026-07-09] ✅🚀 **#7 SHIPPED (two commits) — loop-aware JIT hotness threshold + jit-default-on
   (developer-ruled the full flip; gate-green, unpushed).**
   **Commit 1 (`a22ae7a`) — hotness threshold:** the `Op::Call` hook compiled a callee on its FIRST call
@@ -1172,7 +1263,7 @@ adjudicates via AskUserQuestion — NEVER self-ruled).
 |---|---|---|---|
 | fibrec | **WIN** | ~1.7–2.9× | recursion/calls — phorj's structural strength (`ovf-spec` shipped) |
 | floatmul | **PARITY (accepted)** | ~0.99 (parity) | 🚩→✅ **DEVELOPER RULED (2026-07-09): option A — accept parity as the never-worse floor.** Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php has the identical chain → parity is the ceiling. The ONLY lever that beats php is FP-reassociation/unroll = **byte-identity-FORBIDDEN (Inv #1)**. Developer accepted PARITY as satisfying the "never worse than PHP" bar; no new language surface, Inv #1 fully preserved. Irreducible-by-design. (Options B `#[Reassoc]` LADDER / C AOT-SIMD were considered and NOT chosen.) |
-| intadd (default) | **LOSS** | ~0.67 (1.48× slower) | [Verified: interleaved 8-pair, JIT binary — phorj 12.14M vs php 8.17M ns, 0/8]. The accumulator's overflow guard is on the (short, ~1-cyc) critical path → the guard IS the LOSS. The safe default; fixed on demand ↓. |
+| intadd (default) | **LOSS (accepted)** | ~0.71 (1.40× slower) | [Verified: interleaved 9-round, JIT binary, fresh docker php:8.5+JIT — checked 7.73M · php 5.51M · unchecked 2.55M ns, checksums identical]. The overflow guard's `seto`-materialize is a throughput cost (3 µops × 3 arith ops/iter). **TIGHTENING PROBED + ABANDONED 2026-07-09** [Verified: VCode dump] — Cranelift 0.133 can't emit non-trapping `add; jo`; per-op `brif(overflow)` materializes `seto` identically then adds a branch + loop-splits → worse than sticky. Default-checked pure-accumulator loops are UNBEATABLE vs php by any Cranelift-reachable means (php does strictly less work: no i64 overflow detection). NOT a flag — accepted price of safety; recover per-site via `#[Unchecked]` ↓ (2.16× WIN) or auto via range-analysis where provable. |
 | intadd `#[Unchecked]` | **WIN** | **~1.99 (2× faster)** | [Verified: interleaved 8-pair, JIT release binary, fresh docker php:8.5+JIT, checksums identical — phorj **3,225,621** vs php **6,410,498** ns, 8/8]. `#[Unchecked]` (`64ddf17`) drops the guard → the overflow check WAS the whole gap. Opt-in wrapping; `E-TRANSPILE-UNCHECKED` (LADDER). This is the intadd fork RESOLVED (developer ruled `#[Unchecked]`), not a self-rule. |
 | ~11 VM-only cats | **LOSS (heavy)** | 0.01×–0.39× | [Verified: `microbench.sh` batched-indicative 2026-07-09] closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07 · methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05. **All run on the plain VM — NOT JIT-eligible** (ops outside the int/float unboxed subset) → 3–100× slower than php+JIT. Fix = Tier-2 JIT-subset breadth (per category; several need §14/§15 rulings — e.g. trycatch, strings). floatarith specifically = tracked float lever (toFloat/truncate inline). |
 
