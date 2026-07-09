@@ -206,10 +206,18 @@ pub struct Vm<'a> {
 /// Only ever *compared* by pointer — never dereferenced — so it carries no aliasing/lifetime hazard.
 type FieldCache = std::cell::Cell<(*const crate::value::ClassLayout, u32)>;
 
-/// One method-dispatch inline-cache slot: the `ClassLayout` pointer last seen at a `CallMethod` site and
-/// the resolved (non-overloaded) function index. `(null, _)` is the never-filled sentinel. Only ever
-/// *compared* by pointer, never dereferenced — no aliasing/lifetime hazard.
-type MethodCache = std::cell::Cell<(*const crate::value::ClassLayout, u32)>;
+/// One method-dispatch inline-cache slot: the **class-name** `str` data pointer last seen at a
+/// `CallMethod` site and the resolved (non-overloaded) function index. `(null, _)` is the never-filled
+/// sentinel. Only ever *compared* by pointer, never dereferenced — no aliasing/lifetime hazard.
+///
+/// Keyed by the class-NAME pointer, NOT the `ClassLayout` pointer (unlike [`FieldCache`]): a class name
+/// is unique per class by definition (no two classes share an FQN), and every instance shares one
+/// `Rc<str>` name (cloned from `ClassDesc.class`), so the name pointer is an exact, unconditional
+/// per-class identity. The layout pointer only *happens* to be per-class today (each class gets a fresh
+/// `ClassLayout::new`) — but method dispatch depends on the class, not the field shape, so a future
+/// empty-layout dedup (tempting for zero-field DI services) would make two distinct classes share a
+/// layout and silently return the wrong method. The name pointer is immune to that.
+type MethodCache = std::cell::Cell<(*const u8, u32)>;
 
 // cohesion split (M-Decomp W4): exec/closure clusters.
 mod closure;

@@ -5,6 +5,17 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🛡️ **6C HARDENING (advisor-caught P0-fragility) — method cache keyed by class-NAME ptr, not layout ptr.**
+  Phase 6C advisor flagged that `method_caches` (shipped `4f482e9`) copied `field_caches`'s `layout_ptr` key, but
+  the soundness args differ: a shared `ClassLayout` ⇒ same SLOTS (field cache safe) but NOT same METHODS. Verified
+  [Read `compiler/program.rs:231-237`]: layouts are fresh-per-class TODAY (`ClassLayout::new` per class in the loop,
+  zero-field included) → `4f482e9` was sound, but on an IMPLICIT invariant a future empty-layout dedup (tempting once
+  DI adds many zero-field `#[Injectable]` services — the very next feature) would silently break into a byte-identity
+  P0. FIX: key by `inst.class.as_ptr()` (class-NAME str data ptr) — unique per class UNCONDITIONALLY (FQNs are unique;
+  one shared `Rc<str>` name per class, exec.rs:638). Added the discriminating differential `guide/polymorphic-dispatch.phg`
+  (two zero-field classes, different `say()` bodies, ONE polymorphic call site) the gate previously lacked — interp
+  ignores the cache, VM uses it, so an unsound key would diverge run≢runvm; [Verified: acc=9 byte-identical
+  run≡runvm≡php-8.5.8]. Hardening committed on top of `4f482e9`.
 - [2026-07-10] 🧭 **DEVELOPER RULED (ask-human): PIVOT TO LANGUAGE NOW; boxed-value JIT = the queued big perf push; BANK the inline cache.**
   Given the [Verified] finding below (cheap alloc levers can't flip VM-only features; the dispatch core / boxed-value JIT is
   the only path to WIN, multi-session), the developer chose feature velocity: **build the language queue next (DI v1 →

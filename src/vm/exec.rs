@@ -773,17 +773,21 @@ impl<'a> Vm<'a> {
                 // The receiver sits just below the `argc` args; its slot becomes the new frame's
                 // slot 0 (`this`), with the args at slots 1..=argc (decision P4-6).
                 let slot_base = self.pop_n_start(argc + 1);
-                // Receiver class identity: the `ClassLayout` pointer (shared by every instance of one
-                // class) is the allocation-free monomorphism key — no name clone, no hash on a hit.
-                let layout_ptr: *const crate::value::ClassLayout = match &self.stack[slot_base] {
-                    Value::Instance(inst) => Rc::as_ptr(&inst.layout),
+                // Receiver class identity: the class-NAME `str` data pointer (every instance of one
+                // class shares one `Rc<str>` name) is the allocation-free monomorphism key — no name
+                // clone, no hash on a hit. Name (not layout): dispatch depends on the class, and a name
+                // is unique per class unconditionally (see `MethodCache` doc).
+                let class_ptr: *const u8 = match &self.stack[slot_base] {
+                    Value::Instance(inst) => inst.class.as_ptr(),
                     v => {
                         let mname = &self.program.names[name_idx];
                         return Err(format!("cannot call `.{mname}()` on {}", v.type_name()));
                     }
                 };
                 let cached = self.method_caches[func][site].get();
-                let target = if std::ptr::eq(cached.0, layout_ptr) {
+                // A class name is never empty ⇒ `class_ptr` is never null; the `(null, _)` sentinel
+                // therefore never matches, so an unfilled site always misses to the full lookup.
+                let target = if cached.0 == class_ptr {
                     // Monomorphic hit: the cached func is a NON-overloaded method for this exact class
                     // (overloaded sites never fill), so it is the same target the probe would return.
                     cached.1 as usize
@@ -831,7 +835,7 @@ impl<'a> Vm<'a> {
                             .get(&key)
                             .ok_or_else(|| format!("no method `{}` on `{}`", key.1, key.0))?;
                         // Cache the monomorphic (non-overloaded) resolution for this site + class.
-                        self.method_caches[func][site].set((layout_ptr, f as u32));
+                        self.method_caches[func][site].set((class_ptr, f as u32));
                         f
                     }
                 };

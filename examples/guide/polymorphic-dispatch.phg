@@ -1,0 +1,48 @@
+// Polymorphic method dispatch through an interface — and the differential that guards the VM's
+// method inline cache (perf `4f482e9`).
+//
+// `Dog` and `Cat` are ZERO-FIELD classes implementing one interface with DIFFERENT `say()` bodies.
+// The loop calls `s.say()` at a SINGLE call site whose receiver class alternates every iteration —
+// a polymorphic site (the general regression this example is). The tree-walking interpreter
+// (`phg run`) ignores the VM method cache; the bytecode VM uses it. The cache's monomorphism key is
+// the class-NAME pointer (unique per class) — NOT the `ClassLayout` pointer: were it keyed by
+// something two distinct classes could share (e.g. an empty layout deduped across field-less classes,
+// a plausible future optimization), a polymorphic site like this could return the wrong `say()`. All
+// three legs (`run`/`runvm`/PHP) are byte-identical.
+package Main;
+
+import Core.Output;
+
+interface Speaker {
+    function say(): int;
+}
+
+class Dog implements Speaker {
+    constructor() {}
+    function say(): int {
+        return 1;
+    }
+}
+
+class Cat implements Speaker {
+    constructor() {}
+    function say(): int {
+        return 2;
+    }
+}
+
+function main(): void {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < 6) {
+        mutable Speaker s = new Dog();
+        if (i % 2 == 1) {
+            s = new Cat();
+        }
+        // One call site, alternating receiver class -> polymorphic dispatch.
+        acc = acc + s.say();
+        i = i + 1;
+    }
+    // Dog.say()=1 three times + Cat.say()=2 three times = 9.
+    Output.printLine("acc={acc}");
+}
