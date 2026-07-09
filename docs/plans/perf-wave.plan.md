@@ -5,6 +5,28 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🔭🏗️ **SLICE 2 (DEC-194 user attributes) — LANDSCAPE MAPPED, decomposition set (warm-restart
+  handoff; a context boundary falls here after slice 1 shipped — advisor-endorsed).** [Verified: grep of
+  parser/native/reflect] Current state: (a) attributes PARSE only on FREE FUNCTIONS — `parser/items.rs:68-79`
+  explicitly rejects `#[…]` on any non-function item; (b) `Core.Reflect`(ion) module exists (`kind`,
+  `className`, `typeName`, `interfaces`, `parents`, `methods`, `fields`) but has ZERO attribute reflection
+  (no `getAttributes`); (c) NO user-attribute-declaration concept — today's `#[Route]`/`#[UncheckedOverflow]`
+  are compiler-privileged built-ins, not user-declarable. So DEC-194 is GREENFIELD across parser+AST+checker+
+  interp+VM(runtime attr storage)+reflect+transpile = a large multi-sub-slice feature (realistically several
+  sessions). **RULED DESIGN (from the design-verdict entry below):** inert METADATA attrs, DECLARATION targets
+  only (class/method/function/property/parameter/class-const — NO instruction/local-var, §14 wall), repeatable
+  flag, read via `Core.Reflect`→PHP `getAttributes()`; users canNOT make SEMANTIC attrs (= PHP-parity).
+  **PROPOSED SUB-SLICE DECOMPOSITION (each its own green commit; advisor-3C on the spine ones):**
+  (2a) **Parse attributes on all declaration targets** — extend `parse_attributes` call sites beyond free
+  functions (class/method/property/parameter/class-const); AST carries `attrs` on each; checker still only
+  recognizes the built-ins → unknown user attrs stay `E-UNKNOWN-ATTRIBUTE` until 2b. Bounded, mostly parser+AST.
+  (2b) **Declare a user attribute** — a class marked (e.g.) `#[Attribute(targets…, repeatable)]` becomes a
+  registered attribute type; checker validates target-legality + repeatable; import-gated like any type.
+  (2c) **Runtime representation** — attribute instances attached to reflectable entities, surviving to runtime
+  (opposite of Inv-5 sugar-expansion — `#[Route]` sets precedent that metadata can persist); byte-identity +
+  determinism (sorted enumeration). (2d) **`Core.Reflect.getAttributes()`** read API + `newInstance`-shape.
+  (2e) **Transpile** → PHP `#[Attribute]` + `getAttributes()` (byte-identity-mappable; the whole point of the
+  metadata model). Start 2a (bounded) in a fresh context; 2c/2d are the spine-sensitive ones.
 - [2026-07-09] ✅🏗️ **SLICE 1 SHIPPED — `#[Unchecked]`→`#[UncheckedOverflow]` rename (`ec219dc` + follow-up
   fixes, gate-green).** Moved `Core.Unchecked`→`Core.Runtime.Integer.UncheckedOverflow`; now a proper
   injected attribute-TYPE gated by the two-mode "nothing in the wind" discipline (member-import→bare,
