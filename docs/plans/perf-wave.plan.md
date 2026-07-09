@@ -5,6 +5,40 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅🎛️ **AGREED (developer, interactive adjudication) — OVERFLOW MODEL + `unchecked`. Two
+  linked design rulings (need DEC numbers in `C-decisions.md` when built):**
+  **(1) `unchecked { }` BLOCK** = the opt-in for two's-complement WRAPPING int arithmetic. Lexical
+  region; every int `+`/`-`/`*` inside wraps (no overflow check/fault); everything outside stays
+  checked. Chosen over `&+` operators and `#[Unchecked]` fn-attr (legibility + clean JIT mapping). This
+  is the perf escape hatch that lets the JIT emit plain `iadd` + drop sticky for the region → flips
+  intadd LOSS→WIN.
+  **(2) DEFAULT overflow stays an UNCATCHABLE FAULT (fail-fast)** — NOT a catchable exception (rejected:
+  invites catch-and-continue on corrupted state = the PHP footgun phorj removes; no PHP analog; breaks
+  faults-uncatchable model). Recovery is TYPE-DRIVEN, opt-in: add `Math.tryAdd/trySub/tryMul(a,b): int?`
+  (→ `null` on overflow, handled locally via `??`/`match`). PLUS enrich the runtime-error message to
+  point at `unchecked {}` / `Math.tryAdd`. Rationale: fail-fast = production-safe (no silent
+  corruption); typed recovery = better DX than try/catch (local, explicit, composable with Option combinators).
+  **BUILD PLAN (spine-sensitive → FRESH context + advisor 3C on the concrete op design):**
+  • `unchecked {}`: lexer `unchecked`→token · parser block stmt · AST `Unchecked(body)` or a region flag ·
+    checker passes it through · compiler emits WRAPPING int ops. **Op question (advisor-3C first):** new
+    `AddIWrap/SubIWrap/MulIWrap` variants (Inv-3: extend the 3 exhaustive matches same commit) vs a
+    compile-time region flag reusing AddI — decide before building. Wrapping kernels single-sourced in
+    `value.rs` (Inv-4; `wrapping_add/sub/mul`). Interp + VM both wrap; JIT = the range-analysis path
+    (plain `iadd`, no sticky) triggered by the region instead of a proof — I'm warm on this half.
+  • **§14 LADDER (transpile):** wrapping has NO faithful PHP analog (PHP overflow→float = silent
+    downgrade, FORBIDDEN) → `E-TRANSPILE-UNCHECKED` hard error on the transpile leg + differential
+    quarantine + disclosure wherever byte-identity is claimed. run≡runvm only for `unchecked` regions.
+  • **`Math.tryAdd/trySub/tryMul(): int?`** natives (checked, return null on overflow) — byte-identity
+    clean (PHP can implement), 3-leg parity, ships an `examples/` guide (Inv-9).
+  • **Message enrichment:** the canonical fault body is single-sourced in `value.rs` + byte-identity-
+    asserted (parity-affecting) → change consistently across all backends; if adding operands, thread
+    them at fault-construction (more than a text tweak). Keep `agree_err` green.
+  • Suggested slice order: (a) `Math.try*` + message [smaller] → (b) `unchecked {}` [the spine slice,
+    fresh context, advisor 3C on the Op decision]. intadd WIN lands with (b).
+- [2026-07-09] 🧭 **AGREED (developer, interactive): PERF-FIRST — do BOTH (1) ship opt-in `unchecked` →
+  flip intadd LOSS→WIN, then (2) Tier-2 JIT breadth. Language/sugar DEFERRED** (accepted the challenge:
+  11/15 micros lose to php; sugar adds VM-only losses + is fresh-context spine work). Next action = the
+  `unchecked` §15 syntax adjudication (interactive, not self-ruled), then build intadd WIN, then Tier-2.
 - [2026-07-09] 📊🚩 **RANGE-ANALYSIS SHIPPED + MEASURED — CORRECT but floatmul stays PARITY → 🚩FLAGGED
   (`21465d8`, full gate green, unpushed).** The pre-pass works exactly as designed and the counter guard
   DROPPED in machine code [Verified — asm dump via a temp `PHORJ_JIT_DUMP` seam, reverted clean]:
