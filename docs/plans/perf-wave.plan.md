@@ -5,6 +5,15 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅🏗️ **SLICE 2b-1 SHIPPED — `#[Attribute]` marker declares a class as a user attribute
+  (`92d9761`, gate-green 1867).** Bare marker recognized on a class (the one class-target attribute),
+  import-gated two-mode (`Core.Runtime.Attribute`), single-sourced `Attribute::is_attribute_marker`; closed
+  the `enforce_injected` class-level-attr walk gap; `module_of += Attribute→Runtime`. Args → clean
+  `E-ATTRIBUTE-ARGS` "not yet". Inert (byte-identity preserved). **REMAINING 2b:** (2b-2) parse+validate
+  `targets: […]`+`repeatable` args (needs the `Target` enum injected + named-arg parsing — the positional
+  arg loop gap); (2b-3) USE-validation (registry of `#[Attribute]`-marked classes → a `#[Tag]` use resolves
+  to it, target-legality + typed-arg check — the step that makes attributes USABLE); then 2d reflection, 2e
+  transpile. Building 2b-2 next (self-contained vs 2b-3's cross-cutting registry threading).
 - [2026-07-09] 🎨✅ **2b SYNTAX RULED (developer) + PHP-coverage/better-than-PHP analysis.** Declaration =
   **option 1: `#[Attribute(targets: […], repeatable)]` marker on a class**, legible named-args + `Target`
   enum list + bare `repeatable` (NOT PHP bitflags). Self-consistent (the marker is itself an attribute,
