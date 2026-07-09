@@ -1832,3 +1832,48 @@ fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
         }
     }
 }
+
+#[test]
+fn unchecked_checked_call_boundary_byte_identical_both_directions() {
+    // The mixed-call boundary — the load-bearing surface for the `cur_unchecked` save/restore in the
+    // interp's `run_call` (and the VM reading each frame's own fn flag). NEITHER direction is covered by
+    // the leaf tests above, so a future refactor that dropped the save/restore would only fail HERE.
+    // Both directions asserted run≡runvm (`cmd_run` = VM+JIT vs `cmd_treewalk` = interp oracle).
+
+    // (1) `#[Unchecked]` outer calling a CHECKED inner: the checked inner must STILL fault on overflow
+    // even though the caller wraps — the callee's own flag governs, not the caller's.
+    const A: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Unchecked;\n\
+        function inner(int n) -> int { return n + 1; }\n\
+        #[Unchecked] function outer(int n) -> int { return inner(n); }\n\
+        function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+    let a_jit = crate::cli::cmd_run(A);
+    let a_oracle = crate::cli::cmd_treewalk(A);
+    match (&a_jit, &a_oracle) {
+        (Err(a), Err(b)) => assert_eq!(
+            a, b,
+            "checked inner under an #[Unchecked] outer must FAULT identically on both backends"
+        ),
+        _ => panic!("checked inner must fault on BOTH backends: jit={a_jit:?} oracle={a_oracle:?}"),
+    }
+
+    // (2) reverse — a CHECKED outer calling an `#[Unchecked]` inner: the inner WRAPS (its own flag),
+    // and re-entering the checked outer afterward must restore checking (the save/restore).
+    const B: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Unchecked;\n\
+        #[Unchecked] function inner(int n) -> int { return n + 1; }\n\
+        function outer(int n) -> int { return inner(n); }\n\
+        function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+    let b_jit = crate::cli::cmd_run(B).expect("wrapping inner returns a value");
+    let b_oracle = crate::cli::cmd_treewalk(B).expect("wrapping inner returns a value");
+    assert_eq!(
+        b_jit, b_oracle,
+        "#[Unchecked] inner under a checked outer must WRAP identically on both backends"
+    );
+    assert!(
+        b_jit.contains("-9223372036854775808"),
+        "the #[Unchecked] inner must wrap MAX+1 -> MIN, got {b_jit}"
+    );
+}

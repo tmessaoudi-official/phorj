@@ -694,9 +694,11 @@ pub fn int_neg(n: i64) -> Result<i64, String> {
 // --- `#[Unchecked]` wrapping kernels (perf-wave): two's-complement wrapping arithmetic for a function
 // marked `#[Unchecked]` (import Core.Unchecked). Overflow WRAPS (never faults) — the opt-in escape hatch.
 // Single-sourced like the checked kernels (Inv-4): interp, VM, and JIT all call these for an unchecked fn,
-// so the wrapping result is byte-identical across backends by construction. Div/Rem stay CHECKED even in
-// an unchecked fn (div-by-zero must always fault) — no wrapping sibling. `#[Unchecked]` has no faithful
-// PHP analog (PHP overflow→float), so a using function is `E-TRANSPILE-UNCHECKED` (§14 LADDER).
+// so the wrapping result is byte-identical across backends by construction. Scope = `+ - *` and unary `-`
+// only; Div/Rem stay CHECKED even in an unchecked fn (div-by-zero must always fault), and `**`/`Pow`
+// lowers to a native call (out of the wrapping-op set by construction) so it also stays checked — all
+// intended boundaries, not silent gaps. `#[Unchecked]` has no faithful PHP analog (PHP overflow→float),
+// so a using function is `E-TRANSPILE-UNCHECKED` (§14 LADDER).
 /// Wrapping integer addition (`#[Unchecked]`): `i64::MAX + 1` → `i64::MIN`, never faults.
 pub fn int_wrapping_add(a: i64, b: i64) -> i64 {
     a.wrapping_add(b)
