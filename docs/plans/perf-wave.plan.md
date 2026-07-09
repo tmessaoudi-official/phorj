@@ -5,6 +5,20 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🔬❌ **STEP 2a (cheap lever) — `opt_level=speed` is a DEAD END for float [Verified].**
+  Discovered the JITBuilder uses Cranelift DEFAULTS (`opt_level=none`, no egraph mid-end) — hypothesized
+  that enabling `opt_level=speed` (via `JITBuilder::with_flags(&[("opt_level","speed")], …)`, the clean
+  supported API — no Cargo.toml/cranelift_native change) would fold the bitcasts + LICM the invariants,
+  byte-identity-safe. TESTED: re-dumped `bench`'s VCode under speed — **byte-for-byte IDENTICAL to
+  none** (6 `vmovq` crossings + `movabsq` all still there; timing deltas were pure load-noise, identical
+  machine code). ROOT [Verified]: **the bitcasts are STRUCTURAL, not redundant** — the loop-carried
+  `acc` phi is an I64 `Variable`, so `acc` genuinely arrives as I64 each iteration and MUST bitcast
+  I64→F64 for `vmulsd` then F64→I64 to feed the I64 phi across the back-edge. No optimizer removes a
+  bitcast bridging an I64 phi to an F64 op (semantically required); LICM can't hoist a loop-carried
+  value; the `movabsq` const is intentionally rematerialized. ⇒ **the F64 value-model refactor (make
+  the phi itself F64) is EMPIRICALLY NECESSARY, not just hypothesized.** Flag reverted (Rule 11 — no
+  unmeasured codegen change; mod.rs pristine). `opt_level` for OTHER (int) micros is untested + a
+  separate question (adds compile cost → §15 hotness concern); revisit deliberately.
 - [2026-07-09] 🔬✅ **STEP 1 DONE — floatmul 4.5× ROOT-CAUSED [Verified] via native VCode dump.**
   Temporary `PHORJ_JIT_DUMP` seam (set_disasm + compiled_code().vcode; reverted clean, mod.rs pristine)
   dumped `bench`'s register-allocated asm. The hot loop (`block4`) does **6 `vmovq` GPR↔XMM domain
