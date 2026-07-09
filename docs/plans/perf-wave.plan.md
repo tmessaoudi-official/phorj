@@ -5,6 +5,18 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 📐🎨 **DI + ATTRIBUTE-REFLECTION DESIGN CAPTURED → `docs/plans/di-attributes.plan.md`.**
+  Interactive brainstorm (~8 reasks) persisted as a durable spec (advisor-flagged the design was accreting
+  scope without persistence — fixed). RULED: generic thesis (L1 compile-time attribute reflection + reverse
+  discovery `subjectsWith<A>()`; DI/routing/ORM = consumers) · BOTH compile-time-FIRST · **DI v1** = the
+  one-session core (`#[Injectable]`; ctor+field autowire by TYPE, field injection via synthesized
+  construction-init = immutable-safe; promoted params wired; `inject<T>()` composition-root; default SHARED
+  lifetime + `#[Transient]` opt-out; single-impl interface auto; compile-time missing/ambiguous/cycle errors;
+  expands to plain construction → byte-identical). v2 (captured, deferred): abstract-base flow, interface
+  binding (B=binding-attr default, A=covariant-override v2-sugar), `#[Provides]` factories, generics,
+  app-wide `#[Singleton]` (runtime store), scopes, runtime reflection API, decorators. **⚠️ SCOPE: multi-session
+  framework programme; perf #3 UNTOUCHED; "one session" real only for DI v1. Developer steers from the spec
+  (build DI v1 now vs bank spec + return to perf/#3).**
 - [2026-07-09] ✅🏗️ **SLICE 2b-3b SHIPPED — full arg-TYPE checking on attribute uses.** `check_user_attribute_use`
   now type-checks each attribute argument against the attribute class's constructor parameter (`check_arg` +
   `ty_assignable`, mirroring `check_args_defaulted`) → `E-ATTRIBUTE-ARG-TYPE` (e.g. `#[Tag(123)]` where
