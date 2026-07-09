@@ -1834,6 +1834,34 @@ fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
 }
 
 #[test]
+fn qualified_unchecked_overflow_attribute_is_recognized_and_wraps_on_the_vm() {
+    // Two-mode "nothing in the wind": the QUALIFIED form (`import Core.Runtime.Integer;` +
+    // `#[Integer.UncheckedOverflow]`) is the SAME attribute as the bare leaf-import form, recognized
+    // through the single-sourced `Attribute::is_unchecked_overflow`. Every other test/example exercises
+    // the BARE form; this locks the qualified surface so a future recognition change can't silently drop
+    // it. Asserts the compiler set the fn `unchecked` flag AND the VM wraps (MAX+1 → MIN) instead of
+    // faulting — the VM reads that same flag, so a wrap proves end-to-end recognition on the VM path (the
+    // interpreter reads the same predicate via `attrs_unchecked`; the shipped example covers run≡runvm).
+    let program = compile_source(
+        "package Main;\n\
+         import Core.Runtime.Integer;\n\
+         #[Integer.UncheckedOverflow]\n\
+         function wadd(int a, int b) -> int { return a + b; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "wadd");
+    assert!(
+        program.functions[f].unchecked,
+        "the compiler must set `unchecked` from the QUALIFIED `#[Integer.UncheckedOverflow]` form"
+    );
+    assert_eq!(
+        vm_int(&program, f, vec![Value::Int(i64::MAX), Value::Int(1)]),
+        i64::MIN,
+        "qualified `#[Integer.UncheckedOverflow]`: MAX + 1 must WRAP to MIN on the VM, not fault"
+    );
+}
+
+#[test]
 fn unchecked_checked_call_boundary_byte_identical_both_directions() {
     // The mixed-call boundary — the load-bearing surface for the `cur_unchecked` save/restore in the
     // interp's `run_call` (and the VM reading each frame's own fn flag). NEITHER direction is covered by

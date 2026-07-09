@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Integer.UncheckedOverflow;
+import Core.Runtime.Integer;
 
 // `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow) opts a WHOLE function into two's-complement WRAPPING integer
 // arithmetic: `+ - *` and unary `-` wrap on overflow (like C/Rust) instead of faulting. The DEFAULT —
@@ -31,9 +32,20 @@ function sumWrapping(int n): int {
     return acc;
 }
 
+// The attribute follows the two-mode "nothing in the wind" import discipline. Above we member-imported
+// the class (`import Core.Runtime.Integer.UncheckedOverflow;`) and use it BARE (`#[UncheckedOverflow]`).
+// Alternatively, module-import the parent (`import Core.Runtime.Integer;`) and use it QUALIFIED:
+#[Integer.UncheckedOverflow]
+function wrapAtMaxQualified(int start): int {
+    return start + 1;
+}
+
+// identical behaviour — the qualified form is the same attribute
 function main(): void {
     Output.printLine("{wrapAtMax(9223372036854775807)}");
     // -9223372036854775808 (wrapped, no fault)
+    Output.printLine("{wrapAtMaxQualified(9223372036854775807)}");
+    // -9223372036854775808 (qualified form, same wrap)
     Output.printLine("{sumWrapping(100)}");
 }
 // 4950 (no overflow — same as the checked default)

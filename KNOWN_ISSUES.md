@@ -322,6 +322,16 @@ not a panic:
   for consistency with the existing same-package/qualified function resolution; the checker-layer full fix
   (threading lexical scope) would close both this and the slice-1 native gap above together.
 
+- **Qualified injected names skip import-enforcement (pre-existing, shared by every injected type).**
+  The "nothing in the wind" discipline (`enforce_injected::check_name`) enforces that a **bare** injected
+  name is member-imported, but **early-returns on any dotted name** — so a QUALIFIED injected reference is
+  accepted even with no covering import. This applies uniformly: `#[Integer.UncheckedOverflow]` (perf-wave)
+  works without `import Core.Runtime.Integer;`, exactly as `#[Http.Route]` / `Http.Router` work without
+  `import Core.Http;`. It is **not a byte-identity divergence** (recognition is single-sourced and every
+  backend agrees) — only an under-enforcement of the import rule for the qualified form. Closing it means
+  verifying the qualifier resolves to an actual module import, a general change touching all injected
+  types (Http/Time/Decimal/Runtime.Integer) — deferred as one focused task, not chased per-feature.
+
 - **Override signature checking — return covariance shipped (M-DX S1); parameters deferred.** An
   override's **return type** must now be the overridden type or a subtype of it (`E-OVERRIDE-SIG`) —
   a return-incompatible override previously type-checked clean then fatalled in transpiled PHP. Still

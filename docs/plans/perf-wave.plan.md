@@ -5,6 +5,22 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅🏗️ **SLICE 1 SHIPPED — `#[Unchecked]`→`#[UncheckedOverflow]` rename (`ec219dc` + follow-up
+  fixes, gate-green).** Moved `Core.Unchecked`→`Core.Runtime.Integer.UncheckedOverflow`; now a proper
+  injected attribute-TYPE gated by the two-mode "nothing in the wind" discipline (member-import→bare,
+  module-import→qualified `#[Integer.UncheckedOverflow]`), not a bespoke string match. Recognition
+  SINGLE-SOURCED in `Attribute::is_unchecked_overflow` (checker/compiler/interp/transpile — no 4-way drift).
+  `enforce_injected::module_of` += `UncheckedOverflow→Runtime.Integer`; injected-import leaf reg generalized
+  `len==3`→`>=3` (deeper path). Semantics/codegen/faults/`E-TRANSPILE-UNCHECKED` UNCHANGED; byte-identity
+  preserved. Gate: fmt + clippy(both) + full oracle php-8.5.8 **1862 passed**; two-mode gating verified
+  (bare/qualified/nothing-in-the-wind/old-name). **advisor 6C:** rename is LOW masked-P0 risk (recognition
+  not codegen → no silent-wrong-output path; green gate sufficient). 2 findings: (a) FIXED — qualified form
+  had no coverage → added `qualified_unchecked_overflow_*` jit test + qualified fn in `unchecked.phg`
+  (differential covers both backends); (b) NOTED (KNOWN_ISSUES, NOT chased) — qualified injected names skip
+  import-enforcement (`check_name` early-returns on dotted; pre-existing, shared w/ `#[Http.Route]`;
+  not byte-identity; closing it = one focused task over all injected types). **NEXT: slice 2 (DEC-194 user
+  attributes, additive, absorbs exhaustion) → slice 3 #3 (codegen/byte-identity-critical — advisor: check
+  #5 dep first, smallest sub-slices each w/ advisor review; a context boundary mid-#3 is expected+fine).**
 - [2026-07-09] 🏗️🤝 **RULED (developer): BUILD BOTH THIS SESSION — heard the opportunity cost, chose max
   output.** Order (autonomous, commit each green slice): **(1) `UncheckedOverflow` namespace rename** [ruled,
   small — `Core.Unchecked`→`Core.Runtime.Integer.UncheckedOverflow`, route the checker gate through the
