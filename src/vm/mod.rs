@@ -163,6 +163,18 @@ pub struct Vm<'a> {
     /// a raw-pointer compare is an exact, allocation-free monomorphism test. Classes are immutable, so
     /// a filled entry never goes stale. Built empty per run (a fresh `Vm`), so no cross-run leakage.
     field_caches: Vec<Vec<FieldCache>>,
+    /// Per-site monomorphic **inline caches** for `Op::CallMethod` (perf: methodcall micro is
+    /// dispatch-bound — measured 2 heap allocs/call go entirely to rebuilding the `(class, method)`
+    /// lookup key, atop a hash+`HashMap` probe, per call). Indexed `[func][ip]` exactly like
+    /// [`field_caches`]. A monomorphic site hits `(layout_ptr, func_idx)` and skips the two owned-String
+    /// key allocations, the hash, AND the `methods` probe; a class change refills it. Keyed by the
+    /// receiver's `ClassLayout` pointer (every instance of one class shares that `Rc` — a raw-pointer
+    /// compare is an exact, allocation-free monomorphism test). **Only ever filled for NON-overloaded
+    /// methods** — an overloaded method selects by argument *values* at runtime, so it must never be
+    /// cached to a single target; overloaded sites keep the null sentinel and always take the full path.
+    /// A hit therefore returns exactly the func the `methods` probe would (byte-identical by
+    /// construction); the fault/miss path is the unchanged existing lookup. Built empty per run.
+    method_caches: Vec<Vec<MethodCache>>,
     /// Green-thread coordination (M6 W4): the scheduler/id-allocator + finished-task results. Owned
     /// per-`Vm` in the synchronous-degenerate path (`spawn` runs eagerly, storing its result here;
     /// `join` reads it); the cooperative driver shares one `Coop` across every task-`Vm` instead.
@@ -194,6 +206,11 @@ pub struct Vm<'a> {
 /// Only ever *compared* by pointer — never dereferenced — so it carries no aliasing/lifetime hazard.
 type FieldCache = std::cell::Cell<(*const crate::value::ClassLayout, u32)>;
 
+/// One method-dispatch inline-cache slot: the `ClassLayout` pointer last seen at a `CallMethod` site and
+/// the resolved (non-overloaded) function index. `(null, _)` is the never-filled sentinel. Only ever
+/// *compared* by pointer, never dereferenced — no aliasing/lifetime hazard.
+type MethodCache = std::cell::Cell<(*const crate::value::ClassLayout, u32)>;
+
 // cohesion split (M-Decomp W4): exec/closure clusters.
 mod closure;
 mod exec;
@@ -219,6 +236,18 @@ impl<'a> Vm<'a> {
             // One cache cell per op in every function (sparse use — only field sites read it — but a
             // one-time, per-run allocation keyed directly by `ip`, so the hot path is a flat index).
             field_caches: program
+                .functions
+                .iter()
+                .map(|f| {
+                    f.chunk
+                        .code
+                        .iter()
+                        .map(|_| std::cell::Cell::new((std::ptr::null(), 0u32)))
+                        .collect()
+                })
+                .collect(),
+            // Parallel per-site cache for `Op::CallMethod` (see field docs). Same `[func][ip]` shape.
+            method_caches: program
                 .functions
                 .iter()
                 .map(|f| {

@@ -767,50 +767,76 @@ impl<'a> Vm<'a> {
                 if self.frames.len() >= MAX_CALL_DEPTH {
                     return Err("stack overflow".to_string());
                 }
-                let mname = self.program.names[name_idx].clone();
+                // This op's inline-cache site is `(func, ip - 1)` (`ip` was pre-incremented), exactly
+                // like the field-cache sites.
+                let site = self.frames[fr].ip - 1;
                 // The receiver sits just below the `argc` args; its slot becomes the new frame's
                 // slot 0 (`this`), with the args at slots 1..=argc (decision P4-6).
                 let slot_base = self.pop_n_start(argc + 1);
-                let class = match &self.stack[slot_base] {
-                    Value::Instance(inst) => inst.class.to_string(),
-                    v => return Err(format!("cannot call `.{mname}()` on {}", v.type_name())),
-                };
-                // Dynamic dispatch off the receiver's runtime class. Method existence is
-                // checker-enforced, so the miss is a defensive backstop (interpreter parity).
-                let key = (class, mname);
-                // M-RT overloading: an overloaded method selects among its set by the argument values
-                // (the receiver is at `slot_base`, the `argc` args at `slot_base + 1 ..`) — the same
-                // selector the interpreter's `call_method` runs. A single method stays on the direct path.
-                let func = if let Some(&set_id) = self.program.method_overloads.get(&key) {
-                    let set = &self.program.overloads[set_id];
-                    let cands: Vec<Vec<crate::dispatch::ParamKind>> =
-                        set.iter().map(|(k, _)| k.clone()).collect();
-                    let args = &self.stack[slot_base + 1..slot_base + 1 + argc];
-                    match crate::dispatch::select_overload(
-                        &cands,
-                        args,
-                        &self.program.class_implements,
-                    ) {
-                        Ok(pos) => set[pos].1,
-                        Err(crate::dispatch::SelectErr::Ambiguous) => {
-                            return Err(format!("ambiguous overloaded call to `{}`", key.1))
-                        }
-                        Err(crate::dispatch::SelectErr::NoMatch) => {
-                            return Err(format!(
-                                "no overload of `{}` matches the argument types",
-                                key.1
-                            ))
-                        }
+                // Receiver class identity: the `ClassLayout` pointer (shared by every instance of one
+                // class) is the allocation-free monomorphism key — no name clone, no hash on a hit.
+                let layout_ptr: *const crate::value::ClassLayout = match &self.stack[slot_base] {
+                    Value::Instance(inst) => Rc::as_ptr(&inst.layout),
+                    v => {
+                        let mname = &self.program.names[name_idx];
+                        return Err(format!("cannot call `.{mname}()` on {}", v.type_name()));
                     }
+                };
+                let cached = self.method_caches[func][site].get();
+                let target = if std::ptr::eq(cached.0, layout_ptr) {
+                    // Monomorphic hit: the cached func is a NON-overloaded method for this exact class
+                    // (overloaded sites never fill), so it is the same target the probe would return.
+                    cached.1 as usize
                 } else {
-                    *self
-                        .program
-                        .methods
-                        .get(&key)
-                        .ok_or_else(|| format!("no method `{}` on `{}`", key.1, key.0))?
+                    // Miss — resolve via the receiver's class name. The two owned-String key allocations
+                    // happen only here (rare: first call at a site, or a class change), not per call.
+                    let class = match &self.stack[slot_base] {
+                        Value::Instance(inst) => inst.class.to_string(),
+                        // Unreachable — `layout_ptr` above already proved this is an `Instance`.
+                        _ => unreachable!("receiver kind changed within one op"),
+                    };
+                    let mname = self.program.names[name_idx].clone();
+                    // Dynamic dispatch off the receiver's runtime class. Method existence is
+                    // checker-enforced, so the miss is a defensive backstop (interpreter parity).
+                    let key = (class, mname);
+                    // M-RT overloading: an overloaded method selects among its set by the argument values
+                    // (the receiver is at `slot_base`, the `argc` args at `slot_base + 1 ..`) — the same
+                    // selector the interpreter's `call_method` runs. It depends on the arg values, so it
+                    // is NEVER cached (the cache is class-keyed only); a single method IS cached below.
+                    if let Some(&set_id) = self.program.method_overloads.get(&key) {
+                        let set = &self.program.overloads[set_id];
+                        let cands: Vec<Vec<crate::dispatch::ParamKind>> =
+                            set.iter().map(|(k, _)| k.clone()).collect();
+                        let args = &self.stack[slot_base + 1..slot_base + 1 + argc];
+                        match crate::dispatch::select_overload(
+                            &cands,
+                            args,
+                            &self.program.class_implements,
+                        ) {
+                            Ok(pos) => set[pos].1,
+                            Err(crate::dispatch::SelectErr::Ambiguous) => {
+                                return Err(format!("ambiguous overloaded call to `{}`", key.1))
+                            }
+                            Err(crate::dispatch::SelectErr::NoMatch) => {
+                                return Err(format!(
+                                    "no overload of `{}` matches the argument types",
+                                    key.1
+                                ))
+                            }
+                        }
+                    } else {
+                        let f = *self
+                            .program
+                            .methods
+                            .get(&key)
+                            .ok_or_else(|| format!("no method `{}` on `{}`", key.1, key.0))?;
+                        // Cache the monomorphic (non-overloaded) resolution for this site + class.
+                        self.method_caches[func][site].set((layout_ptr, f as u32));
+                        f
+                    }
                 };
                 self.frames.push(Frame {
-                    func,
+                    func: target,
                     ip: 0,
                     slot_base,
                 });

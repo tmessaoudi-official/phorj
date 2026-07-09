@@ -5,6 +5,62 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🧭 **DEVELOPER RULED (ask-human): PIVOT TO LANGUAGE NOW; boxed-value JIT = the queued big perf push; BANK the inline cache.**
+  Given the [Verified] finding below (cheap alloc levers can't flip VM-only features; the dispatch core / boxed-value JIT is
+  the only path to WIN, multi-session), the developer chose feature velocity: **build the language queue next (DI v1 →
+  String.format 3+4 → attribute v2/reflection → trait → web spine), and treat the boxed-value JIT — now evidence-proven as
+  THE perf lever — as the next dedicated multi-session PERF effort** (revives the deferred #3, with a clear mandate). The
+  inline method cache is **BANKED** (correct + byte-identical + real alloc reduction; committed honestly as an alloc-reduction,
+  NOT a perf WIN, after the full oracle gate). **NEXT ACTION: DI v1** per `di-attributes.plan.md` §1. Perf resumes at the
+  boxed-value JIT when a multi-session window opens (or interleaved per the developer's steer).
+- [2026-07-10] 🚩🔬 **INLINE METHOD CACHE BUILT + MEASURED — alloc removed, but methodcall STAYS LOSS (dispatch-core-bound). FLAG.**
+  Built a monomorphic inline cache for `Op::CallMethod` (VM `method_caches`, mirrors the proven `field_caches`: `[func][ip]`,
+  keyed by the receiver `ClassLayout` ptr, filled only for NON-overloaded methods → byte-identical by construction; miss =
+  the exact existing lookup). **[Verified: deterministic counting-allocator Δallocs/Δiters]: methodcall 2.0→0.0 allocs/call,
+  objalloc 5.0→3.0 allocs/iter (its `c.sq()` dispatch-key allocs gone); checksums stable.** BUT **[Verified: microbench.sh
+  vs docker php:8.5-cli+JIT, best-of-5]: methodcall 0.04× (25× LOSS) — UNCHANGED off the ~0.05× baseline; objalloc 0.20×
+  LOSS; enum 0.01× LOSS. Only fibrec WINs (1.92×) — the sole JIT-eligible micro.** **CONCLUSION (confirms the advisor's
+  necessary-not-sufficient prediction): these features are DISPATCH-CORE-bound, not alloc-bound** — removing all of
+  methodcall's per-call allocation did NOT move wall-clock, because the cost is the VM interpreter loop (operand-stack
+  push/pop of `argc+1`, frame push/pop, per-op match dispatch), ~80ns/call vs php's ~3ns/call. **The cheap alloc levers
+  (inline-cache, Rc<str>, inline-fields) CANNOT make methodcall/objalloc/enum WIN.** The path to WIN on VM-only features
+  IS the dispatch core = a boxed-value JIT (why fibrec, the JIT-eligible micro, is the only WIN) or a VM interpreter-loop
+  rewrite — both multi-session. **The inline cache itself is CORRECT + byte-identical + removes real allocations** (worth
+  banking for allocation pressure in real programs) but is NOT a standalone perf WIN → FLAGGED per WIN-OR-FLAG; surfaced to
+  the developer (this reopens the JIT #3 question with evidence — the original instinct, now proven to be the real lever).
+  (Batched-harness caveat noted: 0.04× is 25× off WIN, far outside the ~1.5× load-noise floor → the LOSS verdict is robust.)
+- [2026-07-09] 🔬📊 **PERF #3 PREMISE FALSIFIED BY PROFILING — reorder (advisor-gated, [Verified] alloc counts).**
+  Before committing to the multi-session JIT #3 grind, the advisor (Phase 3C) flagged the "JIT flips objalloc/enum"
+  premise as [Speculative] (the plan's own label) and mandated profiling to [Verified]. valgrind is ABSENT, so wired
+  a throwaway env+feature-gated counting global allocator (`countalloc` feature, `main.rs` — NEVER shipped/gated/committed,
+  reverted before any commit) and measured per-iteration allocs via matched 100k/200k micro variants. **RESULT [Verified:
+  deterministic Δallocs/Δiters, `target/release/phg --features countalloc`]:** methodcall **2.0 allocs/iter** (loop is
+  alloc-free in source → BOTH allocs are the `(String,String)` dispatch-key `.to_string()` per call); objalloc **5.0
+  allocs/iter** (2 construction [Rc<Instance>+fields Vec] + ~2 dispatch-key + 1 → dominated by REMOVABLE allocs); enum
+  **1.667 allocs/iter** (= exactly (2·2+1·1)/3 for Circle/Square/Dot → LOWEST allocs yet WORST time 100× → NOT alloc-bound,
+  it is double-`match`+variant-dispatch bound). **CONCLUSION: the JIT (#3) flips NONE of these cheaply** — methodcall &
+  objalloc are bound by removable allocations a helper-JIT would still perform; enum is dispatch/match-bound but is the
+  hardest-possible boxed-value codegen and the current JIT can't even represent an `EnumVal`. **REORDER (evidence-backed,
+  inside the ruled perf-first spine — an execution-detail reorder, not a fork):** (1) **Rc<str> dispatch-key widen** [was
+  task #2] FIRST — flips methodcall (removes its only 2 allocs) + a chunk of objalloc; (2) **inline-fields / construction
+  alloc reduction** — flips objalloc; (3) **enum match/dispatch fast-path** — VM-level, investigate the double-match 100×;
+  (4) **JIT #3 DEFERRED/rescoped** — reassess after 1–3, it is not the lever for these three. The counting allocator stays
+  as the local before/after proof tool for the alloc-reduction slices, reverted before commit.
+  **DEVELOPER APPROVED the reorder (ask-human, 2026-07-09)** — proceed: Rc<str> dispatch-key first, then inline-fields,
+  then enum A/B-decompose+fix, JIT #3 deferred & reassessed. Advisor carry: expect alloc-removal to be
+  necessary-not-sufficient (shared dispatch-overhead core: operand-stack + hash/lookup + frame setup) → hit WIN-OR-FLAG
+  honestly; enum 100× root cause still [Inferred] → A/B-decompose (construct-only vs full micro) BEFORE building slice 3.
+- [2026-07-09] 🏁🚀 **MARATHON SCOPE RULED (developer, interactive, ask-human) — Option 1 spine + full both-track expansion.**
+  Sequence LOCKED: **(1) Perf #3** JIT object/enum/method construction+dispatch (LEAD, fresh-context spine-sensitive;
+  enum 0.01× · objalloc 0.34× · methodcall 0.05×) → **(2) Rc<str> dispatch-key widen** (adjacent to #3 dispatch)
+  → **(3) interp-side construction fast-path** (same change enum needs) → **(4) DI v1** (headline pivot, per
+  `di-attributes.plan.md` §1) → **(5) JIT tier-2 breadth sweep** (~11 VM-only LOSS cats, WIN-OR-FLAG each)
+  → **(6) Wave C String.format slices 3+4** (`%x/o/b/e/g`, `%N$`) → **(7) attribute v2 + L1 runtime reflection**
+  (`di-attributes.plan.md` §3) → **(8) `trait`** (BLESSED §7-OPEN) → **(9) Wave D web spine** (UA-L2 → SQL DBAL
+  → HTTP) → **(10) floatmul resolution = §15 FORK, SURFACE for the developer's ruling, do NOT build alone**
+  (FP-reassoc is Inv-1-forbidden). Developer directive: "lots and lots of features from perf AND the language."
+  Autonomy envelope UNCHANGED: WIN-OR-FLAG, commit each green slice, NEVER push, park §14/§15 forks + pivot,
+  5-round advisor cap → park. This is a multi-session programme; the cursor tracks live position.
 - [2026-07-09] 📐🎨 **DI + ATTRIBUTE-REFLECTION DESIGN CAPTURED → `docs/plans/di-attributes.plan.md`.**
   Interactive brainstorm (~8 reasks) persisted as a durable spec (advisor-flagged the design was accreting
   scope without persistence — fixed). RULED: generic thesis (L1 compile-time attribute reflection + reverse
