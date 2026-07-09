@@ -5,6 +5,18 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] 🏁✅ **`#[Unchecked]` SHIPPED → intadd LOSS→WIN (`64ddf17`, full oracle gate green,
+  unpushed).** The developer-adjudicated design built end-to-end: `#[Unchecked]` attribute (import
+  `Core.Unchecked`, whole-function, single fn-level `unchecked` bool read by interp/VM/JIT/transpile) →
+  int `+`/`-`/`*`/unary-`-` WRAP (value.rs `int_wrapping_*` kernels); JIT drops the overflow guard (all
+  int arith plain `iadd`/`isub`/`imul`, `needs_sticky=false`). §14 LADDER `E-TRANSPILE-UNCHECKED` +
+  differential quarantine. **MEASURED [Verified — interleaved 8-pair, JIT release binary, fresh docker
+  php:8.5+JIT, checksums identical (37499987500000)]: intadd `#[Unchecked]` phorj median 3,225,621 ns vs
+  php 6,410,498 ns = 1.987× WIN, phorj faster 8/8.** Flips intadd from LOSS (0.674×) → **~2× WIN** — the
+  overflow guard was the whole gap, and dropping it (safely, by explicit opt-in) closes it. Compute-core
+  scoreboard now: fibrec WIN · intadd WIN(via `#[Unchecked]`) · floatmul 🚩FLAGGED(float-dep-bound). NEXT
+  (follow-up commit): `Math.tryAdd/trySub/tryMul(): int?` typed-recovery natives + the overflow-message
+  hint (the recovery half of the ruled fault model).
 - [2026-07-09] ✅🎛️ **AGREED (developer, interactive adjudication) — OVERFLOW MODEL + `unchecked`. Two
   linked design rulings (need DEC numbers in `C-decisions.md` when built):**
   **(1) `unchecked { }` BLOCK** = the opt-in for two's-complement WRAPPING int arithmetic. Lexical
@@ -1048,7 +1060,8 @@ adjudicates via AskUserQuestion — NEVER self-ruled).
 |---|---|---|---|
 | fibrec | **WIN** | ~1.7–2.9× | recursion/calls — phorj's structural strength (`ovf-spec` shipped) |
 | floatmul | **🚩FLAGGED** | ~0.99 (parity) | Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php identical chain → parity is the ceiling. **Irreducible without FP-reassociation/unroll = byte-identity-FORBIDDEN (Inv #1).** |
-| intadd | **LOSS** (fork-blocked) | ~0.67 (1.48× slower) | [Verified: interleaved 8-pair, JIT binary — phorj 12.14M vs php 8.17M ns, 0/8, checksums identical]. Counter now plain `iadd`, but the ACCUMULATOR (`acc+=…`) keeps its overflow guard (unprovable). Unlike floatmul the int accumulator chain is short (~1 cyc), so the `sadd_overflow`+sticky IS on the critical path → the guard is the LOSS. **Fixable only by opt-in `unchecked` = §15 user-facing-language fork → PENDING dev (perf-wave part 4); not self-ruled.** |
+| intadd (default) | **LOSS** | ~0.67 (1.48× slower) | [Verified: interleaved 8-pair, JIT binary — phorj 12.14M vs php 8.17M ns, 0/8]. The accumulator's overflow guard is on the (short, ~1-cyc) critical path → the guard IS the LOSS. The safe default; fixed on demand ↓. |
+| intadd `#[Unchecked]` | **WIN** | **~1.99 (2× faster)** | [Verified: interleaved 8-pair, JIT release binary, fresh docker php:8.5+JIT, checksums identical — phorj **3,225,621** vs php **6,410,498** ns, 8/8]. `#[Unchecked]` (`64ddf17`) drops the guard → the overflow check WAS the whole gap. Opt-in wrapping; `E-TRANSPILE-UNCHECKED` (LADDER). This is the intadd fork RESOLVED (developer ruled `#[Unchecked]`), not a self-rule. |
 | ~11 VM-only cats | **LOSS (heavy)** | 0.01×–0.39× | [Verified: `microbench.sh` batched-indicative 2026-07-09] closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07 · methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05. **All run on the plain VM — NOT JIT-eligible** (ops outside the int/float unboxed subset) → 3–100× slower than php+JIT. Fix = Tier-2 JIT-subset breadth (per category; several need §14/§15 rulings — e.g. trycatch, strings). floatarith specifically = tracked float lever (toFloat/truncate inline). |
 
 > ⚠️ **Batched vs interleaved:** the table above (except floatmul/intadd/fibrec) is from `microbench.sh`
