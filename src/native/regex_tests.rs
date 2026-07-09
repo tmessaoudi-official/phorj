@@ -28,7 +28,7 @@ fn compile_validates_and_faults_on_unsupported() {
     // A valid regular pattern compiles to a `Regex` instance carrying the bare pattern.
     match re(r"\d{4}") {
         Value::Instance(inst) => {
-            assert_eq!(inst.class, "Regex");
+            assert_eq!(inst.class.as_ref(), "Regex");
             assert_eq!(text(&inst.get_field("pattern").unwrap()), r"\d{4}");
         }
         other => panic!("compile returned {other:?}"),

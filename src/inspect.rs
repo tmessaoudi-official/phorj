@@ -84,7 +84,7 @@ fn render_into(value: &Value, caps: &RenderCaps, depth: usize, out: &mut String)
         }
         Value::Instance(inst) => {
             // Secret redaction — never descend into a secret's fields.
-            if inst.class == SECRET_CLASS {
+            if inst.class.as_ref() == SECRET_CLASS {
                 out.push_str("Secret(<redacted>)");
                 return;
             }
@@ -202,7 +202,7 @@ mod tests {
     fn instance(class: &str, fields: &[(&str, Value)]) -> Value {
         let names: Vec<String> = fields.iter().map(|(n, _)| (*n).to_string()).collect();
         let layout = ClassLayout::new(names);
-        let inst = Instance::new(class.to_string(), layout);
+        let inst = Instance::new(class.into(), layout);
         for (n, v) in fields {
             inst.set_field(n, v.clone());
         }

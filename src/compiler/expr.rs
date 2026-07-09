@@ -912,7 +912,7 @@ impl Compiler<'_> {
         let desc_idx = self
             .class_descs
             .iter()
-            .position(|d| d.class == class)
+            .position(|d| d.class.as_ref() == class)
             .ok_or_else(|| format!("unknown class `{class}` in `with`"))?;
         let field_names = self.class_descs[desc_idx].fields.clone();
         self.expr(object)?; // [.., src]

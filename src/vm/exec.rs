@@ -737,11 +737,11 @@ impl<'a> Vm<'a> {
                     "bool" => matches!(v, Value::Bool(_)),
                     "null" => matches!(v, Value::Null),
                     _ => matches!(&v, Value::Instance(inst)
-                        if &inst.class == name
+                        if inst.class.as_ref() == name.as_str()
                             || self
                                 .program
                                 .class_implements
-                                .get(&inst.class)
+                                .get(&*inst.class)
                                 .is_some_and(|ifaces| ifaces.contains(name))),
                 };
                 self.stack.push(Value::Bool(is));
@@ -757,7 +757,7 @@ impl<'a> Vm<'a> {
                 // slot 0 (`this`), with the args at slots 1..=argc (decision P4-6).
                 let slot_base = self.pop_n_start(argc + 1);
                 let class = match &self.stack[slot_base] {
-                    Value::Instance(inst) => inst.class.clone(),
+                    Value::Instance(inst) => inst.class.to_string(),
                     v => return Err(format!("cannot call `.{mname}()` on {}", v.type_name())),
                 };
                 // Dynamic dispatch off the receiver's runtime class. Method existence is

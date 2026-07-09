@@ -401,7 +401,7 @@ fn exit_code_of(v: &Value) -> i64 {
 /// instance, else its type name (M-faults 2b).
 fn throw_what(v: &Value) -> String {
     match v {
-        Value::Instance(inst) => inst.class.clone(),
+        Value::Instance(inst) => inst.class.to_string(),
         other => other.type_name().to_string(),
     }
 }
@@ -983,7 +983,7 @@ fn match_pattern(
         Pattern::Null(_) => matches!(value, Value::Null), // M3 S2.6: `null` arm over a `T?`
         Pattern::Variant { name, fields, .. } => {
             if let Value::Enum(ev) = value {
-                if &ev.variant == name && ev.payload.len() == fields.len() {
+                if ev.variant.as_ref() == name.as_str() && ev.payload.len() == fields.len() {
                     return fields
                         .iter()
                         .zip(&ev.payload)
@@ -1008,9 +1008,9 @@ fn match_pattern(
                 "bool" => matches!(value, Value::Bool(_)),
                 "null" => matches!(value, Value::Null),
                 _ => matches!(value, Value::Instance(inst)
-                    if inst.class == *type_name
+                    if inst.class.as_ref() == type_name.as_str()
                         || implements
-                            .get(&inst.class)
+                            .get(&*inst.class)
                             .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name))),
             };
             if is {
@@ -1029,9 +1029,9 @@ fn match_pattern(
             type_name, fields, ..
         } => {
             let is = matches!(value, Value::Instance(inst)
-                if inst.class == *type_name
+                if inst.class.as_ref() == type_name.as_str()
                     || implements
-                        .get(&inst.class)
+                        .get(&*inst.class)
                         .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
             if !is {
                 return false;

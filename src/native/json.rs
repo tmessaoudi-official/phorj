@@ -20,8 +20,8 @@ use std::rc::Rc;
 /// string directly.
 fn jnode(variant: &str, payload: Vec<Value>) -> Value {
     Value::Enum(Rc::new(EnumVal {
-        ty: "Json".to_string(),
-        variant: variant.to_string(),
+        ty: "Json".into(),
+        variant: variant.into(),
         payload,
     }))
 }
@@ -94,7 +94,7 @@ fn json_stringify_pretty(args: &[Value], _: &mut String) -> Result<Value, String
 
 fn as_json(v: &Value) -> Result<&EnumVal, String> {
     match v {
-        Value::Enum(e) if e.ty == "Json" => Ok(e),
+        Value::Enum(e) if e.ty.as_ref() == "Json" => Ok(e),
         _ => Err(format!("Json value expected, got {}", v.type_name())),
     }
 }
@@ -110,7 +110,7 @@ fn key_str(k: &HKey) -> Result<&str, String> {
 /// Compact encoding — matches `__phorj_json_encode` byte-for-byte.
 fn encode(v: &Value, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
-    match (e.variant.as_str(), &e.payload[..]) {
+    match (e.variant.as_ref(), &e.payload[..]) {
         ("Null", []) => out.push_str("null"),
         ("Bool", [Value::Bool(b)]) => out.push_str(if *b { "true" } else { "false" }),
         ("Int", [Value::Int(n)]) => out.push_str(&n.to_string()),
@@ -147,7 +147,7 @@ fn encode(v: &Value, out: &mut String) -> Result<(), String> {
 /// inline). `indent` is the current leading-space count. Matches `__phorj_json_pretty`.
 fn encode_pretty(v: &Value, indent: usize, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
-    match (e.variant.as_str(), &e.payload[..]) {
+    match (e.variant.as_ref(), &e.payload[..]) {
         ("Array", [Value::List(xs)]) if !xs.is_empty() => {
             let inner = indent + 4;
             out.push_str("[\n");

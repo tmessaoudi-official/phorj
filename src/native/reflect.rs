@@ -30,7 +30,7 @@ use std::rc::Rc;
 /// agrees: `__phorj_reflect_of` returns `[]` for a non-object / unknown class).
 fn reflect_class_list(args: &[Value], table: &BTreeMap<String, Vec<String>>) -> Value {
     let names = match args {
-        [Value::Instance(i)] => table.get(&i.class).cloned().unwrap_or_default(),
+        [Value::Instance(i)] => table.get(&*i.class).cloned().unwrap_or_default(),
         _ => Vec::new(),
     };
     Value::List(Rc::new(names.into_iter().map(Value::Str).collect()))
@@ -99,8 +99,8 @@ fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `get_class` would report `"Closure"`; both sides agree on `null` instead — the helper guards it).
 fn reflect_class_name(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Instance(i)] => Ok(Value::Str(i.class.clone())),
-        [Value::Enum(e)] => Ok(Value::Str(e.variant.clone())),
+        [Value::Instance(i)] => Ok(Value::Str(i.class.to_string())),
+        [Value::Enum(e)] => Ok(Value::Str(e.variant.to_string())),
         // A scalar / collection / closure is not a class instance → `null` (string?).
         [_] => Ok(Value::Null),
         _ => Err("Reflect.className expects (T)".into()),

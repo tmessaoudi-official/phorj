@@ -80,7 +80,7 @@ fn kind_matches(k: &ParamKind, v: &Value, oracle: &BTreeMap<String, Vec<String>>
         (ParamKind::Set, Value::Set(_)) => true,
         (ParamKind::Fn, Value::Closure(_)) => true,
         (ParamKind::Named(n), Value::Instance(inst)) => is_subtype(&inst.class, n, oracle),
-        (ParamKind::Named(n), Value::Enum(e)) => &e.ty == n,
+        (ParamKind::Named(n), Value::Enum(e)) => e.ty.as_ref() == n.as_str(),
         _ => false,
     }
 }

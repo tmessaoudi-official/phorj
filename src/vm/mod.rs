@@ -98,7 +98,7 @@ fn exit_code_of(v: &Value) -> i64 {
 /// else its type name (M-faults 2b; mirrors the interpreter's `throw_what` for trace parity).
 fn throw_display(v: &Value) -> String {
     match v {
-        Value::Instance(inst) => inst.class.clone(),
+        Value::Instance(inst) => inst.class.to_string(),
         other => other.type_name().to_string(),
     }
 }

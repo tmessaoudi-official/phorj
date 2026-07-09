@@ -5,6 +5,24 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-09] ✅📊 **#4 SLICE 2 SHIPPED — `class`/`ty`/`variant` → `Rc<str>` (gate-green, unpushed).**
+  Migrated `Instance.class`, `EnumVal.ty`/`variant`, `ClassDesc.class`, `EnumDesc.ty`/`variant` from
+  `String` to `Rc<str>`: names are built ONCE in the compiler pre-pass (`.into()`), so per-construction
+  is a refcount bump instead of a fresh `String` alloc. **byte-identity SAFE by construction** — `Rc<str>`
+  is content-equal to `String` on eq/hash/Display/dispatch (advisor-confirmed on every surface). ~50
+  reader sites compiler-driven (`x == "lit"` → `x.as_ref() == "lit"`; `.get(&*x)`; String-crossings →
+  `.to_string()`). **Method-dispatch tuple keys (`(String,String)` maps in interp `call.rs` + VM
+  `exec.rs`) kept the no-regression `.to_string()` path** (same alloc they already did; keying maps on
+  `Rc<str>` is a DEFERRED widen → would flip methodcall). Interp construction allocs per-instance still
+  (`Rc::from`, no regression, no win — VM is the target); no interp name-cache built (deferred).
+  **MEASURED [Verified: interleaved 9-pair, preserved before-binary, self-timed VM, no contention;
+  output byte-identical — enum acc=86500000, objalloc acc=2666664666667000000]: enum median 1.131×
+  (11.6%), min 1.119× (10.6%) — consistent; objalloc median 1.081× (7.5%), min 1.011× (1.1%) — noisier.**
+  **HONEST: neither flips WIN/LOSS — enum stays ~90× LOSS, objalloc ~3× LOSS.** Zero-risk waste removal;
+  #3 (JIT the object/enum construction+dispatch path) remains the structural flipper. Gate: **1881
+  passed / 0 failed** (`--features jit`, `PHORJ_REQUIRE_PHP=1` oracle php-8.5.8, 144-case differential),
+  clippy both configs, fmt, release. DEFERRED follow-ups: (a) dispatch-key maps → `Rc<str>` (flips
+  methodcall); (b) store class name in `Rc<ClassLayout>` so interp construction also shares (bigger).
 - [2026-07-09] ✅📊 **#4 SLICE 1 SHIPPED — VM `MakeInstance` drops the per-instance `ClassDesc` clone
   (gate-green, unpushed).** The old arm `let desc = self.program.class_descs[idx].clone()` cloned the
   whole descriptor (incl. `fields: Vec<String>` + each field-name String) per `new`, though `fields`

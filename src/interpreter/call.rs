@@ -143,8 +143,8 @@ impl<'c> Interp<'c> {
                     ));
                 }
                 return Ok(Value::Enum(Rc::new(EnumVal {
-                    ty: enum_name,
-                    variant: name.clone(),
+                    ty: enum_name.as_str().into(),
+                    variant: name.as_str().into(),
                     payload: argv,
                 })));
             }
@@ -454,10 +454,10 @@ impl<'c> Interp<'c> {
         // receiver's runtime class).
         let origin_class: Option<String> = self
             .method_origins
-            .get(&(inst.class.clone(), name.to_string()))
+            .get(&(inst.class.to_string(), name.to_string()))
             .map(|(oc, _)| oc.clone());
         let candidates: Vec<FunctionDecl> = {
-            let key = (inst.class.clone(), name.to_string());
+            let key = (inst.class.to_string(), name.to_string());
             match self.method_origins.get(&key) {
                 Some((origin_class, origin_method)) => self
                     .classes

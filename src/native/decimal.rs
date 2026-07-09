@@ -26,7 +26,7 @@ fn decimal_of(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// … }`; an unknown variant or wrong value is checker-unreachable, handled defensively (EV-7).
 fn round_mode(v: &Value) -> Result<RoundMode, String> {
     match v {
-        Value::Enum(e) if e.ty == "RoundingMode" => RoundMode::from_variant(&e.variant)
+        Value::Enum(e) if e.ty.as_ref() == "RoundingMode" => RoundMode::from_variant(&e.variant)
             .ok_or_else(|| format!("unknown RoundingMode variant `{}`", e.variant)),
         _ => Err(format!("RoundingMode expected, got {}", v.type_name())),
     }

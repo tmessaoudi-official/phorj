@@ -80,8 +80,8 @@ pub(super) fn compile_program_with(
                         },
                     );
                     enum_descs.push(EnumDesc {
-                        ty: e.name.clone(),
-                        variant: v.name.clone(),
+                        ty: e.name.as_str().into(),
+                        variant: v.name.as_str().into(),
                         arity: v.fields.len(),
                     });
                 }
@@ -228,7 +228,7 @@ pub(super) fn compile_program_with(
             }
         }
         class_descs.push(ClassDesc {
-            class: c.name.clone(),
+            class: c.name.as_str().into(),
             fields,
             layout: crate::value::ClassLayout::new(
                 field_layouts.get(&c.name).cloned().unwrap_or_default(),

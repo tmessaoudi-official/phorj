@@ -98,7 +98,7 @@ impl<'c> Interp<'c> {
                                     &body,
                                     vec![v],
                                     Some(Value::Instance(inst)),
-                                    Some(cls.as_str()),
+                                    Some(cls.as_ref()),
                                     false, // a property hook setter is a method — never `#[Unchecked]`
                                 )?;
                                 return Ok(());
@@ -278,10 +278,10 @@ impl<'c> Interp<'c> {
     /// `instanceof`: an exact class match or `name` is an interface the class implements.
     pub(super) fn value_is_a(&self, v: &Value, name: &str) -> bool {
         matches!(v, Value::Instance(inst)
-            if inst.class == *name
+            if inst.class.as_ref() == name
                 || self
                     .class_implements
-                    .get(&inst.class)
+                    .get(&*inst.class)
                     .is_some_and(|ifaces| ifaces.iter().any(|i| i == name)))
     }
 

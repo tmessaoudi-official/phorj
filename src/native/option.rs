@@ -34,7 +34,7 @@ fn none() -> Value {
 /// `Option.map(Option<T>, (T) -> U) -> Option<U>` — apply `f` to a `Some` payload, pass `None` through.
 fn option_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
-        [Value::Enum(o), f] if o.ty == "Option" => match o.variant.as_str() {
+        [Value::Enum(o), f] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
             "Some" => Ok(some(call(f, vec![o.payload[0].clone()])?)),
             _ => Ok(none()),
         },
@@ -46,7 +46,7 @@ fn option_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String
 /// returns an `Option`, so `Some(x)` becomes `f(x)` (not wrapped again) and `None` passes through.
 fn option_and_then(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
-        [Value::Enum(o), f] if o.ty == "Option" => match o.variant.as_str() {
+        [Value::Enum(o), f] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
             "Some" => call(f, vec![o.payload[0].clone()]),
             _ => Ok(none()),
         },
@@ -57,7 +57,7 @@ fn option_and_then(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, S
 /// `Option.filter(Option<T>, (T) -> bool) -> Option<T>` — keep a `Some` only if the predicate holds.
 fn option_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
-        [Value::Enum(o), f] if o.ty == "Option" => match o.variant.as_str() {
+        [Value::Enum(o), f] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
             "Some" => match call(f, vec![o.payload[0].clone()])? {
                 Value::Bool(true) => Ok(Value::Enum(o.clone())),
                 Value::Bool(false) => Ok(none()),
@@ -77,7 +77,7 @@ fn option_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, Str
 /// RHS). A lazy/thunk form can be added later if wanted.
 fn option_get_or_else(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Enum(o), default] if o.ty == "Option" => match o.variant.as_str() {
+        [Value::Enum(o), default] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
             "Some" => Ok(o.payload[0].clone()),
             _ => Ok(default.clone()),
         },
@@ -98,7 +98,7 @@ fn option_of_nullable(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `Option.toNullable(Option<T>) -> T?` — the reverse bridge: `Some(x)` ⇒ `x`, `None` ⇒ `null`.
 fn option_to_nullable(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Enum(o)] if o.ty == "Option" => match o.variant.as_str() {
+        [Value::Enum(o)] if o.ty.as_ref() == "Option" => match o.variant.as_ref() {
             "Some" => Ok(o.payload[0].clone()),
             _ => Ok(Value::Null),
         },

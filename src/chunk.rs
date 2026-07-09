@@ -407,8 +407,8 @@ pub struct Function {
 /// `Op::MakeEnum`/`Op::MatchTag` — the enum analogue of the constant pool (decision P4-2).
 #[derive(Debug, Clone)]
 pub struct EnumDesc {
-    pub ty: String,
-    pub variant: String,
+    pub ty: std::rc::Rc<str>,
+    pub variant: std::rc::Rc<str>,
     pub arity: usize,
 }
 
@@ -419,7 +419,7 @@ pub struct EnumDesc {
 /// runtime `no field` fault.
 #[derive(Debug, Clone)]
 pub struct ClassDesc {
-    pub class: String,
+    pub class: std::rc::Rc<str>,
     pub fields: Vec<String>,
     /// The class's full slot layout (M-perf S1b), shared (`Rc`) onto every instance `MakeInstance`
     /// builds. Built from [`crate::ast::class_field_layout`] so it is identical to the layout the

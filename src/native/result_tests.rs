@@ -9,8 +9,8 @@ use crate::value::Value;
 /// A runtime `Result` value's variant + single int payload, for terse assertions.
 fn probe(v: &Value) -> (String, Option<i64>) {
     match v {
-        Value::Enum(e) if e.ty == "Result" => (
-            e.variant.clone(),
+        Value::Enum(e) if e.ty.as_ref() == "Result" => (
+            e.variant.to_string(),
             e.payload.first().and_then(|p| match p {
                 Value::Int(n) => Some(*n),
                 _ => None,
@@ -39,8 +39,8 @@ fn bool_of(v: &Value) -> Option<bool> {
 /// A runtime `Option` value's variant + single int payload (for `toOption`).
 fn probe_opt(v: &Value) -> (String, Option<i64>) {
     match v {
-        Value::Enum(e) if e.ty == "Option" => (
-            e.variant.clone(),
+        Value::Enum(e) if e.ty.as_ref() == "Option" => (
+            e.variant.to_string(),
             e.payload.first().and_then(|p| match p {
                 Value::Int(n) => Some(*n),
                 _ => None,

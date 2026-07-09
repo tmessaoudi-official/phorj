@@ -56,7 +56,7 @@ fn none() -> Value {
 /// through unchanged (error type `E` is preserved).
 fn result_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
-        [Value::Enum(r), f] if r.ty == "Result" => match r.variant.as_str() {
+        [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
             "Success" => Ok(success(call(f, vec![r.payload[0].clone()])?)),
             _ => Ok(Value::Enum(r.clone())),
         },
@@ -68,7 +68,7 @@ fn result_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String
 /// error type `E` to `F`), pass `Success` through unchanged.
 fn result_map_err(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
-        [Value::Enum(r), f] if r.ty == "Result" => match r.variant.as_str() {
+        [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
             "Failure" => Ok(failure(call(f, vec![r.payload[0].clone()])?)),
             _ => Ok(Value::Enum(r.clone())),
         },
@@ -81,7 +81,7 @@ fn result_map_err(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, St
 /// `Failure` passes through. Threads the error type `E` through the callback's own `Result`.
 fn result_and_then(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
-        [Value::Enum(r), f] if r.ty == "Result" => match r.variant.as_str() {
+        [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
             "Success" => call(f, vec![r.payload[0].clone()]),
             _ => Ok(Value::Enum(r.clone())),
         },
@@ -93,7 +93,7 @@ fn result_and_then(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, S
 /// Deliberately eager: the default is a plain value argument, always evaluated. Mirrors `Option.getOrElse`.
 fn result_get_or_else(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Enum(r), default] if r.ty == "Result" => match r.variant.as_str() {
+        [Value::Enum(r), default] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
             "Success" => Ok(r.payload[0].clone()),
             _ => Ok(default.clone()),
         },
@@ -106,7 +106,7 @@ fn result_get_or_else(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// The Rust `Result::or_else` analog.
 fn result_or_else(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
-        [Value::Enum(r), f] if r.ty == "Result" => match r.variant.as_str() {
+        [Value::Enum(r), f] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
             "Failure" => call(f, vec![r.payload[0].clone()]),
             _ => Ok(Value::Enum(r.clone())),
         },
@@ -119,7 +119,7 @@ fn result_or_else(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, St
 /// to `import Core.Option;` too (for the `Option` type + its `Some`/`None` PHP classes).
 fn result_to_option(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Enum(r)] if r.ty == "Result" => match r.variant.as_str() {
+        [Value::Enum(r)] if r.ty.as_ref() == "Result" => match r.variant.as_ref() {
             "Success" => Ok(some(r.payload[0].clone())),
             _ => Ok(none()),
         },
@@ -130,7 +130,9 @@ fn result_to_option(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `Result.isSuccess(Result<T,E>) -> bool` — `true` for a `Success`, `false` for a `Failure`.
 fn result_is_success(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Enum(r)] if r.ty == "Result" => Ok(Value::Bool(r.variant == "Success")),
+        [Value::Enum(r)] if r.ty.as_ref() == "Result" => {
+            Ok(Value::Bool(r.variant.as_ref() == "Success"))
+        }
         _ => Err("Result.isSuccess expects (Result<T,E>)".into()),
     }
 }
@@ -138,7 +140,9 @@ fn result_is_success(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `Result.isFailure(Result<T,E>) -> bool` — `true` for a `Failure`, `false` for a `Success`.
 fn result_is_failure(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Enum(r)] if r.ty == "Result" => Ok(Value::Bool(r.variant == "Failure")),
+        [Value::Enum(r)] if r.ty.as_ref() == "Result" => {
+            Ok(Value::Bool(r.variant.as_ref() == "Failure"))
+        }
         _ => Err("Result.isFailure expects (Result<T,E>)".into()),
     }
 }

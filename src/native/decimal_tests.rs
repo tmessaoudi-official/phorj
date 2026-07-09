@@ -47,8 +47,8 @@ fn mode(variant: &str) -> Value {
     use crate::value::EnumVal;
     use std::rc::Rc;
     Value::Enum(Rc::new(EnumVal {
-        ty: "RoundingMode".to_string(),
-        variant: variant.to_string(),
+        ty: "RoundingMode".into(),
+        variant: variant.into(),
         payload: vec![],
     }))
 }

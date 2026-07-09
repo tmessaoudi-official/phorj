@@ -1589,7 +1589,7 @@ fn annotate(op: &Op, chunk: &Chunk, p: &BytecodeProgram) -> Option<String> {
             .get(*i)
             .map(|d| format!("{}::{}", d.ty, d.variant)),
         Op::GetEnumField(i) => Some(format!("payload #{i}")),
-        Op::MakeInstance(i) => p.class_descs.get(*i).map(|d| d.class.clone()),
+        Op::MakeInstance(i) => p.class_descs.get(*i).map(|d| d.class.to_string()),
         _ => None,
     }
 }

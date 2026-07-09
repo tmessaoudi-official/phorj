@@ -59,7 +59,7 @@ impl<'c> Interp<'c> {
             .get(class_name)
             .cloned()
             .unwrap_or_else(|| crate::value::ClassLayout::new(vec![]));
-        let inst = Instance::new(class_name.to_string(), layout);
+        let inst = Instance::new(class_name.into(), layout);
         let total: usize = plan.iter().map(|(p, _)| p.len()).sum();
         if plan.is_empty() {
             if !args.is_empty() {
@@ -117,7 +117,7 @@ impl<'c> Interp<'c> {
                 body,
                 slice,
                 Some(Value::Instance(rc.clone())),
-                Some(rc.class.as_str()),
+                Some(rc.class.as_ref()),
                 false, // constructors are never `#[Unchecked]` (free-function-only attribute)
             )?;
         }
@@ -130,7 +130,7 @@ impl<'c> Interp<'c> {
     /// from the shared `ast::field_initializers` (base-first across ancestors), so every backend sets
     /// the same fields to the same values.
     pub(super) fn run_field_inits(&mut self, rc: &Rc<Instance>) -> R<()> {
-        if let Some(inits) = self.field_inits.get(&rc.class).cloned() {
+        if let Some(inits) = self.field_inits.get(&*rc.class).cloned() {
             for (fname, init) in &inits {
                 let v = self.run_hook_get(Value::Instance(rc.clone()), init)?;
                 rc.set_field(fname, v);

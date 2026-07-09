@@ -50,7 +50,7 @@ fn compiled(pattern: &str) -> Result<Rc<::regex::Regex>, String> {
 /// and self-consistent (every `Regex` shares the same one-slot layout, so eq/reflect parity holds).
 fn regex_value(pattern: &str) -> Value {
     let inst = Instance::new(
-        "Regex".to_string(),
+        "Regex".into(),
         crate::value::ClassLayout::from_sorted_names(&["pattern"]),
     );
     inst.set_field("pattern", Value::Str(pattern.to_string()));
@@ -60,7 +60,7 @@ fn regex_value(pattern: &str) -> Value {
 /// Extract the bare pattern from a `Regex` instance argument.
 fn as_pattern(v: &Value) -> Result<String, String> {
     match v {
-        Value::Instance(inst) if inst.class == "Regex" => inst
+        Value::Instance(inst) if inst.class.as_ref() == "Regex" => inst
             .get_field("pattern")
             .and_then(|p| match p {
                 Value::Str(s) => Some(s.clone()),

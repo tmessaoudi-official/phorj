@@ -92,7 +92,7 @@ mod tests {
         use crate::value::{ClassLayout, Instance};
         use std::rc::Rc;
         let layout = ClassLayout::new(vec!["value".to_string()]);
-        let inst = Instance::new("Secret".to_string(), layout);
+        let inst = Instance::new("Secret".into(), layout);
         inst.set_field("value", Value::Str("hunter2".into()));
         let locals = vec![("token".to_string(), Value::Instance(Rc::new(inst)))];
         let out = format_locals(&locals);

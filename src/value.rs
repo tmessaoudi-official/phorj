@@ -200,7 +200,10 @@ pub enum ClosureData {
 /// after the value is fully evaluated, so a borrow is never held across a re-entrant `eval`/`run`.
 #[derive(Debug, Clone)]
 pub struct Instance {
-    pub class: String,
+    /// The class name, shared as `Rc<str>` so construction is a refcount bump, not a fresh `String`
+    /// allocation per instance (the VM clones it from the compile-time `ClassDesc.class`). Content-
+    /// equal to the old `String` on every surface — eq/hash/Display are byte-identical.
+    pub class: Rc<str>,
     /// The shared `name → slot` layout for `class` (M-perf S1b). Every instance of one class shares the
     /// same `Rc`, so field access resolves a slot against the receiver's own runtime layout.
     pub layout: Rc<ClassLayout>,
@@ -212,7 +215,7 @@ pub struct Instance {
 
 impl Instance {
     /// Allocate an instance of `class` with every slot unset (`None`).
-    pub fn new(class: String, layout: Rc<ClassLayout>) -> Self {
+    pub fn new(class: Rc<str>, layout: Rc<ClassLayout>) -> Self {
         let n = layout.len();
         Instance {
             class,
@@ -246,8 +249,11 @@ impl Instance {
 
 #[derive(Debug, Clone)]
 pub struct EnumVal {
-    pub ty: String,
-    pub variant: String,
+    /// Enum type + variant names, shared as `Rc<str>` (built once in `EnumDesc`, cloned as a refcount
+    /// bump per construction instead of two fresh `String` allocations). Content-equal to the old
+    /// `String` — eq/hash/Display byte-identical.
+    pub ty: Rc<str>,
+    pub variant: Rc<str>,
     pub payload: Vec<Value>,
 }
 

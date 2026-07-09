@@ -84,10 +84,10 @@ impl<'c> Interp<'c> {
                     "bool" => matches!(v, Value::Bool(_)),
                     "null" => matches!(v, Value::Null),
                     _ => matches!(&v, Value::Instance(inst)
-                        if inst.class == *type_name
+                        if inst.class.as_ref() == type_name.as_str()
                             || self
                                 .class_implements
-                                .get(&inst.class)
+                                .get(&*inst.class)
                                 .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name))),
                 };
                 Ok(Value::Bool(is))
@@ -110,10 +110,10 @@ impl<'c> Interp<'c> {
                 // faults — `as` is the safe alternative to `opt!`-style force-unwrap.
                 let v = self.eval(value)?;
                 let is = matches!(&v, Value::Instance(inst)
-                    if inst.class == *type_name
+                    if inst.class.as_ref() == type_name.as_str()
                         || self
                             .class_implements
-                            .get(&inst.class)
+                            .get(&*inst.class)
                             .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
                 Ok(if is { v } else { Value::Null })
             }
@@ -206,8 +206,10 @@ impl<'c> Interp<'c> {
                 // `Signal::Return` mirrors the VM's mid-expression `Op::Return`.
                 let v = self.eval(inner)?;
                 match &v {
-                    Value::Enum(e) if e.variant == "Success" => Ok(e.payload[0].clone()),
-                    Value::Enum(e) if e.variant == "Failure" => Err(Signal::Return(v.clone())),
+                    Value::Enum(e) if e.variant.as_ref() == "Success" => Ok(e.payload[0].clone()),
+                    Value::Enum(e) if e.variant.as_ref() == "Failure" => {
+                        Err(Signal::Return(v.clone()))
+                    }
                     other => rt(format!(
                         "`?` requires a Result value, got {}",
                         other.type_name()
