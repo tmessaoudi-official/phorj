@@ -1824,6 +1824,16 @@ green → WIN-OR-FLAG). Safe-first ordering:**
   picks the slice ORDER by data — do NOT pre-commit V1-first** (the ② lesson: never commit a multi-session
   lever without profiling the bottleneck composition). Confirm ≥1 TARGET category is actually
   representation-winnable (dispatch-free + alloc-bound) before starting any slice. Throwaway, deleted after.
+  **✅ V0 DONE (2026-07-10, throwaway `examples/v0_profile.rs` counting `#[global_allocator]`, jit-off VM,
+  per-iter = alloc-delta between iters=10k/30k; deleted after). [Verified]:** `size_of::<Value>() = 32 B`
+  (driven by `Str(String)` 24 B), `Instance = 56 B`, `String = 24 B`. **allocs/iter classification:**
+  `stringconcat` **9.00** · `mapget` **3.00** · `objalloc` **2.98** = REP-ADDRESSABLE; `methodcall` **0.00** ·
+  `listindex` **0.00** = DISPATCH-BOUND. **CONFIRMS the goal-split:** strings are the #1 representation target
+  (9/iter), then objects/maps (~3); `methodcall`+`listindex` are dispatch-bound (0 alloc/iter) → representation
+  WON'T win them → the JIT-inlining/dispatch lever, NOT a rep slice. **DATA-DRIVEN SLICE ORDER: (1) strings
+  [V1 `Str`→`Rc<str>` + a builder-path for `stringconcat`'s 9/iter] → (2) objects/maps [V3 packed Instance +
+  map rep] → shrink `Value` 32→ (V2 box Decimal / V4 tagged) rides along.** `listindex`=0/iter was a surprise
+  (index doesn't allocate — its LOSS is Value-copy/bounds/dispatch) → also dispatch-lever, not rep.
 - **V1 — `Str(String)` → `Str(Rc<str>)`** (candidate; ONLY if V0 ranks strings a top cost — not pre-committed).
   Clone becomes a refcount bump (was alloc+copy) + shrinks the variant 24→8 B. 368 sites/56 files — big but
   MECHANICAL + byte-identical (`Rc<str>` derefs to `str`, so most `&s` readers are unchanged; only
@@ -1841,12 +1851,14 @@ green → WIN-OR-FLAG). Safe-first ordering:**
   reads through `as_int()`/`is_instance()`/… (huge but safe/mechanical), THEN swap the representation so
   scalars are immediate (no heap, 8 B). Only after V1–V3 prove the direction.
 
-**FIRST NEXT-SESSION ACTION:** V0 profiling+classification FIRST (it gates everything: confirms ≥1
-representation-winnable target exists and picks the slice ORDER by data). If V0 shows every "objects/methods"
-target is dispatch-bound → surface the JIT-method-inlining-vs-accept-LOSS fork to the dev, do NOT grind
-slices. Else start the V0-ranked #1 slice (V1 Str or V3 Instance — data decides). FRESH context
-(spine-sensitive; advisor review, not just the green gate). Slices should NOT surface a §14/§15 fork —
-byte-identity is the invariant; a slice that would change a user-visible semantic is mis-scoped.
+**FIRST NEXT-SESSION ACTION (V0 ✅ DONE — data in above):** start the V0-ranked #1 rep slice = **strings**
+(`Str(String)`→`Rc<str>`, + evaluate a builder-path for `stringconcat`'s 9 allocs/iter), then objects/maps
+(V3 packed Instance). `Value` is 32 B → shrinking it (box Decimal / eventual tagged) rides along and helps
+every shape. **Do NOT spend rep effort on `methodcall`/`listindex` (0 alloc/iter, dispatch-bound)** — those
+are a SEPARATE JIT-inlining/dispatch lever; surface that as its own fork if/when pursued. FRESH context
+(spine-sensitive; advisor review, not just the green gate). Slices must stay byte-identical — a slice that
+would change a user-visible semantic is mis-scoped (no §14/§15 fork expected). Per-slice: measure
+before/after (counting alloc + interleaved fresh-docker-php) → full oracle gate → commit green → WIN-OR-FLAG.
 
 ## Scoreboard — the PERF-PARITY REGISTER (WIN-OR-FLAG, developer 2026-07-09)
 
