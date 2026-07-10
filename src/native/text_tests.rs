@@ -616,8 +616,28 @@ fn text_format_shortest_repr_matches_php_byte_for_byte() {
     assert_eq!(fmt("%015g", 1e20), "000000001.0e+20"); // zero-pad, no sign
     assert_eq!(fmt("%-15g", 1e20), "1.0e+20        ");
     assert_eq!(fmt("%+015g", 1e20), "+00000001.0e+20"); // zeros after the sign
-                                                        // Int operand accepted; non-number faults.
-    assert_eq!(fmt("%g", 42.0), "42");
+                                                        // High precision (≥18, beyond the sweep's .0–.17 axis): both sides emit correctly-rounded digits
+                                                        // of the exact f64 — byte-identical vs php-8.5.8 (0.1 and 1/3 to 20/25/30 significant digits).
+    assert_eq!(fmt("%.20g", 0.1), "0.10000000000000000555");
+    assert_eq!(fmt("%.25g", 0.1), "0.1000000000000000055511151");
+    assert_eq!(fmt("%.30g", 1.0 / 3.0), "0.333333333333333314829616256247");
+    // Int operand is accepted (coerced to float via the `Value::Int(n) => *n as f64` arm).
+    assert_eq!(fmt("%g", 42.0), "42"); // float operand
+    {
+        let mut oi = String::new();
+        let got = match text_format(
+            &[
+                Value::Str("%g".into()),
+                Value::List(std::rc::Rc::new(vec![Value::Int(42)])),
+            ],
+            &mut oi,
+        ) {
+            Ok(Value::Str(s)) => s.to_string(),
+            other => panic!("text_format int operand => {other:?}"),
+        };
+        assert_eq!(got, "42"); // int operand exercises the `as f64` cast
+    }
+    // A non-number faults.
     let mut o = String::new();
     assert!(text_format(
         &[

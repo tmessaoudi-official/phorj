@@ -28,8 +28,10 @@
   - **VERIFICATION (advisor-mandated, the real gate):** throwaway exhaustive sweep — 12,195 values × 28 spec
     variants = **341,459 comparisons of the Rust renderer vs php-8.5.8 `sprintf`, ZERO diffs.** Value set was
     STRUCTURED not just random: branch boundaries `10^k ± {0,1,2} ulp` (k∈-7..8), digit-gain roundings
-    (`9.999995`, `999999.5`), half-to-even, subnormals, ±0.0, negatives, precision `.0`–`.17`. Throwaway test
-    deleted after passing; a curated subset baked as `text_format_shortest_repr_matches_php_byte_for_byte`.
+    (`9.999995`, `999999.5`), half-to-even, subnormals, ±0.0, negatives, precision `.0`–`.17` (precision ≥18
+    separately verified byte-identical — `%.20/.25/.30g` of 0.1 and 1/3, both sides correctly-rounded; and
+    width×`%g` scientific-form padding, both via manual `transpile|php` diff). Throwaway test deleted after
+    passing; a curated subset (incl. the ≥18 + width×g cases) baked as `text_format_shortest_repr_matches_php_byte_for_byte`.
     Plus a manual `transpile examples/guide/string-format.phg | php-8.5.8` diff (run≡php byte-identical) —
     because the example glob (`all_examples_match_between_backends`) is run≡runvm ONLY (no auto PHP leg; the
     `__phorj_format` PHP path has no durable example guard — a known project gap, see the 3b entry).
