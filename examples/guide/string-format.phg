@@ -7,11 +7,12 @@
 // non-int is a clean fault, not PHP's silent `0` coercion. It transpiles to a guarded PHP helper that
 // faults the same way, so both backends and PHP stay byte-identical.
 //
-// Conversions: `%s` (any scalar → its string form), `%d` (int), `%f` (int/float, `.precision`), the
-// integer-radix `%x`/`%X` (hex), `%o` (octal), `%b` (binary), and `%%` (a literal `%`); with flags
-// (`-`/`0`/`+`) and width. Radix conversions are UNSIGNED — a negative int renders as its 64-bit
-// two's-complement bit pattern, exactly like PHP `sprintf`. (`%e`/`%g` come in a later slice.) A value
-// list may be heterogeneous. Reached qualified (`String.format`) or bare after `import Core.String.format;`.
+// Conversions: `%s` (any scalar → its string form), `%d` (int), `%f` (int/float, `.precision`),
+// scientific `%e`/`%E` (int/float, `.precision`), the integer-radix `%x`/`%X` (hex), `%o` (octal),
+// `%b` (binary), and `%%` (a literal `%`); with flags (`-`/`0`/`+`) and width. Radix conversions are
+// UNSIGNED — a negative int renders as its 64-bit two's-complement bit pattern, exactly like PHP
+// `sprintf`. (`%g` comes in a later slice.) A value list may be heterogeneous. Reached qualified
+// (`String.format`) or bare after `import Core.String.format;`.
 package Main;
 
 import Core.Output;
@@ -38,6 +39,14 @@ function main(): void {
     // Radix conversions are unsigned: a negative int is its 64-bit two's-complement pattern (as in PHP),
     // and a `+` flag is inert on them; plain width space-pads. Uppercase `%X` for negatives too.
     Output.printLine(String.format("neg %x | +[%+x] | w[%5x] | negX %X", [-1, 255, 255, -1]));
+    // Scientific notation (slice 3b): `%e`/`%E` — one lead digit, `.precision` fraction digits
+    // (default 6, round-half-to-even), then an exponent that is ALWAYS signed with a minimum of one
+    // digit and no leading zeros (`e+3`/`e+20`/`e-1`), exactly like PHP `sprintf` (not C's min-two).
+    Output.printLine(String.format("%e | %E | %e | %e", [1234.5, 1234.5, 0.0001234, 100.0]));
+    // Big/small magnitudes keep a compact exponent; precision and the `+` flag work as on `%f`.
+    Output.printLine(String.format("[%.2e][%.0e][%+e]", [1234.5, 1.5, 3.14159]));
+    // Width + flags: space-pad, zero-pad (after the sign), left-justify. `-0.0` is not signed by `%e`.
+    Output.printLine(String.format("[%12.4e][%012.4e][%-12.4e] z=%e", [1.5, 0.0 - 1.5, 1.5, -0.0]));
     // A format string with no directives passes through unchanged (empty value list).
     Output.printLine(String.format("no placeholders here", []));
 }

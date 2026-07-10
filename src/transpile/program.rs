@@ -952,9 +952,12 @@ impl Transpiler {
             self.line("if (!is_int($v)) { throw new \\RuntimeException('String.format: %d expects an int'); }");
             self.line("$out .= sprintf($dir, $v);");
             self.indent -= 1;
-            self.line("} elseif ($conv === 'f') {");
+            // Float conversions: `%f` and scientific `%e`/`%E` (slice 3b) — int|float or fault, precision
+            // allowed, delegate the raw directive to PHP's own `sprintf` (canonical rounding + PHP's
+            // min-1-digit signed exponent, which the Rust renderer reproduces byte-for-byte).
+            self.line("} elseif (strpos('feE', $conv) !== false) {");
             self.indent += 1;
-            self.line("if (!is_int($v) && !is_float($v)) { throw new \\RuntimeException('String.format: %f expects a number'); }");
+            self.line("if (!is_int($v) && !is_float($v)) { throw new \\RuntimeException(\"String.format: %$conv expects a number\"); }");
             self.line("$out .= sprintf($dir, (float)$v);");
             self.indent -= 1;
             // Integer-radix conversions (slice 3a): int-or-fault, no precision, delegate the raw directive

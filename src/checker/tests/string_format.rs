@@ -64,13 +64,27 @@ fn percent_percent_is_a_literal_not_a_directive() {
 
 #[test]
 fn unsupported_directive_is_rejected_for_a_literal_spec() {
-    // `%e` (scientific) is not supported yet — `%s`/`%d`/`%f`/`%x`/`%X`/`%o`/`%b`/`%%` are.
+    // `%g` (shortest-repr) is not supported yet — `%s`/`%d`/`%f`/`%e`/`%E`/`%x`/`%X`/`%o`/`%b`/`%%` are.
     let err = expand(
         "package Main; import Core.String; \
-         function main(): void { var s = String.format(\"%e\", [1.5]); }",
+         function main(): void { var s = String.format(\"%g\", [1.5]); }",
     )
-    .expect_err("%e is not supported in this slice");
+    .expect_err("%g is not supported in this slice");
     assert!(err.contains("E-FORMAT-UNSUPPORTED"), "got:\n{err}");
+}
+
+#[test]
+fn slice3b_scientific_conversions_are_accepted() {
+    // `%e`/`%E` (slice 3b) type-check on a literal spec (runtime enforces number-or-fault), including
+    // a `.precision` (float conversions take one).
+    assert!(
+        expand(
+            "package Main; import Core.String; \
+             function main(): void { var s = String.format(\"%e %E %.2e %+e\", [1.5, 1.5, 1.5, 1.5]); }"
+        )
+        .is_ok(),
+        "scientific conversions should type-check"
+    );
 }
 
 #[test]

@@ -419,7 +419,7 @@ pub(crate) struct FormatDirective {
 /// iterator is advanced past `[flags][width][.precision]conv`. Returns the directive, or an error
 /// string for a dangling `%` or an unsupported shape (precision on `%s`/`%d`, an unknown conversion) —
 /// so the runtime renderer and the compile-time gate reject exactly the same specs (this slice: flags
-/// `-`/`0`/`+`, width, `%f`-only precision, conversions `s`/`d`/`f`).
+/// `-`/`0`/`+`, width, float-only precision on `%f`/`%e`/`%E`, conversions `s`/`d`/`f`/`e`/`E`/`x`/`X`/`o`/`b`).
 pub(crate) fn parse_format_directive(
     chars: &mut std::iter::Peekable<std::str::Chars>,
 ) -> Result<FormatDirective, String> {
@@ -460,13 +460,14 @@ pub(crate) fn parse_format_directive(
         .next()
         .ok_or_else(|| "String.format: dangling `%` at the end of the format string".to_string())?;
     match conv {
-        // Precision is supported only on `%f` this version — `%s`/`%d` and the integer-radix conversions
-        // `%x`/`%X`/`%o`/`%b` (slice 3a) reject it (precision-as-min-digits is a later slice).
+        // Precision is supported on the float conversions `%f`/`%e`/`%E` — `%s`/`%d` and the
+        // integer-radix conversions `%x`/`%X`/`%o`/`%b` (slice 3a) reject it (precision-as-min-digits
+        // is a later slice).
         's' | 'd' | 'x' | 'X' | 'o' | 'b' if precision.is_some() => Err(format!(
-            "String.format: precision on `%{conv}` is not supported yet (only `%f` takes a precision \
-             this version)"
+            "String.format: precision on `%{conv}` is not supported yet (only the float conversions \
+             `%f`/`%e`/`%E` take a precision this version)"
         )),
-        's' | 'd' | 'f' | 'x' | 'X' | 'o' | 'b' => Ok(FormatDirective {
+        's' | 'd' | 'f' | 'e' | 'E' | 'x' | 'X' | 'o' | 'b' => Ok(FormatDirective {
             minus,
             zero,
             plus,
@@ -476,7 +477,7 @@ pub(crate) fn parse_format_directive(
         }),
         other => Err(format!(
             "String.format: unsupported directive `%{other}` (this version supports \
-             %s, %d, %f, %x, %X, %o, %b, %%)"
+             %s, %d, %f, %e, %E, %x, %X, %o, %b, %%)"
         )),
     }
 }
@@ -581,6 +582,49 @@ fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
                 let mag = format!("{:.*}", d.precision.unwrap_or(6), f.abs());
                 out.push_str(&pad_format(sign, &mag, &d));
             }
+            // Scientific notation (slice 3b): `%e`/`%E`. PHP renders `[sign]D.DDDDDD e[+-]EXP` — a single
+            // lead digit, `precision` fraction digits (default 6), and an exponent that is ALWAYS signed
+            // with a MINIMUM of one digit and NO leading zeros (`e+3`, `e+20`, `e-1`, `e+0`) — unlike
+            // C/Rust's minimum-two-digit exponent. Rust `{:.*e}` on the magnitude gives the exact same
+            // mantissa and round-half-to-even (verified vs php-8.5.8), plus an unsigned min-1-digit
+            // exponent (`e0`/`e-4`/`e20`); we only re-stamp the exponent SIGN and pick the separator case.
+            // Sign is by value (`< 0.0`): `-0.0` is not negative → no sign, matching PHP (which — unlike
+            // `%g` — never signs a `-0.0` here). Non-finite input has no `e` to reformat (Rust prints
+            // `NaN`/`inf`); we pass the body through unchanged (PHP prints `NaN`/`INF` — a pre-existing
+            // `%f`-class divergence, kept out of examples, never a byte-identity claim).
+            'e' | 'E' => {
+                let f = match v {
+                    Value::Int(n) => *n as f64,
+                    Value::Float(x) => *x,
+                    other => {
+                        return Err(format!(
+                            "String.format: %{} expects a number, found {}",
+                            d.conv,
+                            other.type_name()
+                        ))
+                    }
+                };
+                let sign = if f < 0.0 {
+                    "-"
+                } else if d.plus {
+                    "+"
+                } else {
+                    ""
+                };
+                let raw = format!("{:.*e}", d.precision.unwrap_or(6), f.abs());
+                let body = match raw.split_once('e') {
+                    Some((mantissa, exp)) => {
+                        let (esign, edigits) = match exp.strip_prefix('-') {
+                            Some(rest) => ('-', rest),
+                            None => ('+', exp),
+                        };
+                        let esep = if d.conv == 'E' { 'E' } else { 'e' };
+                        format!("{mantissa}{esep}{esign}{edigits}")
+                    }
+                    None => raw,
+                };
+                out.push_str(&pad_format(sign, &body, &d));
+            }
             // Integer-radix conversions (slice 3a): hex `%x`/`%X`, octal `%o`, binary `%b`. UNSIGNED —
             // a negative int renders as its 64-bit two's-complement bit pattern, matching PHP `sprintf`
             // on a 64-bit build (`%x` of -1 → "ffff…"), so `n as u64` is the exact bridge. No sign is
@@ -606,7 +650,7 @@ fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
                 };
                 out.push_str(&pad_format("", &body, &d));
             }
-            _ => unreachable!("parse_format_directive only returns s/d/f/x/X/o/b"),
+            _ => unreachable!("parse_format_directive only returns s/d/f/e/E/x/X/o/b"),
         }
     }
     if ai != items.len() {

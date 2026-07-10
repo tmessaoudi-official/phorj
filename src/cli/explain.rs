@@ -1488,9 +1488,10 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-FORMAT-UNSUPPORTED" => {
             "E-FORMAT-UNSUPPORTED — a literal `String.format` spec uses a directive not yet supported (W3-5).\n\n\
-             This version supports `%s`/`%d`/`%f`/`%%` and integer-radix `%x`/`%X`/`%o`/`%b`, with flags\n\
-             `-`/`0`/`+`, a width, and a `.precision` on `%f` (default 6). Still coming: `%e`/`%g`,\n\
-             precision on `%s`/`%d`/radix, and `%N$` positional args. (A dynamic runtime spec faults at\n\
+             This version supports `%s`/`%d`/`%f`/`%%`, scientific `%e`/`%E`, and integer-radix\n\
+             `%x`/`%X`/`%o`/`%b`, with flags `-`/`0`/`+`, a width, and a `.precision` on the float\n\
+             conversions `%f`/`%e`/`%E` (default 6). Still coming: `%g`, precision on `%s`/`%d`/radix,\n\
+             and `%N$` positional args. (A dynamic runtime spec faults at\n\
              render time on an unsupported directive instead of at compile time.)\n"
         }
         _ => return None,

@@ -469,3 +469,62 @@ fn text_characters_splits_by_code_point() {
     // (verified byte-identical run≡runvm≡php). This is the edge a code-point splitter gets wrong.
     assert_eq!(chars("😀a🎉"), vec!["😀", "a", "🎉"]);
 }
+
+#[test]
+fn text_format_scientific_matches_php_byte_for_byte() {
+    // Slice 3b: `%e`/`%E`. Every expected string here was captured from the transpile-floor oracle
+    // `php-8.5.8` (`sprintf`) — this locks byte-identity for the tricky cases WITHOUT depending on
+    // `PHORJ_REQUIRE_PHP` (the oracle differential only checks values that appear in an example).
+    let fmt = |spec: &str, vals: Vec<Value>| -> String {
+        let mut o = String::new();
+        match text_format(
+            &[Value::Str(spec.into()), Value::List(std::rc::Rc::new(vals))],
+            &mut o,
+        ) {
+            Ok(Value::Str(s)) => s.to_string(),
+            other => panic!("text_format({spec:?}) returned {other:?}"),
+        }
+    };
+    let f = Value::Float;
+    // Default precision 6, exponent ALWAYS signed with min-1 digit and NO leading zeros (PHP, not C).
+    assert_eq!(fmt("%e", vec![f(1.5)]), "1.500000e+0");
+    assert_eq!(fmt("%e", vec![f(-1.5)]), "-1.500000e+0");
+    assert_eq!(fmt("%e", vec![f(1234.5)]), "1.234500e+3");
+    assert_eq!(fmt("%e", vec![f(0.0001234)]), "1.234000e-4");
+    assert_eq!(fmt("%e", vec![f(1e20)]), "1.000000e+20");
+    assert_eq!(fmt("%e", vec![f(1e-20)]), "1.000000e-20");
+    assert_eq!(fmt("%e", vec![f(123456789.0)]), "1.234568e+8"); // round-half-to-even
+    assert_eq!(fmt("%e", vec![f(1e100)]), "1.000000e+100"); // 3-digit exponent, no leading zeros
+                                                            // An int operand is accepted (coerced to float), like `%f`.
+    assert_eq!(fmt("%e", vec![Value::Int(42)]), "4.200000e+1");
+    // `-0.0` is NOT signed by `%e` (PHP quirk — value `< 0.0` is false; contrast `%g`, a later slice).
+    assert_eq!(fmt("%e", vec![f(-0.0)]), "0.000000e+0");
+    // `%E` upper-cases only the separator.
+    assert_eq!(fmt("%E", vec![f(1.5)]), "1.500000E+0");
+    assert_eq!(fmt("%E", vec![f(1e-20)]), "1.000000E-20");
+    // Precision.
+    assert_eq!(fmt("%.2e", vec![f(1234.5)]), "1.23e+3");
+    assert_eq!(fmt("%.10e", vec![f(123456789.0)]), "1.2345678900e+8");
+    // `%.0e` — no decimal point, round-half-to-even at the boundary (1.5→2, 2.5→2, 0.5→"5e-1").
+    assert_eq!(fmt("%.0e", vec![f(1.5)]), "2e+0");
+    assert_eq!(fmt("%.0e", vec![f(2.5)]), "2e+0");
+    assert_eq!(fmt("%.0e", vec![f(0.5)]), "5e-1");
+    // `+` flag forces a leading sign on non-negatives (and on `-0.0`); a real negative keeps `-`.
+    assert_eq!(fmt("%+e", vec![f(1.5)]), "+1.500000e+0");
+    assert_eq!(fmt("%+e", vec![f(-0.0)]), "+0.000000e+0");
+    // Width: space-pad (right-justify), `-` left-justify, `0` zero-pad AFTER the sign.
+    assert_eq!(fmt("%12.4e", vec![f(1.5)]), "   1.5000e+0");
+    assert_eq!(fmt("%-12.4e", vec![f(1.5)]), "1.5000e+0   ");
+    assert_eq!(fmt("%012.4e", vec![f(-1.5)]), "-001.5000e+0");
+    assert_eq!(fmt("%012.4e", vec![f(1e20)]), "001.0000e+20");
+    // A non-number faults (the phorj upgrade over PHP's silent coercion).
+    let mut o = String::new();
+    assert!(text_format(
+        &[
+            Value::Str("%e".into()),
+            Value::List(std::rc::Rc::new(vec![Value::Str("x".into())]))
+        ],
+        &mut o
+    )
+    .is_err());
+}
