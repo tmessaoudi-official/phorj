@@ -5,6 +5,22 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] ✅ **STEP ① DONE — PARITY/VISION % RECOMPUTED at HEAD `af3aad3` (autonomous).** Formal
+  **systematic verdict-scan** (not a memory-delta): all 29 SYN `P`/`GP` + 8 RT `P`/`GP` rows re-walked, all 35 FN
+  groups checked vs every `src/native/` commit since the `ccb2403` E-surface baseline. **Exactly 2 rows moved:**
+  FN-STR sprintf/printf/vsprintf/vprintf (053–056) GP→COVERED (String.format directive engine, `(spec,list)` takes a
+  runtime list so no variadics needed — src/checker/calls.rs:347), RT-007 JIT GP→P (Cranelift unboxed, default).
+  **Ruled OUT with evidence** (the discipline the scan bought over recall): SYN-118 attributes (DEC-194 shipped but
+  attach to only 2/7 PHP targets — classes + free functions — with no attribute-reflection yet → stays PARTIAL, NOT
+  the CB an early draft claimed), FN-MATH trig/hyperbolic breadth (11 GP — `math.rs` added none), `str_split`/`mb_str_split`
+  (`String.characters` is codepoint-wise ≠ byte-wise + inside the still-blocked M-text GP), Wave A/B (already-CB rows),
+  `Math.try*` (beyond-PHP). **Result: parity ≈60% · vision ≈62% · floor ≈41%** — chain 58% (ccb2403) → 59% (§11.2) →
+  **60% (HEAD)**. Grade: flips [Verified], figure [Inferred], programme weights [Speculative]. Written to
+  `M-gap-matrix §4.6` + `MASTER-PLAN §11.4`/§11.3/§0. **The finding:** the marathon (07-04→10, 203 commits) moved parity +1 (59→60); the
+  full 252-commit span since ccb2403 (07-01), +2 (58→60) — small because it was perf+polish, the only stdlib-breadth
+  movers being crypto (§11.2, pre-marathon) + sprintf (here), so the DB/HTTP/sessions/FS/XML/intl drag (TOP-20
+  #1/2/3/5/12/19) is untouched. This is the evidence that ② boxed JIT (perf) and ③ web spine (parity) are correctly next. **NEXT = ②
+  BOXED-VALUE JIT** (fresh context, spine-sensitive).
 - [2026-07-10] 🧭🎯 **DEVELOPER RULED (ask-human) — NEXT-SESSION ORDER LOCKED: ① recompute parity % → ④ boxed-value JIT → ③ web spine.**
   After the honest status report (parity ≈58% STALE / vision ≈60% STALE; perf: only fibrec+unchecked-int WIN, most
   VM-only features LOSS vs php+JIT). Developer pushed HEAD `7e224ef` (all Wave C shipped). **On the next session the

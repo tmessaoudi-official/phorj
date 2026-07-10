@@ -141,7 +141,7 @@
 | SYN-115 | CE | traits with methods/state/ctors/abstract-reqs/hooks + `use/rename/exclude`; conflicts are errors (arguably better than `insteadof`) |
 | SYN-116 | CB | payload variants + generic enums (`Option<T>`/`Result<T,E>`) — PHP enums carry no payload; backed-enum sugar (`->value`/`cases()`) GAP-planned (A-backed-enums, §3) |
 | SYN-117 | GU | no anonymous classes |
-| SYN-118 | P | `#[Route]` only; no user-defined attributes (`E-UNKNOWN-ATTRIBUTE`) |
+| SYN-118 | P | `#[Route]` only; no user-defined attributes (`E-UNKNOWN-ATTRIBUTE`) — **→ [HEAD `af3aad3`: improved but STILL PARTIAL — user-defined attributes are now declarable + applyable with compile-time-type-checked args (DEC-194, git `bf05648`/`451fb89`), which is better than PHP on the targets it supports. But narrower than PHP's feature: attributes attach only to classes + free functions (2 of PHP's 7 targets — no method/property/param/const/enum; AST `attrs` on `ClassDecl`/`FunctionDecl` only), and are "inert metadata until a later slice reads them via reflection" — attribute-**reflection**, the primary purpose, does not exist yet. Verdict unchanged (P). NOT counted as a mover in §4.6.]** |
 | SYN-119 | P | the *capabilities* are language defaults (Override→`E-OVERRIDE-SIG` always-on; NoDiscard→`E-UNUSED-VALUE` default; SensitiveParameter→`Secret<T>` typed); userland `#[Deprecated]` absent |
 | SYN-120 | P | `Reflection.className/typeName` (PJ-NAT-REFLECTION) |
 | SYN-121 | CB | explicit value(COW)/handle split + single structural `==` (mutation milestone; fixes DEF-024's invisibility) |
@@ -209,7 +209,7 @@ Per-group verdict distribution `C/P/GP/GU/GD/NA` (counts sum to the group's row 
 
 | Group (rows) | C | P | GP | GU | GD | NA | Notes — what's covered, what's named-missing |
 |---|--|--|--|--|--|--|---|
-| **FN-STR** (93) | 30 | 6 | 9 | 35 | 3 | 10 | Covered: length/contains/starts/ends/indexOf(**int?** — fixes DEF-009)/lastIndexOf/substring/count/replace/repeat/case/capitalize/trim×3/split/join/reverse/pad×2/lines/parseInt-Float-Bool, plus md5/sha1/crc32→`Core.Hash`, htmlspecialchars→**`Core.Html` typed XSS-safe (CB)**, str_getcsv→`Core.Csv`, bin2hex/hex2bin→`Core.Encoding`, number_format→`Math.numberFormat`, strcasecmp→equalsIgnoreCase, strval→`Conversion.toString`. GP: **sprintf family (7 rows, A-sprintf §3 M11)**, chr/ord (M-codepoint-int, M-text). GD: setlocale/nl_langinfo/strcoll (locale — §5 no-ICU). GU highlights: str_split(fixed-chunk), ucwords, wordwrap, strtr, similar_text/soundex/metaphone/levenshtein, strtok/strpbrk/strspn, str_increment/decrement, strip_tags. N/A: addslashes×5 (no magic-quotes/SQL-string model), utf8_encode/money_format/hebrevc (removed/deprecated), crypt (→ Cryptography) |
+| **FN-STR** (93) | 30 | 6 | 9 | 35 | 3 | 10 | Covered: length/contains/starts/ends/indexOf(**int?** — fixes DEF-009)/lastIndexOf/substring/count/replace/repeat/case/capitalize/trim×3/split/join/reverse/pad×2/lines/parseInt-Float-Bool, plus md5/sha1/crc32→`Core.Hash`, htmlspecialchars→**`Core.Html` typed XSS-safe (CB)**, str_getcsv→`Core.Csv`, bin2hex/hex2bin→`Core.Encoding`, number_format→`Math.numberFormat`, strcasecmp→equalsIgnoreCase, strval→`Conversion.toString`. GP: **sprintf family (7 rows, A-sprintf §3 M11)** — **→ [HEAD `af3aad3`: 4 of 7 now COVERED — `Core.String.format` = PHP-`%` sprintf with a compile-time-type-checked directive engine (`%s %d %f %e %E %g %G %x %X %o %b %%` + flags/width/precision/`%N$`-positional; DEC-199, git `9bc6612`…`130b0cb`). It closes sprintf(053)/printf(054, via `Output.print`)/vsprintf(055)/vprintf(056) — its `(spec, list)` calling convention accepts a runtime `List` arg (src/checker/calls.rs:347), so the array-form is expressible without variadics. STILL GP: fprintf/vfprintf(057/058 — need stream handles, FN-FS gap) and sscanf(059 — inverse parse, no `String.scan`). Counted in §4.6.]**, chr/ord (M-codepoint-int, M-text). GD: setlocale/nl_langinfo/strcoll (locale — §5 no-ICU). GU highlights: str_split(fixed-chunk), ucwords, wordwrap, strtr, similar_text/soundex/metaphone/levenshtein, strtok/strpbrk/strspn, str_increment/decrement, strip_tags. N/A: addslashes×5 (no magic-quotes/SQL-string model), utf8_encode/money_format/hebrevc (removed/deprecated), crypt (→ Cryptography) |
 | **FN-ARR** (74) | 26 | 12 | 2 | 22 | 2 | 10 | Covered: map/filter/reduce (**uniform subject-first order — fixes DEF-003**), keys/values/has, append/concat/merge, reverse, indexOf/find/contains (**typed-strict — fixes DEF-027**), slice/take/drop, sum/max/min, unique, chunk, fill, count(length/size), range(`a..b` syntax), first/last, any/all, sort/sortWith (**pure, returns — fixes DEF-025**), array_find/any/all/first/last (8.4/8.5 parity), list()→destructuring. P: pop/shift/splice (immutable idiom via slice), diff/intersect (Set.difference/intersection for sets only), asort/ksort family (sortWith composes), array_walk (map covers), SORT_* flags. GP: remaining L-list-breadth (zip — deferred B3). GD: compact/extract (§5 reject). N/A: internal-pointer family (current/key/next/reset/end — no array cursor), each (removed), array_is_list (types make it meaningless) |
 | **FN-MATH** (37) | 17 | 3 | 11 | 4 | 0 | 2 | Covered: abs/ceil/floor/round(+`Core.Decimal` RoundingMode — **CB, fixes DEF-023**)/fmod(`%` on floats)/intdiv/pow/sqrt/exp/log/log10/pi/sin-cos-tan/max-min/isNaN-isFinite-isInfinite + rand/mt_rand→`Core.Random` (seeded deterministic). GP: asin/acos/atan/atan2/hyperbolics/hypot/deg2rad/log2/log1p/expm1 (G-math-breadth §3 M11), BigInt/GMP (N-bigint, M-NUM-2). P: constants row (pi/e only), BCMath (decimal covers money, not arbitrary precision), base-conversions (hex literals + Encoding partial). **GAP: random_int/random_bytes CSPRNG** (security-relevant — no crypto-safe source; Random is deliberately deterministic). N/A: lcg_value (deprecated) |
 | **FN-PCRE** (11) | 4 | 2 | 0 | 4 | 0 | 1 | Covered: preg_match(matches/find/findGroups), match_all(findAll), replace, split (`Core.Regex`, feature-gated). GU: **preg_replace_callback**(+_array), preg_filter, preg_quote. P: preg_grep (filter+matches composes), modifier surface (regex-crate subset of `i m s x u`). N/A: last_error (typed API) |
@@ -260,7 +260,7 @@ figure in Pass 4).
 | RT-004 | N/A | persistent-process model is the deliberate opposite contract |
 | RT-005 | CB | `phg serve` is native long-running — what PHP needs FrankenPHP/Swoole to retrofit |
 | RT-006 | CB | bytecode VM is native; no out-of-language cache required (fixes DEF-043) |
-| RT-007 | GP | no JIT; AOT is v2 (I-aot, §3 v2) |
+| RT-007 | GP | no JIT; AOT is v2 (I-aot, §3 v2) — **→ [HEAD `af3aad3`: now P — a Cranelift method-level JIT ships as a DEFAULT feature (git `3725052`), unboxed int/float + control-flow paths (≈49× fibrec vs `--no-jit`), byte-identical VM fallback. PARTIAL not COVERED: only unboxed numeric paths JIT; the boxed-value object/enum/method JIT is the queued next step. Counted in §4.6.]** |
 | RT-008 | P | `phorj.toml` + `phorj.lock` + `phg vendor` (exact-pin, offline, hash-verified — arguably safer); **no registry (by design, ADR-0005)**, **no transitive deps (documented deferral)** |
 | RT-009 | CB | loader resolves functions and types alike — Composer's `files`-eager-include hack unnecessary (fixes DEF-032) |
 | RT-010 | P | PSR-7/15 shape adopted at the value level (`handle(Request) -> Response`, Core.Http); PSR-3 logging GAP-planned (G-log); PSR-6/11/14 absent |
@@ -456,6 +456,66 @@ Both headline numbers, honestly labeled: **PHP-parity ≈ 58% (row-parity floor 
 The dominant drag on both is the same thing: stdlib breadth (FS/streams, DB, HTTP client,
 sessions, XML, intl) — the language itself is at ~80% parity with substantial better-than coverage.
 
+> ⚠ **§4.2–4.5 above are the RATIFIED full-pass at the E-surface baseline `ccb2403` (2026-07-01).
+> They are preserved as the model's derivation/audit trail. The CURRENT headline lives in §4.6.**
+
+### 4.6 Recompute at HEAD `af3aad3` (2026-07-10 — Wave C milestone close)
+
+**Method — a systematic verdict-scan at HEAD, not a memory-delta.** Every SYN `P`/`GP` row (29) and
+every RT `P`/`GP` row (8) was re-walked against HEAD, and all 35 FN groups were checked against every
+`src/native/` feat/fix commit since the `ccb2403` E-surface baseline. This is the full-re-pass the
+recompute rule (§4.1) mandates at a milestone close. The scan yields **exactly 2 moved rows** — the marathon
+(2026-07-04→10, 203 commits) was **perf + language-polish, not stdlib breadth**, so parity barely
+moved. Explicitly checked-and-ruled-out (no flip): **SYN-118 user-defined attributes** (DEC-194
+shipped, but attach to only 2 of PHP's 7 targets — classes + free functions — with no
+attribute-reflection yet, so the feature stays PARTIAL, not COVERED — the improvement is a richer P
+justification, not a verdict flip); FN-MATH trig/hyperbolic breadth (11 GP rows — `math.rs` added
+*no* `asin/acos/atan/hypot/log2/…`, [Verified: git diff]); `str_split`/`mb_str_split`
+(`String.characters` is codepoint-wise ≠ PHP's byte-wise `str_split`, and sits inside the M-text GP
+programme whose blocker — byte `String.length`, DEF-016 — is unmoved); Wave A/B (type-system + Option/
+Result combinators land on rows already scored CB); `Math.tryAdd/trySub/tryMul` + `#[UncheckedOverflow]`
+(beyond-PHP, no PHP-row counterpart — PASS-2 material).
+
+**The percentage chain (each link a dated re-score of the same ratified model, §11 ledger):**
+`≈58% (ccb2403 full-pass, §4.2–4.5)` → `≈59% (§11.2 re-score, 2026-07-03: FN-HASH/CSPRNG/INI/RAND)` →
+`≈60% (this recompute, HEAD af3aad3)`. Each step is an additive delta on the prior, evidence-per-row.
+
+| # | Row(s) | Was | Now | Δ | Evidence [Verified] |
+|---|---|---|---|--|---|
+| 1 | FN-STR-053/054/055/056 (sprintf/printf/vsprintf/vprintf) | GP | COVERED (×4) | T1 +4 | `Core.String.format` full directive engine (git `9bc6612`…`130b0cb`); runtime-list arg accepted (`calls.rs:347`) |
+| 2 | RT-007 (JIT) | GP | P | RT +0.5 | Cranelift unboxed JIT, default feature (git `3725052`) |
+
+**Recomputed arithmetic (delta on the §11.2 baseline — SYN 79.8%, T1 131.5/303, RT 69.4%):**
+- SYN: unchanged (SYN-118 stays P) ⇒ 103/129 = **79.8%**
+- FN usage-weighted: T1 131.5→135.5/303 ⇒ (3×135.5 + 2×19.0 + 1×0)/1264 = 444.5/1264 = **35.2%** (was 34.2%)
+- RT: PARTIAL 7→8, GP 1→0 ⇒ (9 + 4)/18 = 13/18 = **72.2%**
+- **PHP-parity = 0.35×79.8 + 0.40×35.2 + 0.25×72.2 = 27.9 + 14.1 + 18.1 = ≈ 60%**
+- Raw row-parity floor: SYN 103/129 · FN 154/518 · RT 13/18 ⇒ (103 + 154 + 13)/665 = 270/665 = **≈ 41%**
+
+**Vision %** — programme mean re-based from §11.2's 65.3%. Only two milestones take a cleanly
+attributable bump: M11+M4 70→75 (sprintf directive engine — A-sprintf is a named §3 M11 item) and
+**M-perf 30→40** (JIT-default + inline method cache + `#[UncheckedOverflow]` + `Math.try*` shipped —
+*infrastructure only; the HARD PERF MANDATE is still unmet: only fibrec + unchecked-int-add WIN, and
+methodcall/objalloc/enum remain LOSS* [Speculative]). User attributes + DI v1 are conservatively NOT
+credited — the original 16-milestone vision vector has no slot that maps to them, and inventing one
+would be fabrication (they are real beyond-PHP wins, just untracked by this vector). Mean = 1060/16 =
+66.3%. **Vision = 0.70×60.1 + 0.30×66.3 = 42.1 + 19.9 = ≈ 62%.**
+
+**Grade:** row flips **[Verified]** (commits + source cited); the headline figure **[Inferred]** (an
+additive delta on the ratified §11.2 arithmetic, not a fresh 665-row re-tally); the milestone-programme
+weights **[Speculative]** (judgment, ±, quoted with the model). Moving stdlib weight ±10 pts still
+moves the headline ±~5 pts — quote with the 35/40/25 weights.
+
+**The finding that matters more than the number:** the marathon (2026-07-04→10, 203 commits) moved
+parity **+1 pt (59→60)**; across the full 252 commits since `ccb2403` (2026-07-01), **+2 (58→60)**.
+Small either way because the ONLY stdlib-breadth movers in the whole span were crypto (§11.2,
+pre-marathon) and sprintf (this re-pass) — the dominant parity drag is untouched: TOP-20 #1 (DB), #2
+(HTTP client), #3 (sessions), #5 (FS breadth), #12 (XML), #19 (intl) all sit exactly where the
+full-pass left them. This is the evidence that validates the locked next-session
+order: **② boxed-value JIT is the *perf* lever** (the unmet mandate), **③ web spine is the *parity*
+lever** — §11.3 projects the DB+HTTP+sessions wave (W3) as the jump to ≈65–66%. String.format closed
+the sprintf *directive engine* (a real but ~4-row contribution against a 518-row stdlib denominator).
+
 ---
 
 ## TOP-20 highest-impact gaps (impact = frequency in real PHP code × migration blockage)
@@ -501,8 +561,12 @@ PASS 1 (824 rows: 173 SYN + 631 FN + 20 RT)
 
 Coverage:  language 79.8% · stdlib 27.5% row-weighted / 32.5% usage-weighted · runtime 69.4%
 
-PHP-parity %  ≈ 58   (domain-weighted; raw row-parity floor 38.8%)
-Vision %      ≈ 60   (70% parity + 30% roadmap-programme at 64.4%)
+PHP-parity %  ≈ 58   (ccb2403 full-pass; domain-weighted; raw row-parity floor 38.8%)
+Vision %      ≈ 60   (ccb2403 full-pass; 70% parity + 30% roadmap-programme at 64.4%)
+
+  ⟶ CURRENT at HEAD af3aad3 (2026-07-10, §4.6):  PHP-parity ≈ 60%  ·  Vision ≈ 62%  ·  floor ≈ 41%
+     chain: 58% (ccb2403) → 59% (§11.2, 2026-07-03) → 60% (HEAD). 3 rows moved; marathon was
+     perf+polish not breadth — the DB/HTTP/sessions parity drag is untouched (see §4.6).
 
 PASS 2: 35 beyond-PHP capabilities (no PHP counterpart)
 
