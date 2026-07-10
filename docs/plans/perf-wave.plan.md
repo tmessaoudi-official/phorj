@@ -5,6 +5,36 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🈺 **LANGUAGE QUEUE #6 — String.format slice 3b (`%e`/`%E`) SHIPPED + `%f`/-0.0 sign FIX.**
+  Commits `92d1071` (3b) + `287f0fe` (%f fix) + `6259128` (6C follow-up), gate-green (1904 workspace, oracle
+  `PHORJ_REQUIRE_PHP=1`), byte-identical run≡runvm≡php-8.5.8, clippy+fmt clean, jit-off compiles. **UNPUSHED.**
+  - **3b `%e`/`%E`:** renderer `text_format` uses Rust `{:.*e}` on `.abs()` (mantissa + round-half-to-even match
+    PHP byte-for-byte — [Verified vs php-8.5.8]) then re-stamps the exponent to PHP's form (ALWAYS signed, min-1
+    digit, NO leading zeros: `e+3`/`e+20`/`e-1`/`e+100`, unlike C/Rust min-2). `%E` upper-cases the separator only.
+    Sign by value (`< 0.0`). PHP mirror folds `e`/`E` into the float branch (`strpos('feE',$conv)`) → native
+    `sprintf`. NaN/inf: `split_once('e')` guarded (non-finite passes through; PHP `INF` vs Rust `inf` = documented
+    KNOWN_ISSUES divergence, out of examples).
+  - **%f fix:** `is_sign_negative()` → `f < 0.0`. `-0.0` was rendering `-0.000000` on the backends vs php `0.000000`
+    (latent run≠php shipped in slice 2, untested). PHP signs iff value `< 0.0` ([Verified]: `%.2f` of -0.001 → "-0.00",
+    `%.0f` of -0.4 → "-0", but -0.0 → unsigned).
+  - **Verification pattern (advisor-endorsed):** oracle strings baked into native unit tests
+    (`text_format_scientific_matches_php_byte_for_byte`, `text_format_f_sign_is_by_value_not_ieee_bit`) —
+    independent of `PHORJ_REQUIRE_PHP`; the example differential only checks values that appear in an example.
+  - **NEXT = slice 3c `%g`/`%G` (deferred to a FRESH context — advisor + memory ruled; the subtlest slice in the
+    set). GROUND TRUTH ALREADY BANKED (php-8.5.8, don't re-spelunk):**
+    - Algorithm = C-printf `%g`: `P` = precision (default 6; `P==0`→1). `X` = the decimal exponent of the value
+      rounded to `P` sig-figs. If `-4 <= X < P` → render `%f`-style with precision `P-1-X`; else → `%e`-style with
+      precision `P-1`. Precision on `%g` counts SIGNIFICANT digits, not fraction digits.
+    - **Trailing-zero ASYMMETRY (the PHP quirk that will bite):** FIXED-style strips trailing zeros AND the trailing
+      `.` fully (`100.000`→`"100"`, `1234.50`→`"1234.5"`, `0.000123400`→`"0.0001234"`). SCI-style strips trailing
+      zeros but ALWAYS keeps at least `D.0` (`1.00000e+20`→`"1.0e+20"`, and even `%.0g` of 100 → `"1.0e+2"`, mantissa
+      "1" → "1.0"). PHP DEVIATES FROM C here (C's %g would give `1e+20`). Rule: sci mantissa = strip trailing zeros;
+      if it ends in `.`, append one `0`.
+    - **Sign quirk:** `%g` of `-0.0` → `"-0"` (SIGNED — contrast `%e`/`%f` where -0.0 is UNSIGNED). So `%g`'s sign
+      rule is NOT `< 0.0`; it appears to be the IEEE sign bit for the -0 case. VERIFY this precisely before coding.
+    - **Verification bar (advisor, non-negotiable):** an EXHAUSTIVE RANDOM Rust-renderer-vs-php-sprintf sweep
+      (thousands of doubles × precision variants, ZERO diffs) BEFORE committing — examples cannot control %g's
+      branch-selection risk. Then bake a representative subset as oracle-string unit tests.
 - [2026-07-10] 🛡️ **6C HARDENING (advisor-caught P0-fragility) — method cache keyed by class-NAME ptr, not layout ptr.**
   Phase 6C advisor flagged that `method_caches` (shipped `4f482e9`) copied `field_caches`'s `layout_ptr` key, but
   the soundness args differ: a shared `ClassLayout` ⇒ same SLOTS (field cache safe) but NOT same METHODS. Verified

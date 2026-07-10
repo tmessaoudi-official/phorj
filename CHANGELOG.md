@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `String.format` scientific `%e`/`%E` (slice 3b)
+
+`String.format` now supports the scientific conversions `%e`/`%E` (int/float operand), with a `.precision`
+(default 6) and the existing flags/width. The renderer reproduces PHP `sprintf` byte-for-byte: Rust
+`{:.*e}` on the magnitude supplies the mantissa and round-half-to-even, then the exponent is re-stamped to
+PHP's form — **always signed, minimum one digit, no leading zeros** (`e+3`/`e+20`/`e-1`/`e+100`), unlike
+C/Rust's minimum-two-digit exponent. `%E` upper-cases only the separator. The sign is by value (`< 0.0`),
+so `%e` leaves `-0.0` unsigned (matching PHP). The PHP mirror `__phorj_format` folds `%e`/`%E` into the
+float branch and delegates the raw directive to native `sprintf`. A non-number operand faults cleanly (the
+phorj strictness upgrade over PHP's silent coercion). `examples/guide/string-format.phg` +
+`text_format_scientific_matches_php_byte_for_byte` (oracle strings from php-8.5.8). `%g`/`%G` come in slice
+3c. No new `Op`/`Value`.
+
+### Fixed — `String.format` `%f` signs by value, not the IEEE sign bit
+
+`%f` computed its sign with `is_sign_negative()`, which is true for `-0.0` — so `String.format("%f", -0.0)`
+rendered `-0.000000` on the Rust backends while transpiled PHP rendered `0.000000` (a latent run≠php
+byte-identity break shipped in slice 2, untested — no example used `-0.0`). PHP signs a `%f` iff the value
+is `< 0.0` (`-0.0` unsigned; a value that rounds to zero keeps its sign, e.g. `%.2f` of -0.001 → `-0.00`).
+The rule is now `f < 0.0` — the same rule `%e` uses. Regression test + example line.
+
 ### Added — DI `#[Transient]` lifetime (DI v1 slice 4b)
 
 A class marked `#[Transient]` (or `#[DI.Transient]`) opts OUT of the default-shared DI lifetime: the graph
