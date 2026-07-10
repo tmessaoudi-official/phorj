@@ -36,6 +36,20 @@
   Http-before-Regex ordering; S2 pins `module_of`) but not total (a reorder of two *independent*
   modules wouldn't be caught — behaviorally harmless, but keep the `Core.Db` row in registry order).
 
+## ⭐ P1 `Core.Sql` — SHIPPED vs REMAINING (against the Q3/Q4 rulings) — read this before assuming P1 is done
+
+| Ruling | Shipped this session | Remaining |
+|--------|----------------------|-----------|
+| **Q3 = FULL fluent builder** | `Query` value + positional `bind`; `SelectQuery`: `select/from/where{Eq,Ne,Gt,Ge,Lt,Le,Like}/orderBy{Asc,Desc}/limit/toQuery` | **joins, `groupBy`, `having`, aggregates (`Sql.count`/`as`)** — slice 3 |
+| **Q4 = both bindings, NAMED default** | positional `?`/`bind` only | **named `:name`/`bindNamed` (the ruled DEFAULT)** — slice 1b, NOT yet shipped |
+| Q6 = `throws DbError` + try/catch | — (Tier-B) | all of `Core.Db` execution (P2) |
+| Q7 = `Db.open` overload + `SqliteConfig` | — (Tier-B) | P2 |
+
+**So P1 is NOT complete against Q3/Q4** — the builder core + raw `Query` shipped and are byte-identity-gated;
+joins/aggregates (Q3) and named binding (Q4's default) are the remaining P1 slices. Do them + P2 `Core.Db`
+in a fresh session. Edge paths verified: empty where/order/limit emit no dangling clause; special-char
+values bind as params (never in SQL text — injection-safety holds).
+
 ## W3-1 SQL DBAL — design rulings (draft `w3-1-db-access.md` → decisions)
 
 - [2026-07-10] Q1 (dep amendment) RESOLVED = **admit** (rusqlite/rustls adopted, UNIFIED-SPEC 2026-07-03).

@@ -27,4 +27,7 @@ function main(): void {
         .toQuery();
     Output.printLine(q.sql());
     Output.printLine("bound params: {List.length(q.params())}");
+    // Empty-clause path: no where / order / limit must NOT emit a dangling `WHERE`/`ORDER BY`/`LIMIT`.
+    var bare = Sql.select(["id", "name"]).from("users").toQuery();
+    Output.printLine(bare.sql());
 }
