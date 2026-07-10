@@ -1860,6 +1860,40 @@ are a SEPARATE JIT-inlining/dispatch lever; surface that as its own fork if/when
 would change a user-visible semantic is mis-scoped (no §14/§15 fork expected). Per-slice: measure
 before/after (counting alloc + interleaved fresh-docker-php) → full oracle gate → commit green → WIN-OR-FLAG.
 
+### V1 EXECUTION RECIPE — `Str(String)` → `Str(Rc<str>)` (DE-RISKED 2026-07-10, ready for a fresh context)
+
+**✅ BYTE-IDENTITY CAVEAT CLEARED [Verified via grep]:** NO in-place `Str` mutation exists anywhere in
+`src/` — no `Value::Str(ref mut …)`, no `&mut String` taken from a `Str` payload, no `push`/`push_str`/
+`truncate` on a `Str`'s buffer. (Every `Rc::make_mut` is on List/Map `Rc<Vec>`, never on `Str`.) So `Str`
+is already treated as shared-immutable → `Rc<str>` is safe with zero semantic change. No StringBuilder-style
+native to special-case.
+
+**WHY strings are the #1 win [Verified: `stringconcat` disasm + op impls]:** the 9 allocs/iter =
+2× `Index` clone (`xs[i].clone()` = a `String` heap clone per operand, exec.rs:245) + 2× `as_display`
+clone (`Value::Str(s) => Some(s.clone())`, value.rs:481, inside `Op::Concat`) + ~1-2 result build. With
+`Rc<str>`: the 2 index clones → refcount BUMPS (0 alloc); the 2 `as_display` clones → 0 via a borrow-path;
+result build ~2 → **≈9 → ≈2 allocs/iter**. Also every string-literal push (`Op::Const` of a `Str` const)
+becomes a bump. `string + string` AND `"{…}"` interpolation both lower to `Op::Concat` (compiler/expr.rs:450),
+so ONE builder fix covers both.
+
+**Migration recipe (mechanical, compiler-guided — every type mismatch is a hard error to fix):**
+1. `Value::Str(Rc<str>)` in `src/value.rs`. Const pool `Str` becomes `Rc<str>` too (bonus: literal-push = bump).
+2. **Constructions (~209 sites):** `Value::Str(x.to_string())` / `Value::Str(String::from(x))` → `Value::Str(x.into())`
+   or `Value::Str(Rc::from(x))`. Literals `Value::Str("s".into())` already work (`&str → Rc<str>` via `Into`).
+3. **Reads (~82 pattern bindings):** `Value::Str(s)` → `s: &Rc<str>`, derefs to `str`; `&s`/`s.as_str()`/`&**s`
+   unchanged. Existing `s.clone()` becomes a cheap bump (a win, not a fix).
+4. **Builder path (`Op::Concat`, exec.rs:196):** add `as_display_str(&self) -> Option<Cow<str>>` (`Str` →
+   `Cow::Borrowed`, other kinds → `Cow::Owned(computed)`); Concat uses it to avoid the operand clone, builds
+   into `String::with_capacity(sum_len)` then one `.into()` to `Rc<str>`. Keep `as_display() -> Option<String>`
+   for other callers (or migrate them — the interpreter's interpolation is the other hot user).
+5. **Companion (note, NOT V1):** `HKey` string keys (map/set) may also hold `String` → a later `Rc<str>` there
+   helps `mapget`; scope separately.
+6. **Backends touched:** interpreter + VM + natives + const pool (the `Value` enum). Transpile/lift work on
+   AST/emitted-source, not runtime `Value` — unaffected (confirm no `Value::Str` construction in `src/lift`/
+   transpile paths during the migration).
+7. **Gate:** counting-allocator on `stringconcat` (expect ≈9→≈2) + interleaved fresh-docker-php → full
+   byte-identity oracle `PHORJ_REQUIRE_PHP=1` → clippy both configs + fmt → commit green → WIN-OR-FLAG.
+
 ## Scoreboard — the PERF-PARITY REGISTER (WIN-OR-FLAG, developer 2026-07-09)
 
 Every microbench is exactly one of `WIN` / `PARITY` / `🚩FLAGGED`. Measured interleaved (never batched —
