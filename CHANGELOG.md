@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DI field injection (DI v1 slice 3)
+
+An **injectable-typed instance field with no initializer** is now auto-wired at construction. Mechanism
+(the ruled "synthesized-ctor" model): `desugar_di` folds each such field into its class's constructor as
+an appended **promoted parameter** (synthesizing an empty-body constructor if the class has none), so the
+field is set once (stays immutable) and is resolved/shared/cycle-checked by the SAME graph machinery as a
+constructor dependency — and it transpiles to an ordinary PHP promoted-constructor property
+(byte-identical `run ≡ runvm ≡ php`). A field WITH an initializer is user-provided (left alone); a
+non-injectable-typed field is an ordinary field. Field-injection cycles are caught (`E-DI-CYCLE`) — the
+synthesized-ctor model makes them unbreakable, as designed. `examples/guide/di-field-injection.phg`
+demonstrates a `Clock` shared between a ctor-injected and a field-injected holder. No new `Op`/`Value`.
+
 ### Changed — DI follows the import discipline + annotation-driven `inject()` (DI v1 §7 + slice 2)
 
 **Fix (nothing in the wind):** DI v1 slice 1 shipped `#[Injectable]` and `inject` as **ambient** symbols

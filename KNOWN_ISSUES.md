@@ -1333,8 +1333,12 @@ are byte-identical by construction — the helper throws the same string on both
   (4) A **bare `inject()` with no `Core.DI.inject` member-import** is an ordinary call to an undefined
   function `inject` (an unknown-function error), not a DI-specific diagnostic — the correct consequence
   of freeing the identifier; the explicit `inject<T>()` still gives the clean `E-DI-NO-IMPORT`.
-  (5) Constructor injection only; field injection, `#[Transient]`, `#[Provides]`, and multi-impl
-  qualifiers are later slices.
+  (5) **Field injection** (slice 3) folds an injectable-typed, no-initializer instance field into the
+  constructor as a promoted param. Consequence: it applies to EVERY `#[Injectable]` class program-wide
+  (not only those reached by an `inject`), so a direct `new Injectable(…)` of a class with injected fields
+  must supply them (the arity grows), and a class that instead sets such a field in its constructor BODY
+  (no initializer) will double-assign — give the field an initializer, or don't type it as an injectable,
+  to opt out. `#[Transient]`, `#[Provides]`, and multi-impl qualifiers are later slices.
 
 ## Reporting
 

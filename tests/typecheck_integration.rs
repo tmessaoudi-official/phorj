@@ -219,6 +219,76 @@ fn di_annotation_single_impl_interface_checks_clean() {
     );
 }
 
+// --- slice 3: field injection (synthesized-ctor) -------------------------------------------------
+
+#[test]
+fn di_field_injection_checks_clean() {
+    // `Logger` field-injects `Clock`; `App` field-injects `Logger` and ctor-injects `Clock`. The field
+    // has no initializer + an injectable type → folded to a promoted ctor param, resolved by the graph.
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class Clock {{ constructor() {{}} function n(): int {{ return 1; }} }}\n\
+        #[Injectable] class Logger {{ private Clock clock; constructor() {{}} function m(): int {{ return this.clock.n(); }} }}\n\
+        #[Injectable] class App {{ private Logger logger; constructor(private Clock clock) {{}} function go(): int {{ return this.logger.m(); }} }}\n\
+        function main(): void {{ App a = inject<App>(); Output.printLine(\"{{a.go()}}\"); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected clean field-injection expansion, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
+fn di_field_injection_cycle_is_rejected() {
+    // A field-injects B, B field-injects A — the synthesized-ctor model makes field cycles ctor cycles,
+    // so the existing cycle check catches them (a field-injection cycle is unbreakable in v1).
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class A {{ private B b; constructor() {{}} }}\n\
+        #[Injectable] class B {{ private A a; constructor() {{}} }}\n\
+        function main(): void {{ A x = inject<A>(); }}\n"
+    );
+    let e = expand(&src).unwrap_err();
+    assert!(e.contains("E-DI-CYCLE"), "{e}");
+}
+
+#[test]
+fn di_field_injection_leaves_initialized_field_alone() {
+    // A field WITH an initializer is user-provided — NOT folded into the constructor. `App` therefore has
+    // no injected inputs, so `inject<App>()` builds `new App()` and the field initializes itself.
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class Clock {{ constructor() {{}} }}\n\
+        #[Injectable] class App {{ private Clock clock = new Clock(); constructor() {{}} }}\n\
+        function main(): void {{ App a = inject<App>(); Output.printLine(\"ok\"); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected an initialized field to be left alone, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
+fn di_field_injection_inherited_from_parent() {
+    // An injectable subclass inherits its parent's injected (promoted) field — `ctor_plan` gathers
+    // inherited promoted params, so `inject<Sub>()` wires the parent's `Clock`. (Injectable inheritance
+    // is not a v1 focus, but it resolves correctly rather than silently dropping the field.)
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class Clock {{ constructor() {{}} function n(): int {{ return 1; }} }}\n\
+        #[Injectable] open class Base {{ private Clock clock; constructor() {{}} function t(): int {{ return this.clock.n(); }} }}\n\
+        #[Injectable] class Sub extends Base {{}}\n\
+        function main(): void {{ Sub s = inject<Sub>(); Output.printLine(\"{{s.t()}}\"); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected inherited field injection to resolve, got: {:?}",
+        expand(&src)
+    );
+}
+
 #[test]
 fn di_annotation_in_lambda_inferred_return_is_rejected() {
     // A lambda with an inferred (no declared) return type is NOT an annotation source, even nested in a

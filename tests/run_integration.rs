@@ -81,6 +81,25 @@ fn di_inject_in_field_initializer_runs_not_panics() {
 }
 
 #[test]
+fn di_field_injection_synthesizes_constructor_when_absent() {
+    // Slice 3: an injectable with an injected field and NO explicit constructor — `fold_injected_fields`
+    // must SYNTHESIZE a constructor (the `None` arm) with the promoted param, so the field is wired and
+    // set at construction. Exercises the synthesis branch end-to-end (field actually reads back).
+    let src = "package Main;\n\
+        import Core.Output;\n\
+        import Core.DI.Injectable;\n\
+        import Core.DI.inject;\n\
+        #[Injectable] class Clock { constructor() {} function n(): int { return 3; } }\n\
+        #[Injectable] class Logger { private Clock clock; function m(): int { return this.clock.n(); } }\n\
+        function main(): void { Logger l = inject<Logger>(); Output.printLine(\"{l.m()}\"); }\n";
+    let tokens = lex(src).expect("lex ok");
+    let prog = Parser::new(tokens).parse_program().expect("parse ok");
+    let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
+    let out = interpret(&expanded).expect("synthesized-ctor field injection should run");
+    assert_eq!(out.trim(), "3");
+}
+
+#[test]
 fn program_without_main_errors() {
     let e = run(r#"function helper() -> int { return 1; }"#).unwrap_err();
     assert!(e.message.contains("main"), "{}", e.message);

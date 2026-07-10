@@ -199,5 +199,22 @@ the LOCKED "nothing in the wind" principle ([[import-namespace-redesign]], 2026-
   annotation source: call-arg / param-default / `Optional`/generic (→ `E-DI-MISSING`); see `KNOWN_ISSUES.md`.
 - **Artifacts:** `examples/guide/di.phg` (both forms), `examples/README.md`, `CHANGELOG.md`, KNOWN_ISSUES,
   `phg explain E-DI-NO-IMPORT`, 14 integration tests (typecheck + run) incl. lambda-inferred-return and
-  free-identifier cases. **NEXT slices:** (3) field injection; (4) `#[Provides]`+`#[Transient]` (still
-  ambient-free today — bare `#[Provides]` is `E-ATTR-TARGET`); then v2 qualifiers/generics.
+  free-identifier cases.
+
+### SLICE 3 — field injection SHIPPED 2026-07-10 (gate-green, byte-identical)
+- **Mechanism = synthesized-ctor (§1):** `fold_injected_fields` (in `desugar_di`, BEFORE `build_registry`)
+  folds each injectable's injectable-typed, no-initializer INSTANCE field into its constructor as an
+  appended **promoted param** (sorted name order, Inv-10; synthesizes an empty-body ctor if none). The
+  field then IS a ctor dep → the existing resolver wires/shares/cycle-checks it identically; transpiles to
+  an ordinary promoted-constructor property (byte-identical). A field WITH an initializer is left alone; a
+  non-injectable-typed field is untouched. `build_registry` refactored to `collect_injectable` +
+  `collect_impls` helpers (reused by the fold). `examples/guide/di-field-injection.phg` (shared Clock
+  across ctor- and field-injected holders), 3 integration tests (clean / cycle / initialized-field-alone).
+- **Disclosed (KNOWN_ISSUES):** applies program-wide to every injectable (direct `new` arity grows); a
+  field set in the ctor BODY instead of via an initializer double-assigns — opt out with an initializer.
+
+**NEXT slices:** (4) `#[Provides]`+`#[Transient]` (still ambient-free today — bare `#[Provides]` is
+`E-ATTR-TARGET`); then v2 qualifiers/generics.
+
+### Direction (2026-07-10, ask-human): build BOTH slice 3 (field injection) AND slice 4 (#[Provides]+#[Transient]).
+- [2026-07-10] AGREED: proceed with slice 3 then slice 4, each a green committed slice under the §7 discipline.

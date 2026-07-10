@@ -35,18 +35,25 @@
 //! root). The DI ATTRIBUTES (`#[Injectable]`, qualified `#[DI.Injectable]`) get the same discipline via
 //! `enforce_injected_discipline` (`module_of("Injectable") == "DI"`) + `Attribute::is_di_builtin`.
 //!
+//! FIELD INJECTION (slice 3). Before the registry is built, [`fold_injected_fields`] folds each
+//! injectable's injectable-typed, no-initializer INSTANCE field into its constructor as a promoted
+//! parameter (the "synthesized-ctor" model, §1) — so a field dependency is resolved, shared, and
+//! cycle-checked by the SAME graph machinery as a constructor dependency, and transpiles to an ordinary
+//! promoted-constructor property. A field WITH an initializer is left alone; a non-injectable-typed
+//! field is untouched.
+//!
 //! INVARIANT — keep the rewriter TOTAL. `ritem`/`rfn`/`rmember`/`rexpr`/`rstmt` must recurse EVERY
 //! expression-bearing AST position, so no `Expr::Inject` can survive to a backend `unreachable!`. When a
-//! new expression-bearing AST node is added (the next slices — field injection, `#[Provides]` — touch
-//! exactly this surface), add its arm here. There is no runtime backstop (matching `desugar_router` /
+//! new expression-bearing AST node is added (a later slice like `#[Provides]` touches exactly this
+//! surface), add its arm here. There is no runtime backstop (matching `desugar_router` /
 //! `rewrite_ufcs`); totality is maintained by this rule.
 //!
-//! Scope (disclosed): constructor injection only (field injection is a later slice); dependency types
-//! must be concrete class / interface names (an alias or generic-parameter dependency type is a clean
-//! `E-DI-MISSING`, since this runs before alias/generic expansion); `#[Transient]` / `#[Provides]` are
-//! later slices (v1 is default-shared, plain-`new` construction). Annotation-driven `inject()` draws its
-//! target only from a typed `var` declaration, a `return`, or a lambda return type (a call-argument or
-//! param-default position is NOT an annotation source — write `inject<T>()` there).
+//! Scope (disclosed): constructor + field injection; dependency types must be concrete class / interface
+//! names (an alias or generic-parameter dependency type is a clean `E-DI-MISSING`, since this runs before
+//! alias/generic expansion); `#[Transient]` / `#[Provides]` are later slices (v1 is default-shared,
+//! plain-`new` construction). Annotation-driven `inject()` draws its target only from a typed `var`
+//! declaration, a `return`, or a lambda return type (a call-argument or param-default position is NOT an
+//! annotation source — write `inject<T>()` there).
 
 use crate::ast::{
     ctor_plan, CatchClause, ClassMember, Expr, FunctionDecl, Item, LambdaBody, MatchArm, Program,
@@ -76,6 +83,12 @@ struct Registry {
 type Plan = Vec<(String, Vec<String>)>;
 
 pub fn desugar_di(program: Program) -> Result<Program, Vec<Diagnostic>> {
+    // Field injection (slice 3): fold injectable-typed no-initializer fields into promoted ctor params
+    // BEFORE the registry is built, so `ctor_plan` sees them and the graph resolver wires + shares them
+    // exactly like ctor dependencies (§1 synthesized-ctor model).
+    let injectable = collect_injectable(&program);
+    let impls = collect_impls(&program, &injectable);
+    let program = fold_injected_fields(program, &injectable, &impls);
     let reg = build_registry(&program);
     let bare_inject_imported = imports_path(&program, &["Core", "DI", "inject"]);
     let di_qualifier_imported = imports_di_module(&program);
@@ -111,29 +124,26 @@ pub fn desugar_di(program: Program) -> Result<Program, Vec<Diagnostic>> {
     })
 }
 
-fn build_registry(program: &Program) -> Registry {
-    let mut injectable = BTreeSet::new();
-    let mut all_classes = BTreeSet::new();
-    let mut deps: BTreeMap<String, Vec<(Option<String>, Span)>> = BTreeMap::new();
-    for it in &program.items {
-        if let Item::Class(c) = it {
-            all_classes.insert(c.name.clone());
-            if c.attrs.iter().any(crate::ast::Attribute::is_di_builtin) {
-                injectable.insert(c.name.clone());
+/// The set of `#[Injectable]` classes (bare or qualified attribute — `is_di_builtin`). Cheap; used both
+/// to classify field types in the fold pass and to seed the registry.
+fn collect_injectable(program: &Program) -> BTreeSet<String> {
+    program
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Class(c) if c.attrs.iter().any(crate::ast::Attribute::is_di_builtin) => {
+                Some(c.name.clone())
             }
-        }
-    }
-    // Constructor dependencies for every injectable (via ctor_plan → inherited promoted params too).
-    for cls in &injectable {
-        let plan = ctor_plan(program, cls);
-        let params: Vec<(Option<String>, Span)> = plan
-            .iter()
-            .flat_map(|(ps, _)| ps.iter())
-            .map(|p| (type_head_name(&p.ty), type_span(&p.ty)))
-            .collect();
-        deps.insert(cls.clone(), params);
-    }
-    // interface → injectable implementors (sorted).
+            _ => None,
+        })
+        .collect()
+}
+
+/// `interface → the injectable classes that implement it` (sorted, deduped).
+fn collect_impls(
+    program: &Program,
+    injectable: &BTreeSet<String>,
+) -> BTreeMap<String, Vec<String>> {
     let implements = crate::ast::class_implements(program);
     let mut impls: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (class, ifaces) in &implements {
@@ -148,11 +158,121 @@ fn build_registry(program: &Program) -> Registry {
         v.sort();
         v.dedup();
     }
+    impls
+}
+
+fn build_registry(program: &Program) -> Registry {
+    let injectable = collect_injectable(program);
+    let mut all_classes = BTreeSet::new();
+    let mut deps: BTreeMap<String, Vec<(Option<String>, Span)>> = BTreeMap::new();
+    for it in &program.items {
+        if let Item::Class(c) = it {
+            all_classes.insert(c.name.clone());
+        }
+    }
+    // Constructor dependencies for every injectable (via ctor_plan → inherited promoted params too).
+    // After `fold_injected_fields`, injectable-typed no-initializer fields are already promoted ctor
+    // params here, so field injection is resolved by the SAME graph machinery as ctor injection.
+    for cls in &injectable {
+        let plan = ctor_plan(program, cls);
+        let params: Vec<(Option<String>, Span)> = plan
+            .iter()
+            .flat_map(|(ps, _)| ps.iter())
+            .map(|p| (type_head_name(&p.ty), type_span(&p.ty)))
+            .collect();
+        deps.insert(cls.clone(), params);
+    }
+    let impls = collect_impls(program, &injectable);
     Registry {
         injectable,
         all_classes,
         deps,
         impls,
+    }
+}
+
+/// Field injection (slice 3): fold each injectable's injectable-typed, no-initializer INSTANCE field into
+/// its constructor as an appended **promoted** parameter (synthesizing an empty-body constructor if the
+/// class has none). This is the ruled "synthesized-ctor model" (§1): once the field is a promoted ctor
+/// param, the graph resolver wires it, shares it in a diamond, and detects field cycles EXACTLY like a
+/// ctor dependency — and it transpiles to an ordinary PHP promoted-constructor property (byte-identical).
+/// A field WITH an initializer is user-provided and left alone; a non-injectable-typed field is an
+/// ordinary field the constructor body sets. Determinism (Inv-10): injected fields are appended in
+/// sorted name order. Runs before [`build_registry`], so `ctor_plan` already sees the promoted params.
+fn fold_injected_fields(
+    program: Program,
+    injectable: &BTreeSet<String>,
+    impls: &BTreeMap<String, Vec<String>>,
+) -> Program {
+    use crate::ast::{CtorParam, Modifier};
+    let is_injectable_typed = |ty: &Type| {
+        type_head_name(ty).is_some_and(|n| injectable.contains(&n) || impls.contains_key(&n))
+    };
+    let items = program
+        .items
+        .into_iter()
+        .map(|it| match it {
+            Item::Class(mut c) if injectable.contains(&c.name) => {
+                let mut injected: Vec<CtorParam> = Vec::new();
+                let mut kept: Vec<ClassMember> = Vec::new();
+                for m in c.members.drain(..) {
+                    if let ClassMember::Field {
+                        modifiers,
+                        ty,
+                        name,
+                        init: None,
+                        span,
+                    } = &m
+                    {
+                        let is_static = modifiers.iter().any(|md| matches!(md, Modifier::Static));
+                        if !is_static && is_injectable_typed(ty) {
+                            // Ensure the promoted param carries a visibility (promotion requires one);
+                            // a field without an explicit visibility defaults to private.
+                            let mut mods = modifiers.clone();
+                            if !mods.iter().any(|md| {
+                                matches!(
+                                    md,
+                                    Modifier::Public | Modifier::Private | Modifier::Protected
+                                )
+                            }) {
+                                mods.insert(0, Modifier::Private);
+                            }
+                            injected.push(CtorParam {
+                                modifiers: mods,
+                                ty: ty.clone(),
+                                name: name.clone(),
+                                span: *span,
+                            });
+                            continue;
+                        }
+                    }
+                    kept.push(m);
+                }
+                if !injected.is_empty() {
+                    injected.sort_by(|a, b| a.name.cmp(&b.name));
+                    match kept.iter_mut().find_map(|m| match m {
+                        ClassMember::Constructor { params, .. } => Some(params),
+                        _ => None,
+                    }) {
+                        Some(params) => params.extend(injected),
+                        None => kept.push(ClassMember::Constructor {
+                            modifiers: Vec::new(),
+                            params: injected,
+                            body: Vec::new(),
+                            span: c.span,
+                        }),
+                    }
+                }
+                c.members = kept;
+                Item::Class(c)
+            }
+            other => other,
+        })
+        .collect();
+    Program {
+        package: program.package.clone(),
+        items,
+        span: program.span,
     }
 }
 

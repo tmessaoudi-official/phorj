@@ -1,0 +1,41 @@
+// Field injection (DI v1 slice 3) — an injectable-typed field with NO initializer is auto-wired at
+// construction. The "synthesized-ctor" model: the field becomes a promoted constructor parameter, so it
+// is set once (stays immutable) and is SHARED across the graph exactly like a constructor dependency. A
+// field WITH an initializer is user-provided and left alone; only injectable-typed, no-initializer
+// instance fields auto-wire. Requires the same `Core.DI` imports as any DI (nothing in the wind).
+package Main;
+
+import Core.Output;
+import Core.DI.Injectable;
+import Core.DI.inject;
+
+#[Injectable]
+class Clock {
+    constructor() {}
+    function now(): int {
+        return 42;
+    }
+}
+
+#[Injectable]
+class Logger {
+    private Clock clock;
+    constructor() {}
+    function log(string msg): string {
+        return "[t={this.clock.now()}] {msg}";
+    }
+}
+
+#[Injectable]
+class App {
+    private Logger logger;
+    constructor(private Clock clock) {}
+    function run(): string {
+        return this.logger.log("up at {this.clock.now()}");
+    }
+}
+
+function main(): void {
+    App app = inject<App>();
+    Output.printLine(app.run());
+}
