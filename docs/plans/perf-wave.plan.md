@@ -5,6 +5,20 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] ✅🈺 **LANGUAGE QUEUE #6 COMPLETE — String.format slices 4a + 4b SHIPPED (Wave C done).**
+  Commits `5dd904a` (4a %s precision) + `130b0cb` (4b %N$ positional). Gate-green (1915, oracle), byte-identical,
+  clippy+fmt clean. **UNPUSHED** (origin at `eaa862a` when this run began; dev pushed slices 3b/3c/M-Decomp mid-run).
+  - **4a %s precision** = char-boundary truncate (≤N bytes, never splits a UTF-8 char). PHP helper hand-truncates
+    (NOT `sprintf %.Ns` which byte-truncates) so all 3 legs agree; ASCII == PHP native, multibyte = LADDER divergence.
+    `%d` precision stays REJECTED (dev-ruled — PHP silently ignores it).
+  - **4b %N$ positional** = STRICT: reorder+reuse OK; mixing→`E-FORMAT-MIXED-POSITIONAL`; unreferenced value or
+    out-of-range/zero index → fault. Parser: cloned-iterator lookahead for `[argnum$]`. `FormatDirective.arg`.
+    New checker `analyze_format_directives` (was `count_format_directives`) does mixing/unused/index checks;
+    renderer + `__phorj_format` mirror it. `E-FORMAT-MIXED-POSITIONAL` + explain entry added.
+  - **Wave C String.format = COMPLETE:** `%s %d %f %e %E %g %G %x %X %o %b %%` + flags/width/precision/positional.
+    Remaining (minor, deferred): `%c` char conversion, precision on radix. **NEXT = queue #7** (attribute v2 + L1
+    runtime reflection, `di-attributes.plan.md §3`) — ⚠ DI v2 qualifier SYNTAX is a §15 fork (surface first); OR
+    #8 `trait` (§7-OPEN, §15 fork); OR #9 web spine (large). All remaining items are forks or multi-session.
 - [2026-07-10] 🧑‍⚖️ **DEVELOPER RULED (ask-human, Invariant 15) — String.format slice 4 semantics = STRICT.**
   Three user-visible forks surfaced (Phorj strict vs PHP permissive); dev confirmed all three recommendations:
   1. **Precision on `%d` → KEEP REJECTING** (`E-FORMAT-UNSUPPORTED`). PHP silently ignores it (`%.5d` of 42 → "42");
