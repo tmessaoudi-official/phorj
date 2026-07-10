@@ -5,6 +5,16 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🧹 **TRACKED TECH-DEBT (Invariant 13, disclosed not silently passed) — `src/native/text.rs` is
+  1185 lines, OVER the 1000 hard cap.** It was ALREADY ~1032 before this session (pre-existing violation); the
+  String.format 3b/3c slices enlarged it by ~175. Invariant 13 prescribes the fix (M-Decomp: `text.rs` →
+  `text/mod.rs` + a cohesive `text/format.rs` submodule holding the sprintf renderer cluster —
+  `FormatDirective`, `parse_format_directive`, `pad_format`, `strip_g_fixed_zeros`, `strip_g_sci_mantissa`,
+  `format_g_body`, `text_format`, ~350 lines; keep `text_natives()` in `mod.rs`, `pub(super)`/`pub(crate)` the
+  moved items, update the `#[path]` test include + the `pub(crate) use text::parse_format_directive` re-export in
+  `native/mod.rs`). Extraction drops `text.rs` to ~830 (compliant). NOT done here: a core-native-module directory
+  conversion is its own focused, gate-protected change — bundling it into a feature commit muddies both. **P1
+  follow-up, do before the next String.format slice touches this file.**
 - [2026-07-10] 🈺 **LANGUAGE QUEUE #6 — String.format slice 3c (`%g`/`%G`) SHIPPED.** (developer said "continue"
   → built in the same context per the escape hatch, gated on the advisor-mandated exhaustive sweep instead of
   the fresh-context heuristic). Gate-green, byte-identical, clippy+fmt clean, jit-off compiles. **UNPUSHED.**

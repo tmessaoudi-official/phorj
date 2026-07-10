@@ -606,11 +606,17 @@ fn text_format_shortest_repr_matches_php_byte_for_byte() {
                                                // `%G` upper-cases only the scientific separator.
     assert_eq!(fmt("%G", 1e20), "1.0E+20");
     assert_eq!(fmt("%G", 0.0001234), "0.0001234");
-    // Width/flags compose (space-pad, zero-pad after sign, left-justify).
+    // Width/flags compose in FIXED form (space-pad, zero-pad after sign, left-justify).
     assert_eq!(fmt("%10g", 1234.5), "    1234.5");
     assert_eq!(fmt("%-10g", 1234.5), "1234.5    ");
     assert_eq!(fmt("%010g", 1234.5), "00001234.5");
-    // Int operand accepted; non-number faults.
+    // Width/flags compose in SCIENTIFIC form too — the pad wraps the whole `D.De±X` body (the sweep
+    // covered value×precision but not width×%g, so pin the sci-form padding explicitly vs php-8.5.8).
+    assert_eq!(fmt("%15g", 1e20), "        1.0e+20");
+    assert_eq!(fmt("%015g", 1e20), "000000001.0e+20"); // zero-pad, no sign
+    assert_eq!(fmt("%-15g", 1e20), "1.0e+20        ");
+    assert_eq!(fmt("%+015g", 1e20), "+00000001.0e+20"); // zeros after the sign
+                                                        // Int operand accepted; non-number faults.
     assert_eq!(fmt("%g", 42.0), "42");
     let mut o = String::new();
     assert!(text_format(
