@@ -36,6 +36,36 @@
   Http-before-Regex ordering; S2 pins `module_of`) but not total (a reorder of two *independent*
   modules wouldn't be caught — behaviorally harmless, but keep the `Core.Db` row in registry order).
 
+## ⭐⭐ OPEN DECISION FOR NEXT SESSION (answer FIRST, before any code): byte-formatting shape
+
+**The confirmed goal:** format a `bytes` value byte-by-byte (raw; precision = exact bytes, no
+char-boundary rounding), *separately* from strings — mirroring how `count`/`length` have distinct
+`String.*` and `Bytes.*` versions. Ruled bits: it's wanted; `%b` is TAKEN (binary int, `5`→`101`);
+`String.charCount` (codepoint count, `é`=1) is a small standalone-value complement to `String.length`
+(bytes); the whole Unicode-width story (graphemes + display width) is W4-4, not now.
+
+**The hard constraint I hit in the code (this is why the design reverses):** the developer's leaning
+choice — **type-directed `%s`** in the shared `String.format` (string→char-safe, bytes→raw) — has a
+**byte-identity hole**. The char-vs-byte truncation must be decided per-argument, but (a) the PHP leg
+can't tell a `bytes` from a `string` at runtime (both are PHP strings — `__phorj_format`
+`program.rs:953`), and (b) per-arg static types are only available to the transpiler when the args are
+a **list literal** (`calls.rs:388`), NOT a dynamic `List<union>`. So bytes-`%s` with a dynamic args
+list would char-truncate on PHP but raw-truncate on the Rust backends → **run≠php (Invariant 1 break).**
+
+**THE DECISION (surface first thing next session; recommended first):**
+1. **`Bytes.format(spec, [bytes…])` — separate function (RECOMMENDED).** Byte-identity-safe by
+   construction: every arg is `bytes` *by the function's type*, so its PHP helper ALWAYS raw-truncates —
+   no per-arg dispatch, works for literal AND dynamic args. Matches the `String.length`/`Bytes.length`
+   precedent the developer pointed at. (Was Option 1; the spine constraint now makes it the right call,
+   not just a preference.)
+2. **Type-directed `%s`, RESCUED narrowly** (honest steel-man): either (a) allow bytes-`%s` only when
+   the args are a list literal and hard-error a dynamic list, or (b) forbid precision on bytes-`%s` so
+   there's no truncation to diverge. Both work; both are worse — (a) is a capability hole, (b) is a
+   confusing carve-out.
+
+**Do NOT write the native until this is answered.** It's a byte-identity-critical multi-leg change →
+fresh context. `String.charCount` can ship alongside whichever shape wins (independent, no hole).
+
 ## ⭐ P1 `Core.Sql` — SHIPPED vs REMAINING (against the Q3/Q4 rulings) — read this before assuming P1 is done
 
 | Ruling | Shipped this session | Remaining |
