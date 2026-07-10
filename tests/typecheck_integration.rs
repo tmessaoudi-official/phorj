@@ -270,6 +270,84 @@ fn di_field_injection_leaves_initialized_field_alone() {
     );
 }
 
+// --- slice 4a: #[Provides] factories -------------------------------------------------------------
+
+const DI_PROVIDES_IMPORTS: &str =
+    "import Core.DI.Injectable;\nimport Core.DI.Provides;\nimport Core.DI.inject;\nimport Core.Output;\n";
+
+#[test]
+fn di_provides_factory_checks_clean() {
+    // `Db` needs a config value → not injectable; a `#[Provides]` factory constructs it, and `Repo` wires
+    // `Db` through the factory (precedence over `new`).
+    let src = format!(
+        "package Main;\n{DI_PROVIDES_IMPORTS}\
+        class Db {{ constructor(private string url) {{}} }}\n\
+        class Providers {{ #[Provides] static function db(): Db {{ return new Db(\"x\"); }} }}\n\
+        #[Injectable] class Repo {{ constructor(private Db db) {{}} }}\n\
+        function main(): void {{ Repo r = inject<Repo>(); Output.printLine(\"ok\"); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected clean #[Provides] expansion, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
+fn di_provides_disambiguates_multi_impl_interface() {
+    // Two injectable impls would be E-DI-AMBIGUOUS — a `#[Provides]` returning the interface picks one and
+    // resolves cleanly (the provider wins over the ambiguity).
+    let src = format!(
+        "package Main;\n{DI_PROVIDES_IMPORTS}\
+        interface Logger {{ function log(): string; }}\n\
+        #[Injectable] class FileLog implements Logger {{ constructor() {{}} function log(): string {{ return \"f\"; }} }}\n\
+        #[Injectable] class NetLog implements Logger {{ constructor() {{}} function log(): string {{ return \"n\"; }} }}\n\
+        class Bind {{ #[Provides] static function logger(): Logger {{ return new FileLog(); }} }}\n\
+        function main(): void {{ Logger l = inject<Logger>(); Output.printLine(l.log()); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected #[Provides] to disambiguate, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
+fn di_provides_duplicate_is_ambiguous() {
+    let src = format!(
+        "package Main;\n{DI_PROVIDES_IMPORTS}\
+        class Db {{ constructor(private string url) {{}} }}\n\
+        class P1 {{ #[Provides] static function a(): Db {{ return new Db(\"1\"); }} }}\n\
+        class P2 {{ #[Provides] static function b(): Db {{ return new Db(\"2\"); }} }}\n\
+        #[Injectable] class Repo {{ constructor(private Db db) {{}} }}\n\
+        function main(): void {{ Repo r = inject<Repo>(); }}\n"
+    );
+    let e = expand(&src).unwrap_err();
+    assert!(e.contains("E-DI-AMBIGUOUS"), "{e}");
+}
+
+#[test]
+fn di_provides_on_non_static_method_is_rejected() {
+    let src = format!(
+        "package Main;\n{DI_PROVIDES_IMPORTS}\
+        class Db {{ constructor() {{}} }}\n\
+        class Providers {{ #[Provides] function db(): Db {{ return new Db(); }} }}\n\
+        function main(): void {{ Output.printLine(\"x\"); }}\n"
+    );
+    let e = expand(&src).unwrap_err();
+    assert!(e.contains("E-PROVIDES-TARGET"), "{e}");
+}
+
+#[test]
+fn di_provides_bare_without_import_is_rejected() {
+    let src = "package Main;\nimport Core.Output;\n\
+        class Db { constructor() {} }\n\
+        class Providers { #[Provides] static function db(): Db { return new Db(); } }\n\
+        function main(): void { Output.printLine(\"x\"); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
+}
+
 #[test]
 fn di_field_injection_inherited_from_parent() {
     // An injectable subclass inherits its parent's injected (promoted) field — `ctor_plan` gathers

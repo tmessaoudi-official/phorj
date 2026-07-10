@@ -213,8 +213,20 @@ the LOCKED "nothing in the wind" principle ([[import-namespace-redesign]], 2026-
 - **Disclosed (KNOWN_ISSUES):** applies program-wide to every injectable (direct `new` arity grows); a
   field set in the ctor BODY instead of via an initializer double-assigns — opt out with an initializer.
 
-**NEXT slices:** (4) `#[Provides]`+`#[Transient]` (still ambient-free today — bare `#[Provides]` is
-`E-ATTR-TARGET`); then v2 qualifiers/generics.
+### SLICE 4a — `#[Provides]` factories SHIPPED 2026-07-10 (gate-green, byte-identical)
+- **`#[Provides]`** on a `static` method (return type = provided type) → the graph builds that type via
+  `Owner.method(autowired-params)` instead of `new`. `is_di_provides` (bare + qualified), `module_of`
+  "Provides"→"DI", target-validated in `check_attributes` (static + return type, else `E-PROVIDES-TARGET`,
+  `E-PROVIDES-ARGS`). Registry `collect_providers` scans ALL classes' static methods (NOT just
+  injectables — provider modules are plain classes); duplicate provider for a type → `ambiguous_providers`
+  → `E-DI-AMBIGUOUS`. Resolver restructured: `resolve_node` (provider-for-T → injectable class → single-
+  impl interface, provider WINS incl. over the ambiguity), `Plan` now carries a `Construct::New|Provides`
+  per node, `synth_factory` emits `new`/`Owner.method` accordingly. `examples/guide/di-provides.phg`
+  (config-value provision), 5 tests (clean / interface-disambiguation / duplicate-ambiguous / non-static /
+  no-import). resolve_graph now returns the node KEY.
+
+**NEXT:** slice 4b `#[Transient]` (let-float codegen: hoist shared, inline transient per-use; regression
+guard = byte-identical PHP for di.phg + di-field-injection.phg before/after) → then v2 qualifiers/generics.
 
 ### Direction (2026-07-10, ask-human): build BOTH slice 3 (field injection) AND slice 4 (#[Provides]+#[Transient]).
 - [2026-07-10] AGREED: proceed with slice 3 then slice 4, each a green committed slice under the §7 discipline.

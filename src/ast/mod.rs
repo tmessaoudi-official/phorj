@@ -751,6 +751,14 @@ impl Attribute {
         matches!(self.name.as_str(), "Injectable" | "DI.Injectable")
     }
 
+    /// True iff this is the DI `#[Provides]` attribute (DI v1 slice 4) — marks a `static` method whose
+    /// return type is a provided type: the DI graph constructs that type via the method instead of `new`.
+    /// Bare (`import Core.DI.Provides;`) or qualified (`import Core.DI;` → `#[DI.Provides]`), same
+    /// discipline as `#[Injectable]`. Single recognition source.
+    pub fn is_di_provides(&self) -> bool {
+        matches!(self.name.as_str(), "Provides" | "DI.Provides")
+    }
+
     /// True iff this is the built-in `#[Attribute]` marker (DEC-194) — a class carrying it IS a
     /// user-defined attribute type. Recognized in both "nothing in the wind" forms: bare `Attribute`
     /// (member-import `import Core.Runtime.Attribute;`) or qualified `Runtime.Attribute` (module import

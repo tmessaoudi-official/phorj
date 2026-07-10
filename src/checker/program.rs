@@ -900,6 +900,45 @@ impl Checker {
                 }
                 continue;
             }
+            // DI v1 slice 4: `#[Provides]` marks a `static` method whose return type is a provided type;
+            // the DI graph (`desugar_di`) constructs that type via this method. Valid only on a `static`
+            // method with a declared return type — otherwise a clean error (never silently ignored).
+            // Import-gated by the injected-type discipline (`enforce_injected`). Consumed pre-check, inert
+            // for backends.
+            if attr.is_di_provides() {
+                if !attr.args.is_empty() {
+                    self.err_coded(
+                        attr.span,
+                        "`#[Provides]` takes no arguments".to_string(),
+                        "E-PROVIDES-ARGS",
+                        Some("write it bare: `#[Provides]` on a `static` factory method".into()),
+                    );
+                }
+                if !f
+                    .modifiers
+                    .iter()
+                    .any(|m| matches!(m, crate::ast::Modifier::Static))
+                {
+                    self.err_coded(
+                        attr.span,
+                        "`#[Provides]` must annotate a `static` method".to_string(),
+                        "E-PROVIDES-TARGET",
+                        Some(
+                            "make the factory method `static` — a provider is resolved without an instance"
+                                .into(),
+                        ),
+                    );
+                } else if f.ret.is_none() {
+                    self.err_coded(
+                        attr.span,
+                        "a `#[Provides]` method must declare a return type — it names the provided type"
+                            .to_string(),
+                        "E-PROVIDES-TARGET",
+                        Some("annotate the return type: `static function make(): Db { … }`".into()),
+                    );
+                }
+                continue;
+            }
             // DEC-194 2b-3: a user-defined attribute (`#[Tag]`, where `Tag` carries `#[Attribute]`) is a
             // legal use on a function/method (valid on all targets this slice); validated against its ctor.
             if self.check_user_attribute_use(attr) {

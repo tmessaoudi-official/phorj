@@ -1,0 +1,43 @@
+// `#[Provides]` factories (DI v1 slice 4a) — teach the DI graph how to build a type it can't autowire.
+//
+// A `#[Provides]` static method whose RETURN TYPE is some type `T` becomes the graph's way to construct
+// `T`: it takes PRECEDENCE over `new T(…)`, its own parameters are autowired, and its result is shared
+// (or transient) exactly like a constructed instance. This is how you inject a type you don't own, or one
+// whose constructor needs a config value (a plain `string`/`int` the graph can't wire), or to bind an
+// interface to a chosen implementation. Follows the same `Core.DI` import discipline (nothing in the wind).
+package Main;
+
+import Core.Output;
+import Core.DI.Injectable;
+import Core.DI.Provides;
+import Core.DI.inject;
+
+// `Db` needs a connection string — a config value the graph cannot autowire, so `Db` is NOT injectable.
+class Db {
+    constructor(private string url) {}
+    function ping(): string {
+        return "db@{this.url}";
+    }
+}
+
+// A provider module: a plain class of `#[Provides]` static factories (scanned even though it is not
+// itself `#[Injectable]`).
+class Providers {
+    #[Provides]
+    static function db(): Db {
+        return new Db("localhost:5432");
+    }
+}
+
+#[Injectable]
+class Repo {
+    constructor(private Db db) {}
+    function status(): string {
+        return this.db.ping();
+    }
+}
+
+function main(): void {
+    Repo r = inject<Repo>();
+    Output.printLine(r.status());
+}

@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DI `#[Provides]` factories (DI v1 slice 4a)
+
+A `#[Provides]` (or qualified `#[DI.Provides]`) **static method** whose return type is `T` now teaches the
+DI graph to construct `T` by calling that method instead of `new T(…)`. The method's own parameters are
+autowired, and a provider takes **precedence** over both `new T` and single-impl-interface auto-bind — so
+it injects a type you don't own, a type whose constructor needs a config value the graph can't wire, or
+binds an interface to a chosen implementation (the multi-impl disambiguator). Provider modules are plain
+classes (scanned even when not `#[Injectable]`). Two providers for the same type is `E-DI-AMBIGUOUS`;
+`#[Provides]` off a static method / without a return type is `E-PROVIDES-TARGET`; import-gated like the
+other DI symbols (`E-INJECTED-TYPE-BARE`). The synthesized factory emits `Owner::method(deps)` — byte-
+identical `run ≡ runvm ≡ php`. `examples/guide/di-provides.phg`. No new `Op`/`Value`.
+
 ### Added — DI field injection (DI v1 slice 3)
 
 An **injectable-typed instance field with no initializer** is now auto-wired at construction. Mechanism

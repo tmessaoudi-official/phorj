@@ -1300,6 +1300,17 @@ pub fn explain_text(code: &str) -> Option<String> {
              (`App app = inject();`), a typed `return`, or a lambda return type. It has no source in a\n\
              `var` binding, a discard, or a call argument — there, name the type: `inject<App>()`.\n"
         }
+        "E-PROVIDES-TARGET" => {
+            "E-PROVIDES-TARGET — `#[Provides]` is not on a valid target.\n\n\
+             A `#[Provides]` factory must be a `static` method with a declared return type — the return\n\
+             type names the type it provides, and it is resolved without an instance. Make the method\n\
+             `static` and annotate its return type: `static function make(): Db { … }`.\n"
+        }
+        "E-PROVIDES-ARGS" => {
+            "E-PROVIDES-ARGS — `#[Provides]` was given arguments.\n\n\
+             The `#[Provides]` marker takes no arguments — write it bare on a `static` factory method.\n\
+             The provided type is the method's return type; its own parameters are autowired.\n"
+        }
         "E-DI-NO-IMPORT" => {
             "E-DI-NO-IMPORT — the `inject` composition root was used without importing `Core.DI`.\n\n\
              `inject` is a `Core.DI` member, not a keyword — nothing is available in the wind. Import it\n\

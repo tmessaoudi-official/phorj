@@ -76,11 +76,37 @@ struct Registry {
     /// `interface → the injectable classes that implement it` (sorted; the single-impl auto-bind + the
     /// ambiguity check read this).
     impls: BTreeMap<String, Vec<String>>,
+    /// `provided type → (owner class, static method, method params)` — a `#[Provides]` factory (slice 4a).
+    /// A provider takes PRECEDENCE over `new` for its return type; its params are the deps to autowire.
+    providers: BTreeMap<String, ProviderInfo>,
+    /// Provided types with MORE than one `#[Provides]` factory — an ambiguous provider (E-DI-AMBIGUOUS).
+    ambiguous_providers: BTreeSet<String>,
 }
 
-/// The resolved construction order for one requested type: `(concrete_class, [dep_concrete_classes])`
-/// entries in topological order (dependencies before dependents), each class appearing exactly once.
-type Plan = Vec<(String, Vec<String>)>;
+/// How the resolver constructs one node of the graph.
+#[derive(Clone)]
+enum Construct {
+    /// `new <class>(args…)` — ordinary constructor injection.
+    New(String),
+    /// `<owner>.<method>(args…)` — a `#[Provides]` static factory method (slice 4a).
+    Provides(String, String),
+}
+
+/// The resolved construction order for one requested type: `(key, how-to-construct, [dep keys])` entries
+/// in topological order (dependencies before dependents), each key appearing exactly once (shared). The
+/// `key` is the type the node builds (a concrete class, or a provided type/interface); dep keys reference
+/// the earlier entries' `inst_var`s.
+type Plan = Vec<(String, Construct, Vec<String>)>;
+
+/// A dependency parameter list: each `(Some(type_name) | None, span)` — `None` for a non-injectable
+/// (primitive/optional/generic) type the graph can't wire.
+type DepParams = Vec<(Option<String>, Span)>;
+
+/// A `#[Provides]` factory: `(owner class, static method, method params)`.
+type ProviderInfo = (String, String, DepParams);
+
+/// A resolved construction node: `(key, how-to-construct, dep param types)`.
+type Node = (String, Construct, DepParams);
 
 pub fn desugar_di(program: Program) -> Result<Program, Vec<Diagnostic>> {
     // Field injection (slice 3): fold injectable-typed no-initializer fields into promoted ctor params
@@ -183,12 +209,49 @@ fn build_registry(program: &Program) -> Registry {
         deps.insert(cls.clone(), params);
     }
     let impls = collect_impls(program, &injectable);
+    let (providers, ambiguous_providers) = collect_providers(program);
     Registry {
         injectable,
         all_classes,
         deps,
         impls,
+        providers,
+        ambiguous_providers,
     }
+}
+
+/// Scan EVERY class (not only `#[Injectable]` ones — a provider module is typically a plain class of
+/// static factory methods) for `#[Provides]` static methods, mapping each method's return type → its
+/// `(owner, method, params)`. A return type with more than one provider is recorded ambiguous. Providers
+/// with no return type are skipped here (the checker already reported `E-PROVIDES-TARGET`).
+fn collect_providers(program: &Program) -> (BTreeMap<String, ProviderInfo>, BTreeSet<String>) {
+    let mut providers: BTreeMap<String, ProviderInfo> = BTreeMap::new();
+    let mut ambiguous = BTreeSet::new();
+    for it in &program.items {
+        if let Item::Class(c) = it {
+            for m in &c.members {
+                let ClassMember::Method(f) = m else { continue };
+                if !f.attrs.iter().any(crate::ast::Attribute::is_di_provides) {
+                    continue;
+                }
+                let Some(ret) = f.ret.as_ref().and_then(type_head_name) else {
+                    continue; // E-PROVIDES-TARGET already reported for a return-less provider
+                };
+                let params: DepParams = f
+                    .params
+                    .iter()
+                    .map(|p| (type_head_name(&p.ty), type_span(&p.ty)))
+                    .collect();
+                if providers
+                    .insert(ret.clone(), (c.name.clone(), f.name.clone(), params))
+                    .is_some()
+                {
+                    ambiguous.insert(ret);
+                }
+            }
+        }
+    }
+    (providers, ambiguous)
 }
 
 /// Field injection (slice 3): fold each injectable's injectable-typed, no-initializer INSTANCE field into
@@ -374,21 +437,66 @@ impl Di<'_> {
         None
     }
 
-    /// Resolve the full dependency graph for a concrete class into a topological plan. `in_progress`
-    /// detects cycles. Returns `None` (and records a diagnostic) on any failure.
+    /// Resolve a requested type name to its construction node: `(key, how-to-construct, dep param types)`.
+    /// Precedence (advisor-ruled): a `#[Provides]` factory for the type WINS over `new`/single-impl; then
+    /// an `#[Injectable]` class; then a single-implementation interface (whose impl may itself be
+    /// provider-built). Records the matching diagnostic and returns `None` on ambiguity/missing.
+    fn resolve_node(&mut self, name: &str, span: Span) -> Option<Node> {
+        // A provider for the requested type itself takes precedence over `new` and interface auto-bind.
+        if let Some(node) = self.provider_node(name, span) {
+            return node;
+        }
+        // Otherwise resolve to a concrete injectable class (interface → its single impl).
+        let concrete = self.resolve_concrete(name, span)?;
+        // The concrete impl may itself be provider-built (a `#[Provides]` on the chosen impl).
+        if let Some(node) = self.provider_node(&concrete, span) {
+            return node;
+        }
+        let deps = self.reg.deps.get(&concrete).cloned().unwrap_or_default();
+        Some((concrete.clone(), Construct::New(concrete), deps))
+    }
+
+    /// If `name` has a `#[Provides]` factory, the node that builds it via that factory — or `Some(None)`
+    /// (via the outer `?`) after recording `E-DI-AMBIGUOUS` when more than one provider returns `name`.
+    /// Returns `None` (the outer Option) when `name` has no provider at all.
+    fn provider_node(&mut self, name: &str, span: Span) -> Option<Option<Node>> {
+        if self.reg.ambiguous_providers.contains(name) {
+            self.diags.push(
+                err(
+                    format!("ambiguous injection of `{name}`: more than one `#[Provides]` factory returns it"),
+                    span,
+                )
+                .with_code("E-DI-AMBIGUOUS")
+                .with_hint("declare exactly one `#[Provides]` factory per provided type".to_string()),
+            );
+            return Some(None);
+        }
+        self.reg.providers.get(name).map(|(owner, method, params)| {
+            Some((
+                name.to_string(),
+                Construct::Provides(owner.clone(), method.clone()),
+                params.clone(),
+            ))
+        })
+    }
+
+    /// Resolve the full dependency graph for `name` into a topological plan, returning the node's `key`.
+    /// `in_progress` (the DFS path) detects cycles; `order` (built once per key) realizes sharing. Records
+    /// a diagnostic and returns `None` on any failure.
     fn resolve_graph(
         &mut self,
-        class: &str,
+        name: &str,
         span: Span,
         in_progress: &mut Vec<String>,
         order: &mut Plan,
-    ) -> Option<()> {
-        if order.iter().any(|(c, _)| c == class) {
-            return Some(()); // already constructed once (shared)
+    ) -> Option<String> {
+        let (key, construct, dep_params) = self.resolve_node(name, span)?;
+        if order.iter().any(|(k, _, _)| *k == key) {
+            return Some(key); // already constructed once (shared)
         }
-        if in_progress.iter().any(|c| c == class) {
+        if in_progress.contains(&key) {
             let mut chain = in_progress.clone();
-            chain.push(class.to_string());
+            chain.push(key.clone());
             self.diags.push(
                 err(
                     format!("dependency cycle in injection: {}", chain.join(" → ")),
@@ -396,41 +504,39 @@ impl Di<'_> {
                 )
                 .with_code("E-DI-CYCLE")
                 .with_hint(
-                    "break the cycle — a constructor graph must be acyclic (field-injection cycle-breaking is not in v1)"
+                    "break the cycle — the construction graph must be acyclic (field-injection cycle-breaking is not in v1)"
                         .to_string(),
                 ),
             );
             return None;
         }
-        in_progress.push(class.to_string());
-        let deps = self.reg.deps.get(class).cloned().unwrap_or_default();
-        let mut dep_classes = Vec::new();
-        for (dep_name, dep_span) in deps {
-            let Some(name) = dep_name else {
+        in_progress.push(key.clone());
+        let mut dep_keys = Vec::new();
+        for (dep_name, dep_span) in dep_params {
+            let Some(dep) = dep_name else {
                 self.diags.push(
                     err(
-                        format!("constructor of `{class}` has a dependency whose type is not an injectable class"),
+                        format!("`{key}` has a dependency whose type is not injectable"),
                         dep_span,
                     )
                     .with_code("E-DI-MISSING")
                     .with_hint(
-                        "every constructor parameter of an injectable must be an injectable class or a single-impl interface (config-value provision is a later slice)"
+                        "every dependency must be an injectable class, a single-impl interface, or a `#[Provides]`-provided type (raw config-value provision is a later slice)"
                             .to_string(),
                     ),
                 );
                 in_progress.pop();
                 return None;
             };
-            let Some(concrete) = self.resolve_concrete(&name, dep_span) else {
+            let Some(dep_key) = self.resolve_graph(&dep, dep_span, in_progress, order) else {
                 in_progress.pop();
                 return None;
             };
-            self.resolve_graph(&concrete, dep_span, in_progress, order)?;
-            dep_classes.push(concrete);
+            dep_keys.push(dep_key);
         }
         in_progress.pop();
-        order.push((class.to_string(), dep_classes));
-        Some(())
+        order.push((key.clone(), construct, dep_keys));
+        Some(key)
     }
 
     /// Resolve (memoized) the requested type `t`; returns the factory name to call, or `None` on error.
@@ -438,14 +544,13 @@ impl Di<'_> {
         if let Some(entry) = self.resolved.get(t) {
             return entry.as_ref().map(|_| factory_name(t));
         }
-        let plan = self.resolve_concrete(t, span).and_then(|concrete| {
-            let mut order = Plan::new();
-            let mut in_progress = Vec::new();
-            self.resolve_graph(&concrete, span, &mut in_progress, &mut order)
-                .map(|()| (concrete, order))
-        });
+        let mut order = Plan::new();
+        let mut in_progress = Vec::new();
+        let plan = self
+            .resolve_graph(t, span, &mut in_progress, &mut order)
+            .map(|_root| order);
         match plan {
-            Some((_concrete, order)) => {
+            Some(order) => {
                 self.resolved.insert(t.to_string(), Some(order));
                 Some(factory_name(t))
             }
@@ -1016,35 +1121,50 @@ fn inst_var(class: &str) -> String {
     format!("di{class}")
 }
 
-/// Build `function __phorj_di_<T>(): T { var __di_C = new C(...); …; return __di_<root>; }`.
-/// The last entry in `plan` is the root (topological order emits deps first, root last).
+/// Build `function phorjInject<T>(): T { var di<K> = <construct>; …; return di<root>; }`.
+/// The last entry in `plan` is the root (topological order emits deps first, root last). Each node
+/// constructs via `new <class>(args)` or a `#[Provides]` factory call `<owner>.<method>(args)` (slice 4a).
 fn synth_factory(requested: &str, plan: &Plan) -> Item {
     let sp = di_span();
     let mut body: Vec<Stmt> = Vec::new();
-    for (class, dep_classes) in plan {
-        let args: Vec<Expr> = dep_classes
+    for (key, construct, dep_keys) in plan {
+        let args: Vec<Expr> = dep_keys
             .iter()
             .map(|d| Expr::Ident(inst_var(d), sp))
             .collect();
-        let construct = Expr::New(
-            Box::new(Expr::Call {
-                callee: Box::new(Expr::Ident(class.clone(), sp)),
+        let init = match construct {
+            Construct::New(class) => Expr::New(
+                Box::new(Expr::Call {
+                    callee: Box::new(Expr::Ident(class.clone(), sp)),
+                    args,
+                    span: sp,
+                }),
+                sp,
+            ),
+            // `<owner>.<method>(args)` — a static factory call (a `Member` callee on the owner class name,
+            // exactly like `Color.of(…)`); NO `new`, so the provider fully controls construction.
+            Construct::Provides(owner, method) => Expr::Call {
+                callee: Box::new(Expr::Member {
+                    object: Box::new(Expr::Ident(owner.clone(), sp)),
+                    name: method.clone(),
+                    safe: false,
+                    span: sp,
+                }),
                 args,
                 span: sp,
-            }),
-            sp,
-        );
+            },
+        };
         body.push(Stmt::VarDecl {
-            ty: named_type(class, sp),
-            name: inst_var(class),
-            init: construct,
+            ty: named_type(key, sp),
+            name: inst_var(key),
+            init,
             mutable: false,
             span: sp,
         });
     }
     let root = plan
         .last()
-        .map(|(c, _)| c.clone())
+        .map(|(k, _, _)| k.clone())
         .unwrap_or_else(|| requested.to_string());
     body.push(Stmt::Return {
         value: Some(Expr::Ident(inst_var(&root), sp)),
