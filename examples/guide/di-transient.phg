@@ -1,0 +1,61 @@
+// `#[Transient]` lifetime (DI v1 slice 4b) — opt OUT of the default-shared lifetime.
+//
+// By default the DI graph builds ONE instance of each type per `inject<T>()` root and shares it (a
+// diamond → one instance). A class marked `#[Transient]` is instead built FRESH at every injection point.
+// Crucially, the two are composable: a transient's OWN state is per-instance, but a SHARED dependency of
+// that transient is still the one shared instance.
+//
+// The output `own 1 1 | shared 1 2` proves both at once:
+//   - `own 1 1` — `w1` and `w2` are DISTINCT `Worker`s (each per-instance counter starts fresh);
+//   - `shared 1 2` — both share the ONE `Counter` (its mutable tick runs 1 then 2).
+// The synthesized factory hoists the shared `Counter` to a single local and inlines a fresh `Worker` at
+// each use (`new App(new Worker(c), new Worker(c))`) — byte-identical run/runvm/PHP.
+package Main;
+
+import Core.Output;
+import Core.DI.Injectable;
+import Core.DI.Transient;
+import Core.DI.inject;
+
+// SHARED (default) — mutable state makes the sharing observable.
+#[Injectable]
+class Counter {
+    private mutable int n;
+    constructor() {
+        this.n = 0;
+    }
+    function tick(): int {
+        this.n = this.n + 1;
+        return this.n;
+    }
+}
+
+// TRANSIENT — a fresh instance per injection point; its `Counter` dep is nonetheless the shared one.
+#[Injectable]
+#[Transient]
+class Worker {
+    private mutable int local;
+    constructor(private Counter counter) {
+        this.local = 0;
+    }
+    function own(): int {
+        this.local = this.local + 1;
+        return this.local;
+    }
+    function shared(): int {
+        return this.counter.tick();
+    }
+}
+
+#[Injectable]
+class App {
+    constructor(private Worker w1, private Worker w2) {}
+    function report(): string {
+        return "own {this.w1.own()} {this.w2.own()} | shared {this.w1.shared()} {this.w2.shared()}";
+    }
+}
+
+function main(): void {
+    App app = inject<App>();
+    Output.printLine(app.report());
+}

@@ -1300,6 +1300,11 @@ pub fn explain_text(code: &str) -> Option<String> {
              (`App app = inject();`), a typed `return`, or a lambda return type. It has no source in a\n\
              `var` binding, a discard, or a call argument — there, name the type: `inject<App>()`.\n"
         }
+        "E-TRANSIENT-ARGS" => {
+            "E-TRANSIENT-ARGS — `#[Transient]` was given arguments.\n\n\
+             The `#[Transient]` marker takes no arguments — write it bare on the class. It opts the class\n\
+             out of the default-shared DI lifetime, so a fresh instance is built at each injection point.\n"
+        }
         "E-PROVIDES-TARGET" => {
             "E-PROVIDES-TARGET — `#[Provides]` is not on a valid target.\n\n\
              A `#[Provides]` factory must be a `static` method with a declared return type — the return\n\

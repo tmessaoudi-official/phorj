@@ -100,6 +100,29 @@ fn di_field_injection_synthesizes_constructor_when_absent() {
 }
 
 #[test]
+fn di_transient_is_fresh_per_use_but_shares_its_dependency() {
+    // Slice 4b: a `#[Transient]` `Worker` is built fresh at each of App's two injection points (so its
+    // per-instance `own()` counter starts at 1 both times → "1 1"), while its SHARED `Counter` dep is the
+    // one instance threaded to both (its `tick()` runs 1 then 2 → "1 2"). The exact output distinguishes
+    // correct behavior from BOTH failure modes (transient wrongly shared → "1 2 …"; shared dep wrongly
+    // transient → "… 1 1").
+    let src = "package Main;\n\
+        import Core.Output;\n\
+        import Core.DI.Injectable;\n\
+        import Core.DI.Transient;\n\
+        import Core.DI.inject;\n\
+        #[Injectable] class Counter { private mutable int n; constructor() { this.n = 0; } function tick(): int { this.n = this.n + 1; return this.n; } }\n\
+        #[Injectable] #[Transient] class Worker { private mutable int local; constructor(private Counter counter) { this.local = 0; } function own(): int { this.local = this.local + 1; return this.local; } function shared(): int { return this.counter.tick(); } }\n\
+        #[Injectable] class App { constructor(private Worker w1, private Worker w2) {} function report(): string { return \"own {this.w1.own()} {this.w2.own()} shared {this.w1.shared()} {this.w2.shared()}\"; } }\n\
+        function main(): void { App app = inject<App>(); Output.printLine(app.report()); }\n";
+    let tokens = lex(src).expect("lex ok");
+    let prog = Parser::new(tokens).parse_program().expect("parse ok");
+    let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
+    let out = interpret(&expanded).expect("transient DI should run");
+    assert_eq!(out.trim(), "own 1 1 shared 1 2");
+}
+
+#[test]
 fn program_without_main_errors() {
     let e = run(r#"function helper() -> int { return 1; }"#).unwrap_err();
     assert!(e.message.contains("main"), "{}", e.message);

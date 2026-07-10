@@ -100,10 +100,10 @@ pub(super) fn module_of(name: &str) -> Option<&'static str> {
         // Lives at `Core.Runtime.Attribute` (1-deep module `Runtime`) — `import Core.Runtime.Attribute;`
         // gates bare `#[Attribute]`, or `import Core.Runtime;` → qualified `#[Runtime.Attribute]`.
         "Attribute" => "Runtime",
-        // DI v1 (§7 import discipline): `#[Injectable]`/`#[Provides]` are injected `Core.DI`
-        // attribute-types — bare needs the member-import (`import Core.DI.Provides;`), or write it
-        // qualified (`#[DI.Provides]`) with `import Core.DI;`. `Transient` joins here with slice 4b.
-        "Injectable" | "Provides" => "DI",
+        // DI v1 (§7 import discipline): `#[Injectable]`/`#[Provides]`/`#[Transient]` are injected `Core.DI`
+        // attribute-types — bare needs the member-import (`import Core.DI.Transient;`), or write it
+        // qualified (`#[DI.Transient]`) with `import Core.DI;`.
+        "Injectable" | "Provides" | "Transient" => "DI",
         _ => return None,
     })
 }

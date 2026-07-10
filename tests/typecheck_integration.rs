@@ -348,6 +348,43 @@ fn di_provides_bare_without_import_is_rejected() {
     assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
 }
 
+// --- slice 4b: #[Transient] lifetime -------------------------------------------------------------
+
+#[test]
+fn di_transient_checks_clean() {
+    let src = "package Main;\nimport Core.DI.Injectable;\nimport Core.DI.Transient;\nimport Core.DI.inject;\nimport Core.Output;\n\
+        #[Injectable] class Db { constructor() {} }\n\
+        #[Injectable] #[Transient] class Worker { constructor(private Db db) {} }\n\
+        #[Injectable] class App { constructor(private Worker a, private Worker b) {} }\n\
+        function main(): void { App x = inject<App>(); Output.printLine(\"ok\"); }\n";
+    assert!(
+        expand(src).is_ok(),
+        "expected clean transient expansion, got: {:?}",
+        expand(src)
+    );
+}
+
+#[test]
+fn di_transient_cycle_is_still_rejected() {
+    // Transient does not skip cycle detection (the DFS path check is unchanged).
+    let src = "package Main;\nimport Core.DI.Injectable;\nimport Core.DI.Transient;\nimport Core.DI.inject;\nimport Core.Output;\n\
+        #[Injectable] #[Transient] class A { constructor(private B b) {} }\n\
+        #[Injectable] #[Transient] class B { constructor(private A a) {} }\n\
+        function main(): void { A x = inject<A>(); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-DI-CYCLE"), "{e}");
+}
+
+#[test]
+fn di_transient_bare_without_import_is_rejected() {
+    let src =
+        "package Main;\nimport Core.DI.Injectable;\nimport Core.DI.inject;\nimport Core.Output;\n\
+        #[Injectable] #[Transient] class W { constructor() {} }\n\
+        function main(): void { W w = inject<W>(); Output.printLine(\"x\"); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
+}
+
 #[test]
 fn di_field_injection_inherited_from_parent() {
     // An injectable subclass inherits its parent's injected (promoted) field — `ctor_plan` gathers

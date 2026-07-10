@@ -853,9 +853,18 @@ impl Checker {
             if self.check_user_attribute_use(attr) {
                 continue;
             }
-            // DI v1: `#[Injectable]` is a built-in class attribute consumed by `desugar_di` before any
-            // backend (then inert). Accept it here so it is not `E-UNKNOWN-ATTRIBUTE`.
-            if attr.is_di_builtin() {
+            // DI v1: `#[Injectable]` (slice 1) and `#[Transient]` (slice 4b) are built-in CLASS attributes
+            // consumed by `desugar_di` before any backend (then inert). `#[Transient]` opts the class out
+            // of the default-shared lifetime. Accept them so they are not `E-UNKNOWN-ATTRIBUTE`.
+            if attr.is_di_builtin() || attr.is_di_transient() {
+                if attr.is_di_transient() && !attr.args.is_empty() {
+                    self.err_coded(
+                        attr.span,
+                        "`#[Transient]` takes no arguments".to_string(),
+                        "E-TRANSIENT-ARGS",
+                        Some("write it bare: `#[Transient]` on the class".into()),
+                    );
+                }
                 continue;
             }
             self.err_coded(

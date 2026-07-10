@@ -759,6 +759,13 @@ impl Attribute {
         matches!(self.name.as_str(), "Provides" | "DI.Provides")
     }
 
+    /// True iff this is the DI `#[Transient]` attribute (DI v1 slice 4b) — on a class, opts OUT of the
+    /// default-shared lifetime: the DI graph builds a fresh instance at each injection point instead of
+    /// sharing one per resolution root. Bare (`import Core.DI.Transient;`) or qualified (`#[DI.Transient]`).
+    pub fn is_di_transient(&self) -> bool {
+        matches!(self.name.as_str(), "Transient" | "DI.Transient")
+    }
+
     /// True iff this is the built-in `#[Attribute]` marker (DEC-194) — a class carrying it IS a
     /// user-defined attribute type. Recognized in both "nothing in the wind" forms: bare `Attribute`
     /// (member-import `import Core.Runtime.Attribute;`) or qualified `Runtime.Attribute` (module import

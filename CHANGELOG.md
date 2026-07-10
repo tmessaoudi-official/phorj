@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DI `#[Transient]` lifetime (DI v1 slice 4b)
+
+A class marked `#[Transient]` (or `#[DI.Transient]`) opts OUT of the default-shared DI lifetime: the graph
+builds a FRESH instance at each injection point instead of sharing one per resolution root. A shared
+dependency of a transient stays shared. To support this, the resolved graph is now a **`Built` tree** and
+the synthesized factory is emitted by **let-floating** it — shared nodes hoisted to `var`s once (in
+topological order), transient nodes inlined fresh at each use — with construction kind (`new` vs
+`#[Provides]`) and sharing (shared vs transient) fully orthogonal. For an all-shared graph the emitted PHP
+is byte-identical to before (regression-guarded against the shipped `di.phg` / `di-field-injection.phg` /
+`di-provides.phg`). Cycle detection is unchanged (transients are still cycle-checked). `#[Transient]` off
+a class is `E-TRANSIENT-ARGS` for stray args; import-gated like the other DI symbols.
+`examples/guide/di-transient.phg` (output `own 1 1 | shared 1 2` distinguishes correct from both failure
+modes) + a runtime test asserting the same. No new `Op`/`Value`.
+
 ### Added — DI `#[Provides]` factories (DI v1 slice 4a)
 
 A `#[Provides]` (or qualified `#[DI.Provides]`) **static method** whose return type is `T` now teaches the

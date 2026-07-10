@@ -42,18 +42,24 @@
 //! promoted-constructor property. A field WITH an initializer is left alone; a non-injectable-typed
 //! field is untouched.
 //!
+//! `#[Provides]` FACTORIES (slice 4a) construct a type via a `static` method (`Owner.method(deps)`)
+//! instead of `new` — precedence over `new`/single-impl auto-bind, the params autowired (a provider
+//! module is any class of such statics). `#[Transient]` (slice 4b) opts a class OUT of the default-shared
+//! lifetime: it is built fresh at each injection point. The resolved graph is a [`Built`] tree and the
+//! factory is emitted by LET-FLOATING it — shared nodes hoisted to `var`s once, transient nodes inlined
+//! fresh — with construction-kind (new/provides) and sharing (shared/transient) fully orthogonal.
+//!
 //! INVARIANT — keep the rewriter TOTAL. `ritem`/`rfn`/`rmember`/`rexpr`/`rstmt` must recurse EVERY
 //! expression-bearing AST position, so no `Expr::Inject` can survive to a backend `unreachable!`. When a
-//! new expression-bearing AST node is added (a later slice like `#[Provides]` touches exactly this
-//! surface), add its arm here. There is no runtime backstop (matching `desugar_router` /
-//! `rewrite_ufcs`); totality is maintained by this rule.
+//! new expression-bearing AST node is added, add its arm here. There is no runtime backstop (matching
+//! `desugar_router` / `rewrite_ufcs`); totality is maintained by this rule.
 //!
-//! Scope (disclosed): constructor + field injection; dependency types must be concrete class / interface
-//! names (an alias or generic-parameter dependency type is a clean `E-DI-MISSING`, since this runs before
-//! alias/generic expansion); `#[Transient]` / `#[Provides]` are later slices (v1 is default-shared,
-//! plain-`new` construction). Annotation-driven `inject()` draws its target only from a typed `var`
-//! declaration, a `return`, or a lambda return type (a call-argument or param-default position is NOT an
-//! annotation source — write `inject<T>()` there).
+//! Scope (disclosed): constructor + field injection, `#[Provides]` factories, `#[Transient]` (class-level)
+//! lifetime; dependency types must be concrete class / interface names (an alias or generic-parameter
+//! dependency type is a clean `E-DI-MISSING`, since this runs before alias/generic expansion).
+//! Annotation-driven `inject()` draws its target only from a typed `var` declaration, a `return`, or a
+//! lambda return type (a call-argument or param-default position is NOT an annotation source — write
+//! `inject<T>()` there).
 
 use crate::ast::{
     ctor_plan, CatchClause, ClassMember, Expr, FunctionDecl, Item, LambdaBody, MatchArm, Program,
@@ -81,6 +87,9 @@ struct Registry {
     providers: BTreeMap<String, ProviderInfo>,
     /// Provided types with MORE than one `#[Provides]` factory — an ambiguous provider (E-DI-AMBIGUOUS).
     ambiguous_providers: BTreeSet<String>,
+    /// Classes carrying `#[Transient]` (slice 4b) — built FRESH at each injection point (opt out of the
+    /// default-shared lifetime).
+    transient: BTreeSet<String>,
 }
 
 /// How the resolver constructs one node of the graph.
@@ -92,11 +101,19 @@ enum Construct {
     Provides(String, String),
 }
 
-/// The resolved construction order for one requested type: `(key, how-to-construct, [dep keys])` entries
-/// in topological order (dependencies before dependents), each key appearing exactly once (shared). The
-/// `key` is the type the node builds (a concrete class, or a provided type/interface); dep keys reference
-/// the earlier entries' `inst_var`s.
-type Plan = Vec<(String, Construct, Vec<String>)>;
+/// The resolved construction graph for one requested type, as a TREE (slice 4b): each node records how to
+/// build its key and its resolved dependency sub-nodes. A SHARED node is emitted once (hoisted to a
+/// `var`) and referenced by every dependent; a TRANSIENT node is inlined fresh at each use. Because
+/// sharing (hoist-vs-inline) and construction kind (new-vs-provides) are orthogonal, the let-float emit
+/// in [`synth_factory`] handles all four combinations from this one shape. A shared subtree is built once
+/// and reused during resolution (so a diamond does not blow up); a transient subtree is rebuilt each time.
+#[derive(Clone)]
+struct Built {
+    key: String,
+    construct: Construct,
+    transient: bool,
+    deps: Vec<Built>,
+}
 
 /// A dependency parameter list: each `(Some(type_name) | None, span)` — `None` for a non-injectable
 /// (primitive/optional/generic) type the graph can't wire.
@@ -138,9 +155,9 @@ pub fn desugar_di(program: Program) -> Result<Program, Vec<Diagnostic>> {
         return Err(di.diags);
     }
     // Append a synthesized factory for every successfully-resolved requested type (sorted → Inv-10).
-    for (t, plan) in &di.resolved {
-        if let Some(plan) = plan {
-            items.push(synth_factory(t, plan));
+    for (t, built) in &di.resolved {
+        if let Some(built) = built {
+            items.push(synth_factory(t, built));
         }
     }
     Ok(Program {
@@ -210,6 +227,16 @@ fn build_registry(program: &Program) -> Registry {
     }
     let impls = collect_impls(program, &injectable);
     let (providers, ambiguous_providers) = collect_providers(program);
+    let transient = program
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Class(c) if c.attrs.iter().any(crate::ast::Attribute::is_di_transient) => {
+                Some(c.name.clone())
+            }
+            _ => None,
+        })
+        .collect();
     Registry {
         injectable,
         all_classes,
@@ -217,6 +244,7 @@ fn build_registry(program: &Program) -> Registry {
         impls,
         providers,
         ambiguous_providers,
+        transient,
     }
 }
 
@@ -362,7 +390,7 @@ fn type_span(t: &Type) -> Span {
 struct Di<'a> {
     reg: &'a Registry,
     diags: Vec<Diagnostic>,
-    resolved: BTreeMap<String, Option<Plan>>,
+    resolved: BTreeMap<String, Option<Built>>,
     /// `import Core.DI.inject;` is present → bare `inject…` is allowed (else a bare turbofish is
     /// `E-DI-NO-IMPORT` and a bare annotation `inject()` stays an ordinary call to a user function).
     bare_inject_imported: bool,
@@ -480,19 +508,23 @@ impl Di<'_> {
         })
     }
 
-    /// Resolve the full dependency graph for `name` into a topological plan, returning the node's `key`.
-    /// `in_progress` (the DFS path) detects cycles; `order` (built once per key) realizes sharing. Records
-    /// a diagnostic and returns `None` on any failure.
+    /// Resolve the full dependency graph for `name` into a [`Built`] tree. `in_progress` (the DFS path)
+    /// detects cycles; `shared_cache` memoizes SHARED subtrees so a diamond does not rebuild (and does not
+    /// blow up) — a TRANSIENT subtree is never cached, so it is rebuilt fresh at each use. Records a
+    /// diagnostic and returns `None` on any failure.
     fn resolve_graph(
         &mut self,
         name: &str,
         span: Span,
         in_progress: &mut Vec<String>,
-        order: &mut Plan,
-    ) -> Option<String> {
+        shared_cache: &mut BTreeMap<String, Built>,
+    ) -> Option<Built> {
         let (key, construct, dep_params) = self.resolve_node(name, span)?;
-        if order.iter().any(|(k, _, _)| *k == key) {
-            return Some(key); // already constructed once (shared)
+        let transient = self.reg.transient.contains(&key);
+        if !transient {
+            if let Some(b) = shared_cache.get(&key) {
+                return Some(b.clone()); // a shared subtree — built once, reused (diamond)
+            }
         }
         if in_progress.contains(&key) {
             let mut chain = in_progress.clone();
@@ -511,7 +543,7 @@ impl Di<'_> {
             return None;
         }
         in_progress.push(key.clone());
-        let mut dep_keys = Vec::new();
+        let mut deps = Vec::new();
         for (dep_name, dep_span) in dep_params {
             let Some(dep) = dep_name else {
                 self.diags.push(
@@ -528,15 +560,23 @@ impl Di<'_> {
                 in_progress.pop();
                 return None;
             };
-            let Some(dep_key) = self.resolve_graph(&dep, dep_span, in_progress, order) else {
+            let Some(built) = self.resolve_graph(&dep, dep_span, in_progress, shared_cache) else {
                 in_progress.pop();
                 return None;
             };
-            dep_keys.push(dep_key);
+            deps.push(built);
         }
         in_progress.pop();
-        order.push((key.clone(), construct, dep_keys));
-        Some(key)
+        let built = Built {
+            key: key.clone(),
+            construct,
+            transient,
+            deps,
+        };
+        if !transient {
+            shared_cache.insert(key, built.clone());
+        }
+        Some(built)
     }
 
     /// Resolve (memoized) the requested type `t`; returns the factory name to call, or `None` on error.
@@ -544,14 +584,12 @@ impl Di<'_> {
         if let Some(entry) = self.resolved.get(t) {
             return entry.as_ref().map(|_| factory_name(t));
         }
-        let mut order = Plan::new();
         let mut in_progress = Vec::new();
-        let plan = self
-            .resolve_graph(t, span, &mut in_progress, &mut order)
-            .map(|_root| order);
-        match plan {
-            Some(order) => {
-                self.resolved.insert(t.to_string(), Some(order));
+        let mut shared_cache = BTreeMap::new();
+        let built = self.resolve_graph(t, span, &mut in_progress, &mut shared_cache);
+        match built {
+            Some(built) => {
+                self.resolved.insert(t.to_string(), Some(built));
                 Some(factory_name(t))
             }
             None => {
@@ -1121,53 +1159,58 @@ fn inst_var(class: &str) -> String {
     format!("di{class}")
 }
 
-/// Build `function phorjInject<T>(): T { var di<K> = <construct>; …; return di<root>; }`.
-/// The last entry in `plan` is the root (topological order emits deps first, root last). Each node
-/// constructs via `new <class>(args)` or a `#[Provides]` factory call `<owner>.<method>(args)` (slice 4a).
-fn synth_factory(requested: &str, plan: &Plan) -> Item {
+/// Build `function phorjInject<T>(): T { var di<K> = <construct>; …; return <root>; }` by LET-FLOATING
+/// the [`Built`] tree (slice 4b): every SHARED node is hoisted to a `var` (emitted once, in topological
+/// deps-first order) and referenced by each dependent; every TRANSIENT node is inlined fresh at each use.
+/// Construction kind (new-vs-provides) and sharing (shared-vs-transient) are orthogonal — `build_expr`
+/// emits all four combinations. For an all-shared graph this is byte-identical to the pre-4b flat plan
+/// (post-order hoist order matches), which is the regression guard for the shipped slices.
+fn synth_factory(requested: &str, root: &Built) -> Item {
     let sp = di_span();
-    let mut body: Vec<Stmt> = Vec::new();
-    for (key, construct, dep_keys) in plan {
-        let args: Vec<Expr> = dep_keys
-            .iter()
-            .map(|d| Expr::Ident(inst_var(d), sp))
-            .collect();
-        let init = match construct {
-            Construct::New(class) => Expr::New(
-                Box::new(Expr::Call {
-                    callee: Box::new(Expr::Ident(class.clone(), sp)),
-                    args,
-                    span: sp,
-                }),
-                sp,
-            ),
-            // `<owner>.<method>(args)` — a static factory call (a `Member` callee on the owner class name,
-            // exactly like `Color.of(…)`); NO `new`, so the provider fully controls construction.
-            Construct::Provides(owner, method) => Expr::Call {
-                callee: Box::new(Expr::Member {
-                    object: Box::new(Expr::Ident(owner.clone(), sp)),
-                    name: method.clone(),
-                    safe: false,
-                    span: sp,
-                }),
-                args,
-                span: sp,
-            },
-        };
-        body.push(Stmt::VarDecl {
-            ty: named_type(key, sp),
-            name: inst_var(key),
-            init,
-            mutable: false,
-            span: sp,
-        });
+    // Shared keys in topological (deps-first) order, deduped by first completion; `node_for` keeps the
+    // first `Built` seen for each shared key (any occurrence has the same construct + deps).
+    let mut shared_order: Vec<String> = Vec::new();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut node_for: BTreeMap<String, &Built> = BTreeMap::new();
+    fn collect<'a>(
+        node: &'a Built,
+        order: &mut Vec<String>,
+        seen: &mut BTreeSet<String>,
+        node_for: &mut BTreeMap<String, &'a Built>,
+    ) {
+        // Descend through EVERY node (incl. transient) so a shared dep nested under a transient is still
+        // hoisted; only SHARED nodes are collected as hoisted vars.
+        for d in &node.deps {
+            collect(d, order, seen, node_for);
+        }
+        if !node.transient && seen.insert(node.key.clone()) {
+            node_for.insert(node.key.clone(), node);
+            order.push(node.key.clone());
+        }
     }
-    let root = plan
-        .last()
-        .map(|(k, _, _)| k.clone())
-        .unwrap_or_else(|| requested.to_string());
+    collect(root, &mut shared_order, &mut seen, &mut node_for);
+
+    let mut body: Vec<Stmt> = shared_order
+        .iter()
+        .map(|key| {
+            let node = node_for[key];
+            Stmt::VarDecl {
+                ty: named_type(key, sp),
+                name: inst_var(key),
+                init: build_expr(node, sp),
+                mutable: false,
+                span: sp,
+            }
+        })
+        .collect();
+    // The root: a shared root is its hoisted var; a transient root is inlined.
+    let ret_value = if root.transient {
+        build_expr(root, sp)
+    } else {
+        Expr::Ident(inst_var(&root.key), sp)
+    };
     body.push(Stmt::Return {
-        value: Some(Expr::Ident(inst_var(&root), sp)),
+        value: Some(ret_value),
         span: sp,
     });
     Item::Function(crate::ast::FunctionDecl {
@@ -1186,6 +1229,45 @@ fn synth_factory(requested: &str, plan: &Plan) -> Item {
         generic_ret_from_param: None,
         span: sp,
     })
+}
+
+/// The construction expression for one node: a SHARED dependency resolves to its hoisted `var` ident
+/// (`inst_var`), a TRANSIENT dependency is inlined by recursing (a fresh construction each time). The
+/// construct kind chooses `new <class>(args)` or the static factory call `<owner>.<method>(args)`.
+fn build_expr(node: &Built, sp: Span) -> Expr {
+    let args: Vec<Expr> = node
+        .deps
+        .iter()
+        .map(|d| {
+            if d.transient {
+                build_expr(d, sp)
+            } else {
+                Expr::Ident(inst_var(&d.key), sp)
+            }
+        })
+        .collect();
+    match &node.construct {
+        Construct::New(class) => Expr::New(
+            Box::new(Expr::Call {
+                callee: Box::new(Expr::Ident(class.clone(), sp)),
+                args,
+                span: sp,
+            }),
+            sp,
+        ),
+        // `<owner>.<method>(args)` — a static factory call (a `Member` callee on the owner class name,
+        // exactly like `Color.of(…)`); NO `new`, so the provider fully controls construction.
+        Construct::Provides(owner, method) => Expr::Call {
+            callee: Box::new(Expr::Member {
+                object: Box::new(Expr::Ident(owner.clone(), sp)),
+                name: method.clone(),
+                safe: false,
+                span: sp,
+            }),
+            args,
+            span: sp,
+        },
+    }
 }
 
 fn named_type(name: &str, span: Span) -> Type {

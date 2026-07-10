@@ -225,8 +225,22 @@ the LOCKED "nothing in the wind" principle ([[import-namespace-redesign]], 2026-
   (config-value provision), 5 tests (clean / interface-disambiguation / duplicate-ambiguous / non-static /
   no-import). resolve_graph now returns the node KEY.
 
-**NEXT:** slice 4b `#[Transient]` (let-float codegen: hoist shared, inline transient per-use; regression
-guard = byte-identical PHP for di.phg + di-field-injection.phg before/after) → then v2 qualifiers/generics.
+### SLICE 4b — `#[Transient]` lifetime SHIPPED 2026-07-10 (gate-green, byte-identical, let-float)
+- **`#[Transient]`** on a class → built FRESH per injection point (opt out of default-shared). Recognition
+  `is_di_transient` (+ `module_of` "Transient"→"DI", class-target in `check_class_attributes`,
+  `E-TRANSIENT-ARGS`). **Codegen REWRITE (advisor-designed):** resolved graph is now a `Built` TREE (the
+  flat `Plan` couldn't represent transients — one-entry-per-type IS sharing); `resolve_graph` returns
+  `Built` with a `shared_cache` (shared subtree built once/reused → no diamond blowup; transient rebuilt
+  fresh); `synth_factory` LET-FLOATS it — `collect` gathers shared keys post-order (deps-first, deduped),
+  hoists each to a `var`, `build_expr` inlines transient deps + references shared-dep vars. Construction-
+  kind (new/provides) × sharing (shared/transient) fully orthogonal.
+- **Regression guard (the masked-P0 defense):** for all-shared graphs the let-float emits BYTE-IDENTICAL
+  PHP vs pre-4b — verified by diffing transpiled di.phg + di-field-injection.phg + di-provides.phg
+  before/after (all identical). Cycle detection unchanged (in_progress path; transients still checked).
+- `examples/guide/di-transient.phg` (`own 1 1 | shared 1 2` distinguishes correct from BOTH failure modes:
+  transient-wrongly-shared / shared-dep-wrongly-transient) + runtime test + 3 typecheck tests.
+
+**DI v1 COMPLETE** (slices 1–4). NEXT = v2 (qualifiers/generics/`#[Singleton]`/runtime reflection L1).
 
 ### Direction (2026-07-10, ask-human): build BOTH slice 3 (field injection) AND slice 4 (#[Provides]+#[Transient]).
 - [2026-07-10] AGREED: proceed with slice 3 then slice 4, each a green committed slice under the §7 discipline.
