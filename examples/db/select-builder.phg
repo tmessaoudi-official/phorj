@@ -1,0 +1,30 @@
+// Core.Sql — the fluent SELECT builder (W3-1, Tier-A slice 2).
+//
+// `Sql.select([...]).from(...).where*(...).orderBy*(...).limit(...)` builds the same immutable,
+// parameterized `Query` value as the raw `Sql.query(text)` form — but the SQL text is generated, so
+// you never write it by hand. Comparison operators are per-operator METHODS (whereEq/whereGt/...),
+// not bare symbols, so nothing is imported "in the wind". Every bound value becomes a `?` placeholder
+// with its value in `params()`, so the injection-safety guarantee is preserved end to end.
+//
+// Pure value construction (no database, no IO) — byte-identical across the interpreter, the VM, and
+// transpiled PHP. Running the query is the separate Tier-B `Core.Db` module.
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Sql;
+
+function main(): void {
+    var q = Sql
+        .select(["id", "name", "city"])
+        .from("users")
+        .whereGt("age", 18)
+        .whereEq("city", "Paris")
+        .whereLike("name", "A%")
+        .orderByDesc("age")
+        .orderByAsc("name")
+        .limit(20)
+        .toQuery();
+    Output.printLine(q.sql());
+    Output.printLine("bound params: {List.length(q.params())}");
+}

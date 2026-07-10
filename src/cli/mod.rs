@@ -774,6 +774,8 @@ class Instant {
 /// a program imports `Core.Sql`.
 const SQL_PRELUDE: &str = r#"
 import Core.List;
+import Core.String;
+import Core.Conversion;
 class Query {
   constructor(private string queryText, private List<string | int | float | bool> boundParams) {}
   function bind(string | int | float | bool value): Query {
@@ -782,9 +784,59 @@ class Query {
   function sql(): string { return this.queryText; }
   function params(): List<string | int | float | bool> { return this.boundParams; }
 }
+class SelectQuery {
+  constructor(
+    private List<string> cols,
+    private string tableName,
+    private List<string> conds,
+    private List<string | int | float | bool> binds,
+    private List<string> orders,
+    private int? lim
+  ) {}
+  function from(string t): SelectQuery {
+    return new SelectQuery(this.cols, t, this.conds, this.binds, this.orders, this.lim);
+  }
+  private function withCond(string col, string op, string | int | float | bool val): SelectQuery {
+    string frag = col + " " + op + " ?";
+    return new SelectQuery(this.cols, this.tableName, List.append(this.conds, frag), List.append(this.binds, val), this.orders, this.lim);
+  }
+  function whereEq(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "=", val); }
+  function whereNe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "!=", val); }
+  function whereGt(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, ">", val); }
+  function whereGe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, ">=", val); }
+  function whereLt(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "<", val); }
+  function whereLe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "<=", val); }
+  function whereLike(string col, string val): SelectQuery { return this.withCond(col, "LIKE", val); }
+  private function withOrder(string col, string dir): SelectQuery {
+    return new SelectQuery(this.cols, this.tableName, this.conds, this.binds, List.append(this.orders, col + " " + dir), this.lim);
+  }
+  function orderByAsc(string col): SelectQuery { return this.withOrder(col, "ASC"); }
+  function orderByDesc(string col): SelectQuery { return this.withOrder(col, "DESC"); }
+  function limit(int n): SelectQuery {
+    return new SelectQuery(this.cols, this.tableName, this.conds, this.binds, this.orders, n);
+  }
+  function toQuery(): Query {
+    mutable string text = "SELECT " + String.join(this.cols, ", ") + " FROM " + this.tableName;
+    if (List.length(this.conds) > 0) {
+      text = text + " WHERE " + String.join(this.conds, " AND ");
+    }
+    if (List.length(this.orders) > 0) {
+      text = text + " ORDER BY " + String.join(this.orders, ", ");
+    }
+    if (var n = this.lim) {
+      text = text + " LIMIT " + Conversion.toString(n);
+    }
+    return new Query(text, this.binds);
+  }
+  function sql(): string { return this.toQuery().sql(); }
+  function params(): List<string | int | float | bool> { return this.binds; }
+}
 class Sql {
   static function query(string text): Query {
     return new Query(text, []);
+  }
+  static function select(List<string> columns): SelectQuery {
+    return new SelectQuery(columns, "", [], [], [], null);
   }
 }
 "#;
@@ -897,7 +949,7 @@ const CORE_MODULES: &[VirtualModule] = &[
         src: Some(SQL_PRELUDE),
         respond_bridge: None,
         member_gated: true,
-        bare_types: &["Query"],
+        bare_types: &["Query", "SelectQuery"],
     },
     // Attribute-only modules — no prelude to inject; they exist only to gate their `#[…]` types.
     VirtualModule {

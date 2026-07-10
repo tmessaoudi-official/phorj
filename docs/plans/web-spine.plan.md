@@ -75,6 +75,13 @@
 - [2026-07-10] Named `bindNamed` (Q4's default) DEFERRED to a P1 fast-follow (slice 1b) — needs the
   positional+named dual representation (Map) + empty-map-literal confirmation; positional shipped first as
   the fluent-builder foundation (the builder uses positional `?` under the hood). NOT dropped.
+- [2026-07-10] ✅ **Slice 2 DONE** (fluent SELECT builder): `SelectQuery` (in `SQL_PRELUDE`) —
+  `Sql.select([...]).from().where{Eq,Ne,Gt,Ge,Lt,Le,Like}().orderBy{Asc,Desc}().limit().toQuery()`,
+  per-operator methods (RULED — no ambient operator symbols), generating SQL text that lowers to the same
+  parameterized `Query` (each bound value → `?` + positional param). `SelectQuery` also gated in
+  `module_of`→"Sql". Example `examples/db/select-builder.phg` byte-identical run≡runvm≡php-8.5.8; full
+  gate green (1915) + clippy both + release. REMAINING for the "full builder" (Q3): joins, `groupBy`,
+  `having`, aggregates (`Sql.count`/`as`) — a slice 3 (fresh context OK). Then P2 `Core.Db` execution.
 
 ## Formal Plan
 
