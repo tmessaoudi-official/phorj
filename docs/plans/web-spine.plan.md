@@ -52,19 +52,30 @@ can't tell a `bytes` from a `string` at runtime (both are PHP strings — `__pho
 a **list literal** (`calls.rs:388`), NOT a dynamic `List<union>`. So bytes-`%s` with a dynamic args
 list would char-truncate on PHP but raw-truncate on the Rust backends → **run≠php (Invariant 1 break).**
 
-**THE DECISION (surface first thing next session; recommended first):**
-1. **`Bytes.format(spec, [bytes…])` — separate function (RECOMMENDED).** Byte-identity-safe by
-   construction: every arg is `bytes` *by the function's type*, so its PHP helper ALWAYS raw-truncates —
-   no per-arg dispatch, works for literal AND dynamic args. Matches the `String.length`/`Bytes.length`
-   precedent the developer pointed at. (Was Option 1; the spine constraint now makes it the right call,
-   not just a preference.)
-2. **Type-directed `%s`, RESCUED narrowly** (honest steel-man): either (a) allow bytes-`%s` only when
-   the args are a list literal and hard-error a dynamic list, or (b) forbid precision on bytes-`%s` so
-   there's no truncation to diverge. Both work; both are worse — (a) is a capability hole, (b) is a
-   confusing carve-out.
+**DECIDED (dev, 2026-07-10 — provisional-agreed to the recommendation): `Bytes.format` — separate function.**
+Byte-identity-safe by construction: every arg is `bytes` *by the function's type*, so its PHP helper
+ALWAYS raw-truncates — no per-arg dispatch, works for literal AND dynamic args. Matches the
+`String.length`/`Bytes.length` precedent the developer pointed at. Rejected alternatives (honest
+steel-man, kept for the record): type-directed `%s` restricted to (a) list-literal args only [capability
+hole] or (b) no precision on bytes-`%s` [confusing carve-out] — both preserve byte-identity but are
+strictly worse.
 
-**Do NOT write the native until this is answered.** It's a byte-identity-critical multi-leg change →
-fresh context. `String.charCount` can ship alongside whichever shape wins (independent, no hole).
+**Return type = `bytes`, NOT `string` (forced, not a fork).** `Value::Str` is a Rust `String` = UTF-8
+validated (`value.rs:123`); a byte-precise truncation can split a multibyte char → invalid UTF-8 → NOT
+storable in `Str`. So `Bytes.format(spec, [bytes…]) -> bytes`; the template's literal text contributes
+its own UTF-8 bytes. `String.format` stays `-> string` (char-safe throughout).
+
+**Composition model (answers "format a string with bytes-formatted content in it"): NEST — the type
+boundary picks the direction.**
+- A byte-exact field inside a mostly-text line → make the WHOLE line `Bytes.format` (text literals are
+  just their bytes; result is `bytes`). Safe default when a field might split a char.
+- Pull a byte result into a `String.format` template → only if the bytes are valid UTF-8; requires an
+  explicit `bytes -> string` conversion that FAULTS on invalid UTF-8 (correct: a half-codepoint isn't
+  text). Never a silent broken string.
+
+**Do NOT write the native until confirmed in the fresh session** (dev's agreement was provisional on the
+composition answer above). Byte-identity-critical multi-leg change → fresh context. `String.charCount`
+(codepoint count, `é`=1) ships alongside — independent, no hole.
 
 ## ⭐ P1 `Core.Sql` — SHIPPED vs REMAINING (against the Q3/Q4 rulings) — read this before assuming P1 is done
 
