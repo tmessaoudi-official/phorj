@@ -88,6 +88,26 @@ fn slice3b_scientific_conversions_are_accepted() {
 }
 
 #[test]
+fn scientific_operand_type_defers_to_runtime_like_f() {
+    // `%e` matches `%f`'s compile-time baseline exactly: the checker validates the `(string, list)`
+    // shape + directive count, NOT per-operand types — a wrong-type operand faults identically at
+    // RUNTIME on both backends (byte-identical), never at compile time. Pin the parity so a future
+    // change can't tighten one without the other.
+    let ok_e = "package Main; import Core.String; \
+                function main(): void { var s = String.format(\"%e\", [\"hi\"]); }";
+    let ok_f = "package Main; import Core.String; \
+                function main(): void { var s = String.format(\"%f\", [\"hi\"]); }";
+    assert!(
+        expand(ok_e).is_ok(),
+        "%e defers operand-type to runtime, like %f"
+    );
+    assert!(
+        expand(ok_f).is_ok(),
+        "%f defers operand-type to runtime (control)"
+    );
+}
+
+#[test]
 fn slice3_integer_radix_conversions_are_accepted() {
     // `%x`/`%X`/`%o`/`%b` (slice 3a) type-check on a literal spec (runtime enforces int-or-fault).
     assert!(

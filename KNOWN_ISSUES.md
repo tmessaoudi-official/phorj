@@ -10,18 +10,24 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- **`String.format` (W3-5, DEC-199) — slices 1+2 shipped; more conversions deferred.** Syntax = **PHP-style
-  `%` sprintf** (superseding DEC-198's `{}`); rendered **strictly** (a `%d`/`%f` given the wrong type is a
-  clean fault, not PHP's silent coercion). **Shipped:** `%s` (any scalar), `%d` (int), `%f` (int/float,
-  round-half-to-even matching PHP), `%%`; flags `-`/`0`/`+`, a width, and a `.precision` on `%f` (default
-  6) — e.g. `%-8s`, `%08.2f`, `%+d`, `%.4f`. Qualified `String.format` or bare `import Core.String.format;`;
-  a (possibly heterogeneous) value list. **Not yet supported (clean errors, not crashes):** `%x`/`%o`/`%b`/
-  `%e`/`%g`, precision on `%s`/`%d`, and `%N$` positional — a LITERAL spec using one is
-  `E-FORMAT-UNSUPPORTED` at compile time; a dynamic (runtime) spec faults cleanly at render time. **A
-  `decimal` is NOT yet formattable by `%f`/`%d`** — it faults cleanly on all backends (consistent, not a
-  divergence); use `%s` for a decimal (`19.99d` → "19.99"), or convert it first. These land in later slices
-  (each a byte-match-PHP-`sprintf` increment). `{}` remains interpolation-only; interpolation specifiers
-  (`"{x:>8}"`) are a separate future decision (W5-1).
+- **`String.format` (W3-5, DEC-199) — slices 1+2+3a+3b shipped; `%g` + positional deferred.** Syntax =
+  **PHP-style `%` sprintf** (superseding DEC-198's `{}`); rendered **strictly** (a `%d`/`%f`/`%e` given the
+  wrong type is a clean fault, not PHP's silent coercion). **Shipped:** `%s` (any scalar), `%d` (int),
+  `%f` (int/float, round-half-to-even matching PHP), scientific `%e`/`%E` (int/float — PHP's always-signed
+  min-1-digit no-leading-zero exponent), integer-radix `%x`/`%X`/`%o`/`%b` (unsigned, 64-bit two's-complement
+  for negatives), `%%`; flags `-`/`0`/`+`, a width, and a `.precision` on the float conversions `%f`/`%e`/`%E`
+  (default 6) — e.g. `%-8s`, `%08.2f`, `%+d`, `%.4f`, `%.2e`, `%012.4e`, `%05x`. Qualified `String.format` or
+  bare `import Core.String.format;`; a (possibly heterogeneous) value list. **Not yet supported (clean
+  errors, not crashes):** `%g` (shortest-repr), precision on `%s`/`%d`/radix, and `%N$` positional — a
+  LITERAL spec using one is `E-FORMAT-UNSUPPORTED` at compile time; a dynamic (runtime) spec faults cleanly
+  at render time. **A `decimal` is NOT yet formattable by `%f`/`%d`/`%e`** — it faults cleanly on all
+  backends (consistent, not a divergence); use `%s` for a decimal (`19.99d` → "19.99"), or convert it first.
+  **Non-finite float divergence (deferred, not a byte-identity claim):** `%f`/`%e`/`%E` of a non-finite
+  float (`inf`/`-inf`) renders Rust's `inf`/`-inf` on the backends but PHP `sprintf`'s `INF`/`-INF` — a
+  divergence on `inf` only (`NaN` matches both). This mirrors the existing math non-finite print divergence
+  below; non-finite values are unreachable in deterministic examples, so it is kept out of the example set
+  and never claimed byte-identical. These land in later slices (each a byte-match-PHP-`sprintf` increment).
+  `{}` remains interpolation-only; interpolation specifiers (`"{x:>8}"`) are a separate future decision (W5-1).
 
 - **Static method call sites — shipped corners + deferrals.** `ClassName.method(args)` calls a `static`
   method directly on the class (the static-factory pattern, e.g. `Greeter.make("w")`); calling an
