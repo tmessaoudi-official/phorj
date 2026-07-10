@@ -1860,6 +1860,25 @@ are a SEPARATE JIT-inlining/dispatch lever; surface that as its own fork if/when
 would change a user-visible semantic is mis-scoped (no §14/§15 fork expected). Per-slice: measure
 before/after (counting alloc + interleaved fresh-docker-php) → full oracle gate → commit green → WIN-OR-FLAG.
 
+### ⚠️🚩 WINNABILITY RED FLAG (2026-07-10, advisor-prompted — READ BEFORE STARTING V1/V3)
+**"Alloc-heavy" ≠ "beatable by cutting allocs" — the ② lesson, re-confirmed at LARGER scale.** Before building
+V1, measured the CURRENT gap (which V0 never did — V0 gave allocs/iter, not wall-time-vs-php). [Verified:
+interleaved best-of-5, phorj-VM `--no-jit` vs fresh docker php:8.5+JIT, checksums identical]:
+- **stringconcat: phorj-VM 688ms vs php 25ms → php is 27.6× faster.**
+- **mapget: phorj-VM 645ms vs php 9.6ms → php is 67.1× faster.**
+Per-iter: stringconcat ≈344ns phorj vs ≈12.5ns php. V1 cuts allocs ~9→2 (~4.5× FEWER ALLOCS), but allocation
+is only PART of the 344ns (the rest = VM per-op dispatch + String build + kernel work) → V1 realistically
+lands stringconcat at ~12-15× slower than php = **still a FLAG.** **A 27-67× gap is not closable by
+representation-allocation reduction alone** — php's zval interned-string / packed-array model + tracing-JIT
+op-inlining is fundamentally ahead. **⟹ the value-representation overhaul AS SCOPED (V1 `Rc<str>` / V3 packed
+`Instance`) will NARROW but almost certainly FLAG on its primary targets (strings/maps).** This is the same
+class of result as the ② boxed-JIT FLAG. **DEVELOPER DECISION REQUIRED (surfaced via ask-human) before
+grinding V1's 368-site migration for a likely-FLAG.** Options on the table: (a) proceed with V1 accepting
+"narrow-not-win" (banks a real VM-improvement + smaller Value, honestly FLAGGED); (b) reconsider whether
+"beat php on strings/collections" is reachable at all without a VM+JIT rebuild an order of magnitude larger
+(interning + packed arrays + op-inlining together); (c) pivot to ③ web spine (parity — guaranteed value,
+doesn't need a perf WIN). The measurement changed the premise; do NOT auto-start V1.
+
 ### V1 EXECUTION RECIPE — `Str(String)` → `Str(Rc<str>)` (DE-RISKED 2026-07-10, ready for a fresh context)
 
 **✅ BYTE-IDENTITY CAVEAT CLEARED [Verified via grep]:** NO in-place `Str` mutation exists anywhere in
