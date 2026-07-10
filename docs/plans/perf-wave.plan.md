@@ -5,6 +5,26 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🧭🎯 **DEVELOPER RULED (ask-human) — NEXT-SESSION ORDER LOCKED: ① recompute parity % → ④ boxed-value JIT → ③ web spine.**
+  After the honest status report (parity ≈58% STALE / vision ≈60% STALE; perf: only fibrec+unchecked-int WIN, most
+  VM-only features LOSS vs php+JIT). Developer pushed HEAD `7e224ef` (all Wave C shipped). **On the next session the
+  developer will just say "continue" — this is the standing plan; execute in this exact order:**
+  1. **RECOMPUTE PARITY % (formal, FIRST).** Re-run the 824-row Pass-1 verdicts in
+     `docs/research/full-audit/raw/M-gap-matrix.md` §1–§4 against current HEAD (Wave A/B/C, DI, attributes, JIT all
+     shipped since the 2026-07-03 snapshot; TOP-20 gap #4 sprintf/String.format is now CLOSED). Produce a fresh
+     domain-weighted PHP-parity % + Vision %, update §4 + MASTER-PLAN §0/§11 + the ledger. Read-only analysis; the
+     row arithmetic is mechanical, the weights are judgment (quote them). Replaces the stale ≈58%/≈60%.
+  2. **BOXED-VALUE JIT (the #1 perf lever, big multi-session push).** Evidence-proven as THE path to flip the
+     ~11 VM-only LOSS categories (methodcall ~25× slower, objalloc ~5×, enum ~100×) — the VM is dispatch-core-bound,
+     no VM tuning closes it. Extend the JIT (`src/jit/`, currently unboxed int/float+control-flow) to boxed
+     object/enum/method construction+dispatch. FRESH-context spine-sensitive; PROVE hits>0 + FRESH interleaved
+     docker-php+JIT baseline per [[perf-benchmarking-truth]] (never batch samples). Detail = `perf-wave.plan.md`
+     Step 4 + memory [[perf-vm-only-dispatch-core-bound]].
+  3. **WEB SPINE (Wave D, the #1 PARITY drag — DB/HTTP/sessions).** UA-L2 → W3-1 SQL DBAL (SQLite P1 → Postgres →
+     MySQL, sync) → W3-2 HTTP. Dep amendment APPROVED (rusqlite+rustls, feature-gated, spine-quarantined). This is
+     what moves parity from ~60% toward real-app-capable. Large, multi-session.
+  Autonomy envelope UNCHANGED: WIN-OR-FLAG, commit each green slice, NEVER push (dev pushes), §14 LADDER + §15
+  forks surface-don't-self-rule, full oracle gate before "done", 5-round advisor cap → ask-human.
 - [2026-07-10] ✅🈺 **LANGUAGE QUEUE #6 COMPLETE — String.format slices 4a + 4b SHIPPED (Wave C done).**
   Commits `5dd904a` (4a %s precision) + `130b0cb` (4b %N$ positional). Gate-green (1915, oracle), byte-identical,
   clippy+fmt clean. **UNPUSHED** (origin at `eaa862a` when this run began; dev pushed slices 3b/3c/M-Decomp mid-run).
