@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `src/native/text.rs` split (M-Decomp, Invariant 13)
+
+The `String.format` renderer cluster (`FormatDirective`, `parse_format_directive`, `pad_format`, the
+`%g` helpers, `format_g_body`, `text_format`) moved out of the over-cap `text.rs` (1185 lines) into a
+sibling module `src/native/text_format.rs` (with its tests in `text_format_tests.rs`). `text.rs` drops
+to 824 lines. Pure structural refactor — zero behavior change, gate identical.
+
+### Added — `String.format` precision on `%s` (slice 4a)
+
+`%.Ns` now truncates a string to N characters, and width composes (`%8.3s` truncates then pads). Unlike
+PHP `sprintf`, which byte-truncates and can split a multi-byte UTF-8 char into mojibake, Phorj truncates
+at char boundaries (≤N bytes, never splitting a char) — a developer-ruled legibility choice (Invariant 15)
+that all three backends honor identically, so `run`/`runvm`/transpiled-PHP stay byte-identical (the PHP
+helper `__phorj_format` char-truncates too rather than delegating to `sprintf`'s byte truncation). This is
+byte-identical to PHP's native `sprintf` for ASCII; on multibyte it is a documented LADDER divergence.
+Precision on `%d` is **deliberately rejected** (`E-FORMAT-UNSUPPORTED`): PHP silently ignores it, which is
+exactly the surprise Phorj's strict renderer removes. `%N$` positional args are slice 4b.
+
 ### Added — `String.format` shortest-repr `%g`/`%G` (slice 3c)
 
 `String.format` now supports `%g`/`%G` (int/float operand), with a `.precision` (significant digits,

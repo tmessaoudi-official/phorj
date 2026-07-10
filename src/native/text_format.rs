@@ -62,12 +62,15 @@ pub(crate) fn parse_format_directive(
         .next()
         .ok_or_else(|| "String.format: dangling `%` at the end of the format string".to_string())?;
     match conv {
-        // Precision is supported on the float conversions `%f`/`%e`/`%E`/`%g`/`%G` — `%s`/`%d` and the
-        // integer-radix conversions `%x`/`%X`/`%o`/`%b` (slice 3a) reject it (precision-as-min-digits
-        // is a later slice).
-        's' | 'd' | 'x' | 'X' | 'o' | 'b' if precision.is_some() => Err(format!(
-            "String.format: precision on `%{conv}` is not supported yet (only the float conversions \
-             `%f`/`%e`/`%E`/`%g`/`%G` take a precision this version)"
+        // Precision is supported on the float conversions `%f`/`%e`/`%E`/`%g`/`%G` (fraction/sig-figs) and
+        // on `%s` (slice 4a — truncate to N chars). `%d` deliberately REJECTS it (developer-ruled: PHP
+        // silently ignores precision on `%d`, which is exactly the surprise Phorj's strict renderer removes),
+        // and the integer-radix conversions `%x`/`%X`/`%o`/`%b` reject it too (precision-as-min-digits is a
+        // later slice).
+        'd' | 'x' | 'X' | 'o' | 'b' if precision.is_some() => Err(format!(
+            "String.format: precision on `%{conv}` is not supported (only `%s` and the float conversions \
+             `%f`/`%e`/`%E`/`%g`/`%G` take a precision; PHP silently ignores precision on `%d`, so Phorj \
+             rejects it rather than accept a no-op)"
         )),
         's' | 'd' | 'f' | 'e' | 'E' | 'g' | 'G' | 'x' | 'X' | 'o' | 'b' => Ok(FormatDirective {
             minus,
@@ -219,7 +222,21 @@ pub(crate) fn text_format(args: &[Value], _: &mut String) -> Result<Value, Strin
                 let body = v.as_display().ok_or_else(|| {
                     format!("String.format: cannot format {} with %s", v.type_name())
                 })?;
-                out.push_str(&pad_format("", &body, &d));
+                // Precision on `%s` (slice 4a) truncates to at most `p` BYTES, but never splitting a UTF-8
+                // char (developer-ruled — legible over PHP's byte-exact mojibake). For ASCII this equals
+                // PHP's `sprintf` byte-truncation; on multibyte it is a documented LADDER divergence that
+                // all three backends honor identically (the PHP helper `__phorj_format` char-truncates too).
+                let body = match d.precision {
+                    Some(p) if p < body.len() => {
+                        let mut cut = p;
+                        while cut > 0 && !body.is_char_boundary(cut) {
+                            cut -= 1;
+                        }
+                        &body[..cut]
+                    }
+                    _ => &body,
+                };
+                out.push_str(&pad_format("", body, &d));
             }
             'd' => {
                 let n = match v {

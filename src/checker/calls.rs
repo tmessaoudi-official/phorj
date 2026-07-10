@@ -417,8 +417,9 @@ impl Checker {
                             "E-FORMAT-UNSUPPORTED",
                             Some(
                                 "this version supports `%s`/`%d`/`%f`/`%%`, scientific `%e`/`%E`, shortest-repr \
-                                 `%g`/`%G`, integer-radix `%x`/`%X`/`%o`/`%b`, flags `-`/`0`/`+`, width, and float \
-                                 precision; `%N$` positional and precision on `%s`/`%d` are coming"
+                                 `%g`/`%G`, integer-radix `%x`/`%X`/`%o`/`%b`, flags `-`/`0`/`+`, width, precision on \
+                                 `%s` (truncate) and the float conversions; `%N$` positional is coming. Precision on \
+                                 `%d` is deliberately unsupported (PHP silently ignores it)"
                                     .into(),
                             ),
                         );

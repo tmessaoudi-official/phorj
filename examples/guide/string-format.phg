@@ -56,6 +56,11 @@ function main(): void {
     Output.printLine(String.format("%g | %g | %g | %g", [1234.5, 0.0001234, 100.0, 1e20]));
     // `.precision` = significant digits; `%g` signs `-0.0` (by the IEEE sign bit — unlike `%e`/`%f`).
     Output.printLine(String.format("[%G][%.3g][%+g][%g]", [1.5e-10, 123.456, 42.0, -0.0]));
+    // Precision on %s (slice 4a) truncates to N characters (never splitting a UTF-8 char); width still
+    // composes (truncate, then pad). Precision on %d is deliberately rejected — PHP silently ignores it.
+    Output.printLine(
+        String.format("[%.3s][%.10s][%8.3s][%-8.3s]", ["abcdef", "hi", "abcdef", "abcdef"])
+    );
     // A format string with no directives passes through unchanged (empty value list).
     Output.printLine(String.format("no placeholders here", []));
 }

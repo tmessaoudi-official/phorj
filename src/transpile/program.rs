@@ -943,8 +943,20 @@ impl Transpiler {
             self.line("$v = $args[$ai]; $ai++;");
             self.line("if ($conv === 's') {");
             self.indent += 1;
-            self.line("if ($hasPrec) { throw new \\RuntimeException('String.format: precision on %s not supported'); }");
-            self.line("$out .= sprintf($dir, __phorj_str($v));");
+            // Precision on `%s` (slice 4a) = truncate to N chars, NEVER splitting a UTF-8 char (developer-
+            // ruled). We char-truncate here rather than let `sprintf`'s byte-based `%.Ns` split a char, so
+            // run≡runvm≡this-helper agree; then delegate width/flags to `sprintf` (the precision is a no-op
+            // on the already-≤N-byte string). Manual scan keeps to tier-1 functions (hermetic `php -n`).
+            self.line("$s = __phorj_str($v);");
+            self.line("if ($hasPrec) {");
+            self.indent += 1;
+            self.line(
+                "$dot = strpos($dir, '.'); $p = $dot === false ? 0 : (int)substr($dir, $dot + 1);",
+            );
+            self.line("if ($p < strlen($s)) { $cut = $p; while ($cut > 0 && (ord($s[$cut]) & 0xC0) === 0x80) { $cut--; } $s = substr($s, 0, $cut); }");
+            self.indent -= 1;
+            self.line("}");
+            self.line("$out .= sprintf($dir, $s);");
             self.indent -= 1;
             self.line("} elseif ($conv === 'd') {");
             self.indent += 1;

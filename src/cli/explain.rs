@@ -1490,8 +1490,9 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-FORMAT-UNSUPPORTED — a literal `String.format` spec uses a directive not yet supported (W3-5).\n\n\
              This version supports `%s`/`%d`/`%f`/`%%`, scientific `%e`/`%E`, shortest-repr `%g`/`%G`,\n\
              and integer-radix `%x`/`%X`/`%o`/`%b`, with flags `-`/`0`/`+`, a width, and a `.precision`\n\
-             on the float conversions `%f`/`%e`/`%E`/`%g`/`%G` (default 6). Still coming: precision on\n\
-             `%s`/`%d`/radix, and `%N$` positional args. (A dynamic runtime spec faults at\n\
+             on `%s` (truncate to N chars) and the float conversions `%f`/`%e`/`%E`/`%g`/`%G` (default 6).\n\
+             Still coming: `%N$` positional args. Precision on `%d` is deliberately unsupported (PHP\n\
+             silently ignores it). (A dynamic runtime spec faults at\n\
              render time on an unsupported directive instead of at compile time.)\n"
         }
         _ => return None,

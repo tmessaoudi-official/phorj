@@ -5,6 +5,24 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🧑‍⚖️ **DEVELOPER RULED (ask-human, Invariant 15) — String.format slice 4 semantics = STRICT.**
+  Three user-visible forks surfaced (Phorj strict vs PHP permissive); dev confirmed all three recommendations:
+  1. **Precision on `%d` → KEEP REJECTING** (`E-FORMAT-UNSUPPORTED`). PHP silently ignores it (`%.5d` of 42 → "42");
+     accepting+ignoring would be the only String.format spec that silently does nothing → against the strict-render
+     pattern (which already faults on a non-int `%d`). Deliberate PHP divergence, but only a compile error (never a
+     byte-identity example, Invariant 9). No code change (already rejected) — just clarify docs/error text.
+  2. **Precision on `%s` → CHAR-BOUNDARY TRUNCATE** (slice 4a). Truncate to ≤N bytes never splitting a UTF-8 char.
+     CRITICAL: the transpiled PHP helper `__phorj_format` must ALSO char-truncate (hand-written, NOT delegate to
+     raw `sprintf %.Ns` which byte-truncates) so run≡runvm≡transpiled-PHP stays byte-identical — a deliberate Phorj
+     semantic all 3 backends honor, NOT a spine break. Byte-identical to PHP's native sprintf for ASCII; multibyte
+     mid-char is a documented LADDER divergence (phorj char-truncates, php byte-truncates), never silent.
+  3. **`%N$` positional → STRICT** (slice 4b). Reuse + reorder allowed; MIXING positional+sequential →
+     `E-FORMAT-MIXED-POSITIONAL`; an unreferenced value → `E-FORMAT-ARG-COUNT`; index must be 1..=count (0/oversize
+     → fault). Matches Phorj's existing exact-count strictness (contrast PHP: allows mixing, ignores extras).
+     Impl notes: parse optional `[argnum$]` prefix via a CLONED char-iterator lookahead (Peekable<Chars>: Clone) —
+     digits followed by `$` = argnum, else rewind to flag/width parsing (a leading `0` is the zero-flag). Add
+     `arg: Option<usize>` to `FormatDirective`. Renderer + `__phorj_format` + the checker gate `count_format_directives`
+     all need the mixing/unused/index checks. This is the heavier half — its own green slice.
 - [2026-07-10] ✅🧹 **INVARIANT-13 M-DECOMP DONE (the tracked trip-wire below, resolved before slice 4).**
   Split the `String.format` renderer cluster out of `src/native/text.rs` (1185 → **824 lines**, compliant) into a
   sibling module `src/native/text_format.rs` (375 lines: `FormatDirective`, `parse_format_directive`,

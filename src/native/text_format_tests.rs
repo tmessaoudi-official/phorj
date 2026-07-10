@@ -5,6 +5,37 @@ use super::*;
 use crate::value::Value;
 
 #[test]
+fn text_format_string_precision_truncates_at_char_boundary() {
+    // Slice 4a: precision on `%s` truncates to ≤N BYTES but never splits a UTF-8 char (developer-ruled).
+    let fmt = |spec: &str, s: &str| -> String {
+        let mut o = String::new();
+        match text_format(
+            &[
+                Value::Str(spec.into()),
+                Value::List(std::rc::Rc::new(vec![Value::Str(s.into())])),
+            ],
+            &mut o,
+        ) {
+            Ok(Value::Str(r)) => r.to_string(),
+            other => panic!("text_format({spec:?}) => {other:?}"),
+        }
+    };
+    // ASCII: byte-identical to PHP `sprintf` (`%.3s` truncates, shorter strings pass through, `%.0s` empties).
+    assert_eq!(fmt("%.3s", "abcdef"), "abc");
+    assert_eq!(fmt("%.10s", "ab"), "ab");
+    assert_eq!(fmt("%.0s", "abc"), "");
+    // Width composes with precision: truncate first, then pad.
+    assert_eq!(fmt("%6.3s", "abcdef"), "   abc");
+    assert_eq!(fmt("%-6.3s", "abcdef"), "abc   ");
+    // Multibyte: never split a char (the LADDER divergence — PHP byte-truncates to mojibake, Phorj keeps
+    // whole chars; all three Phorj backends agree). "café" is c a f é(2 bytes) = 5 bytes.
+    assert_eq!(fmt("%.4s", "café"), "caf"); // byte 4 is mid-é → back up, é dropped whole
+    assert_eq!(fmt("%.5s", "café"), "café"); // full 5 bytes
+    assert_eq!(fmt("%.2s", "éa"), "é"); // é is 2 bytes → exactly fits, "a" dropped
+    assert_eq!(fmt("%.1s", "éa"), ""); // 1 byte would split é → nothing fits
+}
+
+#[test]
 fn text_format_scientific_matches_php_byte_for_byte() {
     // Slice 3b: `%e`/`%E`. Every expected string here was captured from the transpile-floor oracle
     // `php-8.5.8` (`sprintf`) — this locks byte-identity for the tricky cases WITHOUT depending on

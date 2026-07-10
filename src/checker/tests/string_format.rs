@@ -178,13 +178,27 @@ fn slice2_flags_width_precision_type_check() {
 }
 
 #[test]
-fn precision_on_string_is_unsupported() {
-    // Precision on `%s` (and `%d`) is deferred — a literal spec using it is E-FORMAT-UNSUPPORTED.
+fn slice4a_precision_on_string_is_accepted() {
+    // Precision on `%s` (slice 4a) truncates to N chars — type-checks on a literal spec.
+    assert!(
+        expand(
+            "package Main; import Core.String; \
+             function main(): void { var s = String.format(\"%.2s %6.3s\", [\"abcd\", \"hello\"]); }"
+        )
+        .is_ok(),
+        "precision on %s should type-check"
+    );
+}
+
+#[test]
+fn precision_on_int_is_unsupported() {
+    // Precision on `%d` is DELIBERATELY rejected (developer-ruled, Invariant 15): PHP silently ignores
+    // it, which is exactly the surprise Phorj's strict renderer removes — a literal spec is E-FORMAT-UNSUPPORTED.
     let err = expand(
         "package Main; import Core.String; \
-         function main(): void { var s = String.format(\"%.2s\", [\"abcd\"]); }",
+         function main(): void { var s = String.format(\"%.3d\", [42]); }",
     )
-    .expect_err("precision on %s is not supported this slice");
+    .expect_err("precision on %d is deliberately unsupported");
     assert!(err.contains("E-FORMAT-UNSUPPORTED"), "got:\n{err}");
 }
 
