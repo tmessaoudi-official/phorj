@@ -5,6 +5,21 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🧭✅ **AGREED (ask-human, after the per-component profile) — PIVOT TO ③ WEB SPINE + REFINE THE
+  MANDATE. The perf arc is RESOLVED with evidence.** The profile proved a clean WIN on strings/arrays needs
+  native-JIT string/collection codegen (= reimplementing php's 20yr-tuned engine; VM dispatch floor alone is
+  ~7-12× php's total; boxed-JIT-via-rt_ is ②-redux) → structurally unreachable at reasonable cost. Developer
+  chose (over "spike it" / "full native rebuild"): **pivot to ③ web spine + refine the HARD PERF MANDATE.**
+  **⚖️ MANDATE REFINED (2026-07-10, developer, §15 — supersedes the absolute "better than php per-feature or
+  garbage"):** *"phorj WINS where structurally possible — numeric / recursion / control-flow (ALREADY WON via
+  the unboxed JIT: fibrec 1.7-2.9×, intadd #[Unchecked] 2×) — and MATCHES-NOT-BEATS php on the 20-yr-tuned
+  string/array/collection categories (a clean WIN there needs reimplementing php's engine; not worth the cost).
+  Perf effort now goes to (a) holding the won numeric ground and (b) parity/features via the web spine."* The
+  three FLAG findings this session (② boxed-JIT, V1-winnability, rebuild-ceiling) are the evidence base. Update
+  MASTER-PLAN §0 charter + memory to this refined mandate. **NEXT = ③ WEB SPINE** (Wave D: UA-L2 → W3-1 SQL
+  DBAL [SQLite P1 → Postgres → MySQL, sync] → W3-2 HTTP → sessions; rusqlite+rustls dep APPROVED, feature-gated,
+  spine-quarantined). Large new domain → FRESH context; first slice = SQLite DBAL (see wave3-4 drafts). All the
+  value-repr/rebuild scoping above stays durable if a future perf push ever revisits it.
 - [2026-07-10] 🎯🏗️🏗️ **AGREED (ask-human, after the winnability RED FLAG) — GO FOR THE FULL STRING/COLLECTION
   PERF REBUILD.** Shown that strings/maps are 27-67× behind php and the scoped rep overhaul (Rc<str>/packed
   Instance) only NARROWS-not-WINS, the developer chose the most ambitious path over "proceed narrow-not-win"
