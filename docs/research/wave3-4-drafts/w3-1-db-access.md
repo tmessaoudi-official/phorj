@@ -1,8 +1,15 @@
 # W3-1 · Database access — design doc
 
-> Status: **DESIGN — not yet implemented.** Contains ONE hard developer adjudication (the dependency
-> fork, §6-Q1) that an autonomous session records as PENDING per invariant 15 (Adjudication Rule) and
-> must NOT rule alone. Everything downstream of that fork is designed conditionally on its answer.
+> Status: **DESIGN FROZEN (2026-07-10) — all §6 forks adjudicated; ready to build P1 in fresh context.**
+> Rulings (developer, interactively; SSOT `docs/plans/web-spine.plan.md` Decisions Log): **Q1** admit dep
+> amendment (rusqlite adopted UNIFIED-SPEC 2026-07-03); **Q2** `rusqlite` bundled; **Q3** FULL fluent
+> `Sql.select()…` builder now (select/from/join/where/groupBy/having/orderBy/limit + aggregates + operator
+> model, all lowering to the parameterized `Query`) — XL, multi-slice; **Q4** ship both positional + named
+> binding, named default; **Q5** interim `Db.close` + `Db.transaction` closure (permanent `using`/`defer`
+> deferred to XL-019); **Q6** `throws DbError` + try/catch (CATCHABLE typed exception → PDO ERRMODE_EXCEPTION
+> / `\PDOException`; the earlier "uncatchable fault" rec was corrected); **Q7** true overload
+> `Db.open(string dsn)` + `Db.open(SqliteConfig)` (dispatch on arg type; per-driver config type). The
+> original per-question recommendations below are superseded where they differ (Q3, Q6, Q7).
 >
 > Grounds: MASTER-PLAN §Wave-3 W3-1 (lines 590–604); §9 charter Bucket-1 "DB 10"; INVARIANTS 1/2/8/10/14;
 > dependency policy (`docs/specs/2026-06-27-dependency-policy.md`); DEC-007 (Determinism Partition),
@@ -284,5 +291,9 @@ PDO DSN string.
 
 ---
 
-STATUS: Designed — not yet implemented. §6-Q1 (dependency-policy amendment) is a blocking PENDING
-adjudication for the developer; `Core.Sql` (Tier A, P1) can proceed with no adjudication once approved.
+STATUS: **DESIGN FROZEN 2026-07-10 — all §6 forks (Q1–Q7) adjudicated (see header banner + web-spine.plan.md).**
+Ready to build. NEXT = P1 `Core.Sql` (now the FULL fluent builder per Q3 — XL, multi-slice) — **START IN
+FRESH CONTEXT** (byte-identity spine; the builder touches the checker/UFCS + injected-prelude registry).
+Then P2 `Core.Db` (rusqlite, `db` feature, Tier-B fixture-tested) with `throws DbError` + the `Db.open`
+overload. Superseded per-question recs: Q3 (full builder, not Query-value-first), Q6 (catchable, not fault),
+Q7 (typed-config overload).

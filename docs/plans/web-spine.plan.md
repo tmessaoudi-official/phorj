@@ -36,6 +36,29 @@
   Http-before-Regex ordering; S2 pins `module_of`) but not total (a reorder of two *independent*
   modules wouldn't be caught — behaviorally harmless, but keep the `Core.Db` row in registry order).
 
+## W3-1 SQL DBAL — design rulings (draft `w3-1-db-access.md` → decisions)
+
+- [2026-07-10] Q1 (dep amendment) RESOLVED = **admit** (rusqlite/rustls adopted, UNIFIED-SPEC 2026-07-03).
+- [2026-07-10] Q2 (driver) RESOLVED = **`rusqlite`** (bundled; the amendment names it; unsafe confined to
+  the crate, phorj's `#![forbid(unsafe_code)]` intact).
+- [2026-07-10] Q4 (param binding) RULED = **ship BOTH positional `?`/`bind` and named `:name`/`bindNamed`;
+  named is the documented default** (order-independent, self-documenting, maps to PDO named params).
+- [2026-07-10] Q5 (lifecycle) = interim **`Db.close` + `Db.transaction` closure** now; permanent
+  `using`/`defer` scoped-release deferred to XL-019 (its own future adjudication). Not separately re-asked.
+- [2026-07-10] Q3 (Sql surface) RULED = **FULL fluent builder now** (developer chose the full surface over
+  the phased/Query-value options): `Sql.select([...]).from().join().where().groupBy().having().orderBy().limit()`
+  + aggregates (`Sql.count`/`as`) + an operator model (`Eq`/`Gt`/`Desc`/…) — designed + tested up front. All
+  compiles down to the parameterized `Query` value (injection-safety preserved). ⚠ This is XL scope for P1 —
+  the build is a multi-slice effort (operator enum + builder methods + aggregate exprs + `Query` lowering).
+- [2026-07-10] Q6 (error model) RULED = **`throws DbError` + try/catch** (CATCHABLE typed exception — my
+  "uncatchable fault" rec was wrong and the developer caught it). Maps to PDO `ERRMODE_EXCEPTION` →
+  catchable `\PDOException`; checker-enforced (fixes PHP's unchecked `@throws`). `fetchOne` still returns
+  `Map?` for the legitimate no-row case (a `null`, not an error).
+- [2026-07-10] Q7 (constructor) RULED = **true overload on a typed config**: `Db.open(string dsn)` +
+  `Db.open(SqliteConfig cfg)`, dispatched on arg TYPE (Phorj parameter-overloading). Adds a per-driver
+  config type (`SqliteConfig`, later `PostgresConfig`). A single `Db.open(string)` for both DSN and path
+  was rejected — identical signature = overload collision (won't compile).
+
 ## Formal Plan
 
 ### Wave-D scope map (frozen sequence; only UA-L2 is build-ready this session)

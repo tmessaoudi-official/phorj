@@ -29,9 +29,14 @@
 > (dev-ruled, ask-human 2026-07-10; full loader-unification deferred as higher-risk). Discovered +
 > logged (KNOWN_ISSUES, separate adjudication): bare `Core.Time.DateTime` is not import-gated while
 > `Date`/`Duration`/`Instant` are — a latent injected-type-discipline inconsistency, preserved
-> byte-identically. SSOT = `docs/plans/web-spine.plan.md` (sequence + decisions). **NEXT = W3-1 SQL DBAL**
-> (SQLite Tier-A `Core.Sql` pure builder → Tier-B `Core.Db` exec; rusqlite adopted; adjudicate the
-> draft's design forks at wave start, fresh context). Then W3-2 HTTP → sessions.
+> byte-identically. SSOT = `docs/plans/web-spine.plan.md` (sequence + decisions). **W3-1 SQL DBAL design FROZEN** (2026-07-10,
+> all 7 draft forks adjudicated interactively — `w3-1-db-access.md` header + web-spine.plan Decisions Log):
+> Q1 admit dep + Q2 rusqlite (both already adopted); Q3 = **FULL fluent `Sql.select()…` builder** (developer
+> chose the full surface — XL, multi-slice); Q4 both bindings, named default; Q5 interim `Db.close`+`transaction`
+> closure; Q6 = **`throws DbError` + try/catch** (CATCHABLE — corrected from "fault"); Q7 = **overloaded
+> `Db.open(string dsn)` + `Db.open(SqliteConfig)`**. **NEXT = BUILD P1 `Core.Sql` (the full fluent builder) —
+> FRESH CONTEXT** (byte-identity spine; touches checker/UFCS + the injected-prelude registry UA-L2 just
+> unified). Then P2 `Core.Db` (rusqlite, `db` feature, Tier-B fixture-tested) → W3-2 HTTP → sessions.
 >
 > **⭐ LATEST (2026-07-10, HEAD `42d9e97` — supersedes the ②→③ order + the absolute perf mandate below):**
 > The perf arc is RESOLVED with evidence. ② BOXED-VALUE JIT was built + measured + REVERTED = **FLAG**
