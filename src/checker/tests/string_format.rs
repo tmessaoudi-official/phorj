@@ -64,12 +64,35 @@ fn percent_percent_is_a_literal_not_a_directive() {
 
 #[test]
 fn unsupported_directive_is_rejected_for_a_literal_spec() {
-    // `%x` (hex) is not supported yet — `%s`/`%d`/`%f`/`%%` are.
+    // `%e` (scientific) is not supported yet — `%s`/`%d`/`%f`/`%x`/`%X`/`%o`/`%b`/`%%` are.
     let err = expand(
         "package Main; import Core.String; \
-         function main(): void { var s = String.format(\"%x\", [255]); }",
+         function main(): void { var s = String.format(\"%e\", [1.5]); }",
     )
-    .expect_err("%x is not supported in this slice");
+    .expect_err("%e is not supported in this slice");
+    assert!(err.contains("E-FORMAT-UNSUPPORTED"), "got:\n{err}");
+}
+
+#[test]
+fn slice3_integer_radix_conversions_are_accepted() {
+    // `%x`/`%X`/`%o`/`%b` (slice 3a) type-check on a literal spec (runtime enforces int-or-fault).
+    assert!(
+        expand(
+            "package Main; import Core.String; \
+             function main(): void { var s = String.format(\"%x %X %o %b\", [255, 255, 8, 5]); }"
+        )
+        .is_ok(),
+        "integer-radix conversions should type-check"
+    );
+}
+
+#[test]
+fn slice3_precision_on_radix_is_unsupported() {
+    let err = expand(
+        "package Main; import Core.String; \
+         function main(): void { var s = String.format(\"%.4x\", [255]); }",
+    )
+    .expect_err("precision on %x is not supported this slice");
     assert!(err.contains("E-FORMAT-UNSUPPORTED"), "got:\n{err}");
 }
 

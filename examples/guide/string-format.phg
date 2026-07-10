@@ -7,9 +7,11 @@
 // non-int is a clean fault, not PHP's silent `0` coercion. It transpiles to a guarded PHP helper that
 // faults the same way, so both backends and PHP stay byte-identical.
 //
-// This first slice supports `%s` (any scalar → its string form), `%d` (an int) and `%%` (a literal
-// `%`). Width/precision/flags and `%f`/`%x`/… come in later slices; a value list may be heterogeneous.
-// Reached qualified (`String.format`, shown here) or bare after `import Core.String.format;` (DEC-197).
+// Conversions: `%s` (any scalar → its string form), `%d` (int), `%f` (int/float, `.precision`), the
+// integer-radix `%x`/`%X` (hex), `%o` (octal), `%b` (binary), and `%%` (a literal `%`); with flags
+// (`-`/`0`/`+`) and width. Radix conversions are UNSIGNED — a negative int renders as its 64-bit
+// two's-complement bit pattern, exactly like PHP `sprintf`. (`%e`/`%g` come in a later slice.) A value
+// list may be heterogeneous. Reached qualified (`String.format`) or bare after `import Core.String.format;`.
 package Main;
 
 import Core.Output;
@@ -30,6 +32,12 @@ function main(): void {
     Output.printLine(String.format("[%5d][%-5d][%05d][%+d]", [42, 42, 42, 7]));
     Output.printLine(String.format("[%8.2f][%08.2f][%-8.2f] pi=%.4f", [3.5, 3.5, 3.5, 3.14159]));
     Output.printLine(String.format("[%6s][%-6s]", ["hi", "hi"]));
+    // Integer-radix (slice 3a): %x/%X hex, %o octal, %b binary — with width + zero-pad.
+    Output.printLine(String.format("hex %x/%X oct %o bin %b", [255, 255, 8, 5]));
+    Output.printLine(String.format("padded [%05x][%-6o][%08b]", [255, 8, 5]));
+    // Radix conversions are unsigned: a negative int is its 64-bit two's-complement pattern (as in PHP),
+    // and a `+` flag is inert on them; plain width space-pads. Uppercase `%X` for negatives too.
+    Output.printLine(String.format("neg %x | +[%+x] | w[%5x] | negX %X", [-1, 255, 255, -1]));
     // A format string with no directives passes through unchanged (empty value list).
     Output.printLine(String.format("no placeholders here", []));
 }

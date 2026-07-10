@@ -460,11 +460,13 @@ pub(crate) fn parse_format_directive(
         .next()
         .ok_or_else(|| "String.format: dangling `%` at the end of the format string".to_string())?;
     match conv {
-        's' | 'd' if precision.is_some() => Err(format!(
+        // Precision is supported only on `%f` this version — `%s`/`%d` and the integer-radix conversions
+        // `%x`/`%X`/`%o`/`%b` (slice 3a) reject it (precision-as-min-digits is a later slice).
+        's' | 'd' | 'x' | 'X' | 'o' | 'b' if precision.is_some() => Err(format!(
             "String.format: precision on `%{conv}` is not supported yet (only `%f` takes a precision \
              this version)"
         )),
-        's' | 'd' | 'f' => Ok(FormatDirective {
+        's' | 'd' | 'f' | 'x' | 'X' | 'o' | 'b' => Ok(FormatDirective {
             minus,
             zero,
             plus,
@@ -473,7 +475,8 @@ pub(crate) fn parse_format_directive(
             conv,
         }),
         other => Err(format!(
-            "String.format: unsupported directive `%{other}` (this version supports %s, %d, %f, %%)"
+            "String.format: unsupported directive `%{other}` (this version supports \
+             %s, %d, %f, %x, %X, %o, %b, %%)"
         )),
     }
 }
@@ -578,7 +581,32 @@ fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
                 let mag = format!("{:.*}", d.precision.unwrap_or(6), f.abs());
                 out.push_str(&pad_format(sign, &mag, &d));
             }
-            _ => unreachable!("parse_format_directive only returns s/d/f"),
+            // Integer-radix conversions (slice 3a): hex `%x`/`%X`, octal `%o`, binary `%b`. UNSIGNED —
+            // a negative int renders as its 64-bit two's-complement bit pattern, matching PHP `sprintf`
+            // on a 64-bit build (`%x` of -1 → "ffff…"), so `n as u64` is the exact bridge. No sign is
+            // ever emitted (radix conversions are unsigned; a `+`/space flag is inert, as in PHP).
+            'x' | 'X' | 'o' | 'b' => {
+                let n = match v {
+                    Value::Int(n) => *n,
+                    other => {
+                        return Err(format!(
+                            "String.format: %{} expects an int, found {}",
+                            d.conv,
+                            other.type_name()
+                        ))
+                    }
+                };
+                let u = n as u64;
+                let body = match d.conv {
+                    'x' => format!("{u:x}"),
+                    'X' => format!("{u:X}"),
+                    'o' => format!("{u:o}"),
+                    'b' => format!("{u:b}"),
+                    _ => unreachable!("outer match restricts to x/X/o/b"),
+                };
+                out.push_str(&pad_format("", &body, &d));
+            }
+            _ => unreachable!("parse_format_directive only returns s/d/f/x/X/o/b"),
         }
     }
     if ai != items.len() {

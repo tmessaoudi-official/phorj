@@ -957,6 +957,15 @@ impl Transpiler {
             self.line("if (!is_int($v) && !is_float($v)) { throw new \\RuntimeException('String.format: %f expects a number'); }");
             self.line("$out .= sprintf($dir, (float)$v);");
             self.indent -= 1;
+            // Integer-radix conversions (slice 3a): int-or-fault, no precision, delegate the raw directive
+            // to PHP `sprintf` (native `%x`/`%X`/`%o`/`%b`, 64-bit unsigned — matches the interpreter's
+            // `n as u64`). `strpos` membership test keeps to tier-1 functions (hermetic `php -n`).
+            self.line("} elseif (strpos('xXob', $conv) !== false) {");
+            self.indent += 1;
+            self.line("if ($hasPrec) { throw new \\RuntimeException('String.format: precision on integer-radix conversions not supported'); }");
+            self.line("if (!is_int($v)) { throw new \\RuntimeException(\"String.format: %$conv expects an int\"); }");
+            self.line("$out .= sprintf($dir, $v);");
+            self.indent -= 1;
             self.line("} else { throw new \\RuntimeException(\"String.format: unsupported directive %$conv\"); }");
             self.indent -= 1;
             self.line("}");

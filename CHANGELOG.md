@@ -44,6 +44,18 @@ non-injectable-typed field is an ordinary field. Field-injection cycles are caug
 synthesized-ctor model makes them unbreakable, as designed. `examples/guide/di-field-injection.phg`
 demonstrates a `Clock` shared between a ctor-injected and a field-injected holder. No new `Op`/`Value`.
 
+### Added — `String.format` integer-radix conversions (slice 3a)
+
+`String.format` (DEC-199 PHP-`%`-sprintf) now supports the integer-radix conversions `%x`/`%X` (hex),
+`%o` (octal), and `%b` (binary), with the existing flags/width. They are UNSIGNED — a negative int
+renders as its 64-bit two's-complement bit pattern (`%x` of -1 → `ffffffffffffffff`), exactly matching
+PHP `sprintf` on a 64-bit build (`n as u64` is the bridge); a non-int value is a clean fault, and
+precision on a radix conversion is rejected (`E-FORMAT-UNSUPPORTED`, later slice). The Rust renderer,
+the compile-time gate (shared `parse_format_directive`), and the transpiled `__phorj_format` PHP helper
+(delegates the raw directive to `sprintf`) all agree — byte-identical `run ≡ runvm ≡ php-8.5.8`, verified
+across positive/negative/zero/width/zero-pad/left-justify. `%e`/`%g` (scientific) remain a later slice.
+`examples/guide/string-format.phg` extended.
+
 ### Changed — DI follows the import discipline + annotation-driven `inject()` (DI v1 §7 + slice 2)
 
 **Fix (nothing in the wind):** DI v1 slice 1 shipped `#[Injectable]` and `inject` as **ambient** symbols
