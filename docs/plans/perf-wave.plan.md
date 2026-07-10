@@ -1894,6 +1894,42 @@ so ONE builder fix covers both.
 7. **Gate:** counting-allocator on `stringconcat` (expect ≈9→≈2) + interleaved fresh-docker-php → full
    byte-identity oracle `PHORJ_REQUIRE_PHP=1` → clippy both configs + fmt → commit green → WIN-OR-FLAG.
 
+### V3 EXECUTION RECIPE — packed `Instance` / objects+maps (DE-RISKED 2026-07-10; nuanced — read before coding)
+
+**Alloc composition [Verified: exec.rs `Op::MakeInstance`]:** construction = `Rc::new(Instance{..})` (1 alloc)
++ `RefCell::new(vec![None; layout.len()])` (1 Vec alloc) = **2 allocs**; `layout.clone()` is a refcount bump.
+objalloc's ≈3/iter ≈ these 2 + the `c.sq()` call overhead. So the object lever = cut those 2 allocs.
+
+**Field-init discipline [Verified]:** `ClassDesc.fields` = **promoted ctor params ONLY** (compiler/program.rs
+~183); declared non-promoted fields are name-pool'd but "unpopulated by construction" (program.rs:204) → their
+slots start **`None`**, set later by a post-`MakeInstance` `SetField` prologue (field initializers
+`this.f = <init>`, program.rs:753-761) or the ctor body. Optional fields with no init get `= null` injected
+(rewrite_new.rs) → always `Some(Null)`. There IS constructor definite-assignment (checker/common.rs:212,
+"Batch D"). **⟹ a transient `None` window EXISTS at runtime** (a declared field between `MakeInstance` and
+its prologue `SetField`).
+
+**Two sub-levers (do NOT conflate):**
+- **V3a — drop the per-field `Option`** (`RefCell<Vec<Option<Value>>>` → `RefCell<Vec<Value>>`): SIZE win only
+  (`Option<Value>` ~40B → `Value` 32B, −8B/field) + kills the Some/None match in Get/SetField. **NO alloc
+  reduction.** ⚠ **PIVOTAL OPEN QUESTION (resolve FIRST, mirrors B1a's self-contained proof):** is a `None`
+  slot ever OBSERVABLE by `GetField`? The None-arm faults "no field `{}`" (exec.rs:679). Dropping `Option`
+  needs a placeholder for the transient-unset slot; a `Value::Null` placeholder would turn that fault into a
+  Null read = a BYTE-IDENTITY CHANGE → only safe if the checker PROVES no field is read before its definite
+  assignment (verify the ctor-body read-before-assign rule in checker/common.rs Batch D + program.rs
+  definite-assignment, and that the None-fault arm is then truly unreachable). If reads-before-assign are
+  NOT rejected → V3a is unsafe as-is (keep Option, or make the fault reachable another way). RESOLVE before coding.
+- **V3b — single-allocation `Instance`** (co-allocate the field storage WITH the `Rc` header, so construction
+  is 1 alloc not 2): the REAL objalloc alloc win (2→1, ~33%). `Option`-agnostic (works regardless of V3a).
+  Complexity: a DST `Rc<Instance>` where `Instance` ends in `[Value]` (unsafe, in the existing `src/value.rs`
+  discipline) OR a vetted thin-Rc dep (⚠ dep-policy § — likely rejected, prefer the in-house DST). This is
+  the higher-payoff, higher-effort half.
+
+**Recommended sequence (after V1):** (1) verify the None-observability question → if clear, V3a (cheap size
+warm-up); (2) V3b (single-alloc) for the measured objalloc alloc win. maps (`mapget` 3/iter) = a parallel
+`Value::Map(Rc<Vec<(HKey,Value)>>)` lever — index clones a `Value` (→ helped by V1 `Rc<str>` for string
+values + a borrow-returning `map_index`); scope after objects. Per-slice: counting-alloc + interleaved php →
+byte-identity oracle → commit green → WIN-OR-FLAG.
+
 ## Scoreboard — the PERF-PARITY REGISTER (WIN-OR-FLAG, developer 2026-07-09)
 
 Every microbench is exactly one of `WIN` / `PARITY` / `🚩FLAGGED`. Measured interleaved (never batched —
