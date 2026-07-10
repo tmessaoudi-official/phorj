@@ -5,6 +5,19 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🎯🏗️ **AGREED (ask-human, after the ② FLAG) — NEXT PERF PUSH = VALUE-REPRESENTATION OVERHAUL.**
+  Given the ② finding (objects/methods are WORK-bound, not dispatch-bound → the lever is the value
+  representation, not the JIT), the developer chose the **big cross-cutting rework** over profile-first-then-
+  targeted or unboxed-JIT-breadth. Goal: WIN vs php on objects/methods/strings/collections. Target areas:
+  a leaner/NaN-boxed/tagged `Value` (immediate int/float/bool/null inline, pointer for heap), packed
+  `Instance` fields (drop the per-field `Option`/`RefCell` churn where safe), string interning / small-string
+  opt. **This is THE most spine-sensitive effort in the project** (touches `src/value.rs` + interpreter + VM
+  + JIT + transpile + every single-sourced kernel + byte-identity across ALL backends, Invariants 1/2/4) →
+  the actual codegen wants a FRESH context (memory rule). This session produces the SCOPED PLAN (blast-radius
+  map + measured current sizes + sequenced safe-first slices + first-slice design), advisor-certified;
+  implementation opens next session at Phase 4/5. Envelope unchanged (WIN-OR-FLAG, per-slice byte-identity
+  oracle gate, commit green never push, §14/§15 surface-don't-self-rule). SCOPING = new section below +
+  (if large) `docs/plans/value-repr.plan.md`.
 - [2026-07-10] 🚩📊 **② GATE RESULT — FLAG. Boxed JIT does NOT flip objects/methods to WIN (measured).**
   Built B0+B1a+B2 (boxed tier wired into the `Op::Call` hook; `MakeInstance`/`GetField`/`Pop` +
   `CallMethod` via `call_indirect`; byte-identical to the VM — 2 new unit tests + a production-path
@@ -1772,6 +1785,68 @@ the project; the memory rule is firm that such slices want a FRESH context (advi
 green gate, catches masked P0s) + a fresh interleaved baseline. This scaffold front-loads the safe
 architectural scoping so the fresh session opens at Phase 4/5. First action there: refresh the docker
 baseline, then B1.
+
+## VALUE-REPRESENTATION OVERHAUL — SCOPED PLAN (2026-07-10, dev-chosen; codegen wants a FRESH context)
+
+**Goal (SPLIT — honest about what representation can and can't win, advisor 2026-07-10):**
+- **Representation-WINNABLE = the alloc/rep-bound, dispatch-FREE losses:** string-building (`stringconcat`),
+  collection build/index (`mapget`/`listindex`), and object *construction* (`objalloc`'s `new Cell` per iter).
+  These pay real per-iteration heap/`Value`-width cost → shrinking+cheapening `Value`/`Instance`/`Str` wins.
+- **NOT representation-winnable = method-dispatch-dominated losses (`methodcall`).** [Verified via disasm:
+  `methodcall` constructs `Box` ONCE then loops `b.get()` → ZERO per-iter allocation; its 28.6× gap is the
+  dispatch loop + frame push/pop + field-read that php's tracing JIT closes by *INLINING* `get()`.] No
+  representation slice touches that (V4 immediate-`Value` only cheapens the loop, can't inline the call
+  away). Winning method-dispatch needs a SEPARATE lever = **JIT method-inlining** (harder than the boxed-
+  *dispatch* ② already tried) — FLAGGED as a distinct future effort, surfaced to the dev BEFORE grinding
+  slices if V0 shows every "objects/methods" target is dispatch-bound. objalloc is mixed (alloc + a `sq()`
+  call) → representation narrows it, may not fully win it.
+The lever the ② FLAG proved: cost lives in `Rc`/`RefCell`/`String`/`Value`-size, IDENTICAL across VM/JIT.
+
+**Current `Value`** (`src/value.rs`) [Inferred from layout — measure exactly in V0]: 17-variant enum, size
+driven by `Str(String)` (24 B, clone = heap alloc+copy) and `Decimal { i128, u8 }` (16 B) → `Value` is
+≈24–32 B. Every stack push / `Vec<Value>` / clone pays that width. **Blast radius [Verified via grep]:**
+`Value::` across 40+ files; `Value::Str(` = **368 sites / 56 files**; `.fields` = **61 sites / 28 files**.
+
+**THE HARD TRUTH (why this is not one commit):** a single-shot NaN-boxed/opaque `Value` rewrites every
+`match Value::X` + `Value::X(..)` — hundreds of sites across interpreter + VM + JIT + natives + transpile,
+all under the byte-identity spine (Inv 1/2/4). It MUST decompose into safe, bounded-blast, individually
+byte-identical + measured + committed slices. The end-state (immediate int/float/bool/null, no heap for
+scalars) is reached LAST, after an accessor-abstraction pass; the early slices bank real wins first.
+
+**Sequenced slices (each: measure before/after via counting-allocator + interleaved fresh-docker-php
+baseline per [[perf-benchmarking-truth]] → full byte-identity oracle gate `PHORJ_REQUIRE_PHP=1` → commit
+green → WIN-OR-FLAG). Safe-first ordering:**
+- **V0 — profile the composition + CLASSIFY (cheap, FIRST; GATES the whole sequence).** Temporary
+  `#[global_allocator]` counting allocator + `size_of::<Value>()`/`<Instance>` prints; run
+  objalloc/methodcall/stringconcat/mapget/listindex. **The discriminator = allocations-per-iteration:**
+  high → representation-addressable (do a slice); ~0/iter but slow-vs-php → dispatch-bound → representation
+  WON'T win it → needs JIT method-inlining or accept-as-LOSS (surface the fork, don't grind). **V0 also
+  picks the slice ORDER by data — do NOT pre-commit V1-first** (the ② lesson: never commit a multi-session
+  lever without profiling the bottleneck composition). Confirm ≥1 TARGET category is actually
+  representation-winnable (dispatch-free + alloc-bound) before starting any slice. Throwaway, deleted after.
+- **V1 — `Str(String)` → `Str(Rc<str>)`** (candidate; ONLY if V0 ranks strings a top cost — not pre-committed).
+  Clone becomes a refcount bump (was alloc+copy) + shrinks the variant 24→8 B. 368 sites/56 files — big but
+  MECHANICAL + byte-identical (`Rc<str>` derefs to `str`, so most `&s` readers are unchanged; only
+  construction gains `.into()`). ⚠ **BYTE-IDENTITY CAVEAT (advisor):** grep FIRST for any in-place mutation
+  of a `Value::Str` payload — a StringBuilder-style native would break under shared-immutable `Rc<str>`;
+  if one exists it needs a `Rc::make_mut`/`String`-local path. (Interning/SSO is a later refinement if V0
+  shows dedup pressure.) NOTE: 368/56 is the BIGGEST churn but strings may NOT be the worst measured loss —
+  packed Instance (V3, 61/28) directly targets objalloc's measured allocation. V0's data picks first.
+- **V2 — box the `Decimal` i128** (`Decimal(Rc<DecimalVal>)`): shrink `Value` further; small blast (decimal
+  sites only). Do iff V0 shows `Value` width is a real cost after V1.
+- **V3 — packed `Instance`.** Drop the per-field `Option` (`RefCell<Vec<Option<Value>>>` → tighter storage;
+  fields are set at `MakeInstance` so `Option` is largely dead weight). 61 sites/28 files. Directly attacks
+  objalloc's per-field churn — the ② target category.
+- **V4 (END-STATE, deferred) — accessor-abstraction pass + NaN-boxed/tagged opaque `Value`.** Route all
+  reads through `as_int()`/`is_instance()`/… (huge but safe/mechanical), THEN swap the representation so
+  scalars are immediate (no heap, 8 B). Only after V1–V3 prove the direction.
+
+**FIRST NEXT-SESSION ACTION:** V0 profiling+classification FIRST (it gates everything: confirms ≥1
+representation-winnable target exists and picks the slice ORDER by data). If V0 shows every "objects/methods"
+target is dispatch-bound → surface the JIT-method-inlining-vs-accept-LOSS fork to the dev, do NOT grind
+slices. Else start the V0-ranked #1 slice (V1 Str or V3 Instance — data decides). FRESH context
+(spine-sensitive; advisor review, not just the green gate). Slices should NOT surface a §14/§15 fork —
+byte-identity is the invariant; a slice that would change a user-visible semantic is mis-scoped.
 
 ## Scoreboard — the PERF-PARITY REGISTER (WIN-OR-FLAG, developer 2026-07-09)
 
