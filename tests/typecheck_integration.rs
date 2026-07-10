@@ -313,6 +313,24 @@ fn di_provides_disambiguates_multi_impl_interface() {
 }
 
 #[test]
+fn di_provides_wins_over_injectable_class() {
+    // `Db` is BOTH `#[Injectable]` (a valid `new`-target) AND has a `#[Provides]` factory — the provider
+    // must win, so this resolves without needing Db's own ctor deps.
+    let src = format!(
+        "package Main;\n{DI_PROVIDES_IMPORTS}\
+        #[Injectable] class Db {{ constructor() {{}} }}\n\
+        class Bind {{ #[Provides] static function db(): Db {{ return new Db(); }} }}\n\
+        #[Injectable] class Repo {{ constructor(private Db db) {{}} }}\n\
+        function main(): void {{ Repo r = inject<Repo>(); Output.printLine(\"ok\"); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected provider to win over the injectable class, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
 fn di_provides_duplicate_is_ambiguous() {
     let src = format!(
         "package Main;\n{DI_PROVIDES_IMPORTS}\

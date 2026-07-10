@@ -123,6 +123,26 @@ fn di_transient_is_fresh_per_use_but_shares_its_dependency() {
 }
 
 #[test]
+fn di_transient_root_inlines_construction() {
+    // Slice 4b: `inject<Transient>()` where the ROOT is transient — exercises the `root.transient` emit
+    // branch (the factory must inline `return new Worker(diDb)` with the shared `Db` hoisted, and NO
+    // dangling `diWorker` var). Runs and reads the shared dep back.
+    let src = "package Main;\n\
+        import Core.Output;\n\
+        import Core.DI.Injectable;\n\
+        import Core.DI.Transient;\n\
+        import Core.DI.inject;\n\
+        #[Injectable] class Db { constructor() {} function n(): int { return 9; } }\n\
+        #[Injectable] #[Transient] class Worker { constructor(private Db db) {} function go(): int { return this.db.n(); } }\n\
+        function main(): void { Worker w = inject<Worker>(); Output.printLine(\"{w.go()}\"); }\n";
+    let tokens = lex(src).expect("lex ok");
+    let prog = Parser::new(tokens).parse_program().expect("parse ok");
+    let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
+    let out = interpret(&expanded).expect("transient-root DI should run");
+    assert_eq!(out.trim(), "9");
+}
+
+#[test]
 fn program_without_main_errors() {
     let e = run(r#"function helper() -> int { return 1; }"#).unwrap_err();
     assert!(e.message.contains("main"), "{}", e.message);

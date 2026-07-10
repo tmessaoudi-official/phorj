@@ -1338,7 +1338,10 @@ are byte-identical by construction — the helper throws the same string on both
   (not only those reached by an `inject`), so a direct `new Injectable(…)` of a class with injected fields
   must supply them (the arity grows), and a class that instead sets such a field in its constructor BODY
   (no initializer) will double-assign — give the field an initializer, or don't type it as an injectable,
-  to opt out. `#[Transient]`, `#[Provides]`, and multi-impl qualifiers are later slices.
+  to opt out. (6) `#[Transient]` (slice 4b) is a **class-level** marker only; `#[Transient]` on a
+  `#[Provides]` method (a transient-lifetime factory result, mentioned in the design) is not yet wired —
+  it currently errors `E-UNKNOWN-ATTRIBUTE` (a clean rejection, not a silent downgrade). Multi-impl
+  qualifiers, generic injectables, and `#[Singleton]` are v2.
 
 ## Reporting
 
