@@ -5,6 +5,26 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🈺 **LANGUAGE QUEUE #6 — String.format slice 3c (`%g`/`%G`) SHIPPED.** (developer said "continue"
+  → built in the same context per the escape hatch, gated on the advisor-mandated exhaustive sweep instead of
+  the fresh-context heuristic). Gate-green, byte-identical, clippy+fmt clean, jit-off compiles. **UNPUSHED.**
+  - **Renderer** (`format_g_body` in `text.rs`): C-printf `%g`. Round `|f|` to P sig-figs via Rust `{:.P-1 e}`,
+    read exponent X. `-4 <= X < P` → FIXED (place decimal in the rounded digit string by X — string manipulation,
+    NO float re-rounding, so the double-rounding class is structurally impossible — then strip trailing zeros +
+    dot FULLY); else SCI (mantissa strips trailing zeros but KEEPS `.0`; exponent re-stamped like `%e`). `%g`
+    signs by the IEEE sign bit (`-0.0`→`"-0"`, UNLIKE `%e`/`%f`). Non-finite guarded on BOTH `split_once('e')`
+    AND `exp.parse()` (advisor catch — `{:.*e}` of inf/NaN has no `e` → pass-through, never panic).
+  - **PHP mirror:** `strpos('feEgG',$conv)` — delegates raw `$dir` to native `sprintf` (correct by construction).
+  - **VERIFICATION (advisor-mandated, the real gate):** throwaway exhaustive sweep — 12,195 values × 28 spec
+    variants = **341,459 comparisons of the Rust renderer vs php-8.5.8 `sprintf`, ZERO diffs.** Value set was
+    STRUCTURED not just random: branch boundaries `10^k ± {0,1,2} ulp` (k∈-7..8), digit-gain roundings
+    (`9.999995`, `999999.5`), half-to-even, subnormals, ±0.0, negatives, precision `.0`–`.17`. Throwaway test
+    deleted after passing; a curated subset baked as `text_format_shortest_repr_matches_php_byte_for_byte`.
+    Plus a manual `transpile examples/guide/string-format.phg | php-8.5.8` diff (run≡php byte-identical) —
+    because the example glob (`all_examples_match_between_backends`) is run≡runvm ONLY (no auto PHP leg; the
+    `__phorj_format` PHP path has no durable example guard — a known project gap, see the 3b entry).
+  - **NEXT:** language-queue #7 (attribute v2 + L1 runtime reflection, `di-attributes.plan.md §3`) OR finish
+    slice 4 (`%N$` positional + precision on `%s`/`%d`). Boxed-value JIT still the deferred multi-session perf push.
 - [2026-07-10] 🈺 **LANGUAGE QUEUE #6 — String.format slice 3b (`%e`/`%E`) SHIPPED + `%f`/-0.0 sign FIX.**
   Commits `92d1071` (3b) + `287f0fe` (%f fix) + `6259128` (6C follow-up), gate-green (1904 workspace, oracle
   `PHORJ_REQUIRE_PHP=1`), byte-identical run≡runvm≡php-8.5.8, clippy+fmt clean, jit-off compiles. **UNPUSHED.**

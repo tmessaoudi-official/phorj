@@ -549,3 +549,76 @@ fn text_format_f_sign_is_by_value_not_ieee_bit() {
     assert_eq!(fmt("%+f", vec![f(0.0)]), "+0.000000"); // + flag on non-negative
     assert_eq!(fmt("%f", vec![f(-1.5)]), "-1.500000"); // ordinary negative
 }
+
+#[test]
+fn text_format_shortest_repr_matches_php_byte_for_byte() {
+    // Slice 3c: `%g`/`%G`. A curated subset of the exhaustive structured+random sweep (341k comparisons,
+    // zero diffs vs php-8.5.8; branch boundaries, digit-gain roundings, half-to-even, subnormals,
+    // precision .0–.17) baked as permanent oracle strings — locks the branch logic independent of php.
+    let fmt = |spec: &str, v: f64| -> String {
+        let mut o = String::new();
+        match text_format(
+            &[
+                Value::Str(spec.into()),
+                Value::List(std::rc::Rc::new(vec![Value::Float(v)])),
+            ],
+            &mut o,
+        ) {
+            Ok(Value::Str(s)) => s.to_string(),
+            other => panic!("text_format({spec:?}) returned {other:?}"),
+        }
+    };
+    // Default precision 6. FIXED style strips trailing zeros AND the dot fully.
+    assert_eq!(fmt("%g", 0.0), "0");
+    assert_eq!(fmt("%g", 1.0), "1");
+    assert_eq!(fmt("%g", 100.0), "100");
+    assert_eq!(fmt("%g", 120.0), "120");
+    assert_eq!(fmt("%g", 0.5), "0.5");
+    assert_eq!(fmt("%g", 1234.5), "1234.5");
+    assert_eq!(fmt("%g", 12345.0), "12345");
+    assert_eq!(fmt("%g", 123456.0), "123456");
+    assert_eq!(fmt("%g", 0.0001234), "0.0001234");
+    assert_eq!(fmt("%g", std::f64::consts::PI), "3.14159");
+    // Branch boundary: X = -4 is the last FIXED, X = -5 flips to SCI; X = P(6) flips to SCI.
+    assert_eq!(fmt("%g", 1e-4), "0.0001"); // X=-4 fixed
+    assert_eq!(fmt("%g", 1e-5), "1.0e-5"); // X=-5 sci
+    assert_eq!(fmt("%g", 1234567.0), "1.23457e+6"); // X=6 sci (rounds to 6 sig figs)
+                                                    // SCI style keeps at least `.0` (PHP quirk vs C).
+    assert_eq!(fmt("%g", 1e20), "1.0e+20");
+    assert_eq!(fmt("%g", 2e20), "2.0e+20");
+    assert_eq!(fmt("%g", 1.2e20), "1.2e+20");
+    assert_eq!(fmt("%g", 1.5e-10), "1.5e-10");
+    // `%g` signs by the IEEE sign bit — `-0.0` is SIGNED (contrast `%e`/`%f`).
+    assert_eq!(fmt("%g", -0.0), "-0");
+    assert_eq!(fmt("%+g", -0.0), "-0");
+    assert_eq!(fmt("%+g", 0.0), "+0");
+    assert_eq!(fmt("%g", -1.5), "-1.5");
+    // Precision = SIGNIFICANT digits (default→6; 0 treated as 1).
+    assert_eq!(fmt("%.0g", 123.456), "1.0e+2");
+    assert_eq!(fmt("%.1g", 123.456), "1.0e+2");
+    assert_eq!(fmt("%.2g", 123.456), "1.2e+2");
+    assert_eq!(fmt("%.3g", 123.456), "123");
+    assert_eq!(fmt("%.4g", 123.456), "123.5");
+    assert_eq!(fmt("%.6g", 123.456), "123.456");
+    // Digit-gain rounding (the double-round class the string-placement design survives).
+    assert_eq!(fmt("%g", 9.999995), "10"); // rounds up into a new exponent, then fixed-strips
+    assert_eq!(fmt("%g", 999999.5), "1.0e+6"); // rounds up past the fixed/sci boundary
+                                               // `%G` upper-cases only the scientific separator.
+    assert_eq!(fmt("%G", 1e20), "1.0E+20");
+    assert_eq!(fmt("%G", 0.0001234), "0.0001234");
+    // Width/flags compose (space-pad, zero-pad after sign, left-justify).
+    assert_eq!(fmt("%10g", 1234.5), "    1234.5");
+    assert_eq!(fmt("%-10g", 1234.5), "1234.5    ");
+    assert_eq!(fmt("%010g", 1234.5), "00001234.5");
+    // Int operand accepted; non-number faults.
+    assert_eq!(fmt("%g", 42.0), "42");
+    let mut o = String::new();
+    assert!(text_format(
+        &[
+            Value::Str("%g".into()),
+            Value::List(std::rc::Rc::new(vec![Value::Str("x".into())]))
+        ],
+        &mut o
+    )
+    .is_err());
+}

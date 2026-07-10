@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `String.format` shortest-repr `%g`/`%G` (slice 3c)
+
+`String.format` now supports `%g`/`%G` (int/float operand), with a `.precision` (significant digits,
+default 6). The renderer reproduces PHP `sprintf`'s C-printf `%g` byte-for-byte: round `|f|` to P
+significant digits via Rust `{:.*e}`, read the exponent X, and if `-4 ≤ X < P` render fixed-style
+(decimal placed in the rounded digits by string manipulation — no double-rounding — then trailing zeros
+and the dot stripped fully), else scientific-style (mantissa keeps at least `.0` — a PHP quirk vs C — and
+the exponent re-stamped to PHP's always-signed min-1-digit form). `%G` upper-cases only the separator.
+Unlike `%e`/`%f`, `%g` signs by the IEEE sign bit, so `-0.0` → `-0`. The PHP mirror folds `%g`/`%G` into
+the float branch (delegates the raw directive to native `sprintf`). Verified by an exhaustive
+structured+random sweep of the Rust renderer vs php-8.5.8 (341k comparisons — branch boundaries, digit-gain
+roundings, half-to-even, subnormals, ±0.0, precision `.0`–`.17` — zero diffs), a curated subset baked as
+oracle-string unit tests, and a run≡php diff on the example. `%N$` positional + precision on `%s`/`%d` remain.
+No new `Op`/`Value`.
+
 ### Added — `String.format` scientific `%e`/`%E` (slice 3b)
 
 `String.format` now supports the scientific conversions `%e`/`%E` (int/float operand), with a `.precision`

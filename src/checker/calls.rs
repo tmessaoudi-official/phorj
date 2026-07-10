@@ -416,9 +416,9 @@ impl Checker {
                             bad,
                             "E-FORMAT-UNSUPPORTED",
                             Some(
-                                "this version supports `%s`/`%d`/`%f`/`%%`, scientific `%e`/`%E`, integer-radix \
-                                 `%x`/`%X`/`%o`/`%b`, flags `-`/`0`/`+`, width, and float precision; `%g` and \
-                                 `%N$` positional are coming"
+                                "this version supports `%s`/`%d`/`%f`/`%%`, scientific `%e`/`%E`, shortest-repr \
+                                 `%g`/`%G`, integer-radix `%x`/`%X`/`%o`/`%b`, flags `-`/`0`/`+`, width, and float \
+                                 precision; `%N$` positional and precision on `%s`/`%d` are coming"
                                     .into(),
                             ),
                         );

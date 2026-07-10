@@ -419,7 +419,7 @@ pub(crate) struct FormatDirective {
 /// iterator is advanced past `[flags][width][.precision]conv`. Returns the directive, or an error
 /// string for a dangling `%` or an unsupported shape (precision on `%s`/`%d`, an unknown conversion) —
 /// so the runtime renderer and the compile-time gate reject exactly the same specs (this slice: flags
-/// `-`/`0`/`+`, width, float-only precision on `%f`/`%e`/`%E`, conversions `s`/`d`/`f`/`e`/`E`/`x`/`X`/`o`/`b`).
+/// `-`/`0`/`+`, width, float-only precision on `%f`/`%e`/`%E`/`%g`/`%G`, conversions `s`/`d`/`f`/`e`/`E`/`g`/`G`/`x`/`X`/`o`/`b`).
 pub(crate) fn parse_format_directive(
     chars: &mut std::iter::Peekable<std::str::Chars>,
 ) -> Result<FormatDirective, String> {
@@ -460,14 +460,14 @@ pub(crate) fn parse_format_directive(
         .next()
         .ok_or_else(|| "String.format: dangling `%` at the end of the format string".to_string())?;
     match conv {
-        // Precision is supported on the float conversions `%f`/`%e`/`%E` — `%s`/`%d` and the
+        // Precision is supported on the float conversions `%f`/`%e`/`%E`/`%g`/`%G` — `%s`/`%d` and the
         // integer-radix conversions `%x`/`%X`/`%o`/`%b` (slice 3a) reject it (precision-as-min-digits
         // is a later slice).
         's' | 'd' | 'x' | 'X' | 'o' | 'b' if precision.is_some() => Err(format!(
             "String.format: precision on `%{conv}` is not supported yet (only the float conversions \
-             `%f`/`%e`/`%E` take a precision this version)"
+             `%f`/`%e`/`%E`/`%g`/`%G` take a precision this version)"
         )),
-        's' | 'd' | 'f' | 'e' | 'E' | 'x' | 'X' | 'o' | 'b' => Ok(FormatDirective {
+        's' | 'd' | 'f' | 'e' | 'E' | 'g' | 'G' | 'x' | 'X' | 'o' | 'b' => Ok(FormatDirective {
             minus,
             zero,
             plus,
@@ -477,7 +477,7 @@ pub(crate) fn parse_format_directive(
         }),
         other => Err(format!(
             "String.format: unsupported directive `%{other}` (this version supports \
-             %s, %d, %f, %e, %E, %x, %X, %o, %b, %%)"
+             %s, %d, %f, %e, %E, %g, %G, %x, %X, %o, %b, %%)"
         )),
     }
 }
@@ -499,6 +499,83 @@ fn pad_format(sign: &str, body: &str, d: &FormatDirective) -> String {
         format!("{sign}{}{body}", "0".repeat(fill))
     } else {
         format!("{}{sign}{body}", " ".repeat(fill))
+    }
+}
+
+/// Strip trailing zeros (and a now-trailing dot) from a `%g` FIXED-style body — but only when it has a
+/// decimal point, so `"100"` stays `"100"` while `"100.000"` → `"100"` and `"0.500"` → `"0.5"`.
+fn strip_g_fixed_zeros(s: &str) -> String {
+    if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+/// Strip trailing zeros from a `%g` SCIENTIFIC mantissa, keeping at least one fraction digit:
+/// `"1.00000"` → `"1.0"`, `"1.20000"` → `"1.2"`, `"1"` → `"1.0"`. PHP's `%g` always renders `D.D…e±X`
+/// in scientific form (a deviation from C, which would strip to bare `"1e+20"`).
+fn strip_g_sci_mantissa(m: &str) -> String {
+    match m.split_once('.') {
+        Some((int, frac)) => {
+            let frac = frac.trim_end_matches('0');
+            if frac.is_empty() {
+                format!("{int}.0")
+            } else {
+                format!("{int}.{frac}")
+            }
+        }
+        None => format!("{m}.0"),
+    }
+}
+
+/// Render the MAGNITUDE of a `%g`/`%G` directive (C-printf `%g`; the caller supplies the sign). `prec`
+/// is the SIGNIFICANT-digit count (default 6, normalized to ≥ 1 here); `upper` selects the `E` separator.
+///
+/// Algorithm (byte-matches php-8.5.8): round `mag` to `prec` significant digits via Rust `{:.*e}` (which
+/// matches PHP's round-half-to-even) and read the exponent `X`. If `-4 ≤ X < prec` render FIXED-style —
+/// placing the decimal point in the rounded digit string by `X` (string placement, so the value is never
+/// re-rounded → no double-rounding) then stripping trailing zeros fully; otherwise render SCIENTIFIC-style
+/// (mantissa keeps at least `.0`, exponent re-stamped to PHP's always-signed min-1-digit form, as in `%e`).
+/// Non-finite `mag` (`inf`/`NaN`) has no exponent to place — Rust prints `inf`/`NaN`, returned verbatim
+/// (PHP `INF`/`NaN` — a documented `%f`-class divergence on `inf`, kept out of examples).
+fn format_g_body(mag: f64, prec: usize, upper: bool) -> String {
+    let p = prec.max(1);
+    let sci = format!("{:.*e}", p - 1, mag);
+    let (mantissa, exp) = match sci.split_once('e') {
+        Some(pair) => pair,
+        None => return sci, // non-finite: no exponent to place
+    };
+    let x: i32 = match exp.parse() {
+        Ok(x) => x,
+        Err(_) => return sci, // defensive: unparseable exponent → pass through (never panic)
+    };
+    if x >= -4 && x < p as i32 {
+        // FIXED style. `digits` = the `p` significant digits with the dot removed ("1.23457" → "123457").
+        let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
+        let body = if x >= 0 {
+            // `x < p` ⇒ `x + 1 ≤ digits.len()`, so the split never overruns.
+            let cut = (x as usize) + 1;
+            let (int, frac) = digits.split_at(cut);
+            if frac.is_empty() {
+                int.to_string()
+            } else {
+                format!("{int}.{frac}")
+            }
+        } else {
+            // x ∈ -4..=-1: "0." + (-x-1) leading zeros + all significant digits.
+            format!("0.{}{}", "0".repeat((-x - 1) as usize), digits)
+        };
+        strip_g_fixed_zeros(&body)
+    } else {
+        // SCIENTIFIC style (same exponent re-stamp as `%e`).
+        let m = strip_g_sci_mantissa(mantissa);
+        let (esign, edigits) = match exp.strip_prefix('-') {
+            Some(rest) => ('-', rest),
+            None => ('+', exp),
+        };
+        let esep = if upper { 'E' } else { 'e' };
+        format!("{m}{esep}{esign}{edigits}")
     }
 }
 
@@ -629,6 +706,31 @@ fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
                 };
                 out.push_str(&pad_format(sign, &body, &d));
             }
+            // Shortest-repr (slice 3c): `%g`/`%G` — C-printf `%g`, precision = significant digits
+            // (default 6). Unlike `%e`/`%f`, `%g` signs by the IEEE sign bit, so `-0.0` renders "-0"
+            // (verified vs php-8.5.8: `%+g` of -0.0 → "-0", of +0.0 → "+0"). Body via `format_g_body`.
+            'g' | 'G' => {
+                let f = match v {
+                    Value::Int(n) => *n as f64,
+                    Value::Float(x) => *x,
+                    other => {
+                        return Err(format!(
+                            "String.format: %{} expects a number, found {}",
+                            d.conv,
+                            other.type_name()
+                        ))
+                    }
+                };
+                let sign = if f.is_sign_negative() {
+                    "-"
+                } else if d.plus {
+                    "+"
+                } else {
+                    ""
+                };
+                let body = format_g_body(f.abs(), d.precision.unwrap_or(6), d.conv == 'G');
+                out.push_str(&pad_format(sign, &body, &d));
+            }
             // Integer-radix conversions (slice 3a): hex `%x`/`%X`, octal `%o`, binary `%b`. UNSIGNED —
             // a negative int renders as its 64-bit two's-complement bit pattern, matching PHP `sprintf`
             // on a 64-bit build (`%x` of -1 → "ffff…"), so `n as u64` is the exact bridge. No sign is
@@ -654,7 +756,7 @@ fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
                 };
                 out.push_str(&pad_format("", &body, &d));
             }
-            _ => unreachable!("parse_format_directive only returns s/d/f/e/E/x/X/o/b"),
+            _ => unreachable!("parse_format_directive only returns s/d/f/e/E/g/G/x/X/o/b"),
         }
     }
     if ai != items.len() {

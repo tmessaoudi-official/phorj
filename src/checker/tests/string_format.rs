@@ -64,13 +64,27 @@ fn percent_percent_is_a_literal_not_a_directive() {
 
 #[test]
 fn unsupported_directive_is_rejected_for_a_literal_spec() {
-    // `%g` (shortest-repr) is not supported yet — `%s`/`%d`/`%f`/`%e`/`%E`/`%x`/`%X`/`%o`/`%b`/`%%` are.
+    // `%c` (char) is not supported — the supported set is `%s`/`%d`/`%f`/`%e`/`%E`/`%g`/`%G`/`%x`/`%X`/
+    // `%o`/`%b`/`%%`.
     let err = expand(
         "package Main; import Core.String; \
-         function main(): void { var s = String.format(\"%g\", [1.5]); }",
+         function main(): void { var s = String.format(\"%c\", [65]); }",
     )
-    .expect_err("%g is not supported in this slice");
+    .expect_err("%c is not supported");
     assert!(err.contains("E-FORMAT-UNSUPPORTED"), "got:\n{err}");
+}
+
+#[test]
+fn slice3c_shortest_repr_conversions_are_accepted() {
+    // `%g`/`%G` (slice 3c) type-check on a literal spec, including a `.precision` (significant digits).
+    assert!(
+        expand(
+            "package Main; import Core.String; \
+             function main(): void { var s = String.format(\"%g %G %.3g %+g\", [1.5, 1.5, 1.5, 1.5]); }"
+        )
+        .is_ok(),
+        "shortest-repr conversions should type-check"
+    );
 }
 
 #[test]

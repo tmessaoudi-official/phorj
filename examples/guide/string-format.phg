@@ -50,6 +50,12 @@ function main(): void {
     Output.printLine(String.format("[%.2e][%.0e][%+e]", [1234.5, 1.5, 3.14159]));
     // Width + flags: space-pad, zero-pad (after the sign), left-justify. `-0.0` is not signed by `%e`.
     Output.printLine(String.format("[%12.4e][%012.4e][%-12.4e] z=%e", [1.5, 0.0 - 1.5, 1.5, -0.0]));
+    // Shortest-repr (slice 3c): `%g`/`%G` — precision is SIGNIFICANT digits (default 6). PHP chooses
+    // fixed vs scientific by magnitude: `-4 <= X < precision` → fixed (trailing zeros stripped fully),
+    // else scientific (mantissa keeps at least `.0`, a PHP quirk). `%G` upper-cases the `E`.
+    Output.printLine(String.format("%g | %g | %g | %g", [1234.5, 0.0001234, 100.0, 1e20]));
+    // `.precision` = significant digits; `%g` signs `-0.0` (by the IEEE sign bit — unlike `%e`/`%f`).
+    Output.printLine(String.format("[%G][%.3g][%+g][%g]", [1.5e-10, 123.456, 42.0, -0.0]));
     // A format string with no directives passes through unchanged (empty value list).
     Output.printLine(String.format("no placeholders here", []));
 }
