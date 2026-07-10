@@ -31,7 +31,10 @@
   KNOWN_ISSUES for separate adjudication. Non-blocking future question (advisor-flagged): `module_of`
   now reaches `cli::core_module_of` (checker→cli edge) — defensible (preludes+`lex_parse` live in cli);
   revisit registry home if it grows. **NEXT = W3-1 SQL DBAL** (fresh context; adjudicate draft forks
-  at wave start).
+  at wave start). Guard shape for W3-1: the corpus-equivalence test was deleted by design, so the
+  differential is the SOLE ongoing registry guard — good coverage (`route-constraints.phg` pins
+  Http-before-Regex ordering; S2 pins `module_of`) but not total (a reorder of two *independent*
+  modules wouldn't be caught — behaviorally harmless, but keep the `Core.Db` row in registry order).
 
 ## Formal Plan
 
