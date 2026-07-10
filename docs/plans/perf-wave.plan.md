@@ -5,6 +5,12 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🎯 **DEV RE-CONFIRMED ORDER ②→③ (ask-human, after seeing the ① recompute evidence).** Shown the
+  finding that parity is the real drag and the web spine is the parity lever (so ③-first was a live option), the
+  developer chose **"both 1 and 2 in order"** — ② boxed-value JIT FIRST (the HARD PERF MANDATE stays #1 priority; it
+  is a different axis from parity), THEN ③ web spine. Deferred forks (DI v2 / trait / floatmul) NOT chosen. Starting ②:
+  fresh interleaved docker-php+JIT baseline + `src/jit/` architecture scope + a concrete slice plan; the spine-touching
+  codegen itself wants a FRESH context (memory rule) → gated at Phase 4.
 - [2026-07-10] ✅ **STEP ① DONE — PARITY/VISION % RECOMPUTED at HEAD `af3aad3` (autonomous).** Formal
   **systematic verdict-scan** (not a memory-delta): all 29 SYN `P`/`GP` + 8 RT `P`/`GP` rows re-walked, all 35 FN
   groups checked vs every `src/native/` commit since the `ccb2403` E-surface baseline. **Exactly 2 rows moved:**
@@ -1617,6 +1623,53 @@
   `vm_speedup` JSON field — `perf-gate.sh:43` reads it), keep local-`php` `--vs-php` as indicative;
   (c) wire the microbench WIN-count mandate gate (a `microbench.sh --gate` mode + baseline, then a CI
   job on the docker-capable lane, or pre-push/local to keep CI docker-free — sub-decision open).
+
+## ② BOXED-VALUE JIT — SLICE PLAN (Phase 4 scaffold, 2026-07-10; codegen wants a FRESH context)
+
+**Goal:** flip the VM-only LOSS categories by extending JIT *eligibility* to object/enum/method ops.
+Current JIT (HEAD `af5aa9e`) supports only arithmetic (int+float) · comparisons · locals · control
+flow · `Op::Call` — everything else is `JitError::Unsupported` → VM fallback (default-deny, `mod.rs`).
+
+**Vehicle = the EXISTING boxed-`Value`-via-kernels path** (`mod.rs §"Boxed-Value-via-kernels"`), NOT the
+unboxed path. The boxed path operates on a `Vec<Value>` operand stack via `rt_*` bridge helpers that
+call the single-sourced `value.rs`/`exec.rs` machinery, so it is **byte-identical to the VM by
+construction** (Invariant 4). It already serves as the unboxed path's oracle; extending its supported-op
+set is the lowest-risk way to add objects/enums/methods. Unboxing these is explicitly OUT of scope (the
+win here is eliminating the interpreter dispatch loop, not register-allocating fields — the VM-only
+categories are *dispatch-core-bound* per [[perf-vm-only-dispatch-core-bound]]).
+
+**Slices (each: add `rt_*` helpers mirroring the `exec.rs` arm → extend `is_eligible` op-scan → extend
+the boxed `Op` match → differential case → PROVE `hits>0` + FRESH interleaved docker-php+JIT baseline
+shows WIN/PARITY per [[perf-benchmarking-truth]], never batch samples):**
+
+- **B1 — objects + fields.** Ops: `MakeInstance(idx)`, `GetField(idx)`, `SetField(idx)`, `IsInstance(name)`
+  (chunk.rs:256-316). `rt_setfield` MUST mutate the shared `Rc<Instance>` cell in place (handle
+  semantics — chunk.rs:278). Micro: `bench/micro/objalloc` (~5× LOSS). Differential: objalloc + an
+  `obj.f + 1`-shaped case (CTy-operand trap, Invariant 7). Target: objalloc → WIN/PARITY.
+- **B2 — method dispatch.** Ops: `CallMethod(name_idx, argc)` + super/parent (chunk.rs:294). Reuses the
+  `Op::Call` frame machinery — ⚠ the `start_depth = frames.len()+1` hook off-by-one is LETHAL
+  ([[jit-slice1b1-memory-stack]]); method frames must honor it. Resolves target via the
+  class→method dispatch table at runtime (chunk.rs:471). DEPENDS ON B1. Micro: `methodcall` (~25× LOSS).
+  Differential: methodcall + recursive-method + TWO-methods-in-one-expr (scratch-slot `self.height-1`,
+  Invariant 8). Target: methodcall → WIN.
+- **B3 — enums.** Ops: `MakeEnum`, `MatchTag(idx)` (chunk.rs:254-256). Micros: `enum` (~100× LOSS),
+  `match`. Differential: enum construct + payload-binding match. Target: enum → WIN.
+
+**Adversarial / MUST-CHECK (the byte-identity spine):**
+- The example glob (`all_examples_match_between_backends`) is **run≡runvm only** — it does NOT prove the
+  JIT path. Each slice needs explicit `hits>0` + VM-oracle assertions in `src/jit/tests.rs` (the
+  green gate alone will NOT catch a masked byte-identity P0 — memory: spine-sensitive → advisor review).
+- Fault parity: method-resolution-miss (chunk.rs:292), field/enum faults must call the SAME fault paths
+  → byte-identical strings (Invariant 4). No `.unwrap()` across the `extern "C"` boundary (mod.rs:53).
+- Dep-policy amendment (domain #7 cranelift) is already ratified; no new dep for these slices.
+- FRESH baseline is a per-session JIT prerequisite (stale/batched = phantom wins) — measure it AT the
+  codegen session, not before. `scripts/microbench.sh` (VM vs `docker php:8.5-cli`) is the harness.
+
+**Why gated here (not started this session):** boxed-JIT codegen is the most spine-sensitive work in
+the project; the memory rule is firm that such slices want a FRESH context (advisor review, not the
+green gate, catches masked P0s) + a fresh interleaved baseline. This scaffold front-loads the safe
+architectural scoping so the fresh session opens at Phase 4/5. First action there: refresh the docker
+baseline, then B1.
 
 ## Scoreboard — the PERF-PARITY REGISTER (WIN-OR-FLAG, developer 2026-07-09)
 
