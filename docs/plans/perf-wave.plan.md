@@ -5,6 +5,21 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🎯🏗️🏗️ **AGREED (ask-human, after the winnability RED FLAG) — GO FOR THE FULL STRING/COLLECTION
+  PERF REBUILD.** Shown that strings/maps are 27-67× behind php and the scoped rep overhaul (Rc<str>/packed
+  Instance) only NARROWS-not-WINS, the developer chose the most ambitious path over "proceed narrow-not-win"
+  and "pivot to ③": **the combined rebuild = string interning + packed arrays + extending the unboxed/inlining
+  JIT to string+collection ops.** This is the LARGEST + most spine-sensitive effort in the project (value.rs +
+  every backend + the JIT + byte-identity spine) → categorically a FRESH context, multi-session.
+  **⚠️ MANDATORY FIRST STEP before ANY build (the lesson now learned 3×: ②, then V1-winnability — "alloc-heavy
+  ≠ winnable", "narrow ≠ win"): DECOMPOSE the 27-67× gap and establish a REALISTIC CEILING.** stringconcat is
+  ≈344ns/iter phorj vs ≈12.5ns php — profile how that 344ns splits (allocation vs VM per-op dispatch vs
+  string-build vs data-structure) to know which sub-lever pays and whether ANY combination can actually BEAT
+  php (not just approach it — php's string/array impl is 20yr-tuned; the honest expectation is parity-to-2×,
+  a clean WIN is uncertain). If the decomposition shows the VM dispatch floor alone (see the `interp` micro =
+  0.10× = ~10× slower on pure dispatch) keeps these >1× even with zero allocation + packed data, then a clean
+  WIN REQUIRES the JIT to run string/collection ops natively (op-inlining, no per-op dispatch) — the hardest
+  sub-lever — and that becomes the gating question to surface. SCOPING = new section below. Envelope unchanged.
 - [2026-07-10] 🎯🏗️ **AGREED (ask-human, after the ② FLAG) — NEXT PERF PUSH = VALUE-REPRESENTATION OVERHAUL.**
   Given the ② finding (objects/methods are WORK-bound, not dispatch-bound → the lever is the value
   representation, not the JIT), the developer chose the **big cross-cutting rework** over profile-first-then-
@@ -1859,6 +1874,34 @@ are a SEPARATE JIT-inlining/dispatch lever; surface that as its own fork if/when
 (spine-sensitive; advisor review, not just the green gate). Slices must stay byte-identical — a slice that
 would change a user-visible semantic is mis-scoped (no §14/§15 fork expected). Per-slice: measure
 before/after (counting alloc + interleaved fresh-docker-php) → full oracle gate → commit green → WIN-OR-FLAG.
+
+## FULL STRING/COLLECTION PERF REBUILD — SCOPED (2026-07-10, dev-chosen; FRESH-context multi-session)
+
+**Gap decomposition [Verified: interleaved best-of-5, phorj-VM `--no-jit` vs fresh docker php:8.5+JIT]:**
+`interp` (1 string build/iter) = **8.9×** behind · `stringconcat` (2 index-clones + concat) = **27.6×** · `mapget`
+= **67.1×**. The `interp` (8.9×) vs `stringconcat` (27.6×) delta ⟹ **allocation (operand/index `String` clones)
+is ~3× of the string gap** — the portion V1 `Rc<str>` removes. The **residual ~9× floor** = VM per-op dispatch
++ int→string + string-build (interp still builds a string, so the TRUE pure-dispatch floor is even lower).
+
+**Sub-levers (sequenced; each byte-identity-gated + measured + WIN-OR-FLAG):**
+1. **Allocation** — V1 `Rc<str>` (index/operand clones → bumps) + a no-alloc/fused string builder. Closes the
+   ~3× allocation portion (stringconcat 27.6×→~9×). NECESSARY-not-SUFFICIENT.
+2. **JIT op-inlining for string/collection ops** — the residual ~9× is VM dispatch + build; ONLY the JIT
+   running these ops natively (no per-op dispatch, fused build, no intermediate `Value`) can close it. THE hard,
+   gating sub-lever — extends the unboxed JIT to a NEW domain (strings/collections, not just int/float). Big.
+3. **Interning + packed arrays** — `mapget` (67×, the worst) needs a packed/hashed map representation (the
+   current `Rc<Vec<(HKey,Value)>>` is linear-scan-ish + clones values) + V1's value savings. String interning
+   helps repeated-literal workloads.
+
+**Realistic ceiling [Inferred, HONEST]:** allocation gets strings 27.6×→~9×; op-inlining could push further,
+but php's ≈12.5ns/iter is 20yr-tuned → expectation is **parity-to-a-few-× on strings; a clean WIN is
+UNCERTAIN; maps (67×) are hardest.** ⚠️ **GATING QUESTION to surface to the dev (after the fresh-context
+profile confirms the decomposition): if even the full rebuild only reaches PARITY-not-WIN on strings/
+collections, is that acceptable under the HARD PERF MANDATE, or are these categories declared "match-not-beat"
+(a mandate refinement)?** — do NOT self-rule (§15). **FIRST FRESH-CONTEXT ACTION:** a precise per-component
+profile (instrumented / `perf`) of stringconcat's ≈344ns/iter (alloc vs dispatch vs build) to confirm the
+split + lock the ceiling, THEN sequence sub-lever 1→2→3. This rebuild is the biggest spine effort in the
+project — fresh context, advisor per slice, byte-identity oracle every step.
 
 ### ⚠️🚩 WINNABILITY RED FLAG (2026-07-10, advisor-prompted — READ BEFORE STARTING V1/V3)
 **"Alloc-heavy" ≠ "beatable by cutting allocs" — the ② lesson, re-confirmed at LARGER scale.** Before building
