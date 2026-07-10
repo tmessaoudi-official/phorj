@@ -1273,6 +1273,33 @@ pub fn explain_text(code: &str) -> Option<String> {
              built-in type, a variable, or an unknown name is rejected. Call a function without `new`;\n\
              construct only declared classes / enum variants.\n"
         }
+        "E-DI-MISSING" => {
+            "E-DI-MISSING — dependency injection could not find an `#[Injectable]` provider.\n\n\
+             `inject<T>()` builds T's dependency graph from `#[Injectable]` classes at compile time.\n\
+             This fires when T (or one of its constructor-parameter types) is not injectable: mark the\n\
+             class `#[Injectable]`, or provide a single `#[Injectable]` implementation for an interface\n\
+             dependency. In v1 every constructor parameter of an injectable must itself be injectable\n\
+             (config-value provision via `#[Provides]` is a later slice).\n"
+        }
+        "E-DI-AMBIGUOUS" => {
+            "E-DI-AMBIGUOUS — an interface dependency has more than one `#[Injectable]` implementation.\n\n\
+             A single-implementation interface auto-binds to its one injectable implementor. When two or\n\
+             more injectable classes implement the interface, the resolver cannot choose. In v1, provide\n\
+             exactly one `#[Injectable]` implementation (binding qualifiers to disambiguate multiple\n\
+             implementations are a later slice).\n"
+        }
+        "E-DI-CYCLE" => {
+            "E-DI-CYCLE — the injection dependency graph has a cycle.\n\n\
+             Constructor injection requires an acyclic graph (each type is built once, dependencies\n\
+             first). A cycle (A needs B, B needs A) cannot be constructed. Break the cycle — e.g. extract\n\
+             a shared dependency, or invert one edge. (Field-injection cycle-breaking is not in v1.)\n"
+        }
+        "E-INJECT-NO-TYPE" => {
+            "E-INJECT-NO-TYPE — `inject()` was written without a target type.\n\n\
+             In v1 the composition root needs an explicit type argument: write `inject<App>()`. The\n\
+             annotation-driven bare `inject()` form (target inferred from the surrounding type) is a\n\
+             later slice.\n"
+        }
         "E-STATIC-NO-INIT" => {
             "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\
              A `static` field is class-level state with no constructor to set it, so it must be\n\

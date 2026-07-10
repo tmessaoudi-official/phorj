@@ -1,0 +1,45 @@
+// Compile-time dependency injection (DI v1) — `#[Injectable]` + the `inject<T>()` composition root.
+//
+// `inject<App>()` resolves App's dependency graph BY TYPE at compile time and expands to plain `new`
+// construction before any backend (byte-identical run/runvm/PHP — there is no runtime DI machinery).
+// The graph here is a DIAMOND: both `App` and `EnglishGreeter` depend on `Clock`. The ruled default
+// lifetime is SHARED, so `inject<App>()` constructs ONE `Clock` and threads it to both — the synthesized
+// factory hoists it to a single local. A single-implementation interface (`Greeter`) auto-binds to its
+// only `#[Injectable]` implementor (`EnglishGreeter`). Wiring is constructor-only in v1.
+package Main;
+
+import Core.Output;
+
+interface Greeter {
+    function greet(): string;
+}
+
+#[Injectable]
+class Clock {
+    constructor() {}
+    function now(): int {
+        return 42;
+    }
+}
+
+#[Injectable]
+class EnglishGreeter implements Greeter {
+    constructor(private Clock clock) {}
+    function greet(): string {
+        return "hello {this.clock.now()}";
+    }
+}
+
+#[Injectable]
+class App {
+    constructor(private Greeter greeter, private Clock clock) {}
+    function run(): string {
+        // `Greeter` auto-binds to EnglishGreeter (single impl); `Clock` is shared with EnglishGreeter's.
+        return "{this.greeter.greet()} t={this.clock.now()}";
+    }
+}
+
+function main(): void {
+    App app = inject<App>();
+    Output.printLine(app.run());
+}

@@ -48,6 +48,67 @@ fn check_src(src: &str) -> Result<(), Vec<phorj::diagnostic::Diagnostic>> {
     check(&prog).map(|_warnings| ())
 }
 
+/// Run the full pre-check expansion chain (incl. `desugar_di`), returning the rendered error string on
+/// failure. DI errors originate in `desugar_di` (inside `check_and_expand`), not the raw `check`.
+fn expand(src: &str) -> Result<(), String> {
+    let tokens = lex(src).expect("lex ok");
+    let prog = Parser::new(tokens).parse_program().expect("parse ok");
+    phorj::cli::check_and_expand(&prog, src).map(|_| ())
+}
+
+#[test]
+fn di_injectable_graph_expands_and_checks_clean() {
+    let src = "package Main;\n\
+        #[Injectable] class Db { constructor() {} }\n\
+        #[Injectable] class Svc { constructor(private Db db) {} }\n\
+        function main(): void { Svc s = inject<Svc>(); Output.printLine(\"ok\"); }\n\
+        import Core.Output;\n";
+    assert!(
+        expand(src).is_ok(),
+        "expected clean DI expansion, got: {:?}",
+        expand(src)
+    );
+}
+
+#[test]
+fn di_non_injectable_target_is_missing() {
+    let src = "package Main;\n\
+        class Bare { constructor() {} }\n\
+        function main(): void { Bare b = inject<Bare>(); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-DI-MISSING"), "{e}");
+}
+
+#[test]
+fn di_multi_impl_interface_is_ambiguous() {
+    let src = "package Main;\n\
+        interface I { function f(): int; }\n\
+        #[Injectable] class A implements I { constructor() {} function f(): int { return 1; } }\n\
+        #[Injectable] class B implements I { constructor() {} function f(): int { return 2; } }\n\
+        function main(): void { I x = inject<I>(); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-DI-AMBIGUOUS"), "{e}");
+}
+
+#[test]
+fn di_dependency_cycle_is_rejected() {
+    let src = "package Main;\n\
+        #[Injectable] class A { constructor(private B b) {} }\n\
+        #[Injectable] class B { constructor(private A a) {} }\n\
+        function main(): void { A x = inject<A>(); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-DI-CYCLE"), "{e}");
+}
+
+#[test]
+fn di_bare_inject_without_type_is_rejected() {
+    let src = "package Main;\n\
+        #[Injectable] class A { constructor() {} }\n\
+        function main(): void { A x = inject(); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-INJECT-NO-TYPE"), "{e}");
+}
+
 #[test]
 fn sample_program_type_checks_clean() {
     let result = check_src(SAMPLE);

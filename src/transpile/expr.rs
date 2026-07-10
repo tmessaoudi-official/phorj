@@ -473,6 +473,7 @@ impl Transpiler {
             // `html"…"` literals are erased to `html.concat([…])` kernel calls by
             // `checker::resolve_html` before transpilation; the transpiler never sees one.
             Expr::Html(..) => unreachable!("html literal not resolved before transpilation"),
+            Expr::Inject { .. } => unreachable!("inject() not expanded before transpilation"),
             Expr::OverloadSelect { .. } => {
                 unreachable!("overload selector resolved + rewritten before transpilation (Slice C1)")
             }

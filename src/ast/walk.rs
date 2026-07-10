@@ -42,6 +42,7 @@ fn collect_free_expr(
         | Expr::Decimal { .. }
         | Expr::Bool(..)
         | Expr::Null(..)
+        | Expr::Inject { .. }
         | Expr::Bytes(..) => {}
         Expr::Str(parts, _) | Expr::Html(parts, _) => {
             for part in parts {
@@ -287,6 +288,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             | Expr::Bool(..)
             | Expr::Null(..)
             | Expr::Bytes(..)
+            | Expr::Inject { .. }
             | Expr::Ident(..) => false,
             Expr::Str(parts, _) | Expr::Html(parts, _) => parts.iter().any(|p| match p {
                 StrPart::Expr(inner) => in_expr(inner),
@@ -412,6 +414,7 @@ pub fn uses_concurrency(program: &Program) -> bool {
             | Expr::Null(..)
             | Expr::Bytes(..)
             | Expr::Ident(..)
+            | Expr::Inject { .. }
             | Expr::This(_) => false,
             Expr::Str(parts, _) | Expr::Html(parts, _) => parts.iter().any(|p| match p {
                 StrPart::Expr(inner) => in_expr(inner),

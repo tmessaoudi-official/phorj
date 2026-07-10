@@ -1052,6 +1052,12 @@ impl Printer<'_> {
                     doc::text(" }"),
                 ]))
             }
+            // DI composition root — rendered faithfully so `phg format` (which parses without running
+            // `desugar_di`) round-trips it: `inject<T>()` or bare `inject()`.
+            Expr::Inject { ty: t, .. } => Ok(doc::text(match t {
+                Some(inner) => format!("inject<{}>()", ty(inner)?),
+                None => "inject()".to_string(),
+            })),
             // `html"…"` literal — same segment model as a string, different delimiter.
             Expr::Html(parts, _) => {
                 let mut s = String::from("html\"");

@@ -853,6 +853,11 @@ impl Checker {
             if self.check_user_attribute_use(attr) {
                 continue;
             }
+            // DI v1: `#[Injectable]` is a built-in class attribute consumed by `desugar_di` before any
+            // backend (then inert). Accept it here so it is not `E-UNKNOWN-ATTRIBUTE`.
+            if attr.is_di_builtin() {
+                continue;
+            }
             self.err_coded(
                 attr.span,
                 format!(

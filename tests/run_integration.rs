@@ -52,6 +52,33 @@ fn sample_program_runs_and_prints_expected_output() {
 }
 
 #[test]
+fn di_inject_in_field_initializer_runs_not_panics() {
+    // Regression (DI v1 6C): `inject<T>()` in a FIELD INITIALIZER (not a function body) must be
+    // expanded by `desugar_di` — else it survives to the backend and panics `unreachable!`. `desugar_di`
+    // walks all expression positions, so this runs and prints the injected value.
+    let src = "package Main;\n\
+        import Core.Output;\n\
+        #[Injectable] class Db { constructor() {} function n(): int { return 7; } }\n\
+        class Svc {\n\
+            private Db db = inject<Db>();\n\
+            constructor() {}\n\
+            function n(): int { return this.db.n(); }\n\
+        }\n\
+        function main(): void {\n\
+            Svc s = new Svc();\n\
+            Output.printLine(\"{s.n()}\");\n\
+        }\n";
+    // Go through `check_and_expand` (where `desugar_di` lives) then interpret the expanded program —
+    // the real `phg run` pipeline. The bare `interpret` helper skips expansion, so it is not the path
+    // that exercises DI.
+    let tokens = lex(src).expect("lex ok");
+    let prog = Parser::new(tokens).parse_program().expect("parse ok");
+    let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
+    let out = interpret(&expanded).expect("field-initializer inject should run, not panic");
+    assert_eq!(out.trim(), "7");
+}
+
+#[test]
 fn program_without_main_errors() {
     let e = run(r#"function helper() -> int { return 1; }"#).unwrap_err();
     assert!(e.message.contains("main"), "{}", e.message);

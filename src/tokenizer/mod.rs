@@ -829,6 +829,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
     use TokenKind::*;
     Some(match s {
         "function" => Function,
+        "inject" => Inject,
         "class" => Class,
         "enum" => Enum,
         "constructor" => Constructor,

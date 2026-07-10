@@ -1133,6 +1133,18 @@ pub fn check_and_expand_reified(
     // the qualifier collapse (its output is bare injected TYPE names, disjoint from variant heads) and
     // before `check_resolutions`.
     let routed = crate::checker::resolve_variant_imports(routed);
+    // DI v1 (`docs/plans/di-attributes.plan.md`): expand `inject<T>()` composition roots into plain
+    // `new` construction (a synthesized `__phorj_di_<T>()` factory per requested type). Pre-check, so
+    // the generated graph type-checks like hand-written code and every backend sees explicit
+    // construction (Inv-5). A no-op unless `inject` is used; compile errors (E-DI-*/E-INJECT-NO-TYPE)
+    // surface here exactly like the other pre-check passes.
+    let routed = match crate::checker::desugar_di(routed) {
+        Ok(p) => p,
+        Err(ds) => {
+            let lines: Vec<String> = ds.iter().map(|e| e.render(diag_src)).collect();
+            return Err(lines.join("\n"));
+        }
+    };
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs, overload_renames, reified)) => {

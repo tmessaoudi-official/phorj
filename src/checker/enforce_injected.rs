@@ -426,6 +426,7 @@ impl Ctx {
             | Expr::Bytes(..)
             | Expr::Ident(..)
             | Expr::This(..)
+            | Expr::Inject { .. }
             | Expr::Html(..) => {}
         }
     }

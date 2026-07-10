@@ -223,6 +223,14 @@ impl Checker {
                 span,
             } => self.check_lambda(params, ret, body, *span),
             Expr::Html(parts, span) => self.check_html(parts, *span),
+            // DI: `desugar_di` expands this away before the checker on the normal path. This arm is
+            // only reached by the raw-checker path (LSP `diagnostics_for`, no desugar) — type it
+            // gracefully as the target `T` (bare `inject()` has no static target here → `Ty::Error`,
+            // which suppresses a cascade) rather than panicking.
+            Expr::Inject { ty, .. } => match ty {
+                Some(t) => self.resolve_type(t),
+                None => Ty::Error,
+            },
         }
     }
 
@@ -946,6 +954,7 @@ impl Checker {
             | Expr::ParentCall { span, .. }
             | Expr::New(_, span)
             | Expr::Spawn { span, .. }
+            | Expr::Inject { span, .. }
             | Expr::Html(_, span) => *span,
         }
     }

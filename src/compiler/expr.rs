@@ -332,6 +332,7 @@ impl Compiler<'_> {
             // `html"…"` literals are erased to `html.concat([…])` kernel calls by
             // `checker::resolve_html` before compilation; the compiler never sees one.
             Expr::Html(..) => unreachable!("html literal not resolved before compilation"),
+            Expr::Inject { .. } => unreachable!("inject() not expanded before compilation"),
             Expr::OverloadSelect { .. } => {
                 unreachable!("overload selector resolved + rewritten before compilation (Slice C1)")
             }

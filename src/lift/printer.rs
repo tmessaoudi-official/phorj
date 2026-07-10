@@ -611,9 +611,13 @@ impl Printer {
                     out.join(", ")
                 ))
             }
-            Expr::Bytes(_, _) | Expr::Lambda { .. } | Expr::CloneWith { .. } | Expr::Html(_, _) => {
-                Err("printer: bytes/lambda/clone-with/html are outside the lift subset".into())
-            }
+            Expr::Bytes(_, _)
+            | Expr::Lambda { .. }
+            | Expr::CloneWith { .. }
+            | Expr::Inject { .. }
+            | Expr::Html(_, _) => Err(
+                "printer: bytes/lambda/clone-with/inject/html are outside the lift subset".into(),
+            ),
         }
     }
 

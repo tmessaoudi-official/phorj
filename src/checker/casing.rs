@@ -266,6 +266,7 @@ impl Checker {
             | Expr::Null(..)
             | Expr::Bytes(..)
             | Expr::Ident(..)
+            | Expr::Inject { .. }
             | Expr::This(..) => {}
             Expr::Str(parts, _) | Expr::Html(parts, _) => {
                 for p in parts {

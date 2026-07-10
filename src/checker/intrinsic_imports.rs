@@ -440,6 +440,7 @@ fn walk_children(e: &mut Expr, en: &Enabled, errs: &mut Vec<Diagnostic>) {
         | Expr::Bytes(..)
         | Expr::Ident(..)
         | Expr::This(..)
+        | Expr::Inject { .. }
         | Expr::Html(..) => {}
     }
 }

@@ -377,6 +377,18 @@ pub enum Expr {
     /// it is erased to ordinary native calls before the interpreter/compiler/transpiler run, the same
     /// "compile-time sugar, expanded out" treatment as `type` aliases.
     Html(Vec<StrPart>, Span),
+    /// `inject<T>()` / `inject()` — the compile-time dependency-injection composition root (DI v1,
+    /// `docs/plans/di-attributes.plan.md` §1+§6). `ty` is the explicit target type `T` for
+    /// `inject<T>()`, or `None` for the annotation-driven bare `inject()` (T comes from the expected
+    /// type). Resolved by [`crate::checker::desugar_di`] **before** the checker: the injectable
+    /// dependency graph is expanded into plain `new` construction (a synthesized `__di_T()` factory
+    /// per root, so per-resolution-root sharing is byte-identical), so no backend ever sees this
+    /// variant — the same "compile-time sugar, expanded out before every backend" discipline as
+    /// [`Expr::New`]/[`Expr::Html`]. `inject` is a reserved keyword (ruled 2026-07-10).
+    Inject {
+        ty: Option<Type>,
+        span: Span,
+    },
 }
 
 /// The body of a lambda: either a single expression (`=> expr`) or a block of statements
@@ -721,6 +733,14 @@ impl Attribute {
             self.name.as_str(),
             "UncheckedOverflow" | "Integer.UncheckedOverflow"
         )
+    }
+
+    /// True iff this is a DI built-in attribute (DI v1). Recognized so the checker does not reject it
+    /// as `E-UNKNOWN-ATTRIBUTE` — it is consumed by [`crate::checker::desugar_di`] before any backend,
+    /// then inert (like `#[Route]`). Slice 1 = `#[Injectable]` only; `#[Transient]`/`#[Provides]` join
+    /// here in later slices. SINGLE SOURCE of the recognition.
+    pub fn is_di_builtin(&self) -> bool {
+        matches!(self.name.as_str(), "Injectable")
     }
 
     /// True iff this is the built-in `#[Attribute]` marker (DEC-194) — a class carrying it IS a

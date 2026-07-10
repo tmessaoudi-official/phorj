@@ -525,6 +525,21 @@ impl Parser {
             }
             TokenKind::Match => self.parse_match(sp),
             TokenKind::If => self.parse_if_expr(sp),
+            TokenKind::Inject => {
+                // DI composition root (DI v1): `inject<T>()` (explicit target type) or `inject()`
+                // (annotation-driven). `inject` is reserved, so `<` here is unambiguously a type-arg.
+                self.advance(); // consume `inject`
+                let ty = if self.eat(&TokenKind::Lt) {
+                    let t = self.parse_type()?;
+                    self.expect(&TokenKind::Gt, "'>' to close `inject<T>`")?;
+                    Some(t)
+                } else {
+                    None
+                };
+                self.expect(&TokenKind::LParen, "'(' after `inject`")?;
+                self.expect(&TokenKind::RParen, "')' to close `inject()`")?;
+                Ok(Expr::Inject { ty, span: sp })
+            }
             TokenKind::LParen => {
                 self.advance();
                 let inner = self.parse_expr()?;

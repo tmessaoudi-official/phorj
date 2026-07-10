@@ -108,3 +108,53 @@ JIT object/enum/method perf frontier — the biggest remaining PHP-beating lever
 Recommendation: this spec is now the durable artifact; the developer steers from it. (Advisor-flagged: the
 design was accreting scope across ~8 reasks without persistence — this file fixes the persistence; the
 scope call is the developer's.)
+
+## 6b. DI v1 SLICE 1 — SHIPPED 2026-07-10 (gate-green 1870/1870, byte-identical)
+
+**Built:** `inject` reserved keyword; `Expr::Inject{ty,span}` (parse `inject<T>()` explicit + `inject()`
+bare); `#[Injectable]` built-in class attribute (`Attribute::is_di_builtin`, whitelisted in
+`check_class_attributes`); **`src/checker/desugar_di.rs`** — a PRE-CHECK desugar (mirrors
+`desugar_router`) that builds an injectable registry (structural, via `ctor_plan` + `class_implements`),
+resolves each requested `T`'s dependency DAG by type (ctor params; single-impl interface auto-binds),
+and synthesizes a `phorjInject<T>()` factory (camelCase — `__phorj_` fails E-NAME-CASE) with
+topologically-ordered `var` bindings so each type is built ONCE per root (**default-SHARED, diamond →
+one instance**, no §14 downgrade); rewrites each `inject<T>()` → `phorjInject<T>()`. Wired into
+`check_and_expand_reified` after `resolve_variant_imports`. Errors `E-DI-MISSING`/`E-DI-AMBIGUOUS`/
+`E-DI-CYCLE`/`E-INJECT-NO-TYPE` (+ `phg explain`). `examples/guide/di.phg` (ctor injection + single-impl
+interface + diamond, byte-identical run≡runvm≡php-8.5.8, transpiles to a plain PHP `phorjInjectApp()`
+factory) + README + 5 integration tests. All 13 `Expr` match arms added (formatter renders `inject<T>()`
+faithfully for the raw-AST `phg format` path; checker types gracefully for the LSP raw path; backends
+`unreachable`).
+**Slice-1 scope (disclosed KNOWN limits):** ctor injection only (no field injection); concrete
+class/interface dep types only (alias/generic dep → clean E-DI-MISSING, pre-alias-expansion);
+`#[Transient]`/`#[Provides]`/bare-`inject()`-annotation-driven are LATER slices; `phorjInject<T>` /
+`di<Class>` synth names collide only with astronomically-unlikely identical user names (documented).
+**NEXT slices:** (2) bare `inject()` annotation-driven; (3) field injection (synthesized construction-init,
+immutable-safe); (4) `#[Provides]` factory + `#[Transient]`; then interface-binding qualifiers (v2 §3).
+
+## 6. DI v1 SYNTAX — developer-ruled 2026-07-10 (interactive, ask-human; supersedes §1's `inject<T>()` shorthand)
+
+Session restart (2026-07-10) BUILD of DI v1 began; these are the ruled user-visible syntax decisions
+(Invariant 15 — surfaced, not self-ruled), resolving the open shape questions §1 left as `inject<T>()` shorthand:
+
+- **Composition root = `inject` is a RESERVED KEYWORD** (like `new`/`match`/`function`). Reserving the bare
+  word removes the `<`-ambiguity (`inject < foo` as a comparison of a var named `inject`) with no speculative
+  backtracking. Cost accepted: `inject` is no longer usable as an identifier (niche).
+- **TWO composition-root forms, both feeding ONE graph resolver** (only the type-source differs):
+  - `inject<T>()` — EXPLICIT: `T` from the type-arg; standalone, works anywhere (no annotation needed).
+    `<T>` after the reserved `inject` keyword is unambiguously a type-arg list (not general turbofish — only
+    this one keyword form). e.g. `var app = inject<App>();`, `inject<Server>().run();`
+  - `inject()` — ANNOTATION-DRIVEN: `T` from the expected type (LHS declaration / return position), reusing
+    the shipped expected-type threading. e.g. `App app = inject();`, `return inject();`
+- **Factory mechanism = ONE `#[Provides]` static method — RULED** (developer chose the single-attribute option
+  after clarifying: lifetime is ORTHOGONAL to construction, so a factory result honors `#[Transient]`/default-shared
+  identically to a `new`-built one; and `#[Factory]`-on-a-class is functionally just a `#[Provides]` method living
+  on that class → a second attribute would be redundant). Shape: a `static function` annotated `#[Provides]` whose
+  RETURN TYPE is the provided type; its own params are autowired; it takes PRECEDENCE over `new T(...)` wherever the
+  graph needs T. Placeable on a provider module (types you don't own / interface→impl binding / config values) OR
+  directly on the injectable class itself (the "class builds itself" case). Lifetime: `#[Transient]` on the
+  `#[Provides]` method (or default shared) — the resolver caches the factory result per resolution-root exactly like
+  a constructed instance. `#[Provides]` is a v1 scope ADDITION (was §3/v2), deliberately pulled forward.
+- **Interface→impl binding in v1:** single-impl auto (§1) OR an explicit `#[Provides]` returning the interface type
+  (the multi-impl disambiguator, folded in free with the factory mechanism). Multiple `#[Injectable]` impls with no
+  `#[Provides]` → ambiguous → compile error (qualifiers stay v2).
