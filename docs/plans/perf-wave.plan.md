@@ -1889,6 +1889,9 @@ is ~3× of the string gap** — the portion V1 `Rc<str>` removes. The **residual
 2. **JIT op-inlining for string/collection ops** — the residual ~9× is VM dispatch + build; ONLY the JIT
    running these ops natively (no per-op dispatch, fused build, no intermediate `Value`) can close it. THE hard,
    gating sub-lever — extends the unboxed JIT to a NEW domain (strings/collections, not just int/float). Big.
+   ⚠️ **SAME CLASS AS ② (advisor):** this is a new JIT domain, not a representation tweak — carry the SAME
+   discipline that ② lacked: **prove it beats php on a minimal SPIKE (one op, one micro) BEFORE committing the
+   full build.** ② cost a session by wiring first, measuring after; a spike-first gate here prevents the repeat.
 3. **Interning + packed arrays** — `mapget` (67×, the worst) needs a packed/hashed map representation (the
    current `Rc<Vec<(HKey,Value)>>` is linear-scan-ish + clones values) + V1's value savings. String interning
    helps repeated-literal workloads.
