@@ -5,6 +5,63 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] 🚩📊 **② GATE RESULT — FLAG. Boxed JIT does NOT flip objects/methods to WIN (measured).**
+  Built B0+B1a+B2 (boxed tier wired into the `Op::Call` hook; `MakeInstance`/`GetField`/`Pop` +
+  `CallMethod` via `call_indirect`; byte-identical to the VM — 2 new unit tests + a production-path
+  `hits>0` test all green). **[Verified: interleaved best-of-5, release JIT binary vs fresh docker
+  php:8.5-cli+JIT, checksums identical]:**
+  - objalloc: boxed 471ms · VM 524ms · php 83ms → **JIT vs VM 1.11× · JIT vs php 0.18× (5.7× slower) = LOSS**
+  - methodcall: boxed 673ms · VM 693ms · php 23ms → **JIT vs VM 1.03× (noise) · JIT vs php 0.03× (28.6× slower) = LOSS**
+  **THE FINDING (refutes the ② premise for objects/methods):** the boxed JIT wins big ONLY where the VM
+  *interpreter dispatch loop* dominates (fibrec: trivial-work, call-heavy → 2×). objalloc/methodcall are
+  *work-bound* — their cost is `Rc<Instance>` allocation (`MakeInstance`), `RefCell`, and method
+  resolution, all done in the SAME single-sourced `rt_`/`exec.rs` kernels whether JIT or VM (Invariant 4),
+  so eliminating the dispatch loop recovers only 3–11%. php's 5.7×/28.6× edge is its packed-property object
+  model + machine-level inline-cache dispatch; Cranelift-boxing over Rust `Value`/`Rc<Instance>`/`RefCell`
+  can't close that. Beating php on objects/methods needs a VALUE-REPRESENTATION change (unbox fields / pack
+  instances) — explicitly OUT of the boxed-JIT scope and a much larger effort. (methodcall shows ~0% gain
+  partly because `rt_method_entry` re-resolves — 2 String allocs + HashMap — per call vs the VM's cached
+  dispatch; an inline cache would recover a few %, NOT the 28× gap → not worth building.)
+  **6C FOLLOW-UP (advisor-caught, MEASURED):** B0 blanket-wiring is a NET PRODUCTION REGRESSION for the
+  common case — a loop-containing object function called ONCE with modest trip counts pays the Cranelift
+  compile (~0.5–1ms) that the marginal 11%/0% gain can't amortize until ~20K–125K iters. [Verified:
+  called-once wall best-of-9 — iters=500 JIT 14.50ms vs VM 13.51ms (0.93×), iters=2000 0.94×, iters=20000
+  0.97× — all REGRESSIONS]. So there was no production improvement to bank. **DISPOSITION (ask-human,
+  developer chose "revert everything, aim for the wins"): B0+B1a+B2 code FULLY REVERTED** — the tree keeps
+  ONLY this measured finding (plan + register + memory). ② boxed-JIT for objects/methods is **evidence-
+  closed as a dead-end**: WIN there needs a VALUE-REPRESENTATION change (unbox fields / pack `Instance` /
+  leaner `Value`), not JIT breadth over the same `Rc`/`RefCell` kernels. **NEXT = developer chose to
+  re-open direction toward actual perf WINS (not ③ parity yet) — options surfaced via ask-human.**
+- [2026-07-10] ✅ **AGREED (ask-human, at the pre-build fork) — BUILD TO THE MEASUREMENT GATE.** Shown the fibrec
+  read (boxed 2.02× > VM, ~13× < php) the developer chose: build the minimum measurable unit **B0 wire + B1a + B2**,
+  then measure objalloc/methodcall boxed-vs-php INTERLEAVED (fresh docker) = the WIN-OR-FLAG gate. WIN → continue ②
+  (B3 enums, SetField fork); FLAG → bank the VM-2× improvement, record, pivot to ③ web spine. Not "full ② regardless",
+  not "pivot to ③ now". Executing now.
+- [2026-07-10] 🔬 **② PRE-BUILD DECISIVE READ + ADVISOR-3C RESEQUENCE (before any codegen).** Advisor flagged the
+  core ② thesis was UNMEASURED. Ran the near-free existing boxed-vs-VM read (`measures_fib_native_jit_vs_vm`,
+  release, `--ignored`): **[Verified] boxed fibrec 124.4 ms · VM 250.7 ms → boxed is 2.02× FASTER than the VM**;
+  php+JIT ~9.6 ms recorded → boxed is still **~13× slower than php** on fibrec. **Reconciliation:** boxed beats the
+  VM (dispatch-elimination alone = 2×, so wiring boxed as a fallback tier will NOT regress VM-only programs — the
+  soundness worry advisor raised is answered). BUT fibrec is the WORST case for the boxed-vs-PHP *absolute* ratio
+  (trivial per-op work → the `extern "C"` per-op helper-call overhead dominates), so it does NOT reliably predict
+  whether object/method/enum (heavier per-op work: alloc, RefCell, dispatch) will beat php. Only building the minimum
+  and measuring the real target answers it. **RESEQUENCED (advisor):** B0 wiring alone adds no target coverage → the
+  first MEASURABLE object milestone is **B0+B1a+B2 as one unit** (objalloc+methodcall both call methods). Split B1:
+  **B1a** = MakeInstance/GetField/IsInstance (side-effect-free — MakeInstance pops all field values in one op,
+  exec.rs:617, no SetField → sound under re-execute-on-fault); **B1b** = SetField (observable RefCell mutation →
+  re-execute-on-fault DOUBLES it if the target pre-exists → a genuine FORK, deferred, not on objalloc/methodcall's
+  path). **MUST-CHECKs for B2 (advisor):** (1) CallMethod resolves by NAME at runtime (chunk.rs:471) not static
+  `Op::Call` — `collect_functions` must enumerate reachable method impls or dispatch lands on an uncompiled fn;
+  (2) the Const eligibility gate (mod.rs:558) rejects non-Int/Unit consts — object/method/enum programs carry string
+  consts (class/method/variant names) → must extend it too. Soundness gate reframed as first-class: "is this op safe
+  to re-execute?" (SetField/IO = no → fork). **The B0+B1a+B2 objalloc/methodcall interleaved-vs-php number is the real
+  WIN-OR-FLAG gate for B3/SetField/everything after.**
+- [2026-07-10] ▶️ **FRESH SESSION — MARATHON RESUMED (ask-human re-confirmed ②→③).** Developer opened a fresh
+  autonomous session, asked for the recommended order, and selected **② BOXED-VALUE JIT → ③ WEB SPINE** (the
+  recommended option, honoring the 2026-07-10 lock). Autonomous mode active (`autonomous-3c-bypass` proj sentinel).
+  Executing the B1/B2/B3 scaffold below starting at Phase 4/5: refresh interleaved docker-php+JIT baseline → B1
+  objects/fields → B2 methods (depends B1) → B3 enums. Envelope unchanged (WIN-OR-FLAG, commit each green slice,
+  NEVER push, §14/§15 surface-don't-self-rule, full oracle gate, 5-round advisor cap → ask-human).
 - [2026-07-10] 🎯 **DEV RE-CONFIRMED ORDER ②→③ (ask-human, after seeing the ① recompute evidence).** Shown the
   finding that parity is the real drag and the web spine is the parity lever (so ③-first was a live option), the
   developer chose **"both 1 and 2 in order"** — ② boxed-value JIT FIRST (the HARD PERF MANDATE stays #1 priority; it
@@ -1624,6 +1681,51 @@
   (c) wire the microbench WIN-count mandate gate (a `microbench.sh --gate` mode + baseline, then a CI
   job on the docker-capable lane, or pre-push/local to keep CI docker-free — sub-decision open).
 
+## ② B0+B1a+B2 CONCRETE DESIGN (2026-07-10 fresh session — from disasm, before codegen)
+
+> ⚠️ **SUPERSEDED / CODE REVERTED (2026-07-10).** This design WAS built and MEASURED, then fully reverted:
+> the boxed JIT is evidence-closed as NOT-a-WIN for object/method work (FLAG — see the Decisions Log entry
+> "② GATE RESULT — FLAG"). Kept below only as the record of what was tried + why it can't win (work-bound,
+> not dispatch-bound). A future value-representation effort is the substrate for an actual WIN.
+
+**Exact op set the gate needs** [Verified via `phg disassemble` of both micros]: `objalloc.bench`/`methodcall.bench`
+graphs use **`Pop`, `MakeInstance`, `GetField`, `CallMethod`** beyond the already-supported int/control/`Call` set.
+`new Cell(i)` compiles to a static `Call → Cell::new` (already supported) whose body does `MakeInstance`; the const
+gate is fine (string consts live only in `main`, never JIT'd). NO SetField, NO IsInstance, NO enums on the path.
+
+**JitCtx gains two raw ptrs** (needed by object/method helpers, which today only see `*mut JitCtx`): `program:
+*const BytecodeProgram` + `fn_ptrs: *const Vec<*const u8>` (entry address per func idx, null=uncompiled). Both set
+in `Compiled::run` from new `Compiled` fields (`program` raw ptr set at `compile`; `fn_ptrs` built post-finalize).
+SAFETY invariant: caller keeps the program alive across `run` (VM's `self.program` outlives the jit cache; tests
+hold it on-stack) — same confinement discipline as the existing island.
+
+**New rt_ helpers (mirror the `exec.rs` kernels EXACTLY — Invariant 4 byte-identity):**
+- `rt_pop(p)` — infallible `stack.pop()`.
+- `rt_make_instance(p, idx) -> status` — exec.rs:617: `split_off(class_descs[idx].fields.len())`, place at layout
+  slots, push `Rc<Instance>`. Side-effect-free (fresh Rc).
+- `rt_get_field(p, name_idx) -> status` — exec.rs:645 minus the inline cache: pop instance, `layout.slot(names[idx])`,
+  push field or fault ("no field `{}` on `{}`" / "cannot read `.{}` on {type}"). Read-only.
+- `rt_call_method_target(p, name_idx, argc) -> i64` — exec.rs:766-841 minus the cache: peek receiver at
+  `stack[len-(argc+1)]`; non-instance → fault "cannot call `.{m}()` on {type}"; overload-aware resolve
+  (`method_overloads`/`overloads`/`dispatch::select_overload` → Ambiguous/NoMatch faults; else `methods[(class,m)]`
+  → "no method" fault). Returns target func idx (≥0) or −1 (fault set). NO stack mutation (frame_base pops later).
+- `rt_fn_entry(p, idx) -> i64` — `(*fn_ptrs)[idx]` as ptr-bits; −1 if null (can't-happen: collect compiled it).
+
+**CallMethod codegen (build_body):** depth_check (fault="stack overflow", VM checks depth FIRST → byte-order) →
+`rt_call_method_target` (tgt<0 → fault_block) → `rt_frame_base(argc+1)` → `rt_fn_entry(tgt)` → `call_indirect`
+(shared `phorj_sig` via `import_signature`) with `[ctx, sb_new]` → fault_check. Reuses `rt_return`'s decrement.
+
+**collect_functions for CallMethod:** enumerate ALL func idxs whose method-name == `names[name_idx]` across
+`program.methods` + `program.overloads` (over-approx, sound, default-deny — any ineligible target sinks the whole
+compile). `CallParent(func,argc)` = static target, treat like `Call`. `Pop`/`MakeInstance`/`GetField` = self-ops,
+just add to the eligibility match.
+
+**B0 wiring (exec.rs hook):** after `compile_unboxed` returns `Err`/`None`, try `Compiled::compile` (boxed) as a
+2nd tier; cache the `Compiled` (its `unboxed` field selects `run` vs `run_unboxed` at dispatch); a boxed
+`JitRun::Fault` falls through + re-executes on the VM identically (sound: B1a/B2 side-effect-free). Prove `hits>0`.
+
+**Gate:** objalloc+methodcall boxed-vs-php INTERLEAVED (fresh docker) → WIN-OR-FLAG.
+
 ## ② BOXED-VALUE JIT — SLICE PLAN (Phase 4 scaffold, 2026-07-10; codegen wants a FRESH context)
 
 **Goal:** flip the VM-only LOSS categories by extending JIT *eligibility* to object/enum/method ops.
@@ -1684,7 +1786,9 @@ adjudicates via AskUserQuestion — NEVER self-ruled).
 | floatmul | **PARITY (accepted)** | ~0.99 (parity) | 🚩→✅ **DEVELOPER RULED (2026-07-09): option A — accept parity as the never-worse floor.** Counter guard DROPPED (asm: `leaq`+`jmp`, no `seto`/sticky — `21465d8`) but loop is **float-dependency-chain-bound** (`vmulsd`→`vaddsd` loop-carried in xmm7, ~8-9 cyc/iter); counter was off the critical path. php has the identical chain → parity is the ceiling. The ONLY lever that beats php is FP-reassociation/unroll = **byte-identity-FORBIDDEN (Inv #1)**. Developer accepted PARITY as satisfying the "never worse than PHP" bar; no new language surface, Inv #1 fully preserved. Irreducible-by-design. (Options B `#[Reassoc]` LADDER / C AOT-SIMD were considered and NOT chosen.) |
 | intadd (default) | **LOSS (accepted)** | ~0.71 (1.40× slower) | [Verified: interleaved 9-round, JIT binary, fresh docker php:8.5+JIT — checked 7.73M · php 5.51M · unchecked 2.55M ns, checksums identical]. The overflow guard's `seto`-materialize is a throughput cost (3 µops × 3 arith ops/iter). **TIGHTENING PROBED + ABANDONED 2026-07-09** [Verified: VCode dump] — Cranelift 0.133 can't emit non-trapping `add; jo`; per-op `brif(overflow)` materializes `seto` identically then adds a branch + loop-splits → worse than sticky. Default-checked pure-accumulator loops are UNBEATABLE vs php by any Cranelift-reachable means (php does strictly less work: no i64 overflow detection). NOT a flag — accepted price of safety; recover per-site via `#[Unchecked]` ↓ (2.16× WIN) or auto via range-analysis where provable. |
 | intadd `#[Unchecked]` | **WIN** | **~1.99 (2× faster)** | [Verified: interleaved 8-pair, JIT release binary, fresh docker php:8.5+JIT, checksums identical — phorj **3,225,621** vs php **6,410,498** ns, 8/8]. `#[Unchecked]` (`64ddf17`) drops the guard → the overflow check WAS the whole gap. Opt-in wrapping; `E-TRANSPILE-UNCHECKED` (LADDER). This is the intadd fork RESOLVED (developer ruled `#[Unchecked]`), not a self-rule. |
-| ~11 VM-only cats | **LOSS (heavy)** | 0.01×–0.39× | [Verified: `microbench.sh` batched-indicative 2026-07-09] closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07 · methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05. **All run on the plain VM — NOT JIT-eligible** (ops outside the int/float unboxed subset) → 3–100× slower than php+JIT. Fix = Tier-2 JIT-subset breadth (per category; several need §14/§15 rulings — e.g. trycatch, strings). floatarith specifically = tracked float lever (toFloat/truncate inline). |
+| objalloc (boxed-JIT probe) | **🚩FLAGGED (LOSS) — CODE REVERTED** | 0.18× (php 5.7× faster) | [Verified: interleaved best-of-5, release JIT vs fresh docker php:8.5+JIT, checksums identical — boxed 471ms · VM 524ms · php 83ms]. A throwaway B1a+B2 boxed codegen (now reverted) ran object construct+method loops but only **1.11× over the VM** — work-bound (Rc/RefCell alloc in shared kernels), not dispatch-loop-bound; and B0 wiring REGRESSED called-once code (compile cost). Gap is REPRESENTATION (php packed props), un-closable by boxing. WIN needs unbox-fields / pack-`Instance` (large). |
+| methodcall (boxed-JIT probe) | **🚩FLAGGED (LOSS) — CODE REVERTED** | 0.03× (php 28.6× faster) | [Verified: interleaved best-of-5 — boxed 673ms · VM 693ms · php 23ms]. ~0% over the VM. Same representation ceiling as objalloc. |
+| ~11 VM-only cats | **LOSS (heavy)** | 0.01×–0.39× | [Verified: `microbench.sh` batched-indicative 2026-07-09] closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07 · methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05. All run on the plain VM. **Boxed-JIT is now evidence-closed as NOT-a-WIN for object/method work** (2026-07-10 gate, code reverted): the categories are work-bound (Rc/RefCell/String kernels), so JIT-ing the dispatch loop barely helps. WIN needs a value-representation change, not JIT breadth. floatarith = tracked float lever. |
 
 > ⚠️ **Batched vs interleaved:** the table above (except floatmul/intadd/fibrec) is from `microbench.sh`
 > which is BATCHED (Phase-1-all-phorj then Phase-2-all-php) → indicative only, subject to the ~1.5×
