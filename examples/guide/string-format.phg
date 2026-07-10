@@ -66,6 +66,9 @@ function main(): void {
     // with their own flags/width. Phorj is strict: mixing `%N$` with plain `%s` faults, and every value
     // must be referenced (unlike PHP, which allows both).
     Output.printLine(String.format("%2$s scored %1$d (%2$s again, %1$05d)", [7, "Bo"]));
+    // %s precision never splits a UTF-8 char: "café" is 5 bytes (é = 2), so %.4s keeps "caf" (é dropped
+    // whole, no mojibake) and %.5s keeps all of "café". All three backends char-truncate identically.
+    Output.printLine(String.format("[%.4s][%.5s]", ["café", "café"]));
     // A format string with no directives passes through unchanged (empty value list).
     Output.printLine(String.format("no placeholders here", []));
 }
