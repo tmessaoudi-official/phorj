@@ -565,7 +565,7 @@ PHP-parity %  ≈ 58   (ccb2403 full-pass; domain-weighted; raw row-parity floor
 Vision %      ≈ 60   (ccb2403 full-pass; 70% parity + 30% roadmap-programme at 64.4%)
 
   ⟶ CURRENT at HEAD af3aad3 (2026-07-10, §4.6):  PHP-parity ≈ 60%  ·  Vision ≈ 62%  ·  floor ≈ 41%
-     chain: 58% (ccb2403) → 59% (§11.2, 2026-07-03) → 60% (HEAD). 3 rows moved; marathon was
+     chain: 58% (ccb2403) → 59% (§11.2, 2026-07-03) → 60% (HEAD). 2 rows moved; marathon was
      perf+polish not breadth — the DB/HTTP/sessions parity drag is untouched (see §4.6).
 
 PASS 2: 35 beyond-PHP capabilities (no PHP counterpart)
