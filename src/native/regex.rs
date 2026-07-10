@@ -182,7 +182,7 @@ fn regex_split(args: &[Value], _: &mut String) -> Result<Value, String> {
 // ---- registry -----------------------------------------------------------------------------------
 
 /// The `Core.Regex` registry entries. `Regex` is the compiler-injected class
-/// (`cli::inject_regex_prelude`) — referenced as a bare `Ty::Named`; the type resolves because a call
+/// (`cli::inject_core_modules`, `Core.Regex` row) — referenced as a bare `Ty::Named`; the type resolves because a call
 /// to any of these natives requires `import Core.Regex;`, which triggers the injection before the
 /// checker runs. The `php` emitters reference the `__phorj_regex_*` runtime helpers
 /// (`transpile/program.rs`); the injected `Regex` class transpiles to a PHP class with a public

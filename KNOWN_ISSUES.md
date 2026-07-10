@@ -1312,6 +1312,14 @@ are byte-identical by construction — the helper throws the same string on both
   contributed. Also unprovided: reflection over enum variants (`interfaces(variant)` etc. return `[]`)
   and `Reflect.*` across packages with namespaced (FQN) class names.
 
+- **Bare `Core.Time.DateTime` is not import-gated, unlike its siblings (discovered UA-L2, 2026-07-10).**
+  The `Core.Time` prelude injects four classes — `Duration`, `Date`, `DateTime`, `Instant` — but the
+  injected-type discipline (`module_of` / `E-INJECTED-TYPE-BARE`) gates only `Duration`/`Date`/`Instant`.
+  So a bare `DateTime` type reference is accepted without a member-import while a bare `Date` is rejected —
+  a latent inconsistency in the "nothing in the wind" rule. UA-L2 preserved this byte-identically (the
+  registry's `bare_types` is seeded to exactly the pre-UA-L2 `module_of` set); whether to also gate
+  `DateTime` is a separate design ruling (adjudicate before the DB/HTTP waves grow the injected-type set).
+
 - **`phg test` — known limitations (M-Test).** The test runner is intentionally minimal this
   milestone. (1) **Tests run on the interpreter only** — there is no `--vm` mode yet to also run each
   test on the bytecode VM as a free parity check. (2) **No fixtures / setup-teardown, no parameterized

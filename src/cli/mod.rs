@@ -360,47 +360,6 @@ pub fn parse_program(src: &str) -> Result<Program, String> {
 const JSON_PRELUDE: &str = "enum Json { Null(), Bool(bool value), Int(int value), \
      Float(float value), String(string value), Array(List<Json> items), Object(Map<string, Json> entries) }";
 
-/// Inject the `Json` enum at the head of a program that imports `Core.Json`, so the `Core.Json.*`
-/// natives' `Json`-typed signatures resolve and user code can construct/`match` the variants — the
-/// enum then flows through every backend as an ordinary enum (`docs/specs/2026-06-26-core-json-design.md`).
-/// Runs before `check_resolutions` (below), the single chokepoint covering run/runvm/transpile + the
-/// loader. A no-op (borrowed) unless `Core.Json` is imported and no `Json` enum is already declared.
-fn inject_json_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
-    use crate::ast::Item;
-    let imports_json = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, .. }
-            if path.len() == 2 && path[0] == "Core" && path[1] == "Json")
-    });
-    let already_declared = prog
-        .items
-        .iter()
-        .any(|it| matches!(it, Item::Enum(e) if e.name == "Json"));
-    if !imports_json || already_declared {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    match lex_parse(JSON_PRELUDE)
-        .ok()
-        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
-    {
-        Some(mut enum_item) => {
-            // Mark it injected so its variants bind qualified-only (`Json.Object(…)`) — the checker's
-            // `E-INJECTED-VARIANT-BARE` rule (variant-qualification B).
-            if let Item::Enum(e) = &mut enum_item {
-                e.injected = true;
-            }
-            let mut items = Vec::with_capacity(prog.items.len() + 1);
-            items.push(enum_item);
-            items.extend(prog.items.iter().cloned());
-            std::borrow::Cow::Owned(Program {
-                package: prog.package.clone(),
-                items,
-                span: prog.span,
-            })
-        }
-        None => std::borrow::Cow::Borrowed(prog), // unreachable: JSON_PRELUDE is valid
-    }
-}
-
 /// The canonical `RoundingMode` enum, injected (below) when a program imports `Core.Decimal`
 /// (M-NUM S2). Zero-payload variants — constructed `new HalfUp()` and matched `HalfUp()`, the
 /// project's zero-payload variant convention — read by `Decimal.div`/`Decimal.round` via the
@@ -409,11 +368,6 @@ fn inject_json_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
 const ROUNDING_MODE_PRELUDE: &str =
     "enum RoundingMode { HalfUp(), HalfDown(), HalfEven(), Up(), Down(), Ceiling(), Floor() }";
 
-/// Inject the `RoundingMode` enum at the head of a program that imports `Core.Decimal`, so the
-/// `Decimal.div`/`Decimal.round` natives' `RoundingMode`-typed signatures resolve and user code can
-/// construct the variants (`new HalfUp()`) — the enum then flows through every backend as an ordinary
-/// enum. Mirrors [`inject_json_prelude`]: a no-op (borrowed) unless `Core.Decimal` is imported and no
-/// `RoundingMode` enum is already declared.
 /// True if the program imports the module `module` (e.g. `["Core", "Http"]`) either as a whole
 /// (`import Core.Http`) OR via a **member-import** of one of its types, one segment deeper
 /// (`import Core.Http.Router`). Import-redesign S2: a member-import must also pull in the injected
@@ -426,37 +380,6 @@ fn imports_module_or_member(prog: &Program, module: &[&str]) -> bool {
     })
 }
 
-fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
-    use crate::ast::Item;
-    let imports_decimal = imports_module_or_member(prog, &["Core", "Decimal"]);
-    let already_declared = prog
-        .items
-        .iter()
-        .any(|it| matches!(it, Item::Enum(e) if e.name == "RoundingMode"));
-    if !imports_decimal || already_declared {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    match lex_parse(ROUNDING_MODE_PRELUDE)
-        .ok()
-        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
-    {
-        Some(mut enum_item) => {
-            if let Item::Enum(e) = &mut enum_item {
-                e.injected = true;
-            }
-            let mut items = Vec::with_capacity(prog.items.len() + 1);
-            items.push(enum_item);
-            items.extend(prog.items.iter().cloned());
-            std::borrow::Cow::Owned(Program {
-                package: prog.package.clone(),
-                items,
-                span: prog.span,
-            })
-        }
-        None => std::borrow::Cow::Borrowed(prog), // unreachable: ROUNDING_MODE_PRELUDE is valid
-    }
-}
-
 /// The canonical `Core.Option<T>` value model (DEC-182, Wave B foundation), injected (below) when a
 /// program imports `Core.Option`. The opt-in rich absence type — distinct from the built-in `T?`
 /// (lightweight built-in absence + what stdlib returns); interconvert explicitly, never implicitly.
@@ -465,83 +388,12 @@ fn inject_rounding_mode_prelude(prog: &Program) -> std::borrow::Cow<'_, Program>
 /// user-declared `enum Option<T>`. Matches the canonical shape in `examples/guide/generic-enums.phg`.
 const OPTION_PRELUDE: &str = "enum Option<T> { None, Some(T value) }";
 
-/// Inject the `Option<T>` enum at the head of a program that imports `Core.Option`, so its variants
-/// can be constructed/`match`ed — qualified only (`Option.Some(…)`, `E-INJECTED-VARIANT-BARE` on
-/// bare use), the injected-enum "nothing in the wind" rule. A no-op (borrowed) unless `Core.Option`
-/// is imported and no `Option` enum is already declared (a user's own `Option` shadows + skips it).
-/// Mirrors [`inject_rounding_mode_prelude`]; the enum then flows through every backend as ordinary.
-fn inject_option_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
-    use crate::ast::Item;
-    let imports_option = imports_module_or_member(prog, &["Core", "Option"]);
-    let already_declared = prog
-        .items
-        .iter()
-        .any(|it| matches!(it, Item::Enum(e) if e.name == "Option"));
-    if !imports_option || already_declared {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    match lex_parse(OPTION_PRELUDE)
-        .ok()
-        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
-    {
-        Some(mut enum_item) => {
-            if let Item::Enum(e) = &mut enum_item {
-                e.injected = true;
-            }
-            let mut items = Vec::with_capacity(prog.items.len() + 1);
-            items.push(enum_item);
-            items.extend(prog.items.iter().cloned());
-            std::borrow::Cow::Owned(Program {
-                package: prog.package.clone(),
-                items,
-                span: prog.span,
-            })
-        }
-        None => std::borrow::Cow::Borrowed(prog), // unreachable: OPTION_PRELUDE is valid
-    }
-}
-
 /// The canonical `Core.Result<T, E>` value model (DEC-182, Wave B foundation), injected (below) when
 /// a program imports `Core.Result`. Error-as-value: `Success(T)` or `Failure(E)`, where the error
 /// payload `E` is a user enum. Pairs with the built-in `Error` marker + typed multi-catch; faults
 /// stay uncatchable (bugs only). A generic injected enum like [`OPTION_PRELUDE`] — `T`/`E` are
 /// erased downstream. Matches the canonical shape in `examples/guide/generic-enums.phg`.
 const RESULT_PRELUDE: &str = "enum Result<T, E> { Success(T value), Failure(E error) }";
-
-/// Inject the `Result<T, E>` enum at the head of a program that imports `Core.Result` (qualified
-/// variants `Result.Success(…)`/`Result.Failure(…)`, `E-INJECTED-VARIANT-BARE` on bare use). A no-op
-/// unless `Core.Result` is imported and no `Result` enum is already declared. Mirrors
-/// [`inject_option_prelude`]; the enum then flows through every backend as ordinary.
-fn inject_result_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
-    use crate::ast::Item;
-    let imports_result = imports_module_or_member(prog, &["Core", "Result"]);
-    let already_declared = prog
-        .items
-        .iter()
-        .any(|it| matches!(it, Item::Enum(e) if e.name == "Result"));
-    if !imports_result || already_declared {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    match lex_parse(RESULT_PRELUDE)
-        .ok()
-        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
-    {
-        Some(mut enum_item) => {
-            if let Item::Enum(e) = &mut enum_item {
-                e.injected = true;
-            }
-            let mut items = Vec::with_capacity(prog.items.len() + 1);
-            items.push(enum_item);
-            items.extend(prog.items.iter().cloned());
-            std::borrow::Cow::Owned(Program {
-                package: prog.package.clone(),
-                items,
-                span: prog.span,
-            })
-        }
-        None => std::borrow::Cow::Borrowed(prog), // unreachable: RESULT_PRELUDE is valid
-    }
-}
 
 /// The canonical `Core.Http` types, injected (below) when a program imports `Core.Http` (M6 W1 →
 /// stdlib). The portable handler model — `handle(Request): Response` — at the value level: `Request`
@@ -756,150 +608,24 @@ function respond(bytes raw): bytes {
 }
 "#;
 
-/// Inject the `Core.Http` types (and, when applicable, the `respond` serve bridge) into a program that
-/// imports `Core.Http`. Mirrors [`inject_json_prelude`]: a no-op (borrowed) unless `Core.Http` is
-/// imported. Each piece is injected only if absent — a user may declare their own `Request`/`Response`
-/// or `respond` and it wins. The `Core.Bytes`/`Core.String` imports the bodies need are injected too
-/// (skipped if the user already imports them).
-fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
-    use crate::ast::Item;
-    let imports = |m: &str| {
-        prog.items
-            .iter()
-            .any(|it| matches!(it, Item::Import { path, .. } if path.join(".") == m))
-    };
-    // S2: a member-import (`import Core.Http.Router`) pulls in the prelude too, not just the whole-
-    // module `import Core.Http`.
-    if !imports_module_or_member(prog, &["Core", "Http"]) {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    let has_class = |n: &str| {
-        prog.items
-            .iter()
-            .any(|it| matches!(it, Item::Class(c) if c.name == n))
-    };
-    let has_fn = |n: &str| {
-        prog.items
-            .iter()
-            .any(|it| matches!(it, Item::Function(f) if f.name == n))
-    };
-    let Some(parsed) = lex_parse(HTTP_PRELUDE).ok() else {
-        return std::borrow::Cow::Borrowed(prog); // unreachable: HTTP_PRELUDE is valid
-    };
-    let mut prepend: Vec<Item> = Vec::new();
-    for it in parsed.items {
-        match &it {
-            Item::Import { path, .. } if !imports(&path.join(".")) => prepend.push(it),
-            Item::Class(c) if c.name == "Request" && !has_class("Request") => prepend.push(it),
-            Item::Class(c) if c.name == "Response" && !has_class("Response") => prepend.push(it),
-            Item::Class(c) if c.name == "Route" && !has_class("Route") => prepend.push(it),
-            Item::Class(c) if c.name == "Router" && !has_class("Router") => prepend.push(it),
-            _ => {}
-        }
-    }
-    // The serve bridge: wrap the user's `handle` when present and no `respond` is defined.
-    if has_fn("handle") && !has_fn("respond") {
-        if let Ok(bridge) = lex_parse(HTTP_RESPOND_BRIDGE) {
-            prepend.extend(
-                bridge
-                    .items
-                    .into_iter()
-                    .filter(|it| matches!(it, Item::Function(f) if f.name == "respond")),
-            );
-        }
-    }
-    if prepend.is_empty() {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    let mut items = Vec::with_capacity(prog.items.len() + prepend.len());
-    items.extend(prepend);
-    items.extend(prog.items.iter().cloned());
-    std::borrow::Cow::Owned(Program {
-        package: prog.package.clone(),
-        items,
-        span: prog.span,
-    })
-}
-
 /// The opaque compiled-`Regex` value model, injected when a program imports `Core.Regex` (Fork A,
 /// `docs/specs/2026-06-28-core-regex-design.md`). A `Regex` value is built only by `Regex.compile`
 /// (which validates via the `regex` crate); the `pattern` field is the **bare** pattern. It is public
 /// so the transpiled `__phorj_regex_*` global helpers can read `$re->pattern` to build the
-/// `/u`-delimited PHP `preg_*` form. Mirrors [`inject_json_prelude`]: a no-op unless `Core.Regex` is
-/// imported and no `Regex` class is already declared.
+/// `/u`-delimited PHP `preg_*` form. Injected by [`inject_core_modules`] via the `Core.Regex`
+/// registry row — a no-op unless `Core.Regex` is imported and no `Regex` class is already declared.
 const REGEX_PRELUDE: &str = "class Regex { constructor(public string pattern) {} }";
-
-fn inject_regex_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
-    use crate::ast::Item;
-    let imports_regex = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, .. }
-            if path.len() == 2 && path[0] == "Core" && path[1] == "Regex")
-    });
-    let already_declared = prog
-        .items
-        .iter()
-        .any(|it| matches!(it, Item::Class(c) if c.name == "Regex"));
-    if !imports_regex || already_declared {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    match lex_parse(REGEX_PRELUDE)
-        .ok()
-        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Class(_))))
-    {
-        Some(class_item) => {
-            let mut items = Vec::with_capacity(prog.items.len() + 1);
-            items.push(class_item);
-            items.extend(prog.items.iter().cloned());
-            std::borrow::Cow::Owned(Program {
-                package: prog.package.clone(),
-                items,
-                span: prog.span,
-            })
-        }
-        None => std::borrow::Cow::Borrowed(prog), // unreachable: REGEX_PRELUDE is valid
-    }
-}
 
 /// The `Secret<T>` opaque-wrapper type, injected when a program imports `Core.Secret` (Fork B,
 /// `docs/specs/2026-06-28-secret-type-design.md`). A `Secret<T>` value is constructed `new Secret(x)`
 /// and read only through `expose()` — the `value` field is private, and a `Secret` instance is not a
 /// `string`, so printing/interpolating it is a clean type error (the primary, loud guarantee; no
 /// runtime `***`). Reuses the generic-class machinery (`Box<T>`) wholesale — no new `Op`/`Value`/`Ty`.
-/// Mirrors [`inject_regex_prelude`]: a no-op unless `Core.Secret` is imported and no `Secret` class is
-/// already declared. The transpiler adds `final` + `#[\SensitiveParameter]` for this class by name.
+/// Injected by [`inject_core_modules`] via the `Core.Secret` registry row — a no-op unless
+/// `Core.Secret` is imported and no `Secret` class is already declared. The transpiler adds `final`
+/// + `#[\SensitiveParameter]` for this class by name.
 const SECRET_PRELUDE: &str =
     "class Secret<T> { constructor(private T value) {} function expose(): T { return this.value; } }";
-
-fn inject_secret_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
-    use crate::ast::Item;
-    let imports_secret = prog.items.iter().any(|it| {
-        matches!(it, Item::Import { path, .. }
-            if path.len() == 2 && path[0] == "Core" && path[1] == "Secret")
-    });
-    let already_declared = prog
-        .items
-        .iter()
-        .any(|it| matches!(it, Item::Class(c) if c.name == "Secret"));
-    if !imports_secret || already_declared {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    match lex_parse(SECRET_PRELUDE)
-        .ok()
-        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Class(_))))
-    {
-        Some(class_item) => {
-            let mut items = Vec::with_capacity(prog.items.len() + 1);
-            items.push(class_item);
-            items.extend(prog.items.iter().cloned());
-            std::borrow::Cow::Owned(Program {
-                package: prog.package.clone(),
-                items,
-                span: prog.span,
-            })
-        }
-        None => std::borrow::Cow::Borrowed(prog), // unreachable: SECRET_PRELUDE is valid
-    }
-}
 
 /// The `Core.Time` value model (M-TIME, `docs/specs/2026-06-28-m-time-design.md`): the pure-Phorj
 /// `Instant`, `Duration`, `Date`, and `DateTime` classes. Because the prelude is run through the same
@@ -1038,36 +764,228 @@ class Instant {
 }
 "#;
 
-fn inject_time_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+/// A virtual `Core.*` module: its import path, its optional injected prelude source, how it gates
+/// (whole-module-only vs also member-imports), and the injected member-type names that must be
+/// import-qualified (the `module_of` contribution). UA-L2 (registry-unification): the single source
+/// for BOTH the prelude-injection fold ([`inject_core_modules`]) AND the injected-type discipline
+/// ([`core_module_of`]) — so a new Core module (Db, HTTP expansions) is ONE row here, not edits in
+/// the eight `inject_*_prelude` fns plus the hand-synced `module_of` match this replaced.
+struct VirtualModule {
+    /// The import path segments, e.g. `["Core", "Http"]`. Gates injection; also the qualifier root.
+    module: &'static [&'static str],
+    /// The `module_of` return value for this row's `bare_types` (the dotted module below `Core.`),
+    /// e.g. `"Http"`, `"Time"`, `"Runtime.Integer"`. Only meaningful when `bare_types` is non-empty.
+    qualifier: &'static str,
+    /// The prelude source to inject when the module is imported; `None` for attribute-only modules
+    /// (`Core.DI`/`Core.Runtime*`) that contribute to `module_of` but inject no enum/class prelude.
+    src: Option<&'static str>,
+    /// The conditionally-injected `respond` serve-bridge source (Http only) — appended when the
+    /// program defines `handle` and no `respond`. The one honest residual special-case.
+    respond_bridge: Option<&'static str>,
+    /// `true` → a member-import (`import Core.Http.Router`) also pulls the prelude in
+    /// ([`imports_module_or_member`]); `false` → only a whole-module import (`import Core.Json`).
+    member_gated: bool,
+    /// Injected member-type names that `module_of` maps to `qualifier` — seeded EXPLICITLY to the
+    /// pre-UA-L2 `module_of` set. NB: kept separate from the prelude's own declared names (the
+    /// shadow-check derives those from the parsed source) — e.g. `Core.Time` injects `DateTime` too,
+    /// but `DateTime` is deliberately NOT in `module_of` (see KNOWN_ISSUES). Fusing the two lists
+    /// would silently change gating; `DateTime` is the proof they diverge.
+    bare_types: &'static [&'static str],
+}
+
+/// The Core-module registry, in the SAME order as the pre-UA-L2 injection chain — ORDER IS
+/// LOAD-BEARING: `HTTP_PRELUDE` transitively `import Core.Regex`, and Http runs BEFORE Regex, so
+/// that transitive import is what triggers `Regex`-class injection for `Router.constraintOk`. A
+/// reorder that broke this would still pass most tests; `examples/web/route-constraints.phg` (a
+/// regex-constrained route with no explicit `import Core.Regex`) is the regression guard.
+const CORE_MODULES: &[VirtualModule] = &[
+    VirtualModule {
+        module: &["Core", "Json"],
+        qualifier: "Json",
+        src: Some(JSON_PRELUDE),
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    VirtualModule {
+        module: &["Core", "Decimal"],
+        qualifier: "Decimal",
+        src: Some(ROUNDING_MODE_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["RoundingMode"],
+    },
+    VirtualModule {
+        module: &["Core", "Option"],
+        qualifier: "Option",
+        src: Some(OPTION_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &[],
+    },
+    VirtualModule {
+        module: &["Core", "Result"],
+        qualifier: "Result",
+        src: Some(RESULT_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &[],
+    },
+    VirtualModule {
+        module: &["Core", "Http"],
+        qualifier: "Http",
+        src: Some(HTTP_PRELUDE),
+        respond_bridge: Some(HTTP_RESPOND_BRIDGE),
+        member_gated: true,
+        bare_types: &["Request", "Response", "Route", "Router"],
+    },
+    VirtualModule {
+        module: &["Core", "Regex"],
+        qualifier: "Regex",
+        src: Some(REGEX_PRELUDE),
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    VirtualModule {
+        module: &["Core", "Secret"],
+        qualifier: "Secret",
+        src: Some(SECRET_PRELUDE),
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    VirtualModule {
+        module: &["Core", "Time"],
+        qualifier: "Time",
+        src: Some(TIME_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Duration", "Date", "Instant"],
+    },
+    // Attribute-only modules — no prelude to inject; they exist only to gate their `#[…]` types.
+    VirtualModule {
+        module: &["Core", "Runtime", "Integer"],
+        qualifier: "Runtime.Integer",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &["UncheckedOverflow"],
+    },
+    VirtualModule {
+        module: &["Core", "Runtime"],
+        qualifier: "Runtime",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &["Attribute"],
+    },
+    VirtualModule {
+        module: &["Core", "DI"],
+        qualifier: "DI",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &["Injectable", "Provides", "Transient"],
+    },
+];
+
+/// The injected member type → owning module qualifier (UA-L2: the registry-derived replacement for
+/// the hand-synced `module_of` match). Reused by the injected-type discipline
+/// (`checker::enforce_injected`) and the qualified-construction dispatch (`checker::calls`/`expr`).
+pub(crate) fn core_module_of(name: &str) -> Option<&'static str> {
+    CORE_MODULES
+        .iter()
+        .find(|m| m.bare_types.contains(&name))
+        .map(|m| m.qualifier)
+}
+
+/// Inject every applicable `Core.*` prelude at the program head, in registry order. Replaces the
+/// eight chained `inject_*_prelude` fns with one uniform fold (UA-L2). For each module whose import
+/// is present, each prelude item is prepended only if absent (imports by path; classes/enums/fns by
+/// name), injected enums are marked `injected` (qualified-variant discipline), and Http's `respond`
+/// bridge is appended when the program defines `handle` and no `respond`. A no-op (borrowed) for a
+/// program that imports no injected Core module — such programs stay byte-for-byte unchanged.
+fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Program> {
     use crate::ast::Item;
-    let imports_time = imports_module_or_member(prog, &["Core", "Time"]);
-    if !imports_time {
-        return std::borrow::Cow::Borrowed(prog);
+    let mut cur: std::borrow::Cow<'_, Program> = std::borrow::Cow::Borrowed(prog);
+    for m in CORE_MODULES {
+        let Some(src) = m.src else { continue };
+        let p = cur.as_ref();
+        let gated_in = if m.member_gated {
+            imports_module_or_member(p, m.module)
+        } else {
+            p.items.iter().any(|it| {
+                matches!(it, Item::Import { path, .. }
+                    if path.len() == m.module.len()
+                        && path.iter().zip(m.module).all(|(a, b)| a == b))
+            })
+        };
+        if !gated_in {
+            continue;
+        }
+        let Ok(parsed) = lex_parse(src) else {
+            continue; // unreachable: registry preludes are valid
+        };
+        let mut prepend: Vec<Item> = Vec::new();
+        for it in parsed.items {
+            let absent = match &it {
+                Item::Import { path, .. } => !p.items.iter().any(|x| {
+                    matches!(x, Item::Import { path: xp, .. } if xp.join(".") == path.join("."))
+                }),
+                Item::Enum(e) => !p
+                    .items
+                    .iter()
+                    .any(|x| matches!(x, Item::Enum(y) if y.name == e.name)),
+                Item::Class(c) => !p
+                    .items
+                    .iter()
+                    .any(|x| matches!(x, Item::Class(y) if y.name == c.name)),
+                Item::Function(f) => !p
+                    .items
+                    .iter()
+                    .any(|x| matches!(x, Item::Function(y) if y.name == f.name)),
+                _ => false,
+            };
+            if absent {
+                let mut it = it;
+                if let Item::Enum(e) = &mut it {
+                    e.injected = true;
+                }
+                prepend.push(it);
+            }
+        }
+        // Http serve bridge: synthesize `respond` wrapping a user `handle`, when no `respond` exists.
+        if let Some(bridge_src) = m.respond_bridge {
+            let has_fn = |n: &str| {
+                p.items
+                    .iter()
+                    .any(|x| matches!(x, Item::Function(f) if f.name == n))
+            };
+            if has_fn("handle") && !has_fn("respond") {
+                if let Ok(bridge) = lex_parse(bridge_src) {
+                    prepend.extend(
+                        bridge
+                            .items
+                            .into_iter()
+                            .filter(|it| matches!(it, Item::Function(f) if f.name == "respond")),
+                    );
+                }
+            }
+        }
+        if prepend.is_empty() {
+            continue;
+        }
+        let mut items = Vec::with_capacity(p.items.len() + prepend.len());
+        items.extend(prepend);
+        items.extend(p.items.iter().cloned());
+        cur = std::borrow::Cow::Owned(Program {
+            package: p.package.clone(),
+            items,
+            span: p.span,
+        });
     }
-    let has_class = |n: &str| {
-        prog.items
-            .iter()
-            .any(|it| matches!(it, Item::Class(c) if c.name == n))
-    };
-    let Ok(parsed) = lex_parse(TIME_PRELUDE) else {
-        return std::borrow::Cow::Borrowed(prog); // unreachable: TIME_PRELUDE is valid
-    };
-    let prepend: Vec<Item> = parsed
-        .items
-        .into_iter()
-        .filter(|it| matches!(it, Item::Class(c) if !has_class(&c.name)))
-        .collect();
-    if prepend.is_empty() {
-        return std::borrow::Cow::Borrowed(prog);
-    }
-    let mut items = Vec::with_capacity(prog.items.len() + prepend.len());
-    items.extend(prepend);
-    items.extend(prog.items.iter().cloned());
-    std::borrow::Cow::Owned(Program {
-        package: prog.package.clone(),
-        items,
-        span: prog.span,
-    })
+    cur
 }
 
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
@@ -1108,14 +1026,10 @@ pub fn check_and_expand_reified(
         }
     };
     let prog = &intrinsic_rewritten;
-    let json_injected = inject_json_prelude(prog);
-    let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
-    let option_injected = inject_option_prelude(rm_injected.as_ref());
-    let result_injected = inject_result_prelude(option_injected.as_ref());
-    let http_injected = inject_http_prelude(result_injected.as_ref());
-    let regex_injected = inject_regex_prelude(http_injected.as_ref());
-    let secret_injected = inject_secret_prelude(regex_injected.as_ref());
-    let injected = inject_time_prelude(secret_injected.as_ref());
+    // UA-L2 (registry-unification): one fold over `CORE_MODULES` replaces the former eight chained
+    // `inject_*_prelude` calls — a no-op for programs that import no injected Core module. Byte-identical
+    // to the old chain (proven over the whole corpus at cutover); adding a Core module is now one row.
+    let injected = inject_core_modules(prog);
     // M6 W2: lower `Http.autoRouter()` into explicit `Router` construction from the `#[Route]`-
     // annotated handlers — BEFORE the checker, so the generated registration type-checks like
     // hand-written code (a no-op unless `Core.Http` is imported). The `#[Route]` attrs survive for the

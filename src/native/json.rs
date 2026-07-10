@@ -1,6 +1,6 @@
 //! `Core.Json` — JSON parse / stringify over a compiler-injected `Json` enum value model
 //! (`docs/specs/2026-06-26-core-json-design.md`). The `Json` enum is injected by
-//! `cli::inject_json_prelude` when a program imports `Core.Json`, so these natives can construct +
+//! `cli::inject_core_modules` (`Core.Json` row) when a program imports `Core.Json`, so these natives can construct +
 //! receive ordinary `Value::Enum { ty: "Json", … }` values.
 //!
 //! The one `eval` body per native is shared by both Rust backends (the parity guarantee). The PHP
@@ -454,7 +454,7 @@ impl JParser<'_> {
 
 // ---- registry -----------------------------------------------------------------------------------
 
-/// The `Core.Json` registry entries. `Json` is the compiler-injected enum (`cli::inject_json_prelude`)
+/// The `Core.Json` registry entries. `Json` is the compiler-injected enum (`cli::inject_core_modules`)
 /// — referenced here as a bare `Ty::Named`; the type resolves because a *call* to one of these natives
 /// requires `import Core.Json;`, which triggers the injection before the checker runs.
 pub(crate) fn json_natives() -> Vec<NativeFn> {

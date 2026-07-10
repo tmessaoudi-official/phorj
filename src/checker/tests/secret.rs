@@ -2,7 +2,7 @@
 //! (private field, no display), so printing/interpolating it is a type error and `.expose()` is the
 //! only read path. `W-SECRET` is a non-fatal lint nudging when an exposed plaintext flows *directly*
 //! into a sink. These tests declare the `Secret` class inline (the lint keys on the type name, so the
-//! `cli::inject_secret_prelude` injection is not needed here).
+//! `cli::inject_core_modules` (`Core.Secret` row) injection is not needed here).
 
 use super::support::*;
 

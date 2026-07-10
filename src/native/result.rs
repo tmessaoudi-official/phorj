@@ -1,6 +1,6 @@
 //! `Core.Result<T, E>` combinators (Wave B slice B-2b, DEC-185).
 //!
-//! The `Result<T, E>` enum itself is compiler-injected (`cli::inject_result_prelude`, slice B-1) when a
+//! The `Result<T, E>` enum itself is compiler-injected (`cli::inject_core_modules`, `Core.Result` row) when a
 //! program imports `Core.Result`; these are the natives that operate on it. Enums have no methods, so the
 //! combinators are ordinary module natives reached UFCS-style (`res.map(fn)` resolves to
 //! `Result.map(res, fn)` via the checker's `try_ufcs` first-param-unification path, exactly like

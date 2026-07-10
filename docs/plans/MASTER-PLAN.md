@@ -18,6 +18,21 @@
 
 ## 0. CURSOR — WHERE WE ARE (update this block every working session)
 
+> **⭐⭐ LATEST (2026-07-10 — WAVE D STARTED · UA-L2 SHIPPED, unpushed):** The web spine (Wave D) is
+> underway. **UA-L2 (injected-prelude → module-loader registry-unification) is DONE** (gate-green:
+> 1585 unit + 144 differential byte-identical run≡runvm≡php-8.5.8 + clippy both-configs + fmt +
+> release build). The eight chained `inject_*_prelude` fns + the hand-synced `enforce_injected::module_of`
+> match now derive from ONE data-driven `cli::CORE_MODULES` registry (`{module, qualifier, src,
+> respond_bridge, member_gated, bare_types}`) — adding a Core module (Db, HTTP expansions) is now ONE
+> row. Byte-identity PROVEN by a throwaway corpus-equivalence test (`old_chain(prog) ≡ inject_core_modules(prog)`
+> structural incl. spans, over the whole corpus) THEN cut over + deleted. Depth = registry-unification
+> (dev-ruled, ask-human 2026-07-10; full loader-unification deferred as higher-risk). Discovered +
+> logged (KNOWN_ISSUES, separate adjudication): bare `Core.Time.DateTime` is not import-gated while
+> `Date`/`Duration`/`Instant` are — a latent injected-type-discipline inconsistency, preserved
+> byte-identically. SSOT = `docs/plans/web-spine.plan.md` (sequence + decisions). **NEXT = W3-1 SQL DBAL**
+> (SQLite Tier-A `Core.Sql` pure builder → Tier-B `Core.Db` exec; rusqlite adopted; adjudicate the
+> draft's design forks at wave start, fresh context). Then W3-2 HTTP → sessions.
+>
 > **⭐ LATEST (2026-07-10, HEAD `42d9e97` — supersedes the ②→③ order + the absolute perf mandate below):**
 > The perf arc is RESOLVED with evidence. ② BOXED-VALUE JIT was built + measured + REVERTED = **FLAG**
 > (objects/methods are work-bound not dispatch-bound; boxing can't beat php). Then measured: strings 27.6× /

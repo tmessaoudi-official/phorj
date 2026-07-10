@@ -84,28 +84,14 @@ pub fn enforce_injected_discipline(prog: &Program) -> Vec<Diagnostic> {
     errs
 }
 
-/// The injected member type → owning module leaf. Mirrors the six injection preludes' multi-type
-/// modules (single-type Json/Regex/Secret are leaf==type — no bare-vs-qualified ambiguity). The single
-/// source for the injected-type registry — reused by the qualified-construction dispatch in `calls.rs`.
+/// The injected member type → owning module qualifier. UA-L2 (registry-unification): the mapping is
+/// now derived from the single `cli::CORE_MODULES` registry (a row's `bare_types` → its `qualifier`),
+/// so a new Core module contributes its gated types there, not in a hand-synced match here. Reused by
+/// the qualified-construction dispatch in `calls.rs`/`expr.rs`. Single-type value modules
+/// (`Json`/`Option`/`Result`/`Regex`/`Secret`) are leaf==type — no bare-vs-qualified ambiguity — so
+/// they carry no `bare_types` and correctly return `None`.
 pub(super) fn module_of(name: &str) -> Option<&'static str> {
-    Some(match name {
-        "Request" | "Response" | "Route" | "Router" => "Http",
-        "Duration" | "Date" | "Instant" => "Time",
-        "RoundingMode" => "Decimal",
-        // `#[UncheckedOverflow]` attribute-type (perf-wave): a 2-deep module `Core.Runtime.Integer`.
-        // `module_of` returns the dotted module path; the hint/qualified forms interpolate it fine
-        // (`import Core.Runtime.Integer.UncheckedOverflow;` / qualified `Integer.UncheckedOverflow`).
-        "UncheckedOverflow" => "Runtime.Integer",
-        // `#[Attribute]` marker (DEC-194 2b): a class carrying `#[Attribute]` IS a user-defined attribute.
-        // Lives at `Core.Runtime.Attribute` (1-deep module `Runtime`) — `import Core.Runtime.Attribute;`
-        // gates bare `#[Attribute]`, or `import Core.Runtime;` → qualified `#[Runtime.Attribute]`.
-        "Attribute" => "Runtime",
-        // DI v1 (§7 import discipline): `#[Injectable]`/`#[Provides]`/`#[Transient]` are injected `Core.DI`
-        // attribute-types — bare needs the member-import (`import Core.DI.Transient;`), or write it
-        // qualified (`#[DI.Transient]`) with `import Core.DI;`.
-        "Injectable" | "Provides" | "Transient" => "DI",
-        _ => return None,
-    })
+    crate::cli::core_module_of(name)
 }
 
 struct Ctx {

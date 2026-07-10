@@ -2,7 +2,7 @@
 //!
 //! This module holds the ONLY native part of the time library: reading the wall clock. Everything else
 //! (`Instant`/`Duration`/`Date`/`DateTime`, all calendar + formatting math) is an **injected pure-Phorj
-//! prelude** (`cli::inject_time_prelude`) that runs through the same backends + transpiler as user code,
+//! prelude** (`cli::inject_core_modules`, `Core.Time` row) that runs through the same backends + transpiler as user code,
 //! so it is byte-identical by construction with zero hand-rolled-PHP divergence.
 //!
 //! Reading the wall clock is inherently non-deterministic, which would break the byte-identity spine. So

@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — UA-L2: injected-prelude → `Core.*` registry unification (Wave D, step 1)
+
+The eight chained `inject_*_prelude` functions and the hand-synced `enforce_injected::module_of`
+match now derive from a single data-driven registry, `cli::CORE_MODULES` — one row per virtual Core
+module (`{ module, qualifier, src, respond_bridge, member_gated, bare_types }`). A new
+`inject_core_modules` fold replaces the former eight-call chain in `check_and_expand_reified`, and
+`checker::enforce_injected::module_of` delegates to a registry-derived `cli::core_module_of`. Adding a
+Core module (the upcoming `Core.Db`/HTTP expansions) is now **one table row**, not edits scattered
+across four hand-synced places. Prepares the registry before the DB/HTTP waves multiply it (RULED
+B2-2; depth = registry-unification, developer-ruled 2026-07-10; full loader-unification deferred).
+
+**Byte-identical by construction and by proof.** The row schema keeps two concerns separate: the
+shadow-check names come from the parsed prelude source (so a user's own `DateTime`/`Json`/… still
+shadows), while `module_of`'s `bare_types` are seeded EXPLICITLY to the pre-UA-L2 set (`Core.Time`
+excludes `DateTime`; single-type value modules `Json`/`Option`/`Result`/`Regex`/`Secret` carry none).
+Registry order matches the old chain exactly (load-bearing: `HTTP_PRELUDE` transitively
+`import Core.Regex`, and Http runs before Regex). Verified by a throwaway corpus-equivalence test
+asserting `old_chain(prog) ≡ inject_core_modules(prog)` structurally (item order + spans) over the
+whole example corpus, then cut over and deleted; the differential harness is the ongoing guard. No new
+`Op`/`Value`, no backend change. Gate green: 1585 unit + 144 differential (run≡runvm≡php-8.5.8) +
+clippy (both feature configs) + fmt + release build.
+
+**Discovered + disclosed** (KNOWN_ISSUES, separate adjudication): bare `Core.Time.DateTime` is not
+import-gated by the injected-type discipline while its siblings `Date`/`Duration`/`Instant` are — a
+latent inconsistency, preserved byte-identically here.
+
 ### Changed — `src/native/text.rs` split (M-Decomp, Invariant 13)
 
 The `String.format` renderer cluster (`FormatDirective`, `parse_format_directive`, `pad_format`, the

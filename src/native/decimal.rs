@@ -53,7 +53,7 @@ fn decimal_round_native(args: &[Value], _: &mut String) -> Result<Value, String>
 }
 
 pub(crate) fn decimal_natives() -> Vec<NativeFn> {
-    // The injected `RoundingMode` enum (cli::inject_rounding_mode_prelude) — referenced as a bare
+    // The injected `RoundingMode` enum (cli::inject_core_modules, Core.Decimal row) — referenced as a bare
     // `Ty::Named`; the type resolves because a call to `div`/`round` requires `import Core.Decimal;`,
     // which triggers the injection before the checker runs (mirrors `Json` in `json_natives`).
     let rmode = || Ty::Named("RoundingMode".to_string(), vec![]);

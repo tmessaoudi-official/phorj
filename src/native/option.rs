@@ -1,6 +1,6 @@
 //! `Core.Option<T>` combinators + `T?`↔`Option` conversions (Wave B slice B-2a, DEC-182).
 //!
-//! The `Option<T>` enum itself is compiler-injected (`cli::inject_option_prelude`, slice B-1) when a
+//! The `Option<T>` enum itself is compiler-injected (`cli::inject_core_modules`, `Core.Option` row) when a
 //! program imports `Core.Option`; these are the natives that operate on it. Enums have no methods, so
 //! the combinators are ordinary module natives reached UFCS-style (`opt.map(fn)` resolves to
 //! `Option.map(opt, fn)` via the checker's `try_ufcs` first-param-unification path, exactly like
