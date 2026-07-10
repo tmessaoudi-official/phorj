@@ -921,12 +921,20 @@ impl Transpiler {
             self.line("function __phorj_format($spec, $args) {");
             self.indent += 1;
             self.line("$out = ''; $ai = 0; $i = 0; $n = strlen($spec); $c = count($args);");
+            // Positional (`%N$`) bookkeeping (slice 4b) — mirrors the Rust renderer's strict semantics.
+            self.line("$sawSeq = false; $sawPos = false; $used = array();");
             self.line("while ($i < $n) {");
             self.indent += 1;
             self.line("$ch = $spec[$i]; $i++;");
             self.line("if ($ch !== '%') { $out .= $ch; continue; }");
             self.line("if ($i < $n && $spec[$i] === '%') { $out .= '%'; $i++; continue; }");
-            self.line("$start = $i - 1;");
+            // Optional `[argnum$]` prefix: a digit run followed by `$` (else those digits are flags/width).
+            self.line("$argIdx = -1;");
+            self.line("$dj = $i; while ($dj < $n && strpos('0123456789', $spec[$dj]) !== false) { $dj++; }");
+            self.line("if ($dj > $i && $dj < $n && $spec[$dj] === '$') { $argIdx = (int)substr($spec, $i, $dj - $i); if ($argIdx < 1) { throw new \\RuntimeException('String.format: positional index must be >= 1'); } $i = $dj + 1; }");
+            // The directive body (flags/width/prec/conv) starts AFTER the argnum — `$dir` excludes it so
+            // it is a plain single-value directive for `sprintf`.
+            self.line("$start = $i;");
             self.line("while ($i < $n && strpos('-0+', $spec[$i]) !== false) { $i++; }");
             // Digit scan via `strpos` into a digit string (like the flag scan above), NOT `ctype_digit`:
             // the ctype extension is not guaranteed under the hermetic `php -n` oracle (it is shared in
@@ -938,9 +946,10 @@ impl Transpiler {
                 "if ($i >= $n) { throw new \\RuntimeException('String.format: dangling %'); }",
             );
             self.line("$conv = $spec[$i]; $i++;");
-            self.line("$dir = substr($spec, $start, $i - $start);");
-            self.line("if ($ai >= $c) { throw new \\RuntimeException('String.format: not enough values'); }");
-            self.line("$v = $args[$ai]; $ai++;");
+            self.line("$dir = '%' . substr($spec, $start, $i - $start);");
+            self.line("if ($argIdx >= 1) { $sawPos = true; $idx = $argIdx - 1; } else { $sawSeq = true; $idx = $ai; $ai++; }");
+            self.line("if ($idx >= $c) { throw new \\RuntimeException('String.format: not enough values'); }");
+            self.line("$used[$idx] = true; $v = $args[$idx];");
             self.line("if ($conv === 's') {");
             self.indent += 1;
             // Precision on `%s` (slice 4a) = truncate to N chars, NEVER splitting a UTF-8 char (developer-
@@ -985,7 +994,9 @@ impl Transpiler {
             self.line("} else { throw new \\RuntimeException(\"String.format: unsupported directive %$conv\"); }");
             self.indent -= 1;
             self.line("}");
-            self.line("if ($ai !== $c) { throw new \\RuntimeException('String.format: value count mismatch'); }");
+            // Strict post-checks (mirror the Rust renderer): no mixing, every value referenced.
+            self.line("if ($sawPos && $sawSeq) { throw new \\RuntimeException('String.format: cannot mix positional and sequential directives'); }");
+            self.line("for ($k = 0; $k < $c; $k++) { if (empty($used[$k])) { throw new \\RuntimeException('String.format: value not referenced'); } }");
             self.line("return $out;");
             self.indent -= 1;
             self.line("}");

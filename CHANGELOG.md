@@ -13,6 +13,19 @@ The `String.format` renderer cluster (`FormatDirective`, `parse_format_directive
 sibling module `src/native/text_format.rs` (with its tests in `text_format_tests.rs`). `text.rs` drops
 to 824 lines. Pure structural refactor — zero behavior change, gate identical.
 
+### Added — `String.format` positional args `%N$` (slice 4b — Wave C complete)
+
+`%N$` selects value N (1-based), so a template can reorder and reuse values (`%2$s %1$s`, `%1$s %1$s`) —
+the i18n case. Positional composes with flags/width/precision (`%1$05d`, `%2$-6.3s`). Developer-ruled
+strict semantics (Invariant 15): unlike PHP, Phorj rejects mixing positional with sequential directives
+(`E-FORMAT-MIXED-POSITIONAL`), faults on a value that is never referenced (`E-FORMAT-ARG-COUNT`), and
+faults on an out-of-range or zero index — matching Phorj's existing exact-count strictness. The argnum
+prefix parses via a cloned-iterator lookahead (digits followed by `$`, else they are flags/width). The
+renderer, the transpiled PHP mirror `__phorj_format`, and the compile-time checker gate all enforce the
+same rules, so `run`/`runvm`/PHP stay byte-identical. This completes the Wave C `String.format` conversion
+set (`%s %d %f %e %E %g %G %x %X %o %b %%` + flags/width/precision/positional); the `%c` char conversion
+and radix precision remain. No new `Op`/`Value`.
+
 ### Added — `String.format` precision on `%s` (slice 4a)
 
 `%.Ns` now truncates a string to N characters, and width composes (`%8.3s` truncates then pads). Unlike

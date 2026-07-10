@@ -191,6 +191,49 @@ fn slice4a_precision_on_string_is_accepted() {
 }
 
 #[test]
+fn slice4b_positional_args_accepted_reorder_and_reuse() {
+    // `%N$` positional (slice 4b): reorder + reuse type-check against a literal list.
+    assert!(
+        expand(
+            "package Main; import Core.String; \
+             function main(): void { var s = String.format(\"%2$s %1$s %1$s\", [\"a\", \"b\"]); }"
+        )
+        .is_ok(),
+        "positional reorder/reuse should type-check"
+    );
+}
+
+#[test]
+fn slice4b_mixing_positional_and_sequential_is_rejected() {
+    let err = expand(
+        "package Main; import Core.String; \
+         function main(): void { var s = String.format(\"%s %1$s\", [\"a\"]); }",
+    )
+    .expect_err("mixing positional and sequential must be rejected");
+    assert!(err.contains("E-FORMAT-MIXED-POSITIONAL"), "got:\n{err}");
+}
+
+#[test]
+fn slice4b_unreferenced_value_is_rejected() {
+    let err = expand(
+        "package Main; import Core.String; \
+         function main(): void { var s = String.format(\"%1$s\", [\"a\", \"b\"]); }",
+    )
+    .expect_err("an unreferenced value must be rejected");
+    assert!(err.contains("E-FORMAT-ARG-COUNT"), "got:\n{err}");
+}
+
+#[test]
+fn slice4b_out_of_range_index_is_rejected() {
+    let err = expand(
+        "package Main; import Core.String; \
+         function main(): void { var s = String.format(\"%3$s\", [\"a\", \"b\"]); }",
+    )
+    .expect_err("an out-of-range positional index must be rejected");
+    assert!(err.contains("E-FORMAT-ARG-COUNT"), "got:\n{err}");
+}
+
+#[test]
 fn precision_on_int_is_unsupported() {
     // Precision on `%d` is DELIBERATELY rejected (developer-ruled, Invariant 15): PHP silently ignores
     // it, which is exactly the surprise Phorj's strict renderer removes — a literal spec is E-FORMAT-UNSUPPORTED.

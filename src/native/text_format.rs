@@ -6,9 +6,12 @@
 //! the emitted PHP mirror `__phorj_format` lives in `transpile::program`.
 use crate::value::Value;
 
-/// One parsed `%…` directive: flags + width + optional precision + conversion char. Shared shape for
-/// the Rust renderer here and the compile-time gate (`count_format_directives`) so they agree exactly.
+/// One parsed `%…` directive: an optional positional arg index + flags + width + optional precision +
+/// conversion char. Shared shape for the Rust renderer here and the compile-time gate
+/// (`analyze_format_directives`) so they agree exactly.
 pub(crate) struct FormatDirective {
+    /// `%N$…` positional argument index (1-based); `None` = sequential (consumes the next value).
+    pub arg: Option<usize>,
     pub minus: bool,
     pub zero: bool,
     pub plus: bool,
@@ -25,6 +28,38 @@ pub(crate) struct FormatDirective {
 pub(crate) fn parse_format_directive(
     chars: &mut std::iter::Peekable<std::str::Chars>,
 ) -> Result<FormatDirective, String> {
+    // Optional `[argnum$]` positional prefix (printf grammar: `%[argnum$][flags][width][.prec]conv`).
+    // A digit run FOLLOWED BY `$` is an arg index; otherwise those digits belong to flags/width (a
+    // leading `0` is the zero-flag), so peek on a CLONE and only consume if the `$` is really there.
+    let arg = {
+        let mut look = chars.clone();
+        let mut digits = String::new();
+        while let Some(&c) = look.peek() {
+            if c.is_ascii_digit() {
+                digits.push(c);
+                look.next();
+            } else {
+                break;
+            }
+        }
+        if !digits.is_empty() && look.peek() == Some(&'$') {
+            for _ in 0..digits.len() {
+                chars.next();
+            }
+            chars.next(); // consume '$'
+            let n: usize = digits
+                .parse()
+                .map_err(|_| "String.format: positional argument index is too large".to_string())?;
+            if n == 0 {
+                return Err(
+                    "String.format: positional index must be >= 1 (`%0$` is invalid)".to_string(),
+                );
+            }
+            Some(n)
+        } else {
+            None
+        }
+    };
     let (mut minus, mut zero, mut plus) = (false, false, false);
     while let Some(&c) = chars.peek() {
         match c {
@@ -73,6 +108,7 @@ pub(crate) fn parse_format_directive(
              rejects it rather than accept a no-op)"
         )),
         's' | 'd' | 'f' | 'e' | 'E' | 'g' | 'G' | 'x' | 'X' | 'o' | 'b' => Ok(FormatDirective {
+            arg,
             minus,
             zero,
             plus,
@@ -198,7 +234,13 @@ pub(crate) fn text_format(args: &[Value], _: &mut String) -> Result<Value, Strin
     };
     let mut out = String::new();
     let mut chars = spec.chars().peekable();
+    // Argument selection: sequential directives consume `ai` in order; `%N$` positional directives pick
+    // value N-1 (developer-ruled strict semantics, Invariant 15 — reuse + reorder allowed). `used` tracks
+    // which values were referenced (an unreferenced one faults); mixing the two forms faults.
     let mut ai = 0usize;
+    let mut saw_seq = false;
+    let mut saw_pos = false;
+    let mut used = vec![false; items.len()];
     while let Some(c) = chars.next() {
         if c != '%' {
             out.push(c);
@@ -210,13 +252,25 @@ pub(crate) fn text_format(args: &[Value], _: &mut String) -> Result<Value, Strin
             continue;
         }
         let d = parse_format_directive(&mut chars)?;
-        let v = items.get(ai).ok_or_else(|| {
+        let idx = match d.arg {
+            Some(n) => {
+                saw_pos = true;
+                n - 1 // parse_format_directive guarantees n >= 1
+            }
+            None => {
+                saw_seq = true;
+                let i = ai;
+                ai += 1;
+                i
+            }
+        };
+        let v = items.get(idx).ok_or_else(|| {
             format!(
                 "String.format: the format string needs at least {} value(s)",
-                ai + 1
+                idx + 1
             )
         })?;
-        ai += 1;
+        used[idx] = true;
         match d.conv {
             's' => {
                 let body = v.as_display().ok_or_else(|| {
@@ -378,9 +432,18 @@ pub(crate) fn text_format(args: &[Value], _: &mut String) -> Result<Value, Strin
             _ => unreachable!("parse_format_directive only returns s/d/f/e/E/g/G/x/X/o/b"),
         }
     }
-    if ai != items.len() {
+    // Strict semantics: mixing `%N$` with sequential directives is rejected, and every provided value
+    // must be referenced (a sequential run leaves trailing values unused; a positional spec may skip one).
+    if saw_pos && saw_seq {
+        return Err(
+            "String.format: cannot mix positional (`%N$`) and sequential directives in one spec"
+                .into(),
+        );
+    }
+    if let Some(unused) = used.iter().position(|u| !u) {
         return Err(format!(
-            "String.format: the format string uses {ai} value(s) but {} were given",
+            "String.format: value {} of {} is never referenced by the format string",
+            unused + 1,
             items.len()
         ));
     }

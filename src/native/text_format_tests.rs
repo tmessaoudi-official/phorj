@@ -5,6 +5,47 @@ use super::*;
 use crate::value::Value;
 
 #[test]
+fn text_format_positional_args_strict() {
+    // Slice 4b: `%N$` positional args (strict — reuse + reorder allowed; mixing and unused faulted).
+    let fmt = |spec: &str, vals: Vec<Value>| -> Result<String, String> {
+        let mut o = String::new();
+        text_format(
+            &[Value::Str(spec.into()), Value::List(std::rc::Rc::new(vals))],
+            &mut o,
+        )
+        .map(|v| match v {
+            Value::Str(s) => s.to_string(),
+            other => panic!("{other:?}"),
+        })
+    };
+    let s = |x: &str| Value::Str(x.into());
+    // Reorder + reuse (the point of positional).
+    assert_eq!(fmt("%2$s %1$s", vec![s("a"), s("b")]).unwrap(), "b a");
+    assert_eq!(fmt("%1$s-%1$s", vec![s("x")]).unwrap(), "x-x");
+    assert_eq!(
+        fmt("%1$s costs %2$s", vec![s("pie"), s("3")]).unwrap(),
+        "pie costs 3"
+    );
+    // Positional composes with flags/width/precision.
+    assert_eq!(
+        fmt("[%1$05d][%2$-6.3s]", vec![Value::Int(42), s("hello")]).unwrap(),
+        "[00042][hel   ]"
+    );
+    // Strict faults: mixing positional + sequential, an unreferenced value, an out-of-range index,
+    // and index 0 (the parser rejects `%0$`).
+    assert!(fmt("%s %1$s", vec![s("a")]).is_err(), "mixing must fault");
+    assert!(
+        fmt("%1$s", vec![s("a"), s("b")]).is_err(),
+        "unreferenced value must fault"
+    );
+    assert!(
+        fmt("%3$s", vec![s("a"), s("b")]).is_err(),
+        "out-of-range index must fault"
+    );
+    assert!(fmt("%0$s", vec![s("a")]).is_err(), "index 0 must fault");
+}
+
+#[test]
 fn text_format_string_precision_truncates_at_char_boundary() {
     // Slice 4a: precision on `%s` truncates to ≤N BYTES but never splits a UTF-8 char (developer-ruled).
     let fmt = |spec: &str, s: &str| -> String {

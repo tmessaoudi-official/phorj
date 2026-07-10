@@ -1481,19 +1481,26 @@ pub fn explain_text(code: &str) -> Option<String> {
              render. Convert a composite value to a string first.\n"
         }
         "E-FORMAT-ARG-COUNT" => {
-            "E-FORMAT-ARG-COUNT — a literal `String.format` spec's directive count ≠ value count (W3-5).\n\n\
-             Each `%s`/`%d` consumes one value (`%%` is a literal `%`, not a directive). Give exactly one\n\
-             value per directive. (Checked at compile time for a literal spec + literal list; a dynamic\n\
-             spec is checked at runtime.)\n"
+            "E-FORMAT-ARG-COUNT — a literal `String.format` spec's value count doesn't match its directives (W3-5).\n\n\
+             For sequential directives, each `%s`/`%d` consumes one value (`%%` is a literal `%`, not a\n\
+             directive) — give exactly one value per directive. For positional `%N$`, every value must be\n\
+             referenced by some `%N$` (reuse/reorder is allowed) and no index may exceed the value count.\n\
+             (Checked at compile time for a literal spec + literal list; a dynamic spec is checked at runtime.)\n"
+        }
+        "E-FORMAT-MIXED-POSITIONAL" => {
+            "E-FORMAT-MIXED-POSITIONAL — a `String.format` spec mixes positional (`%N$`) and sequential directives (W3-5, slice 4b).\n\n\
+             PHP allows mixing (`%s %1$s`), but it is a footgun; Phorj rejects it. Use ALL positional\n\
+             (`%1$s %2$s`) — which lets you reorder and reuse values — or ALL sequential (`%s %s`), never\n\
+             both in one spec. (Checked at compile time for a literal spec; a dynamic spec faults at render time.)\n"
         }
         "E-FORMAT-UNSUPPORTED" => {
             "E-FORMAT-UNSUPPORTED — a literal `String.format` spec uses a directive not yet supported (W3-5).\n\n\
              This version supports `%s`/`%d`/`%f`/`%%`, scientific `%e`/`%E`, shortest-repr `%g`/`%G`,\n\
-             and integer-radix `%x`/`%X`/`%o`/`%b`, with flags `-`/`0`/`+`, a width, and a `.precision`\n\
-             on `%s` (truncate to N chars) and the float conversions `%f`/`%e`/`%E`/`%g`/`%G` (default 6).\n\
-             Still coming: `%N$` positional args. Precision on `%d` is deliberately unsupported (PHP\n\
-             silently ignores it). (A dynamic runtime spec faults at\n\
-             render time on an unsupported directive instead of at compile time.)\n"
+             integer-radix `%x`/`%X`/`%o`/`%b`, and `%N$` positional args, with flags `-`/`0`/`+`, a width,\n\
+             and a `.precision` on `%s` (truncate to N chars) and the float conversions `%f`/`%e`/`%E`/`%g`/`%G`\n\
+             (default 6). Precision on `%d` is deliberately unsupported (PHP silently ignores it). Still\n\
+             coming: the `%c` char conversion and precision on the radix conversions. (A dynamic runtime spec\n\
+             faults at render time on an unsupported directive instead of at compile time.)\n"
         }
         _ => return None,
     };

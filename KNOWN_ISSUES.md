@@ -10,7 +10,7 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- **`String.format` (W3-5, DEC-199) — slices 1+2+3a+3b+3c+4a shipped; `%N$` positional (slice 4b) deferred.**
+- **`String.format` (W3-5, DEC-199) — slices 1+2+3a+3b+3c+4a+4b shipped (Wave C conversion set complete).**
   Syntax = **PHP-style `%` sprintf** (superseding DEC-198's `{}`); rendered **strictly** (a `%d`/`%f`/`%e`/`%g`
   given the wrong type is a clean fault, not PHP's silent coercion). **Shipped:** `%s` (any scalar), `%d` (int),
   `%f` (int/float, round-half-to-even matching PHP), scientific `%e`/`%E` (int/float — PHP's always-signed
@@ -24,9 +24,12 @@ not a panic:
   to each other, and to PHP `sprintf` for ASCII), but PHP's native `sprintf` byte-truncates a multibyte string to
   mojibake — Phorj deliberately keeps whole chars (legible), documented, never silent. **Deliberately unsupported
   (developer-ruled, Invariant 15):** precision on `%d` — PHP silently ignores it, exactly the surprise Phorj's strict
-  renderer removes, so `%.Nd` is `E-FORMAT-UNSUPPORTED` rather than a silent no-op. **Not yet supported (clean errors,
-  not crashes):** precision on radix (`%x`/…), the `%c` char conversion, and `%N$` positional (slice 4b) — a LITERAL
-  spec using one is `E-FORMAT-UNSUPPORTED` at compile time; a dynamic (runtime) spec faults cleanly at render time. **A `decimal` is NOT yet formattable by
+  renderer removes, so `%.Nd` is `E-FORMAT-UNSUPPORTED` rather than a silent no-op. **`%N$` positional (slice 4b)
+  is STRICT** (developer-ruled): `%N$` picks value N (1-based) so reorder + reuse work (`%2$s %1$s`, `%1$s %1$s`),
+  but — unlike PHP — mixing positional with sequential is `E-FORMAT-MIXED-POSITIONAL`, an unreferenced value is
+  `E-FORMAT-ARG-COUNT`, and an out-of-range/zero index faults. **Not yet supported (clean errors, not crashes):**
+  precision on radix (`%x`/…) and the `%c` char conversion — a LITERAL spec using one is `E-FORMAT-UNSUPPORTED` at
+  compile time; a dynamic (runtime) spec faults cleanly at render time. **A `decimal` is NOT yet formattable by
   `%f`/`%d`/`%e`/`%g`** — it faults cleanly on all backends (consistent, not a divergence); use `%s` for a
   decimal (`19.99d` → "19.99"), or convert it first. **Non-finite float divergence (deferred, not a
   byte-identity claim):** `%f`/`%e`/`%E`/`%g` of a non-finite float (`inf`/`-inf`) renders Rust's `inf`/`-inf`

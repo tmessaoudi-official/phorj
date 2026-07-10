@@ -394,15 +394,44 @@ impl Checker {
                         StrPart::Expr(_) => "",
                     })
                     .collect();
-                match count_format_directives(&spec) {
-                    Ok(n) => {
+                match analyze_format_directives(&spec) {
+                    Ok(info) => {
                         if let Expr::List(items, _) = &args[1] {
-                            if n != items.len() {
+                            let len = items.len();
+                            if info.positional && info.sequential {
+                                self.err_coded(
+                                    span,
+                                    "`String.format` cannot mix positional (`%N$`) and sequential directives in one spec".to_string(),
+                                    "E-FORMAT-MIXED-POSITIONAL",
+                                    Some("use all-positional (`%1$s %2$s`) or all-sequential (`%s %s`), not both".into()),
+                                );
+                            } else if info.positional {
+                                // Positional: reuse + reorder allowed, but every value must be referenced
+                                // and no index may exceed the value count.
+                                if info.max_arg > len {
+                                    self.err_coded(
+                                        span,
+                                        format!("`String.format` references `%{}$` but was given only {len} value(s)", info.max_arg),
+                                        "E-FORMAT-ARG-COUNT",
+                                        Some("a positional index must be between 1 and the number of values".into()),
+                                    );
+                                } else if info.referenced.len() != len {
+                                    let unused = (1..=len)
+                                        .find(|k| !info.referenced.contains(k))
+                                        .unwrap_or(len);
+                                    self.err_coded(
+                                        span,
+                                        format!("`String.format` never references value {unused} of {len} (every value must be used)"),
+                                        "E-FORMAT-ARG-COUNT",
+                                        Some("reference every value with a `%N$` (reuse/reorder is allowed)".into()),
+                                    );
+                                }
+                            } else if info.seq_count != len {
                                 self.err_coded(
                                     span,
                                     format!(
-                                        "`String.format` uses {n} directive(s) but was given {} value(s)",
-                                        items.len()
+                                        "`String.format` uses {} directive(s) but was given {len} value(s)",
+                                        info.seq_count
                                     ),
                                     "E-FORMAT-ARG-COUNT",
                                     Some("give exactly one value per `%s`/`%d` (use `%%` for a literal `%`)".into()),
@@ -417,9 +446,9 @@ impl Checker {
                             "E-FORMAT-UNSUPPORTED",
                             Some(
                                 "this version supports `%s`/`%d`/`%f`/`%%`, scientific `%e`/`%E`, shortest-repr \
-                                 `%g`/`%G`, integer-radix `%x`/`%X`/`%o`/`%b`, flags `-`/`0`/`+`, width, precision on \
-                                 `%s` (truncate) and the float conversions; `%N$` positional is coming. Precision on \
-                                 `%d` is deliberately unsupported (PHP silently ignores it)"
+                                 `%g`/`%G`, integer-radix `%x`/`%X`/`%o`/`%b`, `%N$` positional, flags `-`/`0`/`+`, \
+                                 width, precision on `%s` (truncate) and the float conversions. Precision on `%d` is \
+                                 deliberately unsupported (PHP silently ignores it)"
                                     .into(),
                             ),
                         );
@@ -2367,13 +2396,25 @@ fn native_default_expr(d: crate::native::NativeDefault, span: Span) -> crate::as
     }
 }
 
-/// W3-5/DEC-199: scan a LITERAL `String.format` spec — count `%…` directives (`%%` is a literal `%`),
-/// or return the first unsupported-directive message for `E-FORMAT-UNSUPPORTED`. Uses the SAME
-/// [`crate::native::parse_format_directive`] the runtime renderer uses, so the compile-time gate and
-/// `text_format` accept exactly the same specs (this slice: flags `-`/`0`/`+`, width, `%f` precision,
-/// conversions `s`/`d`/`f`).
-fn count_format_directives(spec: &str) -> Result<usize, String> {
-    let mut n = 0usize;
+/// Structured analysis of a LITERAL `String.format` spec — how many sequential directives, whether any
+/// positional (`%N$`) directives appear, the highest explicit index, and the set of referenced indices.
+/// Lets `check_string_format` validate the value count against BOTH the sequential and the positional
+/// (reuse/reorder/no-unused) rules.
+#[derive(Default)]
+struct FormatSpecInfo {
+    seq_count: usize,
+    positional: bool,
+    sequential: bool,
+    max_arg: usize,
+    referenced: std::collections::BTreeSet<usize>,
+}
+
+/// W3-5/DEC-199: scan a LITERAL `String.format` spec (`%%` is a literal `%`), returning its
+/// [`FormatSpecInfo`] or the first unsupported-directive message for `E-FORMAT-UNSUPPORTED`. Uses the
+/// SAME [`crate::native::parse_format_directive`] the runtime renderer uses, so the compile-time gate and
+/// `text_format` accept exactly the same specs.
+fn analyze_format_directives(spec: &str) -> Result<FormatSpecInfo, String> {
+    let mut info = FormatSpecInfo::default();
     let mut chars = spec.chars().peekable();
     while let Some(c) = chars.next() {
         if c != '%' {
@@ -2383,8 +2424,18 @@ fn count_format_directives(spec: &str) -> Result<usize, String> {
             chars.next();
             continue;
         }
-        crate::native::parse_format_directive(&mut chars)?;
-        n += 1;
+        let d = crate::native::parse_format_directive(&mut chars)?;
+        match d.arg {
+            Some(n) => {
+                info.positional = true;
+                info.max_arg = info.max_arg.max(n);
+                info.referenced.insert(n);
+            }
+            None => {
+                info.sequential = true;
+                info.seq_count += 1;
+            }
+        }
     }
-    Ok(n)
+    Ok(info)
 }

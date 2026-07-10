@@ -61,6 +61,11 @@ function main(): void {
     Output.printLine(
         String.format("[%.3s][%.10s][%8.3s][%-8.3s]", ["abcdef", "hi", "abcdef", "abcdef"])
     );
+    // Positional args (slice 4b): `%N$` picks value N (1-based), so a template can REORDER and REUSE
+    // values (the i18n case) — here value 2 ("Bo") and value 1 (7) each appear twice, in any order,
+    // with their own flags/width. Phorj is strict: mixing `%N$` with plain `%s` faults, and every value
+    // must be referenced (unlike PHP, which allows both).
+    Output.printLine(String.format("%2$s scored %1$d (%2$s again, %1$05d)", [7, "Bo"]));
     // A format string with no directives passes through unchanged (empty value list).
     Output.printLine(String.format("no placeholders here", []));
 }
