@@ -158,3 +158,46 @@ Session restart (2026-07-10) BUILD of DI v1 began; these are the ruled user-visi
 - **Interface→impl binding in v1:** single-impl auto (§1) OR an explicit `#[Provides]` returning the interface type
   (the multi-impl disambiguator, folded in free with the factory mechanism). Multiple `#[Injectable]` impls with no
   `#[Provides]` → ambiguous → compile error (qualifiers stay v2).
+
+## 7. DI IMPORT DISCIPLINE — developer-ruled 2026-07-10 (interactive, ask-human; CORRECTS shipped slice 1)
+
+Slice 1 shipped `#[Injectable]` + `inject` as AMBIENT globals (recognized with no import) — a violation of
+the LOCKED "nothing in the wind" principle ([[import-namespace-redesign]], 2026-07-03). RULED corrections:
+
+- **Namespace = `Core.DI`.** A Core module exporting the attribute-types `Injectable`, `Provides`,
+  `Transient` and the composition-root verb `inject` — the SAME injected-Core-type discipline as `Core.Http`.
+- **Both the attributes AND the `inject` verb follow Option 3 (member-import OR qualified):**
+  - Qualified-by-leaf (default, via `import Core.DI;`): `#[DI.Injectable]`, `#[DI.Provides]`,
+    `#[DI.Transient]`, `DI.inject<T>()`, `DI.inject()`.
+  - Bare via member-import: `import Core.DI.Injectable;` → `#[Injectable]`; `import Core.DI.inject;`
+    → bare `inject<T>()` / `inject()`.
+  - Un-imported bare use → `E-INJECTED-TYPE-BARE` (attrs) / the verb's equivalent.
+- **`inject` is NO LONGER an ambient reserved keyword** — it is a `Core.DI` member; the identifier is free
+  again when Core.DI is not imported.
+- **STANDING RULE (dev, absolute): from now on ANYTHING added must follow this same principle** — no new
+  symbol (type, attribute, verb, function) may be usable in the wind; it must be qualified or member-imported.
+
+### Decisions Log
+- [2026-07-10] AGREED: DI namespace = `Core.DI` (attributes + `inject` verb are its members).
+- [2026-07-10] AGREED: Option 3 — DI symbols usable qualified (`DI.inject`, `#[DI.Injectable]`) OR bare via
+  member-import (`import Core.DI.inject;`, `import Core.DI.Injectable;`); un-imported bare = error.
+- [2026-07-10] AGREED (standing): every future symbol follows the same import discipline — nothing ambient.
+
+### SHIPPED 2026-07-10 (import-discipline retrofit + slice 2, gate-green 1884/1884, byte-identical)
+- **Attributes:** `module_of("Injectable") == "DI"` (`enforce_injected.rs`) → bare `#[Injectable]` needs
+  `import Core.DI.Injectable;`, qualified `#[DI.Injectable]` needs `import Core.DI;`, else
+  `E-INJECTED-TYPE-BARE`. `Attribute::is_di_builtin` matches `"Injectable" | "DI.Injectable"` (single
+  recognition source; mirrors `desugar_router`'s `"Route" | "Http.Route"`).
+- **Verb:** `inject` un-keyworded (freed identifier; `TokenKind::Inject` removed). Parser recognizes only
+  the explicit turbofish forms as `Expr::Inject { ty, qualified }` — bare at primary, qualified
+  `DI.inject<T>()` in the postfix Dot arm. `desugar_di` gates (bare → `Core.DI.inject`; qualified →
+  `Core.DI`; else `E-DI-NO-IMPORT`) and converts the no-turbofish `inject()`/`DI.inject()` ordinary calls
+  to the composition root **only when imported** (un-imported stays a plain user call).
+- **Slice 2 (annotation-driven):** bare/qualified `inject()` resolves `T` from a typed `var`, a `return`,
+  or a lambda return type via `current_ret` threading (save/restore across `rfn` + lambdas) + a typed
+  `VarDecl` init position. Same resolver → identical `phorjInject<T>()` factory (byte-identical). Not an
+  annotation source: call-arg / param-default / `Optional`/generic (→ `E-DI-MISSING`); see `KNOWN_ISSUES.md`.
+- **Artifacts:** `examples/guide/di.phg` (both forms), `examples/README.md`, `CHANGELOG.md`, KNOWN_ISSUES,
+  `phg explain E-DI-NO-IMPORT`, 14 integration tests (typecheck + run) incl. lambda-inferred-return and
+  free-identifier cases. **NEXT slices:** (3) field injection; (4) `#[Provides]`+`#[Transient]` (still
+  ambient-free today — bare `#[Provides]` is `E-ATTR-TARGET`); then v2 qualifiers/generics.

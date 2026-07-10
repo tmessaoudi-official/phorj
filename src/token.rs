@@ -111,9 +111,6 @@ pub enum TokenKind {
     False,
     Null,
     New,
-    /// `inject` — DI composition-root keyword (DI v1, ruled 2026-07-10). Leads `inject<T>()` or
-    /// annotation-driven `inject()`; reserved so `<` after it is unambiguously a type-arg list.
-    Inject,
     Instanceof,
     Interface,
     Implements,

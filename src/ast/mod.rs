@@ -384,9 +384,15 @@ pub enum Expr {
     /// dependency graph is expanded into plain `new` construction (a synthesized `__di_T()` factory
     /// per root, so per-resolution-root sharing is byte-identical), so no backend ever sees this
     /// variant — the same "compile-time sugar, expanded out before every backend" discipline as
-    /// [`Expr::New`]/[`Expr::Html`]. `inject` is a reserved keyword (ruled 2026-07-10).
+    /// [`Expr::New`]/[`Expr::Html`]. `inject` is a `Core.DI` member (import-gated, NOT a keyword —
+    /// ruled 2026-07-10 §7): the parser emits this variant only for the explicit turbofish forms
+    /// (`inject<T>()`, `DI.inject<T>()`); the no-turbofish forms parse as ordinary calls and
+    /// [`crate::checker::desugar_di`] converts them to this variant only when `Core.DI` is imported.
     Inject {
         ty: Option<Type>,
+        /// `true` for the qualified surface `DI.inject…`; `false` for bare `inject…`. Determines which
+        /// import gates it (`import Core.DI;` vs member-import `import Core.DI.inject;`).
+        qualified: bool,
         span: Span,
     },
 }
@@ -738,9 +744,11 @@ impl Attribute {
     /// True iff this is a DI built-in attribute (DI v1). Recognized so the checker does not reject it
     /// as `E-UNKNOWN-ATTRIBUTE` — it is consumed by [`crate::checker::desugar_di`] before any backend,
     /// then inert (like `#[Route]`). Slice 1 = `#[Injectable]` only; `#[Transient]`/`#[Provides]` join
-    /// here in later slices. SINGLE SOURCE of the recognition.
+    /// here in later slices. SINGLE SOURCE of the recognition. Matches BOTH the bare `Injectable`
+    /// (member-imported `import Core.DI.Injectable;`) and the qualified `DI.Injectable` (`import
+    /// Core.DI;`) surfaces — mirrors `desugar_router`'s `"Route" | "Http.Route"` (§7 import discipline).
     pub fn is_di_builtin(&self) -> bool {
-        matches!(self.name.as_str(), "Injectable")
+        matches!(self.name.as_str(), "Injectable" | "DI.Injectable")
     }
 
     /// True iff this is the built-in `#[Attribute]` marker (DEC-194) — a class carrying it IS a

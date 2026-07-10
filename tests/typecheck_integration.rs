@@ -56,23 +56,29 @@ fn expand(src: &str) -> Result<(), String> {
     phorj::cli::check_and_expand(&prog, src).map(|_| ())
 }
 
+/// Member-imports that bring the bare DI surface (`#[Injectable]` + `inject`) into scope — §7 import
+/// discipline. Prepended to the clean-graph tests so they exercise the bare form.
+const DI_IMPORTS: &str =
+    "import Core.DI.Injectable;\nimport Core.DI.inject;\nimport Core.Output;\n";
+
 #[test]
 fn di_injectable_graph_expands_and_checks_clean() {
-    let src = "package Main;\n\
-        #[Injectable] class Db { constructor() {} }\n\
-        #[Injectable] class Svc { constructor(private Db db) {} }\n\
-        function main(): void { Svc s = inject<Svc>(); Output.printLine(\"ok\"); }\n\
-        import Core.Output;\n";
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class Db {{ constructor() {{}} }}\n\
+        #[Injectable] class Svc {{ constructor(private Db db) {{}} }}\n\
+        function main(): void {{ Svc s = inject<Svc>(); Output.printLine(\"ok\"); }}\n"
+    );
     assert!(
-        expand(src).is_ok(),
+        expand(&src).is_ok(),
         "expected clean DI expansion, got: {:?}",
-        expand(src)
+        expand(&src)
     );
 }
 
 #[test]
 fn di_non_injectable_target_is_missing() {
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.DI.inject;\n\
         class Bare { constructor() {} }\n\
         function main(): void { Bare b = inject<Bare>(); }\n";
     let e = expand(src).unwrap_err();
@@ -81,31 +87,151 @@ fn di_non_injectable_target_is_missing() {
 
 #[test]
 fn di_multi_impl_interface_is_ambiguous() {
-    let src = "package Main;\n\
-        interface I { function f(): int; }\n\
-        #[Injectable] class A implements I { constructor() {} function f(): int { return 1; } }\n\
-        #[Injectable] class B implements I { constructor() {} function f(): int { return 2; } }\n\
-        function main(): void { I x = inject<I>(); }\n";
-    let e = expand(src).unwrap_err();
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        interface I {{ function f(): int; }}\n\
+        #[Injectable] class A implements I {{ constructor() {{}} function f(): int {{ return 1; }} }}\n\
+        #[Injectable] class B implements I {{ constructor() {{}} function f(): int {{ return 2; }} }}\n\
+        function main(): void {{ I x = inject<I>(); }}\n"
+    );
+    let e = expand(&src).unwrap_err();
     assert!(e.contains("E-DI-AMBIGUOUS"), "{e}");
 }
 
 #[test]
 fn di_dependency_cycle_is_rejected() {
-    let src = "package Main;\n\
-        #[Injectable] class A { constructor(private B b) {} }\n\
-        #[Injectable] class B { constructor(private A a) {} }\n\
-        function main(): void { A x = inject<A>(); }\n";
-    let e = expand(src).unwrap_err();
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class A {{ constructor(private B b) {{}} }}\n\
+        #[Injectable] class B {{ constructor(private A a) {{}} }}\n\
+        function main(): void {{ A x = inject<A>(); }}\n"
+    );
+    let e = expand(&src).unwrap_err();
     assert!(e.contains("E-DI-CYCLE"), "{e}");
 }
 
 #[test]
-fn di_bare_inject_without_type_is_rejected() {
+fn di_bare_inject_without_annotation_is_rejected() {
+    // `var` binding = no annotation source → E-INJECT-NO-TYPE (the imports are present, so this is the
+    // no-target error, not the no-import one).
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class A {{ constructor() {{}} }}\n\
+        function main(): void {{ var x = inject(); }}\n"
+    );
+    let e = expand(&src).unwrap_err();
+    assert!(e.contains("E-INJECT-NO-TYPE"), "{e}");
+}
+
+// --- §7 import discipline: nothing in the wind ---------------------------------------------------
+
+#[test]
+fn di_injectable_attribute_bare_without_import_is_rejected() {
     let src = "package Main;\n\
         #[Injectable] class A { constructor() {} }\n\
-        function main(): void { A x = inject(); }\n";
+        function main(): void {}\n";
     let e = expand(src).unwrap_err();
+    assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
+}
+
+#[test]
+fn di_inject_verb_bare_without_member_import_is_rejected() {
+    // `import Core.DI;` binds the qualifier (so `#[DI.Injectable]` is fine) but NOT the bare `inject`
+    // verb — a bare `inject<A>()` here is E-DI-NO-IMPORT (needs `import Core.DI.inject;`).
+    let src = "package Main;\nimport Core.DI;\n\
+        #[DI.Injectable] class A { constructor() {} }\n\
+        function main(): void { A a = inject<A>(); }\n";
+    let e = expand(src).unwrap_err();
+    assert!(e.contains("E-DI-NO-IMPORT"), "{e}");
+}
+
+#[test]
+fn di_qualified_surface_checks_clean() {
+    // `import Core.DI;` → `#[DI.Injectable]` + `DI.inject<T>()` / `DI.inject()`.
+    let src = "package Main;\nimport Core.DI;\nimport Core.Output;\n\
+        #[DI.Injectable] class A { constructor() {} function n(): int { return 1; } }\n\
+        function build(): A { return DI.inject(); }\n\
+        function main(): void { A a = DI.inject<A>(); Output.printLine(\"{a.n()}\"); Output.printLine(\"{build().n()}\"); }\n";
+    assert!(
+        expand(src).is_ok(),
+        "expected clean qualified DI expansion, got: {:?}",
+        expand(src)
+    );
+}
+
+#[test]
+fn di_inject_is_a_free_identifier_without_import() {
+    // With no `Core.DI` import, `inject` is an ordinary user function — no DI machinery, no error.
+    let src = "package Main;\nimport Core.Output;\n\
+        function inject(): int { return 7; }\n\
+        function main(): void { Output.printLine(\"{inject()}\"); }\n";
+    assert!(
+        expand(src).is_ok(),
+        "expected `inject` usable as a plain function, got: {:?}",
+        expand(src)
+    );
+}
+
+// --- slice 2: annotation-driven `inject()` -------------------------------------------------------
+
+#[test]
+fn di_annotation_from_var_decl_checks_clean() {
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class Db {{ constructor() {{}} }}\n\
+        #[Injectable] class Svc {{ constructor(private Db db) {{}} }}\n\
+        function main(): void {{ Svc s = inject(); Output.printLine(\"ok\"); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected clean annotation-driven DI, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
+fn di_annotation_from_return_checks_clean() {
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class A {{ constructor() {{}} function n(): int {{ return 1; }} }}\n\
+        function build(): A {{ return inject(); }}\n\
+        function main(): void {{ A a = build(); Output.printLine(\"{{a.n()}}\"); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected clean return-position annotation DI, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
+fn di_annotation_single_impl_interface_checks_clean() {
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        interface Greeter {{ function greet(): string; }}\n\
+        #[Injectable] class En implements Greeter {{ constructor() {{}} function greet(): string {{ return \"hi\"; }} }}\n\
+        function main(): void {{ Greeter g = inject(); Output.printLine(g.greet()); }}\n"
+    );
+    assert!(
+        expand(&src).is_ok(),
+        "expected single-impl interface annotation DI, got: {:?}",
+        expand(&src)
+    );
+}
+
+#[test]
+fn di_annotation_in_lambda_inferred_return_is_rejected() {
+    // A lambda with an inferred (no declared) return type is NOT an annotation source, even nested in a
+    // function that returns an injectable — the lambda's `return inject()` must be E-INJECT-NO-TYPE (this
+    // is the test whose result the `current_ret` save/restore determines: without the reset it would
+    // wrongly inherit `App` and succeed).
+    let src = format!(
+        "package Main;\n{DI_IMPORTS}\
+        #[Injectable] class App {{ constructor() {{}} }}\n\
+        function make(): App {{ var f = function() => inject(); return inject(); }}\n\
+        function main(): void {{ discard make(); }}\n"
+    );
+    let e = expand(&src).unwrap_err();
     assert!(e.contains("E-INJECT-NO-TYPE"), "{e}");
 }
 

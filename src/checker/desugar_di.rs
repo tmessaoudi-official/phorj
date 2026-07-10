@@ -19,8 +19,21 @@
 //!
 //! Compile-time errors (all deterministic, sorted iteration — Inv-10): a non-injectable dependency or an
 //! unknown/primitive dependency type (`E-DI-MISSING`), an interface with zero or many injectable impls
-//! (`E-DI-MISSING`/`E-DI-AMBIGUOUS`), and a dependency cycle (`E-DI-CYCLE`). Bare `inject()` (no type
-//! argument) is `E-INJECT-NO-TYPE` in v1 (the annotation-driven form is a later slice).
+//! (`E-DI-MISSING`/`E-DI-AMBIGUOUS`), and a dependency cycle (`E-DI-CYCLE`). A bare `inject()` in a
+//! position with no expected type (a `var` binding, a discard, a call argument) is `E-INJECT-NO-TYPE`.
+//!
+//! IMPORT DISCIPLINE (§7, 2026-07-10). `inject` is a `Core.DI` member, NOT a keyword — nothing in the
+//! wind ([[nothing-in-the-wind-import-discipline]]). Two surfaces feed ONE resolver:
+//! - bare `inject<T>()` / `inject()` — requires the member-import `import Core.DI.inject;`;
+//! - qualified `DI.inject<T>()` / `DI.inject()` — requires `import Core.DI;` (or any `Core.DI.*`).
+//!
+//! The parser emits `Expr::Inject` only for the explicit turbofish forms; the no-turbofish forms arrive
+//! as ordinary `Call`s (`inject()` → `Call{Ident("inject")}`, `DI.inject()` → `Call{Member{DI,inject}}`)
+//! and are converted here ONLY when the matching import is present — so an un-imported `inject()` stays a
+//! plain call to a user function named `inject` (the identifier is freed). An explicit `inject<T>()`
+//! whose import is absent is `E-DI-NO-IMPORT` (a turbofish call cannot be anything but the composition
+//! root). The DI ATTRIBUTES (`#[Injectable]`, qualified `#[DI.Injectable]`) get the same discipline via
+//! `enforce_injected_discipline` (`module_of("Injectable") == "DI"`) + `Attribute::is_di_builtin`.
 //!
 //! INVARIANT — keep the rewriter TOTAL. `ritem`/`rfn`/`rmember`/`rexpr`/`rstmt` must recurse EVERY
 //! expression-bearing AST position, so no `Expr::Inject` can survive to a backend `unreachable!`. When a
@@ -28,10 +41,12 @@
 //! exactly this surface), add its arm here. There is no runtime backstop (matching `desugar_router` /
 //! `rewrite_ufcs`); totality is maintained by this rule.
 //!
-//! Slice 1 scope (disclosed): constructor injection only (field injection is a later slice); dependency
-//! types must be concrete class / interface names (an alias or generic-parameter dependency type is a
-//! clean `E-DI-MISSING`, since this runs before alias/generic expansion); `#[Transient]` / `#[Provides]`
-//! are later slices (v1 is default-shared, plain-`new` construction).
+//! Scope (disclosed): constructor injection only (field injection is a later slice); dependency types
+//! must be concrete class / interface names (an alias or generic-parameter dependency type is a clean
+//! `E-DI-MISSING`, since this runs before alias/generic expansion); `#[Transient]` / `#[Provides]` are
+//! later slices (v1 is default-shared, plain-`new` construction). Annotation-driven `inject()` draws its
+//! target only from a typed `var` declaration, a `return`, or a lambda return type (a call-argument or
+//! param-default position is NOT an annotation source — write `inject<T>()` there).
 
 use crate::ast::{
     ctor_plan, CatchClause, ClassMember, Expr, FunctionDecl, Item, LambdaBody, MatchArm, Program,
@@ -62,6 +77,8 @@ type Plan = Vec<(String, Vec<String>)>;
 
 pub fn desugar_di(program: Program) -> Result<Program, Vec<Diagnostic>> {
     let reg = build_registry(&program);
+    let bare_inject_imported = imports_path(&program, &["Core", "DI", "inject"]);
+    let di_qualifier_imported = imports_di_module(&program);
     let Program {
         package,
         items,
@@ -73,6 +90,9 @@ pub fn desugar_di(program: Program) -> Result<Program, Vec<Diagnostic>> {
         // requested-type name → Some(plan) once resolved, or None if it errored (memoized so a repeated
         // `inject<T>()` resolves once and reports once).
         resolved: BTreeMap::new(),
+        bare_inject_imported,
+        di_qualifier_imported,
+        current_ret: None,
     };
     let mut items: Vec<Item> = items.into_iter().map(|it| di.ritem(it)).collect();
     if !di.diags.is_empty() {
@@ -160,6 +180,32 @@ struct Di<'a> {
     reg: &'a Registry,
     diags: Vec<Diagnostic>,
     resolved: BTreeMap<String, Option<Plan>>,
+    /// `import Core.DI.inject;` is present → bare `inject…` is allowed (else a bare turbofish is
+    /// `E-DI-NO-IMPORT` and a bare annotation `inject()` stays an ordinary call to a user function).
+    bare_inject_imported: bool,
+    /// `import Core.DI;` (or any `Core.DI.*`) is present → qualified `DI.inject…` is allowed.
+    di_qualifier_imported: bool,
+    /// The enclosing function/method/lambda return type — the annotation source for `return inject();`
+    /// (slice 2). Saved/restored across `rfn` and every lambda so an inner scope never inherits an outer
+    /// return type.
+    current_ret: Option<Type>,
+}
+
+/// True iff the program has an import whose path is exactly `want`.
+fn imports_path(program: &Program, want: &[&str]) -> bool {
+    program.items.iter().any(|it| {
+        matches!(it, Item::Import { path, .. }
+            if path.len() == want.len() && path.iter().zip(want).all(|(a, b)| a == b))
+    })
+}
+
+/// True iff `Core.DI` is imported in any form — the module (`import Core.DI;`) or any member
+/// (`import Core.DI.inject;`, `import Core.DI.Injectable;`). Any of these binds the `DI` qualifier.
+fn imports_di_module(program: &Program) -> bool {
+    program.items.iter().any(|it| {
+        matches!(it, Item::Import { path, .. }
+            if path.len() >= 2 && path[0] == "Core" && path[1] == "DI")
+    })
 }
 
 impl Di<'_> {
@@ -314,6 +360,7 @@ impl Di<'_> {
     /// `f(Db d = inject<Db>())` is a real `inject` site — total coverage means no `Expr::Inject` can
     /// survive to a backend `unreachable!`).
     fn rfn(&mut self, f: &mut FunctionDecl) {
+        let prev_ret = std::mem::replace(&mut self.current_ret, f.ret.clone());
         let body = std::mem::take(&mut f.body);
         f.body = self.rblock(body);
         for p in &mut f.params {
@@ -321,6 +368,7 @@ impl Di<'_> {
                 p.default = Some(Box::new(self.rexpr(*d)));
             }
         }
+        self.current_ret = prev_ret;
     }
 
     /// Walk every expression-bearing position of a class member — method bodies+defaults, field
@@ -354,49 +402,166 @@ impl Di<'_> {
         stmts.into_iter().map(|s| self.rstmt(s)).collect()
     }
 
+    /// Gate a composition root against the import discipline (§7), then resolve it. `ty` is the explicit
+    /// turbofish target (`Some`) or `None` for the annotation form; `expected` is the annotation source
+    /// (a typed declaration / return type — already `Infer`-stripped by the caller); `qualified` selects
+    /// which import gates it.
+    fn rinject(
+        &mut self,
+        ty: Option<Type>,
+        qualified: bool,
+        expected: Option<&Type>,
+        span: Span,
+    ) -> Expr {
+        // Import gate. Annotation forms reach here only when already imported (see `annotation_inject`),
+        // so this bites an explicit turbofish `inject<T>()`/`DI.inject<T>()` whose import is absent.
+        let imported = if qualified {
+            self.di_qualifier_imported
+        } else {
+            self.bare_inject_imported
+        };
+        if !imported {
+            let (surface, fix) = if qualified {
+                ("DI.inject", "import Core.DI;")
+            } else {
+                ("inject", "import Core.DI.inject;")
+            };
+            self.diags.push(
+                err(format!("`{surface}` is used without importing `Core.DI`"), span)
+                    .with_code("E-DI-NO-IMPORT")
+                    .with_hint(format!(
+                        "add `{fix}` — the DI composition root must be imported, never used in the wind"
+                    )),
+            );
+            return self.di_error_placeholder(span);
+        }
+        // Explicit `ty` wins; otherwise draw the target from the position's expected type.
+        let name = match ty.as_ref().or(expected) {
+            Some(Type::Named { name, .. }) => name.clone(),
+            Some(_other) => {
+                self.diags.push(
+                    err(
+                        "`inject<T>()` requires a concrete injectable class or interface"
+                            .to_string(),
+                        span,
+                    )
+                    .with_code("E-DI-MISSING")
+                    .with_hint(
+                        "name a concrete injectable class or a single-implementation interface"
+                            .to_string(),
+                    ),
+                );
+                return self.di_error_placeholder(span);
+            }
+            None => {
+                self.diags.push(
+                    err(
+                        "`inject()` could not infer a target type from its position".to_string(),
+                        span,
+                    )
+                    .with_code("E-INJECT-NO-TYPE")
+                    .with_hint(
+                        "use it as the initializer of a typed declaration (`App app = inject();`), a typed `return`, or name the type explicitly: `inject<App>()`"
+                            .to_string(),
+                    ),
+                );
+                return self.di_error_placeholder(span);
+            }
+        };
+        self.inject_to_call(&name, span)
+    }
+
+    /// Resolve a requested type name to its factory call, or a placeholder if resolution errored (the
+    /// diagnostic is recorded inside `factory_for`, and the `Err` return discards the placeholder).
+    fn inject_to_call(&mut self, name: &str, span: Span) -> Expr {
+        match self.factory_for(name, span) {
+            Some(fname) => Expr::Call {
+                callee: Box::new(Expr::Ident(fname, span)),
+                args: Vec::new(),
+                span,
+            },
+            None => self.di_error_placeholder(span),
+        }
+    }
+
+    fn di_error_placeholder(&self, span: Span) -> Expr {
+        Expr::Call {
+            callee: Box::new(Expr::Ident("__phorj_di_error".to_string(), span)),
+            args: Vec::new(),
+            span,
+        }
+    }
+
+    /// Is this nullary call's `callee` an annotation-form composition root whose import is present?
+    /// Returns `Some(qualified)` if so; `None` if it is an ordinary user call (a bare `inject()` with no
+    /// member-import, or `DI.inject()` on a user object when `Core.DI` is not imported — the freed-
+    /// identifier guarantee).
+    fn annotation_inject(&self, callee: &Expr) -> Option<bool> {
+        match callee {
+            Expr::Ident(name, _) if name == "inject" && self.bare_inject_imported => Some(false),
+            Expr::Member {
+                object,
+                name,
+                safe: false,
+                ..
+            } if name == "inject"
+                && self.di_qualifier_imported
+                && matches!(object.as_ref(), Expr::Ident(q, _) if q == "DI") =>
+            {
+                Some(true)
+            }
+            _ => None,
+        }
+    }
+
+    /// Rewrite an expression sitting in an *annotation position* (typed `var` init, `return` value,
+    /// lambda expr-body): a composition root there draws its target from `expected`. Anything else falls
+    /// through to the context-free walk. `Type::Infer` (`var`) is not an annotation → stripped to `None`.
+    fn rexpr_expected(&mut self, e: Expr, expected: Option<&Type>) -> Expr {
+        let expected = expected.filter(|t| !matches!(t, Type::Infer(_)));
+        match e {
+            Expr::Inject {
+                ty,
+                qualified,
+                span,
+            } => self.rinject(ty, qualified, expected, span),
+            Expr::Call { callee, args, span } if args.is_empty() => {
+                match self.annotation_inject(&callee) {
+                    Some(qualified) => self.rinject(None, qualified, expected, span),
+                    None => Expr::Call {
+                        callee: Box::new(self.rexpr(*callee)),
+                        args: Vec::new(),
+                        span,
+                    },
+                }
+            }
+            other => self.rexpr(other),
+        }
+    }
+
     fn rexpr(&mut self, e: Expr) -> Expr {
         match e {
-            Expr::Inject { ty, span } => match ty {
-                Some(Type::Named { name, .. }) => match self.factory_for(&name, span) {
-                    Some(fname) => Expr::Call {
-                        callee: Box::new(Expr::Ident(fname, span)),
-                        args: Vec::new(),
-                        span,
-                    },
-                    // error already recorded; emit a placeholder call (the Err return discards it).
+            // Explicit turbofish `inject<T>()` / `DI.inject<T>()` (parser-produced). Gate the import,
+            // then resolve. In a non-annotation position, `ty: None` cannot arise from the parser; it
+            // only reaches here via `annotation_inject` re-dispatch, so a `None` here means an annotation
+            // `inject()` used where no expected type is available → `E-INJECT-NO-TYPE`.
+            Expr::Inject {
+                ty,
+                qualified,
+                span,
+            } => self.rinject(ty, qualified, None, span),
+            // Recognize an annotation-form composition root written as an ordinary call — but only when
+            // the matching import is present; otherwise it is a genuine user call and recurses normally.
+            Expr::Call { callee, args, span } if args.is_empty() => {
+                match self.annotation_inject(&callee) {
+                    Some(qualified) => self.rinject(None, qualified, None, span),
                     None => Expr::Call {
-                        callee: Box::new(Expr::Ident("__phorj_di_error".to_string(), span)),
+                        callee: Box::new(self.rexpr(*callee)),
                         args: Vec::new(),
                         span,
                     },
-                },
-                Some(_other) => {
-                    self.diags.push(
-                        err(
-                            "`inject<T>()` requires a concrete injectable class or interface"
-                                .to_string(),
-                            span,
-                        )
-                        .with_code("E-DI-MISSING")
-                        .with_hint("use `inject<SomeInjectableClass>()`".to_string()),
-                    );
-                    Expr::Null(span)
                 }
-                None => {
-                    self.diags.push(
-                        err(
-                            "`inject()` needs an explicit target type in v1 — write `inject<T>()`".to_string(),
-                            span,
-                        )
-                        .with_code("E-INJECT-NO-TYPE")
-                        .with_hint(
-                            "the annotation-driven bare `inject()` form is a later slice; name the type: `inject<App>()`"
-                                .to_string(),
-                        ),
-                    );
-                    Expr::Null(span)
-                }
-            },
+            }
             Expr::Call { callee, args, span } => Expr::Call {
                 callee: Box::new(self.rexpr(*callee)),
                 args: args.into_iter().map(|a| self.rexpr(a)).collect(),
@@ -530,15 +695,26 @@ impl Di<'_> {
                 ret,
                 body,
                 span,
-            } => Expr::Lambda {
-                params,
-                ret,
-                body: match body {
-                    LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(self.rexpr(*e))),
+            } => {
+                // A lambda is its own return-type scope: save/restore `current_ret` so a `return
+                // inject()` inside never inherits the enclosing function's return type, and its expr-body
+                // is itself a return position (draws from the lambda's declared `ret`).
+                let prev_ret = std::mem::replace(&mut self.current_ret, ret.clone());
+                let new_body = match body {
+                    LambdaBody::Expr(e) => {
+                        let expected = self.current_ret.clone();
+                        LambdaBody::Expr(Box::new(self.rexpr_expected(*e, expected.as_ref())))
+                    }
                     LambdaBody::Block(stmts) => LambdaBody::Block(self.rblock(stmts)),
-                },
-                span,
-            },
+                };
+                self.current_ret = prev_ret;
+                Expr::Lambda {
+                    params,
+                    ret,
+                    body: new_body,
+                    span,
+                }
+            }
             Expr::CloneWith {
                 object,
                 fields,
@@ -580,13 +756,19 @@ impl Di<'_> {
                 init,
                 mutable,
                 span,
-            } => Stmt::VarDecl {
-                ty,
-                name,
-                init: self.rexpr(init),
-                mutable,
-                span,
-            },
+            } => {
+                // A typed declaration is an annotation position: `App app = inject();` draws its target
+                // from `ty` (slice 2). `var app = …` (`ty` is `Type::Infer`) is not an annotation and is
+                // stripped inside `rexpr_expected`.
+                let init = self.rexpr_expected(init, Some(&ty));
+                Stmt::VarDecl {
+                    ty,
+                    name,
+                    init,
+                    mutable,
+                    span,
+                }
+            }
             Stmt::Assign {
                 target,
                 value,
@@ -597,7 +779,11 @@ impl Di<'_> {
                 span,
             },
             Stmt::Return { value, span } => Stmt::Return {
-                value: value.map(|e| self.rexpr(e)),
+                // A `return` draws its annotation from the enclosing function/method/lambda return type.
+                value: value.map(|e| {
+                    let expected = self.current_ret.clone();
+                    self.rexpr_expected(e, expected.as_ref())
+                }),
                 span,
             },
             Stmt::If {

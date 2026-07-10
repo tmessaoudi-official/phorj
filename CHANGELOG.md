@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — DI follows the import discipline + annotation-driven `inject()` (DI v1 §7 + slice 2)
+
+**Fix (nothing in the wind):** DI v1 slice 1 shipped `#[Injectable]` and `inject` as **ambient** symbols
+(recognized with no import) — a violation of the locked "everything is imported" discipline. They now
+live in `Core.DI` and obey the same rule as `Core.Http`: the bare surface (`#[Injectable]`, `inject`) via
+member-import (`import Core.DI.Injectable;` / `import Core.DI.inject;`), or qualified
+(`#[DI.Injectable]`, `DI.inject<T>()`) via `import Core.DI;`. An un-imported bare attribute is
+`E-INJECTED-TYPE-BARE`; an un-imported explicit `inject<T>()`/`DI.inject<T>()` is the new `E-DI-NO-IMPORT`.
+`inject` is **no longer a keyword** — it is freed as an ordinary identifier when `Core.DI` is not imported
+(a user function named `inject` works). The parser recognizes only the explicit turbofish forms
+(`inject<T>()`, `DI.inject<T>()`); the no-turbofish forms parse as ordinary calls and `desugar_di` converts
+them import-awarely.
+
+**Feature (slice 2):** annotation-driven `inject()` — the target type is inferred from the position (a
+typed `var` declaration, a `return`, or a lambda return type) instead of an explicit `<T>`: `App app =
+inject();`, `function build(): App { return inject(); }`. Draws on the same graph resolver, so it expands
+to the identical `phorjInject<T>()` factory — byte-identical `run ≡ runvm ≡ real PHP 8.5`. Not an
+annotation source: call-argument / parameter-default positions, and `Optional`/generic targets (→
+`E-DI-MISSING`) — see `KNOWN_ISSUES.md`. `#[Provides]`/`#[Transient]`/field injection remain later slices.
+`examples/guide/di.phg` now demonstrates both forms. No new `Op`/`Value`; no backend change.
+
 ### Added — user-defined attributes are usable (DEC-194 slice 2b-3)
 
 A class marked `#[Attribute]` can now be **applied** as `#[Tag("...")]` on a class or function, and the

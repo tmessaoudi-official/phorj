@@ -1295,10 +1295,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              a shared dependency, or invert one edge. (Field-injection cycle-breaking is not in v1.)\n"
         }
         "E-INJECT-NO-TYPE" => {
-            "E-INJECT-NO-TYPE — `inject()` was written without a target type.\n\n\
-             In v1 the composition root needs an explicit type argument: write `inject<App>()`. The\n\
-             annotation-driven bare `inject()` form (target inferred from the surrounding type) is a\n\
-             later slice.\n"
+            "E-INJECT-NO-TYPE — `inject()` could not infer a target type from its position.\n\n\
+             The annotation-driven `inject()` draws its target from a typed declaration\n\
+             (`App app = inject();`), a typed `return`, or a lambda return type. It has no source in a\n\
+             `var` binding, a discard, or a call argument — there, name the type: `inject<App>()`.\n"
+        }
+        "E-DI-NO-IMPORT" => {
+            "E-DI-NO-IMPORT — the `inject` composition root was used without importing `Core.DI`.\n\n\
+             `inject` is a `Core.DI` member, not a keyword — nothing is available in the wind. Import it\n\
+             to use the bare form (`import Core.DI.inject;` → `inject<App>()` / `inject()`), or write it\n\
+             qualified with the module import (`import Core.DI;` → `DI.inject<App>()` / `DI.inject()`).\n\
+             The DI attributes follow the same rule: `#[DI.Injectable]` with `import Core.DI;`, or bare\n\
+             `#[Injectable]` with `import Core.DI.Injectable;`.\n"
         }
         "E-STATIC-NO-INIT" => {
             "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\

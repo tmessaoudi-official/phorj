@@ -1,14 +1,23 @@
-// Compile-time dependency injection (DI v1) — `#[Injectable]` + the `inject<T>()` composition root.
+// Compile-time dependency injection (DI v1) — `#[Injectable]` + the `inject` composition root.
+//
+// DI lives in `Core.DI` and follows the "nothing in the wind" import discipline: the bare surface
+// (`#[Injectable]`, `inject`) needs the member-imports below, or write it qualified as `#[DI.Injectable]`
+// / `DI.inject<T>()` with a single `import Core.DI;`.
 //
 // `inject<App>()` resolves App's dependency graph BY TYPE at compile time and expands to plain `new`
-// construction before any backend (byte-identical run/runvm/PHP — there is no runtime DI machinery).
-// The graph here is a DIAMOND: both `App` and `EnglishGreeter` depend on `Clock`. The ruled default
-// lifetime is SHARED, so `inject<App>()` constructs ONE `Clock` and threads it to both — the synthesized
-// factory hoists it to a single local. A single-implementation interface (`Greeter`) auto-binds to its
-// only `#[Injectable]` implementor (`EnglishGreeter`). Wiring is constructor-only in v1.
+// construction before any backend (byte-identical run/runvm/PHP — there is no runtime DI machinery). The
+// graph here is a DIAMOND: both `App` and `EnglishGreeter` depend on `Clock`. The ruled default lifetime
+// is SHARED, so a single `inject<App>()` constructs ONE `Clock` and threads it to both. A single-
+// implementation interface (`Greeter`) auto-binds to its only `#[Injectable]` implementor. Wiring is
+// constructor-only in v1.
+//
+// Two composition-root forms feed the same resolver: EXPLICIT `inject<App>()` (target from the type
+// argument) and ANNOTATION-DRIVEN `inject()` (target inferred from a typed declaration or a `return`).
 package Main;
 
 import Core.Output;
+import Core.DI.Injectable;
+import Core.DI.inject;
 
 interface Greeter {
     function greet(): string;
@@ -39,7 +48,18 @@ class App {
     }
 }
 
+// Annotation-driven from the RETURN type — no explicit `<App>` needed.
+function build(): App {
+    return inject();
+}
+
 function main(): void {
+    // EXPLICIT target type.
     App app = inject<App>();
     Output.printLine(app.run());
+    // ANNOTATION-DRIVEN from the declared type on the left-hand side.
+    App viaAnnotation = inject();
+    Output.printLine(viaAnnotation.run());
+    // ANNOTATION-DRIVEN from a return position (see `build`).
+    Output.printLine(build().run());
 }

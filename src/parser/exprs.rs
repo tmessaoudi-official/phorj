@@ -283,6 +283,23 @@ impl Parser {
     }
 
     /// Parse a primary, then apply any chain of postfix operators.
+    /// Parse the explicit-turbofish tail of a DI composition root — the `<T>()` after a `inject` /
+    /// `DI.inject` head already consumed by the caller. `qualified` records whether the head was the
+    /// `DI.`-qualified surface (`import Core.DI;`) or bare (`import Core.DI.inject;`); the gate is
+    /// enforced later in [`crate::checker::desugar_di`]. `sp` spans the composition root.
+    fn parse_inject_turbofish(&mut self, qualified: bool, sp: Span) -> Result<Expr, Diagnostic> {
+        self.expect(&TokenKind::Lt, "'<' to open `inject<T>`")?;
+        let t = self.parse_type()?;
+        self.expect(&TokenKind::Gt, "'>' to close `inject<T>`")?;
+        self.expect(&TokenKind::LParen, "'(' after `inject<T>`")?;
+        self.expect(&TokenKind::RParen, "')' to close `inject<T>()`")?;
+        Ok(Expr::Inject {
+            ty: Some(t),
+            qualified,
+            span: sp,
+        })
+    }
+
     pub(super) fn parse_postfix(&mut self) -> Result<Expr, Diagnostic> {
         // Feature C: `new <Name>(<args>)` — the mandatory construction keyword. Parse exactly the
         // construction call (a primary callee + its argument list) and wrap it in `Expr::New`; the
@@ -342,6 +359,18 @@ impl Parser {
                         }
                         _ => return Err(self.error("a field or method name after '.' or '?.'")),
                     };
+                    // DI composition root, qualified turbofish surface `DI.inject<T>()` (§7). Recognized
+                    // only in this exact shape (`DI` head, `.inject`, `<`); any other `.inject` stays an
+                    // ordinary member access, and `DI.inject()` (no turbofish) is converted by
+                    // `desugar_di` when `Core.DI` is imported. `?.` is never a composition root.
+                    if !safe
+                        && name == "inject"
+                        && matches!(&e, Expr::Ident(q, _) if q == "DI")
+                        && matches!(self.peek(), TokenKind::Lt)
+                    {
+                        e = self.parse_inject_turbofish(true, sp)?;
+                        continue;
+                    }
                     e = Expr::Member {
                         object: Box::new(e),
                         name,
@@ -505,6 +534,14 @@ impl Parser {
             }
             TokenKind::Ident(name) => {
                 self.advance();
+                // DI composition root (§7 import discipline): `inject` is NOT a keyword — a `Core.DI`
+                // member freed as an ordinary identifier. Only the explicit turbofish surface
+                // `inject<T>()` is recognized here (otherwise unparseable — Phorj has no general
+                // turbofish). The no-turbofish `inject()` stays a plain call, converted to the
+                // composition root by `desugar_di` ONLY when `Core.DI.inject` is member-imported.
+                if name == "inject" && matches!(self.peek(), TokenKind::Lt) {
+                    return self.parse_inject_turbofish(false, sp);
+                }
                 Ok(Expr::Ident(name, sp))
             }
             TokenKind::Str(segs) => {
@@ -525,21 +562,6 @@ impl Parser {
             }
             TokenKind::Match => self.parse_match(sp),
             TokenKind::If => self.parse_if_expr(sp),
-            TokenKind::Inject => {
-                // DI composition root (DI v1): `inject<T>()` (explicit target type) or `inject()`
-                // (annotation-driven). `inject` is reserved, so `<` here is unambiguously a type-arg.
-                self.advance(); // consume `inject`
-                let ty = if self.eat(&TokenKind::Lt) {
-                    let t = self.parse_type()?;
-                    self.expect(&TokenKind::Gt, "'>' to close `inject<T>`")?;
-                    Some(t)
-                } else {
-                    None
-                };
-                self.expect(&TokenKind::LParen, "'(' after `inject`")?;
-                self.expect(&TokenKind::RParen, "')' to close `inject()`")?;
-                Ok(Expr::Inject { ty, span: sp })
-            }
             TokenKind::LParen => {
                 self.advance();
                 let inner = self.parse_expr()?;

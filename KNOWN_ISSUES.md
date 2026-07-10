@@ -1319,6 +1319,23 @@ are byte-identical by construction — the helper throws the same string on both
   follow-ups; the hard guarantee — formatting never changes program meaning (`parse(fmt(x))`
   preserved) — holds today, gated by a dogfood test over the whole example corpus.
 
+- **Dependency injection (DI v1, `Core.DI`) — disclosed limitations.** (1) **`inject` is a freed
+  identifier**, so a user *variable* literally named `inject` cannot be the left operand of `<` in the
+  exact shape `inject < Type >(…)` — the parser takes that as the explicit composition root
+  (`inject<T>()`). Any other use of the name is unaffected, and the collision is impossible once
+  `Core.DI.inject` is member-imported (the name is then the verb). Astronomically unlikely; mirrors
+  slice-1's synthetic-factory name (`phorjInject<T>`) collision disclosure. (2) **Annotation-driven
+  `inject()` draws its target only from a typed `var` declaration, a `return`, or a lambda return
+  type** — a **call-argument** (`f(inject())`) or a **parameter default** (`f(Db d = inject())`) is not
+  an annotation source; name the type there (`inject<Db>()`). (3) An annotation position whose type is
+  **`Optional`/generic** (`App? a = inject();`, `Repo<User> r = inject();`) reports `E-DI-MISSING`
+  (a concrete injectable class/interface is required) — matching the explicit form's strictness.
+  (4) A **bare `inject()` with no `Core.DI.inject` member-import** is an ordinary call to an undefined
+  function `inject` (an unknown-function error), not a DI-specific diagnostic — the correct consequence
+  of freeing the identifier; the explicit `inject<T>()` still gives the clean `E-DI-NO-IMPORT`.
+  (5) Constructor injection only; field injection, `#[Transient]`, `#[Provides]`, and multi-impl
+  qualifiers are later slices.
+
 ## Reporting
 
 Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.

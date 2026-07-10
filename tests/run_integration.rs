@@ -58,6 +58,8 @@ fn di_inject_in_field_initializer_runs_not_panics() {
     // walks all expression positions, so this runs and prints the injected value.
     let src = "package Main;\n\
         import Core.Output;\n\
+        import Core.DI.Injectable;\n\
+        import Core.DI.inject;\n\
         #[Injectable] class Db { constructor() {} function n(): int { return 7; } }\n\
         class Svc {\n\
             private Db db = inject<Db>();\n\
