@@ -764,6 +764,31 @@ class Instant {
 }
 "#;
 
+/// The `Core.Sql` Tier-A pure query-builder prelude (W3-1, `docs/research/wave3-4-drafts/w3-1-db-access.md`).
+/// A parameterized query is an immutable VALUE: a static SQL template `string` + a separately-bound
+/// positional-param list — so there is no string-concatenation query path and the SQL-injection class is
+/// removed at the type level. Pure string/list construction (no dependency, no IO) → byte-identity-gated
+/// across interpreter ≡ VM ≡ transpiled PHP, and it ships as the first consumer of the UA-L2 `CORE_MODULES`
+/// registry. Slice 1 = the `Query` value + positional `bind`; the fluent `Sql.select()…` builder (slice 2,
+/// per-operator methods) and named `bindNamed` layer on top and lower to this same `Query`. Injected when
+/// a program imports `Core.Sql`.
+const SQL_PRELUDE: &str = r#"
+import Core.List;
+class Query {
+  constructor(private string queryText, private List<string | int | float | bool> boundParams) {}
+  function bind(string | int | float | bool value): Query {
+    return new Query(this.queryText, List.append(this.boundParams, value));
+  }
+  function sql(): string { return this.queryText; }
+  function params(): List<string | int | float | bool> { return this.boundParams; }
+}
+class Sql {
+  static function query(string text): Query {
+    return new Query(text, []);
+  }
+}
+"#;
+
 /// A virtual `Core.*` module: its import path, its optional injected prelude source, how it gates
 /// (whole-module-only vs also member-imports), and the injected member-type names that must be
 /// import-qualified (the `module_of` contribution). UA-L2 (registry-unification): the single source
@@ -862,6 +887,17 @@ const CORE_MODULES: &[VirtualModule] = &[
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
+    },
+    // W3-1 Tier-A pure query builder. `Sql` (class == module leaf) is not gated; `Query` (≠ leaf) is
+    // import-gated like Http's Request/Router. No transitive-order dependency (its only import,
+    // Core.List, is a builtin native module, not an injected prelude), so its position here is free.
+    VirtualModule {
+        module: &["Core", "Sql"],
+        qualifier: "Sql",
+        src: Some(SQL_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Query"],
     },
     // Attribute-only modules — no prelude to inject; they exist only to gate their `#[…]` types.
     VirtualModule {

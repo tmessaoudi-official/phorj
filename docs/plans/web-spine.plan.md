@@ -59,6 +59,23 @@
   config type (`SqliteConfig`, later `PostgresConfig`). A single `Db.open(string)` for both DSN and path
   was rejected — identical signature = overload collision (won't compile).
 
+## W3-1 build (developer overrode the fresh-context stop, 3× "continue" — building in-context)
+
+- [2026-07-10] Building P1 `Core.Sql` in this session (developer explicitly overrode the
+  fresh-context-for-build rule; justified for Tier-A because it is PURE → the differential gate genuinely
+  catches byte-identity divergence). In verified slices, full gate per slice, commit each green.
+- [2026-07-10] Operator model RULED (was NOT self-ruled — the Q3 preview's bare `Gt`/`Eq` would be the
+  "nothing in the wind" #1 recurring error) = **per-operator methods** (`whereEq`/`whereGt`/…/`whereIn`,
+  `orderByAsc`/`orderByDesc`) — zero ambient symbols, no operator enum, no import ceremony.
+- [2026-07-10] ✅ **Slice 1 DONE** (`Core.Sql` Query substrate, prelude-only): `SQL_PRELUDE` +
+  `CORE_MODULES` row (first consumer of UA-L2's registry — one row, zero Rust natives). `Sql.query(text)`
+  → immutable `Query`; positional `bind` (→ new Query); `sql()`/`params()`. `Query` gated in `module_of`→
+  "Sql" per Http precedent; `Sql` (class==leaf) ungated. Example `examples/db/query-builder.phg`
+  byte-identical run≡runvm≡php-8.5.8; full gate green (1915) + clippy both + release.
+- [2026-07-10] Named `bindNamed` (Q4's default) DEFERRED to a P1 fast-follow (slice 1b) — needs the
+  positional+named dual representation (Map) + empty-map-literal confirmation; positional shipped first as
+  the fluent-builder foundation (the builder uses positional `?` under the hood). NOT dropped.
+
 ## Formal Plan
 
 ### Wave-D scope map (frozen sequence; only UA-L2 is build-ready this session)

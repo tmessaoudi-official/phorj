@@ -1,0 +1,28 @@
+// Core.Sql — Tier-A parameterized query VALUES (W3-1, slice 1).
+//
+// A query is an immutable value: a static SQL *template* string plus separately-bound parameters.
+// Because there is no string-concatenation query API, the SQL-injection class is removed at the
+// type level — you cannot build a query by gluing user input into SQL text. `bind` returns a NEW
+// `Query` each time (immutable), so a base query can be reused and specialised safely.
+//
+// This is pure value construction — no database, no IO — so it is byte-identical across the
+// interpreter, the VM, and transpiled PHP (it ships in the differential glob). The impure execution
+// side (`Core.Db`, running the query) is a separate Tier-B module.
+package Main;
+
+import Core.Output;
+import Core.List;
+import Core.Sql;
+
+function main(): void {
+    // The text is a static template; the `?` placeholders are filled by ordered `bind` calls.
+    var base = Sql.query("SELECT id, name FROM users WHERE age > ? AND city = ?");
+    // Each bind returns a new Query — `base` is untouched and reusable.
+    var parisAdults = base.bind(18).bind("Paris");
+    var londonAdults = base.bind(21).bind("London");
+    Output.printLine(parisAdults.sql());
+    Output.printLine("paris params: {List.length(parisAdults.params())}");
+    Output.printLine("london params: {List.length(londonAdults.params())}");
+    // `base` never gained any bindings:
+    Output.printLine("base params: {List.length(base.params())}");
+}
