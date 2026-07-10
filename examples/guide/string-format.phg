@@ -32,6 +32,9 @@ function main(): void {
     // `.precision` on %f (round-half-to-even, matching PHP). Sign sits before zero-padding (`%05d`).
     Output.printLine(String.format("[%5d][%-5d][%05d][%+d]", [42, 42, 42, 7]));
     Output.printLine(String.format("[%8.2f][%08.2f][%-8.2f] pi=%.4f", [3.5, 3.5, 3.5, 3.14159]));
+    // `%f` signs by VALUE (`< 0.0`), like PHP: `-0.0` is unsigned, but a value that rounds to zero
+    // keeps its sign (`%.2f` of -0.001 → "-0.00"); the `+` flag forces a sign on non-negatives.
+    Output.printLine(String.format("[%f][%.2f][%+f]", [-0.0, 0.0 - 0.001, 3.5]));
     Output.printLine(String.format("[%6s][%-6s]", ["hi", "hi"]));
     // Integer-radix (slice 3a): %x/%X hex, %o octal, %b binary — with width + zero-pad.
     Output.printLine(String.format("hex %x/%X oct %o bin %b", [255, 255, 8, 5]));

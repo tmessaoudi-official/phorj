@@ -528,3 +528,24 @@ fn text_format_scientific_matches_php_byte_for_byte() {
     )
     .is_err());
 }
+
+#[test]
+fn text_format_f_sign_is_by_value_not_ieee_bit() {
+    // `%f` signs iff the value is `< 0.0` (like PHP `sprintf`), NOT by the IEEE sign bit: `-0.0` is
+    // unsigned, but a value that rounds to zero keeps its sign. Expected strings from php-8.5.8.
+    let fmt = |spec: &str, vals: Vec<Value>| -> String {
+        let mut o = String::new();
+        match text_format(
+            &[Value::Str(spec.into()), Value::List(std::rc::Rc::new(vals))],
+            &mut o,
+        ) {
+            Ok(Value::Str(s)) => s.to_string(),
+            other => panic!("text_format({spec:?}) returned {other:?}"),
+        }
+    };
+    let f = Value::Float;
+    assert_eq!(fmt("%f", vec![f(-0.0)]), "0.000000"); // -0.0 is NOT signed (the fixed bug)
+    assert_eq!(fmt("%.2f", vec![f(-0.001)]), "-0.00"); // rounds to zero but stays signed
+    assert_eq!(fmt("%+f", vec![f(0.0)]), "+0.000000"); // + flag on non-negative
+    assert_eq!(fmt("%f", vec![f(-1.5)]), "-1.500000"); // ordinary negative
+}

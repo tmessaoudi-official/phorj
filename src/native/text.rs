@@ -572,7 +572,11 @@ fn text_format(args: &[Value], _: &mut String) -> Result<Value, String> {
                         ))
                     }
                 };
-                let sign = if f.is_sign_negative() {
+                // Sign is by VALUE (`< 0.0`), not IEEE sign bit: PHP signs a `%f` iff the value is
+                // negative, so `-0.0` renders "0.000000" (unsigned) and even a value that rounds to zero
+                // keeps its sign (`%.2f` of -0.001 → "-0.00"). `is_sign_negative()` would wrongly sign
+                // `-0.0` → a run≠php byte-identity break (verified vs php-8.5.8). Same rule as `%e`.
+                let sign = if f < 0.0 {
                     "-"
                 } else if d.plus {
                     "+"
