@@ -5,8 +5,16 @@
 > `perf-benchmarking-truth`.
 
 ## Decisions Log
+- [2026-07-10] ✅🧹 **INVARIANT-13 M-DECOMP DONE (the tracked trip-wire below, resolved before slice 4).**
+  Split the `String.format` renderer cluster out of `src/native/text.rs` (1185 → **824 lines**, compliant) into a
+  sibling module `src/native/text_format.rs` (375 lines: `FormatDirective`, `parse_format_directive`,
+  `pad_format`, `strip_g_*`, `format_g_body`, `text_format`) + `text_format_tests.rs` (the moved oracle-string
+  tests). `text_natives()` stays in `text.rs` (`use super::text_format::text_format`); the public path
+  `crate::native::parse_format_directive` is preserved by re-pointing the re-export in `native/mod.rs`. Sibling
+  module (not a directory conversion) = lowest-churn. **Pure structural refactor, ZERO behavior change: gate
+  1908 → 1908 identical, byte-identical, clippy+fmt clean.** Slice 4 can now touch `text_format.rs` freely.
 - [2026-07-10] 🧹 **TRACKED TECH-DEBT (Invariant 13, disclosed not silently passed) — `src/native/text.rs` is
-  1185 lines, OVER the 1000 hard cap.** It was ALREADY ~1032 before this session (pre-existing violation); the
+  1185 lines, OVER the 1000 hard cap.** [RESOLVED — see the entry above.] It was ALREADY ~1032 before this session (pre-existing violation); the
   String.format 3b/3c slices enlarged it by ~175. Invariant 13 prescribes the fix (M-Decomp: `text.rs` →
   `text/mod.rs` + a cohesive `text/format.rs` submodule holding the sprintf renderer cluster —
   `FormatDirective`, `parse_format_directive`, `pad_format`, `strip_g_fixed_zeros`, `strip_g_sci_mantissa`,
