@@ -1883,6 +1883,23 @@ before/after (counting alloc + interleaved fresh-docker-php) → full oracle gat
 is ~3× of the string gap** — the portion V1 `Rc<str>` removes. The **residual ~9× floor** = VM per-op dispatch
 + int→string + string-build (interp still builds a string, so the TRUE pure-dispatch floor is even lower).
 
+**✅ PER-COMPONENT PROFILE DONE (2026-07-10, throwaway counting-allocator+timing example, deleted). [Verified]:**
+relative split (absolute ns inflated by the harness; the FRACTIONS are the signal): stringconcat ≈42% alloc /
+≈58% dispatch+build; interp ≈55%/45%; mapget ≈26%/74%; **intadd (pure int, 0 alloc) = the VM DISPATCH FLOOR ≈
+the same order as the string residual.** Unit costs on this box: small-String alloc+drop ≈17ns, clone ≈28ns.
+**THE SHARPENED FINDING (the ② lesson a 4th time, deepest level):** the VM per-op dispatch floor ALONE is
+already ~7-12× php's TOTAL per-iter time. No representation change touches dispatch. AND sub-lever 2 as scoped
+(boxed JIT calling `rt_` helpers for string/collection ops) is **②-REDUX** — it removes only the dispatch loop,
+not the build/alloc → it lands a heavy LOSS, exactly like the ② method-dispatch FLAG. **⟹ a clean WIN on
+strings/collections requires the JIT to compile these ops NATIVELY (fused, unboxed builds, no boxed-`Value`
+round-trip, no `rt_` helper) — essentially reimplementing php's 20-yr-tuned string/array engine in Cranelift.
+That is enormous and its clean-WIN outcome is HIGHLY UNCERTAIN.** The profile did NOT need a build to show this
+— measuring the dispatch floor + recognizing the `rt_`-helper JIT = ②-redux is decisive. RECOMMENDATION
+surfaced to dev: the "beat php per-feature" mandate is likely STRUCTURALLY UNREACHABLE for 20-yr-tuned
+string/array categories at reasonable cost; phorj's real wins are numeric/recursion (banked) + its VALUE is
+parity/features → pivot to ③ web spine + refine the mandate to "beat where structurally possible, match-not-beat
+on strings/arrays". Do NOT self-rule the mandate (§15) — dev decides.
+
 **Sub-levers (sequenced; each byte-identity-gated + measured + WIN-OR-FLAG):**
 1. **Allocation** — V1 `Rc<str>` (index/operand clones → bumps) + a no-alloc/fused string builder. Closes the
    ~3× allocation portion (stringconcat 27.6×→~9×). NECESSARY-not-SUFFICIENT.
