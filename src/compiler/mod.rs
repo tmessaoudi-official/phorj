@@ -432,8 +432,10 @@ mod expr;
 mod matches;
 mod program;
 mod stmt;
+use ctors::*;
 use program::*;
 
+mod ctors;
 mod cty;
 mod emit;
 
