@@ -590,9 +590,14 @@ fn looks_like_global_call(s: &str) -> bool {
 
 // cohesion split (M-Decomp W4): program/types/stmt/expr/call/matches clusters.
 mod call;
+mod classes;
+mod classes_synth;
 mod expr;
+mod functions;
 mod matches;
-mod program;
+mod program_emit;
+mod runtime_php;
+mod runtime_tables;
 mod stmt;
 mod types;
 
