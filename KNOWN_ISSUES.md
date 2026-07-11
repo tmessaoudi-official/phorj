@@ -1369,11 +1369,13 @@ are byte-identical by construction — the helper throws the same string on both
 
 ## Parked perf — the string/array/collection speed-beat (Fable / end-stage)
 
-**Status: PARKED (developer-ruled 2026-07-10).** Phorj already WINS on numeric/recursion/control-flow
-speed via the unboxed JIT; it MATCHES-not-beats PHP on 20-yr-tuned string/array/collection speed. A
-clean speed-WIN there is **evidence-proven unreachable at reasonable cost** — the developer will bring
-in **Fable** to attempt it, and this is resolved at the very end (once the language is otherwise
-complete and only park-items remain). This section is the durable engineering scoping, folded from the
+**Status: REOPENED (developer-ruled 2026-07-11, Fable session — supersedes the 2026-07-10 end-stage
+park).** Fresh-eyes attempt now, target faster-or-at-least-equal to PHP, evidence-gated: pure-Rust
+ceiling spike FIRST (can any candidate representation beat PHP's per-iter cost at all?), then build
+only what the spike proves winnable; WIN-OR-FLAG per slice. Prior context: Phorj already WINS on
+numeric/recursion/control-flow speed via the unboxed JIT; the string/array/collection speed-WIN was
+previously assessed **evidence-proven unreachable at reasonable cost** — this run re-tests that
+assessment with fresh eyes rather than assuming it. This section is the durable engineering scoping, folded from the
 retired `docs/plans/perf-wave.plan.md` (whose day-by-day narrative lives in `CHANGELOG.md`/`HISTORY`).
 
 **Winnability RED FLAG [Verified: interleaved best-of-5, phorj-VM `--no-jit` vs fresh docker php:8.5+JIT]:**
