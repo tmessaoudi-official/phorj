@@ -45,6 +45,8 @@
   - [External dependency policy](#external-dependency-policy) *(2026-06-27, amended 2026-07-03)*
   - [PHP extension tiers](#php-extension-tiers) *(2026-06-19 — rule in force)*
   - [PHP parity and beyond gap audit](#php-parity-and-beyond-gap-audit) *(2026-06-21 — HISTORICAL)*
+  - [Core.Sql — SQL DBAL (instance model)](#coresql--sql-dbal-instance-model) *(2026-07-11 — DESIGN, build in Ω-1)*
+  - [Dependency injection & attribute reflection (DI v2 / L1–L2)](#dependency-injection--attribute-reflection-di-v2--l1l2) *(2026-07-11 — DESIGN; DI v1 SHIPPED)*
 - **Part V — Build & distribution (M2.5)**
   - [phg build master design](#phg-build-master-design) *(2026-06-16)*
   - [Phase 2 cross-OS builds](#phase-2-cross-os-builds) *(2026-06-16 — SHIPPED v0.4.0)*
@@ -910,8 +912,8 @@ third-party crate. Ruled mechanism:
   `phg run`). A dedicated `jit` CI job builds + lints + tests `-p phorj --features jit`.
 - Staged build: Cranelift IR for arithmetic/control-flow → boxed-`Value` runtime → wire into
   `phg run`/`serve` (hot-fn compile) → AOT for `phg build` → unboxing for statically-typed hot paths.
-  Reject LLVM; reject C-transpile-as-the-shipped-answer (production-only). Plan:
-  `docs/plans/perf-wave.plan.md`.
+  Reject LLVM; reject C-transpile-as-the-shipped-answer (production-only). Plan: MASTER-PLAN
+  §"THE FINISHING WAVE" + `KNOWN_ISSUES` §"Parked perf" (the retired `perf-wave.plan.md` folded there).
 
 ### Process to admit the next one
 
@@ -1063,6 +1065,137 @@ answer); versioned/i18n/video docs.
    `--php-target` floor) must be first-class tested workflows.
 10. **Clusters of deferred corners are one mechanism each** — union follow-ups, mutation corners,
     transpile hazards: bundle by shared fix, don't track ~12 independent rows.
+
+## Core.Sql — SQL DBAL (instance model)
+
+**Status: DESIGN — to build in the finishing wave (Ω-1).** The database-access layer, top parity gap
+(#1). Design ruled interactively by the developer (2026-07-10 Q1–Q7 adjudication + 2026-07-11 instance
+rework). The 2026-07-10 shipped slices 1+2 (a static-factory surface `Sql.query` / `Sql.select` + the
+`SelectQuery` fluent builder, prelude-only `Core.Sql`, zero natives, first `cli::CORE_MODULES` registry
+consumer) are **SUPERSEDED** by the instance model below and reworked in Ω-1. Source: the retired
+`docs/plans/web-spine.plan.md` + `finishing-wave.plan.md` Decisions Log; drafts under
+`docs/research/wave3-4-drafts/w3-1-db-access.md`.
+
+### Instance model (developer-ruled 2026-07-11 — reaffirms Invariant 12 "prefer instances + mandatory `new`")
+
+- **Entry = `new QueryBuilder("users", "u")`** — table-anchored, alias first-class. Under `Core.Sql`,
+  usable via imported leaf (`import Core.Sql.QueryBuilder;` → `new QueryBuilder`) OR parent
+  (`import Core.Sql;` → `new Sql.QueryBuilder`) — leaf-or-parent import, nothing in the wind.
+- **Typed sub-builder per verb** (each exposes ONLY its valid methods — a SELECT can't call `.values()`,
+  a compile error): `.select([...])` → **`SelectQuery`**, `.insert([...])` → **`InsertStatement`**,
+  `.update(...)` → **`UpdateStatement`**, `.delete()` → **`DeleteStatement`**. Immutable threading
+  (Phorj immutable-by-default: each method returns a new value).
+- **`SelectQuery` fluent surface** (per-op methods, no ambient symbols): `select` / `from` /
+  `where{Eq,Ne,Gt,Ge,Lt,Le,Like}` / `orderBy{Asc,Desc}` / `limit` / `toQuery`.
+- **Always-alias + ambiguity error.** Every table (primary + joined) has an alias; columns qualify by
+  alias; an unqualified column with >1 table in play = build-time **`E-SQL-AMBIGUOUS-COLUMN`**; a
+  single-table query auto-qualifies (bare `id` still fine). A Phorj upgrade over PHP's silent ambiguity.
+- **Decoupled dialect (auto at execute, NOT at build).** The builder is dialect-agnostic; `.toQuery()`
+  yields a portable immutable **`Query`** value (SQL template + binds); `new Db(SqliteConfig(...)).execute(q)`
+  renders `?`-vs-`$1` / LIMIT / quoting automatically per the connection's dialect. The builder stays
+  offline-buildable + testable + `new`-able (NOT born from a connection — that coupling was challenged +
+  rejected). Dialect-SPECIFIC features (PG `RETURNING`, MySQL `ON DUPLICATE KEY`) = a later LADDER item /
+  `.raw()` escape — **parked**, not forced now.
+- **Raw queries:** `new Query(sql, [binds])` (instance-consistent; both paths produce a `Query`). Binds
+  come in two forms: positional `bind` (shipped) and named **`bindNamed`** (Q4 default — remaining P1).
+- **Joins:** `.join / .innerJoin / .leftJoin("orders", "o").on("u.id", "=", "o.userId")`.
+
+### Q1–Q7 adjudication (developer-ruled 2026-07-10; the entry-surface reworked to the instance model above)
+
+- **Q1 — dependency amendment:** ADMIT (`rusqlite` + `rustls`, feature-gated, spine-quarantined; adopted).
+- **Q2 — driver:** `rusqlite` (bundled SQLite; the amendment's first realization).
+- **Q3 — Sql surface:** FULL fluent builder (developer chose the full surface — XL, multi-slice).
+- **Q4 — param binding:** ship BOTH positional `?`/`bind` AND named — **named is the default** (`bindNamed`).
+- **Q5 — lifecycle:** interim `Db.close` + `Db.transaction` closure.
+- **Q6 — error model:** **`throws DbError` + try/catch** — CATCHABLE (corrected from an earlier "fault").
+- **Q7 — constructor:** true overload on a typed config — `Db.open(string dsn)` + `Db.open(SqliteConfig)`.
+
+### Tiers
+
+- **P1 (Tier-A, shipped-partial):** the pure builder + raw `Query` — prelude-only `Core.Sql`, zero natives,
+  byte-identity-clean. Remaining P1 = `bindNamed`, joins, `groupBy`/`having`/aggregates.
+- **P2 (Tier-B):** `Core.Db` execution over `rusqlite` (`db` feature; Tier-3 fixture-tested, NOT in the
+  byte-identity differential), then Postgres + MySQL/MariaDB (all sync; Oracle deferred; MongoDB = a
+  separate LADDER item).
+
+## Dependency injection & attribute reflection (DI v2 / L1–L2)
+
+**Status: DESIGN — DI v1 SHIPPED; v2 + the generic L1/L2 programme to build in the finishing wave (Ω-4 +
+Ω-7).** Source: the retired `docs/plans/di-attributes.plan.md` (§0 generic thesis, §3 v2 layers) +
+`finishing-wave.plan.md`.
+
+### The generic thesis (ruled) — build the primitive, not a bespoke DI feature
+
+DI, controllers/routing, entities/ORM, templates, validation, serialization are the SAME shape:
+**attribute-driven, whole-program-discovered metadata processors.** Build the generic primitive; each
+framework feature is a *consumer* of it, not a compiler special-case.
+
+- **L1 — the generic primitive:** compile-time attribute reflection + **reverse discovery**
+  **`subjectsWith<Attr>()`** → every class/method/function/field carrying `#[Attr]`, with its structural
+  metadata (type, ctor param types, methods, fields). Resolution kind (ruled): **BOTH, compile-time-FIRST**
+  — the compile-time core is byte-identity-safe (discovery feeds codegen, expands to plain construction
+  BEFORE backends per Invariant 5 → transpiles to ordinary PHP, NOT quarantined; missing/ambiguous/cyclic =
+  COMPILE error). The runtime reflection API (`subjectsWith<A>()` callable at runtime) is a LATER layer,
+  Invariant-14-quarantined when used.
+- **L2 — framework libraries ride L1:** DI (`#[Injectable]`), routing (`#[Route]`), ORM (`#[Entity]`), etc.
+
+### DI v1 — SHIPPED (slices 1–4, 2026-07-10)
+
+Under `Core.DI` import discipline (member-import `import Core.DI.Injectable;` / `import Core.DI.inject;` →
+bare, OR qualified `#[DI.Injectable]` / `DI.inject<T>()` via `import Core.DI;`; un-imported bare →
+`E-INJECTED-TYPE-BARE` / `E-DI-NO-IMPORT`). `#[Injectable]` + `inject<T>()`/`inject()` → synthesized
+`phorjInject<T>()` factories (`src/checker/desugar_di.rs`); default-SHARED (diamond → one instance);
+single-impl interface auto-bind; `#[Provides]` static factories (precedence over `new`/single-impl);
+`#[Transient]` fresh-per-use via a let-float codegen; field injection via a synthesized construction-init
+(immutable-safe). Byte-identical run≡runvm≡php-8.5.8.
+
+### DI v2 — DESIGN (later layers, Ω-4/Ω-7)
+
+- **Interface binding (multi-impl / contextual):** **(B) a binding/qualifier attribute** —
+  `#[Inject(FileLogger)] public Logger logger` or `#[Uses(Logger => FileLogger)]` on the subclass — is the
+  **v2 default** (sound, standard = .NET `AddScoped<ILogger,FileLogger>` / Symfony bind, zero covariance
+  machinery). **(A) covariant type-override** (subclass redeclares `public FileLogger logger`, narrowing
+  the interface type — Liskov-safe only because injected fields are write-once) is **v2-sugar on top of B**.
+  (v1 = single-impl auto only.)
+- **Abstract-base flow:** an abstract class is never directly `inject`-able; its injected inputs flow into
+  any concrete `#[Injectable]` subclass's dependency graph.
+- **`#[Provides]` factories** for non-injectable values — shipped in v1 as a scope addition; v2 extends.
+- **Generics injectables** (`Repo<T>`).
+- **App-wide `#[Singleton]`** (one instance across ALL `inject` calls / process lifetime) — needs a RUNTIME
+  singleton store + init ordering; NOT pure compile-time → the runtime-lifetime layer.
+- **Request/session scopes.**
+- **Runtime reflection API** (`subjectsWith<A>()` at runtime) — the Invariant-14-quarantined dynamic layer.
+- **Field-injection cycle-breaking; lazy/proxy; decorators.**
+- **Other L2 consumers:** routing (`#[Controller]`/`#[Route]`), ORM (`#[Entity]`/`#[Column]`), templates,
+  validation, serialization — each a consumer of L1 discovery (feeds Ω-7's framework stack).
+
+## Bytes.format — byte-precise formatting (DESIGN — build in Ω-3)
+
+**Status: DESIGN, RESOLVED (developer, commit `dbc5215`) — build byte-identity-critical, multi-leg.**
+Source: the retired `docs/plans/web-spine.plan.md`. Complements `String.format` (the `%`-sprintf engine,
+SHIPPED); `String.charCount` (codepoint count, `é`=1) ships alongside as a companion to byte-based
+`String.length`.
+
+**`Bytes.format(spec, [bytes…]) -> bytes`** — a SEPARATE function from `String.format`, formatting each
+argument **byte-by-byte** (raw; precision truncates to exact bytes, no UTF-8 char-boundary rounding),
+mirroring the `String.length`/`Bytes.length` and `String.count`/`Bytes.count` pairing.
+
+- **Return type is `bytes`, NOT `string` — FORCED, not a preference.** `Value::Str` is a Rust `String` =
+  UTF-8-validated (`value.rs:123`); a byte-precise truncation can split a multibyte codepoint → invalid
+  UTF-8 → unstorable in `Str`. So the result is `bytes`; the template's literal text contributes its own
+  UTF-8 bytes.
+- **Byte-identity-safe by construction.** Every argument is `bytes` *by the function's type*, so the PHP
+  helper always raw-truncates (plain `sprintf` `%s` on a PHP byte-string) — no per-argument type dispatch,
+  correct for literal AND dynamic argument lists.
+- **Rejected: type-directed `%s` in `String.format`** (string→char-safe, bytes→raw in one function). It
+  has a byte-identity HOLE: PHP can't distinguish a `bytes` from a `string` at runtime (both are PHP
+  strings), and per-argument static types exist only for list-*literal* args — so `bytes`-`%s` on a
+  dynamic `List<union>` would char-truncate on PHP but raw-truncate on the Rust backends → `run ≠ php`.
+- **Composition = NEST; the type boundary picks the direction.** A byte-exact field inside a mostly-text
+  line → make the WHOLE line `Bytes.format` (text literals are just their bytes; result is `bytes`).
+  Pulling a byte result into a `String.format` template requires an explicit `bytes → string` conversion
+  that FAULTS on invalid UTF-8 (correct: a half-codepoint isn't text — never a silent broken string).
+- **`%b` is NOT available** for this — it is already taken for binary-integer formatting (`5`→`101`).
 
 ---
 
