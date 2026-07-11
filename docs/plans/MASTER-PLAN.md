@@ -251,6 +251,26 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   reads. Byte-identity watchpoint shipped with it: the INLINE concat now ZEROES its result
   slot's hash+canon words (a stale canon word could false-match in the probe — the garbage
   would otherwise be a byte-identity break, not just a slow path).
+  **P-2c IN PROGRESS (2026-07-11, session 2) — three levers SHIPPED + the perf-gate fixed:**
+  (1) `RemI`-by-pow2 → `band` (`7669a6a`): entry-prefix const-init proof + proven-induction
+  writers ⟹ non-negative dividend; byte-exact, fault-free. (2) **Int-list vertical**
+  (`be91280`): `Kind::IntList`, all-int `MakeList` seals flat (raw i64 at slot bytes 0..8),
+  inline bounds+load — **listindex 0.03× → 0.98× parity**. (3) **Inline
+  `Conversion.toFloat`/`truncate`** (`3cabcb9`): `fcvt_from_sint` / range-guarded
+  `fcvt_to_sint` mirroring `value::float_to_int` exactly — **floatarith 0.03× → ~4× WIN**.
+  Perf-gate hardening (`1d09c12`): microbench.sh sampling was BATCHED and manufactured a
+  phantom 5.4× fibrec WIN→LOSS flip under ambient load (JIT measured intact at 35× over the
+  VM) — now INTERLEAVED + CORE-PINNED; baseline re-emitted honestly. Current ratcheted map:
+  **WINs match 7.14 · floatarith 4.01 · stringconcat 2.02 · fibrec 2.00 · floatmul ~1.00;
+  near-parity listindex 0.99 · mapget 0.92 · intadd 0.69 (checked-default price) · trycatch
+  0.48; VM-bound remainder enum 0.01 · closurecall 0.03 · methodcall 0.03 · webish 0.07 ·
+  interp 0.11 · objalloc 0.14** — the un-JITted object/closure/enum shapes; per the perf-wave
+  evidence those need the VALUE-REPRESENTATION change, not more JIT verticals (the ruled
+  fork — surface options to the dev before building). P-2c TAIL still queued: fused tag
+  checks · Pop-elision · `emit_unboxed` per-op-helper decomposition (1183 lines) · perf
+  register + G-8 language recompute. Housekeeping shipped alongside: MSRV 1.74→1.82
+  (`078fab0`), repo-wide M-Decomp (~30 commits — every file ≤800 lines except 4 by-design:
+  explain/emit_unboxed/runtime_php/vm-exec_op).
   **P-2a ⚑ SPIKE SHIPPED (2026-07-11) — measured, FLAGGED LOSS; verdict recorded.** Handle space +
   helper calls (Concat / list-Index / `String.length`) shipped green: `stringconcat.bench()` is
   JIT-eligible (hits>0 proven), byte-identity holds (1928 tests, PHP oracle; index-fault redoes on
