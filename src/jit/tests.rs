@@ -1673,6 +1673,148 @@ fn jit_string_vertical_index_fault_matches_the_vm() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
+    // P-2b DELIVERY-PATH proof: the exact `bench/micro/mapget.phg` shape — a `MakeMap` of short
+    // string keys → int values (seals FLAT), a flat key list, and a string-subscripted `Index`
+    // (the inline hash-probe) — must JIT through the `Op::Call` hook AND stay byte-identical to
+    // the interpreter oracle. 1000 iterations exercise the probe across all four keys.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"a\" => 10, \"b\" => 20, \"c\" => 30, \"d\" => 40];\n\
+          List<string> keys = [\"a\", \"b\", \"c\", \"d\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = keys[i % 4];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "map-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual map-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the map vertical must actually hit the JIT — else the P-2b flip is unproven"
+    );
+}
+
+#[test]
+fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
+    // A >22-byte key defeats flattening: the seal falls back to a boxed `Value::Map` and every
+    // lookup routes through the helper into the canonical `map_index` kernel. Byte-identity must
+    // hold on that path too (long AND short keys mixed — the short one also stays boxed here,
+    // exercising the helper's slot-key + boxed-map combination).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"a-deliberately-long-key-over-22-bytes\" => 7, \"b\" => 20];\n\
+          List<string> keys = [\"a-deliberately-long-key-over-22-bytes\", \"b\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = keys[i % 2];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "boxed-map lookup must match the oracle");
+}
+
+#[test]
+fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
+    // Duplicate literal keys are legal (checker only type-checks them): `build_map`'s PHP
+    // semantics — FIRST position, LAST value — must survive the flat seal. `m[\"a\"]` must read 2,
+    // never 1, on all backends.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(): int {\n\
+          Map<string, int> m = [\"a\" => 1, \"b\" => 5, \"a\" => 2];\n\
+          return m[\"a\"] * 100 + m[\"b\"];\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "dedup semantics must match the oracle");
+    assert!(
+        jit_out.contains("205"),
+        "last-value-wins dedup must read 205, got: {jit_out}"
+    );
+}
+
+#[test]
+fn jit_map_vertical_missing_key_fault_matches_the_vm() {
+    // A missing key in a FLAT map exhausts the inline probe → code 5 → the hook falls back to the
+    // VM, which renders the canonical `\"map key not found\"` fault — byte-identical failure
+    // behaviour (Invariant 1).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(): int {\n\
+          Map<string, int> m = [\"a\" => 10];\n\
+          return m[\"zzz\"];\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
+    let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
+    assert!(
+        jit_err.contains("map key not found"),
+        "jit-wired fault must be the canonical missing-key fault, got: {jit_err}"
+    );
+    assert!(
+        oracle_err.contains("map key not found"),
+        "oracle fault must be the canonical missing-key fault, got: {oracle_err}"
+    );
+}
+
+#[test]
+fn jit_map_vertical_concat_key_probes_through_the_helper() {
+    // An inline-concat result carries hash 0 (\"unavailable\") — the inline probe must PUNT to the
+    // helper (which compares bytes), never miss-fault a present key. `\"a\" + \"b\"` == \"ab\" is in
+    // the map; the lookup must succeed with the right value on the jit-wired path.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"ab\" => 11, \"cd\" => 22];\n\
+          List<string> parts = [\"a\", \"b\", \"c\", \"d\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = parts[(i % 2) * 2] + parts[(i % 2) * 2 + 1];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "hash-0 concat keys must route through the helper and match the oracle"
+    );
+}
+
+#[test]
 fn jit_stack_overflow_threshold_matches_the_oracle() {
     // The ONE correctness vector the fault-fallback cannot catch: an under-fault (wrong
     // `start_depth`) makes the JIT RETURN A VALUE where the VM overflows — no fault, so no re-run.

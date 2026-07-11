@@ -869,6 +869,12 @@ enum Kind {
     /// variant (v1 verticals cover string lists only — a `MakeList` of anything else is rejected), so
     /// an `Index` result is provably `Str` without a type source.
     StrList(Own),
+    /// A `Map<string, int>` handle (P-2b mapget vertical; same table, same ownership discipline).
+    /// Key/value kinds are part of the variant — a `MakeMap` of anything else is rejected — so a
+    /// string-subscripted `Index` result is provably `Int` without a type source. Runtime encoding:
+    /// all-short-key maps seal FLAT (`UB_TAG_FLAT_MAP` — inline hash-probe lookup), the rest stay
+    /// boxed `Value::Map` (helper lookup through the canonical `map_index` kernel).
+    StrIntMap(Own),
 }
 
 /// Compile-time ownership of a handle operand — see [`Kind::Str`]. Part of `Kind`'s equality, so the
@@ -883,11 +889,14 @@ enum Own {
 impl Kind {
     /// Is this operand a handle into the per-run [`UbCtx`] table?
     fn is_handle(self) -> bool {
-        matches!(self, Kind::Str(_) | Kind::StrList(_))
+        matches!(self, Kind::Str(_) | Kind::StrList(_) | Kind::StrIntMap(_))
     }
     /// Is this operand an OWNED handle (must be freed by its consumer)?
     fn is_owned_handle(self) -> bool {
-        matches!(self, Kind::Str(Own::Owned) | Kind::StrList(Own::Owned))
+        matches!(
+            self,
+            Kind::Str(Own::Owned) | Kind::StrList(Own::Owned) | Kind::StrIntMap(Own::Owned)
+        )
     }
 }
 
@@ -897,6 +906,7 @@ fn borrowed_copy(k: Kind) -> Kind {
     match k {
         Kind::Str(_) => Kind::Str(Own::Borrowed),
         Kind::StrList(_) => Kind::StrList(Own::Borrowed),
+        Kind::StrIntMap(_) => Kind::StrIntMap(Own::Borrowed),
         other => other,
     }
 }
@@ -944,8 +954,15 @@ const UB_TAG_SLOT: i64 = 1 << 62;
 const UB_TAG_FLAT: i64 = 1 << 61;
 /// Handle tag (with `UB_TAG_SLOT`): freeing recycles the slot.
 const UB_TAG_OWNED: i64 = 1 << 60;
+/// Handle tag: flattened `Map<string,int>` — `SLOT|FLAT` combined (impossible otherwise):
+/// bits[40..60) = pair count, low 40 bits = base slot; pair `i` = key slot `base+2i` (hash at
+/// byte 24), value slot `base+2i+1` (the `i64` value in bytes 0..8).
+const UB_TAG_FLAT_MAP: i64 = UB_TAG_SLOT | UB_TAG_FLAT;
 /// Low-bits mask for the slot / base index.
 const UB_IDX_MASK: i64 = (1 << 40) - 1;
+/// Byte offset of a string slot's precomputed FNV-1a hash (`PhStr::cached_hash` — never 0, so 0
+/// means "hash unavailable" and the inline map probe falls back to the helper).
+const UB_SLOT_HASH_OFF: usize = 24;
 /// Bytes per arena slot: `len:u8` + up to 22 data bytes + slack, so the inline concat's bounded
 /// 3×8-byte over-copies (a copy starting at `dst+1+la`, `la ≤ 22`, ends ≤ `dst+47`) stay inside
 /// the 64-byte slot. 64 also keeps every slot cache-line-aligned.
@@ -1001,6 +1018,8 @@ impl UbCtx {
                     let off = bump as usize * UB_SLOT_SIZE;
                     buf_storage[off] = s.len() as u8;
                     buf_storage[off + 1..off + 1 + s.len()].copy_from_slice(s.as_bytes());
+                    buf_storage[off + UB_SLOT_HASH_OFF..off + UB_SLOT_HASH_OFF + 8]
+                        .copy_from_slice(&s.cached_hash().to_le_bytes());
                     bump += 1;
                 }
                 other => handles.push(other.clone()),
@@ -1066,18 +1085,25 @@ impl UbCtx {
         }
     }
 
-    /// Write `bytes` (≤ 22) into a fresh arena slot; the OWNED `SLOT` handle, or `None` when full.
-    fn alloc_slot_bytes(&mut self, bytes: &[u8]) -> Option<i64> {
+    /// Write `bytes` (≤ 22) into a fresh arena slot with its FNV hash (0 = unavailable); the
+    /// OWNED `SLOT` handle, or `None` when full. The data tail (bytes `1+len..=23`) is ZEROED —
+    /// the invariant the inline map probe whole-word compares rely on (a recycled slot may
+    /// carry stale bytes).
+    fn alloc_slot_bytes(&mut self, bytes: &[u8], hash: u64) -> Option<i64> {
         let slot = self.alloc_slot()?;
         let off = slot as usize * UB_SLOT_SIZE;
         self.buf_storage[off] = bytes.len() as u8;
         self.buf_storage[off + 1..off + 1 + bytes.len()].copy_from_slice(bytes);
+        self.buf_storage[off + 1 + bytes.len()..off + UB_SLOT_HASH_OFF].fill(0);
+        self.buf_storage[off + UB_SLOT_HASH_OFF..off + UB_SLOT_HASH_OFF + 8]
+            .copy_from_slice(&hash.to_le_bytes());
         Some(UB_TAG_SLOT | UB_TAG_OWNED | slot as i64)
     }
 
     /// The bytes any STRING handle refers to (slot-tagged or untagged), or `None` on a mismatch.
+    /// The slot branch requires `FLAT` CLEAR: `SLOT|FLAT` is a flat MAP handle (P-2b), never a string.
     fn str_bytes(&self, h: i64) -> Option<&[u8]> {
-        if h & UB_TAG_SLOT != 0 {
+        if h & UB_TAG_SLOT != 0 && h & UB_TAG_FLAT == 0 {
             let idx = (h & UB_IDX_MASK) as usize;
             if idx >= self.cap as usize {
                 return None;
@@ -1182,12 +1208,24 @@ extern "C" fn rt_u_list_seal(ctx: *mut UbCtx, list: i64) -> i64 {
         return list; // too large to flatten — boxed path still works
     }
     let base = ctx.bump as i64;
-    let owned: Vec<Vec<u8>> = elems.iter().map(|b| b.to_vec()).collect();
-    for bytes in &owned {
+    let owned: Vec<(Vec<u8>, u64)> = match ctx.handles.get(list as usize) {
+        Some(Value::List(xs)) => xs
+            .iter()
+            .map(|v| match v {
+                Value::Str(s) => (s.as_bytes().to_vec(), s.cached_hash()),
+                _ => (Vec::new(), 0),
+            })
+            .collect(),
+        _ => return -1,
+    };
+    for (bytes, hash) in &owned {
         let slot = ctx.bump as usize;
         let off = slot * UB_SLOT_SIZE;
         ctx.buf_storage[off] = bytes.len() as u8;
         ctx.buf_storage[off + 1..off + 1 + bytes.len()].copy_from_slice(bytes);
+        ctx.buf_storage[off + 1 + bytes.len()..off + UB_SLOT_HASH_OFF].fill(0);
+        ctx.buf_storage[off + UB_SLOT_HASH_OFF..off + UB_SLOT_HASH_OFF + 8]
+            .copy_from_slice(&hash.to_le_bytes());
         ctx.bump += 1;
     }
     ctx.release(list);
@@ -1202,7 +1240,8 @@ extern "C" fn rt_u_index(ctx: *mut UbCtx, list: i64, idx: i64, free_list: i64) -
     let ctx = unsafe { &mut *ctx };
     if list & (UB_TAG_SLOT | UB_TAG_FLAT) != 0 {
         // Defensive: the codegen sends flat lists down the inline path; mirror it here anyway.
-        if list & UB_TAG_FLAT != 0 {
+        // A flat LIST has `FLAT` set and `SLOT` clear (`SLOT|FLAT` = a flat MAP — not a list).
+        if list & UB_TAG_FLAT != 0 && list & UB_TAG_SLOT == 0 {
             let n = (list >> 40) & 0xFFFFF;
             let base = list & UB_IDX_MASK;
             if (0..n).contains(&idx) {
@@ -1224,7 +1263,8 @@ extern "C" fn rt_u_index(ctx: *mut UbCtx, list: i64, idx: i64, free_list: i64) -
     match &elem {
         Value::Str(s) if s.len() <= crate::phstr::INLINE_CAP => {
             // `None` = arena exhausted → -1 → code 5, redo on VM.
-            ctx.alloc_slot_bytes(s.as_bytes()).unwrap_or(-1)
+            ctx.alloc_slot_bytes(s.as_bytes(), s.cached_hash())
+                .unwrap_or(-1)
         }
         _ => ctx.alloc(elem),
     }
@@ -1246,7 +1286,8 @@ extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask: i64) -> i6
         joined[..ab.len()].copy_from_slice(ab);
         joined[ab.len()..total].copy_from_slice(bb);
         let bytes = joined[..total].to_vec();
-        match ctx.alloc_slot_bytes(&bytes) {
+        // Hash 0 = unavailable (an inline-concat result is rarely a map key; the probe falls back).
+        match ctx.alloc_slot_bytes(&bytes, 0) {
             Some(h) => h,
             None => return -1, // arena exhausted → redo on VM
         }
@@ -1285,6 +1326,170 @@ extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
     n
 }
 
+/// Append one `key => value` pair to a still-building map scratch (an UNTAGGED, uniquely-owned
+/// `Value::List` accumulating `k1, v1, k2, v2, …` — created by `rt_u_list_new(2n)`). The key is a
+/// string handle (any encoding), the value a raw `i64`. `free_key != 0` consumes the key handle.
+/// `-1` = defensive bad-handle fault (→ code 5, redo on VM).
+extern "C" fn rt_u_map_push_pair(
+    ctx: *mut UbCtx,
+    map: i64,
+    key: i64,
+    val: i64,
+    free_key: i64,
+) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let kv = match ctx.str_bytes(key) {
+        // Valid UTF-8 by construction (written from a `PhStr`); `PhStr::new` re-interns.
+        Some(bytes) => match std::str::from_utf8(bytes) {
+            Ok(s) => Value::Str(crate::phstr::PhStr::new(s)),
+            Err(_) => return -1,
+        },
+        None => match ctx.handles.get(key as usize) {
+            Some(v @ Value::Str(_)) => v.clone(),
+            _ => return -1,
+        },
+    };
+    match ctx.handles.get_mut(map as usize) {
+        Some(Value::List(xs)) => match std::rc::Rc::get_mut(xs) {
+            Some(v) => {
+                v.push(kv);
+                v.push(Value::Int(val));
+            }
+            None => return -1,
+        },
+        _ => return -1,
+    }
+    if free_key != 0 {
+        ctx.release(key);
+    }
+    0
+}
+
+/// Finalize a just-built map scratch (`k1, v1, …` — see [`rt_u_map_push_pair`]): dedup through the
+/// canonical [`crate::value::build_map`] kernel (first position, last value — PHP semantics, exactly
+/// the VM's `Op::MakeMap`), then flatten iff every key is a ≤22-byte string (values are `Int` by the
+/// analyzer's `MakeMap` kind proof): consecutive arena slot PAIRS — pair `i` = key slot `base+2i`
+/// (bytes + zero tail + FNV hash at [`UB_SLOT_HASH_OFF`]) and value slot `base+2i+1` (the raw `i64`
+/// LE in bytes 0..8) — returning a `SLOT|FLAT` [`UB_TAG_FLAT_MAP`] handle (lookup then runs fully
+/// inline). A non-flattenable map becomes a boxed `Value::Map` (untagged handle, helper lookup).
+/// `-1` = defensive mismatch / arena exhaustion / kernel fault (→ code 5, redo on VM).
+extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let pairs: Vec<(Value, Value)> = match ctx.handles.get(map as usize) {
+        Some(Value::List(xs)) if xs.len() % 2 == 0 => xs
+            .chunks_exact(2)
+            .map(|kv| (kv[0].clone(), kv[1].clone()))
+            .collect(),
+        _ => return -1,
+    };
+    let deduped = match crate::value::build_map(pairs) {
+        Ok(m) => m,
+        Err(_) => return -1, // non-HKey key: checker-unreachable; the VM redo renders the fault
+    };
+    let flat: Option<Vec<(&crate::phstr::PhStr, i64)>> = deduped
+        .iter()
+        .map(|(k, v)| match (k, v) {
+            (crate::value::HKey::Str(s), Value::Int(n)) if s.len() <= crate::phstr::INLINE_CAP => {
+                Some((s, *n))
+            }
+            _ => None,
+        })
+        .collect();
+    let Some(entries) = flat else {
+        // Not flattenable (long key / non-int value — the latter is analyzer-unreachable):
+        // boxed map, helper-path lookup through the canonical kernel.
+        ctx.release(map);
+        return ctx.alloc(Value::Map(std::rc::Rc::new(deduped)));
+    };
+    let n = entries.len() as i64;
+    if n >= 1 << 20 || ctx.bump + 2 * n as u64 > ctx.cap {
+        ctx.release(map);
+        return ctx.alloc(Value::Map(std::rc::Rc::new(deduped)));
+    }
+    let base = ctx.bump as i64;
+    let owned: Vec<(Vec<u8>, u64, i64)> = entries
+        .iter()
+        .map(|(s, v)| (s.as_bytes().to_vec(), s.cached_hash(), *v))
+        .collect();
+    for (bytes, hash, val) in &owned {
+        // Key slot: len + bytes + ZERO tail (the inline probe's whole-word compares) + hash.
+        let koff = ctx.bump as usize * UB_SLOT_SIZE;
+        ctx.buf_storage[koff] = bytes.len() as u8;
+        ctx.buf_storage[koff + 1..koff + 1 + bytes.len()].copy_from_slice(bytes);
+        ctx.buf_storage[koff + 1 + bytes.len()..koff + UB_SLOT_HASH_OFF].fill(0);
+        ctx.buf_storage[koff + UB_SLOT_HASH_OFF..koff + UB_SLOT_HASH_OFF + 8]
+            .copy_from_slice(&hash.to_le_bytes());
+        // Value slot: the raw i64, LE, bytes 0..8 (the rest is never read).
+        let voff = koff + UB_SLOT_SIZE;
+        ctx.buf_storage[voff..voff + 8].copy_from_slice(&val.to_le_bytes());
+        ctx.bump += 2;
+    }
+    ctx.release(map);
+    UB_TAG_FLAT_MAP | (n << 40) | base
+}
+
+/// `#[repr(C)]` two-`i64` return for [`rt_u_map_get`], matching a Cranelift `returns = [i64, i64]`
+/// import signature exactly as the compiled functions' own two-i64 return does (rax:rdx on SysV
+/// x86-64, x0:x1 on AArch64). `code` 0 = ok; 5 = redo on VM (missing key → the canonical
+/// `"map key not found"` fault, or a defensive mismatch).
+#[repr(C)]
+struct UbMapGetRet {
+    value: i64,
+    code: i64,
+}
+
+/// `m[k]` (string-keyed int map) — the helper (slow) path: a FLAT map probed by hash+bytes (covers
+/// hash-0 keys the inline probe punts on), a boxed map through the canonical
+/// [`crate::value::map_index`] kernel. `free_mask` bit0 consumes the key, bit1 the map (on success —
+/// a code-5 return redoes the whole call on the VM, discarding the ctx).
+extern "C" fn rt_u_map_get(ctx: *mut UbCtx, map: i64, key: i64, free_mask: i64) -> UbMapGetRet {
+    let ctx = unsafe { &mut *ctx };
+    let miss = UbMapGetRet { value: 0, code: 5 };
+    let Some(kb) = ctx.str_bytes(key) else {
+        return miss;
+    };
+    let value = if map & UB_TAG_FLAT != 0 {
+        let kb = kb.to_vec(); // end the str_bytes borrow before re-borrowing the arena
+        let n = (map >> 40) & 0xFFFFF;
+        let base = (map & UB_IDX_MASK) as usize;
+        let mut found = None;
+        for i in 0..n as usize {
+            let koff = (base + 2 * i) * UB_SLOT_SIZE;
+            let len = ctx.buf_storage[koff] as usize;
+            if ctx.buf_storage[koff + 1..koff + 1 + len] == kb[..] {
+                let voff = koff + UB_SLOT_SIZE;
+                let mut vb = [0u8; 8];
+                vb.copy_from_slice(&ctx.buf_storage[voff..voff + 8]);
+                found = Some(i64::from_le_bytes(vb));
+                break;
+            }
+        }
+        match found {
+            Some(v) => v,
+            None => return miss, // the VM redo renders the canonical "map key not found"
+        }
+    } else {
+        let Ok(ks) = std::str::from_utf8(kb) else {
+            return miss;
+        };
+        let kv = Value::Str(crate::phstr::PhStr::new(ks));
+        match ctx.handles.get(map as usize) {
+            Some(Value::Map(m)) => match crate::value::map_index(m, &kv) {
+                Ok(Value::Int(v)) => v,
+                _ => return miss, // missing key (canonical fault on redo) / non-int (unreachable)
+            },
+            _ => return miss,
+        }
+    };
+    if free_mask & 1 != 0 {
+        ctx.release(key);
+    }
+    if free_mask & 2 != 0 {
+        ctx.release(map);
+    }
+    UbMapGetRet { value, code: 0 }
+}
+
 /// Release an owned handle (any encoding — see [`UbCtx::release`]).
 extern "C" fn rt_u_free(ctx: *mut UbCtx, h: i64) {
     let ctx = unsafe { &mut *ctx };
@@ -1301,6 +1506,9 @@ struct UbHelperIds {
     concat: FuncId,
     str_len: FuncId,
     free: FuncId,
+    map_push_pair: FuncId,
+    map_seal: FuncId,
+    map_get: FuncId,
 }
 
 struct UbHelperRefs {
@@ -1311,6 +1519,9 @@ struct UbHelperRefs {
     concat: FuncRef,
     str_len: FuncRef,
     free: FuncRef,
+    map_push_pair: FuncRef,
+    map_seal: FuncRef,
+    map_get: FuncRef,
 }
 
 /// Provenance of an operand-stack entry for the provenance pre-pass ONLY (not codegen): `Param(slot)`
@@ -1635,24 +1846,61 @@ fn unboxed_analyze(
                     }
                     kinds.push(Kind::StrList(Own::Owned));
                 }
+                Op::MakeMap(n) => {
+                    // The 2n operands are k1,v1,…,kn,vn (vn on top): pop value (Int) then key (Str),
+                    // n times — anything else is default-denied (VM fallback).
+                    for _ in 0..*n {
+                        match kinds.pop() {
+                            Some(Kind::Int) => {}
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed MakeMap value kind {other:?}"
+                                )))
+                            }
+                        }
+                        match kinds.pop() {
+                            Some(Kind::Str(_)) => {}
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed MakeMap key kind {other:?}"
+                                )))
+                            }
+                        }
+                    }
+                    kinds.push(Kind::StrIntMap(Own::Owned));
+                }
                 Op::Index => {
+                    // The subscript kind selects the flavor: `Int` → string-list element (`Str`),
+                    // `Str` → string-keyed map value (`Int`). Mirrors build_body's dispatch exactly.
                     match kinds.pop() {
-                        Some(Kind::Int) => {}
+                        Some(Kind::Int) => {
+                            match kinds.pop() {
+                                Some(Kind::StrList(_)) => {}
+                                other => {
+                                    return Err(JitError::Unsupported(format!(
+                                        "unboxed Index receiver kind {other:?}"
+                                    )))
+                                }
+                            }
+                            kinds.push(Kind::Str(Own::Owned));
+                        }
+                        Some(Kind::Str(_)) => {
+                            match kinds.pop() {
+                                Some(Kind::StrIntMap(_)) => {}
+                                other => {
+                                    return Err(JitError::Unsupported(format!(
+                                        "unboxed Index receiver kind {other:?}"
+                                    )))
+                                }
+                            }
+                            kinds.push(Kind::Int);
+                        }
                         other => {
                             return Err(JitError::Unsupported(format!(
                                 "unboxed Index subscript kind {other:?}"
                             )))
                         }
                     }
-                    match kinds.pop() {
-                        Some(Kind::StrList(_)) => {}
-                        other => {
-                            return Err(JitError::Unsupported(format!(
-                                "unboxed Index receiver kind {other:?}"
-                            )))
-                        }
-                    }
-                    kinds.push(Kind::Str(Own::Owned));
                 }
                 Op::Concat(2) => {
                     for _ in 0..2 {
@@ -1829,7 +2077,9 @@ fn collect_functions_unboxed(
                 },
                 // P-2a handle verticals. Operand-KIND validation lives in `unboxed_analyze` /
                 // `build_body_unboxed` (this walk only gates the op set).
-                Op::MakeList(_) | Op::Index | Op::Concat(2) | Op::Pop => uses_handles = true,
+                Op::MakeList(_) | Op::MakeMap(_) | Op::Index | Op::Concat(2) | Op::Pop => {
+                    uses_handles = true
+                }
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 Op::AddI
                 | Op::SubI
@@ -1952,6 +2202,7 @@ fn build_body_unboxed(
                         | Op::Concat(_)
                         | Op::CallNative(..)
                         | Op::MakeList(_)
+                        | Op::MakeMap(_)
                 )
         });
 
@@ -1975,6 +2226,9 @@ fn build_body_unboxed(
         concat: module.declare_func_in_func(ids.concat, b.func),
         str_len: module.declare_func_in_func(ids.str_len, b.func),
         free: module.declare_func_in_func(ids.free, b.func),
+        map_push_pair: module.declare_func_in_func(ids.map_push_pair, b.func),
+        map_seal: module.declare_func_in_func(ids.map_seal, b.func),
+        map_get: module.declare_func_in_func(ids.map_get, b.func),
     });
     let ub_ref = |what: &str| -> Result<&UbHelperRefs, JitError> {
         ub_refs.as_ref().ok_or_else(|| {
@@ -2228,6 +2482,165 @@ fn build_body_unboxed(
                     sealed,
                     Kind::StrList(Own::Owned),
                 )?;
+            }
+            Op::MakeMap(n) => {
+                let h = ub_ref("MakeMap")?;
+                let d = kinds.len();
+                if 2 * n > d {
+                    return Err(JitError::Codegen("unboxed MakeMap underflow".to_string()));
+                }
+                // Validate the 2n-operand tail alternates key (Str) / value (Int) BEFORE emitting
+                // (mirrors the analyze arm exactly).
+                for j in 0..*n {
+                    let (kk, vk) = (kinds[d - 2 * n + 2 * j], kinds[d - 2 * n + 2 * j + 1]);
+                    if !matches!(kk, Kind::Str(_)) || vk != Kind::Int {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed MakeMap pair kinds ({kk:?} => {vk:?})"
+                        )));
+                    }
+                }
+                // Scratch: an untagged list accumulating k1,v1,…  (reuses the list allocator).
+                let capv = b.ins().iconst(types::I64, 2 * *n as i64);
+                let call = b.ins().call(h.list_new, &[ctx, capv]);
+                let map_h = b.inst_results(call)[0];
+                for j in 0..*n {
+                    let kd = d - 2 * n + 2 * j;
+                    let kv = b.use_var(vars[kd]);
+                    let vv = b.use_var(vars[kd + 1]);
+                    let freev = b
+                        .ins()
+                        .iconst(types::I64, kinds[kd].is_owned_handle() as i64);
+                    let pc = b.ins().call(h.map_push_pair, &[ctx, map_h, kv, vv, freev]);
+                    let status = b.inst_results(pc)[0];
+                    let bad = b.ins().icmp_imm(IntCC::NotEqual, status, 0);
+                    fault_if(&mut b, bad, 5);
+                }
+                // Seal: dedup through the canonical `build_map` kernel; an all-short-key int map
+                // flattens into arena slot PAIRS (a `SLOT|FLAT` handle) so lookup runs fully inline.
+                let sc = b.ins().call(h.map_seal, &[ctx, map_h]);
+                let sealed = b.inst_results(sc)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sealed, 0);
+                fault_if(&mut b, bad, 5);
+                kinds.truncate(d - 2 * n);
+                ub_push(
+                    &mut b,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    sealed,
+                    Kind::StrIntMap(Own::Owned),
+                )?;
+            }
+            Op::Index if matches!(kinds.last(), Some(Kind::Str(_))) => {
+                // ---- P-2b: string-keyed map lookup (`m[k]` → Int) --------------------------------
+                let h = ub_ref("Index(map)")?;
+                let (iv, ik) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (mv, mk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if !matches!(ik, Kind::Str(_)) || !matches!(mk, Kind::StrIntMap(_)) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed Index operand kinds ({mk:?}[{ik:?}])"
+                    )));
+                }
+                let merge = b.create_block();
+                b.append_block_param(merge, types::I64);
+                let fast_blk = b.create_block();
+                let slow_blk = b.create_block();
+                // INLINE iff the map sealed FLAT and the key is an arena slot; the probe needs the
+                // key's precomputed hash, so a hash-0 slot (an inline-concat result) also punts.
+                let flat_bit = b.ins().band_imm(mv, UB_TAG_FLAT);
+                let key_slot = b.ins().band_imm(iv, UB_TAG_SLOT);
+                let flat_nz = b.ins().icmp_imm(IntCC::NotEqual, flat_bit, 0);
+                let key_nz = b.ins().icmp_imm(IntCC::NotEqual, key_slot, 0);
+                let both = b.ins().band(flat_nz, key_nz);
+                b.ins().brif(both, fast_blk, &[], slow_blk, &[]);
+                // INLINE: hash-probe over the pair slots. Per non-matching pair: ONE load + ONE
+                // compare (the hash at slot byte 24); a hash match confirms by three whole-word
+                // compares (bytes 0..24 = len + 22 zero-tailed data + pad — byte equality exactly,
+                // the `HKey` equality the kernel uses). A hit loads the value slot's i64. A miss is
+                // code 5 — a FLAT map is complete, so the VM redo renders the canonical
+                // `"map key not found"`.
+                b.switch_to_block(fast_blk);
+                let buf = b.ins().load(types::I64, MemFlagsData::new(), ctx, 0);
+                let ki = b.ins().band_imm(iv, UB_IDX_MASK);
+                let koff = b.ins().ishl_imm(ki, 6);
+                let pk = b.ins().iadd(buf, koff);
+                let khash = b.ins().load(types::I64, MemFlagsData::new(), pk, 24);
+                let kw0 = b.ins().load(types::I64, MemFlagsData::new(), pk, 0);
+                let kw1 = b.ins().load(types::I64, MemFlagsData::new(), pk, 8);
+                let kw2 = b.ins().load(types::I64, MemFlagsData::new(), pk, 16);
+                let probe_blk = b.create_block();
+                b.ins().brif(khash, probe_blk, &[], slow_blk, &[]);
+                b.switch_to_block(probe_blk);
+                let cnt_raw = b.ins().ushr_imm(mv, 40);
+                let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+                let base = b.ins().band_imm(mv, UB_IDX_MASK);
+                let boff = b.ins().ishl_imm(base, 6);
+                let pbase = b.ins().iadd(buf, boff);
+                let head = b.create_block();
+                b.append_block_param(head, types::I64); // pair index
+                let body = b.create_block();
+                b.append_block_param(body, types::I64);
+                let confirm = b.create_block();
+                b.append_block_param(confirm, types::I64);
+                let hit = b.create_block();
+                b.append_block_param(hit, types::I64);
+                let next = b.create_block();
+                b.append_block_param(next, types::I64);
+                let zero = b.ins().iconst(types::I64, 0);
+                b.ins().jump(head, &[zero.into()]);
+                b.switch_to_block(head);
+                let i = b.block_params(head)[0];
+                let done = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, i, cnt);
+                fault_if(&mut b, done, 5); // exhausted = missing key → canonical fault on the VM
+                b.ins().jump(body, &[i.into()]);
+                b.switch_to_block(body);
+                let bi = b.block_params(body)[0];
+                let poff = b.ins().ishl_imm(bi, 7); // pair stride = 2 slots = 128 bytes
+                let ph = b.ins().iadd(pbase, poff);
+                let phash = b.ins().load(types::I64, MemFlagsData::new(), ph, 24);
+                let heq = b.ins().icmp(IntCC::Equal, phash, khash);
+                b.ins().brif(heq, confirm, &[bi.into()], next, &[bi.into()]);
+                b.switch_to_block(confirm);
+                let ci = b.block_params(confirm)[0];
+                let coff = b.ins().ishl_imm(ci, 7);
+                let cph = b.ins().iadd(pbase, coff);
+                let w0 = b.ins().load(types::I64, MemFlagsData::new(), cph, 0);
+                let w1 = b.ins().load(types::I64, MemFlagsData::new(), cph, 8);
+                let w2 = b.ins().load(types::I64, MemFlagsData::new(), cph, 16);
+                let e0 = b.ins().icmp(IntCC::Equal, w0, kw0);
+                let e1 = b.ins().icmp(IntCC::Equal, w1, kw1);
+                let e2 = b.ins().icmp(IntCC::Equal, w2, kw2);
+                let e01 = b.ins().band(e0, e1);
+                let all = b.ins().band(e01, e2);
+                b.ins().brif(all, hit, &[ci.into()], next, &[ci.into()]);
+                b.switch_to_block(hit);
+                let hi = b.block_params(hit)[0];
+                let hoff = b.ins().ishl_imm(hi, 7);
+                let hph = b.ins().iadd(pbase, hoff);
+                let val = b.ins().load(types::I64, MemFlagsData::new(), hph, 64);
+                // Consume the key (recycle iff runtime-OWNED); the flat map is bump-pinned
+                // (runtime-borrowed always) — nothing to free.
+                if ik.is_owned_handle() {
+                    emit_slot_free_if_owned(&mut b, iv);
+                }
+                b.ins().jump(merge, &[val.into()]);
+                b.switch_to_block(next);
+                let ni = b.block_params(next)[0];
+                let n1 = b.ins().iadd_imm(ni, 1);
+                b.ins().jump(head, &[n1.into()]);
+                // SLOW: the helper (boxed map through the canonical kernel; hash-0 / untagged keys).
+                b.switch_to_block(slow_blk);
+                let mask = (ik.is_owned_handle() as i64) | ((mk.is_owned_handle() as i64) << 1);
+                let maskv = b.ins().iconst(types::I64, mask);
+                let call = b.ins().call(h.map_get, &[ctx, mv, iv, maskv]);
+                let sval = b.inst_results(call)[0];
+                let scode = b.inst_results(call)[1];
+                let bad = b.ins().icmp_imm(IntCC::NotEqual, scode, 0);
+                fault_if(&mut b, bad, 5);
+                b.ins().jump(merge, &[sval.into()]);
+                b.switch_to_block(merge);
+                let res = b.block_params(merge)[0];
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
             }
             Op::Index => {
                 let h = ub_ref("Index")?;
@@ -2944,6 +3357,9 @@ impl Compiled {
             builder.symbol("rt_u_concat", rt_u_concat as *const u8);
             builder.symbol("rt_u_str_len", rt_u_str_len as *const u8);
             builder.symbol("rt_u_free", rt_u_free as *const u8);
+            builder.symbol("rt_u_map_push_pair", rt_u_map_push_pair as *const u8);
+            builder.symbol("rt_u_map_seal", rt_u_map_seal as *const u8);
+            builder.symbol("rt_u_map_get", rt_u_map_get as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -2999,6 +3415,19 @@ impl Compiled {
                 Some(types::I64),
             );
             let sig_free = make_sig(&module, &[ptr, types::I64], None);
+            let sig5 = make_sig(
+                &module,
+                &[ptr, types::I64, types::I64, types::I64, types::I64],
+                Some(types::I64),
+            );
+            // Two-i64 return (value, code) — the same multi-return shape as the compiled
+            // functions' own signatures (see [`UbMapGetRet`] for the ABI note).
+            let mut sig_map_get = make_sig(
+                &module,
+                &[ptr, types::I64, types::I64, types::I64],
+                Some(types::I64),
+            );
+            sig_map_get.returns.push(AbiParam::new(types::I64));
             Some(UbHelperIds {
                 list_new: declare(&mut module, "rt_u_list_new", &sig2)?,
                 list_push: declare(&mut module, "rt_u_list_push", &sig4)?,
@@ -3007,6 +3436,9 @@ impl Compiled {
                 concat: declare(&mut module, "rt_u_concat", &sig4)?,
                 str_len: declare(&mut module, "rt_u_str_len", &sig3)?,
                 free: declare(&mut module, "rt_u_free", &sig_free)?,
+                map_push_pair: declare(&mut module, "rt_u_map_push_pair", &sig5)?,
+                map_seal: declare(&mut module, "rt_u_map_seal", &sig2)?,
+                map_get: declare(&mut module, "rt_u_map_get", &sig_map_get)?,
             })
         } else {
             None
