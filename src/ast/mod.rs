@@ -7,9 +7,11 @@ use crate::token::Span;
 
 // AST analyses live in sibling files (M-Decomp W3.3); re-exported so callers keep
 // using `crate::ast::{free_vars, class_implements, ...}` unchanged.
-mod classes;
+mod class_hierarchy;
+mod class_layout;
 mod walk;
-pub use classes::*;
+pub use class_hierarchy::*;
+pub use class_layout::*;
 pub use walk::*;
 
 /// Type annotations (e.g. `int`, `List<Shape>`, `T?`).
