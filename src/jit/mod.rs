@@ -856,6 +856,208 @@ enum Kind {
     Float,
     Bool,
     Unknown,
+    /// A string HANDLE (P-2a helper-op vertical): an `i64` index into the per-run [`UbCtx`] handle
+    /// table. Produced by a `Const(Str)` (a PINNED interned const — never freed), an `Index` into a
+    /// `StrList`, or a `Concat` — the latter two allocate a fresh temp entry. Ownership is tracked at
+    /// COMPILE time: an `Owned` operand is freed by the op that consumes it (or by `Pop`); a
+    /// `Borrowed` one (a const, or a `GetLocal` copy of a slot's handle) is left alone — the slot /
+    /// const table keeps it alive. Handle ops mutate ONLY the private per-run `UbCtx`, so the
+    /// side-effect-free eligibility invariant (see [`is_eligible`]) holds: a fault-redo on the VM
+    /// observes nothing.
+    Str(Own),
+    /// A `List<string>` handle (same table, same ownership discipline). Element kind is part of the
+    /// variant (v1 verticals cover string lists only — a `MakeList` of anything else is rejected), so
+    /// an `Index` result is provably `Str` without a type source.
+    StrList(Own),
+}
+
+/// Compile-time ownership of a handle operand — see [`Kind::Str`]. Part of `Kind`'s equality, so the
+/// leader-state consistency check also enforces ownership agreement across merge edges (a mismatch
+/// falls back to the VM, never double-frees).
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Own {
+    Owned,
+    Borrowed,
+}
+
+impl Kind {
+    /// Is this operand a handle into the per-run [`UbCtx`] table?
+    fn is_handle(self) -> bool {
+        matches!(self, Kind::Str(_) | Kind::StrList(_))
+    }
+    /// Is this operand an OWNED handle (must be freed by its consumer)?
+    fn is_owned_handle(self) -> bool {
+        matches!(self, Kind::Str(Own::Owned) | Kind::StrList(Own::Owned))
+    }
+}
+
+/// The kind a `GetLocal` pushes for a slot of kind `k`: a handle read is a BORROW (the slot keeps
+/// ownership — the copy's consumer must not free it); every other kind copies verbatim.
+fn borrowed_copy(k: Kind) -> Kind {
+    match k {
+        Kind::Str(_) => Kind::Str(Own::Borrowed),
+        Kind::StrList(_) => Kind::StrList(Own::Borrowed),
+        other => other,
+    }
+}
+
+/// Is native-registry entry `id` the `Core.String.length` native (the sole `CallNative` in the P-2a
+/// unboxed subset)? Matched by registry identity — the compiler emitted the id from the same
+/// registry, so this can never alias another native.
+fn unboxed_native_is_str_len(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.String" && nf.name == "length" && nf.pure)
+}
+
+// ===========================================================================================
+// P-2a handle space: the per-run side table + `rt_u_*` helper calls that let the UNBOXED codegen
+// run string/collection verticals (Concat / list Index / `String.length`) natively. Design:
+//  - handles are `i64` indices into `UbCtx::handles`; `[0, n_pinned)` are the graph's interned
+//    string consts (seeded per run from `Compiled::const_handles`, NEVER freed), the rest are
+//    temps recycled through a free-list, so a hot loop's steady-state allocates nothing new.
+//  - every helper is defensive (a bad handle returns `-1` = fault → code 5 "redo on VM"), and
+//    NOTHING observable escapes the private `UbCtx` — the fallback re-execution stays sound.
+//  - the happy paths reuse the SAME single-sourced kernels as the VM (`PhStr::concat`, the
+//    `Op::Index` clone semantics, byte `len`), so byte-identity is preserved by construction.
+// ===========================================================================================
+
+/// The per-run handle table for unboxed handle ops. Created by [`Compiled::run_unboxed`] iff the
+/// compiled graph uses handles; dropped when the run returns (all temps die with it — a fault path
+/// leaks nothing into the VM redo).
+struct UbCtx {
+    handles: Vec<Value>,
+    /// Recycled temp indices (all `>= n_pinned`).
+    free: Vec<usize>,
+    /// Table prefix holding the graph's interned consts — never freed, never recycled.
+    n_pinned: usize,
+}
+
+impl UbCtx {
+    fn alloc(&mut self, v: Value) -> i64 {
+        if let Some(i) = self.free.pop() {
+            self.handles[i] = v;
+            i as i64
+        } else {
+            self.handles.push(v);
+            (self.handles.len() - 1) as i64
+        }
+    }
+    fn release(&mut self, h: i64) {
+        let i = h as usize;
+        if h >= self.n_pinned as i64 && i < self.handles.len() {
+            self.handles[i] = Value::Unit;
+            self.free.push(i);
+        }
+    }
+}
+
+/// SAFETY (all `rt_u_*`): `ctx` is the `&mut UbCtx` the current `run_unboxed` call owns, passed as an
+/// opaque pointer; the compiled code is single-threaded within the call and never aliases it. Every
+/// helper is defensive on the impossible bad-handle case (validated stack discipline) — it returns
+/// `-1` (fault → redo on VM) rather than panicking across the `extern "C"` boundary.
+extern "C" fn rt_u_list_new(ctx: *mut UbCtx, cap: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    ctx.alloc(Value::List(std::rc::Rc::new(Vec::with_capacity(
+        cap.max(0) as usize,
+    ))))
+}
+
+/// Append the element at handle `elem` to the (uniquely-owned, still-building) list at `list`.
+/// `free_elem != 0` consumes the element handle (its `Value` moves into the list).
+extern "C" fn rt_u_list_push(ctx: *mut UbCtx, list: i64, elem: i64, free_elem: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let ev = match ctx.handles.get(elem as usize) {
+        Some(v) => v.clone(),
+        None => return -1,
+    };
+    match ctx.handles.get_mut(list as usize) {
+        Some(Value::List(xs)) => match std::rc::Rc::get_mut(xs) {
+            Some(v) => v.push(ev),
+            None => return -1,
+        },
+        _ => return -1,
+    }
+    if free_elem != 0 {
+        ctx.release(elem);
+    }
+    0
+}
+
+/// `list[idx]` with the VM's exact happy-path semantics (`usize` bounds + element CLONE — cheap for
+/// `PhStr`). Out-of-range (or any shape mismatch) returns `-1` → code 5, and the VM redo renders the
+/// canonical `"list index out of range"` fault. `free_list != 0` consumes the list handle.
+extern "C" fn rt_u_index(ctx: *mut UbCtx, list: i64, idx: i64, free_list: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let elem = match ctx.handles.get(list as usize) {
+        Some(Value::List(xs)) => match usize::try_from(idx).ok().filter(|i| *i < xs.len()) {
+            Some(i) => xs[i].clone(),
+            None => return -1,
+        },
+        _ => return -1,
+    };
+    if free_list != 0 {
+        ctx.release(list);
+    }
+    ctx.alloc(elem)
+}
+
+/// `a + b` (string concat) through the single-sourced [`crate::phstr::PhStr::concat`] kernel — the
+/// same bytes the VM's `Op::Concat` two-`Str` path produces. `free_mask` bit0/bit1 consume `a`/`b`.
+extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let joined = match (ctx.handles.get(a as usize), ctx.handles.get(b as usize)) {
+        (Some(Value::Str(x)), Some(Value::Str(y))) => crate::phstr::PhStr::concat(x, y),
+        _ => return -1,
+    };
+    if free_mask & 1 != 0 {
+        ctx.release(a);
+    }
+    if free_mask & 2 != 0 {
+        ctx.release(b);
+    }
+    ctx.alloc(Value::Str(joined))
+}
+
+/// `Core.String.length` — byte length (the same `s.len()` the native's `text_len` computes).
+/// `free != 0` consumes the handle. `-1` = defensive bad-handle fault.
+extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let n = match ctx.handles.get(h as usize) {
+        Some(Value::Str(s)) => s.len() as i64,
+        _ => return -1,
+    };
+    if free != 0 {
+        ctx.release(h);
+    }
+    n
+}
+
+/// Release an owned temp handle (a `Pop` of an owned handle, or an owned operand a fused consumer
+/// did not take). Pinned consts and out-of-range indices are no-ops.
+extern "C" fn rt_u_free(ctx: *mut UbCtx, h: i64) {
+    let ctx = unsafe { &mut *ctx };
+    ctx.release(h);
+}
+
+/// The declared import ids of the handle-op helpers (one per `JITModule`, when the graph uses
+/// handles); [`UbHelperRefs`] is the same set declared into one function body.
+struct UbHelperIds {
+    list_new: FuncId,
+    list_push: FuncId,
+    index: FuncId,
+    concat: FuncId,
+    str_len: FuncId,
+    free: FuncId,
+}
+
+struct UbHelperRefs {
+    list_new: FuncRef,
+    list_push: FuncRef,
+    index: FuncRef,
+    concat: FuncRef,
+    str_len: FuncRef,
+    free: FuncRef,
 }
 
 /// Provenance of an operand-stack entry for the provenance pre-pass ONLY (not codegen): `Param(slot)`
@@ -1156,13 +1358,75 @@ fn unboxed_analyze(
         loop {
             match &code[ip] {
                 Op::Const(idx) => {
-                    // Kind follows the const's type (Int vs Float) — MUST mirror build_body, which pushes
-                    // Float for a float const so a downstream `AddF`/`Return` types correctly.
+                    // Kind follows the const's type — MUST mirror build_body: Float for a float const,
+                    // a BORROWED (pinned, never freed) handle for a string const, Int otherwise.
                     let k = match program.functions[func_idx].chunk.consts.get(*idx) {
                         Some(Value::Float(_)) => Kind::Float,
+                        Some(Value::Str(_)) => Kind::Str(Own::Borrowed),
                         _ => Kind::Int,
                     };
                     kinds.push(k);
+                }
+                // P-2a handle verticals — mirror build_body's stack effects exactly (default-deny on
+                // any operand-kind mismatch: fall back to the VM, never mis-type a handle).
+                Op::MakeList(n) => {
+                    for _ in 0..*n {
+                        match kinds.pop() {
+                            Some(Kind::Str(_)) => {}
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed MakeList element kind {other:?}"
+                                )))
+                            }
+                        }
+                    }
+                    kinds.push(Kind::StrList(Own::Owned));
+                }
+                Op::Index => {
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Index subscript kind {other:?}"
+                            )))
+                        }
+                    }
+                    match kinds.pop() {
+                        Some(Kind::StrList(_)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Index receiver kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Str(Own::Owned));
+                }
+                Op::Concat(2) => {
+                    for _ in 0..2 {
+                        match kinds.pop() {
+                            Some(Kind::Str(_)) => {}
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed Concat operand kind {other:?}"
+                                )))
+                            }
+                        }
+                    }
+                    kinds.push(Kind::Str(Own::Owned));
+                }
+                Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => {
+                    match kinds.pop() {
+                        Some(Kind::Str(_)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed String.length operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
+                Op::Pop => {
+                    kinds.pop();
                 }
                 Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => {
                     kinds.pop();
@@ -1193,7 +1457,9 @@ fn unboxed_analyze(
                             "unboxed analyze: GetLocal slot {slot} underflow"
                         ))
                     })?;
-                    kinds.push(k);
+                    // A handle read is a BORROW: the slot keeps ownership; the copy on the stack is
+                    // never freed by its consumer (mirrors build_body's downgrade).
+                    kinds.push(borrowed_copy(k));
                 }
                 Op::SetLocal(slot) => {
                     let k = kinds.pop().ok_or_else(|| {
@@ -1205,11 +1471,24 @@ fn unboxed_analyze(
                             kinds.len()
                         )));
                     }
+                    // v1 default-deny: a handle write (or overwriting a slot that holds a handle)
+                    // needs free-the-old-value semantics + alias analysis — rejected, VM fallback.
+                    if k.is_handle() || kinds[*slot].is_handle() {
+                        return Err(JitError::Unsupported(
+                            "unboxed: SetLocal on a handle slot (deferred)".to_string(),
+                        ));
+                    }
                     kinds[*slot] = k;
                 }
                 Op::Call(callee) => {
                     for _ in 0..program.functions[*callee].arity {
-                        kinds.pop();
+                        // A handle arg would arrive at the callee as an untyped i64 param (proven-int
+                        // usage could then do arithmetic on a handle INDEX) — reject, VM fallback.
+                        if kinds.pop().is_some_and(Kind::is_handle) {
+                            return Err(JitError::Unsupported(
+                                "unboxed: handle argument to Call (deferred)".to_string(),
+                            ));
+                        }
                     }
                     kinds.push(Kind::Int);
                 }
@@ -1260,10 +1539,13 @@ fn unboxed_analyze(
 fn collect_functions_unboxed(
     program: &BytecodeProgram,
     entry_idx: usize,
-) -> Result<Vec<usize>, JitError> {
+) -> Result<(Vec<usize>, bool), JitError> {
     let mut order = Vec::new();
     let mut seen = vec![false; program.functions.len()];
     let mut work = vec![entry_idx];
+    // Does the graph use the P-2a handle space (string consts / MakeList / Index / Concat /
+    // `String.length`)? Drives the `UbCtx` setup + helper imports in `compile_unboxed`.
+    let mut uses_handles = false;
     while let Some(fi) = work.pop() {
         if seen[fi] {
             continue;
@@ -1289,8 +1571,13 @@ fn collect_functions_unboxed(
                 Op::Const(idx) => match func.chunk.consts.get(*idx) {
                     Some(Value::Int(_)) => {}
                     Some(Value::Float(_)) => has_float = true,
+                    Some(Value::Str(_)) => uses_handles = true,
                     other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
                 },
+                // P-2a handle verticals. Operand-KIND validation lives in `unboxed_analyze` /
+                // `build_body_unboxed` (this walk only gates the op set).
+                Op::MakeList(_) | Op::Index | Op::Concat(2) | Op::Pop => uses_handles = true,
+                Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 Op::AddI
                 | Op::SubI
                 | Op::MulI
@@ -1331,7 +1618,7 @@ fn collect_functions_unboxed(
         }
         order.push(fi);
     }
-    Ok(order)
+    Ok((order, uses_handles))
 }
 
 /// Emit UNBOXED native code for one int function (self- or cross-recursive) into `cl_ctx.func`
@@ -1348,6 +1635,7 @@ fn collect_functions_unboxed(
 /// VM models it. `unboxed_analyze` fixes the compile-time depth+kinds at each leader (and validates
 /// edge consistency); Cranelift + `seal_all_blocks` inserts the phis for merges and loop back-edges.
 /// Returns `Unsupported` for a non-`Int` `Return` operand or an inconsistent-stack leader.
+#[allow(clippy::too_many_arguments)]
 fn build_body_unboxed(
     module: &mut JITModule,
     cl_ctx: &mut cranelift::codegen::Context,
@@ -1356,6 +1644,8 @@ fn build_body_unboxed(
     func_ids: &[Option<FuncId>],
     proven: &[Option<Kind>],
     ret_kind_out: &mut Option<Kind>,
+    ub: Option<&UbHelperIds>,
+    const_handles: &std::collections::HashMap<(usize, usize), i64>,
 ) -> Result<(), JitError> {
     let func = &program.functions[func_idx];
     let code = &func.chunk.code;
@@ -1394,9 +1684,22 @@ fn build_body_unboxed(
     // `DivF` also branches to the fault-exit (a zero divisor → code 5), as do `DivI`/`RemI` (hardware
     // trap) and `Call` (depth guard + fault propagation) — every op that emits a `fault_if`/direct
     // `brif` to the shared exit must be counted here, or the block won't exist when it is needed.
+    // P-2a: `Index` (bounds), `Concat` and `String.length` (defensive bad-handle) also branch to the
+    // shared fault-exit (code 5, redo on VM).
     let needs_fault_exit = needs_sticky
         || code.iter().enumerate().any(|(ip, op)| {
-            reach[ip] && matches!(op, Op::DivI | Op::RemI | Op::DivF | Op::Call(_))
+            reach[ip]
+                && matches!(
+                    op,
+                    Op::DivI
+                        | Op::RemI
+                        | Op::DivF
+                        | Op::Call(_)
+                        | Op::Index
+                        | Op::Concat(_)
+                        | Op::CallNative(..)
+                        | Op::MakeList(_)
+                )
         });
 
     let mut fbctx = FunctionBuilderContext::new();
@@ -1410,16 +1713,35 @@ fn build_body_unboxed(
             fn_refs[i] = Some(module.declare_func_in_func(*fid, b.func));
         }
     }
+    // P-2a: the handle-op helper refs (declared into this body only when the graph uses handles).
+    let ub_refs = ub.map(|ids| UbHelperRefs {
+        list_new: module.declare_func_in_func(ids.list_new, b.func),
+        list_push: module.declare_func_in_func(ids.list_push, b.func),
+        index: module.declare_func_in_func(ids.index, b.func),
+        concat: module.declare_func_in_func(ids.concat, b.func),
+        str_len: module.declare_func_in_func(ids.str_len, b.func),
+        free: module.declare_func_in_func(ids.free, b.func),
+    });
+    let ub_ref = |what: &str| -> Result<&UbHelperRefs, JitError> {
+        ub_refs.as_ref().ok_or_else(|| {
+            JitError::Codegen(format!(
+                "unboxed: {what} reached codegen without handle helpers (collect drift)"
+            ))
+        })
+    };
 
-    // Entry block: `[depth, a0, a1, …]`. `depth` is the live frame count at the call site (the caller
-    // passes `depth + 1`; the top-level entry gets 1) — a `Call` checks `depth >= MAX_CALL_DEPTH`
-    // BEFORE recursing to reproduce the VM's `"stack overflow"` at the exact threshold.
+    // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
+    // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
+    // `depth` is the live frame count at the call site (the caller passes `depth + 1`; the top-level
+    // entry gets 1) — a `Call` checks `depth >= MAX_CALL_DEPTH` BEFORE recursing to reproduce the
+    // VM's `"stack overflow"` at the exact threshold.
     let entry = b.create_block();
     b.append_block_params_for_function_params(entry);
     b.switch_to_block(entry);
     let entry_params: Vec<ClValue> = b.block_params(entry).to_vec();
-    let depth = entry_params[0];
-    let args: Vec<ClValue> = entry_params[1..].to_vec();
+    let ctx = entry_params[0];
+    let depth = entry_params[1];
+    let args: Vec<ClValue> = entry_params[2..].to_vec();
     // Every stack cell is a Cranelift `Variable` (`vars[d]` = stack depth d), all DECLARED AND DEFINED
     // in the entry block — which dominates the whole body — so every `use_var`, including a loop-header
     // read reached via a back-edge, is dominated by a definition; Cranelift's SSA construction +
@@ -1559,8 +1881,141 @@ fn build_body_unboxed(
                     let fv = b.ins().f64const(*f);
                     ub_push(&mut b, &vars, &fvars, &mut kinds, fv, Kind::Float)?;
                 }
+                Some(Value::Str(_)) => {
+                    // P-2a: a string const is a PINNED handle (interned per graph, seeded into the
+                    // per-run `UbCtx` prefix) — the push is a plain `iconst` of its index, zero calls.
+                    let h = *const_handles.get(&(func_idx, *idx)).ok_or_else(|| {
+                        JitError::Codegen(format!(
+                            "unboxed: Str const {idx} in fn {func_idx} has no pinned handle"
+                        ))
+                    })?;
+                    let v = b.ins().iconst(types::I64, h);
+                    ub_push(
+                        &mut b,
+                        &vars,
+                        &fvars,
+                        &mut kinds,
+                        v,
+                        Kind::Str(Own::Borrowed),
+                    )?;
+                }
                 other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
             },
+            // ---- P-2a handle verticals (helper calls into the per-run UbCtx) --------------------
+            Op::MakeList(n) => {
+                let h = ub_ref("MakeList")?;
+                let d = kinds.len();
+                if *n > d {
+                    return Err(JitError::Codegen("unboxed MakeList underflow".to_string()));
+                }
+                // Validate every element kind BEFORE emitting (mirrors the analyze arm).
+                for k in &kinds[d - n..] {
+                    if !matches!(k, Kind::Str(_)) {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed MakeList element kind {k:?}"
+                        )));
+                    }
+                }
+                let capv = b.ins().iconst(types::I64, *n as i64);
+                let call = b.ins().call(h.list_new, &[ctx, capv]);
+                let list_h = b.inst_results(call)[0];
+                // Push elements bottom-up straight from their depth-indexed Variables (no pops —
+                // the kind stack is truncated once below). An OWNED element is consumed (moved).
+                for j in 0..*n {
+                    let depth_j = d - n + j;
+                    let ev = b.use_var(vars[depth_j]);
+                    let freev = b
+                        .ins()
+                        .iconst(types::I64, kinds[depth_j].is_owned_handle() as i64);
+                    let pc = b.ins().call(h.list_push, &[ctx, list_h, ev, freev]);
+                    let status = b.inst_results(pc)[0];
+                    let bad = b.ins().icmp_imm(IntCC::NotEqual, status, 0);
+                    fault_if(&mut b, bad, 5);
+                }
+                kinds.truncate(d - n);
+                ub_push(
+                    &mut b,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    list_h,
+                    Kind::StrList(Own::Owned),
+                )?;
+            }
+            Op::Index => {
+                let h = ub_ref("Index")?;
+                let (iv, ik) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (lv, lk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if ik != Kind::Int || !matches!(lk, Kind::StrList(_)) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed Index operand kinds ({lk:?}[{ik:?}])"
+                    )));
+                }
+                let freev = b.ins().iconst(types::I64, lk.is_owned_handle() as i64);
+                let call = b.ins().call(h.index, &[ctx, lv, iv, freev]);
+                let res = b.inst_results(call)[0];
+                // A negative handle = out-of-range (or defensive mismatch) → code 5, redo on VM,
+                // which renders the canonical "list index out of range" fault string.
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                fault_if(&mut b, bad, 5);
+                ub_push(
+                    &mut b,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    res,
+                    Kind::Str(Own::Owned),
+                )?;
+            }
+            Op::Concat(2) => {
+                let h = ub_ref("Concat")?;
+                let (bv, bk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if !matches!(ak, Kind::Str(_)) || !matches!(bk, Kind::Str(_)) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed Concat operand kinds ({ak:?}, {bk:?})"
+                    )));
+                }
+                let mask = (ak.is_owned_handle() as i64) | ((bk.is_owned_handle() as i64) << 1);
+                let maskv = b.ins().iconst(types::I64, mask);
+                let call = b.ins().call(h.concat, &[ctx, av, bv, maskv]);
+                let res = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                fault_if(&mut b, bad, 5);
+                ub_push(
+                    &mut b,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    res,
+                    Kind::Str(Own::Owned),
+                )?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => {
+                let h = ub_ref("String.length")?;
+                let (sv, sk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if !matches!(sk, Kind::Str(_)) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed String.length operand kind {sk:?}"
+                    )));
+                }
+                let freev = b.ins().iconst(types::I64, sk.is_owned_handle() as i64);
+                let call = b.ins().call(h.str_len, &[ctx, sv, freev]);
+                let res = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                fault_if(&mut b, bad, 5);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
+            }
+            Op::Pop => {
+                let (v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                // An owned handle dies unconsumed here (a statement-expression string, a loop-body
+                // temp) — release it so the free-list keeps the table at steady state. Scalars and
+                // borrows: dropping the SSA value is the whole discard.
+                if k.is_owned_handle() {
+                    let h = ub_ref("Pop(owned handle)")?;
+                    b.ins().call(h.free, &[ctx, v]);
+                }
+            }
             Op::AddI | Op::SubI | Op::MulI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
@@ -1672,10 +2127,12 @@ fn build_body_unboxed(
                 let known_nonfloat = |k: Kind| matches!(k, Kind::Int | Kind::Bool);
                 if ak == Kind::Float
                     || bk == Kind::Float
+                    || ak.is_handle()
+                    || bk.is_handle()
                     || !(known_nonfloat(ak) || known_nonfloat(bk))
                 {
                     return Err(JitError::Unsupported(format!(
-                        "unboxed: float/ambiguous comparison operands ({ak:?}, {bk:?}) — deferred"
+                        "unboxed: float/handle/ambiguous comparison operands ({ak:?}, {bk:?}) — deferred"
                     )));
                 }
                 let cc = match op {
@@ -1705,7 +2162,8 @@ fn build_body_unboxed(
                     ))
                 })?;
                 let v = b.use_var(var);
-                ub_push(&mut b, &vars, &fvars, &mut kinds, v, kind)?;
+                // A handle read is a BORROW (the slot keeps ownership) — mirrors the analyze arm.
+                ub_push(&mut b, &vars, &fvars, &mut kinds, v, borrowed_copy(kind))?;
             }
             Op::SetLocal(slot) => {
                 // Pop the top and store it into the frame-stack cell at `slot`, updating that cell's
@@ -1726,6 +2184,13 @@ fn build_body_unboxed(
                         kinds.len()
                     )));
                 }
+                // v1 default-deny (mirrors the analyze arm): a handle write needs free-the-old-value
+                // semantics + alias analysis — rejected, VM fallback.
+                if k.is_handle() || kinds[*slot].is_handle() {
+                    return Err(JitError::Unsupported(
+                        "unboxed: SetLocal on a handle slot (deferred)".to_string(),
+                    ));
+                }
                 b.def_var(var, v);
                 kinds[*slot] = k;
             }
@@ -1744,11 +2209,18 @@ fn build_body_unboxed(
                 let arity = program.functions[*callee].arity;
                 let mut cargs: Vec<ClValue> = Vec::with_capacity(arity);
                 for _ in 0..arity {
-                    let (v, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                    let (v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                    // A handle arg would arrive as an untyped i64 param (mirrors the analyze arm).
+                    if k.is_handle() {
+                        return Err(JitError::Unsupported(
+                            "unboxed: handle argument to Call (deferred)".to_string(),
+                        ));
+                    }
                     cargs.push(v);
                 }
                 cargs.reverse();
-                let mut call_args: Vec<ClValue> = Vec::with_capacity(arity + 1);
+                let mut call_args: Vec<ClValue> = Vec::with_capacity(arity + 2);
+                call_args.push(ctx);
                 call_args.push(d1);
                 call_args.extend(cargs);
                 let call = b.ins().call(callee_ref, &call_args);
@@ -1905,6 +2377,12 @@ pub struct Compiled {
     /// ABI, so this is the sole signal telling `run_unboxed` how to decode. Ignored for the boxed ABI
     /// (which decodes via the boxed `Value` stack). Always `Int`/`Float` for unboxed (asserted at build).
     ret_kind: Kind,
+    /// P-2a (unboxed ABI only): does the graph use handle ops? When true, `run_unboxed` builds a
+    /// per-run [`UbCtx`] seeded from `const_handles` and passes its pointer; when false it passes null
+    /// (nothing dereferences it).
+    uses_handles: bool,
+    /// The graph's interned string consts, in pinned-handle order (`UbCtx.handles[0..n]` per run).
+    const_handles: Vec<Value>,
 }
 
 impl Compiled {
@@ -1997,6 +2475,8 @@ impl Compiled {
             unboxed: false,
             arity: 0,
             ret_kind: Kind::Int, // unused by the boxed `run()` (decodes via the boxed Value stack)
+            uses_handles: false,
+            const_handles: Vec::new(),
         })
     }
 
@@ -2013,24 +2493,101 @@ impl Compiled {
         entry_idx: usize,
     ) -> Result<Compiled, JitError> {
         // Transitive op-subset eligibility + the set of functions to compile (reachable-only).
-        let order = collect_functions_unboxed(program, entry_idx)?;
+        let (order, uses_handles) = collect_functions_unboxed(program, entry_idx)?;
 
-        let builder = JITBuilder::new(default_libcall_names())
-            .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
+        // `opt_level=speed` (P-2a): the default `none` leaves the register shuffles around the
+        // handle-op helper calls and the loop-carried Variable phis unoptimized; `speed` is a pure
+        // semantics-preserving Cranelift pass (byte-identity untouched — the same kernels run, in
+        // the same order; the fault/sticky control flow is explicit IR, not droppable side effects).
+        let mut builder =
+            JITBuilder::with_flags(&[("opt_level", "speed")], default_libcall_names())
+                .map_err(|e| JitError::Codegen(format!("JITBuilder: {e}")))?;
+        if uses_handles {
+            builder.symbol("rt_u_list_new", rt_u_list_new as *const u8);
+            builder.symbol("rt_u_list_push", rt_u_list_push as *const u8);
+            builder.symbol("rt_u_index", rt_u_index as *const u8);
+            builder.symbol("rt_u_concat", rt_u_concat as *const u8);
+            builder.symbol("rt_u_str_len", rt_u_str_len as *const u8);
+            builder.symbol("rt_u_free", rt_u_free as *const u8);
+        }
         let mut module = JITModule::new(builder);
+        let ptr = module.target_config().pointer_type();
 
-        // Declare a FuncId per function: `extern "C" fn(depth: i64, a0..a_arity: i64) -> (i64, i64)`.
+        // P-2a: intern the graph's string consts into one pinned table (dedup by content — the P-1a
+        // chunk consts are already `PhStr::literal` values, so a clone shares the Rc + cached hash).
+        // `const_map[(fi, const_idx)] -> pinned handle` feeds the `Const(Str)` codegen `iconst`.
+        let mut const_handles: Vec<Value> = Vec::new();
+        let mut const_map: std::collections::HashMap<(usize, usize), i64> =
+            std::collections::HashMap::new();
+        if uses_handles {
+            let mut by_content: std::collections::HashMap<String, i64> =
+                std::collections::HashMap::new();
+            for &fi in &order {
+                let func = &program.functions[fi];
+                let reach = reachable(&func.chunk.code);
+                for (ip, op) in func.chunk.code.iter().enumerate() {
+                    if !reach[ip] {
+                        continue;
+                    }
+                    if let Op::Const(idx) = op {
+                        if let Some(Value::Str(s)) = func.chunk.consts.get(*idx) {
+                            let h =
+                                *by_content.entry(s.as_str().to_string()).or_insert_with(|| {
+                                    const_handles.push(Value::Str(s.clone()));
+                                    (const_handles.len() - 1) as i64
+                                });
+                            const_map.insert((fi, *idx), h);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Declare the handle-op helper imports (only when used).
+        let ub_ids = if uses_handles {
+            let declare = |m: &mut JITModule, name: &str, sig: &Signature| {
+                m.declare_function(name, Linkage::Import, sig)
+                    .map_err(|e| JitError::Codegen(format!("declare {name}: {e}")))
+            };
+            let sig2 = make_sig(&module, &[ptr, types::I64], Some(types::I64));
+            let sig3 = make_sig(&module, &[ptr, types::I64, types::I64], Some(types::I64));
+            let sig4 = make_sig(
+                &module,
+                &[ptr, types::I64, types::I64, types::I64],
+                Some(types::I64),
+            );
+            let sig_free = make_sig(&module, &[ptr, types::I64], None);
+            Some(UbHelperIds {
+                list_new: declare(&mut module, "rt_u_list_new", &sig2)?,
+                list_push: declare(&mut module, "rt_u_list_push", &sig4)?,
+                index: declare(&mut module, "rt_u_index", &sig4)?,
+                concat: declare(&mut module, "rt_u_concat", &sig4)?,
+                str_len: declare(&mut module, "rt_u_str_len", &sig3)?,
+                free: declare(&mut module, "rt_u_free", &sig_free)?,
+            })
+        } else {
+            None
+        };
+
+        // Declare a FuncId per function:
+        // `extern "C" fn(ctx: *mut UbCtx, depth: i64, a0..a_arity: i64) -> (i64, i64)` — `ctx` is the
+        // per-run handle table (null for a pure-numeric graph; only handle ops dereference it).
         // Per-function arity, so each has its own signature (declared BEFORE any body so calls — self
         // or cross — resolve at finalize).
-        let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
-        for &fi in &order {
+        let make_fn_sig = |module: &JITModule, arity: usize| {
             let mut sig = module.make_signature();
+            sig.params.push(AbiParam::new(ptr)); // ctx
             sig.params.push(AbiParam::new(types::I64)); // depth
-            for _ in 0..program.functions[fi].arity {
+            for _ in 0..arity {
                 sig.params.push(AbiParam::new(types::I64));
             }
             sig.returns.push(AbiParam::new(types::I64)); // value
             sig.returns.push(AbiParam::new(types::I64)); // fault code (0 = ok)
+            sig
+        };
+        let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
+        for &fi in &order {
+            let sig = make_fn_sig(&module, program.functions[fi].arity);
             let id = module
                 .declare_function(&format!("phorj_unboxed_fn_{fi}"), Linkage::Export, &sig)
                 .map_err(|e| JitError::Codegen(format!("declare unboxed fn {fi}: {e}")))?;
@@ -2045,14 +2602,7 @@ impl Compiled {
             let proven = unboxed_proven_param_kinds(&program.functions[fi]);
             let mut ret_kind: Option<Kind> = None;
             let mut cl_ctx = module.make_context();
-            let mut sig = module.make_signature();
-            sig.params.push(AbiParam::new(types::I64));
-            for _ in 0..program.functions[fi].arity {
-                sig.params.push(AbiParam::new(types::I64));
-            }
-            sig.returns.push(AbiParam::new(types::I64));
-            sig.returns.push(AbiParam::new(types::I64));
-            cl_ctx.func.signature = sig;
+            cl_ctx.func.signature = make_fn_sig(&module, program.functions[fi].arity);
             build_body_unboxed(
                 &mut module,
                 &mut cl_ctx,
@@ -2061,6 +2611,8 @@ impl Compiled {
                 &func_ids,
                 &proven,
                 &mut ret_kind,
+                ub_ids.as_ref(),
+                &const_map,
             )?;
             module
                 .define_function(func_ids[fi].expect("declared above"), &mut cl_ctx)
@@ -2084,6 +2636,8 @@ impl Compiled {
             // Every eligible function has ≥1 reachable Return (else no value is produced), so the entry's
             // kind is always set; default to Int defensively.
             ret_kind: entry_ret_kind.unwrap_or(Kind::Int),
+            uses_handles,
+            const_handles,
         })
     }
 
@@ -2168,29 +2722,46 @@ impl Compiled {
             })
             .collect();
         let d0: i64 = start_depth as i64; // live-frames-including-this-entry (see doc above)
-                                          // SAFETY: `self.entry` is finalized machine code with signature
-                                          // `extern "C" fn(i64 depth, i64… /* arity */) -> (i64, i64)`; we transmute to the arity-specific
-                                          // type and pass depth + exactly `arity` i64 args. `self.module` owns the code, alive across the
-                                          // call.
+
+        // P-2a: the per-run handle table — built iff the graph uses handle ops (its pinned prefix is
+        // the interned string consts); a pure-numeric graph gets a null pointer nothing dereferences.
+        // Dropped when this call returns, so a fault path leaks nothing into the VM redo.
+        let mut ub_ctx_storage;
+        let ub_ctx: *mut UbCtx = if self.uses_handles {
+            ub_ctx_storage = UbCtx {
+                n_pinned: self.const_handles.len(),
+                handles: self.const_handles.clone(),
+                free: Vec::new(),
+            };
+            &mut ub_ctx_storage
+        } else {
+            std::ptr::null_mut()
+        };
+        // SAFETY: `self.entry` is finalized machine code with signature
+        // `extern "C" fn(*mut UbCtx, i64 depth, i64… /* arity */) -> (i64, i64)`; we transmute to the
+        // arity-specific type and pass ctx + depth + exactly `arity` i64 args. `self.module` owns the
+        // code, alive across the call; `ub_ctx` (when non-null) outlives the call.
         let ret: UnboxedRet = unsafe {
             match self.arity {
                 0 => {
-                    let f: extern "C" fn(i64) -> UnboxedRet = std::mem::transmute(self.entry);
-                    f(d0)
+                    let f: extern "C" fn(*mut UbCtx, i64) -> UnboxedRet =
+                        std::mem::transmute(self.entry);
+                    f(ub_ctx, d0)
                 }
                 1 => {
-                    let f: extern "C" fn(i64, i64) -> UnboxedRet = std::mem::transmute(self.entry);
-                    f(d0, ia[0])
+                    let f: extern "C" fn(*mut UbCtx, i64, i64) -> UnboxedRet =
+                        std::mem::transmute(self.entry);
+                    f(ub_ctx, d0, ia[0])
                 }
                 2 => {
-                    let f: extern "C" fn(i64, i64, i64) -> UnboxedRet =
+                    let f: extern "C" fn(*mut UbCtx, i64, i64, i64) -> UnboxedRet =
                         std::mem::transmute(self.entry);
-                    f(d0, ia[0], ia[1])
+                    f(ub_ctx, d0, ia[0], ia[1])
                 }
                 3 => {
-                    let f: extern "C" fn(i64, i64, i64, i64) -> UnboxedRet =
+                    let f: extern "C" fn(*mut UbCtx, i64, i64, i64, i64) -> UnboxedRet =
                         std::mem::transmute(self.entry);
-                    f(d0, ia[0], ia[1], ia[2])
+                    f(ub_ctx, d0, ia[0], ia[1], ia[2])
                 }
                 other => {
                     return JitRun::Fault(format!("jit: unboxed arity {other} unsupported"));

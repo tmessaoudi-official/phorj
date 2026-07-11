@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — P-2a: JIT handle-space string vertical (spike; measured, FLAGGED vs php+JIT)
+
+The unboxed JIT gains a **handle space**: `Kind::Str`/`Kind::StrList` operands are `i64` indices
+into a per-run `UbCtx` table (pinned interned consts + free-list-recycled temps, so a hot loop's
+steady state allocates nothing), with compile-time ownership (Owned/Borrowed — part of the leader
+consistency check, so a merge-edge mismatch falls back to the VM rather than double-freeing).
+New default-deny verticals: `Const(Str)` (a pinned-handle `iconst`, zero calls), `MakeList` of
+strings, list `Index` (VM-exact bounds; out-of-range → code 5 → the VM redo renders the canonical
+fault), `Concat(2)` through the single-sourced `PhStr::concat` kernel, `Core.String.length`, and
+`Pop`. The unboxed ABI gains a leading `ctx` pointer (null for pure-numeric graphs); the unboxed
+module now compiles at `opt_level=speed`. `stringconcat.bench()` is JIT-eligible — proven `hits>0`
+plus long/multibyte and fault-path oracle tests. Handle ops mutate only the private per-run table,
+preserving the side-effect-free fault-redo invariant.
+
+**Measured (gate-2, interleaved, fresh docker php:8.5-cli+JIT):** real `phg run` stringconcat
+self-timed 948M (pre-P-1a) → ~130M ns (≈7×), but php sits at ~34M — **LOSS 0.28×, flagged**.
+Verdict recorded in MASTER-PLAN Ω-8: helper-call granularity (~5 calls/iter) has a ~25-30ns/iter
+floor vs php's ~17; the WIN requires inlining the SSO concat fast path in Cranelift IR
+(P-2a-inline). P-2b/P-2c stay gated until that WIN, per the 2026-07-11 ruling.
+
 ### Changed — P-1a: `PhStr` string value representation (SSO + cached hash; perf build, front of Fable run)
 
 `Value::Str` (and `HKey::Str`) moved from `String` to the new `crate::phstr::PhStr` — a 24-byte

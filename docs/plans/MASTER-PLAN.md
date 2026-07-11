@@ -222,7 +222,19 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   order for UTF-8); `String.length` byte semantics + fault strings unchanged (byte-identity).
   **P-1b** `OrderedMap`: entries-vec (insertion order preserved = byte-identity) + open-addressing index
   over cached hashes; `build_map`/`map_index` kernels keep single-sourcing.
-  **P-2a** JIT vertical spike (audited-unsafe stays confined to `src/jit/`): handle space + helper calls
+  **P-2a ⚑ SPIKE SHIPPED (2026-07-11) — measured, FLAGGED LOSS; verdict recorded.** Handle space +
+  helper calls (Concat / list-Index / `String.length`) shipped green: `stringconcat.bench()` is
+  JIT-eligible (hits>0 proven), byte-identity holds (1928 tests, PHP oracle; index-fault redoes on
+  the VM with the canonical string), and the real `phg run` micro dropped 948M → ~130M ns
+  self-timed (≈7× over the pre-P-1a VM). Interleaved vs fresh docker php:8.5-cli+JIT: phg 121M vs
+  php 34M — **LOSS 0.28×**. `opt_level=speed` (also shipped) is noise-level — the cost is HELPER-CALL
+  GRANULARITY (~5 calls/iter ≈ 50-60ns vs php's ~17ns/iter): even fused to 3 calls/iter the
+  call+bookkeeping floor (~25-30ns) stays ~2× short. **Spike conclusion: the WIN needs the SSO
+  fast path INLINE in Cranelift IR** — exactly what the pure-Rust ceiling measured (1.74×) — i.e. a
+  `#[repr(C)]` fixed-layout string slot in the handle table + inline len-check/copy for the
+  ≤22-byte path, helper call only on the heap path. That is the next slice (**P-2a-inline**);
+  per the ruling, **P-2b/P-2c stay gated until the WIN**.
+  *(original spike spec follows)* handle space + helper calls
   for Concat / list-index / `String.length` native → `stringconcat.bench()` JIT-eligible → measure REAL
   `phg run` vs fresh docker php interleaved; WIN required to proceed. **P-2b** mapget vertical (map_get
   helper, unboxed int result). **P-2c** default-deny rollout to the remaining string/collection ops.

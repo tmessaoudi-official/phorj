@@ -1571,6 +1571,108 @@ fn phg_run_hook_hits_the_jit_on_an_int_loop() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_string_vertical() {
+    // P-2a handle-space DELIVERY-PATH proof: the exact `bench/micro/stringconcat.phg` shape —
+    // string consts, `MakeList`, varying `Index`, `Concat`, `String.length`, `Pop` — must JIT
+    // through the `Op::Call` hook AND stay byte-identical to the interpreter oracle. 1000
+    // iterations also exercise the `UbCtx` free-list steady state (temps are recycled, not grown).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"alpha\", \"beta\", \"gamma\", \"delta\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string s = parts[i % 4] + parts[(i + 1) % 4];\n\
+            acc = acc + String.length(s);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "string-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual string-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the string vertical must actually hit the JIT — else the P-2a flip is unproven"
+    );
+}
+
+#[test]
+fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
+    // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
+    // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"héllo-wörld-Ω\", \"a-deliberately-long-segment-over-22-bytes\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string s = parts[i % 2] + parts[(i + 1) % 2];\n\
+            acc = acc + String.length(s);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "long/multibyte concat must match the oracle"
+    );
+}
+
+#[test]
+fn jit_string_vertical_index_fault_matches_the_vm() {
+    // An out-of-range `Index` inside the JIT'd vertical returns the fault sentinel → code 5 → the
+    // hook falls back to the VM, which renders the canonical fault. The jit-wired run must fail with
+    // the SAME fault body as the interpreter (byte-identical failure behaviour, Invariant 1).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"alpha\", \"beta\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string s = parts[i] + parts[0];\n\
+            acc = acc + String.length(s);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(5)}\"); }";
+    let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
+    let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
+    assert!(
+        jit_err.contains("list index out of range"),
+        "jit-wired fault must be the canonical bounds fault, got: {jit_err}"
+    );
+    assert!(
+        oracle_err.contains("list index out of range"),
+        "oracle fault must be the canonical bounds fault, got: {oracle_err}"
+    );
+}
+
+#[test]
 fn jit_stack_overflow_threshold_matches_the_oracle() {
     // The ONE correctness vector the fault-fallback cannot catch: an under-fault (wrong
     // `start_depth`) makes the JIT RETURN A VALUE where the VM overflows — no fault, so no re-run.
