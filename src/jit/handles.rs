@@ -311,6 +311,33 @@ pub(super) extern "C" fn rt_u_list_push(
 /// defensive mismatch.
 pub(super) extern "C" fn rt_u_list_seal(ctx: *mut UbCtx, list: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
+    // P-2c: an all-INT list flattens too — each element's raw `i64` in its slot's bytes 0..8
+    // (the flat-map VALUE-slot layout); `Index` on a `Kind::IntList` then reads it inline. The
+    // handle encoding is the same `FLAT` shape; the compile-time `Kind` picks the read path.
+    let ints: Option<Vec<i64>> = match ctx.handles.get(list as usize) {
+        Some(Value::List(xs)) if !xs.is_empty() => xs
+            .iter()
+            .map(|v| match v {
+                Value::Int(n) => Some(*n),
+                _ => None,
+            })
+            .collect(),
+        _ => None,
+    };
+    if let Some(vals) = ints {
+        let n = vals.len() as i64;
+        if n >= 1 << 20 || ctx.bump + n as u64 > ctx.cap {
+            return list;
+        }
+        let base = ctx.bump as i64;
+        for v in &vals {
+            let off = ctx.bump as usize * UB_SLOT_SIZE;
+            ctx.buf_storage[off..off + 8].copy_from_slice(&v.to_le_bytes());
+            ctx.bump += 1;
+        }
+        ctx.release(list);
+        return UB_TAG_FLAT | (n << 40) | base;
+    }
     let flat: Option<Vec<&[u8]>> = match ctx.handles.get(list as usize) {
         Some(Value::List(xs)) => xs
             .iter()
@@ -656,6 +683,65 @@ pub(super) extern "C" fn rt_u_map_get(
     UbMapGetRet { value, code: 0 }
 }
 
+/// Append a raw `i64` element to a still-building (untagged, uniquely-owned) list — the
+/// `Kind::IntList` twin of [`rt_u_list_push`]. `-1` = defensive bad-handle fault.
+pub(super) extern "C" fn rt_u_list_push_int(ctx: *mut UbCtx, list: i64, val: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    match ctx.handles.get_mut(list as usize) {
+        Some(Value::List(xs)) => match std::rc::Rc::get_mut(xs) {
+            Some(v) => v.push(Value::Int(val)),
+            None => return -1,
+        },
+        _ => return -1,
+    }
+    0
+}
+
+/// `xs[idx]` on an INT list — the helper (slow) path for untagged (boxed) lists; a flat int list
+/// indexes inline. Two-`i64` return like [`rt_u_map_get`] (an int result spans the full range, so
+/// no in-band fault sentinel): `code` 0 = ok, 5 = redo on VM (out-of-range → the canonical
+/// `"list index out of range"`, or a defensive mismatch). `free != 0` consumes the list handle.
+pub(super) extern "C" fn rt_u_index_int(
+    ctx: *mut UbCtx,
+    list: i64,
+    idx: i64,
+    free: i64,
+) -> UbMapGetRet {
+    let ctx = unsafe { &mut *ctx };
+    let miss = UbMapGetRet { value: 0, code: 5 };
+    if list & (UB_TAG_SLOT | UB_TAG_FLAT) != 0 {
+        // Defensive mirror of the inline path (a flat INT list: value at slot bytes 0..8).
+        if list & UB_TAG_FLAT != 0 && list & UB_TAG_SLOT == 0 {
+            let n = (list >> 40) & 0xFFFFF;
+            let base = (list & UB_IDX_MASK) as usize;
+            if (0..n).contains(&idx) {
+                let off = (base + idx as usize) * UB_SLOT_SIZE;
+                let mut vb = [0u8; 8];
+                vb.copy_from_slice(&ctx.buf_storage[off..off + 8]);
+                return UbMapGetRet {
+                    value: i64::from_le_bytes(vb),
+                    code: 0,
+                };
+            }
+        }
+        return miss;
+    }
+    let value = match ctx.handles.get(list as usize) {
+        Some(Value::List(xs)) => match usize::try_from(idx).ok().filter(|i| *i < xs.len()) {
+            Some(i) => match xs[i] {
+                Value::Int(v) => v,
+                _ => return miss, // analyzer-unreachable (kind-proven int list)
+            },
+            None => return miss, // OOB → canonical fault on the VM redo
+        },
+        _ => return miss,
+    };
+    if free != 0 {
+        ctx.release(list);
+    }
+    UbMapGetRet { value, code: 0 }
+}
+
 /// Release an owned handle (any encoding — see [`UbCtx::release`]).
 pub(super) extern "C" fn rt_u_free(ctx: *mut UbCtx, h: i64) {
     let ctx = unsafe { &mut *ctx };
@@ -675,6 +761,8 @@ pub(super) struct UbHelperIds {
     pub(super) map_push_pair: FuncId,
     pub(super) map_seal: FuncId,
     pub(super) map_get: FuncId,
+    pub(super) list_push_int: FuncId,
+    pub(super) index_int: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -688,4 +776,6 @@ pub(super) struct UbHelperRefs {
     pub(super) map_push_pair: FuncRef,
     pub(super) map_seal: FuncRef,
     pub(super) map_get: FuncRef,
+    pub(super) list_push_int: FuncRef,
+    pub(super) index_int: FuncRef,
 }

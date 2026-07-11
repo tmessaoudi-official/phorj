@@ -48,6 +48,10 @@ pub(super) enum Kind {
     /// all-short-key maps seal FLAT (`UB_TAG_FLAT_MAP` — inline hash-probe lookup), the rest stay
     /// boxed `Value::Map` (helper lookup through the canonical `map_index` kernel).
     StrIntMap(Own),
+    /// A `List<int>` handle (P-2c rollout): flat all-int lists store the raw `i64` in each slot's
+    /// bytes 0..8 (the flat-map VALUE-slot layout), so `Index` is an inline bounds check + one
+    /// load; boxed fallbacks go through the two-return `rt_u_index_int` helper.
+    IntList(Own),
 }
 
 /// Compile-time ownership of a handle operand — see [`Kind::Str`]. Part of `Kind`'s equality, so the
@@ -62,13 +66,19 @@ pub(super) enum Own {
 impl Kind {
     /// Is this operand a handle into the per-run [`UbCtx`] table?
     pub(super) fn is_handle(self) -> bool {
-        matches!(self, Kind::Str(_) | Kind::StrList(_) | Kind::StrIntMap(_))
+        matches!(
+            self,
+            Kind::Str(_) | Kind::StrList(_) | Kind::StrIntMap(_) | Kind::IntList(_)
+        )
     }
     /// Is this operand an OWNED handle (must be freed by its consumer)?
     pub(super) fn is_owned_handle(self) -> bool {
         matches!(
             self,
-            Kind::Str(Own::Owned) | Kind::StrList(Own::Owned) | Kind::StrIntMap(Own::Owned)
+            Kind::Str(Own::Owned)
+                | Kind::StrList(Own::Owned)
+                | Kind::StrIntMap(Own::Owned)
+                | Kind::IntList(Own::Owned)
         )
     }
 }
@@ -79,6 +89,7 @@ pub(super) fn borrowed_copy(k: Kind) -> Kind {
     match k {
         Kind::Str(_) => Kind::Str(Own::Borrowed),
         Kind::StrList(_) => Kind::StrList(Own::Borrowed),
+        Kind::IntList(_) => Kind::IntList(Own::Borrowed),
         Kind::StrIntMap(_) => Kind::StrIntMap(Own::Borrowed),
         other => other,
     }
@@ -507,17 +518,26 @@ pub(super) fn unboxed_analyze(
                 // P-2a handle verticals — mirror build_body's stack effects exactly (default-deny on
                 // any operand-kind mismatch: fall back to the VM, never mis-type a handle).
                 Op::MakeList(n) => {
-                    for _ in 0..*n {
-                        match kinds.pop() {
-                            Some(Kind::Str(_)) => {}
-                            other => {
-                                return Err(JitError::Unsupported(format!(
-                                    "unboxed MakeList element kind {other:?}"
-                                )))
-                            }
-                        }
+                    // Element kinds select the list flavor: all-`Str` → `StrList`, all-`Int` →
+                    // `IntList` (P-2c); anything else (mixed, floats, nested) is default-denied.
+                    let d = kinds.len();
+                    if *n > d {
+                        return Err(JitError::Codegen("unboxed MakeList underflow".to_string()));
                     }
-                    kinds.push(Kind::StrList(Own::Owned));
+                    let all_str = kinds[d - n..].iter().all(|k| matches!(k, Kind::Str(_)));
+                    let all_int = *n > 0 && kinds[d - n..].iter().all(|k| *k == Kind::Int);
+                    if !(all_str || all_int) {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed MakeList element kinds {:?}",
+                            &kinds[d - n..]
+                        )));
+                    }
+                    kinds.truncate(d - n);
+                    kinds.push(if all_int {
+                        Kind::IntList(Own::Owned)
+                    } else {
+                        Kind::StrList(Own::Owned)
+                    });
                 }
                 Op::MakeMap(n) => {
                     // The 2n operands are k1,v1,…,kn,vn (vn on top): pop value (Int) then key (Str),
@@ -543,20 +563,19 @@ pub(super) fn unboxed_analyze(
                     kinds.push(Kind::StrIntMap(Own::Owned));
                 }
                 Op::Index => {
-                    // The subscript kind selects the flavor: `Int` → string-list element (`Str`),
-                    // `Str` → string-keyed map value (`Int`). Mirrors build_body's dispatch exactly.
+                    // The subscript kind selects the flavor: `Int` → list element (`Str` from a
+                    // `StrList`, `Int` from an `IntList`), `Str` → string-keyed map value (`Int`).
+                    // Mirrors build_body's dispatch exactly.
                     match kinds.pop() {
-                        Some(Kind::Int) => {
-                            match kinds.pop() {
-                                Some(Kind::StrList(_)) => {}
-                                other => {
-                                    return Err(JitError::Unsupported(format!(
-                                        "unboxed Index receiver kind {other:?}"
-                                    )))
-                                }
+                        Some(Kind::Int) => match kinds.pop() {
+                            Some(Kind::StrList(_)) => kinds.push(Kind::Str(Own::Owned)),
+                            Some(Kind::IntList(_)) => kinds.push(Kind::Int),
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed Index receiver kind {other:?}"
+                                )))
                             }
-                            kinds.push(Kind::Str(Own::Owned));
-                        }
+                        },
                         Some(Kind::Str(_)) => {
                             match kinds.pop() {
                                 Some(Kind::StrIntMap(_)) => {}

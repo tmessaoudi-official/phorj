@@ -108,6 +108,8 @@ pub(super) fn build_body_unboxed(
         map_push_pair: module.declare_func_in_func(ids.map_push_pair, b.func),
         map_seal: module.declare_func_in_func(ids.map_seal, b.func),
         map_get: module.declare_func_in_func(ids.map_get, b.func),
+        list_push_int: module.declare_func_in_func(ids.list_push_int, b.func),
+        index_int: module.declare_func_in_func(ids.index_int, b.func),
     });
     let ub_ref = |what: &str| -> Result<&UbHelperRefs, JitError> {
         ub_refs.as_ref().ok_or_else(|| {
@@ -328,13 +330,15 @@ pub(super) fn build_body_unboxed(
                 if *n > d {
                     return Err(JitError::Codegen("unboxed MakeList underflow".to_string()));
                 }
-                // Validate every element kind BEFORE emitting (mirrors the analyze arm).
-                for k in &kinds[d - n..] {
-                    if !matches!(k, Kind::Str(_)) {
-                        return Err(JitError::Unsupported(format!(
-                            "unboxed MakeList element kind {k:?}"
-                        )));
-                    }
+                // Element kinds select the flavor (mirrors the analyze arm): all-`Str` →
+                // `StrList` (handle pushes), all-`Int` → `IntList` (raw i64 pushes, P-2c).
+                let all_str = kinds[d - n..].iter().all(|k| matches!(k, Kind::Str(_)));
+                let all_int = *n > 0 && kinds[d - n..].iter().all(|k| *k == Kind::Int);
+                if !(all_str || all_int) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed MakeList element kinds {:?}",
+                        &kinds[d - n..]
+                    )));
                 }
                 let capv = b.ins().iconst(types::I64, *n as i64);
                 let call = b.ins().call(h.list_new, &[ctx, capv]);
@@ -344,15 +348,19 @@ pub(super) fn build_body_unboxed(
                 for j in 0..*n {
                     let depth_j = d - n + j;
                     let ev = b.use_var(vars[depth_j]);
-                    let freev = b
-                        .ins()
-                        .iconst(types::I64, kinds[depth_j].is_owned_handle() as i64);
-                    let pc = b.ins().call(h.list_push, &[ctx, list_h, ev, freev]);
+                    let pc = if all_int {
+                        b.ins().call(h.list_push_int, &[ctx, list_h, ev])
+                    } else {
+                        let freev = b
+                            .ins()
+                            .iconst(types::I64, kinds[depth_j].is_owned_handle() as i64);
+                        b.ins().call(h.list_push, &[ctx, list_h, ev, freev])
+                    };
                     let status = b.inst_results(pc)[0];
                     let bad = b.ins().icmp_imm(IntCC::NotEqual, status, 0);
                     fault_if(&mut b, bad, 5);
                 }
-                // Seal: a list of all-short strings flattens into consecutive arena slots (a FLAT
+                // Seal: all-short strings / all ints flatten into consecutive arena slots (a FLAT
                 // handle) so `Index` runs fully inline; anything else keeps the boxed handle.
                 let sc = b.ins().call(h.list_seal, &[ctx, list_h]);
                 let sealed = b.inst_results(sc)[0];
@@ -365,7 +373,11 @@ pub(super) fn build_body_unboxed(
                     &fvars,
                     &mut kinds,
                     sealed,
-                    Kind::StrList(Own::Owned),
+                    if all_int {
+                        Kind::IntList(Own::Owned)
+                    } else {
+                        Kind::StrList(Own::Owned)
+                    },
                 )?;
             }
             Op::MakeMap(n) => {
@@ -521,6 +533,54 @@ pub(super) fn build_body_unboxed(
                 let mask = (ik.is_owned_handle() as i64) | ((mk.is_owned_handle() as i64) << 1);
                 let maskv = b.ins().iconst(types::I64, mask);
                 let call = b.ins().call(h.map_get, &[ctx, mv, iv, maskv]);
+                let sval = b.inst_results(call)[0];
+                let scode = b.inst_results(call)[1];
+                let bad = b.ins().icmp_imm(IntCC::NotEqual, scode, 0);
+                fault_if(&mut b, bad, 5);
+                b.ins().jump(merge, &[sval.into()]);
+                b.switch_to_block(merge);
+                let res = b.block_params(merge)[0];
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
+            }
+            // ---- P-2c: int-list element read (`xs[i]` → Int, raw i64 at slot bytes 0..8) -------
+            Op::Index
+                if matches!(
+                    kinds.get(kinds.len().wrapping_sub(2)),
+                    Some(Kind::IntList(_))
+                ) =>
+            {
+                let h = ub_ref("Index(int)")?;
+                let (iv, ik) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (lv, lk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if ik != Kind::Int || !matches!(lk, Kind::IntList(_)) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed Index operand kinds ({lk:?}[{ik:?}])"
+                    )));
+                }
+                let merge = b.create_block();
+                b.append_block_param(merge, types::I64);
+                let flat_blk = b.create_block();
+                let slow_blk = b.create_block();
+                let flat_bit = b.ins().band_imm(lv, UB_TAG_FLAT);
+                b.ins().brif(flat_bit, flat_blk, &[], slow_blk, &[]);
+                // INLINE (flat int list): unsigned bounds check, then ONE load of the raw i64 at
+                // `buf[(base+idx)*64]`. Out-of-range → code 5 → the canonical fault on the VM.
+                b.switch_to_block(flat_blk);
+                let cnt_raw = b.ins().ushr_imm(lv, 40);
+                let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+                let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
+                fault_if(&mut b, oob, 5);
+                let buf = b.ins().load(types::I64, stable, ctx, 0);
+                let base = b.ins().band_imm(lv, UB_IDX_MASK);
+                let slot = b.ins().iadd(base, iv);
+                let soff = b.ins().ishl_imm(slot, 6);
+                let addr = b.ins().iadd(buf, soff);
+                let fres = b.ins().load(types::I64, MemFlagsData::new(), addr, 0);
+                b.ins().jump(merge, &[fres.into()]);
+                // SLOW (boxed int list): the two-return helper (value spans the full i64 range).
+                b.switch_to_block(slow_blk);
+                let freev = b.ins().iconst(types::I64, lk.is_owned_handle() as i64);
+                let call = b.ins().call(h.index_int, &[ctx, lv, iv, freev]);
                 let sval = b.inst_results(call)[0];
                 let scode = b.inst_results(call)[1];
                 let bad = b.ins().icmp_imm(IntCC::NotEqual, scode, 0);

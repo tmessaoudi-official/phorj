@@ -161,6 +161,8 @@ impl Compiled {
             builder.symbol("rt_u_map_push_pair", rt_u_map_push_pair as *const u8);
             builder.symbol("rt_u_map_seal", rt_u_map_seal as *const u8);
             builder.symbol("rt_u_map_get", rt_u_map_get as *const u8);
+            builder.symbol("rt_u_list_push_int", rt_u_list_push_int as *const u8);
+            builder.symbol("rt_u_index_int", rt_u_index_int as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -240,6 +242,16 @@ impl Compiled {
                 map_push_pair: declare(&mut module, "rt_u_map_push_pair", &sig5)?,
                 map_seal: declare(&mut module, "rt_u_map_seal", &sig2)?,
                 map_get: declare(&mut module, "rt_u_map_get", &sig_map_get)?,
+                list_push_int: declare(&mut module, "rt_u_list_push_int", &sig3)?,
+                index_int: {
+                    let mut s = make_sig(
+                        &module,
+                        &[ptr, types::I64, types::I64, types::I64],
+                        Some(types::I64),
+                    );
+                    s.returns.push(AbiParam::new(types::I64));
+                    declare(&mut module, "rt_u_index_int", &s)?
+                },
             })
         } else {
             None

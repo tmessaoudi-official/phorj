@@ -686,3 +686,72 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
         "the #[UncheckedOverflow] inner must wrap MAX+1 -> MIN, got {b_jit}"
     );
 }
+
+#[test]
+fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
+    // P-2c DELIVERY-PATH proof: the exact `bench/micro/listindex.phg` shape — an all-int
+    // `MakeList` (seals FLAT as raw i64 slots) with a data-dependent `Index` — must JIT through
+    // the hook AND stay byte-identical to the interpreter oracle.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            int idx = (i + acc) % 8;\n\
+            acc = acc + xs[idx];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "int-list vertical must match the oracle");
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual run ok");
+    assert_eq!(manual, oracle);
+    assert!(
+        cache.borrow().hits > 0,
+        "the int-list vertical must actually hit the JIT"
+    );
+}
+
+#[test]
+fn jit_int_list_oob_fault_matches_the_vm() {
+    // Out-of-range on a flat int list → code 5 → the VM redo renders the canonical bounds fault.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(): int {\n\
+          List<int> xs = [10, 20];\n\
+          return xs[5];\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
+    let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
+    assert!(
+        jit_err.contains("list index out of range"),
+        "jit-wired fault must be canonical, got: {jit_err}"
+    );
+    assert!(oracle_err.contains("list index out of range"));
+}
+
+#[test]
+fn jit_int_list_negative_values_and_index_edges_match_the_oracle() {
+    // Negative VALUES flow through the raw-i64 slots untouched; index 0 and len-1 both hit.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(): int {\n\
+          List<int> xs = [0 - 5, 7, 0 - 9223372036854775807];\n\
+          return xs[0] + xs[1] + xs[2] % 1000;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "negative int-list values must match");
+}
