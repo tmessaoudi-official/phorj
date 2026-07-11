@@ -158,7 +158,7 @@ blast radius) live in **KNOWN_ISSUES §"Parked perf"** and the §11 ledger — f
   not static/module-factory namespaces. (Fixes an Invariant-12 violation in the shipped Core.Sql slices.)
 - **Nothing in the wind — leaf-or-parent import, always.** Every symbol (type / attribute / verb / function)
   is import-gated: `import A.B.C` → bare `C`, OR `import A.B` → `B.C`. Never ambient.
-  (Reaffirms [[nothing-in-the-wind-import-discipline]] and the [Nothing in the wind](../specs/UNIFIED-SPEC.md#nothing-in-the-wind) spec.)
+  (See the [Nothing in the wind](../specs/UNIFIED-SPEC.md#nothing-in-the-wind) spec.)
 - **Decoupled / composable / generic / scalable / modular / SOLID throughout.** Components work together
   but don't depend on each other's construction; easy to add / extend / swap.
 
@@ -448,6 +448,10 @@ Corpus 100% clean of syntactic `->` and `import type`; formatter idempotent; sin
 ---
 
 ### 2.7 AUTONOMOUS OVERNIGHT MARATHON — execution queue (set 2026-07-04)
+
+*HISTORICAL execution queue (2026-07-04), NOT an active driver — superseded by THE FINISHING WAVE section
+(§ after §1), which is the single active roadmap. The item detail below is backlog the Ω-sub-waves draw
+from; do not run it as a separate queue.*
 
 > **Goal (developer, 2026-07-04):** a large autonomous run that ships **features + runnable examples +
 > up-to-date VSCode & PhpStorm editor support**, so the developer can build & real-test a real Phorj
