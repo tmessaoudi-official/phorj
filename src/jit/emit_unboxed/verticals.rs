@@ -151,11 +151,13 @@ pub(super) fn arm_index_map(
     // INLINE iff the map sealed FLAT and the key is an arena slot; the probe needs the
     // key's CANON word, so a canon-0 slot (an inline-concat result, an unregistered
     // runtime string) also punts.
-    let flat_bit = b.ins().band_imm(mv, UB_TAG_FLAT);
-    let key_slot = b.ins().band_imm(iv, UB_TAG_SLOT);
-    let flat_nz = b.ins().icmp_imm(IntCC::NotEqual, flat_bit, 0);
-    let key_nz = b.ins().icmp_imm(IntCC::NotEqual, key_slot, 0);
-    let both = b.ins().band(flat_nz, key_nz);
+    // P-2c fused tag check — `(mv & FLAT) != 0 && (iv & SLOT) != 0` in three ops: shift the
+    // map's FLAT bit (61) up onto the key's SLOT bit (62), AND the two words, mask SLOT —
+    // nonzero ⇔ both tags present. (Replaces two band_imm + two icmp + a band.)
+    const _: () = assert!(UB_TAG_FLAT << 1 == UB_TAG_SLOT, "fused tag shift");
+    let mv_flat_up = b.ins().ishl_imm(mv, 1);
+    let fused = b.ins().band(mv_flat_up, iv);
+    let both = b.ins().band_imm(fused, UB_TAG_SLOT);
     b.ins().brif(both, fast_blk, &[], slow_blk, &[]);
     // INLINE: O(1) bucket walk. The key's CANON word (slot byte 32 — nonzero only when
     // assigned via the content registry, so canon equality ⇔ byte equality) indexes
@@ -534,18 +536,25 @@ pub(super) fn arm_pop(
     let (v, k) = ub_pop(b, vars, fvars, kinds)?;
     if k.is_owned_handle() {
         let h = ub_ref(ub, "Pop(owned handle)")?;
+        // P-2c fused release dispatch — ONE branch on the hot path: `x = v & (SLOT|OWNED)`.
+        // `x == SLOT` is a runtime-BORROWED slot (the common case — a flat-list element read
+        // dying at scope exit, e.g. the loop-local key in mapget) → nothing to do. Everything
+        // else re-dispatches on the cold side: OWNED → inline recycle; untagged → helper free.
+        // `OWNED ⇒ SLOT` at runtime (only arena slots carry OWNED), so the three-way is
+        // behavior-identical to the old owned-first two-branch ladder.
+        let x = b.ins().band_imm(v, UB_TAG_SLOT | UB_TAG_OWNED);
+        let is_borrowed_slot = b.ins().icmp_imm(IntCC::Equal, x, UB_TAG_SLOT);
+        let slow_blk = b.create_block();
+        let cont = b.create_block();
+        b.ins().brif(is_borrowed_slot, cont, &[], slow_blk, &[]);
+        b.switch_to_block(slow_blk);
         let owned_bit = b.ins().band_imm(v, UB_TAG_OWNED);
         let push_blk = b.create_block();
-        let not_owned = b.create_block();
-        let cont = b.create_block();
-        b.ins().brif(owned_bit, push_blk, &[], not_owned, &[]);
+        let helper_blk = b.create_block();
+        b.ins().brif(owned_bit, push_blk, &[], helper_blk, &[]);
         b.switch_to_block(push_blk);
         ec.slot_push(b, v);
         b.ins().jump(cont, &[]);
-        b.switch_to_block(not_owned);
-        let slot_bit = b.ins().band_imm(v, UB_TAG_SLOT);
-        let helper_blk = b.create_block();
-        b.ins().brif(slot_bit, cont, &[], helper_blk, &[]);
         b.switch_to_block(helper_blk);
         b.ins().call(h.free, &[ec.ctx, v]);
         b.ins().jump(cont, &[]);
