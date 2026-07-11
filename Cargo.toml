@@ -12,7 +12,7 @@ repository = "https://github.com/tmessaoudi-official/phorj"
 # Cargo floor for the `[lints]` table below (stabilised in Cargo 1.74); older Cargo silently
 # ignores `[lints]`, which would drop the warnings=deny / clippy=deny quality gate. The crate is
 # developed and verified on the toolchain pinned in `rust-toolchain.toml`.
-rust-version = "1.74"
+rust-version = "1.82"
 
 # Test/dev build-speed profile (perf, 2026-07-08). The test suite ran ~126s because EVERYTHING
 # compiled at opt-level 0: memory-hard `argon2` verify alone took ~25s, and the workspace-code
