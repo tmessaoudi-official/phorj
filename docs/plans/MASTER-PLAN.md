@@ -222,6 +222,16 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   order for UTF-8); `String.length` byte semantics + fault strings unchanged (byte-identity).
   **P-1b** `OrderedMap`: entries-vec (insertion order preserved = byte-identity) + open-addressing index
   over cached hashes; `build_map`/`map_index` kernels keep single-sourcing.
+  **P-2a-inline ✅ WIN (2026-07-11) — GATE-2 PASSED: phg 20.9M vs php 35.8M ns = 1.71× on the real
+  `phg run` stringconcat, interleaved best-of-7 vs fresh docker php:8.5-cli+JIT** (the ceiling
+  spike predicted 1.74× — delivered). The SSO fast paths are INLINE Cranelift IR over a
+  `#[repr(C)]` `UbCtx` arena of 64-byte string slots (JIT-visible header at fixed offsets):
+  tagged handles (`SLOT`/`SLOT|OWNED`/`FLAT`), `MakeList` seals all-short lists flat (`Index` =
+  inline unsigned bounds + base+idx, zero copy), `Concat` = inline len-add + free-stack alloc +
+  bounded 3×8-byte over-copies, `String.length` = one byte load, free = inline free-stack push;
+  helpers remain the slow paths (untagged, >22B results, non-flat lists); arena exhaustion → code
+  5 redo-on-VM. Gate green (1928 tests, PHP oracle). **P-2b (mapget vertical) + P-2c (rollout) are
+  UNLOCKED.** History: the helper-granularity spike below measured the LOSS that forced inline.
   **P-2a ⚑ SPIKE SHIPPED (2026-07-11) — measured, FLAGGED LOSS; verdict recorded.** Handle space +
   helper calls (Concat / list-Index / `String.length`) shipped green: `stringconcat.bench()` is
   JIT-eligible (hits>0 proven), byte-identity holds (1928 tests, PHP oracle; index-fault redoes on

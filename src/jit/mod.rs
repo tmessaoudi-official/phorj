@@ -911,29 +911,137 @@ fn unboxed_native_is_str_len(id: usize) -> bool {
 }
 
 // ===========================================================================================
-// P-2a handle space: the per-run side table + `rt_u_*` helper calls that let the UNBOXED codegen
-// run string/collection verticals (Concat / list Index / `String.length`) natively. Design:
-//  - handles are `i64` indices into `UbCtx::handles`; `[0, n_pinned)` are the graph's interned
-//    string consts (seeded per run from `Compiled::const_handles`, NEVER freed), the rest are
-//    temps recycled through a free-list, so a hot loop's steady-state allocates nothing new.
+// P-2a handle space (+ P-2a-inline): the per-run side state + `rt_u_*` helpers that let the
+// UNBOXED codegen run string/collection verticals (Concat / list Index / `String.length`)
+// natively. The P-2a spike measured helper-call granularity ~2× short of php+JIT, so the hot
+// paths are now emitted INLINE in Cranelift IR over a fixed-layout string arena; the helpers
+// remain as the slow paths (untagged operands, >22-byte results, non-flat lists). Design:
+//
+//  - a HANDLE is an `i64` with tag bits (see `UB_TAG_*`):
+//      * untagged           — an index into `UbCtx::handles` (a boxed `Value`; consts >22B,
+//                             heap concat results). Helper-only.
+//      * `SLOT` (bit 62)    — an index into the 64-byte-slot string ARENA (`len:u8` + ≤22 data
+//                             + slack so bounded 24-byte over-copies never cross a neighbour).
+//                             Readable INLINE: `len = load.u8 buf[idx*64]`.
+//      * `SLOT|OWNED` (b60) — same, and freeing recycles the slot (inline free-stack push).
+//                             A borrowed slot (a flat-list element, a pinned short const) has
+//                             OWNED clear, so an emitted free is a runtime no-op.
+//      * `FLAT` (bit 61)    — a list of all-short strings flattened into consecutive arena
+//                             slots: bits[40..60) = element count, bits[0..40) = base slot.
+//                             `Index` is INLINE: unsigned bounds check + base+idx (zero copy).
+//  - the arena header (`buf`, `free_stack`, `free_top`, `bump`, `cap`) leads the `#[repr(C)]`
+//    `UbCtx` at FIXED offsets so inline IR can load/store it directly.
 //  - every helper is defensive (a bad handle returns `-1` = fault → code 5 "redo on VM"), and
-//    NOTHING observable escapes the private `UbCtx` — the fallback re-execution stays sound.
-//  - the happy paths reuse the SAME single-sourced kernels as the VM (`PhStr::concat`, the
-//    `Op::Index` clone semantics, byte `len`), so byte-identity is preserved by construction.
+//    NOTHING observable escapes the private `UbCtx` — the fallback re-execution stays sound
+//    (arena exhaustion also just redoes on the VM).
+//  - the happy paths preserve byte semantics exactly (byte concat, byte `len`, the VM's `Index`
+//    bounds — an unsigned `idx < len` compare rejects negatives like `usize::try_from` does).
 // ===========================================================================================
 
-/// The per-run handle table for unboxed handle ops. Created by [`Compiled::run_unboxed`] iff the
+/// Handle tag: arena-slot handle (low 40 bits = slot index).
+const UB_TAG_SLOT: i64 = 1 << 62;
+/// Handle tag: flattened string list (bits[40..60) = count, low 40 bits = base slot).
+const UB_TAG_FLAT: i64 = 1 << 61;
+/// Handle tag (with `UB_TAG_SLOT`): freeing recycles the slot.
+const UB_TAG_OWNED: i64 = 1 << 60;
+/// Low-bits mask for the slot / base index.
+const UB_IDX_MASK: i64 = (1 << 40) - 1;
+/// Bytes per arena slot: `len:u8` + up to 22 data bytes + slack, so the inline concat's bounded
+/// 3×8-byte over-copies (a copy starting at `dst+1+la`, `la ≤ 22`, ends ≤ `dst+47`) stay inside
+/// the 64-byte slot. 64 also keeps every slot cache-line-aligned.
+const UB_SLOT_SIZE: usize = 64;
+/// Arena capacity in slots (256 KiB). Exhaustion is NOT a fault the user sees — the inline alloc
+/// branches to code 5 and the whole call redoes on the VM.
+const UB_SLOT_CAP: usize = 4096;
+
+/// The per-run handle state for unboxed handle ops. Created by [`Compiled::run_unboxed`] iff the
 /// compiled graph uses handles; dropped when the run returns (all temps die with it — a fault path
-/// leaks nothing into the VM redo).
+/// leaks nothing into the VM redo). `#[repr(C)]`: the leading five fields are the JIT-visible
+/// header, read/written by inline IR at fixed offsets 0/8/16/24/32 — reorder NOTHING above the
+/// `--- Rust-only ---` line.
+#[repr(C)]
 struct UbCtx {
+    /// offset 0: base of the 64-byte-slot string arena (points into `buf_storage`).
+    buf: *mut u8,
+    /// offset 8: base of the recycled-slot stack (points into `free_storage`, `cap` entries).
+    free_stack: *mut u32,
+    /// offset 16: number of live entries on the recycled-slot stack.
+    free_top: u64,
+    /// offset 24: next never-used slot (grows toward `cap` when the free stack is empty).
+    bump: u64,
+    /// offset 32: total slots in the arena.
+    cap: u64,
+    // --- Rust-only (helpers may touch; inline IR must not) ---
+    /// Boxed-`Value` handles (untagged): long consts, heap concat results.
     handles: Vec<Value>,
-    /// Recycled temp indices (all `>= n_pinned`).
+    /// Recycled untagged indices (all `>= n_pinned`).
     free: Vec<usize>,
-    /// Table prefix holding the graph's interned consts — never freed, never recycled.
+    /// `handles` prefix holding pinned consts — never freed, never recycled.
     n_pinned: usize,
+    /// Owns the arena bytes `buf` points into (Vec heap storage is stable across a struct move).
+    #[allow(dead_code)]
+    buf_storage: Vec<u8>,
+    /// Owns the free-stack entries `free_stack` points into.
+    #[allow(dead_code)]
+    free_storage: Vec<u32>,
 }
 
 impl UbCtx {
+    /// Build a fresh per-run context, seeding the graph's interned consts in the SAME deterministic
+    /// order `compile_unboxed` assigned their compile-time handles: a ≤22-byte string const becomes
+    /// a pinned arena slot (borrowed `SLOT` handle), anything else a pinned `handles` entry.
+    fn new(const_values: &[Value]) -> UbCtx {
+        let mut buf_storage = vec![0u8; UB_SLOT_CAP * UB_SLOT_SIZE];
+        let mut free_storage = vec![0u32; UB_SLOT_CAP];
+        let mut handles = Vec::new();
+        let mut bump = 0u64;
+        for v in const_values {
+            match v {
+                Value::Str(s) if s.len() <= crate::phstr::INLINE_CAP => {
+                    let off = bump as usize * UB_SLOT_SIZE;
+                    buf_storage[off] = s.len() as u8;
+                    buf_storage[off + 1..off + 1 + s.len()].copy_from_slice(s.as_bytes());
+                    bump += 1;
+                }
+                other => handles.push(other.clone()),
+            }
+        }
+        let n_pinned = handles.len();
+        UbCtx {
+            buf: buf_storage.as_mut_ptr(),
+            free_stack: free_storage.as_mut_ptr(),
+            free_top: 0,
+            bump,
+            cap: UB_SLOT_CAP as u64,
+            handles,
+            free: Vec::new(),
+            n_pinned,
+            buf_storage,
+            free_storage,
+        }
+    }
+
+    /// The compile-time handles for `const_values`, mirroring [`UbCtx::new`] exactly (same walk,
+    /// same order): index `i` → the `iconst` the codegen bakes for that const.
+    fn const_compile_handles(const_values: &[Value]) -> Vec<i64> {
+        let mut out = Vec::with_capacity(const_values.len());
+        let mut slot = 0i64;
+        let mut table = 0i64;
+        for v in const_values {
+            match v {
+                Value::Str(s) if s.len() <= crate::phstr::INLINE_CAP => {
+                    out.push(UB_TAG_SLOT | slot); // borrowed (OWNED clear): pinned, never freed
+                    slot += 1;
+                }
+                _ => {
+                    out.push(table);
+                    table += 1;
+                }
+            }
+        }
+        out
+    }
+
     fn alloc(&mut self, v: Value) -> i64 {
         if let Some(i) = self.free.pop() {
             self.handles[i] = v;
@@ -943,11 +1051,69 @@ impl UbCtx {
             (self.handles.len() - 1) as i64
         }
     }
+
+    /// Pop a recycled arena slot or bump a fresh one; `None` = arena exhausted (→ redo on VM).
+    fn alloc_slot(&mut self) -> Option<u64> {
+        if self.free_top > 0 {
+            self.free_top -= 1;
+            Some(u64::from(self.free_storage[self.free_top as usize]))
+        } else if self.bump < self.cap {
+            let s = self.bump;
+            self.bump += 1;
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    /// Write `bytes` (≤ 22) into a fresh arena slot; the OWNED `SLOT` handle, or `None` when full.
+    fn alloc_slot_bytes(&mut self, bytes: &[u8]) -> Option<i64> {
+        let slot = self.alloc_slot()?;
+        let off = slot as usize * UB_SLOT_SIZE;
+        self.buf_storage[off] = bytes.len() as u8;
+        self.buf_storage[off + 1..off + 1 + bytes.len()].copy_from_slice(bytes);
+        Some(UB_TAG_SLOT | UB_TAG_OWNED | slot as i64)
+    }
+
+    /// The bytes any STRING handle refers to (slot-tagged or untagged), or `None` on a mismatch.
+    fn str_bytes(&self, h: i64) -> Option<&[u8]> {
+        if h & UB_TAG_SLOT != 0 {
+            let idx = (h & UB_IDX_MASK) as usize;
+            if idx >= self.cap as usize {
+                return None;
+            }
+            let off = idx * UB_SLOT_SIZE;
+            let len = self.buf_storage[off] as usize;
+            Some(&self.buf_storage[off + 1..off + 1 + len])
+        } else if h & UB_TAG_FLAT != 0 {
+            None
+        } else {
+            match self.handles.get(h as usize) {
+                Some(Value::Str(s)) => Some(s.as_bytes()),
+                _ => None,
+            }
+        }
+    }
+
+    /// Release any OWNED handle: an owned arena slot recycles onto the free stack; an untagged
+    /// temp releases its `handles` entry; borrowed slots / flat lists / pinned entries are no-ops.
     fn release(&mut self, h: i64) {
-        let i = h as usize;
-        if h >= self.n_pinned as i64 && i < self.handles.len() {
-            self.handles[i] = Value::Unit;
-            self.free.push(i);
+        if h & UB_TAG_SLOT != 0 {
+            if h & UB_TAG_OWNED != 0 {
+                let idx = (h & UB_IDX_MASK) as u64;
+                if idx < self.cap && (self.free_top as usize) < self.free_storage.len() {
+                    self.free_storage[self.free_top as usize] = idx as u32;
+                    self.free_top += 1;
+                }
+            }
+        } else if h & UB_TAG_FLAT != 0 {
+            // Flat-list slots are bump-pinned for the run (built once per call) — no recycling.
+        } else {
+            let i = h as usize;
+            if h >= self.n_pinned as i64 && i < self.handles.len() {
+                self.handles[i] = Value::Unit;
+                self.free.push(i);
+            }
         }
     }
 }
@@ -963,13 +1129,21 @@ extern "C" fn rt_u_list_new(ctx: *mut UbCtx, cap: i64) -> i64 {
     ))))
 }
 
-/// Append the element at handle `elem` to the (uniquely-owned, still-building) list at `list`.
-/// `free_elem != 0` consumes the element handle (its `Value` moves into the list).
+/// Append the string at handle `elem` (any encoding) to the (uniquely-owned, still-building,
+/// UNTAGGED) list at `list`. `free_elem != 0` consumes the element handle.
 extern "C" fn rt_u_list_push(ctx: *mut UbCtx, list: i64, elem: i64, free_elem: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
-    let ev = match ctx.handles.get(elem as usize) {
-        Some(v) => v.clone(),
-        None => return -1,
+    let ev = match ctx.str_bytes(elem) {
+        // The bytes came from a valid `PhStr` (or an arena slot written from one), so they are
+        // valid UTF-8; `PhStr::new` re-copies them into the right representation.
+        Some(bytes) => match std::str::from_utf8(bytes) {
+            Ok(s) => Value::Str(crate::phstr::PhStr::new(s)),
+            Err(_) => return -1,
+        },
+        None => match ctx.handles.get(elem as usize) {
+            Some(v) => v.clone(),
+            None => return -1,
+        },
     };
     match ctx.handles.get_mut(list as usize) {
         Some(Value::List(xs)) => match std::rc::Rc::get_mut(xs) {
@@ -984,11 +1158,59 @@ extern "C" fn rt_u_list_push(ctx: *mut UbCtx, list: i64, elem: i64, free_elem: i
     0
 }
 
-/// `list[idx]` with the VM's exact happy-path semantics (`usize` bounds + element CLONE — cheap for
-/// `PhStr`). Out-of-range (or any shape mismatch) returns `-1` → code 5, and the VM redo renders the
-/// canonical `"list index out of range"` fault. `free_list != 0` consumes the list handle.
+/// Finalize a just-built list: when EVERY element is a ≤22-byte string, flatten them into
+/// consecutive arena slots and return a `FLAT` handle (releasing the boxed list — `Index` then
+/// runs fully inline, zero-copy); otherwise return the untagged handle unchanged. `-1` only on a
+/// defensive mismatch.
+extern "C" fn rt_u_list_seal(ctx: *mut UbCtx, list: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let flat: Option<Vec<&[u8]>> = match ctx.handles.get(list as usize) {
+        Some(Value::List(xs)) => xs
+            .iter()
+            .map(|v| match v {
+                Value::Str(s) if s.len() <= crate::phstr::INLINE_CAP => Some(s.as_bytes()),
+                _ => None,
+            })
+            .collect(),
+        _ => return -1,
+    };
+    let Some(elems) = flat else {
+        return list; // not flattenable — stays a boxed list (helper-path Index)
+    };
+    let n = elems.len() as i64;
+    if n >= 1 << 20 || ctx.bump + n as u64 > ctx.cap {
+        return list; // too large to flatten — boxed path still works
+    }
+    let base = ctx.bump as i64;
+    let owned: Vec<Vec<u8>> = elems.iter().map(|b| b.to_vec()).collect();
+    for bytes in &owned {
+        let slot = ctx.bump as usize;
+        let off = slot * UB_SLOT_SIZE;
+        ctx.buf_storage[off] = bytes.len() as u8;
+        ctx.buf_storage[off + 1..off + 1 + bytes.len()].copy_from_slice(bytes);
+        ctx.bump += 1;
+    }
+    ctx.release(list);
+    UB_TAG_FLAT | (n << 40) | base
+}
+
+/// `list[idx]` — the helper (slow) path for UNTAGGED (boxed) lists; a flat list indexes inline.
+/// VM-exact bounds semantics; out-of-range returns `-1` → code 5 → the canonical fault on the VM
+/// redo. A short string element lands in an OWNED arena slot (fast for downstream inline ops);
+/// anything else becomes an untagged temp. `free_list != 0` consumes the list handle.
 extern "C" fn rt_u_index(ctx: *mut UbCtx, list: i64, idx: i64, free_list: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
+    if list & (UB_TAG_SLOT | UB_TAG_FLAT) != 0 {
+        // Defensive: the codegen sends flat lists down the inline path; mirror it here anyway.
+        if list & UB_TAG_FLAT != 0 {
+            let n = (list >> 40) & 0xFFFFF;
+            let base = list & UB_IDX_MASK;
+            if (0..n).contains(&idx) {
+                return UB_TAG_SLOT | (base + idx); // borrowed slot
+            }
+        }
+        return -1;
+    }
     let elem = match ctx.handles.get(list as usize) {
         Some(Value::List(xs)) => match usize::try_from(idx).ok().filter(|i| *i < xs.len()) {
             Some(i) => xs[i].clone(),
@@ -999,16 +1221,46 @@ extern "C" fn rt_u_index(ctx: *mut UbCtx, list: i64, idx: i64, free_list: i64) -
     if free_list != 0 {
         ctx.release(list);
     }
-    ctx.alloc(elem)
+    match &elem {
+        Value::Str(s) if s.len() <= crate::phstr::INLINE_CAP => {
+            // `None` = arena exhausted → -1 → code 5, redo on VM.
+            ctx.alloc_slot_bytes(s.as_bytes()).unwrap_or(-1)
+        }
+        _ => ctx.alloc(elem),
+    }
 }
 
-/// `a + b` (string concat) through the single-sourced [`crate::phstr::PhStr::concat`] kernel — the
-/// same bytes the VM's `Op::Concat` two-`Str` path produces. `free_mask` bit0/bit1 consume `a`/`b`.
+/// `a + b` (string concat) — the helper (slow) path: any operand encoding, any length. Byte
+/// semantics are exactly [`crate::phstr::PhStr::concat`]'s (byte concatenation). A ≤22-byte result
+/// lands in an OWNED arena slot (fast for downstream inline ops); longer results go through the
+/// single-sourced `PhStr::concat` kernel into an untagged temp. `free_mask` bit0/bit1 consume the
+/// operands (OWNED rules apply — a borrowed slot free is a no-op).
 extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
-    let joined = match (ctx.handles.get(a as usize), ctx.handles.get(b as usize)) {
-        (Some(Value::Str(x)), Some(Value::Str(y))) => crate::phstr::PhStr::concat(x, y),
-        _ => return -1,
+    let (Some(ab), Some(bb)) = (ctx.str_bytes(a), ctx.str_bytes(b)) else {
+        return -1;
+    };
+    let total = ab.len() + bb.len();
+    let res = if total <= crate::phstr::INLINE_CAP {
+        let mut joined = [0u8; crate::phstr::INLINE_CAP];
+        joined[..ab.len()].copy_from_slice(ab);
+        joined[ab.len()..total].copy_from_slice(bb);
+        let bytes = joined[..total].to_vec();
+        match ctx.alloc_slot_bytes(&bytes) {
+            Some(h) => h,
+            None => return -1, // arena exhausted → redo on VM
+        }
+    } else {
+        // Both sides are valid UTF-8 by construction; concat of valid UTF-8 is valid UTF-8.
+        let (Ok(xs), Ok(ys)) = (std::str::from_utf8(ab), std::str::from_utf8(bb)) else {
+            return -1;
+        };
+        let joined = crate::phstr::PhStr::concat(&crate::phstr::PhStr::new(xs), &{
+            crate::phstr::PhStr::new(ys)
+        });
+        let v = Value::Str(joined);
+        // Reborrow dance: `str_bytes` borrows ended above (bytes copied) — safe to mutate now.
+        ctx.alloc(v)
     };
     if free_mask & 1 != 0 {
         ctx.release(a);
@@ -1016,16 +1268,16 @@ extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask: i64) -> i6
     if free_mask & 2 != 0 {
         ctx.release(b);
     }
-    ctx.alloc(Value::Str(joined))
+    res
 }
 
-/// `Core.String.length` — byte length (the same `s.len()` the native's `text_len` computes).
-/// `free != 0` consumes the handle. `-1` = defensive bad-handle fault.
+/// `Core.String.length` — byte length; the helper (slow) path for untagged handles (a slot handle
+/// reads its length inline). `free != 0` consumes the handle. `-1` = defensive bad-handle fault.
 extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
-    let n = match ctx.handles.get(h as usize) {
-        Some(Value::Str(s)) => s.len() as i64,
-        _ => return -1,
+    let n = match ctx.str_bytes(h) {
+        Some(bytes) => bytes.len() as i64,
+        None => return -1,
     };
     if free != 0 {
         ctx.release(h);
@@ -1033,8 +1285,7 @@ extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
     n
 }
 
-/// Release an owned temp handle (a `Pop` of an owned handle, or an owned operand a fused consumer
-/// did not take). Pinned consts and out-of-range indices are no-ops.
+/// Release an owned handle (any encoding — see [`UbCtx::release`]).
 extern "C" fn rt_u_free(ctx: *mut UbCtx, h: i64) {
     let ctx = unsafe { &mut *ctx };
     ctx.release(h);
@@ -1045,6 +1296,7 @@ extern "C" fn rt_u_free(ctx: *mut UbCtx, h: i64) {
 struct UbHelperIds {
     list_new: FuncId,
     list_push: FuncId,
+    list_seal: FuncId,
     index: FuncId,
     concat: FuncId,
     str_len: FuncId,
@@ -1054,6 +1306,7 @@ struct UbHelperIds {
 struct UbHelperRefs {
     list_new: FuncRef,
     list_push: FuncRef,
+    list_seal: FuncRef,
     index: FuncRef,
     concat: FuncRef,
     str_len: FuncRef,
@@ -1717,6 +1970,7 @@ fn build_body_unboxed(
     let ub_refs = ub.map(|ids| UbHelperRefs {
         list_new: module.declare_func_in_func(ids.list_new, b.func),
         list_push: module.declare_func_in_func(ids.list_push, b.func),
+        list_seal: module.declare_func_in_func(ids.list_seal, b.func),
         index: module.declare_func_in_func(ids.index, b.func),
         concat: module.declare_func_in_func(ids.concat, b.func),
         str_len: module.declare_func_in_func(ids.str_len, b.func),
@@ -1846,6 +2100,32 @@ fn build_body_unboxed(
         b.def_var(sv, next);
     };
 
+    // P-2a-inline: push an owned arena slot's index onto the inline free stack (the caller has
+    // already established `v` is slot-tagged with OWNED set). 5 memory ops, no call.
+    let emit_slot_push = |b: &mut FunctionBuilder, v: ClValue| {
+        let fsp = b.ins().load(types::I64, MemFlagsData::new(), ctx, 8);
+        let ft = b.ins().load(types::I64, MemFlagsData::new(), ctx, 16);
+        let slot = b.ins().band_imm(v, UB_IDX_MASK);
+        let foff = b.ins().ishl_imm(ft, 2);
+        let faddr = b.ins().iadd(fsp, foff);
+        b.ins().istore32(MemFlagsData::new(), slot, faddr, 0);
+        let ft1 = b.ins().iadd_imm(ft, 1);
+        b.ins().store(MemFlagsData::new(), ft1, ctx, 16);
+    };
+    // P-2a-inline: recycle a slot-tagged operand IFF its runtime OWNED bit is set (a flat-list
+    // element or pinned const is compile-time Owned but runtime-borrowed — the free is a no-op).
+    // Used only where the operand is already known slot-tagged (the inline fast paths).
+    let emit_slot_free_if_owned = |b: &mut FunctionBuilder, v: ClValue| {
+        let owned_bit = b.ins().band_imm(v, UB_TAG_OWNED);
+        let push_blk = b.create_block();
+        let cont = b.create_block();
+        b.ins().brif(owned_bit, push_blk, &[], cont, &[]);
+        b.switch_to_block(push_blk);
+        emit_slot_push(b, v);
+        b.ins().jump(cont, &[]);
+        b.switch_to_block(cont);
+    };
+
     for (ip, op) in code.iter().enumerate() {
         if !reach[ip] {
             continue;
@@ -1901,7 +2181,8 @@ fn build_body_unboxed(
                 }
                 other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
             },
-            // ---- P-2a handle verticals (helper calls into the per-run UbCtx) --------------------
+            // ---- P-2a handle verticals (inline fast paths over the UbCtx arena; helpers = slow
+            // paths for untagged operands / >22-byte results / non-flat lists) --------------------
             Op::MakeList(n) => {
                 let h = ub_ref("MakeList")?;
                 let d = kinds.len();
@@ -1932,13 +2213,19 @@ fn build_body_unboxed(
                     let bad = b.ins().icmp_imm(IntCC::NotEqual, status, 0);
                     fault_if(&mut b, bad, 5);
                 }
+                // Seal: a list of all-short strings flattens into consecutive arena slots (a FLAT
+                // handle) so `Index` runs fully inline; anything else keeps the boxed handle.
+                let sc = b.ins().call(h.list_seal, &[ctx, list_h]);
+                let sealed = b.inst_results(sc)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sealed, 0);
+                fault_if(&mut b, bad, 5);
                 kinds.truncate(d - n);
                 ub_push(
                     &mut b,
                     &vars,
                     &fvars,
                     &mut kinds,
-                    list_h,
+                    sealed,
                     Kind::StrList(Own::Owned),
                 )?;
             }
@@ -1951,13 +2238,35 @@ fn build_body_unboxed(
                         "unboxed Index operand kinds ({lk:?}[{ik:?}])"
                     )));
                 }
+                let merge = b.create_block();
+                b.append_block_param(merge, types::I64);
+                let flat_blk = b.create_block();
+                let slow_blk = b.create_block();
+                let flat_bit = b.ins().band_imm(lv, UB_TAG_FLAT);
+                b.ins().brif(flat_bit, flat_blk, &[], slow_blk, &[]);
+                // INLINE (flat list): unsigned bounds check (a negative idx is a huge u64 — same
+                // reject as the VM's `usize::try_from`), then base+idx is a BORROWED slot handle —
+                // zero copy, zero alloc. Out-of-range → code 5 → the VM redo renders the canonical
+                // "list index out of range".
+                b.switch_to_block(flat_blk);
+                let cnt_raw = b.ins().ushr_imm(lv, 40);
+                let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+                let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
+                fault_if(&mut b, oob, 5);
+                let base = b.ins().band_imm(lv, UB_IDX_MASK);
+                let slot = b.ins().iadd(base, iv);
+                let fres = b.ins().bor_imm(slot, UB_TAG_SLOT);
+                b.ins().jump(merge, &[fres.into()]);
+                // SLOW (boxed list): the helper (element clone into a slot / untagged temp).
+                b.switch_to_block(slow_blk);
                 let freev = b.ins().iconst(types::I64, lk.is_owned_handle() as i64);
                 let call = b.ins().call(h.index, &[ctx, lv, iv, freev]);
-                let res = b.inst_results(call)[0];
-                // A negative handle = out-of-range (or defensive mismatch) → code 5, redo on VM,
-                // which renders the canonical "list index out of range" fault string.
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
                 fault_if(&mut b, bad, 5);
+                b.ins().jump(merge, &[sres.into()]);
+                b.switch_to_block(merge);
+                let res = b.block_params(merge)[0];
                 ub_push(
                     &mut b,
                     &vars,
@@ -1976,12 +2285,99 @@ fn build_body_unboxed(
                         "unboxed Concat operand kinds ({ak:?}, {bk:?})"
                     )));
                 }
+                let merge = b.create_block();
+                b.append_block_param(merge, types::I64);
+                let fast1 = b.create_block();
+                let slow_blk = b.create_block();
+                // Fast iff BOTH operands are arena slots (a pinned short const, a flat element, or
+                // an owned temp) — one AND + one branch.
+                let both = b.ins().band(av, bv);
+                let both_slot = b.ins().band_imm(both, UB_TAG_SLOT);
+                b.ins().brif(both_slot, fast1, &[], slow_blk, &[]);
+                // INLINE: load both lengths; a ≤22-byte result is built in a fresh slot with
+                // bounded 3×8-byte over-copies (the 64-byte slot slack absorbs them — see
+                // `UB_SLOT_SIZE`); the byte semantics are exactly `PhStr::concat`'s.
+                b.switch_to_block(fast1);
+                let buf = b.ins().load(types::I64, MemFlagsData::new(), ctx, 0);
+                let ia = b.ins().band_imm(av, UB_IDX_MASK);
+                let aoff = b.ins().ishl_imm(ia, 6);
+                let pa = b.ins().iadd(buf, aoff);
+                let ib = b.ins().band_imm(bv, UB_IDX_MASK);
+                let boff = b.ins().ishl_imm(ib, 6);
+                let pb = b.ins().iadd(buf, boff);
+                let la = b.ins().uload8(types::I64, MemFlagsData::new(), pa, 0);
+                let lb = b.ins().uload8(types::I64, MemFlagsData::new(), pb, 0);
+                let tot = b.ins().iadd(la, lb);
+                let big = b.ins().icmp_imm(
+                    IntCC::UnsignedGreaterThan,
+                    tot,
+                    crate::phstr::INLINE_CAP as i64,
+                );
+                let fast2 = b.create_block();
+                b.ins().brif(big, slow_blk, &[], fast2, &[]);
+                // Allocate the result slot: pop the inline free stack, else bump (full → code 5,
+                // redo on VM — exhaustion is a fallback, never a user-visible fault).
+                b.switch_to_block(fast2);
+                let alloc_done = b.create_block();
+                b.append_block_param(alloc_done, types::I64);
+                let pop_blk = b.create_block();
+                let bump_blk = b.create_block();
+                let ft = b.ins().load(types::I64, MemFlagsData::new(), ctx, 16);
+                b.ins().brif(ft, pop_blk, &[], bump_blk, &[]);
+                b.switch_to_block(pop_blk);
+                let ft1 = b.ins().iadd_imm(ft, -1);
+                b.ins().store(MemFlagsData::new(), ft1, ctx, 16);
+                let fsp = b.ins().load(types::I64, MemFlagsData::new(), ctx, 8);
+                let foff = b.ins().ishl_imm(ft1, 2);
+                let faddr = b.ins().iadd(fsp, foff);
+                let popped = b.ins().uload32(MemFlagsData::new(), faddr, 0);
+                b.ins().jump(alloc_done, &[popped.into()]);
+                b.switch_to_block(bump_blk);
+                let bp = b.ins().load(types::I64, MemFlagsData::new(), ctx, 24);
+                let cap = b.ins().load(types::I64, MemFlagsData::new(), ctx, 32);
+                let full = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, bp, cap);
+                fault_if(&mut b, full, 5);
+                let bp1 = b.ins().iadd_imm(bp, 1);
+                b.ins().store(MemFlagsData::new(), bp1, ctx, 24);
+                b.ins().jump(alloc_done, &[bp.into()]);
+                b.switch_to_block(alloc_done);
+                let sidx = b.block_params(alloc_done)[0];
+                let doff = b.ins().ishl_imm(sidx, 6);
+                let pd = b.ins().iadd(buf, doff);
+                b.ins().istore8(MemFlagsData::new(), tot, pd, 0);
+                // Copy a → dst+1 (static offsets; over-copy is absorbed by the slot slack).
+                for k in 0..3 {
+                    let w = b.ins().load(types::I64, MemFlagsData::new(), pa, 1 + 8 * k);
+                    b.ins().store(MemFlagsData::new(), w, pd, 1 + 8 * k);
+                }
+                // Copy b → dst+1+la (runtime offset).
+                let la1 = b.ins().iadd_imm(la, 1);
+                let pdb = b.ins().iadd(pd, la1);
+                for k in 0..3 {
+                    let w = b.ins().load(types::I64, MemFlagsData::new(), pb, 1 + 8 * k);
+                    b.ins().store(MemFlagsData::new(), w, pdb, 8 * k);
+                }
+                // Consume compile-time-OWNED operands: recycle iff the runtime OWNED bit is set
+                // (a flat element / pinned const is compile-Owned but runtime-borrowed → no-op).
+                for (v, k) in [(av, ak), (bv, bk)] {
+                    if k.is_owned_handle() {
+                        emit_slot_free_if_owned(&mut b, v);
+                    }
+                }
+                let fres_raw = b.ins().bor_imm(sidx, UB_TAG_SLOT);
+                let fres = b.ins().bor_imm(fres_raw, UB_TAG_OWNED);
+                b.ins().jump(merge, &[fres.into()]);
+                // SLOW: the helper handles every encoding + the >22-byte (heap) result.
+                b.switch_to_block(slow_blk);
                 let mask = (ak.is_owned_handle() as i64) | ((bk.is_owned_handle() as i64) << 1);
                 let maskv = b.ins().iconst(types::I64, mask);
                 let call = b.ins().call(h.concat, &[ctx, av, bv, maskv]);
-                let res = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
                 fault_if(&mut b, bad, 5);
+                b.ins().jump(merge, &[sres.into()]);
+                b.switch_to_block(merge);
+                let res = b.block_params(merge)[0];
                 ub_push(
                     &mut b,
                     &vars,
@@ -1999,21 +2395,59 @@ fn build_body_unboxed(
                         "unboxed String.length operand kind {sk:?}"
                     )));
                 }
+                let merge = b.create_block();
+                b.append_block_param(merge, types::I64);
+                let fast_blk = b.create_block();
+                let slow_blk = b.create_block();
+                let slot_bit = b.ins().band_imm(sv, UB_TAG_SLOT);
+                b.ins().brif(slot_bit, fast_blk, &[], slow_blk, &[]);
+                // INLINE: the length is the slot's leading byte.
+                b.switch_to_block(fast_blk);
+                let buf = b.ins().load(types::I64, MemFlagsData::new(), ctx, 0);
+                let si = b.ins().band_imm(sv, UB_IDX_MASK);
+                let soff = b.ins().ishl_imm(si, 6);
+                let ps = b.ins().iadd(buf, soff);
+                let n = b.ins().uload8(types::I64, MemFlagsData::new(), ps, 0);
+                if sk.is_owned_handle() {
+                    emit_slot_free_if_owned(&mut b, sv);
+                }
+                b.ins().jump(merge, &[n.into()]);
+                b.switch_to_block(slow_blk);
                 let freev = b.ins().iconst(types::I64, sk.is_owned_handle() as i64);
                 let call = b.ins().call(h.str_len, &[ctx, sv, freev]);
-                let res = b.inst_results(call)[0];
-                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
                 fault_if(&mut b, bad, 5);
+                b.ins().jump(merge, &[sres.into()]);
+                b.switch_to_block(merge);
+                let res = b.block_params(merge)[0];
                 ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
             }
             Op::Pop => {
                 let (v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 // An owned handle dies unconsumed here (a statement-expression string, a loop-body
-                // temp) — release it so the free-list keeps the table at steady state. Scalars and
-                // borrows: dropping the SSA value is the whole discard.
+                // temp) — release it so the arena/table stay at steady state. Scalars and borrows:
+                // dropping the SSA value is the whole discard. Runtime dispatch: an owned slot
+                // recycles inline; an untagged temp goes through the helper; a borrowed slot or a
+                // flat list is a no-op (flat handled by the helper defensively).
                 if k.is_owned_handle() {
                     let h = ub_ref("Pop(owned handle)")?;
+                    let owned_bit = b.ins().band_imm(v, UB_TAG_OWNED);
+                    let push_blk = b.create_block();
+                    let not_owned = b.create_block();
+                    let cont = b.create_block();
+                    b.ins().brif(owned_bit, push_blk, &[], not_owned, &[]);
+                    b.switch_to_block(push_blk);
+                    emit_slot_push(&mut b, v);
+                    b.ins().jump(cont, &[]);
+                    b.switch_to_block(not_owned);
+                    let slot_bit = b.ins().band_imm(v, UB_TAG_SLOT);
+                    let helper_blk = b.create_block();
+                    b.ins().brif(slot_bit, cont, &[], helper_blk, &[]);
+                    b.switch_to_block(helper_blk);
                     b.ins().call(h.free, &[ctx, v]);
+                    b.ins().jump(cont, &[]);
+                    b.switch_to_block(cont);
                 }
             }
             Op::AddI | Op::SubI | Op::MulI => {
@@ -2505,6 +2939,7 @@ impl Compiled {
         if uses_handles {
             builder.symbol("rt_u_list_new", rt_u_list_new as *const u8);
             builder.symbol("rt_u_list_push", rt_u_list_push as *const u8);
+            builder.symbol("rt_u_list_seal", rt_u_list_seal as *const u8);
             builder.symbol("rt_u_index", rt_u_index as *const u8);
             builder.symbol("rt_u_concat", rt_u_concat as *const u8);
             builder.symbol("rt_u_str_len", rt_u_str_len as *const u8);
@@ -2513,14 +2948,16 @@ impl Compiled {
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
 
-        // P-2a: intern the graph's string consts into one pinned table (dedup by content — the P-1a
-        // chunk consts are already `PhStr::literal` values, so a clone shares the Rc + cached hash).
-        // `const_map[(fi, const_idx)] -> pinned handle` feeds the `Const(Str)` codegen `iconst`.
+        // P-2a: intern the graph's string consts (dedup by content — the P-1a chunk consts are
+        // already `PhStr::literal` values, so a clone shares the Rc + cached hash). The COMPILE-TIME
+        // handle for each const comes from `UbCtx::const_compile_handles` (a short const is a pinned
+        // arena SLOT, a long one an untagged `handles` entry), and `UbCtx::new` seeds the per-run
+        // state in the SAME deterministic order — the two walks must never diverge.
         let mut const_handles: Vec<Value> = Vec::new();
-        let mut const_map: std::collections::HashMap<(usize, usize), i64> =
+        let mut const_positions: std::collections::HashMap<(usize, usize), usize> =
             std::collections::HashMap::new();
         if uses_handles {
-            let mut by_content: std::collections::HashMap<String, i64> =
+            let mut by_content: std::collections::HashMap<String, usize> =
                 std::collections::HashMap::new();
             for &fi in &order {
                 let func = &program.functions[fi];
@@ -2531,17 +2968,22 @@ impl Compiled {
                     }
                     if let Op::Const(idx) = op {
                         if let Some(Value::Str(s)) = func.chunk.consts.get(*idx) {
-                            let h =
+                            let pos =
                                 *by_content.entry(s.as_str().to_string()).or_insert_with(|| {
                                     const_handles.push(Value::Str(s.clone()));
-                                    (const_handles.len() - 1) as i64
+                                    const_handles.len() - 1
                                 });
-                            const_map.insert((fi, *idx), h);
+                            const_positions.insert((fi, *idx), pos);
                         }
                     }
                 }
             }
         }
+        let compile_handles = UbCtx::const_compile_handles(&const_handles);
+        let const_map: std::collections::HashMap<(usize, usize), i64> = const_positions
+            .into_iter()
+            .map(|(k, pos)| (k, compile_handles[pos]))
+            .collect();
 
         // Declare the handle-op helper imports (only when used).
         let ub_ids = if uses_handles {
@@ -2560,6 +3002,7 @@ impl Compiled {
             Some(UbHelperIds {
                 list_new: declare(&mut module, "rt_u_list_new", &sig2)?,
                 list_push: declare(&mut module, "rt_u_list_push", &sig4)?,
+                list_seal: declare(&mut module, "rt_u_list_seal", &sig2)?,
                 index: declare(&mut module, "rt_u_index", &sig4)?,
                 concat: declare(&mut module, "rt_u_concat", &sig4)?,
                 str_len: declare(&mut module, "rt_u_str_len", &sig3)?,
@@ -2728,11 +3171,7 @@ impl Compiled {
         // Dropped when this call returns, so a fault path leaks nothing into the VM redo.
         let mut ub_ctx_storage;
         let ub_ctx: *mut UbCtx = if self.uses_handles {
-            ub_ctx_storage = UbCtx {
-                n_pinned: self.const_handles.len(),
-                handles: self.const_handles.clone(),
-                free: Vec::new(),
-            };
+            ub_ctx_storage = UbCtx::new(&self.const_handles);
             &mut ub_ctx_storage
         } else {
             std::ptr::null_mut()

@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — P-2a-inline: SSO string ops inline in Cranelift IR — **beats php+JIT 1.71× (gate-2 WIN)**
+
+The P-2a spike's verdict (helper-call granularity ~2× short of php) is resolved: the string hot
+paths are now emitted **inline** in the unboxed JIT. `UbCtx` became `#[repr(C)]` with a
+JIT-visible header (arena base, free-stack base, free-top, bump, cap at fixed offsets) over an
+arena of **64-byte string slots** (`len:u8` + ≤22 data + slack so bounded 3×8-byte over-copies
+never cross a neighbour). Handles gained runtime tags: `SLOT` (arena index; `OWNED` marks it
+recyclable), `FLAT` (a `MakeList`-sealed list of all-short strings flattened into consecutive
+slots), untagged (boxed `Value` — long consts, heap results). Inline fast paths: `Index` on a
+flat list = unsigned bounds check + base+idx (zero copy, borrowed slot); `Concat` = len loads,
+≤22 check, inline free-stack alloc, bounded copies; `String.length` = one byte load; free =
+free-stack push. Every op keeps a helper slow path (untagged operands, >22-byte results,
+non-flat lists), short string consts are pre-seeded as pinned arena slots, and arena exhaustion
+funnels to code 5 (redo on VM) — the side-effect-free fallback invariant is untouched.
+
+**Measured (gate-2, interleaved best-of-7, fresh docker php:8.5-cli+JIT):** real `phg run`
+stringconcat **20.9M ns vs php 35.8M ns = 1.71× WIN** (ceiling spike predicted 1.74×). The
+journey: 948M (pre-P-1a VM) → 739M (P-1a PhStr) → ~130M (P-2a helpers) → **~19-21M (inline)**,
+checksum-identical throughout; full gate green (1928 tests, PHP oracle). Per the 2026-07-11
+ruling, the gate-2 WIN unlocks P-2b (mapget vertical) and P-2c (default-deny rollout).
+
 ### Added — P-2a: JIT handle-space string vertical (spike; measured, FLAGGED vs php+JIT)
 
 The unboxed JIT gains a **handle space**: `Kind::Str`/`Kind::StrList` operands are `i64` indices
