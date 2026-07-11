@@ -1378,6 +1378,17 @@ previously assessed **evidence-proven unreachable at reasonable cost** — this 
 assessment with fresh eyes rather than assuming it. This section is the durable engineering scoping, folded from the
 retired `docs/plans/perf-wave.plan.md` (whose day-by-day narrative lives in `CHANGELOG.md`/`HISTORY`).
 
+**CEILING SPIKE RESULT (2026-07-11, Fable run) — the red flag below is REFUTED at the representation
+level [Verified: interleaved best-of-5, pure-Rust candidates vs fresh docker php:8.5.8+opcache.jit
+(tracing), identical checksums].** Winning representations EXIST: stringconcat — SSO inline ≤23B
+zero-alloc **14.9ms vs php 26.0ms = 1.74× WIN** (Rc-operands+String-result 21.8ms = 1.19× WIN;
+strict-`Rc<str>`-result 47.1ms = 1.8× LOSS — the old V1 scoping would indeed have FLAGged); mapget —
+cached-hash string handles (zend_string model) **7.8ms vs php 10.1ms = 1.30× WIN**, compile-time
+interned keys **2.9ms = 3.5× WIN**; std-HashMap/SipHash 3.6× LOSS. Condition: these are JIT-leg
+ceilings (no VM dispatch) — the WIN requires (1) the representation change AND (2) JIT string/collection
+helper ops; the VM-only path still narrows-not-wins. Spike artifacts: session scratchpad `spike/`
+(ceiling.rs + php legs + results.tsv). Prior red-flag text kept below for history:
+
 **Winnability RED FLAG [Verified: interleaved best-of-5, phorj-VM `--no-jit` vs fresh docker php:8.5+JIT]:**
 `stringconcat` 688ms vs 25ms = **27.6×**; `mapget` 645ms vs 9.6ms = **67.1×** (per-iter ≈344ns vs
 ≈12.5ns). Allocation reduction alone lands ~12–15× (still a FLAG) — a 27–67× gap is NOT closable by
