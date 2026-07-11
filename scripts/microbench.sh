@@ -12,8 +12,18 @@
 # resolution. The checksum defeats dead-code elimination AND gates output-identity (VM and PHP must
 # agree before a timing is trusted). Ratio = php_ns / vm_ns; WIN means the VM is faster (the G-8 bar).
 #
+# SAMPLING (P-2c hardening — the fibrec phantom-flip postmortem): samples are INTERLEAVED per
+# feature (phg then php within each of K rounds) and BOTH sides are PINNED to one core
+# (taskset / docker --cpuset-cpus). The old batched phases (all phg, then all php in one
+# container) manufactured a 5.4x phantom WIN->LOSS flip on fibrec with NO code change under
+# ambient load (the JIT was measured intact at 35x over the VM at the same moment):
+# interleaving cancels load drift within a pair, pinning cancels scheduler-migration noise —
+# the same discipline as the hand measurements. The php side runs in ONE long-lived pinned
+# container via `docker exec` per sample (launch/exec overhead never enters the self-timed ns).
+#
 # Env: PHG_BIN (default target/release/phg), MICROBENCH_RUNS (K, default 3),
-#      MICROBENCH_PHP_IMAGE (default php:8.5-cli). Flags: --json.
+#      MICROBENCH_PHP_IMAGE (default php:8.5-cli),
+#      MICROBENCH_CPU (pin core, default: last core). Flags: --json.
 set -eEuo pipefail
 export LC_ALL=C
 
@@ -45,45 +55,37 @@ done
   exit 2
 }
 
-# Phase 1 — phorj VM, best-of-K per feature (on this host).
-declare -A vm_ns vm_sum
+# Phases 1+2 — INTERLEAVED, PINNED sampling (see the header): one long-lived pinned php
+# container; per feature, K rounds of (pinned phg sample, pinned php sample), best-of-K each.
+CPU="${MICROBENCH_CPU:-$(($(nproc) - 1))}"
+CONTAINER="$(docker run -d --rm --cpuset-cpus="$CPU" -v "$MICRO:/w:ro" "$PHP_IMAGE" sleep infinity)"
+cleanup_container() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
+trap cleanup_container EXIT
+
+declare -A vm_ns vm_sum php_ns php_sum
 for name in "${features[@]}"; do
-  best=""
-  cs=""
+  vbest=""
+  vcs=""
+  pbest=""
+  pcs=""
   for ((k = 0; k < K; k++)); do
-    line="$("$BIN" run "$MICRO/$name.phg")"
+    line="$(taskset -c "$CPU" "$BIN" run "$MICRO/$name.phg")"
     ns="$(printf '%s' "$line" | cut -f2)"
-    cs="$(printf '%s' "$line" | cut -f3)"
-    if [[ -z "$best" || "$ns" -lt "$best" ]]; then best="$ns"; fi
+    vcs="$(printf '%s' "$line" | cut -f3)"
+    if [[ -z "$vbest" || "$ns" -lt "$vbest" ]]; then vbest="$ns"; fi
+    # shellcheck disable=SC2086 # JIT_FLAGS is a deliberate word-split flag list
+    pline="$(docker exec "$CONTAINER" php $JIT_FLAGS "/w/$name.php" 2>/dev/null)"
+    pns="$(printf '%s' "$pline" | cut -f2)"
+    pcs="$(printf '%s' "$pline" | cut -f3)"
+    if [[ -z "$pbest" || "$pns" -lt "$pbest" ]]; then pbest="$pns"; fi
   done
-  vm_ns[$name]="$best"
-  vm_sum[$name]="$cs"
+  vm_ns[$name]="$vbest"
+  vm_sum[$name]="$vcs"
+  php_ns[$name]="$pbest"
+  php_sum[$name]="$pcs"
 done
-
-# Phase 2 — release PHP+JIT, best-of-K, ALL micros in ONE container launch (container start is slow).
-php_out="$(docker run --rm -v "$MICRO:/w:ro" "$PHP_IMAGE" sh -c '
-  K='"$K"'
-  for f in /w/*.php; do
-    name=$(basename "$f" .php)
-    best=""; cs=""
-    i=0
-    while [ "$i" -lt "$K" ]; do
-      line=$(php '"$JIT_FLAGS"' "$f")
-      ns=$(printf "%s" "$line" | cut -f2)
-      cs=$(printf "%s" "$line" | cut -f3)
-      if [ -z "$best" ] || [ "$ns" -lt "$best" ]; then best="$ns"; fi
-      i=$((i + 1))
-    done
-    printf "%s %s %s\n" "$name" "$best" "$cs"
-  done
-' 2>/dev/null)"
-
-declare -A php_ns php_sum
-while read -r name ns cs; do
-  [[ -n "$name" ]] || continue
-  php_ns[$name]="$ns"
-  php_sum[$name]="$cs"
-done <<<"$php_out"
+cleanup_container
+trap - EXIT
 
 # Phase 3 — join, output-identity gate, report.
 if [[ "$JSON" == 1 ]]; then
