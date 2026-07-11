@@ -272,6 +272,58 @@ fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_string_accumulator() {
+    // Strbuild-vertical proof: the `s = s + x` accumulator runs on an ACC record — helper
+    // conversion on the FIRST append (fn entry and after every `s = ""` reset), fully-inline
+    // cap-checked appends after, helper growth when the doubling cap is hit, record recycle +
+    // buffer reuse at each reset. `String.length(s)` reads the record len inline. The `check`
+    // map probe pins the EXACT accumulated bytes early (byte-identity through the ACC path),
+    // and the length-fold covers every append thereafter.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"alpha\", \"beta\", \"gamma\", \"delta\"];\n\
+          Map<string, int> check = [\"alphabeta\" => 7, \"alphabetagamma\" => 11];\n\
+          mutable string s = \"\";\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            s = s + parts[i % 4];\n\
+            if (i == 1) { acc = acc + check[s]; }\n\
+            if (i == 2) { acc = acc + check[s]; }\n\
+            if (String.length(s) > 512) {\n\
+              acc = acc + String.length(s);\n\
+              s = \"\";\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc + String.length(s);\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "string-accumulator jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual string-accumulator jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the string accumulator must actually hit the JIT — else the strbuild flip is unproven"
+    );
+}
+
+#[test]
 fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
     // A >22-byte key defeats flattening: the seal falls back to a boxed `Value::Map` and every
     // lookup routes through the helper into the canonical `map_index` kernel. Byte-identity must

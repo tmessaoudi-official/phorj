@@ -37,6 +37,22 @@ pub(super) const UB_TAG_SLOT: i64 = 1 << 62;
 pub(super) const UB_TAG_FLAT: i64 = 1 << 61;
 /// Handle tag (with `UB_TAG_SLOT`): freeing recycles the slot.
 pub(super) const UB_TAG_OWNED: i64 = 1 << 60;
+/// Handle tag: string ACCUMULATOR (low 40 bits = record index) — the php smart_str analog for
+/// the `s = s + x` pattern (the strbuild vertical): a JIT-visible `{ptr,len,cap}` record (at
+/// `acc_base + idx·24`) over a growable byte buffer, appended to IN PLACE fully inline
+/// (cap-checked bounded copy, no call); `rt_u_acc_append` is the slow leg (first-append
+/// conversion, capacity growth, non-slot rhs). Deliberately NOT combined with `UB_TAG_OWNED`:
+/// the inline release ladders' recycle push keys on OWNED alone (arena-slot semantics) — an
+/// ACC handle must take their helper branch, where [`UbCtx::release`] recycles the RECORD but
+/// keeps its buffer (capacity reuse across `s = ""` resets — php's trick).
+pub(super) const UB_TAG_ACC: i64 = 1 << 59;
+/// Accumulator record-table capacity. Records are pre-allocated (`acc_base` must never move);
+/// live accumulators correspond to compile-time accumulator SITES — a handful at most.
+/// Exhaustion falls back to the plain concat path (correct, slower).
+pub(super) const UB_ACC_CAP: usize = 16;
+/// Slack bytes kept PAST every accumulator buffer's usable cap: the inline append's bounded
+/// 3×8-byte over-copy may write up to 24 bytes beyond the appended piece.
+const UB_ACC_SLACK: usize = 24;
 /// Handle tag: flattened `Map<string,int>` — `SLOT|FLAT` combined (impossible otherwise):
 /// bits[40..52) = pair count (≤ 4095), bits[52..57) = log2 of the bucket-table size, low 40 bits
 /// = base slot; pair `i` = key slot `base+2i` (hash at byte 24, canon at byte 32), value slot
@@ -83,6 +99,9 @@ pub(super) struct UbCtx {
     bump: u64,
     /// offset 32: total slots in the arena.
     cap: u64,
+    /// offset 40: base of the accumulator record table (`UB_ACC_CAP` × 24-byte [`AccRec`]s —
+    /// points into `acc_recs`, pre-allocated so it never moves).
+    acc_base: *mut AccRec,
     // --- Rust-only (helpers may touch; inline IR must not) ---
     /// Boxed-`Value` handles (untagged): long consts, heap concat results.
     handles: Vec<Value>,
@@ -101,6 +120,29 @@ pub(super) struct UbCtx {
     /// every nonzero slot canon word is `interned[content] + 1`, so canon equality ⇔ byte
     /// equality. Entries reference ONLY never-recycled slots (pinned or bump-pinned).
     interned: std::collections::HashMap<Vec<u8>, u32>,
+    /// Owns the accumulator record table `acc_base` points into (fixed `UB_ACC_CAP` length).
+    #[allow(dead_code)]
+    acc_recs: Vec<AccRec>,
+    /// Accumulator byte buffers: `acc_bufs[i]` backs `acc_recs[i]` (always `cap + SLACK` long,
+    /// zero-filled — the inline over-copy may touch the slack). KEPT on record release so a
+    /// recycled record reuses its grown capacity.
+    acc_bufs: Vec<Vec<u8>>,
+    /// Recycled accumulator record indices.
+    acc_free: Vec<u32>,
+    /// Next never-used accumulator record index (grows toward `UB_ACC_CAP`).
+    acc_next: u32,
+}
+
+/// One accumulator record — the JIT-visible `{ptr,len,cap}` triple at `acc_base + idx·24`.
+/// `#[repr(C)]`: inline IR reads/writes these at fixed offsets 0/8/16.
+#[repr(C)]
+pub(super) struct AccRec {
+    /// offset 0: base of the byte buffer (points into the matching `acc_bufs` entry).
+    ptr: *mut u8,
+    /// offset 8: current content length in bytes.
+    len: u64,
+    /// offset 16: usable capacity (the buffer itself holds `cap + UB_ACC_SLACK` bytes).
+    cap: u64,
 }
 
 impl UbCtx {
@@ -132,18 +174,30 @@ impl UbCtx {
             }
         }
         let n_pinned = handles.len();
+        let mut acc_recs: Vec<AccRec> = (0..UB_ACC_CAP)
+            .map(|_| AccRec {
+                ptr: std::ptr::null_mut(),
+                len: 0,
+                cap: 0,
+            })
+            .collect();
         UbCtx {
             buf: buf_storage.as_mut_ptr(),
             free_stack: free_storage.as_mut_ptr(),
             free_top: 0,
             bump,
             cap: UB_SLOT_CAP as u64,
+            acc_base: acc_recs.as_mut_ptr(),
             handles,
             free: Vec::new(),
             n_pinned,
             buf_storage,
             free_storage,
             interned,
+            acc_recs,
+            acc_bufs: vec![Vec::new(); UB_ACC_CAP],
+            acc_free: Vec::new(),
+            acc_next: 0,
         }
     }
 
@@ -229,6 +283,13 @@ impl UbCtx {
             Some(&self.buf_storage[off + 1..off + 1 + len])
         } else if h & UB_TAG_FLAT != 0 {
             None
+        } else if h & UB_TAG_ACC != 0 {
+            let idx = (h & UB_IDX_MASK) as usize;
+            if idx >= UB_ACC_CAP {
+                return None;
+            }
+            let len = self.acc_recs[idx].len as usize;
+            Some(&self.acc_bufs[idx][..len])
         } else {
             match self.handles.get(h as usize) {
                 Some(Value::Str(s)) => Some(s.as_bytes()),
@@ -241,7 +302,7 @@ impl UbCtx {
     /// path — see `rt_u_concat`): returns `true` and leaves `h` as the (now longer) result.
     /// The rhs bytes must already be copied OUT of the ctx (this takes `&mut self`).
     pub(super) fn try_append_in_place(&mut self, h: i64, rhs: &[u8]) -> bool {
-        if h & UB_TAG_SLOT != 0 || h & UB_TAG_FLAT != 0 || h < self.n_pinned as i64 {
+        if h & (UB_TAG_SLOT | UB_TAG_FLAT | UB_TAG_ACC) != 0 || h < self.n_pinned as i64 {
             // Tagged / pinned-const handles never mutate (a pinned literal's Rc is shared with
             // the chunk consts anyway - get_mut would refuse - but guard explicitly).
             return false;
@@ -265,6 +326,13 @@ impl UbCtx {
             }
         } else if h & UB_TAG_FLAT != 0 {
             // Flat-list slots are bump-pinned for the run (built once per call) — no recycling.
+        } else if h & UB_TAG_ACC != 0 {
+            // Recycle the RECORD, keep its buffer: a reconverted accumulator (the `s = ""`
+            // reset pattern) reuses the grown capacity — php's buffer-reuse trick.
+            let idx = (h & UB_IDX_MASK) as u32;
+            if (idx as usize) < UB_ACC_CAP {
+                self.acc_free.push(idx);
+            }
         } else {
             let i = h as usize;
             if h >= self.n_pinned as i64 && i < self.handles.len() {
@@ -272,6 +340,39 @@ impl UbCtx {
                 self.free.push(i);
             }
         }
+    }
+
+    /// Ensure accumulator `idx`'s usable cap ≥ `need` (doubling growth; the buffer always holds
+    /// `cap + UB_ACC_SLACK` zero-filled bytes — the inline over-copy may touch the slack).
+    /// Growth preserves content (`Vec::resize` extends) and refreshes the JIT-visible `ptr`.
+    fn acc_grow_to(&mut self, idx: usize, need: usize) {
+        if (self.acc_recs[idx].cap as usize) < need {
+            let new_cap = need.max(self.acc_recs[idx].cap as usize * 2).max(64);
+            self.acc_bufs[idx].resize(new_cap + UB_ACC_SLACK, 0);
+            self.acc_recs[idx].cap = new_cap as u64;
+            self.acc_recs[idx].ptr = self.acc_bufs[idx].as_mut_ptr();
+        }
+    }
+
+    /// Append `bytes` to accumulator `idx` (capacity must already fit — see [`Self::acc_grow_to`]).
+    fn acc_push(&mut self, idx: usize, bytes: &[u8]) {
+        let len = self.acc_recs[idx].len as usize;
+        self.acc_bufs[idx][len..len + bytes.len()].copy_from_slice(bytes);
+        self.acc_recs[idx].len = (len + bytes.len()) as u64;
+    }
+
+    /// Take a free accumulator record (recycled first — its buffer keeps the grown capacity),
+    /// or `None` when all `UB_ACC_CAP` records are live (fall back to the plain concat path).
+    fn acc_take_record(&mut self) -> Option<usize> {
+        if let Some(i) = self.acc_free.pop() {
+            return Some(i as usize);
+        }
+        if (self.acc_next as usize) < UB_ACC_CAP {
+            let i = self.acc_next;
+            self.acc_next += 1;
+            return Some(i as usize);
+        }
+        None
     }
 }
 
@@ -520,6 +621,72 @@ pub(super) extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask:
     }
     if free_mask & 2 != 0 {
         ctx.release(b);
+    }
+    res
+}
+
+/// FUSED accumulator append (`s = s + x`, the strbuild vertical) — the SLOW leg of the inline
+/// ACC fast path. Three cases: (1) lhs already an ACC record → capacity growth (doubling) +
+/// append; (2) lhs any other string encoding → CONVERT: take a record (a recycled one reuses
+/// its grown buffer), copy the lhs bytes in, append the rhs, release the consumed lhs, return
+/// `ACC|idx` — every subsequent append then runs fully inline; (3) record table exhausted
+/// (> `UB_ACC_CAP` live accumulators) → the plain `rt_u_concat` path (correct, slower). The
+/// rhs bytes are copied out first (self-append aliasing + the `&mut` appends). `free_mask`
+/// bit0 consumes the lhs (always set at accumulator sites), bit1 the rhs. `-1` = bad handle.
+pub(super) extern "C" fn rt_u_acc_append(ctx: *mut UbCtx, a: i64, b: i64, free_mask: i64) -> i64 {
+    let ctx_ref = unsafe { &mut *ctx };
+    let mut small = [0u8; 64];
+    let mut spill: Vec<u8> = Vec::new();
+    let rhs_len = {
+        let Some(bb) = ctx_ref.str_bytes(b) else {
+            return -1;
+        };
+        if bb.len() <= small.len() {
+            small[..bb.len()].copy_from_slice(bb);
+        } else {
+            spill = bb.to_vec();
+        }
+        bb.len()
+    };
+    let rhs: &[u8] = if rhs_len <= small.len() {
+        &small[..rhs_len]
+    } else {
+        &spill
+    };
+    let res = if a & UB_TAG_ACC != 0 {
+        // Growth leg: the inline path found len + rhs_len > cap.
+        let idx = (a & UB_IDX_MASK) as usize;
+        if idx >= UB_ACC_CAP {
+            return -1;
+        }
+        let need = ctx_ref.acc_recs[idx].len as usize + rhs_len;
+        ctx_ref.acc_grow_to(idx, need);
+        ctx_ref.acc_push(idx, rhs);
+        a
+    } else {
+        // Conversion leg: the first append onto a non-ACC lhs (fn entry / post-reset).
+        let Some(idx) = ctx_ref.acc_take_record() else {
+            // Record table exhausted — the plain concat path handles masks itself.
+            return rt_u_concat(ctx, a, b, free_mask);
+        };
+        let lhs_owned: Vec<u8> = match ctx_ref.str_bytes(a) {
+            Some(bytes) => bytes.to_vec(),
+            None => {
+                ctx_ref.acc_free.push(idx as u32); // put the record back
+                return -1;
+            }
+        };
+        ctx_ref.acc_grow_to(idx, (lhs_owned.len() + rhs_len).max(64));
+        ctx_ref.acc_recs[idx].len = 0;
+        ctx_ref.acc_push(idx, &lhs_owned);
+        ctx_ref.acc_push(idx, rhs);
+        if free_mask & 1 != 0 {
+            ctx_ref.release(a);
+        }
+        UB_TAG_ACC | idx as i64
+    };
+    if free_mask & 2 != 0 {
+        ctx_ref.release(b);
     }
     res
 }
@@ -942,6 +1109,7 @@ pub(super) struct UbHelperIds {
     pub(super) index_int: FuncId,
     pub(super) int_to_str: FuncId,
     pub(super) concat_mix: FuncId,
+    pub(super) acc_append: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -959,4 +1127,5 @@ pub(super) struct UbHelperRefs {
     pub(super) index_int: FuncRef,
     pub(super) int_to_str: FuncRef,
     pub(super) concat_mix: FuncRef,
+    pub(super) acc_append: FuncRef,
 }

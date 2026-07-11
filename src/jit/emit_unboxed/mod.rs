@@ -9,11 +9,13 @@
 
 use super::*;
 
+mod concat;
 mod enums;
 mod objects;
 mod scalar;
 mod verticals;
 
+use concat::*;
 use enums::*;
 use objects::*;
 use scalar::*;
@@ -413,6 +415,7 @@ pub(super) fn build_body_unboxed(
         index_int: module.declare_func_in_func(ids.index_int, b.func),
         int_to_str: module.declare_func_in_func(ids.int_to_str, b.func),
         concat_mix: module.declare_func_in_func(ids.concat_mix, b.func),
+        acc_append: module.declare_func_in_func(ids.acc_append, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -653,8 +656,9 @@ pub(super) fn build_body_unboxed(
                         {
                             let (bv, bk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                             let (av, _ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                            let res =
-                                concat_pair(&mut b, &ec, h, av, Kind::Str(Own::Owned), bv, bk)?;
+                            // The strbuild vertical: an ACC-record in-place append (inline
+                            // cap-checked copy; helper converts/grows) — see `concat_acc`.
+                            let res = concat_acc(&mut b, &ec, h, av, bv, bk)?;
                             b.def_var(vars[s], res);
                             kinds[s] = Kind::Str(Own::Owned);
                             skip_ip = Some(ip + 1);

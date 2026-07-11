@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Ω-8 vertical: ACC-record string accumulator — **strbuild 0.42× → 2.27× WIN**
+
+The classic `s = s + x` accumulator (templating, log lines, serialization — the pattern where
+php's refcount-1 in-place append historically dominates) now runs on a php-smart_str-analog
+**accumulator record**: a new `UB_TAG_ACC` handle indexes a JIT-visible `{ptr,len,cap}` record
+table (`UbCtx` header offset 40, 16 pre-allocated records), and the proven `accumulator_site`
+peephole emits a fully-inline append — load the record, cap-check, ONE bounded 3×8-byte copy at
+`ptr+len`, store the new length; no call. The `rt_u_acc_append` helper is the slow leg only:
+first-append conversion (fn entry / after every `s = ""` reset — where a recycled record
+REUSES its grown buffer, php's capacity trick), doubling growth, and non-slot rhs; record
+exhaustion falls back to the plain concat path. `String.length` on a borrowed accumulator
+reads the record's len word inline (the `> 512` reset probe costs one load). The ACC tag
+deliberately omits `UB_TAG_OWNED` so the existing release ladders route it to the helper,
+which recycles the record and keeps the buffer. `emit_unboxed/concat.rs` split out of
+`verticals.rs` (M-Decomp, both files back under the cap). New JIT test pins exact accumulated
+bytes via a map probe plus reset/growth cycles, hits>0.
+
+**Measured (exit-bar protocol, 3 × best-of-7, pinned, interleaved, fresh docker
+php:8.5-cli+JIT):** strbuild medians 2.22/2.27/2.30 → **2.27× WIN** (was 0.42; VM leg 56M →
+9.5M ns). No regressions — webish 2.13 · interp 2.54 · stringconcat 1.9 · trycatch 34 hold;
+floatloop's 1.01 median now ratchet-protected; floatmul's noisy 0.93 emit sample aligned to
+its 1.01 protocol median.
+
 ### Added — Ω-8 vertical: fully-inline mixed interpolation — **webish 0.68× → 2.24× WIN, interp → 2.65×**
 
 The fused `rt_u_concat_mix` helper call (one C call per interpolation) is replaced, for the hot
