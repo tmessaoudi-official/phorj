@@ -209,6 +209,21 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
 - **Ω-8 · Perf hold** — hold the won numeric ground; re-verify no regression each sub-wave.
   *(AMENDED 2026-07-11: the string/array speed-beat moved from end-stage park to the FRONT of this Fable
   run — developer ruling via ask-human; ceiling-spike-first, outcome recorded in KNOWN_ISSUES §"Parked perf".)*
+  **CEILING SPIKE PASSED (2026-07-11) → ACTIVE PERF BUILD (front of run):** SSO strings 1.74× / cached-hash
+  maps 1.30× / interned keys 3.5× WIN vs docker php:8.5.8+JIT in pure-Rust ceiling (KNOWN_ISSUES §"Parked
+  perf" has the table). Build slices, each green+measured (WIN-OR-FLAG):
+  **P-1a** `PhStr` (new `src/phstr.rs`, safe): 24B two-variant — `Inline{len:u8,buf:[u8;22]}` zero-alloc
+  runtime-shorts + `Heap(Rc<HeapStr{hash:Cell<u64>,s:String}>)` literals/longs with lazy-cached FNV;
+  const-pool literals = Heap + precomputed hash (interning); `Value` stays 32B (static assert);
+  `Deref<str>`+`From` keep the 204 `Value::Str(` sites mechanical; compare/eq on bytes (≡ codepoint
+  order for UTF-8); `String.length` byte semantics + fault strings unchanged (byte-identity).
+  **P-1b** `OrderedMap`: entries-vec (insertion order preserved = byte-identity) + open-addressing index
+  over cached hashes; `build_map`/`map_index` kernels keep single-sourcing.
+  **P-2a** JIT vertical spike (audited-unsafe stays confined to `src/jit/`): handle space + helper calls
+  for Concat / list-index / `String.length` native → `stringconcat.bench()` JIT-eligible → measure REAL
+  `phg run` vs fresh docker php interleaved; WIN required to proceed. **P-2b** mapget vertical (map_get
+  helper, unboxed int result). **P-2c** default-deny rollout to the remaining string/collection ops.
+  Then recompute the perf register + G-8 language.
 - **Ω-9 · GA close** — spec freeze, GA-CHECKLIST, final vision-% recompute, showcase; THEN resolve the
   remaining `KNOWN_ISSUES` park-items (ruling A). Hygiene follow-up parked here: the **`runvm` → `interpreter
   ≡ VM ≡ PHP` terminology sweep** (~150 occurrences / ~80 files; a semantic rewrite, its own commit + a
