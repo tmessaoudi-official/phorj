@@ -212,6 +212,9 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   **CEILING SPIKE PASSED (2026-07-11) → ACTIVE PERF BUILD (front of run):** SSO strings 1.74× / cached-hash
   maps 1.30× / interned keys 3.5× WIN vs docker php:8.5.8+JIT in pure-Rust ceiling (KNOWN_ISSUES §"Parked
   perf" has the table). Build slices, each green+measured (WIN-OR-FLAG):
+  **P-1a ✅ SHIPPED (2026-07-11)** — gate green (1925 tests, PHP oracle); interleaved before/after:
+  stringconcat 1.28× / mapget 1.19× / webish 1.08× / interp 1.07×, no regressions; php+JIT beat
+  deferred to P-2a as planned (VM dispatch is the remaining cost).
   **P-1a** `PhStr` (new `src/phstr.rs`, safe): 24B two-variant — `Inline{len:u8,buf:[u8;22]}` zero-alloc
   runtime-shorts + `Heap(Rc<HeapStr{hash:Cell<u64>,s:String}>)` literals/longs with lazy-cached FNV;
   const-pool literals = Heap + precomputed hash (interning); `Value` stays 32B (static assert);

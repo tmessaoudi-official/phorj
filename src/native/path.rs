@@ -81,31 +81,31 @@ fn path_join_str(a: &str, b: &str) -> String {
 
 fn path_basename(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(p)] => Ok(Value::Str(php_basename(p))),
+        [Value::Str(p)] => Ok(Value::Str(php_basename(p).into())),
         _ => Err("Path.baseName expects (string)".into()),
     }
 }
 fn path_dirname(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(p)] => Ok(Value::Str(php_dirname(p))),
+        [Value::Str(p)] => Ok(Value::Str(php_dirname(p).into())),
         _ => Err("Path.directoryName expects (string)".into()),
     }
 }
 fn path_extension(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(p)] => Ok(Value::Str(php_extension(p))),
+        [Value::Str(p)] => Ok(Value::Str(php_extension(p).into())),
         _ => Err("Path.extension expects (string)".into()),
     }
 }
 fn path_stem(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(p)] => Ok(Value::Str(php_stem(p))),
+        [Value::Str(p)] => Ok(Value::Str(php_stem(p).into())),
         _ => Err("Path.fileStem expects (string)".into()),
     }
 }
 fn path_join(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(a), Value::Str(b)] => Ok(Value::Str(path_join_str(a, b))),
+        [Value::Str(a), Value::Str(b)] => Ok(Value::Str(path_join_str(a, b).into())),
         _ => Err("Path.join expects (string, string)".into()),
     }
 }

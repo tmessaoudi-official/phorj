@@ -29,7 +29,7 @@ fn crypto_hash_password(args: &[Value], _: &mut String) -> Result<Value, String>
                 .hash_password(pw.as_bytes(), &salt)
                 .map_err(|e| format!("password hashing failed: {e}"))?
                 .to_string();
-            Ok(Value::Str(hash))
+            Ok(Value::Str(hash.into()))
         }
         _ => Err("Crypto.hashPassword expects (string)".into()),
     }

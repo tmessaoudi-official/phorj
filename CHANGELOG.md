@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — P-1a: `PhStr` string value representation (SSO + cached hash; perf build, front of Fable run)
+
+`Value::Str` (and `HKey::Str`) moved from `String` to the new `crate::phstr::PhStr` — a 24-byte
+two-variant representation (`Value` stays 32 bytes, statically asserted): `Inline{len,buf[22]}`
+holds runtime-built strings ≤ 22 bytes with **zero heap traffic** (short-string concat allocates
+nothing), and `Heap(Rc<HeapStr{hash:Cell<u64>,s}>)` shares literals/long strings with a
+**lazily-cached FNV-1a hash** (the zend_string trick). Compiler const-pool literals, `match`
+pattern literals, and the const-folder intern via `PhStr::literal` (heap + precomputed hash), so
+every occurrence of a literal clones by refcount bump and a map lookup by a literal key never
+re-hashes. `string + string` routes through the single-sourced `PhStr::concat` kernel in both
+backends (Invariant 4), with a two-`Str` fast path in the VM's `Op::Concat`. Equality/ordering are
+byte-wise (≡ code-point order for UTF-8), `String.length` stays byte-length, `Display`/`Debug`
+render exactly like `String`, and all fault strings are unchanged — **byte-identity holds**: the
+full gate is green with the PHP oracle required (1925 tests, 28 suites). Measured (interleaved
+before/after, best-of-7, release): `stringconcat` **1.28×**, `mapget` **1.19×**, `webish` 1.08×,
+`interp` 1.07× — no micro regressed; `fibrec` JIT WIN vs docker php+JIT intact (1.59×). The
+php+JIT beat on string/collection micros is P-2a's gate (JIT handle-space helper ops), for which
+this representation is the prerequisite.
+
 ### Changed — UA-L2: injected-prelude → `Core.*` registry unification (Wave D, step 1)
 
 The eight chained `inject_*_prelude` functions and the hand-synced `enforce_injected::module_of`

@@ -66,7 +66,7 @@ fn process_args_reads_the_process_global() {
             let got: Vec<String> = items
                 .iter()
                 .map(|v| match v {
-                    Value::Str(s) => s.clone(),
+                    Value::Str(s) => s.as_str().to_string(),
                     other => panic!("non-string arg {other:?}"),
                 })
                 .collect();

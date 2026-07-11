@@ -268,10 +268,9 @@ fn math_e(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn math_number_format(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // A negative `decimals` is clamped to 0 (matching the PHP helper), so this never faults.
-        [Value::Float(v), Value::Int(d)] => Ok(Value::Str(crate::value::number_format(
-            *v,
-            (*d).max(0) as usize,
-        ))),
+        [Value::Float(v), Value::Int(d)] => Ok(Value::Str(
+            crate::value::number_format(*v, (*d).max(0) as usize).into(),
+        )),
         _ => Err("Math.numberFormat expects (float, int)".into()),
     }
 }

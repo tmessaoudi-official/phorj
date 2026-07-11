@@ -119,7 +119,7 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
 
 fn base64_encode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Bytes(b)] => Ok(Value::Str(b64_encode(b))),
+        [Value::Bytes(b)] => Ok(Value::Str(b64_encode(b).into())),
         _ => Err("Encoding.base64Encode expects (bytes)".into()),
     }
 }
@@ -134,7 +134,7 @@ fn base64_decode_native(args: &[Value], _: &mut String) -> Result<Value, String>
 }
 fn hex_encode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Bytes(b)] => Ok(Value::Str(hex_encode(b))),
+        [Value::Bytes(b)] => Ok(Value::Str(hex_encode(b).into())),
         _ => Err("Encoding.hexEncode expects (bytes)".into()),
     }
 }

@@ -53,7 +53,7 @@ fn regex_value(pattern: &str) -> Value {
         "Regex".into(),
         crate::value::ClassLayout::from_sorted_names(&["pattern"]),
     );
-    inst.set_field("pattern", Value::Str(pattern.to_string()));
+    inst.set_field("pattern", Value::Str(pattern.into()));
     Value::Instance(Rc::new(inst))
 }
 
@@ -63,7 +63,7 @@ fn as_pattern(v: &Value) -> Result<String, String> {
         Value::Instance(inst) if inst.class.as_ref() == "Regex" => inst
             .get_field("pattern")
             .and_then(|p| match p {
-                Value::Str(s) => Some(s.clone()),
+                Value::Str(s) => Some(s.as_str().to_string()),
                 _ => None,
             })
             .ok_or_else(|| "Regex value is missing its pattern".to_string()),
@@ -102,7 +102,7 @@ fn regex_find(args: &[Value], _: &mut String) -> Result<Value, String> {
             let pat = as_pattern(re)?;
             Ok(compiled(&pat)?
                 .find(s)
-                .map_or(Value::Null, |m| Value::Str(m.as_str().to_string())))
+                .map_or(Value::Null, |m| Value::Str(m.as_str().into())))
         }
         _ => Err("Regex.find expects (Regex, string)".into()),
     }
@@ -115,7 +115,7 @@ fn regex_find_all(args: &[Value], _: &mut String) -> Result<Value, String> {
             let pat = as_pattern(re)?;
             let out: Vec<Value> = compiled(&pat)?
                 .find_iter(s)
-                .map(|m| Value::Str(m.as_str().to_string()))
+                .map(|m| Value::Str(m.as_str().into()))
                 .collect();
             Ok(Value::List(Rc::new(out)))
         }
@@ -136,10 +136,7 @@ fn regex_find_groups(args: &[Value], _: &mut String) -> Result<Value, String> {
                     let mut pairs: Vec<(Value, Value)> = Vec::new();
                     for name in engine.capture_names().flatten() {
                         if let Some(m) = caps.name(name) {
-                            pairs.push((
-                                Value::Str(name.to_string()),
-                                Value::Str(m.as_str().to_string()),
-                            ));
+                            pairs.push((Value::Str(name.into()), Value::Str(m.as_str().into())));
                         }
                     }
                     Ok(Value::Map(Rc::new(build_map(pairs)?)))
@@ -157,7 +154,10 @@ fn regex_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
         [re, Value::Str(s), Value::Str(repl)] => {
             let pat = as_pattern(re)?;
             Ok(Value::Str(
-                compiled(&pat)?.replace_all(s, repl.as_str()).into_owned(),
+                compiled(&pat)?
+                    .replace_all(s, repl.as_str())
+                    .into_owned()
+                    .into(),
             ))
         }
         _ => Err("Regex.replace expects (Regex, string, string)".into()),
@@ -171,7 +171,7 @@ fn regex_split(args: &[Value], _: &mut String) -> Result<Value, String> {
             let pat = as_pattern(re)?;
             let out: Vec<Value> = compiled(&pat)?
                 .split(s)
-                .map(|p| Value::Str(p.to_string()))
+                .map(|p| Value::Str(p.into()))
                 .collect();
             Ok(Value::List(Rc::new(out)))
         }

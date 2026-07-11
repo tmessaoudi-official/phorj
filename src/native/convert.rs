@@ -16,7 +16,7 @@ fn convert_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [v] => v
             .as_display()
-            .map(Value::Str)
+            .map(|s| Value::Str(s.into()))
             .ok_or_else(|| format!("Conversion.toString cannot convert {}", v.type_name())),
         _ => Err("Conversion.toString expects (T)".into()),
     }

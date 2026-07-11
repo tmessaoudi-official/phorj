@@ -13,19 +13,19 @@ fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase())),
+        [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase().into())),
         _ => Err("String.upperCase expects (string)".into()),
     }
 }
 fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase())),
+        [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase().into())),
         _ => Err("String.lowerCase expects (string)".into()),
     }
 }
 fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Str(s.trim().to_string())),
+        [Value::Str(s)] => Ok(Value::Str(s.trim().into())),
         _ => Err("String.trim expects (string)".into()),
     }
 }
@@ -85,7 +85,9 @@ fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn text_characters(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::List(std::rc::Rc::new(
-            s.chars().map(|c| Value::Str(c.to_string())).collect(),
+            s.chars()
+                .map(|c| Value::Str(crate::phstr::PhStr::new(c.encode_utf8(&mut [0u8; 4]))))
+                .collect(),
         ))),
         _ => Err("String.characters expects (string)".into()),
     }
@@ -115,7 +117,9 @@ fn text_capitalize(args: &[Value], _: &mut String) -> Result<Value, String> {
                 Some(b) if b.is_ascii_lowercase() => {
                     let mut v = s.as_bytes().to_vec();
                     v[0] = b - 32;
-                    String::from_utf8(v).expect("only a leading ASCII byte was changed")
+                    String::from_utf8(v)
+                        .expect("only a leading ASCII byte was changed")
+                        .into()
                 }
                 _ => s.clone(),
             };
@@ -138,10 +142,10 @@ fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(items), Value::Str(sep)] => {
-            let mut parts: Vec<String> = Vec::with_capacity(items.len());
+            let mut parts: Vec<&str> = Vec::with_capacity(items.len());
             for it in items.iter() {
                 match it {
-                    Value::Str(s) => parts.push(s.clone()),
+                    Value::Str(s) => parts.push(s.as_str()),
                     other => {
                         return Err(format!(
                             "String.join expects List<string>, found element of type {}",
@@ -150,7 +154,7 @@ fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
                     }
                 }
             }
-            Ok(Value::Str(parts.join(sep)))
+            Ok(Value::Str(parts.join(sep.as_str()).into()))
         }
         _ => Err("String.join expects (List<string>, string)".into()),
     }
@@ -158,7 +162,7 @@ fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(from), Value::Str(to)] => {
-            Ok(Value::Str(s.replace(from.as_str(), to.as_str())))
+            Ok(Value::Str(s.replace(from.as_str(), to.as_str()).into()))
         }
         _ => Err("String.replace expects (string, string, string)".into()),
     }
@@ -183,7 +187,7 @@ fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
             if *n < 0 {
                 return Err("String.repeat count must be >= 0".into());
             }
-            Ok(Value::Str(s.repeat(*n as usize)))
+            Ok(Value::Str(s.repeat(*n as usize).into()))
         }
         _ => Err("String.repeat expects (string, int)".into()),
     }
@@ -197,7 +201,7 @@ fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String>
     let cur = s.len();
     let want = if width < 0 { 0 } else { width as usize };
     if cur >= want {
-        return Ok(Value::Str(s.to_string()));
+        return Ok(Value::Str(s.into()));
     }
     if pad.is_empty() {
         return Err("String.pad: pad string must not be empty".into());
@@ -214,7 +218,7 @@ fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String>
         out.extend_from_slice(&padding);
     }
     String::from_utf8(out)
-        .map(Value::Str)
+        .map(|s| Value::Str(s.into()))
         .map_err(|_| "String.pad: pad split a multibyte character (use an ASCII pad)".into())
 }
 fn text_pad_left(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -254,9 +258,9 @@ fn text_last_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// unchanged (Kotlin/Swift ergonomics; PHP `str_starts_with` + `substr`). An empty prefix is a no-op.
 fn text_remove_prefix(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s), Value::Str(pre)] => Ok(Value::Str(
-            s.strip_prefix(pre.as_str()).unwrap_or(s).to_string(),
-        )),
+        [Value::Str(s), Value::Str(pre)] => {
+            Ok(Value::Str(s.strip_prefix(pre.as_str()).unwrap_or(s).into()))
+        }
         _ => Err("String.removePrefix expects (string, string)".into()),
     }
 }
@@ -264,9 +268,9 @@ fn text_remove_prefix(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// unchanged (PHP `str_ends_with` + `substr`). An empty suffix is a no-op.
 fn text_remove_suffix(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s), Value::Str(suf)] => Ok(Value::Str(
-            s.strip_suffix(suf.as_str()).unwrap_or(s).to_string(),
-        )),
+        [Value::Str(s), Value::Str(suf)] => {
+            Ok(Value::Str(s.strip_suffix(suf.as_str()).unwrap_or(s).into()))
+        }
         _ => Err("String.removeSuffix expects (string, string)".into()),
     }
 }
@@ -360,7 +364,7 @@ fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
                 (begin + *length).min(n)
             };
             String::from_utf8(bytes[begin as usize..end as usize].to_vec())
-                .map(Value::Str)
+                .map(|s| Value::Str(s.into()))
                 .map_err(|_| "String.substring split a multibyte character (byte-indexed)".into())
         }
         _ => Err("String.substring expects (string, int, int)".into()),
@@ -379,14 +383,14 @@ fn text_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
 
 fn text_trim_start(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Str(s.trim_start().to_string())),
+        [Value::Str(s)] => Ok(Value::Str(s.trim_start().into())),
         _ => Err("String.trimStart expects (string)".into()),
     }
 }
 
 fn text_trim_end(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Str(s.trim_end().to_string())),
+        [Value::Str(s)] => Ok(Value::Str(s.trim_end().into())),
         _ => Err("String.trimEnd expects (string)".into()),
     }
 }

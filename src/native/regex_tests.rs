@@ -3,13 +3,13 @@ use super::*;
 /// Build a compiled `Regex` value for a pattern (the helper the natives consume).
 fn re(pattern: &str) -> Value {
     let mut o = String::new();
-    regex_compile(&[Value::Str(pattern.to_string())], &mut o).expect("valid pattern")
+    regex_compile(&[Value::Str(pattern.into())], &mut o).expect("valid pattern")
 }
 
 /// `Value::Str` → its text (`Value` has no `PartialEq` — it holds `f64`).
 fn text(v: &Value) -> String {
     match v {
-        Value::Str(s) => s.clone(),
+        Value::Str(s) => s.as_str().to_string(),
         other => panic!("expected a string value, got {other:?}"),
     }
 }
@@ -34,9 +34,9 @@ fn compile_validates_and_faults_on_unsupported() {
         other => panic!("compile returned {other:?}"),
     }
     // Unbalanced — a clean fault, never a panic.
-    assert!(regex_compile(&[Value::Str("(".to_string())], &mut o).is_err());
+    assert!(regex_compile(&[Value::Str("(".into())], &mut o).is_err());
     // Backreferences are unsupported by the linear-time engine → rejected at compile (ReDoS-safe).
-    assert!(regex_compile(&[Value::Str(r"(\w)\1".to_string())], &mut o).is_err());
+    assert!(regex_compile(&[Value::Str(r"(\w)\1".into())], &mut o).is_err());
 }
 
 #[test]

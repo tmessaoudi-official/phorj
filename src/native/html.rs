@@ -23,7 +23,7 @@ fn html_escape(s: &str) -> String {
 
 fn html_text(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Str(html_escape(s))),
+        [Value::Str(s)] => Ok(Value::Str(html_escape(s).into())),
         _ => Err("Html.text expects (string)".into()),
     }
 }
@@ -61,9 +61,9 @@ fn html_join_fragments(items: &[Value]) -> Result<String, String> {
 /// VALUE is escaped — the same `htmlspecialchars(_, ENT_QUOTES)` boundary as `text`.
 fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(name), Value::Str(value)] => {
-            Ok(Value::Str(format!(" {name}=\"{}\"", html_escape(value))))
-        }
+        [Value::Str(name), Value::Str(value)] => Ok(Value::Str(
+            format!(" {name}=\"{}\"", html_escape(value)).into(),
+        )),
         _ => Err("Html.attribute expects (string, string)".into()),
     }
 }
@@ -71,7 +71,7 @@ fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `bool_attr(name)` -> ` name` — a valueless boolean attribute (`disabled`, `checked`, `required`).
 fn html_bool_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(name)] => Ok(Value::Str(format!(" {name}"))),
+        [Value::Str(name)] => Ok(Value::Str(format!(" {name}").into())),
         _ => Err("Html.booleanAttribute expects (string)".into()),
     }
 }
@@ -83,7 +83,7 @@ fn html_el(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(tag), Value::List(attrs), Value::List(children)] => {
             let a = html_join_fragments(attrs)?;
             let c = html_join_fragments(children)?;
-            Ok(Value::Str(format!("<{tag}{a}>{c}</{tag}>")))
+            Ok(Value::Str(format!("<{tag}{a}>{c}</{tag}>").into()))
         }
         _ => Err("Html.element expects (string, List<Attr>, List<Html>)".into()),
     }
@@ -94,7 +94,7 @@ fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(tag), Value::List(attrs)] => {
             let a = html_join_fragments(attrs)?;
-            Ok(Value::Str(format!("<{tag}{a}/>")))
+            Ok(Value::Str(format!("<{tag}{a}/>").into()))
         }
         _ => Err("Html.voidElement expects (string, List<Attr>)".into()),
     }
@@ -103,7 +103,7 @@ fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `concat(parts)` -> the `Html` parts joined with no separator (combine sibling fragments).
 fn html_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::List(parts)] => Ok(Value::Str(html_join_fragments(parts)?)),
+        [Value::List(parts)] => Ok(Value::Str(html_join_fragments(parts)?.into())),
         _ => Err("Html.concat expects (List<Html>)".into()),
     }
 }
@@ -126,10 +126,9 @@ macro_rules! tag_el {
                 [Value::List(attrs), Value::List(children)] => {
                     let a = html_join_fragments(attrs)?;
                     let c = html_join_fragments(children)?;
-                    Ok(Value::Str(format!(
-                        concat!("<", $tag, "{}>{}</", $tag, ">"),
-                        a, c
-                    )))
+                    Ok(Value::Str(
+                        format!(concat!("<", $tag, "{}>{}</", $tag, ">"), a, c).into(),
+                    ))
                 }
                 _ => Err(concat!("Html.", $tag, " expects (List<Attr>, List<Html>)").into()),
             }
@@ -167,7 +166,7 @@ macro_rules! tag_void {
             match args {
                 [Value::List(attrs)] => {
                     let a = html_join_fragments(attrs)?;
-                    Ok(Value::Str(format!(concat!("<", $tag, "{}/>"), a)))
+                    Ok(Value::Str(format!(concat!("<", $tag, "{}/>"), a).into()))
                 }
                 _ => Err(concat!("Html.", $tag, " expects (List<Attr>)").into()),
             }

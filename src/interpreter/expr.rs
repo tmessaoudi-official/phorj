@@ -382,7 +382,7 @@ impl<'c> Interp<'c> {
                 }
             }
         }
-        Ok(Value::Str(s))
+        Ok(Value::Str(s.into()))
     }
 
     pub(super) fn eval_unary(&mut self, op: UnaryOp, expr: &Expr) -> R<Value> {

@@ -18,15 +18,18 @@ fn file_natives_eval_and_emit() {
     let p = tmp.to_string_lossy().to_string();
     let _ = std::fs::remove_file(&tmp);
     assert!(matches!(
-        file_write(&[Value::Str(p.clone()), Value::Str("hi\n".into())], &mut o),
+        file_write(
+            &[Value::Str(p.as_str().into()), Value::Str("hi\n".into())],
+            &mut o
+        ),
         Ok(Value::Unit)
     ));
     assert!(matches!(
-        file_exists(&[Value::Str(p.clone())], &mut o),
+        file_exists(&[Value::Str(p.as_str().into())], &mut o),
         Ok(Value::Bool(true))
     ));
     assert!(
-        matches!(file_read(&[Value::Str(p.clone())], &mut o), Ok(Value::Str(s)) if s == "hi\n")
+        matches!(file_read(&[Value::Str(p.as_str().into())], &mut o), Ok(Value::Str(s)) if s == "hi\n")
     );
     let _ = std::fs::remove_file(&tmp);
     // `read` returns `string?`; PHP erasure distinguishes empty file from missing.

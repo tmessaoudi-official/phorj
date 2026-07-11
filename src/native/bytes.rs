@@ -4,7 +4,7 @@ use crate::value::Value;
 
 fn bytes_from_string(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Bytes(std::rc::Rc::new(s.clone().into_bytes()))),
+        [Value::Str(s)] => Ok(Value::Bytes(std::rc::Rc::new(s.as_bytes().to_vec()))),
         _ => Err("Bytes.fromString expects (string)".into()),
     }
 }
@@ -12,7 +12,7 @@ fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Invalid UTF-8 → `null` (the `string?` absent case), never a fault.
         [Value::Bytes(b)] => Ok(match std::str::from_utf8(b) {
-            Ok(s) => Value::Str(s.to_string()),
+            Ok(s) => Value::Str(s.into()),
             Err(_) => Value::Null,
         }),
         _ => Err("Bytes.toString expects (bytes)".into()),

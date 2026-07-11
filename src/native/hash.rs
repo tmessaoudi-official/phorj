@@ -370,7 +370,7 @@ fn sha256(msg: &[u8]) -> [u8; 32] {
 
 fn hash_bytes(args: &[Value], digest: fn(&[u8]) -> String, who: &str) -> Result<Value, String> {
     match args {
-        [Value::Bytes(b)] => Ok(Value::Str(digest(b))),
+        [Value::Bytes(b)] => Ok(Value::Str(digest(b).into())),
         _ => Err(format!("Hash.{who} expects (bytes)")),
     }
 }

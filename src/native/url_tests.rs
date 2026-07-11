@@ -6,7 +6,7 @@ fn s(f: fn(&[Value], &mut String) -> Result<Value, String>, input: &str) -> Valu
 }
 fn str_of(v: Value) -> String {
     match v {
-        Value::Str(t) => t,
+        Value::Str(t) => t.into(),
         other => panic!("expected string, got {other:?}"),
     }
 }

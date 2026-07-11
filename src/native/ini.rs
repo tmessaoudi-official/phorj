@@ -43,7 +43,7 @@ fn ini_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
                     } else {
                         format!("{section}.{key}")
                     };
-                    pairs.push((Value::Str(full), Value::Str(val.to_string())));
+                    pairs.push((Value::Str(full.into()), Value::Str(val.into())));
                 }
                 // else: not a comment / section / key=value → skipped
             }

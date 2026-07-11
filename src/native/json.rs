@@ -33,7 +33,7 @@ fn json_stringify(args: &[Value], _: &mut String) -> Result<Value, String> {
         [j] => {
             let mut s = String::new();
             encode(j, &mut s)?;
-            Ok(Value::Str(s))
+            Ok(Value::Str(s.into()))
         }
         _ => Err("Json.stringify expects (Json)".into()),
     }
@@ -75,7 +75,7 @@ fn json_stringify_lines(args: &[Value], _: &mut String) -> Result<Value, String>
                 encode(x, &mut s)?;
                 lines.push(s);
             }
-            Ok(Value::Str(lines.join("\n")))
+            Ok(Value::Str(lines.join("\n").into()))
         }
         _ => Err("Json.stringifyLines expects (List<Json>)".into()),
     }
@@ -86,7 +86,7 @@ fn json_stringify_pretty(args: &[Value], _: &mut String) -> Result<Value, String
         [j] => {
             let mut s = String::new();
             encode_pretty(j, 0, &mut s)?;
-            Ok(Value::Str(s))
+            Ok(Value::Str(s.into()))
         }
         _ => Err("Json.stringifyPretty expects (Json)".into()),
     }
@@ -273,7 +273,7 @@ impl JParser<'_> {
             'f' => self.lit("false", jnode("Bool", vec![Value::Bool(false)])),
             '"' => {
                 let s = self.string()?;
-                Some(jnode("String", vec![Value::Str(s)]))
+                Some(jnode("String", vec![Value::Str(s.into())]))
             }
             '[' => self.array(),
             '{' => self.object(),
@@ -435,7 +435,7 @@ impl JParser<'_> {
                 return None;
             }
             let val = self.value()?;
-            pairs.push((Value::Str(key), val));
+            pairs.push((Value::Str(key.into()), val));
             self.ws();
             match self.bump()? {
                 ',' => {}

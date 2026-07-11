@@ -7,7 +7,7 @@ fn p(input: &str) -> Vec<String> {
         Value::List(items) => items
             .iter()
             .map(|v| match v {
-                Value::Str(s) => s.clone(),
+                Value::Str(s) => s.as_str().to_string(),
                 other => panic!("non-string field: {other:?}"),
             })
             .collect(),
@@ -20,7 +20,7 @@ fn f(fields: &[&str]) -> String {
         fields.iter().map(|s| Value::Str((*s).into())).collect(),
     ));
     match csv_format(&[list], &mut String::new()).unwrap() {
-        Value::Str(s) => s,
+        Value::Str(s) => s.into(),
         other => panic!("expected string, got {other:?}"),
     }
 }

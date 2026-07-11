@@ -20,7 +20,7 @@ enum ConstKey {
     /// `f64::to_bits` — so `+0.0`/`-0.0` and distinct `NaN`s key apart, and equal floats dedup.
     Float(u64),
     Bool(bool),
-    Str(String),
+    Str(crate::phstr::PhStr),
     Unit,
 }
 

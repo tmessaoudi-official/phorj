@@ -7,7 +7,7 @@ fn file_read(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Any read failure maps to `null` (the `string?` absent case), never a fault.
         [Value::Str(path)] => Ok(match std::fs::read_to_string(path) {
-            Ok(s) => Value::Str(s),
+            Ok(s) => Value::Str(s.into()),
             Err(_) => Value::Null,
         }),
         _ => Err("File.read expects (string)".into()),

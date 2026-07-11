@@ -35,7 +35,11 @@ pub fn set_process_args(args: Vec<String>) {
 fn process_args(_args: &[Value], _: &mut String) -> Result<Value, String> {
     let items = PROCESS_ARGS
         .read()
-        .map(|g| g.iter().map(|s| Value::Str(s.clone())).collect::<Vec<_>>())
+        .map(|g| {
+            g.iter()
+                .map(|s| Value::Str(s.as_str().into()))
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     Ok(Value::List(Rc::new(items)))
 }
@@ -50,7 +54,9 @@ pub fn process_args_value() -> Value {
 fn env_get(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // An unset variable is `null` (string?); composes with `??` / if-let like any optional.
-        [Value::Str(name)] => Ok(std::env::var(name).map_or(Value::Null, Value::Str)),
+        [Value::Str(name)] => {
+            Ok(std::env::var(name.as_str()).map_or(Value::Null, |v| Value::Str(v.into())))
+        }
         _ => Err("Environment.get expects (string)".into()),
     }
 }
@@ -62,7 +68,7 @@ fn env_all(_args: &[Value], _: &mut String) -> Result<Value, String> {
     pairs.sort_by(|a, b| a.0.cmp(&b.0));
     let map: Vec<(HKey, Value)> = pairs
         .into_iter()
-        .map(|(k, v)| (HKey::Str(k), Value::Str(v)))
+        .map(|(k, v)| (HKey::Str(k.into()), Value::Str(v.into())))
         .collect();
     Ok(Value::Map(Rc::new(map)))
 }

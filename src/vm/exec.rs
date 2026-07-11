@@ -195,19 +195,26 @@ impl<'a> Vm<'a> {
 
             Op::Concat(n) => {
                 let parts = self.split_off(n);
-                let mut s = String::new();
-                for v in &parts {
-                    match v.as_display() {
-                        Some(t) => s.push_str(&t),
-                        None => {
-                            return Err(format!(
-                                "cannot interpolate {} into a string",
-                                v.type_name()
-                            ))
+                // Two-`Str` fast path (`a + b`, the dominant concat shape): the single-sourced
+                // `PhStr::concat` kernel — short results stay inline, no display round-trip.
+                if let [Value::Str(a), Value::Str(b)] = parts.as_slice() {
+                    let joined = crate::phstr::PhStr::concat(a, b);
+                    self.stack.push(Value::Str(joined));
+                } else {
+                    let mut s = String::new();
+                    for v in &parts {
+                        match v.as_display() {
+                            Some(t) => s.push_str(&t),
+                            None => {
+                                return Err(format!(
+                                    "cannot interpolate {} into a string",
+                                    v.type_name()
+                                ))
+                            }
                         }
                     }
+                    self.stack.push(Value::Str(s.into()));
                 }
-                self.stack.push(Value::Str(s));
             }
             Op::MakeList(n) => {
                 let items = self.split_off(n);

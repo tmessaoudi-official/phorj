@@ -105,7 +105,10 @@ fn format_field(out: &mut String, f: &str) {
 fn csv_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => {
-            let fields = parse_row(s).into_iter().map(Value::Str).collect();
+            let fields = parse_row(s)
+                .into_iter()
+                .map(|f| Value::Str(f.into()))
+                .collect();
             Ok(Value::List(std::rc::Rc::new(fields)))
         }
         _ => Err("Csv.parse expects (string)".into()),
@@ -128,7 +131,7 @@ fn csv_format(args: &[Value], _: &mut String) -> Result<Value, String> {
                 }
                 format_field(&mut out, f);
             }
-            Ok(Value::Str(out))
+            Ok(Value::Str(out.into()))
         }
         _ => Err("Csv.format expects (List<string>)".into()),
     }

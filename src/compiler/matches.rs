@@ -83,7 +83,13 @@ impl Compiler<'_> {
                 line,
             ),
             Pattern::Str(s, _) => {
-                self.emit_literal_test(m_slot, path, Value::Str(s.clone()), skips, line);
+                self.emit_literal_test(
+                    m_slot,
+                    path,
+                    Value::Str(crate::phstr::PhStr::literal(s)),
+                    skips,
+                    line,
+                );
             }
             Pattern::Bool(b, _) => {
                 self.emit_literal_test(m_slot, path, Value::Bool(*b), skips, line);

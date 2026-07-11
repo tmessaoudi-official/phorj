@@ -69,14 +69,14 @@ fn pct_decode(s: &str, raw: bool) -> Option<String> {
 
 fn encode_native(args: &[Value], raw: bool, who: &str) -> Result<Value, String> {
     match args {
-        [Value::Str(s)] => Ok(Value::Str(pct_encode(s, raw))),
+        [Value::Str(s)] => Ok(Value::Str(pct_encode(s, raw).into())),
         _ => Err(format!("Url.{who} expects (string)")),
     }
 }
 fn decode_native(args: &[Value], raw: bool, who: &str) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(match pct_decode(s, raw) {
-            Some(d) => Value::Str(d),
+            Some(d) => Value::Str(d.into()),
             None => Value::Null,
         }),
         _ => Err(format!("Url.{who} expects (string)")),

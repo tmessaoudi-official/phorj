@@ -9,7 +9,7 @@ fn h(f: fn(&[Value], &mut String) -> Result<Value, String>, s: &str) -> String {
     )
     .unwrap()
     {
-        Value::Str(t) => t,
+        Value::Str(t) => t.into(),
         other => panic!("expected string, got {other:?}"),
     }
 }

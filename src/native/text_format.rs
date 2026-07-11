@@ -447,7 +447,7 @@ pub(crate) fn text_format(args: &[Value], _: &mut String) -> Result<Value, Strin
             items.len()
         ));
     }
-    Ok(Value::Str(out))
+    Ok(Value::Str(out.into()))
 }
 
 #[cfg(test)]

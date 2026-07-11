@@ -33,7 +33,9 @@ fn reflect_class_list(args: &[Value], table: &BTreeMap<String, Vec<String>>) -> 
         [Value::Instance(i)] => table.get(&*i.class).cloned().unwrap_or_default(),
         _ => Vec::new(),
     };
-    Value::List(Rc::new(names.into_iter().map(Value::Str).collect()))
+    Value::List(Rc::new(
+        names.into_iter().map(|n| Value::Str(n.into())).collect(),
+    ))
 }
 
 /// `Reflect.interfaces(x) -> List<string>` — the (sorted, transitive) interfaces `x`'s class
@@ -89,7 +91,7 @@ fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
         },
         _ => return Err("Reflect.kind expects (T)".into()),
     };
-    Ok(Value::Str(kind.to_string()))
+    Ok(Value::Str(kind.into()))
 }
 
 /// `Reflect.className(x) -> string?` — the runtime class name for an object (`get_class`), or `null`
@@ -99,8 +101,8 @@ fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `get_class` would report `"Closure"`; both sides agree on `null` instead — the helper guards it).
 fn reflect_class_name(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
-        [Value::Instance(i)] => Ok(Value::Str(i.class.to_string())),
-        [Value::Enum(e)] => Ok(Value::Str(e.variant.to_string())),
+        [Value::Instance(i)] => Ok(Value::Str(i.class.to_string().into())),
+        [Value::Enum(e)] => Ok(Value::Str(e.variant.to_string().into())),
         // A scalar / collection / closure is not a class instance → `null` (string?).
         [_] => Ok(Value::Null),
         _ => Err("Reflect.className expects (T)".into()),
@@ -140,7 +142,7 @@ fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {
         },
         _ => return Err("Reflect.typeName expects (T)".into()),
     };
-    Ok(Value::Str(name.to_string()))
+    Ok(Value::Str(name.into()))
 }
 
 pub(crate) fn reflect_natives() -> Vec<NativeFn> {

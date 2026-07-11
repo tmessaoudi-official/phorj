@@ -9,11 +9,11 @@ fn parse(src: &str) -> Vec<(String, String)> {
             .iter()
             .map(|(k, v)| {
                 let ks = match k {
-                    HKey::Str(s) => s.clone(),
+                    HKey::Str(s) => s.as_str().to_string(),
                     other => panic!("non-string ini key: {other:?}"),
                 };
                 let vs = match v {
-                    Value::Str(s) => s.clone(),
+                    Value::Str(s) => s.as_str().to_string(),
                     other => panic!("non-string ini value: {other:?}"),
                 };
                 (ks, vs)

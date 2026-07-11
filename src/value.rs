@@ -6,6 +6,7 @@
 //! deferred to M3, when mutation could create cycles). See `docs/specs/2026-06-16-m2-p5-object-model-design.md`.
 
 use crate::green::sched::{ChanId, TaskId};
+use crate::phstr::PhStr;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
@@ -120,7 +121,7 @@ pub enum Value {
         scale: u8,
     },
     Bool(bool),
-    Str(String),
+    Str(PhStr),
     /// Raw octet sequence (`bytes`). Shared (like `List`) — cloning is a refcount bump. Distinct from
     /// `Str` (which is UTF-8); converts only via the `core.bytes` natives (M6 W0).
     Bytes(Rc<Vec<u8>>),
@@ -263,7 +264,7 @@ pub struct EnumVal {
 pub enum HKey {
     Int(i64),
     Bool(bool),
-    Str(String),
+    Str(PhStr),
 }
 
 impl HKey {
@@ -305,7 +306,10 @@ pub fn iter_elements(v: &Value) -> Result<Vec<Value>, String> {
         // B1: a `string` iterates its characters as 1-char strings (ASCII-domain like the rest of the
         // String stdlib — Unicode scalars; the transpiler emits PHP `str_split`, byte-identical for
         // ASCII). An empty string yields no elements (matches PHP 8 `str_split("")` == []).
-        Value::Str(s) => Ok(s.chars().map(|c| Value::Str(c.to_string())).collect()),
+        Value::Str(s) => Ok(s
+            .chars()
+            .map(|c| Value::Str(PhStr::new(c.encode_utf8(&mut [0u8; 4]))))
+            .collect()),
         // B1: a `Map<K, V>` iterates as `[key, value]` 2-element lists in insertion order — the
         // two-binding `for (k, v in map)` form destructures each pair (the VM indexes [0]/[1], the
         // interpreter unpacks below). Single-sourced so run≡runvm.
@@ -477,7 +481,7 @@ impl Value {
             // is byte-identical across run/runvm/PHP (M-NUM S1).
             Value::Decimal { unscaled, scale } => Some(fmt_decimal(*unscaled, *scale)),
             Value::Bool(b) => Some(b.to_string()),
-            Value::Str(s) => Some(s.clone()),
+            Value::Str(s) => Some(s.as_str().to_string()),
             Value::Unit => Some("unit".to_string()),
             // Functions cannot be displayed (the checker forbids interpolating a function
             // value; this arm is only reached through the fallback `_ => None` path — EV-7).
@@ -617,8 +621,8 @@ pub fn const_literal(e: &crate::ast::Expr) -> Option<Value> {
         Expr::Null(_) => Some(Value::Null),
         // A plain string literal is a single `Literal` part; any interpolation makes it non-const.
         Expr::Str(parts, _) => match parts.as_slice() {
-            [] => Some(Value::Str(String::new())),
-            [StrPart::Literal(s)] => Some(Value::Str(s.clone())),
+            [] => Some(Value::Str(PhStr::empty())),
+            [StrPart::Literal(s)] => Some(Value::Str(PhStr::literal(s))),
             _ => None,
         },
         Expr::Bytes(b, _) => Some(Value::Bytes(Rc::new(b.clone()))),

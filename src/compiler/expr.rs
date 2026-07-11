@@ -364,16 +364,18 @@ impl Compiler<'_> {
     pub(super) fn compile_str(&mut self, parts: &[StrPart], line: u32) -> Result<(), String> {
         // A single literal segment (or empty) is just a string constant.
         if let [StrPart::Literal(s)] = parts {
-            self.emit_const(Value::Str(s.clone()), line);
+            self.emit_const(Value::Str(crate::phstr::PhStr::literal(s)), line);
             return Ok(());
         }
         if parts.is_empty() {
-            self.emit_const(Value::Str(String::new()), line);
+            self.emit_const(Value::Str(crate::phstr::PhStr::empty()), line);
             return Ok(());
         }
         for part in parts {
             match part {
-                StrPart::Literal(s) => self.emit_const(Value::Str(s.clone()), line),
+                StrPart::Literal(s) => {
+                    self.emit_const(Value::Str(crate::phstr::PhStr::literal(s)), line)
+                }
                 StrPart::Expr(e) => self.expr(e)?,
             }
         }

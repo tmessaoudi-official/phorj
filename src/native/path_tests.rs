@@ -3,7 +3,7 @@ use crate::value::Value;
 
 fn s1(f: fn(&[Value], &mut String) -> Result<Value, String>, input: &str) -> String {
     match f(&[Value::Str(input.into())], &mut String::new()).unwrap() {
-        Value::Str(t) => t,
+        Value::Str(t) => t.into(),
         other => panic!("expected string, got {other:?}"),
     }
 }
@@ -14,7 +14,7 @@ fn s2(f: fn(&[Value], &mut String) -> Result<Value, String>, a: &str, b: &str) -
     )
     .unwrap()
     {
-        Value::Str(t) => t,
+        Value::Str(t) => t.into(),
         other => panic!("expected string, got {other:?}"),
     }
 }
