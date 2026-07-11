@@ -9,9 +9,11 @@
 
 use super::*;
 
+mod enums;
 mod scalar;
 mod verticals;
 
+use enums::*;
 use scalar::*;
 use verticals::*;
 
@@ -164,7 +166,8 @@ pub(super) fn build_body_unboxed(
     // trap) and `Call` (depth guard + fault propagation) — every op that emits a `fault_if`/direct
     // `brif` to the shared exit must be counted here, or the block won't exist when it is needed.
     // P-2a: `Index` (bounds), `Concat` and `String.length` (defensive bad-handle) also branch to the
-    // shared fault-exit (code 5, redo on VM).
+    // shared fault-exit (code 5, redo on VM). `Fault` (the match-exhaustiveness backstop) jumps to
+    // it unconditionally.
     let needs_fault_exit = needs_sticky
         || code.iter().enumerate().any(|(ip, op)| {
             reach[ip]
@@ -179,6 +182,7 @@ pub(super) fn build_body_unboxed(
                         | Op::CallNative(..)
                         | Op::MakeList(_)
                         | Op::MakeMap(_)
+                        | Op::Fault(_)
                 )
         });
 
@@ -233,13 +237,19 @@ pub(super) fn build_body_unboxed(
     // bits (uniform i64 ABI) → bitcast to F64 ONCE here, not per-op. The space NOT matching a slot's
     // initial kind gets a type-correct filler that definite-assignment guarantees is overwritten before
     // read, but must exist to dominate any (dead-then-DCE'd) use.
+    // TRI-space stack cells: `vars[d]` = the I64 space, `fvars[d]` = the F64 space, and `evars[d]`
+    // = the ENUM-TAG space (the second word of a register-pair [`Kind::EnumInt`] — the payload
+    // rides in `vars[d]`). A cell in an unused space carries its type-correct filler; unused
+    // Variables cost nothing after SSA + DCE.
     let mut vars: Vec<Variable> = Vec::with_capacity(max_depth);
     let mut fvars: Vec<Variable> = Vec::with_capacity(max_depth);
+    let mut evars: Vec<Variable> = Vec::with_capacity(max_depth);
     let i_zero = b.ins().iconst(types::I64, 0);
     let f_zero = b.ins().f64const(0.0);
     for s in 0..max_depth {
         let ivar = b.declare_var(types::I64);
         let fvar = b.declare_var(types::F64);
+        let evar = b.declare_var(types::I64);
         if s < args.len() && matches!(param_kinds.get(s), Some(Kind::Float)) {
             let fbits = b.ins().bitcast(types::F64, MemFlagsData::new(), args[s]);
             b.def_var(fvar, fbits);
@@ -251,8 +261,10 @@ pub(super) fn build_body_unboxed(
             b.def_var(ivar, i_zero);
             b.def_var(fvar, f_zero);
         }
+        b.def_var(evar, i_zero);
         vars.push(ivar);
         fvars.push(fvar);
+        evars.push(evar);
     }
 
     // ovf-spec: the speculation sticky flag. A Cranelift `Variable` (NOT an SSA value) so a loop
@@ -463,6 +475,12 @@ pub(super) fn build_body_unboxed(
                     ))
                 })?;
                 let v = b.use_var(var);
+                // A register-pair enum copies BOTH words: the tag into the copy's evars cell
+                // (dest depth = current top, i.e. kinds.len() BEFORE the push).
+                if kind == Kind::EnumInt {
+                    let tv = b.use_var(evars[*slot]);
+                    b.def_var(evars[kinds.len()], tv);
+                }
                 // A handle read is a BORROW (the slot keeps ownership) — mirrors the analyze arm.
                 ub_push(&mut b, &vars, &fvars, &mut kinds, v, borrowed_copy(kind))?;
             }
@@ -492,6 +510,12 @@ pub(super) fn build_body_unboxed(
                         "unboxed: SetLocal on a handle slot (deferred)".to_string(),
                     ));
                 }
+                // A register-pair enum stores BOTH words: the tag from the popped cell's evars
+                // slot (source depth = kinds.len() AFTER the pop) into the frame cell's.
+                if k == Kind::EnumInt {
+                    let tv = b.use_var(evars[kinds.len()]);
+                    b.def_var(evars[*slot], tv);
+                }
                 b.def_var(var, v);
                 kinds[*slot] = k;
             }
@@ -511,10 +535,11 @@ pub(super) fn build_body_unboxed(
                 let mut cargs: Vec<ClValue> = Vec::with_capacity(arity);
                 for _ in 0..arity {
                     let (v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                    // A handle arg would arrive as an untyped i64 param (mirrors the analyze arm).
-                    if k.is_handle() {
+                    // A handle arg would arrive as an untyped i64 param (mirrors the analyze arm);
+                    // a two-word enum can't cross the one-i64-per-arg ABI either.
+                    if k.is_handle() || k == Kind::EnumInt {
                         return Err(JitError::Unsupported(
-                            "unboxed: handle argument to Call (deferred)".to_string(),
+                            "unboxed: handle/enum argument to Call (deferred)".to_string(),
                         ));
                     }
                     cargs.push(v);
@@ -536,6 +561,34 @@ pub(super) fn build_body_unboxed(
                 b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
                 b.switch_to_block(cont);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, value, Kind::Int)?;
+            }
+            // Enum vertical (zero-alloc register pairs) — arm bodies live in `enums.rs`.
+            Op::MakeEnum(idx) => {
+                let arity = program.enum_descs[*idx].arity;
+                arm_make_enum(
+                    &mut b,
+                    &vars,
+                    &fvars,
+                    &evars,
+                    &mut kinds,
+                    *idx as i64,
+                    arity,
+                )?;
+            }
+            Op::MatchTag(idx) => {
+                arm_match_tag(&mut b, &vars, &fvars, &evars, &mut kinds, *idx as i64)?;
+            }
+            Op::GetEnumField(0) => {
+                arm_get_enum_field(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            // A fixed runtime fault (the match-exhaustiveness backstop): unconditionally funnel
+            // to the shared fault-exit as code 5 — the VM redo reproduces the exact canonical
+            // message (Invariant 2). A terminator: no fall-through.
+            Op::Fault(_) => {
+                let fx = fault_exit.expect("Fault requires a fault-exit block (needs_fault_exit)");
+                let five = b.ins().iconst(types::I64, 5);
+                b.ins().jump(fx, &[five.into()]);
+                current = None;
             }
             Op::Jump(t) => {
                 let tb = blocks[*t].ok_or_else(|| {

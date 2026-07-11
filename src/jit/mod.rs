@@ -154,7 +154,9 @@ fn reachable(code: &[Op]) -> Vec<bool> {
         }
         reach[ip] = true;
         match &code[ip] {
-            Op::Return => {}
+            // `Fault` is an unconditional runtime fault — like `Return` it never falls through
+            // (the VM returns the fault message; unboxed codegen jumps to the shared fault-exit).
+            Op::Return | Op::Fault(_) => {}
             Op::Jump(t) => work.push(*t),
             Op::JumpIfFalse(t) => {
                 work.push(*t);

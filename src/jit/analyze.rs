@@ -52,6 +52,16 @@ pub(super) enum Kind {
     /// bytes 0..8 (the flat-map VALUE-slot layout), so `Index` is an inline bounds check + one
     /// load; boxed fallbacks go through the two-return `rt_u_index_int` helper.
     IntList(Own),
+    /// An enum value with AT MOST ONE `Int` payload (the enum vertical), realized as TWO i64
+    /// register words: the payload in the I64 space (`vars[d]`, filler 0 for a zero-payload
+    /// variant) and the VARIANT TAG (its `enum_descs` index) in the tag space (`evars[d]`).
+    /// ZERO-allocation: construct = two register defs, `MatchTag` = one compare,
+    /// `GetEnumField(0)` = the payload word already in hand. Scalar-like (not a handle, no
+    /// ownership, copy is free). Tag-index equality is equivalent to the VM's variant-name
+    /// equality because the compiler's pre-pass dedups descriptors per (type, variant) and the
+    /// checker guarantees a scrutinee is matched only against its own enum's variants.
+    /// Multi-payload / non-int-payload variants are default-denied (collect + analyze).
+    EnumInt,
 }
 
 /// Compile-time ownership of a handle operand — see [`Kind::Str`]. Part of `Kind`'s equality, so the
@@ -713,13 +723,72 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds[*slot] = k;
                 }
+                // Enum vertical: MakeEnum pops the payload(s), pushes the two-word register enum;
+                // MatchTag pops the scrutinee copy, pushes the tag-compare bool; GetEnumField(0)
+                // pops the enum, pushes its payload. Only ≤1-int-payload variants are in the
+                // subset (mirrors `collect_functions_unboxed`); anything else → VM fallback.
+                Op::MakeEnum(idx) => {
+                    let arity = program.enum_descs[*idx].arity;
+                    if arity > 1 {
+                        return Err(JitError::Unsupported(
+                            "unboxed: MakeEnum arity > 1 (deferred)".to_string(),
+                        ));
+                    }
+                    for _ in 0..arity {
+                        let k = kinds.pop().ok_or_else(|| {
+                            JitError::Codegen("unboxed analyze: MakeEnum underflow".to_string())
+                        })?;
+                        if k != Kind::Int {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed: MakeEnum payload kind {k:?} (deferred)"
+                            )));
+                        }
+                    }
+                    kinds.push(Kind::EnumInt);
+                }
+                Op::MatchTag(_) => {
+                    let k = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: MatchTag underflow".to_string())
+                    })?;
+                    if k != Kind::EnumInt {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: MatchTag operand kind {k:?} (deferred)"
+                        )));
+                    }
+                    kinds.push(Kind::Bool);
+                }
+                Op::GetEnumField(i) => {
+                    if *i != 0 {
+                        return Err(JitError::Unsupported(
+                            "unboxed: GetEnumField index > 0 (deferred)".to_string(),
+                        ));
+                    }
+                    let k = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: GetEnumField underflow".to_string())
+                    })?;
+                    if k != Kind::EnumInt {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: GetEnumField operand kind {k:?} (deferred)"
+                        )));
+                    }
+                    kinds.push(Kind::Int);
+                }
+                // A fixed runtime fault (match-exhaustiveness backstop) — a TERMINATOR: no
+                // fall-through successor, no propagated edge (mirrors `reachable`).
+                Op::Fault(_) => {
+                    break;
+                }
                 Op::Call(callee) => {
                     for _ in 0..program.functions[*callee].arity {
                         // A handle arg would arrive at the callee as an untyped i64 param (proven-int
                         // usage could then do arithmetic on a handle INDEX) — reject, VM fallback.
-                        if kinds.pop().is_some_and(Kind::is_handle) {
+                        // A two-word enum can't cross the one-i64-per-arg ABI either.
+                        if kinds
+                            .pop()
+                            .is_some_and(|k| k.is_handle() || k == Kind::EnumInt)
+                        {
                             return Err(JitError::Unsupported(
-                                "unboxed: handle argument to Call (deferred)".to_string(),
+                                "unboxed: handle/enum argument to Call (deferred)".to_string(),
                             ));
                         }
                     }
@@ -840,6 +909,17 @@ pub(super) fn collect_functions_unboxed(
                 // op-allowed above (Eq..Ge) but REJECTED at build time when the operands are float
                 // (fcmp/NaN deferred) — a build-time fallback, sound.
                 Op::AddF | Op::SubF | Op::MulF | Op::DivF => has_float = true,
+                // Enum vertical: register-pair enums (≤1 int payload — the arity gate here; the
+                // payload/operand KIND gates live in `unboxed_analyze`). `Fault` is the
+                // match-exhaustiveness backstop terminator → shared fault-exit, code 5.
+                Op::MakeEnum(idx) => {
+                    if program.enum_descs.get(*idx).is_none_or(|d| d.arity > 1) {
+                        return Err(JitError::Unsupported(
+                            "unboxed: MakeEnum arity > 1 (deferred)".to_string(),
+                        ));
+                    }
+                }
+                Op::MatchTag(_) | Op::GetEnumField(0) | Op::Fault(_) => {}
                 // Mutable locals: a read of any slot and a write (SetLocal) are both in the subset.
                 // Slots are Cranelift Variables (widen-1 c1); their kind is proven by the analyze pass,
                 // and a non-numeric-typed local reaching a `Return` fails the build (whole-graph fallback).
