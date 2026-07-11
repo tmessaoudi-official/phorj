@@ -5,6 +5,78 @@ use super::boxed::ub_int;
 use super::*;
 
 #[test]
+fn proven_rem_by_pow2_masks_and_matches_the_oracle() {
+    // P-2c: `i % 4` with a proven non-negative induction dividend lowers to a single `band` —
+    // values must stay byte-identical to the interpreter oracle across the whole range walk.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            acc = acc + (i % 4) * 10 + (i % 8);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "masked rem must match the oracle");
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual run ok");
+    assert_eq!(manual, oracle);
+    assert!(cache.borrow().hits > 0, "the rem loop must actually JIT");
+}
+
+#[test]
+fn negative_dividend_rem_is_unproven_and_matches_the_oracle() {
+    // A negative-init counter must NOT be masked (`-7 % 4 == -3`, mask would give 1): the proof
+    // requires init ≥ 0, so this stays checked `srem` — byte-identical to the oracle either way.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0 - 7;\n\
+          while (i < iters) {\n\
+            acc = acc + (i % 4);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(9)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "negative-dividend rem must match the oracle"
+    );
+}
+
+#[test]
+fn non_pow2_rem_stays_checked_and_matches_the_oracle() {
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            acc = acc + (i % 3);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(100)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "%3 must match the oracle");
+}
+
+#[test]
 fn unboxed_arithmetic_matches_vm_oracle() {
     // Pure int arithmetic through native registers (no boxed Vec, no helper calls). Checked against
     // the VM oracle across sign combinations.

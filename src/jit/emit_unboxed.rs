@@ -788,6 +788,29 @@ pub(super) fn build_body_unboxed(
             Op::DivI | Op::RemI => {
                 let (bv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let (av, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                // P-2c: a range-PROVEN `RemI` (non-negative dividend, positive power-of-two const
+                // divisor — see `range_proven_ops`) is a single `band`: exact same value (truncated
+                // rem of a non-negative by a positive 2^m), and both fault conditions are impossible.
+                if matches!(op, Op::RemI) && proven_ops[ip] {
+                    let c = match &code[ip - 1] {
+                        Op::Const(ci) => match func.chunk.consts.get(*ci) {
+                            Some(Value::Int(c)) => *c,
+                            other => {
+                                return Err(JitError::Codegen(format!(
+                                    "proven RemI divisor not an int const: {other:?}"
+                                )))
+                            }
+                        },
+                        other => {
+                            return Err(JitError::Codegen(format!(
+                                "proven RemI not preceded by Const: {other:?}"
+                            )))
+                        }
+                    };
+                    let res = b.ins().band_imm(av, c - 1);
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
+                    continue;
+                }
                 // ovf-spec: div/rem CANNOT be speculated — `sdiv`/`srem` hardware-trap (SIGFPE) on both
                 // divide-by-zero AND i64::MIN / -1. So KEEP both as real per-op branches (rare → cheap),
                 // but funnel them to code 5 (redo on VM) like every other fault; the VM redo renders the

@@ -278,7 +278,111 @@ pub(super) fn range_proven_ops(func: &crate::chunk::Function) -> Vec<bool> {
         }
         proven[k] = true;
     }
+
+    // P-2c: prove `RemI` by a POSITIVE power-of-two const with a provably NON-NEGATIVE dividend —
+    // then `x % 2^m ≡ x & (2^m - 1)` EXACTLY (truncated rem of a non-negative by a positive), and
+    // both fault conditions (mod-zero, MIN % -1) are impossible, so the emitter may use a single
+    // `band` with no checks. Non-negativity proof for `GetLocal(s)`:
+    //  - slot `s`'s entry-prefix initializer is a const int ≥ 0 (see `entry_prefix_const_inits`);
+    //  - every reachable `SetLocal(s)` writer is a PROVEN induction increment (`proven[w-1]` — the
+    //    AddI pass above), so `s` only ever grows and (per that proof) never overflows;
+    //    zero writers is also fine (a constant slot).
+    // Any miss degrades to the checked `srem` path (safe).
+    let inits = entry_prefix_const_inits(func, &reach);
+    for k in 0..n {
+        if !reach[k] || !matches!(code[k], Op::RemI) || k < 2 {
+            continue;
+        }
+        let s = match code[k - 2] {
+            Op::GetLocal(s) => s,
+            _ => continue,
+        };
+        let pow2 = matches!(code[k - 1], Op::Const(ci)
+            if matches!(func.chunk.consts.get(ci), Some(Value::Int(c)) if *c > 0 && (c & (c - 1)) == 0));
+        if !pow2 {
+            continue;
+        }
+        if inits.get(s).copied().flatten().is_none_or(|v| v < 0) {
+            continue;
+        }
+        let writers_ok = code.iter().enumerate().all(|(ip, op)| {
+            !(reach[ip] && matches!(op, Op::SetLocal(t) if *t == s))
+                || (ip >= 1 && matches!(code[ip - 1], Op::AddI) && proven[ip - 1])
+        });
+        if writers_ok {
+            proven[k] = true;
+        }
+    }
     proven
+}
+
+/// The provable CONST-INT value of each frame slot at the end of the function's straight-line
+/// entry prefix (before the first block leader): slots are frame-stack positions, so the prefix's
+/// stack simulation identifies each declaration's initializer. Params and anything non-const or
+/// past an unmodeled op are `None` (sound: a missed init only under-proves). Only ops the unboxed
+/// collector admits are modeled; any other op ends the scan.
+fn entry_prefix_const_inits(func: &crate::chunk::Function, reach: &[bool]) -> Vec<Option<i64>> {
+    let code = &func.chunk.code;
+    let is_leader = leaders(code, reach);
+    let mut st: Vec<Option<i64>> = vec![None; func.arity];
+    for (ip, op) in code.iter().enumerate() {
+        if ip > 0 && is_leader[ip] {
+            break;
+        }
+        match op {
+            Op::Const(ci) => st.push(match func.chunk.consts.get(*ci) {
+                Some(Value::Int(v)) => Some(*v),
+                _ => None,
+            }),
+            Op::GetLocal(s) => st.push(st.get(*s).copied().flatten()),
+            Op::SetLocal(s) => {
+                let v = st.pop().flatten();
+                if let Some(slot) = st.get_mut(*s) {
+                    *slot = v;
+                }
+            }
+            Op::MakeList(n) => {
+                st.truncate(st.len().saturating_sub(*n));
+                st.push(None);
+            }
+            Op::MakeMap(n) => {
+                st.truncate(st.len().saturating_sub(2 * n));
+                st.push(None);
+            }
+            Op::Concat(n) => {
+                st.truncate(st.len().saturating_sub(*n));
+                st.push(None);
+            }
+            Op::AddI
+            | Op::SubI
+            | Op::MulI
+            | Op::DivI
+            | Op::RemI
+            | Op::AddF
+            | Op::SubF
+            | Op::MulF
+            | Op::DivF
+            | Op::Eq
+            | Op::Ne
+            | Op::Lt
+            | Op::Gt
+            | Op::Le
+            | Op::Ge
+            | Op::Index => {
+                st.truncate(st.len().saturating_sub(2));
+                st.push(None);
+            }
+            Op::Neg | Op::Not => {
+                st.pop();
+                st.push(None);
+            }
+            Op::Pop => {
+                st.pop();
+            }
+            _ => break, // unmodeled op: stop (later slots stay unproven — sound)
+        }
+    }
+    st
 }
 
 /// Push an SSA value + its kind onto the unboxed operand stack, which is realized as depth-indexed
