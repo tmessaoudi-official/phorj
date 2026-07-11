@@ -1367,6 +1367,61 @@ are byte-identical by construction — the helper throws the same string on both
   it currently errors `E-UNKNOWN-ATTRIBUTE` (a clean rejection, not a silent downgrade). Multi-impl
   qualifiers, generic injectables, and `#[Singleton]` are v2.
 
+## Parked perf — the string/array/collection speed-beat (Fable / end-stage)
+
+**Status: PARKED (developer-ruled 2026-07-10).** Phorj already WINS on numeric/recursion/control-flow
+speed via the unboxed JIT; it MATCHES-not-beats PHP on 20-yr-tuned string/array/collection speed. A
+clean speed-WIN there is **evidence-proven unreachable at reasonable cost** — the developer will bring
+in **Fable** to attempt it, and this is resolved at the very end (once the language is otherwise
+complete and only park-items remain). This section is the durable engineering scoping, folded from the
+retired `docs/plans/perf-wave.plan.md` (whose day-by-day narrative lives in `CHANGELOG.md`/`HISTORY`).
+
+**Winnability RED FLAG [Verified: interleaved best-of-5, phorj-VM `--no-jit` vs fresh docker php:8.5+JIT]:**
+`stringconcat` 688ms vs 25ms = **27.6×**; `mapget` 645ms vs 9.6ms = **67.1×** (per-iter ≈344ns vs
+≈12.5ns). Allocation reduction alone lands ~12–15× (still a FLAG) — a 27–67× gap is NOT closable by
+representation/allocation changes alone; it needs JIT-compiling string/collection ops NATIVELY
+(reimplementing PHP's C engine in Cranelift = enormous + uncertain).
+
+**V0 profile [Verified, throwaway allocator]:** `size_of::<Value>()=32B` (driven by `Str(String)`),
+`Instance=56B`. allocs/iter: `stringconcat` **9.0**, `mapget` **3.0**, `objalloc` **2.98** (rep-addressable);
+`methodcall`/`listindex` **0.0** (dispatch-bound — a SEPARATE JIT-inlining lever, not rep).
+
+**Value-representation overhaul — scoped slice sequence (dormant; the recipe for any future push):**
+- Blast radius [Verified grep]: `Value::` 40+ files; `Value::Str(` 368 sites / 56 files; `.fields` 61/28.
+- **V1 — `Str(String)`→`Str(Rc<str>)`.** Byte-identity-safe [Verified: no in-place `Str` mutation in
+  `src/` — every `Rc::make_mut` is List/Map]. `stringconcat` 9 allocs/iter = 2× Index clone (`exec.rs:245`)
+  + 2× `as_display` clone (`value.rs:481` in `Op::Concat`) + result build → ~2 with `Rc<str>` + a fused
+  builder. `string+string` AND `"{…}"` both lower to `Op::Concat` (`compiler/expr.rs:450`) — one builder
+  fix covers both. Migration: ~209 constructions (`.into()`), ~82 pattern reads (deref to `str`), const
+  pool `Str`→`Rc<str>`, `as_display_str -> Cow<str>` at `exec.rs:196`; interp+VM+natives+const-pool;
+  transpile/lift unaffected. NARROWS-not-WINS (still a FLAG per the red flag above).
+- **V2** box `Decimal` (i128). **V3 — packed `Instance`:** construction = `Rc::new` + `RefCell::new(vec![None;len])`
+  = 2 allocs. **V3a** drop per-field `Option` (−8B/field) — RESOLVE-FIRST open question: is a `None` slot
+  ever observable by `GetField` (fault "no field", `exec.rs:679`)? A Null placeholder turns that fault
+  into a read = byte-identity change → only safe if the checker proves no read-before-def (verify
+  `checker/common.rs`). **V3b** single-allocation Instance (co-alloc field storage with the Rc header,
+  2→1 alloc — the real objalloc win; needs in-house DST or a vetted thin-Rc dep). Maps = parallel
+  `Value::Map(Rc<Vec<(HKey,Value)>>)` lever. **V4** NaN-boxed/tagged end-state (after an accessor-abstraction pass).
+- **String/collection rebuild — per-component profile [Verified]:** gap decomposition interp 8.9× /
+  stringconcat 27.6× / mapget 67.1×; alloc ≈3× of the string gap, residual ~9× floor = VM per-op dispatch
+  + int→string + build. Relative split: stringconcat ≈42% alloc / ≈58% dispatch+build; mapget ≈26/74;
+  `intadd` (0 alloc) = the VM dispatch FLOOR ≈ same order as the string residual. Unit costs: small-String
+  alloc+drop ≈17ns, clone ≈28ns. **The dispatch floor alone is ~7–12× PHP's total per-iter.** Sub-levers:
+  (1) allocation (V1 — necessary-not-sufficient); (2) JIT op-inlining for string/collection ops — SAME
+  CLASS as the reverted boxed-JIT → **spike-first gate: prove ONE op beats PHP on a micro BEFORE the full
+  build** (the ② lesson: wire-first/measure-after cost a session); (3) interning + packed arrays (mapget
+  67× worst).
+
+**Perf-parity register (per-micro state snapshot; near-parity rows are interleave-confirmed, batched rows
+indicative ±~1.5×):** fibrec WIN ~1.7–2.9× · floatmul PARITY (accepted) · intadd default LOSS ~0.71
+(accepted) · intadd `#[UncheckedOverflow]` WIN ~1.99× · ~11 VM-only LOSS categories 0.01–0.39×
+(closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07
+· methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05).
+
+**range-analysis (`21465d8`):** sound + byte-identity-preserving but produces ZERO measured WIN on any
+current micro (the induction counter was off the critical path); kept as the safe-by-proof half of the
+counter/accumulator split. "Will matter when the counter is on the critical path" is [Speculative].
+
 ## Reporting
 
 Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.

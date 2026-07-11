@@ -117,41 +117,34 @@ W6-4/UA-0.10). The five doc false-claim families the audit found (zero-deps, `im
 dead CLI verbs, the wrong concurrency E-code, 🔲-on-shipped) are corrected in the Stage-D pass
 (§2.3) and must never be reintroduced.
 
-**G-8 · PERF MANDATE (developer, 2026-07-05, EMPHATIC — hard bar, not aspiration).** *"Either phorj is
-BETTER in performance than PHP, or it means nothing — it's garbage."* Phorj must be **measurably
-faster than PHP, proven PER-FEATURE**: `phg runvm` beats a **tuned RELEASE php (opcache+JIT)** on each
-feature's isolated microbenchmark. **Not equal — faster.** Consequences:
-(a) **`phg run` is the correctness ORACLE (Invariant 2) — SLOW BY DESIGN (tree-walker); NEVER a perf
-    number.** Perf = `runvm`. Transpiled-PHP *is* PHP ⇒ equal-by-construction — the migration BRIDGE,
-    not the perf story; the perf claim rides the VM.
-(b) The current whole-workload `phg benchmark` is **insufficient** — it cannot prove per-feature parity
-    nor catch a single-feature regression. **Build a per-feature MICROBENCHMARK suite** (one isolated
-    tight-loop bench per operation, in-process median-of-N + warmup, `runvm` vs release-php + helper-
-    overhead check on transpiled-php, ns/op, baseline-tracked, regression-gated via `scripts/perf-gate.sh`).
-(c) **Baseline must be VALID first (W6-4/UA-0.10):** a tuned RELEASE php (no Xdebug — the box php aborts
-    recursion >512 frames — opcache+JIT, clean ini). Until then NO publishable vs-php number, only
-    run-vs-runvm. (Measured 2026-07-05: VM 1.45ms vs debug-php 37ms on `workload.phg` — but that php is
-    invalid; a tuned php+JIT is the real target and is genuinely hard to beat.)
-(d) **Definition-of-done input:** a feature is not perf-"done" until its microbench shows the VM beating
-    release-php; a loss is a tracked **P0-perf bug** to optimize (VM dispatch/allocation/inline-caches).
-    If the VM cannot beat release-php+JIT on a hot path even after optimization → the native/AOT-backend
-    question is a **§15 fork** (surface to the developer, never decide alone). **This is the developer's
-    #1 stated priority.** Full diagnosis: memory `perf-benchmarking-truth`.
+**G-8 · PERF MANDATE (developer, REFINED 2026-07-10 via ask-human — supersedes the original absolute
+"better-in-performance-or-it's-garbage" bar).** "Better than PHP" is **multi-dimensional** — faster /
+safer / better-organized / best-practice / SOLID. **Speed is one axis, not the whole bar.** On speed:
+- Phorj **WINS where structurally possible** — numeric / recursion / control-flow — ALREADY WON via the
+  unboxed Cranelift JIT, which is a **default feature** (`phg run` JITs hot functions out of the box;
+  `--no-jit` / `--tree-walker` opt out): fibrec 1.7–2.9×, intadd `#[UncheckedOverflow]` 2× (fresh
+  interleaved release-php+JIT baselines).
+- Phorj **MATCHES-not-beats** PHP on 20-yr-tuned string / array / collection categories. A clean
+  speed-WIN there needs reimplementing PHP's C engine natively in the JIT — **evidence-proven
+  unreachable at reasonable cost** (strings 27.6× / maps 67.1× behind; the boxed-value JIT was built,
+  measured, and REVERTED as not-a-win). **This speed-beat is PARKED** (see KNOWN_ISSUES §"Parked perf");
+  the developer will bring in **Fable** to attack it, and all park-items are resolved at the very end
+  (once the language is otherwise complete and only they remain). Parity-speed there still ships a Phorj
+  UPGRADE on the OTHER axes (Unicode correctness, no silent coercion, immutability, types).
 
-**G-8 UPDATE (2026-07-05, measured + adjudicated — working plan `docs/plans/perf-wave.plan.md`).**
-Honest baseline landed (phg runvm vs **real release PHP 8.5.7+JIT via Docker**, self-timed pure-exec):
-fib(30) **~28× slower**, heap-alloc **~10× slower**, ~6× memory. (The prior "runvm 25× faster" was a
-light-workload/DEBUG-php artifact — corrected.) callgrind root-caused it: 61% dispatch machinery, 8%
-per-op clone (FIXED `f277113`, −10%), ~15% stack traffic. **VM micro-opt curve flattened → the §15
-fork is RULED: build the JIT/AOT backend** (the only path past the interpretation floor; PHP is a
-bytecode VM + JIT, so `runvm`↔`php-no-JIT` and phorj-JIT↔`php+JIT` are the real races). Ruled with it:
-(i) **CLI reshape** — `phg run`/bare `phg <file>` → the VM (then JIT); `phg run --tree-walker` → the
-interpreter; **`runvm` command REMOVED**; tree-walker KEPT as the (now non-user-facing) correctness
-oracle. (ii) **Per-feature microbench harness** (runvm vs release-php+JIT, ns/op, regression-gated) —
-co-runs as JIT measurement backbone + playground data source; subsumes W6-4/UA-0.10. (iii) **Playground**
-shows precomputed NATIVE 4-engine perf (tree-walk/VM/PHP+JIT/transpiled-PHP, time+mem, per-example +
-global). (iv) **Explore** the tuned-VM-vs-PHP-no-JIT ceiling (possibly relax `forbid(unsafe)` for
-validated-bytecode indexing — folds into JIT design). `forbid(unsafe)` will relax for JIT codegen.
+Standing perf rules (evergreen):
+(a) `phg run` is the correctness ORACLE (Invariant 2) — a slow-by-design tree-walker under `--tree-walker`,
+    NEVER a perf number. Perf rides the VM/JIT. Transpiled-PHP *is* PHP ⇒ equal-by-construction: the
+    migration BRIDGE, never the perf story.
+(b) **NO perf claim without a FRESH release-`php:8.5`+opcache.jit Docker baseline, INTERLEAVED not
+    batched** (this box has a ~1.5× load-noise floor — batched runs manufacture phantom wins). Gate on
+    **WIN / MATCH / LOSS**, not magnitude (ratios swing 3–4×).
+(c) Per-feature microbench harness + `scripts/perf-gate.sh` regression gate; `phg benchmark` for
+    before/after numbers (output-identity gated).
+
+Full evidence, the per-micro scoreboard, and the shelved value-representation-overhaul scoping (V0–V4 +
+blast radius) live in **KNOWN_ISSUES §"Parked perf"** and the §11 ledger — folded here from the retired
+`perf-wave.plan.md`.
 
 ---
 
