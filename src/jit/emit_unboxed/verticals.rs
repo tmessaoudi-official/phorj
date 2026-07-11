@@ -378,39 +378,11 @@ pub(super) fn arm_concat(
         let res = concat_pair(b, ec, h, av, ak, bv, bk)?;
         return ub_push(b, vars, fvars, kinds, res, Kind::Str(Own::Owned));
     }
-    // Mixed interpolation / wide concat (n ≤ 6): ONE fused helper call — `rt_u_concat_mix`
-    // renders every `Int` part (zero-alloc) and joins all parts with NO intermediate slots
-    // (the pairwise fold allocated + copied + freed a slot per merge).
+    // Mixed interpolation / wide concat (n ≤ 6) — the webish vertical: the HOT shape (every
+    // Str part slot-tagged, total ≤ 22 bytes) is built FULLY INLINE in IR; everything else
+    // takes the ONE fused `rt_u_concat_mix` helper call (heap parts, >22-byte results).
     if n <= 6 {
-        let mut kmask: i64 = 0;
-        let mut fmask: i64 = 0;
-        for (j, (_, k)) in parts.iter().enumerate() {
-            match k {
-                Kind::Int => kmask |= 1 << j,
-                Kind::Str(_) => {
-                    if k.is_owned_handle() {
-                        fmask |= 1 << j;
-                    }
-                }
-                other => {
-                    return Err(JitError::Unsupported(format!(
-                        "unboxed Concat operand kind {other:?}"
-                    )));
-                }
-            }
-        }
-        let nv = b.ins().iconst(types::I64, n as i64);
-        let kv = b.ins().iconst(types::I64, kmask);
-        let fv = b.ins().iconst(types::I64, fmask);
-        let zero = b.ins().iconst(types::I64, 0);
-        let mut args: Vec<ClValue> = vec![ec.ctx, nv, kv, fv];
-        args.extend(parts.iter().map(|(v, _)| *v));
-        args.extend(std::iter::repeat_n(zero, 6 - n));
-        let call = b.ins().call(h.concat_mix, &args);
-        let sres = b.inst_results(call)[0];
-        let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
-        ec.fault_if(b, bad, 5);
-        return ub_push(b, vars, fvars, kinds, sres, Kind::Str(Own::Owned));
+        return concat_mix_n(b, ec, h, vars, fvars, kinds, &parts);
     }
     // n > 6 (rare): render `Int` parts via `rt_u_int_to_str`, then fold pairwise (string
     // concat is associative — byte-identical to the VM's single walk); each merge consumes
@@ -535,6 +507,194 @@ pub(super) fn concat_pair(
     b.ins().jump(merge, &[sres.into()]);
     b.switch_to_block(merge);
     Ok(b.block_params(merge)[0])
+}
+
+/// Mixed interpolation / wide concat (`Concat(n)`, 2 ≤ n ≤ 6, Int|Str parts) — the webish
+/// vertical: the hot shape (every `Str` part slot-tagged, total ≤ 22 bytes) is built FULLY
+/// INLINE. Each `Int` part renders backward into a private 48-byte stack scratch — the exact
+/// `as_display` decimal bytes, branchless sign (the '-' is ALWAYS stored at the byte before
+/// the digits; it lands inside the piece only when the start steps back over it) — then all
+/// parts join into a fresh arena slot with bounded 3×8-byte over-copies at a running cursor
+/// (the slot slack absorbs them; hash+canon are zeroed after — the same "punt to the helper"
+/// marker the fused helper writes, so the bytes AND the metadata are identical). Str pieces
+/// over-read ≤ 24 bytes from byte 1 of their 64-byte slot; Int pieces over-read within their
+/// 48-byte scratch (digits at [1..21], sign can reach 0, max read offset 44). Any untagged
+/// (heap) part or a >22-byte total falls to the ONE fused `rt_u_concat_mix` call — the prior
+/// path, byte-identical by construction.
+pub(super) fn concat_mix_n(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    parts: &[(ClValue, Kind)],
+) -> Result<(), JitError> {
+    let n = parts.len();
+    debug_assert!((2..=6).contains(&n));
+    let mut kmask: i64 = 0;
+    let mut fmask: i64 = 0;
+    for (j, (_, k)) in parts.iter().enumerate() {
+        match k {
+            Kind::Int => kmask |= 1 << j,
+            Kind::Str(_) => {
+                if k.is_owned_handle() {
+                    fmask |= 1 << j;
+                }
+            }
+            other => {
+                return Err(JitError::Unsupported(format!(
+                    "unboxed Concat operand kind {other:?}"
+                )));
+            }
+        }
+    }
+    let merge = b.create_block();
+    b.append_block_param(merge, types::I64);
+    let fast0 = b.create_block();
+    let slow_blk = b.create_block();
+    // Fast iff every Str part is an arena slot: AND the handles (the SLOT bit survives iff
+    // all have it), one branch. An all-Int mix has no handle to test — unconditionally fast.
+    let str_vals: Vec<ClValue> = parts
+        .iter()
+        .filter(|(_, k)| matches!(k, Kind::Str(_)))
+        .map(|(v, _)| *v)
+        .collect();
+    if let Some((&first, rest)) = str_vals.split_first() {
+        let mut acc = first;
+        for &v in rest {
+            acc = b.ins().band(acc, v);
+        }
+        let slot_bit = b.ins().band_imm(acc, UB_TAG_SLOT);
+        b.ins().brif(slot_bit, fast0, &[], slow_blk, &[]);
+    } else {
+        b.ins().jump(fast0, &[]);
+    }
+    b.switch_to_block(fast0);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    // Per part: (piece_ptr, piece_len) as runtime values, source order.
+    let mut pieces: Vec<(ClValue, ClValue)> = Vec::with_capacity(n);
+    for &(pv, pk) in parts {
+        match pk {
+            Kind::Str(_) => {
+                let idx = b.ins().band_imm(pv, UB_IDX_MASK);
+                let off = b.ins().ishl_imm(idx, 6);
+                let ps = b.ins().iadd(buf, off);
+                let len = b.ins().uload8(types::I64, MemFlagsData::new(), ps, 0);
+                let data = b.ins().iadd_imm(ps, 1);
+                pieces.push((data, len));
+            }
+            Kind::Int => {
+                let ss = b.create_sized_stack_slot(StackSlotData::new(
+                    StackSlotKind::ExplicitSlot,
+                    48,
+                    3,
+                ));
+                let base = b.ins().stack_addr(types::I64, ss, 0);
+                // |v| as unsigned (`ineg(i64::MIN)` == i64::MIN == 2^63 unsigned — correct).
+                let neg = b.ins().icmp_imm(IntCC::SignedLessThan, pv, 0);
+                let nv = b.ins().ineg(pv);
+                let u0 = b.ins().select(neg, nv, pv);
+                let loop_hdr = b.create_block();
+                b.append_block_param(loop_hdr, types::I64); // u (remaining digits)
+                b.append_block_param(loop_hdr, types::I64); // pos (next write + 1)
+                let after = b.create_block();
+                b.append_block_param(after, types::I64); // pos of the first digit
+                let pos0 = b.ins().iconst(types::I64, 21);
+                b.ins().jump(loop_hdr, &[u0.into(), pos0.into()]);
+                b.switch_to_block(loop_hdr);
+                let u = b.block_params(loop_hdr)[0];
+                let pos = b.block_params(loop_hdr)[1];
+                let pos1 = b.ins().iadd_imm(pos, -1);
+                let ten = b.ins().iconst(types::I64, 10);
+                let rem = b.ins().urem(u, ten);
+                let ch = b.ins().iadd_imm(rem, b'0' as i64);
+                let addr = b.ins().iadd(base, pos1);
+                b.ins().istore8(MemFlagsData::new(), ch, addr, 0);
+                let u1 = b.ins().udiv(u, ten);
+                b.ins().brif(
+                    u1,
+                    loop_hdr,
+                    &[u1.into(), pos1.into()],
+                    after,
+                    &[pos1.into()],
+                );
+                b.switch_to_block(after);
+                let posd = b.block_params(after)[0];
+                // Branchless sign: ALWAYS store '-' at posd-1 (a scratch slack byte when
+                // non-negative), then step the piece start back by neg (0/1).
+                let minus = b.ins().iconst(types::I64, b'-' as i64);
+                let addr_m = b.ins().iadd(base, posd);
+                b.ins().istore8(MemFlagsData::new(), minus, addr_m, -1);
+                let negw = b.ins().uextend(types::I64, neg);
+                let pos2 = b.ins().isub(posd, negw);
+                let ptr = b.ins().iadd(base, pos2);
+                let cap21 = b.ins().iconst(types::I64, 21);
+                let len = b.ins().isub(cap21, pos2);
+                pieces.push((ptr, len));
+            }
+            _ => unreachable!("validated above"),
+        }
+    }
+    let mut tot = pieces[0].1;
+    for &(_, l) in &pieces[1..] {
+        tot = b.ins().iadd(tot, l);
+    }
+    let big = b.ins().icmp_imm(
+        IntCC::UnsignedGreaterThan,
+        tot,
+        crate::phstr::INLINE_CAP as i64,
+    );
+    let fast2 = b.create_block();
+    b.ins().brif(big, slow_blk, &[], fast2, &[]);
+    b.switch_to_block(fast2);
+    let sidx = ec.slot_alloc(b);
+    let doff = b.ins().ishl_imm(sidx, 6);
+    let pd = b.ins().iadd(buf, doff);
+    b.ins().istore8(MemFlagsData::new(), tot, pd, 0);
+    // Bounded copies at a running cursor (dst byte 1 onward; each piece ≤ 22 → 3×8 covers it).
+    let mut cur = b.ins().iconst(types::I64, 1);
+    for &(ptr, len) in &pieces {
+        let dst = b.ins().iadd(pd, cur);
+        for k in 0..3 {
+            let w = b.ins().load(types::I64, MemFlagsData::new(), ptr, 8 * k);
+            b.ins().store(MemFlagsData::new(), w, dst, 8 * k);
+        }
+        cur = b.ins().iadd(cur, len);
+    }
+    // Zero the metadata words the over-copies trashed: hash 0 + canon 0 = "punt to the
+    // helper" — identical to the fused helper's `alloc_slot_bytes(joined, 0, 0)`.
+    let zmeta = b.ins().iconst(types::I64, 0);
+    b.ins()
+        .store(MemFlagsData::new(), zmeta, pd, UB_SLOT_HASH_OFF as i32);
+    b.ins()
+        .store(MemFlagsData::new(), zmeta, pd, UB_SLOT_CANON_OFF as i32);
+    // Consume compile-time-OWNED Str parts (runtime OWNED bit gates the recycle).
+    for &(v, k) in parts {
+        if matches!(k, Kind::Str(_)) && k.is_owned_handle() {
+            ec.slot_free_if_owned(b, v);
+        }
+    }
+    let fres_raw = b.ins().bor_imm(sidx, UB_TAG_SLOT);
+    let fres = b.ins().bor_imm(fres_raw, UB_TAG_OWNED);
+    b.ins().jump(merge, &[fres.into()]);
+    // SLOW: the fused helper — heap parts, >22-byte results (byte-identical join).
+    b.switch_to_block(slow_blk);
+    let nv = b.ins().iconst(types::I64, n as i64);
+    let kv = b.ins().iconst(types::I64, kmask);
+    let fv = b.ins().iconst(types::I64, fmask);
+    let zero = b.ins().iconst(types::I64, 0);
+    let mut args: Vec<ClValue> = vec![ec.ctx, nv, kv, fv];
+    args.extend(parts.iter().map(|(v, _)| *v));
+    args.extend(std::iter::repeat_n(zero, 6 - n));
+    let call = b.ins().call(h.concat_mix, &args);
+    let sres = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    ec.fault_if(b, bad, 5);
+    b.ins().jump(merge, &[sres.into()]);
+    b.switch_to_block(merge);
+    let res = b.block_params(merge)[0];
+    ub_push(b, vars, fvars, kinds, res, Kind::Str(Own::Owned))
 }
 
 /// `String.length` native — INLINE for a slot operand (the length is the slot's leading

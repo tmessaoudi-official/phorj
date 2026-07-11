@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Ω-8 vertical: fully-inline mixed interpolation — **webish 0.68× → 2.24× WIN, interp → 2.65×**
+
+The fused `rt_u_concat_mix` helper call (one C call per interpolation) is replaced, for the hot
+shape, by pure Cranelift IR: every `Str` part slot-tagged (one AND + branch over the handles)
+and a ≤22-byte total build the result entirely inline. Each `Int` part renders backward into a
+private 48-byte stack scratch — the exact `as_display` decimal bytes, with a branchless sign
+(the '-' is always stored at the byte before the digits and only enters the piece when the
+start steps back over it; `i64::MIN` renders correctly via `ineg`'s wrap) — then all parts join
+into a fresh arena slot with bounded 3×8-byte over-copies at a running cursor, hash+canon
+zeroed after (the same "punt" marker the helper writes, so bytes AND metadata are identical).
+Untagged (heap) parts or >22-byte totals still take the one fused helper call. New JIT test
+proves hits>0 and exact rendered bytes through a map probe (a wrong render would miss the key
+on the JIT leg only), covering sign/zero/`i64::MIN`/`MAX` and both paths in one loop.
+
+**Measured (exit-bar protocol: 3 × best-of-7, pinned, interleaved, fresh docker
+php:8.5-cli+JIT):** webish medians 2.37/2.31/2.22 → **2.31× WIN** (was 0.68), interp
+2.59/2.80/2.98 → **2.80× WIN** (was 1.03); no regressions (stringconcat 1.94, trycatch 32.5,
+mapget 0.87, strbuild 0.42). Ratchet re-emitted; two noisy snapshot entries were aligned to the
+protocol medians rather than trusted (strbuild's lucky 1.08 → 0.42 to avoid arming a phantom
+flip-block; floatmul's 0.985 → 1.00 to keep the won parity protected). Also fixed the two
+clippy errors the trycatch commit left (pre-commit runs no clippy; pre-push does).
+
 ### Added — Ω-8 vertical: native throw/catch in the unboxed JIT — **trycatch 0.37× → 33.4× WIN**
 
 Try/catch is now compiled natively in the unboxed JIT, in three gated sub-slices. (1) **Str

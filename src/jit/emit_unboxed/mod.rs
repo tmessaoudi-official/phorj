@@ -180,6 +180,7 @@ struct ThrowSite<'a> {
 /// Release every OWNED cell in `kinds[from..]` (kind-directed — instances free their string
 /// fields too): the VM's unwind/frame-teardown drops these values; the arena must recycle
 /// them or leak. The cells' words are read from their depth-indexed Variables.
+#[allow(clippy::too_many_arguments)] // emit plumbing
 fn emit_unwind_releases(
     b: &mut FunctionBuilder,
     ec: &Ec,

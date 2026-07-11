@@ -85,7 +85,7 @@ use crate::value::Value;
 use cranelift::codegen::ir::{FuncRef, MemFlagsData, Signature, Type};
 use cranelift::prelude::{
     types, AbiParam, Block, FloatCC, FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC,
-    Value as ClValue, Variable,
+    StackSlotData, StackSlotKind, Value as ClValue, Variable,
 };
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, FuncId, Linkage, Module};
@@ -206,11 +206,7 @@ fn leaders(code: &[Op], reach: &[bool]) -> Vec<bool> {
                 }
             }
             // A catch pad is entered via the (implicit) handler edge — a block leader.
-            Op::PushHandler(t) => {
-                if *t < n {
-                    is_leader[*t] = true;
-                }
-            }
+            Op::PushHandler(t) if *t < n => is_leader[*t] = true,
             _ => {}
         }
     }

@@ -222,6 +222,56 @@ fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
+    // Webish-vertical proof: mixed `Concat(n)` interpolation (`"h={v} p={p}"`) runs FULLY
+    // INLINE for the hot shape — IR digit render (sign, zero, i64::MIN/MAX) + slot joins —
+    // while >22-byte totals (the MIN/MAX bodies) take the fused helper: BOTH paths exercise
+    // in ONE loop. The `check` map probe makes `acc` depend on the EXACT rendered bytes (a
+    // wrong render misses the key and faults on the JIT leg only → outputs diverge → caught).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<int> vals = [(0 - 9223372036854775807) - 1, 0 - 42, 0, 7, 9223372036854775807, 123456];\n\
+          List<string> paths = [\"/\", \"/users\", \"/posts\", \"/a\", \"/b\", \"/c\"];\n\
+          Map<string, int> check = [\"h=-42 p=/users\" => 3, \"h=0 p=/posts\" => 5, \"h=7 p=/a\" => 7];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            int v = vals[i % 6];\n\
+            string p = paths[i % 6];\n\
+            string body = \"h={v} p={p}\";\n\
+            int j = i % 6;\n\
+            if (j >= 1) { if (j <= 3) { acc = acc + check[body]; } }\n\
+            acc = acc + String.length(body);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(600)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "mixed-interpolation jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual mixed-interpolation jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "mixed interpolation must actually hit the JIT — else the webish flip is unproven"
+    );
+}
+
+#[test]
 fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
     // A >22-byte key defeats flattening: the seal falls back to a boxed `Value::Map` and every
     // lookup routes through the helper into the canonical `map_index` kernel. Byte-identity must
