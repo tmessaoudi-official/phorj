@@ -68,6 +68,17 @@ pub(super) enum Kind {
     /// never-read filler. Capturing closures are default-denied (collect + analyze); two
     /// different targets merging at a leader disagree on the kind → VM fallback (sound).
     Fn(usize),
+    /// An INSTANCE handle (the object vertical): an arena SLOT (always slot-tagged — instances
+    /// exist only via `MakeInstance` here or an injected method `this`), fields stored FLAT at
+    /// byte `8·layout_slot` (≤ 8 int fields; the class index rides in the compile-time kind, so
+    /// `GetField`/`SetField` are ONE inline load/store with a static offset and `CallMethod` is
+    /// a statically-dispatched direct call). Subset gates: every field ctor-initialized
+    /// (`desc.fields.len() == layout.len()` — no `None` window, so `GetField` is total) and
+    /// int-valued. Ownership mirrors the string handles (`Owned` freed by consumer/`Pop` via
+    /// the inline recycle ladder; `GetLocal` copies are `Borrowed`); `SetLocal` of an instance
+    /// stays denied (aliasing). Returning an instance = OWNERSHIP TRANSFER, allowed only under
+    /// the ctor-shaped gate in the `Return` arm.
+    Inst(usize, Own),
 }
 
 /// Compile-time ownership of a handle operand — see [`Kind::Str`]. Part of `Kind`'s equality, so the
@@ -84,7 +95,11 @@ impl Kind {
     pub(super) fn is_handle(self) -> bool {
         matches!(
             self,
-            Kind::Str(_) | Kind::StrList(_) | Kind::StrIntMap(_) | Kind::IntList(_)
+            Kind::Str(_)
+                | Kind::StrList(_)
+                | Kind::StrIntMap(_)
+                | Kind::IntList(_)
+                | Kind::Inst(..)
         )
     }
     /// Is this operand an OWNED handle (must be freed by its consumer)?
@@ -95,6 +110,7 @@ impl Kind {
                 | Kind::StrList(Own::Owned)
                 | Kind::StrIntMap(Own::Owned)
                 | Kind::IntList(Own::Owned)
+                | Kind::Inst(_, Own::Owned)
         )
     }
 }
@@ -107,6 +123,7 @@ pub(super) fn borrowed_copy(k: Kind) -> Kind {
         Kind::StrList(_) => Kind::StrList(Own::Borrowed),
         Kind::IntList(_) => Kind::IntList(Own::Borrowed),
         Kind::StrIntMap(_) => Kind::StrIntMap(Own::Borrowed),
+        Kind::Inst(c, _) => Kind::Inst(c, Own::Borrowed),
         other => other,
     }
 }
@@ -157,7 +174,11 @@ pub(super) enum Prov {
 /// (a missed mark) only over-rejects (falls back), never mis-accepts. The operand stack is cleared at
 /// terminators so no provenance leaks across a basic-block boundary; `self.arity` args are popped for
 /// a `Call` (u2a calls are self-recursive, so the callee arity equals this function's).
-pub(super) fn unboxed_proven_param_kinds(func: &crate::chunk::Function) -> Vec<Option<Kind>> {
+pub(super) fn unboxed_proven_param_kinds(
+    program: &BytecodeProgram,
+    func_idx: usize,
+) -> Vec<Option<Kind>> {
+    let func = &program.functions[func_idx];
     let code = &func.chunk.code;
     let reach = reachable(code);
     let mut proven: Vec<Option<Kind>> = vec![None; func.arity];
@@ -213,6 +234,41 @@ pub(super) fn unboxed_proven_param_kinds(func: &crate::chunk::Function) -> Vec<O
                 // result. Clear conservatively: losing provenance for operands below the args only
                 // over-rejects (a missed mark), never mis-marks — and the call result is `Other`.
                 stack.clear();
+                stack.push(Prov::Other);
+            }
+            // Object/enum verticals: ctor field values and enum payloads are INT-gated by the
+            // analyze pass, so a bare param feeding them is proven `Int` (the synthesized-ctor
+            // shape `GetLocal(param); MakeInstance` needs exactly this mark).
+            Op::MakeInstance(cidx) => {
+                for _ in 0..program.class_descs[*cidx].fields.len() {
+                    let p = stack.pop().unwrap_or(Prov::Other);
+                    mark(&mut proven, p, Kind::Int);
+                }
+                stack.push(Prov::Other);
+            }
+            Op::MakeEnum(idx) => {
+                for _ in 0..program.enum_descs[*idx].arity {
+                    let p = stack.pop().unwrap_or(Prov::Other);
+                    mark(&mut proven, p, Kind::Int);
+                }
+                stack.push(Prov::Other);
+            }
+            // Method/closure calls: the int-gated args prove bare params `Int`; the receiver /
+            // callee cell is popped unmarked (it is an instance / fn value, not an int).
+            Op::CallMethod(_, argc) => {
+                for _ in 0..*argc {
+                    let p = stack.pop().unwrap_or(Prov::Other);
+                    mark(&mut proven, p, Kind::Int);
+                }
+                stack.pop();
+                stack.push(Prov::Other);
+            }
+            Op::CallValue(argc) => {
+                for _ in 0..*argc {
+                    let p = stack.pop().unwrap_or(Prov::Other);
+                    mark(&mut proven, p, Kind::Int);
+                }
+                stack.pop();
                 stack.push(Prov::Other);
             }
             Op::JumpIfFalse(_) => {
@@ -492,11 +548,58 @@ pub(super) fn ub_pop(
 /// Per-ip abstract operand-stack KINDS at each block leader (`None` = not a leader / unreached).
 pub(super) type LeaderStates = Vec<Option<Vec<Kind>>>;
 
+/// Per-graph cross-function facts for the unboxed path, produced by [`resolve_unboxed_graph`]'s
+/// fixpoint: each function's return KIND (`None` until computed — callers assume `Int`) and,
+/// for method bodies, the receiver class injected as param 0 (`this`). Both are read by the
+/// analyze pass AND by `build_body_unboxed` (which re-runs analyze on the stable facts).
+#[derive(Clone, Debug, Default)]
+pub(super) struct UbGraphInfo {
+    pub(super) ret_kinds: Vec<Option<Kind>>,
+    pub(super) this_inst: Vec<Option<usize>>,
+}
+
+impl UbGraphInfo {
+    pub(super) fn new(n: usize) -> Self {
+        Self {
+            ret_kinds: vec![None; n],
+            this_inst: vec![None; n],
+        }
+    }
+    /// The kind a caller's stack receives from calling `callee` (`Int` until the fixpoint
+    /// fills it — the pre-object behavior, so pure-int graphs converge in one pass).
+    pub(super) fn ret_of(&self, callee: usize) -> Kind {
+        self.ret_kinds
+            .get(callee)
+            .copied()
+            .flatten()
+            .unwrap_or(Kind::Int)
+    }
+    /// Effective param kinds for `func_idx`: the usage-proven seeds, with a method body's
+    /// slot 0 overridden to its receiver class (`this` arrives as a BORROWED instance handle).
+    pub(super) fn param_kinds(
+        &self,
+        func_idx: usize,
+        proven: &[Option<Kind>],
+        arity: usize,
+    ) -> Vec<Kind> {
+        let mut pk: Vec<Kind> = (0..arity)
+            .map(|s| proven.get(s).copied().flatten().unwrap_or(Kind::Unknown))
+            .collect();
+        if let Some(c) = self.this_inst.get(func_idx).copied().flatten() {
+            if let Some(p0) = pk.get_mut(0) {
+                *p0 = Kind::Inst(c, Own::Borrowed);
+            }
+        }
+        pk
+    }
+}
+
 pub(super) fn unboxed_analyze(
     program: &BytecodeProgram,
     func_idx: usize,
     param_kinds: &[Kind],
-) -> Result<(LeaderStates, usize), JitError> {
+    info: &UbGraphInfo,
+) -> Result<(LeaderStates, usize, Option<Kind>, Vec<(usize, usize)>), JitError> {
     let code = &program.functions[func_idx].chunk.code;
     let n = code.len();
     let reach = reachable(code);
@@ -504,8 +607,13 @@ pub(super) fn unboxed_analyze(
 
     let mut leader_state: LeaderStates = vec![None; n];
     let mut max_depth = param_kinds.len();
+    // The function's return kind (all reachable `Return`s must agree, instance returns
+    // normalized to `Owned`) + the statically-resolved `CallMethod` sites discovered
+    // (`(target fn, receiver class)`) — the fixpoint's discovery feed.
+    let mut ret_kind: Option<Kind> = None;
+    let mut method_calls: Vec<(usize, usize)> = Vec::new();
     if n == 0 {
-        return Ok((leader_state, max_depth));
+        return Ok((leader_state, max_depth, ret_kind, method_calls));
     }
     // ip 0 (the entry leader) starts with the params on the stack: slots 0..arity at the frame base.
     leader_state[0] = Some(param_kinds.to_vec());
@@ -822,9 +930,21 @@ pub(super) fn unboxed_analyze(
                             "unboxed: CallValue arity mismatch (VM renders the fault)".to_string(),
                         ));
                     }
-                    kinds.push(Kind::Int);
+                    if info.this_inst.get(f).copied().flatten().is_some() {
+                        return Err(JitError::Unsupported(
+                            "unboxed: CallValue to a method body (deferred)".to_string(),
+                        ));
+                    }
+                    kinds.push(info.ret_of(f));
                 }
                 Op::Call(callee) => {
+                    if info.this_inst.get(*callee).copied().flatten().is_some() {
+                        // A method body's slot 0 is an injected instance — a plain `Call` would
+                        // pass an untyped int there. Only `CallMethod` may reach it.
+                        return Err(JitError::Unsupported(
+                            "unboxed: plain Call to a method body (deferred)".to_string(),
+                        ));
+                    }
                     for _ in 0..program.functions[*callee].arity {
                         // A handle arg would arrive at the callee as an untyped i64 param (proven-int
                         // usage could then do arithmetic on a handle INDEX) — reject, VM fallback.
@@ -838,7 +958,121 @@ pub(super) fn unboxed_analyze(
                             ));
                         }
                     }
+                    kinds.push(info.ret_of(*callee));
+                }
+                // Object vertical: flat arena instances + static field offsets + statically-
+                // dispatched methods. Gates: every field ctor-initialized (no `None` window),
+                // ≤ 8 int fields, int-only field values/args, non-overloaded methods.
+                Op::MakeInstance(cidx) => {
+                    let desc = &program.class_descs[*cidx];
+                    let nf = desc.fields.len();
+                    if desc.layout.len() != nf || nf > 8 {
+                        return Err(JitError::Unsupported(
+                            "unboxed: MakeInstance with non-ctor-initialized or >8 fields (deferred)"
+                                .to_string(),
+                        ));
+                    }
+                    for _ in 0..nf {
+                        let k = kinds.pop().ok_or_else(|| {
+                            JitError::Codegen("unboxed analyze: MakeInstance underflow".to_string())
+                        })?;
+                        if k != Kind::Int {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed: MakeInstance field kind {k:?} (deferred)"
+                            )));
+                        }
+                    }
+                    kinds.push(Kind::Inst(*cidx, Own::Owned));
+                }
+                Op::GetField(nidx) => {
+                    let k = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: GetField underflow".to_string())
+                    })?;
+                    let Kind::Inst(c, _) = k else {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: GetField on {k:?} (deferred)"
+                        )));
+                    };
+                    if program.class_descs[c]
+                        .layout
+                        .slot(&program.names[*nidx])
+                        .is_none()
+                    {
+                        return Err(JitError::Unsupported(
+                            "unboxed: GetField name not in layout (VM renders the fault)"
+                                .to_string(),
+                        ));
+                    }
                     kinds.push(Kind::Int);
+                }
+                Op::SetField(nidx) => {
+                    let v = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: SetField underflow".to_string())
+                    })?;
+                    let k = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: SetField underflow".to_string())
+                    })?;
+                    if v != Kind::Int {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: SetField value kind {v:?} (deferred)"
+                        )));
+                    }
+                    let Kind::Inst(c, _) = k else {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: SetField on {k:?} (deferred)"
+                        )));
+                    };
+                    if program.class_descs[c]
+                        .layout
+                        .slot(&program.names[*nidx])
+                        .is_none()
+                    {
+                        return Err(JitError::Unsupported(
+                            "unboxed: SetField name not in layout (VM no-op parity)".to_string(),
+                        ));
+                    }
+                }
+                Op::CallMethod(nidx, argc) => {
+                    for _ in 0..*argc {
+                        if kinds.pop().is_some_and(|k| {
+                            k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_))
+                        }) {
+                            return Err(JitError::Unsupported(
+                                "unboxed: handle/enum/fn argument to CallMethod (deferred)"
+                                    .to_string(),
+                            ));
+                        }
+                    }
+                    let recv = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: CallMethod underflow".to_string())
+                    })?;
+                    let Kind::Inst(c, _) = recv else {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: CallMethod on {recv:?} (deferred)"
+                        )));
+                    };
+                    let key = (
+                        program.class_descs[c].class.to_string(),
+                        program.names[*nidx].clone(),
+                    );
+                    if program.method_overloads.contains_key(&key) {
+                        return Err(JitError::Unsupported(
+                            "unboxed: overloaded method (deferred)".to_string(),
+                        ));
+                    }
+                    let Some(&target) = program.methods.get(&key) else {
+                        return Err(JitError::Unsupported(
+                            "unboxed: unresolved method (VM renders the fault)".to_string(),
+                        ));
+                    };
+                    // Receiver becomes the callee's slot 0 (`this`), args at 1..=argc.
+                    if program.functions[target].arity != *argc + 1 {
+                        return Err(JitError::Unsupported(
+                            "unboxed: CallMethod arity mismatch (VM renders the fault)".to_string(),
+                        ));
+                    }
+                    method_calls.push((target, c));
+                    kinds.push(info.ret_of(target));
                 }
                 Op::Jump(t) => {
                     propagate(&mut leader_state, &mut work, *t, &kinds)?;
@@ -851,6 +1085,60 @@ pub(super) fn unboxed_analyze(
                     break;
                 }
                 Op::Return => {
+                    let rk = *kinds.last().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: Return underflow".to_string())
+                    })?;
+                    let rk = match rk {
+                        // OWNERSHIP-TRANSFER gate for an instance return (the synthesized-ctor
+                        // shape): the escaping handle must be the function's OWN fresh
+                        // allocation, and nothing else owned may be live (no leak at return —
+                        // frame teardown emits no frees).
+                        Kind::Inst(c, own) => {
+                            // (a) no handle/instance params — a returned borrow could otherwise
+                            //     alias a caller-owned handle (double-free on the caller side).
+                            if param_kinds.iter().any(|k| k.is_handle()) {
+                                return Err(JitError::Unsupported(
+                                    "unboxed: instance return from a function with handle params (deferred)"
+                                        .to_string(),
+                                ));
+                            }
+                            // (b) owned-cell census below the returned top.
+                            let below = &kinds[..kinds.len() - 1];
+                            let owned: Vec<Kind> = below
+                                .iter()
+                                .copied()
+                                .filter(|k| k.is_owned_handle())
+                                .collect();
+                            let transfer_ok = match own {
+                                // Returned owned directly: nothing else owned may remain.
+                                Own::Owned => owned.is_empty(),
+                                // Returned a borrow of a local: exactly ONE owned cell — an
+                                // instance of the SAME class (the borrowed lineage) — remains.
+                                Own::Borrowed => {
+                                    owned.len() == 1
+                                        && matches!(owned[0], Kind::Inst(c2, Own::Owned) if c2 == c)
+                                }
+                            };
+                            if !transfer_ok {
+                                return Err(JitError::Unsupported(
+                                    "unboxed: instance return with ambiguous ownership (deferred)"
+                                        .to_string(),
+                                ));
+                            }
+                            // The caller receives ownership.
+                            Kind::Inst(c, Own::Owned)
+                        }
+                        other => other,
+                    };
+                    match &ret_kind {
+                        None => ret_kind = Some(rk),
+                        Some(prev) if *prev != rk => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed: inconsistent return kinds ({prev:?} vs {rk:?})"
+                            )));
+                        }
+                        Some(_) => {}
+                    }
                     break;
                 }
                 other => {
@@ -869,7 +1157,7 @@ pub(super) fn unboxed_analyze(
             ip = next;
         }
     }
-    Ok((leader_state, max_depth))
+    Ok((leader_state, max_depth, ret_kind, method_calls))
 }
 
 /// Collect the set of functions to compile for the UNBOXED path: the entry plus every function it
@@ -966,6 +1254,14 @@ pub(super) fn collect_functions_unboxed(
                     }
                 }
                 Op::MatchTag(_) | Op::GetEnumField(0) | Op::Fault(_) => {}
+                // Object vertical: flat arena instances (the arena is the UbCtx — handle space
+                // required). Kind/layout gates live in `unboxed_analyze`; `CallMethod` targets
+                // are discovered by `resolve_unboxed_graph`'s fixpoint (receiver kinds needed).
+                Op::MakeInstance(_) | Op::GetField(_) | Op::SetField(_) => uses_handles = true,
+                Op::CallMethod(..) => {
+                    has_call = true;
+                    uses_handles = true;
+                }
                 // Closure vertical: collect the capture-free target into the graph; `CallValue`
                 // is a direct call at emit time (counts as a call for the float-leaf gate).
                 Op::MakeClosure(f) => {
@@ -1001,4 +1297,86 @@ pub(super) fn collect_functions_unboxed(
         order.push(fi);
     }
     Ok((order, uses_handles))
+}
+
+/// Resolve the FULL unboxed graph: the op-gated function set ([`collect_functions_unboxed`]),
+/// then the cross-function FIXPOINT — per-function return kinds (a ctor returns an instance,
+/// so its callers' stacks must see `Inst`, not the pre-object `Int` assumption), method-body
+/// `this` injection, and `CallMethod` target DISCOVERY (a resolved method body is op-gated and
+/// joins the set, then its own callees do). Facts refine monotonically (ret kinds flip at most
+/// from the `Int` assumption to the computed kind as callee facts arrive); the iteration cap is
+/// a defensive backstop — hitting it falls back to the VM, never miscompiles.
+pub(super) fn resolve_unboxed_graph(
+    program: &BytecodeProgram,
+    entry_idx: usize,
+) -> Result<(Vec<usize>, bool, UbGraphInfo), JitError> {
+    let (mut order, mut uses_handles) = collect_functions_unboxed(program, entry_idx)?;
+    let mut info = UbGraphInfo::new(program.functions.len());
+    let cap = program.functions.len() + 3;
+    for _round in 0..cap {
+        let mut changed = false;
+        // An `Unsupported` mid-fixpoint may be STALE-fact-induced (a caller analyzed before its
+        // ctor's `Inst` return is recorded sees `Int` and rejects `CallMethod` on it) — hold the
+        // error and retry next round; it is fatal only once the facts stop changing.
+        let mut pending_err: Option<JitError> = None;
+        let mut idx = 0;
+        while idx < order.len() {
+            let fi = order[idx];
+            idx += 1;
+            let proven = unboxed_proven_param_kinds(program, fi);
+            let pk = info.param_kinds(fi, &proven, program.functions[fi].arity);
+            let (rk, mcalls) = match unboxed_analyze(program, fi, &pk, &info) {
+                Ok((_, _, rk, mcalls)) => (rk, mcalls),
+                Err(e @ JitError::Unsupported(_)) => {
+                    pending_err = Some(e);
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            if let Some(rk) = rk {
+                if info.ret_kinds[fi] != Some(rk) {
+                    info.ret_kinds[fi] = Some(rk);
+                    changed = true;
+                }
+            }
+            for (target, class) in mcalls {
+                match info.this_inst[target] {
+                    None => {
+                        info.this_inst[target] = Some(class);
+                        changed = true;
+                    }
+                    Some(prev) if prev != class => {
+                        // One method body reached with two receiver classes — cannot inject a
+                        // single `this` kind (also structurally impossible today: the methods
+                        // table is per (class, name)). Fall back.
+                        return Err(JitError::Unsupported(
+                            "unboxed: method body reached from two classes (deferred)".to_string(),
+                        ));
+                    }
+                    Some(_) => {}
+                }
+                if !order.contains(&target) {
+                    // Op-gate the discovered method body + its transitive plain callees.
+                    let (sub_order, sub_handles) = collect_functions_unboxed(program, target)?;
+                    for t in sub_order {
+                        if !order.contains(&t) {
+                            order.push(t);
+                        }
+                    }
+                    uses_handles |= sub_handles;
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            return match pending_err {
+                None => Ok((order, uses_handles, info)),
+                // Facts are stable and a function still rejects — a genuine fallback.
+                Some(e) => Err(e),
+            };
+        }
+    }
+    Err(JitError::Unsupported(
+        "unboxed: graph resolution did not converge (deferred)".to_string(),
+    ))
 }

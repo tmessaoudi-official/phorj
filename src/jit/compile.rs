@@ -140,8 +140,16 @@ impl Compiled {
         program: &BytecodeProgram,
         entry_idx: usize,
     ) -> Result<Compiled, JitError> {
-        // Transitive op-subset eligibility + the set of functions to compile (reachable-only).
-        let (order, uses_handles) = collect_functions_unboxed(program, entry_idx)?;
+        // Transitive op-subset eligibility + the set of functions to compile (reachable-only),
+        // plus the cross-function fixpoint facts (ret kinds, method `this` injection).
+        let (order, uses_handles, info) = resolve_unboxed_graph(program, entry_idx)?;
+        // The ENTRY's return crosses back into the boxed world — `run_unboxed` decodes only
+        // Int/Float. An instance-returning entry stays on the VM.
+        if matches!(info.ret_of(entry_idx), Kind::Inst(..)) {
+            return Err(JitError::Unsupported(
+                "unboxed: entry returns an instance (deferred)".to_string(),
+            ));
+        }
 
         // `opt_level=speed` (P-2a): the default `none` leaves the register shuffles around the
         // handle-op helper calls and the loop-carried Variable phis unoptimized; `speed` is a pure
@@ -287,7 +295,7 @@ impl Compiled {
         // Capture the ENTRY's return kind for `run_unboxed`'s Int-vs-Float decode.
         let mut entry_ret_kind: Option<Kind> = None;
         for &fi in &order {
-            let proven = unboxed_proven_param_kinds(&program.functions[fi]);
+            let proven = unboxed_proven_param_kinds(program, fi);
             let mut ret_kind: Option<Kind> = None;
             let mut cl_ctx = module.make_context();
             cl_ctx.func.signature = make_fn_sig(&module, program.functions[fi].arity);
@@ -301,6 +309,7 @@ impl Compiled {
                 &mut ret_kind,
                 ub_ids.as_ref(),
                 &const_map,
+                &info,
             )?;
             module
                 .define_function(func_ids[fi].expect("declared above"), &mut cl_ctx)

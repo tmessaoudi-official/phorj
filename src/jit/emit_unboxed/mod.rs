@@ -10,10 +10,12 @@
 use super::*;
 
 mod enums;
+mod objects;
 mod scalar;
 mod verticals;
 
 use enums::*;
+use objects::*;
 use scalar::*;
 use verticals::*;
 
@@ -90,6 +92,37 @@ impl Ec {
         b.ins().jump(cont, &[]);
         b.switch_to_block(cont);
     }
+
+    /// Allocate a fresh arena SLOT inline (the P-2a-inline concat ladder, shared by
+    /// `MakeInstance`): pop the inline free stack if non-empty, else bump — a full arena is
+    /// code 5 (redo on VM; exhaustion is a fallback, never a user-visible fault). Returns the
+    /// slot INDEX (untagged).
+    fn slot_alloc(&self, b: &mut FunctionBuilder) -> ClValue {
+        let alloc_done = b.create_block();
+        b.append_block_param(alloc_done, types::I64);
+        let pop_blk = b.create_block();
+        let bump_blk = b.create_block();
+        let ft = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 16);
+        b.ins().brif(ft, pop_blk, &[], bump_blk, &[]);
+        b.switch_to_block(pop_blk);
+        let ft1 = b.ins().iadd_imm(ft, -1);
+        b.ins().store(MemFlagsData::new(), ft1, self.ctx, 16);
+        let fsp = b.ins().load(types::I64, self.stable, self.ctx, 8);
+        let foff = b.ins().ishl_imm(ft1, 2);
+        let faddr = b.ins().iadd(fsp, foff);
+        let popped = b.ins().uload32(MemFlagsData::new(), faddr, 0);
+        b.ins().jump(alloc_done, &[popped.into()]);
+        b.switch_to_block(bump_blk);
+        let bp = b.ins().load(types::I64, MemFlagsData::new(), self.ctx, 24);
+        let cap = b.ins().load(types::I64, self.stable, self.ctx, 32);
+        let full = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, bp, cap);
+        self.fault_if(b, full, 5);
+        let bp1 = b.ins().iadd_imm(bp, 1);
+        b.ins().store(MemFlagsData::new(), bp1, self.ctx, 24);
+        b.ins().jump(alloc_done, &[bp.into()]);
+        b.switch_to_block(alloc_done);
+        b.block_params(alloc_done)[0]
+    }
 }
 
 /// Resolve the handle-op helper refs, or fail with the canonical collect-drift diagnostic
@@ -143,6 +176,7 @@ fn emit_call_to(
     kinds: &mut Vec<Kind>,
     callee: usize,
     cargs: Vec<ClValue>,
+    ret: Kind,
 ) -> Result<(), JitError> {
     let callee_ref = fn_refs
         .get(callee)
@@ -170,7 +204,15 @@ fn emit_call_to(
         .expect("Call requires a fault-exit block (needs_fault_exit)");
     b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
     b.switch_to_block(cont);
-    ub_push(b, vars, fvars, kinds, value, Kind::Int)
+    // The callee's fixpoint-recorded return kind (Int for pure-int graphs; an instance-returning
+    // ctor hands its OWNED arena handle across — the ownership-transfer contract). A Float return
+    // travels as its i64 bits over the uniform ABI → bitcast back into the F64 space here.
+    let value = if ret == Kind::Float {
+        b.ins().bitcast(types::F64, MemFlagsData::new(), value)
+    } else {
+        value
+    };
+    ub_push(b, vars, fvars, kinds, value, ret)
 }
 
 /// Emit UNBOXED native code for one int function (self- or cross-recursive) into `cl_ctx.func`
@@ -198,6 +240,7 @@ pub(super) fn build_body_unboxed(
     ret_kind_out: &mut Option<Kind>,
     ub: Option<&UbHelperIds>,
     const_handles: &std::collections::HashMap<(usize, usize), i64>,
+    info: &UbGraphInfo,
 ) -> Result<(), JitError> {
     let func = &program.functions[func_idx];
     let code = &func.chunk.code;
@@ -205,12 +248,12 @@ pub(super) fn build_body_unboxed(
     let reach = reachable(code);
 
     // Param slots read as `Int` iff proven int by usage (so a bare-param `Return`, e.g. fib's base case,
-    // types correctly); otherwise `Unknown` → a bare return of one is rejected. These seed the entry
-    // stack for the analysis, which then fixes every leader's (depth, kinds) and the max stack depth.
-    let param_kinds: Vec<Kind> = (0..func.arity)
-        .map(|s| proven.get(s).copied().flatten().unwrap_or(Kind::Unknown))
-        .collect();
-    let (leader_state, max_depth) = unboxed_analyze(program, func_idx, &param_kinds)?;
+    // types correctly); otherwise `Unknown` → a bare return of one is rejected. A method body's slot 0
+    // is the injected receiver (`this` — a BORROWED instance handle from the fixpoint facts). These seed
+    // the entry stack for the analysis, which then fixes every leader's (depth, kinds) and the max depth.
+    let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity);
+    let (leader_state, max_depth, _ret, _mcalls) =
+        unboxed_analyze(program, func_idx, &param_kinds, info)?;
 
     // Range analysis (docs/plans/perf-wave.plan.md): `proven_ops[ip]` = an `AddI` that is a provably-
     // no-overflow induction-variable increment → emit a plain wrapping-free `iadd`, no sticky. From it:
@@ -249,11 +292,13 @@ pub(super) fn build_body_unboxed(
                         | Op::DivF
                         | Op::Call(_)
                         | Op::CallValue(_)
+                        | Op::CallMethod(..)
                         | Op::Index
                         | Op::Concat(_)
                         | Op::CallNative(..)
                         | Op::MakeList(_)
                         | Op::MakeMap(_)
+                        | Op::MakeInstance(_)
                         | Op::Fault(_)
                 )
         });
@@ -597,7 +642,17 @@ pub(super) fn build_body_unboxed(
                 let arity = program.functions[*callee].arity;
                 let cargs = pop_int_args(&mut b, &vars, &fvars, &mut kinds, arity)?;
                 emit_call_to(
-                    &mut b, &ec, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, *callee, cargs,
+                    &mut b,
+                    &ec,
+                    &fn_refs,
+                    ctx,
+                    depth,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    *callee,
+                    cargs,
+                    info.ret_of(*callee),
                 )?;
             }
             // Closure vertical: a capture-free `MakeClosure` is fully STATIC — the target rides
@@ -622,8 +677,81 @@ pub(super) fn build_body_unboxed(
                     ));
                 }
                 emit_call_to(
-                    &mut b, &ec, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, f, cargs,
+                    &mut b,
+                    &ec,
+                    &fn_refs,
+                    ctx,
+                    depth,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    f,
+                    cargs,
+                    info.ret_of(f),
                 )?;
+            }
+            // Object vertical (flat arena instances) — arm bodies live in `objects.rs`.
+            Op::MakeInstance(cidx) => {
+                let desc = &program.class_descs[*cidx];
+                // Field j (ctor push order) → its layout slot (static permutation — mirrors the
+                // VM's `layout.slot(name)` mapping exactly).
+                let perm: Vec<usize> = desc
+                    .fields
+                    .iter()
+                    .map(|n| {
+                        desc.layout.slot(n).ok_or_else(|| {
+                            JitError::Codegen(format!("unboxed: ctor field `{n}` not in layout"))
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
+                arm_make_instance(&mut b, &ec, &vars, &fvars, &mut kinds, *cidx, &perm)?;
+            }
+            Op::GetField(nidx) => {
+                arm_get_field(&mut b, &ec, &vars, &fvars, &mut kinds, program, *nidx)?;
+            }
+            Op::SetField(nidx) => {
+                arm_set_field(&mut b, &ec, &vars, &fvars, &mut kinds, program, *nidx)?;
+            }
+            // Statically-dispatched method call: the receiver's class is in the compile-time
+            // kind → the target is a methods-table lookup → the SAME direct-call emission, with
+            // the receiver handle prepended as the callee's slot 0 (`this`). The VM's frame
+            // teardown drops the receiver — an OWNED temp receiver is freed after the call.
+            Op::CallMethod(nidx, argc) => {
+                let cargs = pop_int_args(&mut b, &vars, &fvars, &mut kinds, *argc)?;
+                let (rv, rk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let Kind::Inst(c, _) = rk else {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: CallMethod on {rk:?} (deferred)"
+                    )));
+                };
+                let key = (
+                    program.class_descs[c].class.to_string(),
+                    program.names[*nidx].clone(),
+                );
+                let Some(&target) = program.methods.get(&key) else {
+                    return Err(JitError::Codegen(
+                        "unboxed: CallMethod unresolved past analyze".to_string(),
+                    ));
+                };
+                let mut full_args: Vec<ClValue> = Vec::with_capacity(cargs.len() + 1);
+                full_args.push(rv);
+                full_args.extend(cargs);
+                emit_call_to(
+                    &mut b,
+                    &ec,
+                    &fn_refs,
+                    ctx,
+                    depth,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    target,
+                    full_args,
+                    info.ret_of(target),
+                )?;
+                if rk.is_owned_handle() {
+                    ec.slot_free_if_owned(&mut b, rv);
+                }
             }
             // Enum vertical (zero-alloc register pairs) — arm bodies live in `enums.rs`.
             Op::MakeEnum(idx) => {
@@ -696,12 +824,20 @@ pub(super) fn build_body_unboxed(
             }
             Op::Return => {
                 let (v, kind) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                if kind != Kind::Int && kind != Kind::Float {
-                    // A bool/unknown return would be mis-decoded — reject to VM/boxed.
-                    return Err(JitError::Unsupported(format!(
-                        "unboxed: non-numeric return (kind {kind:?})"
-                    )));
-                }
+                // Int/Float return to the caller's world; an INSTANCE return is the ownership-
+                // transfer contract (validated by the analyze pass's transfer gate — the entry
+                // function returning an instance was rejected in `compile_unboxed`). Normalize
+                // the instance's compile-time ownership to Owned: the caller receives it.
+                let kind = match kind {
+                    Kind::Int | Kind::Float => kind,
+                    Kind::Inst(c, _) => Kind::Inst(c, Own::Owned),
+                    other => {
+                        // A bool/unknown return would be mis-decoded — reject to VM/boxed.
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: non-numeric return (kind {other:?})"
+                        )));
+                    }
+                };
                 // Record the return kind for `run_unboxed`'s Int-vs-Float decode; ASSERT every reachable
                 // Return in THIS function agrees — a mixed Int/Float would decode the i64 return-bits
                 // wrong (advisor 3C). The value operand is the same i64 bits either way; only the decode

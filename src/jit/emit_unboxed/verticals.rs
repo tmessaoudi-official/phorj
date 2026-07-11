@@ -401,33 +401,10 @@ pub(super) fn arm_concat2(
     );
     let fast2 = b.create_block();
     b.ins().brif(big, slow_blk, &[], fast2, &[]);
-    // Allocate the result slot: pop the inline free stack, else bump (full → code 5,
-    // redo on VM — exhaustion is a fallback, never a user-visible fault).
+    // Allocate the result slot (the shared inline free-stack-or-bump ladder — `Ec::slot_alloc`;
+    // full → code 5, redo on VM — exhaustion is a fallback, never a user-visible fault).
     b.switch_to_block(fast2);
-    let alloc_done = b.create_block();
-    b.append_block_param(alloc_done, types::I64);
-    let pop_blk = b.create_block();
-    let bump_blk = b.create_block();
-    let ft = b.ins().load(types::I64, MemFlagsData::new(), ec.ctx, 16);
-    b.ins().brif(ft, pop_blk, &[], bump_blk, &[]);
-    b.switch_to_block(pop_blk);
-    let ft1 = b.ins().iadd_imm(ft, -1);
-    b.ins().store(MemFlagsData::new(), ft1, ec.ctx, 16);
-    let fsp = b.ins().load(types::I64, ec.stable, ec.ctx, 8);
-    let foff = b.ins().ishl_imm(ft1, 2);
-    let faddr = b.ins().iadd(fsp, foff);
-    let popped = b.ins().uload32(MemFlagsData::new(), faddr, 0);
-    b.ins().jump(alloc_done, &[popped.into()]);
-    b.switch_to_block(bump_blk);
-    let bp = b.ins().load(types::I64, MemFlagsData::new(), ec.ctx, 24);
-    let cap = b.ins().load(types::I64, ec.stable, ec.ctx, 32);
-    let full = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, bp, cap);
-    ec.fault_if(b, full, 5);
-    let bp1 = b.ins().iadd_imm(bp, 1);
-    b.ins().store(MemFlagsData::new(), bp1, ec.ctx, 24);
-    b.ins().jump(alloc_done, &[bp.into()]);
-    b.switch_to_block(alloc_done);
-    let sidx = b.block_params(alloc_done)[0];
+    let sidx = ec.slot_alloc(b);
     let doff = b.ins().ishl_imm(sidx, 6);
     let pd = b.ins().iadd(buf, doff);
     b.ins().istore8(MemFlagsData::new(), tot, pd, 0);
