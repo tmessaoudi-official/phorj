@@ -329,6 +329,7 @@ pub(super) fn build_body_unboxed(
         list_push_int: module.declare_func_in_func(ids.list_push_int, b.func),
         index_int: module.declare_func_in_func(ids.index_int, b.func),
         int_to_str: module.declare_func_in_func(ids.int_to_str, b.func),
+        concat_mix: module.declare_func_in_func(ids.concat_mix, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).

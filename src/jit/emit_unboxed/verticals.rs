@@ -371,10 +371,51 @@ pub(super) fn arm_concat(
         parts.push(ub_pop(b, vars, fvars, kinds)?);
     }
     parts.reverse();
-    // Mixed interpolation: render each `Int` part to its decimal string FIRST (source order —
-    // the VM's `as_display` walk), via `rt_u_int_to_str` (an i64 decimal always fits inline —
-    // one slot, no heap; -1 = arena exhausted → code 5). The rendered part is a fresh OWNED
-    // slot, consumed by the fold like any other owned operand.
+    // The dominant pure `a + b` shape keeps the fully-INLINE fast path (the stringconcat WIN).
+    if n == 2 && matches!(parts[0].1, Kind::Str(_)) && matches!(parts[1].1, Kind::Str(_)) {
+        let (av, ak) = parts[0];
+        let (bv, bk) = parts[1];
+        let res = concat_pair(b, ec, h, av, ak, bv, bk)?;
+        return ub_push(b, vars, fvars, kinds, res, Kind::Str(Own::Owned));
+    }
+    // Mixed interpolation / wide concat (n ≤ 6): ONE fused helper call — `rt_u_concat_mix`
+    // renders every `Int` part (zero-alloc) and joins all parts with NO intermediate slots
+    // (the pairwise fold allocated + copied + freed a slot per merge).
+    if n <= 6 {
+        let mut kmask: i64 = 0;
+        let mut fmask: i64 = 0;
+        for (j, (_, k)) in parts.iter().enumerate() {
+            match k {
+                Kind::Int => kmask |= 1 << j,
+                Kind::Str(_) => {
+                    if k.is_owned_handle() {
+                        fmask |= 1 << j;
+                    }
+                }
+                other => {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed Concat operand kind {other:?}"
+                    )));
+                }
+            }
+        }
+        let nv = b.ins().iconst(types::I64, n as i64);
+        let kv = b.ins().iconst(types::I64, kmask);
+        let fv = b.ins().iconst(types::I64, fmask);
+        let zero = b.ins().iconst(types::I64, 0);
+        let mut args: Vec<ClValue> = vec![ec.ctx, nv, kv, fv];
+        for j in 0..6 {
+            args.push(if j < n { parts[j].0 } else { zero });
+        }
+        let call = b.ins().call(h.concat_mix, &args);
+        let sres = b.inst_results(call)[0];
+        let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+        ec.fault_if(b, bad, 5);
+        return ub_push(b, vars, fvars, kinds, sres, Kind::Str(Own::Owned));
+    }
+    // n > 6 (rare): render `Int` parts via `rt_u_int_to_str`, then fold pairwise (string
+    // concat is associative — byte-identical to the VM's single walk); each merge consumes
+    // its operands per the ownership mask, so intermediates recycle.
     for part in parts.iter_mut() {
         match part.1 {
             Kind::Str(_) => {}
@@ -392,8 +433,6 @@ pub(super) fn arm_concat(
             }
         }
     }
-    // Left-fold pairwise (string concat is associative — byte-identical to the VM's single
-    // walk); each merge consumes its operands per the ownership mask, so intermediates recycle.
     let (mut av, mut ak) = parts[0];
     for &(bv, bk) in &parts[1..] {
         av = concat_pair(b, ec, h, av, ak, bv, bk)?;

@@ -485,17 +485,128 @@ pub(super) extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask:
 /// the owned slot handle, or `-1` on arena exhaustion (→ code 5, redo on VM).
 pub(super) extern "C" fn rt_u_int_to_str(ctx: *mut UbCtx, v: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
-    let s = v.to_string();
-    let bytes = s.into_bytes();
-    let hash = match crate::phstr::fnv1a(&bytes) {
-        0 => 1,
-        h => h,
-    };
-    let canon1 = ctx.canon1_of(&bytes);
-    match ctx.alloc_slot_bytes(&bytes, hash, canon1) {
-        Some(h) => h,
-        None => -1, // arena exhausted → redo on VM
+    // Zero-alloc decimal render — the exact bytes of the VM's `as_display` (`n.to_string()`):
+    // digits written backward into a stack buffer ("-9223372036854775808" is 20 bytes, the max).
+    let mut buf = [0u8; 20];
+    let mut pos = buf.len();
+    let neg = v < 0;
+    let mut u = v.unsigned_abs();
+    loop {
+        pos -= 1;
+        buf[pos] = b'0' + (u % 10) as u8;
+        u /= 10;
+        if u == 0 {
+            break;
+        }
     }
+    if neg {
+        pos -= 1;
+        buf[pos] = b'-';
+    }
+    let bytes = &buf[pos..];
+    // hash 0 + canon 0 = "punt to the helper" — same marker as the INLINE concat result. A
+    // rendered int used as a map key just takes the helper probe (correct, rare); skipping
+    // the fnv1a + canon-registry probe here is the hot-path win.
+    // arena exhausted → -1 → code 5, redo on VM
+    ctx.alloc_slot_bytes(bytes, 0, 0).unwrap_or(-1)
+}
+
+/// FUSED mixed-interpolation concat (`Concat(n)`, n ≤ 6, any mix of string handles and raw
+/// ints): ONE call renders every `Int` part (zero-alloc stack render — the exact `as_display`
+/// bytes) and joins all parts in source order, with NO intermediate slots (the pairwise fold
+/// this replaces allocated + copied + freed a slot per merge). `kmask` bit j = part j is a raw
+/// `Int` (else a string handle); `fmask` bit j = consume part j's handle (`Int` parts ignore
+/// it). Result: an inline-short slot or a heap handle; `-1` = bad handle / arena exhausted
+/// (→ code 5, redo on VM).
+#[allow(clippy::too_many_arguments)] // fixed extern "C" shape: 6 part registers + masks
+pub(super) extern "C" fn rt_u_concat_mix(
+    ctx: *mut UbCtx,
+    n: i64,
+    kmask: i64,
+    fmask: i64,
+    p0: i64,
+    p1: i64,
+    p2: i64,
+    p3: i64,
+    p4: i64,
+    p5: i64,
+) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let parts = [p0, p1, p2, p3, p4, p5];
+    let n = n as usize;
+    debug_assert!(n <= 6);
+    // Render/collect every part into ONE stack buffer (source order — the VM's `as_display`
+    // walk): 6 parts × (≤22B short string | ≤20B int digits) ≤ 132 < 160, so the hot path is
+    // ZERO-alloc. Long (heap) string parts overflow to a heap join — the cold path.
+    let mut small = [0u8; 160];
+    let mut slen = 0usize;
+    let mut overflow: Option<Vec<u8>> = None;
+    for (j, &pv) in parts.iter().enumerate().take(n) {
+        let mut ibuf = [0u8; 20];
+        let piece: &[u8] = if kmask & (1 << j) != 0 {
+            // Raw Int → decimal bytes (identical to `Value::Int`'s `as_display`).
+            let mut pos = ibuf.len();
+            let neg = pv < 0;
+            let mut u = pv.unsigned_abs();
+            loop {
+                pos -= 1;
+                ibuf[pos] = b'0' + (u % 10) as u8;
+                u /= 10;
+                if u == 0 {
+                    break;
+                }
+            }
+            if neg {
+                pos -= 1;
+                ibuf[pos] = b'-';
+            }
+            &ibuf[pos..]
+        } else {
+            match ctx.str_bytes(pv) {
+                Some(bytes) => bytes,
+                None => return -1,
+            }
+        };
+        match &mut overflow {
+            Some(v) => v.extend_from_slice(piece),
+            None if slen + piece.len() <= small.len() => {
+                small[slen..slen + piece.len()].copy_from_slice(piece);
+                slen += piece.len();
+            }
+            None => {
+                let mut v = Vec::with_capacity(slen + piece.len() + 64);
+                v.extend_from_slice(&small[..slen]);
+                v.extend_from_slice(piece);
+                overflow = Some(v);
+            }
+        }
+    }
+    let joined: &[u8] = match &overflow {
+        Some(v) => v,
+        None => &small[..slen],
+    };
+    let res = if joined.len() <= crate::phstr::INLINE_CAP {
+        // hash 0 + canon 0 = "punt to the helper" — same marker as the INLINE concat result;
+        // skipping the fnv1a + canon-registry probe is the hot-path win (a joined string used
+        // as a map key takes the helper probe — correct, rare).
+        match ctx.alloc_slot_bytes(joined, 0, 0) {
+            Some(h) => h,
+            None => return -1, // arena exhausted → redo on VM
+        }
+    } else {
+        // Valid UTF-8 by construction (handle parts are valid, digit bytes are ASCII).
+        let Ok(s) = std::str::from_utf8(joined) else {
+            return -1;
+        };
+        let v = Value::Str(crate::phstr::PhStr::new(s));
+        ctx.alloc(v)
+    };
+    for (j, &pv) in parts.iter().enumerate().take(n) {
+        if kmask & (1 << j) == 0 && fmask & (1 << j) != 0 {
+            ctx.release(pv);
+        }
+    }
+    res
 }
 
 /// `Core.String.length` — byte length; the helper (slow) path for untagged handles (a slot handle
@@ -784,6 +895,7 @@ pub(super) struct UbHelperIds {
     pub(super) list_push_int: FuncId,
     pub(super) index_int: FuncId,
     pub(super) int_to_str: FuncId,
+    pub(super) concat_mix: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -800,4 +912,5 @@ pub(super) struct UbHelperRefs {
     pub(super) list_push_int: FuncRef,
     pub(super) index_int: FuncRef,
     pub(super) int_to_str: FuncRef,
+    pub(super) concat_mix: FuncRef,
 }

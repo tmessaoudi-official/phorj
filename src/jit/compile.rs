@@ -172,6 +172,7 @@ impl Compiled {
             builder.symbol("rt_u_list_push_int", rt_u_list_push_int as *const u8);
             builder.symbol("rt_u_index_int", rt_u_index_int as *const u8);
             builder.symbol("rt_u_int_to_str", rt_u_int_to_str as *const u8);
+            builder.symbol("rt_u_concat_mix", rt_u_concat_mix as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -262,6 +263,25 @@ impl Compiled {
                     declare(&mut module, "rt_u_index_int", &s)?
                 },
                 int_to_str: declare(&mut module, "rt_u_int_to_str", &sig2)?,
+                concat_mix: {
+                    let s = make_sig(
+                        &module,
+                        &[
+                            ptr,
+                            types::I64,
+                            types::I64,
+                            types::I64,
+                            types::I64,
+                            types::I64,
+                            types::I64,
+                            types::I64,
+                            types::I64,
+                            types::I64,
+                        ],
+                        Some(types::I64),
+                    );
+                    declare(&mut module, "rt_u_concat_mix", &s)?
+                },
             })
         } else {
             None
