@@ -293,6 +293,30 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   (3) mapget 0.84 / listindex 0.94 — emit-quality tail; (4) checked-intadd elision
   (task 9, ruled ACTIVE): extend range proofs to elide overflow checks on provably-bounded
   accumulators. THEN V3b → NaN-box (Order A), perf register + G-8 recompute at wave close.
+  **TRYCATCH SLICE — FULL DESIGN (execute in 3 gated sub-slices):**
+  (1) **Str fields in instances**: per-class field-kind table in the fixpoint (from MakeInstance
+  operand kinds, ctor push order = desc.fields; all sites must agree; Int|Str only). GetField
+  of a Str field → Str(Borrowed) (instance keeps ownership); SetField Str value must be
+  Owned/ConstBorrow (release the OLD field word first). Instance RELEASE for str-fielded
+  classes is KIND-DIRECTED at each release site (Pop/SetLocal-overwrite/consumers): load each
+  Str-field word + emit_release it, THEN recycle the instance slot (runtime OWNED bit makes
+  const-field frees no-ops — the bit gates everything). (2) **Handle args to ctors**: allow
+  Str args (Owned/ConstBorrow only — Borrowed = aliasing double-free, DENY) to instance-
+  returning callees; VM semantics MOVE args into the frame ⇒ callee params own their words ⇒
+  generalize `this_inst` to a per-fn param-kind override table (`param_over`) recorded from
+  call sites in the fixpoint (normalize ConstBorrow→Owned — bit-gated safe); ctor consumes
+  params into fields (transfer). (3) **Native throw/catch**: compile-time handler STACK walked
+  by analyze (PushHandler(t) pushes + propagates an edge to pad t with kinds+[Inst(thrown_c,
+  Owned)]; PopHandler pops; nesting = stack). Fixpoint records per-fn thrown-class (singleton
+  else Unsupported v1). Throw: with an ACTIVE local handler → truncate compile-time stack to
+  the handler height (emit releases for dropped OWNED cells — the VM's unwind drops them),
+  place the payload word, JUMP to the pad (no ABI crossing); with none → return (payload,
+  **code 6**). Call/CallMethod inside a try-range: 3-way ccode dispatch — 0→cont, 6→(truncate
+  + payload + jump pad), else→fault-exit (code 6 propagates through the existing fault-exit
+  forwarding to OUTER callers automatically; reaching the VM boundary = JitRun::Fault → VM
+  redo → correct throw semantics for escapes — try bodies must stay side-effect-free like
+  everything else). Pad's IsInstance(c) is kind-static → constant-folds. needs_fault_exit +=
+  Throw. Measure: trycatch 0.37 → ≥1.0 median-of-3.
   **PERF-100% SWEEP — RULED (2026-07-11, session 3 close, developer via ask-human, THE GO given):**
   scope = flip trycatch/strbuild/webish/mapget/interp (+floatmul parity watch) THEN a FULL
   fundamentals micro sweep (collection writes, capturing closures/HOF, string ops, iteration —
