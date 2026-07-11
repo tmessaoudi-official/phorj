@@ -6,6 +6,66 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Ω-8 vertical: native throw/catch in the unboxed JIT — **trycatch 0.37× → 33.4× WIN**
+
+Try/catch is now compiled natively in the unboxed JIT, in three gated sub-slices. (1) **Str
+fields in instances**: a per-class field-kind table joins the fixpoint (derived from
+`MakeInstance` operand kinds; all sites must agree, Int|Str only); `GetField` of a Str field
+yields a borrowed handle (the instance keeps ownership), `SetField` releases the old field word
+first, and instance release is kind-directed — str-fielded classes free their owned field words
+before the slot is recycled (the runtime OWNED bit makes const-field frees no-ops). (2) **String
+ctor args**: Str arguments (Owned/ConstBorrow) may cross into instance-returning callees — a
+unique `GetLocal` transfers ownership (the slot dies), call sites inject a per-fn `param_over`
+kind-override table, and analysis facts now flow out through a `UbDiscovery` out-param so they
+survive held failures, breaking the caller/ctor fixpoint deadlock. A str-fielded
+construct+method loop dropped 847M → 15.5M ns (**55×**). (3) **Native throw/catch**: thrown
+values ride the existing (value, code) multi-return as **code 6** with the payload handle;
+try-regions are compile-time `handler_ranges` walked lexically by analysis (catch pads become
+edges in `reachable`/leaders); a throw with an active local handler truncates the compile-time
+stack to the handler height (releasing dropped OWNED cells) and jumps to the pad — no ABI
+crossing; without one it returns code 6, which propagates through the existing fault-exit
+forwarding (VM boundary = redo, preserving escape semantics). Calls inside a try dispatch
+3-way (continue / jump-to-pad / fault-exit), and the pad's `IsInstance` is kind-static so it
+constant-folds away.
+
+**Measured (pinned, interleaved, fresh docker php:8.5-cli+JIT):** trycatch 906M → 11.8M ns
+self-timed — **0.37× LOSS → 29.97× WIN**, ratcheted at **33.39×**. Full map after: **11 WINs /
+17 micros** (interp also flipped to 1.03× WIN); remaining losses strbuild 0.43 · webish 0.68 ·
+intadd 0.73 (checked-default price; unchecked = WON) · mapget 0.80.
+
+### Added — Ω-8 unboxed verticals waves 1–3: enums, closures, objects, mixed concat, coverage micros
+
+The session-3 verticals that took the map from 5 to 9 WINs, all default-deny with VM fallback
+and byte-identity preserved. **Enums**: `Kind::EnumInt` register pairs (payload word + a tag in
+`evars` space) make `MakeEnum`/`MatchTag`/`GetEnumField(0)` zero-alloc; `Fault` is a terminator
+in `reachable` — enum 0.01× → 1.7× WIN. **Closures**: capture-free `MakeClosure` is fully
+static (`Kind::Fn(target)`), `CallValue` becomes a direct call — closurecall 0.03× → 2× WIN.
+**Objects**: flat-arena instances (`Kind::Inst(class)`, fields at fixed slot offsets, static
+method dispatch with `this` as arg 0, ctor ownership-transfer return) resolved through a
+`resolve_unboxed_graph` fixpoint — methodcall 0.03× → 2.8× WIN, objalloc 0.14× → 9× WIN.
+**Mixed concat**: `Concat(n)` accepts Int operands via `rt_u_int_to_str` rendering and a fused
+zero-alloc `rt_u_concat_mix` (one call, stack-joined parts) — interp 0.11× → parity-then-WIN,
+webish 0.05× → 0.68. **Coverage wave**: exact float-comparison lowering
+(`partial_cmp`/`eq_val` ↔ FloatCC), handle-slot writes (`Own::ConstBorrow` + leader joins), and
+a fused string-accumulator peephole (positional `accumulator_site` proof → in-place
+`rt_u_concat` append on a uniquely-owned heap lhs) + two new base micros, floatloop (1.0× WIN)
+and strbuild (0.11 → 0.43). Perf lesson recorded: hot-path result slots write hash 0/canon 0 —
+canon registration only pays where content gets probed. Alongside: P-2c emit-quality levers
+(fused map tag checks, single-branch Pop release, int-list vertical `Kind::IntList` flat i64
+slots — listindex 0.03× → 0.95, inline `Conversion.toFloat`/`truncate` — floatarith 0.03× →
+4.2× WIN, range-proven RemI-by-pow2), and the perf-gate fix that un-phantomed measurement:
+microbench sampling is now **interleaved + core-pinned** (batched sampling had manufactured a
+5.4× phantom flip under ambient load).
+
+### Changed — M-Decomp repo-wide sweep + MSRV 1.82
+
+Every source file over the 800-line soft cap was decomposed by cohesion (M-Decomp pattern:
+`foo/mod.rs` + sub-files, `pub(super)` for moved methods) — ~30 splits across jit, compiler,
+checker, ast, parser, lift, native, serve, chunk, transpile, interpreter — leaving only 4
+by-design exceptions (explain, emit_unboxed dispatch, runtime_php, vm exec_op). One regression
+caught and restored in-sweep: the interpreter's `#[cfg(test)]` module dropped by a split.
+MSRV raised 1.74 → 1.82 (`Option::is_none_or` usage made it real; `rust-version` now matches).
+
 ### Added — P-2a-inline: SSO string ops inline in Cranelift IR — **beats php+JIT 1.71× (gate-2 WIN)**
 
 The P-2a spike's verdict (helper-call granularity ~2× short of php) is resolved: the string hot

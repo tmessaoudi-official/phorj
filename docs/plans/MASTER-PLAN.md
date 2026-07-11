@@ -25,12 +25,12 @@
 
 | | |
 |---|---|
-| **Date / HEAD** | 2026-07-11. Plan/spec consolidation done (perf-wave / di-attributes / web-spine / cli-name-sync / finishing-wave folded into this file + UNIFIED-SPEC + KNOWN_ISSUES; ROADMAP→thin pointer). |
+| **Date / HEAD** | 2026-07-12, HEAD `5ba5f17`. Ω-8 verticals: trycatch NATIVE throw/catch shipped + ratcheted **33.4× WIN** — map now **11 WINs / 17 micros** (remaining losses: strbuild 0.43 · webish 0.68 · intadd 0.73 checked · mapget 0.80). Prior: 2026-07-11 plan/spec consolidation (perf-wave / di-attributes / web-spine / cli-name-sync / finishing-wave folded into this file + UNIFIED-SPEC + KNOWN_ISSUES; ROADMAP→thin pointer). |
 | **Completion** | **PHP-parity ≈60% · Vision ≈62% · raw row-floor ≈41%** — HEAD `af3aad3`, §11.4 + `M-gap-matrix §4.6`. [Inferred: additive delta on the ratified 824-row model; a full 824-row re-pass is due at the next milestone/wave close.] Denominator = **824 verdict rows** (665 net of N/A + GAP-by-design). Road to 100% parity = close **445 rows** (76 PARTIAL + 110 GAP-planned + 259 GAP-unplanned); the 49 GAP-by-design footguns are audited in Ω-0 (do-everything-better, take-no-weakness). |
 | **Active programme** | **THE FINISHING WAVE** (section after §1): Ω-0 footgun audit → Ω-1 web spine → Ω-2 filesystem/subprocess/logging/compression → Ω-3 string-Unicode/regex/array/math → Ω-4 language surface → Ω-5 date/intl/XML → Ω-6 the 259-row unplanned stdlib tail → Ω-7 beyond-PHP programme → Ω-8 perf hold → Ω-9 GA. Target = **100% VISION**. |
 | **Locked rulings (2026-07-11, developer via ask-human)** | **Perf** = multi-dimensional "better" (faster/safer/organized/SOLID). **AMENDED (2026-07-11, Fable session, developer via ask-human): the string/array/collection speed-beat is REOPENED NOW — fresh-eyes attempt at the FRONT of this run, target faster-or-at-least-equal to PHP, evidence-gated (pure-Rust ceiling spike FIRST per KNOWN_ISSUES §"Parked perf"; WIN-OR-FLAG; no MATCH in the ceiling test → report honestly and re-ask).** Prior end-stage park superseded. **Target** = 100% VISION. **Footguns** audited in Ω-0. **GLOBAL TENETS (whole wave):** prefer INSTANCES + mandatory `new`; nothing in the wind (every symbol import-gated, leaf-or-parent); decoupled / composable / generic / scalable / modular / SOLID. **Core.Sql DBAL = instance model** (`new QueryBuilder("t","a")` → typed per-verb sub-builders `SelectQuery`/`InsertStatement`/`UpdateStatement`/`DeleteStatement`; always-alias + `E-SQL-AMBIGUOUS-COLUMN`; decoupled dialect rendered at `db.execute`; `new Query(sql,[binds])` raw — SUPERSEDES the shipped slices 1+2 static-factory `Sql.query`/`Sql.select`, reworked in Ω-1). **PERF-FIRST rulings (2026-07-11, session 3, developer via ask-human):** (1) **Order A** — unboxed arena verticals (enum → closure/method → objalloc → composites) → V3b single-alloc `Instance` → NaN-box end-state, each shape spike-gated WIN-OR-FLAG; (2) **exit bar = beat-or-match EVERYTHING** (every micro ≥1.0× vs fresh docker php:8.5-cli+JIT, pinned+interleaved) — a flag is accepted only after all three levers are exhausted on that shape, loss anatomy documented; (3) **intadd** scored WON via `#[UncheckedOverflow]` 2× (apples-to-apples vs php's unchecked semantics); checked-DEFAULT ≥1.0× is an ACTIVE best-effort target — range-proof overflow-check-elision front REOPENED (induction/const-init proofs eliding checks where overflow is provably impossible; fault behavior unchanged); (4) **trycatch (0.48×, un-ruled prior)** = full lever attempt in the wave (anatomy first, then zero-cost-on-no-throw shape). |
 | **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy (both configs, incl. `--no-default-features`) + fmt + release build + an Invariant-9 example + byte-identity `run≡runvm≡php-8.5.8`. **`jit` is a DEFAULT feature** (bare `cargo test`/`build`/`clippy` include it; `--features jit` is a harmless redundant no-op; verify jit-off compiles via `cargo check --no-default-features`; run without native codegen via `phg run --no-jit`). Pre-commit = fast Rust-only tier (~12s); pre-push = full oracle + microbench-gate. Commit each green slice; **NEVER push** (developer pushes). |
-| **Next** | Consolidation complete → the developer runs Fable against THIS file + UNIFIED-SPEC to execute the Ω-waves to 100% vision. |
+| **Next** | Ω-8 flip-seq continues: **webish fully-inline interpolation** → strbuild inline append → mapget/listindex emit tail → checked-intadd elision (task 9) → fundamentals micro sweep → representation slice (V3b + Rc cycle-leak §15 fork) → perf register + G-8 recompute → Ω-0…Ω-9. |
 
 **Percentage protocol:** re-run the M §4 arithmetic (824 rows, weights 35 SYN / 40 FN / 25 RT) after
 every milestone/wave close; update this cursor and §11 in the same commit. Always quote the number with
@@ -317,6 +317,22 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   redo → correct throw semantics for escapes — try bodies must stay side-effect-free like
   everything else). Pad's IsInstance(c) is kind-static → constant-folds. needs_fault_exit +=
   Throw. Measure: trycatch 0.37 → ≥1.0 median-of-3.
+  **TRYCATCH SLICE — ✅ SHIPPED (session 4, 2026-07-12), all three sub-slices as designed:**
+  `7653434` Str fields in instances (per-class field-kind table in the fixpoint, GetField
+  borrow/take-ownership, SetField old-word release, kind-directed `release_kinded` instance
+  free) · `a1f12a3` string ctor args (single-use param moves, call-site `param_over` injection,
+  `UbDiscovery` out-param so facts survive held failures — breaks the caller/ctor fixpoint
+  deadlock; str-fielded construct+method loop 847M→15.5M = 55×) · `cbef2d6` NATIVE throw/catch
+  (code-6 thrown discriminant in the (value,code) return, lexical `handler_ranges`, catch-pad
+  edges in reachable/leaders, kind-directed unwind releases, static IsInstance fold, 3-way
+  ThrowSite call dispatch) — **trycatch 0.37× → 29.97× measured (906M→11.8M self-timed),
+  ratcheted 33.39×** (`5ba5f17`). **Ratcheted map after (17 micros): 11 WINs** — trycatch 33.39
+  · objalloc 8.99 · match 7.15 · floatarith 4.21 · methodcall 2.79 · closurecall 2.04 ·
+  stringconcat 1.94 · fibrec 1.84 · enum 1.72 · floatmul 1.03 · **interp 1.03 (flipped to
+  WIN)**; near-parity tail floatloop 0.98 · listindex 0.95; **remaining losses: strbuild 0.425
+  · webish 0.676 · intadd 0.726 (checked; unchecked=WON) · mapget 0.804.** NEXT (flip-seq):
+  webish fully-inline interpolation → strbuild inline append → mapget/listindex emit tail →
+  checked-intadd elision (task 9).
   **PERF-100% SWEEP — RULED (2026-07-11, session 3 close, developer via ask-human, THE GO given):**
   scope = flip trycatch/strbuild/webish/mapget/interp (+floatmul parity watch) THEN a FULL
   fundamentals micro sweep (collection writes, capturing closures/HOF, string ops, iteration —
