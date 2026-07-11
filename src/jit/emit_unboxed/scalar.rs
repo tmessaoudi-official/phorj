@@ -191,12 +191,30 @@ pub(super) fn arm_cmp(
 ) -> Result<(), JitError> {
     let (bv, bk) = ub_pop(b, vars, fvars, kinds)?;
     let (av, ak) = ub_pop(b, vars, fvars, kinds)?;
+    // FLOAT comparisons (both operands PROVEN Float — they live in the F64 space): the exact
+    // `partial_cmp` projection of the shared kernels. `Lt/Gt/Le/Ge` = `value::compare_ord`'s
+    // `Some(o)` arm with `None` (NaN) → false — Cranelift's ORDERED FloatCC codes are exactly
+    // that. `Eq` = `eq_val`'s IEEE `==` (NaN ≠ NaN → ordered Equal); `Ne` = its negation
+    // (NaN → true — FloatCC::NotEqual is unordered-or-unequal, the precise complement).
+    if ak == Kind::Float && bk == Kind::Float {
+        let cc = match op {
+            Op::Eq => FloatCC::Equal,
+            Op::Ne => FloatCC::NotEqual,
+            Op::Lt => FloatCC::LessThan,
+            Op::Gt => FloatCC::GreaterThan,
+            Op::Le => FloatCC::LessThanOrEqual,
+            _ => FloatCC::GreaterThanOrEqual,
+        };
+        let r = b.ins().fcmp(cc, av, bv);
+        let r64 = b.ins().uextend(types::I64, r);
+        return ub_push(b, vars, fvars, kinds, r64, Kind::Bool);
+    }
     // `icmp` is only correct on integer bit-patterns. Reject unless BOTH operands are safely
-    // non-float. A known `Float` → reject. An `Unknown` operand is AMBIGUOUS (a float param
-    // used only in comparisons is never proven Float — the trap this guards): require the
-    // OTHER operand to be a KNOWN non-float (Int/Bool); the checker's homogeneous-comparison
-    // rule then guarantees the Unknown is the same non-float type. Both-Unknown → reject (VM
-    // fallback). Float comparisons (fcmp/NaN) are deferred to a later slice (INVARIANTS #13).
+    // non-float. A known-`Float`-vs-other pairing → reject. An `Unknown` operand is AMBIGUOUS
+    // (a float param used only in comparisons is never proven Float — the trap this guards):
+    // require the OTHER operand to be a KNOWN non-float (Int/Bool); the checker's homogeneous-
+    // comparison rule then guarantees the Unknown is the same non-float type. Both-Unknown →
+    // reject (VM fallback).
     let known_nonfloat = |k: Kind| matches!(k, Kind::Int | Kind::Bool);
     if ak == Kind::Float
         || bk == Kind::Float

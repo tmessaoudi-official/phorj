@@ -87,7 +87,27 @@ pub(super) enum Kind {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum Own {
     Owned,
+    /// A copy whose runtime OWNED bit MAY be set (a `GetLocal` copy of an owned local): its
+    /// consumer must NOT free it, and it can never merge with an `Owned` edge (releasing it
+    /// there would recycle the still-live original — the double-free shape).
     Borrowed,
+    /// A copy whose runtime OWNED bit is PROVABLY CLEAR (a pinned string const and its
+    /// copies): releasing it anywhere is a runtime no-op, so an `Owned ⊔ ConstBorrow` merge
+    /// safely joins to `Owned` — the declaration-initialized accumulator pattern
+    /// (`mutable string s = ""; … s = s + x;`) hinges on exactly this join.
+    ConstBorrow,
+}
+
+impl Own {
+    /// The ownership a `GetLocal` copy carries: a const's copy is still provably bit-clear;
+    /// everything else downgrades to the unjoinable `Borrowed`.
+    pub(super) fn borrow_of(self) -> Own {
+        if self == Own::ConstBorrow {
+            Own::ConstBorrow
+        } else {
+            Own::Borrowed
+        }
+    }
 }
 
 impl Kind {
@@ -119,12 +139,44 @@ impl Kind {
 /// ownership — the copy's consumer must not free it); every other kind copies verbatim.
 pub(super) fn borrowed_copy(k: Kind) -> Kind {
     match k {
-        Kind::Str(_) => Kind::Str(Own::Borrowed),
-        Kind::StrList(_) => Kind::StrList(Own::Borrowed),
-        Kind::IntList(_) => Kind::IntList(Own::Borrowed),
-        Kind::StrIntMap(_) => Kind::StrIntMap(Own::Borrowed),
-        Kind::Inst(c, _) => Kind::Inst(c, Own::Borrowed),
+        Kind::Str(o) => Kind::Str(o.borrow_of()),
+        Kind::StrList(o) => Kind::StrList(o.borrow_of()),
+        Kind::IntList(o) => Kind::IntList(o.borrow_of()),
+        Kind::StrIntMap(o) => Kind::StrIntMap(o.borrow_of()),
+        Kind::Inst(c, o) => Kind::Inst(c, o.borrow_of()),
         other => other,
+    }
+}
+
+/// Join two operand kinds at a merge edge. Identical kinds join to themselves. The SAME handle
+/// family differing only between `Owned` and `ConstBorrow` joins to `Owned` — safe because a
+/// release is runtime-bit-gated (freeing a provably-bit-clear const word is a no-op), so the
+/// `Owned` side's frees are correct on both edges. `Borrowed` (bit UNKNOWN — may alias a live
+/// owned local) never joins with `Owned`; `Borrowed ⊔ ConstBorrow` joins to `Borrowed` (neither
+/// side frees). Anything else → `None` (VM fallback).
+pub(super) fn join_kind(a: Kind, b: Kind) -> Option<Kind> {
+    if a == b {
+        return Some(a);
+    }
+    fn join_own(x: Own, y: Own) -> Option<Own> {
+        match (x, y) {
+            (a, b) if a == b => Some(a),
+            (Own::Owned, Own::ConstBorrow) | (Own::ConstBorrow, Own::Owned) => Some(Own::Owned),
+            (Own::Borrowed, Own::ConstBorrow) | (Own::ConstBorrow, Own::Borrowed) => {
+                Some(Own::Borrowed)
+            }
+            _ => None,
+        }
+    }
+    match (a, b) {
+        (Kind::Str(x), Kind::Str(y)) => join_own(x, y).map(Kind::Str),
+        (Kind::StrList(x), Kind::StrList(y)) => join_own(x, y).map(Kind::StrList),
+        (Kind::StrIntMap(x), Kind::StrIntMap(y)) => join_own(x, y).map(Kind::StrIntMap),
+        (Kind::IntList(x), Kind::IntList(y)) => join_own(x, y).map(Kind::IntList),
+        (Kind::Inst(c1, x), Kind::Inst(c2, y)) if c1 == c2 => {
+            join_own(x, y).map(|o| Kind::Inst(c1, o))
+        }
+        _ => None,
     }
 }
 
@@ -636,9 +688,29 @@ pub(super) fn unboxed_analyze(
                 work.push(target);
             }
             Some(existing) if existing.as_slice() != out => {
-                return Err(JitError::Unsupported(format!(
-                    "unboxed: inconsistent operand stack at leader ip {target} ({existing:?} vs {out:?})"
-                )));
+                // Element-wise JOIN (see `join_kind`): the declaration-initialized accumulator
+                // pattern merges a ConstBorrow entry edge with an Owned back edge — joined to
+                // Owned (safe: releases are runtime-bit-gated). A widened state re-enqueues the
+                // leader (the lattice is 2 levels deep per cell — converges immediately).
+                if existing.len() != out.len() {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: inconsistent operand stack depth at leader ip {target} ({existing:?} vs {out:?})"
+                    )));
+                }
+                let joined: Option<Vec<Kind>> = existing
+                    .iter()
+                    .zip(out.iter())
+                    .map(|(&a, &b)| join_kind(a, b))
+                    .collect();
+                let Some(joined) = joined else {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: inconsistent operand stack at leader ip {target} ({existing:?} vs {out:?})"
+                    )));
+                };
+                if joined.as_slice() != existing.as_slice() {
+                    leader_state[target] = Some(joined);
+                    work.push(target);
+                }
             }
             Some(_) => {}
         }
@@ -657,7 +729,7 @@ pub(super) fn unboxed_analyze(
                     // a BORROWED (pinned, never freed) handle for a string const, Int otherwise.
                     let k = match program.functions[func_idx].chunk.consts.get(*idx) {
                         Some(Value::Float(_)) => Kind::Float,
-                        Some(Value::Str(_)) => Kind::Str(Own::Borrowed),
+                        Some(Value::Str(_)) => Kind::Str(Own::ConstBorrow),
                         _ => Kind::Int,
                     };
                     kinds.push(k);
@@ -836,11 +908,23 @@ pub(super) fn unboxed_analyze(
                             kinds.len()
                         )));
                     }
-                    // v1 default-deny: a handle write (or overwriting a slot that holds a handle)
-                    // needs free-the-old-value semantics + alias analysis — rejected, VM fallback.
-                    if k.is_handle() || kinds[*slot].is_handle() {
+                    // Handle writes (the accumulator pattern `s = s + x` / the reset `s = ""`):
+                    // the OLD value is freed at emit (runtime-bit-gated release ladder), the slot
+                    // takes the incoming kind. Storing a `Borrowed` handle stays DENIED — it may
+                    // alias a live owned local (`s2 = s1`), and the slot's later free would
+                    // recycle the original (the double-free shape). Kind-changing writes over a
+                    // live handle slot are fine (the old value is released either way).
+                    if matches!(
+                        k,
+                        Kind::Str(Own::Borrowed)
+                            | Kind::StrList(Own::Borrowed)
+                            | Kind::StrIntMap(Own::Borrowed)
+                            | Kind::IntList(Own::Borrowed)
+                            | Kind::Inst(_, Own::Borrowed)
+                    ) {
                         return Err(JitError::Unsupported(
-                            "unboxed: SetLocal on a handle slot (deferred)".to_string(),
+                            "unboxed: SetLocal of a borrowed handle (aliasing — deferred)"
+                                .to_string(),
                         ));
                     }
                     kinds[*slot] = k;
@@ -1126,6 +1210,9 @@ pub(super) fn unboxed_analyze(
                                     owned.len() == 1
                                         && matches!(owned[0], Kind::Inst(c2, Own::Owned) if c2 == c)
                                 }
+                                // Instances are never const-borrows (no instance consts exist);
+                                // unreachable by construction — reject defensively.
+                                Own::ConstBorrow => false,
                             };
                             if !transfer_ok {
                                 return Err(JitError::Unsupported(

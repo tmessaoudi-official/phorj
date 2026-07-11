@@ -493,7 +493,7 @@ pub(super) fn build_body_unboxed(
                         &fvars,
                         &mut kinds,
                         v,
-                        Kind::Str(Own::Borrowed),
+                        Kind::Str(Own::ConstBorrow),
                     )?;
                 }
                 other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
@@ -622,12 +622,26 @@ pub(super) fn build_body_unboxed(
                         kinds.len()
                     )));
                 }
-                // v1 default-deny (mirrors the analyze arm): a handle write needs free-the-old-value
-                // semantics + alias analysis — rejected, VM fallback.
-                if k.is_handle() || kinds[*slot].is_handle() {
+                // Storing a BORROWED handle stays denied (aliasing — mirrors the analyze arm).
+                if matches!(
+                    k,
+                    Kind::Str(Own::Borrowed)
+                        | Kind::StrList(Own::Borrowed)
+                        | Kind::StrIntMap(Own::Borrowed)
+                        | Kind::IntList(Own::Borrowed)
+                        | Kind::Inst(_, Own::Borrowed)
+                ) {
                     return Err(JitError::Unsupported(
-                        "unboxed: SetLocal on a handle slot (deferred)".to_string(),
+                        "unboxed: SetLocal of a borrowed handle (aliasing — deferred)".to_string(),
                     ));
+                }
+                // Overwriting a live OWNED handle releases the old value first (the accumulator
+                // pattern `s = s + x` — the old string dies here; runtime-bit-gated, so a
+                // joined-to-Owned const edge is a no-op release).
+                if kinds[*slot].is_owned_handle() {
+                    let h = ub_ref(ub_refs.as_ref(), "SetLocal(handle overwrite)")?;
+                    let old = b.use_var(vars[*slot]);
+                    emit_release(&mut b, &ec, h, old);
                 }
                 // A register-pair enum stores BOTH words: the tag from the popped cell's evars
                 // slot (source depth = kinds.len() AFTER the pop) into the frame cell's.

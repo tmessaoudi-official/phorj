@@ -598,29 +598,34 @@ pub(super) fn arm_pop(
     let (v, k) = ub_pop(b, vars, fvars, kinds)?;
     if k.is_owned_handle() {
         let h = ub_ref(ub, "Pop(owned handle)")?;
-        // P-2c fused release dispatch — ONE branch on the hot path: `x = v & (SLOT|OWNED)`.
-        // `x == SLOT` is a runtime-BORROWED slot (the common case — a flat-list element read
-        // dying at scope exit, e.g. the loop-local key in mapget) → nothing to do. Everything
-        // else re-dispatches on the cold side: OWNED → inline recycle; untagged → helper free.
-        // `OWNED ⇒ SLOT` at runtime (only arena slots carry OWNED), so the three-way is
-        // behavior-identical to the old owned-first two-branch ladder.
-        let x = b.ins().band_imm(v, UB_TAG_SLOT | UB_TAG_OWNED);
-        let is_borrowed_slot = b.ins().icmp_imm(IntCC::Equal, x, UB_TAG_SLOT);
-        let slow_blk = b.create_block();
-        let cont = b.create_block();
-        b.ins().brif(is_borrowed_slot, cont, &[], slow_blk, &[]);
-        b.switch_to_block(slow_blk);
-        let owned_bit = b.ins().band_imm(v, UB_TAG_OWNED);
-        let push_blk = b.create_block();
-        let helper_blk = b.create_block();
-        b.ins().brif(owned_bit, push_blk, &[], helper_blk, &[]);
-        b.switch_to_block(push_blk);
-        ec.slot_push(b, v);
-        b.ins().jump(cont, &[]);
-        b.switch_to_block(helper_blk);
-        b.ins().call(h.free, &[ec.ctx, v]);
-        b.ins().jump(cont, &[]);
-        b.switch_to_block(cont);
+        emit_release(b, ec, h, v);
     }
     Ok(())
+}
+
+/// The FUSED runtime release dispatch for a compile-time-OWNED handle value — ONE branch on
+/// the hot path: `x = v & (SLOT|OWNED)`. `x == SLOT` is a runtime-BORROWED slot (the common
+/// case — a flat-list element / joined-to-Owned const dying at its release point) → nothing to
+/// do. Everything else re-dispatches on the cold side: OWNED → inline recycle; untagged →
+/// helper free. `OWNED ⇒ SLOT` at runtime (only arena slots carry OWNED), so the three-way is
+/// behavior-identical to an owned-first two-branch ladder. Used by `Pop`, the `SetLocal`
+/// handle-overwrite, and any consumer releasing a dead handle.
+pub(super) fn emit_release(b: &mut FunctionBuilder, ec: &Ec, h: &UbHelperRefs, v: ClValue) {
+    let x = b.ins().band_imm(v, UB_TAG_SLOT | UB_TAG_OWNED);
+    let is_borrowed_slot = b.ins().icmp_imm(IntCC::Equal, x, UB_TAG_SLOT);
+    let slow_blk = b.create_block();
+    let cont = b.create_block();
+    b.ins().brif(is_borrowed_slot, cont, &[], slow_blk, &[]);
+    b.switch_to_block(slow_blk);
+    let owned_bit = b.ins().band_imm(v, UB_TAG_OWNED);
+    let push_blk = b.create_block();
+    let helper_blk = b.create_block();
+    b.ins().brif(owned_bit, push_blk, &[], helper_blk, &[]);
+    b.switch_to_block(push_blk);
+    ec.slot_push(b, v);
+    b.ins().jump(cont, &[]);
+    b.switch_to_block(helper_blk);
+    b.ins().call(h.free, &[ec.ctx, v]);
+    b.ins().jump(cont, &[]);
+    b.switch_to_block(cont);
 }

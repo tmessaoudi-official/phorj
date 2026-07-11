@@ -1,0 +1,36 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.String;
+
+// Microbench: the CLASSIC string-accumulator pattern — `s = s + part` in a loop (templating,
+// log-line building, serialization). Grows past the inline width (heap strings), resets at 512
+// bytes so total memory stays bounded while every append cost is real. This is the pattern where
+// PHP's refcount-1 in-place append (amortized O(1)) historically dominates immutable-string
+// languages — measured honestly here.
+function bench(int iters): int {
+    List<string> parts = ["alpha", "beta", "gamma", "delta"];
+    mutable string s = "";
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        s = s + parts[i % 4];
+        if (String.length(s) > 512) {
+            acc = acc + String.length(s);
+            s = "";
+        }
+        i = i + 1;
+    }
+    return acc + String.length(s);
+}
+
+function main(): void {
+    int iters = 2000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("strbuild\t{d + guard}\t{acc}");
+}
