@@ -594,12 +594,17 @@ impl UbGraphInfo {
     }
 }
 
+/// `unboxed_analyze`'s result: the per-leader states, the max stack depth, the function's
+/// return kind (`None` when no reachable `Return` produced one), and the statically-resolved
+/// `CallMethod` sites `(target fn, receiver class)` — the graph fixpoint's discovery feed.
+pub(super) type UbAnalysis = (LeaderStates, usize, Option<Kind>, Vec<(usize, usize)>);
+
 pub(super) fn unboxed_analyze(
     program: &BytecodeProgram,
     func_idx: usize,
     param_kinds: &[Kind],
     info: &UbGraphInfo,
-) -> Result<(LeaderStates, usize, Option<Kind>, Vec<(usize, usize)>), JitError> {
+) -> Result<UbAnalysis, JitError> {
     let code = &program.functions[func_idx].chunk.code;
     let n = code.len();
     let reach = reachable(code);
