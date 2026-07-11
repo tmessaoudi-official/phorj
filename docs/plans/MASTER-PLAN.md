@@ -293,6 +293,17 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   (3) mapget 0.84 / listindex 0.94 — emit-quality tail; (4) checked-intadd elision
   (task 9, ruled ACTIVE): extend range proofs to elide overflow checks on provably-bounded
   accumulators. THEN V3b → NaN-box (Order A), perf register + G-8 recompute at wave close.
+  **VERTICALS WAVE 3 (session 3, coverage-driven — "what aren't we measuring?"):** float
+  comparisons (exact partial_cmp/eq_val↔FloatCC mapping) + handle-slot writes
+  (`Own::ConstBorrow` + Owned⊔ConstBorrow leader join) + the fused string-accumulator peephole
+  (`accumulator_site` positional proof → `rt_u_concat` in-place append on uniquely-owned heap
+  lhs — compile-time ownership delivers php's refcount-1 trick). TWO NEW BASE MICROS (now 17):
+  **floatloop 1.02× WIN** (float-driven loops were fully VM-bound and unmeasured) ·
+  **strbuild 0.11→0.53×** (the classic `s = s + x`; remaining gap = helper call vs php's
+  inlined append — next lever: inline append fast path / HeapStr capacity doubling).
+  STILL-UNMEASURED bases parked for the next wave: collection WRITES (list append / map
+  insert), higher-order lambda pipelines (map/filter), and a JIT-coverage %-of-examples
+  metric (what fraction of real programs stays unboxed — the honest generality signal).
   **OBJECT VERTICAL — DESIGN (SHIPPED as designed, kept for reference):** `Kind::Inst(class_idx)` =
   arena slot handle (SLOT|OWNED, fields flat at byte 8·layout_slot, ≤8 int fields, gate
   `desc.fields.len()==layout.len()` so no None window → GetField total+inline, SetField inline
