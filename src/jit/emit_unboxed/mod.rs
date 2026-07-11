@@ -167,6 +167,37 @@ fn pop_int_args(
     Ok(cargs)
 }
 
+/// Everything a call site / `Throw` needs to route a THROWN payload (code 6): the tables for
+/// kind-directed unwind releases, the helpers, and the active catch pad (`None` = the throw
+/// leaves this frame as `(payload, 6)`). `pad` = (pad block, pad stack height).
+struct ThrowSite<'a> {
+    program: &'a BytecodeProgram,
+    info: &'a UbGraphInfo,
+    h: &'a UbHelperRefs,
+    pad: Option<(Block, usize)>,
+}
+
+/// Release every OWNED cell in `kinds[from..]` (kind-directed — instances free their string
+/// fields too): the VM's unwind/frame-teardown drops these values; the arena must recycle
+/// them or leak. The cells' words are read from their depth-indexed Variables.
+fn emit_unwind_releases(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    kinds: &[Kind],
+    from: usize,
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+) {
+    for (d, k) in kinds.iter().enumerate().skip(from) {
+        if k.is_owned_handle() {
+            let w = b.use_var(vars[d]);
+            release_kinded(b, ec, h, w, *k, program, info, None);
+        }
+    }
+}
+
 /// The shared direct-call emission (`Op::Call` and `Op::CallValue` on a static `Fn`): reproduce
 /// the VM's pre-push depth guard, native-call the callee's FuncId with `depth + 1` + the args,
 /// propagate the callee's `(value, code)` — code != 0 ⇒ the whole graph redoes on the VM.
@@ -183,6 +214,7 @@ fn emit_call_to(
     callee: usize,
     cargs: Vec<ClValue>,
     ret: Kind,
+    throwing: Option<ThrowSite<'_>>,
 ) -> Result<(), JitError> {
     let callee_ref = fn_refs
         .get(callee)
@@ -200,15 +232,50 @@ fn emit_call_to(
     let call = b.ins().call(callee_ref, &call_args);
     let results = b.inst_results(call);
     let (value, ccode) = (results[0], results[1]);
-    // ovf-spec: a callee (also ovf-spec) returns code 0 or 5; code != 0 ⇒ propagate 5 to the
-    // shared fault-exit → this whole graph redoes on the VM.
-    let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
     let cont = b.create_block();
     // A `Call`/`CallValue` is in the `needs_fault_exit` set, so `fault_exit` is `Some` here.
     let fx = ec
         .fault_exit
         .expect("Call requires a fault-exit block (needs_fault_exit)");
-    b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
+    match throwing {
+        // Non-throwing graph: code 0 or 5 only — the 2-way fast dispatch.
+        None => {
+            let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
+            b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
+        }
+        // Throwing graph: 0 → continue; 6 → route the thrown payload (unwind to the active
+        // pad, or forward `(payload, 6)` out of this frame); else → fault-exit (redo on VM).
+        Some(ts) => {
+            let not_ok = b.create_block();
+            let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
+            b.ins().brif(is_fault, not_ok, &[], cont, &[]);
+            b.switch_to_block(not_ok);
+            let thrown_blk = b.create_block();
+            let is_thrown = b.ins().icmp_imm(IntCC::Equal, ccode, 6);
+            b.ins()
+                .brif(is_thrown, thrown_blk, &[], fx, &[ccode.into()]);
+            b.switch_to_block(thrown_blk);
+            // Pending speculation: the VM-truth faulted at the earlier arith BEFORE this call
+            // ever ran — redo wins over the throw (checked only on this cold path).
+            if let Some(sv) = ec.sticky {
+                let s = b.use_var(sv);
+                ec.fault_if(b, s, 5);
+            }
+            match ts.pad {
+                Some((pad_blk, pad_h)) => {
+                    // The VM's unwind truncates to the handler height and pushes the payload.
+                    emit_unwind_releases(b, ec, ts.h, vars, kinds, pad_h, ts.program, ts.info);
+                    b.def_var(vars[pad_h], value);
+                    b.ins().jump(pad_blk, &[]);
+                }
+                None => {
+                    // Frame teardown: everything owned dies; the payload leaves as (value, 6).
+                    emit_unwind_releases(b, ec, ts.h, vars, kinds, 0, ts.program, ts.info);
+                    b.ins().return_(&[value, ccode]);
+                }
+            }
+        }
+    }
     b.switch_to_block(cont);
     // The callee's fixpoint-recorded return kind (Int for pure-int graphs; an instance-returning
     // ctor hands its OWNED arena handle across — the ownership-transfer contract). A Float return
@@ -259,6 +326,9 @@ pub(super) fn build_body_unboxed(
     // the entry stack for the analysis, which then fixes every leader's (depth, kinds) and the max depth.
     let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity);
     let single_use = single_use_params(func);
+    // Innermost active catch pad per ip (lexical try ranges) — drives Throw + call-site
+    // code-6 dispatch.
+    let handler_at = handler_ranges(code);
     let mut scratch_disc = UbDiscovery::default();
     let ub_analysis = unboxed_analyze(program, func_idx, &param_kinds, info, &mut scratch_disc)?;
     let (leader_state, max_depth, depth_at) = (
@@ -455,6 +525,27 @@ pub(super) fn build_body_unboxed(
         sticky,
     };
 
+    // Per-call-site throw routing (Some only in a throwing graph): the active pad's block +
+    // stack height, resolved per ip from the lexical handler ranges.
+    let throw_site = |ip: usize,
+                      blocks: &[Option<Block>],
+                      leader_state: &LeaderStates|
+     -> Result<Option<(Block, usize)>, JitError> {
+        match handler_at[ip] {
+            None => Ok(None),
+            Some(pad_ip) => {
+                let blk = blocks[pad_ip].ok_or_else(|| {
+                    JitError::Codegen("unboxed: catch pad has no block".to_string())
+                })?;
+                let h = leader_state[pad_ip]
+                    .as_ref()
+                    .ok_or_else(|| JitError::Codegen("unboxed: catch pad unanalyzed".to_string()))?
+                    .len()
+                    - 1;
+                Ok(Some((blk, h)))
+            }
+        }
+    };
     let mut skip_ip: Option<usize> = None;
     for (ip, op) in code.iter().enumerate() {
         if !reach[ip] {
@@ -724,6 +815,16 @@ pub(super) fn build_body_unboxed(
                     *callee,
                     cargs,
                     info.ret_of(*callee),
+                    if info.thrown_class.is_some() {
+                        Some(ThrowSite {
+                            program,
+                            info,
+                            h: ub_ref(ub_refs.as_ref(), "throw dispatch")?,
+                            pad: throw_site(ip, &blocks, &leader_state)?,
+                        })
+                    } else {
+                        None
+                    },
                 )?;
             }
             // Closure vertical: a capture-free `MakeClosure` is fully STATIC — the target rides
@@ -759,6 +860,16 @@ pub(super) fn build_body_unboxed(
                     f,
                     cargs,
                     info.ret_of(f),
+                    if info.thrown_class.is_some() {
+                        Some(ThrowSite {
+                            program,
+                            info,
+                            h: ub_ref(ub_refs.as_ref(), "throw dispatch")?,
+                            pad: throw_site(ip, &blocks, &leader_state)?,
+                        })
+                    } else {
+                        None
+                    },
                 )?;
             }
             // Object vertical (flat arena instances) — arm bodies live in `objects.rs`.
@@ -825,6 +936,16 @@ pub(super) fn build_body_unboxed(
                     target,
                     full_args,
                     info.ret_of(target),
+                    if info.thrown_class.is_some() {
+                        Some(ThrowSite {
+                            program,
+                            info,
+                            h: ub_ref(ub_refs.as_ref(), "throw dispatch")?,
+                            pad: throw_site(ip, &blocks, &leader_state)?,
+                        })
+                    } else {
+                        None
+                    },
                 )?;
                 if rk.is_owned_handle() {
                     let h = ub_ref(ub_refs.as_ref(), "CallMethod(receiver free)")?;
@@ -849,6 +970,66 @@ pub(super) fn build_body_unboxed(
             }
             Op::GetEnumField(0) => {
                 arm_get_enum_field(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            // Native try/catch: handler bookkeeping is COMPILE-TIME (the lexical ranges) —
+            // no runtime code at the markers.
+            Op::PushHandler(_) | Op::PopHandler => {}
+            // `Throw`: release everything the VM's unwind would drop, then jump to the active
+            // pad with the payload (or leave the frame as `(payload, 6)`). Pending overflow
+            // speculation wins first (VM-truth faulted before reaching the throw).
+            Op::Throw => {
+                let (pv, pk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if !matches!(pk, Kind::Inst(..)) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: Throw of {pk:?} (deferred)"
+                    )));
+                }
+                if let Some(sv) = sticky {
+                    let s = b.use_var(sv);
+                    ec.fault_if(&mut b, s, 5);
+                }
+                let h = ub_ref(ub_refs.as_ref(), "Throw")?;
+                match handler_at[ip] {
+                    Some(pad_ip) => {
+                        let pad_blk = blocks[pad_ip].ok_or_else(|| {
+                            JitError::Codegen("unboxed: catch pad has no block".to_string())
+                        })?;
+                        let pad_h = leader_state[pad_ip]
+                            .as_ref()
+                            .ok_or_else(|| {
+                                JitError::Codegen("unboxed: catch pad unanalyzed".to_string())
+                            })?
+                            .len()
+                            - 1;
+                        emit_unwind_releases(&mut b, &ec, h, &vars, &kinds, pad_h, program, info);
+                        b.def_var(vars[pad_h], pv);
+                        b.ins().jump(pad_blk, &[]);
+                    }
+                    None => {
+                        emit_unwind_releases(&mut b, &ec, h, &vars, &kinds, 0, program, info);
+                        let six = b.ins().iconst(types::I64, 6);
+                        b.ins().return_(&[pv, six]);
+                    }
+                }
+                current = None;
+            }
+            // `instanceof` on a statically-classed instance: a compile-time constant (name
+            // match or supertype membership — the same `class_implements` oracle as the VM).
+            Op::IsInstance(name) => {
+                let (_v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let Kind::Inst(c, _) = k else {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: IsInstance on {k:?} (deferred)"
+                    )));
+                };
+                let cls = &program.class_descs[c].class;
+                let is = cls.as_ref() == name.as_str()
+                    || program
+                        .class_implements
+                        .get(&**cls)
+                        .is_some_and(|ifaces| ifaces.contains(name));
+                let r = b.ins().iconst(types::I64, is as i64);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, r, Kind::Bool)?;
             }
             // A fixed runtime fault (the match-exhaustiveness backstop): unconditionally funnel
             // to the shared fault-exit as code 5 — the VM redo reproduces the exact canonical

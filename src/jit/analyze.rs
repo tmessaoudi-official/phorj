@@ -617,6 +617,9 @@ pub(super) struct UbGraphInfo {
     /// agree. `None` = no override (usage-proven kinds apply); `Unknown` cells = no override
     /// for that one param.
     pub(super) param_over: Vec<Option<Vec<Kind>>>,
+    /// The graph-wide THROWN class (v1: a single throwable class per graph, else fallback) —
+    /// types every catch pad's incoming value.
+    pub(super) thrown_class: Option<usize>,
 }
 
 impl UbGraphInfo {
@@ -626,6 +629,7 @@ impl UbGraphInfo {
             this_inst: vec![None; n],
             field_kinds: vec![None; n_classes],
             param_over: vec![None; n],
+            thrown_class: None,
         }
     }
     /// The kind a `GetField` of ctor-push-position `j` on class `c` yields (`None` = the
@@ -701,6 +705,8 @@ pub(super) struct UbDiscovery {
     /// Observed CALL argument signatures for calls passing handle args `(callee, arg kinds
     /// in declaration order, ownership-normalized)`.
     pub(super) call_sigs: Vec<(usize, Vec<Kind>)>,
+    /// Classes observed at `Throw` sites — merged into the graph-wide thrown-class singleton.
+    pub(super) throw_classes: Vec<usize>,
 }
 
 /// Detect the FUSED-ACCUMULATOR shape at a Concat(2) site: GetLocal(s); ..rhs..; Concat(2);
@@ -715,6 +721,31 @@ pub(super) struct UbDiscovery {
 /// param's OWNERSHIP (kind pushed Owned, the slot dies to `Unknown`) — how an owned string
 /// argument flows through a ctor into an instance field without borrow aliasing. Pure count —
 /// analyze and emit recompute it identically.
+/// The innermost ACTIVE handler pad for each ip — a LEXICAL scan over `PushHandler`/
+/// `PopHandler` (compiler-emitted try/catch is block-structured: a push at try-entry, a pop
+/// at try-exit, the pad after; nesting nests; control flow never jumps into a try from
+/// outside). `None` = no handler covers the ip (a throw there leaves the function as code 6).
+/// The pad itself is OUTSIDE its own range (the VM pops the handler when unwinding to it, so
+/// a rethrow in the pad targets the OUTER handler) — the pop precedes the pad lexically.
+pub(super) fn handler_ranges(code: &[Op]) -> Vec<Option<usize>> {
+    let mut out = vec![None; code.len()];
+    let mut stack: Vec<usize> = Vec::new();
+    for (ip, op) in code.iter().enumerate() {
+        match op {
+            Op::PushHandler(t) => {
+                out[ip] = stack.last().copied();
+                stack.push(*t);
+            }
+            Op::PopHandler => {
+                stack.pop();
+                out[ip] = stack.last().copied();
+            }
+            _ => out[ip] = stack.last().copied(),
+        }
+    }
+    out
+}
+
 pub(super) fn single_use_params(func: &crate::chunk::Function) -> Vec<bool> {
     let code = &func.chunk.code;
     let reach = reachable(code);
@@ -1140,6 +1171,52 @@ pub(super) fn unboxed_analyze(
                 // fall-through successor, no propagated edge (mirrors `reachable`).
                 Op::Fault(_) => {
                     break;
+                }
+                // Native try/catch: `PushHandler(t)` establishes the HANDLER EDGE — the pad
+                // `t` is entered (by a throw anywhere in the range) with the stack exactly as
+                // it stands HERE plus the thrown value on top (the VM's unwind truncates to
+                // this height and pushes the payload). The thrown value's class is the
+                // graph-wide singleton (not yet known -> held, the fixpoint retries once a
+                // `Throw` is discovered). Fall-through continues into the try body unchanged.
+                Op::PushHandler(t) => {
+                    let Some(c) = info.thrown_class else {
+                        return Err(JitError::Unsupported(
+                            "unboxed: try before any thrown class is known (fixpoint retry)"
+                                .to_string(),
+                        ));
+                    };
+                    let mut pad = kinds.clone();
+                    pad.push(Kind::Inst(c, Own::Owned));
+                    propagate(&mut leader_state, &mut work, *t, &pad)?;
+                }
+                Op::PopHandler => {}
+                // `Throw` pops the payload (an owned instance) and transfers control — a
+                // TERMINATOR (the emit arm unwinds to the active pad or returns code 6).
+                Op::Throw => {
+                    let k = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: Throw underflow".to_string())
+                    })?;
+                    let Kind::Inst(c, _) = k else {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: Throw of {k:?} (deferred)"
+                        )));
+                    };
+                    disc.throw_classes.push(c);
+                    break;
+                }
+                // `value instanceof Name` on a STATICALLY-classed instance folds to a
+                // constant (class name match or supertype membership — the same
+                // `class_implements` oracle the VM consults).
+                Op::IsInstance(_) => {
+                    let k = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: IsInstance underflow".to_string())
+                    })?;
+                    if !matches!(k, Kind::Inst(..)) {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: IsInstance on {k:?} (deferred)"
+                        )));
+                    }
+                    kinds.push(Kind::Bool);
                 }
                 // Closure vertical: a capture-free `MakeClosure` is a STATIC target — the kind
                 // carries the function index; `CallValue` on it is a direct call (models the
@@ -1602,6 +1679,11 @@ pub(super) fn collect_functions_unboxed(
                     }
                 }
                 Op::MatchTag(_) | Op::GetEnumField(0) | Op::Fault(_) => {}
+                // Native try/catch (handler ranges are compile-time; Throw needs the arena
+                // for its instance payload — any thrower constructed one, so uses_handles is
+                // already set by its MakeInstance; keep it explicit for safety).
+                Op::PushHandler(_) | Op::PopHandler | Op::IsInstance(_) => {}
+                Op::Throw => uses_handles = true,
                 // Object vertical: flat arena instances (the arena is the UbCtx — handle space
                 // required). Kind/layout gates live in `unboxed_analyze`; `CallMethod` targets
                 // are discovered by `resolve_unboxed_graph`'s fixpoint (receiver kinds needed).
@@ -1716,6 +1798,20 @@ pub(super) fn resolve_unboxed_graph(
                     Some(prev) if prev != &sig => {
                         return Err(JitError::Unsupported(
                             "unboxed: conflicting call argument kinds (deferred)".to_string(),
+                        ));
+                    }
+                    Some(_) => {}
+                }
+            }
+            for c in disc.throw_classes {
+                match info.thrown_class {
+                    None => {
+                        info.thrown_class = Some(c);
+                        changed = true;
+                    }
+                    Some(prev) if prev != c => {
+                        return Err(JitError::Unsupported(
+                            "unboxed: multiple thrown classes in one graph (deferred)".to_string(),
                         ));
                     }
                     Some(_) => {}
