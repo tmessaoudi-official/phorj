@@ -609,3 +609,66 @@ fn unboxed_ineligible_callee_sinks_the_whole_graph() {
 }
 
 // --- slice b3b: `phg run` wiring — the JIT hook on `Op::Call`, VM-fallback, depth parity ---
+
+#[test]
+fn inline_conversions_match_the_oracle_and_hit_the_jit() {
+    // P-2c: `Conversion.toFloat` (fcvt_from_sint) + `Conversion.truncate` (guarded fcvt_to_sint)
+    // run fully inline — the exact floatarith shape must JIT and stay byte-identical.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Conversion;\n\
+        function bench(int iters): int {\n\
+          mutable float acc = 0.0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            acc = acc + Conversion.toFloat(i) * 0.5;\n\
+            i = i + 1;\n\
+          }\n\
+          return Conversion.truncate(acc);\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "conversion loop must match the oracle");
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual run ok");
+    assert_eq!(manual, oracle);
+    assert!(cache.borrow().hits > 0, "the conversion loop must JIT");
+}
+
+#[test]
+fn inline_truncate_range_fault_matches_the_vm() {
+    // Out-of-range truncate (2^63 doubles) faults canonically on both paths; negatives and
+    // fractional values truncate toward zero exactly like the kernel.
+    const OK: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Conversion;\n\
+        function bench(): int {\n\
+          mutable float f = 0.0 - 12345.678;\n\
+          return Conversion.truncate(f) + Conversion.truncate(9.9);\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_out = crate::cli::cmd_run(OK).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(OK).expect("oracle ok");
+    assert_eq!(jit_out, oracle, "negative/fractional truncate must match");
+
+    const OOR: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Conversion;\n\
+        function bench(): int {\n\
+          mutable float f = 1.0e300;\n\
+          return Conversion.truncate(f);\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_err = crate::cli::cmd_run(OOR).expect_err("must fault");
+    let oracle_err = crate::cli::cmd_treewalk(OOR).expect_err("must fault");
+    assert!(
+        jit_err.contains("out of int range"),
+        "jit fault must be canonical, got: {jit_err}"
+    );
+    assert!(oracle_err.contains("out of int range"));
+}

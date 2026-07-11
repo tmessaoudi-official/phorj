@@ -756,6 +756,42 @@ pub(super) fn build_body_unboxed(
                     Kind::Str(Own::Owned),
                 )?;
             }
+            // ---- P-2c numeric conversions: fully inline, no helper, no handle space ------------
+            Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {
+                // `Conversion.toFloat(int)` — the kernel is `n as f64`; `fcvt_from_sint` is the
+                // same IEEE round-to-nearest widening. Total: no fault path.
+                let (iv, ik) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if ik != Kind::Int {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed toFloat operand kind {ik:?}"
+                    )));
+                }
+                let fv = b.ins().fcvt_from_sint(types::F64, iv);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, fv, Kind::Float)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_truncate(*id) => {
+                // `Conversion.truncate(float)` — mirrors `value::float_to_int` EXACTLY: trunc
+                // toward zero, then require `LOWER <= t < UPPER` (NaN/±∞ fail the ordered
+                // compares). In-range → `fcvt_to_sint` (cannot trap under the guard, and `t` is
+                // already integral so the conversion is exact); out-of-range → code 5, the VM
+                // redo renders the canonical "float is out of int range" fault.
+                let (fv, fk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if fk != Kind::Float {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed truncate operand kind {fk:?}"
+                    )));
+                }
+                let t = b.ins().trunc(fv);
+                let lower = b.ins().f64const(-9_223_372_036_854_775_808.0);
+                let upper = b.ins().f64const(9_223_372_036_854_775_808.0);
+                let ge = b.ins().fcmp(FloatCC::GreaterThanOrEqual, t, lower);
+                let lt = b.ins().fcmp(FloatCC::LessThan, t, upper);
+                let ok = b.ins().band(ge, lt);
+                let bad = b.ins().icmp_imm(IntCC::Equal, ok, 0);
+                fault_if(&mut b, bad, 5);
+                let res = b.ins().fcvt_to_sint(types::I64, t);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Int)?;
+            }
             Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => {
                 let h = ub_ref("String.length")?;
                 let (sv, sk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;

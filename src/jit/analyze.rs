@@ -104,6 +104,23 @@ pub(super) fn unboxed_native_is_str_len(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.String" && nf.name == "length" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.Conversion.toFloat` (P-2c: inline `fcvt_from_sint` — the
+/// kernel is `n as f64`, the same IEEE round-to-nearest widening)?
+pub(super) fn unboxed_native_is_to_float(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Conversion" && nf.name == "toFloat" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.Conversion.truncate` (P-2c: inline trunc + range guard +
+/// `fcvt_to_sint`, mirroring `value::float_to_int` exactly — out-of-range/NaN/±∞ → code 5, the
+/// VM redo renders the canonical fault)?
+pub(super) fn unboxed_native_is_truncate(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Conversion" && nf.name == "truncate" && nf.pure)
+}
+
 /// Provenance of an operand-stack entry for the provenance pre-pass ONLY (not codegen): `Param(slot)`
 /// = a bare `GetLocal(slot)` result; `Other` = anything else (a `Const`, an arithmetic/comparison
 /// result, a call result).
@@ -618,6 +635,28 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::Int);
                 }
+                Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed toFloat operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Float);
+                }
+                Op::CallNative(id, 1) if unboxed_native_is_truncate(*id) => {
+                    match kinds.pop() {
+                        Some(Kind::Float) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed truncate operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
                 Op::Pop => {
                     kinds.pop();
                 }
@@ -773,6 +812,12 @@ pub(super) fn collect_functions_unboxed(
                     uses_handles = true
                 }
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
+                // P-2c numeric conversions: pure, handle-free, fully inline.
+                Op::CallNative(id, 1)
+                    if unboxed_native_is_to_float(*id) || unboxed_native_is_truncate(*id) =>
+                {
+                    has_float = true;
+                }
                 Op::AddI
                 | Op::SubI
                 | Op::MulI
