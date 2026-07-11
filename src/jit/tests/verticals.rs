@@ -1,0 +1,688 @@
+//! Delivery-path + handle-vertical tests: the `phg run` hook, string/list/map verticals,
+//! fault parity through code-5 redo.
+
+use super::boxed::ub_int;
+use super::unboxed::{ub_float, vm_float};
+use super::*;
+
+#[test]
+fn phg_run_hook_actually_hits_the_jit() {
+    // A silent 100%-fallback to the VM would pass every byte-identity check identically and prove
+    // nothing — so this asserts the hit counter is non-zero, i.e. the native path genuinely ran.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }\n\
+        function main() -> void { Output.printLine(\"{fib(10)}\"); }";
+    // Byte-identity: the jit-wired run must match the interpreter oracle (Invariant 2).
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "jit-wired output must match the interpreter oracle"
+    );
+    // Prove the JIT path was actually hit (build a Vm with an inspectable shared cache).
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual jit-wired output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the JIT path must actually be hit — a silent fallback false-greens byte-identity"
+    );
+}
+
+#[test]
+fn phg_run_hook_hits_the_jit_on_an_int_loop() {
+    // widen-1 DELIVERY-PATH proof (loops): an int `while` loop in a CALLED function must JIT through the
+    // `Op::Call` hook. (A loop in `main` never JITs — `main` prints, so it is ineligible, and the
+    // entry-level JIT cannot reach its body; the loop MUST live in a callee, exactly the
+    // `bench/micro/intadd.phg` shape.) Byte-identity alone can't prove the flip — a silent VM fallback
+    // false-greens it — so this asserts the hit counter fires, i.e. the widened subset genuinely runs
+    // native at the CLI.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters) -> int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
+          return acc;\n\
+        }\n\
+        function main() -> void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "int-loop jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual int-loop jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "an int loop in a called function must actually hit the JIT — else the perf flip is unproven"
+    );
+}
+
+#[test]
+fn phg_run_hook_hits_the_jit_on_the_string_vertical() {
+    // P-2a handle-space DELIVERY-PATH proof: the exact `bench/micro/stringconcat.phg` shape —
+    // string consts, `MakeList`, varying `Index`, `Concat`, `String.length`, `Pop` — must JIT
+    // through the `Op::Call` hook AND stay byte-identical to the interpreter oracle. 1000
+    // iterations also exercise the `UbCtx` free-list steady state (temps are recycled, not grown).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"alpha\", \"beta\", \"gamma\", \"delta\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string s = parts[i % 4] + parts[(i + 1) % 4];\n\
+            acc = acc + String.length(s);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "string-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual string-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the string vertical must actually hit the JIT — else the P-2a flip is unproven"
+    );
+}
+
+#[test]
+fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
+    // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
+    // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"héllo-wörld-Ω\", \"a-deliberately-long-segment-over-22-bytes\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string s = parts[i % 2] + parts[(i + 1) % 2];\n\
+            acc = acc + String.length(s);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "long/multibyte concat must match the oracle"
+    );
+}
+
+#[test]
+fn jit_string_vertical_index_fault_matches_the_vm() {
+    // An out-of-range `Index` inside the JIT'd vertical returns the fault sentinel → code 5 → the
+    // hook falls back to the VM, which renders the canonical fault. The jit-wired run must fail with
+    // the SAME fault body as the interpreter (byte-identical failure behaviour, Invariant 1).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"alpha\", \"beta\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string s = parts[i] + parts[0];\n\
+            acc = acc + String.length(s);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(5)}\"); }";
+    let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
+    let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
+    assert!(
+        jit_err.contains("list index out of range"),
+        "jit-wired fault must be the canonical bounds fault, got: {jit_err}"
+    );
+    assert!(
+        oracle_err.contains("list index out of range"),
+        "oracle fault must be the canonical bounds fault, got: {oracle_err}"
+    );
+}
+
+#[test]
+fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
+    // P-2b DELIVERY-PATH proof: the exact `bench/micro/mapget.phg` shape — a `MakeMap` of short
+    // string keys → int values (seals FLAT), a flat key list, and a string-subscripted `Index`
+    // (the inline hash-probe) — must JIT through the `Op::Call` hook AND stay byte-identical to
+    // the interpreter oracle. 1000 iterations exercise the probe across all four keys.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"a\" => 10, \"b\" => 20, \"c\" => 30, \"d\" => 40];\n\
+          List<string> keys = [\"a\", \"b\", \"c\", \"d\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = keys[i % 4];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "map-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual map-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the map vertical must actually hit the JIT — else the P-2b flip is unproven"
+    );
+}
+
+#[test]
+fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
+    // A >22-byte key defeats flattening: the seal falls back to a boxed `Value::Map` and every
+    // lookup routes through the helper into the canonical `map_index` kernel. Byte-identity must
+    // hold on that path too (long AND short keys mixed — the short one also stays boxed here,
+    // exercising the helper's slot-key + boxed-map combination).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"a-deliberately-long-key-over-22-bytes\" => 7, \"b\" => 20];\n\
+          List<string> keys = [\"a-deliberately-long-key-over-22-bytes\", \"b\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = keys[i % 2];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "boxed-map lookup must match the oracle");
+}
+
+#[test]
+fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
+    // Duplicate literal keys are legal (checker only type-checks them): `build_map`'s PHP
+    // semantics — FIRST position, LAST value — must survive the flat seal. `m[\"a\"]` must read 2,
+    // never 1, on all backends.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(): int {\n\
+          Map<string, int> m = [\"a\" => 1, \"b\" => 5, \"a\" => 2];\n\
+          return m[\"a\"] * 100 + m[\"b\"];\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "dedup semantics must match the oracle");
+    assert!(
+        jit_out.contains("205"),
+        "last-value-wins dedup must read 205, got: {jit_out}"
+    );
+}
+
+#[test]
+fn jit_map_vertical_larger_map_walks_buckets_and_matches_the_oracle() {
+    // 12 pairs → a 32-bucket table: exercises the open-addressed walk (collisions + wraparound)
+    // across every key, byte-identical to the oracle.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"k0\" => 1, \"k1\" => 2, \"k2\" => 3, \"k3\" => 4,\n\
+            \"k4\" => 5, \"k5\" => 6, \"k6\" => 7, \"k7\" => 8,\n\
+            \"k8\" => 9, \"k9\" => 10, \"k10\" => 11, \"k11\" => 12];\n\
+          List<string> keys = [\"k0\", \"k1\", \"k2\", \"k3\", \"k4\", \"k5\",\n\
+            \"k6\", \"k7\", \"k8\", \"k9\", \"k10\", \"k11\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = keys[i % 12];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(240)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "bucket-walk lookup must match the oracle");
+    assert!(
+        jit_out.contains("1560"),
+        "240 iterations over sum(1..=12)=78 must read 1560, got: {jit_out}"
+    );
+}
+
+#[test]
+fn jit_map_vertical_missing_key_fault_matches_the_vm() {
+    // A missing key in a FLAT map exhausts the inline probe → code 5 → the hook falls back to the
+    // VM, which renders the canonical `\"map key not found\"` fault — byte-identical failure
+    // behaviour (Invariant 1).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(): int {\n\
+          Map<string, int> m = [\"a\" => 10];\n\
+          return m[\"zzz\"];\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench()}\"); }";
+    let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
+    let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
+    assert!(
+        jit_err.contains("map key not found"),
+        "jit-wired fault must be the canonical missing-key fault, got: {jit_err}"
+    );
+    assert!(
+        oracle_err.contains("map key not found"),
+        "oracle fault must be the canonical missing-key fault, got: {oracle_err}"
+    );
+}
+
+#[test]
+fn jit_map_vertical_concat_key_probes_through_the_helper() {
+    // An inline-concat result carries hash 0 (\"unavailable\") — the inline probe must PUNT to the
+    // helper (which compares bytes), never miss-fault a present key. `\"a\" + \"b\"` == \"ab\" is in
+    // the map; the lookup must succeed with the right value on the jit-wired path.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"ab\" => 11, \"cd\" => 22];\n\
+          List<string> parts = [\"a\", \"b\", \"c\", \"d\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = parts[(i % 2) * 2] + parts[(i % 2) * 2 + 1];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "hash-0 concat keys must route through the helper and match the oracle"
+    );
+}
+
+#[test]
+fn jit_stack_overflow_threshold_matches_the_oracle() {
+    // The ONE correctness vector the fault-fallback cannot catch: an under-fault (wrong
+    // `start_depth`) makes the JIT RETURN A VALUE where the VM overflows — no fault, so no re-run.
+    // A LINEAR eligible recursion bracketing `MAX_CALL_DEPTH`: under `--features jit`, cmd_run routes
+    // `countdown` through the JIT; the interpreter (cmd_treewalk) is never JITted, so it is the pure
+    // depth oracle (Invariant 2). Running through the real cmd_run path (its `on_deep_stack` 256MB
+    // thread) also proves 4096 native JIT frames don't blow the production stack.
+    use crate::limits::MAX_CALL_DEPTH;
+    for n in (MAX_CALL_DEPTH - 3)..=(MAX_CALL_DEPTH + 2) {
+        let src = format!(
+            "package Main;\n\
+             import Core.Output;\n\
+             function countdown(int n) -> int {{ if (n <= 0) {{ return 0; }} return countdown(n - 1); }}\n\
+             function main() -> void {{ Output.printLine(\"{{countdown({n})}}\"); }}"
+        );
+        let jit = crate::cli::cmd_run(&src);
+        let oracle = crate::cli::cmd_treewalk(&src);
+        match (&jit, &oracle) {
+            (Ok(a), Ok(b)) => assert_eq!(a, b, "countdown({n}): jit output must match the oracle"),
+            (Err(a), Err(b)) => assert_eq!(a, b, "countdown({n}): jit fault must match the oracle"),
+            _ => panic!(
+                "countdown({n}): jit/oracle disagree on success-vs-fault: jit={jit:?}, oracle={oracle:?}"
+            ),
+        }
+    }
+}
+
+// --- range-analysis (docs/plans/perf-wave.plan.md): the induction-counter overflow-guard drop. These
+// UNIT-TEST the `range_proven_ops` recognizer directly (the soundness surface) — a counter can't be run
+// to 2^63 to observe an overflow fault, so correctness is proven structurally (which ops are proven) +
+// by byte-identity vs the VM oracle on the emitted code. The ONE unsound spot is the guard↔increment
+// link, so the rejection cases (wrong slot, `<=`, `!=`, double-write, nested) are the load-bearing ones:
+// each must NOT prove, so it keeps its overflow guard. ---
+
+/// How many `AddI` ops the range analysis proves as no-overflow induction increments in `name`.
+fn proven_count(program: &BytecodeProgram, name: &str) -> usize {
+    let f = func_index(program, name);
+    super::range_proven_ops(&program.functions[f])
+        .iter()
+        .filter(|&&p| p)
+        .count()
+}
+
+#[test]
+fn range_analysis_proves_strict_lt_plus_one_counter() {
+    // The canonical counted loop `while (i < n) { i = i + 1; }`: strict `<`, `+1`, single writer, guard
+    // on the induction slot at the loop header → PROVEN (exactly one). Byte-identical to the VM oracle.
+    let program = compile_source(
+        "package Main;\n\
+         function count(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; } return i; }\n\
+         function main() -> void {}",
+    );
+    assert_eq!(
+        proven_count(&program, "count"),
+        1,
+        "the strict-`<` `+1` counter must be range-proven (overflow guard droppable)"
+    );
+    let f = func_index(&program, "count");
+    assert!(
+        Compiled::compile_unboxed(&program, f).is_ok(),
+        "must stay unboxed-eligible"
+    );
+    for n in [0_i64, 1, 5, 100, -3] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "range-proven counter count({n}) must still match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn range_analysis_rejects_le_ne_and_wrong_slot_guards() {
+    // Each is a real bound on the counter that the recognizer INTENTIONALLY does not prove (fail closed),
+    // so each keeps its overflow guard: `<=` (`+1` at `i64::MAX` would overflow), `!=` (not `<`), and a
+    // guard on a DIFFERENT slot than the increment (`n < 100` guards `n`, not `i`). None may be proven.
+    let program = compile_source(
+        "package Main;\n\
+         function le(int n)    -> int { mutable int i = 0; while (i <= n)   { i = i + 1; } return i; }\n\
+         function ne(int n)    -> int { mutable int i = 0; while (i != n)   { i = i + 1; } return i; }\n\
+         function wrong(int n) -> int { mutable int i = 0; while (n < 100)  { i = i + 1; } return i; }\n\
+         function main() -> void {}",
+    );
+    for name in ["le", "ne", "wrong"] {
+        assert_eq!(
+            proven_count(&program, name),
+            0,
+            "`{name}` must NOT be range-proven — it keeps its overflow guard (sound)"
+        );
+    }
+    // `le`/`ne` terminate and must stay byte-identical (the guard they kept is harmless here).
+    for (name, n) in [("le", 5_i64), ("ne", 5)] {
+        let f = func_index(&program, name);
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "unproven-counter {name}({n}) must match the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn range_analysis_rejects_double_write_and_nested_loop() {
+    // Double-write: two `SetLocal(i)` → single-writer fails → not proven. Nested: the outer counter's
+    // guarded body contains an inner back-edge → condition (4) fails → outer not proven; the inner `!=`
+    // counter is not proven either → zero proven total.
+    let program = compile_source(
+        "package Main;\n\
+         function dbl(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; i = i + 1; } return i; }\n\
+         function nest(int n) -> int {\n\
+           mutable int i = 0;\n\
+           while (i < n) {\n\
+             mutable int j = 0;\n\
+             while (j != n) { j = j + 1; }\n\
+             i = i + 1;\n\
+           }\n\
+           return i;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    // The soundness-critical assertion is that NEITHER counter is proven (both keep their overflow
+    // guards). `dbl`/`nest` are not necessarily unboxed-eligible (the block-local `j` / statement shape
+    // introduces a `Pop`), so they run on the VM — byte-identity of unproven counters is covered by the
+    // `le`/`ne` cases and the existing loop suite; here we only pin the recognizer's rejection.
+    assert_eq!(
+        proven_count(&program, "dbl"),
+        0,
+        "double-write counter must not be proven"
+    );
+    assert_eq!(
+        proven_count(&program, "nest"),
+        0,
+        "a counter with a nested loop in its body must not be proven"
+    );
+}
+
+#[test]
+fn range_analysis_float_counted_loop_matches_vm_and_drops_guard() {
+    // The floatmul WIN shape: a float accumulator + a strict-`<` `+1` int counter. The counter is the
+    // ONLY int-arith op → it is proven AND `needs_sticky` becomes false → all sticky machinery is gone.
+    // Correctness = bit-exact float result vs the VM oracle (the WIN itself is measured separately).
+    let program = compile_source(
+        "package Main;\n\
+         function bench(int iters, float r) -> float {\n\
+           mutable float acc = 0.0;\n\
+           mutable int i = 0;\n\
+           while (i < iters) { acc = acc * r + 0.5; i = i + 1; }\n\
+           return acc;\n\
+         }\n\
+         function main() -> void {}",
+    );
+    assert_eq!(
+        proven_count(&program, "bench"),
+        1,
+        "the float loop's int counter must be range-proven"
+    );
+    let f = func_index(&program, "bench");
+    assert!(
+        Compiled::compile_unboxed(&program, f).is_ok(),
+        "float counted loop must be unboxed-eligible"
+    );
+    for iters in [0_i64, 1, 10, 1000] {
+        let jit = ub_float(&program, f, &[Value::Int(iters), Value::Float(1.0000001)]);
+        let vm = vm_float(
+            &program,
+            f,
+            vec![Value::Int(iters), Value::Float(1.0000001)],
+        );
+        assert_eq!(
+            jit.to_bits(),
+            vm.to_bits(),
+            "bench({iters}) must be bit-exact vs the VM oracle"
+        );
+    }
+}
+
+#[test]
+fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
+    // intadd-PARTIAL + the fault-preservation guard: a strict-`<` `+1` counter (PROVEN → plain `iadd`)
+    // sharing a loop with `s = s * 3` (a `MulI`, never proven → keeps its overflow guard). Exactly one
+    // op proven (the counter). Byte-identical for small n; and for n past the overflow point the UNPROVEN
+    // multiply must STILL funnel to the VM redo — proving dropping the counter's guard did not drop the
+    // accumulator's (3^40 > i64::MAX, so the VM faults overflow around i=39).
+    let program = compile_source(
+        "package Main;\n\
+         function f(int n) -> int { mutable int s = 1; mutable int i = 0; while (i < n) { s = s * 3; i = i + 1; } return s; }\n\
+         function main() -> void {}",
+    );
+    assert_eq!(
+        proven_count(&program, "f"),
+        1,
+        "only the counter is proven; the `*3` accumulator is not"
+    );
+    let f = func_index(&program, "f");
+    for n in [0_i64, 1, 5, 20] {
+        assert_eq!(
+            ub_int(&program, f, &[Value::Int(n)]),
+            vm_int(&program, f, vec![Value::Int(n)]),
+            "coexist f({n}) (no overflow) must match the VM oracle"
+        );
+    }
+    // n = 50 overflows the `*3` accumulator: the unproven op's guard must still fire → VM redo.
+    match Compiled::compile_unboxed(&program, f)
+        .expect("eligible")
+        .run_unboxed(&[Value::Int(50)], 1)
+    {
+        JitRun::Fault(m) => assert_eq!(
+            m, REDO_ON_VM,
+            "the unproven `*3` overflow must still funnel to redo"
+        ),
+        JitRun::Value(v) => panic!("expected redo (accumulator overflow), got {}", as_int(&v)),
+    }
+}
+
+// --- `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow): whole-function two's-complement wrapping int arithmetic.
+// The fn-level `unchecked` flag makes the JIT emit plain `iadd`/`isub`/`imul`/`ineg` (no overflow guard,
+// no sticky) — the WIN path (intadd LOSS→WIN) — and the result must be byte-identical to the VM, which
+// reads the same flag and calls the same `value::int_wrapping_*` kernels. ---
+
+#[test]
+fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
+    let program = compile_source(
+        "package Main;\n\
+         import Core.Runtime.Integer.UncheckedOverflow;\n\
+         #[UncheckedOverflow]\n\
+         function wadd(int a, int b) -> int { return a + b; }\n\
+         #[UncheckedOverflow]\n\
+         function wsub(int a, int b) -> int { return a - b; }\n\
+         #[UncheckedOverflow]\n\
+         function wmul(int a, int b) -> int { return a * b; }\n\
+         function main() -> void {}",
+    );
+    // The overflow edges that WOULD fault in a checked function must WRAP here (no redo, no fault).
+    let cases: &[(&str, i64, i64, i64)] = &[
+        ("wadd", i64::MAX, 1, i64::MIN), // MAX + 1 wraps
+        ("wsub", i64::MIN, 1, i64::MAX), // MIN - 1 wraps
+        ("wmul", i64::MAX, 2, i64::MAX.wrapping_mul(2)),
+    ];
+    for &(name, a, b, want) in cases {
+        let f = func_index(&program, name);
+        match Compiled::compile_unboxed(&program, f)
+            .expect("an #[UncheckedOverflow] int fn is unboxed-eligible")
+            .run_unboxed(&[Value::Int(a), Value::Int(b)], 1)
+        {
+            JitRun::Value(v) => assert_eq!(
+                as_int(&v),
+                want,
+                "unchecked {name}({a},{b}) must WRAP to {want}, not fault"
+            ),
+            JitRun::Fault(m) => panic!("unchecked {name} must NOT fault (wraps), got {m}"),
+        }
+        // Byte-identity vs the VM oracle across the edges + an ordinary value.
+        for &(a, b) in &[(a, b), (2, 3), (-7, 5)] {
+            assert_eq!(
+                ub_int(&program, f, &[Value::Int(a), Value::Int(b)]),
+                vm_int(&program, f, vec![Value::Int(a), Value::Int(b)]),
+                "unchecked {name}({a},{b}) JIT must match the VM oracle"
+            );
+        }
+    }
+}
+
+#[test]
+fn qualified_unchecked_overflow_attribute_is_recognized_and_wraps_on_the_vm() {
+    // Two-mode "nothing in the wind": the QUALIFIED form (`import Core.Runtime.Integer;` +
+    // `#[Integer.UncheckedOverflow]`) is the SAME attribute as the bare leaf-import form, recognized
+    // through the single-sourced `Attribute::is_unchecked_overflow`. Every other test/example exercises
+    // the BARE form; this locks the qualified surface so a future recognition change can't silently drop
+    // it. Asserts the compiler set the fn `unchecked` flag AND the VM wraps (MAX+1 → MIN) instead of
+    // faulting — the VM reads that same flag, so a wrap proves end-to-end recognition on the VM path (the
+    // interpreter reads the same predicate via `attrs_unchecked`; the shipped example covers run≡runvm).
+    let program = compile_source(
+        "package Main;\n\
+         import Core.Runtime.Integer;\n\
+         #[Integer.UncheckedOverflow]\n\
+         function wadd(int a, int b) -> int { return a + b; }\n\
+         function main() -> void {}",
+    );
+    let f = func_index(&program, "wadd");
+    assert!(
+        program.functions[f].unchecked,
+        "the compiler must set `unchecked` from the QUALIFIED `#[Integer.UncheckedOverflow]` form"
+    );
+    assert_eq!(
+        vm_int(&program, f, vec![Value::Int(i64::MAX), Value::Int(1)]),
+        i64::MIN,
+        "qualified `#[Integer.UncheckedOverflow]`: MAX + 1 must WRAP to MIN on the VM, not fault"
+    );
+}
+
+#[test]
+fn unchecked_checked_call_boundary_byte_identical_both_directions() {
+    // The mixed-call boundary — the load-bearing surface for the `cur_unchecked` save/restore in the
+    // interp's `run_call` (and the VM reading each frame's own fn flag). NEITHER direction is covered by
+    // the leaf tests above, so a future refactor that dropped the save/restore would only fail HERE.
+    // Both directions asserted run≡runvm (`cmd_run` = VM+JIT vs `cmd_treewalk` = interp oracle).
+
+    // (1) `#[UncheckedOverflow]` outer calling a CHECKED inner: the checked inner must STILL fault on overflow
+    // even though the caller wraps — the callee's own flag governs, not the caller's.
+    const A: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Runtime.Integer.UncheckedOverflow;\n\
+        function inner(int n) -> int { return n + 1; }\n\
+        #[UncheckedOverflow] function outer(int n) -> int { return inner(n); }\n\
+        function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+    let a_jit = crate::cli::cmd_run(A);
+    let a_oracle = crate::cli::cmd_treewalk(A);
+    match (&a_jit, &a_oracle) {
+        (Err(a), Err(b)) => assert_eq!(
+            a, b,
+            "checked inner under an #[UncheckedOverflow] outer must FAULT identically on both backends"
+        ),
+        _ => panic!("checked inner must fault on BOTH backends: jit={a_jit:?} oracle={a_oracle:?}"),
+    }
+
+    // (2) reverse — a CHECKED outer calling an `#[UncheckedOverflow]` inner: the inner WRAPS (its own flag),
+    // and re-entering the checked outer afterward must restore checking (the save/restore).
+    const B: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.Runtime.Integer.UncheckedOverflow;\n\
+        #[UncheckedOverflow] function inner(int n) -> int { return n + 1; }\n\
+        function outer(int n) -> int { return inner(n); }\n\
+        function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+    let b_jit = crate::cli::cmd_run(B).expect("wrapping inner returns a value");
+    let b_oracle = crate::cli::cmd_treewalk(B).expect("wrapping inner returns a value");
+    assert_eq!(
+        b_jit, b_oracle,
+        "#[UncheckedOverflow] inner under a checked outer must WRAP identically on both backends"
+    );
+    assert!(
+        b_jit.contains("-9223372036854775808"),
+        "the #[UncheckedOverflow] inner must wrap MAX+1 -> MIN, got {b_jit}"
+    );
+}
