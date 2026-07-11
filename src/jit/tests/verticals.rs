@@ -2,7 +2,7 @@
 //! fault parity through code-5 redo.
 
 use super::boxed::ub_int;
-use super::unboxed::{ub_float, vm_float};
+use super::unboxed_flow::{ub_float, vm_float};
 use super::*;
 
 #[test]

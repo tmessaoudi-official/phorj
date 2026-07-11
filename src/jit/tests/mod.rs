@@ -11,7 +11,8 @@ use crate::chunk::BytecodeProgram;
 use crate::value::Value;
 
 mod boxed;
-mod unboxed;
+mod unboxed_flow;
+mod unboxed_int;
 mod verticals;
 
 /// Compile loose source through the real front-end (loader → check → compile), same helper shape the
