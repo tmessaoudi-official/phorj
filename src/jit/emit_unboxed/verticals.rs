@@ -404,9 +404,8 @@ pub(super) fn arm_concat(
         let fv = b.ins().iconst(types::I64, fmask);
         let zero = b.ins().iconst(types::I64, 0);
         let mut args: Vec<ClValue> = vec![ec.ctx, nv, kv, fv];
-        for j in 0..6 {
-            args.push(if j < n { parts[j].0 } else { zero });
-        }
+        args.extend(parts.iter().map(|(v, _)| *v));
+        args.extend(std::iter::repeat_n(zero, 6 - n));
         let call = b.ins().call(h.concat_mix, &args);
         let sres = b.inst_results(call)[0];
         let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
