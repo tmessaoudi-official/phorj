@@ -515,3 +515,6 @@ mod engine;
 mod kernels;
 
 use self::kernels::*;
+
+#[cfg(test)]
+mod tests;
