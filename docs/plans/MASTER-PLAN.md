@@ -268,7 +268,26 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   fork is now RULED (2026-07-11 session 3, developer via ask-human — see §0 PERF-FIRST
   rulings): Order A = unboxed verticals FIRST (the pattern that won listindex/floatarith),
   then V3b, then NaN-box; bar = beat-or-match everything; trycatch gets a full lever;
-  checked-intadd elision reopened.** P-2c TAIL still queued: fused tag
+  checked-intadd elision reopened.**
+  **VERTICALS PROGRESS (session 3): enum ✅ 0.01→1.58× WIN (`0afd3a1` — Kind::EnumInt register
+  pairs: payload word + `evars` tag space, MakeEnum/MatchTag/GetEnumField(0)/Fault in the subset,
+  zero alloc; Fault = terminator in `reachable`). closurecall ✅ 0.03→2.13× WIN (`1cc958b` —
+  Kind::Fn(target): capture-free MakeClosure is fully static, CallValue = direct call via shared
+  `emit_call_to`; measured pinned+interleaved best-of-7 on a quiet core; NOTE ambient load can
+  swing even interleaved ratios — re-measure on a quiet core before trusting a flip).**
+  **OBJECT VERTICAL — DESIGN (next, methodcall+objalloc together):** `Kind::Inst(class_idx)` =
+  arena slot handle (SLOT|OWNED, fields flat at byte 8·layout_slot, ≤8 int fields, gate
+  `desc.fields.len()==layout.len()` so no None window → GetField total+inline, SetField inline
+  store, alloc = concat's free-stack-or-bump ladder, no helper, no boxed fallback). CallMethod:
+  static dispatch off receiver kind → methods table → direct call, receiver = arg 0 (`this`);
+  free-receiver-if-owned after the call; deny overloaded methods. Ctor return: Return-of-Inst
+  allowed iff no Inst/handle params AND exactly one owned Inst cell in frame (ownership
+  transfer, no frees at return); entry fn returning Inst = deny. INFRA: fixpoint loop in
+  compile.rs — {analyze all, record per-fn ret kinds (init Int), resolve CallMethod targets
+  from receiver kinds, add new callees, repeat until stable}; per-fn param-kind INJECTION
+  (method `this` = Inst(c)); Call arm pushes callee's recorded ret kind. Instance/enum/fn args
+  to Call stay denied (only `this` crosses, via CallMethod).
+  P-2c TAIL shipped: emit_unboxed M-Decomp (mod/scalar/verticals/enums, `39d6a46`), fused tag
   checks · Pop-elision · `emit_unboxed` per-op-helper decomposition (1183 lines) · perf
   register + G-8 language recompute. Housekeeping shipped alongside: MSRV 1.74→1.82
   (`078fab0`), repo-wide M-Decomp (~30 commits — every file ≤800 lines except 4 by-design:
