@@ -478,6 +478,26 @@ pub(super) extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask:
     res
 }
 
+/// Render an `Int` operand of a mixed `Concat` as its decimal string — exactly the VM's
+/// `as_display` for `Value::Int` (`n.to_string()`) — into a fresh arena slot. An i64 decimal is
+/// ≤ 20 bytes, so the result ALWAYS fits inline (`INLINE_CAP` = 22): one slot alloc, no heap.
+/// Registered content (real hash + canon) so a rendered key probes maps fully inline. Returns
+/// the owned slot handle, or `-1` on arena exhaustion (→ code 5, redo on VM).
+pub(super) extern "C" fn rt_u_int_to_str(ctx: *mut UbCtx, v: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let s = v.to_string();
+    let bytes = s.into_bytes();
+    let hash = match crate::phstr::fnv1a(&bytes) {
+        0 => 1,
+        h => h,
+    };
+    let canon1 = ctx.canon1_of(&bytes);
+    match ctx.alloc_slot_bytes(&bytes, hash, canon1) {
+        Some(h) => h,
+        None => -1, // arena exhausted → redo on VM
+    }
+}
+
 /// `Core.String.length` — byte length; the helper (slow) path for untagged handles (a slot handle
 /// reads its length inline). `free != 0` consumes the handle. `-1` = defensive bad-handle fault.
 pub(super) extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
@@ -763,6 +783,7 @@ pub(super) struct UbHelperIds {
     pub(super) map_get: FuncId,
     pub(super) list_push_int: FuncId,
     pub(super) index_int: FuncId,
+    pub(super) int_to_str: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -778,4 +799,5 @@ pub(super) struct UbHelperRefs {
     pub(super) map_get: FuncRef,
     pub(super) list_push_int: FuncRef,
     pub(super) index_int: FuncRef,
+    pub(super) int_to_str: FuncRef,
 }

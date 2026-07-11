@@ -328,6 +328,7 @@ pub(super) fn build_body_unboxed(
         map_get: module.declare_func_in_func(ids.map_get, b.func),
         list_push_int: module.declare_func_in_func(ids.list_push_int, b.func),
         index_int: module.declare_func_in_func(ids.index_int, b.func),
+        int_to_str: module.declare_func_in_func(ids.int_to_str, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -525,9 +526,9 @@ pub(super) fn build_body_unboxed(
                 let h = ub_ref(ub_refs.as_ref(), "Index")?;
                 arm_index_str_list(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
-            Op::Concat(2) => {
+            Op::Concat(cn) if *cn >= 2 => {
                 let h = ub_ref(ub_refs.as_ref(), "Concat")?;
-                arm_concat2(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+                arm_concat(&mut b, &ec, h, &vars, &fvars, &mut kinds, *cn)?;
             }
             // ---- P-2c numeric conversions: fully inline, no helper, no handle space ------------
             Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {

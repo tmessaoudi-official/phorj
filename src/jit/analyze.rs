@@ -741,10 +741,13 @@ pub(super) fn unboxed_analyze(
                         }
                     }
                 }
-                Op::Concat(2) => {
-                    for _ in 0..2 {
+                Op::Concat(n) if *n >= 2 => {
+                    // Mixed interpolation: `Str` operands concatenate; an `Int` operand renders
+                    // to its decimal string first (`rt_u_int_to_str` — always inline-short).
+                    // Anything else (floats/bools/handles) → VM fallback.
+                    for _ in 0..*n {
                         match kinds.pop() {
-                            Some(Kind::Str(_)) => {}
+                            Some(Kind::Str(_)) | Some(Kind::Int) => {}
                             other => {
                                 return Err(JitError::Unsupported(format!(
                                     "unboxed Concat operand kind {other:?}"
@@ -1217,9 +1220,8 @@ pub(super) fn collect_functions_unboxed(
                 },
                 // P-2a handle verticals. Operand-KIND validation lives in `unboxed_analyze` /
                 // `build_body_unboxed` (this walk only gates the op set).
-                Op::MakeList(_) | Op::MakeMap(_) | Op::Index | Op::Concat(2) | Op::Pop => {
-                    uses_handles = true
-                }
+                Op::MakeList(_) | Op::MakeMap(_) | Op::Index | Op::Pop => uses_handles = true,
+                Op::Concat(n) if *n >= 2 => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 // P-2c numeric conversions: pure, handle-free, fully inline.
                 Op::CallNative(id, 1)

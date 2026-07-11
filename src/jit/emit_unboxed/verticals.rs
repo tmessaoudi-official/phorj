@@ -356,16 +356,64 @@ pub(super) fn arm_index_str_list(
 /// build the result in a fresh arena slot with bounded 3×8-byte over-copies (then ZERO the
 /// hash+canon metadata words the over-copies trashed — a stale canon would FALSE-MATCH in the
 /// map probe, a byte-identity break); everything else goes through the helper.
-pub(super) fn arm_concat2(
+pub(super) fn arm_concat(
     b: &mut FunctionBuilder,
     ec: &Ec,
     h: &UbHelperRefs,
     vars: &[Variable],
     fvars: &[Variable],
     kinds: &mut Vec<Kind>,
+    n: usize,
 ) -> Result<(), JitError> {
-    let (bv, bk) = ub_pop(b, vars, fvars, kinds)?;
-    let (av, ak) = ub_pop(b, vars, fvars, kinds)?;
+    // Pop the n parts (top = last), restore source order.
+    let mut parts: Vec<(ClValue, Kind)> = Vec::with_capacity(n);
+    for _ in 0..n {
+        parts.push(ub_pop(b, vars, fvars, kinds)?);
+    }
+    parts.reverse();
+    // Mixed interpolation: render each `Int` part to its decimal string FIRST (source order —
+    // the VM's `as_display` walk), via `rt_u_int_to_str` (an i64 decimal always fits inline —
+    // one slot, no heap; -1 = arena exhausted → code 5). The rendered part is a fresh OWNED
+    // slot, consumed by the fold like any other owned operand.
+    for part in parts.iter_mut() {
+        match part.1 {
+            Kind::Str(_) => {}
+            Kind::Int => {
+                let call = b.ins().call(h.int_to_str, &[ec.ctx, part.0]);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                ec.fault_if(b, bad, 5);
+                *part = (sres, Kind::Str(Own::Owned));
+            }
+            other => {
+                return Err(JitError::Unsupported(format!(
+                    "unboxed Concat operand kind {other:?}"
+                )));
+            }
+        }
+    }
+    // Left-fold pairwise (string concat is associative — byte-identical to the VM's single
+    // walk); each merge consumes its operands per the ownership mask, so intermediates recycle.
+    let (mut av, mut ak) = parts[0];
+    for &(bv, bk) in &parts[1..] {
+        av = concat_pair(b, ec, h, av, ak, bv, bk)?;
+        ak = Kind::Str(Own::Owned);
+    }
+    ub_push(b, vars, fvars, kinds, av, ak)
+}
+
+/// Emit ONE pairwise concat merge (the P-2a-inline fast path + helper slow path), returning
+/// the merged value (an OWNED slot / helper handle). Both operands are consumed according to
+/// their compile-time ownership.
+fn concat_pair(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    av: ClValue,
+    ak: Kind,
+    bv: ClValue,
+    bk: Kind,
+) -> Result<ClValue, JitError> {
     if !matches!(ak, Kind::Str(_)) || !matches!(bk, Kind::Str(_)) {
         return Err(JitError::Unsupported(format!(
             "unboxed Concat operand kinds ({ak:?}, {bk:?})"
@@ -448,8 +496,7 @@ pub(super) fn arm_concat2(
     ec.fault_if(b, bad, 5);
     b.ins().jump(merge, &[sres.into()]);
     b.switch_to_block(merge);
-    let res = b.block_params(merge)[0];
-    ub_push(b, vars, fvars, kinds, res, Kind::Str(Own::Owned))
+    Ok(b.block_params(merge)[0])
 }
 
 /// `String.length` native — INLINE for a slot operand (the length is the slot's leading
