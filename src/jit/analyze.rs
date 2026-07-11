@@ -330,7 +330,8 @@ pub(super) fn range_proven_ops(func: &crate::chunk::Function) -> Vec<bool> {
         if !pow2 {
             continue;
         }
-        if inits.get(s).copied().flatten().is_none_or(|v| v < 0) {
+        // MSRV 1.74: `Option::is_none_or` is 1.82+ — use `matches!` for the "known ≥ 0" test.
+        if !matches!(inits.get(s).copied().flatten(), Some(v) if v >= 0) {
             continue;
         }
         let writers_ok = code.iter().enumerate().all(|(ip, op)| {
