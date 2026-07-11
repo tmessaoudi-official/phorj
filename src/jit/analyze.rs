@@ -608,14 +608,24 @@ pub(super) type LeaderStates = Vec<Option<Vec<Kind>>>;
 pub(super) struct UbGraphInfo {
     pub(super) ret_kinds: Vec<Option<Kind>>,
     pub(super) this_inst: Vec<Option<usize>>,
+    /// Per-CLASS field kinds (layout-slot order NOT — ctor push order; every `MakeInstance`
+    /// site of a class must agree, ownership-normalized). `Int` fields are raw words; `Str`
+    /// fields are handle words the instance OWNS (released with it, runtime-bit-gated).
+    pub(super) field_kinds: Vec<Option<Vec<Kind>>>,
 }
 
 impl UbGraphInfo {
-    pub(super) fn new(n: usize) -> Self {
+    pub(super) fn new(n: usize, n_classes: usize) -> Self {
         Self {
             ret_kinds: vec![None; n],
             this_inst: vec![None; n],
+            field_kinds: vec![None; n_classes],
         }
+    }
+    /// The kind a `GetField` of ctor-push-position `j` on class `c` yields (`None` = the
+    /// class's signature is not yet recorded — the fixpoint retries).
+    pub(super) fn field_kind(&self, c: usize, j: usize) -> Option<Kind> {
+        self.field_kinds.get(c)?.as_ref()?.get(j).copied()
     }
     /// The kind a caller's stack receives from calling `callee` (`Int` until the fixpoint
     /// fills it — the pre-object behavior, so pure-int graphs converge in one pass).
@@ -649,13 +659,20 @@ impl UbGraphInfo {
 /// `unboxed_analyze`'s result: the per-leader states, the max stack depth, the function's
 /// return kind (`None` when no reachable `Return` produced one), and the statically-resolved
 /// `CallMethod` sites `(target fn, receiver class)` — the graph fixpoint's discovery feed.
-pub(super) type UbAnalysis = (
-    LeaderStates,
-    usize,
-    Option<Kind>,
-    Vec<(usize, usize)>,
-    Vec<Option<usize>>,
-);
+/// `unboxed_analyze`'s result bundle.
+pub(super) struct UbAnalysis {
+    pub(super) leader_state: LeaderStates,
+    pub(super) max_depth: usize,
+    /// The function's return kind (`None` when no reachable `Return` produced one).
+    pub(super) ret_kind: Option<Kind>,
+    /// Statically-resolved `CallMethod` sites `(target fn, receiver class)` — fixpoint feed.
+    pub(super) method_calls: Vec<(usize, usize)>,
+    /// Operand-stack depth before each reachable op (`accumulator_site`'s positional input).
+    pub(super) depth_at: Vec<Option<usize>>,
+    /// Observed `MakeInstance` field-kind signatures `(class, kinds in ctor push order)` —
+    /// fixpoint feed for the per-class field-kind table (Str-fielded instances).
+    pub(super) inst_fields: Vec<(usize, Vec<Kind>)>,
+}
 
 /// Detect the FUSED-ACCUMULATOR shape at a Concat(2) site: GetLocal(s); ..rhs..; Concat(2);
 /// SetLocal(s) all inside ONE basic block, where the lhs cell is the untouched GetLocal(s)
@@ -736,11 +753,19 @@ pub(super) fn unboxed_analyze(
     // (`(target fn, receiver class)`) — the fixpoint's discovery feed.
     let mut ret_kind: Option<Kind> = None;
     let mut method_calls: Vec<(usize, usize)> = Vec::new();
+    let mut inst_fields: Vec<(usize, Vec<Kind>)> = Vec::new();
     // Operand-stack depth BEFORE each reachable op (accumulator_site's positional input).
     // A leader re-walk (an ownership join) records the same depths - only kinds widen.
     let mut depth_at: Vec<Option<usize>> = vec![None; n];
     if n == 0 {
-        return Ok((leader_state, max_depth, ret_kind, method_calls, depth_at));
+        return Ok(UbAnalysis {
+            leader_state,
+            max_depth,
+            ret_kind,
+            method_calls,
+            depth_at,
+            inst_fields,
+        });
     }
     // ip 0 (the entry leader) starts with the params on the stack: slots 0..arity at the frame base.
     leader_state[0] = Some(param_kinds.to_vec());
@@ -1135,16 +1160,31 @@ pub(super) fn unboxed_analyze(
                                 .to_string(),
                         ));
                     }
+                    // Fields are Int words or Str handle words the instance takes OWNERSHIP of
+                    // (a Borrowed str operand would alias a live local - its later field-free
+                    // double-frees - DENY; ConstBorrow words are runtime-bit-clear, safe).
+                    // Record the ownership-normalized signature for the fixpoint's per-class
+                    // field-kind table (drives GetField/SetField typing + kinded release).
+                    let mut sig: Vec<Kind> = Vec::with_capacity(nf);
                     for _ in 0..nf {
                         let k = kinds.pop().ok_or_else(|| {
                             JitError::Codegen("unboxed analyze: MakeInstance underflow".to_string())
                         })?;
-                        if k != Kind::Int {
-                            return Err(JitError::Unsupported(format!(
-                                "unboxed: MakeInstance field kind {k:?} (deferred)"
-                            )));
+                        match k {
+                            Kind::Int => sig.push(Kind::Int),
+                            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
+                                sig.push(Kind::Str(Own::Owned))
+                            }
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed: MakeInstance field kind {other:?} (deferred)"
+                                )));
+                            }
                         }
                     }
+                    // Operands popped top-first = REVERSE ctor push order; store push order.
+                    sig.reverse();
+                    inst_fields.push((*cidx, sig));
                     kinds.push(Kind::Inst(*cidx, Own::Owned));
                 }
                 Op::GetField(nidx) => {
@@ -1156,17 +1196,51 @@ pub(super) fn unboxed_analyze(
                             "unboxed: GetField on {k:?} (deferred)"
                         )));
                     };
-                    if program.class_descs[c]
-                        .layout
-                        .slot(&program.names[*nidx])
-                        .is_none()
-                    {
+                    let desc = &program.class_descs[c];
+                    if desc.layout.slot(&program.names[*nidx]).is_none() {
                         return Err(JitError::Unsupported(
                             "unboxed: GetField name not in layout (VM renders the fault)"
                                 .to_string(),
                         ));
                     }
-                    kinds.push(Kind::Int);
+                    // The field's kind comes from the fixpoint's per-class table (ctor push
+                    // order = desc.fields order). Not yet recorded -> held-Unsupported, the
+                    // fixpoint retries next round. A Str field read is a BORROW: the instance
+                    // keeps ownership of the handle word.
+                    let j = desc
+                        .fields
+                        .iter()
+                        .position(|f| f == &program.names[*nidx])
+                        .ok_or_else(|| {
+                            JitError::Unsupported(
+                                "unboxed: GetField name not a ctor field (deferred)".to_string(),
+                            )
+                        })?;
+                    match info.field_kind(c, j) {
+                        Some(Kind::Int) => kinds.push(Kind::Int),
+                        // A Str read from a BORROWED receiver borrows (the instance keeps the
+                        // word). From an OWNED receiver (a dying temp - `new C(..).f`), the
+                        // result TAKES the field's word (the release of the dying instance
+                        // skips that one field) - else the returned handle would dangle.
+                        Some(Kind::Str(_)) => {
+                            kinds.push(if matches!(k, Kind::Inst(_, Own::Owned)) {
+                                Kind::Str(Own::Owned)
+                            } else {
+                                Kind::Str(Own::Borrowed)
+                            })
+                        }
+                        Some(other) => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed: GetField field kind {other:?} (deferred)"
+                            )));
+                        }
+                        None => {
+                            return Err(JitError::Unsupported(
+                                "unboxed: GetField before class signature is known (fixpoint retry)"
+                                    .to_string(),
+                            ));
+                        }
+                    }
                 }
                 Op::SetField(nidx) => {
                     let v = kinds.pop().ok_or_else(|| {
@@ -1175,24 +1249,45 @@ pub(super) fn unboxed_analyze(
                     let k = kinds.pop().ok_or_else(|| {
                         JitError::Codegen("unboxed analyze: SetField underflow".to_string())
                     })?;
-                    if v != Kind::Int {
-                        return Err(JitError::Unsupported(format!(
-                            "unboxed: SetField value kind {v:?} (deferred)"
-                        )));
-                    }
                     let Kind::Inst(c, _) = k else {
                         return Err(JitError::Unsupported(format!(
                             "unboxed: SetField on {k:?} (deferred)"
                         )));
                     };
-                    if program.class_descs[c]
-                        .layout
-                        .slot(&program.names[*nidx])
-                        .is_none()
-                    {
+                    let desc = &program.class_descs[c];
+                    if desc.layout.slot(&program.names[*nidx]).is_none() {
                         return Err(JitError::Unsupported(
                             "unboxed: SetField name not in layout (VM no-op parity)".to_string(),
                         ));
+                    }
+                    let j = desc
+                        .fields
+                        .iter()
+                        .position(|f| f == &program.names[*nidx])
+                        .ok_or_else(|| {
+                            JitError::Unsupported(
+                                "unboxed: SetField name not a ctor field (deferred)".to_string(),
+                            )
+                        })?;
+                    // The stored value must MATCH the class's field kind; a Str store takes
+                    // ownership of the word (Borrowed would alias a live local - DENY).
+                    match (info.field_kind(c, j), v) {
+                        (Some(Kind::Int), Kind::Int) => {}
+                        (
+                            Some(Kind::Str(_)),
+                            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow),
+                        ) => {}
+                        (None, _) => {
+                            return Err(JitError::Unsupported(
+                                "unboxed: SetField before class signature is known (fixpoint retry)"
+                                    .to_string(),
+                            ));
+                        }
+                        (Some(fk), vv) => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed: SetField value kind {vv:?} into {fk:?} field (deferred)"
+                            )));
+                        }
                     }
                 }
                 Op::CallMethod(nidx, argc) => {
@@ -1323,7 +1418,14 @@ pub(super) fn unboxed_analyze(
             ip = next;
         }
     }
-    Ok((leader_state, max_depth, ret_kind, method_calls, depth_at))
+    Ok(UbAnalysis {
+        leader_state,
+        max_depth,
+        ret_kind,
+        method_calls,
+        depth_at,
+        inst_fields,
+    })
 }
 
 /// Collect the set of functions to compile for the UNBOXED path: the entry plus every function it
@@ -1476,7 +1578,7 @@ pub(super) fn resolve_unboxed_graph(
     entry_idx: usize,
 ) -> Result<(Vec<usize>, bool, UbGraphInfo), JitError> {
     let (mut order, mut uses_handles) = collect_functions_unboxed(program, entry_idx)?;
-    let mut info = UbGraphInfo::new(program.functions.len());
+    let mut info = UbGraphInfo::new(program.functions.len(), program.class_descs.len());
     let cap = program.functions.len() + 3;
     for _round in 0..cap {
         let mut changed = false;
@@ -1490,8 +1592,8 @@ pub(super) fn resolve_unboxed_graph(
             idx += 1;
             let proven = unboxed_proven_param_kinds(program, fi);
             let pk = info.param_kinds(fi, &proven, program.functions[fi].arity);
-            let (rk, mcalls) = match unboxed_analyze(program, fi, &pk, &info) {
-                Ok((_, _, rk, mcalls, _)) => (rk, mcalls),
+            let (rk, mcalls, ifields) = match unboxed_analyze(program, fi, &pk, &info) {
+                Ok(a) => (a.ret_kind, a.method_calls, a.inst_fields),
                 Err(e @ JitError::Unsupported(_)) => {
                     pending_err = Some(e);
                     continue;
@@ -1502,6 +1604,22 @@ pub(super) fn resolve_unboxed_graph(
                 if info.ret_kinds[fi] != Some(rk) {
                     info.ret_kinds[fi] = Some(rk);
                     changed = true;
+                }
+            }
+            for (class, sig) in ifields {
+                match &info.field_kinds[class] {
+                    None => {
+                        info.field_kinds[class] = Some(sig);
+                        changed = true;
+                    }
+                    Some(prev) if prev != &sig => {
+                        // Two construction sites disagree on a field's kind (e.g. Int here,
+                        // Str there) - a single static signature is impossible. Fall back.
+                        return Err(JitError::Unsupported(
+                            "unboxed: conflicting MakeInstance field kinds (deferred)".to_string(),
+                        ));
+                    }
+                    Some(_) => {}
                 }
             }
             for (target, class) in mcalls {

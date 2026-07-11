@@ -252,8 +252,12 @@ pub(super) fn build_body_unboxed(
     // is the injected receiver (`this` — a BORROWED instance handle from the fixpoint facts). These seed
     // the entry stack for the analysis, which then fixes every leader's (depth, kinds) and the max depth.
     let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity);
-    let (leader_state, max_depth, _ret, _mcalls, depth_at) =
-        unboxed_analyze(program, func_idx, &param_kinds, info)?;
+    let ub_analysis = unboxed_analyze(program, func_idx, &param_kinds, info)?;
+    let (leader_state, max_depth, depth_at) = (
+        ub_analysis.leader_state,
+        ub_analysis.max_depth,
+        ub_analysis.depth_at,
+    );
 
     // Range analysis (docs/plans/perf-wave.plan.md): `proven_ops[ip]` = an `AddI` that is a provably-
     // no-overflow induction-variable increment → emit a plain wrapping-free `iadd`, no sticky. From it:
@@ -572,7 +576,16 @@ pub(super) fn build_body_unboxed(
                 arm_str_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::Pop => {
-                arm_pop(&mut b, &ec, ub_refs.as_ref(), &vars, &fvars, &mut kinds)?;
+                arm_pop(
+                    &mut b,
+                    &ec,
+                    ub_refs.as_ref(),
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    program,
+                    info,
+                )?;
             }
             Op::AddI | Op::SubI | Op::MulI => {
                 // Plain (wrapping-free) when `#[UncheckedOverflow]` or a range-proven induction
@@ -670,7 +683,7 @@ pub(super) fn build_body_unboxed(
                 if kinds[*slot].is_owned_handle() {
                     let h = ub_ref(ub_refs.as_ref(), "SetLocal(handle overwrite)")?;
                     let old = b.use_var(vars[*slot]);
-                    emit_release(&mut b, &ec, h, old);
+                    release_kinded(&mut b, &ec, h, old, kinds[*slot], program, info, None);
                 }
                 // A register-pair enum stores BOTH words: the tag from the popped cell's evars
                 // slot (source depth = kinds.len() AFTER the pop) into the frame cell's.
@@ -752,10 +765,16 @@ pub(super) fn build_body_unboxed(
                 arm_make_instance(&mut b, &ec, &vars, &fvars, &mut kinds, *cidx, &perm)?;
             }
             Op::GetField(nidx) => {
-                arm_get_field(&mut b, &ec, &vars, &fvars, &mut kinds, program, *nidx)?;
+                let h = ub_ref(ub_refs.as_ref(), "GetField")?;
+                arm_get_field(
+                    &mut b, &ec, h, &vars, &fvars, &mut kinds, program, info, *nidx,
+                )?;
             }
             Op::SetField(nidx) => {
-                arm_set_field(&mut b, &ec, &vars, &fvars, &mut kinds, program, *nidx)?;
+                let h = ub_ref(ub_refs.as_ref(), "SetField")?;
+                arm_set_field(
+                    &mut b, &ec, h, &vars, &fvars, &mut kinds, program, info, *nidx,
+                )?;
             }
             // Statically-dispatched method call: the receiver's class is in the compile-time
             // kind → the target is a methods-table lookup → the SAME direct-call emission, with
@@ -795,7 +814,8 @@ pub(super) fn build_body_unboxed(
                     info.ret_of(target),
                 )?;
                 if rk.is_owned_handle() {
-                    ec.slot_free_if_owned(&mut b, rv);
+                    let h = ub_ref(ub_refs.as_ref(), "CallMethod(receiver free)")?;
+                    release_kinded(&mut b, &ec, h, rv, rk, program, info, None);
                 }
             }
             // Enum vertical (zero-alloc register pairs) — arm bodies live in `enums.rs`.

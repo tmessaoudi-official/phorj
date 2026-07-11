@@ -587,6 +587,7 @@ pub(super) fn arm_str_len(
 /// dropping the SSA value is the whole discard. Runtime dispatch: an owned slot recycles
 /// inline; an untagged temp goes through the helper; a borrowed slot or a flat list is a
 /// no-op (flat handled by the helper defensively).
+#[allow(clippy::too_many_arguments)] // emit plumbing
 pub(super) fn arm_pop(
     b: &mut FunctionBuilder,
     ec: &Ec,
@@ -594,11 +595,13 @@ pub(super) fn arm_pop(
     vars: &[Variable],
     fvars: &[Variable],
     kinds: &mut Vec<Kind>,
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
 ) -> Result<(), JitError> {
     let (v, k) = ub_pop(b, vars, fvars, kinds)?;
     if k.is_owned_handle() {
         let h = ub_ref(ub, "Pop(owned handle)")?;
-        emit_release(b, ec, h, v);
+        release_kinded(b, ec, h, v, k, program, info, None);
     }
     Ok(())
 }
