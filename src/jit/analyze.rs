@@ -62,6 +62,12 @@ pub(super) enum Kind {
     /// checker guarantees a scrutinee is matched only against its own enum's variants.
     /// Multi-payload / non-int-payload variants are default-denied (collect + analyze).
     EnumInt,
+    /// A CAPTURE-FREE first-class function value (the closure vertical): the target function
+    /// index is carried entirely in the compile-time kind, so `CallValue` lowers to a DIRECT
+    /// native call — no closure object, no indirection, zero allocation. The runtime word is a
+    /// never-read filler. Capturing closures are default-denied (collect + analyze); two
+    /// different targets merging at a leader disagree on the kind → VM fallback (sound).
+    Fn(usize),
 }
 
 /// Compile-time ownership of a handle operand — see [`Kind::Str`]. Part of `Kind`'s equality, so the
@@ -778,17 +784,57 @@ pub(super) fn unboxed_analyze(
                 Op::Fault(_) => {
                     break;
                 }
+                // Closure vertical: a capture-free `MakeClosure` is a STATIC target — the kind
+                // carries the function index; `CallValue` on it is a direct call (models the
+                // return `Int`, like `Call`). Captures / non-`Fn` callees / a static arity
+                // mismatch (the VM renders that fault) → VM fallback.
+                Op::MakeClosure(f) => {
+                    if program.functions[*f].n_captures != 0 {
+                        return Err(JitError::Unsupported(
+                            "unboxed: closure with captures (deferred)".to_string(),
+                        ));
+                    }
+                    kinds.push(Kind::Fn(*f));
+                }
+                Op::CallValue(argc) => {
+                    for _ in 0..*argc {
+                        if kinds.pop().is_some_and(|k| {
+                            k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_))
+                        }) {
+                            return Err(JitError::Unsupported(
+                                "unboxed: handle/enum/fn argument to CallValue (deferred)"
+                                    .to_string(),
+                            ));
+                        }
+                    }
+                    let callee = kinds.pop().ok_or_else(|| {
+                        JitError::Codegen("unboxed analyze: CallValue underflow".to_string())
+                    })?;
+                    let Kind::Fn(f) = callee else {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: CallValue on {callee:?} (deferred)"
+                        )));
+                    };
+                    // Capture-free ⇒ n_params == arity; a mismatch is the VM's canonical
+                    // "wrong number of arguments" fault — fall back so it renders there.
+                    if program.functions[f].arity != *argc {
+                        return Err(JitError::Unsupported(
+                            "unboxed: CallValue arity mismatch (VM renders the fault)".to_string(),
+                        ));
+                    }
+                    kinds.push(Kind::Int);
+                }
                 Op::Call(callee) => {
                     for _ in 0..program.functions[*callee].arity {
                         // A handle arg would arrive at the callee as an untyped i64 param (proven-int
                         // usage could then do arithmetic on a handle INDEX) — reject, VM fallback.
-                        // A two-word enum can't cross the one-i64-per-arg ABI either.
-                        if kinds
-                            .pop()
-                            .is_some_and(|k| k.is_handle() || k == Kind::EnumInt)
-                        {
+                        // A two-word enum can't cross the one-i64-per-arg ABI either, and a `Fn`'s
+                        // static target would be lost.
+                        if kinds.pop().is_some_and(|k| {
+                            k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_))
+                        }) {
                             return Err(JitError::Unsupported(
-                                "unboxed: handle/enum argument to Call (deferred)".to_string(),
+                                "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
                             ));
                         }
                     }
@@ -920,6 +966,21 @@ pub(super) fn collect_functions_unboxed(
                     }
                 }
                 Op::MatchTag(_) | Op::GetEnumField(0) | Op::Fault(_) => {}
+                // Closure vertical: collect the capture-free target into the graph; `CallValue`
+                // is a direct call at emit time (counts as a call for the float-leaf gate).
+                Op::MakeClosure(f) => {
+                    if program
+                        .functions
+                        .get(*f)
+                        .is_none_or(|fun| fun.n_captures != 0)
+                    {
+                        return Err(JitError::Unsupported(
+                            "unboxed: closure with captures (deferred)".to_string(),
+                        ));
+                    }
+                    work.push(*f);
+                }
+                Op::CallValue(_) => has_call = true,
                 // Mutable locals: a read of any slot and a write (SetLocal) are both in the subset.
                 // Slots are Cranelift Variables (widen-1 c1); their kind is proven by the analyze pass,
                 // and a non-numeric-typed local reaching a `Return` fails the build (whole-graph fallback).

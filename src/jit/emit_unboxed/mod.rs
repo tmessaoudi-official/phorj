@@ -102,6 +102,77 @@ fn ub_ref<'a>(ub: Option<&'a UbHelperRefs>, what: &str) -> Result<&'a UbHelperRe
     })
 }
 
+/// Pop `argc` int-representable args off the operand stack (top is the LAST arg), rejecting
+/// kinds that can't cross the one-i64-per-arg ABI (handles, register-pair enums, static `Fn`s).
+/// Returns the args in declaration order.
+fn pop_int_args(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    argc: usize,
+) -> Result<Vec<ClValue>, JitError> {
+    let mut cargs: Vec<ClValue> = Vec::with_capacity(argc);
+    for _ in 0..argc {
+        let (v, k) = ub_pop(b, vars, fvars, kinds)?;
+        // A handle arg would arrive as an untyped i64 param (mirrors the analyze arm); a
+        // two-word enum can't cross the ABI either, and a `Fn`'s static target would be lost.
+        if k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_)) {
+            return Err(JitError::Unsupported(
+                "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
+            ));
+        }
+        cargs.push(v);
+    }
+    cargs.reverse();
+    Ok(cargs)
+}
+
+/// The shared direct-call emission (`Op::Call` and `Op::CallValue` on a static `Fn`): reproduce
+/// the VM's pre-push depth guard, native-call the callee's FuncId with `depth + 1` + the args,
+/// propagate the callee's `(value, code)` — code != 0 ⇒ the whole graph redoes on the VM.
+#[allow(clippy::too_many_arguments)] // emit plumbing, same shape as build_body_unboxed
+fn emit_call_to(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    fn_refs: &[Option<FuncRef>],
+    ctx: ClValue,
+    depth: ClValue,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    callee: usize,
+    cargs: Vec<ClValue>,
+) -> Result<(), JitError> {
+    let callee_ref = fn_refs
+        .get(callee)
+        .copied()
+        .flatten()
+        .ok_or_else(|| JitError::Codegen(format!("unboxed: call to uncompiled fn {callee}")))?;
+    let dmax = b.ins().iconst(types::I64, MAX_CALL_DEPTH as i64);
+    let too_deep = b.ins().icmp(IntCC::SignedGreaterThanOrEqual, depth, dmax);
+    ec.fault_if(b, too_deep, 5); // ovf-spec: stack-overflow → redo on VM (code 5)
+    let d1 = b.ins().iadd_imm(depth, 1);
+    let mut call_args: Vec<ClValue> = Vec::with_capacity(cargs.len() + 2);
+    call_args.push(ctx);
+    call_args.push(d1);
+    call_args.extend(cargs);
+    let call = b.ins().call(callee_ref, &call_args);
+    let results = b.inst_results(call);
+    let (value, ccode) = (results[0], results[1]);
+    // ovf-spec: a callee (also ovf-spec) returns code 0 or 5; code != 0 ⇒ propagate 5 to the
+    // shared fault-exit → this whole graph redoes on the VM.
+    let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
+    let cont = b.create_block();
+    // A `Call`/`CallValue` is in the `needs_fault_exit` set, so `fault_exit` is `Some` here.
+    let fx = ec
+        .fault_exit
+        .expect("Call requires a fault-exit block (needs_fault_exit)");
+    b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
+    b.switch_to_block(cont);
+    ub_push(b, vars, fvars, kinds, value, Kind::Int)
+}
+
 /// Emit UNBOXED native code for one int function (self- or cross-recursive) into `cl_ctx.func`
 /// (signature already `extern "C" fn(depth, a0..a_arity: i64) -> (i64 value, i64 code)` — a
 /// multi-return, so no fault-cell pointer / no memory store on any path). Success returns `(value, 0)`;
@@ -177,6 +248,7 @@ pub(super) fn build_body_unboxed(
                         | Op::RemI
                         | Op::DivF
                         | Op::Call(_)
+                        | Op::CallValue(_)
                         | Op::Index
                         | Op::Concat(_)
                         | Op::CallNative(..)
@@ -520,47 +592,38 @@ pub(super) fn build_body_unboxed(
                 kinds[*slot] = k;
             }
             Op::Call(callee) => {
-                // Self OR cross-function call. Reproduce the VM's pre-push depth guard, then a direct
-                // native call to the callee's FuncId, passing `depth + 1` + the callee's `arity` args
-                // already on the operand stack; propagate the callee's `(value, code)`.
-                let callee_ref = fn_refs[*callee].ok_or_else(|| {
-                    JitError::Codegen(format!("unboxed: call to uncompiled fn {callee}"))
-                })?;
-                let dmax = b.ins().iconst(types::I64, MAX_CALL_DEPTH as i64);
-                let too_deep = b.ins().icmp(IntCC::SignedGreaterThanOrEqual, depth, dmax);
-                ec.fault_if(&mut b, too_deep, 5); // ovf-spec: stack-overflow → redo on VM (code 5)
-                let d1 = b.ins().iadd_imm(depth, 1);
-                // Pop the CALLEE's `arity` args (top is the last arg); rebuild in declaration order.
+                // Self OR cross-function call: pop the callee's `arity` args, then the shared
+                // direct-call emission (depth guard + native call + fault propagation).
                 let arity = program.functions[*callee].arity;
-                let mut cargs: Vec<ClValue> = Vec::with_capacity(arity);
-                for _ in 0..arity {
-                    let (v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                    // A handle arg would arrive as an untyped i64 param (mirrors the analyze arm);
-                    // a two-word enum can't cross the one-i64-per-arg ABI either.
-                    if k.is_handle() || k == Kind::EnumInt {
-                        return Err(JitError::Unsupported(
-                            "unboxed: handle/enum argument to Call (deferred)".to_string(),
-                        ));
-                    }
-                    cargs.push(v);
+                let cargs = pop_int_args(&mut b, &vars, &fvars, &mut kinds, arity)?;
+                emit_call_to(
+                    &mut b, &ec, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, *callee, cargs,
+                )?;
+            }
+            // Closure vertical: a capture-free `MakeClosure` is fully STATIC — the target rides
+            // in the compile-time kind (`Fn(f)`), the runtime word is a never-read filler.
+            Op::MakeClosure(f) => {
+                let filler = b.ins().iconst(types::I64, 0);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, filler, Kind::Fn(*f))?;
+            }
+            // `CallValue` on a static `Fn(f)`: pop the args, pop the (filler) callee word, then
+            // the SAME direct-call emission as `Op::Call` — no indirection, no closure object.
+            Op::CallValue(argc) => {
+                let cargs = pop_int_args(&mut b, &vars, &fvars, &mut kinds, *argc)?;
+                let (_fv, fk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let Kind::Fn(f) = fk else {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: CallValue on {fk:?} (deferred)"
+                    )));
+                };
+                if program.functions[f].arity != *argc {
+                    return Err(JitError::Codegen(
+                        "unboxed: CallValue arity mismatch past analyze".to_string(),
+                    ));
                 }
-                cargs.reverse();
-                let mut call_args: Vec<ClValue> = Vec::with_capacity(arity + 2);
-                call_args.push(ctx);
-                call_args.push(d1);
-                call_args.extend(cargs);
-                let call = b.ins().call(callee_ref, &call_args);
-                let results = b.inst_results(call);
-                let (value, ccode) = (results[0], results[1]);
-                // ovf-spec: a callee (also ovf-spec) returns code 0 or 5; code != 0 ⇒ propagate 5 to the
-                // shared fault-exit → this whole graph redoes on the VM.
-                let is_fault = b.ins().icmp_imm(IntCC::NotEqual, ccode, 0);
-                let cont = b.create_block();
-                // A `Call` is in the `needs_fault_exit` set, so `fault_exit` is `Some` here.
-                let fx = fault_exit.expect("Call requires a fault-exit block (needs_fault_exit)");
-                b.ins().brif(is_fault, fx, &[ccode.into()], cont, &[]);
-                b.switch_to_block(cont);
-                ub_push(&mut b, &vars, &fvars, &mut kinds, value, Kind::Int)?;
+                emit_call_to(
+                    &mut b, &ec, &fn_refs, ctx, depth, &vars, &fvars, &mut kinds, f, cargs,
+                )?;
             }
             // Enum vertical (zero-alloc register pairs) — arm bodies live in `enums.rs`.
             Op::MakeEnum(idx) => {
