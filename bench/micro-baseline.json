@@ -10,39 +10,39 @@
       "identical": true
     },
     "fibrec": {
-      "ratio": 1.985,
+      "ratio": 1.893,
       "identical": true
     },
     "floatarith": {
-      "ratio": 0.027,
+      "ratio": 4.193,
       "identical": true
     },
     "floatmul": {
-      "ratio": 0.861,
+      "ratio": 0.999,
       "identical": true
     },
     "intadd": {
-      "ratio": 0.718,
+      "ratio": 0.687,
       "identical": true
     },
     "interp": {
-      "ratio": 0.105,
+      "ratio": 0.110,
       "identical": true
     },
     "listindex": {
-      "ratio": 0.025,
+      "ratio": 0.969,
       "identical": true
     },
     "mapget": {
-      "ratio": 0.869,
+      "ratio": 0.862,
       "identical": true
     },
     "match": {
-      "ratio": 7.487,
+      "ratio": 7.451,
       "identical": true
     },
     "methodcall": {
-      "ratio": 0.033,
+      "ratio": 0.035,
       "identical": true
     },
     "objalloc": {
@@ -50,15 +50,15 @@
       "identical": true
     },
     "stringconcat": {
-      "ratio": 2.024,
+      "ratio": 2.063,
       "identical": true
     },
     "trycatch": {
-      "ratio": 0.444,
+      "ratio": 0.458,
       "identical": true
     },
     "webish": {
-      "ratio": 0.060,
+      "ratio": 0.057,
       "identical": true
     }
   }
