@@ -178,6 +178,25 @@ impl PhStr {
     /// Concatenate two strings with the representation-optimal path: short results stay inline
     /// (zero alloc), long results build one heap buffer. The single-sourced kernel both backends'
     /// `+`/interpolation route through (via `value::concat_display`).
+    /// Append `bytes` IN PLACE when this is a UNIQUELY-owned heap string (`Rc::get_mut`
+    /// succeeds): the amortized-O(1) accumulator path — compile-time ownership at the call
+    /// site proves the value is a dying temp being rebuilt (`s = s + x`), so mutating it is
+    /// unobservable. Resets the lazy hash (content changed). Returns `false` when not
+    /// applicable (inline / shared / non-UTF-8 bytes) — the caller falls back to `concat`.
+    pub fn append_in_place(&mut self, bytes: &[u8]) -> bool {
+        if let PhStr::Heap(rc) = self {
+            if let Some(h) = Rc::get_mut(rc) {
+                let Ok(s) = std::str::from_utf8(bytes) else {
+                    return false;
+                };
+                h.s.push_str(s);
+                h.hash.set(0); // content changed — recompute lazily on next use
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn concat(a: &PhStr, b: &PhStr) -> PhStr {
         let ab = a.as_bytes();
         let bb = b.as_bytes();

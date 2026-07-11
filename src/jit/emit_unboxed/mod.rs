@@ -252,7 +252,7 @@ pub(super) fn build_body_unboxed(
     // is the injected receiver (`this` — a BORROWED instance handle from the fixpoint facts). These seed
     // the entry stack for the analysis, which then fixes every leader's (depth, kinds) and the max depth.
     let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity);
-    let (leader_state, max_depth, _ret, _mcalls) =
+    let (leader_state, max_depth, _ret, _mcalls, depth_at) =
         unboxed_analyze(program, func_idx, &param_kinds, info)?;
 
     // Range analysis (docs/plans/perf-wave.plan.md): `proven_ops[ip]` = an `AddI` that is a provably-
@@ -443,8 +443,14 @@ pub(super) fn build_body_unboxed(
         sticky,
     };
 
+    let mut skip_ip: Option<usize> = None;
     for (ip, op) in code.iter().enumerate() {
         if !reach[ip] {
+            continue;
+        }
+        // A fused two-op arm (the accumulator peephole) already emitted this op's effect.
+        if skip_ip == Some(ip) {
+            skip_ip = None;
             continue;
         }
         if ip != 0 {
@@ -529,6 +535,29 @@ pub(super) fn build_body_unboxed(
             }
             Op::Concat(cn) if *cn >= 2 => {
                 let h = ub_ref(ub_refs.as_ref(), "Concat")?;
+                // FUSED-ACCUMULATOR peephole (s = s + x): the lhs is the untouched borrow of
+                // the very slot the following SetLocal rewrites - treat it as CONSUMED (the old
+                // value dies here), emit ONE pair merge whose helper path appends IN PLACE on a
+                // uniquely-owned heap lhs (amortized O(1) - the classic accumulator), store the
+                // result straight into the slot, and skip the SetLocal.
+                if *cn == 2 {
+                    if let Some(s) = accumulator_site(code, &depth_at, &is_leader, ip) {
+                        let dl = kinds.len();
+                        if dl >= 2
+                            && matches!(kinds[dl - 1], Kind::Str(_))
+                            && matches!(kinds[dl - 2], Kind::Str(_))
+                        {
+                            let (bv, bk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                            let (av, _ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                            let res =
+                                concat_pair(&mut b, &ec, h, av, Kind::Str(Own::Owned), bv, bk)?;
+                            b.def_var(vars[s], res);
+                            kinds[s] = Kind::Str(Own::Owned);
+                            skip_ip = Some(ip + 1);
+                            continue;
+                        }
+                    }
+                }
                 arm_concat(&mut b, &ec, h, &vars, &fvars, &mut kinds, *cn)?;
             }
             // ---- P-2c numeric conversions: fully inline, no helper, no handle space ------------

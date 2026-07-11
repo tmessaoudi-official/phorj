@@ -237,6 +237,21 @@ impl UbCtx {
         }
     }
 
+    /// In-place append onto a CONSUMED untagged heap-string handle (the fused accumulator
+    /// path — see `rt_u_concat`): returns `true` and leaves `h` as the (now longer) result.
+    /// The rhs bytes must already be copied OUT of the ctx (this takes `&mut self`).
+    pub(super) fn try_append_in_place(&mut self, h: i64, rhs: &[u8]) -> bool {
+        if h & UB_TAG_SLOT != 0 || h & UB_TAG_FLAT != 0 || h < self.n_pinned as i64 {
+            // Tagged / pinned-const handles never mutate (a pinned literal's Rc is shared with
+            // the chunk consts anyway - get_mut would refuse - but guard explicitly).
+            return false;
+        }
+        match self.handles.get_mut(h as usize) {
+            Some(Value::Str(s)) => s.append_in_place(rhs),
+            _ => false,
+        }
+    }
+
     /// Release any OWNED handle: an owned arena slot recycles onto the free stack; an untagged
     /// temp releases its `handles` entry; borrowed slots / flat lists / pinned entries are no-ops.
     pub(super) fn release(&mut self, h: i64) {
@@ -436,6 +451,37 @@ pub(super) extern "C" fn rt_u_index(ctx: *mut UbCtx, list: i64, idx: i64, free_l
 /// operands (OWNED rules apply — a borrowed slot free is a no-op).
 pub(super) extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
+    // FUSED-accumulator fast path (`s = s + x` — the caller marked the lhs CONSUMED): a
+    // uniquely-owned untagged heap lhs appends the rhs bytes IN PLACE (amortized O(1)) and the
+    // SAME handle is the result — no copy, no new entry. Compile-time ownership proves what
+    // PHP proves by refcount. The rhs bytes are copied out first (self-append `s = s + s` and
+    // the `&mut` below both need the borrow released); ≤ 64B stays on the stack.
+    if free_mask & 1 != 0 && a & (UB_TAG_SLOT | UB_TAG_FLAT) == 0 {
+        let mut small = [0u8; 64];
+        let mut spill: Vec<u8> = Vec::new();
+        let rhs_len = {
+            let Some(bb) = ctx.str_bytes(b) else {
+                return -1;
+            };
+            if bb.len() <= small.len() {
+                small[..bb.len()].copy_from_slice(bb);
+            } else {
+                spill = bb.to_vec();
+            }
+            bb.len()
+        };
+        let rhs: &[u8] = if rhs_len <= small.len() {
+            &small[..rhs_len]
+        } else {
+            &spill
+        };
+        if ctx.try_append_in_place(a, rhs) {
+            if free_mask & 2 != 0 {
+                ctx.release(b);
+            }
+            return a;
+        }
+    }
     let (Some(ab), Some(bb)) = (ctx.str_bytes(a), ctx.str_bytes(b)) else {
         return -1;
     };

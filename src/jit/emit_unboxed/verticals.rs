@@ -443,7 +443,7 @@ pub(super) fn arm_concat(
 /// Emit ONE pairwise concat merge (the P-2a-inline fast path + helper slow path), returning
 /// the merged value (an OWNED slot / helper handle). Both operands are consumed according to
 /// their compile-time ownership.
-fn concat_pair(
+pub(super) fn concat_pair(
     b: &mut FunctionBuilder,
     ec: &Ec,
     h: &UbHelperRefs,

@@ -649,7 +649,74 @@ impl UbGraphInfo {
 /// `unboxed_analyze`'s result: the per-leader states, the max stack depth, the function's
 /// return kind (`None` when no reachable `Return` produced one), and the statically-resolved
 /// `CallMethod` sites `(target fn, receiver class)` — the graph fixpoint's discovery feed.
-pub(super) type UbAnalysis = (LeaderStates, usize, Option<Kind>, Vec<(usize, usize)>);
+pub(super) type UbAnalysis = (
+    LeaderStates,
+    usize,
+    Option<Kind>,
+    Vec<(usize, usize)>,
+    Vec<Option<usize>>,
+);
+
+/// Detect the FUSED-ACCUMULATOR shape at a Concat(2) site: GetLocal(s); ..rhs..; Concat(2);
+/// SetLocal(s) all inside ONE basic block, where the lhs cell is the untouched GetLocal(s)
+/// copy and s is not rewritten in between. The peephole lets emit treat the borrow as
+/// CONSUMED (s's old value dies at the immediately-following SetLocal) - which is what
+/// unlocks the helper's in-place append. Purely positional: depth_at (the analyze walk's
+/// per-ip depth) locates the pusher of the lhs cell; liveness (the cell never popped) and
+/// interference (no SetLocal(s)) are re-checked op-by-op. Returns the slot s.
+pub(super) fn accumulator_site(
+    code: &[Op],
+    depth_at: &[Option<usize>],
+    is_leader: &[bool],
+    ip: usize,
+) -> Option<usize> {
+    let Some(Op::SetLocal(s)) = code.get(ip + 1) else {
+        return None;
+    };
+    // The SetLocal must be same-block (a jump target between the two would observe the
+    // un-fused intermediate state).
+    if is_leader.get(ip + 1).copied().unwrap_or(true) {
+        return None;
+    }
+    let d = depth_at.get(ip).copied().flatten()?;
+    if d < 2 {
+        return None;
+    }
+    let lhs_index = d - 2;
+    let mut j = ip;
+    loop {
+        if j == 0 {
+            return None;
+        }
+        j -= 1;
+        let dj = depth_at.get(j).copied().flatten()?;
+        let dj1 = depth_at.get(j + 1).copied().flatten()?;
+        if dj == lhs_index && dj1 == lhs_index + 1 {
+            // code[j] pushed the lhs cell. It must be the untouched borrow of s.
+            let Op::GetLocal(src) = code[j] else {
+                return None;
+            };
+            if src != *s {
+                return None;
+            }
+            // Interference: s must not be rewritten between the borrow and the SetLocal.
+            for op in &code[j + 1..ip] {
+                if matches!(op, Op::SetLocal(x) if x == s) {
+                    return None;
+                }
+            }
+            return Some(*s);
+        }
+        // The cell was popped (or never live) below this point - not the accumulator shape.
+        if dj <= lhs_index || dj1 <= lhs_index {
+            return None;
+        }
+        // Hit the block leader without finding the pusher.
+        if is_leader[j] {
+            return None;
+        }
+    }
+}
 
 pub(super) fn unboxed_analyze(
     program: &BytecodeProgram,
@@ -669,8 +736,11 @@ pub(super) fn unboxed_analyze(
     // (`(target fn, receiver class)`) — the fixpoint's discovery feed.
     let mut ret_kind: Option<Kind> = None;
     let mut method_calls: Vec<(usize, usize)> = Vec::new();
+    // Operand-stack depth BEFORE each reachable op (accumulator_site's positional input).
+    // A leader re-walk (an ownership join) records the same depths - only kinds widen.
+    let mut depth_at: Vec<Option<usize>> = vec![None; n];
     if n == 0 {
-        return Ok((leader_state, max_depth, ret_kind, method_calls));
+        return Ok((leader_state, max_depth, ret_kind, method_calls, depth_at));
     }
     // ip 0 (the entry leader) starts with the params on the stack: slots 0..arity at the frame base.
     leader_state[0] = Some(param_kinds.to_vec());
@@ -723,6 +793,7 @@ pub(super) fn unboxed_analyze(
             .expect("a queued leader always has a recorded state");
         let mut ip = l;
         loop {
+            depth_at[ip] = Some(kinds.len());
             match &code[ip] {
                 Op::Const(idx) => {
                     // Kind follows the const's type — MUST mirror build_body: Float for a float const,
@@ -1252,7 +1323,7 @@ pub(super) fn unboxed_analyze(
             ip = next;
         }
     }
-    Ok((leader_state, max_depth, ret_kind, method_calls))
+    Ok((leader_state, max_depth, ret_kind, method_calls, depth_at))
 }
 
 /// Collect the set of functions to compile for the UNBOXED path: the entry plus every function it
@@ -1420,7 +1491,7 @@ pub(super) fn resolve_unboxed_graph(
             let proven = unboxed_proven_param_kinds(program, fi);
             let pk = info.param_kinds(fi, &proven, program.functions[fi].arity);
             let (rk, mcalls) = match unboxed_analyze(program, fi, &pk, &info) {
-                Ok((_, _, rk, mcalls)) => (rk, mcalls),
+                Ok((_, _, rk, mcalls, _)) => (rk, mcalls),
                 Err(e @ JitError::Unsupported(_)) => {
                     pending_err = Some(e);
                     continue;
