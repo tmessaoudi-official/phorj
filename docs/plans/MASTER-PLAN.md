@@ -275,7 +275,25 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   Kind::Fn(target): capture-free MakeClosure is fully static, CallValue = direct call via shared
   `emit_call_to`; measured pinned+interleaved best-of-7 on a quiet core; NOTE ambient load can
   swing even interleaved ratios — re-measure on a quiet core before trusting a flip).**
-  **OBJECT VERTICAL — DESIGN (next, methodcall+objalloc together):** `Kind::Inst(class_idx)` =
+  **VERTICALS WAVE 2 (session 3, later) — ALL FOUR SHIPPED + measured (pinned, interleaved,
+  best-of-7):** objects `1d1582d` (methodcall 0.03→**2.96× WIN**, objalloc 0.14→**9.92× WIN**) ·
+  mixed-Concat `8fcb9dd`+`16dd21a`+`e8e1511` (interp 0.11→**0.91**, webish 0.05→**0.70**) ·
+  ratchet `a144f8d`. **Current full map: 9 WINs** (objalloc 9.92 · match 6.95 · floatarith 3.98 ·
+  methodcall 2.96 · closurecall 1.96 · stringconcat 1.91 · fibrec 1.82 · enum 1.66 · floatmul
+  1.02); near-parity listindex 0.94 · interp 0.91 · mapget 0.84; losses webish 0.70 · intadd
+  0.67 (checked; unchecked=WON 2×) · trycatch 0.42. **Perf lesson (measured):** hashing/canon
+  registration on hot-path result slots was the mixed-concat killer — result slots write
+  hash 0/canon 0 (punt marker); registration only pays where content gets probed.
+  **REMAINING to the ≥1.0-everything bar:** (1) trycatch — needs NATIVE throw/catch (code 6 =
+  "thrown, value = payload handle" in the (value,code) multi-return; try-regions as compile-time
+  handler ranges; Call-sites inside a try dispatch code-6 to the catch pad) AND str fields in
+  instances first (`Odd.message` — per-field Kind table + recursive instance free);
+  (2) webish 0.70 — remaining cost = concat_mix call + map probe; lever = fully-inline
+  interpolation (IR digit render into the result slot) and/or mapget probe micro-tuning;
+  (3) mapget 0.84 / listindex 0.94 — emit-quality tail; (4) checked-intadd elision
+  (task 9, ruled ACTIVE): extend range proofs to elide overflow checks on provably-bounded
+  accumulators. THEN V3b → NaN-box (Order A), perf register + G-8 recompute at wave close.
+  **OBJECT VERTICAL — DESIGN (SHIPPED as designed, kept for reference):** `Kind::Inst(class_idx)` =
   arena slot handle (SLOT|OWNED, fields flat at byte 8·layout_slot, ≤8 int fields, gate
   `desc.fields.len()==layout.len()` so no None window → GetField total+inline, SetField inline
   store, alloc = concat's free-stack-or-bump ladder, no helper, no boxed fallback). CallMethod:
