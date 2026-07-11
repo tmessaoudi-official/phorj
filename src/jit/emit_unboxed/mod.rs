@@ -148,12 +148,18 @@ fn pop_int_args(
     let mut cargs: Vec<ClValue> = Vec::with_capacity(argc);
     for _ in 0..argc {
         let (v, k) = ub_pop(b, vars, fvars, kinds)?;
-        // A handle arg would arrive as an untyped i64 param (mirrors the analyze arm); a
-        // two-word enum can't cross the ABI either, and a `Fn`'s static target would be lost.
-        if k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_)) {
-            return Err(JitError::Unsupported(
-                "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
-            ));
+        match k {
+            // A string argument MOVES into the callee (mirrors the analyze arm) — the word
+            // crosses as a plain i64; the callee's single-use-moved param owns it.
+            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {}
+            // Any other handle would arrive as an untyped i64 param; a two-word enum can't
+            // cross the ABI; a `Fn`'s static target would be lost.
+            k if k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_)) => {
+                return Err(JitError::Unsupported(
+                    "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
+                ));
+            }
+            _ => {}
         }
         cargs.push(v);
     }
@@ -252,7 +258,9 @@ pub(super) fn build_body_unboxed(
     // is the injected receiver (`this` — a BORROWED instance handle from the fixpoint facts). These seed
     // the entry stack for the analysis, which then fixes every leader's (depth, kinds) and the max depth.
     let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity);
-    let ub_analysis = unboxed_analyze(program, func_idx, &param_kinds, info)?;
+    let single_use = single_use_params(func);
+    let mut scratch_disc = UbDiscovery::default();
+    let ub_analysis = unboxed_analyze(program, func_idx, &param_kinds, info, &mut scratch_disc)?;
     let (leader_state, max_depth, depth_at) = (
         ub_analysis.leader_state,
         ub_analysis.max_depth,
@@ -642,8 +650,13 @@ pub(super) fn build_body_unboxed(
                     let tv = b.use_var(evars[*slot]);
                     b.def_var(evars[kinds.len()], tv);
                 }
-                // A handle read is a BORROW (the slot keeps ownership) — mirrors the analyze arm.
-                ub_push(&mut b, &vars, &fvars, &mut kinds, v, borrowed_copy(kind))?;
+                // Single-use param MOVE / plain BORROW — mirrors the analyze arm exactly.
+                if *slot < single_use.len() && single_use[*slot] && kind == Kind::Str(Own::Owned) {
+                    kinds[*slot] = Kind::Unknown;
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, v, Kind::Str(Own::Owned))?;
+                } else {
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, v, borrowed_copy(kind))?;
+                }
             }
             Op::SetLocal(slot) => {
                 // Pop the top and store it into the frame-stack cell at `slot`, updating that cell's

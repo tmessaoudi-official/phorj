@@ -612,6 +612,11 @@ pub(super) struct UbGraphInfo {
     /// site of a class must agree, ownership-normalized). `Int` fields are raw words; `Str`
     /// fields are handle words the instance OWNS (released with it, runtime-bit-gated).
     pub(super) field_kinds: Vec<Option<Vec<Kind>>>,
+    /// Per-FUNCTION param-kind overrides recorded from CALL SITES that pass handle args
+    /// (a string argument MOVES into the callee — normalized `Str(Owned)`); all sites must
+    /// agree. `None` = no override (usage-proven kinds apply); `Unknown` cells = no override
+    /// for that one param.
+    pub(super) param_over: Vec<Option<Vec<Kind>>>,
 }
 
 impl UbGraphInfo {
@@ -620,6 +625,7 @@ impl UbGraphInfo {
             ret_kinds: vec![None; n],
             this_inst: vec![None; n],
             field_kinds: vec![None; n_classes],
+            param_over: vec![None; n],
         }
     }
     /// The kind a `GetField` of ctor-push-position `j` on class `c` yields (`None` = the
@@ -647,6 +653,17 @@ impl UbGraphInfo {
         let mut pk: Vec<Kind> = (0..arity)
             .map(|s| proven.get(s).copied().flatten().unwrap_or(Kind::Unknown))
             .collect();
+        // Call-site-recorded overrides (handle args) beat usage proofs (a str param feeding
+        // MakeInstance is usage-proven "Int" by the conservative pre-pass — the override wins).
+        if let Some(Some(over)) = self.param_over.get(func_idx) {
+            for (s, k) in over.iter().enumerate() {
+                if *k != Kind::Unknown {
+                    if let Some(slot) = pk.get_mut(s) {
+                        *slot = *k;
+                    }
+                }
+            }
+        }
         if let Some(c) = self.this_inst.get(func_idx).copied().flatten() {
             if let Some(p0) = pk.get_mut(0) {
                 *p0 = Kind::Inst(c, Own::Borrowed);
@@ -665,13 +682,25 @@ pub(super) struct UbAnalysis {
     pub(super) max_depth: usize,
     /// The function's return kind (`None` when no reachable `Return` produced one).
     pub(super) ret_kind: Option<Kind>,
-    /// Statically-resolved `CallMethod` sites `(target fn, receiver class)` — fixpoint feed.
-    pub(super) method_calls: Vec<(usize, usize)>,
     /// Operand-stack depth before each reachable op (`accumulator_site`'s positional input).
     pub(super) depth_at: Vec<Option<usize>>,
-    /// Observed `MakeInstance` field-kind signatures `(class, kinds in ctor push order)` —
-    /// fixpoint feed for the per-class field-kind table (Str-fielded instances).
+}
+
+/// Cross-function facts DISCOVERED during an analyze walk, harvested through a `&mut` OUT
+/// param so facts recorded BEFORE a held-`Unsupported` failure survive it — the fixpoint's
+/// escape from chicken-egg deadlocks (a caller records its ctor call signature even though
+/// its own analysis then fails on a not-yet-known method return; the ctor's next round then
+/// has its param kinds). Every recorded fact was validated by the sound walk prefix; merge
+/// rules are idempotent, so leader re-walk duplicates are harmless.
+#[derive(Default)]
+pub(super) struct UbDiscovery {
+    /// Statically-resolved `CallMethod` sites `(target fn, receiver class)`.
+    pub(super) method_calls: Vec<(usize, usize)>,
+    /// Observed `MakeInstance` field-kind signatures `(class, kinds in ctor push order)`.
     pub(super) inst_fields: Vec<(usize, Vec<Kind>)>,
+    /// Observed CALL argument signatures for calls passing handle args `(callee, arg kinds
+    /// in declaration order, ownership-normalized)`.
+    pub(super) call_sigs: Vec<(usize, Vec<Kind>)>,
 }
 
 /// Detect the FUSED-ACCUMULATOR shape at a Concat(2) site: GetLocal(s); ..rhs..; Concat(2);
@@ -681,6 +710,31 @@ pub(super) struct UbAnalysis {
 /// unlocks the helper's in-place append. Purely positional: depth_at (the analyze walk's
 /// per-ip depth) locates the pusher of the lhs cell; liveness (the cell never popped) and
 /// interference (no SetLocal(s)) are re-checked op-by-op. Returns the slot s.
+/// Per-PARAM "single-use move" eligibility: param `p` is read by exactly ONE reachable
+/// `GetLocal(p)` and never rewritten (`SetLocal(p)` count 0). Such a read can transfer the
+/// param's OWNERSHIP (kind pushed Owned, the slot dies to `Unknown`) — how an owned string
+/// argument flows through a ctor into an instance field without borrow aliasing. Pure count —
+/// analyze and emit recompute it identically.
+pub(super) fn single_use_params(func: &crate::chunk::Function) -> Vec<bool> {
+    let code = &func.chunk.code;
+    let reach = reachable(code);
+    let mut gets = vec![0usize; func.arity];
+    let mut sets = vec![0usize; func.arity];
+    for (ip, op) in code.iter().enumerate() {
+        if !reach[ip] {
+            continue;
+        }
+        match op {
+            Op::GetLocal(s) if *s < func.arity => gets[*s] += 1,
+            Op::SetLocal(s) if *s < func.arity => sets[*s] += 1,
+            _ => {}
+        }
+    }
+    (0..func.arity)
+        .map(|p| gets[p] == 1 && sets[p] == 0)
+        .collect()
+}
+
 pub(super) fn accumulator_site(
     code: &[Op],
     depth_at: &[Option<usize>],
@@ -740,6 +794,7 @@ pub(super) fn unboxed_analyze(
     func_idx: usize,
     param_kinds: &[Kind],
     info: &UbGraphInfo,
+    disc: &mut UbDiscovery,
 ) -> Result<UbAnalysis, JitError> {
     let code = &program.functions[func_idx].chunk.code;
     let n = code.len();
@@ -752,8 +807,9 @@ pub(super) fn unboxed_analyze(
     // normalized to `Owned`) + the statically-resolved `CallMethod` sites discovered
     // (`(target fn, receiver class)`) — the fixpoint's discovery feed.
     let mut ret_kind: Option<Kind> = None;
-    let mut method_calls: Vec<(usize, usize)> = Vec::new();
-    let mut inst_fields: Vec<(usize, Vec<Kind>)> = Vec::new();
+    // Single-use param moves (see `single_use_params`): a unique read of an Owned-handle
+    // param TRANSFERS ownership and kills the slot.
+    let single_use = single_use_params(&program.functions[func_idx]);
     // Operand-stack depth BEFORE each reachable op (accumulator_site's positional input).
     // A leader re-walk (an ownership join) records the same depths - only kinds widen.
     let mut depth_at: Vec<Option<usize>> = vec![None; n];
@@ -762,9 +818,7 @@ pub(super) fn unboxed_analyze(
             leader_state,
             max_depth,
             ret_kind,
-            method_calls,
             depth_at,
-            inst_fields,
         });
     }
     // ip 0 (the entry leader) starts with the params on the stack: slots 0..arity at the frame base.
@@ -990,9 +1044,16 @@ pub(super) fn unboxed_analyze(
                             "unboxed analyze: GetLocal slot {slot} underflow"
                         ))
                     })?;
-                    // A handle read is a BORROW: the slot keeps ownership; the copy on the stack is
-                    // never freed by its consumer (mirrors build_body's downgrade).
-                    kinds.push(borrowed_copy(k));
+                    // Single-use param MOVE: the unique read of an Owned-str param transfers
+                    // the word's ownership to the stack and kills the slot (`Unknown`) — the
+                    // ctor-argument flow. Everything else is a BORROW: the slot keeps
+                    // ownership; the copy is never freed by its consumer.
+                    if *slot < single_use.len() && single_use[*slot] && k == Kind::Str(Own::Owned) {
+                        kinds[*slot] = Kind::Unknown;
+                        kinds.push(Kind::Str(Own::Owned));
+                    } else {
+                        kinds.push(borrowed_copy(k));
+                    }
                 }
                 Op::SetLocal(slot) => {
                     let k = kinds.pop().ok_or_else(|| {
@@ -1133,18 +1194,37 @@ pub(super) fn unboxed_analyze(
                             "unboxed: plain Call to a method body (deferred)".to_string(),
                         ));
                     }
-                    for _ in 0..program.functions[*callee].arity {
-                        // A handle arg would arrive at the callee as an untyped i64 param (proven-int
-                        // usage could then do arithmetic on a handle INDEX) — reject, VM fallback.
-                        // A two-word enum can't cross the one-i64-per-arg ABI either, and a `Fn`'s
-                        // static target would be lost.
-                        if kinds.pop().is_some_and(|k| {
-                            k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_))
-                        }) {
-                            return Err(JitError::Unsupported(
-                                "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
-                            ));
+                    let arity = program.functions[*callee].arity;
+                    let mut sig: Vec<Kind> = Vec::with_capacity(arity);
+                    let mut has_handle_arg = false;
+                    for _ in 0..arity {
+                        let k = kinds.pop().ok_or_else(|| {
+                            JitError::Codegen("unboxed analyze: Call underflow".to_string())
+                        })?;
+                        match k {
+                            // A string argument MOVES into the callee (its param is a single-
+                            // use-moved Owned slot there; a const word's later frees no-op).
+                            // A BORROWED string arg would leave the caller's local aliasing a
+                            // word the callee now owns — double-free — DENY.
+                            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::Str(Own::Owned));
+                            }
+                            k if k.is_handle()
+                                || k == Kind::EnumInt
+                                || matches!(k, Kind::Fn(_)) =>
+                            {
+                                return Err(JitError::Unsupported(
+                                    "unboxed: handle/enum/fn argument to Call (deferred)"
+                                        .to_string(),
+                                ));
+                            }
+                            other => sig.push(other),
                         }
+                    }
+                    if has_handle_arg {
+                        sig.reverse(); // popped last-arg-first; record declaration order
+                        disc.call_sigs.push((*callee, sig));
                     }
                     kinds.push(info.ret_of(*callee));
                 }
@@ -1184,7 +1264,7 @@ pub(super) fn unboxed_analyze(
                     }
                     // Operands popped top-first = REVERSE ctor push order; store push order.
                     sig.reverse();
-                    inst_fields.push((*cidx, sig));
+                    disc.inst_fields.push((*cidx, sig));
                     kinds.push(Kind::Inst(*cidx, Own::Owned));
                 }
                 Op::GetField(nidx) => {
@@ -1329,7 +1409,7 @@ pub(super) fn unboxed_analyze(
                             "unboxed: CallMethod arity mismatch (VM renders the fault)".to_string(),
                         ));
                     }
-                    method_calls.push((target, c));
+                    disc.method_calls.push((target, c));
                     kinds.push(info.ret_of(target));
                 }
                 Op::Jump(t) => {
@@ -1352,11 +1432,14 @@ pub(super) fn unboxed_analyze(
                         // allocation, and nothing else owned may be live (no leak at return —
                         // frame teardown emits no frees).
                         Kind::Inst(c, own) => {
-                            // (a) no handle/instance params — a returned borrow could otherwise
-                            //     alias a caller-owned handle (double-free on the caller side).
-                            if param_kinds.iter().any(|k| k.is_handle()) {
+                            // (a) no INSTANCE params — a returned Inst borrow could otherwise
+                            //     alias a caller-owned instance (double-free on the caller
+                            //     side). Str params can't be the returned lineage (kinds
+                            //     differ), and an UNMOVED owned str param is caught by the
+                            //     owned-cell census below (the leak gate).
+                            if param_kinds.iter().any(|k| matches!(k, Kind::Inst(..))) {
                                 return Err(JitError::Unsupported(
-                                    "unboxed: instance return from a function with handle params (deferred)"
+                                    "unboxed: instance return from a function with instance params (deferred)"
                                         .to_string(),
                                 ));
                             }
@@ -1422,9 +1505,7 @@ pub(super) fn unboxed_analyze(
         leader_state,
         max_depth,
         ret_kind,
-        method_calls,
         depth_at,
-        inst_fields,
     })
 }
 
@@ -1592,11 +1673,15 @@ pub(super) fn resolve_unboxed_graph(
             idx += 1;
             let proven = unboxed_proven_param_kinds(program, fi);
             let pk = info.param_kinds(fi, &proven, program.functions[fi].arity);
-            let (rk, mcalls, ifields) = match unboxed_analyze(program, fi, &pk, &info) {
-                Ok(a) => (a.ret_kind, a.method_calls, a.inst_fields),
+            let mut disc = UbDiscovery::default();
+            let rk = match unboxed_analyze(program, fi, &pk, &info, &mut disc) {
+                Ok(a) => a.ret_kind,
                 Err(e @ JitError::Unsupported(_)) => {
+                    // Held: the walk prefix's DISCOVERIES below still merge (they were
+                    // validated before the failure point) — that's what breaks the
+                    // caller-needs-callee / callee-needs-caller deadlock.
                     pending_err = Some(e);
-                    continue;
+                    None
                 }
                 Err(e) => return Err(e),
             };
@@ -1606,7 +1691,7 @@ pub(super) fn resolve_unboxed_graph(
                     changed = true;
                 }
             }
-            for (class, sig) in ifields {
+            for (class, sig) in disc.inst_fields {
                 match &info.field_kinds[class] {
                     None => {
                         info.field_kinds[class] = Some(sig);
@@ -1622,7 +1707,21 @@ pub(super) fn resolve_unboxed_graph(
                     Some(_) => {}
                 }
             }
-            for (target, class) in mcalls {
+            for (callee, sig) in disc.call_sigs {
+                match &info.param_over[callee] {
+                    None => {
+                        info.param_over[callee] = Some(sig);
+                        changed = true;
+                    }
+                    Some(prev) if prev != &sig => {
+                        return Err(JitError::Unsupported(
+                            "unboxed: conflicting call argument kinds (deferred)".to_string(),
+                        ));
+                    }
+                    Some(_) => {}
+                }
+            }
+            for (target, class) in disc.method_calls {
                 match info.this_inst[target] {
                     None => {
                         info.this_inst[target] = Some(class);
