@@ -293,6 +293,20 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   (3) mapget 0.84 / listindex 0.94 — emit-quality tail; (4) checked-intadd elision
   (task 9, ruled ACTIVE): extend range proofs to elide overflow checks on provably-bounded
   accumulators. THEN V3b → NaN-box (Order A), perf register + G-8 recompute at wave close.
+  **PERF-100% SWEEP — RULED (2026-07-11, session 3 close, developer via ask-human, THE GO given):**
+  scope = flip trycatch/strbuild/webish/mapget/interp (+floatmul parity watch) THEN a FULL
+  fundamentals micro sweep (collection writes, capturing closures/HOF, string ops, iteration —
+  every new micro must reach the bar too) THEN the closing REPRESENTATION slice (V3b evaluation
+  + the Rc CYCLE-LEAK answer — a §15 fork: php-style cycle collector vs weak refs vs both,
+  SURFACE options before building; no finalizers exist so collection is semantically invisible).
+  **Exit bar = median ratio ≥ 1.00 across 3 protocol runs (best-of-7, pinned, interleaved,
+  load < 2) per micro.** intadd = WON via unchecked (fair race; checked-default stays the
+  safety feature, loop-specialization best-effort non-blocking). AFTER the sweep: language
+  waves Ω-0…Ω-7 where EVERY new feature ships already ≥1.0 vs php (JIT arms or other means),
+  never sacrificing safety/typing. **PARKED DEBTS (disclosed + accepted):** precise
+  deoptimization = post-100% gateway to JIT-ing effectful/async bodies (redo-on-VM caps the
+  subset to side-effect-free code); shared-memory threading closed by the Rc value model —
+  parallelism = isolates + channels; playground/iOS stay VM-speed (byte-identical).
   **VERTICALS WAVE 3 (session 3, coverage-driven — "what aren't we measuring?"):** float
   comparisons (exact partial_cmp/eq_val↔FloatCC mapping) + handle-slot writes
   (`Own::ConstBorrow` + Owned⊔ConstBorrow leader join) + the fused string-accumulator peephole
