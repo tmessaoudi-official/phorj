@@ -1,35 +1,32 @@
-use super::*;
-use crate::types::Ty;
 use crate::value::Value;
 // The `String.format` renderer lives in the sibling `text_format` module (M-Decomp, Invariant 13);
 // `text_natives()` below registers it as `Core.String.format`.
-use super::text_format::text_format;
 
-fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Int(s.len() as i64)),
         _ => Err("String.length expects (string)".into()),
     }
 }
-fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase().into())),
         _ => Err("String.upperCase expects (string)".into()),
     }
 }
-fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase().into())),
         _ => Err("String.lowerCase expects (string)".into()),
     }
 }
-fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim().into())),
         _ => Err("String.trim expects (string)".into()),
     }
 }
-fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sub)] => Ok(Value::Bool(s.contains(sub.as_str()))),
         _ => Err("String.contains expects (string, string)".into()),
@@ -38,19 +35,19 @@ fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
 // ASCII-oriented like the rest of Core.Text (PHP under `-n` has no mbstring). `reverse` reverses by
 // chars (== bytes for ASCII, matching PHP `strrev`); `equalsIgnoreCase`/`containsIgnoreCase` fold only
 // ASCII letters (== PHP `strcasecmp`/`stripos` in the C locale). Non-ASCII is a documented edge.
-fn text_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.chars().rev().collect())),
         _ => Err("String.reverse expects (string)".into()),
     }
 }
-fn text_equals_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_equals_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(a), Value::Str(b)] => Ok(Value::Bool(a.eq_ignore_ascii_case(b))),
         _ => Err("String.equalsIgnoreCase expects (string, string)".into()),
     }
 }
-fn text_contains_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_contains_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(h), Value::Str(n)] => Ok(Value::Bool(
             h.to_ascii_lowercase().contains(&n.to_ascii_lowercase()),
@@ -58,7 +55,7 @@ fn text_contains_ignore_case(args: &[Value], _: &mut String) -> Result<Value, St
         _ => Err("String.containsIgnoreCase expects (string, string)".into()),
     }
 }
-fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sep)] => {
             // An empty separator is ill-defined and FAULTS (output-parity pass 2026-07-05): PHP
@@ -82,7 +79,7 @@ fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// characters (parallels `String.lines`); `split(s, "")` faults. Empty string → empty list. Erases to
 /// PHP `preg_split('//u', …, PREG_SPLIT_NO_EMPTY)` (code points without mbstring — same kernel as
 /// `__phorj_text_reverse`).
-fn text_characters(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_characters(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::List(std::rc::Rc::new(
             s.chars()
@@ -93,7 +90,7 @@ fn text_characters(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Split on the FIRST occurrence → `[head, tail]`; `[whole]` (1 elem) if `sep` is absent.
         // Matches PHP `explode($sep, $s, 2)` exactly for a non-empty separator (the only use).
@@ -110,7 +107,7 @@ fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
 // `capitalize(string) -> string` — uppercase the first character if it is an ASCII lowercase letter,
 // else unchanged. Byte-for-byte PHP `ucfirst` (which only upcases a leading a-z byte; a multibyte first
 // codepoint is left as-is). ASCII-scoped, like `upper`/`reverse` — documented (no mbstring under `php -n`).
-fn text_capitalize(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_capitalize(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => {
             let out = match s.as_bytes().first() {
@@ -130,7 +127,7 @@ fn text_capitalize(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 // `lines(string) -> List<string>` — split on `\n` (an embedded `\r` is left in the line, matching PHP
 // `explode("\n", s)`). An empty string → `[""]`; a trailing `\n` → a trailing `""` (explode semantics).
-fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => {
             let parts: Vec<Value> = s.split('\n').map(|p| Value::Str(p.into())).collect();
@@ -139,7 +136,7 @@ fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("String.lines expects (string)".into()),
     }
 }
-fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(items), Value::Str(sep)] => {
             let mut parts: Vec<&str> = Vec::with_capacity(items.len());
@@ -159,7 +156,7 @@ fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("String.join expects (List<string>, string)".into()),
     }
 }
-fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(from), Value::Str(to)] => {
             Ok(Value::Str(s.replace(from.as_str(), to.as_str()).into()))
@@ -167,19 +164,19 @@ fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("String.replace expects (string, string, string)".into()),
     }
 }
-fn text_starts_with(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_starts_with(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(pre)] => Ok(Value::Bool(s.starts_with(pre.as_str()))),
         _ => Err("String.startsWith expects (string, string)".into()),
     }
 }
-fn text_ends_with(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_ends_with(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(suf)] => Ok(Value::Bool(s.ends_with(suf.as_str()))),
         _ => Err("String.endsWith expects (string, string)".into()),
     }
 }
-fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // PHP `str_repeat` requires count >= 0 (a `ValueError` otherwise); a negative count faults
         // cleanly here (EV-7 — never panic; `n as usize` on a negative i64 would be a huge alloc).
@@ -197,7 +194,7 @@ fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// left or right. Byte-based to match PHP (no mbstring); the example domain is ASCII. An empty pad
 /// faults cleanly (PHP `ValueError`); a multibyte pad truncated mid-char yields invalid UTF-8 →
 /// faults rather than panicking (EV-7).
-fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String> {
+pub(super) fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String> {
     let cur = s.len();
     let want = if width < 0 { 0 } else { width as usize };
     if cur >= want {
@@ -221,13 +218,13 @@ fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String>
         .map(|s| Value::Str(s.into()))
         .map_err(|_| "String.pad: pad split a multibyte character (use an ASCII pad)".into())
 }
-fn text_pad_left(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_pad_left(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Int(w), Value::Str(p)] => text_pad(s, *w, p, true),
         _ => Err("String.padLeft expects (string, int, string)".into()),
     }
 }
-fn text_pad_right(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_pad_right(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Int(w), Value::Str(p)] => text_pad(s, *w, p, false),
         _ => Err("String.padRight expects (string, int, string)".into()),
@@ -235,7 +232,7 @@ fn text_pad_right(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 /// `indexOf(string, string) -> int?` — the byte offset of the first occurrence of `needle`, else
 /// `null` (PHP `strpos`, mapped from `false`). An empty needle is `0` (PHP 8 + Rust `find` agree).
-fn text_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(needle)] => Ok(s
             .find(needle.as_str())
@@ -246,7 +243,7 @@ fn text_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `lastIndexOf(string, string) -> int?` — the byte offset of the **last** occurrence of `needle`,
 /// else `null` (PHP `strrpos`, mapped from `false`). An empty needle is `strlen(s)` (PHP 8 + Rust
 /// `rfind` agree). The byte/`int?` complement of `indexOf`.
-fn text_last_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_last_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(needle)] => Ok(s
             .rfind(needle.as_str())
@@ -256,7 +253,7 @@ fn text_last_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 /// `removePrefix(string, string) -> string` — drop a leading `prefix` if present, else return `s`
 /// unchanged (Kotlin/Swift ergonomics; PHP `str_starts_with` + `substr`). An empty prefix is a no-op.
-fn text_remove_prefix(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_remove_prefix(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(pre)] => {
             Ok(Value::Str(s.strip_prefix(pre.as_str()).unwrap_or(s).into()))
@@ -266,7 +263,7 @@ fn text_remove_prefix(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 /// `removeSuffix(string, string) -> string` — drop a trailing `suffix` if present, else return `s`
 /// unchanged (PHP `str_ends_with` + `substr`). An empty suffix is a no-op.
-fn text_remove_suffix(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_remove_suffix(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(suf)] => {
             Ok(Value::Str(s.strip_suffix(suf.as_str()).unwrap_or(s).into()))
@@ -281,7 +278,7 @@ fn text_remove_suffix(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// requiring only one digit overall. **Both reject `inf`/`nan`** (the grammar requires digits, so
 /// those non-numeric words never match) — this is what keeps `parseFloat` byte-identical with PHP,
 /// whose `(float)` cast can't produce inf/nan and whose rendering would otherwise diverge.
-fn valid_float(s: &str, permissive: bool) -> bool {
+pub(super) fn valid_float(s: &str, permissive: bool) -> bool {
     let b = s.as_bytes();
     let n = b.len();
     let mut i = 0;
@@ -333,7 +330,7 @@ fn valid_float(s: &str, permissive: bool) -> bool {
 /// (run on the validator-accepted slice); the gated PHP helper `__phorj_parse_float` mirrors the
 /// grammar + cast. The `permissive` flag has a default of `false` (M4 default parameters), so
 /// `parseFloat(s)` is strict and `parseFloat(s, true)` is lax.
-fn text_parse_float(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_parse_float(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Bool(permissive)] => {
             if valid_float(s, *permissive) {
@@ -348,7 +345,7 @@ fn text_parse_float(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `substring(string, int, int) -> string` — a byte-indexed slice mirroring PHP `substr($s, start,
 /// len)` exactly (negative start/len count from the end; out-of-range clamps to empty). Byte-based
 /// (no mbstring); a slice that splits a multibyte char yields invalid UTF-8 → faults (EV-7).
-fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Int(start), Value::Int(length)] => {
             let bytes = s.as_bytes();
@@ -374,21 +371,21 @@ fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// The `Core.String` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
 /// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
 /// reorder accordingly so the erasure matches Phorj's `(subject, …)` argument order.
-fn text_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Bool(s.is_empty())),
         _ => Err("String.isEmpty expects (string)".into()),
     }
 }
 
-fn text_trim_start(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_trim_start(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim_start().into())),
         _ => Err("String.trimStart expects (string)".into()),
     }
 }
 
-fn text_trim_end(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_trim_end(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim_end().into())),
         _ => Err("String.trimEnd expects (string)".into()),
@@ -397,7 +394,7 @@ fn text_trim_end(args: &[Value], _: &mut String) -> Result<Value, String> {
 
 /// `Text.count(string, string) -> int` — non-overlapping occurrences of the substring (PHP
 /// `substr_count`). An empty needle is a clean fault (PHP `substr_count` rejects it too).
-fn text_count(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn text_count(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sub)] => {
             if sub.is_empty() {
@@ -410,419 +407,3 @@ fn text_count(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("String.count expects (string, string)".into()),
     }
 }
-
-pub(crate) fn text_natives() -> Vec<NativeFn> {
-    let s = || Ty::String;
-    vec![
-        // W3-5 / DEC-199: `String.format(spec, args)` — PHP-style `%` sprintf. The checker
-        // special-cases it (`check_string_format`) for arg-type validation + a compile-time
-        // `E-FORMAT-UNSUPPORTED` gate on a literal spec, but (unlike the desugared `Reflect.typeName`)
-        // it is a REAL runtime native: `text_format` renders it and `__phorj_format` is the PHP mirror.
-        NativeFn {
-            module: "Core.String",
-            name: "format",
-            params: vec![s(), Ty::List(Box::new(s()))],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_format),
-            php: |a| format!("__phorj_format({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "isEmpty",
-            params: vec![s()],
-            ret: Ty::Bool,
-            pure: true,
-            eval: NativeEval::Pure(text_is_empty),
-            php: |a| format!("({}) === ''", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "trimStart",
-            params: vec![s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_trim_start),
-            php: |a| format!("__phorj_text_trim_start({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "trimEnd",
-            params: vec![s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_trim_end),
-            php: |a| format!("__phorj_text_trim_end({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "count",
-            params: vec![s(), s()],
-            ret: Ty::Int,
-            pure: true,
-            eval: NativeEval::Pure(text_count),
-            php: |a| format!("substr_count({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "length",
-            params: vec![s()],
-            ret: Ty::Int,
-            pure: true,
-            eval: NativeEval::Pure(text_len),
-            php: |a| format!("strlen({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "upperCase",
-            params: vec![s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_upper),
-            php: |a| format!("strtoupper({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "lowerCase",
-            params: vec![s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_lower),
-            php: |a| format!("strtolower({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "trim",
-            params: vec![s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_trim),
-            php: |a| format!("__phorj_text_trim({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "contains",
-            params: vec![s(), s()],
-            ret: Ty::Bool,
-            pure: true,
-            eval: NativeEval::Pure(text_contains),
-            php: |a| format!("str_contains({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "reverse",
-            params: vec![s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_reverse),
-            // Erases to `__phorj_text_reverse` (code-point reversal), NOT `strrev` (byte reversal
-            // mangles multibyte) — UA-1.2. Rust already reverses by `chars()`.
-            php: |a| format!("__phorj_text_reverse({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "equalsIgnoreCase",
-            params: vec![s(), s()],
-            ret: Ty::Bool,
-            pure: true,
-            eval: NativeEval::Pure(text_equals_ignore_case),
-            php: |a| format!("strcasecmp({}, {}) === 0", parg(a, 0), parg(a, 1)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "containsIgnoreCase",
-            params: vec![s(), s()],
-            ret: Ty::Bool,
-            pure: true,
-            eval: NativeEval::Pure(text_contains_ignore_case),
-            php: |a| format!("stripos({}, {}) !== false", parg(a, 0), parg(a, 1)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "split",
-            params: vec![s(), s()],
-            ret: Ty::List(Box::new(Ty::String)),
-            pure: true,
-            eval: NativeEval::Pure(text_split),
-            // PHP `explode(separator, string)` — separator first. `explode("")` throws (empty
-            // delimiter), matching the Rust empty-separator fault; non-empty splits agree.
-            php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
-        },
-        // `characters(string) -> List<string>` — each Unicode code point (parallels `lines`). The named
-        // way to split into chars now that `split(s, "")` faults. Code-point-safe via PCRE `/u`.
-        NativeFn {
-            module: "Core.String",
-            name: "characters",
-            params: vec![s()],
-            ret: Ty::List(Box::new(Ty::String)),
-            pure: true,
-            eval: NativeEval::Pure(text_characters),
-            php: |a| format!("preg_split('//u', {}, -1, PREG_SPLIT_NO_EMPTY)", parg(a, 0)),
-        },
-        // `capitalize(string) -> string` — ASCII `ucfirst` (Tier-1, byte-identical).
-        NativeFn {
-            module: "Core.String",
-            name: "capitalize",
-            params: vec![s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_capitalize),
-            php: |a| format!("ucfirst({})", parg(a, 0)),
-        },
-        // `lines(string) -> List<string>` — split on `\n` (charter §2 subject-first; Tier-1).
-        NativeFn {
-            module: "Core.String",
-            name: "lines",
-            params: vec![s()],
-            ret: Ty::List(Box::new(Ty::String)),
-            pure: true,
-            eval: NativeEval::Pure(text_lines),
-            php: |a| format!("explode(\"\\n\", {})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "splitOnce",
-            params: vec![s(), s()],
-            ret: Ty::List(Box::new(Ty::String)),
-            pure: true,
-            eval: NativeEval::Pure(text_split_once),
-            // PHP `explode(separator, string, 2)` — separator first; the limit-2 yields [head, tail].
-            php: |a| format!("explode({}, {}, 2)", parg(a, 1), parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "join",
-            params: vec![Ty::List(Box::new(Ty::String)), s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_join),
-            // PHP `implode(glue, array)` — glue first.
-            php: |a| format!("implode({}, {})", parg(a, 1), parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "replace",
-            params: vec![s(), s(), s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_replace),
-            // PHP `str_replace(search, replace, subject)`.
-            php: |a| {
-                format!(
-                    "str_replace({}, {}, {})",
-                    parg(a, 1),
-                    parg(a, 2),
-                    parg(a, 0)
-                )
-            },
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "startsWith",
-            params: vec![s(), s()],
-            ret: Ty::Bool,
-            pure: true,
-            eval: NativeEval::Pure(text_starts_with),
-            php: |a| format!("str_starts_with({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "endsWith",
-            params: vec![s(), s()],
-            ret: Ty::Bool,
-            pure: true,
-            eval: NativeEval::Pure(text_ends_with),
-            php: |a| format!("str_ends_with({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "repeat",
-            params: vec![s(), Ty::Int],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_repeat),
-            php: |a| format!("str_repeat({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        // `parseInt(string) -> int?` — None on a non-integer (the first optional-return native). PHP
-        // erases to the gated `__phorj_parse_int` helper (set in `transpile/call.rs`), which mirrors
-        // Rust's `i64::from_str` exactly: optional sign, base-10 digits (leading zeros OK), in i64
-        // range, no surrounding whitespace; anything else is `null` (Phorj `None`).
-        NativeFn {
-            module: "Core.String",
-            name: "parseInt",
-            params: vec![s()],
-            ret: Ty::Optional(Box::new(Ty::Int)),
-            pure: true,
-            eval: NativeEval::Pure(text_parse_int),
-            php: |a| format!("__phorj_parse_int({})", parg(a, 0)),
-        },
-        // `parseBool(string) -> bool?` (M4 `string as bool`) — strict `"true"`/`"false"` only; never
-        // PHP truthiness. Arrow-IIFE PHP carrier = single-eval of the operand.
-        NativeFn {
-            module: "Core.String",
-            name: "parseBool",
-            params: vec![s()],
-            ret: Ty::Optional(Box::new(Ty::Bool)),
-            pure: true,
-            eval: NativeEval::Pure(text_parse_bool),
-            php: |a| {
-                format!(
-                    "(fn($__b) => $__b === 'true' ? true : ($__b === 'false' ? false : null))({})",
-                    parg(a, 0)
-                )
-            },
-        },
-        // `parseFloat(string, bool permissive = false) -> float?` — the motivating native for M4
-        // default parameters (the `permissive` flag defaults to strict). Rejects inf/nan in both
-        // modes; permissive also accepts a lone leading/trailing dot. Gated `__phorj_parse_float`.
-        NativeFn {
-            module: "Core.String",
-            name: "parseFloat",
-            params: vec![s(), Ty::Bool],
-            ret: Ty::Optional(Box::new(Ty::Float)),
-            pure: true,
-            eval: NativeEval::Pure(text_parse_float),
-            php: |a| format!("__phorj_parse_float({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        // `padLeft`/`padRight(string, int, string) -> string` — PHP `str_pad` (byte-based, no mbstring).
-        NativeFn {
-            module: "Core.String",
-            name: "padLeft",
-            params: vec![s(), Ty::Int, s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_pad_left),
-            php: |a| {
-                format!(
-                    "str_pad({}, {}, {}, STR_PAD_LEFT)",
-                    parg(a, 0),
-                    parg(a, 1),
-                    parg(a, 2)
-                )
-            },
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "padRight",
-            params: vec![s(), Ty::Int, s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_pad_right),
-            // STR_PAD_RIGHT is the default, but pass it explicitly for symmetry/legibility.
-            php: |a| {
-                format!(
-                    "str_pad({}, {}, {}, STR_PAD_RIGHT)",
-                    parg(a, 0),
-                    parg(a, 1),
-                    parg(a, 2)
-                )
-            },
-        },
-        // `indexOf(string, string) -> int?` — gated `__phorj_text_index_of` (PHP `strpos` → null).
-        NativeFn {
-            module: "Core.String",
-            name: "indexOf",
-            params: vec![s(), s()],
-            ret: Ty::Optional(Box::new(Ty::Int)),
-            pure: true,
-            eval: NativeEval::Pure(text_index_of),
-            php: |a| format!("__phorj_text_index_of({}, {})", parg(a, 0), parg(a, 1)),
-        },
-        // `lastIndexOf(string, string) -> int?` — the last occurrence (PHP `strrpos` → null via a
-        // single-eval arrow-IIFE, like `parseBool`; no helper-file edit).
-        NativeFn {
-            module: "Core.String",
-            name: "lastIndexOf",
-            params: vec![s(), s()],
-            ret: Ty::Optional(Box::new(Ty::Int)),
-            pure: true,
-            eval: NativeEval::Pure(text_last_index_of),
-            php: |a| {
-                format!(
-                    "(fn($__h, $__n) => ($__p = strrpos($__h, $__n)) === false ? null : $__p)({}, {})",
-                    parg(a, 0),
-                    parg(a, 1)
-                )
-            },
-        },
-        // `removePrefix`/`removeSuffix(string, string) -> string` — drop an affix if present (PHP
-        // `str_starts_with`/`str_ends_with` + `substr`, single-eval arrow-IIFE).
-        NativeFn {
-            module: "Core.String",
-            name: "removePrefix",
-            params: vec![s(), s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_remove_prefix),
-            php: |a| {
-                format!(
-                    "(fn($__s, $__p) => str_starts_with($__s, $__p) ? substr($__s, strlen($__p)) : $__s)({}, {})",
-                    parg(a, 0),
-                    parg(a, 1)
-                )
-            },
-        },
-        NativeFn {
-            module: "Core.String",
-            name: "removeSuffix",
-            params: vec![s(), s()],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_remove_suffix),
-            php: |a| {
-                format!(
-                    "(fn($__s, $__p) => str_ends_with($__s, $__p) ? substr($__s, 0, strlen($__s) - strlen($__p)) : $__s)({}, {})",
-                    parg(a, 0),
-                    parg(a, 1)
-                )
-            },
-        },
-        // `substring(string, int, int) -> string` — PHP `substr` (byte-indexed; negatives from end).
-        NativeFn {
-            module: "Core.String",
-            name: "substring",
-            params: vec![s(), Ty::Int, Ty::Int],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(text_substring),
-            php: |a| format!("substr({}, {}, {})", parg(a, 0), parg(a, 1), parg(a, 2)),
-        },
-    ]
-}
-
-/// `Text.parseInt` — parse a base-10 integer, or `None` (`Value::Null`) when the whole string is not
-/// a valid `i64`. Delegates to Rust's `i64::from_str` (the single source of truth; the PHP helper is
-/// written to match it byte-for-byte).
-fn text_parse_int(args: &[Value], _: &mut String) -> Result<Value, String> {
-    match args {
-        [Value::Str(s)] => Ok(s.parse::<i64>().map_or(Value::Null, Value::Int)),
-        _ => Err("String.parseInt expects (string)".into()),
-    }
-}
-
-/// `parseBool(string) -> bool?` (M4 as-matrix S3, the `string as bool` kernel) — **strict**: only the
-/// literals `"true"`/`"false"` parse; anything else (incl. `"1"`, `"yes"`, `""`) is `null`. Phorj
-/// deliberately does NOT inherit PHP's `(bool)"0" == false` / `(bool)"false" == true` truthiness — the
-/// #1 string-cast footgun. The PHP carrier is an arrow-IIFE matching this exactly.
-fn text_parse_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
-    match args {
-        [Value::Str(s)] => Ok(match s.as_str() {
-            "true" => Value::Bool(true),
-            "false" => Value::Bool(false),
-            _ => Value::Null,
-        }),
-        _ => Err("String.parseBool expects (string)".into()),
-    }
-}
-
-// ---- Core.File ----------------------------------------------------------------------------------
-// Filesystem natives (std::fs ↔ PHP file builtins, D-L9). `read` returns `string?` — `null` on any
-// failure (missing file, permission, non-UTF-8) — exercising S2 null-safety (`??` / `if (var x =
-// read(p))`). DETERMINISM: a file *read* is byte-identical across backends iff every backend reads
-// the same bytes, so file examples read a **committed fixture**; `write` is a non-deterministic side
-// effect and is excluded from the byte-identity-gated example set (it is unit-tested with a temp
-// file). The run↔runvm spine shares the same `eval`, so it is always identical regardless.
-
-#[cfg(test)]
-#[path = "text_tests.rs"]
-mod tests;

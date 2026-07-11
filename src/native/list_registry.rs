@@ -1,0 +1,435 @@
+//! `Core.List` native registrations (kernels live in list.rs).
+
+use super::list::*;
+use super::*;
+use crate::types::Ty;
+
+pub(crate) fn list_natives() -> Vec<NativeFn> {
+    let t = || Ty::Param("T".into());
+    let u = || Ty::Param("U".into());
+    let list = |e: Ty| Ty::List(Box::new(e));
+    vec![
+        NativeFn {
+            module: "Core.List",
+            name: "reverse",
+            params: vec![Ty::List(Box::new(t()))],
+            ret: Ty::List(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_reverse),
+            // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
+            php: |a| format!("array_reverse({})", parg(a, 0)),
+        },
+        // `enumerate(xs) -> Map<int, T>` — index→element pairs for `for (int i, T x in …)` (B1).
+        NativeFn {
+            module: "Core.List",
+            name: "enumerate",
+            params: vec![list(t())],
+            ret: Ty::Map(Box::new(Ty::Int), Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_enumerate),
+            // A PHP list is already 0-keyed; array_values guarantees sequential int keys.
+            php: |a| format!("array_values({})", parg(a, 0)),
+        },
+        // `fill(value, count) -> List<T>` — `count` copies of `value` (PHP `array_fill`, value last).
+        NativeFn {
+            module: "Core.List",
+            name: "fill",
+            params: vec![t(), Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_fill),
+            php: |a| format!("array_fill(0, {}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "length",
+            params: vec![Ty::List(Box::new(t()))],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(list_length),
+            php: |a| format!("count({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "sum",
+            params: vec![Ty::List(Box::new(Ty::Int))],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(list_sum),
+            php: |a| format!("array_sum({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "contains",
+            params: vec![list(t()), t()],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(list_contains),
+            // strict `in_array` (=== ) matches Phorj's value equality for scalars + nested
+            // lists/maps; arg order is (needle, haystack) — the reverse of `contains(list, value)`.
+            // (A list of class instances would differ: PHP `===` is identity, Phorj is structural —
+            // KNOWN_ISSUES; scalar/collection element lists are byte-identical.)
+            php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "map",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(u()))],
+            ret: list(u()),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_map),
+            // array_map(callable, array) — note the order is swapped vs Phorj's map(list, f).
+            php: |a| format!("array_map({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "filter",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_filter),
+            // array_filter preserves original keys; array_values re-indexes to a sequential list.
+            php: |a| format!("array_values(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "reduce",
+            params: vec![list(t()), u(), Ty::Function(vec![u(), t()], Box::new(u()))],
+            ret: u(),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_reduce),
+            // array_reduce(array, callback, initial) — initial is Phorj's 2nd arg, fn its 3rd.
+            php: |a| {
+                format!(
+                    "array_reduce({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 2),
+                    parg(a, 1)
+                )
+            },
+        },
+        // `sort(List<T>) -> List<T>` — natural ascending (PHP `sort`, but byte-stable + string-byte
+        // order). Gated `__phorj_sort` helper (a `<=>`/`strcmp` type-dispatched `usort` over a copy).
+        NativeFn {
+            module: "Core.List",
+            name: "sort",
+            params: vec![list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_sort),
+            php: |a| format!("__phorj_sort({})", parg(a, 0)),
+        },
+        // `sortWith(List<T>, (T, T) -> int) -> List<T>` — comparator (PHP `usort`), higher-order.
+        NativeFn {
+            module: "Core.List",
+            name: "sortWith",
+            params: vec![list(t()), Ty::Function(vec![t(), t()], Box::new(Ty::Int))],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_sort_with),
+            php: |a| format!("__phorj_sort_with({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `slice(List<T>, int, int) -> List<T>` — PHP `array_slice` (offset, length; negatives count
+        // from the end; out-of-range clamps to empty).
+        NativeFn {
+            module: "Core.List",
+            name: "slice",
+            params: vec![list(t()), Ty::Int, Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_slice),
+            php: |a| {
+                format!(
+                    "array_slice({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "take",
+            params: vec![list(t()), Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_take),
+            php: |a| format!("array_slice({}, 0, max(0, {}))", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "drop",
+            params: vec![list(t()), Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_drop),
+            php: |a| format!("array_slice({}, max(0, {}))", parg(a, 0), parg(a, 1)),
+        },
+        // `chunk(List<T>, int) -> List<List<T>>` — consecutive groups of `size` (last may be shorter).
+        // PHP `array_chunk` (re-indexed); `size < 1` faults on both backends (charter §3).
+        NativeFn {
+            module: "Core.List",
+            name: "chunk",
+            params: vec![list(t()), Ty::Int],
+            ret: list(list(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_chunk),
+            php: |a| format!("array_chunk({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `indexOf(List<T>, T) -> int?` — gated `__phorj_index_of` (PHP `array_search` strict → null).
+        NativeFn {
+            module: "Core.List",
+            name: "indexOf",
+            params: vec![list(t()), t()],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(list_index_of),
+            php: |a| format!("__phorj_index_of({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `lastIndexOf(List<T>, T) -> int?` — gated `__phorj_last_index_of` (PHP `array_keys` strict →
+        // last key, or null). The symmetric companion to `indexOf`.
+        NativeFn {
+            module: "Core.List",
+            name: "lastIndexOf",
+            params: vec![list(t()), t()],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(list_last_index_of),
+            php: |a| format!("__phorj_last_index_of({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `concat(List<T>, List<T>) -> List<T>` — PHP `array_merge` (re-indexes sequential lists).
+        NativeFn {
+            module: "Core.List",
+            name: "concat",
+            params: vec![list(t()), list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_concat),
+            php: |a| format!("array_merge({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `append(List<T>, T) -> List<T>` — a new list with the element added at the end (COW, O(n));
+        // for hot loops prefer `List.fill` + index-set (O(1)/write) or `List.map(range, fn)`.
+        NativeFn {
+            module: "Core.List",
+            name: "append",
+            params: vec![list(t()), t()],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_append),
+            php: |a| format!("array_merge({}, [{}])", parg(a, 0), parg(a, 1)),
+        },
+        // `first(List<T>) -> T?` / `last(List<T>) -> T?` — head/tail or null for an empty list.
+        NativeFn {
+            module: "Core.List",
+            name: "first",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_first),
+            php: |a| format!("({}[0] ?? null)", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "last",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_last),
+            php: |a| format!("({0}[count({0}) - 1] ?? null)", parg(a, 0)),
+        },
+        // `unique(List<T>) -> List<T>` — dedupe, keeping first occurrence + order. Value-equality
+        // (Phorj structural ≡ the `__phorj_unique` helper's strict `in_array`); NOT PHP's
+        // `array_unique` (which stringifies / juggles numeric strings — a parity break for `List<string>`).
+        NativeFn {
+            module: "Core.List",
+            name: "unique",
+            params: vec![list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_unique),
+            php: |a| format!("__phorj_unique({})", parg(a, 0)),
+        },
+        // `min(List<T>) -> T?` / `max(List<T>) -> T?` — null for an empty list. Uses the `natural_cmp`
+        // byte-order (strings via `strcmp`, not PHP's numeric-string-juggling `min`/`max`), so the
+        // `__phorj_min`/`_max` helpers match the Rust backends exactly.
+        NativeFn {
+            module: "Core.List",
+            name: "min",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_min),
+            php: |a| format!("__phorj_min({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "max",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_max),
+            php: |a| format!("__phorj_max({})", parg(a, 0)),
+        },
+        // `find(List<T>, (T) -> bool) -> T?` — the first element satisfying the predicate, or null.
+        // `any` / `all` — short-circuiting existential / universal quantifiers. All three
+        // SHORT-CIRCUIT identically on every backend (the `__phorj_find/any/all` helpers `foreach`
+        // + early-`return`), so a side-effecting predicate produces byte-identical stdout.
+        NativeFn {
+            module: "Core.List",
+            name: "find",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_find),
+            php: |a| format!("__phorj_find({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "any",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_any),
+            php: |a| format!("__phorj_any({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "all",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_all),
+            php: |a| format!("__phorj_all({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "isEmpty",
+            params: vec![list(t())],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(list_is_empty),
+            php: |a| format!("count({}) === 0", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "flatten",
+            params: vec![list(list(t()))],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_flatten),
+            // `array_merge(...$xss)` concatenates + re-indexes; `...[]` ⇒ `array_merge()` ⇒ `[]`.
+            php: |a| format!("array_merge(...{})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "count",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_count),
+            // array_filter keeps the predicate-true elements; count them.
+            php: |a| format!("count(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
+        },
+    ]
+}
+
+/// `unique` — first-occurrence-order dedupe by Phorj value-equality.
+fn list_unique(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut out: Vec<Value> = Vec::new();
+            for x in xs.iter() {
+                if !out.iter().any(|y| y.eq_val(x)) {
+                    out.push(x.clone());
+                }
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.unique expects (List<T>)".into()),
+    }
+}
+
+/// `min`/`max` — the smallest/largest by `natural_cmp`, or `Null` for an empty list.
+fn list_min(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => Ok(xs
+            .iter()
+            .min_by(|a, b| natural_cmp(a, b))
+            .cloned()
+            .unwrap_or(Value::Null)),
+        _ => Err("List.min expects (List<T>)".into()),
+    }
+}
+fn list_max(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => Ok(xs
+            .iter()
+            .max_by(|a, b| natural_cmp(a, b))
+            .cloned()
+            .unwrap_or(Value::Null)),
+        _ => Err("List.max expects (List<T>)".into()),
+    }
+}
+
+/// Run a `(T) -> bool` predicate over the list, short-circuiting. A non-bool result is a clean fault
+/// (matches `filter`). `find` returns the first matching element (or `Null`); `any`/`all` the verdict.
+fn list_pred(call: &mut ClosureInvoker, f: &Value, x: &Value) -> Result<bool, String> {
+    match call(f, vec![x.clone()])? {
+        Value::Bool(b) => Ok(b),
+        other => Err(format!(
+            "List predicate must return bool, got {}",
+            other.type_name()
+        )),
+    }
+}
+fn list_find(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            for x in xs.iter() {
+                if list_pred(call, f, x)? {
+                    return Ok(x.clone());
+                }
+            }
+            Ok(Value::Null)
+        }
+        _ => Err("List.find expects (List<T>, (T) -> bool)".into()),
+    }
+}
+fn list_any(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            for x in xs.iter() {
+                if list_pred(call, f, x)? {
+                    return Ok(Value::Bool(true));
+                }
+            }
+            Ok(Value::Bool(false))
+        }
+        _ => Err("List.any expects (List<T>, (T) -> bool)".into()),
+    }
+}
+fn list_all(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            for x in xs.iter() {
+                if !list_pred(call, f, x)? {
+                    return Ok(Value::Bool(false));
+                }
+            }
+            Ok(Value::Bool(true))
+        }
+        _ => Err("List.all expects (List<T>, (T) -> bool)".into()),
+    }
+}
+
+// ---- Core.Map -----------------------------------------------------------------------------------
+// Map query natives, all generic over the key/value types (`keys(Map<K,V>) -> List<K>`). They read
+// the insertion-ordered `Value::Map` rep (a `Vec<(HKey, Value)>`, not a `HashMap` — risk R1), so
+// `keys`/`values` are byte-identical with PHP's order-preserving `array_keys`/`array_values`. KEY
+// COERCION CAVEAT (KNOWN_ISSUES): PHP arrays coerce integer-like string keys and bools to int keys,
+// so a `keys()` over such a map renders differently under PHP than on the Rust backends; examples use
+// plain (non-numeric) string keys, which PHP keeps verbatim. The run↔runvm spine is always identical.
+
+#[cfg(test)]
+#[path = "list_tests.rs"]
+mod tests;
