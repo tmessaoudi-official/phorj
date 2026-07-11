@@ -232,6 +232,25 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   helpers remain the slow paths (untagged, >22B results, non-flat lists); arena exhaustion → code
   5 redo-on-VM. Gate green (1928 tests, PHP oracle). **P-2b (mapget vertical) + P-2c (rollout) are
   UNLOCKED.** History: the helper-granularity spike below measured the LOSS that forced inline.
+  **P-2b ⚑ SHIPPED (2026-07-11) — measured, FLAGGED at 0.81× (php+JIT 1.23× ahead on mapget).**
+  Two sub-slices, both green (1922 tests, PHP oracle): (1) `MakeMap`/string-`Index` join the
+  unboxed subset — `Kind::StrIntMap`, seal through the canonical `build_map` kernel, flat
+  arena pair slots, inline hash-first linear probe (`a7ff3a8`, measured 0.60×; the ceiling
+  spike had already measured linear-scan a LOSS — expected); (2) the ceiling-blessed upgrade:
+  seal-time open-addressed BUCKET TABLE (u32 pair indices after the pairs, lf ≤ 1/2) + CANON
+  interning (slot byte 32 = `interned-slot+1` via a content registry; canon equality ⇔ byte
+  equality) → probe = `hash&mask` → bucket → ONE canon compare → value; plus run-invariant
+  ctx-header loads marked `notrap+can_move` (GVN/LICM). Interleaved best-of, BOTH SIDES PINNED
+  to one core (`taskset -c 7` / `--cpuset-cpus=7` — the box's ambient load made unpinned runs
+  swing 3-4×): **phg 14.31M vs php 11.64M ns = 0.81×**, all 5 pair-ratios in 0.78–0.83
+  (linear-probe baseline 0.60×; VM pre-vertical 2.67B — the vertical is ~100× over the VM).
+  Verdict: the remaining ~0.9ns/iter is fixed scaffolding php's specialized trace doesn't pay
+  (checked arith, tag dispatch, ownership frees, srem) — matches the refined mandate
+  (match-not-beat on 20-yr-tuned collections). Emit-quality levers queued into P-2c:
+  range-proven `RemI`-by-pow2 → `band`, fused tag checks, Pop-elision for provably-borrowed
+  reads. Byte-identity watchpoint shipped with it: the INLINE concat now ZEROES its result
+  slot's hash+canon words (a stale canon word could false-match in the probe — the garbage
+  would otherwise be a byte-identity break, not just a slow path).
   **P-2a ⚑ SPIKE SHIPPED (2026-07-11) — measured, FLAGGED LOSS; verdict recorded.** Handle space +
   helper calls (Concat / list-Index / `String.length`) shipped green: `stringconcat.bench()` is
   JIT-eligible (hits>0 proven), byte-identity holds (1928 tests, PHP oracle; index-fault redoes on

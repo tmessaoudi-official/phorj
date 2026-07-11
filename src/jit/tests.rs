@@ -1763,6 +1763,37 @@ fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
 }
 
 #[test]
+fn jit_map_vertical_larger_map_walks_buckets_and_matches_the_oracle() {
+    // 12 pairs → a 32-bucket table: exercises the open-addressed walk (collisions + wraparound)
+    // across every key, byte-identical to the oracle.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          Map<string, int> m = [\"k0\" => 1, \"k1\" => 2, \"k2\" => 3, \"k3\" => 4,\n\
+            \"k4\" => 5, \"k5\" => 6, \"k6\" => 7, \"k7\" => 8,\n\
+            \"k8\" => 9, \"k9\" => 10, \"k10\" => 11, \"k11\" => 12];\n\
+          List<string> keys = [\"k0\", \"k1\", \"k2\", \"k3\", \"k4\", \"k5\",\n\
+            \"k6\", \"k7\", \"k8\", \"k9\", \"k10\", \"k11\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = keys[i % 12];\n\
+            acc = acc + m[k];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(240)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(jit_out, oracle, "bucket-walk lookup must match the oracle");
+    assert!(
+        jit_out.contains("1560"),
+        "240 iterations over sum(1..=12)=78 must read 1560, got: {jit_out}"
+    );
+}
+
+#[test]
 fn jit_map_vertical_missing_key_fault_matches_the_vm() {
     // A missing key in a FLAT map exhausts the inline probe → code 5 → the hook falls back to the
     // VM, which renders the canonical `\"map key not found\"` fault — byte-identical failure

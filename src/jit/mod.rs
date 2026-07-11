@@ -955,14 +955,26 @@ const UB_TAG_FLAT: i64 = 1 << 61;
 /// Handle tag (with `UB_TAG_SLOT`): freeing recycles the slot.
 const UB_TAG_OWNED: i64 = 1 << 60;
 /// Handle tag: flattened `Map<string,int>` — `SLOT|FLAT` combined (impossible otherwise):
-/// bits[40..60) = pair count, low 40 bits = base slot; pair `i` = key slot `base+2i` (hash at
-/// byte 24), value slot `base+2i+1` (the `i64` value in bytes 0..8).
+/// bits[40..52) = pair count (≤ 4095), bits[52..57) = log2 of the bucket-table size, low 40 bits
+/// = base slot; pair `i` = key slot `base+2i` (hash at byte 24, canon at byte 32), value slot
+/// `base+2i+1` (the `i64` value in bytes 0..8). The open-addressed bucket table (u32 pair
+/// indices, `u32::MAX` = empty, load factor ≤ 1/2) fills the arena slots immediately AFTER the
+/// `2n` pair slots, so its address derives from `base + 2·count` — no extra handle bits.
 const UB_TAG_FLAT_MAP: i64 = UB_TAG_SLOT | UB_TAG_FLAT;
 /// Low-bits mask for the slot / base index.
 const UB_IDX_MASK: i64 = (1 << 40) - 1;
 /// Byte offset of a string slot's precomputed FNV-1a hash (`PhStr::cached_hash` — never 0, so 0
 /// means "hash unavailable" and the inline map probe falls back to the helper).
 const UB_SLOT_HASH_OFF: usize = 24;
+/// Byte offset of a string slot's CANON word: `interned slot index + 1`, 0 = uncanonical (the
+/// inline map probe punts to the helper). Assigned ONLY through the [`UbCtx::interned`] registry
+/// (keyed by content, first-registration-wins), so canon equality ⇔ byte equality — the probe
+/// compares ONE canon word per bucket instead of hash + three data words.
+const UB_SLOT_CANON_OFF: usize = 32;
+/// Bit positions of the flat-MAP handle's count / log2(table-size) fields (see
+/// [`UB_TAG_FLAT_MAP`]; flat LISTS keep their original 20-bit count at bit 40).
+const UB_MAP_CNT_SHIFT: i64 = 40;
+const UB_MAP_LOG_SHIFT: i64 = 52;
 /// Bytes per arena slot: `len:u8` + up to 22 data bytes + slack, so the inline concat's bounded
 /// 3×8-byte over-copies (a copy starting at `dst+1+la`, `la ≤ 22`, ends ≤ `dst+47`) stay inside
 /// the 64-byte slot. 64 also keeps every slot cache-line-aligned.
@@ -1001,6 +1013,11 @@ struct UbCtx {
     /// Owns the free-stack entries `free_stack` points into.
     #[allow(dead_code)]
     free_storage: Vec<u32>,
+    /// The CANON registry: content → the slot that canonically holds it (pinned consts at
+    /// startup; flat-list/map seal slots as they are bump-pinned). First registration wins —
+    /// every nonzero slot canon word is `interned[content] + 1`, so canon equality ⇔ byte
+    /// equality. Entries reference ONLY never-recycled slots (pinned or bump-pinned).
+    interned: std::collections::HashMap<Vec<u8>, u32>,
 }
 
 impl UbCtx {
@@ -1011,6 +1028,8 @@ impl UbCtx {
         let mut buf_storage = vec![0u8; UB_SLOT_CAP * UB_SLOT_SIZE];
         let mut free_storage = vec![0u32; UB_SLOT_CAP];
         let mut handles = Vec::new();
+        let mut interned: std::collections::HashMap<Vec<u8>, u32> =
+            std::collections::HashMap::new();
         let mut bump = 0u64;
         for v in const_values {
             match v {
@@ -1020,6 +1039,10 @@ impl UbCtx {
                     buf_storage[off + 1..off + 1 + s.len()].copy_from_slice(s.as_bytes());
                     buf_storage[off + UB_SLOT_HASH_OFF..off + UB_SLOT_HASH_OFF + 8]
                         .copy_from_slice(&s.cached_hash().to_le_bytes());
+                    // A pinned const is its own canon (consts are content-deduped at compile).
+                    buf_storage[off + UB_SLOT_CANON_OFF..off + UB_SLOT_CANON_OFF + 8]
+                        .copy_from_slice(&(bump + 1).to_le_bytes());
+                    interned.entry(s.as_bytes().to_vec()).or_insert(bump as u32);
                     bump += 1;
                 }
                 other => handles.push(other.clone()),
@@ -1037,6 +1060,7 @@ impl UbCtx {
             n_pinned,
             buf_storage,
             free_storage,
+            interned,
         }
     }
 
@@ -1085,11 +1109,12 @@ impl UbCtx {
         }
     }
 
-    /// Write `bytes` (≤ 22) into a fresh arena slot with its FNV hash (0 = unavailable); the
-    /// OWNED `SLOT` handle, or `None` when full. The data tail (bytes `1+len..=23`) is ZEROED —
-    /// the invariant the inline map probe whole-word compares rely on (a recycled slot may
-    /// carry stale bytes).
-    fn alloc_slot_bytes(&mut self, bytes: &[u8], hash: u64) -> Option<i64> {
+    /// Write `bytes` (≤ 22) into a fresh arena slot with its FNV hash (0 = unavailable) and canon
+    /// word (`interned slot + 1`, 0 = uncanonical — pass the registry lookup, NEVER a recyclable
+    /// slot's own index); the OWNED `SLOT` handle, or `None` when full. The data tail (bytes
+    /// `1+len..=23`) is ZEROED — the invariant the inline map probe whole-word compares rely on
+    /// (a recycled slot may carry stale bytes).
+    fn alloc_slot_bytes(&mut self, bytes: &[u8], hash: u64, canon1: u64) -> Option<i64> {
         let slot = self.alloc_slot()?;
         let off = slot as usize * UB_SLOT_SIZE;
         self.buf_storage[off] = bytes.len() as u8;
@@ -1097,7 +1122,15 @@ impl UbCtx {
         self.buf_storage[off + 1 + bytes.len()..off + UB_SLOT_HASH_OFF].fill(0);
         self.buf_storage[off + UB_SLOT_HASH_OFF..off + UB_SLOT_HASH_OFF + 8]
             .copy_from_slice(&hash.to_le_bytes());
+        self.buf_storage[off + UB_SLOT_CANON_OFF..off + UB_SLOT_CANON_OFF + 8]
+            .copy_from_slice(&canon1.to_le_bytes());
         Some(UB_TAG_SLOT | UB_TAG_OWNED | slot as i64)
+    }
+
+    /// The canon word (`slot + 1`) for `bytes` if some never-recycled slot canonically holds
+    /// that content, else 0.
+    fn canon1_of(&self, bytes: &[u8]) -> u64 {
+        self.interned.get(bytes).map_or(0, |s| u64::from(*s) + 1)
     }
 
     /// The bytes any STRING handle refers to (slot-tagged or untagged), or `None` on a mismatch.
@@ -1226,6 +1259,11 @@ extern "C" fn rt_u_list_seal(ctx: *mut UbCtx, list: i64) -> i64 {
         ctx.buf_storage[off + 1 + bytes.len()..off + UB_SLOT_HASH_OFF].fill(0);
         ctx.buf_storage[off + UB_SLOT_HASH_OFF..off + UB_SLOT_HASH_OFF + 8]
             .copy_from_slice(&hash.to_le_bytes());
+        // Canonicalize: adopt the registry's slot for this content, or register this one (a flat
+        // element is bump-pinned — never recycled — so it may safely enter the registry).
+        let canon1 = *ctx.interned.entry(bytes.clone()).or_insert(slot as u32) as u64 + 1;
+        ctx.buf_storage[off + UB_SLOT_CANON_OFF..off + UB_SLOT_CANON_OFF + 8]
+            .copy_from_slice(&canon1.to_le_bytes());
         ctx.bump += 1;
     }
     ctx.release(list);
@@ -1262,9 +1300,15 @@ extern "C" fn rt_u_index(ctx: *mut UbCtx, list: i64, idx: i64, free_list: i64) -
     }
     match &elem {
         Value::Str(s) if s.len() <= crate::phstr::INLINE_CAP => {
-            // `None` = arena exhausted → -1 → code 5, redo on VM.
-            ctx.alloc_slot_bytes(s.as_bytes(), s.cached_hash())
-                .unwrap_or(-1)
+            // An interned content returns its canonical slot BORROWED (zero alloc, probe-ready);
+            // an unknown one gets a fresh OWNED slot with canon 0 (recyclable slots must never
+            // enter the registry). `None` = arena exhausted → -1 → code 5, redo on VM.
+            match ctx.interned.get(s.as_bytes()) {
+                Some(slot) => UB_TAG_SLOT | i64::from(*slot),
+                None => ctx
+                    .alloc_slot_bytes(s.as_bytes(), s.cached_hash(), 0)
+                    .unwrap_or(-1),
+            }
         }
         _ => ctx.alloc(elem),
     }
@@ -1286,8 +1330,15 @@ extern "C" fn rt_u_concat(ctx: *mut UbCtx, a: i64, b: i64, free_mask: i64) -> i6
         joined[..ab.len()].copy_from_slice(ab);
         joined[ab.len()..total].copy_from_slice(bb);
         let bytes = joined[..total].to_vec();
-        // Hash 0 = unavailable (an inline-concat result is rarely a map key; the probe falls back).
-        match ctx.alloc_slot_bytes(&bytes, 0) {
+        // Real hash + canon lookup: a helper-path concat result that reproduces an interned
+        // content probes maps fully inline (canon ≠ 0 ⟹ hash is real — the probe's bucket index
+        // depends on it; the INLINE concat writes 0/0 and punts to the helper instead).
+        let hash = match crate::phstr::fnv1a(&bytes) {
+            0 => 1,
+            h => h,
+        };
+        let canon1 = ctx.canon1_of(&bytes);
+        match ctx.alloc_slot_bytes(&bytes, hash, canon1) {
             Some(h) => h,
             None => return -1, // arena exhausted → redo on VM
         }
@@ -1402,7 +1453,11 @@ extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
         return ctx.alloc(Value::Map(std::rc::Rc::new(deduped)));
     };
     let n = entries.len() as i64;
-    if n >= 1 << 20 || ctx.bump + 2 * n as u64 > ctx.cap {
+    // Bucket-table sizing: load factor ≤ 1/2, minimum 4 buckets (an empty map still terminates
+    // its probe on an empty bucket). The table lives in the slots right after the 2n pairs.
+    let tsize = usize::max(4, (2 * n as usize).next_power_of_two());
+    let tslots = tsize.div_ceil(16) as u64; // tsize u32 entries × 4 bytes / 64-byte slots
+    if n >= 1 << 12 || ctx.bump + 2 * n as u64 + tslots > ctx.cap {
         ctx.release(map);
         return ctx.alloc(Value::Map(std::rc::Rc::new(deduped)));
     }
@@ -1411,21 +1466,39 @@ extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
         .iter()
         .map(|(s, v)| (s.as_bytes().to_vec(), s.cached_hash(), *v))
         .collect();
-    for (bytes, hash, val) in &owned {
-        // Key slot: len + bytes + ZERO tail (the inline probe's whole-word compares) + hash.
-        let koff = ctx.bump as usize * UB_SLOT_SIZE;
+    let mut table = vec![u32::MAX; tsize];
+    for (i, (bytes, hash, val)) in owned.iter().enumerate() {
+        // Key slot: len + bytes + ZERO tail (the inline probe's whole-word compares) + hash +
+        // canon (adopt-or-register — a flat key slot is bump-pinned, registry-safe).
+        let kslot = ctx.bump as usize;
+        let koff = kslot * UB_SLOT_SIZE;
         ctx.buf_storage[koff] = bytes.len() as u8;
         ctx.buf_storage[koff + 1..koff + 1 + bytes.len()].copy_from_slice(bytes);
         ctx.buf_storage[koff + 1 + bytes.len()..koff + UB_SLOT_HASH_OFF].fill(0);
         ctx.buf_storage[koff + UB_SLOT_HASH_OFF..koff + UB_SLOT_HASH_OFF + 8]
             .copy_from_slice(&hash.to_le_bytes());
+        let canon1 = *ctx.interned.entry(bytes.clone()).or_insert(kslot as u32) as u64 + 1;
+        ctx.buf_storage[koff + UB_SLOT_CANON_OFF..koff + UB_SLOT_CANON_OFF + 8]
+            .copy_from_slice(&canon1.to_le_bytes());
         // Value slot: the raw i64, LE, bytes 0..8 (the rest is never read).
         let voff = koff + UB_SLOT_SIZE;
         ctx.buf_storage[voff..voff + 8].copy_from_slice(&val.to_le_bytes());
         ctx.bump += 2;
+        // Open-addressed insert (keys are already deduped, so every insert finds a hole).
+        let mut t = (*hash as usize) & (tsize - 1);
+        while table[t] != u32::MAX {
+            t = (t + 1) & (tsize - 1);
+        }
+        table[t] = i as u32;
     }
+    let toff = ctx.bump as usize * UB_SLOT_SIZE;
+    for (i, e) in table.iter().enumerate() {
+        ctx.buf_storage[toff + 4 * i..toff + 4 * i + 4].copy_from_slice(&e.to_le_bytes());
+    }
+    ctx.bump += tslots;
     ctx.release(map);
-    UB_TAG_FLAT_MAP | (n << 40) | base
+    let log2 = tsize.trailing_zeros() as i64;
+    UB_TAG_FLAT_MAP | (n << UB_MAP_CNT_SHIFT) | (log2 << UB_MAP_LOG_SHIFT) | base
 }
 
 /// `#[repr(C)]` two-`i64` return for [`rt_u_map_get`], matching a Cranelift `returns = [i64, i64]`
@@ -1450,7 +1523,7 @@ extern "C" fn rt_u_map_get(ctx: *mut UbCtx, map: i64, key: i64, free_mask: i64) 
     };
     let value = if map & UB_TAG_FLAT != 0 {
         let kb = kb.to_vec(); // end the str_bytes borrow before re-borrowing the arena
-        let n = (map >> 40) & 0xFFFFF;
+        let n = (map >> UB_MAP_CNT_SHIFT) & 0xFFF;
         let base = (map & UB_IDX_MASK) as usize;
         let mut found = None;
         for i in 0..n as usize {
@@ -2354,10 +2427,16 @@ fn build_body_unboxed(
         b.def_var(sv, next);
     };
 
+    // Loads of RUN-INVARIANT `UbCtx` header fields — the arena base (offset 0), the free-stack
+    // base (8), the capacity (32); nothing ever stores to them during a run. `notrap` + `can_move`
+    // lets GVN/LICM collapse the per-op re-loads and hoist them out of hot loops (the mutable
+    // header fields — `free_top` at 16, `bump` at 24 — keep the default flags).
+    let stable = MemFlagsData::new().with_notrap().with_can_move();
+
     // P-2a-inline: push an owned arena slot's index onto the inline free stack (the caller has
     // already established `v` is slot-tagged with OWNED set). 5 memory ops, no call.
     let emit_slot_push = |b: &mut FunctionBuilder, v: ClValue| {
-        let fsp = b.ins().load(types::I64, MemFlagsData::new(), ctx, 8);
+        let fsp = b.ins().load(types::I64, stable, ctx, 8);
         let ft = b.ins().load(types::I64, MemFlagsData::new(), ctx, 16);
         let slot = b.ins().band_imm(v, UB_IDX_MASK);
         let foff = b.ins().ishl_imm(ft, 2);
@@ -2546,76 +2625,78 @@ fn build_body_unboxed(
                 let fast_blk = b.create_block();
                 let slow_blk = b.create_block();
                 // INLINE iff the map sealed FLAT and the key is an arena slot; the probe needs the
-                // key's precomputed hash, so a hash-0 slot (an inline-concat result) also punts.
+                // key's CANON word, so a canon-0 slot (an inline-concat result, an unregistered
+                // runtime string) also punts.
                 let flat_bit = b.ins().band_imm(mv, UB_TAG_FLAT);
                 let key_slot = b.ins().band_imm(iv, UB_TAG_SLOT);
                 let flat_nz = b.ins().icmp_imm(IntCC::NotEqual, flat_bit, 0);
                 let key_nz = b.ins().icmp_imm(IntCC::NotEqual, key_slot, 0);
                 let both = b.ins().band(flat_nz, key_nz);
                 b.ins().brif(both, fast_blk, &[], slow_blk, &[]);
-                // INLINE: hash-probe over the pair slots. Per non-matching pair: ONE load + ONE
-                // compare (the hash at slot byte 24); a hash match confirms by three whole-word
-                // compares (bytes 0..24 = len + 22 zero-tailed data + pad — byte equality exactly,
-                // the `HKey` equality the kernel uses). A hit loads the value slot's i64. A miss is
-                // code 5 — a FLAT map is complete, so the VM redo renders the canonical
-                // `"map key not found"`.
+                // INLINE: O(1) bucket walk. The key's CANON word (slot byte 32 — nonzero only when
+                // assigned via the content registry, so canon equality ⇔ byte equality) indexes
+                // nothing itself; the HASH picks the bucket (`hash & mask`), each bucket holds a
+                // pair index (u32::MAX = empty), and ONE canon compare decides the pair. An empty
+                // bucket is a genuine miss (the seal's load factor ≤ 1/2 guarantees termination) —
+                // code 5, the VM redo renders the canonical `"map key not found"`. A canon-0 key
+                // (inline-concat result, unregistered runtime string) punts to the helper.
                 b.switch_to_block(fast_blk);
-                let buf = b.ins().load(types::I64, MemFlagsData::new(), ctx, 0);
+                let buf = b.ins().load(types::I64, stable, ctx, 0);
                 let ki = b.ins().band_imm(iv, UB_IDX_MASK);
                 let koff = b.ins().ishl_imm(ki, 6);
                 let pk = b.ins().iadd(buf, koff);
-                let khash = b.ins().load(types::I64, MemFlagsData::new(), pk, 24);
-                let kw0 = b.ins().load(types::I64, MemFlagsData::new(), pk, 0);
-                let kw1 = b.ins().load(types::I64, MemFlagsData::new(), pk, 8);
-                let kw2 = b.ins().load(types::I64, MemFlagsData::new(), pk, 16);
+                let khash =
+                    b.ins()
+                        .load(types::I64, MemFlagsData::new(), pk, UB_SLOT_HASH_OFF as i32);
+                let kcanon = b.ins().load(
+                    types::I64,
+                    MemFlagsData::new(),
+                    pk,
+                    UB_SLOT_CANON_OFF as i32,
+                );
                 let probe_blk = b.create_block();
-                b.ins().brif(khash, probe_blk, &[], slow_blk, &[]);
+                b.ins().brif(kcanon, probe_blk, &[], slow_blk, &[]);
                 b.switch_to_block(probe_blk);
-                let cnt_raw = b.ins().ushr_imm(mv, 40);
-                let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+                let cnt_raw = b.ins().ushr_imm(mv, UB_MAP_CNT_SHIFT);
+                let cnt = b.ins().band_imm(cnt_raw, 0xFFF);
+                let lg_raw = b.ins().ushr_imm(mv, UB_MAP_LOG_SHIFT);
+                let lg = b.ins().band_imm(lg_raw, 0x1F);
                 let base = b.ins().band_imm(mv, UB_IDX_MASK);
                 let boff = b.ins().ishl_imm(base, 6);
                 let pbase = b.ins().iadd(buf, boff);
+                let tsoff = b.ins().ishl_imm(cnt, 7); // table starts after the 2·cnt pair slots
+                let tbase = b.ins().iadd(pbase, tsoff);
+                let one = b.ins().iconst(types::I64, 1);
+                let tsize = b.ins().ishl(one, lg);
+                let mask = b.ins().iadd_imm(tsize, -1);
+                let t0 = b.ins().band(khash, mask);
                 let head = b.create_block();
-                b.append_block_param(head, types::I64); // pair index
-                let body = b.create_block();
-                b.append_block_param(body, types::I64);
-                let confirm = b.create_block();
-                b.append_block_param(confirm, types::I64);
+                b.append_block_param(head, types::I64); // bucket index
                 let hit = b.create_block();
-                b.append_block_param(hit, types::I64);
+                b.append_block_param(hit, types::I64); // matched pair index
                 let next = b.create_block();
                 b.append_block_param(next, types::I64);
-                let zero = b.ins().iconst(types::I64, 0);
-                b.ins().jump(head, &[zero.into()]);
+                b.ins().jump(head, &[t0.into()]);
                 b.switch_to_block(head);
-                let i = b.block_params(head)[0];
-                let done = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, i, cnt);
-                fault_if(&mut b, done, 5); // exhausted = missing key → canonical fault on the VM
-                b.ins().jump(body, &[i.into()]);
-                b.switch_to_block(body);
-                let bi = b.block_params(body)[0];
-                let poff = b.ins().ishl_imm(bi, 7); // pair stride = 2 slots = 128 bytes
+                let t = b.block_params(head)[0];
+                let btoff = b.ins().ishl_imm(t, 2);
+                let baddr = b.ins().iadd(tbase, btoff);
+                let e = b.ins().uload32(MemFlagsData::new(), baddr, 0);
+                let empty = b.ins().icmp_imm(IntCC::Equal, e, 0xFFFF_FFFF);
+                fault_if(&mut b, empty, 5); // genuine miss → canonical fault on the VM
+                let poff = b.ins().ishl_imm(e, 7); // pair stride = 2 slots = 128 bytes
                 let ph = b.ins().iadd(pbase, poff);
-                let phash = b.ins().load(types::I64, MemFlagsData::new(), ph, 24);
-                let heq = b.ins().icmp(IntCC::Equal, phash, khash);
-                b.ins().brif(heq, confirm, &[bi.into()], next, &[bi.into()]);
-                b.switch_to_block(confirm);
-                let ci = b.block_params(confirm)[0];
-                let coff = b.ins().ishl_imm(ci, 7);
-                let cph = b.ins().iadd(pbase, coff);
-                let w0 = b.ins().load(types::I64, MemFlagsData::new(), cph, 0);
-                let w1 = b.ins().load(types::I64, MemFlagsData::new(), cph, 8);
-                let w2 = b.ins().load(types::I64, MemFlagsData::new(), cph, 16);
-                let e0 = b.ins().icmp(IntCC::Equal, w0, kw0);
-                let e1 = b.ins().icmp(IntCC::Equal, w1, kw1);
-                let e2 = b.ins().icmp(IntCC::Equal, w2, kw2);
-                let e01 = b.ins().band(e0, e1);
-                let all = b.ins().band(e01, e2);
-                b.ins().brif(all, hit, &[ci.into()], next, &[ci.into()]);
+                let pcanon = b.ins().load(
+                    types::I64,
+                    MemFlagsData::new(),
+                    ph,
+                    UB_SLOT_CANON_OFF as i32,
+                );
+                let ceq = b.ins().icmp(IntCC::Equal, pcanon, kcanon);
+                b.ins().brif(ceq, hit, &[e.into()], next, &[t.into()]);
                 b.switch_to_block(hit);
-                let hi = b.block_params(hit)[0];
-                let hoff = b.ins().ishl_imm(hi, 7);
+                let he = b.block_params(hit)[0];
+                let hoff = b.ins().ishl_imm(he, 7);
                 let hph = b.ins().iadd(pbase, hoff);
                 let val = b.ins().load(types::I64, MemFlagsData::new(), hph, 64);
                 // Consume the key (recycle iff runtime-OWNED); the flat map is bump-pinned
@@ -2625,9 +2706,10 @@ fn build_body_unboxed(
                 }
                 b.ins().jump(merge, &[val.into()]);
                 b.switch_to_block(next);
-                let ni = b.block_params(next)[0];
-                let n1 = b.ins().iadd_imm(ni, 1);
-                b.ins().jump(head, &[n1.into()]);
+                let nt = b.block_params(next)[0];
+                let t1 = b.ins().iadd_imm(nt, 1);
+                let tw = b.ins().band(t1, mask);
+                b.ins().jump(head, &[tw.into()]);
                 // SLOW: the helper (boxed map through the canonical kernel; hash-0 / untagged keys).
                 b.switch_to_block(slow_blk);
                 let mask = (ik.is_owned_handle() as i64) | ((mk.is_owned_handle() as i64) << 1);
@@ -2711,7 +2793,7 @@ fn build_body_unboxed(
                 // bounded 3×8-byte over-copies (the 64-byte slot slack absorbs them — see
                 // `UB_SLOT_SIZE`); the byte semantics are exactly `PhStr::concat`'s.
                 b.switch_to_block(fast1);
-                let buf = b.ins().load(types::I64, MemFlagsData::new(), ctx, 0);
+                let buf = b.ins().load(types::I64, stable, ctx, 0);
                 let ia = b.ins().band_imm(av, UB_IDX_MASK);
                 let aoff = b.ins().ishl_imm(ia, 6);
                 let pa = b.ins().iadd(buf, aoff);
@@ -2740,14 +2822,14 @@ fn build_body_unboxed(
                 b.switch_to_block(pop_blk);
                 let ft1 = b.ins().iadd_imm(ft, -1);
                 b.ins().store(MemFlagsData::new(), ft1, ctx, 16);
-                let fsp = b.ins().load(types::I64, MemFlagsData::new(), ctx, 8);
+                let fsp = b.ins().load(types::I64, stable, ctx, 8);
                 let foff = b.ins().ishl_imm(ft1, 2);
                 let faddr = b.ins().iadd(fsp, foff);
                 let popped = b.ins().uload32(MemFlagsData::new(), faddr, 0);
                 b.ins().jump(alloc_done, &[popped.into()]);
                 b.switch_to_block(bump_blk);
                 let bp = b.ins().load(types::I64, MemFlagsData::new(), ctx, 24);
-                let cap = b.ins().load(types::I64, MemFlagsData::new(), ctx, 32);
+                let cap = b.ins().load(types::I64, stable, ctx, 32);
                 let full = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, bp, cap);
                 fault_if(&mut b, full, 5);
                 let bp1 = b.ins().iadd_imm(bp, 1);
@@ -2770,6 +2852,14 @@ fn build_body_unboxed(
                     let w = b.ins().load(types::I64, MemFlagsData::new(), pb, 1 + 8 * k);
                     b.ins().store(MemFlagsData::new(), w, pdb, 8 * k);
                 }
+                // Zero the metadata words the over-copies just trashed: hash 0 + canon 0 = "punt
+                // to the helper" — without this, stale/garbage canon could FALSE-MATCH in the
+                // inline map probe (a byte-identity break, not just a slow path).
+                let zmeta = b.ins().iconst(types::I64, 0);
+                b.ins()
+                    .store(MemFlagsData::new(), zmeta, pd, UB_SLOT_HASH_OFF as i32);
+                b.ins()
+                    .store(MemFlagsData::new(), zmeta, pd, UB_SLOT_CANON_OFF as i32);
                 // Consume compile-time-OWNED operands: recycle iff the runtime OWNED bit is set
                 // (a flat element / pinned const is compile-Owned but runtime-borrowed → no-op).
                 for (v, k) in [(av, ak), (bv, bk)] {
@@ -2816,7 +2906,7 @@ fn build_body_unboxed(
                 b.ins().brif(slot_bit, fast_blk, &[], slow_blk, &[]);
                 // INLINE: the length is the slot's leading byte.
                 b.switch_to_block(fast_blk);
-                let buf = b.ins().load(types::I64, MemFlagsData::new(), ctx, 0);
+                let buf = b.ins().load(types::I64, stable, ctx, 0);
                 let si = b.ins().band_imm(sv, UB_IDX_MASK);
                 let soff = b.ins().ishl_imm(si, 6);
                 let ps = b.ins().iadd(buf, soff);
