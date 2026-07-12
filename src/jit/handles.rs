@@ -825,6 +825,19 @@ pub(super) extern "C" fn rt_u_concat_mix(
 
 /// `Core.String.length` — byte length; the helper (slow) path for untagged handles (a slot handle
 /// reads its length inline). `free != 0` consumes the handle. `-1` = defensive bad-handle fault.
+/// `Op::Len` helper — a BOXED (untagged) list handle's length (the flat case is fully inline:
+/// the count rides the handle bits). `-1` = defensive bad-handle fault (→ code 5, redo on VM).
+pub(super) extern "C" fn rt_u_list_len(ctx: *mut UbCtx, h: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    if h & UB_TAG_FLAT != 0 {
+        return (h >> 40) & 0xFFFFF;
+    }
+    match ctx.handles.get(h as usize) {
+        Some(Value::List(xs)) => xs.len() as i64,
+        _ => -1,
+    }
+}
+
 pub(super) extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
     let n = match ctx.str_bytes(h) {
@@ -1116,6 +1129,7 @@ pub(super) struct UbHelperIds {
     pub(super) int_to_str: FuncId,
     pub(super) concat_mix: FuncId,
     pub(super) acc_append: FuncId,
+    pub(super) list_len: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1134,4 +1148,5 @@ pub(super) struct UbHelperRefs {
     pub(super) int_to_str: FuncRef,
     pub(super) concat_mix: FuncRef,
     pub(super) acc_append: FuncRef,
+    pub(super) list_len: FuncRef,
 }

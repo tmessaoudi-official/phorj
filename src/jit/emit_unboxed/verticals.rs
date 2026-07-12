@@ -342,6 +342,67 @@ pub(super) fn arm_index_str_list(
     ub_push(b, vars, fvars, kinds, res, Kind::Str(Own::Owned))
 }
 
+/// `Op::IterElems` — the for-in normalization (B1): a BORROWED flat-able Str/Int list handle
+/// IS its element snapshot (sealed lists are immutable within this subset), so the arm is an
+/// identity re-push — ZERO instructions. Analyze admits only the borrowed list kinds here.
+pub(super) fn arm_iter_elems(
+    b: &mut FunctionBuilder,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (v, k) = ub_pop(b, vars, fvars, kinds)?;
+    if !matches!(
+        k,
+        Kind::StrList(Own::Borrowed) | Kind::IntList(Own::Borrowed)
+    ) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed IterElems operand kind {k:?}"
+        )));
+    }
+    ub_push(b, vars, fvars, kinds, v, k)
+}
+
+/// `Op::Len` — list length (the for-in inner-loop bound): INLINE for a FLAT handle (the
+/// count rides bits 40..60 of the handle — two ops, no load), the helper for a boxed list.
+pub(super) fn arm_list_len(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
+    if !matches!(
+        lk,
+        Kind::StrList(Own::Borrowed) | Kind::IntList(Own::Borrowed)
+    ) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed Len operand kind {lk:?}"
+        )));
+    }
+    let merge = b.create_block();
+    b.append_block_param(merge, types::I64);
+    let fast_blk = b.create_block();
+    let slow_blk = b.create_block();
+    let flat_bit = b.ins().band_imm(lv, UB_TAG_FLAT);
+    b.ins().brif(flat_bit, fast_blk, &[], slow_blk, &[]);
+    b.switch_to_block(fast_blk);
+    let cnt_raw = b.ins().ushr_imm(lv, 40);
+    let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+    b.ins().jump(merge, &[cnt.into()]);
+    b.switch_to_block(slow_blk);
+    let call = b.ins().call(h.list_len, &[ec.ctx, lv]);
+    let sres = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    ec.fault_if(b, bad, 5);
+    b.ins().jump(merge, &[sres.into()]);
+    b.switch_to_block(merge);
+    let res = b.block_params(merge)[0];
+    ub_push(b, vars, fvars, kinds, res, Kind::Int)
+}
+
 /// `String.length` native — INLINE for a slot operand (the length is the slot's leading
 /// byte) and for a BORROWED accumulator record (the length is the record's len word — the
 /// `String.length(s) > 512` reset probe in the strbuild pattern); the helper otherwise

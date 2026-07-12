@@ -395,6 +395,7 @@ pub(super) fn build_body_unboxed(
                         | Op::CallValue(_)
                         | Op::CallMethod(..)
                         | Op::Index
+                        | Op::Len
                         | Op::Concat(_)
                         | Op::CallNative(..)
                         | Op::MakeList(_)
@@ -432,6 +433,7 @@ pub(super) fn build_body_unboxed(
         int_to_str: module.declare_func_in_func(ids.int_to_str, b.func),
         concat_mix: module.declare_func_in_func(ids.concat_mix, b.func),
         acc_append: module.declare_func_in_func(ids.acc_append, b.func),
+        list_len: module.declare_func_in_func(ids.list_len, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -666,6 +668,13 @@ pub(super) fn build_body_unboxed(
             Op::Index => {
                 let h = ub_ref(ub_refs.as_ref(), "Index")?;
                 arm_index_str_list(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::IterElems => {
+                arm_iter_elems(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            Op::Len => {
+                let h = ub_ref(ub_refs.as_ref(), "Len")?;
+                arm_list_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
             Op::Concat(cn) if *cn >= 2 => {
                 let h = ub_ref(ub_refs.as_ref(), "Concat")?;

@@ -999,3 +999,51 @@ fn task9_rejects_computed_bound_and_body_branches() {
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle);
 }
+
+#[test]
+fn phg_run_hook_hits_the_jit_on_for_in_iteration() {
+    // Forin-vertical proof: `for (x in xs)` desugars to `IterElems` + an indexed while over
+    // `Len` — a BORROWED flat list handle IS its element snapshot (identity, zero
+    // instructions) and `Len` reads the count from the handle bits. Covers int-list AND
+    // str-list iteration, byte-identity, and hits>0.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
+          List<string> ws = [\"alpha\", \"be\", \"gamma\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            for (int x in xs) {\n\
+              acc = acc + x;\n\
+            }\n\
+            for (string w in ws) {\n\
+              acc = acc + String.length(w);\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(500)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "for-in jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual for-in jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "for-in iteration must actually hit the JIT — else the forin flip is unproven"
+    );
+}

@@ -994,6 +994,38 @@ pub(super) fn unboxed_analyze(
                         }
                     }
                 }
+                Op::IterElems => {
+                    // For-in lowering (B1): the iterable normalizes to its element list. A
+                    // BORROWED flat-able Str/Int list handle IS that snapshot (sealed lists
+                    // are immutable within this subset) — identity. Owned/other iterables →
+                    // VM fallback (fail closed).
+                    match kinds.pop() {
+                        Some(Kind::StrList(Own::Borrowed)) => {
+                            kinds.push(Kind::StrList(Own::Borrowed))
+                        }
+                        Some(Kind::IntList(Own::Borrowed)) => {
+                            kinds.push(Kind::IntList(Own::Borrowed))
+                        }
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed IterElems operand kind {other:?}"
+                            )))
+                        }
+                    }
+                }
+                Op::Len => {
+                    // List length (the for-in inner-loop bound): BORROWED list → Int.
+                    match kinds.pop() {
+                        Some(Kind::StrList(Own::Borrowed)) | Some(Kind::IntList(Own::Borrowed)) => {
+                            kinds.push(Kind::Int)
+                        }
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed Len operand kind {other:?}"
+                            )))
+                        }
+                    }
+                }
                 Op::Concat(n) if *n >= 2 => {
                     // Mixed interpolation: `Str` operands concatenate; an `Int` operand renders
                     // to its decimal string first (`rt_u_int_to_str` — always inline-short).
@@ -1638,7 +1670,12 @@ pub(super) fn collect_functions_unboxed(
                 },
                 // P-2a handle verticals. Operand-KIND validation lives in `unboxed_analyze` /
                 // `build_body_unboxed` (this walk only gates the op set).
-                Op::MakeList(_) | Op::MakeMap(_) | Op::Index | Op::Pop => uses_handles = true,
+                Op::MakeList(_)
+                | Op::MakeMap(_)
+                | Op::Index
+                | Op::Pop
+                | Op::IterElems
+                | Op::Len => uses_handles = true,
                 Op::Concat(n) if *n >= 2 => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 // P-2c numeric conversions: pure, handle-free, fully inline.

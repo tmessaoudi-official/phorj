@@ -174,6 +174,7 @@ impl Compiled {
             builder.symbol("rt_u_int_to_str", rt_u_int_to_str as *const u8);
             builder.symbol("rt_u_concat_mix", rt_u_concat_mix as *const u8);
             builder.symbol("rt_u_acc_append", rt_u_acc_append as *const u8);
+            builder.symbol("rt_u_list_len", rt_u_list_len as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -284,6 +285,7 @@ impl Compiled {
                     declare(&mut module, "rt_u_concat_mix", &s)?
                 },
                 acc_append: declare(&mut module, "rt_u_acc_append", &sig4)?,
+                list_len: declare(&mut module, "rt_u_list_len", &sig2)?,
             })
         } else {
             None
