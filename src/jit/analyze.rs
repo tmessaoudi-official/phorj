@@ -1174,6 +1174,24 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::IntList(Own::Owned));
                 }
+                Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => {
+                    // The GENERAL (non-accumulator) `List.append` — full clone semantics via
+                    // `rt_u_list_append_clone` (a fresh BOXED list; inputs untouched), exactly
+                    // the VM native. Mirrors the emit arm (fail closed).
+                    match (kinds.pop(), kinds.pop()) {
+                        (Some(Kind::Int), Some(Kind::IntList(_))) => {
+                            kinds.push(Kind::IntList(Own::Owned));
+                        }
+                        (Some(Kind::Str(_)), Some(Kind::StrList(_))) => {
+                            kinds.push(Kind::StrList(Own::Owned));
+                        }
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List.append operand kinds {other:?}"
+                            )))
+                        }
+                    }
+                }
                 Op::CallNative(id, 2)
                     if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
                 {

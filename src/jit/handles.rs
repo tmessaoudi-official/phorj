@@ -286,6 +286,50 @@ impl UbCtx {
         }
     }
 
+    /// Materialize ANY int/str list handle (flat slots, ACL builder record, boxed) into a fresh
+    /// `Vec<Value>` — the clone half of PHP value semantics for the GENERAL `List.append`
+    /// (`str_elems` = the compile-time element kind; a flat handle does not encode it).
+    /// `None` = not a list handle (defensive → code 5, redo on VM).
+    fn list_values(&self, h: i64, str_elems: bool) -> Option<Vec<Value>> {
+        if h & UB_TAG_FLAT != 0 && h & UB_TAG_SLOT == 0 {
+            let n = ((h >> 40) & 0xFFFFF) as usize;
+            let base = (h & UB_IDX_MASK) as usize;
+            let mut out = Vec::with_capacity(n + 1);
+            for i in 0..n {
+                let off = (base + i) * UB_SLOT_SIZE;
+                if str_elems {
+                    let len = self.buf_storage[off] as usize;
+                    let s = std::str::from_utf8(&self.buf_storage[off + 1..off + 1 + len]).ok()?;
+                    out.push(Value::Str(crate::phstr::PhStr::new(s)));
+                } else {
+                    let mut b = [0u8; 8];
+                    b.copy_from_slice(&self.buf_storage[off..off + 8]);
+                    out.push(Value::Int(i64::from_le_bytes(b)));
+                }
+            }
+            return Some(out);
+        }
+        if h & UB_TAG_ACL != 0 {
+            // ACL builder records are int-only by construction.
+            let idx = (h & UB_IDX_MASK) as usize;
+            if idx >= UB_ACC_CAP || str_elems {
+                return None;
+            }
+            let n = (self.acc_recs[idx].len / 8) as usize;
+            let mut out = Vec::with_capacity(n + 1);
+            for i in 0..n {
+                let mut b = [0u8; 8];
+                b.copy_from_slice(&self.acc_bufs[idx][i * 8..i * 8 + 8]);
+                out.push(Value::Int(i64::from_le_bytes(b)));
+            }
+            return Some(out);
+        }
+        match self.handles.get(h as usize) {
+            Some(Value::List(xs)) => Some(xs.as_ref().clone()),
+            _ => None,
+        }
+    }
+
     /// Pop a recycled arena slot or bump a fresh one; `None` = arena exhausted (→ redo on VM).
     pub(super) fn alloc_slot(&mut self) -> Option<u64> {
         if self.free_top > 0 {
@@ -1466,6 +1510,47 @@ pub(super) extern "C" fn rt_u_map_builder_seed(
     rt_u_map_builder_set(ctx, UB_TAG_AMB | idx as i64, key, val)
 }
 
+/// The GENERAL (non-accumulator) `List.append` — full PHP value semantics via a clone: any
+/// input list form (flat / ACL / boxed) materializes to a fresh Vec, the element is pushed,
+/// and a fresh BOXED handle returns; the inputs are untouched unless compile-time-OWNED
+/// (`meta` bits: 0 = str element, 1 = free the element, 2 = free the list). This is the
+/// widening that lets `ys = List.append(xs, v)` (target ≠ source — NOT an accumulator site)
+/// compile instead of declining the whole graph. `-1` = defensive mismatch (code 5).
+pub(super) extern "C" fn rt_u_list_append_clone(
+    ctx: *mut UbCtx,
+    list: i64,
+    elem: i64,
+    meta: i64,
+) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let str_elem = meta & 1 != 0;
+    let Some(mut vals) = ctx.list_values(list, str_elem) else {
+        return -1;
+    };
+    let ev = if str_elem {
+        match ctx.str_bytes(elem) {
+            Some(bytes) => match std::str::from_utf8(bytes) {
+                Ok(s) => Value::Str(crate::phstr::PhStr::new(s)),
+                Err(_) => return -1,
+            },
+            None => match ctx.handles.get(elem as usize) {
+                Some(v @ Value::Str(_)) => v.clone(),
+                _ => return -1,
+            },
+        }
+    } else {
+        Value::Int(elem)
+    };
+    vals.push(ev);
+    if meta & 2 != 0 {
+        ctx.release(elem);
+    }
+    if meta & 4 != 0 {
+        ctx.release(list);
+    }
+    ctx.alloc(Value::List(std::rc::Rc::new(vals)))
+}
+
 /// Fresh EMPTY int-list builder (the hofpipe vertical: `List.map`'s output list) — take a
 /// record (recycled ones reuse their grown buffer), len 0. `-1` = pool exhaustion (code 5).
 pub(super) extern "C" fn rt_u_list_builder_new(ctx: *mut UbCtx) -> i64 {
@@ -1601,6 +1686,7 @@ pub(super) struct UbHelperIds {
     pub(super) map_builder_seed: FuncId,
     pub(super) list_acc_reseed: FuncId,
     pub(super) list_builder_new: FuncId,
+    pub(super) list_append_clone: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1625,4 +1711,5 @@ pub(super) struct UbHelperRefs {
     pub(super) map_builder_seed: FuncRef,
     pub(super) list_acc_reseed: FuncRef,
     pub(super) list_builder_new: FuncRef,
+    pub(super) list_append_clone: FuncRef,
 }

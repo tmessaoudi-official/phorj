@@ -439,6 +439,7 @@ pub(super) fn build_body_unboxed(
         map_builder_seed: module.declare_func_in_func(ids.map_builder_seed, b.func),
         list_acc_reseed: module.declare_func_in_func(ids.list_acc_reseed, b.func),
         list_builder_new: module.declare_func_in_func(ids.list_builder_new, b.func),
+        list_append_clone: module.declare_func_in_func(ids.list_append_clone, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -834,7 +835,10 @@ pub(super) fn build_body_unboxed(
                     unboxed_native_is_list_map(*id),
                 )?;
             }
-            Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => {
+            Op::CallNative(id, 2)
+                if unboxed_native_is_list_append(*id)
+                    && accumulator_site(code, &depth_at, &is_leader, ip).is_some() =>
+            {
                 // The listappend vertical (mirrors the Concat accumulator peephole): ONLY
                 // at a proven accumulator site — the lhs is the dying borrow of the very
                 // slot the following SetLocal rewrites; consume it into an ACL builder
@@ -857,6 +861,32 @@ pub(super) fn build_body_unboxed(
                 b.def_var(vars[s], res);
                 kinds[s] = Kind::IntList(Own::Owned);
                 skip_ip = Some(ip + 1);
+            }
+            Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => {
+                // The GENERAL (non-accumulator) `List.append` — full clone semantics via the
+                // helper: a fresh BOXED list, inputs untouched unless compile-time-OWNED
+                // (mirrors the analyze arm exactly).
+                let h = ub_ref(ub_refs.as_ref(), "List.append(clone)")?;
+                let (ev, ek) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (lv, lk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let out_kind = match (ek, lk) {
+                    (Kind::Int, Kind::IntList(_)) => Kind::IntList(Own::Owned),
+                    (Kind::Str(_), Kind::StrList(_)) => Kind::StrList(Own::Owned),
+                    other => {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed List.append operand kinds {other:?}"
+                        )))
+                    }
+                };
+                let meta = (matches!(ek, Kind::Str(_)) as i64)
+                    | ((ek.is_owned_handle() as i64) << 1)
+                    | ((lk.is_owned_handle() as i64) << 2);
+                let metav = b.ins().iconst(types::I64, meta);
+                let call = b.ins().call(h.list_append_clone, &[ec.ctx, lv, ev, metav]);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                ec.fault_if(&mut b, bad, 5);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, sres, out_kind)?;
             }
             Op::Pop => {
                 arm_pop(

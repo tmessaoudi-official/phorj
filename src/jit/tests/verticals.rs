@@ -311,6 +311,51 @@ fn phg_run_hook_hits_the_jit_on_the_forin_pointer_walk() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_general_list_append() {
+    // The GENERAL (non-accumulator) `List.append` — target != source, so the ACL fast path
+    // does not apply and the clone helper carries full PHP value semantics: `xs` must stay
+    // 3 elements forever while each `ys` is a fresh 4-element list (read back via the boxed
+    // Index helper). Also exercises the str-list variant. hits > 0 + byte-identity.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [1, 2, 3];\n\
+          List<string> ss = [\"a\", \"b\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            List<int> ys = List.append(xs, i);\n\
+            List<string> ts = List.append(ss, \"c\");\n\
+            acc = acc + List.length(ys) + ys[3] + List.length(xs) + List.length(ts);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "general list-append jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual general list-append must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the general list-append must actually hit the JIT"
+    );
+}
+
+#[test]
 fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // The MUTATION GUARD: iterating a local AND writing it in the same function (append
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would
