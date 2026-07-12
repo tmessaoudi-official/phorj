@@ -137,17 +137,40 @@ fn ub_ref<'a>(ub: Option<&'a UbHelperRefs>, what: &str) -> Result<&'a UbHelperRe
     })
 }
 
+/// The W9 call-boundary CLONE of a compile-time-BORROWED str/list argument (PHP value
+/// semantics: `this.field` forwarded into the next builder — passing the raw word would
+/// leave the owner and the callee both freeing it). Returns the fresh Owned word.
+fn emit_arg_clone(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    ub: Option<&UbHelperRefs>,
+    v: ClValue,
+    repr: i64,
+) -> Result<ClValue, JitError> {
+    let h = ub_ref(ub, "call-arg clone")?;
+    let reprv = b.ins().iconst(types::I64, repr);
+    let call = b.ins().call(h.clone_value, &[ec.ctx, v, reprv]);
+    let cv = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, cv, 0);
+    ec.fault_if(b, bad, 5);
+    Ok(cv)
+}
+
 /// Pop `argc` args (top is the LAST arg) and build the callee's ABI word vector per its
 /// FINAL param kinds (`pks` — slots aligned to the args; a method receiver is prepended by
 /// the caller): a `Dyn` param takes TWO words (payload, tag) — a concrete argument gets a
 /// constant tag (float args bitcast to their bits), a forwarded Dyn reads its tag from the
-/// enum-tag space. Every other param takes the single-word move rules (a string/list/map
-/// argument MOVES into the callee — the word crosses as a plain i64; the callee's
-/// single-use-moved param owns it), rejecting kinds that can't cross one-i64-per-arg
-/// (handles, register-pair enums, static `Fn`s). Returns the words in declaration order.
+/// enum-tag space. Every other param takes the single-word move rules (an Owned/const
+/// string or list MOVES into the callee — the word crosses as a plain i64; the callee's
+/// single-use-moved param owns it; a BORROWED one CLONES first, W9 — mirrors the analyze
+/// arms exactly), rejecting kinds that can't cross one-i64-per-arg (maps stay Owned-only —
+/// no clone repr; instance handles, register-pair enums, static `Fn`s). Returns the words
+/// in declaration order.
 #[allow(clippy::too_many_arguments)] // emit plumbing
 fn pop_call_args(
     b: &mut FunctionBuilder,
+    ec: &Ec,
+    ub: Option<&UbHelperRefs>,
     vars: &[Variable],
     fvars: &[Variable],
     evars: &[Variable],
@@ -172,9 +195,14 @@ fn pop_call_args(
                     (bits, b.ins().iconst(types::I64, 1))
                 }
                 Kind::Bool => (v, b.ins().iconst(types::I64, 2)),
-                // The Dyn takes the word (Owned moves in; a const word's frees no-op).
+                // The Dyn takes the word (Owned moves in; a const word's frees no-op; a
+                // Borrowed one clones first — W9).
                 Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
                     (v, b.ins().iconst(types::I64, 3))
+                }
+                Kind::Str(Own::Borrowed) => {
+                    let cv = emit_arg_clone(b, ec, ub, v, 2)?;
+                    (cv, b.ins().iconst(types::I64, 3))
                 }
                 other => {
                     return Err(JitError::Unsupported(format!(
@@ -185,13 +213,22 @@ fn pop_call_args(
             rev.push(vec![payload, tag]);
             continue;
         }
-        match k {
+        let v = match k {
+            // Owned words MOVE; const words pass as-is (their frees no-op).
             Kind::Str(Own::Owned)
             | Kind::Str(Own::ConstBorrow)
             | Kind::StrList(Own::Owned)
+            | Kind::StrList(Own::ConstBorrow)
             | Kind::IntList(Own::Owned)
+            | Kind::IntList(Own::ConstBorrow)
             | Kind::StrIntMap(Own::Owned)
-            | Kind::DynList(Own::Owned) => {}
+            | Kind::DynList(Own::Owned)
+            | Kind::DynList(Own::ConstBorrow) => v,
+            // W9: the borrowed word clones into a fresh Owned handle the callee may consume.
+            Kind::Str(Own::Borrowed) => emit_arg_clone(b, ec, ub, v, 2)?,
+            Kind::StrList(Own::Borrowed) => emit_arg_clone(b, ec, ub, v, 3)?,
+            Kind::IntList(Own::Borrowed) => emit_arg_clone(b, ec, ub, v, 4)?,
+            Kind::DynList(Own::Borrowed) => emit_arg_clone(b, ec, ub, v, 5)?,
             // A Dyn arg into a NON-Dyn param would cross as one word and silently drop its
             // tag — impossible post-fixpoint (Dyn absorbs at the join), reject defensively.
             Kind::Dyn => {
@@ -204,8 +241,8 @@ fn pop_call_args(
                     "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
                 ));
             }
-            _ => {}
-        }
+            _ => v,
+        };
         rev.push(vec![v]);
     }
     rev.reverse();
@@ -424,7 +461,9 @@ pub(super) fn build_body_unboxed(
     // `brif` to the shared exit must be counted here, or the block won't exist when it is needed.
     // P-2a: `Index` (bounds), `Concat` and `String.length` (defensive bad-handle) also branch to the
     // shared fault-exit (code 5, redo on VM). `Fault` (the match-exhaustiveness backstop) jumps to
-    // it unconditionally.
+    // it unconditionally. `GetField` is counted because a BORROWED field word returned from the
+    // function CLONES at `Return` (fault on a defensive mismatch) — the `return this.field;`
+    // shape has no other counted op (every other borrowed-returnable value traces to one).
     let needs_fault_exit = needs_sticky
         || !entry_guards.is_empty()
         || code.iter().enumerate().any(|(ip, op)| {
@@ -444,6 +483,7 @@ pub(super) fn build_body_unboxed(
                         | Op::MakeList(_)
                         | Op::MakeMap(_)
                         | Op::MakeInstance(_)
+                        | Op::GetField(_)
                         | Op::Fault(_)
                 )
         });
@@ -1025,13 +1065,19 @@ pub(super) fn build_body_unboxed(
             }
             Op::CallNative(id, 2)
                 if unboxed_native_is_list_append(*id)
-                    && accumulator_site(code, &depth_at, &is_leader, ip).is_some() =>
+                    && accumulator_site(code, &depth_at, &is_leader, ip).is_some()
+                    && matches!(kinds.last(), Some(Kind::Int))
+                    && matches!(
+                        kinds.get(kinds.len().wrapping_sub(2)),
+                        Some(Kind::IntList(_))
+                    ) =>
             {
                 // The listappend vertical (mirrors the Concat accumulator peephole): ONLY
                 // at a proven accumulator site — the lhs is the dying borrow of the very
                 // slot the following SetLocal rewrites; consume it into an ACL builder
                 // record (in-place push), store the result straight into the slot, and
-                // skip the SetLocal.
+                // skip the SetLocal. Non-int accumulator shapes fall THROUGH to the general
+                // clone arm (guard order mirrors analyze exactly).
                 let s = accumulator_site(code, &depth_at, &is_leader, ip).ok_or_else(|| {
                     JitError::Unsupported(
                         "unboxed List.append outside an accumulator site".to_string(),
@@ -1287,7 +1333,17 @@ pub(super) fn build_body_unboxed(
                 // emission (depth guard + native call + fault propagation).
                 let arity = program.functions[*callee].arity;
                 let pks = abi_param_kinds(program, info, *callee);
-                let cargs = pop_call_args(&mut b, &vars, &fvars, &evars, &mut kinds, arity, &pks)?;
+                let cargs = pop_call_args(
+                    &mut b,
+                    &ec,
+                    ub_refs.as_ref(),
+                    &vars,
+                    &fvars,
+                    &evars,
+                    &mut kinds,
+                    arity,
+                    &pks,
+                )?;
                 emit_call_to(
                     &mut b,
                     &ec,
@@ -1353,7 +1409,17 @@ pub(super) fn build_body_unboxed(
                     )));
                 };
                 let pks = abi_param_kinds(program, info, f_peek);
-                let cargs = pop_call_args(&mut b, &vars, &fvars, &evars, &mut kinds, *argc, &pks)?;
+                let cargs = pop_call_args(
+                    &mut b,
+                    &ec,
+                    ub_refs.as_ref(),
+                    &vars,
+                    &fvars,
+                    &evars,
+                    &mut kinds,
+                    *argc,
+                    &pks,
+                )?;
                 let (_fv, fk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let Kind::Fn(f) = fk else {
                     return Err(JitError::Unsupported(format!(
@@ -1445,8 +1511,17 @@ pub(super) fn build_body_unboxed(
                     ));
                 };
                 let pks = abi_param_kinds(program, info, target);
-                let cargs =
-                    pop_call_args(&mut b, &vars, &fvars, &evars, &mut kinds, *argc, &pks[1..])?;
+                let cargs = pop_call_args(
+                    &mut b,
+                    &ec,
+                    ub_refs.as_ref(),
+                    &vars,
+                    &fvars,
+                    &evars,
+                    &mut kinds,
+                    *argc,
+                    &pks[1..],
+                )?;
                 let (rv, rk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 if !matches!(rk, Kind::Inst(c2, _) if c2 == c_peek) {
                     return Err(JitError::Codegen(
@@ -1614,7 +1689,8 @@ pub(super) fn build_body_unboxed(
                 current = None;
             }
             Op::Return => {
-                let (v, kind) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (v, popped_kind) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let kind = popped_kind;
                 // Int/Float return to the caller's world; an INSTANCE return is the ownership-
                 // transfer contract (validated by the analyze pass's transfer gate — the entry
                 // function returning an instance was rejected in `compile_unboxed`). Normalize
@@ -1625,13 +1701,17 @@ pub(super) fn build_body_unboxed(
                 let (v, kind) = match kind {
                     Kind::Int | Kind::Float | Kind::Bool => (v, kind),
                     Kind::Inst(c, _) => (v, Kind::Inst(c, Own::Owned)),
-                    Kind::Str(own) | Kind::StrList(own) | Kind::IntList(own)
+                    Kind::Str(own)
+                    | Kind::StrList(own)
+                    | Kind::IntList(own)
+                    | Kind::DynList(own)
                         if own == Own::Borrowed =>
                     {
                         let h = ub_ref(ub_refs.as_ref(), "Return(borrowed handle clone)")?;
                         let repr = match kind {
                             Kind::Str(_) => 2,
                             Kind::StrList(_) => 3,
+                            Kind::DynList(_) => 5,
                             _ => 4,
                         };
                         let reprv = b.ins().iconst(types::I64, repr);
@@ -1642,6 +1722,7 @@ pub(super) fn build_body_unboxed(
                         let owned = match kind {
                             Kind::Str(_) => Kind::Str(Own::Owned),
                             Kind::StrList(_) => Kind::StrList(Own::Owned),
+                            Kind::DynList(_) => Kind::DynList(Own::Owned),
                             _ => Kind::IntList(Own::Owned),
                         };
                         (cv, owned)
@@ -1649,6 +1730,7 @@ pub(super) fn build_body_unboxed(
                     Kind::Str(_) => (v, Kind::Str(Own::Owned)),
                     Kind::StrList(_) => (v, Kind::StrList(Own::Owned)),
                     Kind::IntList(_) => (v, Kind::IntList(Own::Owned)),
+                    Kind::DynList(_) => (v, Kind::DynList(Own::Owned)),
                     other => {
                         // An unknown/enum/map return would be mis-decoded — reject to VM/boxed.
                         return Err(JitError::Unsupported(format!(
@@ -1656,6 +1738,18 @@ pub(super) fn build_body_unboxed(
                         )));
                     }
                 };
+                // W9 frame teardown: release every OWNED cell left below (the VM drops the
+                // frame; a leaked temp — e.g. an owned frag local after its borrowed copy
+                // went into an append — would exhaust the arena in a hot loop). The return
+                // value is SECURED first (borrowed returns cloned above; an Owned handle on
+                // the stack is unique, so no below cell can back it). EXCEPTION: a BORROWED
+                // instance return transfers its single backing cell (the analyze census
+                // guarantees it is the only owned cell) — nothing is released on that path.
+                let transfers_backing = matches!(popped_kind, Kind::Inst(_, Own::Borrowed));
+                if !transfers_backing && kinds.iter().any(|k| k.is_owned_handle()) {
+                    let h = ub_ref(ub_refs.as_ref(), "Return(frame teardown)")?;
+                    emit_unwind_releases(&mut b, &ec, h, &vars, &kinds, 0, program, info);
+                }
                 // Record the return kind for `run_unboxed`'s Int-vs-Float decode; ASSERT every reachable
                 // Return in THIS function agrees — a mixed Int/Float would decode the i64 return-bits
                 // wrong (advisor 3C). The value operand is the same i64 bits either way; only the decode

@@ -6,6 +6,41 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — JIT W9 + S8: the sqlbuild builder pipeline compiles end to end (borrowed-arg clone-at-boundary, Return frame teardown, deferred pad seeding, flattened JoinClause)
+
+The whole `Core.Sql` immutable-builder shape — union Dyn wheres, joins, `toQuery()`,
+`sql()`/`params()` reads, try/catch, the bench loop — now stays on the unboxed JIT path.
+Four levers, each closing a fixpoint- or ownership-structural wall the sqlbuild probe
+isolated:
+
+- **W9a — borrowed handle args CLONE at the call boundary** (PHP value semantics via the
+  existing `rt_u_clone_value`): every `this.field` forwarded into the next builder step
+  (`new SelectQuery(this.tableName, …)`, `this.next(this.cols, …)`) was a compile-time
+  BORROWED arg, denied wholesale — so no builder sig ever recorded and every ctor param
+  stayed Unknown. Owned/const words still move free; maps stay Owned-only (no clone repr).
+- **W9b — Return frame teardown**: `Op::Return` now releases every owned cell left below
+  the (already-secured) return value — the `frag` temp in `withCond` used to force an
+  "ambiguous ownership" decline (and owned temps silently leaked before). A BORROWED
+  instance return keeps the exact transfer census (its single backing cell must survive).
+- **W9c — deferred catch-pad seeding**: `PushHandler` no longer fails when the graph's
+  thrown class is unknown — it keeps walking the try body (recording the discoveries that
+  REACH the `Throw` sites, e.g. `qualify` behind the builder chain) and holds the error at
+  the walk's end. Failing at the marker deadlocked the fixpoint the same way the union
+  param did.
+- **S8 — JoinClause flattened** (prelude): it carries the parent `SelectQuery`'s FIELDS
+  (14 fields, wide two-slot instance) instead of the parent instance — an instance-kind
+  ctor arg was un-analyzable and the word would dangle once the chain frees the receiver
+  after `.on()`.
+
+Also: the int-list accumulator append arm now falls through to the general clone arm for
+non-int shapes (a str-list `out = append(out, q)` loop declined the whole graph);
+`GetField` joins the fault-exit pre-scan (a `return this.field;` body's Return-clone had
+no counted fault source — a latent `fault_if` panic these graphs exposed); borrowed
+`DynList` returns clone (repr 5) and the entry decode materializes DynList returns; a
+whole-graph decline now names the failing function in its message. Delivery:
+`phg_run_hook_hits_the_jit_on_the_sqlbuild_builder_pipeline` (the full builder chain,
+hits > 0 + byte-identity). Full oracle 1967/1967 with the PHP leg required.
+
 ### Added — JIT W-slice 7: union params as tagged two-word Dyn cells (the sqlbuild gate's last widening lever)
 
 A declared scalar-union param (`string | int | float | bool` — the `Core.Sql` `whereEq`/

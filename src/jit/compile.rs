@@ -563,10 +563,11 @@ impl Compiled {
             0 => match self.ret_kind {
                 Kind::Float => JitRun::Value(Value::Float(f64::from_bits(ret.value as u64))),
                 Kind::Bool => JitRun::Value(Value::Bool(ret.value != 0)),
-                Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) => {
+                Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) | Kind::DynList(_) => {
                     let repr = match self.ret_kind {
                         Kind::Str(_) => 2,
                         Kind::StrList(_) => 3,
+                        Kind::DynList(_) => 5,
                         _ => 4,
                     };
                     match cached.as_ref().and_then(|c| c.materialize(ret.value, repr)) {

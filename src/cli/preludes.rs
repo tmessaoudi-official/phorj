@@ -505,10 +505,10 @@ class SelectQuery {
   }
   function join(string table, string alias): JoinClause { return this.innerJoin(table, alias); }
   function innerJoin(string table, string alias): JoinClause {
-    return new JoinClause(this, "INNER", table, alias);
+    return new JoinClause(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, this.lim, "INNER", table, alias);
   }
   function leftJoin(string table, string alias): JoinClause {
-    return new JoinClause(this, "LEFT", table, alias);
+    return new JoinClause(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, this.lim, "LEFT", table, alias);
   }
   function withJoin(string frag, string alias): SelectQuery {
     return this.next(this.cols, List.append(this.joinFrags, frag), List.append(this.joinAliases, alias), this.conds, this.binds, this.groups, this.havings, this.orders, this.lim);
@@ -615,13 +615,32 @@ class SelectQuery {
   }
 }
 class JoinClause {
-  constructor(private SelectQuery parent, private string joinKind, private string table, private string alias) {}
+  // S8 FLATTENED: carries the parent SelectQuery's FIELDS (not the instance — the builder
+  // chain frees the receiver after `.on()`, so an instance-kind field would dangle on the
+  // JIT's flat-arena path; the copied fields also match the immutable-threading discipline
+  // every other builder step uses).
+  constructor(
+    private string tableName,
+    private string tableAlias,
+    private List<string> cols,
+    private List<string> joinFrags,
+    private List<string> joinAliases,
+    private List<string> conds,
+    private List<string | int | float | bool> binds,
+    private List<string> groups,
+    private List<string> havings,
+    private List<string> orders,
+    private int lim,
+    private string joinKind,
+    private string joinTable,
+    private string joinAlias
+  ) {}
   function on(string left, string op, string right): SelectQuery throws SqlError {
     if (!String.contains(left, ".") || !String.contains(right, ".")) {
       throw new SqlError("E-SQL-AMBIGUOUS-COLUMN: join ON columns must be alias-qualified");
     }
-    string frag = this.joinKind + " JOIN " + this.table + " " + this.alias + " ON " + left + " " + op + " " + right;
-    return this.parent.withJoin(frag, this.alias);
+    string frag = this.joinKind + " JOIN " + this.joinTable + " " + this.joinAlias + " ON " + left + " " + op + " " + right;
+    return new SelectQuery(this.tableName, this.tableAlias, this.cols, List.append(this.joinFrags, frag), List.append(this.joinAliases, this.joinAlias), this.conds, this.binds, this.groups, this.havings, this.orders, this.lim);
   }
 }
 class InsertStatement {

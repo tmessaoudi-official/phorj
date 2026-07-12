@@ -1055,6 +1055,10 @@ pub(super) fn unboxed_analyze(
     // normalized to `Owned`) + the statically-resolved `CallMethod` sites discovered
     // (`(target fn, receiver class)`) — the fixpoint's discovery feed.
     let mut ret_kind: Option<Kind> = None;
+    // A `PushHandler` hit before the graph's thrown class was known — the walk CONTINUES
+    // (its discoveries must land this round or the fixpoint deadlocks) and the held error
+    // fires at the end instead.
+    let mut pad_deferred = false;
     // Single-use param moves (see `single_use_params`): a unique read of an Owned-handle
     // param TRANSFERS ownership and kills the slot.
     let single_use = single_use_params(&program.functions[func_idx]);
@@ -1358,12 +1362,19 @@ pub(super) fn unboxed_analyze(
                 }
                 Op::CallNative(id, 2)
                     if unboxed_native_is_list_append(*id)
-                        && accumulator_site(code, &depth_at, &is_leader, ip).is_some() =>
+                        && accumulator_site(code, &depth_at, &is_leader, ip).is_some()
+                        && matches!(kinds.last(), Some(Kind::Int))
+                        && matches!(
+                            kinds.get(kinds.len().wrapping_sub(2)),
+                            Some(Kind::IntList(_))
+                        ) =>
                 {
                     // The listappend vertical: ONLY at a proven accumulator site (the lhs is
-                    // the dying borrow of the slot the following SetLocal rewrites) — the
-                    // emit consumes it into an ACL builder record. Elsewhere → VM fallback
-                    // (the clone semantics must stay observable).
+                    // the dying borrow of the slot the following SetLocal rewrites) AND the
+                    // int-list shape — the emit consumes it into an ACL builder record. A
+                    // non-int accumulator site (a str-list `out = append(out, q)` loop)
+                    // falls THROUGH to the general clone arm below (guard order mirrors
+                    // emit exactly).
                     match (kinds.pop(), kinds.pop()) {
                         (Some(Kind::Int), Some(Kind::IntList(_))) => {}
                         other => {
@@ -1731,15 +1742,22 @@ pub(super) fn unboxed_analyze(
                 // graph-wide singleton (not yet known -> held, the fixpoint retries once a
                 // `Throw` is discovered). Fall-through continues into the try body unchanged.
                 Op::PushHandler(t) => {
-                    let Some(c) = info.thrown_class else {
-                        return Err(JitError::Unsupported(
-                            "unboxed: try before any thrown class is known (fixpoint retry)"
-                                .to_string(),
-                        ));
-                    };
-                    let mut pad = kinds.clone();
-                    pad.push(Kind::Inst(c, Own::Owned));
-                    propagate(&mut leader_state, &mut work, *t, &pad)?;
+                    match info.thrown_class {
+                        Some(c) => {
+                            let mut pad = kinds.clone();
+                            pad.push(Kind::Inst(c, Own::Owned));
+                            propagate(&mut leader_state, &mut work, *t, &pad)?;
+                        }
+                        // Not yet known — DEFER (don't fail here): keep walking the try
+                        // body so its call sigs / method discoveries land THIS round. The
+                        // only `Throw` sites may live in methods that exact walk discovers
+                        // (the sqlbuild shape: `qualify` throws, reached only through the
+                        // builder chain inside the try) — failing at the marker would
+                        // deadlock the fixpoint. The held error at the walk's end keeps
+                        // this function declined until the class is known; the pad block
+                        // simply stays unreached this round.
+                        None => pad_deferred = true,
+                    }
                 }
                 Op::PopHandler => {}
                 // `Throw` pops the payload (an owned instance) and transfers control — a
@@ -1845,23 +1863,28 @@ pub(super) fn unboxed_analyze(
                             JitError::Codegen("unboxed analyze: Call underflow".to_string())
                         })?;
                         match k {
-                            // A string/list/map argument MOVES into the callee (its param is
-                            // a single-use-moved Owned slot there; a const word's later frees
-                            // no-op). A BORROWED handle arg would leave the caller's local
-                            // aliasing a word the callee now owns — double-free — DENY.
-                            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
+                            // A string/list argument MOVES into the callee (its param is a
+                            // single-use-moved Owned slot there; a const word's later frees
+                            // no-op). A BORROWED word CLONES at the emit boundary (W9 — PHP
+                            // value semantics: `this.field` forwarded into the next builder;
+                            // passing the raw word would leave the owner and the callee both
+                            // freeing it), so every str/list ownership is accepted here and
+                            // the callee always receives an Owned word.
+                            Kind::Str(_) => {
                                 sig.push(Kind::Str(Own::Owned));
                             }
-                            Kind::StrList(Own::Owned) => {
+                            Kind::StrList(_) => {
                                 sig.push(Kind::StrList(Own::Owned));
                             }
-                            Kind::IntList(Own::Owned) => {
+                            Kind::IntList(_) => {
                                 sig.push(Kind::IntList(Own::Owned));
                             }
+                            // No map clone repr yet — Owned moves only (Borrowed stays denied
+                            // via the handle guard below).
                             Kind::StrIntMap(Own::Owned) => {
                                 sig.push(Kind::StrIntMap(Own::Owned));
                             }
-                            Kind::DynList(Own::Owned) => {
+                            Kind::DynList(_) => {
                                 sig.push(Kind::DynList(Own::Owned));
                             }
                             k if k.is_handle()
@@ -1922,7 +1945,10 @@ pub(super) fn unboxed_analyze(
                             Kind::DynList(Own::Owned) => sig.push(Kind::DynList(Own::Owned)),
                             other => {
                                 return Err(JitError::Unsupported(format!(
-                                    "unboxed: MakeInstance field kind {other:?} (deferred)"
+                                    "unboxed: MakeInstance {} field {} kind {other:?} (deferred)",
+                                    program.class_descs[*cidx].class,
+                                    // popped top-first ⇒ this is ctor-push position nf-1-len
+                                    nf - 1 - sig.len(),
                                 )));
                             }
                         }
@@ -2047,19 +2073,22 @@ pub(super) fn unboxed_analyze(
                             JitError::Codegen("unboxed analyze: CallMethod underflow".to_string())
                         })?;
                         match k {
-                            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
+                            // W9: a BORROWED str/list arg clones at the emit boundary (PHP
+                            // value semantics) — the callee always receives an Owned word.
+                            Kind::Str(_) => {
                                 sig.push(Kind::Str(Own::Owned));
                             }
-                            Kind::StrList(Own::Owned) => {
+                            Kind::StrList(_) => {
                                 sig.push(Kind::StrList(Own::Owned));
                             }
-                            Kind::IntList(Own::Owned) => {
+                            Kind::IntList(_) => {
                                 sig.push(Kind::IntList(Own::Owned));
                             }
+                            // No map clone repr yet — Owned moves only.
                             Kind::StrIntMap(Own::Owned) => {
                                 sig.push(Kind::StrIntMap(Own::Owned));
                             }
-                            Kind::DynList(Own::Owned) => {
+                            Kind::DynList(_) => {
                                 sig.push(Kind::DynList(Own::Owned));
                             }
                             k if k.is_handle()
@@ -2153,10 +2182,15 @@ pub(super) fn unboxed_analyze(
                                 .filter(|k| k.is_owned_handle())
                                 .collect();
                             let transfer_ok = match own {
-                                // Returned owned directly: nothing else owned may remain.
-                                Own::Owned => owned.is_empty(),
+                                // Returned owned directly: any other owned cells are frame
+                                // temps the emit's Return teardown now releases (W9) — an
+                                // Owned Inst on the stack is unique (moves; GetLocal copies
+                                // are Borrowed), so no below cell can back it.
+                                Own::Owned => true,
                                 // Returned a borrow of a local: exactly ONE owned cell — an
-                                // instance of the SAME class (the borrowed lineage) — remains.
+                                // instance of the SAME class (the borrowed lineage) — remains
+                                // and TRANSFERS (the emit teardown releases nothing on this
+                                // path, so the census must stay exact).
                                 Own::Borrowed => {
                                     owned.len() == 1
                                         && matches!(owned[0], Kind::Inst(c2, Own::Owned) if c2 == c)
@@ -2216,6 +2250,14 @@ pub(super) fn unboxed_analyze(
             }
             ip = next;
         }
+    }
+    if pad_deferred {
+        // A `PushHandler` ran before any thrown class was known — every discovery above
+        // still merged (that's the point of deferring), but this function cannot compile
+        // until the fixpoint learns the class and re-walks it.
+        return Err(JitError::Unsupported(
+            "unboxed: try before any thrown class is known (fixpoint retry)".to_string(),
+        ));
     }
     Ok(UbAnalysis {
         leader_state,
@@ -2437,7 +2479,7 @@ pub(super) fn resolve_unboxed_graph(
         // An `Unsupported` mid-fixpoint may be STALE-fact-induced (a caller analyzed before its
         // ctor's `Inst` return is recorded sees `Int` and rejects `CallMethod` on it) — hold the
         // error and retry next round; it is fatal only once the facts stop changing.
-        let mut pending_err: Option<JitError> = None;
+        let mut pending_err: Option<(usize, JitError)> = None;
         let mut idx = 0;
         while idx < order.len() {
             let fi = order[idx];
@@ -2456,7 +2498,7 @@ pub(super) fn resolve_unboxed_graph(
                     // Held: the walk prefix's DISCOVERIES below still merge (they were
                     // validated before the failure point) — that's what breaks the
                     // caller-needs-callee / callee-needs-caller deadlock.
-                    pending_err = Some(e);
+                    pending_err = Some((fi, e));
                     None
                 }
                 Err(e) => return Err(e),
@@ -2557,8 +2599,13 @@ pub(super) fn resolve_unboxed_graph(
         if !changed {
             return match pending_err {
                 None => Ok((order, uses_handles, info)),
-                // Facts are stable and a function still rejects — a genuine fallback.
-                Some(e) => Err(e),
+                // Facts are stable and a function still rejects — a genuine fallback. Name
+                // the function so a whole-graph decline is diagnosable from the message.
+                Some((fi, JitError::Unsupported(msg))) => Err(JitError::Unsupported(format!(
+                    "{msg} [in `{}`]",
+                    program.functions[fi].name
+                ))),
+                Some((_, e)) => Err(e),
             };
         }
     }
