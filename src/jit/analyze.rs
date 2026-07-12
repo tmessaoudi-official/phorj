@@ -181,13 +181,11 @@ pub(super) fn join_unknown_bottom(a: &[Kind], b: &[Kind]) -> Option<Vec<Kind>> {
             _ if x == y => Some(*x),
             (Kind::Unknown, k) => Some(*k),
             (k, Kind::Unknown) => Some(*k),
-            // The conservative usage pre-pass proves handle params as `Int` placeholders on
-            // the first fixpoint pass (see `param_kinds`' override note); the checker
-            // guarantees two sites can never GENUINELY disagree on a static ctor/param type,
-            // so Int ⊔ handle refines to the handle kind. Two distinct handle families (or
-            // any other cross-family pair) remain a genuine conflict.
-            (Kind::Int, k) if k.is_handle() => Some(*k),
-            (k, Kind::Int) if k.is_handle() => Some(*k),
+            // NB: no Int ⊔ handle refinement — a UNION-typed param's call sites can
+            // GENUINELY disagree (Int here, Str there), and silently unifying would compile
+            // the callee for one family while the other family's raw word arrives at runtime
+            // (an int dereferenced as a handle). Cross-family = conflict = whole-graph
+            // decline until tagged dynamic cells (W-slice: union params) land.
             _ => None,
         })
         .collect()
@@ -406,13 +404,14 @@ pub(super) fn unboxed_proven_param_kinds(
                 stack.clear();
                 stack.push(Prov::Other);
             }
-            // Object/enum verticals: ctor field values and enum payloads are INT-gated by the
-            // analyze pass, so a bare param feeding them is proven `Int` (the synthesized-ctor
-            // shape `GetLocal(param); MakeInstance` needs exactly this mark).
+            // Enum payloads stay INT-gated; ctor FIELD values may now be handles (W-slices
+            // 3+4), so a bare param feeding `MakeInstance` is left UNPROVEN — the call-site
+            // override (`param_over`) supplies its true kind, and stamping `Int` here poisoned
+            // the fixpoint recordings (an Int-placeholder is indistinguishable from a genuine
+            // Int at the merge, which is exactly the union-param hazard).
             Op::MakeInstance(cidx) => {
                 for _ in 0..program.class_descs[*cidx].fields.len() {
-                    let p = stack.pop().unwrap_or(Prov::Other);
-                    mark(&mut proven, p, Kind::Int);
+                    stack.pop();
                 }
                 stack.push(Prov::Other);
             }
@@ -423,20 +422,19 @@ pub(super) fn unboxed_proven_param_kinds(
                 }
                 stack.push(Prov::Other);
             }
-            // Method/closure calls: the int-gated args prove bare params `Int`; the receiver /
-            // callee cell is popped unmarked (it is an instance / fn value, not an int).
+            // Method/closure calls: args may be handles now (W-slice 4) — leave bare params
+            // UNPROVEN (call-site overrides supply the kinds); the receiver / callee cell is
+            // popped unmarked (it is an instance / fn value, not an int).
             Op::CallMethod(_, argc) => {
                 for _ in 0..*argc {
-                    let p = stack.pop().unwrap_or(Prov::Other);
-                    mark(&mut proven, p, Kind::Int);
+                    stack.pop();
                 }
                 stack.pop();
                 stack.push(Prov::Other);
             }
             Op::CallValue(argc) => {
                 for _ in 0..*argc {
-                    let p = stack.pop().unwrap_or(Prov::Other);
-                    mark(&mut proven, p, Kind::Int);
+                    stack.pop();
                 }
                 stack.pop();
                 stack.push(Prov::Other);

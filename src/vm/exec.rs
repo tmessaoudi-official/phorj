@@ -515,7 +515,10 @@ impl<'a> Vm<'a> {
                                 cache_rc.borrow_mut().hits += 1;
                                 return Ok(Flow::Next);
                             }
-                            crate::jit::JitRun::Fault(_) => { /* fall through to the VM */ }
+                            crate::jit::JitRun::Fault(_) => {
+                                // Fall through to the VM (the redo renders any true fault).
+                                cache_rc.borrow_mut().redos += 1;
+                            }
                         }
                     }
                 }

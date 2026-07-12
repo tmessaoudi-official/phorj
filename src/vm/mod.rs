@@ -53,6 +53,10 @@ pub struct JitCache {
     /// asserts this `> 0` on a known-eligible program — a silent 100%-fallback would otherwise pass
     /// the differential identically and prove the JIT path was never hit.
     pub hits: u64,
+    /// Code-5 REDOS: a compiled function ran natively, faulted, and re-executed on the VM —
+    /// each redo pays BOTH costs, so a hot function redoing every call is a net perf LOSS
+    /// (the observability half of the JIT-coverage metric).
+    pub redos: u64,
 }
 
 /// How many times a **loopless** function must be called before it is JIT-compiled (loop-containing
@@ -87,6 +91,7 @@ impl JitCache {
             compiled: std::collections::HashMap::new(),
             attempts: std::collections::HashMap::new(),
             hits: 0,
+            redos: 0,
         }
     }
 }
