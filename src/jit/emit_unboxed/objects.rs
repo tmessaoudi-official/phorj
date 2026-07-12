@@ -83,18 +83,11 @@ pub(super) fn arm_get_field(
     let fk = info.field_kind(c, j).ok_or_else(|| {
         JitError::Codegen("unboxed: GetField before signature past analyze".to_string())
     })?;
-    let out = match fk {
-        Kind::Int => Kind::Int,
-        Kind::Str(_) => {
-            if rk.is_owned_handle() {
-                Kind::Str(Own::Owned)
-            } else {
-                Kind::Str(Own::Borrowed)
-            }
-        }
-        other => {
+    let out = match field_read_kind(fk, rk.is_owned_handle()) {
+        Some(out) => out,
+        None => {
             return Err(JitError::Codegen(format!(
-                "unboxed: GetField field kind {other:?} past analyze"
+                "unboxed: GetField field kind {fk:?} past analyze"
             )));
         }
     };
@@ -158,9 +151,12 @@ pub(super) fn arm_set_field(
     let ri = b.ins().band_imm(rv, UB_IDX_MASK);
     let roff = b.ins().ishl_imm(ri, 6);
     let pr = b.ins().iadd(buf, roff);
-    // A Str field overwrite releases the OLD word first (the instance owned it; the runtime
-    // bit makes a const word's release a no-op).
-    if matches!(vk, Kind::Str(_)) {
+    // A HANDLE field overwrite releases the OLD word first (the instance owned it; the
+    // runtime bit makes a const word's release a no-op; a boxed list word takes the helper).
+    if matches!(
+        vk,
+        Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) | Kind::StrIntMap(_)
+    ) {
         let old = b
             .ins()
             .load(types::I64, MemFlagsData::new(), pr, (8 * slot) as i32);
@@ -176,8 +172,9 @@ pub(super) fn arm_set_field(
     Ok(())
 }
 
-/// The LAYOUT slots of class `c`'s `Str` fields (from the fixpoint's per-class signature +
-/// the desc's name→slot mapping). Empty for pure-int classes (the common fast case).
+/// The LAYOUT slots of class `c`'s HANDLE fields — str AND list/map (from the fixpoint's
+/// per-class signature + the desc's name→slot mapping). Empty for pure-int classes (the
+/// common fast case). Every listed word gets the FULL release ladder on instance death.
 pub(super) fn str_field_layout_slots(
     program: &BytecodeProgram,
     info: &UbGraphInfo,
@@ -189,7 +186,12 @@ pub(super) fn str_field_layout_slots(
     let desc = &program.class_descs[c];
     sig.iter()
         .enumerate()
-        .filter(|(_, k)| matches!(k, Kind::Str(_)))
+        .filter(|(_, k)| {
+            matches!(
+                k,
+                Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) | Kind::StrIntMap(_)
+            )
+        })
         .filter_map(|(j, _)| desc.fields.get(j).and_then(|n| desc.layout.slot(n)))
         .collect()
 }

@@ -168,6 +168,26 @@ pub(super) fn borrowed_copy(k: Kind) -> Kind {
     }
 }
 
+/// The kind a FIELD READ pushes for a field of kind `fk` on a receiver whose compile-time
+/// ownership is `receiver_owned`: Int loads a raw word; a HANDLE field (str/list/map) BORROWS
+/// from a live receiver but TAKES the word from a dying OWNED temp (the kinded release skips
+/// that field — else the returned handle would dangle). `None` = not a supported field kind.
+pub(super) fn field_read_kind(fk: Kind, receiver_owned: bool) -> Option<Kind> {
+    let own = if receiver_owned {
+        Own::Owned
+    } else {
+        Own::Borrowed
+    };
+    match fk {
+        Kind::Int => Some(Kind::Int),
+        Kind::Str(_) => Some(Kind::Str(own)),
+        Kind::StrList(_) => Some(Kind::StrList(own)),
+        Kind::IntList(_) => Some(Kind::IntList(own)),
+        Kind::StrIntMap(_) => Some(Kind::StrIntMap(own)),
+        _ => None,
+    }
+}
+
 /// Element-wise kind-vector join with `Unknown` as BOTTOM (the fixpoint's first-pass
 /// placeholder): `Unknown ⊔ K = K`, identical kinds join to themselves, two KNOWN kinds
 /// disagreeing → `None` (a genuine conflict — no single static signature exists).
@@ -1757,6 +1777,11 @@ pub(super) fn unboxed_analyze(
                             Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
                                 sig.push(Kind::Str(Own::Owned))
                             }
+                            // W-slice: handle-list/map fields — the field takes the word
+                            // (ownership moves in; a Borrowed arg would alias — DENY).
+                            Kind::StrList(Own::Owned) => sig.push(Kind::StrList(Own::Owned)),
+                            Kind::IntList(Own::Owned) => sig.push(Kind::IntList(Own::Owned)),
+                            Kind::StrIntMap(Own::Owned) => sig.push(Kind::StrIntMap(Own::Owned)),
                             other => {
                                 return Err(JitError::Unsupported(format!(
                                     "unboxed: MakeInstance field kind {other:?} (deferred)"
@@ -1798,23 +1823,19 @@ pub(super) fn unboxed_analyze(
                                 "unboxed: GetField name not a ctor field (deferred)".to_string(),
                             )
                         })?;
+                    // A handle read from a BORROWED receiver borrows (the instance keeps
+                    // the word); from an OWNED receiver (a dying temp — `new C(..).f`) the
+                    // result TAKES the field's word (`field_read_kind`).
                     match info.field_kind(c, j) {
-                        Some(Kind::Int) => kinds.push(Kind::Int),
-                        // A Str read from a BORROWED receiver borrows (the instance keeps the
-                        // word). From an OWNED receiver (a dying temp - `new C(..).f`), the
-                        // result TAKES the field's word (the release of the dying instance
-                        // skips that one field) - else the returned handle would dangle.
-                        Some(Kind::Str(_)) => {
-                            kinds.push(if matches!(k, Kind::Inst(_, Own::Owned)) {
-                                Kind::Str(Own::Owned)
-                            } else {
-                                Kind::Str(Own::Borrowed)
-                            })
-                        }
-                        Some(other) => {
-                            return Err(JitError::Unsupported(format!(
-                                "unboxed: GetField field kind {other:?} (deferred)"
-                            )));
+                        Some(fk) => {
+                            match field_read_kind(fk, matches!(k, Kind::Inst(_, Own::Owned))) {
+                                Some(out) => kinds.push(out),
+                                None => {
+                                    return Err(JitError::Unsupported(format!(
+                                        "unboxed: GetField field kind {fk:?} (deferred)"
+                                    )));
+                                }
+                            }
                         }
                         None => {
                             return Err(JitError::Unsupported(
@@ -1859,6 +1880,9 @@ pub(super) fn unboxed_analyze(
                             Some(Kind::Str(_)),
                             Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow),
                         ) => {}
+                        (Some(Kind::StrList(_)), Kind::StrList(Own::Owned)) => {}
+                        (Some(Kind::IntList(_)), Kind::IntList(Own::Owned)) => {}
+                        (Some(Kind::StrIntMap(_)), Kind::StrIntMap(Own::Owned)) => {}
                         (None, _) => {
                             return Err(JitError::Unsupported(
                                 "unboxed: SetField before class signature is known (fixpoint retry)"

@@ -513,6 +513,54 @@ fn phg_run_hook_hits_the_jit_on_bool_consts_and_to_string() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_list_fields() {
+    // W-slice: HANDLE-LIST instance fields — a List<string> ctor arg MOVES into the field
+    // word; GetField borrows it (List.length over the borrow); the per-iteration reassignment
+    // releases the instance AND its list field (steady state across 2000 fresh instances).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        class Row {\n\
+          constructor(public List<string> cols, public string name, public int n) {}\n\
+          function width(): int {\n\
+            return List.length(this.cols);\n\
+          }\n\
+        }\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            Row r = new Row([\"a\", \"b\", \"c\"], \"t\", i);\n\
+            acc = acc + r.width() + List.length(r.cols) + r.n;\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "list-field jit-wired output must match the oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual list-field run must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the list-field shapes must actually hit the JIT (redos = {})",
+        cache.borrow().redos
+    );
+}
+
+#[test]
 fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // The MUTATION GUARD: iterating a local AND writing it in the same function (append
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would
