@@ -1076,6 +1076,86 @@ pub(super) fn accumulator_site(
     }
 }
 
+/// CHAIN-ACCUMULATOR site (`s = s + A + B + …`) — the multi-append generalization of
+/// [`accumulator_site`] for `Concat(2)` left-spines. Returns `Some((slot, is_last))` when
+/// `ip` is ANY concat in a spine that (a) roots at the untouched borrow `GetLocal(s)`,
+/// (b) terminates in a same-block `SetLocal(s)`, (c) contains no other read/write of `s`
+/// and no jump target, and (d) every op landing back at the cell's stack height is another
+/// binary concat (a pop-then-repush by anything else REPLACES the cell — the exact hole the
+/// tightened `accumulator_site` rejects). Every chain position derives root/terminator from
+/// the same span, so all positions agree — a partial fusion (one concat in-place, another
+/// boxed, the SetLocal old-release half-elided) is structurally impossible. `is_last` is
+/// true for the concat directly before the `SetLocal` (that one stores + fuses the store).
+pub(super) fn accumulator_chain(
+    code: &[Op],
+    depth_at: &[Option<usize>],
+    is_leader: &[bool],
+    ip: usize,
+) -> Option<(usize, bool)> {
+    if !matches!(code.get(ip), Some(Op::Concat(2))) {
+        return None;
+    }
+    let d = depth_at.get(ip).copied().flatten()?;
+    if d < 2 {
+        return None;
+    }
+    let lhs_index = d - 2;
+    // Backward: find the root pusher of the cell, walking THROUGH chain links.
+    let mut j = ip;
+    let root = loop {
+        if j == 0 {
+            return None;
+        }
+        j -= 1;
+        let dj = depth_at.get(j).copied().flatten()?;
+        let dj1 = depth_at.get(j + 1).copied().flatten()?;
+        if dj == lhs_index && dj1 == lhs_index + 1 {
+            break j; // the plain push that created the cell
+        }
+        if dj1 == lhs_index + 1 {
+            // Landed back at the cell's height: only a binary-concat chain link may.
+            if !matches!(code[j], Op::Concat(2)) || dj != lhs_index + 2 {
+                return None;
+            }
+        } else if dj <= lhs_index {
+            return None;
+        }
+        if is_leader[j] {
+            return None;
+        }
+    };
+    let Op::GetLocal(s) = code[root] else {
+        return None;
+    };
+    // Forward from the borrow: validate the WHOLE span (identical for every position).
+    let mut k = root + 1;
+    let term = loop {
+        if k >= code.len() || is_leader[k] {
+            return None;
+        }
+        let dk = depth_at.get(k).copied().flatten()?;
+        match &code[k] {
+            Op::SetLocal(x) if *x == s => {
+                if dk != lhs_index + 1 {
+                    return None; // must store the chain value itself
+                }
+                break k;
+            }
+            Op::SetLocal(x) | Op::GetLocal(x) if *x == s => return None, // interference
+            _ => {}
+        }
+        let dk1 = depth_at.get(k + 1).copied().flatten()?;
+        if dk <= lhs_index || dk1 <= lhs_index {
+            return None; // the cell died before the store
+        }
+        if dk1 == lhs_index + 1 && !(matches!(code[k], Op::Concat(2)) && dk == lhs_index + 2) {
+            return None; // a non-chain op landed at the cell's height (cell replaced)
+        }
+        k += 1;
+    };
+    (root < ip && ip < term).then_some((s, ip + 1 == term))
+}
+
 pub(super) fn unboxed_analyze(
     program: &BytecodeProgram,
     func_idx: usize,

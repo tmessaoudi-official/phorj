@@ -963,6 +963,61 @@ fn phg_run_hook_hits_the_jit_on_the_string_accumulator() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_chain_accumulator() {
+    // Chain-vertical proof (`s = s + A + B + …`, the toQuery shape): EVERY concat in the
+    // left-spine appends in place on the same ACC record — the first link consumes the
+    // slot's borrow, mid links carry the record, the last link fuses the store. An Int
+    // operand mid-chain renders through the interpolation decimal renderer (as_display
+    // bytes). The map probe pins the exact accumulated bytes early (byte-identity through
+    // the chain), and the length-fold covers every statement thereafter. Before the chain
+    // arm this shape leaked one builder record per statement (the accumulator_site
+    // positional hole) and re-boxed the WHOLE accumulated string per statement.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"alpha\", \"beta\", \"gamma\", \"delta\"];\n\
+          Map<string, int> check = [\"alpha-1|beta-2|\" => 3, \"alpha-1|beta-2|gamma-3|\" => 5];\n\
+          mutable string s = \"\";\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            s = s + parts[i % 4] + \"-{i % 4 + 1}\" + \"|\";\n\
+            if (i == 1) { acc = acc + check[s]; }\n\
+            if (i == 2) { acc = acc + check[s]; }\n\
+            if (String.length(s) > 512) {\n\
+              acc = acc + String.length(s);\n\
+              s = \"\";\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc + String.length(s);\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "chain-accumulator jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual chain-accumulator jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the chain accumulator must actually hit the JIT (redos = {})",
+        cache.borrow().redos
+    );
+}
+
+#[test]
 fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
     // A >22-byte key defeats flattening: the seal falls back to a boxed `Value::Map` and every
     // lookup routes through the helper into the canonical `map_index` kernel. Byte-identity must

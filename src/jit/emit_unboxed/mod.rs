@@ -923,28 +923,53 @@ pub(super) fn build_body_unboxed(
             }
             Op::Concat(cn) if *cn >= 2 => {
                 let h = ub_ref(ub_refs.as_ref(), "Concat")?;
-                // FUSED-ACCUMULATOR peephole (s = s + x): the lhs is the untouched borrow of
-                // the very slot the following SetLocal rewrites - treat it as CONSUMED (the old
-                // value dies here), emit ONE pair merge whose helper path appends IN PLACE on a
-                // uniquely-owned heap lhs (amortized O(1) - the classic accumulator), store the
-                // result straight into the slot, and skip the SetLocal.
+                // FUSED-ACCUMULATOR peephole, CHAIN form (`s = s + A + B + …`): every concat
+                // in a proven left-spine appends IN PLACE on the accumulator record (amortized
+                // O(1) — php's smart_str). The FIRST link consumes the slot's borrow (the old
+                // value dies there), mid links carry the record as an Owned operand, and the
+                // LAST link stores straight into the slot and skips the SetLocal. An Int rhs
+                // renders through the SAME zero-alloc decimal renderer interpolation uses
+                // (`as_display` bytes exactly) — so every kind combo analyze admits for Concat
+                // takes this arm, and a partial fusion (in-place first link, boxed later link,
+                // old-release half-elided → double free) is impossible by construction.
                 if *cn == 2 {
-                    if let Some(s) = accumulator_site(code, &depth_at, &is_leader, ip) {
-                        let dl = kinds.len();
-                        if dl >= 2
-                            && matches!(kinds[dl - 1], Kind::Str(_))
-                            && matches!(kinds[dl - 2], Kind::Str(_))
-                        {
-                            let (bv, bk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                            let (av, _ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                            // The strbuild vertical: an ACC-record in-place append (inline
-                            // cap-checked copy; helper converts/grows) — see `concat_acc`.
-                            let res = concat_acc(&mut b, &ec, h, av, bv, bk)?;
+                    if let Some((s, last)) = accumulator_chain(code, &depth_at, &is_leader, ip) {
+                        let (bv0, bk0) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                        let (bv, bk) = if bk0 == Kind::Int {
+                            let call = b.ins().call(h.int_to_str, &[ec.ctx, bv0]);
+                            let rv = b.inst_results(call)[0];
+                            let bad = b.ins().icmp_imm(IntCC::SignedLessThan, rv, 0);
+                            ec.fault_if(&mut b, bad, 5);
+                            (rv, Kind::Str(Own::Owned))
+                        } else {
+                            (bv0, bk0)
+                        };
+                        let (av, ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                        if !matches!(ak, Kind::Str(_)) {
+                            // Analyze admits only Str|Int Concat operands and the chain lhs
+                            // is a str slot's borrow / the previous link's record — anything
+                            // else is analyze↔emit drift: fail CLOSED (silent partial fusion
+                            // would double-free the consumed slot value).
+                            return Err(JitError::Codegen(format!(
+                                "unboxed chain-accumulator lhs kind {ak:?}"
+                            )));
+                        }
+                        let res = concat_acc(&mut b, &ec, h, av, bv, bk)?;
+                        if last {
                             b.def_var(vars[s], res);
                             kinds[s] = Kind::Str(Own::Owned);
                             skip_ip = Some(ip + 1);
-                            continue;
+                        } else {
+                            ub_push(
+                                &mut b,
+                                &vars,
+                                &fvars,
+                                &mut kinds,
+                                res,
+                                Kind::Str(Own::Owned),
+                            )?;
                         }
+                        continue;
                     }
                 }
                 arm_concat(&mut b, &ec, h, &vars, &fvars, &mut kinds, *cn)?;
