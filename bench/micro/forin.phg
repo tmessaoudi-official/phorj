@@ -1,0 +1,30 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+
+// Microbench: ITERATION — `for (x in xs)` over a small list, repeated (the scan shape every
+// real program spends time in: summing, searching, rendering rows). The accumulator feeds
+// back into the checksum so the nested scan cannot fold to a closed form.
+function bench(int iters): int {
+    List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        for (int x in xs) {
+            acc = acc + x;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 1000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("forin\t{d + guard}\t{acc}");
+}

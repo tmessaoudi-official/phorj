@@ -1,0 +1,36 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.List;
+
+// Microbench: collection WRITE — the grow-a-list pattern (`List.append` in a loop: result
+// building, batching, buffering). Grows to 256 elements then resets so total memory stays
+// bounded while every append cost is real (seeded with one element: empty collection
+// literals take no contextual type — see KNOWN_ISSUES) (php's `$xs[] = $v` amortized-O(1) push is the
+// 20-year-tuned baseline). The checksum reads both ends + the length so the build cannot be
+// dead-code-eliminated.
+function bench(int iters): int {
+    mutable List<int> xs = [0];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        xs = List.append(xs, i);
+        if (List.length(xs) >= 256) {
+            acc = acc + List.length(xs) + xs[0] + xs[255];
+            xs = [0];
+        }
+        i = i + 1;
+    }
+    return acc + List.length(xs);
+}
+
+function main(): void {
+    int iters = 1000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("listappend\t{d + guard}\t{acc}");
+}

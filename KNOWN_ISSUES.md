@@ -5,6 +5,17 @@ Phorj is pre-1.0. This page lists current limitations and known rough edges. Mos
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
 parse error, non-zero exit) — never a crash.
 
+## PENDING design forks (2026-07-12 overnight run — recorded instead of asked, reopen at end)
+
+- **DEC-PENDING: empty collection literals take no contextual type.** `List<int> xs = [];` and
+  `Map<string, int> m = [];` both fail with `cannot infer element type of empty list literal`
+  even though the annotation names the type, and there are no `List.empty()` / `Map.empty()`
+  constructors — today the only way to a fresh empty collection is a seeded literal (see
+  `bench/micro/listappend.phg`). Options for adjudication: (a) contextual typing for collection
+  literals in annotated declarations/assignments (the annotation is right there — RECOMMENDED);
+  (b) `List.empty<T>()` / `Map.empty<K,V>()` stdlib constructors; (c) both.
+  Failing program: `function f(): int { List<int> xs = []; return List.length(xs); }`.
+
 ## Language features not yet implemented
 
 These are designed but not in the current surface; using them produces a clean compile-time error,

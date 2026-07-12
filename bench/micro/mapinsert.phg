@@ -1,0 +1,35 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Map;
+
+// Microbench: map WRITE — `m[k] = v` over cycling string keys (session/context building,
+// counters, caches). The first 8 iterations of each cycle INSERT, the rest OVERWRITE (both
+// paths real); a periodic read + reset keeps memory bounded and defeats dead-code elimination.
+function bench(int iters): int {
+    List<string> keys = ["alpha", "beta", "gamma", "delta", "epsi", "zeta", "eta", "theta"];
+    mutable Map<string, int> m = ["alpha" => 0];
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        string k = keys[i % 8];
+        m[k] = i;
+        if (i % 64 == 63) {
+            acc = acc + m["alpha"] + m["theta"];
+            m = ["alpha" => 0];
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 1000000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("mapinsert\t{d + guard}\t{acc}");
+}

@@ -380,6 +380,21 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   iteration — every new micro must reach the bar) → representation slice (V3b + Rc
   cycle-leak, fork recorded in KNOWN_ISSUES per the 2026-07-12 overnight directive) →
   perf register + G-8 recompute → Ω-0.
+  **FUNDAMENTALS SWEEP — DISCOVERY SHIPPED (session 4): 4 new micros (21 total), 4 new
+  VM-bound catastrophic losses found** (identity ✓ on all): **listappend 0.01×** (700ns/append
+  — immutable `List.append` clones the whole list per call; php `$xs[]=` is 4ns) · **forin
+  0.01×** (172ns/element — the desugar is IterElems + indexed while, ~13 VM-dispatch ops/elem;
+  php foreach = 1.4ns) · **mapinsert 0.03×** (`m[k]=v` insert+overwrite, 232ns/iter vs php 6ns)
+  · **hofpipe 0.19×** (List.map + capturing lambda + List.count). None of these shapes are in
+  the unboxed subset. **PLANNED VERTICALS (in tractability order):** (1) forin — `IterElems`
+  on a flat/Int/Str list = borrowed identity (sealed lists are immutable in the subset) +
+  `Len` = inline count from handle bits; the indexed inner loop then rides the EXISTING inline
+  Index; (2) listappend — ACC-style mutable list BUILDER in the arena (the strbuild recipe:
+  unique-ownership accumulator, in-place push, helper growth); (3) mapinsert — mutable map
+  builder (same recipe + bucket maintenance); (4) hofpipe — capturing closures (env as an
+  instance-like arena record) + inlining the map/count native loops. Also discovered →
+  KNOWN_ISSUES DEC-PENDING: empty collection literals take no contextual type and no
+  `List.empty()`/`Map.empty()` exist (micros use seeded literals).
   **PERF-100% SWEEP — RULED (2026-07-11, session 3 close, developer via ask-human, THE GO given):**
   scope = flip trycatch/strbuild/webish/mapget/interp (+floatmul parity watch) THEN a FULL
   fundamentals micro sweep (collection writes, capturing closures/HOF, string ops, iteration —
