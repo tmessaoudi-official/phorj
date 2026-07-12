@@ -139,7 +139,13 @@ fn ub_ref<'a>(ub: Option<&'a UbHelperRefs>, what: &str) -> Result<&'a UbHelperRe
 
 /// The W9 call-boundary CLONE of a compile-time-BORROWED str/list argument (PHP value
 /// semantics: `this.field` forwarded into the next builder — passing the raw word would
-/// leave the owner and the callee both freeing it). Returns the fresh Owned word.
+/// leave the owner and the callee both freeing it). Returns the word the callee receives.
+///
+/// FAST PATH: a runtime-FLAT word passes through UN-cloned — flat snapshots are immutable,
+/// bump-pinned for the whole run (never recycled mid-run, so no lifetime hazard wherever
+/// the callee stores it), and every release of one is a no-op — "ownership" over a flat
+/// word is vacuous. This is what keeps the immutable-threaded builder chain from paying a
+/// boxed clone per UNCHANGED field per step (PHP pays a refcount bump there).
 fn emit_arg_clone(
     b: &mut FunctionBuilder,
     ec: &Ec,
@@ -148,12 +154,37 @@ fn emit_arg_clone(
     repr: i64,
 ) -> Result<ClValue, JitError> {
     let h = ub_ref(ub, "call-arg clone")?;
+    let merge = b.create_block();
+    b.append_block_param(merge, types::I64);
+    let clone_blk = b.create_block();
+    // Second pass-through: a runtime-BORROWED slot word (`x == SLOT` without OWNED) — the
+    // only producers are const-interned words and bump-pinned flat elements, both pinned
+    // for the whole run and release-no-op, so "ownership" over them is vacuous (exactly
+    // the `emit_release` no-op leg). An OWNED slot / untagged heap word falls through to
+    // the real clone. This is what spares the per-step `this.tableName`/`this.tableAlias`
+    // const-string clones in a builder chain.
+    let chk_slot = b.create_block();
+    if repr != 2 {
+        // FLAT is a list-word encoding only.
+        let flat_bit = b.ins().band_imm(v, UB_TAG_FLAT);
+        b.ins().brif(flat_bit, merge, &[v.into()], chk_slot, &[]);
+    } else {
+        b.ins().jump(chk_slot, &[]);
+    }
+    b.switch_to_block(chk_slot);
+    let x = b.ins().band_imm(v, UB_TAG_SLOT | UB_TAG_OWNED);
+    let borrowed_slot = b.ins().icmp_imm(IntCC::Equal, x, UB_TAG_SLOT);
+    b.ins()
+        .brif(borrowed_slot, merge, &[v.into()], clone_blk, &[]);
+    b.switch_to_block(clone_blk);
     let reprv = b.ins().iconst(types::I64, repr);
     let call = b.ins().call(h.clone_value, &[ec.ctx, v, reprv]);
     let cv = b.inst_results(call)[0];
     let bad = b.ins().icmp_imm(IntCC::SignedLessThan, cv, 0);
     ec.fault_if(b, bad, 5);
-    Ok(cv)
+    b.ins().jump(merge, &[cv.into()]);
+    b.switch_to_block(merge);
+    Ok(b.block_params(merge)[0])
 }
 
 /// Pop `argc` args (top is the LAST arg) and build the callee's ABI word vector per its
