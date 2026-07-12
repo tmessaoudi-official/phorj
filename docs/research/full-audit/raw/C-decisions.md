@@ -344,3 +344,58 @@ residual, not located rows. The 5 mixed-mode rows (DEC-053/056/060/087/129 — A
 AUTONOMOUS details) are the only ambiguity, and ALL FIVE were re-adjudicated in the 2026-07-02
 rulings (MASTER-PLAN §12). 10 conflicts,
 33 supersessions traced.*
+
+
+---
+
+## 2026-07-12 adjudication batch (Fable run, session 6 — developer via AskUserQuestion, all Mode: ASKED)
+
+Per the developer's standing instruction this batch records EVERY ruling **with the alternatives
+considered and why they lost**. All six pending forks + three run-level meta-rulings cleared in
+one sitting (failing programs + after-state previews were embedded in each dialog).
+
+- **DEC-201 — empty collection literals: BOTH contextual typing AND explicit constructors.**
+  `List<int> xs = [];` adopts the annotated type in declarations/assignments/call-args/returns,
+  AND `List.empty<T>()` / `Map.empty<K,V>()` ship for expression positions with no context.
+  *Alternatives:* contextual-only (loses the no-context expression case), constructors-only
+  (verbose; the annotation is right there). Both was chosen for completeness.
+- **DEC-202 (closes DEC-200) — PHP-reserved top-level type names: REJECT with `E-RESERVED-NAME`.**
+  Extend `is_php_reserved_symbol_name` with the full keyword set (derived empirically vs php-8.5.8)
+  + the PHP builtin-class core (`Exception`/`Error`/`Closure`/…). *Alternatives:* invisible mangle
+  (like enum variants — rejected: silently renames a USER-chosen top-level symbol, surprising on
+  PHP interop/debugging); hybrid reject-keywords/mangle-builtins (rejected: two rules where one
+  suffices). Legibility + no-surprises won.
+- **DEC-203 — scope guard: `using (h = expr) { … }` block** (C#-style; closes at block exit on
+  every path incl. throw; the type implements a `Closable` contract; transpiles to PHP
+  try/finally). *Alternatives:* Go-style `defer` (rejected: LIFO order + capture timing = new
+  footgun surface with no PHP analog); both (rejected: two mechanisms, more spec surface — can be
+  revisited if `using` proves insufficient).
+- **DEC-204 — graceful shutdown: typed `Runtime.onShutdown(fn)`** (single registration point,
+  SIGINT/SIGTERM before exit; vetted `ctrlc` already in-tree; lands with Ω-2 `Core.Process`;
+  pairs with DEC-203 for resource cleanup). *Alternatives:* serve-only hook (rejected: CLI worker
+  loops still die cold); stay excluded (rejected: kills the Ω-1 web-spine durability story).
+- **DEC-205 — Rc cycle leak: BOTH, PHASED — PHP-style threshold cycle collector first (safety:
+  `serve` can never leak; semantically invisible, exact PHP engine parity), `Weak<T>` second**
+  (zero-overhead idiom for graph back-edges; transpiles 1:1 to PHP `WeakReference` (7.4+), so
+  byte-identity holds). Ruled after a perf re-ask: collector ≈ zero steady-state cost
+  (root-buffering on decrement + threshold passes), Weak = fastest but not a safety net alone.
+  *Alternatives:* collector-only (graph-heavy code pays avoidable passes); Weak-only (a forgotten
+  weak edge still leaks in serve — burden on the user).
+- **DEC-206 — bare `DateTime`: GATE IT** (`E-INJECTED-TYPE-BARE`, same hint as its Core.Time
+  siblings — closes the UA-L2 nothing-in-the-wind inconsistency; the fix for affected code is one
+  member-import line). *Alternatives:* un-gate the siblings (repeals nothing-in-the-wind for the
+  module); leave-and-document (permanent wart against the #1 recurring design rule).
+
+**Run-level meta-rulings (same sitting):**
+- **META-1 — sqlbuild bar: go ALL THE WAY (L2a str-ACL builder → L2b field-transfer → L3
+  refcounted JIT handles) until ≥ 1.0× vs php, BEFORE Ω-wave work**; at run end ALL known issues
+  and design decisions are reopened for a full re-discussion; every decision records its
+  alternatives (this format). *Alternatives:* flag after L2a/L2b (deferred perf debt); flag now
+  (fastest breadth) — both rejected for the perf mandate.
+- **META-2 — L3 representation constraint: IN-ISLAND, ZERO-DEP** — refcounts live as arena
+  bookkeeping inside `src/jit/handles.rs` (the existing audited unsafe island; a parallel
+  per-slot count array). Ruled after a dep re-ask: no crate does arena-word refcounting
+  (thin-Rc crates target the VM-side Value layer = parked V3b, not L3). *Alternatives:*
+  pre-approve `triomphe` for V3b too (broader than needed); decide-per-design (more asks).
+- **META-3 — wave order confirmed as written:** Ω-1 Core.Db → HTTP → sessions, then Ω-2…Ω-9
+  in sequence. *Alternatives:* language-surface-first, web-spine-depth-first — both declined.

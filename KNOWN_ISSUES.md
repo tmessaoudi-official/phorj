@@ -5,7 +5,15 @@ Phorj is pre-1.0. This page lists current limitations and known rough edges. Mos
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
 parse error, non-zero exit) — never a crash.
 
-## PENDING design forks (2026-07-12 overnight run — recorded instead of asked, reopen at end)
+## Design forks — ADJUDICATED 2026-07-12 (developer via AskUserQuestion; full rulings + alternatives in `docs/research/full-audit/raw/C-decisions.md` §"2026-07-12 adjudication batch")
+
+> Every fork below is now RULED and queued for its wave slot; the original analyses are kept
+> for context. **DEC-201** empty literals → BOTH contextual typing + `List.empty<T>()`/`Map.empty<K,V>()`.
+> **DEC-202** reserved top-level names → reject `E-RESERVED-NAME` (full keyword set + PHP builtin classes).
+> **DEC-203** scope guard → `using` block + `Closable` contract (PHP try/finally).
+> **DEC-204** shutdown → `Runtime.onShutdown(fn)` (lands with Ω-2 Core.Process).
+> **DEC-205** cycles → BOTH, PHASED: PHP-style threshold collector first, `Weak<T>` (→ PHP WeakReference) second.
+> **DEC-206** bare `DateTime` → gated (`E-INJECTED-TYPE-BARE`) like its siblings.
 
 - **DEC-PENDING: empty collection literals take no contextual type.** `List<int> xs = [];` and
   `Map<string, int> m = [];` both fail with `cannot infer element type of empty list literal`
