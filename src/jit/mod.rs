@@ -118,6 +118,7 @@ mod boxed;
 mod compile;
 mod emit_unboxed;
 mod handles;
+mod range_acc;
 
 pub use self::compile::Compiled;
 
@@ -125,6 +126,7 @@ use self::analyze::*;
 use self::boxed::*;
 use self::emit_unboxed::*;
 use self::handles::*;
+use self::range_acc::*;
 
 /// Build a Cranelift signature with the given parameter/return machine types.
 fn make_sig(module: &JITModule, params: &[Type], ret: Option<Type>) -> Signature {

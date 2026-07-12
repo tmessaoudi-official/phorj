@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Task 9: accumulator overflow-check elision — **ALL 17 micros now ≥ 1.0× vs php+JIT**
+
+The checked-add price (the measured single root cause of the last three losses) is gone where
+it can be PROVEN gone: a new fail-closed interval pass (`src/jit/range_acc.rs`) analyzes a
+counted loop in i128 and elides the `*_overflow` + sticky accumulation for every
+`AddI`/`SubI`/`MulI` whose result provably fits i64 — bounded ACCUMULATOR chains
+(`acc = acc + m[k] + xs[idx]` — growth tracked through the chain to the `SetLocal`),
+counter-AFFINE terms (`i * 3 - 1`), and expression-dividend `RemI`-by-pow2 (provably
+non-negative → the single `band`). Trip count and counter ride a bound `G`: a const loop bound
+is exact; a never-written PARAM bound gets an ENTRY GUARD (`param > G` → code-5 decline, the
+VM runs that call unspecialized — `G` from a `2^31 → 2^24 → 2^20` ladder, largest that
+verifies). Accumulator envelopes are `acc0 + G·envelope` (envelope includes 0); an
+env-stability second walk rejects hidden growing slots; every out-of-scope shape (computed
+bounds, body branches, unknown ops) keeps full checking. When everything speculated is proven,
+the sticky variable itself disappears — the intadd endgame. Fault behavior is unchanged by
+construction (elision only where overflow is impossible; declines redo on the VM, which
+faults canonically — covered by a genuine-overflow parity test).
+
+**Measured (exit-bar protocol, 3 × best-of-7, pinned, interleaved, fresh docker
+php:8.5-cli+JIT):** intadd 0.68 → **1.48× WIN** (checked-default now BEATS php's unchecked
+adds) · mapget 0.88 → **1.01× WIN** · listindex 0.97 → **1.47× WIN**. With floatmul (1.00)
+and floatloop (1.01) medians holding, **every one of the 17 micros meets the
+beat-or-match bar — the PERF-100% flip phase is complete.** Five new tests cover the proofs,
+the guard-decline path, the rejection shapes, and overflow-fault parity.
+
 ### Changed — Ω-8 vertical: packed flat-map buckets — mapget 0.82× → 0.88×, residue measured
 
 The flat-map bucket table now stores PACKED 16-byte `{canon: u64, value: i64}` entries

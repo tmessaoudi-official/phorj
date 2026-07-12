@@ -2,55 +2,55 @@
   "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT (docker php:8.5-cli). The gate BLOCKS on identity breaks and WIN->LOSS flips (ratio crossing 1.0 downward) — NOT on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after the JIT lands a WIN so the flip check protects it. ratio<1 = the VM still LOSES to php (the JIT is the lever).",
   "features": {
     "closurecall": {
-      "ratio": 2.036,
+      "ratio": 2.048,
       "identical": true
     },
     "enum": {
-      "ratio": 1.631,
+      "ratio": 1.628,
       "identical": true
     },
     "fibrec": {
-      "ratio": 1.770,
+      "ratio": 1.801,
       "identical": true
     },
     "floatarith": {
-      "ratio": 4.396,
+      "ratio": 4.015,
       "identical": true
     },
     "floatloop": {
-      "ratio": 1.017,
+      "ratio": 1.035,
       "identical": true
     },
     "floatmul": {
-      "ratio": 1.01,
+      "ratio": 1.00,
       "identical": true
     },
     "intadd": {
-      "ratio": 0.684,
+      "ratio": 1.437,
       "identical": true
     },
     "interp": {
-      "ratio": 2.535,
+      "ratio": 2.459,
       "identical": true
     },
     "listindex": {
-      "ratio": 0.97,
+      "ratio": 1.449,
       "identical": true
     },
     "mapget": {
-      "ratio": 0.88,
+      "ratio": 1.01,
       "identical": true
     },
     "match": {
-      "ratio": 7.166,
+      "ratio": 6.981,
       "identical": true
     },
     "methodcall": {
-      "ratio": 2.793,
+      "ratio": 2.754,
       "identical": true
     },
     "objalloc": {
-      "ratio": 9.228,
+      "ratio": 8.790,
       "identical": true
     },
     "strbuild": {
@@ -58,15 +58,15 @@
       "identical": true
     },
     "stringconcat": {
-      "ratio": 2.055,
+      "ratio": 1.906,
       "identical": true
     },
     "trycatch": {
-      "ratio": 32.365,
+      "ratio": 32.586,
       "identical": true
     },
     "webish": {
-      "ratio": 2.217,
+      "ratio": 2.221,
       "identical": true
     }
   }

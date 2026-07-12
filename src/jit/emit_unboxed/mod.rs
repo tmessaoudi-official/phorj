@@ -349,7 +349,22 @@ pub(super) fn build_body_unboxed(
     //   `needs_fault_exit` — is there ANY path to the shared fault-exit (a sticky redo, OR a `DivI`/
     //     `RemI`/`Call` per-op fault branch)? If NO, don't create the block at all (an unreferenced,
     //     never-jumped-to block would be a dangling exit — avoid it).
-    let proven_ops = range_proven_ops(func);
+    let mut proven_ops = range_proven_ops(func);
+    // Task 9: the accumulator interval pass may prove MORE ops (bounded accumulator adds,
+    // counter-affine SubI/MulI, expression-dividend RemI-by-pow2) and may require ENTRY
+    // GUARDS (`param > G` ⇒ code-5 decline to the VM — the specialization precondition).
+    let entry_guards: Vec<(usize, i64)> = match accumulator_elision(func, &proven_ops) {
+        Some(acc) => {
+            for (ip, p) in acc.proven.iter().enumerate() {
+                if *p {
+                    proven_ops[ip] = true;
+                }
+            }
+            acc.guards
+        }
+        None => Vec::new(),
+    };
+    let proven_ops = proven_ops; // freeze
     let speculated = |op: &Op| matches!(op, Op::AddI | Op::SubI | Op::MulI | Op::Neg);
     // `#[UncheckedOverflow]` (Core.Runtime.Integer.UncheckedOverflow): the whole function's int arith WRAPS — every `AddI`/`SubI`/`MulI`/
     // `Neg` becomes a plain wrapping op (no overflow check, no sticky), exactly like a range-proven
@@ -368,6 +383,7 @@ pub(super) fn build_body_unboxed(
     // shared fault-exit (code 5, redo on VM). `Fault` (the match-exhaustiveness backstop) jumps to
     // it unconditionally.
     let needs_fault_exit = needs_sticky
+        || !entry_guards.is_empty()
         || code.iter().enumerate().any(|(ip, op)| {
             reach[ip]
                 && matches!(
@@ -511,6 +527,17 @@ pub(super) fn build_body_unboxed(
         None
     };
 
+    // Task 9 entry guards: `param > G` fails the elision precondition — decline the whole
+    // call with code 5 (redo on the VM: correct, just unspecialized for out-of-range bounds).
+    for &(slot, gmax) in &entry_guards {
+        let fx = fault_exit.expect("entry guards imply needs_fault_exit");
+        let v = b.use_var(vars[slot]);
+        let over = b.ins().icmp_imm(IntCC::SignedGreaterThan, v, gmax);
+        let cv = b.ins().iconst(types::I64, 5);
+        let cont = b.create_block();
+        b.ins().brif(over, fx, &[cv.into()], cont, &[]);
+        b.switch_to_block(cont);
+    }
     b.ins().jump(start, &[]);
     b.switch_to_block(start);
     let mut current: Option<Block> = Some(start);
@@ -694,7 +721,9 @@ pub(super) fn build_body_unboxed(
             Op::AddI | Op::SubI | Op::MulI => {
                 // Plain (wrapping-free) when `#[UncheckedOverflow]` or a range-proven induction
                 // `AddI` — computed here (dispatch owns `proven_ops`), lowered in `scalar.rs`.
-                let plain = func.unchecked || (matches!(op, Op::AddI) && proven_ops[ip]);
+                // Task 9: the accumulator interval pass proves SubI/MulI too (counter-affine
+                // terms, bounded-accumulator sites) — `proven_ops[ip]` is op-agnostic here.
+                let plain = func.unchecked || proven_ops[ip];
                 arm_int_arith(&mut b, &ec, &vars, &fvars, &mut kinds, op, plain)?;
             }
             Op::DivI | Op::RemI => {
