@@ -1038,6 +1038,82 @@ pub(super) fn movable_dying_elem(func: &crate::chunk::Function, ip: usize) -> Op
     (gets == 1 && sets == 0).then_some(*v)
 }
 
+/// L2b field-TAKE mask for an OWNED-`this` method body: `mask[j]` = field j's word may MOVE
+/// out at its single `this.field` read (an Owned push — the call boundary then MOVES it, no
+/// clone) with a poison word written into the husk slot: the teardown's release ladder no-ops
+/// on it (a non-OWNED slot word), and any drift read faults the helpers to a code-5 redo
+/// (never wrong bytes). Whole-method conditions (conservative, both walks share this exact
+/// function — mirror-safe by construction):
+///  - NO backward branch (a loop could re-run a take pair — the second pass would read the
+///    poison), and NO `SetField` (a write through `this` could recreate/observe the void);
+///  - every `GetLocal(0)` is either immediately followed by a same-block `GetField` (the
+///    counted read pairs) or is a STRAY (the `this.next(…)` receiver shape) — strays are
+///    allowed only when every method NAME in the body that resolves on OUR class has a
+///    `GetLocal(0)`-free body (a this-receiver call can only target our class; a callee
+///    that never touches its slot 0 cannot observe the voided fields), and never when a
+///    stray is followed by `SetLocal` (an alias could re-read the husk). `this` cannot
+///    escape any other way inside the unboxed subset: Inst call args are rejected,
+///    borrowed-Inst returns from Inst-param functions are rejected, and MakeInstance
+///    accepts no Inst ctor args.
+pub(super) fn owned_this_taken_fields(
+    program: &BytecodeProgram,
+    func_idx: usize,
+    class: usize,
+) -> Vec<bool> {
+    let desc = &program.class_descs[class];
+    let nfields = desc.fields.len();
+    let none = vec![false; nfields];
+    let code = &program.functions[func_idx].chunk.code;
+    if code
+        .iter()
+        .enumerate()
+        .any(|(ip, op)| matches!(op, Op::Jump(t) | Op::JumpIfFalse(t) if *t <= ip))
+    {
+        return none;
+    }
+    let reach = reachable(code);
+    let is_leader = leaders(code, &reach);
+    let mut counts = vec![0usize; nfields];
+    let mut stray_this_use = false;
+    let mut this_callees_clean = true;
+    for (ip, op) in code.iter().enumerate() {
+        if !reach[ip] {
+            continue;
+        }
+        match op {
+            Op::SetField(_) => return none,
+            Op::GetLocal(0) => match code.get(ip + 1) {
+                Some(Op::GetField(nidx)) if !is_leader.get(ip + 1).copied().unwrap_or(true) => {
+                    match desc.fields.iter().position(|f| f == &program.names[*nidx]) {
+                        Some(j) => counts[j] += 1,
+                        None => stray_this_use = true,
+                    }
+                }
+                Some(Op::SetLocal(_)) => return none, // an alias could re-read the husk
+                _ => stray_this_use = true,
+            },
+            Op::CallMethod(nidx, _) => {
+                let key = (desc.class.to_string(), program.names[*nidx].clone());
+                if let Some(&t) = program.methods.get(&key) {
+                    if program.functions[t]
+                        .chunk
+                        .code
+                        .iter()
+                        .any(|o| matches!(o, Op::GetLocal(0)))
+                    {
+                        this_callees_clean = false;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if stray_this_use && !this_callees_clean {
+        return none;
+    }
+    counts.into_iter().map(|c| c == 1).collect()
+}
+
 pub(super) fn accumulator_site(
     code: &[Op],
     depth_at: &[Option<usize>],
@@ -1189,6 +1265,12 @@ pub(super) fn unboxed_analyze(
     let n = code.len();
     let reach = reachable(code);
     let is_leader = leaders(code, &reach);
+    // L2b: the field-TAKE mask for an owned-`this` method (None otherwise) — shared with
+    // the emit dispatch (same function, same inputs: mirror-safe by construction).
+    let this_taken: Option<Vec<bool>> = match param_kinds.first() {
+        Some(Kind::Inst(c, Own::Owned)) => Some(owned_this_taken_fields(program, func_idx, *c)),
+        _ => None,
+    };
 
     let mut leader_state: LeaderStates = vec![None; n];
     let mut max_depth = param_kinds.len();
@@ -2178,10 +2260,22 @@ pub(super) fn unboxed_analyze(
                         })?;
                     // A handle read from a BORROWED receiver borrows (the instance keeps
                     // the word); from an OWNED receiver (a dying temp — `new C(..).f`) the
-                    // result TAKES the field's word (`field_read_kind`).
+                    // result TAKES the field's word (`field_read_kind`). L2b: a proven
+                    // single-read `this.field` in an owned-`this` method ALSO takes (the
+                    // emit poisons the husk slot; the teardown release no-ops on it).
+                    let take_from_husk = ip > 0
+                        && matches!(code[ip - 1], Op::GetLocal(0))
+                        && !is_leader[ip]
+                        && matches!(k, Kind::Inst(_, Own::Borrowed))
+                        && this_taken
+                            .as_ref()
+                            .is_some_and(|m| m.get(j).copied().unwrap_or(false));
                     match info.field_kind(c, j) {
                         Some(fk) => {
-                            match field_read_kind(fk, matches!(k, Kind::Inst(_, Own::Owned))) {
+                            match field_read_kind(
+                                fk,
+                                matches!(k, Kind::Inst(_, Own::Owned)) || take_from_husk,
+                            ) {
                                 Some(out) => kinds.push(out),
                                 None => {
                                     return Err(JitError::Unsupported(format!(

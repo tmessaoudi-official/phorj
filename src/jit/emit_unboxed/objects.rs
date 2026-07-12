@@ -101,6 +101,7 @@ pub(super) fn arm_get_field(
     program: &BytecodeProgram,
     info: &UbGraphInfo,
     nidx: usize,
+    take_from_husk: bool,
 ) -> Result<(), JitError> {
     let (rv, rk) = ub_pop(b, vars, fvars, kinds)?;
     let Kind::Inst(c, _) = rk else {
@@ -125,7 +126,7 @@ pub(super) fn arm_get_field(
     let fk = info.field_kind(c, j).ok_or_else(|| {
         JitError::Codegen("unboxed: GetField before signature past analyze".to_string())
     })?;
-    let out = match field_read_kind(fk, rk.is_owned_handle()) {
+    let out = match field_read_kind(fk, rk.is_owned_handle() || take_from_husk) {
         Some(out) => out,
         None => {
             return Err(JitError::Codegen(format!(
@@ -139,6 +140,23 @@ pub(super) fn arm_get_field(
     let pr = b.ins().iadd(buf, roff);
     let (fp, foff) = field_addr(b, ec, pr, slot, is_wide(program, c));
     let val = b.ins().load(types::I64, MemFlagsData::new(), fp, foff);
+    if take_from_husk && !rk.is_owned_handle() {
+        // L2b: the proven single-read `this.field` MOVES the word out of the still-live
+        // husk — poison the slot so the method-end husk release no-ops on it (a non-OWNED
+        // slot word) and any drift read faults the helpers to a code-5 redo (idx is far
+        // past the arena cap — never wrong bytes).
+        if matches!(
+            fk,
+            Kind::Str(_)
+                | Kind::StrList(_)
+                | Kind::IntList(_)
+                | Kind::StrIntMap(_)
+                | Kind::DynList(_)
+        ) {
+            let poison = b.ins().iconst(types::I64, UB_TAG_SLOT | UB_IDX_MASK);
+            b.ins().store(MemFlagsData::new(), poison, fp, foff);
+        }
+    }
     if rk.is_owned_handle() {
         // A dying temp receiver: free its OTHER handle fields + its slot; the read field's
         // word (any handle kind — str/list/map/DynList, exactly the set `field_read_kind`

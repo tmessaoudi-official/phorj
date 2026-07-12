@@ -497,11 +497,12 @@ class SelectQuery {
     private int lim
   ) {}
   private function next(
+    string tableName, string tableAlias,
     List<string> cols, List<string> joinFrags, List<string> joinAliases, List<string> conds,
     List<string | int | float | bool> binds, List<string> groups, List<string> havings,
     List<string> orders, int lim
   ): SelectQuery {
-    return new SelectQuery(this.tableName, this.tableAlias, cols, joinFrags, joinAliases, conds, binds, groups, havings, orders, lim);
+    return new SelectQuery(tableName, tableAlias, cols, joinFrags, joinAliases, conds, binds, groups, havings, orders, lim);
   }
   function join(string table, string alias): JoinClause { return this.innerJoin(table, alias); }
   function innerJoin(string table, string alias): JoinClause {
@@ -511,11 +512,11 @@ class SelectQuery {
     return new JoinClause(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, this.lim, "LEFT", table, alias);
   }
   function withJoin(string frag, string alias): SelectQuery {
-    return this.next(this.cols, List.append(this.joinFrags, frag), List.append(this.joinAliases, alias), this.conds, this.binds, this.groups, this.havings, this.orders, this.lim);
+    return this.next(this.tableName, this.tableAlias, this.cols, List.append(this.joinFrags, frag), List.append(this.joinAliases, alias), this.conds, this.binds, this.groups, this.havings, this.orders, this.lim);
   }
   private function withCond(string col, string op, string | int | float | bool val): SelectQuery {
     string frag = col + " " + op + " ?";
-    return this.next(this.cols, this.joinFrags, this.joinAliases, List.append(this.conds, frag), List.append(this.binds, val), this.groups, this.havings, this.orders, this.lim);
+    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, List.append(this.conds, frag), List.append(this.binds, val), this.groups, this.havings, this.orders, this.lim);
   }
   function whereEq(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "=", val); }
   function whereNe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "!=", val); }
@@ -525,11 +526,11 @@ class SelectQuery {
   function whereLe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "<=", val); }
   function whereLike(string col, string val): SelectQuery { return this.withCond(col, "LIKE", val); }
   function groupBy(string col): SelectQuery {
-    return this.next(this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, List.append(this.groups, col), this.havings, this.orders, this.lim);
+    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, List.append(this.groups, col), this.havings, this.orders, this.lim);
   }
   private function withHaving(string expr, string op, string | int | float | bool val): SelectQuery {
     string frag = expr + " " + op + " ?";
-    return this.next(this.cols, this.joinFrags, this.joinAliases, this.conds, List.append(this.binds, val), this.groups, List.append(this.havings, frag), this.orders, this.lim);
+    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, List.append(this.binds, val), this.groups, List.append(this.havings, frag), this.orders, this.lim);
   }
   function havingEq(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, "=", val); }
   function havingGt(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, ">", val); }
@@ -537,12 +538,12 @@ class SelectQuery {
   function havingLt(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, "<", val); }
   function havingLe(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, "<=", val); }
   private function withOrder(string col, string dir): SelectQuery {
-    return this.next(this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, List.append(this.orders, col + " " + dir), this.lim);
+    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, List.append(this.orders, col + " " + dir), this.lim);
   }
   function orderByAsc(string col): SelectQuery { return this.withOrder(col, "ASC"); }
   function orderByDesc(string col): SelectQuery { return this.withOrder(col, "DESC"); }
   function limit(int n): SelectQuery {
-    return this.next(this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, n);
+    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, n);
   }
   private function joined(): bool { return List.length(this.joinFrags) > 1; }
   private function qualify(string col): string throws SqlError {

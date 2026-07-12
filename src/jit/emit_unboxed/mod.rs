@@ -664,6 +664,12 @@ pub(super) fn build_body_unboxed(
     // One Cranelift block per reachable leader — the SAME leader set `unboxed_analyze` used, so the two
     // views of the block structure can never drift.
     let is_leader = leaders(code, &reach);
+    // L2b: the field-TAKE mask for an owned-`this` method — the SAME shared function the
+    // analyze walk used (mirror-safe by construction).
+    let this_taken: Option<Vec<bool>> = match param_kinds.first() {
+        Some(Kind::Inst(c, Own::Owned)) => Some(owned_this_taken_fields(program, func_idx, *c)),
+        _ => None,
+    };
     let mut blocks: Vec<Option<Block>> = vec![None; n];
     for ip in 0..n {
         if reach[ip] && is_leader[ip] {
@@ -1577,8 +1583,34 @@ pub(super) fn build_body_unboxed(
             }
             Op::GetField(nidx) => {
                 let h = ub_ref(ub_refs.as_ref(), "GetField")?;
+                // L2b: the proven single-read `this.field` in an owned-`this` method MOVES
+                // the word out of the husk (mirrors the analyze arm's predicate exactly —
+                // both derive from the shared `owned_this_taken_fields` mask).
+                let take_from_husk = ip > 0
+                    && matches!(code[ip - 1], Op::GetLocal(0))
+                    && !is_leader[ip]
+                    && matches!(kinds.last(), Some(Kind::Inst(_, Own::Borrowed)))
+                    && this_taken.as_ref().is_some_and(|m| {
+                        let Some(Kind::Inst(c, _)) = kinds.last() else {
+                            return false;
+                        };
+                        program.class_descs[*c]
+                            .fields
+                            .iter()
+                            .position(|f| f == &program.names[*nidx])
+                            .is_some_and(|j| m.get(j).copied().unwrap_or(false))
+                    });
                 arm_get_field(
-                    &mut b, &ec, h, &vars, &fvars, &mut kinds, program, info, *nidx,
+                    &mut b,
+                    &ec,
+                    h,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    program,
+                    info,
+                    *nidx,
+                    take_from_husk,
                 )?;
             }
             Op::SetField(nidx) => {
