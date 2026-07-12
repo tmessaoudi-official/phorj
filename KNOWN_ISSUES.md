@@ -1461,11 +1461,16 @@ representation/allocation changes alone; it needs JIT-compiling string/collectio
   build** (the ② lesson: wire-first/measure-after cost a session); (3) interning + packed arrays (mapget
   67× worst).
 
-**Perf-parity register (per-micro state snapshot; near-parity rows are interleave-confirmed, batched rows
-indicative ±~1.5×):** fibrec WIN ~1.7–2.9× · floatmul PARITY (accepted) · intadd default LOSS ~0.71
-(accepted) · intadd `#[UncheckedOverflow]` WIN ~1.99× · ~11 VM-only LOSS categories 0.01–0.39×
-(closurecall 0.03 · enum 0.01 · floatarith 0.04 · interp 0.10 · listindex 0.03 · mapget 0.02 · match 0.07
-· methodcall 0.05 · objalloc 0.34 · stringconcat 0.29 · trycatch 0.39 · webish 0.05).
+**Perf-parity register (2026-07-12 session-5 snapshot — 3× best-of-7 protocol MEDIANS, pinned +
+interleaved, fresh docker php:8.5-cli+JIT, output-identity on all; the gate-ratcheted SSOT is
+`bench/micro-baseline.json`): ALL 21 micros ≥ 1.0×.** trycatch 33.4 · objalloc 9.1 · match 7.1 ·
+hofpipe 6.47 · floatarith 4.0 · methodcall 2.9 · interp 2.75 · webish 2.29 · strbuild 2.17 ·
+closurecall 2.08 · forin 2.05 · stringconcat 2.04 · fibrec 1.79 · enum 1.66 · listappend 1.65 ·
+listindex 1.61 · intadd 1.46 (checked-DEFAULT beats php's unchecked; `#[UncheckedOverflow]` ~2×) ·
+mapget 1.10 · mapinsert 1.08 · floatloop 1.00 · floatmul 1.00 (ruled PARITY). The historical
+VM-only losses below this line describe the `--no-jit` path only. Disclosed JIT-path caps: boxed
+(non-flattenable / >4096-slot) collections take a code-5 VM redo in the HOF/pointer-walk/builder
+verticals; the JIT-coverage-of-real-programs metric is still unmeasured (parked).
 
 **range-analysis (`21465d8`):** sound + byte-identity-preserving but produces ZERO measured WIN on any
 current micro (the induction counter was off the critical path); kept as the safe-by-proof half of the

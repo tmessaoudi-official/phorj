@@ -26,7 +26,7 @@
 | | |
 |---|---|
 | **Date / HEAD** | 2026-07-12 (session 5). **🏆 FULL SWEEP CLOSED — ALL 21 micros ≥ 1.0× vs fresh php:8.5-cli+JIT** (3× best-of-7 protocol medians, re-adjudicated + ratcheted): trycatch 33.4 · objalloc 9.1 · match 7.1 · **hofpipe 6.47** · floatarith 4.0 · methodcall 2.9 · interp 2.75 · webish 2.29 · strbuild 2.17 · closurecall 2.08 · **forin 2.05** · stringconcat 2.04 · fibrec 1.79 · enum 1.66 · **listappend 1.65** · listindex 1.61 · intadd 1.46 · mapget 1.10 · **mapinsert 1.08** · floatloop 1.00 · floatmul 1.00 (PARITY, ruled). Session-5 verticals: ACL list builders + reseed peephole (arena-cliff fix), AMB map builders (inline overwrite+insert), FnCap1 capturing closures + HOF loops (map/count), forin pointer-walk + mutation guard. Prior: session-4 flip phase (original 17), plan/spec consolidation. |
-| **Completion** | **PHP-parity ≈60% · Vision ≈62% · raw row-floor ≈41%** — HEAD `af3aad3`, §11.4 + `M-gap-matrix §4.6`. [Inferred: additive delta on the ratified 824-row model; a full 824-row re-pass is due at the next milestone/wave close.] Denominator = **824 verdict rows** (665 net of N/A + GAP-by-design). Road to 100% parity = close **445 rows** (76 PARTIAL + 110 GAP-planned + 259 GAP-unplanned); the 49 GAP-by-design footguns are audited in Ω-0 (do-everything-better, take-no-weakness). |
+| **Completion** | **PHP-parity ≈60% · Vision ≈63% · raw row-floor ≈41%** — §11.5 (session-5 Ω-8-close re-pass): zero SYN/FN/RT flips (pure-perf span), M-perf 40→90 (the hard mandate is MET on the 21-micro surface; withheld 10 = coverage metric + deopt parks). Denominator = **824 verdict rows** (665 net of N/A + GAP-by-design). Road to 100% parity = close **445 rows** (76 PARTIAL + 110 GAP-planned + 259 GAP-unplanned); the 49 GAP-by-design footguns are audited in Ω-0. |
 | **Active programme** | **THE FINISHING WAVE** (section after §1): Ω-0 footgun audit → Ω-1 web spine → Ω-2 filesystem/subprocess/logging/compression → Ω-3 string-Unicode/regex/array/math → Ω-4 language surface → Ω-5 date/intl/XML → Ω-6 the 259-row unplanned stdlib tail → Ω-7 beyond-PHP programme → Ω-8 perf hold → Ω-9 GA. Target = **100% VISION**. |
 | **Locked rulings (2026-07-11, developer via ask-human)** | **Perf** = multi-dimensional "better" (faster/safer/organized/SOLID). **AMENDED (2026-07-11, Fable session, developer via ask-human): the string/array/collection speed-beat is REOPENED NOW — fresh-eyes attempt at the FRONT of this run, target faster-or-at-least-equal to PHP, evidence-gated (pure-Rust ceiling spike FIRST per KNOWN_ISSUES §"Parked perf"; WIN-OR-FLAG; no MATCH in the ceiling test → report honestly and re-ask).** Prior end-stage park superseded. **Target** = 100% VISION. **Footguns** audited in Ω-0. **GLOBAL TENETS (whole wave):** prefer INSTANCES + mandatory `new`; nothing in the wind (every symbol import-gated, leaf-or-parent); decoupled / composable / generic / scalable / modular / SOLID. **Core.Sql DBAL = instance model** (`new QueryBuilder("t","a")` → typed per-verb sub-builders `SelectQuery`/`InsertStatement`/`UpdateStatement`/`DeleteStatement`; always-alias + `E-SQL-AMBIGUOUS-COLUMN`; decoupled dialect rendered at `db.execute`; `new Query(sql,[binds])` raw — SUPERSEDES the shipped slices 1+2 static-factory `Sql.query`/`Sql.select`, reworked in Ω-1). **PERF-FIRST rulings (2026-07-11, session 3, developer via ask-human):** (1) **Order A** — unboxed arena verticals (enum → closure/method → objalloc → composites) → V3b single-alloc `Instance` → NaN-box end-state, each shape spike-gated WIN-OR-FLAG; (2) **exit bar = beat-or-match EVERYTHING** (every micro ≥1.0× vs fresh docker php:8.5-cli+JIT, pinned+interleaved) — a flag is accepted only after all three levers are exhausted on that shape, loss anatomy documented; (3) **intadd** scored WON via `#[UncheckedOverflow]` 2× (apples-to-apples vs php's unchecked semantics); checked-DEFAULT ≥1.0× is an ACTIVE best-effort target — range-proof overflow-check-elision front REOPENED (induction/const-init proofs eliding checks where overflow is provably impossible; fault behavior unchanged); (4) **trycatch (0.48×, un-ruled prior)** = full lever attempt in the wave (anatomy first, then zero-cost-on-no-throw shape). **PER-FEATURE PERF GATE (2026-07-12, developer via ask-human, session 5):** programme confirmed Phase A (session-5 perf tail: listappend → mapinsert → hofpipe → forin lever-3 → re-adjudicate+ratchet all 21 → representation slice → perf register+G-8) then Phase B (Ω-0…Ω-9); **every new feature shipped in the Ω waves lands its own perf micro in the same change and must score ≥1.0× vs fresh php:8.5-cli+JIT (beat-or-match, pinned+interleaved protocol)** — the bar is per-feature definition-of-done, not only an Ω-8 hold; run continues without stopping until 100% VISION. |
 | **Gate** | `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy (both configs, incl. `--no-default-features`) + fmt + release build + an Invariant-9 example + byte-identity `run≡runvm≡php-8.5.8`. **`jit` is a DEFAULT feature** (bare `cargo test`/`build`/`clippy` include it; `--features jit` is a harmless redundant no-op; verify jit-off compiles via `cargo check --no-default-features`; run without native codegen via `phg run --no-jit`). Pre-commit = fast Rust-only tier (~12s); pre-push = full oracle + microbench-gate. Commit each green slice; **NEVER push** (developer pushes). |
@@ -93,11 +93,14 @@ safer / better-organized / best-practice / SOLID. **Speed is one axis, not the w
   unboxed Cranelift JIT, which is a **default feature** (`phg run` JITs hot functions out of the box;
   `--no-jit` / `--tree-walker` opt out): fibrec 1.7–2.9×, intadd `#[UncheckedOverflow]` 2× (fresh
   interleaved release-php+JIT baselines).
-- Phorj **MATCHES-not-beats** PHP on 20-yr-tuned string / array / collection categories. A clean
-  speed-WIN there needs reimplementing PHP's C engine natively in the JIT — **evidence-proven
-  unreachable at reasonable cost** (strings 27.6× / maps 67.1× behind; the boxed-value JIT was built,
-  measured, and REVERTED as not-a-win). **This speed-beat is PARKED** (see KNOWN_ISSUES §"Parked perf");
-  the developer will bring in **Fable** to attack it, and all park-items are resolved at the very end
+- **SUPERSEDED 2026-07-12 (session 5): the string/array/collection speed-beat is WON.** The Fable
+  run the parked text below anticipated happened — unboxed-JIT verticals (SSO+ACC strings, packed
+  map buckets + AMB builders, ACL list builders, FnCap1 closures + HOF loops, pointer-walk
+  iteration) flipped every category: **ALL 21 micros ≥ 1.0×** vs fresh php:8.5-cli+JIT (protocol
+  medians, §0). The old "MATCHES-not-beats" ceiling applied to the VM-only path; the JIT path
+  beat it. Historical text (kept for the record): a clean speed-WIN was believed to need
+  reimplementing PHP's C engine (strings 27.6× / maps 67.1× behind on the VM; the boxed-value
+  JIT was built, measured, REVERTED) — the unboxed handle-space verticals were the third way
   (once the language is otherwise complete and only they remain). Parity-speed there still ships a Phorj
   UPGRADE on the OTHER axes (Unicode correctness, no silent coercion, immutability, types).
 
@@ -1125,6 +1128,29 @@ because the only stdlib-breadth movers were crypto (§11.2, pre-marathon) + spri
 #1 (DB) / #2 (HTTP) / #3 (sessions) / #5 (FS) / #12 (XML) / #19 (intl) are all untouched. This is the evidence validating the locked order: **②
 boxed-value JIT = the perf lever** (unmet mandate), **③ web spine = the parity lever** (§11.3 puts the
 W3 DB+HTTP+sessions wave as the jump to ≈65–66%).
+
+### 11.5 2026-07-12 session-5 re-score — the Ω-8 wave-close re-pass
+
+The sweep span (sessions 4+5, `109fa2c`→HEAD) was **pure perf** (verticals + ratchet — zero new
+language surface, zero stdlib breadth), so the systematic scan finds **no SYN/FN row flips**.
+RT-007 (JIT) stays **PARTIAL** deliberately: the unboxed JIT now beats php+JIT on ALL 21 micro
+categories, but it accelerates a proven SUBSET (side-effect-free int/float/string/collection/
+closure shapes) while PHP's JIT takes arbitrary code — the honest generality signal (the
+JIT-coverage-of-real-programs metric) is still unmeasured, so a COVERED claim would be theater.
+
+**Arithmetic (delta on §11.4):** SYN 79.8% · FN 35.2% · RT 72.2% — all unchanged ⇒ parity stays
+≈ **60%**. Programme: **M-perf 40 → 90** — the HARD PERF MANDATE §11.4 called "still unmet" is
+now MET on the measured surface (all 21 micros ≥ 1.0× vs fresh php:8.5-cli+JIT, 3× best-of-7
+protocol, output-identity, gate-ratcheted; the withheld 10 = the coverage metric + precise
+deoptimization, both disclosed parks) ⇒ mean (1060 − 40 + 90)/16 = 1110/16 = **69.4%**.
+Vision = 0.70×60.2 + 0.30×69.4 ≈ **63%**. Floor unchanged ≈ **41%**.
+
+**Grade:** no-flip scan **[Verified: the span's commits are all `perf(...)`/`docs(...)` — no
+`src/native/`, checker-surface, or transpiler additions]**; M-perf 90 **[Inferred: the mandate's
+own bar (beat-or-match everything, protocol medians) reads green — the two withheld points are
+the disclosed parks]**; vision figure **[Inferred: additive on the ratified §11.4 arithmetic]**.
+**The chain:** 58% → 59% → 60% (§11.4) → **60% parity / ≈63% vision (this re-pass)**. The next
+parity mover remains Ω-1 (web spine: DB #1 / HTTP #2 / sessions #3 → ≈65–66%).
 
 ### 11.3 Projected per-wave gains (unchanged model, re-based)
 
