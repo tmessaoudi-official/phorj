@@ -1510,6 +1510,102 @@ pub(super) extern "C" fn rt_u_map_builder_seed(
     rt_u_map_builder_set(ctx, UB_TAG_AMB | idx as i64, key, val)
 }
 
+/// The GENERIC pure 2-arg native BRIDGE — converts handle/raw args to `Value`s, calls the
+/// REGISTERED native itself (`NativeEval::Pure` — the exact single-sourced VM kernel, so join /
+/// contains / splitOnce / drop semantics can never drift), and converts the result back.
+/// `meta` bit layout: [0..3) arg-a repr, [3..6) arg-b repr, [6..9) result repr
+/// (0 = raw int/bool word, 2 = str handle, 3 = STR-list handle, 4 = INT-list handle),
+/// [9] free a if owned, [10] free b if owned. Two-i64 return: `code` 0 = ok, 5 = redo on VM
+/// (a native Err — the VM rerun renders the canonical fault — or a defensive mismatch).
+pub(super) extern "C" fn rt_u_native2(
+    ctx: *mut UbCtx,
+    id: i64,
+    a: i64,
+    b: i64,
+    meta: i64,
+) -> UbMapGetRet {
+    let ctx = unsafe { &mut *ctx };
+    let miss = UbMapGetRet { value: 0, code: 5 };
+    let to_value = |ctx: &UbCtx, raw: i64, repr: i64| -> Option<Value> {
+        match repr {
+            0 => Some(Value::Int(raw)),
+            2 => match ctx.str_bytes(raw) {
+                Some(bytes) => match std::str::from_utf8(bytes) {
+                    Ok(s) => Some(Value::Str(crate::phstr::PhStr::new(s))),
+                    Err(_) => None,
+                },
+                None => match ctx.handles.get(raw as usize) {
+                    Some(v @ Value::Str(_)) => Some(v.clone()),
+                    _ => None,
+                },
+            },
+            3 => Some(Value::List(std::rc::Rc::new(ctx.list_values(raw, true)?))),
+            4 => Some(Value::List(std::rc::Rc::new(ctx.list_values(raw, false)?))),
+            _ => None,
+        }
+    };
+    let Some(va) = to_value(ctx, a, meta & 7) else {
+        return miss;
+    };
+    let Some(vb) = to_value(ctx, b, (meta >> 3) & 7) else {
+        return miss;
+    };
+    let Some(nf) = crate::native::registry().get(id as usize) else {
+        return miss;
+    };
+    let crate::native::NativeEval::Pure(f) = nf.eval else {
+        return miss;
+    };
+    let mut sink = String::new(); // pure natives never write output (analyze gates on nf.pure)
+    let Ok(res) = f(&[va, vb], &mut sink) else {
+        return miss; // native fault → the VM redo renders the canonical message
+    };
+    if meta & (1 << 9) != 0 {
+        ctx.release(a);
+    }
+    if meta & (1 << 10) != 0 {
+        ctx.release(b);
+    }
+    let value = match ((meta >> 6) & 7, res) {
+        (0, Value::Int(n)) => n,
+        (0, Value::Bool(bv)) => bv as i64,
+        (2, v @ Value::Str(_)) => ctx.alloc(v),
+        (3 | 4, v @ Value::List(_)) => ctx.alloc(v),
+        _ => return miss, // repr mismatch: defensive, VM redo
+    };
+    UbMapGetRet { value, code: 0 }
+}
+
+/// String equality for the unboxed `Op::Eq`/`Op::Ne` on two string operands — the shared
+/// [`Value::eq_val`] kernel (single-sourced, so `==` on strings can never drift from the VM).
+/// Returns 0/1; `-1` = defensive non-string operand (code 5).
+pub(super) extern "C" fn rt_u_str_eq(ctx: *mut UbCtx, a: i64, b: i64, meta: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let get = |ctx: &UbCtx, h: i64| -> Option<Value> {
+        match ctx.str_bytes(h) {
+            Some(bytes) => match std::str::from_utf8(bytes) {
+                Ok(s) => Some(Value::Str(crate::phstr::PhStr::new(s))),
+                Err(_) => None,
+            },
+            None => match ctx.handles.get(h as usize) {
+                Some(v @ Value::Str(_)) => Some(v.clone()),
+                _ => None,
+            },
+        }
+    };
+    let (Some(va), Some(vb)) = (get(ctx, a), get(ctx, b)) else {
+        return -1;
+    };
+    let eq = va.eq_val(&vb) as i64;
+    if meta & 1 != 0 {
+        ctx.release(a);
+    }
+    if meta & 2 != 0 {
+        ctx.release(b);
+    }
+    eq
+}
+
 /// The GENERAL (non-accumulator) `List.append` — full PHP value semantics via a clone: any
 /// input list form (flat / ACL / boxed) materializes to a fresh Vec, the element is pushed,
 /// and a fresh BOXED handle returns; the inputs are untouched unless compile-time-OWNED
@@ -1687,6 +1783,8 @@ pub(super) struct UbHelperIds {
     pub(super) list_acc_reseed: FuncId,
     pub(super) list_builder_new: FuncId,
     pub(super) list_append_clone: FuncId,
+    pub(super) native2: FuncId,
+    pub(super) str_eq: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1712,4 +1810,6 @@ pub(super) struct UbHelperRefs {
     pub(super) list_acc_reseed: FuncRef,
     pub(super) list_builder_new: FuncRef,
     pub(super) list_append_clone: FuncRef,
+    pub(super) native2: FuncRef,
+    pub(super) str_eq: FuncRef,
 }

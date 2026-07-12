@@ -356,6 +356,63 @@ fn phg_run_hook_hits_the_jit_on_general_list_append() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_native_bridge2_and_str_eq() {
+    // The generic pure-native bridge (join / contains / splitOnce / drop route through the
+    // REGISTERED natives — single-sourced kernels) + string `==`/`!=` via the `eq_val` helper.
+    // Every result folds into the checksum; hits > 0 + byte-identity.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        import Core.String;\n\
+        function bench(int iters): int {\n\
+          List<string> parts = [\"alpha\", \"beta\", \"gamma\"];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string joined = String.join(parts, \", \");\n\
+            acc = acc + String.length(joined);\n\
+            if (String.contains(joined, \"beta\")) {\n\
+              acc = acc + 1;\n\
+            }\n\
+            List<string> pair = String.splitOnce(joined, \", \");\n\
+            acc = acc + List.length(pair);\n\
+            List<string> rest = List.drop(parts, 1);\n\
+            acc = acc + List.length(rest);\n\
+            string head = parts[i % 3];\n\
+            if (head == \"beta\") {\n\
+              acc = acc + 10;\n\
+            }\n\
+            if (head != \"gamma\") {\n\
+              acc = acc + 100;\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "bridge2/str-eq jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual bridge2/str-eq must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the bridge2/str-eq shapes must actually hit the JIT"
+    );
+}
+
+#[test]
 fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // The MUTATION GUARD: iterating a local AND writing it in the same function (append
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would

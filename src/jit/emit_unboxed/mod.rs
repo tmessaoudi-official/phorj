@@ -440,6 +440,8 @@ pub(super) fn build_body_unboxed(
         list_acc_reseed: module.declare_func_in_func(ids.list_acc_reseed, b.func),
         list_builder_new: module.declare_func_in_func(ids.list_builder_new, b.func),
         list_append_clone: module.declare_func_in_func(ids.list_append_clone, b.func),
+        native2: module.declare_func_in_func(ids.native2, b.func),
+        str_eq: module.declare_func_in_func(ids.str_eq, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -798,6 +800,29 @@ pub(super) fn build_body_unboxed(
                 arm_concat(&mut b, &ec, h, &vars, &fvars, &mut kinds, *cn)?;
             }
             // ---- P-2c numeric conversions: fully inline, no helper, no handle space ------------
+            Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
+                // The generic pure-native bridge — mirrors the analyze arm; the helper calls
+                // the REGISTERED native (single-sourced kernel), so semantics cannot drift.
+                let h = ub_ref(ub_refs.as_ref(), "native bridge2")?;
+                let (bv, bk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let Some((meta_base, out_kind)) = unboxed_native_bridge2(*id, &ak, &bk) else {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed bridge2 native operand kinds ({ak:?}, {bk:?})"
+                    )));
+                };
+                let meta = meta_base
+                    | ((ak.is_owned_handle() as i64) << 9)
+                    | ((bk.is_owned_handle() as i64) << 10);
+                let idv = b.ins().iconst(types::I64, *id as i64);
+                let metav = b.ins().iconst(types::I64, meta);
+                let call = b.ins().call(h.native2, &[ec.ctx, idv, av, bv, metav]);
+                let sval = b.inst_results(call)[0];
+                let scode = b.inst_results(call)[1];
+                let bad = b.ins().icmp_imm(IntCC::NotEqual, scode, 0);
+                ec.fault_if(&mut b, bad, 5);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, sval, out_kind)?;
+            }
             Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {
                 arm_to_float(&mut b, &vars, &fvars, &mut kinds)?;
             }
@@ -959,6 +984,28 @@ pub(super) fn build_body_unboxed(
                 let r = b.ins().icmp(IntCC::UnsignedLessThan, pv, ev);
                 let r64 = b.ins().uextend(types::I64, r);
                 ub_push(&mut b, &vars, &fvars, &mut kinds, r64, Kind::Bool)?;
+            }
+            Op::Eq | Op::Ne
+                if matches!(kinds.last(), Some(Kind::Str(_)))
+                    && matches!(kinds.get(kinds.len().wrapping_sub(2)), Some(Kind::Str(_))) =>
+            {
+                // String equality — the shared `Value::eq_val` kernel via the helper (the
+                // `col == \"*\"` / `next == \"_\"` prelude shapes).
+                let h = ub_ref(ub_refs.as_ref(), "Eq(str)")?;
+                let (bv, bk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let meta = (ak.is_owned_handle() as i64) | ((bk.is_owned_handle() as i64) << 1);
+                let metav = b.ins().iconst(types::I64, meta);
+                let call = b.ins().call(h.str_eq, &[ec.ctx, av, bv, metav]);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                ec.fault_if(&mut b, bad, 5);
+                let res = if matches!(op, Op::Ne) {
+                    b.ins().bxor_imm(sres, 1)
+                } else {
+                    sres
+                };
+                ub_push(&mut b, &vars, &fvars, &mut kinds, res, Kind::Bool)?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
                 arm_cmp(&mut b, &vars, &fvars, &mut kinds, op)?;

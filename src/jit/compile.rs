@@ -189,6 +189,8 @@ impl Compiled {
                 "rt_u_list_append_clone",
                 rt_u_list_append_clone as *const u8,
             );
+            builder.symbol("rt_u_native2", rt_u_native2 as *const u8);
+            builder.symbol("rt_u_str_eq", rt_u_str_eq as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -307,6 +309,16 @@ impl Compiled {
                 list_acc_reseed: declare(&mut module, "rt_u_list_acc_reseed", &sig3)?,
                 list_builder_new: declare(&mut module, "rt_u_list_builder_new", &sig1)?,
                 list_append_clone: declare(&mut module, "rt_u_list_append_clone", &sig4)?,
+                native2: {
+                    let mut s = make_sig(
+                        &module,
+                        &[ptr, types::I64, types::I64, types::I64, types::I64],
+                        Some(types::I64),
+                    );
+                    s.returns.push(AbiParam::new(types::I64));
+                    declare(&mut module, "rt_u_native2", &s)?
+                },
+                str_eq: declare(&mut module, "rt_u_str_eq", &sig4)?,
             })
         } else {
             None

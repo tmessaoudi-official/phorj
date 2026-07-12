@@ -244,6 +244,44 @@ pub(super) fn unboxed_native_is_list_count(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.List" && nf.name == "count" && nf.pure)
 }
 
+/// Is `id` one of the pure 2-arg natives routed through the GENERIC `rt_u_native2` bridge
+/// (which calls the registered native itself — single-sourced semantics)? Cheap name gate for
+/// the match guards; the shape table is [`unboxed_native_bridge2`].
+pub(super) fn unboxed_native_is_bridge2(id: usize) -> bool {
+    crate::native::registry().get(id).is_some_and(|nf| {
+        nf.pure
+            && matches!(
+                (nf.module, nf.name),
+                ("Core.String", "join" | "contains" | "splitOnce") | ("Core.List", "drop")
+            )
+    })
+}
+
+/// The bridge-2 shape table: given the native and the two COMPILE-TIME operand kinds
+/// (a = pushed first, b = second), return the `rt_u_native2` meta base (arg/result reprs —
+/// see the helper's bit layout) and the result kind. `None` = kind mismatch (fail closed).
+pub(super) fn unboxed_native_bridge2(id: usize, a: &Kind, b: &Kind) -> Option<(i64, Kind)> {
+    let nf = crate::native::registry().get(id)?;
+    match ((nf.module, nf.name), a, b) {
+        (("Core.String", "join"), Kind::StrList(_), Kind::Str(_)) => {
+            Some((3 | (2 << 3) | (2 << 6), Kind::Str(Own::Owned)))
+        }
+        (("Core.String", "contains"), Kind::Str(_), Kind::Str(_)) => {
+            Some((2 | (2 << 3), Kind::Bool))
+        }
+        (("Core.String", "splitOnce"), Kind::Str(_), Kind::Str(_)) => {
+            Some((2 | (2 << 3) | (3 << 6), Kind::StrList(Own::Owned)))
+        }
+        (("Core.List", "drop"), Kind::StrList(_), Kind::Int) => {
+            Some((3 | (3 << 6), Kind::StrList(Own::Owned)))
+        }
+        (("Core.List", "drop"), Kind::IntList(_), Kind::Int) => {
+            Some((4 | (4 << 6), Kind::IntList(Own::Owned)))
+        }
+        _ => None,
+    }
+}
+
 /// Is native-registry entry `id` `Core.Conversion.toFloat` (P-2c: inline `fcvt_from_sint` — the
 /// kernel is `n as f64`, the same IEEE round-to-nearest widening)?
 pub(super) fn unboxed_native_is_to_float(id: usize) -> bool {
@@ -1245,6 +1283,27 @@ pub(super) fn unboxed_analyze(
                         Kind::Int
                     });
                 }
+                Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => {
+                    // The generic pure-native bridge (join/contains/splitOnce/drop) — the
+                    // helper calls the registered native itself; kinds from the shape table.
+                    let b2 = kinds.pop();
+                    let a2 = kinds.pop();
+                    match (a2, b2) {
+                        (Some(ka), Some(kb)) => match unboxed_native_bridge2(*id, &ka, &kb) {
+                            Some((_, out)) => kinds.push(out),
+                            None => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed bridge2 native operand kinds ({ka:?}, {kb:?})"
+                                )))
+                            }
+                        },
+                        other => {
+                            return Err(JitError::Codegen(format!(
+                                "unboxed analyze: bridge2 underflow {other:?}"
+                            )))
+                        }
+                    }
+                }
                 Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {
                     match kinds.pop() {
                         Some(Kind::Int) => {}
@@ -1977,6 +2036,7 @@ pub(super) fn collect_functions_unboxed(
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => uses_handles = true,
+                Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => uses_handles = true,
                 // hofpipe: the HOF loop arms direct-call the compiled lambda per element.
                 Op::CallNative(id, 2)
                     if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
