@@ -278,14 +278,12 @@ impl Checker {
         };
         // Discharge the chosen member's checked exceptions (the sig whose DECLARED return matches),
         // unless under `?`-propagation.
-        if !skip_throws {
-            if let Some(sig) = self.classes[&cls].methods[method]
-                .iter()
-                .find(|s| s.ret == chosen.1)
-            {
-                for e in sig.throws.clone() {
-                    self.discharge_call_throw(method, &apply_subst(&e, &theta), call_span);
-                }
+        if let Some(sig) = self.classes[&cls].methods[method]
+            .iter()
+            .find(|s| s.ret == chosen.1)
+        {
+            for e in sig.throws.clone() {
+                self.route_call_throw(skip_throws, method, &apply_subst(&e, &theta), call_span);
             }
         }
         // Record the resolved rewrite: a method call on the mangled name, preserving the receiver and
@@ -520,11 +518,9 @@ impl Checker {
             }
         };
         // Discharge the chosen member's checked exceptions (M-faults 2b) unless under `?`-propagation.
-        if !skip_throws {
-            if let Some(sig) = self.funcs[name].iter().find(|s| s.ret == chosen.0) {
-                for e in sig.throws.clone() {
-                    self.discharge_call_throw(name, &e, call_span);
-                }
+        if let Some(sig) = self.funcs[name].iter().find(|s| s.ret == chosen.0) {
+            for e in sig.throws.clone() {
+                self.route_call_throw(skip_throws, name, &e, call_span);
             }
         }
         // Record the resolved rewrite: a plain call to the mangled name, keyed by `rewrite_key` (the

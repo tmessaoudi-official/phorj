@@ -186,17 +186,22 @@ impl Checker {
             // and returns the call's normal type (M-faults 2b). Result-mode `?` is *not* — it is
             // restricted to a let-initializer (the one position with a clean PHP hoist; M-faults 2a):
             // flag it, but still check the inner to avoid a cascade.
-            Expr::Propagate { inner, span } => self.try_throws_propagate(inner, *span).unwrap_or_else(
-                || {
-                    self.check_expr(inner);
+            Expr::Propagate { inner, span } => match self.try_throws_propagate(inner, *span) {
+                Some(crate::checker::throws::PropagateOutcome::Throws(t)) => t,
+                other => {
+                    // A non-throwing call (`Plain` — already checked) or a non-call operand
+                    // (`None` — check it now): Result-mode `?` is invalid in this position.
+                    if other.is_none() {
+                        self.check_expr(inner);
+                    }
                     self.err_coded(
                         *span,
                         "Result-mode `?` propagation is only allowed as the whole initializer of a `var`/typed binding",
                         "E-PROPAGATE-POSITION",
                         Some("bind the call's result to a local first (`var r = f(); …`), then handle it".into()),
                     )
-                },
-            ),
+                }
+            },
             Expr::CloneWith {
                 object,
                 fields,

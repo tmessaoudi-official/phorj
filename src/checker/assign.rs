@@ -413,6 +413,12 @@ impl Checker {
     /// by the `Expr::Propagate` arm in `check_expr` (`E-PROPAGATE-POSITION`).
     pub(super) fn check_propagate(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
         let t = self.check_expr(inner);
+        self.check_propagate_typed(t, span)
+    }
+
+    /// The typed half of [`Self::check_propagate`] — validates an ALREADY-COMPUTED operand type
+    /// (the throws-mode attempt hands its `Plain` type here so the operand is checked once).
+    pub(super) fn check_propagate_typed(&mut self, t: Ty, span: Span) -> Ty {
         let (name, args) = match &t {
             Ty::Error => return Ty::Error,
             Ty::Named(n, a) if self.is_result_enum(n) => (n.clone(), a.clone()),

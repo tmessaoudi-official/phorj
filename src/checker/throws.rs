@@ -2,6 +2,15 @@
 
 use super::*;
 
+/// The result of a throws-mode `?` attempt — see [`Checker::try_throws_propagate`].
+pub(in crate::checker) enum PropagateOutcome {
+    /// The operand is a throwing call: propagation validated, node erased; the call's type.
+    Throws(Ty),
+    /// The operand is a call that throws NOTHING — already checked; its type is handed back so
+    /// the caller takes the Result-mode / position-error path without a duplicate check.
+    Plain(Ty),
+}
+
 impl Checker {
     /// Flatten any union member of a resolved `throws` list into its individual exception types, so
     /// `throws A | B` becomes the set `{A, B}` — discharge and validation operate per type, and a
@@ -43,40 +52,55 @@ impl Checker {
             .any(|frame| frame.iter().any(|c| self.ty_assignable(e, c)))
     }
 
-    /// If `inner` is a call to a free function declaring a non-empty `throws` set, return that set
-    /// (owned). The one operand shape a throws-mode `?` recognises this slice — `f()?` where `f`
-    /// declares `throws E`. Method/native/closure throwing calls are a documented deferral (their
-    /// throws are still discharged at the call site, just not propagable with `?`).
-    pub(super) fn free_call_throws(&self, inner: &crate::ast::Expr) -> Option<Vec<Ty>> {
-        if let crate::ast::Expr::Call { callee, .. } = inner {
-            if let crate::ast::Expr::Ident(name, _) = &**callee {
-                // Throws-mode `?` on an overloaded function uses the first overload's throws (the
-                // common case is a single overload); a fully overload-aware `?`-throws is a deferral.
-                if let Some(sig) = self.funcs.get(name).and_then(|v| v.first()) {
-                    if !sig.throws.is_empty() {
-                        return Some(sig.throws.clone());
-                    }
-                }
+    /// Route one checked exception a call site must account for: under `?`-propagation
+    /// (`skip = true`, the outermost-call suppression flag) it is COLLECTED into
+    /// [`Checker::propagate_sink`] for `try_throws_propagate` to validate; at a bare call it is
+    /// discharged (caught-or-error) as before. Every discharge site funnels here, so free
+    /// functions, methods, and overload sets all propagate uniformly.
+    pub(in crate::checker) fn route_call_throw(
+        &mut self,
+        skip: bool,
+        name: &str,
+        e: &Ty,
+        span: Span,
+    ) {
+        if skip {
+            if !self.propagate_sink.contains(e) {
+                self.propagate_sink.push(e.clone());
             }
+        } else {
+            self.discharge_call_throw(name, e, span);
         }
-        None
     }
 
-    /// Throws-mode `?` (M-faults 2b): `f()?` where `f` declares `throws E`. Checks the inner call
-    /// (suppressing its own call-site discharge), requires every thrown type to be *declared* by the
-    /// enclosing `throws` (propagation — not a `try`), records the node for erasure, and returns the
-    /// call's *normal* return type. Returns `None` when `inner` is not a free throwing call, so the
-    /// caller falls back to Result-mode (`check_propagate`) or `E-PROPAGATE-POSITION`.
+    /// Throws-mode `?` (M-faults 2b): `f()?` / `recv.m()?` where the callee declares `throws E`
+    /// — free functions AND methods (the method half closed the old `free_call_throws`
+    /// deferral). Checks the inner call ONCE with discharge suppressed; the sites collect the
+    /// callee's throws into [`Checker::propagate_sink`]. A non-empty set is validated against
+    /// the enclosing `throws` (propagation — not a `try`), the node recorded for erasure, and
+    /// the call's *normal* type returned as [`PropagateOutcome::Throws`]. An empty set means
+    /// the call throws nothing — [`PropagateOutcome::Plain`] hands the already-computed type
+    /// back so the caller can take the Result-mode / position-error path WITHOUT re-checking.
+    /// `None` = not a call operand at all (nothing was checked).
     pub(super) fn try_throws_propagate(
         &mut self,
         inner: &crate::ast::Expr,
         span: Span,
-    ) -> Option<Ty> {
-        let throws = self.free_call_throws(inner)?;
+    ) -> Option<PropagateOutcome> {
+        if !matches!(inner, crate::ast::Expr::Call { .. }) {
+            return None;
+        }
+        let prev_sink = std::mem::take(&mut self.propagate_sink);
         // The wrapped call propagates instead of discharging locally — suppress its own check.
         self.skip_throws_discharge = true;
         let t = self.check_expr(inner);
-        for e in &throws {
+        // Defensive: if the operand never reached a consuming call-check, clear the flag.
+        self.skip_throws_discharge = false;
+        let collected = std::mem::replace(&mut self.propagate_sink, prev_sink);
+        if collected.is_empty() {
+            return Some(PropagateOutcome::Plain(t));
+        }
+        for e in &collected {
             if !self.throws_declared(e) {
                 self.err_coded(
                     span,
@@ -93,7 +117,7 @@ impl Checker {
         // Record for erasure: a throws-mode `?` is a checker-only marker (the call's own throw
         // unwinds), so the backend-facing AST keeps just the inner call (see `resolve_html`).
         self.html_resolutions.insert(span.start, inner.clone());
-        Some(t)
+        Some(PropagateOutcome::Throws(t))
     }
 
     /// Validate a function's `throws` declaration (M-faults 2b): the entry `main` may not declare it

@@ -334,6 +334,11 @@ pub struct Checker {
     /// One-shot flag set by a throws-mode `?` so the immediately-wrapped throwing call skips its own
     /// call-site discharge check (the `?` propagates instead). Consumed (taken) by the call.
     skip_throws_discharge: bool,
+    /// Throws collected from the `?`-operand's OUTERMOST call while `skip_throws_discharge` was
+    /// honored (free fns AND methods — the method half closed the documented `free_call_throws`
+    /// deferral). Read + validated by [`Checker::try_throws_propagate`]; empty ⇒ the call throws
+    /// nothing (Result-mode / position-error fallback, no re-check).
+    propagate_sink: Vec<Ty>,
     /// One-shot flag (Feature C) set by `check_new` so the immediately-wrapped construction call
     /// recognizes it was `new`-prefixed and skips `E-NEW-REQUIRED`. Taken (cleared) at the top of
     /// `check_named_call` — before its arguments are checked — so a bare construction *argument* still

@@ -283,6 +283,36 @@ fn method_throws_unhandled_at_bare_call_is_error() {
 }
 
 #[test]
+fn method_propagate_with_declared_throws_is_clean() {
+    // `?`-throws on a METHOD call (the old `free_call_throws` deferral, closed in Ω-1): a
+    // method call under `?` propagates to the enclosing `throws` exactly like a free function.
+    let ok = errors_of(&format!(
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }}              function wrap() -> int throws BadInput {{ var n = this.risky()?; return n; }} }}              function main() -> void {{ var s = new Svc(); try {{ var n = s.wrap(); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(
+        ok.is_empty(),
+        "method `?`-throws with a declared enclosing `throws` must be clean, got {ok:?}"
+    );
+}
+
+#[test]
+fn method_propagate_without_declared_throws_is_error() {
+    // The same propagation WITHOUT the enclosing declaration is E-CALL-UNHANDLED (not the
+    // Result-mode E-PROPAGATE-CONTEXT confusion the deferral used to produce).
+    let bad = errors_of(&format!(
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }}              function wrap() -> int {{ var n = this.risky()?; return n; }} }}              function main() -> void {{ var s = new Svc(); var n = s.wrap(); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED for an undeclared method propagation, got {bad:?}"
+    );
+    assert!(
+        !bad.iter().any(|d| d.code == Some("E-PROPAGATE-CONTEXT")),
+        "must not fall through to Result-mode on a throwing method call, got {bad:?}"
+    );
+}
+
+#[test]
 fn method_throws_wrapped_in_try_is_clean() {
     // The same method call inside a `try` catching the declared type discharges cleanly.
     let ok = errors_of(&format!(

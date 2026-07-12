@@ -211,10 +211,8 @@ impl Checker {
             let sig = &sigs[0];
             // Discharge each checked exception the callee declares: a bare call must catch it in an
             // enclosing `try` (M-faults 2b); the propagate (`?`) path used the suppression flag.
-            if !skip_throws {
-                for e in &sig.throws {
-                    self.discharge_call_throw(name, e, span);
-                }
+            for e in &sig.throws {
+                self.route_call_throw(skip_throws, name, e, span);
             }
             return if sig.type_params.is_empty() {
                 // M4: defaulted-arity check (a non-default function has all-`None` defaults, so this

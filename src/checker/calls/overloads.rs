@@ -269,13 +269,13 @@ impl Checker {
                 Some("the argument types must match one overload's parameter types".into()),
             );
         }
-        if !skip_throws {
+        {
             let mut discharged: Vec<Ty> = Vec::new();
             for m in &matches {
                 for e in &m.throws {
                     if !discharged.contains(e) {
                         discharged.push(e.clone());
-                        self.discharge_call_throw(name, e, span);
+                        self.route_call_throw(skip_throws, name, e, span);
                     }
                 }
             }
@@ -301,10 +301,8 @@ impl Checker {
         let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
         if applied.len() == 1 {
             let (params, ret, throws) = &applied[0];
-            if !skip_throws {
-                for e in throws {
-                    self.discharge_call_throw(name, e, span);
-                }
+            for e in throws.clone() {
+                self.route_call_throw(skip_throws, name, &e, span);
             }
             return if params.iter().any(ty_has_param) || ty_has_param(ret) {
                 self.check_generic_call(name, params, ret, args, span)
@@ -316,7 +314,7 @@ impl Checker {
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
         // Discharge the union of every statically-matching overload's throws — runtime dispatch may
         // pick any of them (mirrors `check_overload_call`).
-        if !skip_throws {
+        {
             let mut discharged: Vec<Ty> = Vec::new();
             for (params, _, throws) in applied {
                 let matches = params.len() == arg_tys.len()
@@ -328,7 +326,7 @@ impl Checker {
                     for e in throws {
                         if !discharged.contains(e) {
                             discharged.push(e.clone());
-                            self.discharge_call_throw(name, e, span);
+                            self.route_call_throw(skip_throws, name, e, span);
                         }
                     }
                 }

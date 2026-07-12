@@ -35,6 +35,7 @@ impl Checker {
             cur_is_main: false,
             try_catch_stack: Vec::new(),
             skip_throws_discharge: false,
+            propagate_sink: Vec::new(),
             under_new: false,
             in_field_init: false,
             in_static_init: false,

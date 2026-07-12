@@ -103,9 +103,17 @@ impl Checker {
                     _ => Some(self.resolve_type(ty)),
                 };
                 let actual = match init {
-                    crate::ast::Expr::Propagate { inner, span: psp } => self
-                        .try_throws_propagate(inner, *psp)
-                        .unwrap_or_else(|| self.check_propagate(inner, *psp)),
+                    crate::ast::Expr::Propagate { inner, span: psp } => {
+                        match self.try_throws_propagate(inner, *psp) {
+                            Some(crate::checker::throws::PropagateOutcome::Throws(t)) => t,
+                            // A call that throws nothing was already checked — hand its type to
+                            // Result-mode without a duplicate check.
+                            Some(crate::checker::throws::PropagateOutcome::Plain(t)) => {
+                                self.check_propagate_typed(t, *psp)
+                            }
+                            None => self.check_propagate(inner, *psp),
+                        }
+                    }
                     // C2 sink: a bare return-overloaded call binds to a concrete declared type without a
                     // `<Type>` selector — the typed binding supplies the resolving context. (`var x = …`
                     // is `Type::Infer`, has no context, and falls through to the `E-OVERLOAD-NO-CONTEXT`
