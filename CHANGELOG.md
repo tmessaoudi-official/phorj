@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — listappend ACC-list-builder vertical — **0.01× → 1.66× WIN** (protocol median, 3× best-of-7)
+
+The strbuild ACC recipe applied to collection writes: at a proven `accumulator_site`
+(`xs = List.append(xs, v)` — the lhs is the dying borrow of the very slot the following
+`SetLocal` rewrites, so the pure-append clone is unobservable), the unboxed JIT consumes the
+list into an **ACL builder record** (`UB_TAG_ACL`, same `{ptr,len,cap}` record pool as the
+string ACC; elements are consecutive raw i64s) and pushes IN PLACE: inline cap-check + ONE
+8-byte store + len bump — php's `$xs[] =`. `rt_u_list_acc_append` is the one slow leg
+(first-append conversion from a flat/boxed list, capacity growth, table exhaustion → code-5
+VM redo). `List.length` (`arm_list_len`) gained an inline ACL len-word read (the
+every-iteration `>= 256` reset probe costs one load), `rt_u_index_int` an ACL bounds+load arm
+(`xs[0]`/`xs[255]`), and the release ladders recycle the record while KEEPING its grown buffer
+across `xs = [0]` resets (php's buffer-reuse trick — the same `UbCtx::release` ladder as ACC).
+Analyze mirrors every arm fail-closed (`List.length` borrowed-only; `List.append` only at
+accumulator sites — anywhere else stays on the VM so clone semantics remain observable).
+Delivery-path test proves `hits > 0` + byte-identity on the exact micro shape across several
+reset cycles. listappend **0.01× → 1.66×** (self-timed 673M → 2.35M ns; rounds 1.69/1.66/1.62
+vs pinned fresh docker php:8.5-cli+JIT); baseline ratcheted.
+
 ### Added — Fundamentals sweep + for-in vertical + task-9 v2 — **forin 0.01× → 0.73×, listindex → 1.61×**
 
 The coverage-driven sweep added four MACRO-realistic micros (21 total) and found four VM-bound

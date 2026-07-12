@@ -397,7 +397,23 @@ pub(super) fn arm_list_len(
     let fast_blk = b.create_block();
     let slow_blk = b.create_block();
     let flat_bit = b.ins().band_imm(lv, UB_TAG_FLAT);
-    b.ins().brif(flat_bit, fast_blk, &[], slow_blk, &[]);
+    // A non-flat operand may be an ACL builder record (the listappend vertical's
+    // `List.length(xs) >= 256` reset probe runs EVERY iteration) — read its len word
+    // inline, count = len/8 (elements are raw i64s).
+    let chk_acl = b.create_block();
+    let fast_acl = b.create_block();
+    b.ins().brif(flat_bit, fast_blk, &[], chk_acl, &[]);
+    b.switch_to_block(chk_acl);
+    let acl_bit = b.ins().band_imm(lv, UB_TAG_ACL);
+    b.ins().brif(acl_bit, fast_acl, &[], slow_blk, &[]);
+    b.switch_to_block(fast_acl);
+    let abase = b.ins().load(types::I64, ec.stable, ec.ctx, 40);
+    let aidx = b.ins().band_imm(lv, UB_IDX_MASK);
+    let aroff = b.ins().imul_imm(aidx, 24);
+    let aprec = b.ins().iadd(abase, aroff);
+    let alen = b.ins().load(types::I64, MemFlagsData::new(), aprec, 8);
+    let acnt = b.ins().ushr_imm(alen, 3);
+    b.ins().jump(merge, &[acnt.into()]);
     b.switch_to_block(fast_blk);
     let cnt_raw = b.ins().ushr_imm(lv, 40);
     let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
@@ -411,6 +427,57 @@ pub(super) fn arm_list_len(
     b.switch_to_block(merge);
     let res = b.block_params(merge)[0];
     ub_push(b, vars, fvars, kinds, res, Kind::Int)
+}
+
+/// FUSED list-builder append (`xs = List.append(xs, v)`, the listappend vertical) — emitted
+/// ONLY at a proven `accumulator_site` (the lhs is the dying borrow of the very slot the
+/// following `SetLocal` rewrites, treated as CONSUMED — the pure-append clone is
+/// unobservable). The hot shape — lhs already an ACL builder record — pushes FULLY INLINE:
+/// load `{ptr,len,cap}` from the record (at `acc_base + idx·24`), cap-check, ONE 8-byte
+/// store at `ptr+len`, bump len — php's `$xs[] =`. Everything else (first append on a
+/// flat/boxed list, capacity growth) takes the ONE `rt_u_list_acc_append` helper call,
+/// which converts/grows and returns the ACL handle the inline path then carries.
+pub(super) fn list_append_acc(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    av: ClValue,
+    vv: ClValue,
+) -> Result<ClValue, JitError> {
+    let merge = b.create_block();
+    b.append_block_param(merge, types::I64);
+    let fast0 = b.create_block();
+    let slow_blk = b.create_block();
+    let acl_bit = b.ins().band_imm(av, UB_TAG_ACL);
+    b.ins().brif(acl_bit, fast0, &[], slow_blk, &[]);
+    // INLINE: cap-checked in-place push of one raw i64 element.
+    b.switch_to_block(fast0);
+    let abase = b.ins().load(types::I64, ec.stable, ec.ctx, 40);
+    let idx = b.ins().band_imm(av, UB_IDX_MASK);
+    let roff = b.ins().imul_imm(idx, 24);
+    let prec = b.ins().iadd(abase, roff);
+    let len = b.ins().load(types::I64, MemFlagsData::new(), prec, 8);
+    let cap = b.ins().load(types::I64, MemFlagsData::new(), prec, 16);
+    let nl = b.ins().iadd_imm(len, 8);
+    let too_big = b.ins().icmp(IntCC::UnsignedGreaterThan, nl, cap);
+    let fast2 = b.create_block();
+    b.ins().brif(too_big, slow_blk, &[], fast2, &[]);
+    b.switch_to_block(fast2);
+    let ptr = b.ins().load(types::I64, MemFlagsData::new(), prec, 0);
+    let dst = b.ins().iadd(ptr, len);
+    b.ins().store(MemFlagsData::new(), vv, dst, 0);
+    b.ins().store(MemFlagsData::new(), nl, prec, 8);
+    b.ins().jump(merge, &[av.into()]);
+    // SLOW: convert/grow through the helper (lhs ALWAYS consumed at an accumulator site);
+    // a table-exhaustion `-1` is code 5 — the call redoes on the VM, correct, unspecialized.
+    b.switch_to_block(slow_blk);
+    let call = b.ins().call(h.list_acc_append, &[ec.ctx, av, vv]);
+    let sres = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    ec.fault_if(b, bad, 5);
+    b.ins().jump(merge, &[sres.into()]);
+    b.switch_to_block(merge);
+    Ok(b.block_params(merge)[0])
 }
 
 /// `String.length` native — INLINE for a slot operand (the length is the slot's leading

@@ -189,6 +189,23 @@ pub(super) fn unboxed_native_is_str_len(id: usize) -> bool {
         .is_some_and(|nf| nf.module == "Core.String" && nf.name == "length" && nf.pure)
 }
 
+/// Is native-registry entry `id` `Core.List.length` (the listappend vertical: inline for a
+/// flat handle — count bits — or an ACL builder record; helper for a boxed list)?
+pub(super) fn unboxed_native_is_list_len(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "length" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.List.append` (the listappend vertical: at a PROVEN
+/// accumulator site the consumed lhs becomes/extends an ACL builder record — in-place push,
+/// php's `$xs[] =`; any other use stays on the VM)?
+pub(super) fn unboxed_native_is_list_append(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "append" && nf.pure)
+}
+
 /// Is native-registry entry `id` `Core.Conversion.toFloat` (P-2c: inline `fcvt_from_sint` — the
 /// kernel is `n as f64`, the same IEEE round-to-nearest widening)?
 pub(super) fn unboxed_native_is_to_float(id: usize) -> bool {
@@ -1053,6 +1070,37 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::Int);
                 }
+                Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => {
+                    // Borrowed-only — mirrors `arm_list_len` exactly (fail closed).
+                    match kinds.pop() {
+                        Some(Kind::IntList(Own::Borrowed)) | Some(Kind::StrList(Own::Borrowed)) => {
+                        }
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List.length operand kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_list_append(*id)
+                        && accumulator_site(code, &depth_at, &is_leader, ip).is_some() =>
+                {
+                    // The listappend vertical: ONLY at a proven accumulator site (the lhs is
+                    // the dying borrow of the slot the following SetLocal rewrites) — the
+                    // emit consumes it into an ACL builder record. Elsewhere → VM fallback
+                    // (the clone semantics must stay observable).
+                    match (kinds.pop(), kinds.pop()) {
+                        (Some(Kind::Int), Some(Kind::IntList(_))) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List.append operand kinds {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::IntList(Own::Owned));
+                }
                 Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {
                     match kinds.pop() {
                         Some(Kind::Int) => {}
@@ -1678,6 +1726,8 @@ pub(super) fn collect_functions_unboxed(
                 | Op::Len => uses_handles = true,
                 Op::Concat(n) if *n >= 2 => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
+                Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => uses_handles = true,
+                Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => uses_handles = true,
                 // P-2c numeric conversions: pure, handle-free, fully inline.
                 Op::CallNative(id, 1)
                     if unboxed_native_is_to_float(*id) || unboxed_native_is_truncate(*id) =>

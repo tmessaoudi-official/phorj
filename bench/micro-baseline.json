@@ -33,6 +33,10 @@
       "ratio": 2.459,
       "identical": true
     },
+    "listappend": {
+      "ratio": 1.66,
+      "identical": true
+    },
     "listindex": {
       "ratio": 1.449,
       "identical": true

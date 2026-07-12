@@ -120,6 +120,55 @@ fn phg_run_hook_hits_the_jit_on_the_string_vertical() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_listappend_vertical() {
+    // Listappend-vertical DELIVERY-PATH proof: the exact `bench/micro/listappend.phg` shape —
+    // `xs = List.append(xs, i)` at an accumulator site (consumed into an ACL builder record,
+    // in-place push), the every-iteration `List.length` reset probe (inline ACL len read),
+    // `xs[0]`/`xs[255]` reads through the helper's ACL arm, and the `xs = [0]` reset (the
+    // release ladder recycles the record, keeping its grown buffer). Must JIT through the
+    // `Op::Call` hook AND stay byte-identical to the interpreter oracle. 2000 iterations
+    // cross the 256 reset boundary several times, proving record recycling reaches steady state.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        function bench(int iters): int {\n\
+          mutable List<int> xs = [0];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            xs = List.append(xs, i);\n\
+            if (List.length(xs) >= 256) {\n\
+              acc = acc + List.length(xs) + xs[0] + xs[255];\n\
+              xs = [0];\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc + List.length(xs);\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "listappend-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual listappend-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the listappend vertical must actually hit the JIT — else the builder flip is unproven"
+    );
+}
+
+#[test]
 fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
     // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
     // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.

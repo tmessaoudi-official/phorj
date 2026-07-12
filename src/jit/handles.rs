@@ -46,6 +46,14 @@ pub(super) const UB_TAG_OWNED: i64 = 1 << 60;
 /// ACC handle must take their helper branch, where [`UbCtx::release`] recycles the RECORD but
 /// keeps its buffer (capacity reuse across `s = ""` resets — php's trick).
 pub(super) const UB_TAG_ACC: i64 = 1 << 59;
+/// Handle tag: INT-LIST BUILDER (low 40 bits = record index) — the listappend vertical's
+/// analog of `UB_TAG_ACC` for the `xs = List.append(xs, v)` accumulator pattern: the SAME
+/// `{ptr,len,cap}` record pool (records are type-agnostic; len/cap in BYTES, elements are
+/// consecutive raw i64s), appended fully inline at proven accumulator sites (cap check + one
+/// 8-byte store, php's `$xs[] =` analog); `rt_u_list_acc_append` is the slow leg (conversion
+/// from a flat/boxed list, capacity growth). Like ACC, deliberately NOT OWNED-tagged — the
+/// release ladders route it to the helper, which recycles the record and keeps the buffer.
+pub(super) const UB_TAG_ACL: i64 = 1 << 58;
 /// Accumulator record-table capacity. Records are pre-allocated (`acc_base` must never move);
 /// live accumulators correspond to compile-time accumulator SITES — a handful at most.
 /// Exhaustion falls back to the plain concat path (correct, slower).
@@ -327,9 +335,10 @@ impl UbCtx {
             }
         } else if h & UB_TAG_FLAT != 0 {
             // Flat-list slots are bump-pinned for the run (built once per call) — no recycling.
-        } else if h & UB_TAG_ACC != 0 {
-            // Recycle the RECORD, keep its buffer: a reconverted accumulator (the `s = ""`
-            // reset pattern) reuses the grown capacity — php's buffer-reuse trick.
+        } else if h & (UB_TAG_ACC | UB_TAG_ACL) != 0 {
+            // Recycle the RECORD (string accumulator or list builder — same pool), keep its
+            // buffer: a reconverted accumulator/builder (the reset pattern) reuses the grown
+            // capacity — php's buffer-reuse trick.
             let idx = (h & UB_IDX_MASK) as u32;
             if (idx as usize) < UB_ACC_CAP {
                 self.acc_free.push(idx);
@@ -832,10 +841,79 @@ pub(super) extern "C" fn rt_u_list_len(ctx: *mut UbCtx, h: i64) -> i64 {
     if h & UB_TAG_FLAT != 0 {
         return (h >> 40) & 0xFFFFF;
     }
+    if h & UB_TAG_ACL != 0 {
+        let idx = (h & UB_IDX_MASK) as usize;
+        if idx >= UB_ACC_CAP {
+            return -1;
+        }
+        return (ctx.acc_recs[idx].len / 8) as i64;
+    }
     match ctx.handles.get(h as usize) {
         Some(Value::List(xs)) => xs.len() as i64,
         _ => -1,
     }
+}
+
+/// FUSED list-builder append (`xs = List.append(xs, v)`, the listappend vertical) — the SLOW
+/// leg of the inline ACL fast path. (1) lhs already an ACL record → capacity growth
+/// (doubling) + push; (2) lhs a flat/boxed INT list → CONVERT: take a record (recycled ones
+/// reuse their grown buffer), copy the elements in as raw i64s, push, release the consumed
+/// lhs, return `ACL|idx`; (3) record table exhausted → `-1` (code 5, the call redoes on the
+/// VM — correct, unspecialized). Only reachable from proven accumulator sites, so the lhs is
+/// always consumed.
+pub(super) extern "C" fn rt_u_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    if a & UB_TAG_ACL != 0 {
+        let idx = (a & UB_IDX_MASK) as usize;
+        if idx >= UB_ACC_CAP {
+            return -1;
+        }
+        let need = ctx.acc_recs[idx].len as usize + 8;
+        ctx.acc_grow_to(idx, need);
+        ctx.acc_push(idx, &v.to_le_bytes());
+        return a;
+    }
+    // Conversion leg: collect the current elements (flat arena slots or a boxed int list).
+    let elems: Vec<i64> = if a & UB_TAG_FLAT != 0 && a & UB_TAG_SLOT == 0 {
+        let n = ((a >> 40) & 0xFFFFF) as usize;
+        let base = (a & UB_IDX_MASK) as usize;
+        (0..n)
+            .map(|i| {
+                let off = (base + i) * UB_SLOT_SIZE;
+                let mut b8 = [0u8; 8];
+                b8.copy_from_slice(&ctx.buf_storage[off..off + 8]);
+                i64::from_le_bytes(b8)
+            })
+            .collect()
+    } else {
+        match ctx.handles.get(a as usize) {
+            Some(Value::List(xs)) => {
+                let ints: Option<Vec<i64>> = xs
+                    .iter()
+                    .map(|e| match e {
+                        Value::Int(n) => Some(*n),
+                        _ => None,
+                    })
+                    .collect();
+                match ints {
+                    Some(v) => v,
+                    None => return -1,
+                }
+            }
+            _ => return -1,
+        }
+    };
+    let Some(idx) = ctx.acc_take_record() else {
+        return -1;
+    };
+    ctx.acc_grow_to(idx, ((elems.len() + 1) * 8).max(64));
+    ctx.acc_recs[idx].len = 0;
+    for e in &elems {
+        ctx.acc_push(idx, &e.to_le_bytes());
+    }
+    ctx.acc_push(idx, &v.to_le_bytes());
+    ctx.release(a);
+    UB_TAG_ACL | idx as i64
 }
 
 pub(super) extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
@@ -1072,6 +1150,24 @@ pub(super) extern "C" fn rt_u_index_int(
 ) -> UbMapGetRet {
     let ctx = unsafe { &mut *ctx };
     let miss = UbMapGetRet { value: 0, code: 5 };
+    if list & UB_TAG_ACL != 0 {
+        // An int-list BUILDER read: bounds vs the record's element count, raw i64 load.
+        let ridx = (list & UB_IDX_MASK) as usize;
+        if ridx >= UB_ACC_CAP {
+            return miss;
+        }
+        let n = (ctx.acc_recs[ridx].len / 8) as i64;
+        if !(0..n).contains(&idx) {
+            return miss; // the VM redo renders the canonical bounds fault
+        }
+        let off = idx as usize * 8;
+        let mut vb = [0u8; 8];
+        vb.copy_from_slice(&ctx.acc_bufs[ridx][off..off + 8]);
+        return UbMapGetRet {
+            value: i64::from_le_bytes(vb),
+            code: 0,
+        };
+    }
     if list & (UB_TAG_SLOT | UB_TAG_FLAT) != 0 {
         // Defensive mirror of the inline path (a flat INT list: value at slot bytes 0..8).
         if list & UB_TAG_FLAT != 0 && list & UB_TAG_SLOT == 0 {
@@ -1130,6 +1226,7 @@ pub(super) struct UbHelperIds {
     pub(super) concat_mix: FuncId,
     pub(super) acc_append: FuncId,
     pub(super) list_len: FuncId,
+    pub(super) list_acc_append: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1149,4 +1246,5 @@ pub(super) struct UbHelperRefs {
     pub(super) concat_mix: FuncRef,
     pub(super) acc_append: FuncRef,
     pub(super) list_len: FuncRef,
+    pub(super) list_acc_append: FuncRef,
 }

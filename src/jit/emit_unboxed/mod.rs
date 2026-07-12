@@ -434,6 +434,7 @@ pub(super) fn build_body_unboxed(
         concat_mix: module.declare_func_in_func(ids.concat_mix, b.func),
         acc_append: module.declare_func_in_func(ids.acc_append, b.func),
         list_len: module.declare_func_in_func(ids.list_len, b.func),
+        list_acc_append: module.declare_func_in_func(ids.list_acc_append, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -714,6 +715,36 @@ pub(super) fn build_body_unboxed(
             Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => {
                 let h = ub_ref(ub_refs.as_ref(), "String.length")?;
                 arm_str_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => {
+                // `List.length` — same lowering as `Op::Len` (flat count bits / ACL len
+                // word inline; helper for a boxed list).
+                let h = ub_ref(ub_refs.as_ref(), "List.length")?;
+                arm_list_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => {
+                // The listappend vertical (mirrors the Concat accumulator peephole): ONLY
+                // at a proven accumulator site — the lhs is the dying borrow of the very
+                // slot the following SetLocal rewrites; consume it into an ACL builder
+                // record (in-place push), store the result straight into the slot, and
+                // skip the SetLocal.
+                let s = accumulator_site(code, &depth_at, &is_leader, ip).ok_or_else(|| {
+                    JitError::Unsupported(
+                        "unboxed List.append outside an accumulator site".to_string(),
+                    )
+                })?;
+                let h = ub_ref(ub_refs.as_ref(), "List.append")?;
+                let (vv, vk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if vk != Kind::Int || !matches!(ak, Kind::IntList(_)) {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed List.append operand kinds ({ak:?}, {vk:?})"
+                    )));
+                }
+                let res = list_append_acc(&mut b, &ec, h, av, vv)?;
+                b.def_var(vars[s], res);
+                kinds[s] = Kind::IntList(Own::Owned);
+                skip_ip = Some(ip + 1);
             }
             Op::Pop => {
                 arm_pop(
