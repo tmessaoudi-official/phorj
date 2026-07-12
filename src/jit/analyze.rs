@@ -168,6 +168,31 @@ pub(super) fn borrowed_copy(k: Kind) -> Kind {
     }
 }
 
+/// Element-wise kind-vector join with `Unknown` as BOTTOM (the fixpoint's first-pass
+/// placeholder): `Unknown ⊔ K = K`, identical kinds join to themselves, two KNOWN kinds
+/// disagreeing → `None` (a genuine conflict — no single static signature exists).
+pub(super) fn join_unknown_bottom(a: &[Kind], b: &[Kind]) -> Option<Vec<Kind>> {
+    if a.len() != b.len() {
+        return None;
+    }
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| match (x, y) {
+            _ if x == y => Some(*x),
+            (Kind::Unknown, k) => Some(*k),
+            (k, Kind::Unknown) => Some(*k),
+            // The conservative usage pre-pass proves handle params as `Int` placeholders on
+            // the first fixpoint pass (see `param_kinds`' override note); the checker
+            // guarantees two sites can never GENUINELY disagree on a static ctor/param type,
+            // so Int ⊔ handle refines to the handle kind. Two distinct handle families (or
+            // any other cross-family pair) remain a genuine conflict.
+            (Kind::Int, k) if k.is_handle() => Some(*k),
+            (k, Kind::Int) if k.is_handle() => Some(*k),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Join two operand kinds at a merge edge. Identical kinds join to themselves. The SAME handle
 /// family differing only between `Owned` and `ConstBorrow` joins to `Owned` — safe because a
 /// release is runtime-bit-gated (freeing a provably-bit-clear const word is a no-op), so the
@@ -1406,9 +1431,16 @@ pub(super) fn unboxed_analyze(
                     // the word's ownership to the stack and kills the slot (`Unknown`) — the
                     // ctor-argument flow. Everything else is a BORROW: the slot keeps
                     // ownership; the copy is never freed by its consumer.
-                    if *slot < single_use.len() && single_use[*slot] && k == Kind::Str(Own::Owned) {
+                    let movable = matches!(
+                        k,
+                        Kind::Str(Own::Owned)
+                            | Kind::StrList(Own::Owned)
+                            | Kind::IntList(Own::Owned)
+                            | Kind::StrIntMap(Own::Owned)
+                    );
+                    if *slot < single_use.len() && single_use[*slot] && movable {
                         kinds[*slot] = Kind::Unknown;
-                        kinds.push(Kind::Str(Own::Owned));
+                        kinds.push(k);
                     } else {
                         kinds.push(borrowed_copy(k));
                     }
@@ -1640,13 +1672,25 @@ pub(super) fn unboxed_analyze(
                             JitError::Codegen("unboxed analyze: Call underflow".to_string())
                         })?;
                         match k {
-                            // A string argument MOVES into the callee (its param is a single-
-                            // use-moved Owned slot there; a const word's later frees no-op).
-                            // A BORROWED string arg would leave the caller's local aliasing a
-                            // word the callee now owns — double-free — DENY.
+                            // A string/list/map argument MOVES into the callee (its param is
+                            // a single-use-moved Owned slot there; a const word's later frees
+                            // no-op). A BORROWED handle arg would leave the caller's local
+                            // aliasing a word the callee now owns — double-free — DENY.
                             Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
                                 has_handle_arg = true;
                                 sig.push(Kind::Str(Own::Owned));
+                            }
+                            Kind::StrList(Own::Owned) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::StrList(Own::Owned));
+                            }
+                            Kind::IntList(Own::Owned) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::IntList(Own::Owned));
+                            }
+                            Kind::StrIntMap(Own::Owned) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::StrIntMap(Own::Owned));
                             }
                             k if k.is_handle()
                                 || k == Kind::EnumInt
@@ -1809,14 +1853,44 @@ pub(super) fn unboxed_analyze(
                     }
                 }
                 Op::CallMethod(nidx, argc) => {
+                    // Args mirror the free-`Call` contract: scalars pass by word; a
+                    // string/list/map argument MOVES (Owned into the callee's param slot);
+                    // borrowed handles / enums / fns stay denied. The moved kinds are
+                    // recorded as the method's param sig (slot 0 = `this`, injected by
+                    // `this_inst` — Unknown here so the override leaves it alone).
+                    let mut sig: Vec<Kind> = Vec::with_capacity(*argc + 1);
+                    let mut has_handle_arg = false;
                     for _ in 0..*argc {
-                        if kinds.pop().is_some_and(|k| {
-                            k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_))
-                        }) {
-                            return Err(JitError::Unsupported(
-                                "unboxed: handle/enum/fn argument to CallMethod (deferred)"
-                                    .to_string(),
-                            ));
+                        let k = kinds.pop().ok_or_else(|| {
+                            JitError::Codegen("unboxed analyze: CallMethod underflow".to_string())
+                        })?;
+                        match k {
+                            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::Str(Own::Owned));
+                            }
+                            Kind::StrList(Own::Owned) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::StrList(Own::Owned));
+                            }
+                            Kind::IntList(Own::Owned) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::IntList(Own::Owned));
+                            }
+                            Kind::StrIntMap(Own::Owned) => {
+                                has_handle_arg = true;
+                                sig.push(Kind::StrIntMap(Own::Owned));
+                            }
+                            k if k.is_handle()
+                                || k == Kind::EnumInt
+                                || matches!(k, Kind::Fn(_) | Kind::FnCap1(_)) =>
+                            {
+                                return Err(JitError::Unsupported(
+                                    "unboxed: handle/enum/fn argument to CallMethod (deferred)"
+                                        .to_string(),
+                                ));
+                            }
+                            other => sig.push(other),
                         }
                     }
                     let recv = kinds.pop().ok_or_else(|| {
@@ -1848,6 +1922,11 @@ pub(super) fn unboxed_analyze(
                         ));
                     }
                     disc.method_calls.push((target, c));
+                    if has_handle_arg {
+                        sig.push(Kind::Unknown); // slot 0 = `this` (this_inst injects it)
+                        sig.reverse(); // popped last-arg-first; record declaration order
+                        disc.call_sigs.push((target, sig));
+                    }
                     kinds.push(info.ret_of(target));
                 }
                 Op::Jump(t) => {
@@ -1870,14 +1949,18 @@ pub(super) fn unboxed_analyze(
                         // allocation, and nothing else owned may be live (no leak at return —
                         // frame teardown emits no frees).
                         Kind::Inst(c, own) => {
-                            // (a) no INSTANCE params — a returned Inst borrow could otherwise
-                            //     alias a caller-owned instance (double-free on the caller
-                            //     side). Str params can't be the returned lineage (kinds
-                            //     differ), and an UNMOVED owned str param is caught by the
-                            //     owned-cell census below (the leak gate).
-                            if param_kinds.iter().any(|k| matches!(k, Kind::Inst(..))) {
+                            // (a) no INSTANCE params — applies to the BORROWED-return lineage
+                            //     only: a returned Inst borrow could alias a caller-owned
+                            //     instance (double-free on the caller side). An OWNED Inst
+                            //     provably comes from THIS function's own MakeInstance
+                            //     (GetLocal copies are Borrowed and there is no Inst param
+                            //     move), so instance params cannot be its lineage — the
+                            //     builder-method shape (`this` in, fresh instance out).
+                            if matches!(own, Own::Borrowed)
+                                && param_kinds.iter().any(|k| matches!(k, Kind::Inst(..)))
+                            {
                                 return Err(JitError::Unsupported(
-                                    "unboxed: instance return from a function with instance params (deferred)"
+                                    "unboxed: borrowed instance return from a function with instance params (deferred)"
                                         .to_string(),
                                 ));
                             }
@@ -1910,6 +1993,12 @@ pub(super) fn unboxed_analyze(
                             // The caller receives ownership.
                             Kind::Inst(c, Own::Owned)
                         }
+                        // A str/list return always reaches the caller as a fresh/transferred
+                        // OWNED word (the emit clones a borrowed one) — mirror that here so
+                        // `ret_of` hands callers the right ownership.
+                        Kind::Str(_) => Kind::Str(Own::Owned),
+                        Kind::StrList(_) => Kind::StrList(Own::Owned),
+                        Kind::IntList(_) => Kind::IntList(Own::Owned),
                         other => other,
                     };
                     match &ret_kind {
@@ -2190,11 +2279,19 @@ pub(super) fn resolve_unboxed_graph(
                         changed = true;
                     }
                     Some(prev) if prev != &sig => {
-                        // Two construction sites disagree on a field's kind (e.g. Int here,
-                        // Str there) - a single static signature is impossible. Fall back.
-                        return Err(JitError::Unsupported(
-                            "unboxed: conflicting MakeInstance field kinds (deferred)".to_string(),
-                        ));
+                        // Element-wise join with `Unknown` as BOTTOM: a first-fixpoint-pass
+                        // site records `Unknown` where a param proof hasn't landed yet — a
+                        // later pass refines it. Two KNOWN kinds disagreeing (Int here, Str
+                        // there) stays a hard fallback (no single static signature).
+                        let Some(joined) = join_unknown_bottom(prev, &sig) else {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed: conflicting MakeInstance field kinds ({prev:?} vs {sig:?})"
+                            )));
+                        };
+                        if &joined != prev {
+                            info.field_kinds[class] = Some(joined);
+                            changed = true;
+                        }
                     }
                     Some(_) => {}
                 }
@@ -2206,9 +2303,15 @@ pub(super) fn resolve_unboxed_graph(
                         changed = true;
                     }
                     Some(prev) if prev != &sig => {
-                        return Err(JitError::Unsupported(
-                            "unboxed: conflicting call argument kinds (deferred)".to_string(),
-                        ));
+                        let Some(joined) = join_unknown_bottom(prev, &sig) else {
+                            return Err(JitError::Unsupported(
+                                "unboxed: conflicting call argument kinds (deferred)".to_string(),
+                            ));
+                        };
+                        if &joined != prev {
+                            info.param_over[callee] = Some(joined);
+                            changed = true;
+                        }
                     }
                     Some(_) => {}
                 }

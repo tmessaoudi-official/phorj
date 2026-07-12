@@ -330,6 +330,26 @@ impl UbCtx {
         }
     }
 
+    /// Materialize a RETURNED handle word into a real `Value` for the VM (the entry-level
+    /// str/list return decode — a raw handle printed as an int was the conformance break this
+    /// fixes). `repr`: 2 = str, 3 = str-list, 4 = int-list. `None` = defensive mismatch.
+    pub(super) fn materialize(&self, h: i64, repr: i64) -> Option<Value> {
+        match repr {
+            2 => match self.str_bytes(h) {
+                Some(bytes) => std::str::from_utf8(bytes)
+                    .ok()
+                    .map(|s| Value::Str(crate::phstr::PhStr::new(s))),
+                None => match self.handles.get(h as usize) {
+                    Some(v @ Value::Str(_)) => Some(v.clone()),
+                    _ => None,
+                },
+            },
+            3 => Some(Value::List(std::rc::Rc::new(self.list_values(h, true)?))),
+            4 => Some(Value::List(std::rc::Rc::new(self.list_values(h, false)?))),
+            _ => None,
+        }
+    }
+
     /// Pop a recycled arena slot or bump a fresh one; `None` = arena exhausted (→ redo on VM).
     pub(super) fn alloc_slot(&mut self) -> Option<u64> {
         if self.free_top > 0 {
@@ -1576,6 +1596,36 @@ pub(super) extern "C" fn rt_u_native2(
     UbMapGetRet { value, code: 0 }
 }
 
+/// Clone a handle VALUE into a fresh untagged Owned handle (`repr`: 2 = str, 3 = str-list,
+/// 4 = int-list) — the Return-of-BORROWED-handle path: a borrowed field/local word returned
+/// as-is would leave the caller and the owner both freeing it (double-free); PHP value
+/// semantics say the caller gets its own copy. `-1` = defensive mismatch (code 5).
+pub(super) extern "C" fn rt_u_clone_value(ctx: *mut UbCtx, h: i64, repr: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let v = match repr {
+        2 => match ctx.str_bytes(h) {
+            Some(bytes) => match std::str::from_utf8(bytes) {
+                Ok(s) => Value::Str(crate::phstr::PhStr::new(s)),
+                Err(_) => return -1,
+            },
+            None => match ctx.handles.get(h as usize) {
+                Some(v @ Value::Str(_)) => v.clone(),
+                _ => return -1,
+            },
+        },
+        3 => match ctx.list_values(h, true) {
+            Some(vals) => Value::List(std::rc::Rc::new(vals)),
+            None => return -1,
+        },
+        4 => match ctx.list_values(h, false) {
+            Some(vals) => Value::List(std::rc::Rc::new(vals)),
+            None => return -1,
+        },
+        _ => return -1,
+    };
+    ctx.alloc(v)
+}
+
 /// String equality for the unboxed `Op::Eq`/`Op::Ne` on two string operands — the shared
 /// [`Value::eq_val`] kernel (single-sourced, so `==` on strings can never drift from the VM).
 /// Returns 0/1; `-1` = defensive non-string operand (code 5).
@@ -1785,6 +1835,7 @@ pub(super) struct UbHelperIds {
     pub(super) list_append_clone: FuncId,
     pub(super) native2: FuncId,
     pub(super) str_eq: FuncId,
+    pub(super) clone_value: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1812,4 +1863,5 @@ pub(super) struct UbHelperRefs {
     pub(super) list_append_clone: FuncRef,
     pub(super) native2: FuncRef,
     pub(super) str_eq: FuncRef,
+    pub(super) clone_value: FuncRef,
 }

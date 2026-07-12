@@ -191,6 +191,7 @@ impl Compiled {
             );
             builder.symbol("rt_u_native2", rt_u_native2 as *const u8);
             builder.symbol("rt_u_str_eq", rt_u_str_eq as *const u8);
+            builder.symbol("rt_u_clone_value", rt_u_clone_value as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -319,6 +320,7 @@ impl Compiled {
                     declare(&mut module, "rt_u_native2", &s)?
                 },
                 str_eq: declare(&mut module, "rt_u_str_eq", &sig4)?,
+                clone_value: declare(&mut module, "rt_u_clone_value", &sig3)?,
             })
         } else {
             None
@@ -532,15 +534,26 @@ impl Compiled {
                 }
             }
         };
-        // Stash the reused ctx back for the next call (arena + record buffers keep their growth).
-        if let Some(c) = cached.take() {
-            *self.ub_ctx_cache.borrow_mut() = Some(c);
-        }
-        match ret.code {
-            // Decode the returned i64 by the entry's return kind: Int verbatim, Float from its bits.
+        // Decode BEFORE stashing the ctx back — a returned str/list handle points into it.
+        let decoded = match ret.code {
+            // Decode the returned i64 by the entry's return kind: Int verbatim, Float from its
+            // bits, Bool from 0/1; a STR/LIST return is a HANDLE into the per-run ctx and must
+            // MATERIALIZE into a real `Value` here (a raw handle word printed as an int was
+            // the conformance break this arm fixes).
             0 => match self.ret_kind {
                 Kind::Float => JitRun::Value(Value::Float(f64::from_bits(ret.value as u64))),
                 Kind::Bool => JitRun::Value(Value::Bool(ret.value != 0)),
+                Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) => {
+                    let repr = match self.ret_kind {
+                        Kind::Str(_) => 2,
+                        Kind::StrList(_) => 3,
+                        _ => 4,
+                    };
+                    match cached.as_ref().and_then(|c| c.materialize(ret.value, repr)) {
+                        Some(v) => JitRun::Value(v),
+                        None => JitRun::Fault(REDO_ON_VM.to_string()),
+                    }
+                }
                 _ => JitRun::Value(Value::Int(ret.value)),
             },
             // ovf-spec: EVERY unboxed fault now funnels to code 5 = "redo on VM" (codes 1/2/3/4 are no
@@ -548,7 +561,12 @@ impl Compiled {
             // correctly-ordered fault string + source line. See [`REDO_ON_VM`].
             5 => JitRun::Fault(REDO_ON_VM.to_string()),
             other => JitRun::Fault(format!("jit: unboxed unknown fault code {other}")),
+        };
+        // Stash the reused ctx back for the next call (arena + record buffers keep their growth).
+        if let Some(c) = cached.take() {
+            *self.ub_ctx_cache.borrow_mut() = Some(c);
         }
+        decoded
     }
 }
 

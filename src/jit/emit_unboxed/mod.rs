@@ -151,9 +151,13 @@ fn pop_int_args(
     for _ in 0..argc {
         let (v, k) = ub_pop(b, vars, fvars, kinds)?;
         match k {
-            // A string argument MOVES into the callee (mirrors the analyze arm) — the word
-            // crosses as a plain i64; the callee's single-use-moved param owns it.
-            Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {}
+            // A string/list/map argument MOVES into the callee (mirrors the analyze arm) —
+            // the word crosses as a plain i64; the callee's single-use-moved param owns it.
+            Kind::Str(Own::Owned)
+            | Kind::Str(Own::ConstBorrow)
+            | Kind::StrList(Own::Owned)
+            | Kind::IntList(Own::Owned)
+            | Kind::StrIntMap(Own::Owned) => {}
             // Any other handle would arrive as an untyped i64 param; a two-word enum can't
             // cross the ABI; a `Fn`'s static target would be lost.
             k if k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_)) => {
@@ -442,6 +446,7 @@ pub(super) fn build_body_unboxed(
         list_append_clone: module.declare_func_in_func(ids.list_append_clone, b.func),
         native2: module.declare_func_in_func(ids.native2, b.func),
         str_eq: module.declare_func_in_func(ids.str_eq, b.func),
+        clone_value: module.declare_func_in_func(ids.clone_value, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -1032,9 +1037,16 @@ pub(super) fn build_body_unboxed(
                     b.def_var(evars[kinds.len()], tv);
                 }
                 // Single-use param MOVE / plain BORROW — mirrors the analyze arm exactly.
-                if *slot < single_use.len() && single_use[*slot] && kind == Kind::Str(Own::Owned) {
+                let movable = matches!(
+                    kind,
+                    Kind::Str(Own::Owned)
+                        | Kind::StrList(Own::Owned)
+                        | Kind::IntList(Own::Owned)
+                        | Kind::StrIntMap(Own::Owned)
+                );
+                if *slot < single_use.len() && single_use[*slot] && movable {
                     kinds[*slot] = Kind::Unknown;
-                    ub_push(&mut b, &vars, &fvars, &mut kinds, v, Kind::Str(Own::Owned))?;
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, v, kind)?;
                 } else {
                     ub_push(&mut b, &vars, &fvars, &mut kinds, v, borrowed_copy(kind))?;
                 }
@@ -1402,11 +1414,38 @@ pub(super) fn build_body_unboxed(
                 // transfer contract (validated by the analyze pass's transfer gate — the entry
                 // function returning an instance was rejected in `compile_unboxed`). Normalize
                 // the instance's compile-time ownership to Owned: the caller receives it.
-                let kind = match kind {
-                    Kind::Int | Kind::Float | Kind::Bool => kind,
-                    Kind::Inst(c, _) => Kind::Inst(c, Own::Owned),
+                // A STR/LIST return transfers Owned/const words as-is; a BORROWED one (a field
+                // read, a flat element) is CLONED first — PHP value semantics, and the owner
+                // and the caller can never double-free one word.
+                let (v, kind) = match kind {
+                    Kind::Int | Kind::Float | Kind::Bool => (v, kind),
+                    Kind::Inst(c, _) => (v, Kind::Inst(c, Own::Owned)),
+                    Kind::Str(own) | Kind::StrList(own) | Kind::IntList(own)
+                        if own == Own::Borrowed =>
+                    {
+                        let h = ub_ref(ub_refs.as_ref(), "Return(borrowed handle clone)")?;
+                        let repr = match kind {
+                            Kind::Str(_) => 2,
+                            Kind::StrList(_) => 3,
+                            _ => 4,
+                        };
+                        let reprv = b.ins().iconst(types::I64, repr);
+                        let call = b.ins().call(h.clone_value, &[ec.ctx, v, reprv]);
+                        let cv = b.inst_results(call)[0];
+                        let bad = b.ins().icmp_imm(IntCC::SignedLessThan, cv, 0);
+                        ec.fault_if(&mut b, bad, 5);
+                        let owned = match kind {
+                            Kind::Str(_) => Kind::Str(Own::Owned),
+                            Kind::StrList(_) => Kind::StrList(Own::Owned),
+                            _ => Kind::IntList(Own::Owned),
+                        };
+                        (cv, owned)
+                    }
+                    Kind::Str(_) => (v, Kind::Str(Own::Owned)),
+                    Kind::StrList(_) => (v, Kind::StrList(Own::Owned)),
+                    Kind::IntList(_) => (v, Kind::IntList(Own::Owned)),
                     other => {
-                        // A bool/unknown return would be mis-decoded — reject to VM/boxed.
+                        // An unknown/enum/map return would be mis-decoded — reject to VM/boxed.
                         return Err(JitError::Unsupported(format!(
                             "unboxed: non-numeric return (kind {other:?})"
                         )));

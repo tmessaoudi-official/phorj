@@ -413,6 +413,61 @@ fn phg_run_hook_hits_the_jit_on_the_native_bridge2_and_str_eq() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
+    // W-slices 3+4: handle ARGS move across calls/methods (a fresh list literal and a str
+    // const into a free fn; a str arg into a METHOD), and the builder-method return shape —
+    // `this` (an Inst param) in, a FRESH Owned instance out (the relaxed transfer gate: an
+    // Owned Inst provably comes from the callee's own MakeInstance). hits > 0 + byte-identity.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        import Core.String;\n\
+        class Counter {\n\
+          constructor(public int n, public string tag) {}\n\
+          function bumped(string t): Counter {\n\
+            return new Counter(this.n + 1, t);\n\
+          }\n\
+        }\n\
+        function rowOf(List<string> parts, string sep): string {\n\
+          return String.join(parts, sep);\n\
+        }\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string row = rowOf([\"a\", \"b\", \"c\"], \"-\");\n\
+            acc = acc + String.length(row);\n\
+            Counter c0 = new Counter(i, \"x\");\n\
+            Counter c1 = c0.bumped(\"y\");\n\
+            acc = acc + c1.n;\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "handle-args/builder-return jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual handle-args/builder-return must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the handle-args/builder-return shapes must actually hit the JIT"
+    );
+}
+
+#[test]
 fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // The MUTATION GUARD: iterating a local AND writing it in the same function (append
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would
