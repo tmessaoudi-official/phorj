@@ -1737,6 +1737,24 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
 }
 
 #[test]
+fn qualify_bytecode_probe_tmp() {
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/bench/micro/sqlbuild.phg"
+    ))
+    .expect("sqlbuild micro readable");
+    let program = compile_source(&src);
+    for (f, func) in program.functions.iter().enumerate() {
+        if func.name.contains("qualifyAll") || func.name.contains("qualifyFragments") {
+            eprintln!("== fn {f} ({}) arity {} ==", func.name, func.arity);
+            for (ip, op) in func.chunk.code.iter().enumerate() {
+                eprintln!("  {ip:3}: {op:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
     // L2a: the STR-list ACL accumulator builder — the qualify-loop shape
     // (`out = List.append(out, q)` where q is a fresh OWNED string) consumes each element

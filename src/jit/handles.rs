@@ -1013,9 +1013,9 @@ pub(super) extern "C" fn rt_u_list_len(ctx: *mut UbCtx, h: i64) -> i64 {
 /// leg of the inline ACL fast path. (1) lhs already an ACL record → capacity growth
 /// (doubling) + push; (2) lhs a flat/boxed INT list → CONVERT: take a record (recycled ones
 /// reuse their grown buffer), copy the elements in as raw i64s, push, release the consumed
-/// lhs, return `ACL|idx`; (3) record table exhausted → `-1` (code 5, the call redoes on the
-/// VM — correct, unspecialized). Only reachable from proven accumulator sites, so the lhs is
-/// always consumed.
+/// lhs, return `ACL|idx`; (3) record table exhausted → general clone-append fallback (boxed
+/// result, same MOVE semantics — correct bytes at degraded speed, never a code-5 redo
+/// storm). Only reachable from proven accumulator sites, so the lhs is always consumed.
 pub(super) extern "C" fn rt_u_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
     if a & UB_TAG_ACL != 0 {
@@ -1059,7 +1059,9 @@ pub(super) extern "C" fn rt_u_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -
         }
     };
     let Some(idx) = ctx.acc_take_record() else {
-        return -1;
+        // Pool exhausted — fall back to the general clone-append (raw i64 elements are
+        // plain words: nothing extra to release).
+        return rt_u_list_append_clone(ctx, a, v, 0b100);
     };
     ctx.acc_grow_to(idx, ((elems.len() + 1) * 8).max(64));
     ctx.acc_recs[idx].len = 0;
@@ -1077,7 +1079,8 @@ pub(super) extern "C" fn rt_u_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -
 /// record here is analyze/emit drift → `-1`. (2) lhs a FLAT str list → convert: the
 /// elements' BORROWED SLOT WORDS go in as-is (the slots are bump-pinned for the run — no
 /// copies, and their releases no-op); lhs a BOXED str list → one owned arena word per
-/// element (a one-time conversion cost). (3) exhaustion / non-str element → `-1` (code 5,
+/// element (a one-time conversion cost). (3) pool exhaustion → general clone-append
+/// fallback (boxed result, never a code-5 redo storm); non-str element → `-1` (code 5,
 /// redo on VM). Only reachable from proven accumulator sites, so the lhs is consumed.
 pub(super) extern "C" fn rt_u_str_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
@@ -1118,7 +1121,13 @@ pub(super) extern "C" fn rt_u_str_list_acc_append(ctx: *mut UbCtx, a: i64, v: i6
         strs.into_iter().map(|s| ctx.alloc(s)).collect()
     };
     let Some(idx) = ctx.acc_take_record() else {
-        return -1;
+        // Pool exhausted — fall back to the general clone-append (boxed result, same
+        // MOVE semantics: elem word + lhs consumed). Correct bytes at degraded speed,
+        // NEVER a code-5 redo storm — mirrors rt_u_acc_append's plain-concat fallback.
+        for w in words {
+            ctx.release(w); // boxed-lhs materialization made owned words; slot words no-op
+        }
+        return rt_u_list_append_clone(ctx, a, v, 0b111);
     };
     ctx.acc_grow_to(idx, ((words.len() + 1) * 8).max(64));
     ctx.acc_recs[idx].len = 0;

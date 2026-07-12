@@ -983,6 +983,39 @@ pub(super) fn single_use_params(func: &crate::chunk::Function) -> Vec<bool> {
         .collect()
 }
 
+/// L2a: is the operand at `ip` a MOVABLE dying-local element for the str accumulator arm?
+/// True when `ip-1` is `GetLocal(v)` of a NON-PARAM local read exactly once and never
+/// rewritten (the qualify-loop `q` shape: declared afresh per iteration, read only as the
+/// append element, its cell scope-popped before the back edge). The arm then treats the
+/// borrowed word as CONSUMED and voids slot `v` — the later `Pop` pops an `Unknown` cell
+/// (no release), and any shape that instead carries the voided slot to a merge declines at
+/// `join_kind(Unknown, ⊥) = None` (fail closed — this is deliberately SITE-LOCAL so the
+/// blanket-widening regression cannot recur: no other consumer's kind stream changes).
+/// Returns the source slot.
+pub(super) fn movable_dying_elem(func: &crate::chunk::Function, ip: usize) -> Option<usize> {
+    let code = &func.chunk.code;
+    let Some(Op::GetLocal(v)) = ip.checked_sub(1).and_then(|p| code.get(p)) else {
+        return None;
+    };
+    if *v < func.arity {
+        return None; // params take the standard single-use path
+    }
+    let reach = reachable(code);
+    let mut gets = 0usize;
+    let mut sets = 0usize;
+    for (i, op) in code.iter().enumerate() {
+        if !reach[i] {
+            continue;
+        }
+        match op {
+            Op::GetLocal(s) if s == v => gets += 1,
+            Op::SetLocal(s) if s == v => sets += 1,
+            _ => {}
+        }
+    }
+    (gets == 1 && sets == 0).then_some(*v)
+}
+
 pub(super) fn accumulator_site(
     code: &[Op],
     depth_at: &[Option<usize>],
@@ -1027,7 +1060,13 @@ pub(super) fn accumulator_site(
             return Some(*s);
         }
         // The cell was popped (or never live) below this point - not the accumulator shape.
-        if dj <= lhs_index || dj1 <= lhs_index {
+        // `dj1 <= lhs_index + 1` also rejects any intermediate op whose post-boundary lands
+        // BACK at the cell's height: a pop-then-repush (e.g. the inner Concat of
+        // `s = s + A + B`) replaces the cell's VALUE at the same depth, so the value at
+        // `lhs_index` when `ip` runs is NOT the untouched borrow of `s` — treating that as
+        // an in-place append leaks the accumulator record the local still owns (the
+        // SetLocal old-release is elided on proven sites).
+        if dj <= lhs_index || dj1 <= lhs_index + 1 {
             return None;
         }
         // Hit the block leader without finding the pusher.
@@ -1388,10 +1427,11 @@ pub(super) fn unboxed_analyze(
                 Op::CallNative(id, 2)
                     if unboxed_native_is_list_append(*id)
                         && accumulator_site(code, &depth_at, &is_leader, ip).is_some()
-                        && matches!(
+                        && (matches!(
                             kinds.last(),
                             Some(Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow))
-                        )
+                        ) || (matches!(kinds.last(), Some(Kind::Str(Own::Borrowed)))
+                            && movable_dying_elem(&program.functions[func_idx], ip).is_some()))
                         && matches!(
                             kinds.get(kinds.len().wrapping_sub(2)),
                             Some(Kind::StrList(_))
@@ -1403,15 +1443,31 @@ pub(super) fn unboxed_analyze(
                     // must be one the record can OWN: Owned moves in, a const word's later
                     // frees no-op; a BORROWED elem (would double-free with its owner) falls
                     // THROUGH to the general clone arm (guard order mirrors emit exactly).
-                    match (kinds.pop(), kinds.pop()) {
+                    let elem = kinds.pop();
+                    let lhs = kinds.pop();
+                    match (&elem, &lhs) {
                         (
-                            Some(Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow)),
+                            Some(
+                                Kind::Str(Own::Owned)
+                                | Kind::Str(Own::ConstBorrow)
+                                | Kind::Str(Own::Borrowed),
+                            ),
                             Some(Kind::StrList(_)),
                         ) => {}
                         other => {
                             return Err(JitError::Unsupported(format!(
                                 "unboxed List.append operand kinds {other:?}"
                             )))
+                        }
+                    }
+                    // A Borrowed elem is a DYING-LOCAL move (the guard proved it): the
+                    // record consumes the word, so VOID the source slot — its later Pop
+                    // pops Unknown (no release, no double free with the record).
+                    if matches!(elem, Some(Kind::Str(Own::Borrowed))) {
+                        let v = movable_dying_elem(&program.functions[func_idx], ip)
+                            .expect("guard proved movable elem");
+                        if let Some(cell) = kinds.get_mut(v) {
+                            *cell = Kind::Unknown;
                         }
                     }
                     kinds.push(Kind::StrList(Own::Owned));

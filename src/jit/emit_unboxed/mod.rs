@@ -1131,10 +1131,11 @@ pub(super) fn build_body_unboxed(
             Op::CallNative(id, 2)
                 if unboxed_native_is_list_append(*id)
                     && accumulator_site(code, &depth_at, &is_leader, ip).is_some()
-                    && matches!(
+                    && (matches!(
                         kinds.last(),
                         Some(Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow))
-                    )
+                    ) || (matches!(kinds.last(), Some(Kind::Str(Own::Borrowed)))
+                        && movable_dying_elem(func, ip).is_some()))
                     && matches!(
                         kinds.get(kinds.len().wrapping_sub(2)),
                         Some(Kind::StrList(_))
@@ -1152,8 +1153,20 @@ pub(super) fn build_body_unboxed(
                     )
                 })?;
                 let h = ub_ref(ub_refs.as_ref(), "List.append(str acc)")?;
-                let (vv, _vk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (vv, vk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let (av, _ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                // Dying-local elem: the record consumes the word — VOID the source slot
+                // (mirrors the analyze arm; its later Pop pops Unknown, no release).
+                if vk == Kind::Str(Own::Borrowed) {
+                    let v = movable_dying_elem(func, ip).ok_or_else(|| {
+                        JitError::Codegen(
+                            "unboxed: borrowed str-acc elem not movable past analyze".to_string(),
+                        )
+                    })?;
+                    if let Some(cell) = kinds.get_mut(v) {
+                        *cell = Kind::Unknown;
+                    }
+                }
                 let call = b.ins().call(h.str_list_acc_append, &[ec.ctx, av, vv]);
                 let res = b.inst_results(call)[0];
                 let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
