@@ -666,7 +666,7 @@ pub(super) fn build_body_unboxed(
     let is_leader = leaders(code, &reach);
     // L2b: the field-TAKE mask for an owned-`this` method — the SAME shared function the
     // analyze walk used (mirror-safe by construction).
-    let this_taken: Option<Vec<bool>> = match param_kinds.first() {
+    let this_taken: Option<Vec<Option<usize>>> = match param_kinds.first() {
         Some(Kind::Inst(c, Own::Owned)) => Some(owned_this_taken_fields(program, func_idx, *c)),
         _ => None,
     };
@@ -1598,7 +1598,7 @@ pub(super) fn build_body_unboxed(
                             .fields
                             .iter()
                             .position(|f| f == &program.names[*nidx])
-                            .is_some_and(|j| m.get(j).copied().unwrap_or(false))
+                            .is_some_and(|j| m.get(j).copied().flatten() == Some(ip))
                     });
                 arm_get_field(
                     &mut b,
