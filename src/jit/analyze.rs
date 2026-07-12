@@ -76,6 +76,18 @@ pub(super) enum Kind {
     /// matching the VM's `[caps.., args..]` lambda frame layout. ≥ 2 captures / non-int
     /// captures stay default-denied (collect + analyze).
     FnCap1(usize),
+    /// Lever-3 pointer-walk iteration (the for-in desugar): the END pointer of a FLAT int
+    /// list being iterated — the desugar's elems cell, rewritten at the `IterElems; Const(0)`
+    /// init site. `Len` on it is an identity re-push (the bound IS the pointer), `Lt` against
+    /// the cursor is one unsigned compare. Scalar-like (no ownership).
+    IterEnd,
+    /// Lever-3 pointer-walk iteration: the element CURSOR (the desugar's j cell). `Index`
+    /// with it is ONE load (`ptr[0..8)` — flat slots keep the raw i64 in bytes 0..8);
+    /// `j + 1` (`Const(1); AddI`) strength-reduces to `ptr + 64` (the slot stride). The
+    /// mutation guard in `collect_functions_unboxed` proves the iterated slot is never
+    /// written, so the list is always a bump-pinned FLAT snapshot (never ACL/boxed at
+    /// runtime — a boxed one faults to code 5, redo on VM). Scalar-like (no ownership).
+    IterPtr,
     /// An INSTANCE handle (the object vertical): an arena SLOT (always slot-tagged — instances
     /// exist only via `MakeInstance` here or an injected method `this`), fields stored FLAT at
     /// byte `8·layout_slot` (≤ 8 int fields; the class index rides in the compile-time kind, so
@@ -1005,6 +1017,20 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::StrIntMap(Own::Owned));
                 }
+                Op::Index if matches!(kinds.last(), Some(Kind::IterPtr)) => {
+                    // Lever 3: `elems[j]` with a pointer cursor — ONE load (the loop guard is
+                    // the bounds proof; the desugar never indexes past the cursor).
+                    kinds.pop();
+                    match kinds.pop() {
+                        Some(Kind::IterEnd) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed: iter-cursor Index receiver {other:?} (desugar drift)"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Int);
+                }
                 Op::Index => {
                     // The subscript kind selects the flavor: `Int` → list element (`Str` from a
                     // `StrList`, `Int` from an `IntList`), `Str` → string-keyed map value (`Int`).
@@ -1038,27 +1064,48 @@ pub(super) fn unboxed_analyze(
                     }
                 }
                 Op::IterElems => {
-                    // For-in lowering (B1): the iterable normalizes to its element list. A
-                    // BORROWED flat-able Str/Int list handle IS that snapshot (sealed lists
-                    // are immutable within this subset) — identity. Owned/other iterables →
-                    // VM fallback (fail closed).
-                    match kinds.pop() {
-                        Some(Kind::StrList(Own::Borrowed)) => {
-                            kinds.push(Kind::StrList(Own::Borrowed))
-                        }
-                        Some(Kind::IntList(Own::Borrowed)) => {
-                            kinds.push(Kind::IntList(Own::Borrowed))
-                        }
-                        other => {
-                            return Err(JitError::Unsupported(format!(
-                                "unboxed IterElems operand kind {other:?}"
-                            )))
+                    // Lever-3 POINTER-WALK init (mirrors the emit arm exactly): an INT list at
+                    // the desugar's `IterElems; Const(0)` site becomes (end, cursor) pointer
+                    // cells — Len/Lt/Index/j+1 then strength-reduce per-op. The collect-walk's
+                    // mutation guard proves the iterated slot is never written, so the list is
+                    // a flat snapshot. Gate: the Const(0) is same-block (not a leader).
+                    let ptr_walk = matches!(kinds.last(), Some(Kind::IntList(Own::Borrowed)))
+                        && !is_leader.get(ip + 1).copied().unwrap_or(true)
+                        && matches!(code.get(ip + 1), Some(Op::Const(c))
+                        if matches!(
+                            program.functions[func_idx].chunk.consts.get(*c),
+                            Some(Value::Int(0))
+                        ));
+                    if ptr_walk {
+                        kinds.pop();
+                        kinds.push(Kind::IterEnd);
+                        kinds.push(Kind::IterPtr);
+                        ip += 1; // consume the Const(0) — the emit mirrors with skip_ip
+                    } else {
+                        // For-in lowering (B1): the iterable normalizes to its element list. A
+                        // BORROWED flat-able Str list handle IS that snapshot (sealed lists
+                        // are immutable within this subset) — identity. Owned/other iterables
+                        // → VM fallback (fail closed).
+                        match kinds.pop() {
+                            Some(Kind::StrList(Own::Borrowed)) => {
+                                kinds.push(Kind::StrList(Own::Borrowed))
+                            }
+                            Some(Kind::IntList(Own::Borrowed)) => {
+                                kinds.push(Kind::IntList(Own::Borrowed))
+                            }
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed IterElems operand kind {other:?}"
+                                )))
+                            }
                         }
                     }
                 }
                 Op::Len => {
-                    // List length (the for-in inner-loop bound): BORROWED list → Int.
+                    // List length (the for-in inner-loop bound): BORROWED list → Int; an
+                    // IterEnd bound re-pushes itself (the pointer IS the bound — lever 3).
                     match kinds.pop() {
+                        Some(Kind::IterEnd) => kinds.push(Kind::IterEnd),
                         Some(Kind::StrList(Own::Borrowed)) | Some(Kind::IntList(Own::Borrowed)) => {
                             kinds.push(Kind::Int)
                         }
@@ -1205,9 +1252,35 @@ pub(super) fn unboxed_analyze(
                 Op::Pop => {
                     kinds.pop();
                 }
+                Op::AddI
+                    if matches!(kinds.get(kinds.len().wrapping_sub(2)), Some(Kind::IterPtr)) =>
+                {
+                    // Lever 3: the desugar's `j + 1` (always `Const(1); AddI`) strength-reduces
+                    // to `cursor + 64` (the flat slot stride) — mirror the emit gate exactly.
+                    if !(ip >= 1
+                        && matches!(code.get(ip - 1), Some(Op::Const(c))
+                        if matches!(
+                            program.functions[func_idx].chunk.consts.get(*c),
+                            Some(Value::Int(1))
+                        )))
+                    {
+                        return Err(JitError::Unsupported(
+                            "unboxed: non-unit increment on an iter cursor".to_string(),
+                        ));
+                    }
+                    kinds.pop();
+                    kinds.pop();
+                    kinds.push(Kind::IterPtr);
+                }
                 Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => {
-                    kinds.pop();
-                    kinds.pop();
+                    let (b2, a2) = (kinds.pop(), kinds.pop());
+                    if matches!(b2, Some(Kind::IterPtr | Kind::IterEnd))
+                        || matches!(a2, Some(Kind::IterPtr | Kind::IterEnd))
+                    {
+                        return Err(JitError::Unsupported(
+                            "unboxed: arithmetic on iter pointers (desugar drift)".to_string(),
+                        ));
+                    }
                     kinds.push(Kind::Int);
                 }
                 Op::AddF | Op::SubF | Op::MulF | Op::DivF => {
@@ -1223,9 +1296,27 @@ pub(super) fn unboxed_analyze(
                     kinds.pop();
                     kinds.push(Kind::Bool);
                 }
+                Op::Lt
+                    if matches!(kinds.last(), Some(Kind::IterEnd))
+                        && matches!(
+                            kinds.get(kinds.len().wrapping_sub(2)),
+                            Some(Kind::IterPtr)
+                        ) =>
+                {
+                    // Lever 3: the desugar's `j < Len(elems)` header — one unsigned compare.
+                    kinds.pop();
+                    kinds.pop();
+                    kinds.push(Kind::Bool);
+                }
                 Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
-                    kinds.pop();
-                    kinds.pop();
+                    let (b2, a2) = (kinds.pop(), kinds.pop());
+                    if matches!(b2, Some(Kind::IterPtr | Kind::IterEnd))
+                        || matches!(a2, Some(Kind::IterPtr | Kind::IterEnd))
+                    {
+                        return Err(JitError::Unsupported(
+                            "unboxed: comparison on iter pointers (desugar drift)".to_string(),
+                        ));
+                    }
                     kinds.push(Kind::Bool);
                 }
                 Op::GetLocal(slot) => {
@@ -1828,6 +1919,13 @@ pub(super) fn collect_functions_unboxed(
         // float is a follow-up). Tracked per-function.
         let mut has_float = false;
         let mut has_call = false;
+        // MUTATION GUARD (lever 3 + the ACL builders): a slot that FEEDS an `IterElems`
+        // anywhere in the function must never be WRITTEN in the function. The VM's for-in
+        // iterates a SNAPSHOT; the JIT iterates the live flat buffer (and an ACL append /
+        // reseed mutates or recycles the record IN PLACE under the walker). Disjointness
+        // makes the snapshot free — any overlap → the whole function stays on the VM.
+        let mut iter_srcs: Vec<usize> = Vec::new();
+        let mut writes: Vec<usize> = Vec::new();
         for (ip, op) in code.iter().enumerate() {
             if !reach[ip] {
                 continue;
@@ -1846,8 +1944,17 @@ pub(super) fn collect_functions_unboxed(
                 | Op::Index
                 | Op::SetIndexLocal(_)
                 | Op::Pop
-                | Op::IterElems
                 | Op::Len => uses_handles = true,
+                Op::IterElems => {
+                    uses_handles = true;
+                    // MUTATION GUARD source: the iterable is a GetLocal borrow (the only
+                    // Borrowed producer in the subset) — record the slot it came from.
+                    if ip >= 1 {
+                        if let Some(Op::GetLocal(src)) = code.get(ip - 1) {
+                            iter_srcs.push(*src);
+                        }
+                    }
+                }
                 Op::Concat(n) if *n >= 2 => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => uses_handles = true,
@@ -1928,13 +2035,20 @@ pub(super) fn collect_functions_unboxed(
                 // Mutable locals: a read of any slot and a write (SetLocal) are both in the subset.
                 // Slots are Cranelift Variables (widen-1 c1); their kind is proven by the analyze pass,
                 // and a non-numeric-typed local reaching a `Return` fails the build (whole-graph fallback).
-                Op::GetLocal(_) | Op::SetLocal(_) => {}
+                Op::GetLocal(_) => {}
+                Op::SetLocal(s) => writes.push(*s),
                 Op::Call(callee) => {
                     has_call = true;
                     work.push(*callee);
                 }
                 other => return Err(JitError::Unsupported(format!("unboxed {other:?}"))),
             }
+        }
+        if iter_srcs.iter().any(|s| writes.contains(s)) {
+            return Err(JitError::Unsupported(
+                "unboxed: iterated local is also written (snapshot semantics — VM fallback)"
+                    .to_string(),
+            ));
         }
         if has_float && has_call {
             return Err(JitError::Unsupported(

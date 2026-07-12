@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — forin lever-3 pointer-walk iteration — **0.73× → 2.30× WIN** (protocol median, 3× best-of-7)
+
+The for-in desugar's harness cells become RAW POINTERS at emit: at the `IterElems; Const(0)`
+init site over a runtime-FLAT int list, the elems cell becomes the END pointer
+(`Kind::IterEnd`) and the j cell the element CURSOR (`Kind::IterPtr`) — every harness op then
+strength-reduces per-op with NO region rewriting: `Len` = identity re-push (the pointer IS the
+bound), the header `Lt` = ONE unsigned compare, `xs[j]` = ONE load (the loop guard is the
+bounds proof), `j + 1` = `+64` (the slot stride; the analyze mirror verifies the increment
+literal is exactly 1). Generic arith/comparison arms explicitly REJECT iter kinds, so a
+desugar drift can never leak pointer math into user-visible values. **MUTATION GUARD** (also
+closes a latent byte-identity hazard the ACL builders introduced): a slot that feeds
+`IterElems` must never be written in the same function — the VM's for-in iterates a SNAPSHOT,
+while an in-place ACL append/reseed would grow or recycle the record UNDER the walker; any
+overlap declines the whole function to the VM (test proves the decline + byte-identity). The
+guard also implies an iterated slot can never hold an ACL at runtime, so the walk is flat-only
+(boxed → code-5 VM redo, disclosed). forin **0.73× → 2.30×** (rounds 2.30/2.82/1.66 vs pinned
+fresh docker php:8.5-cli+JIT); delivery-path test proves `hits > 0` + byte-identity; baseline
+ratcheted. **ALL FOUR fundamentals-sweep losses are now WINs** (listappend 1.66 · mapinsert
+1.06 · hofpipe 6.46 · forin 2.30) — 21/21 micros ≥ 1.0×.
+
 ### Added — hofpipe capturing-closure + HOF-loop vertical — **0.19× → 6.46× WIN** (protocol median, 3× best-of-7)
 
 Higher-order pipelines enter the unboxed JIT. Two pieces: (1) **`Kind::FnCap1`** — a

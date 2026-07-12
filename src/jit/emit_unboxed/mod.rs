@@ -710,6 +710,19 @@ pub(super) fn build_body_unboxed(
                 let h = ub_ref(ub_refs.as_ref(), "MakeMap")?;
                 arm_make_map(&mut b, &ec, h, &vars, &fvars, &mut kinds, *n)?;
             }
+            Op::Index if matches!(kinds.last(), Some(Kind::IterPtr)) => {
+                // Lever 3: `elems[j]` with a pointer cursor — ONE load; the loop guard is the
+                // bounds proof (the desugar never indexes past the cursor).
+                let (pv, _pk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (_ev, ek) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if ek != Kind::IterEnd {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: iter-cursor Index receiver {ek:?} (desugar drift)"
+                    )));
+                }
+                let x = b.ins().load(types::I64, MemFlagsData::new(), pv, 0);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, x, Kind::Int)?;
+            }
             Op::Index if matches!(kinds.last(), Some(Kind::Str(_))) => {
                 // P-2b: string-keyed map lookup (`m[k]` → Int) — the inline bucket probe.
                 let h = ub_ref(ub_refs.as_ref(), "Index(map)")?;
@@ -729,8 +742,27 @@ pub(super) fn build_body_unboxed(
                 let h = ub_ref(ub_refs.as_ref(), "Index")?;
                 arm_index_str_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
             }
+            Op::IterElems
+                if matches!(kinds.last(), Some(Kind::IntList(Own::Borrowed)))
+                    && !is_leader.get(ip + 1).copied().unwrap_or(true)
+                    && matches!(code.get(ip + 1), Some(Op::Const(c))
+                        if matches!(func.chunk.consts.get(*c), Some(Value::Int(0)))) =>
+            {
+                // Lever-3 POINTER-WALK init (mirrors the analyze arm): the desugar's
+                // `IterElems; Const(0)` becomes (end, cursor) pointer cells; Len/Lt/Index/j+1
+                // then strength-reduce per-op. The mutation guard proved the iterated slot is
+                // never written, so the list is a stable flat snapshot (boxed → code-5 redo).
+                let h = ub_ref(ub_refs.as_ref(), "IterElems(ptr-walk)")?;
+                arm_iter_ptr_init(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+                skip_ip = Some(ip + 1);
+            }
             Op::IterElems => {
                 arm_iter_elems(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            Op::Len if matches!(kinds.last(), Some(Kind::IterEnd)) => {
+                // Lever 3: the bound IS the end pointer — identity re-push, zero instructions.
+                let (v, k) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                ub_push(&mut b, &vars, &fvars, &mut kinds, v, k)?;
             }
             Op::Len => {
                 let h = ub_ref(ub_refs.as_ref(), "Len")?;
@@ -838,6 +870,22 @@ pub(super) fn build_body_unboxed(
                     info,
                 )?;
             }
+            Op::AddI if matches!(kinds.get(kinds.len().wrapping_sub(2)), Some(Kind::IterPtr)) => {
+                // Lever 3: the desugar's `j + 1` — `cursor + 64` (the flat slot stride); the
+                // analyze mirror verified the increment literal is exactly 1.
+                if !(ip >= 1
+                    && matches!(code.get(ip - 1), Some(Op::Const(c))
+                        if matches!(func.chunk.consts.get(*c), Some(Value::Int(1)))))
+                {
+                    return Err(JitError::Unsupported(
+                        "unboxed: non-unit increment on an iter cursor".to_string(),
+                    ));
+                }
+                let (_one, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (pv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let bumped = b.ins().iadd_imm(pv, 64);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, bumped, Kind::IterPtr)?;
+            }
             Op::AddI | Op::SubI | Op::MulI => {
                 // Plain (wrapping-free) when `#[UncheckedOverflow]` or a range-proven induction
                 // `AddI` — computed here (dispatch owns `proven_ops`), lowered in `scalar.rs`.
@@ -870,6 +918,17 @@ pub(super) fn build_body_unboxed(
             }
             Op::Not => {
                 arm_not(&mut b, &vars, &fvars, &mut kinds)?;
+            }
+            Op::Lt
+                if matches!(kinds.last(), Some(Kind::IterEnd))
+                    && matches!(kinds.get(kinds.len().wrapping_sub(2)), Some(Kind::IterPtr)) =>
+            {
+                // Lever 3: the desugar's loop header — ONE unsigned pointer compare.
+                let (ev, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (pv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let r = b.ins().icmp(IntCC::UnsignedLessThan, pv, ev);
+                let r64 = b.ins().uextend(types::I64, r);
+                ub_push(&mut b, &vars, &fvars, &mut kinds, r64, Kind::Bool)?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => {
                 arm_cmp(&mut b, &vars, &fvars, &mut kinds, op)?;

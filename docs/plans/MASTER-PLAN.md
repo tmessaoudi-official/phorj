@@ -404,7 +404,14 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   at emit — recognize the for-in indexed loop and emit ptr<end walking, removing j/Len/guard
   entirely); **listindex rides the bounds elision to 1.61**. All prior WINs hold (K=3 under
   load: mapget 1.11 · intadd 1.51; quiet protocol re-adjudication at the front's close).
-  REMAINING SWEEP LOSSES: forin 0.73.
+  REMAINING SWEEP LOSSES: NONE — the sweep is CLOSED (all 21 micros ≥ 1.0×).
+  **FORIN LEVER-3 — ✅ SHIPPED (session 5): 0.73× → 2.30× WIN** (protocol median
+  2.30/2.82/1.66): pointer-walk kinds (`IterEnd`/`IterPtr`) at the desugar's
+  `IterElems; Const(0)` site — Len identity, header Lt = one unsigned cmp, Index = one
+  load, j+1 = +64; per-op strength reduction, no region rewrite. MUTATION GUARD: an
+  iterated slot may never be written in-function (snapshot semantics; also closes the
+  latent ACL append-under-iteration hazard; guard ⇒ iterated lists are never ACL ⇒
+  flat-only walk, boxed = code-5 redo disclosed). Baseline ratcheted at 2.30.
   **HOFPIPE VERTICAL — ✅ SHIPPED (session 5): 0.19× → 6.46× WIN** (protocol median
   6.59/6.46/6.46): `Kind::FnCap1` one-int-capture closures (the capture word IS the stack
   cell — zero allocation; direct call with the capture prepended, the VM's [caps..,args..]

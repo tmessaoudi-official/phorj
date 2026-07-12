@@ -440,6 +440,56 @@ pub(super) fn arm_iter_elems(
     ub_push(b, vars, fvars, kinds, v, k)
 }
 
+/// Lever-3 POINTER-WALK init (the for-in desugar's `IterElems; Const(0)` site): a runtime
+/// FLAT int list becomes (end, cursor) raw pointers into the arena — the harness ops then
+/// strength-reduce per-op (`Len` identity, `Lt` one unsigned compare, `Index` one load,
+/// `j+1` → `+64`). The mutation guard (collect walk) proved the iterated slot is never
+/// written in-function, so the flat buffer is a stable snapshot for the whole loop; a
+/// runtime NON-flat list (boxed — an ACL is unreachable under the guard) is code 5, redo
+/// on the VM (disclosed: boxed lists don't take this vertical).
+pub(super) fn arm_iter_ptr_init(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    _h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+) -> Result<(), JitError> {
+    let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
+    if lk != Kind::IntList(Own::Borrowed) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed iter-ptr init operand kind {lk:?}"
+        )));
+    }
+    let setup = b.create_block();
+    b.append_block_param(setup, types::I64); // start
+    b.append_block_param(setup, types::I64); // end
+    let flat_blk = b.create_block();
+    let bad_blk = b.create_block();
+    let flat_bit = b.ins().band_imm(lv, UB_TAG_FLAT);
+    b.ins().brif(flat_bit, flat_blk, &[], bad_blk, &[]);
+    b.switch_to_block(flat_blk);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let base = b.ins().band_imm(lv, UB_IDX_MASK);
+    let boff = b.ins().ishl_imm(base, 6);
+    let start = b.ins().iadd(buf, boff);
+    let cnt_raw = b.ins().ushr_imm(lv, 40);
+    let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+    let cbytes = b.ins().ishl_imm(cnt, 6);
+    let end = b.ins().iadd(start, cbytes);
+    b.ins().jump(setup, &[start.into(), end.into()]);
+    b.switch_to_block(bad_blk);
+    let always = b.ins().iconst(types::I64, 1);
+    ec.fault_if(b, always, 5);
+    let z = b.ins().iconst(types::I64, 0);
+    b.ins().jump(setup, &[z.into(), z.into()]); // unreachable terminator
+    b.switch_to_block(setup);
+    let start_v = b.block_params(setup)[0];
+    let end_v = b.block_params(setup)[1];
+    ub_push(b, vars, fvars, kinds, end_v, Kind::IterEnd)?;
+    ub_push(b, vars, fvars, kinds, start_v, Kind::IterPtr)
+}
+
 /// `Op::Len` — list length (the for-in inner-loop bound): INLINE for a FLAT handle (the
 /// count rides bits 40..60 of the handle — two ops, no load), the helper for a boxed list.
 pub(super) fn arm_list_len(

@@ -266,6 +266,96 @@ fn phg_run_hook_hits_the_jit_on_the_hofpipe_vertical() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_forin_pointer_walk() {
+    // Lever-3 DELIVERY-PATH proof: the exact `bench/micro/forin.phg` shape — a nested
+    // `for (x in xs)` over a flat const list. The desugar's elems/j cells become (end,
+    // cursor) pointers at the `IterElems; Const(0)` init; Len is an identity re-push, the
+    // header Lt one unsigned compare, `xs[j]` ONE load, `j+1` a `+64` bump. Must JIT through
+    // the `Op::Call` hook AND stay byte-identical to the interpreter oracle (including the
+    // empty-list edge: start == end skips the loop like `0 < 0`).
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            for (int x in xs) {\n\
+              acc = acc + x;\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "forin pointer-walk jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual forin pointer-walk jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the forin pointer walk must actually hit the JIT — else lever 3 is unproven"
+    );
+}
+
+#[test]
+fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
+    // The MUTATION GUARD: iterating a local AND writing it in the same function (append
+    // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would
+    // mutate or recycle the record IN PLACE under the walker). The whole function must
+    // decline (fall back to the VM) and stay byte-identical — snapshot semantics preserved.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        function bench(int iters): int {\n\
+          mutable List<int> xs = [1, 2, 3];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            for (int x in xs) {\n\
+              xs = List.append(xs, x);\n\
+              acc = acc + x + List.length(xs);\n\
+            }\n\
+            xs = [1, 2, 3];\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(50)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "iterate-while-append must stay byte-identical (snapshot semantics via VM fallback)"
+    );
+    // And the guard must actually decline it — a compile success here would mean the JIT
+    // walks a buffer that the body's in-place append is mutating under it.
+    let program = compile_source(SRC);
+    let bench = (0..program.functions.len())
+        .find(|f| program.functions[*f].arity == 1)
+        .expect("bench fn");
+    assert!(
+        matches!(
+            Compiled::compile_unboxed(&program, bench),
+            Err(JitError::Unsupported(_))
+        ),
+        "the mutation guard must decline an iterated-and-written local"
+    );
+}
+
+#[test]
 fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
     // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
     // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.
