@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — hofpipe capturing-closure + HOF-loop vertical — **0.19× → 6.46× WIN** (protocol median, 3× best-of-7)
+
+Higher-order pipelines enter the unboxed JIT. Two pieces: (1) **`Kind::FnCap1`** — a
+ONE-int-capture lambda whose stack cell IS the capture word (`MakeClosure` pops one capture and
+re-tags it in place at the same depth: no closure object, no aux register space, zero
+allocation); consumers direct-call the target with the capture PREPENDED as arg 0 — the VM's
+`[caps.., args..]` lambda frame (a lambda's `arity` already folds captures in, so signatures
+need no adjustment). (2) **HOF loop arms** — `List.map`/`List.count` with a static `Fn`/`FnCap1`
+lower to ONE native loop: a uniform `(addr, stride)` walk over the input (flat list 64-byte
+slots / ACL builder packed i64s; boxed → code-5 VM redo, the disclosed v1 gap), a direct call
+per element, and map → an ACL builder output (inline cap-checked pushes) / count → a register
+sum of the 0/1 predicate results. **Bool returns** joined the subset (`ret_kind` records Bool,
+`run_unboxed` decodes `Value::Bool`) — the count predicate's shape; unproven-param returns stay
+rejected. Throwing graphs keep HOFs on the VM (fail closed); analyze mirrors every arm.
+hofpipe **0.19× → 6.46×** (rounds 6.59/6.46/6.46 vs pinned fresh docker php:8.5-cli+JIT —
+zend's `array_map` allocates a closure + array per iteration, the JIT loop allocates nothing);
+delivery-path test proves `hits > 0` + byte-identity with a live varying capture; baseline
+ratcheted.
+
 ### Added — mapinsert AMB map-builder vertical — **0.02× → 1.06× WIN** (protocol median, 3× best-of-7)
 
 `m[k] = v` (`Op::SetIndexLocal`) on a uniquely-owned `Map<string,int>` local enters the unboxed

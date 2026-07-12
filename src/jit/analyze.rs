@@ -68,6 +68,14 @@ pub(super) enum Kind {
     /// never-read filler. Capturing closures are default-denied (collect + analyze); two
     /// different targets merging at a leader disagree on the kind → VM fallback (sound).
     Fn(usize),
+    /// A ONE-INT-CAPTURE first-class function value (the hofpipe vertical): the target index
+    /// rides the compile-time kind and the runtime word in the cell IS the single captured
+    /// `Int` — `MakeClosure` pops one capture and pushes this at the SAME depth, so the value
+    /// is already in place: no closure object, no aux space, zero allocation. A consumer
+    /// (the HOF loop arms) direct-calls the target with the capture PREPENDED as arg 0,
+    /// matching the VM's `[caps.., args..]` lambda frame layout. ≥ 2 captures / non-int
+    /// captures stay default-denied (collect + analyze).
+    FnCap1(usize),
     /// An INSTANCE handle (the object vertical): an arena SLOT (always slot-tagged — instances
     /// exist only via `MakeInstance` here or an injected method `this`), fields stored FLAT at
     /// byte `8·layout_slot` (≤ 8 int fields; the class index rides in the compile-time kind, so
@@ -204,6 +212,24 @@ pub(super) fn unboxed_native_is_list_append(id: usize) -> bool {
     crate::native::registry()
         .get(id)
         .is_some_and(|nf| nf.module == "Core.List" && nf.name == "append" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.List.map` (the hofpipe vertical: a STATIC-lambda map
+/// lowers to a native loop — inline element loads, a direct call per element, an ACL builder
+/// output — no closure object, no VM re-entry)?
+pub(super) fn unboxed_native_is_list_map(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "map" && nf.pure)
+}
+
+/// Is native-registry entry `id` `Core.List.count` (the hofpipe vertical: a STATIC-predicate
+/// count lowers to a native loop — inline element loads, a direct call per element, a running
+/// register sum)?
+pub(super) fn unboxed_native_is_list_count(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.List" && nf.name == "count" && nf.pure)
 }
 
 /// Is native-registry entry `id` `Core.Conversion.toFloat` (P-2c: inline `fcvt_from_sint` — the
@@ -1101,6 +1127,59 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::IntList(Own::Owned));
                 }
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
+                {
+                    // The hofpipe vertical: a STATIC-target lambda (capture-free `Fn` or
+                    // one-int-capture `FnCap1`) over an int list lowers to a native loop with
+                    // a direct call per element. `map` needs an Int-returning transform (the
+                    // output is an ACL int-list builder); `count` a Bool/Int predicate.
+                    // v1: HOF loops don't route thrown payloads out of the loop body — a
+                    // throwing graph stays on the VM (fail closed).
+                    if info.thrown_class.is_some() {
+                        return Err(JitError::Unsupported(
+                            "unboxed: List HOF in a throwing graph (deferred)".to_string(),
+                        ));
+                    }
+                    let is_map = unboxed_native_is_list_map(*id);
+                    let f = match kinds.pop() {
+                        Some(Kind::Fn(f)) | Some(Kind::FnCap1(f)) => f,
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List HOF callee kind {other:?} (deferred)"
+                            )))
+                        }
+                    };
+                    // `arity` folds captures in (frame = [caps.., args..]) — the HOF passes
+                    // exactly one element arg, so declared params must be 1.
+                    if program.functions[f].arity - program.functions[f].n_captures != 1 {
+                        return Err(JitError::Unsupported(
+                            "unboxed: List HOF lambda arity != 1 (VM renders any fault)"
+                                .to_string(),
+                        ));
+                    }
+                    let rk = info.ret_of(f);
+                    if (is_map && rk != Kind::Int)
+                        || (!is_map && rk != Kind::Bool && rk != Kind::Int)
+                    {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: List HOF lambda return kind {rk:?} (deferred)"
+                        )));
+                    }
+                    match kinds.pop() {
+                        Some(Kind::IntList(_)) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List HOF receiver kind {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(if is_map {
+                        Kind::IntList(Own::Owned)
+                    } else {
+                        Kind::Int
+                    });
+                }
                 Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {
                     match kinds.pop() {
                         Some(Kind::Int) => {}
@@ -1323,14 +1402,27 @@ pub(super) fn unboxed_analyze(
                 // carries the function index; `CallValue` on it is a direct call (models the
                 // return `Int`, like `Call`). Captures / non-`Fn` callees / a static arity
                 // mismatch (the VM renders that fault) → VM fallback.
-                Op::MakeClosure(f) => {
-                    if program.functions[*f].n_captures != 0 {
-                        return Err(JitError::Unsupported(
-                            "unboxed: closure with captures (deferred)".to_string(),
-                        ));
+                Op::MakeClosure(f) => match program.functions[*f].n_captures {
+                    0 => kinds.push(Kind::Fn(*f)),
+                    1 => {
+                        // hofpipe: ONE int capture — the popped capture word stays in its
+                        // cell, which becomes the FnCap1 value (same depth, zero moves).
+                        match kinds.pop() {
+                            Some(Kind::Int) => {}
+                            other => {
+                                return Err(JitError::Unsupported(format!(
+                                    "unboxed: non-int closure capture {other:?} (deferred)"
+                                )))
+                            }
+                        }
+                        kinds.push(Kind::FnCap1(*f));
                     }
-                    kinds.push(Kind::Fn(*f));
-                }
+                    _ => {
+                        return Err(JitError::Unsupported(
+                            "unboxed: closure with 2+ captures (deferred)".to_string(),
+                        ))
+                    }
+                },
                 Op::CallValue(argc) => {
                     for _ in 0..*argc {
                         if kinds.pop().is_some_and(|k| {
@@ -1706,6 +1798,14 @@ pub(super) fn collect_functions_unboxed(
     let mut order = Vec::new();
     let mut seen = vec![false; program.functions.len()];
     let mut work = vec![entry_idx];
+    // The ENTRY is seeded with exactly `arity` args by `run_unboxed` — a capturing lambda
+    // can only enter the graph as a `MakeClosure` target (its captures arrive as prepended
+    // call args), never as the entry itself.
+    if program.functions[entry_idx].n_captures != 0 {
+        return Err(JitError::Unsupported(
+            "unboxed: capturing entry (deferred)".to_string(),
+        ));
+    }
     // Does the graph use the P-2a handle space (string consts / MakeList / Index / Concat /
     // `String.length`)? Drives the `UbCtx` setup + helper imports in `compile_unboxed`.
     let mut uses_handles = false;
@@ -1715,8 +1815,10 @@ pub(super) fn collect_functions_unboxed(
         }
         seen[fi] = true;
         let func = &program.functions[fi];
-        if func.n_captures != 0 {
-            return Err(JitError::Unsupported("closure with captures".to_string()));
+        if func.n_captures > 1 {
+            return Err(JitError::Unsupported(
+                "closure with 2+ captures".to_string(),
+            ));
         }
         let code = &func.chunk.code;
         let reach = reachable(code);
@@ -1750,6 +1852,13 @@ pub(super) fn collect_functions_unboxed(
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => uses_handles = true,
+                // hofpipe: the HOF loop arms direct-call the compiled lambda per element.
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
+                {
+                    uses_handles = true;
+                    has_call = true;
+                }
                 // P-2c numeric conversions: pure, handle-free, fully inline.
                 Op::CallNative(id, 1)
                     if unboxed_native_is_to_float(*id) || unboxed_native_is_truncate(*id) =>
@@ -1807,10 +1916,10 @@ pub(super) fn collect_functions_unboxed(
                     if program
                         .functions
                         .get(*f)
-                        .is_none_or(|fun| fun.n_captures != 0)
+                        .is_none_or(|fun| fun.n_captures > 1)
                     {
                         return Err(JitError::Unsupported(
-                            "unboxed: closure with captures (deferred)".to_string(),
+                            "unboxed: closure with 2+ captures (deferred)".to_string(),
                         ));
                     }
                     work.push(*f);

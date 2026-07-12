@@ -220,6 +220,52 @@ fn phg_run_hook_hits_the_jit_on_the_mapinsert_vertical() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_hofpipe_vertical() {
+    // Hofpipe-vertical DELIVERY-PATH proof: the exact `bench/micro/hofpipe.phg` shape —
+    // `List.map` with a ONE-int-capture lambda (`FnCap1`: the capture word IS the stack cell,
+    // prepended as arg 0 on the direct per-element call) into an ACL builder output, then
+    // `List.count` with a capture-free Bool predicate consuming that owned ACL (record
+    // recycled at the release). The varying capture `k` proves the capture is live. Must JIT
+    // through the `Op::Call` hook AND stay byte-identical to the interpreter oracle.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            int k = i % 7 + 1;\n\
+            List<int> ys = List.map(xs, function(int x) => x * k);\n\
+            acc = acc + List.count(ys, function(int y) => y % 2 == 0);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "hofpipe-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual hofpipe-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the hofpipe vertical must actually hit the JIT — else the HOF flip is unproven"
+    );
+}
+
+#[test]
 fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
     // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
     // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.

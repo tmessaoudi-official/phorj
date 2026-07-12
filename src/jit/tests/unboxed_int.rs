@@ -213,11 +213,12 @@ fn unboxed_min_over_neg_one_and_neg_min_funnel_to_redo_without_trapping() {
 
 #[test]
 fn unboxed_rejects_non_int_return() {
-    // The type-erasure guard: a bool return (would mis-map to Value::Int), a bare UNPROVEN-int param
-    // return (`identity` — n is never an int-arith operand, so unprovable), and a returned bool PARAM
-    // (`retb` — proves the provenance pass does NOT over-mark) all fall back — compile_unboxed must
-    // return Unsupported, never miscompile. (Mutable locals AND int loops are now eligible — see the
-    // mutable-local + loop tests; self-/cross-recursive int functions too.)
+    // The type-erasure guard: a bare UNPROVEN-int param return (`identity` — n is never an
+    // int-arith operand, so unprovable) and a returned bool PARAM (`retb` — proves the
+    // provenance pass does NOT over-mark) fall back — compile_unboxed must return Unsupported,
+    // never miscompile. A PROVEN bool return (`isSmall` — the hofpipe predicate shape) is now
+    // in the subset: `ret_kind` records Bool and `run_unboxed` decodes `Value::Bool`, so it
+    // must COMPILE and stay byte-identical to the oracle.
     let program = compile_source(
         "package Main;\n\
          function isSmall(int n) -> bool { return n < 10; }\n\
@@ -225,15 +226,26 @@ fn unboxed_rejects_non_int_return() {
          function retb(bool b, int n) -> bool { if (n > 0) { return b; } return b; }\n\
          function main() -> void {}",
     );
-    for name in ["isSmall", "identity", "retb"] {
+    for name in ["identity", "retb"] {
         let f = func_index(&program, name);
         assert!(
             matches!(
                 Compiled::compile_unboxed(&program, f),
                 Err(JitError::Unsupported(_))
             ),
-            "unboxed must reject `{name}` (non-int-return), not miscompile"
+            "unboxed must reject `{name}` (unproven return), not miscompile"
         );
+    }
+    let f = func_index(&program, "isSmall");
+    let compiled = Compiled::compile_unboxed(&program, f)
+        .expect("a proven bool return is in the subset (hofpipe predicate shape)");
+    for n in [-3_i64, 9, 10, 42] {
+        match compiled.run_unboxed(&[Value::Int(n)], 1) {
+            crate::jit::JitRun::Value(Value::Bool(b)) => {
+                assert_eq!(b, n < 10, "isSmall({n}) must decode as the oracle's bool")
+            }
+            other => panic!("isSmall({n}) must return a decoded Bool, got {other:?}"),
+        }
     }
 }
 

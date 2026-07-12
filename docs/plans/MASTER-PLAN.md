@@ -404,7 +404,14 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   at emit — recognize the for-in indexed loop and emit ptr<end walking, removing j/Len/guard
   entirely); **listindex rides the bounds elision to 1.61**. All prior WINs hold (K=3 under
   load: mapget 1.11 · intadd 1.51; quiet protocol re-adjudication at the front's close).
-  REMAINING SWEEP LOSSES: hofpipe 0.21 · forin 0.73.
+  REMAINING SWEEP LOSSES: forin 0.73.
+  **HOFPIPE VERTICAL — ✅ SHIPPED (session 5): 0.19× → 6.46× WIN** (protocol median
+  6.59/6.46/6.46): `Kind::FnCap1` one-int-capture closures (the capture word IS the stack
+  cell — zero allocation; direct call with the capture prepended, the VM's [caps..,args..]
+  frame; NB a lambda's `arity` already folds captures in) + `List.map`/`List.count` HOF loop
+  arms (uniform (addr,stride) walk over flat/ACL inputs, direct call per element, ACL
+  builder output / register predicate sum) + Bool returns in the subset (`run_unboxed`
+  decodes `Value::Bool`). Throwing graphs keep HOFs on the VM. Baseline ratcheted at 6.46.
   **MAPINSERT VERTICAL — ✅ SHIPPED (session 5): 0.02× → 1.06× WIN** (protocol median
   1.06/1.06/1.10): AMB builder records (`UB_TAG_AMB`, packed `{canon,value}` table + rank
   canons for insertion order) — `Op::SetIndexLocal` inline probe-walk overwrite AND inline

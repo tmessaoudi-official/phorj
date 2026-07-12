@@ -1436,6 +1436,18 @@ pub(super) extern "C" fn rt_u_map_builder_seed(
     rt_u_map_builder_set(ctx, UB_TAG_AMB | idx as i64, key, val)
 }
 
+/// Fresh EMPTY int-list builder (the hofpipe vertical: `List.map`'s output list) — take a
+/// record (recycled ones reuse their grown buffer), len 0. `-1` = pool exhaustion (code 5).
+pub(super) extern "C" fn rt_u_list_builder_new(ctx: *mut UbCtx) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let Some(idx) = ctx.acc_take_record() else {
+        return -1;
+    };
+    ctx.acc_grow_to(idx, 64);
+    ctx.acc_recs[idx].len = 0;
+    UB_TAG_ACL | idx as i64
+}
+
 /// BUILDER RESEED (int list) — the `xs = [v]` RESET twin of [`rt_u_map_builder_seed`]: the
 /// listappend micro's reset bump-seals one flat slot per cycle (3906 slots at 1M iterations —
 /// 95% of the arena; ~4M would fall off the same cliff). Release the old handle (ACL record
@@ -1558,6 +1570,7 @@ pub(super) struct UbHelperIds {
     pub(super) map_builder_set: FuncId,
     pub(super) map_builder_seed: FuncId,
     pub(super) list_acc_reseed: FuncId,
+    pub(super) list_builder_new: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1581,4 +1594,5 @@ pub(super) struct UbHelperRefs {
     pub(super) map_builder_set: FuncRef,
     pub(super) map_builder_seed: FuncRef,
     pub(super) list_acc_reseed: FuncRef,
+    pub(super) list_builder_new: FuncRef,
 }

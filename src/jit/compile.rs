@@ -179,6 +179,7 @@ impl Compiled {
             builder.symbol("rt_u_map_builder_set", rt_u_map_builder_set as *const u8);
             builder.symbol("rt_u_map_builder_seed", rt_u_map_builder_seed as *const u8);
             builder.symbol("rt_u_list_acc_reseed", rt_u_list_acc_reseed as *const u8);
+            builder.symbol("rt_u_list_builder_new", rt_u_list_builder_new as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -226,6 +227,7 @@ impl Compiled {
                 m.declare_function(name, Linkage::Import, sig)
                     .map_err(|e| JitError::Codegen(format!("declare {name}: {e}")))
             };
+            let sig1 = make_sig(&module, &[ptr], Some(types::I64));
             let sig2 = make_sig(&module, &[ptr, types::I64], Some(types::I64));
             let sig3 = make_sig(&module, &[ptr, types::I64, types::I64], Some(types::I64));
             let sig4 = make_sig(
@@ -294,6 +296,7 @@ impl Compiled {
                 map_builder_set: declare(&mut module, "rt_u_map_builder_set", &sig4)?,
                 map_builder_seed: declare(&mut module, "rt_u_map_builder_seed", &sig4)?,
                 list_acc_reseed: declare(&mut module, "rt_u_list_acc_reseed", &sig3)?,
+                list_builder_new: declare(&mut module, "rt_u_list_builder_new", &sig1)?,
             })
         } else {
             None
@@ -317,6 +320,8 @@ impl Compiled {
         };
         let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
         for &fi in &order {
+            // NB: a lambda's `arity` already folds its captures in (frame = [caps.., args..]),
+            // so the sig covers the prepended capture args with no adjustment.
             let sig = make_fn_sig(&module, program.functions[fi].arity);
             let id = module
                 .declare_function(&format!("phorj_unboxed_fn_{fi}"), Linkage::Export, &sig)
@@ -499,6 +504,7 @@ impl Compiled {
             // Decode the returned i64 by the entry's return kind: Int verbatim, Float from its bits.
             0 => match self.ret_kind {
                 Kind::Float => JitRun::Value(Value::Float(f64::from_bits(ret.value as u64))),
+                Kind::Bool => JitRun::Value(Value::Bool(ret.value != 0)),
                 _ => JitRun::Value(Value::Int(ret.value)),
             },
             // ovf-spec: EVERY unboxed fault now funnels to code 5 = "redo on VM" (codes 1/2/3/4 are no

@@ -438,6 +438,7 @@ pub(super) fn build_body_unboxed(
         map_builder_set: module.declare_func_in_func(ids.map_builder_set, b.func),
         map_builder_seed: module.declare_func_in_func(ids.map_builder_seed, b.func),
         list_acc_reseed: module.declare_func_in_func(ids.list_acc_reseed, b.func),
+        list_builder_new: module.declare_func_in_func(ids.list_builder_new, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -780,6 +781,27 @@ pub(super) fn build_body_unboxed(
                 let h = ub_ref(ub_refs.as_ref(), "List.length")?;
                 arm_list_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
             }
+            Op::CallNative(id, 2)
+                if unboxed_native_is_list_map(*id) || unboxed_native_is_list_count(*id) =>
+            {
+                // The hofpipe vertical: a STATIC-lambda `List.map`/`List.count` lowers to a
+                // native loop (inline element loads over flat/ACL, a direct call per element,
+                // an ACL builder output for map / a register sum for count).
+                let h = ub_ref(ub_refs.as_ref(), "List HOF")?;
+                arm_list_hof(
+                    &mut b,
+                    &ec,
+                    h,
+                    &fn_refs,
+                    ctx,
+                    depth,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    info,
+                    unboxed_native_is_list_map(*id),
+                )?;
+            }
             Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => {
                 // The listappend vertical (mirrors the Concat accumulator peephole): ONLY
                 // at a proven accumulator site — the lhs is the dying borrow of the very
@@ -967,11 +989,29 @@ pub(super) fn build_body_unboxed(
                 )?;
             }
             // Closure vertical: a capture-free `MakeClosure` is fully STATIC — the target rides
-            // in the compile-time kind (`Fn(f)`), the runtime word is a never-read filler.
-            Op::MakeClosure(f) => {
-                let filler = b.ins().iconst(types::I64, 0);
-                ub_push(&mut b, &vars, &fvars, &mut kinds, filler, Kind::Fn(*f))?;
-            }
+            // in the compile-time kind (`Fn(f)`), the runtime word is a never-read filler. A
+            // ONE-int-capture closure (hofpipe) re-tags the capture word IN PLACE (`FnCap1`):
+            // pop + re-push at the same depth is zero moves.
+            Op::MakeClosure(f) => match program.functions[*f].n_captures {
+                0 => {
+                    let filler = b.ins().iconst(types::I64, 0);
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, filler, Kind::Fn(*f))?;
+                }
+                1 => {
+                    let (cv, ck) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                    if ck != Kind::Int {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed: non-int closure capture {ck:?} (deferred)"
+                        )));
+                    }
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, cv, Kind::FnCap1(*f))?;
+                }
+                _ => {
+                    return Err(JitError::Unsupported(
+                        "unboxed: closure with 2+ captures (deferred)".to_string(),
+                    ))
+                }
+            },
             // `CallValue` on a static `Fn(f)`: pop the args, pop the (filler) callee word, then
             // the SAME direct-call emission as `Op::Call` — no indirection, no closure object.
             Op::CallValue(argc) => {
@@ -1227,7 +1267,7 @@ pub(super) fn build_body_unboxed(
                 // function returning an instance was rejected in `compile_unboxed`). Normalize
                 // the instance's compile-time ownership to Owned: the caller receives it.
                 let kind = match kind {
-                    Kind::Int | Kind::Float => kind,
+                    Kind::Int | Kind::Float | Kind::Bool => kind,
                     Kind::Inst(c, _) => Kind::Inst(c, Own::Owned),
                     other => {
                         // A bool/unknown return would be mis-decoded — reject to VM/boxed.
