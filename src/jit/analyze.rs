@@ -1706,7 +1706,6 @@ pub(super) fn unboxed_analyze(
                     }
                     let arity = program.functions[*callee].arity;
                     let mut sig: Vec<Kind> = Vec::with_capacity(arity);
-                    let mut has_handle_arg = false;
                     for _ in 0..arity {
                         let k = kinds.pop().ok_or_else(|| {
                             JitError::Codegen("unboxed analyze: Call underflow".to_string())
@@ -1717,19 +1716,15 @@ pub(super) fn unboxed_analyze(
                             // no-op). A BORROWED handle arg would leave the caller's local
                             // aliasing a word the callee now owns — double-free — DENY.
                             Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::Str(Own::Owned));
                             }
                             Kind::StrList(Own::Owned) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::StrList(Own::Owned));
                             }
                             Kind::IntList(Own::Owned) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::IntList(Own::Owned));
                             }
                             Kind::StrIntMap(Own::Owned) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::StrIntMap(Own::Owned));
                             }
                             k if k.is_handle()
@@ -1744,10 +1739,13 @@ pub(super) fn unboxed_analyze(
                             other => sig.push(other),
                         }
                     }
-                    if has_handle_arg {
-                        sig.reverse(); // popped last-arg-first; record declaration order
-                        disc.call_sigs.push((*callee, sig));
-                    }
+                    // Record EVERY call sig (not just handle-arg ones): the usage pre-pass no
+                    // longer stamps ctor/method-arg params, so int-only callees need their
+                    // param proofs from here too (the un-recorded gap silently declined the
+                    // whole objalloc/methodcall graphs — a 60-85x regression the ratchet
+                    // caught).
+                    sig.reverse(); // popped last-arg-first; record declaration order
+                    disc.call_sigs.push((*callee, sig));
                     kinds.push(info.ret_of(*callee));
                 }
                 // Object vertical: flat arena instances + static field offsets + statically-
@@ -1903,26 +1901,21 @@ pub(super) fn unboxed_analyze(
                     // recorded as the method's param sig (slot 0 = `this`, injected by
                     // `this_inst` — Unknown here so the override leaves it alone).
                     let mut sig: Vec<Kind> = Vec::with_capacity(*argc + 1);
-                    let mut has_handle_arg = false;
                     for _ in 0..*argc {
                         let k = kinds.pop().ok_or_else(|| {
                             JitError::Codegen("unboxed analyze: CallMethod underflow".to_string())
                         })?;
                         match k {
                             Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::Str(Own::Owned));
                             }
                             Kind::StrList(Own::Owned) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::StrList(Own::Owned));
                             }
                             Kind::IntList(Own::Owned) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::IntList(Own::Owned));
                             }
                             Kind::StrIntMap(Own::Owned) => {
-                                has_handle_arg = true;
                                 sig.push(Kind::StrIntMap(Own::Owned));
                             }
                             k if k.is_handle()
@@ -1966,11 +1959,11 @@ pub(super) fn unboxed_analyze(
                         ));
                     }
                     disc.method_calls.push((target, c));
-                    if has_handle_arg {
-                        sig.push(Kind::Unknown); // slot 0 = `this` (this_inst injects it)
-                        sig.reverse(); // popped last-arg-first; record declaration order
-                        disc.call_sigs.push((target, sig));
-                    }
+                    // Record EVERY method sig (see the Call arm note — int-only methods need
+                    // their param proofs from call sites now).
+                    sig.push(Kind::Unknown); // slot 0 = `this` (this_inst injects it)
+                    sig.reverse(); // popped last-arg-first; record declaration order
+                    disc.call_sigs.push((target, sig));
                     kinds.push(info.ret_of(target));
                 }
                 Op::Jump(t) => {
