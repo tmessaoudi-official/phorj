@@ -330,6 +330,21 @@ impl UbCtx {
         }
     }
 
+    /// Materialize a DYN list (boxed by construction; the one flat form is the empty
+    /// literal) into a fresh `Vec<Value>`. `None` = defensive mismatch.
+    fn dyn_list_values(&self, h: i64) -> Option<Vec<Value>> {
+        if h & UB_TAG_FLAT != 0 && h & UB_TAG_SLOT == 0 {
+            if (h >> 40) & 0xFFFFF != 0 {
+                return None;
+            }
+            return Some(Vec::new());
+        }
+        match self.handles.get(h as usize) {
+            Some(Value::List(xs)) => Some(xs.as_ref().clone()),
+            _ => None,
+        }
+    }
+
     /// Materialize a RETURNED handle word into a real `Value` for the VM (the entry-level
     /// str/list return decode — a raw handle printed as an int was the conformance break this
     /// fixes). `repr`: 2 = str, 3 = str-list, 4 = int-list. `None` = defensive mismatch.
@@ -346,6 +361,7 @@ impl UbCtx {
             },
             3 => Some(Value::List(std::rc::Rc::new(self.list_values(h, true)?))),
             4 => Some(Value::List(std::rc::Rc::new(self.list_values(h, false)?))),
+            5 => Some(Value::List(std::rc::Rc::new(self.dyn_list_values(h)?))),
             _ => None,
         }
     }
@@ -1596,6 +1612,74 @@ pub(super) extern "C" fn rt_u_native2(
     UbMapGetRet { value, code: 0 }
 }
 
+/// Tag-dispatched `List.append` for DYN elements / DynList receivers (W7): materialize the
+/// lhs (`lhs_repr`: 3 = str-list, 4 = int-list, 5 = dyn/boxed-only — a flat-empty word is
+/// fine under any repr), convert the (payload, tag) element to a `Value`
+/// (tag 0 = int, 1 = float-bits, 2 = bool, 3 = str-handle), push, release the str payload
+/// (runtime-bit-gated — a Dyn only ever holds Owned/const words) and the lhs if
+/// compile-time-OWNED (`free_list` != 0). Returns a fresh BOXED handle; `-1` = defensive
+/// mismatch (code 5, redo on VM).
+pub(super) extern "C" fn rt_u_list_append_dyn(
+    ctx: *mut UbCtx,
+    list: i64,
+    payload: i64,
+    tag: i64,
+    meta: i64,
+) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let lhs_repr = meta & 7;
+    let free_list = meta & 8 != 0;
+    let mut vals = match lhs_repr {
+        3 => match ctx.list_values(list, true) {
+            Some(v) => v,
+            None => return -1,
+        },
+        4 => match ctx.list_values(list, false) {
+            Some(v) => v,
+            None => return -1,
+        },
+        5 => {
+            // Dyn lists are boxed by construction; the one flat form is the EMPTY literal.
+            if list & UB_TAG_FLAT != 0 && list & UB_TAG_SLOT == 0 {
+                if (list >> 40) & 0xFFFFF != 0 {
+                    return -1;
+                }
+                Vec::new()
+            } else {
+                match ctx.handles.get(list as usize) {
+                    Some(Value::List(xs)) => xs.as_ref().clone(),
+                    _ => return -1,
+                }
+            }
+        }
+        _ => return -1,
+    };
+    let ev = match tag {
+        0 => Value::Int(payload),
+        1 => Value::Float(f64::from_bits(payload as u64)),
+        2 => Value::Bool(payload != 0),
+        3 => match ctx.str_bytes(payload) {
+            Some(bytes) => match std::str::from_utf8(bytes) {
+                Ok(s) => Value::Str(crate::phstr::PhStr::new(s)),
+                Err(_) => return -1,
+            },
+            None => match ctx.handles.get(payload as usize) {
+                Some(v @ Value::Str(_)) => v.clone(),
+                _ => return -1,
+            },
+        },
+        _ => return -1,
+    };
+    vals.push(ev);
+    if tag == 3 {
+        ctx.release(payload); // runtime-bit-gated: const/borrowed words no-op
+    }
+    if free_list {
+        ctx.release(list);
+    }
+    ctx.alloc(Value::List(std::rc::Rc::new(vals)))
+}
+
 /// Clone a handle VALUE into a fresh untagged Owned handle (`repr`: 2 = str, 3 = str-list,
 /// 4 = int-list) — the Return-of-BORROWED-handle path: a borrowed field/local word returned
 /// as-is would leave the caller and the owner both freeing it (double-free); PHP value
@@ -1618,6 +1702,10 @@ pub(super) extern "C" fn rt_u_clone_value(ctx: *mut UbCtx, h: i64, repr: i64) ->
             None => return -1,
         },
         4 => match ctx.list_values(h, false) {
+            Some(vals) => Value::List(std::rc::Rc::new(vals)),
+            None => return -1,
+        },
+        5 => match ctx.dyn_list_values(h) {
             Some(vals) => Value::List(std::rc::Rc::new(vals)),
             None => return -1,
         },
@@ -1836,6 +1924,7 @@ pub(super) struct UbHelperIds {
     pub(super) native2: FuncId,
     pub(super) str_eq: FuncId,
     pub(super) clone_value: FuncId,
+    pub(super) list_append_dyn: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1864,4 +1953,5 @@ pub(super) struct UbHelperRefs {
     pub(super) native2: FuncRef,
     pub(super) str_eq: FuncRef,
     pub(super) clone_value: FuncRef,
+    pub(super) list_append_dyn: FuncRef,
 }

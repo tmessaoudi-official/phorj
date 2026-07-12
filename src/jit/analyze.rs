@@ -88,6 +88,24 @@ pub(super) enum Kind {
     /// written, so the list is always a bump-pinned FLAT snapshot (never ACL/boxed at
     /// runtime — a boxed one faults to code 5, redo on VM). Scalar-like (no ownership).
     IterPtr,
+    /// A UNION-typed value (W7 — the `string | int | float | bool` param shape): TWO register
+    /// words — the PAYLOAD in the I64 space (`vars[d]`; float = its bits, str = a handle) and
+    /// the runtime TAG in the enum-tag space (`evars[d]`: 0 = int, 1 = float-bits, 2 = bool,
+    /// 3 = str-handle). Produced at the fixpoint's param joins when call sites GENUINELY
+    /// disagree on a scalar family (the sound form of what a silent unification could not
+    /// do); consumed by tag-dispatched helpers (list append) and the tag-gated release.
+    /// ABI: a Dyn param crosses as TWO i64 args (payload, tag).
+    /// Ownership: MOVE-ONLY (no borrowed-Dyn kind exists — a copy would alias the owned str
+    /// payload). Consumers that take the pair (append helper, a Dyn callee param) release
+    /// the tag-3 payload; a Dyn cell still live at unwind/return LEAKS its payload — safe
+    /// (arena exhaustion ⇒ code 5, redo on VM — never wrong bytes), same doctrine as the
+    /// no-frees frame teardown, and unreachable for the read-once union-param shape.
+    Dyn,
+    /// A `List<union>` handle (always runtime-BOXED — built only by Dyn-element appends; an
+    /// empty literal starts as a flat-empty StrList and the list-family join refines it).
+    /// Same ownership discipline as the other list kinds; consumers: length, append, field
+    /// store/read, call-arg move, borrowed-return clone. `Index` stays denied (deferred).
+    DynList(Own),
     /// An INSTANCE handle (the object vertical): an arena SLOT (always slot-tagged — instances
     /// exist only via `MakeInstance` here or an injected method `this`), fields stored FLAT at
     /// byte `8·layout_slot` (≤ 8 int fields; the class index rides in the compile-time kind, so
@@ -139,6 +157,7 @@ impl Kind {
                 | Kind::StrList(_)
                 | Kind::StrIntMap(_)
                 | Kind::IntList(_)
+                | Kind::DynList(_)
                 | Kind::Inst(..)
         )
     }
@@ -150,6 +169,7 @@ impl Kind {
                 | Kind::StrList(Own::Owned)
                 | Kind::StrIntMap(Own::Owned)
                 | Kind::IntList(Own::Owned)
+                | Kind::DynList(Own::Owned)
                 | Kind::Inst(_, Own::Owned)
         )
     }
@@ -164,8 +184,36 @@ pub(super) fn borrowed_copy(k: Kind) -> Kind {
         Kind::IntList(o) => Kind::IntList(o.borrow_of()),
         Kind::StrIntMap(o) => Kind::StrIntMap(o.borrow_of()),
         Kind::Inst(c, o) => Kind::Inst(c, o.borrow_of()),
+        Kind::DynList(o) => Kind::DynList(o.borrow_of()),
         other => other,
     }
+}
+
+/// The FINAL per-slot param kinds of `fi` (usage proofs merged with the fixpoint's call-site
+/// overrides) — the single source both the SIGNATURE builder and every CALL SITE derive the
+/// ABI from: a `Dyn` param crosses as TWO i64 words (payload, tag), everything else as one.
+pub(super) fn abi_param_kinds(
+    program: &BytecodeProgram,
+    info: &UbGraphInfo,
+    fi: usize,
+) -> Vec<Kind> {
+    let proven = unboxed_proven_param_kinds(program, fi);
+    info.param_kinds(
+        fi,
+        &proven,
+        program.functions[fi].arity,
+        &program.functions[fi].dyn_params,
+    )
+}
+
+/// Can `k` be a member of a tagged Dyn cell (the scalar union families)?
+fn is_dynable(k: &Kind) -> bool {
+    matches!(k, Kind::Int | Kind::Float | Kind::Bool | Kind::Str(_))
+}
+
+/// Is `k` any list-family kind (for the DynList-refining join)?
+fn is_list_kind(k: &Kind) -> bool {
+    matches!(k, Kind::StrList(_) | Kind::IntList(_) | Kind::DynList(_))
 }
 
 /// The kind a FIELD READ pushes for a field of kind `fk` on a receiver whose compile-time
@@ -184,6 +232,7 @@ pub(super) fn field_read_kind(fk: Kind, receiver_owned: bool) -> Option<Kind> {
         Kind::StrList(_) => Some(Kind::StrList(own)),
         Kind::IntList(_) => Some(Kind::IntList(own)),
         Kind::StrIntMap(_) => Some(Kind::StrIntMap(own)),
+        Kind::DynList(_) => Some(Kind::DynList(own)),
         _ => None,
     }
 }
@@ -201,11 +250,19 @@ pub(super) fn join_unknown_bottom(a: &[Kind], b: &[Kind]) -> Option<Vec<Kind>> {
             _ if x == y => Some(*x),
             (Kind::Unknown, k) => Some(*k),
             (k, Kind::Unknown) => Some(*k),
-            // NB: no Int ⊔ handle refinement — a UNION-typed param's call sites can
-            // GENUINELY disagree (Int here, Str there), and silently unifying would compile
-            // the callee for one family while the other family's raw word arrives at runtime
-            // (an int dereferenced as a handle). Cross-family = conflict = whole-graph
-            // decline until tagged dynamic cells (W-slice: union params) land.
+            // W7: a UNION-typed param's call sites GENUINELY disagree on a scalar family —
+            // join to the TAGGED two-word Dyn (each site passes (payload, tag); the callee
+            // dispatches at runtime). This is the sound form of what a silent unification
+            // could not do. Dyn absorbs further scalar evidence idempotently.
+            (Kind::Dyn, k) | (k, Kind::Dyn) if is_dynable(k) => Some(Kind::Dyn),
+            (a2, b2) if is_dynable(a2) && is_dynable(b2) => Some(Kind::Dyn),
+            // List-family join: mixed list evidence (an `[]` starts as flat-empty StrList;
+            // a Dyn append produces DynList) refines toward the BOXED DynList — every list
+            // consumer of a DynList word is boxed/kind-agnostic at runtime, so widening the
+            // compile-time kind is sound.
+            (Kind::DynList(_), k) | (k, Kind::DynList(_)) if is_list_kind(k) => {
+                Some(Kind::DynList(Own::Owned))
+            }
             _ => None,
         })
         .collect()
@@ -792,12 +849,17 @@ impl UbGraphInfo {
             .unwrap_or(Kind::Int)
     }
     /// Effective param kinds for `func_idx`: the usage-proven seeds, with a method body's
-    /// slot 0 overridden to its receiver class (`this` arrives as a BORROWED instance handle).
+    /// slot 0 overridden to its receiver class (`this` arrives as a BORROWED instance handle)
+    /// and declared scalar-union params seeded `Dyn` (`dyn_params` — the compiler-stamped
+    /// checker fact; slot-aligned, so it applies LAST and wins over both usage proofs and
+    /// call-site overrides: the declaration is ground truth, and Dyn is the superset every
+    /// dynable site kind crosses into).
     pub(super) fn param_kinds(
         &self,
         func_idx: usize,
         proven: &[Option<Kind>],
         arity: usize,
+        dyn_params: &[bool],
     ) -> Vec<Kind> {
         let mut pk: Vec<Kind> = (0..arity)
             .map(|s| proven.get(s).copied().flatten().unwrap_or(Kind::Unknown))
@@ -816,6 +878,16 @@ impl UbGraphInfo {
         if let Some(c) = self.this_inst.get(func_idx).copied().flatten() {
             if let Some(p0) = pk.get_mut(0) {
                 *p0 = Kind::Inst(c, Own::Borrowed);
+            }
+        }
+        // W7: the declared-union seed — WITHOUT it, a mid-chain method that both takes and
+        // consumes the union param deadlocks the fixpoint (its walk can't finish until the
+        // param is Dyn; the param can't join to Dyn until later chain sites are reached).
+        for (s, is_dyn) in dyn_params.iter().enumerate() {
+            if *is_dyn {
+                if let Some(slot) = pk.get_mut(s) {
+                    *slot = Kind::Dyn;
+                }
             }
         }
         pk
@@ -1235,10 +1307,13 @@ pub(super) fn unboxed_analyze(
                     kinds.push(Kind::Int);
                 }
                 Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => {
-                    // Borrowed-only — mirrors `arm_list_len` exactly (fail closed).
+                    // Any list kind, any ownership — mirrors `arm_list_len` exactly. An
+                    // OWNED operand dies here (measure-then-free at emit — the
+                    // `List.length(q.params())` shape: length of a fresh clone).
                     match kinds.pop() {
-                        Some(Kind::IntList(Own::Borrowed)) | Some(Kind::StrList(Own::Borrowed)) => {
-                        }
+                        Some(Kind::IntList(_))
+                        | Some(Kind::StrList(_))
+                        | Some(Kind::DynList(_)) => {}
                         other => {
                             return Err(JitError::Unsupported(format!(
                                 "unboxed List.length operand kind {other:?}"
@@ -1246,6 +1321,40 @@ pub(super) fn unboxed_analyze(
                         }
                     }
                     kinds.push(Kind::Int);
+                }
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_list_append(*id)
+                        && (matches!(kinds.last(), Some(Kind::Dyn))
+                            || matches!(
+                                kinds.get(kinds.len().wrapping_sub(2)),
+                                Some(Kind::DynList(_))
+                            )) =>
+                {
+                    // W7: a DYN element (tag-dispatched) or a DynList receiver — the boxed
+                    // tag-aware clone-append helper; result = a fresh Owned DynList.
+                    let elem = kinds.pop();
+                    let lhs = kinds.pop();
+                    let elem_ok = matches!(
+                        elem,
+                        Some(
+                            Kind::Dyn
+                                | Kind::Int
+                                | Kind::Float
+                                | Kind::Bool
+                                | Kind::Str(Own::Owned)
+                                | Kind::Str(Own::ConstBorrow)
+                        )
+                    );
+                    let lhs_ok = matches!(
+                        lhs,
+                        Some(Kind::StrList(_) | Kind::IntList(_) | Kind::DynList(_))
+                    );
+                    if !elem_ok || !lhs_ok {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed dyn List.append operand kinds ({lhs:?}, {elem:?})"
+                        )));
+                    }
+                    kinds.push(Kind::DynList(Own::Owned));
                 }
                 Op::CallNative(id, 2)
                     if unboxed_native_is_list_append(*id)
@@ -1315,9 +1424,8 @@ pub(super) fn unboxed_analyze(
                         ));
                     }
                     let rk = info.ret_of(f);
-                    if (is_map && rk != Kind::Int)
-                        || (!is_map && rk != Kind::Bool && rk != Kind::Int)
-                    {
+                    // map: Int only; count: Bool or Int.
+                    if rk != Kind::Int && (is_map || rk != Kind::Bool) {
                         return Err(JitError::Unsupported(format!(
                             "unboxed: List HOF lambda return kind {rk:?} (deferred)"
                         )));
@@ -1392,6 +1500,13 @@ pub(super) fn unboxed_analyze(
                     kinds.push(Kind::Int);
                 }
                 Op::Pop => {
+                    // W7: a discarded Dyn would need a tag-gated payload release — no
+                    // consumer produces the shape yet (union params are read, not discarded).
+                    if matches!(kinds.last(), Some(Kind::Dyn)) {
+                        return Err(JitError::Unsupported(
+                            "unboxed: Pop of a union (Dyn) value (deferred)".to_string(),
+                        ));
+                    }
                     kinds.pop();
                 }
                 Op::AddI
@@ -1471,16 +1586,25 @@ pub(super) fn unboxed_analyze(
                     // the word's ownership to the stack and kills the slot (`Unknown`) — the
                     // ctor-argument flow. Everything else is a BORROW: the slot keeps
                     // ownership; the copy is never freed by its consumer.
+                    // W7: a Dyn cell is MOVE-ONLY — `borrowed_copy(Dyn)` would alias the
+                    // owned str payload (two cells, one word, consumer releases → double
+                    // free), and no borrowed-Dyn kind exists to mark the copy inert.
                     let movable = matches!(
                         k,
                         Kind::Str(Own::Owned)
                             | Kind::StrList(Own::Owned)
                             | Kind::IntList(Own::Owned)
                             | Kind::StrIntMap(Own::Owned)
+                            | Kind::DynList(Own::Owned)
+                            | Kind::Dyn
                     );
                     if *slot < single_use.len() && single_use[*slot] && movable {
                         kinds[*slot] = Kind::Unknown;
                         kinds.push(k);
+                    } else if k == Kind::Dyn {
+                        return Err(JitError::Unsupported(
+                            "unboxed: multi-use union (Dyn) param (deferred)".to_string(),
+                        ));
                     } else {
                         kinds.push(borrowed_copy(k));
                     }
@@ -1507,11 +1631,19 @@ pub(super) fn unboxed_analyze(
                             | Kind::StrList(Own::Borrowed)
                             | Kind::StrIntMap(Own::Borrowed)
                             | Kind::IntList(Own::Borrowed)
+                            | Kind::DynList(Own::Borrowed)
                             | Kind::Inst(_, Own::Borrowed)
                     ) {
                         return Err(JitError::Unsupported(
                             "unboxed: SetLocal of a borrowed handle (aliasing — deferred)"
                                 .to_string(),
+                        ));
+                    }
+                    // W7: storing a Dyn needs the pair-copy + a tag-gated release of any old
+                    // Dyn in the slot — no consumer needs it yet (union params are read once).
+                    if k == Kind::Dyn {
+                        return Err(JitError::Unsupported(
+                            "unboxed: SetLocal of a union (Dyn) value (deferred)".to_string(),
                         ));
                     }
                     kinds[*slot] = k;
@@ -1666,7 +1798,9 @@ pub(super) fn unboxed_analyze(
                 Op::CallValue(argc) => {
                     for _ in 0..*argc {
                         if kinds.pop().is_some_and(|k| {
-                            k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_))
+                            k.is_handle()
+                                || k == Kind::EnumInt
+                                || matches!(k, Kind::Fn(_) | Kind::Dyn)
                         }) {
                             return Err(JitError::Unsupported(
                                 "unboxed: handle/enum/fn argument to CallValue (deferred)"
@@ -1727,6 +1861,9 @@ pub(super) fn unboxed_analyze(
                             Kind::StrIntMap(Own::Owned) => {
                                 sig.push(Kind::StrIntMap(Own::Owned));
                             }
+                            Kind::DynList(Own::Owned) => {
+                                sig.push(Kind::DynList(Own::Owned));
+                            }
                             k if k.is_handle()
                                 || k == Kind::EnumInt
                                 || matches!(k, Kind::Fn(_)) =>
@@ -1782,6 +1919,7 @@ pub(super) fn unboxed_analyze(
                             Kind::StrList(Own::Owned) => sig.push(Kind::StrList(Own::Owned)),
                             Kind::IntList(Own::Owned) => sig.push(Kind::IntList(Own::Owned)),
                             Kind::StrIntMap(Own::Owned) => sig.push(Kind::StrIntMap(Own::Owned)),
+                            Kind::DynList(Own::Owned) => sig.push(Kind::DynList(Own::Owned)),
                             other => {
                                 return Err(JitError::Unsupported(format!(
                                     "unboxed: MakeInstance field kind {other:?} (deferred)"
@@ -1883,6 +2021,7 @@ pub(super) fn unboxed_analyze(
                         (Some(Kind::StrList(_)), Kind::StrList(Own::Owned)) => {}
                         (Some(Kind::IntList(_)), Kind::IntList(Own::Owned)) => {}
                         (Some(Kind::StrIntMap(_)), Kind::StrIntMap(Own::Owned)) => {}
+                        (Some(Kind::DynList(_)), Kind::DynList(Own::Owned)) => {}
                         (None, _) => {
                             return Err(JitError::Unsupported(
                                 "unboxed: SetField before class signature is known (fixpoint retry)"
@@ -1919,6 +2058,9 @@ pub(super) fn unboxed_analyze(
                             }
                             Kind::StrIntMap(Own::Owned) => {
                                 sig.push(Kind::StrIntMap(Own::Owned));
+                            }
+                            Kind::DynList(Own::Owned) => {
+                                sig.push(Kind::DynList(Own::Owned));
                             }
                             k if k.is_handle()
                                 || k == Kind::EnumInt
@@ -2038,6 +2180,14 @@ pub(super) fn unboxed_analyze(
                         Kind::Str(_) => Kind::Str(Own::Owned),
                         Kind::StrList(_) => Kind::StrList(Own::Owned),
                         Kind::IntList(_) => Kind::IntList(Own::Owned),
+                        Kind::DynList(_) => Kind::DynList(Own::Owned),
+                        // W7: a Dyn return has no single-kind decode on the caller side —
+                        // mirror the emit reject exactly (analyze accepts ⇒ emit accepts).
+                        Kind::Dyn => {
+                            return Err(JitError::Unsupported(
+                                "unboxed: union (Dyn) return (deferred)".to_string(),
+                            ));
+                        }
                         other => other,
                     };
                     match &ret_kind {
@@ -2293,7 +2443,12 @@ pub(super) fn resolve_unboxed_graph(
             let fi = order[idx];
             idx += 1;
             let proven = unboxed_proven_param_kinds(program, fi);
-            let pk = info.param_kinds(fi, &proven, program.functions[fi].arity);
+            let pk = info.param_kinds(
+                fi,
+                &proven,
+                program.functions[fi].arity,
+                &program.functions[fi].dyn_params,
+            );
             let mut disc = UbDiscovery::default();
             let rk = match unboxed_analyze(program, fi, &pk, &info, &mut disc) {
                 Ok(a) => a.ret_kind,

@@ -53,6 +53,7 @@ fn validate_accepts_a_well_formed_program() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -83,6 +84,7 @@ fn validate_rejects_out_of_range_const() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -115,6 +117,7 @@ fn validate_rejects_out_of_range_call_and_bad_main() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -162,6 +165,7 @@ fn validate_rejects_out_of_range_enum_desc() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -193,6 +197,7 @@ fn validate_rejects_out_of_range_class_and_field() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -223,6 +228,7 @@ fn validate_rejects_out_of_range_class_and_field() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c2,
@@ -251,6 +257,7 @@ fn validate_rejects_out_of_range_class_and_field() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c3,
@@ -279,6 +286,7 @@ fn validate_rejects_out_of_range_class_and_field() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c4,
@@ -309,6 +317,7 @@ fn validate_rejects_out_of_range_native() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -342,6 +351,7 @@ fn validate_rejects_out_of_range_closure() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -378,6 +388,7 @@ fn validate_accepts_unchecked_no_index_ops() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,
@@ -407,6 +418,7 @@ fn bytecode_program_holds_functions_and_main_index() {
             name: "main".into(),
             arity: 0,
             n_captures: 0,
+            dyn_params: Vec::new(),
 
             unchecked: false,
             chunk: c,

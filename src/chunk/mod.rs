@@ -152,6 +152,15 @@ pub struct Function {
     /// `E-TRANSPILE-UNCHECKED` (no PHP analog, §14 LADDER) and quarantined from the differential's PHP leg.
     /// `false` for every function without the attribute (the common case).
     pub unchecked: bool,
+    /// W7 (JIT union params): `true` per frame slot whose DECLARED param type is a scalar-only
+    /// union (members ⊆ {`int`, `float`, `bool`, `string`} — the checker already validated the
+    /// union itself). Slot-aligned: a method's slot 0 (`this`) is `false`; lambdas record none
+    /// (all-`false`). Compiler-stamped checker fact, read ONLY by the unboxed JIT to seed such
+    /// params as tagged `Dyn` cells — without the seed, a mid-call-chain method that both takes
+    /// and consumes the union param deadlocks the JIT's call-sig fixpoint (its return kind can
+    /// never land, so the later chain sites that would prove the union are never reached).
+    /// Interp/VM/transpiler ignore it. Empty ⇒ no union params (the common case).
+    pub dyn_params: Vec<bool>,
     pub chunk: Chunk,
 }
 

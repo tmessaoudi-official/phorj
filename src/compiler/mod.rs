@@ -332,6 +332,24 @@ fn catch_binding_cty(ty: &Type) -> CTy {
     }
 }
 
+/// W7 (JIT union params): is `ty` a scalar-only union (members ⊆ {`int`, `float`, `bool`,
+/// `string`})? The single recognizer behind `Function::dyn_params` — the checker already
+/// validated the union's members; this only classifies the scalar-family subset the unboxed
+/// JIT can carry as a tagged two-word Dyn cell.
+pub(crate) fn is_scalar_union(ty: &Type) -> bool {
+    match ty {
+        Type::Union(members, _) => members.iter().all(|m| {
+            matches!(
+                m,
+                Type::Named { name, args, .. }
+                    if args.is_empty()
+                        && matches!(name.as_str(), "int" | "float" | "bool" | "string")
+            )
+        }),
+        _ => false,
+    }
+}
+
 fn resolve_cty(ty: &Type) -> CTy {
     match ty {
         Type::Named { name, args, .. } => match name.as_str() {

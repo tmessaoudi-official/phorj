@@ -107,6 +107,7 @@ pub(super) fn compile_constructor<'a>(
             arity: all_params.len(),
             n_captures: 0,    // constructors are never closures
             unchecked: false, // `#[UncheckedOverflow]` is free-function-only (parser rejects it on methods/ctors)
+            dyn_params: all_params.iter().map(|p| is_scalar_union(&p.ty)).collect(),
             chunk: comp.chunk,
         },
         comp.extra_functions,
@@ -188,6 +189,10 @@ pub(super) fn compile_method<'a>(
             arity: 1 + f.params.len(),
             n_captures: 0,    // methods are never closures
             unchecked: false, // `#[UncheckedOverflow]` is free-function-only (parser rejects it on methods)
+            // Slot-aligned with the frame: slot 0 = `this` (never a union), params at 1..
+            dyn_params: std::iter::once(false)
+                .chain(f.params.iter().map(|p| is_scalar_union(&p.ty)))
+                .collect(),
             chunk: comp.chunk,
         },
         comp.extra_functions,

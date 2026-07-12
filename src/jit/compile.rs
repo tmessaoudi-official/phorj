@@ -192,6 +192,7 @@ impl Compiled {
             builder.symbol("rt_u_native2", rt_u_native2 as *const u8);
             builder.symbol("rt_u_str_eq", rt_u_str_eq as *const u8);
             builder.symbol("rt_u_clone_value", rt_u_clone_value as *const u8);
+            builder.symbol("rt_u_list_append_dyn", rt_u_list_append_dyn as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -321,6 +322,14 @@ impl Compiled {
                 },
                 str_eq: declare(&mut module, "rt_u_str_eq", &sig4)?,
                 clone_value: declare(&mut module, "rt_u_clone_value", &sig3)?,
+                list_append_dyn: {
+                    let s = make_sig(
+                        &module,
+                        &[ptr, types::I64, types::I64, types::I64, types::I64],
+                        Some(types::I64),
+                    );
+                    declare(&mut module, "rt_u_list_append_dyn", &s)?
+                },
             })
         } else {
             None
@@ -331,22 +340,33 @@ impl Compiled {
         // per-run handle table (null for a pure-numeric graph; only handle ops dereference it).
         // Per-function arity, so each has its own signature (declared BEFORE any body so calls — self
         // or cross — resolve at finalize).
-        let make_fn_sig = |module: &JITModule, arity: usize| {
+        // W7: the ABI is KIND-driven — a `Dyn` param crosses as TWO i64 words (payload, tag).
+        let make_fn_sig = |module: &JITModule, pks: &[Kind]| {
             let mut sig = module.make_signature();
             sig.params.push(AbiParam::new(ptr)); // ctx
             sig.params.push(AbiParam::new(types::I64)); // depth
-            for _ in 0..arity {
+            for pk in pks {
                 sig.params.push(AbiParam::new(types::I64));
+                if *pk == Kind::Dyn {
+                    sig.params.push(AbiParam::new(types::I64)); // the tag word
+                }
             }
             sig.returns.push(AbiParam::new(types::I64)); // value
             sig.returns.push(AbiParam::new(types::I64)); // fault code (0 = ok)
             sig
         };
+        // The VM hook seeds the ENTRY with one Value per arity slot — a Dyn entry param has
+        // no tag source there (deferred; callees inside the graph are the Dyn consumers).
+        if abi_param_kinds(program, &info, entry_idx).contains(&Kind::Dyn) {
+            return Err(JitError::Unsupported(
+                "unboxed: entry with a union (Dyn) param (deferred)".to_string(),
+            ));
+        }
         let mut func_ids: Vec<Option<FuncId>> = vec![None; program.functions.len()];
         for &fi in &order {
             // NB: a lambda's `arity` already folds its captures in (frame = [caps.., args..]),
             // so the sig covers the prepended capture args with no adjustment.
-            let sig = make_fn_sig(&module, program.functions[fi].arity);
+            let sig = make_fn_sig(&module, &abi_param_kinds(program, &info, fi));
             let id = module
                 .declare_function(&format!("phorj_unboxed_fn_{fi}"), Linkage::Export, &sig)
                 .map_err(|e| JitError::Codegen(format!("declare unboxed fn {fi}: {e}")))?;
@@ -361,7 +381,7 @@ impl Compiled {
             let proven = unboxed_proven_param_kinds(program, fi);
             let mut ret_kind: Option<Kind> = None;
             let mut cl_ctx = module.make_context();
-            cl_ctx.func.signature = make_fn_sig(&module, program.functions[fi].arity);
+            cl_ctx.func.signature = make_fn_sig(&module, &abi_param_kinds(program, &info, fi));
             build_body_unboxed(
                 &mut module,
                 &mut cl_ctx,
@@ -502,7 +522,7 @@ impl Compiled {
         };
         let ub_ctx: *mut UbCtx = cached
             .as_deref_mut()
-            .map_or(std::ptr::null_mut(), |c| std::ptr::from_mut(c));
+            .map_or(std::ptr::null_mut(), std::ptr::from_mut);
         // SAFETY: `self.entry` is finalized machine code with signature
         // `extern "C" fn(*mut UbCtx, i64 depth, i64… /* arity */) -> (i64, i64)`; we transmute to the
         // arity-specific type and pass ctx + depth + exactly `arity` i64 args. `self.module` owns the

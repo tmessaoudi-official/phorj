@@ -615,6 +615,104 @@ fn phg_run_hook_hits_the_jit_on_wide_two_slot_instances() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_union_dyn_params() {
+    // W7: union Dyn cells — `add`'s value param sees Int, Str AND Bool call sites (a
+    // genuine scalar-family disagreement → the tagged two-word Dyn), each appended to a
+    // `List<union>` field via the tag-dispatched helper (binds starts as the flat-empty
+    // literal and the list-family join refines it to DynList). The per-iteration chain
+    // frees OWNED temp receivers WITH their DynList fields (steady state across 2000
+    // iterations — the sqlbuild builder shape end to end). No float arm here: a float
+    // CONST in a calling function still trips the v1 "float subset is leaf-only" gate
+    // (a separate lever); the Dyn float tag (1) is wired and waits on that gate.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        class Q {\n\
+          constructor(private List<string | int | float | bool> binds, public int n) {}\n\
+          function add(string | int | float | bool v): Q {\n\
+            return new Q(List.append(this.binds, v), this.n + 1);\n\
+          }\n\
+          function size(): int { return List.length(this.binds); }\n\
+        }\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            Q q = new Q([], 0).add(i).add(\"paid\").add(true);\n\
+            acc = acc + q.size() + q.n;\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "union-dyn jit-wired output must match the oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual union-dyn run ok");
+    assert_eq!(manual, oracle, "manual union-dyn run must match the oracle");
+    assert!(
+        cache.borrow().hits > 0,
+        "union Dyn params must actually hit the JIT (redos = {})",
+        cache.borrow().redos
+    );
+}
+
+#[test]
+fn phg_run_hook_takes_list_fields_from_dying_temp_receivers() {
+    // Regression (W7 audit): a LIST field read off a DYING owned temp (`new P(..).cols`)
+    // TAKES the word — the receiver's field-release walk must EXCLUDE that slot (it used
+    // to exclude Str fields only, so the taken list word was freed under the reader:
+    // recycled-slot reuse could hand the consumer a different live value — wrong bytes,
+    // not just a redo). Steady state over 2000 temps proves take + skip + no leak.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        import Core.String;\n\
+        class P {\n\
+          constructor(public List<string> cols, public string tag) {}\n\
+        }\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            acc = acc + List.length(new P([\"a\", \"b\"], \"t\").cols) + i;\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "dying-temp list-field output must match the oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual dying-temp run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual dying-temp list-field run must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the dying-temp list-field take must actually hit the JIT (redos = {})",
+        cache.borrow().redos
+    );
+}
+
+#[test]
 fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // The MUTATION GUARD: iterating a local AND writing it in the same function (append
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would

@@ -501,10 +501,7 @@ pub(super) fn arm_list_len(
     kinds: &mut Vec<Kind>,
 ) -> Result<(), JitError> {
     let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
-    if !matches!(
-        lk,
-        Kind::StrList(Own::Borrowed) | Kind::IntList(Own::Borrowed)
-    ) {
+    if !matches!(lk, Kind::StrList(_) | Kind::IntList(_) | Kind::DynList(_)) {
         return Err(JitError::Unsupported(format!(
             "unboxed Len operand kind {lk:?}"
         )));
@@ -543,6 +540,12 @@ pub(super) fn arm_list_len(
     b.ins().jump(merge, &[sres.into()]);
     b.switch_to_block(merge);
     let res = b.block_params(merge)[0];
+    // An OWNED operand dies at the measurement (`List.length(q.params())` — length of a
+    // fresh clone): release AFTER the count is in hand (runtime-bit-gated — flat/const
+    // words no-op; a boxed word takes the helper free).
+    if lk.is_owned_handle() {
+        emit_release(b, ec, h, lv);
+    }
     ub_push(b, vars, fvars, kinds, res, Kind::Int)
 }
 
@@ -980,6 +983,13 @@ pub(super) fn arm_pop(
     info: &UbGraphInfo,
 ) -> Result<(), JitError> {
     let (v, k) = ub_pop(b, vars, fvars, kinds)?;
+    // W7: analyze declines Pop-of-Dyn (its payload would need a tag-gated release) — a Dyn
+    // reaching here is analyze/emit drift, not a supported shape.
+    if k == Kind::Dyn {
+        return Err(JitError::Codegen(
+            "unboxed: Pop of a Dyn value past analyze".to_string(),
+        ));
+    }
     if k.is_owned_handle() {
         let h = ub_ref(ub, "Pop(owned handle)")?;
         release_kinded(b, ec, h, v, k, program, info, None);

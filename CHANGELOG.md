@@ -6,6 +6,43 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — JIT W-slice 7: union params as tagged two-word Dyn cells (the sqlbuild gate's last widening lever)
+
+A declared scalar-union param (`string | int | float | bool` — the `Core.Sql` `whereEq`/
+`whereGt` value shape) now stays in the unboxed JIT subset as a `Kind::Dyn` register pair:
+the PAYLOAD in the I64 space, the runtime TAG in the enum-tag space (EnumInt precedent;
+0 = int, 1 = float-bits, 2 = bool, 3 = str-handle). The ABI is kind-driven — a Dyn param
+crosses every call as TWO i64 words, expanded by the one `pop_call_args` shared by
+`Call`/`CallValue`/`CallMethod` from the same `abi_param_kinds` single source the signature
+builder reads. Consumers: the tag-dispatched `rt_u_list_append_dyn` helper (a Dyn element or
+`DynList` receiver → a fresh boxed `List<union>`), `List.length` (now ANY list kind and ANY
+ownership — an OWNED operand is measured then freed, the `List.length(q.params())` shape),
+`DynList` instance fields (ctor stores, borrow reads, kinded release), and `DynList`
+call-arg moves / clone-returns. Dyn cells are MOVE-ONLY (a borrowed copy would alias the
+owned str payload — double free); multi-use / `SetLocal` / `Pop` / `Return` of a Dyn stay
+fail-closed declines.
+
+The load-bearing piece is the **declared-union seed**: the compiler stamps
+`Function::dyn_params` (a checker fact — which param slots are scalar-only unions) and the
+fixpoint seeds those params `Dyn` directly. Without it the sqlbuild chain DEADLOCKS: a
+mid-chain method that both takes and appends the union param (`withCond`) can never finish
+its round-1 walk, so its return kind never lands, so the later chain sites that would
+contribute the other scalar family to the join are never reached — call-site discovery
+alone cannot see the union.
+
+Two latent object-vertical bugs found by the W7 audit are fixed in the same change:
+a LIST/map field read off a DYING owned temp (`new P(..).cols`) TAKES the word but the
+receiver's field-release walk only excluded `Str` fields — the taken word was freed under
+the reader (recycled-slot reuse could hand the consumer a DIFFERENT live value: wrong
+bytes, not a redo); and `str_field_layout_slots` did not list `DynList` fields (an instance
+owning a `List<union>` leaked it on death). Emit↔analyze mirror drifts closed: `GetLocal`'s
+movable set (DynList), `arm_list_len`'s accepted kinds, `SetField`'s value gate.
+
+Delivery: `phg_run_hook_hits_the_jit_on_union_dyn_params` (Int/Str/Bool sites → genuine
+Dyn; appends through a `List<union>` field across a temp-receiver builder chain; hits > 0 +
+byte-identity over 2000 iterations) + `phg_run_hook_takes_list_fields_from_dying_temp_receivers`
+(the take-and-skip regression). Full oracle 1966/1966 with the PHP leg required.
+
 ### Added — forin lever-3 pointer-walk iteration — **0.73× → 2.30× WIN** (protocol median, 3× best-of-7)
 
 The for-in desugar's harness cells become RAW POINTERS at emit: at the `IterElems; Const(0)`

@@ -137,29 +137,68 @@ fn ub_ref<'a>(ub: Option<&'a UbHelperRefs>, what: &str) -> Result<&'a UbHelperRe
     })
 }
 
-/// Pop `argc` int-representable args off the operand stack (top is the LAST arg), rejecting
-/// kinds that can't cross the one-i64-per-arg ABI (handles, register-pair enums, static `Fn`s).
-/// Returns the args in declaration order.
-fn pop_int_args(
+/// Pop `argc` args (top is the LAST arg) and build the callee's ABI word vector per its
+/// FINAL param kinds (`pks` — slots aligned to the args; a method receiver is prepended by
+/// the caller): a `Dyn` param takes TWO words (payload, tag) — a concrete argument gets a
+/// constant tag (float args bitcast to their bits), a forwarded Dyn reads its tag from the
+/// enum-tag space. Every other param takes the single-word move rules (a string/list/map
+/// argument MOVES into the callee — the word crosses as a plain i64; the callee's
+/// single-use-moved param owns it), rejecting kinds that can't cross one-i64-per-arg
+/// (handles, register-pair enums, static `Fn`s). Returns the words in declaration order.
+#[allow(clippy::too_many_arguments)] // emit plumbing
+fn pop_call_args(
     b: &mut FunctionBuilder,
     vars: &[Variable],
     fvars: &[Variable],
+    evars: &[Variable],
     kinds: &mut Vec<Kind>,
     argc: usize,
+    pks: &[Kind],
 ) -> Result<Vec<ClValue>, JitError> {
-    let mut cargs: Vec<ClValue> = Vec::with_capacity(argc);
-    for _ in 0..argc {
+    // Collected LAST-arg-first as (words…) per arg, then flattened in declaration order.
+    let mut rev: Vec<Vec<ClValue>> = Vec::with_capacity(argc);
+    for i in 0..argc {
+        let pk = pks
+            .get(argc - 1 - i)
+            .copied()
+            .ok_or_else(|| JitError::Codegen("unboxed: call pks underflow".to_string()))?;
         let (v, k) = ub_pop(b, vars, fvars, kinds)?;
+        if pk == Kind::Dyn {
+            let (payload, tag) = match k {
+                Kind::Dyn => (v, b.use_var(evars[kinds.len()])),
+                Kind::Int => (v, b.ins().iconst(types::I64, 0)),
+                Kind::Float => {
+                    let bits = b.ins().bitcast(types::I64, MemFlagsData::new(), v);
+                    (bits, b.ins().iconst(types::I64, 1))
+                }
+                Kind::Bool => (v, b.ins().iconst(types::I64, 2)),
+                // The Dyn takes the word (Owned moves in; a const word's frees no-op).
+                Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
+                    (v, b.ins().iconst(types::I64, 3))
+                }
+                other => {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: {other:?} argument into a Dyn param (deferred)"
+                    )));
+                }
+            };
+            rev.push(vec![payload, tag]);
+            continue;
+        }
         match k {
-            // A string/list/map argument MOVES into the callee (mirrors the analyze arm) —
-            // the word crosses as a plain i64; the callee's single-use-moved param owns it.
             Kind::Str(Own::Owned)
             | Kind::Str(Own::ConstBorrow)
             | Kind::StrList(Own::Owned)
             | Kind::IntList(Own::Owned)
-            | Kind::StrIntMap(Own::Owned) => {}
-            // Any other handle would arrive as an untyped i64 param; a two-word enum can't
-            // cross the ABI; a `Fn`'s static target would be lost.
+            | Kind::StrIntMap(Own::Owned)
+            | Kind::DynList(Own::Owned) => {}
+            // A Dyn arg into a NON-Dyn param would cross as one word and silently drop its
+            // tag — impossible post-fixpoint (Dyn absorbs at the join), reject defensively.
+            Kind::Dyn => {
+                return Err(JitError::Unsupported(
+                    "unboxed: Dyn argument into a non-Dyn param (deferred)".to_string(),
+                ));
+            }
             k if k.is_handle() || k == Kind::EnumInt || matches!(k, Kind::Fn(_)) => {
                 return Err(JitError::Unsupported(
                     "unboxed: handle/enum/fn argument to Call (deferred)".to_string(),
@@ -167,10 +206,10 @@ fn pop_int_args(
             }
             _ => {}
         }
-        cargs.push(v);
+        rev.push(vec![v]);
     }
-    cargs.reverse();
-    Ok(cargs)
+    rev.reverse();
+    Ok(rev.into_iter().flatten().collect())
 }
 
 /// Everything a call site / `Throw` needs to route a THROWN payload (code 6): the tables for
@@ -331,7 +370,7 @@ pub(super) fn build_body_unboxed(
     // types correctly); otherwise `Unknown` → a bare return of one is rejected. A method body's slot 0
     // is the injected receiver (`this` — a BORROWED instance handle from the fixpoint facts). These seed
     // the entry stack for the analysis, which then fixes every leader's (depth, kinds) and the max depth.
-    let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity);
+    let param_kinds: Vec<Kind> = info.param_kinds(func_idx, proven, func.arity, &func.dyn_params);
     let single_use = single_use_params(func);
     // Innermost active catch pad per ip (lexical try ranges) — drives Throw + call-site
     // code-6 dispatch.
@@ -447,6 +486,7 @@ pub(super) fn build_body_unboxed(
         native2: module.declare_func_in_func(ids.native2, b.func),
         str_eq: module.declare_func_in_func(ids.str_eq, b.func),
         clone_value: module.declare_func_in_func(ids.clone_value, b.func),
+        list_append_dyn: module.declare_func_in_func(ids.list_append_dyn, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -459,7 +499,31 @@ pub(super) fn build_body_unboxed(
     let entry_params: Vec<ClValue> = b.block_params(entry).to_vec();
     let ctx = entry_params[0];
     let depth = entry_params[1];
-    let args: Vec<ClValue> = entry_params[2..].to_vec();
+    // W7: map ABI arg slots -> frame slots per the FINAL param kinds (a Dyn param consumes
+    // TWO incoming words: payload into the I64 space, tag into the enum-tag space).
+    let abi_args: Vec<ClValue> = entry_params[2..].to_vec();
+    let mut args: Vec<ClValue> = Vec::with_capacity(param_kinds.len());
+    let mut arg_tags: Vec<Option<ClValue>> = Vec::with_capacity(param_kinds.len());
+    {
+        let mut ai = 0usize;
+        for pk in &param_kinds {
+            let payload = abi_args
+                .get(ai)
+                .copied()
+                .ok_or_else(|| JitError::Codegen("unboxed: ABI arg underflow".to_string()))?;
+            ai += 1;
+            if *pk == Kind::Dyn {
+                let tag = abi_args.get(ai).copied().ok_or_else(|| {
+                    JitError::Codegen("unboxed: ABI Dyn tag underflow".to_string())
+                })?;
+                ai += 1;
+                arg_tags.push(Some(tag));
+            } else {
+                arg_tags.push(None);
+            }
+            args.push(payload);
+        }
+    }
     // Every stack cell is a Cranelift `Variable` (`vars[d]` = stack depth d), all DECLARED AND DEFINED
     // in the entry block — which dominates the whole body — so every `use_var`, including a loop-header
     // read reached via a back-edge, is dominated by a definition; Cranelift's SSA construction +
@@ -497,7 +561,12 @@ pub(super) fn build_body_unboxed(
             b.def_var(ivar, i_zero);
             b.def_var(fvar, f_zero);
         }
-        b.def_var(evar, i_zero);
+        // W7: a Dyn param's SECOND incoming word (the runtime tag) seeds its enum-tag cell;
+        // every other slot gets the filler.
+        match arg_tags.get(s).copied().flatten() {
+            Some(tag) => b.def_var(evar, tag),
+            None => b.def_var(evar, i_zero),
+        }
         vars.push(ivar);
         fvars.push(fvar);
         evars.push(evar);
@@ -893,6 +962,69 @@ pub(super) fn build_body_unboxed(
             }
             Op::CallNative(id, 2)
                 if unboxed_native_is_list_append(*id)
+                    && (matches!(kinds.last(), Some(Kind::Dyn))
+                        || matches!(
+                            kinds.get(kinds.len().wrapping_sub(2)),
+                            Some(Kind::DynList(_))
+                        )) =>
+            {
+                // W7: a DYN element (tag-dispatched) or a DynList receiver — the boxed
+                // tag-aware clone-append helper; result = a fresh Owned DynList. Guard order
+                // mirrors analyze exactly (this arm BEFORE the accumulator arm — a Dyn
+                // element at an accumulator site takes the tag-aware path there too).
+                let h = ub_ref(ub_refs.as_ref(), "List.append(dyn)")?;
+                let (ev, ek) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                // The popped element's enum-tag cell (a forwarded Dyn's runtime tag lives
+                // there; kinds.len() is the popped slot's index AFTER the pop).
+                let elem_tag_cell = evars[kinds.len()];
+                let (lv, lk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (payload, tag) = match ek {
+                    Kind::Dyn => (ev, b.use_var(elem_tag_cell)),
+                    Kind::Int => (ev, b.ins().iconst(types::I64, 0)),
+                    Kind::Float => {
+                        let bits = b.ins().bitcast(types::I64, MemFlagsData::new(), ev);
+                        (bits, b.ins().iconst(types::I64, 1))
+                    }
+                    Kind::Bool => (ev, b.ins().iconst(types::I64, 2)),
+                    // The Dyn takes the word (Owned moves in; a const word's frees no-op).
+                    Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow) => {
+                        (ev, b.ins().iconst(types::I64, 3))
+                    }
+                    other => {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed dyn List.append element kind {other:?}"
+                        )));
+                    }
+                };
+                let lhs_repr: i64 = match lk {
+                    Kind::StrList(_) => 3,
+                    Kind::IntList(_) => 4,
+                    Kind::DynList(_) => 5,
+                    other => {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed dyn List.append lhs kind {other:?}"
+                        )));
+                    }
+                };
+                let meta = lhs_repr | ((lk.is_owned_handle() as i64) << 3);
+                let metav = b.ins().iconst(types::I64, meta);
+                let call = b
+                    .ins()
+                    .call(h.list_append_dyn, &[ec.ctx, lv, payload, tag, metav]);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                ec.fault_if(&mut b, bad, 5);
+                ub_push(
+                    &mut b,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    sres,
+                    Kind::DynList(Own::Owned),
+                )?;
+            }
+            Op::CallNative(id, 2)
+                if unboxed_native_is_list_append(*id)
                     && accumulator_site(code, &depth_at, &is_leader, ip).is_some() =>
             {
                 // The listappend vertical (mirrors the Concat accumulator peephole): ONLY
@@ -1056,23 +1188,32 @@ pub(super) fn build_body_unboxed(
                     ))
                 })?;
                 let v = b.use_var(var);
-                // A register-pair enum copies BOTH words: the tag into the copy's evars cell
-                // (dest depth = current top, i.e. kinds.len() BEFORE the push).
-                if kind == Kind::EnumInt {
+                // A register-pair enum — and a W7 Dyn cell — copies BOTH words: the tag into
+                // the copy's evars cell (dest depth = current top, i.e. kinds.len() BEFORE
+                // the push).
+                if matches!(kind, Kind::EnumInt | Kind::Dyn) {
                     let tv = b.use_var(evars[*slot]);
                     b.def_var(evars[kinds.len()], tv);
                 }
                 // Single-use param MOVE / plain BORROW — mirrors the analyze arm exactly.
+                // W7: a Dyn cell is MOVE-ONLY (a borrowed copy would alias the owned str
+                // payload — double free); multi-use was declined by analyze.
                 let movable = matches!(
                     kind,
                     Kind::Str(Own::Owned)
                         | Kind::StrList(Own::Owned)
                         | Kind::IntList(Own::Owned)
                         | Kind::StrIntMap(Own::Owned)
+                        | Kind::DynList(Own::Owned)
+                        | Kind::Dyn
                 );
                 if *slot < single_use.len() && single_use[*slot] && movable {
                     kinds[*slot] = Kind::Unknown;
                     ub_push(&mut b, &vars, &fvars, &mut kinds, v, kind)?;
+                } else if kind == Kind::Dyn {
+                    return Err(JitError::Unsupported(
+                        "unboxed: multi-use union (Dyn) param (deferred)".to_string(),
+                    ));
                 } else {
                     ub_push(&mut b, &vars, &fvars, &mut kinds, v, borrowed_copy(kind))?;
                 }
@@ -1110,10 +1251,17 @@ pub(super) fn build_body_unboxed(
                         | Kind::StrList(Own::Borrowed)
                         | Kind::StrIntMap(Own::Borrowed)
                         | Kind::IntList(Own::Borrowed)
+                        | Kind::DynList(Own::Borrowed)
                         | Kind::Inst(_, Own::Borrowed)
                 ) {
                     return Err(JitError::Unsupported(
                         "unboxed: SetLocal of a borrowed handle (aliasing — deferred)".to_string(),
+                    ));
+                }
+                // W7: mirrors the analyze deny (pair-copy + old-Dyn release not wired yet).
+                if k == Kind::Dyn {
+                    return Err(JitError::Unsupported(
+                        "unboxed: SetLocal of a union (Dyn) value (deferred)".to_string(),
                     ));
                 }
                 // Overwriting a live OWNED handle releases the old value first (the accumulator
@@ -1134,10 +1282,12 @@ pub(super) fn build_body_unboxed(
                 kinds[*slot] = k;
             }
             Op::Call(callee) => {
-                // Self OR cross-function call: pop the callee's `arity` args, then the shared
-                // direct-call emission (depth guard + native call + fault propagation).
+                // Self OR cross-function call: pop the callee's `arity` args per its FINAL
+                // ABI param kinds (a Dyn param takes TWO words), then the shared direct-call
+                // emission (depth guard + native call + fault propagation).
                 let arity = program.functions[*callee].arity;
-                let cargs = pop_int_args(&mut b, &vars, &fvars, &mut kinds, arity)?;
+                let pks = abi_param_kinds(program, info, *callee);
+                let cargs = pop_call_args(&mut b, &vars, &fvars, &evars, &mut kinds, arity, &pks)?;
                 emit_call_to(
                     &mut b,
                     &ec,
@@ -1189,7 +1339,21 @@ pub(super) fn build_body_unboxed(
             // `CallValue` on a static `Fn(f)`: pop the args, pop the (filler) callee word, then
             // the SAME direct-call emission as `Op::Call` — no indirection, no closure object.
             Op::CallValue(argc) => {
-                let cargs = pop_int_args(&mut b, &vars, &fvars, &mut kinds, *argc)?;
+                // The static `Fn` target is UNDER the args — peek it so the callee's ABI
+                // param kinds drive the arg pop (a Dyn param takes a (payload, tag) pair
+                // even when THIS site passes a concrete scalar).
+                let fk_peek = *kinds
+                    .get(kinds.len().wrapping_sub(*argc + 1))
+                    .ok_or_else(|| {
+                        JitError::Codegen("unboxed: CallValue underflow past analyze".to_string())
+                    })?;
+                let Kind::Fn(f_peek) = fk_peek else {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed: CallValue on {fk_peek:?} (deferred)"
+                    )));
+                };
+                let pks = abi_param_kinds(program, info, f_peek);
+                let cargs = pop_call_args(&mut b, &vars, &fvars, &evars, &mut kinds, *argc, &pks)?;
                 let (_fv, fk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
                 let Kind::Fn(f) = fk else {
                     return Err(JitError::Unsupported(format!(
@@ -1258,15 +1422,21 @@ pub(super) fn build_body_unboxed(
             // the receiver handle prepended as the callee's slot 0 (`this`). The VM's frame
             // teardown drops the receiver — an OWNED temp receiver is freed after the call.
             Op::CallMethod(nidx, argc) => {
-                let cargs = pop_int_args(&mut b, &vars, &fvars, &mut kinds, *argc)?;
-                let (rv, rk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
-                let Kind::Inst(c, _) = rk else {
+                // The receiver is UNDER the args — peek its class to resolve the target so
+                // the callee's ABI param kinds (slot 0 = `this`, args at 1..) can drive the
+                // arg pop (a Dyn param takes a (payload, tag) pair).
+                let rk_peek = *kinds
+                    .get(kinds.len().wrapping_sub(*argc + 1))
+                    .ok_or_else(|| {
+                        JitError::Codegen("unboxed: CallMethod underflow past analyze".to_string())
+                    })?;
+                let Kind::Inst(c_peek, _) = rk_peek else {
                     return Err(JitError::Unsupported(format!(
-                        "unboxed: CallMethod on {rk:?} (deferred)"
+                        "unboxed: CallMethod on {rk_peek:?} (deferred)"
                     )));
                 };
                 let key = (
-                    program.class_descs[c].class.to_string(),
+                    program.class_descs[c_peek].class.to_string(),
                     program.names[*nidx].clone(),
                 );
                 let Some(&target) = program.methods.get(&key) else {
@@ -1274,6 +1444,15 @@ pub(super) fn build_body_unboxed(
                         "unboxed: CallMethod unresolved past analyze".to_string(),
                     ));
                 };
+                let pks = abi_param_kinds(program, info, target);
+                let cargs =
+                    pop_call_args(&mut b, &vars, &fvars, &evars, &mut kinds, *argc, &pks[1..])?;
+                let (rv, rk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if !matches!(rk, Kind::Inst(c2, _) if c2 == c_peek) {
+                    return Err(JitError::Codegen(
+                        "unboxed: CallMethod receiver kind drifted past analyze".to_string(),
+                    ));
+                }
                 let mut full_args: Vec<ClValue> = Vec::with_capacity(cargs.len() + 1);
                 full_args.push(rv);
                 full_args.extend(cargs);

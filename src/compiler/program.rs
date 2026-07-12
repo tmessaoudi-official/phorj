@@ -568,6 +568,7 @@ pub(super) fn compile_program_with(
             // whole function's int arithmetic to the wrapping kernels on every backend. Recognition is
             // single-sourced in `Attribute::is_unchecked_overflow` (checker/compiler/interp/transpile agree).
             unchecked: f.attrs.iter().any(|a| a.is_unchecked_overflow()),
+            dyn_params: f.params.iter().map(|p| is_scalar_union(&p.ty)).collect(),
             chunk: c.chunk,
         });
         // Drain any lambda sub-functions emitted during this body's compilation.

@@ -140,9 +140,18 @@ pub(super) fn arm_get_field(
     let (fp, foff) = field_addr(b, ec, pr, slot, is_wide(program, c));
     let val = b.ins().load(types::I64, MemFlagsData::new(), fp, foff);
     if rk.is_owned_handle() {
-        // A dying temp receiver: free its OTHER str fields + its slot; the read field's
-        // word (if Str) now belongs to the result.
-        let exclude = if matches!(fk, Kind::Str(_)) {
+        // A dying temp receiver: free its OTHER handle fields + its slot; the read field's
+        // word (any handle kind — str/list/map/DynList, exactly the set `field_read_kind`
+        // hands out as TAKEN) now belongs to the result, so the field walk must skip it or
+        // the result would hold a freed word (double free).
+        let exclude = if matches!(
+            fk,
+            Kind::Str(_)
+                | Kind::StrList(_)
+                | Kind::IntList(_)
+                | Kind::StrIntMap(_)
+                | Kind::DynList(_)
+        ) {
             Some(slot)
         } else {
             None
@@ -169,9 +178,17 @@ pub(super) fn arm_set_field(
 ) -> Result<(), JitError> {
     let (vv, vk) = ub_pop(b, vars, fvars, kinds)?;
     let (rv, rk) = ub_pop(b, vars, fvars, kinds)?;
+    // Mirrors the analyze arm's accepted (field, value) pairs — analyze already matched the
+    // value against the class's field kind, so the vk gate alone suffices here.
     if !matches!(
         vk,
-        Kind::Int | Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow)
+        Kind::Int
+            | Kind::Str(Own::Owned)
+            | Kind::Str(Own::ConstBorrow)
+            | Kind::StrList(Own::Owned)
+            | Kind::IntList(Own::Owned)
+            | Kind::StrIntMap(Own::Owned)
+            | Kind::DynList(Own::Owned)
     ) {
         return Err(JitError::Unsupported(format!(
             "unboxed: SetField value kind {vk:?} (deferred)"
@@ -197,7 +214,7 @@ pub(super) fn arm_set_field(
     // runtime bit makes a const word's release a no-op; a boxed list word takes the helper).
     if matches!(
         vk,
-        Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) | Kind::StrIntMap(_)
+        Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) | Kind::StrIntMap(_) | Kind::DynList(_)
     ) {
         let old = b.ins().load(types::I64, MemFlagsData::new(), fp, foff);
         emit_release(b, ec, h, old);
@@ -228,7 +245,11 @@ pub(super) fn str_field_layout_slots(
         .filter(|(_, k)| {
             matches!(
                 k,
-                Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) | Kind::StrIntMap(_)
+                Kind::Str(_)
+                    | Kind::StrList(_)
+                    | Kind::IntList(_)
+                    | Kind::StrIntMap(_)
+                    | Kind::DynList(_)
             )
         })
         .filter_map(|(j, _)| desc.fields.get(j).and_then(|n| desc.layout.slot(n)))
