@@ -541,6 +541,15 @@ impl UbCtx {
     }
 }
 
+/// An UNTAGGED word — a plain `handles` index (no slot/flat/builder/owned tag bits): the
+/// boxed-`Value` island where Rc sharing (the VM's own COW discipline) is legal.
+#[inline]
+fn ub_is_untagged(h: i64) -> bool {
+    h >= 0
+        && h & (UB_TAG_SLOT | UB_TAG_FLAT | UB_TAG_ACC | UB_TAG_ACL | UB_TAG_AMB | UB_TAG_OWNED)
+            == 0
+}
+
 /// SAFETY (all `rt_u_*`): `ctx` is the `&mut UbCtx` the current `run_unboxed` call owns, passed as an
 /// opaque pointer; the compiled code is single-threaded within the call and never aliases it. Every
 /// helper is defensive on the impossible bad-handle case (validated stack discipline) — it returns
@@ -1673,6 +1682,12 @@ pub(super) extern "C" fn rt_u_native2(
                     _ => None,
                 },
             },
+            3 | 4 if ub_is_untagged(raw) => match ctx.handles.get(raw as usize) {
+                // Boxed arg: O(1) Rc bump — the pure native reads the SAME Value the VM
+                // would pass (byte-identical by construction, cheaper than materializing).
+                Some(v @ Value::List(_)) => Some(v.clone()),
+                _ => None,
+            },
             3 => Some(Value::List(std::rc::Rc::new(ctx.list_values(raw, true)?))),
             4 => Some(Value::List(std::rc::Rc::new(ctx.list_values(raw, false)?))),
             _ => None,
@@ -1784,6 +1799,17 @@ pub(super) extern "C" fn rt_u_list_append_dyn(
 /// semantics say the caller gets its own copy. `-1` = defensive mismatch (code 5).
 pub(super) extern "C" fn rt_u_clone_value(ctx: *mut UbCtx, h: i64, repr: i64) -> i64 {
     let ctx = unsafe { &mut *ctx };
+    // BOXED fast path (any list repr): an untagged handle holds a `Value::List(Rc<..>)` —
+    // phorj value semantics share via Rc with COW at mutation (the VM's own discipline;
+    // every JIT in-place mutator is `Rc::get_mut`-guarded fail-closed), so the clone is an
+    // O(1) Rc bump instead of a deep materialization. This is what makes the W9a
+    // clone-at-boundary cheap on builder-chain shapes (php's refcount equivalence).
+    if matches!(repr, 3..=5) && ub_is_untagged(h) {
+        if let Some(v @ Value::List(_)) = ctx.handles.get(h as usize) {
+            let v = v.clone();
+            return ctx.alloc(v);
+        }
+    }
     let v = match repr {
         2 => match ctx.str_bytes(h) {
             Some(bytes) => match std::str::from_utf8(bytes) {
@@ -1856,8 +1882,24 @@ pub(super) extern "C" fn rt_u_list_append_clone(
 ) -> i64 {
     let ctx = unsafe { &mut *ctx };
     let str_elem = meta & 1 != 0;
-    let Some(mut vals) = ctx.list_values(list, str_elem) else {
-        return -1;
+    // Boxed lhs: take an Rc handle up front — after the (optional) lhs release drops the
+    // original strong count, `Rc::make_mut` pushes IN PLACE when unique and copies once
+    // when genuinely shared (the COW discipline — identical values, fewer copies).
+    let boxed_lhs: Option<std::rc::Rc<Vec<Value>>> = if ub_is_untagged(list) {
+        match ctx.handles.get(list as usize) {
+            Some(Value::List(xs)) => Some(xs.clone()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let vals_fallback: Option<Vec<Value>> = if boxed_lhs.is_none() {
+        match ctx.list_values(list, str_elem) {
+            Some(v) => Some(v),
+            None => return -1,
+        }
+    } else {
+        None
     };
     let ev = if str_elem {
         match ctx.str_bytes(elem) {
@@ -1873,13 +1915,18 @@ pub(super) extern "C" fn rt_u_list_append_clone(
     } else {
         Value::Int(elem)
     };
-    vals.push(ev);
     if meta & 2 != 0 {
         ctx.release(elem);
     }
     if meta & 4 != 0 {
         ctx.release(list);
     }
+    if let Some(mut rc) = boxed_lhs {
+        std::rc::Rc::make_mut(&mut rc).push(ev);
+        return ctx.alloc(Value::List(rc));
+    }
+    let mut vals = vals_fallback.expect("non-boxed lhs materialized above");
+    vals.push(ev);
     ctx.alloc(Value::List(std::rc::Rc::new(vals)))
 }
 
