@@ -1658,7 +1658,17 @@ pub(super) fn build_body_unboxed(
                         None
                     },
                 )?;
-                if rk.is_owned_handle() {
+                // L2b: a callee compiled with OWNED `this` (every site passes a dying owned
+                // receiver) TAKES the word — its Return teardown releases the husk, so the
+                // call site must NOT (double free). A borrowed-this callee leaves the dying
+                // temp to this site as before.
+                let callee_owns_this = matches!(pks.first(), Some(Kind::Inst(_, Own::Owned)));
+                if callee_owns_this && !rk.is_owned_handle() {
+                    return Err(JitError::Codegen(
+                        "unboxed: owned-this callee reached with a borrowed receiver".to_string(),
+                    ));
+                }
+                if rk.is_owned_handle() && !callee_owns_this {
                     let h = ub_ref(ub_refs.as_ref(), "CallMethod(receiver free)")?;
                     release_kinded(&mut b, &ec, h, rv, rk, program, info, None);
                 }

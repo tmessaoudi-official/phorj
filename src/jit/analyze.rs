@@ -263,6 +263,17 @@ pub(super) fn join_unknown_bottom(a: &[Kind], b: &[Kind]) -> Option<Vec<Kind>> {
             (Kind::DynList(_), k) | (k, Kind::DynList(_)) if is_list_kind(k) => {
                 Some(Kind::DynList(Own::Owned))
             }
+            // L2b: receiver-ownership MEET for `this` (sig slot 0) — Owned only when EVERY
+            // call site passes an owned (dying) receiver; one borrowed site demotes the
+            // whole method to the borrowed compile (the safe direction).
+            (Kind::Inst(c1, o1), Kind::Inst(c2, o2)) if c1 == c2 => {
+                let own = if *o1 == Own::Owned && *o2 == Own::Owned {
+                    Own::Owned
+                } else {
+                    Own::Borrowed
+                };
+                Some(Kind::Inst(*c1, own))
+            }
             _ => None,
         })
         .collect()
@@ -876,8 +887,19 @@ impl UbGraphInfo {
             }
         }
         if let Some(c) = self.this_inst.get(func_idx).copied().flatten() {
+            // L2b: `this` compiles OWNED only when the sig merge proved EVERY call site
+            // passes an owned dying receiver (the fluent-chain shape — the site TRANSFERS
+            // the word and the method's teardown releases the husk). Any borrowed site,
+            // or no sig yet, keeps the safe borrowed compile.
+            let own = match self.param_over.get(func_idx) {
+                Some(Some(over)) => match over.first() {
+                    Some(Kind::Inst(c2, Own::Owned)) if *c2 == c => Own::Owned,
+                    _ => Own::Borrowed,
+                },
+                _ => Own::Borrowed,
+            };
             if let Some(p0) = pk.get_mut(0) {
-                *p0 = Kind::Inst(c, Own::Borrowed);
+                *p0 = Kind::Inst(c, own);
             }
         }
         // W7: the declared-union seed — WITHOUT it, a mid-chain method that both takes and
@@ -2300,8 +2322,16 @@ pub(super) fn unboxed_analyze(
                     }
                     disc.method_calls.push((target, c));
                     // Record EVERY method sig (see the Call arm note — int-only methods need
-                    // their param proofs from call sites now).
-                    sig.push(Kind::Unknown); // slot 0 = `this` (this_inst injects it)
+                    // their param proofs from call sites now). Slot 0 carries the RECEIVER'S
+                    // ownership (L2b): an Owned dying receiver at every site lets the callee
+                    // compile with `this` OWNED (the site transfers the word, the method's
+                    // teardown releases the husk); one borrowed site meets the whole method
+                    // back to the borrowed compile (join_unknown_bottom's Inst arm).
+                    let recv_own = match recv {
+                        Kind::Inst(_, Own::Owned) => Own::Owned,
+                        _ => Own::Borrowed,
+                    };
+                    sig.push(Kind::Inst(c, recv_own)); // slot 0 = `this`
                     sig.reverse(); // popped last-arg-first; record declaration order
                     disc.call_sigs.push((target, sig));
                     kinds.push(info.ret_of(target));
