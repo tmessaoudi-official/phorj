@@ -45,6 +45,10 @@
       "ratio": 1.01,
       "identical": true
     },
+    "mapinsert": {
+      "ratio": 1.06,
+      "identical": true
+    },
     "match": {
       "ratio": 6.981,
       "identical": true

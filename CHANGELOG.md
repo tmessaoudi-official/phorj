@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — mapinsert AMB map-builder vertical — **0.02× → 1.06× WIN** (protocol median, 3× best-of-7)
+
+`m[k] = v` (`Op::SetIndexLocal`) on a uniquely-owned `Map<string,int>` local enters the unboxed
+JIT: the first write CONVERTS the sealed flat map into an **AMB builder record** (`UB_TAG_AMB`,
+shared record pool; layout `[log2][count][packed {canon,value} table][rank canons]` — ranks keep
+PHP's insertion order, overwrite keeps the original rank). The write is FULLY INLINE for
+canonized slot keys: packed-table probe walk (the mapget shape) → HIT = one value-word store;
+EMPTY at load ≤ 1/2 with rank capacity = **inline INSERT** (entry + rank + count++, four
+stores — zend-hash add). `rt_u_map_builder_set` is the one slow leg (conversion, canon-0 keys,
+growth-rebuild); `rt_u_map_get` gained an AMB arm and `arm_index_map` an inline AMB read leg
+(same probe over the record table). Aliasing is impossible in the subset (SetLocal of borrowed
+handles stays denied), so in-place mutation matches the VM's `Rc::make_mut` refcount-1 COW path
+byte-for-byte; analyze mirrors every arm fail-closed. **BUILDER-RESEED peephole** (both
+verticals): `m = [k => v]` / `xs = [v]` literal RESETS over a live builder slot reuse a record
+via `rt_u_map_builder_seed` / `rt_u_list_acc_reseed` instead of bump-sealing — without it every
+reset leaked 1–3 never-recycled arena slots and a 1M-iteration run walked off the 4096-slot
+arena into a permanent code-5 VM redo (mapinsert's observed 1M cliff; listappend was at 95%
+arena — ~4M iters from the same cliff). mapinsert **0.02× → 1.06×** (rounds 1.06/1.06/1.10 vs
+pinned fresh docker php:8.5-cli+JIT); listappend re-verified 1.68/1.65/1.68; delivery-path test
+proves `hits > 0` + byte-identity across reset cycles; baseline ratcheted.
+
 ### Added — listappend ACC-list-builder vertical — **0.01× → 1.66× WIN** (protocol median, 3× best-of-7)
 
 The strbuild ACC recipe applied to collection writes: at a proven `accumulator_site`

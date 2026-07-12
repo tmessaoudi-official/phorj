@@ -169,6 +169,57 @@ fn phg_run_hook_hits_the_jit_on_the_listappend_vertical() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_the_mapinsert_vertical() {
+    // Mapinsert-vertical DELIVERY-PATH proof: the exact `bench/micro/mapinsert.phg` shape —
+    // `m[k] = v` (`Op::SetIndexLocal`) over cycling flat-list string keys: the first write
+    // CONVERTS the sealed map into an AMB builder record (helper), the 8-per-cycle inserts
+    // take the helper, every overwrite takes the inline packed-table probe + one store;
+    // `m["alpha"]`/`m["theta"]` reads go through the helper's AMB arm, and the `m = [...]`
+    // reset recycles the record (grown buffer kept). Must JIT through the `Op::Call` hook
+    // AND stay byte-identical to the interpreter oracle. 2000 iterations cross the 64-step
+    // reset boundary many times, proving record recycling reaches steady state.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          List<string> keys = [\"alpha\", \"beta\", \"gamma\", \"delta\", \"epsi\", \"zeta\", \"eta\", \"theta\"];\n\
+          mutable Map<string, int> m = [\"alpha\" => 0];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            string k = keys[i % 8];\n\
+            m[k] = i;\n\
+            if (i % 64 == 63) {\n\
+              acc = acc + m[\"alpha\"] + m[\"theta\"];\n\
+              m = [\"alpha\" => 0];\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "mapinsert-vertical jit-wired output must match the interpreter oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual mapinsert-vertical jit output must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "the mapinsert vertical must actually hit the JIT — else the builder flip is unproven"
+    );
+}
+
+#[test]
 fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
     // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
     // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.

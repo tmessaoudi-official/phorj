@@ -1197,6 +1197,27 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds[*slot] = k;
                 }
+                Op::SetIndexLocal(slot) => {
+                    // The mapinsert vertical (`m[k] = v`) — mirrors `arm_set_index_map_local`
+                    // exactly (fail closed): an Int value over a borrowed/const string key, on
+                    // a uniquely-OWNED map slot. Aliasing is impossible in the subset (SetLocal
+                    // of a borrowed handle is denied above), so the in-place mutation matches
+                    // the VM's `Rc::make_mut` refcount-1 COW path byte-for-byte.
+                    match (kinds.pop(), kinds.pop()) {
+                        (Some(Kind::Int), Some(Kind::Str(_))) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed SetIndexLocal operand kinds {other:?}"
+                            )))
+                        }
+                    }
+                    if !matches!(kinds.get(*slot), Some(Kind::StrIntMap(Own::Owned))) {
+                        return Err(JitError::Unsupported(format!(
+                            "unboxed SetIndexLocal map slot kind {:?}",
+                            kinds.get(*slot)
+                        )));
+                    }
+                }
                 // Enum vertical: MakeEnum pops the payload(s), pushes the two-word register enum;
                 // MatchTag pops the scrutinee copy, pushes the tag-compare bool; GetEnumField(0)
                 // pops the enum, pushes its payload. Only ≤1-int-payload variants are in the
@@ -1721,6 +1742,7 @@ pub(super) fn collect_functions_unboxed(
                 Op::MakeList(_)
                 | Op::MakeMap(_)
                 | Op::Index
+                | Op::SetIndexLocal(_)
                 | Op::Pop
                 | Op::IterElems
                 | Op::Len => uses_handles = true,

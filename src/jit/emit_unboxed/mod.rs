@@ -435,6 +435,9 @@ pub(super) fn build_body_unboxed(
         acc_append: module.declare_func_in_func(ids.acc_append, b.func),
         list_len: module.declare_func_in_func(ids.list_len, b.func),
         list_acc_append: module.declare_func_in_func(ids.list_acc_append, b.func),
+        map_builder_set: module.declare_func_in_func(ids.map_builder_set, b.func),
+        map_builder_seed: module.declare_func_in_func(ids.map_builder_seed, b.func),
+        list_acc_reseed: module.declare_func_in_func(ids.list_acc_reseed, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -644,10 +647,65 @@ pub(super) fn build_body_unboxed(
             // ---- P-2a/P-2b/P-2c handle verticals (inline fast paths over the UbCtx arena;
             // helpers = slow paths) — arm bodies live in `verticals.rs` ---------------------------
             Op::MakeList(n) => {
+                // BUILDER-RESEED peephole (`xs = [v]` over a live builder slot): a literal
+                // reset in a builder loop must NOT bump-seal a fresh flat list each cycle —
+                // bump slots never recycle, so a long run walks off the arena (the 1M-iter
+                // cliff: exhaustion → boxed → permanent code-5 VM redo). Reuse a record via
+                // the reseed helper and skip the SetLocal. Kind-gated to an
+                // already-`IntList(Owned)` slot, so the INITIAL binding seals normally.
+                if *n == 1
+                    && !is_leader.get(ip + 1).copied().unwrap_or(true)
+                    && matches!(kinds.last(), Some(Kind::Int))
+                {
+                    if let Some(Op::SetLocal(s)) = code.get(ip + 1) {
+                        if matches!(kinds.get(*s), Some(Kind::IntList(Own::Owned))) {
+                            let h = ub_ref(ub_refs.as_ref(), "MakeList(reseed)")?;
+                            let (vv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                            let old = b.use_var(vars[*s]);
+                            let call = b.ins().call(h.list_acc_reseed, &[ec.ctx, old, vv]);
+                            let sres = b.inst_results(call)[0];
+                            let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                            ec.fault_if(&mut b, bad, 5);
+                            b.def_var(vars[*s], sres);
+                            kinds[*s] = Kind::IntList(Own::Owned);
+                            skip_ip = Some(ip + 1);
+                            continue;
+                        }
+                    }
+                }
                 let h = ub_ref(ub_refs.as_ref(), "MakeList")?;
                 arm_make_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, *n)?;
             }
             Op::MakeMap(n) => {
+                // BUILDER-RESEED peephole (`m = [k => v]` over a live builder slot) — the
+                // map twin of the MakeList reseed above (same arena-exhaustion cliff).
+                if *n == 1 && !is_leader.get(ip + 1).copied().unwrap_or(true) {
+                    let d = kinds.len();
+                    let pair_ok = d >= 2
+                        && matches!(kinds[d - 1], Kind::Int)
+                        && matches!(kinds[d - 2], Kind::Str(_));
+                    if pair_ok {
+                        if let Some(Op::SetLocal(s)) = code.get(ip + 1) {
+                            if matches!(kinds.get(*s), Some(Kind::StrIntMap(Own::Owned))) {
+                                let h = ub_ref(ub_refs.as_ref(), "MakeMap(reseed)")?;
+                                let (vv, _) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                                let (iv, ik) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                                let old = b.use_var(vars[*s]);
+                                let call = b.ins().call(h.map_builder_seed, &[ec.ctx, old, iv, vv]);
+                                let sres = b.inst_results(call)[0];
+                                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                                ec.fault_if(&mut b, bad, 5);
+                                b.def_var(vars[*s], sres);
+                                kinds[*s] = Kind::StrIntMap(Own::Owned);
+                                if ik.is_owned_handle() {
+                                    emit_release(&mut b, &ec, h, iv);
+                                }
+                                skip_ip = Some(ip + 1);
+                                continue;
+                            }
+                        }
+                    }
+                }
                 let h = ub_ref(ub_refs.as_ref(), "MakeMap")?;
                 arm_make_map(&mut b, &ec, h, &vars, &fvars, &mut kinds, *n)?;
             }
@@ -822,6 +880,13 @@ pub(super) fn build_body_unboxed(
                 } else {
                     ub_push(&mut b, &vars, &fvars, &mut kinds, v, borrowed_copy(kind))?;
                 }
+            }
+            Op::SetIndexLocal(slot) => {
+                // The mapinsert vertical: `m[k] = v` on a uniquely-owned map local — inline
+                // AMB-builder overwrite (packed-table probe + one store); conversion / insert
+                // / growth via the ONE helper. The result handle def_vars back into the slot.
+                let h = ub_ref(ub_refs.as_ref(), "SetIndexLocal(map)")?;
+                arm_set_index_map_local(&mut b, &ec, h, &vars, &fvars, &mut kinds, *slot)?;
             }
             Op::SetLocal(slot) => {
                 // Pop the top and store it into the frame-stack cell at `slot`, updating that cell's

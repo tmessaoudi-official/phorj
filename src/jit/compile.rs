@@ -176,6 +176,9 @@ impl Compiled {
             builder.symbol("rt_u_acc_append", rt_u_acc_append as *const u8);
             builder.symbol("rt_u_list_len", rt_u_list_len as *const u8);
             builder.symbol("rt_u_list_acc_append", rt_u_list_acc_append as *const u8);
+            builder.symbol("rt_u_map_builder_set", rt_u_map_builder_set as *const u8);
+            builder.symbol("rt_u_map_builder_seed", rt_u_map_builder_seed as *const u8);
+            builder.symbol("rt_u_list_acc_reseed", rt_u_list_acc_reseed as *const u8);
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -288,6 +291,9 @@ impl Compiled {
                 acc_append: declare(&mut module, "rt_u_acc_append", &sig4)?,
                 list_len: declare(&mut module, "rt_u_list_len", &sig2)?,
                 list_acc_append: declare(&mut module, "rt_u_list_acc_append", &sig3)?,
+                map_builder_set: declare(&mut module, "rt_u_map_builder_set", &sig4)?,
+                map_builder_seed: declare(&mut module, "rt_u_map_builder_seed", &sig4)?,
+                list_acc_reseed: declare(&mut module, "rt_u_list_acc_reseed", &sig3)?,
             })
         } else {
             None

@@ -158,7 +158,74 @@ pub(super) fn arm_index_map(
     let mv_flat_up = b.ins().ishl_imm(mv, 1);
     let fused = b.ins().band(mv_flat_up, iv);
     let both = b.ins().band_imm(fused, UB_TAG_SLOT);
-    b.ins().brif(both, fast_blk, &[], slow_blk, &[]);
+    let chk_amb = b.create_block();
+    b.ins().brif(both, fast_blk, &[], chk_amb, &[]);
+    // AMB read leg (the mapinsert vertical): a MUTABLE builder record with a canonized slot
+    // key probes ITS packed table inline — same walk, table at `record.ptr + 16` instead of
+    // the sealed pairs' tail. The `m["alpha"]`/`m["theta"]` reads in a builder loop would
+    // otherwise pay a helper call (bytes Vec + registry HashMap) each.
+    b.switch_to_block(chk_amb);
+    let amb_bit = b.ins().band_imm(mv, UB_TAG_AMB);
+    let chk_amb_key = b.create_block();
+    b.ins().brif(amb_bit, chk_amb_key, &[], slow_blk, &[]);
+    b.switch_to_block(chk_amb_key);
+    let kslot_bit = b.ins().band_imm(iv, UB_TAG_SLOT);
+    let amb_key = b.create_block();
+    b.ins().brif(kslot_bit, amb_key, &[], slow_blk, &[]);
+    b.switch_to_block(amb_key);
+    let abuf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let aki = b.ins().band_imm(iv, UB_IDX_MASK);
+    let akoff = b.ins().ishl_imm(aki, 6);
+    let apk = b.ins().iadd(abuf, akoff);
+    let akhash = b.ins().load(
+        types::I64,
+        MemFlagsData::new(),
+        apk,
+        UB_SLOT_HASH_OFF as i32,
+    );
+    let akcanon = b.ins().load(
+        types::I64,
+        MemFlagsData::new(),
+        apk,
+        UB_SLOT_CANON_OFF as i32,
+    );
+    let amb_probe = b.create_block();
+    b.ins().brif(akcanon, amb_probe, &[], slow_blk, &[]);
+    b.switch_to_block(amb_probe);
+    let abase = b.ins().load(types::I64, ec.stable, ec.ctx, 40);
+    let aridx = b.ins().band_imm(mv, UB_IDX_MASK);
+    let aroff = b.ins().imul_imm(aridx, 24);
+    let aprec = b.ins().iadd(abase, aroff);
+    let aptr = b.ins().load(types::I64, MemFlagsData::new(), aprec, 0);
+    let alg = b.ins().load(types::I64, MemFlagsData::new(), aptr, 0);
+    let aone = b.ins().iconst(types::I64, 1);
+    let atsize = b.ins().ishl(aone, alg);
+    let amask = b.ins().iadd_imm(atsize, -1);
+    let at0 = b.ins().band(akhash, amask);
+    let ahead = b.create_block();
+    b.append_block_param(ahead, types::I64);
+    let ahit = b.create_block();
+    let anext = b.create_block();
+    b.ins().jump(ahead, &[at0.into()]);
+    b.switch_to_block(ahead);
+    let at = b.block_params(ahead)[0];
+    let abtoff = b.ins().ishl_imm(at, 4);
+    let aebase = b.ins().iadd(aptr, abtoff);
+    let aecanon = b.ins().load(types::I64, MemFlagsData::new(), aebase, 16);
+    let aceq = b.ins().icmp(IntCC::Equal, aecanon, akcanon);
+    b.ins().brif(aceq, ahit, &[], anext, &[]);
+    b.switch_to_block(ahit);
+    let aval = b.ins().load(types::I64, MemFlagsData::new(), aebase, 24);
+    if ik.is_owned_handle() {
+        ec.slot_free_if_owned(b, iv);
+    }
+    b.ins().jump(merge, &[aval.into()]);
+    b.switch_to_block(anext);
+    let aempty = b.ins().icmp_imm(IntCC::Equal, aecanon, 0);
+    ec.fault_if(b, aempty, 5); // genuine miss → canonical fault on the VM redo
+    let at1 = b.ins().iadd_imm(at, 1);
+    let atw = b.ins().band(at1, amask);
+    b.ins().jump(ahead, &[atw.into()]);
     // INLINE: O(1) bucket walk. The key's CANON word (slot byte 32 — nonzero only when
     // assigned via the content registry, so canon equality ⇔ byte equality) indexes
     // nothing itself; the HASH picks the bucket (`hash & mask`), each bucket holds a
@@ -478,6 +545,155 @@ pub(super) fn list_append_acc(
     b.ins().jump(merge, &[sres.into()]);
     b.switch_to_block(merge);
     Ok(b.block_params(merge)[0])
+}
+
+/// `Op::SetIndexLocal` on a `Map<string,int>` local — the mapinsert vertical (`m[k] = v`,
+/// php's `$m[$k] = $v`): the map local is uniquely owned (analyze admits only
+/// `StrIntMap(Owned)` slots — aliasing is impossible in the subset, so in-place mutation is
+/// unobservable, exactly the VM's `Rc::make_mut` refcount-1 path). INLINE when the map is
+/// already an AMB builder record AND the key is a canonized arena slot: packed-table probe
+/// walk (same shape as the mapget probe — one canon compare per bucket), a HIT overwrites the
+/// entry's value word in place (ONE store — rank/order unchanged, PHP semantics). Everything
+/// else — first write on a sealed map (conversion), a genuine INSERT (probe hit a hole),
+/// canon-0 keys, growth — takes the ONE `rt_u_map_builder_set` helper. The result handle is
+/// stored straight back into the slot (`def_var`), which is what makes the conversion's new
+/// AMB handle stick.
+#[allow(clippy::too_many_arguments)] // emit plumbing
+pub(super) fn arm_set_index_map_local(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    h: &UbHelperRefs,
+    vars: &[Variable],
+    fvars: &[Variable],
+    kinds: &mut Vec<Kind>,
+    slot: usize,
+) -> Result<(), JitError> {
+    let (vv, vk) = ub_pop(b, vars, fvars, kinds)?;
+    let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
+    if vk != Kind::Int || !matches!(ik, Kind::Str(_)) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed SetIndexLocal operand kinds ({ik:?}, {vk:?})"
+        )));
+    }
+    if !matches!(kinds.get(slot), Some(Kind::StrIntMap(Own::Owned))) {
+        return Err(JitError::Unsupported(format!(
+            "unboxed SetIndexLocal map slot kind {:?}",
+            kinds.get(slot)
+        )));
+    }
+    let mv = b.use_var(vars[slot]);
+    let merge = b.create_block();
+    b.append_block_param(merge, types::I64);
+    let chk_key = b.create_block();
+    let probe0 = b.create_block();
+    let slow_blk = b.create_block();
+    // INLINE iff the map is an AMB record and the key is a canonized arena slot.
+    let amb_bit = b.ins().band_imm(mv, UB_TAG_AMB);
+    b.ins().brif(amb_bit, chk_key, &[], slow_blk, &[]);
+    b.switch_to_block(chk_key);
+    let slot_bit = b.ins().band_imm(iv, UB_TAG_SLOT);
+    b.ins().brif(slot_bit, probe0, &[], slow_blk, &[]);
+    b.switch_to_block(probe0);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let ki = b.ins().band_imm(iv, UB_IDX_MASK);
+    let koff = b.ins().ishl_imm(ki, 6);
+    let pk = b.ins().iadd(buf, koff);
+    let khash = b
+        .ins()
+        .load(types::I64, MemFlagsData::new(), pk, UB_SLOT_HASH_OFF as i32);
+    let kcanon = b.ins().load(
+        types::I64,
+        MemFlagsData::new(),
+        pk,
+        UB_SLOT_CANON_OFF as i32,
+    );
+    let walk_blk = b.create_block();
+    b.ins().brif(kcanon, walk_blk, &[], slow_blk, &[]);
+    b.switch_to_block(walk_blk);
+    // Record `{ptr}` at `acc_base + idx·24`; the table starts at `ptr + 16`.
+    let abase = b.ins().load(types::I64, ec.stable, ec.ctx, 40);
+    let ridx = b.ins().band_imm(mv, UB_IDX_MASK);
+    let roff = b.ins().imul_imm(ridx, 24);
+    let prec = b.ins().iadd(abase, roff);
+    let ptr = b.ins().load(types::I64, MemFlagsData::new(), prec, 0);
+    let lg = b.ins().load(types::I64, MemFlagsData::new(), ptr, 0);
+    let one = b.ins().iconst(types::I64, 1);
+    let tsize = b.ins().ishl(one, lg);
+    let mask = b.ins().iadd_imm(tsize, -1);
+    let t0 = b.ins().band(khash, mask);
+    // Packed bucket walk (the mapget probe shape): HIT = overwrite the value word in place;
+    // an EMPTY bucket is a genuine INSERT → the helper (it appends rank + entry + count).
+    let head = b.create_block();
+    b.append_block_param(head, types::I64);
+    let hit = b.create_block();
+    let next = b.create_block();
+    b.ins().jump(head, &[t0.into()]);
+    b.switch_to_block(head);
+    let t = b.block_params(head)[0];
+    let btoff = b.ins().ishl_imm(t, 4);
+    let ebase = b.ins().iadd(ptr, btoff);
+    let ecanon = b.ins().load(types::I64, MemFlagsData::new(), ebase, 16);
+    let ceq = b.ins().icmp(IntCC::Equal, ecanon, kcanon);
+    b.ins().brif(ceq, hit, &[], next, &[]);
+    b.switch_to_block(hit);
+    b.ins().store(MemFlagsData::new(), vv, ebase, 24);
+    b.ins().jump(merge, &[mv.into()]);
+    b.switch_to_block(next);
+    let empty = b.ins().icmp_imm(IntCC::Equal, ecanon, 0);
+    let ins_blk = b.create_block();
+    let step = b.create_block();
+    b.ins().brif(empty, ins_blk, &[], step, &[]);
+    // INLINE INSERT (an empty bucket at load ≤ 1/2 with rank capacity): entry + rank canon +
+    // count++, four stores — php's zend-hash add. Growth (load would cross 1/2) or a full
+    // rank region punts to the helper (which rebuilds / grows the record buffer).
+    b.switch_to_block(ins_blk);
+    let count = b.ins().load(types::I64, MemFlagsData::new(), ptr, 8);
+    let cap = b.ins().load(types::I64, MemFlagsData::new(), prec, 16);
+    let count1 = b.ins().iadd_imm(count, 1);
+    let lf = b.ins().ishl_imm(count1, 1);
+    let lf_bad = b.ins().icmp(IntCC::SignedGreaterThan, lf, tsize);
+    let chk_cap = b.create_block();
+    b.ins().brif(lf_bad, slow_blk, &[], chk_cap, &[]);
+    b.switch_to_block(chk_cap);
+    // need = 16 + tsize·16 + (count+1)·8 bytes ≤ cap, else the helper grows the buffer.
+    let tbytes = b.ins().ishl_imm(tsize, 4);
+    let rbytes = b.ins().ishl_imm(count1, 3);
+    let need0 = b.ins().iadd(tbytes, rbytes);
+    let need = b.ins().iadd_imm(need0, 16);
+    let cap_bad = b.ins().icmp(IntCC::SignedGreaterThan, need, cap);
+    let do_ins = b.create_block();
+    b.ins().brif(cap_bad, slow_blk, &[], do_ins, &[]);
+    b.switch_to_block(do_ins);
+    b.ins().store(MemFlagsData::new(), kcanon, ebase, 16);
+    b.ins().store(MemFlagsData::new(), vv, ebase, 24);
+    let roff2 = b.ins().ishl_imm(count, 3);
+    let rank0 = b.ins().iadd(ptr, tbytes);
+    let rank1 = b.ins().iadd(rank0, roff2);
+    b.ins().store(MemFlagsData::new(), kcanon, rank1, 16);
+    b.ins().store(MemFlagsData::new(), count1, ptr, 8);
+    b.ins().jump(merge, &[mv.into()]);
+    b.switch_to_block(step);
+    let t1 = b.ins().iadd_imm(t, 1);
+    let tw = b.ins().band(t1, mask);
+    b.ins().jump(head, &[tw.into()]);
+    // SLOW: conversion / insert / canon-0 / growth through the helper.
+    b.switch_to_block(slow_blk);
+    let call = b.ins().call(h.map_builder_set, &[ec.ctx, mv, iv, vv]);
+    let sres = b.inst_results(call)[0];
+    let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+    ec.fault_if(b, bad, 5);
+    b.ins().jump(merge, &[sres.into()]);
+    b.switch_to_block(merge);
+    let res = b.block_params(merge)[0];
+    b.def_var(vars[slot], res);
+    // Slot kind stays `StrIntMap(Owned)`. A compile-time-OWNED key dies here (single-use
+    // GetLocal move / inline temp) — full ladder, runtime-bit-gated (a flat element or
+    // pinned const is runtime-borrowed, so the free is a no-op; the canon registry never
+    // points at a recyclable slot, so recycling the key cannot dangle a canon).
+    if ik.is_owned_handle() {
+        emit_release(b, ec, h, iv);
+    }
+    Ok(())
 }
 
 /// `String.length` native — INLINE for a slot operand (the length is the slot's leading

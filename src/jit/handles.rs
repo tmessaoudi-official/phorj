@@ -54,6 +54,21 @@ pub(super) const UB_TAG_ACC: i64 = 1 << 59;
 /// from a flat/boxed list, capacity growth). Like ACC, deliberately NOT OWNED-tagged — the
 /// release ladders route it to the helper, which recycles the record and keeps the buffer.
 pub(super) const UB_TAG_ACL: i64 = 1 << 58;
+/// Handle tag: MAP BUILDER (low 40 bits = record index) — the mapinsert vertical: a MUTABLE
+/// `Map<string,int>` on the SAME record pool, converted from a sealed flat map by the first
+/// `m[k] = v` (`Op::SetIndexLocal`) on a uniquely-owned map local. Record-buffer layout
+/// (bytes): `[0..8) log2(tsize)`, `[8..16) count`, `[16..16+tsize·16)` PACKED open-addressed
+/// bucket table `{canon: u64, value: i64}` (canon 0 = empty, load ≤ 1/2 — the SAME entry shape
+/// as the sealed flat-map probe), then `count` rank canons (u64 each, INSERTION order — the
+/// order-faithful materialization witness; PHP maps are insertion-ordered, overwrite keeps the
+/// original rank). An OVERWRITE hit is fully inline (probe walk + one store into the entry's
+/// value word — php's `$m[$k] = $v`); insert / collision-miss / canon-0 keys / conversion /
+/// table growth take the ONE `rt_u_map_builder_set` helper. Canon discipline: only BUMP-PINNED
+/// slots are ever interned (adopt-or-register — a new runtime key registers a fresh pinned
+/// slot), so canon equality ⇔ byte equality holds for the builder exactly as for the seal.
+/// Like ACC/ACL, deliberately NOT OWNED-tagged — the release ladders route it to the helper,
+/// which recycles the record and keeps its grown buffer (the `m = [...]` reset reuse trick).
+pub(super) const UB_TAG_AMB: i64 = 1 << 57;
 /// Accumulator record-table capacity. Records are pre-allocated (`acc_base` must never move);
 /// live accumulators correspond to compile-time accumulator SITES — a handful at most.
 /// Exhaustion falls back to the plain concat path (correct, slower).
@@ -335,7 +350,7 @@ impl UbCtx {
             }
         } else if h & UB_TAG_FLAT != 0 {
             // Flat-list slots are bump-pinned for the run (built once per call) — no recycling.
-        } else if h & (UB_TAG_ACC | UB_TAG_ACL) != 0 {
+        } else if h & (UB_TAG_ACC | UB_TAG_ACL | UB_TAG_AMB) != 0 {
             // Recycle the RECORD (string accumulator or list builder — same pool), keep its
             // buffer: a reconverted accumulator/builder (the reset pattern) reuses the grown
             // capacity — php's buffer-reuse trick.
@@ -1082,6 +1097,53 @@ pub(super) extern "C" fn rt_u_map_get(
     let Some(kb) = ctx.str_bytes(key) else {
         return miss;
     };
+    if map & UB_TAG_AMB != 0 {
+        // A MUTABLE map builder (the mapinsert vertical): canon via the registry (a key that
+        // was never interned anywhere cannot be in the builder — genuine miss, the VM redo
+        // renders the canonical "map key not found"), then the packed table probe.
+        let kb = kb.to_vec();
+        let ridx = (map & UB_IDX_MASK) as usize;
+        if ridx >= UB_ACC_CAP {
+            return miss;
+        }
+        let Some(&kslot) = ctx.interned.get(&kb) else {
+            return miss;
+        };
+        let canon1 = kslot as u64 + 1;
+        let hoff = kslot as usize * UB_SLOT_SIZE + UB_SLOT_HASH_OFF;
+        let mut hb = [0u8; 8];
+        hb.copy_from_slice(&ctx.buf_storage[hoff..hoff + 8]);
+        let hash = u64::from_le_bytes(hb);
+        let buf = &ctx.acc_bufs[ridx];
+        let mut w8 = [0u8; 8];
+        w8.copy_from_slice(&buf[0..8]);
+        let tsize = 1usize << u64::from_le_bytes(w8);
+        let mut t = (hash as usize) & (tsize - 1);
+        loop {
+            let eoff = 16 + t * 16;
+            let mut cb = [0u8; 8];
+            cb.copy_from_slice(&buf[eoff..eoff + 8]);
+            let ecanon = u64::from_le_bytes(cb);
+            if ecanon == canon1 {
+                let mut vb = [0u8; 8];
+                vb.copy_from_slice(&buf[eoff + 8..eoff + 16]);
+                if free_mask & 1 != 0 {
+                    ctx.release(key);
+                }
+                if free_mask & 2 != 0 {
+                    ctx.release(map);
+                }
+                return UbMapGetRet {
+                    value: i64::from_le_bytes(vb),
+                    code: 0,
+                };
+            }
+            if ecanon == 0 {
+                return miss; // genuine miss — canonical fault on the VM redo
+            }
+            t = (t + 1) & (tsize - 1);
+        }
+    }
     let value = if map & UB_TAG_FLAT != 0 {
         let kb = kb.to_vec(); // end the str_bytes borrow before re-borrowing the arena
         let n = (map >> UB_MAP_CNT_SHIFT) & 0xFFF;
@@ -1122,6 +1184,272 @@ pub(super) extern "C" fn rt_u_map_get(
         ctx.release(map);
     }
     UbMapGetRet { value, code: 0 }
+}
+
+/// FUSED map-builder set (`m[k] = v` on a uniquely-owned map local, the mapinsert vertical) —
+/// the SLOW leg of the inline AMB overwrite (see [`UB_TAG_AMB`]). (1) map already an AMB
+/// record → probe by canon: hit = overwrite (rank unchanged — PHP keeps the original
+/// insertion position), hole = INSERT (append rank canon + table entry, count++, doubling
+/// rebuild at load > 1/2); (2) map a SEALED flat map → CONVERT: take a record (recycled ones
+/// reuse their grown buffer), seed table + ranks from the pair slots (canon/hash were written
+/// at seal, order = the seal's insertion order), then apply the set; (3) boxed map / long key
+/// / record-table exhaustion → `-1` (code 5, the call redoes on the VM — correct,
+/// unspecialized). Canon resolution is registry adopt-or-register: a never-seen key registers
+/// a FRESH bump-pinned slot (never a recyclable one), preserving canon ⇔ byte equality.
+pub(super) extern "C" fn rt_u_map_builder_set(
+    ctx: *mut UbCtx,
+    map: i64,
+    key: i64,
+    val: i64,
+) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    let kb: Vec<u8> = match ctx.str_bytes(key) {
+        Some(b) => b.to_vec(),
+        None => return -1,
+    };
+    if kb.len() > crate::phstr::INLINE_CAP {
+        return -1; // AMB keys are slot-interned (≤ 22 bytes); long keys stay on the VM
+    }
+    // Canon: adopt the registry entry, else register a fresh bump-pinned key slot.
+    let kslot = match ctx.interned.get(&kb) {
+        Some(&s) => s as usize,
+        None => {
+            let Ok(ks) = std::str::from_utf8(&kb) else {
+                return -1;
+            };
+            if ctx.bump + 1 > ctx.cap {
+                return -1;
+            }
+            let kslot = ctx.bump as usize;
+            let koff = kslot * UB_SLOT_SIZE;
+            let hash = crate::phstr::PhStr::new(ks).cached_hash();
+            ctx.buf_storage[koff] = kb.len() as u8;
+            ctx.buf_storage[koff + 1..koff + 1 + kb.len()].copy_from_slice(&kb);
+            ctx.buf_storage[koff + 1 + kb.len()..koff + UB_SLOT_HASH_OFF].fill(0);
+            ctx.buf_storage[koff + UB_SLOT_HASH_OFF..koff + UB_SLOT_HASH_OFF + 8]
+                .copy_from_slice(&hash.to_le_bytes());
+            let canon1 = (kslot as u64) + 1;
+            ctx.buf_storage[koff + UB_SLOT_CANON_OFF..koff + UB_SLOT_CANON_OFF + 8]
+                .copy_from_slice(&canon1.to_le_bytes());
+            ctx.bump += 1;
+            ctx.interned.insert(kb, kslot as u32);
+            kslot
+        }
+    };
+    let canon1 = kslot as u64 + 1;
+    let hoff = kslot * UB_SLOT_SIZE + UB_SLOT_HASH_OFF;
+    let mut hb = [0u8; 8];
+    hb.copy_from_slice(&ctx.buf_storage[hoff..hoff + 8]);
+    let hash = u64::from_le_bytes(hb);
+    // Get-or-convert the builder record.
+    let idx = if map & UB_TAG_AMB != 0 {
+        let idx = (map & UB_IDX_MASK) as usize;
+        if idx >= UB_ACC_CAP {
+            return -1;
+        }
+        idx
+    } else if map & UB_TAG_FLAT_MAP == UB_TAG_FLAT_MAP {
+        let n = ((map >> UB_MAP_CNT_SHIFT) & 0xFFF) as usize;
+        let base = (map & UB_IDX_MASK) as usize;
+        let Some(idx) = ctx.acc_take_record() else {
+            return -1;
+        };
+        // Seed sizing keeps load ≤ 1/2 with headroom for the set about to happen.
+        let tsize = usize::max(16, (2 * (n + 1)).next_power_of_two());
+        ctx.acc_grow_to(idx, 16 + tsize * 16 + (n + 1) * 8);
+        let lg = tsize.trailing_zeros() as u64;
+        ctx.acc_bufs[idx][0..8].copy_from_slice(&lg.to_le_bytes());
+        ctx.acc_bufs[idx][8..16].copy_from_slice(&(n as u64).to_le_bytes());
+        ctx.acc_bufs[idx][16..16 + tsize * 16].fill(0);
+        for i in 0..n {
+            let koff2 = (base + 2 * i) * UB_SLOT_SIZE;
+            let mut cb = [0u8; 8];
+            cb.copy_from_slice(
+                &ctx.buf_storage[koff2 + UB_SLOT_CANON_OFF..koff2 + UB_SLOT_CANON_OFF + 8],
+            );
+            let c = u64::from_le_bytes(cb);
+            let mut hb2 = [0u8; 8];
+            hb2.copy_from_slice(
+                &ctx.buf_storage[koff2 + UB_SLOT_HASH_OFF..koff2 + UB_SLOT_HASH_OFF + 8],
+            );
+            let h2 = u64::from_le_bytes(hb2);
+            let voff = (base + 2 * i + 1) * UB_SLOT_SIZE;
+            let mut vb = [0u8; 8];
+            vb.copy_from_slice(&ctx.buf_storage[voff..voff + 8]);
+            let v2 = i64::from_le_bytes(vb);
+            if c == 0 {
+                // Seal always canonizes flat keys — defensive; recycle the record and punt.
+                ctx.acc_free.push(idx as u32);
+                return -1;
+            }
+            // Table insert — keys are deduped at seal, every probe finds a hole.
+            let mut t = (h2 as usize) & (tsize - 1);
+            loop {
+                let eoff = 16 + t * 16;
+                let mut eb = [0u8; 8];
+                eb.copy_from_slice(&ctx.acc_bufs[idx][eoff..eoff + 8]);
+                if u64::from_le_bytes(eb) == 0 {
+                    ctx.acc_bufs[idx][eoff..eoff + 8].copy_from_slice(&c.to_le_bytes());
+                    ctx.acc_bufs[idx][eoff + 8..eoff + 16].copy_from_slice(&v2.to_le_bytes());
+                    break;
+                }
+                t = (t + 1) & (tsize - 1);
+            }
+            let roff = 16 + tsize * 16 + i * 8;
+            ctx.acc_bufs[idx][roff..roff + 8].copy_from_slice(&c.to_le_bytes());
+        }
+        ctx.acc_recs[idx].len = (16 + tsize * 16 + n * 8) as u64;
+        // The sealed flat map is bump-pinned — nothing to release.
+        idx
+    } else {
+        return -1; // boxed map — stays on the VM
+    };
+    let mut w8 = [0u8; 8];
+    w8.copy_from_slice(&ctx.acc_bufs[idx][0..8]);
+    let mut lg = u64::from_le_bytes(w8);
+    let mut tsize = 1usize << lg;
+    w8.copy_from_slice(&ctx.acc_bufs[idx][8..16]);
+    let count = u64::from_le_bytes(w8) as usize;
+    // Probe: overwrite on canon hit (rank unchanged), first hole = insert position.
+    let mut t = (hash as usize) & (tsize - 1);
+    loop {
+        let eoff = 16 + t * 16;
+        let mut eb = [0u8; 8];
+        eb.copy_from_slice(&ctx.acc_bufs[idx][eoff..eoff + 8]);
+        let ec = u64::from_le_bytes(eb);
+        if ec == canon1 {
+            ctx.acc_bufs[idx][eoff + 8..eoff + 16].copy_from_slice(&val.to_le_bytes());
+            return UB_TAG_AMB | idx as i64;
+        }
+        if ec == 0 {
+            break;
+        }
+        t = (t + 1) & (tsize - 1);
+    }
+    // INSERT — doubling rebuild first if the new count would break load ≤ 1/2.
+    if 2 * (count + 1) > tsize {
+        let old_tsize = tsize;
+        let mut vals: std::collections::HashMap<u64, [u8; 8]> =
+            std::collections::HashMap::with_capacity(count);
+        for i in 0..old_tsize {
+            let eoff = 16 + i * 16;
+            let mut eb = [0u8; 8];
+            eb.copy_from_slice(&ctx.acc_bufs[idx][eoff..eoff + 8]);
+            let ec = u64::from_le_bytes(eb);
+            if ec != 0 {
+                let mut vb = [0u8; 8];
+                vb.copy_from_slice(&ctx.acc_bufs[idx][eoff + 8..eoff + 16]);
+                vals.insert(ec, vb);
+            }
+        }
+        let ranks: Vec<u64> = (0..count)
+            .map(|i| {
+                let roff = 16 + old_tsize * 16 + i * 8;
+                let mut rb = [0u8; 8];
+                rb.copy_from_slice(&ctx.acc_bufs[idx][roff..roff + 8]);
+                u64::from_le_bytes(rb)
+            })
+            .collect();
+        tsize *= 2;
+        lg += 1;
+        ctx.acc_grow_to(idx, 16 + tsize * 16 + (count + 1) * 8);
+        ctx.acc_bufs[idx][0..8].copy_from_slice(&lg.to_le_bytes());
+        ctx.acc_bufs[idx][16..16 + tsize * 16].fill(0);
+        for (i, &rc) in ranks.iter().enumerate() {
+            let rslot = (rc - 1) as usize;
+            let rhoff = rslot * UB_SLOT_SIZE + UB_SLOT_HASH_OFF;
+            let mut rhb = [0u8; 8];
+            rhb.copy_from_slice(&ctx.buf_storage[rhoff..rhoff + 8]);
+            let rhash = u64::from_le_bytes(rhb);
+            let Some(rv) = vals.get(&rc) else {
+                ctx.acc_free.push(idx as u32);
+                return -1; // defensive — a rank without a table entry
+            };
+            let mut rt = (rhash as usize) & (tsize - 1);
+            loop {
+                let eoff = 16 + rt * 16;
+                let mut eb = [0u8; 8];
+                eb.copy_from_slice(&ctx.acc_bufs[idx][eoff..eoff + 8]);
+                if u64::from_le_bytes(eb) == 0 {
+                    ctx.acc_bufs[idx][eoff..eoff + 8].copy_from_slice(&rc.to_le_bytes());
+                    ctx.acc_bufs[idx][eoff + 8..eoff + 16].copy_from_slice(rv);
+                    break;
+                }
+                rt = (rt + 1) & (tsize - 1);
+            }
+            let roff = 16 + tsize * 16 + i * 8;
+            ctx.acc_bufs[idx][roff..roff + 8].copy_from_slice(&rc.to_le_bytes());
+        }
+        // Re-probe for OUR hole (the key is known-absent — we got here on a miss).
+        t = (hash as usize) & (tsize - 1);
+        loop {
+            let eoff = 16 + t * 16;
+            let mut eb = [0u8; 8];
+            eb.copy_from_slice(&ctx.acc_bufs[idx][eoff..eoff + 8]);
+            if u64::from_le_bytes(eb) == 0 {
+                break;
+            }
+            t = (t + 1) & (tsize - 1);
+        }
+    } else {
+        // Ranks may need one more word (Vec::resize preserves content; the probe position
+        // stays valid — the table itself is untouched by the grow).
+        ctx.acc_grow_to(idx, 16 + tsize * 16 + (count + 1) * 8);
+    }
+    let eoff = 16 + t * 16;
+    ctx.acc_bufs[idx][eoff..eoff + 8].copy_from_slice(&canon1.to_le_bytes());
+    ctx.acc_bufs[idx][eoff + 8..eoff + 16].copy_from_slice(&val.to_le_bytes());
+    let roff = 16 + tsize * 16 + count * 8;
+    ctx.acc_bufs[idx][roff..roff + 8].copy_from_slice(&canon1.to_le_bytes());
+    ctx.acc_bufs[idx][8..16].copy_from_slice(&((count as u64) + 1).to_le_bytes());
+    ctx.acc_recs[idx].len = (16 + tsize * 16 + (count + 1) * 8) as u64;
+    UB_TAG_AMB | idx as i64
+}
+
+/// BUILDER RESEED (map) — the `m = [k => v]` RESET in a builder loop (the mapinsert micro's
+/// bounded-memory pattern). Without this, every reset bump-seals 2n pair slots + a table
+/// (the arena NEVER recycles bump slots) and a long run exhausts the arena → boxed map →
+/// permanent code-5 VM redo — the 1M-iteration cliff. Instead: release the old handle (an
+/// AMB record recycles, keeping its grown buffer; a sealed flat map is bump-pinned — no-op),
+/// take a record, seed the single pair — ZERO arena growth per reset. Emitted by the
+/// `MakeMap(1)` + `SetLocal` peephole (kind-gated to an already-`StrIntMap(Owned)` slot, so
+/// the INITIAL binding still seals normally). `-1` = exhaustion/bad key (code 5, VM redo).
+pub(super) extern "C" fn rt_u_map_builder_seed(
+    ctx: *mut UbCtx,
+    old: i64,
+    key: i64,
+    val: i64,
+) -> i64 {
+    let cx = unsafe { &mut *ctx };
+    cx.release(old);
+    let Some(idx) = cx.acc_take_record() else {
+        return -1;
+    };
+    let tsize = 16usize;
+    cx.acc_grow_to(idx, 16 + tsize * 16 + 8);
+    let lg = tsize.trailing_zeros() as u64;
+    cx.acc_bufs[idx][0..8].copy_from_slice(&lg.to_le_bytes());
+    cx.acc_bufs[idx][8..16].copy_from_slice(&0u64.to_le_bytes());
+    cx.acc_bufs[idx][16..16 + tsize * 16].fill(0);
+    cx.acc_recs[idx].len = (16 + tsize * 16) as u64;
+    // Delegate the single insert to the canonical set path (canon adopt-or-register).
+    rt_u_map_builder_set(ctx, UB_TAG_AMB | idx as i64, key, val)
+}
+
+/// BUILDER RESEED (int list) — the `xs = [v]` RESET twin of [`rt_u_map_builder_seed`]: the
+/// listappend micro's reset bump-seals one flat slot per cycle (3906 slots at 1M iterations —
+/// 95% of the arena; ~4M would fall off the same cliff). Release the old handle (ACL record
+/// recycles with its buffer), take a record, seed one element. `-1` = exhaustion (code 5).
+pub(super) extern "C" fn rt_u_list_acc_reseed(ctx: *mut UbCtx, old: i64, v: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    ctx.release(old);
+    let Some(idx) = ctx.acc_take_record() else {
+        return -1;
+    };
+    ctx.acc_grow_to(idx, 64);
+    ctx.acc_recs[idx].len = 0;
+    ctx.acc_push(idx, &v.to_le_bytes());
+    UB_TAG_ACL | idx as i64
 }
 
 /// Append a raw `i64` element to a still-building (untagged, uniquely-owned) list — the
@@ -1227,6 +1555,9 @@ pub(super) struct UbHelperIds {
     pub(super) acc_append: FuncId,
     pub(super) list_len: FuncId,
     pub(super) list_acc_append: FuncId,
+    pub(super) map_builder_set: FuncId,
+    pub(super) map_builder_seed: FuncId,
+    pub(super) list_acc_reseed: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1247,4 +1578,7 @@ pub(super) struct UbHelperRefs {
     pub(super) acc_append: FuncRef,
     pub(super) list_len: FuncRef,
     pub(super) list_acc_append: FuncRef,
+    pub(super) map_builder_set: FuncRef,
+    pub(super) map_builder_seed: FuncRef,
+    pub(super) list_acc_reseed: FuncRef,
 }

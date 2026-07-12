@@ -404,7 +404,15 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   at emit — recognize the for-in indexed loop and emit ptr<end walking, removing j/Len/guard
   entirely); **listindex rides the bounds elision to 1.61**. All prior WINs hold (K=3 under
   load: mapget 1.11 · intadd 1.51; quiet protocol re-adjudication at the front's close).
-  REMAINING SWEEP LOSSES: mapinsert 0.02 · hofpipe 0.21 · forin 0.73.
+  REMAINING SWEEP LOSSES: hofpipe 0.21 · forin 0.73.
+  **MAPINSERT VERTICAL — ✅ SHIPPED (session 5): 0.02× → 1.06× WIN** (protocol median
+  1.06/1.06/1.10): AMB builder records (`UB_TAG_AMB`, packed `{canon,value}` table + rank
+  canons for insertion order) — `Op::SetIndexLocal` inline probe-walk overwrite AND inline
+  insert (load ≤ 1/2 + rank-capacity gated); `rt_u_map_builder_set` slow leg;
+  `rt_u_map_get` AMB arm + inline AMB read leg in `arm_index_map`. Plus the
+  **BUILDER-RESEED peephole** (both builder verticals): literal resets reuse a record
+  instead of bump-sealing — kills the arena-exhaustion cliff (mapinsert died at 1M iters;
+  listappend was at 95% arena). Baseline ratcheted at 1.06; listappend holds 1.68.
   **LISTAPPEND VERTICAL — ✅ SHIPPED (session 5): 0.01× → 1.66× WIN** (protocol median
   1.69/1.66/1.62): ACL builder records (`UB_TAG_ACL`, the strbuild ACC recipe on the same
   record pool) — accumulator-site `List.append` consumes the dying lhs into an in-place
