@@ -155,6 +155,9 @@ pub(super) struct UbCtx {
     acc_free: Vec<u32>,
     /// Next never-used accumulator record index (grows toward `UB_ACC_CAP`).
     acc_next: u32,
+    /// `bump` right after const seeding — the pinned-const arena prefix. Everything at or past
+    /// it is per-run state that [`UbCtx::reset_for_run`] reclaims (the ctx-reuse lever).
+    const_bump: u64,
 }
 
 /// One accumulator record — the JIT-visible `{ptr,len,cap}` triple at `acc_base + idx·24`.
@@ -222,6 +225,33 @@ impl UbCtx {
             acc_bufs: vec![Vec::new(); UB_ACC_CAP],
             acc_free: Vec::new(),
             acc_next: 0,
+            const_bump: bump,
+        }
+    }
+
+    /// Reset a CACHED context back to its post-[`UbCtx::new`] state — the ctx-reuse lever: a
+    /// many-call graph must not pay the 256 KiB arena build + const seeding per call (measured:
+    /// it made JIT'd handle-methods SLOWER than `--no-jit` on the sqlbuild shape). Zeroes ONLY
+    /// the region the previous run dirtied, truncates the handle table to the pinned consts,
+    /// drops run-registered canons (their slots are reclaimed with the bump), clears both free
+    /// lists, and recycles every accumulator record while KEEPING its grown buffer (the reuse
+    /// trick, now cross-call). Runs on ENTRY, so a faulted previous run leaves nothing behind.
+    pub(super) fn reset_for_run(&mut self) {
+        let dirty_from = self.const_bump as usize * UB_SLOT_SIZE;
+        let dirty_to = (self.bump as usize * UB_SLOT_SIZE).min(self.buf_storage.len());
+        if dirty_to > dirty_from {
+            self.buf_storage[dirty_from..dirty_to].fill(0);
+        }
+        self.bump = self.const_bump;
+        self.free_top = 0;
+        self.handles.truncate(self.n_pinned);
+        self.free.clear();
+        let cb = self.const_bump as u32;
+        self.interned.retain(|_, slot| *slot < cb);
+        self.acc_free.clear();
+        for i in 0..self.acc_next {
+            self.acc_free.push(i);
+            self.acc_recs[i as usize].len = 0;
         }
     }
 

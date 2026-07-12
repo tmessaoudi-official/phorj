@@ -31,6 +31,10 @@ pub struct Compiled {
     uses_handles: bool,
     /// The graph's interned string consts, in pinned-handle order (`UbCtx.handles[0..n]` per run).
     const_handles: Vec<Value>,
+    /// The REUSED per-run handle context (built lazily on the first handle-using call, reset on
+    /// every entry — see [`UbCtx::reset_for_run`]). Boxed so its interior pointers (arena base,
+    /// free stack, record table — all into never-resized heap Vecs) stay stable across moves.
+    ub_ctx_cache: std::cell::RefCell<Option<Box<UbCtx>>>,
 }
 
 impl Compiled {
@@ -125,6 +129,7 @@ impl Compiled {
             ret_kind: Kind::Int, // unused by the boxed `run()` (decodes via the boxed Value stack)
             uses_handles: false,
             const_handles: Vec::new(),
+            ub_ctx_cache: std::cell::RefCell::new(None),
         })
     }
 
@@ -374,6 +379,7 @@ impl Compiled {
             ret_kind: entry_ret_kind.unwrap_or(Kind::Int),
             uses_handles,
             const_handles,
+            ub_ctx_cache: std::cell::RefCell::new(None),
         })
     }
 
@@ -459,16 +465,25 @@ impl Compiled {
             .collect();
         let d0: i64 = start_depth as i64; // live-frames-including-this-entry (see doc above)
 
-        // P-2a: the per-run handle table — built iff the graph uses handle ops (its pinned prefix is
-        // the interned string consts); a pure-numeric graph gets a null pointer nothing dereferences.
-        // Dropped when this call returns, so a fault path leaks nothing into the VM redo.
-        let mut ub_ctx_storage;
-        let ub_ctx: *mut UbCtx = if self.uses_handles {
-            ub_ctx_storage = UbCtx::new(&self.const_handles);
-            &mut ub_ctx_storage
+        // P-2a: the per-run handle table — built iff the graph uses handle ops (its pinned prefix
+        // is the interned string consts); a pure-numeric graph gets a null pointer nothing
+        // dereferences. REUSED across calls (built lazily once, reset ON ENTRY — the ctx-reuse
+        // lever: per-call construction made many-call handle graphs slower than `--no-jit`). The
+        // entry reset also means a fault path leaks nothing into the VM redo.
+        let mut cached: Option<Box<UbCtx>> = if self.uses_handles {
+            let mut c = self
+                .ub_ctx_cache
+                .borrow_mut()
+                .take()
+                .unwrap_or_else(|| Box::new(UbCtx::new(&self.const_handles)));
+            c.reset_for_run();
+            Some(c)
         } else {
-            std::ptr::null_mut()
+            None
         };
+        let ub_ctx: *mut UbCtx = cached
+            .as_deref_mut()
+            .map_or(std::ptr::null_mut(), |c| std::ptr::from_mut(c));
         // SAFETY: `self.entry` is finalized machine code with signature
         // `extern "C" fn(*mut UbCtx, i64 depth, i64… /* arity */) -> (i64, i64)`; we transmute to the
         // arity-specific type and pass ctx + depth + exactly `arity` i64 args. `self.module` owns the
@@ -500,6 +515,10 @@ impl Compiled {
                 }
             }
         };
+        // Stash the reused ctx back for the next call (arena + record buffers keep their growth).
+        if let Some(c) = cached.take() {
+            *self.ub_ctx_cache.borrow_mut() = Some(c);
+        }
         match ret.code {
             // Decode the returned i64 by the entry's return kind: Int verbatim, Float from its bits.
             0 => match self.ret_kind {
