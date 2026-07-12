@@ -633,6 +633,10 @@ pub(super) fn build_body_unboxed(
                     let fv = b.ins().f64const(*f);
                     ub_push(&mut b, &vars, &fvars, &mut kinds, fv, Kind::Float)?;
                 }
+                Some(Value::Bool(bv)) => {
+                    let v = b.ins().iconst(types::I64, *bv as i64);
+                    ub_push(&mut b, &vars, &fvars, &mut kinds, v, Kind::Bool)?;
+                }
                 Some(Value::Str(_)) => {
                     // P-2a: a string const is a PINNED handle (interned per graph, seeded into the
                     // per-run `UbCtx` prefix) — the push is a plain `iconst` of its index, zero calls.
@@ -837,6 +841,28 @@ pub(super) fn build_body_unboxed(
             Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => {
                 let h = ub_ref(ub_refs.as_ref(), "String.length")?;
                 arm_str_len(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+            }
+            Op::CallNative(id, 1) if unboxed_native_is_to_string(*id) => {
+                // `Conversion.toString(int)` — the SAME zero-alloc renderer interpolation uses.
+                let h = ub_ref(ub_refs.as_ref(), "Conversion.toString")?;
+                let (nv, nk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                if nk != Kind::Int {
+                    return Err(JitError::Unsupported(format!(
+                        "unboxed toString operand kind {nk:?} (deferred)"
+                    )));
+                }
+                let call = b.ins().call(h.int_to_str, &[ec.ctx, nv]);
+                let sres = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, sres, 0);
+                ec.fault_if(&mut b, bad, 5);
+                ub_push(
+                    &mut b,
+                    &vars,
+                    &fvars,
+                    &mut kinds,
+                    sres,
+                    Kind::Str(Own::Owned),
+                )?;
             }
             Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => {
                 // `List.length` — same lowering as `Op::Len` (flat count bits / ACL len

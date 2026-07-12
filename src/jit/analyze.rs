@@ -305,6 +305,15 @@ pub(super) fn unboxed_native_bridge2(id: usize, a: &Kind, b: &Kind) -> Option<(i
     }
 }
 
+/// Is native-registry entry `id` `Core.Conversion.toString` (INT operand only in this subset —
+/// routed to the same zero-alloc `rt_u_int_to_str` renderer interpolation uses, so the bytes
+/// can never drift from the VM's `as_display`)?
+pub(super) fn unboxed_native_is_to_string(id: usize) -> bool {
+    crate::native::registry()
+        .get(id)
+        .is_some_and(|nf| nf.module == "Core.Conversion" && nf.name == "toString" && nf.pure)
+}
+
 /// Is native-registry entry `id` `Core.Conversion.toFloat` (P-2c: inline `fcvt_from_sint` — the
 /// kernel is `n as f64`, the same IEEE round-to-nearest widening)?
 pub(super) fn unboxed_native_is_to_float(id: usize) -> bool {
@@ -1027,6 +1036,7 @@ pub(super) fn unboxed_analyze(
                     let k = match program.functions[func_idx].chunk.consts.get(*idx) {
                         Some(Value::Float(_)) => Kind::Float,
                         Some(Value::Str(_)) => Kind::Str(Own::ConstBorrow),
+                        Some(Value::Bool(_)) => Kind::Bool,
                         _ => Kind::Int,
                     };
                     kinds.push(k);
@@ -1326,6 +1336,18 @@ pub(super) fn unboxed_analyze(
                             )))
                         }
                     }
+                }
+                Op::CallNative(id, 1) if unboxed_native_is_to_string(*id) => {
+                    // `Conversion.toString(int)` — the interpolation renderer's exact bytes.
+                    match kinds.pop() {
+                        Some(Kind::Int) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed toString operand kind {other:?} (deferred)"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::Str(Own::Owned));
                 }
                 Op::CallNative(id, 1) if unboxed_native_is_to_float(*id) => {
                     match kinds.pop() {
@@ -2096,7 +2118,7 @@ pub(super) fn collect_functions_unboxed(
             }
             match op {
                 Op::Const(idx) => match func.chunk.consts.get(*idx) {
-                    Some(Value::Int(_)) => {}
+                    Some(Value::Int(_) | Value::Bool(_)) => {}
                     Some(Value::Float(_)) => has_float = true,
                     Some(Value::Str(_)) => uses_handles = true,
                     other => return Err(JitError::Unsupported(format!("unboxed Const {other:?}"))),
@@ -2122,6 +2144,7 @@ pub(super) fn collect_functions_unboxed(
                 Op::Concat(n) if *n >= 2 => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_str_len(*id) => uses_handles = true,
                 Op::CallNative(id, 1) if unboxed_native_is_list_len(*id) => uses_handles = true,
+                Op::CallNative(id, 1) if unboxed_native_is_to_string(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => uses_handles = true,
                 Op::CallNative(id, 2) if unboxed_native_is_bridge2(*id) => uses_handles = true,
                 // hofpipe: the HOF loop arms direct-call the compiled lambda per element.

@@ -468,6 +468,51 @@ fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_bool_consts_and_to_string() {
+    // Bool consts (`mutable bool flag = true`) + `Conversion.toString(int)` (the interpolation
+    // renderer's exact bytes) in the unboxed subset. hits > 0 + byte-identity.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.String;\n\
+        import Core.Conversion;\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            mutable bool odd = true;\n\
+            if (i % 2 == 0) {\n\
+              odd = false;\n\
+            }\n\
+            if (odd) {\n\
+              acc = acc + 1;\n\
+            }\n\
+            string s = Conversion.toString(i * 7 - 3);\n\
+            acc = acc + String.length(s);\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "bool/toString jit-wired output must match the oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(manual, oracle, "manual bool/toString must match the oracle");
+    assert!(
+        cache.borrow().hits > 0,
+        "bool/toString shapes must actually hit the JIT"
+    );
+}
+
+#[test]
 fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // The MUTATION GUARD: iterating a local AND writing it in the same function (append
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would
