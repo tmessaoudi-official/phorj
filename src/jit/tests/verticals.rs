@@ -561,6 +561,60 @@ fn phg_run_hook_hits_the_jit_on_list_fields() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_wide_two_slot_instances() {
+    // W8: a WIDE instance (11 fields > the single-slot 8) — fields 0..6 in slot A, A[7] =
+    // the B-slot index, 7..14 in B. Mixed int/str/list fields exercise routed loads/stores
+    // AND the wide release (B recycled before A) across 2000 fresh instances. The high-index
+    // fields (8, 9, 10) live in slot B — reading them proves the two-hop addressing.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        import Core.String;\n\
+        class Wide {\n\
+          constructor(\n\
+            public int a, public int b, public int c, public int d,\n\
+            public int e, public int f, public int g, public string h,\n\
+            public int i, public List<string> j, public string k\n\
+          ) {}\n\
+          function tail(): int {\n\
+            return this.i + List.length(this.j) + String.length(this.k);\n\
+          }\n\
+        }\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int n = 0;\n\
+          while (n < iters) {\n\
+            Wide w = new Wide(n, 2, 3, 4, 5, 6, 7, \"hi\", n + 8, [\"x\", \"y\"], \"tail\");\n\
+            acc = acc + w.a + w.g + String.length(w.h) + w.i + w.tail();\n\
+            n = n + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "wide-instance jit-wired output must match the oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual jit-wired run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual wide-instance run must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "wide instances must actually hit the JIT (redos = {})",
+        cache.borrow().redos
+    );
+}
+
+#[test]
 fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // The MUTATION GUARD: iterating a local AND writing it in the same function (append
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would

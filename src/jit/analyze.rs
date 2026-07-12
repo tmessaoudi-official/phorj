@@ -1754,9 +1754,11 @@ pub(super) fn unboxed_analyze(
                 Op::MakeInstance(cidx) => {
                     let desc = &program.class_descs[*cidx];
                     let nf = desc.fields.len();
-                    if desc.layout.len() != nf || nf > 8 {
+                    // ≤ 15 fields: 0..6 in slot A, A[7] = the B-slot index, 7..14 in B
+                    // (the two-slot layout — SelectQuery's 11 fields drove the widening).
+                    if desc.layout.len() != nf || nf > 15 {
                         return Err(JitError::Unsupported(
-                            "unboxed: MakeInstance with non-ctor-initialized or >8 fields (deferred)"
+                            "unboxed: MakeInstance with non-ctor-initialized or >15 fields (deferred)"
                                 .to_string(),
                         ));
                     }

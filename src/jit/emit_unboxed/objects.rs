@@ -11,6 +11,31 @@
 
 use super::*;
 
+/// Is class `c` a WIDE instance (> 8 fields — the two-slot layout)? Fields 0..6 live in
+/// slot A; A's byte 56 (word 7) holds slot B's RAW index; fields 7..14 live in B.
+pub(super) fn is_wide(program: &BytecodeProgram, c: usize) -> bool {
+    program.class_descs[c].layout.len() > 8
+}
+
+/// The (base-pointer, byte-offset) of `layout_slot` given the instance's A-slot pointer
+/// `pa` — a wide class's fields 7.. take the ONE extra hop through the B-index word.
+fn field_addr(
+    b: &mut FunctionBuilder,
+    ec: &Ec,
+    pa: ClValue,
+    layout_slot: usize,
+    wide: bool,
+) -> (ClValue, i32) {
+    if !wide || layout_slot < 7 {
+        return (pa, (8 * layout_slot) as i32);
+    }
+    let bidx = b.ins().load(types::I64, MemFlagsData::new(), pa, 56);
+    let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
+    let boff = b.ins().ishl_imm(bidx, 6);
+    let pb = b.ins().iadd(buf, boff);
+    (pb, (8 * (layout_slot - 7)) as i32)
+}
+
 /// `Op::MakeInstance(cidx)` — allocate a slot, store the ctor field values (stack order =
 /// `desc.fields` order) each at its layout slot via the static permutation `perm`, push the
 /// `SLOT|OWNED` handle.
@@ -34,11 +59,28 @@ pub(super) fn arm_make_instance(
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
     let soff = b.ins().ishl_imm(sidx, 6);
     let pd = b.ins().iadd(buf, soff);
-    // Field j (push order) → byte offset 8·perm[j]; values read straight from their
-    // depth-indexed Variables (no pops — the kind stack is truncated once below).
+    // WIDE (> 8 fields): a second slot for fields 7.. — its raw index at A byte 56. (An
+    // exhaustion mid-pair is code 5; the entry reset reclaims the half-built pair.)
+    let wide = nf > 8;
+    let pb = if wide {
+        let bidx = ec.slot_alloc(b);
+        b.ins().store(MemFlagsData::new(), bidx, pd, 56);
+        let boff = b.ins().ishl_imm(bidx, 6);
+        Some(b.ins().iadd(buf, boff))
+    } else {
+        None
+    };
+    // Field j (push order) → byte offset 8·perm[j] (routed to A or B for a wide class);
+    // values read straight from their depth-indexed Variables (no pops — the kind stack is
+    // truncated once below).
     for (j, &slot) in perm.iter().enumerate() {
         let v = b.use_var(vars[d - nf + j]);
-        b.ins().store(MemFlagsData::new(), v, pd, (8 * slot) as i32);
+        let (dst, off) = if !wide || slot < 7 {
+            (pd, (8 * slot) as i32)
+        } else {
+            (pb.expect("wide pair allocated"), (8 * (slot - 7)) as i32)
+        };
+        b.ins().store(MemFlagsData::new(), v, dst, off);
     }
     kinds.truncate(d - nf);
     let h_raw = b.ins().bor_imm(sidx, UB_TAG_SLOT);
@@ -95,9 +137,8 @@ pub(super) fn arm_get_field(
     let ri = b.ins().band_imm(rv, UB_IDX_MASK);
     let roff = b.ins().ishl_imm(ri, 6);
     let pr = b.ins().iadd(buf, roff);
-    let val = b
-        .ins()
-        .load(types::I64, MemFlagsData::new(), pr, (8 * slot) as i32);
+    let (fp, foff) = field_addr(b, ec, pr, slot, is_wide(program, c));
+    let val = b.ins().load(types::I64, MemFlagsData::new(), fp, foff);
     if rk.is_owned_handle() {
         // A dying temp receiver: free its OTHER str fields + its slot; the read field's
         // word (if Str) now belongs to the result.
@@ -151,19 +192,17 @@ pub(super) fn arm_set_field(
     let ri = b.ins().band_imm(rv, UB_IDX_MASK);
     let roff = b.ins().ishl_imm(ri, 6);
     let pr = b.ins().iadd(buf, roff);
+    let (fp, foff) = field_addr(b, ec, pr, slot, is_wide(program, c));
     // A HANDLE field overwrite releases the OLD word first (the instance owned it; the
     // runtime bit makes a const word's release a no-op; a boxed list word takes the helper).
     if matches!(
         vk,
         Kind::Str(_) | Kind::StrList(_) | Kind::IntList(_) | Kind::StrIntMap(_)
     ) {
-        let old = b
-            .ins()
-            .load(types::I64, MemFlagsData::new(), pr, (8 * slot) as i32);
+        let old = b.ins().load(types::I64, MemFlagsData::new(), fp, foff);
         emit_release(b, ec, h, old);
     }
-    b.ins()
-        .store(MemFlagsData::new(), vv, pr, (8 * slot) as i32);
+    b.ins().store(MemFlagsData::new(), vv, fp, foff);
     if rk.is_owned_handle() {
         // Statement-temp receiver dies here — its fields (including the value just stored)
         // die with it, exactly like the VM's Rc drop.
@@ -211,14 +250,19 @@ pub(super) fn release_kinded(
     info: &UbGraphInfo,
     exclude: Option<usize>,
 ) {
-    let str_slots: Vec<usize> = match k {
-        Kind::Inst(c, _) => str_field_layout_slots(program, info, c)
-            .into_iter()
-            .filter(|s| Some(*s) != exclude)
-            .collect(),
-        _ => Vec::new(),
+    let (str_slots, wide): (Vec<usize>, bool) = match k {
+        Kind::Inst(c, _) => (
+            str_field_layout_slots(program, info, c)
+                .into_iter()
+                .filter(|s| Some(*s) != exclude)
+                .collect(),
+            is_wide(program, c),
+        ),
+        _ => (Vec::new(), false),
     };
-    if str_slots.is_empty() {
+    // A WIDE instance must take the kinded path even with zero handle fields — its B slot
+    // must be recycled too (the plain ladder would leak it).
+    if str_slots.is_empty() && !wide {
         emit_release(b, ec, h, v);
         return;
     }
@@ -235,10 +279,14 @@ pub(super) fn release_kinded(
     let voff = b.ins().ishl_imm(vi, 6);
     let pv = b.ins().iadd(buf, voff);
     for s in str_slots {
-        let fw = b
-            .ins()
-            .load(types::I64, MemFlagsData::new(), pv, (8 * s) as i32);
+        let (fp, foff) = field_addr(b, ec, pv, s, wide);
+        let fw = b.ins().load(types::I64, MemFlagsData::new(), fp, foff);
         emit_release(b, ec, h, fw);
+    }
+    if wide {
+        // Recycle the B slot (its raw index at A byte 56) before A itself.
+        let bidx = b.ins().load(types::I64, MemFlagsData::new(), pv, 56);
+        ec.slot_push(b, bidx);
     }
     ec.slot_push(b, v);
     b.ins().jump(cont, &[]);
