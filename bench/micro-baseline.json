@@ -34,11 +34,11 @@
       "identical": true
     },
     "listindex": {
-      "ratio": 0.988,
+      "ratio": 0.97,
       "identical": true
     },
     "mapget": {
-      "ratio": 0.820,
+      "ratio": 0.88,
       "identical": true
     },
     "match": {

@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — Ω-8 vertical: packed flat-map buckets — mapget 0.82× → 0.88×, residue measured
+
+The flat-map bucket table now stores PACKED 16-byte `{canon: u64, value: i64}` entries
+(canon 0 = empty — a real canon is never 0) instead of u32 pair indices: a probe hit is the
+canon compare plus one ADJACENT value load (one cache line), where the old walk chased a
+3-deep dependent chain (bucket u32 → pair-slot canon → value slot). Seal writes the packed
+table; the helper's linear pair walk is unchanged. Measured (3 × best-of-7 protocol):
+**mapget 0.82 → 0.88/0.89/0.88 — consistent +7%, still short of the bar.** The remaining gap
+is now precisely accounted for: an isolation run (`#[UncheckedOverflow]` variant, pinned,
+interleaved) puts the loop's two checked int-adds at **1.5M ns of the 11.9M VM leg — removing
+them lands within noise of php's 10.5M**. Verdict: the probe levers are exhausted (bucket+canon
+interning → fused tag check → packed buckets); the mapget/listindex (0.97) tail is the
+checked-add price, and task 9 (range-proof overflow-check elision, ruled ACTIVE) is the
+closing lever for both plus intadd itself.
+
 ### Added — Ω-8 vertical: ACC-record string accumulator — **strbuild 0.42× → 2.27× WIN**
 
 The classic `s = s + x` accumulator (templating, log lines, serialization — the pattern where

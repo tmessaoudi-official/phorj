@@ -56,9 +56,10 @@ const UB_ACC_SLACK: usize = 24;
 /// Handle tag: flattened `Map<string,int>` — `SLOT|FLAT` combined (impossible otherwise):
 /// bits[40..52) = pair count (≤ 4095), bits[52..57) = log2 of the bucket-table size, low 40 bits
 /// = base slot; pair `i` = key slot `base+2i` (hash at byte 24, canon at byte 32), value slot
-/// `base+2i+1` (the `i64` value in bytes 0..8). The open-addressed bucket table (u32 pair
-/// indices, `u32::MAX` = empty, load factor ≤ 1/2) fills the arena slots immediately AFTER the
-/// `2n` pair slots, so its address derives from `base + 2·count` — no extra handle bits.
+/// `base+2i+1` (the `i64` value in bytes 0..8). The open-addressed bucket table — PACKED
+/// 16-byte `{canon: u64, value: i64}` entries, canon 0 = empty (a real canon is never 0),
+/// load factor ≤ 1/2 — fills the arena slots immediately AFTER the `2n` pair slots, so its
+/// address derives from `base + 2·count`; a probe hit is two adjacent loads, no indirection.
 pub(super) const UB_TAG_FLAT_MAP: i64 = UB_TAG_SLOT | UB_TAG_FLAT;
 /// Low-bits mask for the slot / base index.
 pub(super) const UB_IDX_MASK: i64 = (1 << 40) - 1;
@@ -914,8 +915,11 @@ pub(super) extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
     let n = entries.len() as i64;
     // Bucket-table sizing: load factor ≤ 1/2, minimum 4 buckets (an empty map still terminates
     // its probe on an empty bucket). The table lives in the slots right after the 2n pairs.
+    // PACKED entries (the mapget vertical): each bucket is 16 bytes `{canon: u64, value: i64}`
+    // (canon 0 = empty — a real canon is never 0), so the inline probe's hit is TWO adjacent
+    // loads in one cache line (was a 3-deep dependent chain: bucket u32 → pair canon → value).
     let tsize = usize::max(4, (2 * n as usize).next_power_of_two());
-    let tslots = tsize.div_ceil(16) as u64; // tsize u32 entries × 4 bytes / 64-byte slots
+    let tslots = (tsize * 16).div_ceil(UB_SLOT_SIZE) as u64; // 16-byte entries / 64-byte slots
     if n >= 1 << 12 || ctx.bump + 2 * n as u64 + tslots > ctx.cap {
         ctx.release(map);
         return ctx.alloc(Value::Map(std::rc::Rc::new(deduped)));
@@ -925,8 +929,8 @@ pub(super) extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
         .iter()
         .map(|(s, v)| (s.as_bytes().to_vec(), s.cached_hash(), *v))
         .collect();
-    let mut table = vec![u32::MAX; tsize];
-    for (i, (bytes, hash, val)) in owned.iter().enumerate() {
+    let mut table = vec![(0u64, 0i64); tsize];
+    for (bytes, hash, val) in owned.iter() {
         // Key slot: len + bytes + ZERO tail (the inline probe's whole-word compares) + hash +
         // canon (adopt-or-register — a flat key slot is bump-pinned, registry-safe).
         let kslot = ctx.bump as usize;
@@ -943,16 +947,18 @@ pub(super) extern "C" fn rt_u_map_seal(ctx: *mut UbCtx, map: i64) -> i64 {
         let voff = koff + UB_SLOT_SIZE;
         ctx.buf_storage[voff..voff + 8].copy_from_slice(&val.to_le_bytes());
         ctx.bump += 2;
-        // Open-addressed insert (keys are already deduped, so every insert finds a hole).
+        // Open-addressed insert (keys are already deduped — every insert finds a hole; canons
+        // are distinct because canon equality ⇔ byte equality, and never 0).
         let mut t = (*hash as usize) & (tsize - 1);
-        while table[t] != u32::MAX {
+        while table[t].0 != 0 {
             t = (t + 1) & (tsize - 1);
         }
-        table[t] = i as u32;
+        table[t] = (canon1, *val);
     }
     let toff = ctx.bump as usize * UB_SLOT_SIZE;
-    for (i, e) in table.iter().enumerate() {
-        ctx.buf_storage[toff + 4 * i..toff + 4 * i + 4].copy_from_slice(&e.to_le_bytes());
+    for (i, (c, v)) in table.iter().enumerate() {
+        ctx.buf_storage[toff + 16 * i..toff + 16 * i + 8].copy_from_slice(&c.to_le_bytes());
+        ctx.buf_storage[toff + 16 * i + 8..toff + 16 * i + 16].copy_from_slice(&v.to_le_bytes());
     }
     ctx.bump += tslots;
     ctx.release(map);

@@ -196,35 +196,24 @@ pub(super) fn arm_index_map(
     let tsize = b.ins().ishl(one, lg);
     let mask = b.ins().iadd_imm(tsize, -1);
     let t0 = b.ins().band(khash, mask);
+    // PACKED bucket walk (the mapget vertical): each 16-byte bucket is `{canon, value}` —
+    // a HIT is the canon compare plus ONE adjacent value load (one cache line, no pair
+    // indirection); canon 0 = empty bucket = genuine miss (code 5, the VM redo renders the
+    // canonical `"map key not found"`).
     let head = b.create_block();
     b.append_block_param(head, types::I64); // bucket index
     let hit = b.create_block();
-    b.append_block_param(hit, types::I64); // matched pair index
     let next = b.create_block();
-    b.append_block_param(next, types::I64);
     b.ins().jump(head, &[t0.into()]);
     b.switch_to_block(head);
     let t = b.block_params(head)[0];
-    let btoff = b.ins().ishl_imm(t, 2);
+    let btoff = b.ins().ishl_imm(t, 4);
     let baddr = b.ins().iadd(tbase, btoff);
-    let e = b.ins().uload32(MemFlagsData::new(), baddr, 0);
-    let empty = b.ins().icmp_imm(IntCC::Equal, e, 0xFFFF_FFFF);
-    ec.fault_if(b, empty, 5); // genuine miss → canonical fault on the VM
-    let poff = b.ins().ishl_imm(e, 7); // pair stride = 2 slots = 128 bytes
-    let ph = b.ins().iadd(pbase, poff);
-    let pcanon = b.ins().load(
-        types::I64,
-        MemFlagsData::new(),
-        ph,
-        UB_SLOT_CANON_OFF as i32,
-    );
-    let ceq = b.ins().icmp(IntCC::Equal, pcanon, kcanon);
-    b.ins().brif(ceq, hit, &[e.into()], next, &[t.into()]);
+    let bcanon = b.ins().load(types::I64, MemFlagsData::new(), baddr, 0);
+    let ceq = b.ins().icmp(IntCC::Equal, bcanon, kcanon);
+    b.ins().brif(ceq, hit, &[], next, &[]);
     b.switch_to_block(hit);
-    let he = b.block_params(hit)[0];
-    let hoff = b.ins().ishl_imm(he, 7);
-    let hph = b.ins().iadd(pbase, hoff);
-    let val = b.ins().load(types::I64, MemFlagsData::new(), hph, 64);
+    let val = b.ins().load(types::I64, MemFlagsData::new(), baddr, 8);
     // Consume the key (recycle iff runtime-OWNED); the flat map is bump-pinned
     // (runtime-borrowed always) — nothing to free.
     if ik.is_owned_handle() {
@@ -232,8 +221,9 @@ pub(super) fn arm_index_map(
     }
     b.ins().jump(merge, &[val.into()]);
     b.switch_to_block(next);
-    let nt = b.block_params(next)[0];
-    let t1 = b.ins().iadd_imm(nt, 1);
+    let empty = b.ins().icmp_imm(IntCC::Equal, bcanon, 0);
+    ec.fault_if(b, empty, 5); // genuine miss → canonical fault on the VM
+    let t1 = b.ins().iadd_imm(t, 1);
     let tw = b.ins().band(t1, mask);
     b.ins().jump(head, &[tw.into()]);
     // SLOW: the helper (boxed map through the canonical kernel; hash-0 / untagged keys).
