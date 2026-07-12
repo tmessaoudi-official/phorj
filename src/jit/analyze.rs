@@ -1385,6 +1385,37 @@ pub(super) fn unboxed_analyze(
                     }
                     kinds.push(Kind::IntList(Own::Owned));
                 }
+                Op::CallNative(id, 2)
+                    if unboxed_native_is_list_append(*id)
+                        && accumulator_site(code, &depth_at, &is_leader, ip).is_some()
+                        && matches!(
+                            kinds.last(),
+                            Some(Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow))
+                        )
+                        && matches!(
+                            kinds.get(kinds.len().wrapping_sub(2)),
+                            Some(Kind::StrList(_))
+                        ) =>
+                {
+                    // L2a: the STR-list accumulator vertical (`out = List.append(out, q)` in
+                    // the qualify loops) — the emit consumes the lhs into a STR-word ACL
+                    // builder record (in-place word push, zero clones). The element word
+                    // must be one the record can OWN: Owned moves in, a const word's later
+                    // frees no-op; a BORROWED elem (would double-free with its owner) falls
+                    // THROUGH to the general clone arm (guard order mirrors emit exactly).
+                    match (kinds.pop(), kinds.pop()) {
+                        (
+                            Some(Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow)),
+                            Some(Kind::StrList(_)),
+                        ) => {}
+                        other => {
+                            return Err(JitError::Unsupported(format!(
+                                "unboxed List.append operand kinds {other:?}"
+                            )))
+                        }
+                    }
+                    kinds.push(Kind::StrList(Own::Owned));
+                }
                 Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => {
                     // The GENERAL (non-accumulator) `List.append` — full clone semantics via
                     // `rt_u_list_append_clone` (a fresh BOXED list; inputs untouched), exactly

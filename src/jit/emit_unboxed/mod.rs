@@ -558,6 +558,7 @@ pub(super) fn build_body_unboxed(
         str_eq: module.declare_func_in_func(ids.str_eq, b.func),
         clone_value: module.declare_func_in_func(ids.clone_value, b.func),
         list_append_dyn: module.declare_func_in_func(ids.list_append_dyn, b.func),
+        str_list_acc_append: module.declare_func_in_func(ids.str_list_acc_append, b.func),
     });
     // Entry block: `[ctx, depth, a0, a1, …]`. `ctx` is the per-run [`UbCtx`] pointer (null for a
     // pure-numeric graph — only handle ops dereference it, and they exist only when it is real).
@@ -1125,6 +1126,40 @@ pub(super) fn build_body_unboxed(
                 let res = list_append_acc(&mut b, &ec, h, av, vv)?;
                 b.def_var(vars[s], res);
                 kinds[s] = Kind::IntList(Own::Owned);
+                skip_ip = Some(ip + 1);
+            }
+            Op::CallNative(id, 2)
+                if unboxed_native_is_list_append(*id)
+                    && accumulator_site(code, &depth_at, &is_leader, ip).is_some()
+                    && matches!(
+                        kinds.last(),
+                        Some(Kind::Str(Own::Owned) | Kind::Str(Own::ConstBorrow))
+                    )
+                    && matches!(
+                        kinds.get(kinds.len().wrapping_sub(2)),
+                        Some(Kind::StrList(_))
+                    ) =>
+            {
+                // L2a: the STR-list accumulator vertical — consume the lhs into a STR-word
+                // ACL builder record (the element WORD moves in, zero clones; the record
+                // owns it). Element must be Owned/const (a Borrowed word would double-free
+                // with its owner — such sites fall through to the general clone arm; the
+                // guard mirrors analyze exactly). Result rebinds the slot; the following
+                // SetLocal is fused away.
+                let s = accumulator_site(code, &depth_at, &is_leader, ip).ok_or_else(|| {
+                    JitError::Unsupported(
+                        "unboxed List.append outside an accumulator site".to_string(),
+                    )
+                })?;
+                let h = ub_ref(ub_refs.as_ref(), "List.append(str acc)")?;
+                let (vv, _vk) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let (av, _ak) = ub_pop(&mut b, &vars, &fvars, &mut kinds)?;
+                let call = b.ins().call(h.str_list_acc_append, &[ec.ctx, av, vv]);
+                let res = b.inst_results(call)[0];
+                let bad = b.ins().icmp_imm(IntCC::SignedLessThan, res, 0);
+                ec.fault_if(&mut b, bad, 5);
+                b.def_var(vars[s], res);
+                kinds[s] = Kind::StrList(Own::Owned);
                 skip_ip = Some(ip + 1);
             }
             Op::CallNative(id, 2) if unboxed_native_is_list_append(*id) => {

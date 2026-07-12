@@ -69,6 +69,12 @@ pub(super) const UB_TAG_ACL: i64 = 1 << 58;
 /// Like ACC/ACL, deliberately NOT OWNED-tagged — the release ladders route it to the helper,
 /// which recycles the record and keeps its grown buffer (the `m = [...]` reset reuse trick).
 pub(super) const UB_TAG_AMB: i64 = 1 << 57;
+/// STR-ELEMENT marker for an ACL list-builder record (L2a — set ALONGSIDE `UB_TAG_ACL`):
+/// the record's i64s are STRING WORDS the record OWNS (Owned words freed on record release;
+/// borrowed-slot/const words no-op), not raw ints. Bit 56 is safe here: a flat word's 20-bit
+/// count (bits 40..60) can also cover bit 56, but the FLAT tag dispatches FIRST on every
+/// ladder, so an ACL-branch check never sees a flat word.
+pub(super) const UB_TAG_ACLS: i64 = 1 << 56;
 /// Accumulator record-table capacity. Records are pre-allocated (`acc_base` must never move);
 /// live accumulators correspond to compile-time accumulator SITES — a handful at most.
 /// Exhaustion falls back to the plain concat path (correct, slower).
@@ -310,9 +316,11 @@ impl UbCtx {
             return Some(out);
         }
         if h & UB_TAG_ACL != 0 {
-            // ACL builder records are int-only by construction.
+            // ACL builder records: raw i64s (int semantics) or, with the ACLS marker (L2a),
+            // STRING WORDS — the requested element kind must MATCH the record's marker
+            // (defensive mismatch → None → code 5).
             let idx = (h & UB_IDX_MASK) as usize;
-            if idx >= UB_ACC_CAP || str_elems {
+            if idx >= UB_ACC_CAP || str_elems != (h & UB_TAG_ACLS != 0) {
                 return None;
             }
             let n = (self.acc_recs[idx].len / 8) as usize;
@@ -320,7 +328,19 @@ impl UbCtx {
             for i in 0..n {
                 let mut b = [0u8; 8];
                 b.copy_from_slice(&self.acc_bufs[idx][i * 8..i * 8 + 8]);
-                out.push(Value::Int(i64::from_le_bytes(b)));
+                let w = i64::from_le_bytes(b);
+                if str_elems {
+                    let s: crate::phstr::PhStr = match self.str_bytes(w) {
+                        Some(bytes) => std::str::from_utf8(bytes).ok()?.into(),
+                        None => match self.handles.get(w as usize) {
+                            Some(Value::Str(s)) => s.clone(),
+                            _ => return None,
+                        },
+                    };
+                    out.push(Value::Str(s));
+                } else {
+                    out.push(Value::Int(w));
+                }
             }
             return Some(out);
         }
@@ -466,6 +486,16 @@ impl UbCtx {
             // capacity — php's buffer-reuse trick.
             let idx = (h & UB_IDX_MASK) as u32;
             if (idx as usize) < UB_ACC_CAP {
+                if h & UB_TAG_ACLS != 0 {
+                    // L2a: a STR list-builder record OWNS its element words — release each
+                    // first (borrowed-slot/const words no-op; Owned words free/recycle).
+                    let n = (self.acc_recs[idx as usize].len / 8) as usize;
+                    for i in 0..n {
+                        let mut b8 = [0u8; 8];
+                        b8.copy_from_slice(&self.acc_bufs[idx as usize][i * 8..i * 8 + 8]);
+                        self.release(i64::from_le_bytes(b8));
+                    }
+                }
                 self.acc_free.push(idx);
             }
         } else {
@@ -1039,6 +1069,65 @@ pub(super) extern "C" fn rt_u_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -
     ctx.acc_push(idx, &v.to_le_bytes());
     ctx.release(a);
     UB_TAG_ACL | idx as i64
+}
+
+/// L2a: the STR-list twin of [`rt_u_list_acc_append`] — the record stores element WORDS the
+/// record then OWNS (the qualify-loop `out = List.append(out, q)` shape pushes q's word,
+/// ZERO clones). (1) lhs already a STR record (`ACL|ACLS`) → grow + push the word; an INT
+/// record here is analyze/emit drift → `-1`. (2) lhs a FLAT str list → convert: the
+/// elements' BORROWED SLOT WORDS go in as-is (the slots are bump-pinned for the run — no
+/// copies, and their releases no-op); lhs a BOXED str list → one owned arena word per
+/// element (a one-time conversion cost). (3) exhaustion / non-str element → `-1` (code 5,
+/// redo on VM). Only reachable from proven accumulator sites, so the lhs is consumed.
+pub(super) extern "C" fn rt_u_str_list_acc_append(ctx: *mut UbCtx, a: i64, v: i64) -> i64 {
+    let ctx = unsafe { &mut *ctx };
+    if a & UB_TAG_ACL != 0 {
+        if a & UB_TAG_ACLS == 0 {
+            return -1;
+        }
+        let idx = (a & UB_IDX_MASK) as usize;
+        if idx >= UB_ACC_CAP {
+            return -1;
+        }
+        let need = ctx.acc_recs[idx].len as usize + 8;
+        ctx.acc_grow_to(idx, need);
+        ctx.acc_push(idx, &v.to_le_bytes());
+        return a;
+    }
+    let words: Vec<i64> = if a & UB_TAG_FLAT != 0 && a & UB_TAG_SLOT == 0 {
+        let n = ((a >> 40) & 0xFFFFF) as usize;
+        let base = (a & UB_IDX_MASK) as usize;
+        (0..n).map(|i| (base + i) as i64 | UB_TAG_SLOT).collect()
+    } else {
+        let strs: Vec<Value> = match ctx.handles.get(a as usize) {
+            Some(Value::List(xs)) => {
+                let all: Option<Vec<Value>> = xs
+                    .iter()
+                    .map(|e| match e {
+                        s @ Value::Str(_) => Some(s.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                match all {
+                    Some(vs) => vs,
+                    None => return -1,
+                }
+            }
+            _ => return -1,
+        };
+        strs.into_iter().map(|s| ctx.alloc(s)).collect()
+    };
+    let Some(idx) = ctx.acc_take_record() else {
+        return -1;
+    };
+    ctx.acc_grow_to(idx, ((words.len() + 1) * 8).max(64));
+    ctx.acc_recs[idx].len = 0;
+    for w in &words {
+        ctx.acc_push(idx, &w.to_le_bytes());
+    }
+    ctx.acc_push(idx, &v.to_le_bytes());
+    ctx.release(a);
+    UB_TAG_ACL | UB_TAG_ACLS | idx as i64
 }
 
 pub(super) extern "C" fn rt_u_str_len(ctx: *mut UbCtx, h: i64, free: i64) -> i64 {
@@ -1925,6 +2014,7 @@ pub(super) struct UbHelperIds {
     pub(super) str_eq: FuncId,
     pub(super) clone_value: FuncId,
     pub(super) list_append_dyn: FuncId,
+    pub(super) str_list_acc_append: FuncId,
 }
 
 pub(super) struct UbHelperRefs {
@@ -1954,4 +2044,5 @@ pub(super) struct UbHelperRefs {
     pub(super) str_eq: FuncRef,
     pub(super) clone_value: FuncRef,
     pub(super) list_append_dyn: FuncRef,
+    pub(super) str_list_acc_append: FuncRef,
 }

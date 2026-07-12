@@ -193,6 +193,10 @@ impl Compiled {
             builder.symbol("rt_u_str_eq", rt_u_str_eq as *const u8);
             builder.symbol("rt_u_clone_value", rt_u_clone_value as *const u8);
             builder.symbol("rt_u_list_append_dyn", rt_u_list_append_dyn as *const u8);
+            builder.symbol(
+                "rt_u_str_list_acc_append",
+                rt_u_str_list_acc_append as *const u8,
+            );
         }
         let mut module = JITModule::new(builder);
         let ptr = module.target_config().pointer_type();
@@ -329,6 +333,10 @@ impl Compiled {
                         Some(types::I64),
                     );
                     declare(&mut module, "rt_u_list_append_dyn", &s)?
+                },
+                str_list_acc_append: {
+                    let s = make_sig(&module, &[ptr, types::I64, types::I64], Some(types::I64));
+                    declare(&mut module, "rt_u_str_list_acc_append", &s)?
                 },
             })
         } else {

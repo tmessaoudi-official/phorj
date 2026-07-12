@@ -1737,6 +1737,61 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
 }
 
 #[test]
+fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
+    // L2a: the STR-list ACL accumulator builder — the qualify-loop shape
+    // (`out = List.append(out, q)` where q is a fresh OWNED string) consumes each element
+    // WORD into a str-word record (zero clones), materializes through List.drop + join,
+    // and the record + its owned words release at steady state across 2000 iterations.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        import Core.List;\n\
+        import Core.String;\n\
+        function qualify(string col, string alias): string {\n\
+          return alias + \".\" + col;\n\
+        }\n\
+        function bench(int iters): int {\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            List<string> cols = [\"id\", \"name\", \"total\"];\n\
+            mutable List<string> out = [\"\"];\n\
+            mutable int j = 0;\n\
+            while (j < List.length(cols)) {\n\
+              string q = qualify(cols[j], \"u\");\n\
+              out = List.append(out, q);\n\
+              j = j + 1;\n\
+            }\n\
+            List<string> done = List.drop(out, 1);\n\
+            acc = acc + String.length(String.join(done, \", \")) + i;\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "str-accumulator jit-wired output must match the oracle"
+    );
+    let program = compile_source(SRC);
+    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
+    let manual = crate::vm::Vm::new(&program)
+        .with_jit(cache.clone())
+        .run()
+        .expect("manual str-accumulator run ok");
+    assert_eq!(
+        manual, oracle,
+        "manual str-accumulator run must match the oracle"
+    );
+    assert!(
+        cache.borrow().hits > 0,
+        "str-list accumulators must actually hit the JIT (redos = {})",
+        cache.borrow().redos
+    );
+}
+
+#[test]
 fn phg_run_hook_hits_the_jit_on_the_sqlbuild_builder_pipeline() {
     // W9 + S8 delivery: the FULL sqlbuild shape end to end on the JIT — borrowed field
     // reads forwarded as call args (clone-at-boundary), the flattened JoinClause (14
