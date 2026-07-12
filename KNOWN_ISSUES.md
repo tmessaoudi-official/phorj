@@ -30,6 +30,25 @@ parse error, non-zero exit) — never a crash.
   refs for idiomatic graphs). Deferred-not-ruled per the ADJUDICATION rule; reopen with the
   parked items at run end.
 
+- **DEC-PENDING: scope-guard construct (`using`/`defer`) — the Ω-0 audit's one genuinely
+  uncovered capability residue (from SYN-126 `__destruct`, 2026-07-12 session 5).** Rc/Drop has
+  no deterministic finalization (the `__destruct` exclusion is confirmed), but deterministic
+  SCOPE-EXIT cleanup for resources (files, locks, DB connections — Ω-1 makes this pressing) has
+  no Phorj form today. Failing program (the handle stays open until process exit on the early
+  return): `function f(): int { File h = File.open("x.log"); if (cond()) { return 1; } // no
+  close on this path … }`. Options for adjudication: (a) **`using (h = expr) { … }` block**
+  (C#-style — closes at block exit on EVERY path incl. throw; type implements a `Closable`
+  contract — RECOMMENDED: explicit, static, transpiles to PHP try/finally); (b) **`defer expr;`
+  statement** (Go-style — flexible but execution order is a new footgun surface); (c) both.
+- **DEC-PENDING: graceful-shutdown surface (from the Ω-0 pcntl-family audit, 2026-07-12
+  session 5).** Raw signals stay excluded; `serve` handles SIGINT internally (vetted `ctrlc`
+  dep). A long-lived program (worker loop, serve handler holding state) cannot flush/close on
+  SIGTERM today — the process just dies. Options for adjudication: (a) **typed
+  `Runtime.onShutdown(fn)` hook** (single registration point, runs on SIGINT/SIGTERM before
+  exit — RECOMMENDED, pairs with the `using` construct for resource cleanup); (b) fold into
+  `serve` only (narrower); (c) stay excluded (run-once CLI posture). Lands naturally with Ω-2
+  `Core.Process`.
+
 - **V3b single-alloc `Instance` — PARKED with anatomy (Order-A representation slice,
   2026-07-12 session 5).** The spike-gate evaluation concluded: **no measurable protocol
   target remains** — all 21 micros are ≥ 1.0× via the unboxed JIT (objalloc 9.3× runs native;

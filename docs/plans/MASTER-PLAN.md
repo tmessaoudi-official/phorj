@@ -185,8 +185,13 @@ blast radius) live in **KNOWN_ISSUES §"Parked perf"** and the §11 ledger — f
 Row-level detail is drawn from §2 (UA-0/UA-1/UA-L2…) and §3–§9 (waves 0–6). Ω-0 runs as part of the
 verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
 
-- **Ω-0 · Footgun audit** (ruling C): walk all 49 GAP-by-design rows; per row apply *do-everything-better /
-  take-no-weakness* — capability → schedule a better/safer Phorj cover; pure footgun → confirm excluded.
+- **Ω-0 · Footgun audit — ✅ DONE (session 5, 2026-07-12):** all 49 GD rows walked one-by-one —
+  full verdict table in `docs/research/full-audit/raw/omega0-footgun-audit.md`. ZERO rows flip
+  today; every capability residue routed: `Core.Process` typed subprocess + shutdown surface →
+  Ω-2 · scope-guard `using`/`defer` (the audit's ONE genuinely uncovered residue, from
+  `__destruct`) + variadics → Ω-4 · explicit-locale intl instances + explicit-format date parse
+  + the ICU extension-story fork → Ω-5 · typed-serde derive candidate → Ω-7. Two NEW
+  DEC-PENDING entries recorded in KNOWN_ISSUES §PENDING (`using`/`defer`, `Runtime.onShutdown`).
 - **Ω-1 · Web spine** (TOP-20 #1/#2/#3): finish **Core.Sql** P1 → P2 `Core.Db` (rusqlite) → PG/MySQL →
   HTTP client → sessions/cookies/auth. Continues Wave D. **UA-L2 is DONE** — the `cli::CORE_MODULES`
   registry (deterministic sorted iteration, Inv-10) means adding a Core module is ONE row; Core.Sql was its
