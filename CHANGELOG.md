@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Fundamentals sweep + for-in vertical + task-9 v2 — **forin 0.01× → 0.73×, listindex → 1.61×**
+
+The coverage-driven sweep added four MACRO-realistic micros (21 total) and found four VM-bound
+catastrophic losses: **listappend 0.01×** (immutable `List.append` clones the whole list per
+call), **forin 0.01×** (the for-in desugar = `IterElems` + an indexed while — ~13 VM-dispatch
+ops per element), **mapinsert 0.03×**, **hofpipe 0.19×** (none of those shapes were in the
+unboxed subset). Two slices shipped against them: (1) **for-in in the unboxed JIT** —
+`IterElems` on a borrowed flat list is an IDENTITY re-push (sealed lists are immutable within
+the subset; zero instructions) and `Len` reads the element count from the handle bits (helper
+for boxed lists). (2) **Task-9 v2** — the interval pass admits NESTED counted loops: inner
+`j < T` guards where `T` is a const or the `Len` of a compile-time-known collection, counters
+pinned to `[0, T]` (refined to `[0, T-1]` between the passed guard and the increment), site
+growth multiplied by the enclosing trip counts, the outer counter self-proven by shape — and
+**in-bounds `Index` elision**: an index interval provably inside `[0, len)` drops the bounds
+branch at emit. forin fell 172 → ~2.4 ns/element (0.73×; the documented next lever is
+strength-reduced pointer-bump flat iteration); listindex rides the bounds elision to 1.61×;
+every prior WIN holds. Also recorded (KNOWN_ISSUES, pending adjudication): empty collection
+literals take no contextual type and no `List.empty()`/`Map.empty()` constructors exist.
+
 ### Added — Task 9: accumulator overflow-check elision — **ALL 17 micros now ≥ 1.0× vs php+JIT**
 
 The checked-add price (the measured single root cause of the last three losses) is gone where

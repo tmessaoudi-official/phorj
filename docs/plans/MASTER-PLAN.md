@@ -395,6 +395,16 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   instance-like arena record) + inlining the map/count native loops. Also discovered →
   KNOWN_ISSUES DEC-PENDING: empty collection literals take no contextual type and no
   `List.empty()`/`Map.empty()` exist (micros use seeded literals).
+  **FORIN VERTICAL + TASK-9 v2 — ✅ SHIPPED (session 4):** IterElems = borrowed flat-list
+  identity + Len inline (`5bf2138`); task-9 v2 (`b54709f`): nested counted loops (j<T guards
+  incl. the Len-of-known-collection shape), counters pinned [0,T] with post-guard [0,T-1]
+  body refinement, growth × trip multipliers, outer counter self-proven by shape, and
+  **in-bounds Index elision** (interval ⊆ [0,len) drops the bounds branch). **forin 0.01 →
+  0.73** (172 → ~2.4ns/elem; remaining LEVER 3 = strength-reduced pointer-bump flat iteration
+  at emit — recognize the for-in indexed loop and emit ptr<end walking, removing j/Len/guard
+  entirely); **listindex rides the bounds elision to 1.61**. All prior WINs hold (K=3 under
+  load: mapget 1.11 · intadd 1.51; quiet protocol re-adjudication at the front's close).
+  REMAINING SWEEP LOSSES: listappend 0.01 · mapinsert 0.02 · hofpipe 0.21 · forin 0.73.
   **PERF-100% SWEEP — RULED (2026-07-11, session 3 close, developer via ask-human, THE GO given):**
   scope = flip trycatch/strbuild/webish/mapget/interp (+floatmul parity watch) THEN a FULL
   fundamentals micro sweep (collection writes, capturing closures/HOF, string ops, iteration —
