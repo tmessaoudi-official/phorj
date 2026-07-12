@@ -405,6 +405,14 @@ verified gap inventory and feeds the row-detail for Ω-1…Ω-6.
   entirely); **listindex rides the bounds elision to 1.61**. All prior WINs hold (K=3 under
   load: mapget 1.11 · intadd 1.51; quiet protocol re-adjudication at the front's close).
   REMAINING SWEEP LOSSES: NONE — the sweep is CLOSED (all 21 micros ≥ 1.0×).
+  **REPRESENTATION SLICE — ✅ CLOSED (session 5, recorded-not-asked per the overnight
+  directive): V3b = PARKED with anatomy** (no measurable protocol target — all 21 micros
+  run native via the unboxed JIT; V3b's beneficiaries are the disclosed VM-only surfaces;
+  the DST needs unsafe-outside-`src/jit/` or a thin-Rc dep — either breaches a declared
+  invariant → adjudication, not self-ruling). **Rc CYCLE-LEAK = DEC-PENDING** in
+  KNOWN_ISSUES §PENDING (options: php-style trial-deletion collector / weak refs / both,
+  with the `serve` per-request-leak risk example). NaN-box end-state stays parked behind
+  the same no-measurable-target reasoning.
   **FORIN LEVER-3 — ✅ SHIPPED (session 5): 0.73× → 2.30× WIN** (protocol median
   2.30/2.82/1.66): pointer-walk kinds (`IterEnd`/`IterPtr`) at the desugar's
   `IterElems; Const(0)` site — Len identity, header Lt = one unsigned cmp, Index = one

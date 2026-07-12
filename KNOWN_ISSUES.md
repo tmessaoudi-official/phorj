@@ -16,6 +16,31 @@ parse error, non-zero exit) — never a crash.
   (b) `List.empty<T>()` / `Map.empty<K,V>()` stdlib constructors; (c) both.
   Failing program: `function f(): int { List<int> xs = []; return List.length(xs); }`.
 
+- **DEC-PENDING: the Rc CYCLE-LEAK answer (§15 fork — the representation slice's design half,
+  2026-07-12 session 5).** Instances are `Rc`-shared mutable handles: `a.next = b; b.next = a`
+  leaks until process exit (see "No cycle collector" below). Run-once CLI = fine; **`phg serve`
+  is long-lived** — a request handler that builds one cyclic object graph per request leaks
+  per-request memory forever. Failing program (leaks one cycle per loop turn under `serve`):
+  `class Node { mutable Node? next; } … while (true) { Node a = new Node(null); Node b = new
+  Node(a); a.next = b; }`. Options for adjudication: (a) **php-style backup cycle collector**
+  (trial-deletion over suspected roots, runs at thresholds — heaviest, exact PHP parity,
+  collection is semantically invisible since no finalizers exist — RECOMMENDED for serve
+  parity); (b) **weak references** (`Weak<T>` surface type — lighter, but pushes the burden to
+  the user and adds surface area PHP doesn't have); (c) **both** (collector for safety, weak
+  refs for idiomatic graphs). Deferred-not-ruled per the ADJUDICATION rule; reopen with the
+  parked items at run end.
+
+- **V3b single-alloc `Instance` — PARKED with anatomy (Order-A representation slice,
+  2026-07-12 session 5).** The spike-gate evaluation concluded: **no measurable protocol
+  target remains** — all 21 micros are ≥ 1.0× via the unboxed JIT (objalloc 9.3× runs native;
+  a boxed-VM allocation change cannot move any protocol number). V3b's beneficiaries are
+  VM-only surfaces (playground/wasm, iOS, non-subset functions — all disclosed VM-speed).
+  Additionally, the co-allocated Rc-header DST needs `unsafe` outside `src/jit/` (breaching
+  `#![deny(unsafe_code)]`'s single-island invariant) or a thin-Rc dependency (breaching the
+  std-only policy) — either is an adjudication question, not a self-ruling. Reopen if a
+  VM-side representation win becomes measurable (e.g. a JIT-coverage metric shows real
+  programs falling off the subset) or the invariants are re-adjudicated.
+
 ## Language features not yet implemented
 
 These are designed but not in the current surface; using them produces a clean compile-time error,
