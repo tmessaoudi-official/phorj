@@ -1047,3 +1047,52 @@ fn phg_run_hook_hits_the_jit_on_for_in_iteration() {
         "for-in iteration must actually hit the JIT — else the forin flip is unproven"
     );
 }
+
+#[test]
+fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
+    // The forin shape: an accumulator fed inside an INNER counted loop whose bound is
+    // `Len(iter)` of a compile-time-known list. v2 must prove the accumulator sites, the
+    // inner+outer counters AND the in-bounds `Index` (its bounds branch drops); byte
+    // identity must hold, including at the entry-guard decline.
+    const SRC: &str = "package Main;\n\
+        import Core.Output;\n\
+        function bench(int iters): int {\n\
+          List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
+          mutable int acc = 0;\n\
+          mutable int i = 0;\n\
+          while (i < iters) {\n\
+            for (int x in xs) {\n\
+              acc = acc + x;\n\
+            }\n\
+            i = i + 1;\n\
+          }\n\
+          return acc;\n\
+        }\n\
+        function main(): void { Output.printLine(\"{bench(700)}\"); }";
+    let program = compile_source(SRC);
+    let acc = acc_elision(&program, "bench").expect("the nested for-in shape must prove (v2)");
+    let proven = acc.proven.iter().filter(|&&p| p).count();
+    // Site AddI + inner counter AddI + outer counter AddI + the in-bounds Index ≥ 4 marks.
+    assert!(
+        proven >= 4,
+        "nested proofs expected >= 4 marks, got {proven}"
+    );
+    let f = func_index(&program, "bench");
+    let func = &program.functions[f];
+    let idx_proven = func
+        .chunk
+        .code
+        .iter()
+        .enumerate()
+        .any(|(ip, op)| matches!(op, Op::Index) && acc.proven[ip]);
+    assert!(
+        idx_proven,
+        "the for-in Index must be proven in-bounds (branch drops)"
+    );
+    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
+    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
+    assert_eq!(
+        jit_out, oracle,
+        "nested elided for-in must match the oracle"
+    );
+}

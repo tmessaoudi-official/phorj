@@ -244,6 +244,7 @@ pub(super) fn arm_index_map(
 /// `Op::Index` with an `IntList` beneath the index — P-2c int-list element read
 /// (`xs[i]` → Int, raw i64 at slot bytes 0..8): inline unsigned bounds check + ONE load
 /// for a flat list; the two-return helper for a boxed one.
+#[allow(clippy::too_many_arguments)] // emit plumbing
 pub(super) fn arm_index_int_list(
     b: &mut FunctionBuilder,
     ec: &Ec,
@@ -251,6 +252,7 @@ pub(super) fn arm_index_int_list(
     vars: &[Variable],
     fvars: &[Variable],
     kinds: &mut Vec<Kind>,
+    proven: bool,
 ) -> Result<(), JitError> {
     let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
     let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
@@ -268,10 +270,13 @@ pub(super) fn arm_index_int_list(
     // INLINE (flat int list): unsigned bounds check, then ONE load of the raw i64 at
     // `buf[(base+idx)*64]`. Out-of-range → code 5 → the canonical fault on the VM.
     b.switch_to_block(flat_blk);
-    let cnt_raw = b.ins().ushr_imm(lv, 40);
-    let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
-    let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
-    ec.fault_if(b, oob, 5);
+    // Task-9 v2: a range-PROVEN in-bounds index (interval ⊆ [0, len)) drops the bounds branch.
+    if !proven {
+        let cnt_raw = b.ins().ushr_imm(lv, 40);
+        let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+        let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
+        ec.fault_if(b, oob, 5);
+    }
     let buf = b.ins().load(types::I64, ec.stable, ec.ctx, 0);
     let base = b.ins().band_imm(lv, UB_IDX_MASK);
     let slot = b.ins().iadd(base, iv);
@@ -295,6 +300,7 @@ pub(super) fn arm_index_int_list(
 
 /// Plain `Op::Index` — string-list element read: a flat list yields base+idx as a BORROWED
 /// slot handle (zero copy, zero alloc); a boxed list goes through the helper.
+#[allow(clippy::too_many_arguments)] // emit plumbing
 pub(super) fn arm_index_str_list(
     b: &mut FunctionBuilder,
     ec: &Ec,
@@ -302,6 +308,7 @@ pub(super) fn arm_index_str_list(
     vars: &[Variable],
     fvars: &[Variable],
     kinds: &mut Vec<Kind>,
+    proven: bool,
 ) -> Result<(), JitError> {
     let (iv, ik) = ub_pop(b, vars, fvars, kinds)?;
     let (lv, lk) = ub_pop(b, vars, fvars, kinds)?;
@@ -321,10 +328,13 @@ pub(super) fn arm_index_str_list(
     // zero copy, zero alloc. Out-of-range → code 5 → the VM redo renders the canonical
     // "list index out of range".
     b.switch_to_block(flat_blk);
-    let cnt_raw = b.ins().ushr_imm(lv, 40);
-    let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
-    let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
-    ec.fault_if(b, oob, 5);
+    // Task-9 v2: a range-PROVEN in-bounds index (interval ⊆ [0, len)) drops the bounds branch.
+    if !proven {
+        let cnt_raw = b.ins().ushr_imm(lv, 40);
+        let cnt = b.ins().band_imm(cnt_raw, 0xFFFFF);
+        let oob = b.ins().icmp(IntCC::UnsignedGreaterThanOrEqual, iv, cnt);
+        ec.fault_if(b, oob, 5);
+    }
     let base = b.ins().band_imm(lv, UB_IDX_MASK);
     let slot = b.ins().iadd(base, iv);
     let fres = b.ins().bor_imm(slot, UB_TAG_SLOT);

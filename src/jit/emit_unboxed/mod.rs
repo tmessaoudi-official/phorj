@@ -663,11 +663,11 @@ pub(super) fn build_body_unboxed(
                 ) =>
             {
                 let h = ub_ref(ub_refs.as_ref(), "Index(int)")?;
-                arm_index_int_list(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+                arm_index_int_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
             }
             Op::Index => {
                 let h = ub_ref(ub_refs.as_ref(), "Index")?;
-                arm_index_str_list(&mut b, &ec, h, &vars, &fvars, &mut kinds)?;
+                arm_index_str_list(&mut b, &ec, h, &vars, &fvars, &mut kinds, proven_ops[ip])?;
             }
             Op::IterElems => {
                 arm_iter_elems(&mut b, &vars, &fvars, &mut kinds)?;
