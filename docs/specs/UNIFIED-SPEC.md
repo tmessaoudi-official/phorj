@@ -120,7 +120,9 @@ strategy. Phorj removes surprises, never capability.*
 | Construction | `Greeter g = Greeter("Tak")` | **superseded**: `new` is mandatory |
 | Concurrency | "model TBD" | **resolved**: uncolored `spawn`+channels on cooperative green threads (see [Ecosystem strategy](#ecosystem-strategy) E-8) |
 
-Type system (all stand): sound static typing, no juggling/coercion; true monomorphized generics;
+Type system (all stand): sound static typing, no juggling/coercion; **erased** generics (type-checked
+then rewritten to `Type::Erased` before any backend — NOT monomorphized; the pragmatic engineering
+choice per the philosophy, `checker/resolve.rs`);
 null safety `T?` + unwrap-before-use; ADT `enum` with payloads + compiler-verified exhaustive
 `match`; `==` value equality / `is` identity; strict `bool` only (no truthiness); `int` = 64-bit
 signed (+`decimal` for money; sized `i8..u64` deferred to v2); UTF-8 `string`. Collections split the
