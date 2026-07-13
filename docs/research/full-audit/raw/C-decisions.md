@@ -697,6 +697,24 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   selection (`f(Animal)`+`f(Dog)`, arg static `Animal` holding a `Dog`) — the sound subset is where no
   runtime refinement can change the selection (safe approx: primitive/leaf arg types). Deferred (low
   priority vs the DB/output work).
+- **DEC-221 — RULED (ASKED 2026-07-13): throwing constructors.** phorj constructors could not declare
+  `throws` (a `constructor(...) throws E` was a parse error; a throwing call in a ctor body had no
+  `?`/try escape), which forced DEC-208's fail-able open into a static factory `Db.connect(dsn)` —
+  deviating from the ruled `new Db(dsn)`. Ruling: **make constructors able to declare + propagate
+  `throws`** so `new Db(dsn) throws DbError` works, exactly as ruled and exactly like PHP's `new PDO`
+  (fail-fast + PHP-faithful + enriches ALL fallible construction, not just Db). *Alternatives:* keep the
+  `Db.connect` factory (rejected — permanent deviation from the ruling + PHP; the "named constructor"
+  idiom is clean but not what was ruled); lazy-open to preserve `new Db` syntactically (rejected —
+  fail-LATE, a bad DSN constructs "fine" and errors on first use, disconnecting error from cause).
+  **Impl:** (1) AST — add `throws: Vec<Type>` to `ClassMember::Constructor` (`ast/decls.rs:189`; ~60
+  match/construct sites, most use `..`). (2) Parser — parse an optional `throws` clause (reuse
+  `parse_throws_clause`, `parser/types.rs:31`) between `)` and `{` at BOTH ctor parser sites
+  (`parser/items/types.rs:318`, `parser/items/decls.rs:423`). (3) Checker — store the ctor throws on the
+  class's ctor signature (`collect/types_decls.rs` ctor build); check the ctor BODY with those throws in
+  context (so its throwing calls discharge, like `check_function`); at `check_new` (`expr/core.rs:252`)
+  route the ctor's throws to `route_call_throw` so `new X(...)` is a throwing expression the caller must
+  handle/propagate. (4) Formatter — render `throws` on ctors. (5) Then convert DB_PRELUDE `Db.connect`
+  back to `constructor(string dsn) throws DbError { this.raw = match(...){...} }` + example `new Db(dsn)`.
 - **DEC-220 — RULED (ASKED 2026-07-13): unified output/log/response system (Output/Log/Response), 3 named
   sinks + opt-in capture.** Prompted by a real bug the dev hit: `Output.print*` in a `phg serve` handler
   goes to the SERVER LOG (stderr), not the browser (`serve/handlers.rs:182`) — a context-magical redirect

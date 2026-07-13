@@ -362,3 +362,126 @@ fn throws_comma_and_union_mix() {
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
+
+// ── DEC-221: throwing constructors ──
+
+/// A class whose constructor declares `throws BadInput` and throws inside its body.
+const THROWING_CTOR: &str =
+    "class Res { constructor(int x) throws BadInput { if (x < 0) { throw new BadInput(\"neg\"); } } }";
+
+#[test]
+fn throwing_ctor_bare_construction_is_unhandled() {
+    // DEC-221: `new Res(...)` where the ctor `throws BadInput` and the caller neither catches nor
+    // propagates is `E-CALL-UNHANDLED` — construction is a throwing expression.
+    let bad = errors_of(&format!(
+        "{ERRDEF} {THROWING_CTOR} function main() -> void {{ var r = new Res(-1); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED for an unhandled throwing construction, got {bad:?}"
+    );
+}
+
+#[test]
+fn throwing_ctor_construction_in_try_is_clean() {
+    // The same construction wrapped in a `try` catching the declared type discharges cleanly.
+    let ok = errors_of(&format!(
+        "{ERRDEF} {THROWING_CTOR} \
+             function main() -> void {{ try {{ var r = new Res(-1); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn throwing_ctor_construction_propagated_with_question_is_clean() {
+    // DEC-221: `new X(...)?` propagates the ctor's throws to the enclosing `throws` (throws-mode `?`
+    // now accepts a construction operand, `Expr::New(box Call)`, not just a bare call).
+    let ok = errors_of(&format!(
+        "{ERRDEF} {THROWING_CTOR} \
+             function make() -> void throws BadInput {{ var r = new Res(-1)?; }} \
+             function main() -> void {{ try {{ make(); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn throwing_ctor_construction_propagated_without_declaration_is_unhandled() {
+    // The same `new X(...)?` WITHOUT an enclosing `throws` is `E-CALL-UNHANDLED` — and must NOT fall
+    // through to the Result-mode `E-PROPAGATE-CONTEXT` (a construction is not a `Result`).
+    let bad = errors_of(&format!(
+        "{ERRDEF} {THROWING_CTOR} \
+             function make() -> void {{ var r = new Res(-1)?; }} function main() -> void {{}}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED, got {bad:?}"
+    );
+    assert!(
+        !bad.iter().any(|d| d.code == Some("E-PROPAGATE-CONTEXT")),
+        "must not fall through to Result-mode on a throwing construction, got {bad:?}"
+    );
+}
+
+#[test]
+fn ctor_body_discharges_against_declared_throws() {
+    // The ctor BODY is checked with its declared throws in context (like `check_function`): a
+    // throwing helper called under `?` propagates against the ctor's own `throws` — the DB_PRELUDE
+    // pattern (`DbError.fail(e)?` inside `constructor(...) throws DbError`). Clean.
+    let ok = errors_of(&format!(
+        "{ERRDEF} function boom() -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
+             class Res {{ constructor() throws BadInput {{ var n = boom()?; }} }} \
+             function main() -> void {{ try {{ var r = new Res(); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn ctor_body_undeclared_throw_is_unhandled() {
+    // A throwing call inside a ctor that does NOT declare the throw is `E-CALL-UNHANDLED` (the body
+    // discharges against the ctor's own throws set, which is empty here).
+    let bad = errors_of(&format!(
+        "{ERRDEF} function boom() -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
+             class Res {{ constructor() {{ var n = boom(); }} }} \
+             function main() -> void {{ var r = new Res(); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED for an undischarged throw in a ctor body, got {bad:?}"
+    );
+}
+
+#[test]
+fn ctor_throws_non_error_type_is_rejected() {
+    // A ctor `throws` type that does not implement `Error` is `E-THROW-TYPE` (the same per-type
+    // validation as functions, shared via `validate_throw_types`).
+    let bad = errors_of("class Res { constructor() throws int {} } function main() -> void {}");
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-THROW-TYPE")),
+        "expected E-THROW-TYPE for a non-Error ctor throws, got {bad:?}"
+    );
+}
+
+#[test]
+fn non_throwing_ctor_construction_is_clean() {
+    // Regression guard: a constructor that declares no `throws` leaves `new X()` non-throwing.
+    let ok = errors_of(
+        "class Res { constructor(int x) {} } function main() -> void { var r = new Res(1); }",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn inherited_throwing_ctor_propagates_to_subclass_construction() {
+    // A subclass with no own ctor inherits the parent's throwing ctor — `new Child(...)` must be
+    // handled too (the throws set is inherited alongside the param signature).
+    let bad = errors_of(&format!(
+        "{ERRDEF} \
+             class Base {{ constructor(int x) throws BadInput {{ if (x < 0) {{ throw new BadInput(\"neg\"); }} }} }} \
+             class Child extends Base {{}} \
+             function main() -> void {{ var c = new Child(-1); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED for an inherited throwing ctor, got {bad:?}"
+    );
+}

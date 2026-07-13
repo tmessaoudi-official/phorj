@@ -320,10 +320,18 @@ impl Parser {
                 self.expect(&TokenKind::LParen, "'(' after 'constructor'")?;
                 let params = self.parse_ctor_params()?;
                 self.expect(&TokenKind::RParen, "')' to close constructor parameters")?;
+                // DEC-221: an optional `throws T (| T)* (, …)*` clause between the params and the body,
+                // reusing the function/interface clause parser. Absent → the ctor throws nothing.
+                let throws = if self.eat(&TokenKind::Throws) {
+                    self.parse_throws_clause()?
+                } else {
+                    Vec::new()
+                };
                 let body = self.parse_block()?;
                 Ok(ClassMember::Constructor {
                     modifiers,
                     params,
+                    throws,
                     body,
                     span: sp,
                 })

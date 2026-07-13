@@ -4,7 +4,7 @@
 //! The enhanced-PDO surface opens a real bundled-SQLite database (`rusqlite`), so its example is
 //! `pure:false` → quarantined from the byte-identity differential (live DB I/O can't be byte-identical
 //! across rusqlite and PHP PDO). This is therefore the SOLE gate that runs the shipped
-//! `examples/db/basic.phg` through the real language surface — `Db.connect(dsn)` → `prepare` → `bind`/
+//! `examples/db/basic.phg` through the real language surface — `new Db(dsn)` → `prepare` → `bind`/
 //! `bindNamed` → `exec`/`query` → typed `Row` accessors, with a catchable `DbError` — on BOTH backends.
 //! The PHP leg is excluded; `run ≡ runvm` must hold (both call the one shared native bodies). Compiled
 //! only under `--features db` (see the pre-push gate's `--features db` step).

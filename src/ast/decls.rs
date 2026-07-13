@@ -193,6 +193,14 @@ pub enum ClassMember {
         /// modifiers here are rejected (`E-CTOR-MODIFIER`). Previously parsed and dropped.
         modifiers: Vec<Modifier>,
         params: Vec<CtorParam>,
+        /// Declared checked-exception set of the constructor — the `constructor(…) throws E (| E)*`
+        /// clause (DEC-221). Empty for a constructor that throws nothing. Semantically identical to
+        /// [`FunctionDecl::throws`]: each member must be a specific subtype of the built-in `Error`,
+        /// the ctor BODY discharges throwing calls against it, and `new X(…)` propagates it to the
+        /// construction site (which must `try`/`catch` it or `?`-propagate + declare `throws`). Erased
+        /// before any backend — a throwing ctor transpiles to an ordinary PHP constructor whose body
+        /// `throw`s (PHP has no checked exceptions).
+        throws: Vec<Type>,
         body: Vec<Stmt>,
         span: Span,
     },

@@ -230,6 +230,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             ClassMember::Constructor {
                 modifiers,
                 params,
+                throws,
                 body,
                 span,
             } => ClassMember::Constructor {
@@ -243,6 +244,8 @@ pub fn expand_aliases(program: &Program) -> Program {
                         span: p.span,
                     })
                     .collect(),
+                // A ctor's `throws` type may name a type alias — rewrite it like the fn path (line ~207).
+                throws: throws.iter().map(|t| rt(t, a, 0)).collect(),
                 body: body.iter().map(|s| rstmt(s, a)).collect(),
                 span: *span,
             },

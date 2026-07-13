@@ -135,6 +135,11 @@ struct ClassInfo {
     /// constructor parameter types, for `ClassName(args)` calls. For a class with no own constructor
     /// under single inheritance (M-RT S6c.2a), this is the *inherited* parent constructor's signature.
     ctor: Vec<Ty>,
+    /// DEC-221: the constructor's declared checked-exception set (resolved + flattened), read at the
+    /// construction site (`new X(args)` routes each through `route_call_throw`, so the caller must
+    /// `try`/`catch` or `?`-propagate) and to seed `cur_throws` while checking the ctor body. Inherited
+    /// alongside [`Self::ctor`] for a class with no own constructor. Empty for a non-throwing ctor.
+    ctor_throws: Vec<Ty>,
     /// Whether the class declares its **own** constructor (vs. inheriting one). Distinguishes a class
     /// with a zero-arg ctor from one with no ctor at all (both leave `ctor` empty) — `merge_inherited`
     /// inherits a single parent's `ctor` only into a class that has none of its own (M-RT S6c.2a).
@@ -244,6 +249,7 @@ impl ClassInfo {
             methods: HashMap::new(),
             hooks: HashMap::new(),
             ctor: Vec::new(),
+            ctor_throws: Vec::new(),
             has_ctor: false,
             is_user_attribute: false, // placeholder; overwritten by `collect_class`
             ctor_vis: MemberVis::Public,

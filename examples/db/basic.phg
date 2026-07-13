@@ -1,6 +1,6 @@
 // Enhanced-PDO database access with `Core.Db` (DEC-208) — a strongly-typed PDO.
 //
-//   * `Db.connect(dsn)`       — open a connection (throws `DbError`).
+//   * `new Db(dsn)`            — open a connection (throws `DbError`).
 //   * `db.prepare(sql)`        — a prepared `Statement`.
 //   * `.bind(v)` / `.bindNamed(name, v)` — positional `?` / named `:name` binds (chainable).
 //   * `.exec()`                — run a write, returns the affected-row count.
@@ -20,15 +20,20 @@ import Core.Db.DbError;
 
 function main(): void {
     try {
-        Db db = Db.connect("sqlite::memory:");
+        Db db = new Db("sqlite::memory:");
         discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
-
         // Positional `?` binds.
         discard db.prepare("INSERT INTO users(name, age) VALUES(?, ?)").bind("Ada").bind(36).exec();
         // Named `:name` binds.
-        discard db.prepare("INSERT INTO users(name, age) VALUES(:n, :a)").bindNamed("n", "Grace").bindNamed("a", 45).exec();
-
-        List<Row> rows = db.prepare("SELECT name, age FROM users WHERE age > ? ORDER BY age").bind(30).query();
+        discard db
+            .prepare("INSERT INTO users(name, age) VALUES(:n, :a)")
+            .bindNamed("n", "Grace")
+            .bindNamed("a", 45)
+            .exec();
+        List<Row> rows = db
+            .prepare("SELECT name, age FROM users WHERE age > ? ORDER BY age")
+            .bind(30)
+            .query();
         for (Row r in rows) {
             string name = r.getString("name");
             int age = r.getInt("age");

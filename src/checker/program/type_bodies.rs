@@ -68,23 +68,32 @@ impl Checker {
                     self.check_function(f);
                     self.in_static_method = was_static;
                 }
-                ClassMember::Constructor { params, body, .. } => {
+                ClassMember::Constructor {
+                    params, body, span, ..
+                } => {
                     let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Void);
                     // type params in scope for any `T` annotation in the body
                     self.active_type_params = type_params.to_vec();
                     self.active_type_param_bounds = self.cur_class_type_param_bounds.clone();
                     self.push_scope();
                     // constructor params are in scope inside its body
-                    let ctor = self
+                    let (ctor, ctor_throws) = self
                         .classes
                         .get(type_name)
-                        .map(|info| info.ctor.clone())
+                        .map(|info| (info.ctor.clone(), info.ctor_throws.clone()))
                         .unwrap_or_default();
                     for (p, t) in params.iter().zip(ctor) {
                         self.declare(&p.name, t, p.span);
                     }
+                    // DEC-221: validate the ctor's declared throws (now the full hierarchy is built) and
+                    // make it the active discharge context for the body, exactly as `check_function`
+                    // does for a function — so a throwing call inside the ctor discharges/propagates
+                    // against the declared set (`DbError.fail(e)?` in `constructor(...) throws DbError`).
+                    self.validate_throw_types(&ctor_throws, *span);
                     let was_ctor = std::mem::replace(&mut self.in_constructor, true);
+                    let prev_throws = std::mem::replace(&mut self.cur_throws, ctor_throws);
                     self.check_body(body);
+                    self.cur_throws = prev_throws;
                     self.in_constructor = was_ctor;
                     self.pop_scope();
                     self.active_type_params.clear();

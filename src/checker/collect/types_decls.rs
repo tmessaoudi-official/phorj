@@ -94,6 +94,7 @@ impl Checker {
                 methods: HashMap::new(),
                 hooks: HashMap::new(),
                 ctor: Vec::new(),
+                ctor_throws: Vec::new(),
                 has_ctor: false,
                 is_user_attribute: c.attrs.iter().any(|a| a.is_attribute_marker()),
                 ctor_vis: MemberVis::Public,
@@ -175,6 +176,7 @@ impl Checker {
             std::collections::HashSet::new();
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
+        let mut ctor_throws = Vec::new();
         let mut ctor_vis = MemberVis::Public;
         // The class's type parameters are in scope while resolving every member signature (fields,
         // constructor, methods), so a bare `T` resolves to `Ty::Param("T")` (M-RT generics-all). A
@@ -289,6 +291,7 @@ impl Checker {
                 ClassMember::Constructor {
                     modifiers,
                     params,
+                    throws,
                     span,
                     ..
                 } => {
@@ -336,6 +339,13 @@ impl Checker {
                             ty
                         })
                         .collect();
+                    // DEC-221: resolve + flatten the ctor's declared throws with the class type
+                    // params still in scope (a bare `T` in a `throws` position resolves like a param
+                    // type). Semantic validation (E-THROW-TYPE / E-THROWS-TOO-BROAD) runs later at
+                    // body-check, once the full class hierarchy is built — the same collect/body split
+                    // free functions use.
+                    ctor_throws =
+                        Self::flatten_throws(throws.iter().map(|t| self.resolve_type(t)).collect());
                     self.active_type_params.clear();
                 }
                 ClassMember::Method(f) => {
@@ -488,6 +498,7 @@ impl Checker {
             .iter()
             .any(|m| matches!(m, ClassMember::Constructor { .. }));
         info.ctor = ctor;
+        info.ctor_throws = ctor_throws;
         info.ctor_vis = ctor_vis;
         // `ctor_owner` was initialized to the class's own name; an own ctor keeps it. An inherited
         // ctor's owner/visibility are merged in `merge_inherited` for a class with no own ctor.

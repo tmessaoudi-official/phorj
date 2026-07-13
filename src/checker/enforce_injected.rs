@@ -172,9 +172,18 @@ impl Ctx {
     fn walk_member(&self, m: &ClassMember, errs: &mut Vec<Diagnostic>) {
         match m {
             ClassMember::Field { ty, .. } => self.walk_type(ty, errs),
-            ClassMember::Constructor { params, body, .. } => {
+            ClassMember::Constructor {
+                params,
+                throws,
+                body,
+                ..
+            } => {
                 for p in params {
                     self.walk_type(&p.ty, errs);
+                }
+                // DEC-221: a ctor `throws` type is subject to the same import discipline as a fn's (walk_fn).
+                for t in throws {
+                    self.walk_type(t, errs);
                 }
                 self.walk_block(body, errs);
             }

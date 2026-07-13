@@ -3,7 +3,7 @@
 //! Feature-gated (`db`) and native-only. This module owns the RUNTIME layer: the opaque connection /
 //! statement handles ([`DbConn`] / [`DbStmt`], carried by [`Value::Db`] via the [`DbObject`] trait) and
 //! the internal `Core.DbSys` native bodies for connect / prepare / bind / bindNamed / query / exec and
-//! the Row accessors. The public `Core.Db` SURFACE (`Db`/`Statement`/`Row` + `Db.connect(dsn)` +
+//! the Row accessors. The public `Core.Db` SURFACE (`Db`/`Statement`/`Row` + `new Db(dsn)` +
 //! `db.prepare(sql).bind(v).query()`) is the phorj-source `DB_PRELUDE` (`src/cli/preludes.rs`) on top of
 //! these — the natives live under the `DbSys` qualifier so a prelude `class Db` never collides with them.
 //!

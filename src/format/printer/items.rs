@@ -136,6 +136,17 @@ impl Printer<'_> {
         ))
     }
 
+    /// Render a `throws` clause (`" throws A | B"`, empty when the list is empty), shared by the two
+    /// constructor arms (DEC-221) — the same ` throws {…}` form [`Self::fn_signature`] uses, joined with
+    /// `|`, so a formatted throwing ctor round-trips idempotently through the parser.
+    pub(super) fn throws_clause(throws: &[crate::ast::Type]) -> Result<String, String> {
+        if throws.is_empty() {
+            return Ok(String::new());
+        }
+        let ts: Result<Vec<_>, _> = throws.iter().map(ty).collect();
+        Ok(format!(" throws {}", ts?.join(" | ")))
+    }
+
     /// Item attributes (`#[Route("GET", "/p")]`, `#[UncheckedOverflow]`, `#[Attribute]`, a user `#[Tag(…)]`)
     /// print one per line above the declaration they annotate. Single source for functions AND classes so
     /// the two never drift (a class attribute dropped here would silently corrupt `fmt` idempotence).
@@ -241,9 +252,10 @@ impl Printer<'_> {
         self.indent += 1;
         for m in &c.members {
             match m {
-                ClassMember::Constructor { params, .. } => {
+                ClassMember::Constructor { params, throws, .. } => {
                     let ps = self.ctor_params(params)?;
-                    self.line(&format!("constructor({ps});"));
+                    let th = Self::throws_clause(throws)?;
+                    self.line(&format!("constructor({ps}){th};"));
                 }
                 ClassMember::Method(f) => {
                     let sig = self.fn_signature(f)?;
@@ -286,12 +298,18 @@ impl Printer<'_> {
                 }
                 Ok(())
             }
-            ClassMember::Constructor { params, body, .. } => {
+            ClassMember::Constructor {
+                params,
+                throws,
+                body,
+                ..
+            } => {
                 let ps = self.ctor_params(params)?;
+                let th = Self::throws_clause(throws)?;
                 if body.is_empty() {
-                    self.line(&format!("constructor({ps}) {{}}"));
+                    self.line(&format!("constructor({ps}){th} {{}}"));
                 } else {
-                    self.line(&format!("constructor({ps}) {{"));
+                    self.line(&format!("constructor({ps}){th} {{"));
                     self.indent += 1;
                     for s in body {
                         self.stmt(s)?;

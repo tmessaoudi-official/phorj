@@ -9,6 +9,7 @@ impl Checker {
         name: &str,
         args: &[crate::ast::Expr],
         span: Span,
+        skip_throws: bool,
     ) -> Option<Ty> {
         // enum variant constructor: find the (unique) enum that owns this variant name
         let owner = self
@@ -48,8 +49,16 @@ impl Checker {
         // class constructor: `ClassName(args)`
         if let Some(info) = self.classes.get(name) {
             let ctor = info.ctor.clone();
+            let ctor_throws = info.ctor_throws.clone();
             let type_params = info.type_params.clone();
             let is_abstract = info.is_abstract;
+            // DEC-221: a throwing constructor makes `new X(args)` a throwing expression. Route each
+            // declared throw exactly like a free/method call — a bare construction must be caught by an
+            // enclosing `try` (else `E-CALL-UNHANDLED`); under `?`-propagation the set is collected.
+            // Routed here (before the generic/non-generic split) so a generic throwing ctor is covered too.
+            for e in &ctor_throws {
+                self.route_call_throw(skip_throws, name, e, span);
+            }
             // M-RT S6b: an abstract class has unimplemented methods and cannot be instantiated.
             if is_abstract {
                 self.err_coded(

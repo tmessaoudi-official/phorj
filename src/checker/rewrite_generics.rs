@@ -513,6 +513,7 @@ pub fn erase_generics(program: Program) -> Program {
                         ClassMember::Constructor {
                             modifiers,
                             params,
+                            throws,
                             body,
                             span,
                         } => {
@@ -520,6 +521,8 @@ pub fn erase_generics(program: Program) -> Program {
                             ClassMember::Constructor {
                                 modifiers,
                                 params: params.iter().map(|p| rctorparam(p, &set)).collect(),
+                                // Erase the class type params from the ctor's `throws` types, like the fn path.
+                                throws: throws.iter().map(|t| rty(t, &set)).collect(),
                                 body: body.iter().map(|s| rstmt(s, &set)).collect(),
                                 span,
                             }

@@ -101,7 +101,10 @@ impl Checker {
                                     Some(format!("write `new {cls}.{name}(…)`")),
                                 );
                             }
-                            if let Some(t) = self.try_variant_or_class_call(name, args, span) {
+                            // Injected-class ctors (Http.Router / Time.Duration / Decimal) declare no
+                            // `throws`, so the discharge set is empty — pass `false` (bare discharge).
+                            if let Some(t) = self.try_variant_or_class_call(name, args, span, false)
+                            {
                                 return t;
                             }
                         }
@@ -174,7 +177,7 @@ impl Checker {
                 Some(format!("write `new {name}(…)`")),
             );
         }
-        if let Some(t) = self.try_variant_or_class_call(name, args, span) {
+        if let Some(t) = self.try_variant_or_class_call(name, args, span, skip_throws) {
             return t;
         }
         let sigs = match self.funcs.get(name) {

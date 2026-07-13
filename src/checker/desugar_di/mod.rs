@@ -349,6 +349,8 @@ fn fold_injected_fields(
                         None => kept.push(ClassMember::Constructor {
                             modifiers: Vec::new(),
                             params: injected,
+                            // A DI-synthesized constructor only stores injected deps — it throws nothing.
+                            throws: Vec::new(),
                             body: Vec::new(),
                             span: c.span,
                         }),

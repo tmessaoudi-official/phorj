@@ -73,9 +73,11 @@ impl Checker {
         }
     }
 
-    /// Throws-mode `?` (M-faults 2b): `f()?` / `recv.m()?` where the callee declares `throws E`
-    /// — free functions AND methods (the method half closed the old `free_call_throws`
-    /// deferral). Checks the inner call ONCE with discharge suppressed; the sites collect the
+    /// Throws-mode `?` (M-faults 2b): `f()?` / `recv.m()?` / `new X(…)?` where the callee (a free
+    /// function, method, or DEC-221 throwing constructor) declares `throws E`. The construction operand
+    /// (`Expr::New(box Call)`) is a new additive case; the method operand closed the old
+    /// `free_call_throws` deferral earlier (Ω-1). Checks the inner call ONCE with discharge
+    /// suppressed; the sites collect the
     /// callee's throws into [`Checker::propagate_sink`]. A non-empty set is validated against
     /// the enclosing `throws` (propagation — not a `try`), the node recorded for erasure, and
     /// the call's *normal* type returned as [`PropagateOutcome::Throws`]. An empty set means
@@ -87,7 +89,15 @@ impl Checker {
         inner: &crate::ast::Expr,
         span: Span,
     ) -> Option<PropagateOutcome> {
-        if !matches!(inner, crate::ast::Expr::Call { .. }) {
+        // A throwing operand is a bare call (`f()?`) OR a throwing construction (`new X()?`, DEC-221):
+        // `new X()` is `Expr::New(box Call)`, and the construction site honors the same `skip_throws`
+        // suppression as a call (see `try_variant_or_class_call`), so both collect into `propagate_sink`.
+        let is_throwing_operand = match inner {
+            crate::ast::Expr::Call { .. } => true,
+            crate::ast::Expr::New(boxed, _) => matches!(&**boxed, crate::ast::Expr::Call { .. }),
+            _ => false,
+        };
+        if !is_throwing_operand {
             return None;
         }
         let prev_sink = std::mem::take(&mut self.propagate_sink);
@@ -139,12 +149,22 @@ impl Checker {
                 ),
             );
         }
+        self.validate_throw_types(resolved, f.span);
+    }
+
+    /// Validate each entry of a *resolved* declared throws set (the per-type half of
+    /// [`Self::validate_throws_decl`], shared with the constructor path — DEC-221): every type must
+    /// implement `Error` (`E-THROW-TYPE`) and the bare `Error` root is too broad
+    /// (`E-THROWS-TOO-BROAD`). Poison (`Ty::Error`) is skipped so a prior error doesn't cascade. The
+    /// `main`-specific `E-UNCAUGHT-THROW` check stays in [`Self::validate_throws_decl`] (it applies to
+    /// functions only — a constructor is never the entry point).
+    pub(super) fn validate_throw_types(&mut self, resolved: &[Ty], span: Span) {
         for t in resolved {
             match t {
                 Ty::Error => {} // poison from an earlier error — don't cascade
                 Ty::Named(n, _) if n == "Error" => {
                     self.err_coded(
-                        f.span,
+                        span,
                         "`throws Error` is too broad — declare the specific exception type(s) you throw",
                         "E-THROWS-TOO-BROAD",
                         Some("e.g. `throws BadInput` so callers know exactly what to catch".into()),
@@ -152,7 +172,7 @@ impl Checker {
                 }
                 _ if !self.is_error_type(t) => {
                     self.err_coded(
-                        f.span,
+                        span,
                         format!(
                             "`throws {t}` is not allowed — a thrown type must implement `Error`"
                         ),

@@ -213,6 +213,8 @@ impl Lifter {
             return Ok(ClassMember::Constructor {
                 modifiers,
                 params,
+                // PHP has no checked exceptions — a lifted PHP constructor declares no `throws`.
+                throws: Vec::new(),
                 body,
                 span: SP,
             });

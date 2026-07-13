@@ -136,6 +136,41 @@ fn parses_fn_throws_clause() {
     }
 }
 
+#[test]
+fn parses_ctor_throws_clause() {
+    // DEC-221: a constructor may declare a `throws` clause between its params and body.
+    match item("class C { constructor(int x) throws ParseError {} }") {
+        Item::Class(c) => match &c.members[0] {
+            ClassMember::Constructor { params, throws, .. } => {
+                assert_eq!(params.len(), 1);
+                assert_eq!(throws.len(), 1);
+                assert!(matches!(&throws[0], Type::Named { name, .. } if name == "ParseError"));
+            }
+            other => panic!("member 0: {other:?}"),
+        },
+        other => panic!("got {other:?}"),
+    }
+    // `throws A | B` captures the whole union as one `Type::Union`, like the fn form.
+    match item("class C { constructor() throws A | B {} }") {
+        Item::Class(c) => match &c.members[0] {
+            ClassMember::Constructor { throws, .. } => {
+                assert_eq!(throws.len(), 1);
+                assert!(matches!(&throws[0], Type::Union(members, _) if members.len() == 2));
+            }
+            other => panic!("member 0: {other:?}"),
+        },
+        other => panic!("got {other:?}"),
+    }
+    // No throws clause ⇒ empty (byte-identical to the pre-DEC-221 AST).
+    match item("class C { constructor(int x) {} }") {
+        Item::Class(c) => match &c.members[0] {
+            ClassMember::Constructor { throws, .. } => assert!(throws.is_empty()),
+            other => panic!("member 0: {other:?}"),
+        },
+        other => panic!("got {other:?}"),
+    }
+}
+
 // ── A-1: `:` return-type syntax (PHP/TS); `->` kept as a silent transition alias ──
 
 #[test]

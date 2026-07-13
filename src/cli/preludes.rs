@@ -512,13 +512,12 @@ class Statement {
 }
 
 class Db {
-  // A constructor cannot declare `throws` (phorj rule), and opening a connection can fail — so the
-  // fail-able open is a static factory `Db.connect(dsn)` (throws `DbError`), and the constructor just
-  // stores the already-opened handle. (The DEC-208 surface said `new Db(dsn)`; the constructor-throws
-  // constraint forces `Db.connect` — surfaced to the developer.)
-  constructor(private DbHandle raw) {}
-  static function connect(string dsn): Db throws DbError {
-    return match (DbSys.connect(dsn)) { DbResult.Ok(h) => new Db(h), DbResult.Err(e) => DbError.fail(e)? };
+  // DEC-221: opening a connection can fail, so the constructor itself declares `throws DbError` and
+  // opens directly — `new Db(dsn)` (fail-fast, exactly like PHP's `new PDO`). No static factory. The
+  // handle is COMPUTED in the body (not a promoted param), so the field is `mutable` (set once here).
+  private mutable DbHandle raw;
+  constructor(string dsn) throws DbError {
+    this.raw = match (DbSys.connect(dsn)) { DbResult.Ok(h) => h, DbResult.Err(e) => DbError.fail(e)? };
   }
   function prepare(string sql): Statement throws DbError {
     return match (DbSys.prepare(this.raw, sql)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };

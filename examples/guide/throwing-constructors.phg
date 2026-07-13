@@ -1,0 +1,53 @@
+// Throwing constructors (DEC-221) — a constructor may declare a `throws` clause and fail during
+// construction, exactly like PHP's `new PDO(...)`. This moves validation to the ONE place an
+// invariant is established (construction) instead of a separate factory, so an object can never
+// exist in an invalid state.
+//
+//   * `constructor(int amount) throws RangeError { … }` — the ctor declares what it can throw.
+//   * a throwing call inside the body (`throw new RangeError(…)`) discharges against that clause.
+//   * `new Percentage(150)` is therefore a THROWING expression: the caller must `try`/`catch` it
+//     (or `?`-propagate + declare `throws`), just like any fallible call.
+package Main;
+
+import Core.Output;
+
+// A checked exception (implements the built-in `Error` marker so it is throwable/catchable).
+class RangeError implements Error {
+    constructor(public string message) {}
+}
+
+// A percentage is 0..100 by construction — the invariant is enforced in the constructor, so any
+// `Percentage` value in the program is guaranteed valid. The param is promoted to a `private`
+// field; the body validates it before construction can complete.
+class Percentage {
+    constructor(private int amount) throws RangeError {
+        if (amount < 0 || amount > 100) {
+            throw new RangeError("percentage {amount} is out of range 0..100");
+        }
+    }
+    function read(): int {
+        return this.amount;
+    }
+}
+
+// A throwing construction can also be PROPAGATED with `?` from a function that declares the same
+// `throws` — `new Percentage(p)?` hands the `RangeError` to the caller instead of catching it here.
+function makePercentage(int p): Percentage throws RangeError {
+    return new Percentage(p)?;
+}
+
+function main(): void {
+    try {
+        Percentage ok = new Percentage(75);
+        Output.printLine("ok: {ok.read()}%");
+        // Propagated from `makePercentage` via `?` — same catch handles it.
+        Percentage viaHelper = makePercentage(10);
+        Output.printLine("helper: {viaHelper.read()}%");
+        // This construction throws — control jumps straight to the `catch`, so the instance is
+        // never bound to `bad` and the next line never runs.
+        Percentage bad = new Percentage(150);
+        Output.printLine("unreachable: {bad.read()}%");
+    } catch (RangeError e) {
+        Output.printLine("rejected: {e.message}");
+    }
+}

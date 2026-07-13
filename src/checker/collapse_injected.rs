@@ -224,6 +224,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
             ClassMember::Constructor {
                 modifiers,
                 params,
+                throws,
                 body,
                 span,
             } => ClassMember::Constructor {
@@ -237,6 +238,8 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                         span: p.span,
                     })
                     .collect(),
+                // Rewrite the ctor's `throws` types like the fn path (line ~202).
+                throws: throws.iter().map(rt).collect(),
                 body: body.iter().map(rstmt).collect(),
                 span: *span,
             },

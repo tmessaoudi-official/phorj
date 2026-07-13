@@ -425,6 +425,13 @@ impl Parser {
                     self.expect(&TokenKind::LParen, "'(' after 'constructor'")?;
                     let params = self.parse_ctor_params()?;
                     self.expect(&TokenKind::RParen, "')' to close constructor parameters")?;
+                    // DEC-221: a foreign constructor may declare `throws` too (between `)` and `;`),
+                    // describing the PHP constructor's failure surface for the checker.
+                    let throws = if self.eat(&TokenKind::Throws) {
+                        self.parse_throws_clause()?
+                    } else {
+                        Vec::new()
+                    };
                     self.expect(
                         &TokenKind::Semicolon,
                         "';' after a foreign constructor signature",
@@ -432,6 +439,7 @@ impl Parser {
                     members.push(ClassMember::Constructor {
                         modifiers,
                         params,
+                        throws,
                         body: Vec::new(),
                         span: msp,
                     });

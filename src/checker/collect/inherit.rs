@@ -112,6 +112,8 @@ impl Checker {
                 // the merge; two unresolved trait ctors are `E-TRAIT-CTOR-COLLISION`.
                 if !child.has_ctor && tinfo.has_ctor {
                     child.ctor = tinfo.ctor.clone();
+                    // DEC-221: the trait ctor's declared throws come with its signature.
+                    child.ctor_throws = tinfo.ctor_throws.clone();
                     child.has_ctor = true;
                 }
             }
@@ -208,6 +210,11 @@ impl Checker {
             // class declaring its own ctor keeps it (the deferred parent-forwarding case, KNOWN_ISSUES).
             if !child.has_ctor {
                 child.ctor.extend(parent_info.ctor.iter().cloned());
+                // DEC-221: inherit the parent ctor's declared throws alongside its param signature, so
+                // `new Child(args)` propagates whatever the inherited constructor can throw.
+                child
+                    .ctor_throws
+                    .extend(parent_info.ctor_throws.iter().cloned());
                 // Inherit the constructor's visibility + declaring owner (Batch A) from the first
                 // parent in `extends` order — so `new Child(...)` is gated by the inherited ctor's
                 // visibility (an inherited `private`/`protected __construct` blocks external
