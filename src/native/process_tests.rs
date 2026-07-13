@@ -37,12 +37,16 @@ fn every_other_native_is_pure() {
     // `Core.Log` is whole-module impure (DEC-220): every `Log.debug/info/warn/error` writes a
     // `[LEVEL]` line to the ambient process stderr, so an importing program is quarantined (its logs
     // are out-of-band from the compared stdout).
+    // `Core.DbSys` is whole-module impure (DEC-208): the internal natives behind the `Core.Db` prelude
+    // open/read/write a real SQLite database, so any importing program is quarantined (live DB I/O
+    // can't be byte-identical across rusqlite and PHP PDO). Only compiled under `--features db`.
     let impure_modules = [
         "Core.Process",
         "Core.Environment",
         "Core.Time",
         "Core.Runtime",
         "Core.Log",
+        "Core.DbSys",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the

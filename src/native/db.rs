@@ -2,17 +2,18 @@
 //!
 //! Feature-gated (`db`) and native-only. This module owns the RUNTIME layer: the opaque connection /
 //! statement handles ([`DbConn`] / [`DbStmt`], carried by [`Value::Db`] via the [`DbObject`] trait) and
-//! the internal `__`-prefixed native bodies for open / prepare / bind / bindNamed / query / exec and the
-//! Row accessors. The public `Core.Db` SURFACE (`Db`/`Statement`/`Row` + `new Db(dsn)` +
-//! `db.prepare(sql).bind(v).query()`) is a phorj-source prelude on top of these — landing in a later
-//! slice.
+//! the internal `Core.DbSys` native bodies for connect / prepare / bind / bindNamed / query / exec and
+//! the Row accessors. The public `Core.Db` SURFACE (`Db`/`Statement`/`Row` + `Db.connect(dsn)` +
+//! `db.prepare(sql).bind(v).query()`) is the phorj-source `DB_PRELUDE` (`src/cli/preludes.rs`) on top of
+//! these — the natives live under the `DbSys` qualifier so a prelude `class Db` never collides with them.
 //!
 //! **Error mechanism (DEC-208 = prelude-wrapper).** phorj's native ABI has no throws channel: a native's
 //! `Err(String)` is an uncatchable HARD fault (`vm/exec.rs`), so it cannot express the ruled catchable
-//! `throws DbError` (Q6). Instead every `__`-native here returns a `Result<T, string>` VALUE
-//! (`Core.Result.Success(payload)` on success, `Core.Result.Failure(message)` on any DB error — it
-//! NEVER faults on a DB error); the phorj-source prelude matches it and `throw`s a catchable `DbError`
-//! (a real `Op::Throw`). Only a checker-unreachable arity/shape bug still returns `Err` (a hard fault).
+//! `throws DbError` (Q6). Instead every native here returns a `DbResult<T>` VALUE (`DbResult.Ok(payload)`
+//! on success, `DbResult.Err(message)` on any DB error — it NEVER faults on a DB error); the phorj-source
+//! prelude `match`es it and `throw`s a catchable `DbError` (a real `Op::Throw`). `DbResult` is a
+//! prelude-LOCAL enum (not `Core.Result`, whose injection sits earlier in the module chain and so is not
+//! pulled in by `Core.Db`'s transitive import). Only a checker-unreachable arity/shape bug returns `Err`.
 //!
 //! **Spine treatment.** Every native is `pure: false`, so `uses_impure_native` auto-excludes any
 //! `import Core.Db` program from the byte-identity differential (live DB I/O can't be byte-identical
@@ -27,23 +28,25 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// Wrap a success payload as `Core.Result.Success(v)`. The `__`-natives here NEVER fault on a DB error
-/// (a native `Err(String)` is an uncatchable hard fault — `vm/exec.rs`); instead they return this
-/// `Result<T, string>` VALUE, and the phorj-source `Core.Db` prelude inspects it and `throw`s a
-/// catchable `DbError` (DEC-208 error-mechanism = prelude-wrapper).
+/// Wrap a success payload as `DbResult.Ok(v)`. The natives here NEVER fault on a DB error (a native
+/// `Err(String)` is an uncatchable hard fault — `vm/exec.rs`); instead they return this `DbResult<T>`
+/// VALUE, and the phorj-source `Core.Db` prelude `match`es it and `throw`s a catchable `DbError`
+/// (DEC-208 error-mechanism = prelude-wrapper). `DbResult` is a PRELUDE-LOCAL enum (defined in
+/// DB_PRELUDE, injected with it) — NOT `Core.Result`, whose injection sits earlier in the module chain
+/// and so is not pulled in by `Core.Db`'s transitive import (importer-after-imported doesn't inject).
 fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
-        ty: "Result".into(),
-        variant: "Success".into(),
+        ty: "DbResult".into(),
+        variant: "Ok".into(),
         payload: vec![v],
     }))
 }
 
-/// Wrap a DB error message as `Core.Result.Failure(msg)` — the prelude turns this into `throw DbError`.
+/// Wrap a DB error message as `DbResult.Err(msg)` — the prelude turns this into `throw DbError`.
 fn failure(msg: String) -> Value {
     Value::Enum(Rc::new(EnumVal {
-        ty: "Result".into(),
-        variant: "Failure".into(),
+        ty: "DbResult".into(),
+        variant: "Err".into(),
         payload: vec![Value::Str(msg.into())],
     }))
 }
@@ -426,41 +429,43 @@ db_native!(row_get_string, get_string_inner);
 db_native!(row_get_float, get_float_inner);
 db_native!(row_get_bool, get_bool_inner);
 
-/// The `Core.Db` registry entries — the INTERNAL `__`-prefixed natives the phorj-source `Core.Db`
-/// prelude wraps. Every native is `pure: false` (opens/uses a real DB resource) so any `import Core.Db`
-/// program is auto-quarantined from the byte-identity differential, and every native returns
-/// `Result<T, string>` (Success | Failure) — never a hard fault on a DB error (the prelude throws a
-/// catchable `DbError`). The `php` emitters map to PDO (DEC-208 LADDER case 1); finalized in the
-/// transpile slice, not byte-identity-gated here.
+/// The `Core.DbSys` registry entries — the INTERNAL natives the phorj-source `Core.Db` prelude wraps.
+/// They live under the `DbSys` qualifier (NOT `Db`) so a prelude `class Db` calling `DbSys.open(..)`
+/// never collides with the class. Every opaque connection / statement / row handle is typed `DbHandle`
+/// (a reserved opaque type backed by `Value::Db`/`Value::Map` — the prelude threads it, never inspects
+/// it). Every native is `pure: false` (opens/uses a real DB resource) so any `import Core.Db` program is
+/// auto-quarantined from the byte-identity differential, and every native returns `Result<T, string>`
+/// (Success | Failure) — never a hard fault on a DB error (the prelude throws a catchable `DbError`).
+/// The `php` emitters map to PDO (DEC-208 LADDER case 1); finalized in the transpile slice.
 pub fn db_natives() -> Vec<NativeFn> {
-    let db = || Ty::Named("Db".into(), vec![]);
-    let stmt = || Ty::Named("Statement".into(), vec![]);
-    let row = || Ty::Named("Row".into(), vec![]);
-    let res = |t: Ty| Ty::Named("Result".into(), vec![t, Ty::String]);
+    let handle = || Ty::Named("DbHandle".into(), vec![]);
+    let res = |t: Ty| Ty::Named("DbResult".into(), vec![t]);
+    // A bindable scalar — the same union the old Core.Sql `Query.bind` used.
+    let bindable = || Ty::Union(vec![Ty::String, Ty::Int, Ty::Float, Ty::Bool]);
     vec![
         NativeFn {
-            module: "Core.Db",
-            name: "__open",
+            module: "Core.DbSys",
+            name: "connect",
             params: vec![Ty::String],
-            ret: res(db()),
+            ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_open),
             php: |a| format!("new \\PDO({})", a.first().map_or("''", |s| s)),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__prepare",
-            params: vec![db(), Ty::String],
-            ret: res(stmt()),
+            module: "Core.DbSys",
+            name: "prepare",
+            params: vec![handle(), Ty::String],
+            ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_prepare),
             php: |a| format!("{}->prepare({})", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__bind",
-            params: vec![stmt(), Ty::Empty],
-            ret: res(stmt()),
+            module: "Core.DbSys",
+            name: "bind",
+            params: vec![handle(), bindable()],
+            ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_bind),
             // Positional binds are collected and passed to execute() in the transpile slice; the
@@ -468,19 +473,19 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__bindNamed",
-            params: vec![stmt(), Ty::String, Ty::Empty],
-            ret: res(stmt()),
+            module: "Core.DbSys",
+            name: "bindNamed",
+            params: vec![handle(), Ty::String, bindable()],
+            ret: res(handle()),
             pure: false,
             eval: NativeEval::Pure(db_bind_named),
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__query",
-            params: vec![stmt()],
-            ret: res(Ty::List(Box::new(row()))),
+            module: "Core.DbSys",
+            name: "query",
+            params: vec![handle()],
+            ret: res(Ty::List(Box::new(handle()))),
             pure: false,
             eval: NativeEval::Pure(db_query),
             php: |a| {
@@ -491,45 +496,45 @@ pub fn db_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__exec",
-            params: vec![stmt()],
+            module: "Core.DbSys",
+            name: "exec",
+            params: vec![handle()],
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::Pure(db_exec),
             php: |a| format!("{}->execute()", a[0]),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__getInt",
-            params: vec![row(), Ty::String],
+            module: "Core.DbSys",
+            name: "getInt",
+            params: vec![handle(), Ty::String],
             ret: res(Ty::Int),
             pure: false,
             eval: NativeEval::Pure(row_get_int),
             php: |a| format!("(int) {}[{}]", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__getString",
-            params: vec![row(), Ty::String],
+            module: "Core.DbSys",
+            name: "getString",
+            params: vec![handle(), Ty::String],
             ret: res(Ty::String),
             pure: false,
             eval: NativeEval::Pure(row_get_string),
             php: |a| format!("(string) {}[{}]", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__getFloat",
-            params: vec![row(), Ty::String],
+            module: "Core.DbSys",
+            name: "getFloat",
+            params: vec![handle(), Ty::String],
             ret: res(Ty::Float),
             pure: false,
             eval: NativeEval::Pure(row_get_float),
             php: |a| format!("(float) {}[{}]", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.Db",
-            name: "__getBool",
-            params: vec![row(), Ty::String],
+            module: "Core.DbSys",
+            name: "getBool",
+            params: vec![handle(), Ty::String],
             ret: res(Ty::Bool),
             pure: false,
             eval: NativeEval::Pure(row_get_bool),
@@ -545,19 +550,19 @@ mod tests {
     /// Extract the payload of a `Result.Success(v)` value the natives now return; panic on `Failure`.
     fn ok_of(v: Value) -> Value {
         match v {
-            Value::Enum(e) if e.variant.as_ref() == "Success" => e.payload[0].clone(),
-            other => panic!("expected Result.Success, got {other:?}"),
+            Value::Enum(e) if e.variant.as_ref() == "Ok" => e.payload[0].clone(),
+            other => panic!("expected DbResult.Ok, got {other:?}"),
         }
     }
 
     /// Extract the message of a `Result.Failure(msg)` value; panic on `Success`.
     fn err_of(v: Value) -> String {
         match v {
-            Value::Enum(e) if e.variant.as_ref() == "Failure" => match &e.payload[0] {
+            Value::Enum(e) if e.variant.as_ref() == "Err" => match &e.payload[0] {
                 Value::Str(s) => s.as_str().to_string(),
                 other => panic!("Failure payload not a string: {other:?}"),
             },
-            other => panic!("expected Result.Failure, got {other:?}"),
+            other => panic!("expected DbResult.Err, got {other:?}"),
         }
     }
 

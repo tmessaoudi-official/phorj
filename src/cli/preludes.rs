@@ -418,335 +418,6 @@ class Instant {
 }
 "#;
 
-/// The `Core.Sql` Tier-A pure query-builder prelude (W3-1, `docs/research/wave3-4-drafts/w3-1-db-access.md`).
-/// A parameterized query is an immutable VALUE: a static SQL template `string` + a separately-bound
-/// positional-param list — so there is no string-concatenation query path and the SQL-injection class is
-/// removed at the type level. Pure string/list construction (no dependency, no IO) → byte-identity-gated
-/// across interpreter ≡ VM ≡ transpiled PHP, and it ships as the first consumer of the UA-L2 `CORE_MODULES`
-/// registry. Slice 1 = the `Query` value + positional `bind`; the fluent `Sql.select()…` builder (slice 2,
-/// per-operator methods) and named `bindNamed` layer on top and lower to this same `Query`. Injected when
-/// a program imports `Core.Sql`.
-pub(super) const SQL_PRELUDE: &str = r#"
-import Core.List;
-import Core.String;
-import Core.Conversion;
-import Core.Validation;
-class SqlError implements Error {
-  constructor(public string message) {}
-}
-class Query {
-  constructor(private string queryText, private List<string | int | float | bool> boundParams) {}
-  function bind(string | int | float | bool value): Query {
-    return new Query(this.queryText, List.append(this.boundParams, value));
-  }
-  function bindNamed(string name, string | int | float | bool value): Query {
-    string token = ":" + name;
-    List<string> parts = String.split(this.queryText, token);
-    mutable string rebuilt = parts[0];
-    mutable List<string | int | float | bool> outParams = this.boundParams;
-    mutable int i = 1;
-    while (i < List.length(parts)) {
-      string tail = parts[i];
-      mutable bool boundary = true;
-      if (String.length(tail) > 0) {
-        string next = String.substring(tail, 0, 1);
-        if (Validation.isAlnum(next) || next == "_") {
-          boundary = false;
-        }
-      }
-      if (boundary) {
-        rebuilt = rebuilt + "?" + tail;
-        outParams = List.append(outParams, value);
-      } else {
-        rebuilt = rebuilt + token + tail;
-      }
-      i = i + 1;
-    }
-    return new Query(rebuilt, outParams);
-  }
-  function sql(): string { return this.queryText; }
-  function params(): List<string | int | float | bool> { return this.boundParams; }
-}
-class QueryBuilder {
-  constructor(private string tableName, private string tableAlias) {}
-  function select(List<string> columns): SelectQuery {
-    return new SelectQuery(this.tableName, this.tableAlias, columns, [""], [""], [], [], [], [], [], 0);
-  }
-  function insert(List<string> columns): InsertStatement {
-    return new InsertStatement(this.tableName, columns, [""], 0);
-  }
-  function update(): UpdateStatement {
-    return new UpdateStatement(this.tableName, [], [], [], []);
-  }
-  function delete(): DeleteStatement {
-    return new DeleteStatement(this.tableName, [], []);
-  }
-}
-class SelectQuery {
-  constructor(
-    private string tableName,
-    private string tableAlias,
-    private List<string> cols,
-    private List<string> joinFrags,
-    private List<string> joinAliases,
-    private List<string> conds,
-    private List<string | int | float | bool> binds,
-    private List<string> groups,
-    private List<string> havings,
-    private List<string> orders,
-    private int lim
-  ) {}
-  private function next(
-    string tableName, string tableAlias,
-    List<string> cols, List<string> joinFrags, List<string> joinAliases, List<string> conds,
-    List<string | int | float | bool> binds, List<string> groups, List<string> havings,
-    List<string> orders, int lim
-  ): SelectQuery {
-    return new SelectQuery(tableName, tableAlias, cols, joinFrags, joinAliases, conds, binds, groups, havings, orders, lim);
-  }
-  function join(string table, string alias): JoinClause { return this.innerJoin(table, alias); }
-  function innerJoin(string table, string alias): JoinClause {
-    return new JoinClause(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, this.lim, "INNER", table, alias);
-  }
-  function leftJoin(string table, string alias): JoinClause {
-    return new JoinClause(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, this.lim, "LEFT", table, alias);
-  }
-  function withJoin(string frag, string alias): SelectQuery {
-    return this.next(this.tableName, this.tableAlias, this.cols, List.append(this.joinFrags, frag), List.append(this.joinAliases, alias), this.conds, this.binds, this.groups, this.havings, this.orders, this.lim);
-  }
-  private function withCond(string col, string op, string | int | float | bool val): SelectQuery {
-    string frag = col + " " + op + " ?";
-    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, List.append(this.conds, frag), List.append(this.binds, val), this.groups, this.havings, this.orders, this.lim);
-  }
-  function whereEq(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "=", val); }
-  function whereNe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "!=", val); }
-  function whereGt(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, ">", val); }
-  function whereGe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, ">=", val); }
-  function whereLt(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "<", val); }
-  function whereLe(string col, string | int | float | bool val): SelectQuery { return this.withCond(col, "<=", val); }
-  function whereLike(string col, string val): SelectQuery { return this.withCond(col, "LIKE", val); }
-  function groupBy(string col): SelectQuery {
-    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, List.append(this.groups, col), this.havings, this.orders, this.lim);
-  }
-  private function withHaving(string expr, string op, string | int | float | bool val): SelectQuery {
-    string frag = expr + " " + op + " ?";
-    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, List.append(this.binds, val), this.groups, List.append(this.havings, frag), this.orders, this.lim);
-  }
-  function havingEq(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, "=", val); }
-  function havingGt(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, ">", val); }
-  function havingGe(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, ">=", val); }
-  function havingLt(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, "<", val); }
-  function havingLe(string expr, string | int | float | bool val): SelectQuery { return this.withHaving(expr, "<=", val); }
-  private function withOrder(string col, string dir): SelectQuery {
-    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, List.append(this.orders, col + " " + dir), this.lim);
-  }
-  function orderByAsc(string col): SelectQuery { return this.withOrder(col, "ASC"); }
-  function orderByDesc(string col): SelectQuery { return this.withOrder(col, "DESC"); }
-  function limit(int n): SelectQuery {
-    return this.next(this.tableName, this.tableAlias, this.cols, this.joinFrags, this.joinAliases, this.conds, this.binds, this.groups, this.havings, this.orders, n);
-  }
-  private function joined(): bool { return List.length(this.joinFrags) > 1; }
-  private function qualify(string col): string throws SqlError {
-    if (String.contains(col, ".") || String.contains(col, "(") || col == "*") {
-      return col;
-    }
-    if (this.joined()) {
-      throw new SqlError("E-SQL-AMBIGUOUS-COLUMN: unqualified column '" + col + "' with more than one table in play - qualify it with a table alias");
-    }
-    return this.tableAlias + "." + col;
-  }
-  private function qualifyAll(List<string> cols): List<string> throws SqlError {
-    mutable List<string> out = [""];
-    mutable int i = 0;
-    while (i < List.length(cols)) {
-      string q = this.qualify(cols[i])?;
-      out = List.append(out, q);
-      i = i + 1;
-    }
-    return List.drop(out, 1);
-  }
-  // A stored fragment is "col OP ?" / "col DIR" — qualification targets its FIRST token only.
-  private function qualifyFragment(string frag): string throws SqlError {
-    List<string> pair = String.splitOnce(frag, " ");
-    if (List.length(pair) == 2) {
-      string head = this.qualify(pair[0])?;
-      return head + " " + pair[1];
-    }
-    string whole = this.qualify(frag)?;
-    return whole;
-  }
-  private function qualifyFragments(List<string> frags): List<string> throws SqlError {
-    mutable List<string> out = [""];
-    mutable int i = 0;
-    while (i < List.length(frags)) {
-      string f = this.qualifyFragment(frags[i])?;
-      out = List.append(out, f);
-      i = i + 1;
-    }
-    return List.drop(out, 1);
-  }
-  function toQuery(): Query throws SqlError {
-    List<string> qcols = this.qualifyAll(this.cols)?;
-    mutable string text = "SELECT " + String.join(qcols, ", ")
-      + " FROM " + this.tableName + " " + this.tableAlias;
-    mutable int j = 1;
-    while (j < List.length(this.joinFrags)) {
-      text = text + " " + this.joinFrags[j];
-      j = j + 1;
-    }
-    if (List.length(this.conds) > 0) {
-      List<string> qconds = this.qualifyFragments(this.conds)?;
-      text = text + " WHERE " + String.join(qconds, " AND ");
-    }
-    if (List.length(this.groups) > 0) {
-      List<string> qgroups = this.qualifyAll(this.groups)?;
-      text = text + " GROUP BY " + String.join(qgroups, ", ");
-    }
-    if (List.length(this.havings) > 0) {
-      text = text + " HAVING " + String.join(this.havings, " AND ");
-    }
-    if (List.length(this.orders) > 0) {
-      List<string> qorders = this.qualifyFragments(this.orders)?;
-      text = text + " ORDER BY " + String.join(qorders, ", ");
-    }
-    if (this.lim > 0) {
-      text = text + " LIMIT " + Conversion.toString(this.lim);
-    }
-    return new Query(text, this.binds);
-  }
-}
-class JoinClause {
-  // S8 FLATTENED: carries the parent SelectQuery's FIELDS (not the instance — the builder
-  // chain frees the receiver after `.on()`, so an instance-kind field would dangle on the
-  // JIT's flat-arena path; the copied fields also match the immutable-threading discipline
-  // every other builder step uses).
-  constructor(
-    private string tableName,
-    private string tableAlias,
-    private List<string> cols,
-    private List<string> joinFrags,
-    private List<string> joinAliases,
-    private List<string> conds,
-    private List<string | int | float | bool> binds,
-    private List<string> groups,
-    private List<string> havings,
-    private List<string> orders,
-    private int lim,
-    private string joinKind,
-    private string joinTable,
-    private string joinAlias
-  ) {}
-  function on(string left, string op, string right): SelectQuery throws SqlError {
-    if (!String.contains(left, ".") || !String.contains(right, ".")) {
-      throw new SqlError("E-SQL-AMBIGUOUS-COLUMN: join ON columns must be alias-qualified");
-    }
-    string frag = this.joinKind + " JOIN " + this.joinTable + " " + this.joinAlias + " ON " + left + " " + op + " " + right;
-    return new SelectQuery(this.tableName, this.tableAlias, this.cols, List.append(this.joinFrags, frag), List.append(this.joinAliases, this.joinAlias), this.conds, this.binds, this.groups, this.havings, this.orders, this.lim);
-  }
-}
-class InsertStatement {
-  constructor(
-    private string tableName,
-    private List<string> cols,
-    private List<string | int | float | bool> rowBinds,
-    private int rowCount
-  ) {}
-  function values(List<string | int | float | bool> row): InsertStatement throws SqlError {
-    if (List.length(row) != List.length(this.cols)) {
-      throw new SqlError("E-SQL-VALUES-ARITY: expected " + Conversion.toString(List.length(this.cols)) + " values");
-    }
-    mutable List<string | int | float | bool> binds = this.rowBinds;
-    mutable int i = 0;
-    while (i < List.length(row)) {
-      binds = List.append(binds, row[i]);
-      i = i + 1;
-    }
-    return new InsertStatement(this.tableName, this.cols, binds, this.rowCount + 1);
-  }
-  function toQuery(): Query throws SqlError {
-    if (this.rowCount == 0) {
-      throw new SqlError("E-SQL-NO-VALUES: insert has no values() row");
-    }
-    mutable List<string> marks = [""];
-    mutable int i = 0;
-    while (i < List.length(this.cols)) {
-      marks = List.append(marks, "?");
-      i = i + 1;
-    }
-    string oneRow = "(" + String.join(List.drop(marks, 1), ", ") + ")";
-    mutable List<string> rows = [""];
-    mutable int r = 0;
-    while (r < this.rowCount) {
-      rows = List.append(rows, oneRow);
-      r = r + 1;
-    }
-    string text = "INSERT INTO " + this.tableName + " (" + String.join(this.cols, ", ") + ") VALUES "
-      + String.join(List.drop(rows, 1), ", ");
-    return new Query(text, List.drop(this.rowBinds, 1));
-  }
-}
-class UpdateStatement {
-  constructor(
-    private string tableName,
-    private List<string> sets,
-    private List<string> conds,
-    private List<string | int | float | bool> setBinds,
-    private List<string | int | float | bool> condBinds
-  ) {}
-  function set(string col, string | int | float | bool val): UpdateStatement {
-    return new UpdateStatement(this.tableName, List.append(this.sets, col + " = ?"), this.conds, List.append(this.setBinds, val), this.condBinds);
-  }
-  private function withCond(string col, string op, string | int | float | bool val): UpdateStatement {
-    return new UpdateStatement(this.tableName, this.sets, List.append(this.conds, col + " " + op + " ?"), this.setBinds, List.append(this.condBinds, val));
-  }
-  function whereEq(string col, string | int | float | bool val): UpdateStatement { return this.withCond(col, "=", val); }
-  function whereNe(string col, string | int | float | bool val): UpdateStatement { return this.withCond(col, "!=", val); }
-  function whereGt(string col, string | int | float | bool val): UpdateStatement { return this.withCond(col, ">", val); }
-  function whereGe(string col, string | int | float | bool val): UpdateStatement { return this.withCond(col, ">=", val); }
-  function whereLt(string col, string | int | float | bool val): UpdateStatement { return this.withCond(col, "<", val); }
-  function whereLe(string col, string | int | float | bool val): UpdateStatement { return this.withCond(col, "<=", val); }
-  function toQuery(): Query throws SqlError {
-    if (List.length(this.sets) == 0) {
-      throw new SqlError("E-SQL-NO-SET: update has no set() assignment");
-    }
-    mutable string text = "UPDATE " + this.tableName + " SET " + String.join(this.sets, ", ");
-    if (List.length(this.conds) > 0) {
-      text = text + " WHERE " + String.join(this.conds, " AND ");
-    }
-    mutable List<string | int | float | bool> binds = this.setBinds;
-    mutable int i = 0;
-    while (i < List.length(this.condBinds)) {
-      binds = List.append(binds, this.condBinds[i]);
-      i = i + 1;
-    }
-    return new Query(text, binds);
-  }
-}
-class DeleteStatement {
-  constructor(
-    private string tableName,
-    private List<string> conds,
-    private List<string | int | float | bool> binds
-  ) {}
-  private function withCond(string col, string op, string | int | float | bool val): DeleteStatement {
-    return new DeleteStatement(this.tableName, List.append(this.conds, col + " " + op + " ?"), List.append(this.binds, val));
-  }
-  function whereEq(string col, string | int | float | bool val): DeleteStatement { return this.withCond(col, "=", val); }
-  function whereNe(string col, string | int | float | bool val): DeleteStatement { return this.withCond(col, "!=", val); }
-  function whereGt(string col, string | int | float | bool val): DeleteStatement { return this.withCond(col, ">", val); }
-  function whereGe(string col, string | int | float | bool val): DeleteStatement { return this.withCond(col, ">=", val); }
-  function whereLt(string col, string | int | float | bool val): DeleteStatement { return this.withCond(col, "<", val); }
-  function whereLe(string col, string | int | float | bool val): DeleteStatement { return this.withCond(col, "<=", val); }
-  function toQuery(): Query {
-    mutable string text = "DELETE FROM " + this.tableName;
-    if (List.length(this.conds) > 0) {
-      text = text + " WHERE " + String.join(this.conds, " AND ");
-    }
-    return new Query(text, this.binds);
-  }
-}
-"#;
-
 /// A virtual `Core.*` module: its import path, its optional injected prelude source, how it gates
 /// (whole-module-only vs also member-imports), and the injected member-type names that must be
 /// import-qualified (the `module_of` contribution). UA-L2 (registry-unification): the single source
@@ -775,6 +446,85 @@ pub(super) struct VirtualModule {
     /// would silently change gating; `DateTime` is the proof they diverge.
     bare_types: &'static [&'static str],
 }
+
+/// `Core.Db` (DEC-208) — the enhanced-PDO surface: `Db`/`Statement`/`Row`/`DbError` phorj-source classes
+/// wrapping the opaque `DbHandle` and the internal `Core.DbSys` natives. Each method calls a
+/// `DbSys.*` native (which returns `Result<T, string>` — never a hard fault) and `match`es it, throwing
+/// a catchable `DbError` on `Failure` (DEC-208 error-mechanism = prelude-wrapper; a phorj-source `throw`
+/// is a real `Op::Throw`, byte-identical across both backends). `import Core.Db` transitively imports
+/// `Core.DbSys` (the natives) + `Core.Result` (the carrier), so this module runs BEFORE them.
+pub(super) const DB_PRELUDE: &str = r#"
+import Core.DbSys;
+import Core.List;
+
+// Prelude-local result carrier (NOT Core.Result — see the native docs on injection order).
+enum DbResult<T> { Ok(T value), Err(string message) }
+
+class DbError implements Error {
+  constructor(public string message) {}
+  // `throw` is a statement, not an expression, so it cannot be a `match` arm value directly. This
+  // `never`-returning helper lets a `DbResult.Err(e)` arm raise a catchable `DbError` as an expression
+  // (`DbResult.Err(e) => DbError.fail(e)`) — a call to a `never` function types as the bottom type, unifying
+  // with the `Success` arm's value type.
+  static function fail(string message): never throws DbError { throw new DbError(message); }
+}
+
+class Row {
+  constructor(private DbHandle raw) {}
+  function getInt(string column): int throws DbError {
+    return match (DbSys.getInt(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getString(string column): string throws DbError {
+    return match (DbSys.getString(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getFloat(string column): float throws DbError {
+    return match (DbSys.getFloat(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getBool(string column): bool throws DbError {
+    return match (DbSys.getBool(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+}
+
+class Statement {
+  constructor(private DbHandle raw) {}
+  function bind(string | int | float | bool value): Statement throws DbError {
+    return match (DbSys.bind(this.raw, value)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function bindNamed(string name, string | int | float | bool value): Statement throws DbError {
+    return match (DbSys.bindNamed(this.raw, name, value)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function exec(): int throws DbError {
+    return match (DbSys.exec(this.raw)) { DbResult.Ok(n) => n, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function query(): List<Row> throws DbError {
+    return match (DbSys.query(this.raw)) { DbResult.Ok(rows) => Statement.wrapRows(rows), DbResult.Err(e) => DbError.fail(e)? };
+  }
+  private static function wrapRows(List<DbHandle> rows): List<Row> {
+    mutable List<Row> out = new List<Row>();
+    mutable int i = 0;
+    int n = List.length(rows);
+    while (i < n) {
+      out = List.append(out, new Row(rows[i]));
+      i = i + 1;
+    }
+    return out;
+  }
+}
+
+class Db {
+  // A constructor cannot declare `throws` (phorj rule), and opening a connection can fail — so the
+  // fail-able open is a static factory `Db.connect(dsn)` (throws `DbError`), and the constructor just
+  // stores the already-opened handle. (The DEC-208 surface said `new Db(dsn)`; the constructor-throws
+  // constraint forces `Db.connect` — surfaced to the developer.)
+  constructor(private DbHandle raw) {}
+  static function connect(string dsn): Db throws DbError {
+    return match (DbSys.connect(dsn)) { DbResult.Ok(h) => new Db(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function prepare(string sql): Statement throws DbError {
+    return match (DbSys.prepare(this.raw, sql)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
+}
+"#;
 
 /// The Core-module registry, in the SAME order as the pre-UA-L2 injection chain — ORDER IS
 /// LOAD-BEARING: `HTTP_PRELUDE` transitively `import Core.Regex`, and Http runs BEFORE Regex, so
@@ -846,25 +596,26 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
     },
-    // W3-1 Tier-A pure query builder. `Sql` (class == module leaf) is not gated; `Query` (≠ leaf) is
-    // import-gated like Http's Request/Router. No transitive-order dependency (its only import,
-    // Core.List, is a builtin native module, not an injected prelude), so its position here is free.
+    // `Core.Db` (DEC-208) — the enhanced-PDO surface classes. MUST precede `Core.DbSys` (its natives)
+    // so its `import Core.DbSys` triggers the natives being in scope (the Http→Regex ordering rule).
     VirtualModule {
-        module: &["Core", "Sql"],
-        qualifier: "Sql",
-        src: Some(SQL_PRELUDE),
+        module: &["Core", "Db"],
+        qualifier: "Db",
+        src: Some(DB_PRELUDE),
         respond_bridge: None,
         member_gated: true,
-        bare_types: &[
-            "Query",
-            "QueryBuilder",
-            "SelectQuery",
-            "InsertStatement",
-            "UpdateStatement",
-            "DeleteStatement",
-            "JoinClause",
-            "SqlError",
-        ],
+        bare_types: &["Db", "Statement", "Row", "DbError", "DbHandle"],
+    },
+    // `Core.DbSys` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.Db` prelude
+    // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Db` never collides with
+    // the native leaf. Feature-gated (`db`): the natives only exist under `--features db`.
+    VirtualModule {
+        module: &["Core", "DbSys"],
+        qualifier: "DbSys",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
     },
     // Attribute-only modules — no prelude to inject; they exist only to gate their `#[…]` types.
     VirtualModule {

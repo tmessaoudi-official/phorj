@@ -1792,24 +1792,6 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
 }
 
 #[test]
-fn qualify_bytecode_probe_tmp() {
-    let src = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/bench/micro/sqlbuild.phg"
-    ))
-    .expect("sqlbuild micro readable");
-    let program = compile_source(&src);
-    for (f, func) in program.functions.iter().enumerate() {
-        if func.name.contains("qualifyAll") || func.name.contains("qualifyFragments") {
-            eprintln!("== fn {f} ({}) arity {} ==", func.name, func.arity);
-            for (ip, op) in func.chunk.code.iter().enumerate() {
-                eprintln!("  {ip:3}: {op:?}");
-            }
-        }
-    }
-}
-
-#[test]
 fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
     // L2a: the STR-list ACL accumulator builder — the qualify-loop shape
     // (`out = List.append(out, q)` where q is a fresh OWNED string) consumes each element
@@ -1860,64 +1842,6 @@ fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
     assert!(
         cache.borrow().hits > 0,
         "str-list accumulators must actually hit the JIT (redos = {})",
-        cache.borrow().redos
-    );
-}
-
-#[test]
-fn phg_run_hook_hits_the_jit_on_the_sqlbuild_builder_pipeline() {
-    // W9 + S8 delivery: the FULL sqlbuild shape end to end on the JIT — borrowed field
-    // reads forwarded as call args (clone-at-boundary), the flattened JoinClause (14
-    // fields, wide two-slot), union Dyn wheres, toQuery + sql()/params() reads, and the
-    // try/catch whose thrown class is only discoverable THROUGH the walk (the deferred
-    // pad seeding). Deterministic output (no timing); hits > 0 + byte-identity.
-    const SRC: &str = "package Main;\n\
-        import Core.Output;\n\
-        import Core.List;\n\
-        import Core.String;\n\
-        import Core.Sql;\n\
-        import Core.Sql.SqlError;\n\
-        function bench(int iters): int {\n\
-          mutable int acc = 0;\n\
-          mutable int i = 0;\n\
-          while (i < iters) {\n\
-            try {\n\
-              var q = new Sql.QueryBuilder(\"users\", \"u\")\n\
-                .select([\"u.id\", \"u.name\", \"o.total\"])\n\
-                .innerJoin(\"orders\", \"o\").on(\"u.id\", \"=\", \"o.userId\")\n\
-                .whereGt(\"u.age\", i % 80)\n\
-                .whereEq(\"o.status\", \"paid\")\n\
-                .orderByDesc(\"o.total\")\n\
-                .limit(10)\n\
-                .toQuery();\n\
-              acc = acc + String.length(q.sql()) + List.length(q.params());\n\
-            } catch (SqlError e) {\n\
-              acc = acc + String.length(e.message);\n\
-            }\n\
-            i = i + 1;\n\
-          }\n\
-          return acc;\n\
-        }\n\
-        function main(): void { Output.printLine(\"{bench(500)}\"); }";
-    let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
-    let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
-    assert_eq!(
-        jit_out, oracle,
-        "sqlbuild-pipeline jit-wired output must match the oracle"
-    );
-    let program = compile_source(SRC);
-    let cache = std::rc::Rc::new(std::cell::RefCell::new(crate::vm::JitCache::new()));
-    let manual = crate::vm::Vm::new(&program)
-        .with_jit(cache.clone())
-        .run()
-        .expect("manual sqlbuild-pipeline run ok");
-    assert_eq!(
-        manual, oracle,
-        "manual sqlbuild-pipeline run must match the oracle"
-    );
-    assert!(
-        cache.borrow().hits > 0,
-        "the sqlbuild pipeline must actually hit the JIT (redos = {})",
         cache.borrow().redos
     );
 }

@@ -221,6 +221,16 @@ impl Checker {
                 // `check_method_call`, `check_static_method_call`).
                 "Channel" => Ty::Named("Channel".into(), vec![self.one_arg(name, args, *span)]),
                 "Task" => Ty::Named("Task".into(), vec![self.one_arg(name, args, *span)]),
+                // `DbHandle` (DEC-208): the opaque native connection/statement/row handle the `Core.Db`
+                // prelude classes store in a field and thread to the `Core.DbSys` natives. Reserved +
+                // IMPORT-GATED (never ambient — the developer's "nothing in the wind" rule): it resolves
+                // only when `Core.DbSys` is in scope (the injected `Core.Db` prelude imports it), so a
+                // user cannot name `DbHandle` without importing `Core.Db`. Opaque: it never participates
+                // in arithmetic/compare/display (like `Channel`/`Task`), so the value kernels are
+                // untouched; the natives downcast the underlying `Value::Db`/`Value::Map` at runtime.
+                "DbHandle" if self.imports.values().any(|m| m == "Core.DbSys") => {
+                    Ty::Named("DbHandle".into(), vec![])
+                }
                 "double" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => self.err(
                     *span,
                     format!("the numeric type `{name}` is not yet supported in M1"),
