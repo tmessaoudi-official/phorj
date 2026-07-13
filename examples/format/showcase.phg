@@ -15,7 +15,7 @@ function grade(int score): string {
         1 => "a single point",
         2 => "a pair of points",
         3 => "the very top score",
-        _ => "some other score"
+        default => "some other score"
     };
 }
 

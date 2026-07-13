@@ -161,12 +161,56 @@ impl Parser {
                         binding,
                         span: sp,
                     })
+                } else if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+                    // A bare PascalCase name in binding position is the DEC-209 footgun: it LOOKS
+                    // like a variant/type match but silently binds+catches everything (PascalCase is
+                    // the type/variant namespace, never a value binding). Reject with the 3 intents.
+                    Err(Diagnostic::new(
+                        Stage::Parse,
+                        format!("`{name}` is a PascalCase name used as a bare pattern binding — it would silently catch every value instead of matching a variant"),
+                        sp.line,
+                        sp.col,
+                    )
+                    .with_code("E-MATCH-BARE-VARIANT")
+                    .with_hint(format!(
+                        "did you mean the variant `{name}()`, a type-test `{name} x` / `{name} _`, a lowercase binding, or `default` for the catch-all?"
+                    )))
                 } else {
                     Ok(Pattern::Binding { name, span: sp })
                 }
             }
             _ => Err(self.error("a pattern")),
         }
+    }
+
+    /// Parse a **top-level match-arm** pattern (DEC-209). Adds the arm-only catch-all rules over
+    /// `parse_pattern`: `default` is the sole standalone catch-all keyword (→ `Wildcard`, binds
+    /// nothing), and a standalone `_` arm is rejected — `_` is an ignore-placeholder only, valid as
+    /// a sub-pattern (`Some(_)`) or a type-test binder (`Square _`), never the whole arm. A lowercase
+    /// bare name (`x =>`) stays a catch-all `Binding`; a PascalCase bare name is the rejected footgun
+    /// (handled in `parse_pattern`). Sub-patterns still go through `parse_pattern`, so `_` there is
+    /// unaffected.
+    pub(super) fn parse_arm_pattern(&mut self) -> Result<Pattern, Diagnostic> {
+        let sp = self.peek_span();
+        if let TokenKind::Ident(name) = self.peek() {
+            if name == "default" {
+                self.advance();
+                return Ok(Pattern::Wildcard(sp));
+            }
+            if name == "_" {
+                return Err(Diagnostic::new(
+                    Stage::Parse,
+                    "`_` is not the catch-all arm — it is an ignore-placeholder only".to_string(),
+                    sp.line,
+                    sp.col,
+                )
+                .with_code("E-MATCH-BARE-VARIANT")
+                .with_hint(
+                    "use `default` for the catch-all arm; `_` binds nothing only inside a pattern (`Some(_)`) or a type-test (`Square _`)",
+                ));
+            }
+        }
+        self.parse_pattern()
     }
 
     /// Is `p` an invalid alternative of an or-pattern (`a | b`)? An alternative may not be a

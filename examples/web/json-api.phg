@@ -24,7 +24,7 @@ class Response {
 
 // Extract an integer from a JSON node (non-ints contribute 0 — a deliberately lenient sum).
 function intOf(Json j): int {
-    return match (j) { Json.Int(n) => n, _ => 0 };
+    return match (j) { Json.Int(n) => n, default => 0 };
 }
 
 // Summarize a JSON array into a small JSON object. Statements (the loop) live here, not in a `match`
@@ -52,7 +52,7 @@ function handle(Request req): Response {
                 200,
                 Bytes.fromString(Json.stringify(summarize(items)))
             ),
-            _ => new Response(400, errorBody("expected a JSON array"))
+            default => new Response(400, errorBody("expected a JSON array"))
         };
     }
     return new Response(400, errorBody("invalid JSON"));

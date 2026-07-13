@@ -80,7 +80,7 @@ fn full_surface_is_idempotent() {
         "package Main;\nfunction f(): void { var b = b\"\\x00ab\"; }",
         "package Main; import Core.Test;\ntest \"x\" { Test.assertTrue(true); }",
         "package Main;\nenum Opt<T> { Some(T v), None }\n\
-         function f(Opt<int> o): int { return match (o) { Some(n) when n > 0 => n, Some(n) => 0, None => -1 }; }",
+         function f(Opt<int> o): int { return match (o) { Some(n) when n > 0 => n, Some(n) => 0, None() => -1 }; }",
     ];
     for s in samples {
         assert_idempotent(s);

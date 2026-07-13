@@ -57,8 +57,12 @@ fn parse_type_pattern_vs_binding() {
         pat("Circle _"),
         Pattern::Type { binding: None, .. }
     ));
-    // a lone ident stays a catch-all Binding (the documented footgun, preserved).
-    assert!(matches!(pat("Circle"), Pattern::Binding { .. }));
+    // A lone LOWERCASE ident is a catch-all Binding (valid).
+    assert!(matches!(pat("shape"), Pattern::Binding { name, .. } if name == "shape"));
+    // A lone PascalCase ident is REJECTED (DEC-209): it looks like a variant/type but would
+    // silently catch everything, so it is `E-MATCH-BARE-VARIANT` rather than a bare binding.
+    let err = parser("Circle").parse_pattern().unwrap_err();
+    assert_eq!(err.code, Some("E-MATCH-BARE-VARIANT"));
 }
 
 #[test]

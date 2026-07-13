@@ -29,7 +29,7 @@ fn match_over_optional() {
 fn or_pattern_arms_are_exhaustive_and_dedup_aware() {
     // Grouped literals: `0 | 1 | 2` + a catch-all is exhaustive (each alternative is a real arm).
     assert!(errors_of(
-        r#"function band(int n) -> string { return match n { 0 | 1 | 2 => "low", _ => "hi" }; }"#
+        r#"function band(int n) -> string { return match n { 0 | 1 | 2 => "low", default => "hi" }; }"#
     )
     .is_empty());
     // Grouped enum variants discharge each variant's shape → exhaustive with no catch-all.
@@ -47,7 +47,7 @@ fn or_pattern_arms_are_exhaustive_and_dedup_aware() {
     );
     // A duplicated alternative is a redundant arm → `W-MATCH-UNREACHABLE`.
     let w = warnings_of(
-        r#"function f(int n) -> string { return match n { 1 | 1 => "x", _ => "y" }; }"#,
+        r#"function f(int n) -> string { return match n { 1 | 1 => "x", default => "y" }; }"#,
     );
     assert!(
         w.iter().any(|d| d.code == Some("W-MATCH-UNREACHABLE")),
@@ -99,7 +99,7 @@ fn non_exhaustive_match_lists_missing_variants_sorted() {
 fn wildcard_makes_match_exhaustive() {
     let src = format!(
         "{SHAPE} function area(Shape s) -> float {{ \
-               return match s {{ Circle(r) => r, _ => 0.0, }}; }}"
+               return match s {{ Circle(r) => r, default => 0.0, }}; }}"
     );
     assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
 }
@@ -162,14 +162,14 @@ fn struct_destructuring_patterns() {
     // Rename + nested destructuring + a CTy operand (`x + y`, both `int` binds): type-checks.
     let nested = format!(
         "{PL} function f(Line l) -> int {{ return match l {{ \
-             Line {{ from: Point {{ x, y }}, to }} => x + y + to.x, _ => 0, }}; }}"
+             Line {{ from: Point {{ x, y }}, to }} => x + y + to.x, default => 0, }}; }}"
     );
     assert!(errors_of(&nested).is_empty(), "{:?}", errors_of(&nested));
 
     // E-STRUCT-PAT-TYPE — the head names something that isn't a class.
     let bad_type = format!(
         "{SHAPES} function f(Circle | Square s) -> float {{ return match s {{ \
-             Nope {{ r }} => r, _ => 0.0, }}; }}"
+             Nope {{ r }} => r, default => 0.0, }}; }}"
     );
     assert!(
         errors_of(&bad_type)
@@ -194,7 +194,7 @@ fn struct_destructuring_patterns() {
 
     // E-PATTERN-DUP-BIND — `x` is bound twice (field `x` and renamed field `y`).
     let dup = "class Point { constructor(public int x, public int y) {} } \
-         function f(Point p) -> int { return match p { Point { x, y: x } => x, _ => 0, }; }";
+         function f(Point p) -> int { return match p { Point { x, y: x } => x, default => 0, }; }";
     assert!(
         errors_of(dup)
             .iter()
@@ -215,7 +215,7 @@ fn nested_type_pattern_in_variant_payload() {
     // class (so `c.r` resolves). A refutable payload needs a `_` fallback to be exhaustive.
     let ok = format!(
         "{SETUP} function f(Boxed b) -> float {{ return match b {{ \
-             W(Circle c) => c.r, W(Square s) => s.side, _ => 0.0, }}; }}"
+             W(Circle c) => c.r, W(Square s) => s.side, default => 0.0, }}; }}"
     );
     assert!(errors_of(&ok).is_empty(), "{:?}", errors_of(&ok));
 

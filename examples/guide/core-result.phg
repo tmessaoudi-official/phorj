@@ -27,7 +27,7 @@ function parsePositive(string s): Result<int, ParseFault> {
         "1" => new Result.Success(1),
         "2" => new Result.Success(2),
         "3" => new Result.Success(3),
-        _ => new Result.Failure(new NotANumber(s))
+        default => new Result.Failure(new NotANumber(s))
     };
 }
 

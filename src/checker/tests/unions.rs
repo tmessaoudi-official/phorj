@@ -126,7 +126,7 @@ fn instanceof_narrows_a_union_operand() {
 fn primitive_union_literal_match_ok() {
     let ok = errors_of(
         "function classify(int | string code) -> string { \
-               return match code { 0 => \"zero\", \"ok\" => \"okay\", _ => \"other\" }; } \
+               return match code { 0 => \"zero\", \"ok\" => \"okay\", default => \"other\" }; } \
              function main() -> void { string s = classify(0); }",
     );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -175,7 +175,7 @@ fn union_string_pattern_erased_ambig_rejected() {
     // can't tell an erased sibling from a real string (run/runvm distinguish by value kind).
     let bad = errors_of(
         "function f(string | decimal v) -> string { \
-               return match v { string s => s, _ => \"x\" }; } \
+               return match v { string s => s, default => \"x\" }; } \
              function main() -> void {}",
     );
     assert!(
@@ -191,7 +191,7 @@ fn optional_union_string_pattern_erased_ambig_rejected() {
     // and must not bypass `E-MATCH-ERASED-AMBIG`.
     let bad = errors_of(
         "function f((string | decimal)? v) -> string { \
-               return match v { string s => s, _ => \"x\" }; } \
+               return match v { string s => s, default => \"x\" }; } \
              function main() -> void {}",
     );
     assert!(
@@ -207,7 +207,7 @@ fn optional_union_type_patterns_ok() {
     // collection's `.first`/`Map.get` yields, consumed at the call site).
     let ok = errors_of(
         "function f((int | string)? v) -> string { \
-               return match v { int i => \"i\", string s => s, _ => \"n\" }; } \
+               return match v { int i => \"i\", string s => s, default => \"n\" }; } \
              function main() -> void {}",
     );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");

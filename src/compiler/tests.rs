@@ -294,7 +294,7 @@ fn match_as_binary_operand_tracks_scrutinee_slot() {
     // The lhs `1` is live on the operand stack when the `match` rhs compiles, so the scrutinee
     // must spill to a transient-aware slot (not `locals.len()`).
     let src = r#"import Core.Output;
-function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
+function g(int n) -> int { return 1 + match n { 0 => 10, default => 20 }; }
             function main() -> void { Output.printLine("{g(0)}"); Output.printLine("{g(5)}"); }"#;
     assert_eq!(out(src), "11\n21\n");
 }
@@ -307,7 +307,7 @@ fn nested_match_reextracts_outer_binding() {
     let src = r#"import Core.Output;
 enum Pair { P(int a, int b), }
             function f(Pair p) -> string {
-                return match p { P(a, b) => match a { 0 => "z b={b}", _ => "a={a} b={b}", }, };
+                return match p { P(a, b) => match a { 0 => "z b={b}", default => "a={a} b={b}", }, };
             }
             function main() -> void { Output.printLine(f(P(0, 9))); Output.printLine(f(P(5, 2))); }"#;
     assert_eq!(out(src), "z b=9\na=5 b=2\n");

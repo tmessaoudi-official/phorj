@@ -210,7 +210,7 @@ fn lifts_match_with_default() {
         out.contains(r#"0 => "low""#) && out.contains(r#"1 => "low""#),
         "{out}"
     );
-    assert!(out.contains(r#"_ => "hi""#), "{out}");
+    assert!(out.contains(r#"default => "hi""#), "{out}");
     assert_reparses(&out);
 }
 

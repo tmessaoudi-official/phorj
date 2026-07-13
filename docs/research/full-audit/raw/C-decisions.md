@@ -440,7 +440,11 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   warn-only (rejected — ignored warnings still ship wrong-but-passing programs); keep silent (rejected);
   full `Shape.Circle` qualification (rejected — breaks idiomatic bare `Circle() =>`); remove `_` entirely
   (rejected — forces named-but-unused bindings); keep both `_` and `default` as catch-all (rejected — TIMTOWTDI).
-  Closes DEC-056d.
+  Closes DEC-056d. *(SHIPPED 2026-07-13: parser `parse_arm_pattern` (`default`→Wildcard catch-all;
+  standalone `_`→`E-MATCH-BARE-VARIANT`) + bare-PascalCase rejection in `parse_pattern`; formatter + lift
+  printer render a top-level catch-all Wildcard as `default`; `phg explain E-MATCH-BARE-VARIANT`; nullary
+  variant matches now require `Name()` (bare `Red`→`Red()`); codemod of all `_ =>` + bare-variant arms
+  across examples/conformance/bench/tests; new parser tests; full oracle gate 1974 green.)*
 - **DEC-210 — `++`/`--` ratified STATEMENT-ONLY; register corrected.** The code is already statement-only
   (`parser/stmts.rs`, desugar `x=x+1`; `x=i++`/`a[i++]=i++` are parse errors) — the craftsmanship-correct
   design with no sequence-point footgun expressible. The register's DEC-096 row wrongly marked the

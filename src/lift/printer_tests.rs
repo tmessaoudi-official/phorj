@@ -80,9 +80,9 @@ fn prints_if_elseif_else_chain() {
 #[test]
 fn prints_match_and_new() {
     let out = pp(
-        "package Main;\nenum Color { Red, Green }\nfunction f(int n): int {\n  return match (n) { 0 => 1, _ => 2 };\n}\n",
+        "package Main;\nenum Color { Red, Green }\nfunction f(int n): int {\n  return match (n) { 0 => 1, default => 2 };\n}\n",
     );
-    assert!(out.contains("match (n) { 0 => 1, _ => 2 }"), "{out}");
+    assert!(out.contains("match (n) { 0 => 1, default => 2 }"), "{out}");
 }
 
 #[test]

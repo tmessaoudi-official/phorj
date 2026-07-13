@@ -154,7 +154,7 @@ fn match_wildcard_is_catch_all() {
     let src = r#"import Core.Output;
 
             enum Shape { Circle(float r), Rect(float w, float h), }
-            function kind(Shape s) -> int { return match s { Circle(r) => 1, _ => 2, }; }
+            function kind(Shape s) -> int { return match s { Circle(r) => 1, default => 2, }; }
             function main() -> void { Output.printLine("{kind(Rect(1.0, 2.0))}"); }
         "#;
     assert_eq!(out(src), "2\n");

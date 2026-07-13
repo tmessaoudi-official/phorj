@@ -16,9 +16,13 @@ function bench(int iters): int {
     mutable int i = 0;
     while (i < iters) {
         try {
-            var q = new Sql.QueryBuilder("users", "u")
+            var q = new Sql.QueryBuilder(
+                "users",
+                "u"
+            )
                 .select(["u.id", "u.name", "o.total"])
-                .innerJoin("orders", "o").on("u.id", "=", "o.userId")
+                .innerJoin("orders", "o")
+                .on("u.id", "=", "o.userId")
                 .whereGt("u.age", i % 80)
                 .whereEq("o.status", "paid")
                 .orderByDesc("o.total")

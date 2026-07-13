@@ -31,7 +31,7 @@ function larger(int a, int b): int {
 
 // A `match` that returns on every arm is total (the arms are exhaustive over `int` via `_`).
 function sign(int n): string {
-    return match (n) { 0 => "zero", _ => if (n > 0) { "positive" } else { "negative" } };
+    return match (n) { 0 => "zero", default => if (n > 0) { "positive" } else { "negative" } };
 }
 
 // The bottom type: a `-> never` function provably diverges, so it never returns a value. Declared to

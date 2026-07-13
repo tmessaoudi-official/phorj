@@ -166,11 +166,13 @@ impl Printer {
                         Some(g) => format!(" when {}", self.expr(g)?),
                         None => String::new(),
                     };
-                    out.push(format!(
-                        "{}{guard} => {}",
-                        self.pattern(&arm.pattern)?,
-                        self.expr(&arm.body)?
-                    ));
+                    // DEC-209: a top-level catch-all arm renders as `default` (a standalone `_` arm
+                    // is now a parse error); nested wildcards still render as `_` via `pattern`.
+                    let head = match &arm.pattern {
+                        Pattern::Wildcard(_) => "default".to_string(),
+                        p => self.pattern(p)?,
+                    };
+                    out.push(format!("{head}{guard} => {}", self.expr(&arm.body)?));
                 }
                 Ok(format!(
                     "match ({}) {{ {} }}",

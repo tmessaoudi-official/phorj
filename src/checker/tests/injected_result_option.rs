@@ -44,7 +44,7 @@ fn bare_option_variant_is_injected_variant_bare() {
 fn qualified_result_variants_typecheck() {
     let src = "package Main; import Core.Result; \
                function safeDiv(int a, int b) -> Result<int, string> { \
-                   return match (b) { 0 => new Result.Failure(\"divide by zero\"), _ => new Result.Success(a / b) }; \
+                   return match (b) { 0 => new Result.Failure(\"divide by zero\"), default => new Result.Success(a / b) }; \
                } \
                function main() -> void { var r = safeDiv(10, 2); }";
     let prog = prog_raw(src);

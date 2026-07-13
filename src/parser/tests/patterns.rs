@@ -88,7 +88,7 @@ fn parses_struct_patterns() {
 fn parses_match_arm_guards() {
     // A contextual `when` after the arm pattern attaches an optional guard. An arm with no
     // `when` parses exactly as before (guard = None).
-    match expr("match s { Circle c when c.r > 0.0 => 1, Circle c => 0, _ => -1 }") {
+    match expr("match s { Circle c when c.r > 0.0 => 1, Circle c => 0, default => -1 }") {
         Expr::Match { arms, .. } => {
             assert_eq!(arms.len(), 3);
             assert!(arms[0].guard.is_some(), "first arm has a when-guard");

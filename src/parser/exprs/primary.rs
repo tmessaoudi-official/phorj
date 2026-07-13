@@ -269,7 +269,7 @@ impl Parser {
             // Or-pattern `p1 | p2 | … => body` (Phase 1 operators slice): collect `|`-separated
             // alternatives. A single pattern (no `|`) is the common case and behaves exactly as
             // before. `|` is unambiguous here — a pattern is followed only by `|`, `when`, or `=>`.
-            let mut alts = vec![self.parse_pattern()?];
+            let mut alts = vec![self.parse_arm_pattern()?];
             while self.eat(&TokenKind::Bar) {
                 alts.push(self.parse_pattern()?);
             }

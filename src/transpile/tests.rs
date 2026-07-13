@@ -327,7 +327,7 @@ fn literal_match_with_binding_emits_native_match() {
 fn literal_match_with_wildcard_emits_native_match() {
     // A wildcard `_` catch-all needs no binding, so the subject is the bare scrutinee.
     let out = php(
-            "function classify(int code) -> string { return match code { 0 => \"zero\", 1 => \"one\", _ => \"other\" }; }",
+            "function classify(int code) -> string { return match code { 0 => \"zero\", 1 => \"one\", default => \"other\" }; }",
         );
     assert!(out.contains("return match ($code) {"), "{out}");
     assert!(out.contains("0 => \"zero\","), "{out}");
@@ -426,7 +426,7 @@ fn reserved_keyword_and_builtin_variant_names_are_mangled_in_php() {
 fn reserved_variant_construction_and_instanceof_are_mangled() {
     let src = format!(
         "{RESERVED_ENUM} function f() -> Tok {{ return Int(5); }} \
-         function g(Tok t) -> int {{ return match t {{ Int(n) => n, _ => 0 }}; }}"
+         function g(Tok t) -> int {{ return match t {{ Int(n) => n, default => 0 }}; }}"
     );
     let out = php(&src);
     assert!(out.contains("new Int_(5)"), "{out}");
@@ -534,7 +534,7 @@ fn match_in_var_decl_assigns_in_each_arm() {
 fn wildcard_arm_has_no_trailing_throw() {
     let out = php(&format!(
         "{SHAPE} function area(Shape s) -> float {{ \
-               return match s {{ Circle(r) => r, _ => 0.0, }}; }}"
+               return match s {{ Circle(r) => r, default => 0.0, }}; }}"
     ));
     assert!(!out.contains("UnhandledMatchError"), "{out}");
 }

@@ -131,7 +131,7 @@ fn clean_function_has_no_unreachable_warning() {
 
 #[test]
 fn match_arm_after_catch_all_warns() {
-    let src = "function f(int x) -> int { return match x { _ => 0, 1 => 9 }; } \
+    let src = "function f(int x) -> int { return match x { default => 0, 1 => 9 }; } \
                    function main() -> void {}";
     assert!(
         warnings_of(src)
@@ -144,7 +144,7 @@ fn match_arm_after_catch_all_warns() {
 
 #[test]
 fn duplicate_match_literal_arm_warns() {
-    let src = "function f(int x) -> int { return match x { 1 => 1, 1 => 2, _ => 0 }; } \
+    let src = "function f(int x) -> int { return match x { 1 => 1, 1 => 2, default => 0 }; } \
                    function main() -> void {}";
     assert!(
         warnings_of(src)
@@ -157,7 +157,7 @@ fn duplicate_match_literal_arm_warns() {
 
 #[test]
 fn exhaustive_distinct_match_has_no_unreachable_warning() {
-    let src = "function f(int x) -> int { return match x { 1 => 1, 2 => 2, _ => 0 }; } \
+    let src = "function f(int x) -> int { return match x { 1 => 1, 2 => 2, default => 0 }; } \
                    function main() -> void {}";
     assert!(
         warnings_of(src)

@@ -42,7 +42,7 @@ impl Checker {
                     "unreachable match arm: a previous arm already matches everything",
                     "W-MATCH-UNREACHABLE",
                     Some(
-                        "a `_` or bare-identifier arm is a catch-all; arms after it never run"
+                        "a `default` or bare lowercase-identifier arm is a catch-all; arms after it never run"
                             .into(),
                     ),
                 );
@@ -210,7 +210,7 @@ impl Checker {
                     if has_enum {
                         self.err(
                             span,
-                            "non-exhaustive match: add a `_` wildcard arm for non-enum scrutinees",
+                            "non-exhaustive match: add a `default` catch-all arm for non-enum scrutinees",
                         );
                     } else {
                         members.push(Ty::Null);

@@ -30,7 +30,13 @@ function show(Router rt, string method, string path): void {
 }
 
 function main(): void {
-    Router rt = new Router([], []).route("GET", "/", home).route("GET", "/users/\{id\}", showUser).route("GET", "/users/me", currentUser);
+    Router rt = new Router(
+        [],
+        []
+    )
+        .route("GET", "/", home)
+        .route("GET", "/users/\{id\}", showUser)
+        .route("GET", "/users/me", currentUser);
     show(rt, "GET", "/");
     show(rt, "GET", "/users/7");
     show(rt, "GET", "/users/me");

@@ -14,7 +14,7 @@ function bench(int iters): int {
         Shape sh = match (i % 3) {
             0 => new Shape.Circle(i % 10),
             1 => new Shape.Square(i % 10),
-            _ => new Shape.Dot()
+            default => new Shape.Dot()
         };
         int a = match (sh) { Circle(r) => r * r, Square(s) => s * s * 2, Dot() => 1 };
         acc = acc + a;

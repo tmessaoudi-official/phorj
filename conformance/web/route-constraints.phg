@@ -29,7 +29,13 @@ function show(Router rt, string path): void {
 }
 
 function main(): void {
-    Router rt = new Router([], []).route("GET", "/u/\{id:\\d+\}", byId).route("GET", "/u/\{name\}", byName).route("GET", "/d/\{y:\\d\{4\}\}/\{m:\\d\{2\}\}", ymd);
+    Router rt = new Router(
+        [],
+        []
+    )
+        .route("GET", "/u/\{id:\\d+\}", byId)
+        .route("GET", "/u/\{name\}", byName)
+        .route("GET", "/d/\{y:\\d\{4\}\}/\{m:\\d\{2\}\}", ymd);
     show(rt, "/u/42");
     // constrained \d+ wins
     show(rt, "/u/ada");

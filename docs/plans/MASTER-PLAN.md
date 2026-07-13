@@ -55,8 +55,10 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
    checker re-exports, transpile group-3 calls it; example `transpile/enum_variant_builtin_names.phg`;
    1973-test oracle gate green. Closed the live G-1 byte-identity break. No surface change.
 2. **DEC-210 — ✅ DONE** — DEC-096 register row corrected; statement-only ratified. No code.
-3. **DEC-209** — `E-MATCH-BARE-VARIANT` (reject bare PascalCase arm) + catch-all keyword `default`
-   (parser + checker) + `_` restricted to ignore-placeholder; explain row; codemod existing `_ =>` arms.
+3. **DEC-209 — ✅ SHIPPED** — `E-MATCH-BARE-VARIANT` (reject bare PascalCase arm) + catch-all keyword
+   `default` + `_` restricted to ignore-placeholder; formatter/lift render top-level catch-all as
+   `default`; nullary variant matches require `Name()`; explain row; codemod of `_ =>`/bare-variant arms
+   across examples/conformance/bench/tests; new parser tests; oracle gate 1974 green.
 4. **DEC-214** — `new List<T>()`/`new Map<K,V>()` empty construction; remove `[]`/`{}` contextual typing
    + `List.empty`/`Map.empty`; keep `[1,2,3]`; codemod. Supersedes DEC-201.
 5. **DEC-207** — `::` for class/type-level access (token + parser `sep` field + checker enforcement +

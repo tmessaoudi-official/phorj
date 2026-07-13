@@ -27,7 +27,7 @@ function describe(Option<int> o): string {
 
 // Returns a generic enum: divide, or report the reason as a string error.
 function safeDiv(int a, int b): Result<int, string> {
-    return match (b) { 0 => new Failure("divide by zero"), _ => new Success(a / b) };
+    return match (b) { 0 => new Failure("divide by zero"), default => new Success(a / b) };
 }
 
 function report(Result<int, string> r): string {

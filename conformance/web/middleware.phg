@@ -38,7 +38,16 @@ function show(Router rt, string method, string path, List<string> headers): void
 }
 
 function main(): void {
-    Router rt = new Router([], []).use(tag).route("GET", "/", home).group("/admin", function(Router r): Router { return r.use(requireAuth).route("GET", "/x", secret); });
+    Router rt = new Router(
+        [],
+        []
+    )
+        .use(tag)
+        .route("GET", "/", home)
+        .group(
+            "/admin",
+            function(Router r): Router { return r.use(requireAuth).route("GET", "/x", secret); }
+        );
     show(rt, "GET", "/", []);
     // tag wraps home
     show(rt, "GET", "/admin/x", []);

@@ -99,7 +99,7 @@ fn external_struct_destructure_of_public_field_is_ok() {
 #[test]
 fn external_match_struct_pattern_of_private_field_is_error() {
     let src = "class C { constructor(private int secret) {} } \
-               function main() -> int { var c = new C(7); return match c { C { secret } => secret, _ => 0 }; }";
+               function main() -> int { var c = new C(7); return match c { C { secret } => secret, default => 0 }; }";
     assert!(has(src, "E-FIELD-VISIBILITY"), "{:?}", errors_of(src));
 }
 

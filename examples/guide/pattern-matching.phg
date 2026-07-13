@@ -59,7 +59,10 @@ function areaOf(Circle | Square sh): float {
 }
 
 function originSum(Line l): int {
-    return match (l) { Line { from: Point { x: fx, y: fy }, to: to } => fx + fy + to.x, _ => 0 };
+    return match (l) {
+        Line { from: Point { x: fx, y: fy }, to: to } => fx + fy + to.x,
+        default => 0
+    };
 }
 
 interface Animal {
@@ -141,7 +144,7 @@ function band(int n): string {
         7 => "high",
         8 => "high",
         9 => "high",
-        _ => "mid"
+        default => "mid"
     };
 }
 

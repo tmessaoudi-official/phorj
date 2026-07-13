@@ -187,7 +187,7 @@ impl Printer<'_> {
                         None => String::new(),
                     };
                     arm_docs.push(doc::concat(vec![
-                        doc::text(format!("{}{guard} => ", self.pattern(&arm.pattern)?)),
+                        doc::text(format!("{}{guard} => ", self.arm_pattern(&arm.pattern)?)),
                         self.expr_doc(&arm.body)?,
                     ]));
                 }
@@ -585,6 +585,16 @@ impl Printer<'_> {
     pub(super) fn postfix_doc(&self, e: &Expr) -> Result<Doc, String> {
         let d = self.expr_doc(e)?;
         Ok(if prec_of(e) < PREC_ATOM { parens(d) } else { d })
+    }
+
+    /// Render a **top-level match-arm** pattern. A catch-all Wildcard prints as `default` (DEC-209 —
+    /// a top-level arm Wildcard can only originate from `default`, since a standalone `_` arm is a
+    /// parse error); every other pattern, and any *nested* Wildcard (`Some(_)`), renders via `pattern`.
+    fn arm_pattern(&self, p: &Pattern) -> Result<String, String> {
+        match p {
+            Pattern::Wildcard(_) => Ok("default".to_string()),
+            _ => self.pattern(p),
+        }
     }
 
     pub(super) fn pattern(&self, p: &Pattern) -> Result<String, String> {

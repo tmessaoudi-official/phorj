@@ -877,12 +877,13 @@ enum Grade { Pass(int score), Fail(int score), }
            };
        }
        function main() -> void { Output.printLine(describe(new Pass(90))); Output.printLine(describe(new Fail(40))); }"#,
-    // bare (no-payload) variants, wildcard arm, `match` in var-decl-init position
+    // no-payload variants matched with `()` (DEC-209 — bare `Red` in a pattern is rejected), catch-all
+    // `default` arm, `match` in var-decl-init position
     r#"import Core.Output;
 enum Color { Red, Green, Blue, }
        function main() -> void {
            Color c = Green;
-           string name = match c { Red => "red", Green => "green", _ => "other", };
+           string name = match c { Red() => "red", Green() => "green", default => "other", };
            Output.printLine(name);
        }"#,
     // literal int patterns + catch-all binding used in interpolation
@@ -898,7 +899,7 @@ function yn(bool b) -> string { return match b { true => "Y", false => "N", }; }
     // string literal patterns + wildcard
     r#"import Core.Output;
 function kind(string s) -> string {
-           return match s { "a" => "first", "b" => "second", _ => "rest", };
+           return match s { "a" => "first", "b" => "second", default => "rest", };
        }
        function main() -> void { Output.printLine(kind("a")); Output.printLine(kind("b")); Output.printLine(kind("z")); }"#,
     // enum value flows through a local and equality (`==` on enums) before matching
@@ -907,13 +908,13 @@ enum Dir { N, S, }
        function main() -> void {
            Dir d = N;
            Output.printLine("{d == N}");
-           string t = match d { N => "north", S => "south", };
+           string t = match d { N() => "north", S() => "south", };
            Output.printLine(t);
        }"#,
     // `match` in a *transient* position: as the rhs of `+`, with the lhs already on the operand
     // stack (exercises the compiler's operand-height tracking for the scrutinee slot).
     r#"import Core.Output;
-function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
+function g(int n) -> int { return 1 + match n { 0 => 10, default => 20 }; }
        function main() -> void { Output.printLine("{g(0)}"); Output.printLine("{g(5)}"); }"#,
     // nested `match` whose inner arm references the *outer* arm's binding (re-extraction across
     // two live scrutinees — the hardest binding/height case in P4a).
@@ -921,7 +922,7 @@ function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
 enum Pair { P(int a, int b), }
        function f(Pair p) -> string {
            return match p {
-               P(a, b) => match a { 0 => "first=zero b={b}", _ => "a={a} b={b}", },
+               P(a, b) => match a { 0 => "first=zero b={b}", default => "a={a} b={b}", },
            };
        }
        function main() -> void { Output.printLine(f(new P(0, 9))); Output.printLine(f(new P(5, 2))); }"#,
@@ -3214,7 +3215,7 @@ function areaOf(Circle | Square sh) -> float {
     return match sh { Circle { r } => r, Square { side } => side, };
 }
 function originSum(Line l) -> int {
-    return match l { Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x, _ => 0, };
+    return match l { Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x, default => 0, };
 }
 function main() -> void {
     float a = areaOf(new Circle(2.5));
@@ -3316,7 +3317,7 @@ class Circle implements Shape { constructor(public float r) {} }
 class Square implements Shape { constructor(public float side) {} }
 enum Boxed { W(Shape inner) }
 function f(Boxed b) -> float {
-    return match b { W(Circle c) => c.r + 1.0, W(Square s) => s.side, _ => 0.0, };
+    return match b { W(Circle c) => c.r + 1.0, W(Square s) => s.side, default => 0.0, };
 }
 function main() -> void {
     float a = f(new W(new Circle(2.5)));

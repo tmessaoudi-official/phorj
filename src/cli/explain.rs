@@ -534,7 +534,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              that erases to a PHP `string` (`decimal`/`bytes`/`html`/`attr`), then `is_string` would\n\
              match those too — the interpreter and VM distinguish them by runtime representation, but the\n\
              transpiled PHP cannot, breaking byte-identity. Split the union so the `string` arm is\n\
-             unambiguous, or add a `_` arm and test the other members another way.\n"
+             unambiguous, or add a `default` arm and test the other members another way.\n"
         }
         "E-MATCH-GUARD-EXHAUST" => {
             "E-MATCH-GUARD-EXHAUST — a shape is covered only by guarded arms.\n\n\
@@ -542,7 +542,17 @@ pub fn explain_text(code: &str) -> Option<String> {
              condition; a false guard falls through to the next arm. Because the guard might be false,\n\
              a guarded arm does NOT discharge its shape for exhaustiveness. If every arm matching a\n\
              given variant/type is guarded, the match can fall through with no arm — so add an\n\
-             **unguarded** arm (or `_`) covering that shape as a fallback.\n"
+             **unguarded** arm (or `default`) covering that shape as a fallback.\n"
+        }
+        "E-MATCH-BARE-VARIANT" => {
+            "E-MATCH-BARE-VARIANT — a bare name (or a standalone `_`) is used as a match arm.\n\n\
+             PascalCase is the type/variant namespace, so a bare `Circle => …` LOOKS like it matches the\n\
+             variant `Circle` but is actually a catch-all binding named `Circle` that matches EVERY value —\n\
+             a silent footgun (DEC-209), so it is rejected. Write what you meant: `Circle() => …` to match\n\
+             the variant, `Circle x => …` / `Circle _ => …` to type-test (optionally binding), a lowercase\n\
+             name (`x => …`) to bind every value, or `default => …` for the catch-all arm. A standalone\n\
+             `_ => …` arm is likewise rejected: `_` is an ignore-placeholder only, valid inside a pattern\n\
+             (`Some(_)`) or a type-test (`Square _`), never the whole arm — use `default`.\n"
         }
         "E-FIXEDLIST-LEN" => {
             "E-FIXEDLIST-LEN — a fixed-length list literal has the wrong length.\n\n\

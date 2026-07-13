@@ -302,7 +302,7 @@ fn unterminated_interpolation_errors() {
 
 #[test]
 fn parses_match_expression() {
-    let e = expr("match s { Circle(r) => r, Rect(w, h) => w, _ => 0 }");
+    let e = expr("match s { Circle(r) => r, Rect(w, h) => w, default => 0 }");
     match e {
         Expr::Match {
             scrutinee, arms, ..
@@ -333,7 +333,7 @@ fn parses_match_with_trailing_comma_and_exprs() {
 fn or_pattern_desugars_to_one_arm_per_alternative() {
     // `1 | 2 | 3 => "low"` expands to three arms each carrying the (cloned) body — every backend
     // sees ordinary arms, so exhaustiveness / dedup / narrowing are unchanged.
-    let e = expr(r#"match n { 1 | 2 | 3 => "low", _ => "hi" }"#);
+    let e = expr(r#"match n { 1 | 2 | 3 => "low", default => "hi" }"#);
     match e {
         Expr::Match { arms, .. } => {
             assert_eq!(arms.len(), 4); // 3 expanded + the wildcard
@@ -349,9 +349,11 @@ fn or_pattern_desugars_to_one_arm_per_alternative() {
 #[test]
 fn or_pattern_rejects_binding_alternatives() {
     // a bare-name alternative, a `_` alternative, and a variant binder are all rejected.
+    // (`_` is placed as a NON-head alternative here — a `_` at the arm head is E-MATCH-BARE-VARIANT,
+    // tested separately; as an or-alternative it is E-OR-PATTERN-BIND.)
     for src in [
-        "match n { 1 | x => 0, _ => 1 }",
-        "match n { _ | 1 => 0 }",
+        "match n { 1 | x => 0, default => 1 }",
+        "match n { 1 | _ => 0 }",
         "match e { A(v) | B() => 0 }",
     ] {
         let d = parser(src).parse_expr().unwrap_err();
@@ -361,6 +363,36 @@ fn or_pattern_rejects_binding_alternatives() {
     assert!(parser("match o { Some(_) | None() => 0 }")
         .parse_expr()
         .is_ok());
+}
+
+/// DEC-209 — `default` is the sole standalone catch-all; a standalone `_` arm and a bare PascalCase
+/// arm are both rejected with `E-MATCH-BARE-VARIANT`; `_` stays valid as an ignore-placeholder and a
+/// lowercase bare name is still a catch-all binding.
+#[test]
+fn match_default_catch_all_and_bare_variant_rejection() {
+    // `default` → a Wildcard catch-all arm.
+    match expr("match s { Circle(r) => r, default => 0 }") {
+        Expr::Match { arms, .. } => {
+            assert!(matches!(arms.last().unwrap().pattern, Pattern::Wildcard(_)));
+        }
+        other => panic!("got {other:?}"),
+    }
+    // standalone `_` arm → rejected (use `default`).
+    let d = parser("match s { Circle(r) => r, _ => 0 }")
+        .parse_expr()
+        .unwrap_err();
+    assert_eq!(d.code, Some("E-MATCH-BARE-VARIANT"), "standalone _ arm");
+    // bare PascalCase arm → rejected (silent catch-all footgun).
+    let d = parser("match s { Square => 0 }").parse_expr().unwrap_err();
+    assert_eq!(d.code, Some("E-MATCH-BARE-VARIANT"), "bare PascalCase arm");
+    // `_` still valid inside a pattern and as a type-test ignore; lowercase bare name still binds.
+    assert!(parser("match s { Some(_) => 0, default => 1 }")
+        .parse_expr()
+        .is_ok());
+    assert!(parser("match s { Square _ => 0, default => 1 }")
+        .parse_expr()
+        .is_ok());
+    assert!(parser("match s { x => x }").parse_expr().is_ok());
 }
 
 #[test]

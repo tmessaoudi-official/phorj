@@ -10,7 +10,7 @@ function area(Shape s): int {
 }
 
 function sign(int n): string {
-    return match (n) { 0 => "zero", x when x > 0 => "pos", _ => "neg" };
+    return match (n) { 0 => "zero", x when x > 0 => "pos", default => "neg" };
 }
 
 function main(): void {

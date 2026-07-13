@@ -47,7 +47,7 @@ function name(Circle | Square | Triangle s): string {
 
 // A primitive union accepts either type; literal patterns match by value, with a `_` for the rest.
 function classify(int | string code): string {
-    return match (code) { 0 => "zero", "ok" => "okay", _ => "other" };
+    return match (code) { 0 => "zero", "ok" => "okay", default => "other" };
 }
 
 function main(): void {
