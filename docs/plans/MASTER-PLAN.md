@@ -51,10 +51,10 @@ its weights and denominator.
 
 **Implementation queue (each = its own green, byte-identity-gated slice + Invariant-9 example +
 UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime surface):**
-1. **DEC-213 (BUG, do first)** — unify the reject + variant-mangle builtin-class list onto one shared
-   constant; add a differential example with a `DateTime`/`RuntimeException` variant name. Closes a live
-   G-1 byte-identity break. No surface change.
-2. **DEC-210** — correct the DEC-096 register row (done in the register); ratify statement-only. No code.
+1. **DEC-213 (BUG) — ✅ SHIPPED `b8dd069`** — `src/php_names.rs` single-sources the builtin-class list;
+   checker re-exports, transpile group-3 calls it; example `transpile/enum_variant_builtin_names.phg`;
+   1973-test oracle gate green. Closed the live G-1 byte-identity break. No surface change.
+2. **DEC-210 — ✅ DONE** — DEC-096 register row corrected; statement-only ratified. No code.
 3. **DEC-209** — `E-MATCH-BARE-VARIANT` (reject bare PascalCase arm) + catch-all keyword `default`
    (parser + checker) + `_` restricted to ignore-placeholder; explain row; codemod existing `_ =>` arms.
 4. **DEC-214** — `new List<T>()`/`new Map<K,V>()` empty construction; remove `[]`/`{}` contextual typing

@@ -108,7 +108,7 @@
 | DEC-093 | 06-25 | **A-1: `: T` return syntax; `->` fully retired**; typed lambdas TS-identical (`fn(int x): string => …`) | keep `->` | plans/2026-06-25-php-fidelity-and-divergence-audit.plan.md | ASKED | ✅ |
 | DEC-094 | 06-25 | **A-6: `foreach (coll as BINDING)` adopted to REPLACE `for (x in coll)`**; one keyword `as`; 4 binding forms; optional `with int i` counter; `of`/`in` rejected as synonyms | keep `for in`; `of` keyword | same plan | ASKED | ◐ shipped **alongside** for-in, not replacing (see CONFLICTS C-2) |
 | DEC-095 | 06-25 | **A-3: type-first params KEEP** (`(int name)` = PHP-minus-sigil) | TS name-first `name: int` | same plan | ASKED | ✅ |
-| DEC-096 | 06-25 | **A-46: `++`/`--` allowed as EXPRESSIONS** (dev overruled Claude's statement-only KEEP after full hazard briefing); eval order pinned to PHP left-to-right; `W-SEQUENCE-MUTATION` lint sweetener | statement-only | same plan; specs/2026-06-26-m3-stream1-syntax-reshape-design.md | ASKED (overruled) | ✅ |
+| DEC-096 | 06-25 | **A-46: `++`/`--` allowed as EXPRESSIONS** (dev overruled Claude's statement-only KEEP after full hazard briefing); eval order pinned to PHP left-to-right; `W-SEQUENCE-MUTATION` lint sweetener | statement-only | same plan; specs/2026-06-26-m3-stream1-syntax-reshape-design.md | ASKED (overruled) | ✅ *(CORRECTED per DEC-210, 2026-07-13: shipped design is STATEMENT-ONLY — `++`/`--` are NOT expressions and the `W-SEQUENCE-MUTATION` lint was never built; verified `x=i++`/`a[i++]=i++` are parse errors. The overrule to expr-form was itself reversed/never-built; ✅ tracks the statement-only outcome.)* |
 | DEC-097 | 06-25/26 | Strings: two modes `"…"` (interpolating) + `r"…"` (raw); PHP `'…'` rejected; **A-62 `"""…"""` auto-dedent text blocks adopted** (Java-style trailing-strip, interpolating, purely additive); `{w}` interpolation delimiter KEEP (A-7; `${w}`/`{$w}` rejected — reintroduce the sigil) | single quotes; `${}` | same plan | ASKED | ✅ |
 | DEC-098 | 06-25 | **A-61: `instanceof` stays lowercase** — universal cross-language convention beats camelCase-consistency | `instanceOf` | same plan | ASKED | ✅ |
 | DEC-099 | 06-25 | Transpile fidelity: B-1 per-hole native PHP `"{$…}"` interpolation with EXHAUSTIVE hole-kind classification (dev requirement); B-2 `println` → `echo X, "\n"` (`printf` rejected — literal `%` corruption risk); B-9 minimal `$` escaping | printf; blanket concat | same plan | ASKED | ✅ |
@@ -473,7 +473,9 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   reject and the mangle so a phorj programmer may name a class `Exception` — truest to "bridge not soul",
   but a spine-level full byte-identity re-baseline of every single-package example; DECLINED for now,
   not scheduled); unify toward one policy all-reject/all-mangle (rejected — worse both ways). This is a
-  correctness fix, implemented independent of the surface rulings.
+  correctness fix, implemented independent of the surface rulings. *(SHIPPED `b8dd069`: `src/php_names.rs`
+  single-sources the builtin-class list; `checker/common.rs` re-exports it, `transpile/names.rs` group-3
+  calls it; differential example `transpile/enum_variant_builtin_names.phg`; full oracle gate 1973 green.)*
 - **DEC-214 — empty collections via `new List<T>()` / `new Map<K,V>()`; SUPERSEDES DEC-201.** Empty
   collections are CONSTRUCTED with mandatory `new` (`new List<int>()`, `new Map<string,int>()`); the
   empty-literal contextual typing (`var xs = [];` inferred from later use) AND the `List.empty<T>()` /
