@@ -89,6 +89,13 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
    flag-derived (no harness edit); `Value::Channel(…, Rc<RefCell<…>>)` (value/types.rs:150) is the
    opaque-handle precedent; native ABI is `fn(&[Value],…)` so a handle rides as arg-0; `Value::Channel`
    ripples only ~12 sites (bounded). **BUILD SLICES (fresh context — design-dense subsystem):**
+   **S1 PROGRESS (2026-07-13):** commit 1 ✅ `d8765c4` (`db` feature + `rusqlite` bundled dep, proven to
+   compile). commit 2 ✅ `6934d7f` (RUNTIME: `DbObject`+`Value::Db`, gated `src/native/db.rs` with all
+   open/prepare/bind/bindNamed/query/exec + Row getters, `pure:false`, 3 unit tests green). **commit 3
+   (SURFACE) = NEXT, fresh context** — the design-dense part; precise recipe in memory topic
+   [[session-2026-07-13-opus-language-reconsideration]] §DEC-208: import-gated built-in classes
+   (Db/Statement/Row/DbError — NOT ambient, advisor flag), `new Db` + method typing, compiler+interpreter
+   dispatch to `CallNative` (receiver arg-0), catchable `DbError`, `examples/db/` + `tests/db.rs` fixture.
    - **S1** (atomic — no clean thinner cut; a dep alone is inert, a Value variant alone is dead-code/
      warnings-deny): add non-default `db` feature + `rusqlite` (bundled) to Cargo.toml; add opaque
      handle to Value modelled feature-independently (a `Value::Db(Rc<dyn DbHandle>)`-style always-present
