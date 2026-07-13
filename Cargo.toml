@@ -69,6 +69,13 @@ green = ["dep:corosensei"]
 # roots relax from `forbid(unsafe_code)` to `deny(unsafe_code)` so that one module can carry a scoped
 # `#![allow]`. 7th external-dependency domain — see docs/specs/UNIFIED-SPEC.md#external-dependency-policy.
 jit = ["dep:cranelift", "dep:cranelift-jit", "dep:cranelift-module"]
+# Embedded SQL database primitive `Core.Db` (DEC-208, enhanced-PDO). Off by default and off for wasm
+# (no native SQLite). rusqlite (8th external-dependency domain, admitted 2026-07-03 — UNIFIED-SPEC
+# #external-dependency-policy Q1/Q2) links SQLite via its `bundled` feature (no system libsqlite3
+# dependency). Its `unsafe` is SQLite C-FFI internal to the crate — phorj's own code stays unsafe-free.
+# SPINE-QUARANTINED: Core.Db natives are `pure:false`, so `uses_impure_native` auto-excludes every
+# `import Core.Db` example from the byte-identity differential (tested via the tests/db.rs fixture).
+db = ["dep:rusqlite"]
 
 [dependencies]
 # FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
@@ -85,6 +92,13 @@ argon2 = { version = "0.5", optional = true, features = ["std"] }
 # corosensei fails to compile there), so the dep is gated to non-wasm targets and the `green` feature.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 corosensei = { version = "0.3", optional = true }
+
+# EIGHTH external-dependency domain (embedded SQL, admitted 2026-07-03). Powers the `Core.Db`
+# enhanced-PDO primitive (DEC-208) over SQLite. `bundled` compiles SQLite from vendored C source, so
+# there is no system-libsqlite3 build dependency. rusqlite's `unsafe` is the SQLite C-FFI boundary,
+# internal to the crate (like argon2/corosensei/cranelift) — phorj's own crate stays unsafe-free.
+# Native-only: no SQLite on wasm32. Feature-gated (`db`), spine-quarantined (Tier-3 fixture-tested).
+rusqlite = { version = "0.40", optional = true, features = ["bundled"] }
 
 # SEVENTH external-dependency domain (native codegen, developer-authorized 2026-07-06). Cranelift
 # (Bytecode Alliance — the wasmtime code generator, fuzzed + production-hardened) is the JIT backend
