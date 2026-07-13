@@ -1,0 +1,38 @@
+// Structured logging with `Core.Log` (DEC-220 — the 3-sink output system).
+//
+// Phorj separates output into THREE explicitly-named sinks, so code always says where bytes go:
+//   * `Output.*`  -> the program's STDOUT (its result / normal output).
+//   * `Core.Log.*` -> STDERR, as leveled `[LEVEL] message` lines (out-of-band diagnostics/logs).
+//   * `Response`   -> the browser, in a `phg serve` handler (see examples/web/).
+//
+// This is unlike PHP, where `echo` and `error_log` blur together. Because `Core.Log` writes to stderr
+// (a real side effect on the environment), a program importing it is quarantined from the byte-identity
+// differential — like `Core.Runtime`/`Core.Process`. Run it and note: the `[INFO]`/`[WARN]`/`[ERROR]`
+// lines go to STDERR, while `Output.printLine` goes to STDOUT. Redirect one away to see the split:
+//   phg run examples/guide/logging.phg 2>/dev/null   # only the stdout line
+//   phg run examples/guide/logging.phg 1>/dev/null   # only the [LEVEL] log lines
+package Main;
+
+import Core.Output;
+import Core.Log;
+
+function main(): void {
+    Log.debug("starting up");
+    // [DEBUG] starting up   -> stderr
+    Log.info("processing 3 records");
+    // [INFO] processing 3 records -> stderr
+    mutable int total = 0;
+    mutable int i = 1;
+    while (i <= 3) {
+        total = total + i;
+        i = i + 1;
+    }
+    if (total != 6) {
+        Log.error("unexpected total: {total}");
+    }
+    // [ERROR] ... -> stderr
+    Log.warn("this is only a demo");
+    // [WARN] this is only a demo -> stderr
+    Output.printLine("sum = {total}");
+}
+// sum = 6  -> STDOUT (the program's actual output)

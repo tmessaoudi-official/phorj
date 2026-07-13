@@ -36,6 +36,7 @@ mod ini;
 mod json;
 mod list;
 mod list_registry;
+mod log;
 mod map;
 mod math;
 mod option;
@@ -361,6 +362,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
     registry.extend(runtime::runtime_natives());
+    registry.extend(log::log_natives());
     registry.extend(test::test_natives());
     registry.extend(time::time_natives());
     #[cfg(feature = "crypto")]

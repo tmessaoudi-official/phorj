@@ -2499,6 +2499,8 @@ const TIER1_PHP: &[&str] = &[
     "memory_reset_peak_usage",
     "microtime",
     "time",
+    // structured logging (Core.Log → error_log, Zend core) — DEC-220
+    "error_log",
 ];
 
 /// PHP language constructs that appear as bareword-before-`(` but are NOT extension functions.

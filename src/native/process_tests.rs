@@ -34,11 +34,15 @@ fn every_other_native_is_pure() {
     // (`append`/`delete`/`rename`/`copy`) are impure (non-idempotent disk side effects), while
     // `read`/`exists`/`write`/`size` stay pure — so any importer is quarantined, tested in
     // `tests/filesystem.rs`.
+    // `Core.Log` is whole-module impure (DEC-220): every `Log.debug/info/warn/error` writes a
+    // `[LEVEL]` line to the ambient process stderr, so an importing program is quarantined (its logs
+    // are out-of-band from the compared stdout).
     let impure_modules = [
         "Core.Process",
         "Core.Environment",
         "Core.Time",
         "Core.Runtime",
+        "Core.Log",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the

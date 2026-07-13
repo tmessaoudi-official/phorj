@@ -891,6 +891,17 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: false,
         bare_types: &["Injectable", "Provides", "Transient"],
     },
+    // `Core.Log` (DEC-220): structured leveled logging to STDERR — native-only (no prelude), qualified
+    // calls `Log.debug/info/warn/error(msg)` resolve to the `Core.Log` natives. Impure (stderr side
+    // effect) ⇒ an importing program is quarantined from the byte-identity differential.
+    VirtualModule {
+        module: &["Core", "Log"],
+        qualifier: "Log",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
 ];
 
 /// The injected member type → owning module qualifier (UA-L2: the registry-derived replacement for
