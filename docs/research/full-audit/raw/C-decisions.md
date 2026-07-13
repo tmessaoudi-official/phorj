@@ -549,3 +549,24 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
     (zero-cost) vs current runtime multiple-dispatch (per-call cost); a META-6 zero-cost-sugar tension.
   Suggested ruling order: DEC-216+DEC-218 together → DEC-215 family (DI + desugar_router) → per-module
   moves (Http/Time/Validation) → DEC-217 → DEC-219. Every move a tracked, tested, register-recorded slice.
+
+**Audit adjudications RULED (2026-07-13 batch 2, developer via AskUserQuestion):**
+- **DEC-216 — RULED: SPLIT.** phg KEEPS import/module resolution + offline `vendor/` consumption (it is
+  the language's import system); `phg vendor` fetch + `phorj.toml` + lock MOVE to a separate companion
+  tool (rustc/cargo, go/`go mod` model). The language stays package-agnostic (no network, no manifest);
+  userland libs still work (the tool populates `vendor/`, phg consumes it offline). *Alternatives:* remove
+  entirely (kills third-party libs); keep in phg (the rejected status quo). Impacts src/manifest.rs +
+  src/lock.rs + the vendor subcommand (extract to the tool) — loader's resolution stays.
+- **DEC-218 — RULED: userland libraries + Core primitives** (consistent with DEC-208). Externalized web
+  spine (Http/router/sessions, Dotenv/Event/Cli/Log/Uuid/Serde, Template, SQL builder) ships as USERLAND
+  libraries via the DEC-216 vendor path; Core keeps only the thin primitive each rides. **Http-primitive
+  note (developer):** the Core HTTP primitive must expose HTTP verbs (GET/POST/HEAD/…) + request
+  bodies/file uploads in a **clean, well-organized OOP** way (not a flat function bag). *Alternatives:*
+  first-party bundled libs (curated but phg-adjacent); keep-in-Core (bloat).
+- **DEC-217 — RULED: keep `phg test` built-in** (Rust/Go toolchain precedent; phg's byte-identity
+  discipline is testing-centric — a first-class runner is core identity, not bloat). *Alternative:*
+  userland test lib (PHPUnit precedent) — declined.
+- **DEC-219 — RULED: static overload resolution** — the checker picks the overload at compile time when
+  argument types are statically known (zero-cost direct call); runtime multiple-dispatch remains ONLY for
+  genuinely union-typed args. A META-6 zero-cost win, no surface change. *Alternative:* always-runtime
+  dispatch (per-call cost) — declined.
