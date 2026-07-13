@@ -72,6 +72,7 @@ fn builds_function_item() {
         vis: Visibility::Public,
         name: "area".into(),
         type_params: vec![],
+        type_param_bounds: Vec::new(),
         params: vec![Param {
             ty: Type::Named {
                 name: "Shape".into(),

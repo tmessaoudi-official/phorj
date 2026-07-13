@@ -59,6 +59,7 @@ impl<'c> Interp<'c> {
                             attrs: Vec::new(), // synthetic trait→class carries no attributes
                             name: t.name.clone(),
                             type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
                             extends: Vec::new(),
                             implements: Vec::new(),
                             open: false,

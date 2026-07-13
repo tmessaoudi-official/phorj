@@ -3,6 +3,19 @@
 
 use super::*;
 
+/// Render a generic parameter list body `T, U: Bound, …` (DEC-207/DEC-211) — each param with its
+/// optional `: Interface` bound. Shared by the function/class/enum headers so bounds round-trip.
+fn type_params_body(params: &[String], bounds: &[(String, String)]) -> String {
+    params
+        .iter()
+        .map(|p| match bounds.iter().find(|(n, _)| n == p) {
+            Some((_, b)) => format!("{p}: {b}"),
+            None => p.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 impl Printer<'_> {
     pub(super) fn program(&mut self, p: &Program) -> Result<(), String> {
         // A comment above the `package` line (a file header) is emitted first, before the package.
@@ -100,7 +113,10 @@ impl Printer<'_> {
         let generics = if f.type_params.is_empty() {
             String::new()
         } else {
-            format!("<{}>", f.type_params.join(", "))
+            format!(
+                "<{}>",
+                type_params_body(&f.type_params, &f.type_param_bounds)
+            )
         };
         let params = self.params(&f.params)?;
         let ret = match &f.ret {
@@ -180,7 +196,10 @@ impl Printer<'_> {
         let generics = if c.type_params.is_empty() {
             String::new()
         } else {
-            format!("<{}>", c.type_params.join(", "))
+            format!(
+                "<{}>",
+                type_params_body(&c.type_params, &c.type_param_bounds)
+            )
         };
         let mut header = format!("{}{prefix}class {}{generics}", vis_str(c.vis), c.name);
         if !c.extends.is_empty() {
@@ -316,7 +335,10 @@ impl Printer<'_> {
         let generics = if e.type_params.is_empty() {
             String::new()
         } else {
-            format!("<{}>", e.type_params.join(", "))
+            format!(
+                "<{}>",
+                type_params_body(&e.type_params, &e.type_param_bounds)
+            )
         };
         let mut variants = Vec::new();
         for v in &e.variants {

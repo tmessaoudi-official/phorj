@@ -350,6 +350,16 @@ impl Checker {
 
     /// Context-aware assignability: [`Ty::assignable`] plus this checker's nominal subtyping.
     pub(in crate::checker) fn ty_assignable(&self, from: &Ty, to: &Ty) -> bool {
+        // DEC-211: a BOUNDED type parameter is assignable to its bound interface (and anything the
+        // bound is assignable to) — so `T` where `T: Comparable` satisfies a `Comparable` parameter.
+        // The same-param `T <: T` case falls through to the structural path below.
+        if let Ty::Param(p) = from {
+            if let Some((_, iface)) = self.active_type_param_bounds.iter().find(|(n, _)| n == p) {
+                if self.ty_assignable(&Ty::Named(iface.clone(), Vec::new()), to) {
+                    return true;
+                }
+            }
+        }
         Ty::assignable_with(from, to, &|a, b| self.is_subtype(a, b))
     }
 }

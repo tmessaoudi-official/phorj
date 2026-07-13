@@ -442,6 +442,7 @@ pub fn erase_generics(program: Program) -> Program {
                     vis: f.vis,
                     name: f.name.clone(),
                     type_params: Vec::new(), // erased
+                    type_param_bounds: Vec::new(),
                     params: f.params.iter().map(|p| rparam(p, &params)).collect(),
                     ret: f.ret.as_ref().map(|t| rty(t, &params)),
                     throws: f.throws.iter().map(|t| rty(t, &params)).collect(),
@@ -478,6 +479,7 @@ pub fn erase_generics(program: Program) -> Program {
                                 vis: f.vis,
                                 name: f.name.clone(),
                                 type_params: Vec::new(), // erased
+                                type_param_bounds: Vec::new(),
                                 params: f.params.iter().map(|p| rparam(p, &set)).collect(),
                                 ret: f.ret.as_ref().map(|t| rty(t, &set)),
                                 throws: f.throws.iter().map(|t| rty(t, &set)).collect(),
@@ -549,6 +551,7 @@ pub fn erase_generics(program: Program) -> Program {
                     attrs: c.attrs,
                     name: c.name,
                     type_params: Vec::new(), // erased
+                    type_param_bounds: Vec::new(),
                     extends: c.extends,
                     implements: c.implements,
                     open: c.open,
@@ -571,6 +574,7 @@ pub fn erase_generics(program: Program) -> Program {
                     vis: e.vis,
                     name: e.name,
                     type_params: Vec::new(), // erased
+                    type_param_bounds: Vec::new(),
                     variants: e
                         .variants
                         .into_iter()

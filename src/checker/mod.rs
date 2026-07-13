@@ -74,6 +74,11 @@ struct FnSig {
     /// methods may be generic (M-RT generics-all); interface method signatures stay non-generic
     /// (the parser builds them with empty `type_params`), so theirs is always empty.
     type_params: Vec<String>,
+    /// Per-type-param bounds (DEC-211): `(param, Interface)` pairs. At a generic call site, after the
+    /// arguments bind each `T` (θ), the concrete binding must implement its bound (`E-BOUND-NOT-SATISFIED`)
+    /// — the soundness guarantee that makes the def-site's bounded-`T` member resolution safe post-erasure.
+    /// Empty for non-generic/unbounded functions and interface methods.
+    type_param_bounds: Vec<(String, String)>,
     /// Checked exception types this function declares (`throws A | B` ⇒ `[A, B]`), resolved at
     /// collection time. Empty for the common no-throws case. A call site must *discharge* each
     /// member — catch it in an enclosing `try`, or propagate it with `?` and a matching enclosing
@@ -451,10 +456,18 @@ pub struct Checker {
     /// being looked up as an alias/enum/class. Set around each generic function and cleared after;
     /// empty for everything else (M-RT S7).
     active_type_params: Vec<String>,
+    /// Per-type-param bounds in scope while checking the current function/method body (DEC-211):
+    /// `(param, Interface)` pairs, the union of the class's and the function's own bounds. A bounded
+    /// `Ty::Param("T")`'s member access resolves against the bound interface (`bound_of`). Recomputed
+    /// per function (empty for a non-generic/unbounded body); mirrors `active_type_params`.
+    active_type_param_bounds: Vec<(String, String)>,
     /// Type parameters of the generic *class* whose body is currently being checked (`["T"]` for a
     /// method/constructor inside `class Box<T>`). Unioned with the method's own `type_params` so a
     /// method body sees both. Empty for free functions and non-generic classes (M-RT generics-all).
     cur_class_type_params: Vec<String>,
+    /// Bounds of the generic *class* whose body is currently being checked (DEC-211), unioned into
+    /// `active_type_param_bounds` for each method. Empty for free functions and non-generic classes.
+    cur_class_type_param_bounds: Vec<(String, String)>,
     /// Return-type-overload classification (M-RT Slice C1), built by [`Self::finalize_overloads`]
     /// between collection and body-checking. Maps a free-function name whose overload set is a *pure
     /// return-overload set* (all members share identical parameter signatures, ≥2 distinct return

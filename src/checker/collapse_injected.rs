@@ -196,6 +196,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
             vis: f.vis,
             name: f.name.clone(),
             type_params: f.type_params.clone(),
+            type_param_bounds: f.type_param_bounds.clone(),
             params: f.params.iter().map(rparam).collect(),
             ret: f.ret.as_ref().map(rt),
             throws: f.throws.iter().map(rt).collect(),
@@ -284,6 +285,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 attrs: c.attrs.clone(),
                 name: c.name.clone(),
                 type_params: c.type_params.clone(),
+                type_param_bounds: c.type_param_bounds.clone(),
                 extends: c.extends.clone(),
                 implements: c.implements.clone(),
                 open: c.open,
@@ -312,6 +314,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 vis: e.vis,
                 name: e.name.clone(),
                 type_params: e.type_params.clone(),
+                type_param_bounds: e.type_param_bounds.clone(),
                 variants: e
                     .variants
                     .iter()

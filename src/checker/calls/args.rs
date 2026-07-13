@@ -58,7 +58,7 @@ impl Checker {
         // the transpiler emits via the `php` closure). `n` borrows the `'static` registry, so passing
         // `&n.params`/`&n.ret` alongside `&mut self` does not alias.
         if n.params.iter().any(ty_has_param) || ty_has_param(&n.ret) {
-            self.check_generic_call(&label, &n.params, &n.ret, args, span)
+            self.check_generic_call(&label, &n.params, &n.ret, &[], args, span)
         } else {
             // M4: a native may declare defaults for trailing params (e.g. `parseFloat(string, bool
             // permissive = false)`). Build the parallel `Option<Expr>` list from `native_defaults` —

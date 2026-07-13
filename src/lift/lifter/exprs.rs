@@ -221,6 +221,7 @@ pub(super) fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
         vis: crate::ast::Visibility::Public,
         name: e.name.clone(),
         type_params: Vec::new(),
+        type_param_bounds: Vec::new(),
         variants,
         injected: false,
         span: SP,

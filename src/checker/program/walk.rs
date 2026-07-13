@@ -233,12 +233,12 @@ impl Checker {
                 Item::Class(c) if c.foreign => {}
                 Item::Class(c) => {
                     self.check_class_attributes(c);
-                    self.check_type_body(&c.name, &c.type_params, &c.members);
+                    self.check_type_body(&c.name, &c.type_params, &c.type_param_bounds, &c.members);
                 }
                 // M-RT S8: a trait's method/ctor/hook bodies are checked once, in trait context
                 // (correct spans, no double-reporting), with the trait's own collected members as
                 // `this`. A trait has no type parameters this slice.
-                Item::Trait(t) => self.check_type_body(&t.name, &[], &t.members),
+                Item::Trait(t) => self.check_type_body(&t.name, &[], &[], &t.members),
                 // M-Test: a `test "name" { … }` block is checked like a `-> void` body with no `this`,
                 // but only under `phg test`; in a normal build it is rejected (production code cannot
                 // smuggle test blocks).

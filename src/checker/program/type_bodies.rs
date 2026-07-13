@@ -11,11 +11,16 @@ impl Checker {
         &mut self,
         type_name: &str,
         type_params: &[String],
+        type_param_bounds: &[(String, String)],
         members: &[crate::ast::ClassMember],
     ) {
         use crate::ast::{ClassMember, Modifier};
         let prev = self.cur_class.replace(type_name.to_string());
         let prev_tp = std::mem::replace(&mut self.cur_class_type_params, type_params.to_vec());
+        let prev_tpb = std::mem::replace(
+            &mut self.cur_class_type_param_bounds,
+            type_param_bounds.to_vec(),
+        );
         // Feature B — expression field initializers. An initializer is evaluated per-instance at
         // construction in declaration order, after the promoted ctor params are bound. So promoted
         // params are always available to an initializer; an explicit field is available only to LATER
@@ -67,6 +72,7 @@ impl Checker {
                     let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Void);
                     // type params in scope for any `T` annotation in the body
                     self.active_type_params = type_params.to_vec();
+                    self.active_type_param_bounds = self.cur_class_type_param_bounds.clone();
                     self.push_scope();
                     // constructor params are in scope inside its body
                     let ctor = self
@@ -82,6 +88,7 @@ impl Checker {
                     self.in_constructor = was_ctor;
                     self.pop_scope();
                     self.active_type_params.clear();
+                    self.active_type_param_bounds.clear();
                     self.cur_ret = prev_ret;
                 }
                 // A property hook (M-mut.7b) — type-check the `get` expression against the hook's
@@ -91,6 +98,7 @@ impl Checker {
                     ty, name, get, set, ..
                 } => {
                     self.active_type_params = type_params.to_vec();
+                    self.active_type_param_bounds = self.cur_class_type_param_bounds.clone();
                     let hook_ty = self.resolve_type(ty);
                     if let Some(e) = get {
                         self.push_scope();
@@ -129,6 +137,7 @@ impl Checker {
                         self.cur_ret = prev_ret;
                     }
                     self.active_type_params.clear();
+                    self.active_type_param_bounds.clear();
                 }
                 // Feature B: type-check a plain instance field's initializer with `this` + the field
                 // scope live, and reject a forward reference (reading a not-yet-initialized field).
@@ -159,6 +168,7 @@ impl Checker {
                         );
                     }
                     self.active_type_params = type_params.to_vec();
+                    self.active_type_param_bounds = self.cur_class_type_param_bounds.clone();
                     let fty = self.resolve_type(ty);
                     // A field-default lambda may not capture `this` (partially-built instance).
                     self.in_field_init = true;
@@ -173,6 +183,7 @@ impl Checker {
                         );
                     }
                     self.active_type_params.clear();
+                    self.active_type_param_bounds.clear();
                     available.insert(name.clone());
                 }
                 ClassMember::Field { .. } => {}
@@ -180,6 +191,7 @@ impl Checker {
         }
         self.check_definite_assignment(type_name, members);
         self.cur_class_type_params = prev_tp;
+        self.cur_class_type_param_bounds = prev_tpb;
         self.cur_class = prev;
     }
 
@@ -312,6 +324,11 @@ impl Checker {
         let mut active = self.cur_class_type_params.clone();
         active.extend(f.type_params.iter().cloned());
         self.active_type_params = active;
+        // DEC-211: the same union for bounds — a method sees the class's + its own type-param bounds,
+        // so a bounded `Ty::Param` resolves member access against its bound interface (`bound_of`).
+        let mut active_bounds = self.cur_class_type_param_bounds.clone();
+        active_bounds.extend(f.type_param_bounds.iter().cloned());
+        self.active_type_param_bounds = active_bounds;
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
             None => Ty::Void,

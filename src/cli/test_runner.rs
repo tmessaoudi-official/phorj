@@ -160,6 +160,7 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
         vis: Visibility::Public,
         name: "main".into(),
         type_params: Vec::new(),
+        type_param_bounds: Vec::new(),
         params: Vec::new(),
         ret: Some(Type::Named {
             name: "void".into(),

@@ -220,7 +220,14 @@ impl Checker {
                 self.check_args_defaulted(name, &sig.params, &sig.defaults, args, span);
                 sig.ret.clone()
             } else {
-                self.check_generic_call(name, &sig.params, &sig.ret, args, span)
+                self.check_generic_call(
+                    name,
+                    &sig.params,
+                    &sig.ret,
+                    &sig.type_param_bounds,
+                    args,
+                    span,
+                )
             };
         }
         // Overload set (M-RT): generic members were rejected at collection, so every overload is

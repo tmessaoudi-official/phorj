@@ -22,6 +22,10 @@ pub struct FunctionDecl {
     /// annotation naming one of these (e.g. `T`) resolves to `Ty::Param("T")` while checking this
     /// function, and is erased to `Type::Erased` before any backend runs.
     pub type_params: Vec<String>,
+    /// DEC-211 generic bounds — sparse `(param, Interface)` pairs. `<T: Comparable>` → `("T",
+    /// "Comparable")`; a bare `<T>` contributes no pair. checker-only (the checker enforces each
+    /// bound pre-erasure from the parser AST); erased before any backend, like `type_params`.
+    pub type_param_bounds: Vec<(String, String)>,
     pub params: Vec<Param>,
     pub ret: Option<Type>,
     /// Declared checked-exception set: the `throws T (| T)*` clause (M-faults 2b). empty for a
@@ -61,6 +65,7 @@ pub fn synth_empty_main() -> Item {
         vis: Visibility::Public,
         name: "main".to_string(),
         type_params: Vec::new(),
+        type_param_bounds: Vec::new(),
         params: Vec::new(),
         ret: None,
         throws: Vec::new(),
@@ -156,6 +161,9 @@ pub struct EnumDecl {
     /// are **erased** (rewritten to `Type::Erased` across every variant) before any backend runs —
     /// the same compile-time-only discipline as generic classes (`Box<T>`).
     pub type_params: Vec<String>,
+    /// DEC-211 generic bounds — sparse `(param, Interface)` pairs (see [`FunctionDecl::type_param_bounds`]).
+    /// checker-only; erased before any backend.
+    pub type_param_bounds: Vec<(String, String)>,
     pub variants: Vec<EnumVariant>,
     /// True for a compiler-INJECTED enum (`Json`, `RoundingMode` — added by `cli::inject_*_prelude`
     /// when the matching `Core.*` module is imported), false for a user-declared enum. Its variants
@@ -226,6 +234,9 @@ pub struct ClassDecl {
     /// arguments are inferred at construction and these parameters are **erased** (rewritten to
     /// `Type::Erased` across every member) before any backend runs.
     pub type_params: Vec<String>,
+    /// DEC-211 generic bounds — sparse `(param, Interface)` pairs (see [`FunctionDecl::type_param_bounds`]).
+    /// checker-only; erased before any backend.
+    pub type_param_bounds: Vec<(String, String)>,
     /// Parent classes this class `extends` (M-RT S6). empty for a root class; one entry for single
     /// inheritance (`class Dog extends Animal`); two or more for multiple inheritance
     /// (`class Duck extends Swimmer, Flyer`). Each parent must be an `open` class

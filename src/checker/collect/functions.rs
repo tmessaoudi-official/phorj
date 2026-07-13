@@ -42,6 +42,7 @@ impl Checker {
             defaults,
             ret,
             type_params: f.type_params.clone(),
+            type_param_bounds: f.type_param_bounds.clone(),
             throws,
             is_static: false, // free functions are never static
         };

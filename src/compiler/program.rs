@@ -36,6 +36,7 @@ pub(super) fn compile_program_with(
                 attrs: Vec::new(), // synthetic trait→class carries no attributes
                 name: t.name.clone(),
                 type_params: Vec::new(),
+                type_param_bounds: Vec::new(),
                 extends: Vec::new(),
                 implements: Vec::new(),
                 open: false,
@@ -356,6 +357,7 @@ pub(super) fn compile_program_with(
                             vis: Visibility::Public,
                             name: format!("{name}$get"),
                             type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
                             params: Vec::new(),
                             ret: Some(ty.clone()),
                             throws: Vec::new(),
@@ -378,6 +380,7 @@ pub(super) fn compile_program_with(
                             vis: Visibility::Public,
                             name: format!("{name}$set"),
                             type_params: Vec::new(),
+                            type_param_bounds: Vec::new(),
                             params: vec![p.clone()],
                             ret: None,
                             throws: Vec::new(),

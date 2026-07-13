@@ -201,6 +201,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             vis: f.vis,
             name: f.name.clone(),
             type_params: f.type_params.clone(),
+            type_param_bounds: f.type_param_bounds.clone(),
             params: f.params.iter().map(|p| rparam(p, a)).collect(),
             ret: f.ret.as_ref().map(|t| rt(t, a, 0)),
             throws: f.throws.iter().map(|t| rt(t, a, 0)).collect(),
@@ -287,6 +288,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                 attrs: c.attrs.clone(),
                 name: c.name.clone(),
                 type_params: c.type_params.clone(),
+                type_param_bounds: c.type_param_bounds.clone(),
                 extends: c.extends.clone(),
                 implements: c.implements.clone(),
                 open: c.open,
@@ -316,6 +318,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                 vis: e.vis,
                 name: e.name.clone(),
                 type_params: e.type_params.clone(),
+                type_param_bounds: e.type_param_bounds.clone(),
                 variants: e
                     .variants
                     .iter()

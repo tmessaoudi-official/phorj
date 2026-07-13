@@ -90,6 +90,7 @@ pub(super) fn synth_factory(requested: &str, root: &Built) -> Item {
         vis: crate::ast::Visibility::Public,
         name: factory_name(requested),
         type_params: Vec::new(),
+        type_param_bounds: Vec::new(),
         params: Vec::new(),
         // Return the REQUESTED type (`inject<Logger>()` returns `Logger`, built as its single impl —
         // assignable), so the call site types exactly as the user wrote.

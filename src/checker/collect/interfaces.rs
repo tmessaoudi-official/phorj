@@ -15,6 +15,7 @@ impl Checker {
             attrs: Vec::new(), // synthetic trait→class carries no attributes
             name: t.name.clone(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             extends: Vec::new(),
             implements: Vec::new(),
             open: false,
@@ -99,6 +100,7 @@ impl Checker {
                     defaults: vec![None; m.params.len()],
                     ret,
                     type_params: Vec::new(),
+                    type_param_bounds: Vec::new(),
                     // Interface-method throws are not enforced through dynamic dispatch this slice
                     // (a documented deferral); keep the set empty so no call site mis-discharges.
                     throws: Vec::new(),

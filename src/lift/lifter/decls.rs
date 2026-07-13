@@ -48,6 +48,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             vis: crate::ast::Visibility::Public,
             name: "main".into(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             params: Vec::new(),
             ret: Some(named("void")),
             throws: Vec::new(),
@@ -96,6 +97,7 @@ impl Lifter {
             vis: crate::ast::Visibility::Public,
             name: f.name.clone(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             params,
             ret: lift_ret(&f.ret, Some(&f.body))?,
             throws: Vec::new(),
@@ -116,6 +118,7 @@ impl Lifter {
             attrs: Vec::new(), // PHP→Phorj attribute lifting deferred (DEC-194 later slice)
             name: c.name.clone(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             extends: c.extends.clone().into_iter().collect(),
             implements: c.implements.clone(),
             // PHP is extensible-by-default (only `final` seals it); Phorj is final-by-default, so a
@@ -239,6 +242,7 @@ impl Lifter {
             vis: crate::ast::Visibility::Public,
             name: m.name.clone(),
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             params,
             ret: lift_ret(&m.ret, m.body.as_deref())?,
             throws: Vec::new(),

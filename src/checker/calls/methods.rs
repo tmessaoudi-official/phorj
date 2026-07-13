@@ -45,6 +45,17 @@ impl Checker {
         } else {
             UfcsNav::SafeNonNull
         };
+        // DEC-211: a BOUNDED type parameter resolves member access against its bound interface — so
+        // `a.cmp(b)` where `a: T` and `T: Comparable` type-checks against `Comparable`'s members. An
+        // unbounded `T` is left opaque (unchanged). The instantiation site separately guarantees the
+        // concrete type argument implements the bound, so this resolution is sound after erasure.
+        let base = match &base {
+            Ty::Param(p) => match self.active_type_param_bounds.iter().find(|(n, _)| n == p) {
+                Some((_, iface)) => Ty::Named(iface.clone(), Vec::new()),
+                None => base,
+            },
+            _ => base,
+        };
         let ret = match base {
             // Built-in concurrency handles (M6 W4): `Channel<T>` (send/recv), `Task<T>` (join).
             // Dispatched before user-class lookup — `Channel`/`Task` are reserved built-ins, never a

@@ -305,7 +305,9 @@ impl Checker {
                 self.route_call_throw(skip_throws, name, &e, span);
             }
             return if params.iter().any(ty_has_param) || ty_has_param(ret) {
-                self.check_generic_call(name, params, ret, args, span)
+                // Bounds on an OVERLOADED generic function are a documented deferral (the `applied`
+                // tuples don't carry them); the common non-overloaded path (core.rs) enforces them.
+                self.check_generic_call(name, params, ret, &[], args, span)
             } else {
                 self.check_args(name, params, args, span);
                 ret.clone()
@@ -384,6 +386,7 @@ impl Checker {
         name: &str,
         params: &[Ty],
         ret: &Ty,
+        bounds: &[(String, String)],
         args: &[crate::ast::Expr],
         span: Span,
     ) -> Ty {
@@ -416,6 +419,25 @@ impl Checker {
         }
         if !ok {
             return Ty::Error;
+        }
+        // DEC-211: enforce each type-parameter bound against the concrete type the arguments bound it
+        // to (θ). This is the soundness guarantee behind the def-site's bounded-`T` member resolution:
+        // once `T` is fixed to a concrete `X`, `X` must implement the bound interface, so the bound's
+        // methods (resolved at the definition site) genuinely exist on `X` after erasure.
+        for (p, iface) in bounds {
+            if let Some(concrete) = theta.get(p) {
+                let want = Ty::Named(iface.clone(), Vec::new());
+                if !self.ty_assignable(concrete, &want) {
+                    self.err_coded(
+                        span,
+                        format!(
+                            "type argument `{concrete}` for `{p}` does not satisfy the bound `: {iface}`"
+                        ),
+                        "E-BOUND-NOT-SATISFIED",
+                        Some(format!("`{concrete}` must implement `{iface}`")),
+                    );
+                }
+            }
         }
         apply_subst(ret, &theta)
     }

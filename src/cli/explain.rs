@@ -544,6 +544,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              given variant/type is guarded, the match can fall through with no arm — so add an\n\
              **unguarded** arm (or `default`) covering that shape as a fallback.\n"
         }
+        "E-BOUND-NOT-SATISFIED" => {
+            "E-BOUND-NOT-SATISFIED — a generic type argument does not satisfy its type-parameter bound.\n\n\
+             A bounded type parameter `<T: Interface>` (DEC-211) constrains `T` to types that implement\n\
+             the bound, so the function body may call the bound's methods on a `T` value. At a call site\n\
+             the argument types fix `T` to a concrete type — which must implement the bound, or the\n\
+             bound's methods would not exist on it after erasure. Make the type argument implement the\n\
+             bound interface, or relax/remove the bound. (Erased before any backend — the bound is a\n\
+             compile-time contract, like the parameter itself.)\n"
+        }
         "E-MATCH-BARE-VARIANT" => {
             "E-MATCH-BARE-VARIANT — a bare name (or a standalone `_`) is used as a match arm.\n\n\
              PascalCase is the type/variant namespace, so a bare `Circle => …` LOOKS like it matches the\n\

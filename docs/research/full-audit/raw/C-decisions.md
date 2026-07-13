@@ -489,10 +489,16 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   stay bound-less (rejected — `max`/`sort` unwritable); hardcode magic `Comparable`/`Numeric` (rejected —
   the one-domain-hardcode anti-pattern this sweep removes elsewhere). (Doc fix: UNIFIED-SPEC:104 says
   "monomorphized"; impl is ERASURE everywhere else. Memory index "trait CLOSED" is wrong — DEC-177 blessed traits.)
-  *(ATTEMPTED + REVERTED 2026-07-13 — kept clean for a sound fresh-context finish. SOUNDNESS FINDING:
-  a shippable DEC-211 needs BOTH (a) def-site resolution AND (b) the instantiation check; def-site alone
-  is UNSOUND (`max<Socket>()` on a `Socket` lacking the bound compiles then faults at runtime — violates
-  refuses-to-lie), and parse-only is a misleading no-op — so there is no committable partial. FULL IMPL
+  *(SHIPPED 2026-07-13 — full + sound. Both halves built: (a) def-site — a bounded `Ty::Param(T)`'s
+  member access resolves against its bound interface (`check_method_call` remap) + a bounded `T` is
+  `ty_assignable` to its bound (so `a.cmp(b)` with `b: T` type-checks); (b) instantiation — after θ binds
+  `T:=X` in `check_generic_call`, `X` must implement the bound or `E-BOUND-NOT-SATISFIED`. Bounds
+  threaded via `active_type_param_bounds`/`cur_class_type_param_bounds` (checker context) + `FnSig`; the
+  formatter renders `<T: Bound>` (`type_params_body`); pre-check rewrite passes (rewrite_alias/
+  collapse_injected) PRESERVE bounds (the key bug: they'd dropped them to `Vec::new()` before the check).
+  Example `guide/generic-bounds.phg`, checker test `generic_bound_enforced_at_definition_and_instantiation`,
+  `phg explain E-BOUND-NOT-SATISFIED`. Full oracle 1976 green; clippy both + fmt clean; byte-identical.
+  The earlier "no committable partial" was right — so it was built whole, not partial. FULL IMPL
   MAP (verified sites): (1) AST — add `type_param_bounds: Vec<(String,String)>` to FunctionDecl/ClassDecl/
   EnumDecl (`ast/decls.rs`); ~31 construction sites need the field (parser sites use the parsed value, all
   backend/erasure/rebuild/test sites `Vec::new()`). (2) Parser — `parse_type_params` (`parser/types.rs`)

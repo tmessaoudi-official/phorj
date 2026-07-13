@@ -304,7 +304,7 @@ impl Parser {
     ) -> Result<FunctionDecl, Diagnostic> {
         self.expect(&TokenKind::Function, "'function'")?;
         let name = self.expect_ident("a function name")?;
-        let type_params = self.parse_type_params()?;
+        let (type_params, type_param_bounds) = self.parse_type_params()?;
         self.expect(&TokenKind::LParen, "'(' after function name")?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen, "')' to close parameters")?;
@@ -340,6 +340,7 @@ impl Parser {
             vis: Visibility::Public,
             name,
             type_params,
+            type_param_bounds,
             params,
             ret,
             throws,
@@ -362,7 +363,7 @@ impl Parser {
         }
         self.expect(&TokenKind::Function, "'function' after 'declare'")?;
         let name = self.expect_ident("a foreign function name")?;
-        let type_params = self.parse_type_params()?;
+        let (type_params, type_param_bounds) = self.parse_type_params()?;
         self.expect(&TokenKind::LParen, "'(' after function name")?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen, "')' to close parameters")?;
@@ -381,6 +382,7 @@ impl Parser {
             vis: Visibility::Public,
             name,
             type_params,
+            type_param_bounds,
             params,
             ret,
             throws: Vec::new(),
@@ -455,6 +457,7 @@ impl Parser {
                         vis: Visibility::Public,
                         name: mname,
                         type_params: Vec::new(),
+                        type_param_bounds: Vec::new(),
                         params,
                         ret,
                         throws: Vec::new(),
@@ -489,6 +492,7 @@ impl Parser {
             attrs: Vec::new(), // a foreign `declare` rejects attributes (checked above)
             name,
             type_params: Vec::new(),
+            type_param_bounds: Vec::new(),
             extends,
             implements,
             open: false,

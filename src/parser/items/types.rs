@@ -9,7 +9,7 @@ impl Parser {
         let name = self.expect_ident("an enum name")?;
         // Optional generic parameter list `<T, E>` immediately after the enum name (M-RT generic
         // enums) — `enum Result<T, E> { Success(T value), Failure(E error) }`.
-        let type_params = self.parse_type_params()?;
+        let (type_params, type_param_bounds) = self.parse_type_params()?;
         self.expect(&TokenKind::LBrace, "'{' to open enum body")?;
         let mut variants = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
@@ -36,6 +36,7 @@ impl Parser {
             vis: Visibility::Public,
             name,
             type_params,
+            type_param_bounds,
             variants,
             injected: false, // user-written; only `cli::inject_*_prelude` sets this true
             span: sp,
@@ -56,7 +57,7 @@ impl Parser {
         let name = self.expect_ident("a class name")?;
         // Optional generic parameter list `<T, U>` immediately after the class name (M-RT
         // generics-all), before `extends`/`implements` — `class Box<T> extends … implements … { … }`.
-        let type_params = self.parse_type_params()?;
+        let (type_params, type_param_bounds) = self.parse_type_params()?;
         // Optional `extends A, B` parent-class list (M-RT S6) — before `implements`.
         let extends = if self.eat(&TokenKind::Extends) {
             self.parse_name_list("a class name after 'extends'")?
@@ -111,6 +112,7 @@ impl Parser {
             attrs,
             name,
             type_params,
+            type_param_bounds,
             extends,
             implements,
             open,
@@ -258,6 +260,7 @@ impl Parser {
                 vis: Visibility::Public,
                 name: mname,
                 type_params: Vec::new(),
+                type_param_bounds: Vec::new(),
                 params,
                 ret,
                 throws,

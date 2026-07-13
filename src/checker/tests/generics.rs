@@ -2,6 +2,32 @@
 
 use super::support::*;
 
+/// DEC-211 — a `<T: Interface>` bound is enforced at BOTH the definition site (a bounded `T`'s member
+/// access resolves against the bound) and at instantiation (the concrete type arg must implement it).
+#[test]
+fn generic_bound_enforced_at_definition_and_instantiation() {
+    let prelude = "interface Comparable { function cmp(Comparable o): int; } \
+         class Money implements Comparable { constructor(public int cents) {} function cmp(Comparable o): int { return this.cents; } } \
+         class Socket { constructor() {} } \
+         function maxOf<T: Comparable>(T a, T b): T { if (a.cmp(b) > 0) { return a; } return b; } ";
+    // Definition site: `a.cmp(b)` on a bounded `T` type-checks; a conforming argument type is clean.
+    let ok = errors_of(&format!(
+        "{prelude} function main(): void {{ Money m = maxOf(new Money(5), new Money(3)); }}"
+    ));
+    assert!(
+        ok.is_empty(),
+        "conforming bounded call should be clean, got {ok:?}"
+    );
+    // Instantiation site: `Socket` does not implement `Comparable` → E-BOUND-NOT-SATISFIED.
+    let bad = errors_of(&format!(
+        "{prelude} function main(): void {{ Socket s = maxOf(new Socket(), new Socket()); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-BOUND-NOT-SATISFIED")),
+        "expected E-BOUND-NOT-SATISFIED, got {bad:?}"
+    );
+}
+
 #[test]
 fn generic_identity_typechecks_and_infers() {
     // A generic function used at two distinct concrete types — both inferred clean.

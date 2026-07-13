@@ -381,6 +381,7 @@ impl Checker {
                         defaults: vec![None; f.params.len()],
                         ret,
                         type_params: f.type_params.clone(),
+                        type_param_bounds: f.type_param_bounds.clone(),
                         throws,
                         is_static: f.modifiers.contains(&Modifier::Static),
                     };

@@ -2,6 +2,10 @@
 
 use super::*;
 
+/// A parsed generic parameter list (DEC-211): the parameter names in order, plus the sparse
+/// `(param, Interface)` bound pairs (`<T, U: Comparable>` → `(["T","U"], [("U","Comparable")])`).
+type ParsedTypeParams = (Vec<String>, Vec<(String, String)>);
+
 impl Parser {
     /// Parse a type annotation: `Name`, `Name<T, U>`, `T?`, `(T, U) -> R`, or a union `A | B | C`
     /// (M-RT S4). A single atom is returned unchanged (so a non-union program's AST is byte-identical);
@@ -182,19 +186,34 @@ impl Parser {
     }
 
     /// Optional generic parameter list `<T, U>` immediately after a function name (M-RT S7).
-    /// Absent ⇒ empty vec. Both free functions and methods may be generic (M-RT generics-all);
+    /// Absent ⇒ two empty vecs. Both free functions and methods may be generic (M-RT generics-all);
     /// generic *interface* methods are still a non-parse because interface methods build their
     /// `FunctionDecl` directly with an empty `type_params` (no `<…>` is consumed there).
-    pub(super) fn parse_type_params(&mut self) -> Result<Vec<String>, Diagnostic> {
+    ///
+    /// DEC-211: each parameter may carry an OPTIONAL single interface bound (`<T: Comparable>`).
+    /// Returns `(names, bounds)` where `bounds` is a SPARSE list of `(param, Interface)` pairs — a
+    /// bare `<T>` contributes no pair. Additive: `<T>` still parses exactly as before. This slice is
+    /// mechanical scaffold only — the bound is parsed and carried on the decl; no checker enforcement.
+    pub(super) fn parse_type_params(&mut self) -> Result<ParsedTypeParams, Diagnostic> {
         if !self.check(&TokenKind::Lt) {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
         self.advance(); // consume '<'
-        let mut params = vec![self.expect_ident("a type parameter name")?];
-        while self.eat(&TokenKind::Comma) {
-            params.push(self.expect_ident("a type parameter name")?);
+        let mut params = Vec::new();
+        let mut bounds = Vec::new();
+        loop {
+            let name = self.expect_ident("a type parameter name")?;
+            if self.eat(&TokenKind::Colon) {
+                let bound =
+                    self.expect_ident("an interface bound after ':' in a type parameter")?;
+                bounds.push((name.clone(), bound));
+            }
+            params.push(name);
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
         }
         self.expect(&TokenKind::Gt, "'>' to close type parameters")?;
-        Ok(params)
+        Ok((params, bounds))
     }
 }
