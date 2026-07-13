@@ -58,6 +58,19 @@ else
     echo "microbench-gate: release binary $BIN absent — SKIP (run: cargo build --release; infra, not a regression)" >&2
     exit 0
   fi
+  # Load guard: this gate compares native-VM vs docker-php ABSOLUTE ratios, which swing 3-4x on this
+  # shared box under load (the pinned core is not isolated via isolcpus). Blocking a push on a sample
+  # taken under load yields FALSE WIN->LOSS flips — verified 2026-07-13: the collection micros read
+  # 1.1-1.7 (WIN) at load <2 but 0.2-0.5 (LOSS) at load ~7, with NO code change. The load-IMMUNE
+  # VM-regression gate is perf-gate.sh (same-process tree/VM ratio); THIS ratchet needs a quiet box
+  # (MASTER-PLAN §0: "MUST re-run microbench-gate on a QUIET box"). So SKIP (never block) when the
+  # 1-min load exceeds MICROBENCH_MAX_LOAD — a push is never wedged by an unmeasurable-under-load box.
+  _load1="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)"
+  _maxload="${MICROBENCH_MAX_LOAD:-2.5}"
+  if awk -v l="$_load1" -v m="$_maxload" 'BEGIN{exit (l>m)?0:1}'; then
+    echo "microbench-gate: 1-min load $_load1 > $_maxload — SKIP the G-8 ratchet (box too loaded to measure native-VM-vs-docker-php reliably; perf-gate.sh still gates VM regressions; re-run on a quiet box). Not a regression." >&2
+    exit 0
+  fi
   json="$(bash "$ROOT/scripts/microbench.sh" --json)" || {
     echo "microbench-gate: harness run failed" >&2
     exit 2
