@@ -516,6 +516,52 @@ order: **② boxed-value JIT is the *perf* lever** (the unmet mandate), **③ we
 lever** — §11.3 projects the DB+HTTP+sessions wave (W3) as the jump to ≈65–66%. String.format closed
 the sprintf *directive engine* (a real but ~4-row contribution against a 518-row stdlib denominator).
 
+### 4.7 Recompute at HEAD `bea7f61` (2026-07-13 — Phase-A close + ownership stack + DEC batch)
+
+**Scope of the span (af3aad3 → bea7f61, sessions 5–6, ~45 commits):** Phase A perf-tail closed
+(ALL 21 micros ≥ 1.0× vs release-php+JIT, protocol-ratcheted medians), Ω-0 footgun audit, Ω-1
+slice 1 (Core.Sql per-verb DBAL), JIT widening W1–W9 + S8 (strings/lists/maps/instances/enums/
+union-Dyn cells — the FULL sqlbuild pipeline compiles end-to-end), the ownership stack
+(chain-accumulator, Rc-sharing, L2b receiver-transfer + field-TAKE; sqlbuild macro 0.27→0.36 vs
+php), the DEC-201..206 adjudication batch RULED, and DEC-202 SHIPPED (builtin-class
+E-RESERVED-NAME).
+
+**Row flips [Verified: commits + gate output]:**
+
+| # | Row(s) | Was | Now | Δ | Evidence |
+|---|---|---|---|--|---|
+| 1 | RT-007 (JIT) | P | COVERED | RT +0.5 | The JIT is no longer "unboxed numerics only": strings, lists, maps, instances (wide two-slot), enums, union cells and the whole Core.Sql pipeline compile (sessions 5–6); default feature; 21/21 micros ≥ php+JIT [Verified: microbench-gate PASS 21 WIN / 0 flips, quiet-box 2026-07-13] |
+
+Explicitly checked-and-ruled-out: **Core.Sql DBAL flips no FN-DB rows** (the rows are driver
+EXECUTION functions — mysqli/PDO query/bind/fetch; a query *builder* without `Core.Db` execution
+covers none of them — the builder is credited in the Vision programme instead); **DEC-202 flips no
+SYN row** (a new reject-rule, not a coverage change); DI v1 / user attributes stay uncredited (§4.6
+rationale unchanged).
+
+**Recomputed arithmetic (additive delta on §4.6):**
+- SYN: unchanged **79.8%** · FN usage-weighted: unchanged **35.2%**
+- RT: 13→13.5 / 18 = **75.0%**
+- **PHP-parity = 0.35×79.8 + 0.40×35.2 + 0.25×75.0 = 27.9 + 14.1 + 18.75 ≈ 61%**
+- Raw floor: (103 + 154 + 13.5)/665 ≈ **41%**
+
+**Vision %** — programme deltas: **M-perf 40→70** (the HARD PERF MANDATE is now MET on the entire
+micro suite — all 21 ≥ 1.0×, several far above (objalloc 9.5×, match 7.2×, trycatch 33×), JIT
+default, gate ratcheted; NOT 100 because the sqlbuild macro-bench is still 0.36 vs php and deep
+object-graph workloads remain VM-bound [Verified: gate output + pinned sqlbuild timings]);
+**GA-M12 60→62** (Core.Sql DBAL = the query-building half of the DB story; execution half — Core.Db
+driver — still unshipped [Inferred: MASTER-PLAN Ω-1 status]). Mean = (1060 + 30 + 2)/16 = 1092/16
+= **68.3%**. **Vision = 0.70×60.75 + 0.30×68.3 = 42.5 + 20.5 ≈ 63%.**
+
+**Grade:** RT-007 flip **[Verified]**; headline **[Inferred]** (additive delta, same ratified
+model); programme grades **[Speculative]** (judgment, quoted with the 35/40/25 weights).
+
+**The same finding, sharpened:** two more sessions of perf + language work moved parity
++1 (60→61) and Vision +1 (62→63) — *the model is doing its job*: the dominant drag is UNCHANGED
+stdlib breadth (DB execution #1, HTTP client #2, sessions #3, FS #5, XML #12, intl #19). The
+projected jump to ≈65–66% parity is the W3 web spine (Core.Db + HTTP + sessions) — which is
+exactly Ω-1's remainder, queued right after the sqlbuild ≥1.0 gate (META-1).
+
+
 ---
 
 ## TOP-20 highest-impact gaps (impact = frequency in real PHP code × migration blockage)
