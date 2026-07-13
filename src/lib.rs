@@ -36,6 +36,7 @@ pub mod manifest;
 pub mod mem;
 pub mod native;
 pub mod parser;
+pub mod php_names;
 pub mod phstr;
 pub mod profile;
 pub mod serve;

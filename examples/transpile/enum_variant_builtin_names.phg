@@ -1,0 +1,37 @@
+package Main;
+
+// DEC-213 — an enum variant whose name collides with an always-preloaded PHP builtin class
+// (RuntimeException, ArrayObject, Exception, …) transpiles to a MANGLED PHP class name
+// (`RuntimeException_`) so it never redeclares the builtin. The mangle list is single-sourced
+// with the checker's DEC-202 reject (`crate::php_names`), so the two can never drift. Mangling is
+// invisible: `run`/`runvm` address a variant by its Phorj name, so stdout is identical on all
+// backends and under real PHP. Before the fix, the SPL/date/json names slipped through the
+// transpiler's narrower list and the transpiled PHP threw "Cannot redeclare class RuntimeException".
+import Core.Output;
+
+// Variants: RuntimeException (SPL), ArrayObject (SPL container), Exception (engine-core),
+// DateInterval (date) all collide with PHP builtins and are mangled; Plain is ordinary.
+enum Event { RuntimeException(string msg), ArrayObject(int count), Exception(string what), DateInterval(int days), Plain(int n) }
+
+function describe(Event e): string {
+    return match (e) {
+        RuntimeException(m) => "runtime: {m}",
+        ArrayObject(c) => "arrayobject count={c}",
+        Exception(w) => "exception: {w}",
+        DateInterval(d) => "interval {d}d",
+        Plain(n) => "plain {n}"
+    };
+}
+
+function main(): void {
+    List<Event> events = [
+        new RuntimeException("boom"),
+        new ArrayObject(3),
+        new Exception("bad"),
+        new DateInterval(7),
+        new Plain(42)
+    ];
+    for (Event e in events) {
+        Output.printLine(describe(e));
+    }
+}

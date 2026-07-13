@@ -30,11 +30,13 @@ pub(super) fn last_segment(name: &str) -> &str {
 ///      position (`empty`/`echo`/`print`/`match`/`fn`/… — e.g. a variant `Empty` ⇒ `final class Empty`
 ///      is `Parse error: unexpected token "empty"`). This group closes the F-m byte-identity break
 ///      (`run ≡ run --tree-walker` succeeded while the transpiled PHP failed to parse);
-///   3. **always-present PHP builtin class/interface names** (`Exception`/`Error`/`Closure`/… — a
-///      variant `Exception` ⇒ `final class Exception` is a "cannot redeclare class" fatal). This group
-///      is the always-loaded engine core (no extension required); the *unbounded* extension-loaded tail
-///      (`PDO`, `SplStack`, …) is not enumerable and stays caught by the transpile→real-PHP oracle —
-///      an honest, bounded reduction, acceptable because mangling is invisible and free.
+///   3. **always-present PHP builtin class/interface names** (`Exception`/`DateTime`/`ArrayObject`/… — a
+///      variant `DateTime` ⇒ `final class DateTime` is a "cannot redeclare class" fatal). Single-sourced
+///      via `crate::php_names::is_php_builtin_class_name` (DEC-213) — the SAME list the checker's DEC-202
+///      reject uses, so the reject set and this mangle set can never drift (they did before DEC-213: a
+///      variant named after an SPL/date/json builtin passed the reject but redeclared in transpiled PHP).
+///      The *unbounded* extension-loaded tail (`PDO`, `mysqli`, …) is not enumerable and stays caught by
+///      the transpile→real-PHP oracle — an honest, bounded reduction; mangling is invisible and free.
 pub(super) fn php_variant_name(variant: &str) -> String {
     // The trailing segment is the actual PHP class name (`\Ns\Int` ⇒ `Int`); mangle only that.
     let leaf = last_segment(variant);
@@ -82,26 +84,12 @@ pub(super) fn php_variant_name(variant: &str) -> String {
         "match",
         "fn",
         "readonly",
-        // 3. always-present PHP builtin class/interface names (engine core, no extension needed)
-        "exception",
-        "error",
-        "throwable",
-        "typeerror",
-        "valueerror",
-        "parseerror",
-        "arithmeticerror",
-        "divisionbyzeroerror",
-        "argumentcounterror",
-        "closure",
-        "generator",
-        "stdclass",
-        "stringable",
-        "countable",
-        "iterator",
-        "traversable",
-        "arrayaccess",
+        // Group 3 (always-present PHP builtin class/interface names) is single-sourced below via
+        // `crate::php_names::is_php_builtin_class_name` (DEC-213) — do NOT re-inline it here.
     ];
-    if RESERVED.contains(&leaf.to_ascii_lowercase().as_str()) {
+    if RESERVED.contains(&leaf.to_ascii_lowercase().as_str())
+        || crate::php_names::is_php_builtin_class_name(leaf)
+    {
         format!("{variant}_")
     } else {
         variant.to_string()
