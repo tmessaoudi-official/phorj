@@ -497,7 +497,15 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   deferred (no empty-set VM op → would need a new `Op`). **PART-2 PENDING**: remove the empty-`[]`
   contextual typing (calls/args.rs `check_arg` + `thread_literal_expected` empty-list path + decl/return
   threading) so bare `[]` errors "use `new List<T>()`", then codemod every empty-`[]` across the repo —
-  a DEC-209-sized churn; separate slice, fresh context.)*
+  a DEC-209-sized churn; separate slice, fresh context. **RE-SEQUENCED (2026-07-13, evidence-based):
+  the 3-edit checker removal was ATTEMPTED and REVERTED — measured blast radius = 9 differential
+  examples + 7 checker/JIT tests, and critically the empty-`[]` sites are DOMINATED by (a) the WEB
+  examples (router/middleware/controller/route-constraints/router-attrs) that DEC-218 EXTERNALIZES and
+  (b) the Core.Sql PRELUDE (the sqlbuild/union-dyn JIT tests broke — the prelude uses empty `[]`) that
+  DEC-208 EXTERNALIZES. Doing part-2 now = prelude surgery + double-churn on code about to leave the
+  language. CORRECT ORDER: DEC-208 (Sql prelude → userland) + DEC-218 (web spine → userland) FIRST,
+  THEN part-2 codemods only the small remaining general-purpose empty-`[]` set. Part-2 depends on
+  DEC-208/DEC-218.)*
 - **DEC-215 — DI stays compile-time; L1/L2 refactor affirmed, scheduled Ω-4/Ω-7.** DI v1 is a 1292-LOC
   bespoke COMPILER pass (`desugar_di/`, pre-check, `Expr::Inject`) — the same "app framework privileged
   into the compiler" category as the ejected SQL builder (DEC-208). The spec's own ruling stands: build a
