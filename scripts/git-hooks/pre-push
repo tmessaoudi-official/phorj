@@ -48,6 +48,18 @@ else
   cargo test --features jit --quiet
 fi
 
+# `Core.Db` (DEC-208) is a Tier-3, non-default, native-only feature (`db` → rusqlite bundled SQLite).
+# The default/jit gates above compile it OUT, so its tests never run there; this step is the sole gate
+# that exercises the `db` surface. Targeted (the `db` module + the `tests/db.rs` fixture) so a push
+# pays the one-time rusqlite C compile but not a whole second full-suite run. Skipped only if the crate
+# fails to build the feature (never silently green — a build error blocks the push).
+echo "[pre-push] cargo test --features db (Core.Db — Tier-3 gated, native-only)"
+if cargo nextest --version >/dev/null 2>&1; then
+  cargo nextest run --features db -E 'test(/db/)' --status-level fail
+else
+  cargo test --features db db --quiet
+fi
+
 echo "[pre-push] microbench-gate (G-8 mandate ratchet — no WIN->LOSS flip, output-identity holds)"
 # Self-skips (exit 0) if docker or the release binary is absent — a push is never wedged by missing
 # infra. Blocks (exit 1) only on a WIN->LOSS flip (a feature that beat release-php now loses) or a
