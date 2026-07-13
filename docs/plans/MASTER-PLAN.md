@@ -133,6 +133,18 @@ Output→stdout always, `Core.Log` leveled→stderr, `Response` builders→brows
 opt-in; REMOVES the serve Output→stderr magic). Slices S1 Core.Log · S2 Response builders + drop the
 redirect · S3 capture. Full detail: C-decisions.md §2026-07-13 DEC-208/DEC-220.
 
+**QUEUE STATUS (2026-07-13, Opus run — CONTINUATION, +10 green commits):** additionally SHIPPED green +
+committed: **DEC-208 enhanced-PDO `Core.Db`** — dynamic path COMPLETE (`new Db(dsn)` → `prepare`/`bind`/
+`bindNamed`/`query`→`List<Row>` + typed `getInt/getString/getFloat/getBool`/`exec`; catchable `throws
+DbError` via the prelude-wrapper; `DbHandle`/`DbSys` natives; `bundled rusqlite` `db` feature; runs both
+backends `Ada is 36`/`Grace is 45`); **old Core.Sql builder REMOVED** (DEC-208 supersession — prelude,
+examples, sqlbuild bench, 2 JIT tests, README); **DEC-220 S1 `Core.Log`** (leveled→stderr); **DEC-221
+throwing constructors** (`constructor(...) throws E`; restored the ruled `new Db(dsn)`; a general language
+enrichment). Full oracle gate PHORJ_REQUIRE_PHP=1 green (1990). **DEC-208 S2 STILL PENDING**: the typed-
+generic `queryInto<T>()`/`queryOneInto<T>()` hydration (type-directed — checker resolves T's field layout,
+a `DbSys` native hydrates by strict name → `DbError`; same result-value protocol). **DEC-220 S2/S3
+PENDING**: `Response` builders (+ remove serve Output→stderr redirect) · `Response.capture(fn)`.
+
 **Sequencing:** correctness (1) → cheap surface fixes (2–4) → the `::` migration (5) → additive
 type/literal work (6–7) → the DB primitive design+build (8, gates Ω-1) → DI at its wave (9).
 
