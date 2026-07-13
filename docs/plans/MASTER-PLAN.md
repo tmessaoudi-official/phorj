@@ -60,7 +60,12 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
    `default`; nullary variant matches require `Name()`; explain row; codemod of `_ =>`/bare-variant arms
    across examples/conformance/bench/tests; new parser tests; oracle gate 1974 green.
 4. **DEC-214** — `new List<T>()`/`new Map<K,V>()` empty construction; remove `[]`/`{}` contextual typing
-   + `List.empty`/`Map.empty`; keep `[1,2,3]`; codemod. Supersedes DEC-201.
+   + `List.empty`/`Map.empty`; keep `[1,2,3]`; codemod. Supersedes DEC-201. ⚠ **FEATURE, not a codemod**
+   (verified 2026-07-13): `new List<int>()` does NOT parse today — `new` only accepts a plain constructor
+   call (`E-…` "new must be followed by a constructor call"), rejecting the `List<int>` generic type. Needs
+   `new`-grammar for generic collection types + checker typing (empty List<T>/Map<K,V>) + all 3 backends
+   (interp/VM/transpile→PHP `[]`) + removal of the DEC-201 empty-literal/`List.empty` machinery + codemod
+   of every `[]`/`List.empty` usage. Sized like DEC-209; fresh context recommended.
 5. **DEC-207** — `::` for class/type-level access (token + parser `sep` field + checker enforcement +
    formatter). Transpiler already emits `::`; extend the lifter to round-trip `::`↔`->`. Codemod all
    examples (module fns keep `.`). Spine-adjacent — fresh context, full differential.
