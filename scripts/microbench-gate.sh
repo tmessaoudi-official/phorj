@@ -30,6 +30,12 @@ BASELINE="${MICROBENCH_BASELINE:-$ROOT/bench/micro-baseline.json}"
 EMIT=0
 [[ "${1:-}" == "--emit" ]] && EMIT=1
 
+# A WIN->LOSS "flip" blocks only when the new ratio drops below this band. A parity baseline (~1.0 —
+# floatmul/floatloop) wobbling within [FLIP_EPSILON, 1.0) is box noise on this shared machine (±3-5%
+# php-side swings with no code change), not a regression — MASTER-PLAN §0 gate-infra ruling, option (a),
+# 2026-07-13. A genuine loss (new ratio < FLIP_EPSILON) still fails. Override via MICROBENCH_FLIP_EPSILON.
+FLIP_EPSILON="${MICROBENCH_FLIP_EPSILON:-0.95}"
+
 command -v jq >/dev/null 2>&1 || {
   echo "microbench-gate: jq is required" >&2
   exit 2
@@ -88,10 +94,19 @@ while IFS=$'\t' read -r feat ratio identical; do
     echo "  note $feat: not in baseline (new) — ratio=$ratio ($win_now); run --emit to snapshot it"
     continue
   fi
-  # BLOCK: a feature we had WON now LOSES (the G-8 ratchet).
-  if awk -v br="$b_ratio" -v r="$ratio" 'BEGIN{exit (br>=1.0 && r<1.0)?0:1}'; then
-    echo "  FAIL $feat: WIN->LOSS flip — baseline ratio $b_ratio (WIN) now $ratio (LOSS): a G-8 mandate regression"
+  # BLOCK: a feature we had WON now LOSES by MORE than the noise band (the G-8 ratchet).
+  # A parity baseline (~1.0 — floatmul/floatloop) wobbling a fraction below 1.0 is box noise on this
+  # shared machine (empirically ±3-5% php-side swings with NO code change; MASTER-PLAN §0 gate-infra
+  # ruling), NOT a regression: only a drop below FLIP_EPSILON blocks. A genuine >5% loss still fails.
+  if awk -v br="$b_ratio" -v r="$ratio" -v eps="$FLIP_EPSILON" 'BEGIN{exit (br>=1.0 && r<eps)?0:1}'; then
+    echo "  FAIL $feat: WIN->LOSS flip — baseline ratio $b_ratio (WIN) now $ratio (< $FLIP_EPSILON band): a G-8 mandate regression"
     fails=$((fails + 1))
+    continue
+  fi
+  # Near-parity wobble: a WIN baseline now fractionally < 1.0 but within the FLIP_EPSILON band — box
+  # noise on a parity baseline, reported not blocked (so a shared-machine push is never wedged by it).
+  if awk -v br="$b_ratio" -v r="$ratio" 'BEGIN{exit (br>=1.0 && r<1.0)?0:1}'; then
+    echo "  warn $feat: near-parity wobble — baseline $b_ratio now $ratio (within $FLIP_EPSILON noise band; not blocking)"
     continue
   fi
   # REPORT (non-blocking): ratio movement vs baseline.
