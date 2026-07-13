@@ -118,6 +118,12 @@ impl Compiler<'_> {
                 }
                 self.emit(Op::MakeList(items.len()), sp.line);
             }
+            // `new List<T>()` / `new Map<K,V>()` (DEC-214) — emit an empty collection (no elements
+            // pushed); reuses the existing MakeList/MakeMap ops, so no new `Op`.
+            Expr::NewColl { kind, span, .. } => match kind {
+                crate::ast::CollKind::List => self.emit(Op::MakeList(0), span.line),
+                crate::ast::CollKind::Map => self.emit(Op::MakeMap(0), span.line),
+            },
             Expr::Map(pairs, sp) => {
                 // Push each key then its value (source order); `Op::MakeMap(n)` pops the 2n values and
                 // builds the insertion-ordered map via the shared `build_map` kernel (M-RT S3).

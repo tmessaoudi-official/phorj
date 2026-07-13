@@ -381,6 +381,8 @@ fn walk_children(e: &mut Expr, en: &Enabled, errs: &mut Vec<Diagnostic>) {
                 walk_expr(i, en, errs);
             }
         }
+        // `new List<T>()` — no intrinsic-import obligations (built-in collection kinds).
+        Expr::NewColl { .. } => {}
         Expr::Map(pairs, _) => {
             for (k, v) in pairs {
                 walk_expr(k, en, errs);

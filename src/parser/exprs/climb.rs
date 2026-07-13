@@ -2,6 +2,18 @@
 
 use super::*;
 
+/// The built-in collection type name → its `CollKind` for `new` construction (DEC-214:
+/// `new List<T>()` / `new Map<K,V>()`). `Set` is intentionally excluded (deferred — the VM has no
+/// empty-set construction op), so `new Set<…>()` stays an ordinary (and currently invalid) `new`.
+fn collection_kind(name: &str) -> Option<crate::ast::CollKind> {
+    use crate::ast::CollKind;
+    match name {
+        "List" => Some(CollKind::List),
+        "Map" => Some(CollKind::Map),
+        _ => None,
+    }
+}
+
 impl Parser {
     /// Entry point: parse a full expression (lowest precedence). Every fresh expression context —
     /// including a bracketed sub-expression (parens / call args / index / list & map literals all
@@ -317,36 +329,63 @@ impl Parser {
         } else if matches!(self.peek(), TokenKind::New) {
             let sp = self.peek_span();
             self.advance();
-            let mut callee = self.parse_primary()?;
-            // Qualified enum-variant construction `new Enum.Variant(args)` (injected-enum
-            // qualification): consume a dotted-ident chain before the argument list so the callee is a
-            // `Member` path the checker resolves to a specific enum's variant. `new Counter()` (no dot)
-            // keeps the plain `Ident` callee.
-            while matches!(self.peek(), TokenKind::Dot) {
-                self.advance();
-                let nsp = self.peek_span();
-                let name = self.expect_ident(
-                    "a variant name after `.` in a qualified constructor (`new Enum.Variant(…)`)",
-                )?;
-                callee = Expr::Member {
-                    object: Box::new(callee),
-                    name,
-                    safe: false,
-                    span: nsp,
+            // DEC-214: `new List<T>()` / `new Map<K,V>()` — explicit empty-collection construction.
+            // Recognized when `new` is followed by a built-in collection type name; the whole
+            // `List<T>` is parsed via the generic type parser (so nested `<…>>` works) and the value
+            // argument list must be empty. Any other head (`new Counter()`, `new Enum.Variant(…)`) is
+            // ordinary construction, below.
+            if matches!(self.peek(), TokenKind::Ident(n) if collection_kind(n).is_some()) {
+                let kind = match self.peek() {
+                    TokenKind::Ident(n) => collection_kind(n).expect("guarded above"),
+                    _ => unreachable!(),
                 };
+                let ty = self.parse_type()?;
+                let args = match ty {
+                    Type::Named { args, .. } => args,
+                    _ => Vec::new(),
+                };
+                self.expect(
+                    &TokenKind::LParen,
+                    "'(' — `new List<T>()` / `new Map<K,V>()` takes no value arguments",
+                )?;
+                self.expect(&TokenKind::RParen, "')' to close `new List<T>()`")?;
+                Expr::NewColl {
+                    kind,
+                    args,
+                    span: sp,
+                }
+            } else {
+                let mut callee = self.parse_primary()?;
+                // Qualified enum-variant construction `new Enum.Variant(args)` (injected-enum
+                // qualification): consume a dotted-ident chain before the argument list so the callee is
+                // a `Member` path the checker resolves to a specific enum's variant. `new Counter()` (no
+                // dot) keeps the plain `Ident` callee.
+                while matches!(self.peek(), TokenKind::Dot) {
+                    self.advance();
+                    let nsp = self.peek_span();
+                    let name = self.expect_ident(
+                        "a variant name after `.` in a qualified constructor (`new Enum.Variant(…)`)",
+                    )?;
+                    callee = Expr::Member {
+                        object: Box::new(callee),
+                        name,
+                        safe: false,
+                        span: nsp,
+                    };
+                }
+                self.expect(
+                    &TokenKind::LParen,
+                    "'(' — `new` must be followed by a constructor call, e.g. `new Counter()`",
+                )?;
+                let args = self.parse_arg_list()?;
+                self.expect(&TokenKind::RParen, "')' to close arguments")?;
+                let call = Expr::Call {
+                    callee: Box::new(callee),
+                    args,
+                    span: sp,
+                };
+                Expr::New(Box::new(call), sp)
             }
-            self.expect(
-                &TokenKind::LParen,
-                "'(' — `new` must be followed by a constructor call, e.g. `new Counter()`",
-            )?;
-            let args = self.parse_arg_list()?;
-            self.expect(&TokenKind::RParen, "')' to close arguments")?;
-            let call = Expr::Call {
-                callee: Box::new(callee),
-                args,
-                span: sp,
-            };
-            Expr::New(Box::new(call), sp)
         } else {
             self.parse_primary()?
         };

@@ -1,27 +1,30 @@
-// Empty collection initialization (M-DOGFOOD W0).
+// Empty collection construction (DEC-214).
 //
-// An empty list literal `[]` carries no element to infer from, so it takes its element type
-// from the surrounding *expected type* — a variable's declared annotation or a function's
-// declared return type. This is the bidirectional-inference case that used to be rejected with
-// "cannot infer element type of empty list literal". `var xs = []` (no expected type) is still
-// an error by design — the fix is context-driven, not a silent default.
+// Empty collections are built with mandatory `new` — `new List<T>()` / `new Map<K,V>()` — self-typed
+// from their type arguments (no context needed, no "type from later use" inference, no static
+// factory). This is consistent with the language's mandatory-`new` rule. Non-empty literals
+// `[1, 2, 3]` are unchanged. Empty construction transpiles to a PHP empty array `[]`; byte-identical
+// across both backends and real PHP. (`new Set<T>()` is a follow-up — the VM has no empty-set op yet.)
 package Main;
 
 import Core.Output;
 import Core.List;
+import Core.Map;
 
-// The return type `List<int>` supplies the element type for the empty `[]`.
+// The type argument supplies the element type directly — no expected-type context required.
 function emptyInts(): List<int> {
-    return [];
+    return new List<int>();
 }
 
 function main(): void {
-    // Declared-annotation form.
-    List<string> names = [];
-    Output.printLine("names empty? {List.isEmpty(names)}");
-    // Return-type form, then grow it functionally (List is immutable — concat returns a new list).
+    List<string> names = new List<string>();
+    Map<string, int> counts = new Map<string, int>();
+    Output.printLine("empty? names={List.isEmpty(names)} counts={Map.size(counts)}");
+    // Grow functionally (collections are immutable — each op returns a new value).
     List<int> xs = emptyInts();
     List<int> grown = List.concat(xs, [1, 2, 3]);
     Output.printLine("grown length = {List.length(grown)}");
     Output.printLine("grown sum    = {List.sum(grown)}");
+    Map<string, int> m2 = Map.set(counts, "a", 1);
+    Output.printLine("m2 size = {Map.size(m2)}  a = {Map.get(m2, \"a\") ?? -1}");
 }

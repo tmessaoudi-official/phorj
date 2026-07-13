@@ -354,6 +354,9 @@ impl Ctx {
                     self.walk_expr(i, errs);
                 }
             }
+            // `new List<T>()` — built-in collection kinds; type args are resolved (and injected-import
+            // discipline enforced) during type resolution, not in this expr walk.
+            Expr::NewColl { .. } => {}
             Expr::Map(pairs, _) => {
                 for (k, v) in pairs {
                     self.walk_expr(k, errs);

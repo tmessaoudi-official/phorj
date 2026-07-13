@@ -153,7 +153,38 @@ impl Checker {
             | Expr::New(_, span)
             | Expr::Spawn { span, .. }
             | Expr::Inject { span, .. }
+            | Expr::NewColl { span, .. }
             | Expr::Html(_, span) => *span,
+        }
+    }
+
+    /// `new List<T>()` / `new Map<K,V>()` / `new Set<T>()` (DEC-214) — explicit empty-collection
+    /// construction. Self-typed from the type arguments (no contextual inference), which are resolved
+    /// through `resolve_type` (so casing + injected-import discipline + existence are all enforced on
+    /// the args). Arity is checked against the kind. The pre-backend `rewrite_new_coll` pass then lowers
+    /// this to an empty `List`/`Map`, so no backend needs the element type.
+    pub(in crate::checker) fn check_new_coll(
+        &mut self,
+        kind: crate::ast::CollKind,
+        args: &[crate::ast::Type],
+        span: Span,
+    ) -> Ty {
+        use crate::ast::CollKind;
+        if args.len() != kind.arity() {
+            return self.err(
+                span,
+                format!(
+                    "`new {}<…>()` expects {} type argument(s), got {}",
+                    kind.name(),
+                    kind.arity(),
+                    args.len()
+                ),
+            );
+        }
+        let tys: Vec<Ty> = args.iter().map(|a| self.resolve_type(a)).collect();
+        match kind {
+            CollKind::List => Ty::List(Box::new(tys[0].clone())),
+            CollKind::Map => Ty::Map(Box::new(tys[0].clone()), Box::new(tys[1].clone())),
         }
     }
 

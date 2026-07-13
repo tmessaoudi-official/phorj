@@ -146,6 +146,8 @@ impl Checker {
             },
             Expr::List(elems, span) => self.check_list(elems, *span), // Task 5
             Expr::Map(pairs, span) => self.check_map(pairs, *span),   // M-RT S3
+            Expr::NewColl { kind, args, span } => self.check_new_coll(*kind, args, *span), // DEC-214
+
             Expr::Unary { op, expr, span } => self.check_unary(*op, expr, *span),
             Expr::Binary { op, lhs, rhs, span } => self.check_binary(*op, lhs, rhs, *span),
             Expr::InstanceOf {

@@ -210,6 +210,9 @@ impl Transpiler {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
                 Ok(format!("[{}]", parts?.join(", ")))
             }
+            // `new List<T>()` / `new Map<K,V>()` (DEC-214) — an empty PHP array `[]` (List and Map both
+            // erase to a PHP array; the empty form is identical).
+            Expr::NewColl { .. } => Ok("[]".into()),
             // A map literal → a PHP `[k => v, …]` array (insertion-ordered, like Phorj), M-RT S3.
             Expr::Map(pairs, _) => {
                 let mut parts = Vec::with_capacity(pairs.len());

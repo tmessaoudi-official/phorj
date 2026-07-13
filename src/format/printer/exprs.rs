@@ -42,6 +42,15 @@ impl Printer<'_> {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
                 Ok(bracketed("[", xs?, "]"))
             }
+            // `new List<T>()` / `new Map<K,V>()` (DEC-214) — always inline (no elements to wrap).
+            Expr::NewColl { kind, args, .. } => {
+                let rendered: Result<Vec<_>, _> = args.iter().map(ty).collect();
+                Ok(doc::text(format!(
+                    "new {}<{}>()",
+                    kind.name(),
+                    rendered?.join(", ")
+                )))
+            }
             Expr::Map(pairs, _) => {
                 let mut xs = Vec::new();
                 for (k, v) in pairs {

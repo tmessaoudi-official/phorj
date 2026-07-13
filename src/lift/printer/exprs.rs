@@ -44,6 +44,12 @@ impl Printer {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
                 Ok(format!("[{}]", xs?.join(", ")))
             }
+            // `new List<T>()` / `new Map<K,V>()` (DEC-214). The lifter never synthesizes this today, but
+            // print it faithfully for completeness.
+            Expr::NewColl { kind, args, .. } => {
+                let a: Result<Vec<_>, _> = args.iter().map(ty).collect();
+                Ok(format!("new {}<{}>()", kind.name(), a?.join(", ")))
+            }
             Expr::Map(pairs, _) => {
                 let mut xs = Vec::new();
                 for (k, v) in pairs {

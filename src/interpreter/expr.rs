@@ -46,6 +46,12 @@ impl<'c> Interp<'c> {
                 }
                 Ok(Value::List(Rc::new(out)))
             }
+            // `new List<T>()` / `new Map<K,V>()` (DEC-214) — an empty collection (self-typed by the
+            // checker; the runtime value carries no element type).
+            Expr::NewColl { kind, .. } => Ok(match kind {
+                crate::ast::CollKind::List => Value::List(Rc::new(vec![])),
+                crate::ast::CollKind::Map => Value::Map(Rc::new(vec![])),
+            }),
             Expr::Map(pairs, _) => {
                 // Evaluate key then value (source order — matches the compiler's emit and the VM's
                 // pop order, so side effects fire identically), then build via the shared kernel so

@@ -489,7 +489,15 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   the inference the developer's "nothing inferred" rules out. *Alternatives:* all collections via `new`
   incl. `[1,2,3]` → `new List<int>(1,2,3)`, remove bracket literals entirely (rejected — loses ergonomic
   literals where the type is self-evident); keep DEC-201 (rejected — retains the `new`-bypass factory +
-  the type-from-later-use inference). **Supersedes DEC-201.**
+  the type-from-later-use inference). **Supersedes DEC-201.** *(PART-1 SHIPPED 2026-07-13: the
+  `new List<T>()` / `new Map<K,V>()` CAPABILITY — `Expr::NewColl` + `CollKind`, parser reuses
+  `parse_type` for the generic head, checker `check_new_coll` self-types via `resolve_type`, all 3
+  backends build an empty collection (transpile→`[]`), formatter/lift render, parser test + example
+  `guide/empty-collections.phg`; PURELY ADDITIVE — `[]` still works. Full oracle 1975 green. `Set`
+  deferred (no empty-set VM op → would need a new `Op`). **PART-2 PENDING**: remove the empty-`[]`
+  contextual typing (calls/args.rs `check_arg` + `thread_literal_expected` empty-list path + decl/return
+  threading) so bare `[]` errors "use `new List<T>()`", then codemod every empty-`[]` across the repo —
+  a DEC-209-sized churn; separate slice, fresh context.)*
 - **DEC-215 — DI stays compile-time; L1/L2 refactor affirmed, scheduled Ω-4/Ω-7.** DI v1 is a 1292-LOC
   bespoke COMPILER pass (`desugar_di/`, pre-check, `Expr::Inject`) — the same "app framework privileged
   into the compiler" category as the ejected SQL builder (DEC-208). The spec's own ruling stands: build a
@@ -524,3 +532,20 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   fetch command + manifest leave `phg` to an external companion tool; (3) **external tool owns
   everything** (manifest + fetch + vendor); `phg` is package-agnostic. Impacts `examples/project/withdeps`
   + `src/loader/` + `src/manifest.rs`. Blocks nothing; adjudicate after DEC-214.
+- **IN-LANGUAGE-vs-EXTERNALIZE AUDIT (2026-07-13, 4-agent sweep — full doc `docs/research/2026-07-13-externalize-audit.md`).**
+  Applied META-6 to the whole surface. KEEP-CORE: stdlib primitives + native-backed app primitives
+  (Crypto/File/Path/Process/Env/Reflection/Runtime/Url/Secret/Db/Csv/Ini) + language capabilities +
+  zero-cost sugar + the language toolchain (transpile/format/test/…). EXTERNALIZE candidates (ranked):
+  package-mgmt (DEC-216), Http (→primitive+userland), DI (DEC-215), **desugar_router (NEW — a 489-LOC
+  web-framework compiler pass, peer to DI; same DEC-215 L1/L2 treatment)**, serve, lift, lsp, Time
+  (calendar→lib, keep clock), Validation, html (DEC-212), Dotenv/Event/Cli/Log/Uuid/Sessions/Serde/
+  Template (→userland), debug/DAP. New PENDING adjudications surfaced:
+  - **DEC-217 — PENDING: Test framework in-language or userland?** Genuine tie — PHPUnit is PHP
+    *userland* (externalize) vs Rust/Go ship a *built-in* runner (keep). Surface with both precedents.
+  - **DEC-218 — PENDING: externalize DELIVERY destination** — userland (DEC-208 style) vs first-party
+    bundled lib (DEC-212 style). **Must be ruled WITH DEC-216** (if packaging is removed, a "userland"
+    web spine has no distribution path).
+  - **DEC-219 — PENDING: overloading dispatch** — resolve statically where arg types are known
+    (zero-cost) vs current runtime multiple-dispatch (per-call cost); a META-6 zero-cost-sugar tension.
+  Suggested ruling order: DEC-216+DEC-218 together → DEC-215 family (DI + desugar_router) → per-module
+  moves (Http/Time/Validation) → DEC-217 → DEC-219. Every move a tracked, tested, register-recorded slice.

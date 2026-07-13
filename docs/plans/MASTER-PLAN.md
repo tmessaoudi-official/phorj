@@ -59,8 +59,10 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
    `default` + `_` restricted to ignore-placeholder; formatter/lift render top-level catch-all as
    `default`; nullary variant matches require `Name()`; explain row; codemod of `_ =>`/bare-variant arms
    across examples/conformance/bench/tests; new parser tests; oracle gate 1974 green.
-4. **DEC-214** — `new List<T>()`/`new Map<K,V>()` empty construction; remove `[]`/`{}` contextual typing
-   + `List.empty`/`Map.empty`; keep `[1,2,3]`; codemod. Supersedes DEC-201. ⚠ **FEATURE, not a codemod**
+4. **DEC-214 — PART-1 ✅ SHIPPED** (`new List<T>()`/`new Map<K,V>()` capability — `Expr::NewColl`,
+   additive, `[]` still works, oracle 1975 green, example `guide/empty-collections.phg`; `Set` deferred).
+   **PART-2 PENDING**: remove empty-`[]` contextual typing + codemod every empty-`[]` (DEC-209-sized).
+   Original note (feature confirmation): `new List<int>()` did NOT parse — needed new-grammar + AST +
    (verified 2026-07-13): `new List<int>()` does NOT parse today — `new` only accepts a plain constructor
    call (`E-…` "new must be followed by a constructor call"), rejecting the `List<int>` generic type. Needs
    `new`-grammar for generic collection types + checker typing (empty List<T>/Map<K,V>) + all 3 backends

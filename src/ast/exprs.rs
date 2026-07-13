@@ -2,6 +2,32 @@
 
 use super::*;
 
+/// The built-in generic collection kinds constructible with `new` (DEC-214): `new List<T>()` and
+/// `new Map<K,V>()`. `Set` is deferred — the VM has no empty-set construction op (sets are built via
+/// `Set.of(...)` natives), so `new Set<T>()` would need a new `Op` (Invariant-3 coupling); a follow-up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollKind {
+    List,
+    Map,
+}
+
+impl CollKind {
+    /// The surface type name (`List`/`Map`) used in diagnostics.
+    pub fn name(self) -> &'static str {
+        match self {
+            CollKind::List => "List",
+            CollKind::Map => "Map",
+        }
+    }
+    /// The arity of its type arguments (`List<T>` = 1, `Map<K,V>` = 2).
+    pub fn arity(self) -> usize {
+        match self {
+            CollKind::List => 1,
+            CollKind::Map => 2,
+        }
+    }
+}
+
 /// Expressions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -30,6 +56,16 @@ pub enum Expr {
     /// first element; at least one pair (an empty map literal is deferred — `[]` is the empty *list*).
     /// Keys must be `int`/`bool`/`string` (`E-MAP-KEY`); transpiles to a PHP `[k => v]` array.
     Map(Vec<(Expr, Expr)>, Span),
+    /// `new List<T>()` / `new Map<K,V>()` / `new Set<T>()` — explicit empty-collection construction
+    /// (DEC-214, supersedes the removed empty-`[]` contextual typing of DEC-201). Carries the
+    /// collection kind + type arguments; the checker types it directly from the args (self-typed, no
+    /// contextual inference), then a pre-backend rewrite (`rewrite_new_coll`) lowers it to an empty
+    /// `List`/`Map` so every backend is unchanged. Non-empty literals `[1, 2, 3]` are untouched.
+    NewColl {
+        kind: CollKind,
+        args: Vec<Type>,
+        span: Span,
+    },
     Unary {
         op: UnaryOp,
         expr: Box<Expr>,

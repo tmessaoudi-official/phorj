@@ -395,6 +395,31 @@ fn match_default_catch_all_and_bare_variant_rejection() {
     assert!(parser("match s { x => x }").parse_expr().is_ok());
 }
 
+/// DEC-214 — `new List<T>()` / `new Map<K,V>()` parse to `Expr::NewColl`; ordinary `new C()` stays
+/// `Expr::New`; `new Set<T>()` is NOT special (Set is deferred).
+#[test]
+fn parses_new_collection_construction() {
+    use crate::ast::CollKind;
+    match expr("new List<int>()") {
+        Expr::NewColl { kind, args, .. } => {
+            assert_eq!(kind, CollKind::List);
+            assert_eq!(args.len(), 1);
+        }
+        other => panic!("got {other:?}"),
+    }
+    match expr("new Map<string, int>()") {
+        Expr::NewColl { kind, args, .. } => {
+            assert_eq!(kind, CollKind::Map);
+            assert_eq!(args.len(), 2);
+        }
+        other => panic!("got {other:?}"),
+    }
+    // ordinary construction is unaffected.
+    assert!(matches!(expr("new Counter()"), Expr::New(..)));
+    // `new Set<…>()` is NOT collection-construction (Set deferred) — it is not recognized here.
+    assert!(parser("new Set<int>()").parse_expr().is_err());
+}
+
 #[test]
 fn parses_ranges() {
     match expr("0..3") {
