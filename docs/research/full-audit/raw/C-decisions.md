@@ -417,10 +417,30 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   →PHP free function). Makes static-vs-instance visible at the call site (legibility = a craftsmanship
   axis) and PHP↔Phorj round-trip lossless (transpiler already emits `Counter::make()`/`parent::`; the
   lifter today FLATTENS PHP `::` and `->` both into `.`). Does NOT change checker resolution (stays
-  name-based). Migration = mechanical codemod (~182 example files / 962 `Output.printLine`-style occ,
-  though module fns keep `.`). *Alternatives:* `::` for ALL non-instance incl module fns (rejected —
-  conflates namespace with class; dishonest about what a module is); keep unified `.` (rejected —
-  static/instance invisible, lossy round-trip). **Partially supersedes the naming-overhaul "unified `.`".**
+  name-based). *Alternatives:* `::` for ALL non-instance incl module fns (rejected — conflates namespace
+  with class; dishonest about what a module is); keep unified `.` (rejected — static/instance invisible,
+  lossy round-trip). **Partially supersedes the naming-overhaul "unified `.`".**
+  *(CODEMOD SCOPE CORRECTION 2026-07-13: NOT ~182 files — module functions like `Output.printLine` STAY
+  `.` (R1), so the codemod is only the class-static/const/enum-variant/`parent` accesses = a MODERATE set,
+  not the 962 module-fn occurrences.) ATTEMPTED + REVERTED 2026-07-13 (kept clean; same "no sound partial"
+  wall as DEC-211 — parser-accepts-`::`-but-nothing-enforces-it is a misleading no-op; sound version is
+  all-or-nothing for consistency). FULL IMPL MAP (verified/built in the attempt): (1) token — add
+  `TokenKind::ColonColon` (`token.rs`) + a `(b':', Some(b':')) => ColonColon` arm in the tokenizer
+  two-char dispatch (`tokenizer/mod.rs:~340`). (2) AST — add `enum MemberSep { Dot, ColonColon }` +
+  `sep: MemberSep` field on `Expr::Member` (`ast/exprs.rs`); ~36 sites ripple (26 construction → `Dot`,
+  10 match → `sep: _`); a subagent did this once cleanly. NB the ~9 rewrite passes that rebuild `Member`
+  clobber `sep`→`Dot` but that's HARMLESS — `sep` only matters pre-rewrite (formatter reads the raw
+  parser AST; checker enforces during type-check; backends ignore it). (3) Parser — postfix loop accepts
+  `Dot|QuestionDot|ColonColon`, sets `sep` (`parser/exprs/climb.rs`, done); STILL TODO: enum-variant
+  construct (`new Enum::Variant` — the `new` dotted chain) + match patterns (`Enum::Variant` in
+  `parser/patterns.rs`) + `parent::` (parse_parent_call). (4) CHECKER ENFORCEMENT (the semantic core) —
+  at each Member resolution (`calls/core.rs::check_call`, `calls/methods.rs::check_member`, enum-variant
+  + const + parent sites), after the existing name-based kind resolution, require `sep==ColonColon` for
+  class-static/const/enum-variant/parent and `sep==Dot` for instance/module, else `E-SEP-MISMATCH`.
+  (5) Formatter — render `::`/`.`/`?.` from `sep` (`format/printer/exprs.rs` Member arm). (6) Lifter —
+  PHP `::` → `ColonColon`, `->`/`.` → `Dot` (`lift/lifter/exprs.rs`, currently flattens both to `.`).
+  (7) Codemod all class-level accesses in examples/conformance/tests → `::` + fixtures. (8) Gate. Steps
+  (1)-(3) mechanical; (4) is the real work but comparatively mechanical (kind already known at each site).)*
 - **DEC-208 — DB: drop the query builder from the language; ship an enhanced-PDO primitive.** The SQL
   query builder leaves the language AND is NOT a first-party library (any builder = 100% userland).
   Phorj instead provides an **enhanced PDO-style DB primitive** (better than PHP's PDO — surface TBD
