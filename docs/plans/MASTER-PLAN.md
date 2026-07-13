@@ -124,6 +124,14 @@ features. **RULED-NOT-BUILT (resume order, each fresh-context):** DEC-208 (surfa
 **part-2** (remove empty-`[]`; after DEC-208/218) → DEC-215 (DI L1/L2) → DEC-216 (pkg-mgmt split) →
 DEC-218 (web-spine externalize) → DEC-212 **part-2** (html→library). DEC-219 (static overload
 resolution) deferred: byte-identity-soundness-subtle (subtype refinement) — low priority vs the above.
+**NEW RULINGS 2026-07-13 (both fresh-context builds):** DEC-208 error-mechanism = **prelude-wrapper**
+(natives return a result-value, never fault; phorj-source prelude methods `throws DbError` → catchable
+`Op::Throw`; native ABI has no throws channel — verified). This reworks DEC-208 commit-3 from built-in-
+class+native-dispatch to **prelude classes wrapping the opaque handle** (+ rework commit-2 natives from
+`Err(String)` to a result-value). DEC-220 = **unified Output/Log/Response system** (3 named sinks:
+Output→stdout always, `Core.Log` leveled→stderr, `Response` builders→browser + `Response.capture(fn)`
+opt-in; REMOVES the serve Output→stderr magic). Slices S1 Core.Log · S2 Response builders + drop the
+redirect · S3 capture. Full detail: C-decisions.md §2026-07-13 DEC-208/DEC-220.
 
 **Sequencing:** correctness (1) → cheap surface fixes (2–4) → the `::` migration (5) → additive
 type/literal work (6–7) → the DB primitive design+build (8, gates Ω-1) → DI at its wave (9).

@@ -490,6 +490,21 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
       positional-only / named-only binds (rejected — dev chose both); `queryOneInto():T`-throws or
       no-single-helper (rejected — dev chose `T?`); generics-only, drop dynamic path (rejected — dev keeps
       both). *Build is multi-slice; slice plan in MASTER-PLAN §0.1.*
+  - **ERROR-MECHANISM RULED 2026-07-13 (ASKED) = Option A: prelude-wrapper over result-returning
+    natives.** Blocker found while building: phorj's native ABI has no throws channel — a native's
+    `Err(String)` is a HARD, uncatchable fault (only `Op::Throw` from phorj-source is catchable), so
+    routing `db.prepare(...)` to a plain `CallNative` cannot express the ruled catchable `throws DbError`
+    (Q6). Ruling: the `Db`/`Statement`/`Row` surface methods are **phorj-source prelude methods declared
+    `throws DbError`**; the Rust natives (src/native/db.rs) **return a result-encoding value (ok | error),
+    never fault**; the prelude inspects it and `throw`s a real `DbError` (the same catchable mechanism
+    Core.Sql's `?`-throws used). No native-ABI change; spine-safe; reuses proven machinery. *Implication
+    for the build:* commit 2's natives must be reworked from `Err(String)`-on-SQL-error to returning a
+    result value; the S1 surface (commit 3) becomes prelude classes wrapping the opaque native handle
+    rather than pure built-in-class recognition. *S2 caveat noted:* the type-directed `queryInto<T>`
+    hydration still needs a native returning the same result-encoding convention. *Alternatives:* B —
+    extend the native ABI with a `throws` channel (cleaner call sites, benefits all future throwing
+    natives, but a cross-cutting spine-adjacent change — REJECTED as too big for the need now); C —
+    DbError as a hard uncatchable fault (REJECTED — reverses Q6, un-PDO-like, no in-language recovery).
 - **DEC-209 — match legibility: reject bare PascalCase arms; `default` is the catch-all; `_` = ignore-only.**
   A lone PascalCase ident arm (`Circle =>`) currently becomes a SILENT catch-all binding — verified
   live: `match(s){Circle=>"c"}` returns "c" for a `Square` (byte-identity holds across all 4 backends,
@@ -678,4 +693,28 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
 - **DEC-219 — RULED: static overload resolution** — the checker picks the overload at compile time when
   argument types are statically known (zero-cost direct call); runtime multiple-dispatch remains ONLY for
   genuinely union-typed args. A META-6 zero-cost win, no surface change. *Alternative:* always-runtime
-  dispatch (per-call cost) — declined.
+  dispatch (per-call cost) — declined. ⚠ soundness: subtype refinement can make runtime dispatch ≠ static
+  selection (`f(Animal)`+`f(Dog)`, arg static `Animal` holding a `Dog`) — the sound subset is where no
+  runtime refinement can change the selection (safe approx: primitive/leaf arg types). Deferred (low
+  priority vs the DB/output work).
+- **DEC-220 — RULED (ASKED 2026-07-13): unified output/log/response system (Output/Log/Response), 3 named
+  sinks + opt-in capture.** Prompted by a real bug the dev hit: `Output.print*` in a `phg serve` handler
+  goes to the SERVER LOG (stderr), not the browser (`serve/handlers.rs:182`) — a context-magical redirect
+  (stdout in CLI, stderr-log in serve). The challenge (accepted): the fix is EXPLICIT NAMED sinks, not
+  making `Output` more ambient. Ruling — three context-independent sinks:
+  (1) **`Output.*` → process STDOUT, always** (CLI). The serve-only Output→stderr redirect is REMOVED.
+  (2) **`Log.debug/info/warn/error(msg)` → structured, leveled STDERR** — first-class server/app logging
+  (beats PHP `error_log`). New `Core.Log` module.
+  (3) **`Response.html/text/json/bytes(..).status(n).withHeader(k,v).withCookie(..)` → the browser** — a
+  typed builder; headers-before-body enforced structurally (PHP's "headers already sent" impossible).
+  PLUS **`Response.capture(() => { Output.printLine(..) })`** — opt-in PHP-like echo-into-body within an
+  EXPLICIT scope (no ambient state; combines the "explicit builder" + "capture block" options).
+  Ties into DEC-218 (Core.Http/Response + Log as thin Core primitives; richer helpers userland). Byte-id:
+  Log→stderr is invisible to the stdout differential; Response is a value (the portable `handle(Request):
+  Response` unit). *Alternatives:* ambient echo (Output writes to the response in a handler — REJECTED,
+  implicit ambient sink + PHP header/buffer footguns); leaner 3-sinks WITHOUT capture (REJECTED — dev
+  wants the opt-in ergonomic); keep the current serve Output→stderr magic (REJECTED — the reported bug).
+  *Build (fresh context, multi-slice):* S1 `Core.Log` (leveled natives → stderr; additive, self-contained)
+  · S2 `Response` builders (`.html/.text/.json/.status/.withHeader/.withCookie`) replacing raw
+  `new Response(status,bytes,headers)` + remove the serve Output→stderr redirect (Output stays stdout) ·
+  S3 `Response.capture(fn)` opt-in buffering. Each = Invariant-9 example + gate.
