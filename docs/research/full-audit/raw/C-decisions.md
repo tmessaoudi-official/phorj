@@ -459,6 +459,25 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   stay bound-less (rejected — `max`/`sort` unwritable); hardcode magic `Comparable`/`Numeric` (rejected —
   the one-domain-hardcode anti-pattern this sweep removes elsewhere). (Doc fix: UNIFIED-SPEC:104 says
   "monomorphized"; impl is ERASURE everywhere else. Memory index "trait CLOSED" is wrong — DEC-177 blessed traits.)
+  *(ATTEMPTED + REVERTED 2026-07-13 — kept clean for a sound fresh-context finish. SOUNDNESS FINDING:
+  a shippable DEC-211 needs BOTH (a) def-site resolution AND (b) the instantiation check; def-site alone
+  is UNSOUND (`max<Socket>()` on a `Socket` lacking the bound compiles then faults at runtime — violates
+  refuses-to-lie), and parse-only is a misleading no-op — so there is no committable partial. FULL IMPL
+  MAP (verified sites): (1) AST — add `type_param_bounds: Vec<(String,String)>` to FunctionDecl/ClassDecl/
+  EnumDecl (`ast/decls.rs`); ~31 construction sites need the field (parser sites use the parsed value, all
+  backend/erasure/rebuild/test sites `Vec::new()`). (2) Parser — `parse_type_params` (`parser/types.rs`)
+  returns `(Vec<String>, Vec<(String,String)>)`, parsing an optional `: Interface` per param; its 4
+  callers destructure. (3) Checker context — add `active_type_param_bounds` + `cur_class_type_param_bounds`
+  to the Checker (`checker/mod.rs:453/457`), set/clear ALONGSIDE `active_type_params` (in
+  `program/type_bodies.rs` method/ctor/hook sites + `check_function` for free fns). (4) DEF-SITE — in
+  `check_method_call` (`calls/methods.rs:6`), just before `match base`, remap a `Ty::Param(p)` that has an
+  active bound `B` to `Ty::Named(B, vec![])` so the existing interface-method-resolution arm types the
+  call against the bound (one clean remap). (5) INSTANTIATION (soundness-critical) — in the generic-call
+  unify path (`check_generic_call`/`unify`+θ), after θ binds `T:=X`, check `X` implements each bounded
+  `T`'s interface via `ast::class_implements` (`ast/class_hierarchy.rs:17`); else `E-BOUND-NOT-SATISFIED`.
+  (6) Erased before backends. (7) Tests: `max<T:Comparable>` body `a.cmp(b)` type-checks; `max<Socket>`
+  rejected; bare `<T>` still legal; example. Steps (1)-(3) mechanical (~40 min, a subagent did (1) once);
+  (4)+(5) are the real type-system work.)*
 - **DEC-212 — domain literals: generalize `html"…"` to a tagged-template primitive.** The language gains
   ONE general tagged-template mechanism (a user-definable interpolation handler returning a typed
   newtype); `html` becomes a first-party library on it, keeping the EXACT escaping kernel
