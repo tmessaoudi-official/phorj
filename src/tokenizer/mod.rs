@@ -339,6 +339,9 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
                     (b'|', Some(b'|')) => Some(TokenKind::OrOr),
                     (b'?', Some(b'?')) => Some(TokenKind::QuestionQuestion),
                     (b'?', Some(b'.')) => Some(TokenKind::QuestionDot),
+                    // `::` class/type-level member-access separator (DEC-207). A lone `:` falls
+                    // through to the single-char dispatch (`Colon`), unchanged.
+                    (b':', Some(b':')) => Some(TokenKind::ColonColon),
                     // compound-assign + increment/decrement (M-mut.2). `-=`/`--`/`->` and
                     // `/=` (not a `//`/`/*` comment, handled earlier) all reach here distinctly.
                     (b'+', Some(b'=')) => Some(TokenKind::PlusEq),

@@ -203,11 +203,13 @@ pub fn erase_generics(program: Program) -> Program {
                 object,
                 name,
                 safe,
+                sep: _,
                 span,
             } => Expr::Member {
                 object: Box::new(rexpr(object, params)),
                 name: name.clone(),
                 safe: *safe,
+                sep: crate::ast::MemberSep::Dot,
                 span: *span,
             },
             Expr::Index {

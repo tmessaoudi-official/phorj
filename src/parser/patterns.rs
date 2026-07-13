@@ -56,9 +56,11 @@ impl Parser {
                 // leading ident is the enum qualifier. Only the variant form (`(fields)`, or nullary
                 // with no parens) is valid after a dotted path — never a struct/type/binding pattern.
                 // The checker validates the qualifier names the scrutinee's enum.
-                if self.eat(&TokenKind::Dot) {
+                // DEC-207: `::` is accepted as an alternative to `.` here (`Enum::Variant(…)`),
+                // parsing to the identical `Pattern::Variant` — the pattern AST carries no separator.
+                if self.eat(&TokenKind::Dot) || self.eat(&TokenKind::ColonColon) {
                     let variant = self.expect_ident(
-                        "a variant name after `.` in a qualified pattern (`Enum.Variant(…)`)",
+                        "a variant name after `.`/`::` in a qualified pattern (`Enum.Variant(…)`)",
                     )?;
                     let mut fields = Vec::new();
                     if self.eat(&TokenKind::LParen) {

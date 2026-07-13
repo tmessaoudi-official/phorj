@@ -360,16 +360,24 @@ impl Parser {
                 // qualification): consume a dotted-ident chain before the argument list so the callee is
                 // a `Member` path the checker resolves to a specific enum's variant. `new Counter()` (no
                 // dot) keeps the plain `Ident` callee.
-                while matches!(self.peek(), TokenKind::Dot) {
+                // DEC-207: also accept `::` here so `new Color::Red()` parses identically to
+                // `new Color.Red()`, recording the surface separator on `Member.sep`.
+                while matches!(self.peek(), TokenKind::Dot | TokenKind::ColonColon) {
+                    let sep = if matches!(self.peek(), TokenKind::ColonColon) {
+                        crate::ast::MemberSep::ColonColon
+                    } else {
+                        crate::ast::MemberSep::Dot
+                    };
                     self.advance();
                     let nsp = self.peek_span();
                     let name = self.expect_ident(
-                        "a variant name after `.` in a qualified constructor (`new Enum.Variant(…)`)",
+                        "a variant name after `.`/`::` in a qualified constructor (`new Enum.Variant(…)`)",
                     )?;
                     callee = Expr::Member {
                         object: Box::new(callee),
                         name,
                         safe: false,
+                        sep,
                         span: nsp,
                     };
                 }
@@ -392,21 +400,32 @@ impl Parser {
         loop {
             let sp = self.peek_span();
             match self.peek() {
-                TokenKind::Dot | TokenKind::QuestionDot => {
+                TokenKind::Dot | TokenKind::QuestionDot | TokenKind::ColonColon => {
                     let safe = matches!(self.peek(), TokenKind::QuestionDot);
+                    // DEC-207: `::` is the class/type-level access separator, recorded on the
+                    // resulting `Member.sep`; `.`/`?.` record `Dot`. Purely syntactic here (no
+                    // enforcement) — both parse to the same `Member` shape. `::` is never nullsafe.
+                    let sep = if matches!(self.peek(), TokenKind::ColonColon) {
+                        crate::ast::MemberSep::ColonColon
+                    } else {
+                        crate::ast::MemberSep::Dot
+                    };
                     self.advance();
                     let name = match self.peek().clone() {
                         TokenKind::Ident(n) => {
                             self.advance();
                             n
                         }
-                        _ => return Err(self.error("a field or method name after '.' or '?.'")),
+                        _ => {
+                            return Err(self.error("a field or method name after '.', '?.' or '::'"))
+                        }
                     };
                     // DI composition root, qualified turbofish surface `DI.inject<T>()` (§7). Recognized
                     // only in this exact shape (`DI` head, `.inject`, `<`); any other `.inject` stays an
                     // ordinary member access, and `DI.inject()` (no turbofish) is converted by
                     // `desugar_di` when `Core.DI` is imported. `?.` is never a composition root.
                     if !safe
+                        && sep == crate::ast::MemberSep::Dot
                         && name == "inject"
                         && matches!(&e, Expr::Ident(q, _) if q == "DI")
                         && matches!(self.peek(), TokenKind::Lt)
@@ -418,6 +437,7 @@ impl Parser {
                         object: Box::new(e),
                         name,
                         safe,
+                        sep,
                         span: sp,
                     };
                 }
@@ -501,7 +521,10 @@ impl Parser {
         } else {
             None
         };
-        self.expect(&TokenKind::Dot, "'.' after `parent` in a super call")?;
+        // DEC-207: accept `::` as an alternative to `.` after `parent` (`parent::m(…)`).
+        if !(self.eat(&TokenKind::Dot) || self.eat(&TokenKind::ColonColon)) {
+            return Err(self.error("'.' or '::' after `parent` in a super call"));
+        }
         // The method is an ordinary name, or the `constructor` keyword (a parent-constructor call).
         let method = if matches!(self.peek(), TokenKind::Constructor) {
             self.advance();

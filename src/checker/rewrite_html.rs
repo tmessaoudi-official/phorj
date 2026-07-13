@@ -80,11 +80,13 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 object,
                 name,
                 safe,
+                sep: _,
                 span,
             } => Expr::Member {
                 object: Box::new(rexpr(*object, h)),
                 name,
                 safe,
+                sep: crate::ast::MemberSep::Dot,
                 span,
             },
             Expr::Index {

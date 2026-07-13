@@ -183,7 +183,12 @@ impl Parser {
     /// followed by `.`/`(` stays an ordinary identifier (no `.phg` uses it as a value). The checker
     /// rejects it outside an instance method/constructor (`E-PARENT-OUTSIDE-METHOD`).
     fn at_parent_call(&self) -> bool {
-        self.at_kw("parent") && matches!(self.peek2(), TokenKind::Dot | TokenKind::LParen)
+        // DEC-207: `parent::m(…)` is accepted alongside `parent.m(…)` and `parent(A)…`.
+        self.at_kw("parent")
+            && matches!(
+                self.peek2(),
+                TokenKind::Dot | TokenKind::ColonColon | TokenKind::LParen
+            )
     }
 
     /// `spawn` is a contextual concurrency keyword (M6 W4), recognized ONLY as the prefix of a call —

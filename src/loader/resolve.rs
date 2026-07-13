@@ -350,11 +350,13 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             object,
             name,
             safe,
+            sep: _,
             span,
         } => Expr::Member {
             object: Box::new(resolve_expr(*object, ctx)),
             name,
             safe,
+            sep: crate::ast::MemberSep::Dot,
             span,
         },
         Expr::Index {
@@ -625,6 +627,7 @@ pub(super) fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &Reso
             object,
             name,
             safe,
+            sep: _,
             span: msp,
         } => {
             if !safe {
@@ -647,6 +650,7 @@ pub(super) fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &Reso
                     object: Box::new(resolve_expr(*object, ctx)),
                     name,
                     safe,
+                    sep: crate::ast::MemberSep::Dot,
                     span: msp,
                 }),
                 args,

@@ -126,9 +126,18 @@ impl Printer<'_> {
                 self.args_doc(args)?,
             ])),
             Expr::Member {
-                object, name, safe, ..
+                object,
+                name,
+                safe,
+                sep,
+                ..
             } => {
-                let dot = if *safe { "?." } else { "." };
+                // DEC-207: render the written separator — `::` for class-level access, else `?.`/`.`.
+                let dot = match sep {
+                    crate::ast::MemberSep::ColonColon => "::",
+                    _ if *safe => "?.",
+                    _ => ".",
+                };
                 Ok(doc::concat(vec![
                     self.postfix_doc(object)?,
                     doc::text(format!("{dot}{name}")),
@@ -493,7 +502,7 @@ impl Printer<'_> {
     /// preserved. Returns `None` for anything that is not a ≥2-dot chain (handled by the per-node arms).
     pub(super) fn chain_doc(&self, e: &Expr) -> Result<Option<Doc>, String> {
         enum Seg<'a> {
-            Dot(&'a str, bool),
+            Dot(&'a str, bool, crate::ast::MemberSep),
             Args(&'a [Expr]),
             Index(&'a Expr),
             Force,
@@ -504,9 +513,13 @@ impl Printer<'_> {
         loop {
             match cur {
                 Expr::Member {
-                    object, name, safe, ..
+                    object,
+                    name,
+                    safe,
+                    sep,
+                    ..
                 } => {
-                    segs.push(Seg::Dot(name, *safe));
+                    segs.push(Seg::Dot(name, *safe, *sep));
                     cur = object;
                 }
                 Expr::Call { callee, args, .. } => {
@@ -534,8 +547,14 @@ impl Printer<'_> {
         segs.reverse();
         let seg_doc = |pr: &Self, s: &Seg| -> Result<Doc, String> {
             Ok(match s {
-                Seg::Dot(name, safe) => {
-                    doc::text(format!("{}{name}", if *safe { "?." } else { "." }))
+                Seg::Dot(name, safe, sep) => {
+                    // DEC-207: render the written separator (`::` for class-level, else `?.`/`.`).
+                    let d = match sep {
+                        crate::ast::MemberSep::ColonColon => "::",
+                        _ if *safe => "?.",
+                        _ => ".",
+                    };
+                    doc::text(format!("{d}{name}"))
                 }
                 Seg::Args(args) => pr.args_doc(args)?,
                 Seg::Index(ix) => {

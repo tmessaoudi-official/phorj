@@ -492,6 +492,7 @@ impl Checker {
             object: Box::new(Expr::Ident(leaf.to_string(), span)),
             name: name.to_string(),
             safe: false,
+            sep: crate::ast::MemberSep::Dot,
             span,
         };
         let mut call_args = vec![value.clone()];

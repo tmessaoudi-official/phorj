@@ -474,11 +474,13 @@ impl Di<'_> {
                 object,
                 name,
                 safe,
+                sep: _,
                 span,
             } => Expr::Member {
                 object: Box::new(self.rexpr(*object)),
                 name,
                 safe,
+                sep: crate::ast::MemberSep::Dot,
                 span,
             },
             Expr::Index {

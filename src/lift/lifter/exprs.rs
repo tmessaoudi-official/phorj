@@ -76,6 +76,8 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                 object: Box::new(lift_expr(recv)?),
                 name: name.clone(),
                 safe: *nullsafe,
+                // PHP instance call `->`/`?->` (DEC-207).
+                sep: crate::ast::MemberSep::Dot,
                 span: SP,
             }),
             args: lift_exprs(args)?,
@@ -89,6 +91,8 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             object: Box::new(lift_expr(recv)?),
             name: name.clone(),
             safe: *nullsafe,
+            // PHP instance property `->`/`?->` (DEC-207).
+            sep: crate::ast::MemberSep::Dot,
             span: SP,
         },
         php::PhpExpr::StaticCall { class, name, args } => Expr::Call {
@@ -373,6 +377,8 @@ pub(super) fn static_member(class: &str, name: &str) -> Expr {
         object: Box::new(Expr::Ident(class.to_string(), SP)),
         name: name.to_string(),
         safe: false,
+        // PHP `::` static access (DEC-207) — round-trips back to `::`.
+        sep: crate::ast::MemberSep::ColonColon,
         span: SP,
     }
 }
@@ -384,6 +390,8 @@ pub(super) fn console_print(arg: Expr) -> Expr {
             object: Box::new(Expr::Ident("Output".into(), SP)),
             name: "print".into(),
             safe: false,
+            // Synthesized echo target, not lifted from a PHP `::` (DEC-207).
+            sep: crate::ast::MemberSep::Dot,
             span: SP,
         }),
         args: vec![arg],

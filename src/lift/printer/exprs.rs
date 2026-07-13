@@ -116,9 +116,19 @@ impl Printer {
                 ))
             }
             Expr::Member {
-                object, name, safe, ..
+                object,
+                name,
+                safe,
+                sep,
+                ..
             } => {
-                let dot = if *safe { "?." } else { "." };
+                // DEC-207: render the written separator — `::` for PHP-`::`-lifted class access,
+                // else `?.`/`.`. Makes the PHP->Phorj draft round-trip faithful.
+                let dot = match sep {
+                    crate::ast::MemberSep::ColonColon => "::",
+                    _ if *safe => "?.",
+                    _ => ".",
+                };
                 Ok(format!("{}{dot}{name}", self.postfix_operand(object)?))
             }
             Expr::Index { object, index, .. } => Ok(format!(

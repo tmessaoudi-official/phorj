@@ -176,6 +176,7 @@ impl Checker {
                 object,
                 name,
                 safe,
+                sep: _,
                 span,
             } => self.check_member(object, name, *safe, *span),
             Expr::Index {

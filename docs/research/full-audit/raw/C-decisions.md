@@ -421,10 +421,20 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   with class; dishonest about what a module is); keep unified `.` (rejected — static/instance invisible,
   lossy round-trip). **Partially supersedes the naming-overhaul "unified `.`".**
   *(CODEMOD SCOPE CORRECTION 2026-07-13: NOT ~182 files — module functions like `Output.printLine` STAY
-  `.` (R1), so the codemod is only the class-static/const/enum-variant/`parent` accesses = a MODERATE set,
-  not the 962 module-fn occurrences.) ATTEMPTED + REVERTED 2026-07-13 (kept clean; same "no sound partial"
-  wall as DEC-211 — parser-accepts-`::`-but-nothing-enforces-it is a misleading no-op; sound version is
-  all-or-nothing for consistency). FULL IMPL MAP (verified/built in the attempt): (1) token — add
+  `.` (R1); the codemod is class-static/const/enum-variant/`parent` accesses — larger than "moderate"
+  because enum variants (Result/Option/Json) are pervasive, but NOT the 962 module-fn occurrences.)
+  **PART-1 SHIPPED 2026-07-13 (additive — the earlier "no sound partial" fear was WRONG for DEC-207): the
+  `::` CAPABILITY.** `TokenKind::ColonColon` + tokenizer two-char rule; `enum MemberSep { Dot, ColonColon }`
+  + `sep` field on `Expr::Member` (~36-site ripple, all `Dot`); parser accepts `::` in the postfix member
+  loop, `new Enum::Variant`, match patterns, and `parent::`; both printers (format + lift) render `::`;
+  lifter maps PHP `::`↔`->` faithfully. **Additive — `.` still works everywhere**; example
+  `guide/colon-colon-access.phg` (`MathUtil::square()`/`Counter::start()` static via `::`, `c.add()`
+  instance via `.`), byte-identical run/runvm/php, canonical formatting, transpiles to PHP `::`. No new
+  `Op`. **PART-2 (enforcement + codemod):** add `E-SEP-MISMATCH` (require `::` for class-static/const/
+  enum-variant/parent, `.` for instance/module) at the checker resolution sites; add a `sep` marker to
+  `Pattern::Variant` + `ParentCall` so match-patterns and `parent::` also RENDER `::` (part-1 renders
+  those back to `.`); then codemod all class-level `.`→`::` across preludes + examples + fixtures
+  (enforcement errors pinpoint every site) — the large-but-mechanical migration. FULL IMPL MAP (verified/built in the attempt): (1) token — add
   `TokenKind::ColonColon` (`token.rs`) + a `(b':', Some(b':')) => ColonColon` arm in the tokenizer
   two-char dispatch (`tokenizer/mod.rs:~340`). (2) AST — add `enum MemberSep { Dot, ColonColon }` +
   `sep: MemberSep` field on `Expr::Member` (`ast/exprs.rs`); ~36 sites ripple (26 construction → `Dot`,

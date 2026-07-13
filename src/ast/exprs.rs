@@ -28,6 +28,17 @@ impl CollKind {
     }
 }
 
+/// Which separator token was written for a member access (DEC-207). Purely **syntactic**: `Dot` for
+/// `.`/`?.` (instance access) and `ColonColon` for `::` (class/type-level access). Both parse to the
+/// same `Expr::Member` AST; this field only records the surface spelling so the formatter can render
+/// it back faithfully. No enforcement in this scaffold — the checker will later reject `.` on statics
+/// / `::` on instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemberSep {
+    Dot,
+    ColonColon,
+}
+
 /// Expressions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -113,6 +124,9 @@ pub enum Expr {
         object: Box<Expr>,
         name: String,
         safe: bool,
+        /// The syntactic separator written (DEC-207): `Dot` for `.`/`?.`, `ColonColon` for `::`.
+        /// Records the surface spelling only; both parse identically.
+        sep: MemberSep,
         span: Span,
     },
     /// `object[index]`

@@ -205,6 +205,7 @@ impl Checker {
                     object: Box::new(Expr::Ident(q.to_string(), call_span)),
                     name: name.to_string(),
                     safe: false,
+                    sep: crate::ast::MemberSep::Dot,
                     span: call_span,
                 },
             };

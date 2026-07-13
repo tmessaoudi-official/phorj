@@ -133,6 +133,7 @@ pub(super) fn build_expr(node: &Built, sp: Span) -> Expr {
                 object: Box::new(Expr::Ident(owner.clone(), sp)),
                 name: method.clone(),
                 safe: false,
+                sep: crate::ast::MemberSep::Dot,
                 span: sp,
             }),
             args,

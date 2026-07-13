@@ -230,6 +230,7 @@ fn rexpr(e: Expr, m: &VarMap) -> Expr {
                             object: Box::new(Expr::Ident(enum_name.clone(), isp)),
                             name: real.clone(),
                             safe: false,
+                            sep: crate::ast::MemberSep::Dot,
                             span: isp,
                         }),
                         None => Box::new(Expr::Ident(name, isp)),
@@ -306,11 +307,13 @@ fn rexpr(e: Expr, m: &VarMap) -> Expr {
             object,
             name,
             safe,
+            sep: _,
             span,
         } => Expr::Member {
             object: Box::new(rexpr(*object, m)),
             name,
             safe,
+            sep: crate::ast::MemberSep::Dot,
             span,
         },
         Expr::Index {

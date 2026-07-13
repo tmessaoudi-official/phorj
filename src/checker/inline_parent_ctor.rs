@@ -244,6 +244,7 @@ fn assign_this(name: &str, value: Expr, span: Span) -> Stmt {
             object: Box::new(Expr::This(span)),
             name: name.to_string(),
             safe: false,
+            sep: crate::ast::MemberSep::Dot,
             span,
         },
         value,

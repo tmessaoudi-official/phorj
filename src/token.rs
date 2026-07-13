@@ -136,6 +136,10 @@ pub enum TokenKind {
     Semicolon,
     Comma,
     Colon,
+    /// `::` — the class/type-level member-access separator (DEC-207). Accepted, preserved, and
+    /// rendered as an alternative to `.` for static/class-level access; purely syntactic (the
+    /// `Expr::Member.sep` field records which was written). No enforcement in this scaffold.
+    ColonColon,
     Question,
     QuestionQuestion, // `??` null-coalesce
     QuestionDot,      // `?.` safe (nullsafe) access

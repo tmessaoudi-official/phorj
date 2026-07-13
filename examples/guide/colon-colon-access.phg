@@ -1,0 +1,33 @@
+// Class-level access with `::` (DEC-207) — a `static` method or constant is reached with `::`, an
+// instance member with `.`. This makes static-vs-instance visible at the call site (a legibility win)
+// and round-trips 1:1 with PHP's `::` / `->`. Additive today: the `.` form still works everywhere;
+// *requiring* `::` for class-level access (and `.` for instance) is DEC-207 part-2 (enforcement).
+package Main;
+
+import Core.Output;
+
+class MathUtil {
+    static function square(int n): int {
+        return n * n;
+    }
+}
+
+class Counter {
+    constructor(private int total) {}
+    static function start(): Counter {
+        // A static factory — reached on the class with `::`.
+        return new Counter(0);
+    }
+    function add(int n): int {
+        return this.total + n;
+    }
+}
+
+function main(): void {
+    // `::` for class-level (static) access…
+    int sq = MathUtil::square(6);
+    Counter c = Counter::start();
+    // …and `.` for instance access on the value it returns.
+    int t = c.add(sq);
+    Output.printLine("square = {sq}  total = {t}");
+}

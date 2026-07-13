@@ -239,6 +239,7 @@ impl Compiler<'_> {
                 object,
                 name,
                 safe,
+                sep: _,
                 span,
             } => {
                 // Field read: evaluate the object, then look its field up at runtime by name

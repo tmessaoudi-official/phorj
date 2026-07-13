@@ -67,6 +67,7 @@ impl Checker {
                     object: Box::new(Expr::Ident(leaf.clone(), span)),
                     name: name.to_string(),
                     safe: false,
+                    sep: crate::ast::MemberSep::Dot,
                     span,
                 }),
                 args,

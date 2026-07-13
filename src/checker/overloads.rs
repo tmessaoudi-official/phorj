@@ -296,6 +296,7 @@ impl Checker {
                     object: Box::new(object.clone()),
                     name: chosen.2.clone(),
                     safe,
+                    sep: crate::ast::MemberSep::Dot,
                     span: call_span,
                 }),
                 args: args.to_vec(),

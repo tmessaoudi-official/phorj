@@ -137,6 +137,7 @@ fn reflect_call(qual: &str, name: &str, value: Expr) -> Expr {
             object: Box::new(Expr::Ident(qual.to_string(), synth_span())),
             name: name.to_string(),
             safe: false,
+            sep: crate::ast::MemberSep::Dot,
             span: synth_span(),
         }),
         args: vec![value],
