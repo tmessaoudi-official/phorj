@@ -114,6 +114,11 @@ fn render_into(value: &Value, caps: &RenderCaps, depth: usize, out: &mut String)
         Value::Closure(_) => out.push_str("<function>"),
         Value::Channel(_, _) => out.push_str("<channel>"),
         Value::Task(_) => out.push_str("<task>"),
+        Value::Db(h) => {
+            out.push('<');
+            out.push_str(h.kind());
+            out.push('>');
+        }
     }
 }
 

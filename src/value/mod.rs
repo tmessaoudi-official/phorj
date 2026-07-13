@@ -16,12 +16,14 @@ use std::rc::Rc;
 mod arith;
 mod collections;
 mod core_impl;
+mod db;
 mod decimal;
 mod types;
 
 pub use self::arith::*;
 pub use self::collections::*;
 pub use self::core_impl::*;
+pub use self::db::*;
 pub use self::decimal::*;
 pub use self::types::*;
 

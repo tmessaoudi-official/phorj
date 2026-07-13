@@ -461,6 +461,35 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   analysis but OVERRULED — dev wants the low-level primitive, not a curated builder); keep in Core
   (rejected — heavier than PHP's floor, couples app concerns to the language). **Supersedes the shipped
   Core.Sql DBAL slices + the DEC-era Core.Sql design.**
+  - **SURFACE RULED 2026-07-13 (ASKED, two AskUserQuestion rounds).** The enhanced-PDO primitive =
+    **shape 1 + shape 3 combined** — a strongly-typed PDO with generics. `import Core.Db` required.
+    - **Connection:** `Db db = new Db("sqlite:app.db")` (DSN string; mandatory `new`).
+    - **Prepared-first:** `Statement s = db.prepare(sql)`; every path goes through a `Statement`.
+    - **Both bind styles** (chosen): positional `s.bind(v)` (`?` placeholders, left-to-right) AND named
+      `s.bindNamed("name", v)` (`:name`); mutually exclusive per statement; binds are chainable and typed.
+    - **Dynamic path (shape 1, KEPT):** `Rows rows = s.query()` → `for (Row r in rows) { r.getInt("c");
+      r.getString("name"); ... }` — typed accessors, no silent coercion; for ad-hoc/aggregate SQL where no
+      result class exists (`COUNT(*)`, exploratory).
+    - **Typed-generic path (shape 3):** `List<T> = s.queryInto<T>()` and `T? = s.queryOneInto<T>()`
+      (0 rows → `null`, 1 → the object, >1 → `DbError`). Row→object mapping is **by field NAME, STRICT**
+      (chosen): every public field of `T` must have a same-named result column; a type mismatch OR a SQL
+      NULL into a non-optional field → `DbError`; extra columns ignored; declare `int? age` to admit NULL.
+    - **Writes:** `int n = s.exec()` → affected-row count.
+    - **Errors:** a checked `DbError` (thrown, never PDO's silent `false`/`null`); propagated with `?` like
+      any checked fault. Enhancements over PDO: strong typing + generics + strict mapping + no silent
+      coercion + checked errors + mandatory prepared statements.
+    - **LADDER (invariant 14):** transpile leg is **faithful (case 1)** — maps to PHP PDO
+      (`new PDO(dsn)`, `prepare`/`bindValue`/`execute`/`fetch*`, object hydration). Native leg executes
+      over `rusqlite` (`db` feature, already vetted — UNIFIED-SPEC §External dependency policy Q1/Q2).
+    - **SPINE TREATMENT:** per the adopted plan (UNIFIED-SPEC P2/Tier-B) DB *execution* is **Tier-3
+      fixture-tested, NOT in the example-glob byte-identity spine** (live I/O can't be trivially
+      byte-identical rusqlite-vs-PDO); the surface's *parse/check/transpile-shape* stays spine-tested.
+    - **Alternatives (this round):** shape 1 only (PDO-faithful, no generics — rejected, dev wants
+      generics); shape 2 one-shot `db.query(sql, binds)` (rejected — no Statement reuse); mapping by
+      constructor-order (rejected — order-fragile); lenient mapping (rejected — silent-default footgun);
+      positional-only / named-only binds (rejected — dev chose both); `queryOneInto():T`-throws or
+      no-single-helper (rejected — dev chose `T?`); generics-only, drop dynamic path (rejected — dev keeps
+      both). *Build is multi-slice; slice plan in MASTER-PLAN §0.1.*
 - **DEC-209 — match legibility: reject bare PascalCase arms; `default` is the catch-all; `_` = ignore-only.**
   A lone PascalCase ident arm (`Circle =>`) currently becomes a SILENT catch-all binding — verified
   live: `match(s){Circle=>"c"}` returns "c" for a `Square` (byte-identity holds across all 4 backends,

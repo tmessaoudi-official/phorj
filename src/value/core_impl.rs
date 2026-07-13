@@ -23,6 +23,7 @@ impl Value {
             Value::Closure(_) => "function",
             Value::Channel(..) => "channel",
             Value::Task(_) => "task",
+            Value::Db(h) => h.kind(),
         }
     }
 

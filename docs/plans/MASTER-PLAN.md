@@ -75,9 +75,48 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
    checker def-site + instantiation enforcement; erase to PHP). Purely additive.
 7. **DEC-212** — general tagged-template primitive; move `html` to a first-party library with the same
    kernel. Retire the hardcoded `html"` lexer branch.
-8. **DEC-208** — enhanced-PDO DB primitive (needs its OWN design round first: surface + how it beats
-   PDO); remove Core.Sql from the Core registry; any builder is userland. Feeds the Ω-1 web spine.
+8. **DEC-208** — enhanced-PDO DB primitive. **SURFACE RULED 2026-07-13** (two AskUserQuestion rounds;
+   full ruling + alternatives in C-decisions.md §2026-07-13 DEC-208 "SURFACE RULED"). Shape = **1+3
+   combined** (strongly-typed PDO with generics): `new Db("sqlite:app.db")` → `db.prepare(sql)` →
+   `.bind(v)` (positional `?`) / `.bindNamed("n",v)` (named `:name`, BOTH chosen) → `.query()`
+   (dynamic `Rows`→`Row`, `r.getInt`/`r.getString`) OR `.queryInto<T>()` (`List<T>`, by-field-NAME
+   STRICT mapping — missing col / type-mismatch / NULL-into-non-optional → `DbError`; `int?` admits
+   NULL; extra cols ignored) OR `.queryOneInto<T>(): T?` (0→null,1→obj,>1→DbError); `.exec(): int`.
+   Errors = checked `throws DbError`. LADDER case-1 (faithful → PHP PDO). **SPINE: quarantined** —
+   register Core.Db natives `pure:false` ⇒ `uses_impure_native` (differential.rs:1068) auto-excludes
+   every `import Core.Db` example from the byte-identity differential; correctness via a dedicated
+   fixture harness (`tests/db.rs`, mirror `tests/process.rs`). Verified linchpins: quarantine seam is
+   flag-derived (no harness edit); `Value::Channel(…, Rc<RefCell<…>>)` (value/types.rs:150) is the
+   opaque-handle precedent; native ABI is `fn(&[Value],…)` so a handle rides as arg-0; `Value::Channel`
+   ripples only ~12 sites (bounded). **BUILD SLICES (fresh context — design-dense subsystem):**
+   - **S1** (atomic — no clean thinner cut; a dep alone is inert, a Value variant alone is dead-code/
+     warnings-deny): add non-default `db` feature + `rusqlite` (bundled) to Cargo.toml; add opaque
+     handle to Value modelled feature-independently (a `Value::Db(Rc<dyn DbHandle>)`-style always-present
+     variant whose rusqlite-backed impls are `#[cfg(feature="db")]`, so match arms don't cfg-split) —
+     mirror Channel across the ~12 sites (type_name "db", clone=share-Rc, eq=identity/false, display=err);
+     register Db/Statement/Rows(as `List<Row>`)/Row as reserved built-in classes in the checker with
+     typed method sigs; a compiler dispatch arm (mirror the Channel arm calls.rs:130, but route to
+     `CallNative` with the receiver pushed as arg-0) for `db.prepare/.bind/.bindNamed/.query/.exec`;
+     Row = injected-type over a materialized column `Map` (reuse the Core.Json injected-type pattern —
+     `r.getInt(k)` is a native reading the map; `query()` returns `List<Row>` so `for-in` is free, no
+     Rows variant); rusqlite lifetime workaround: Statement handle stores (conn Rc, sql, binds) and
+     prepares+executes lazily at query/exec (avoids the Statement-borrows-Connection lifetime knot);
+     PDO transpile (faithful); `tests/db.rs` fixture + quarantined `examples/db/…` walkthrough.
+   - **S2** — generics: `queryInto<T>()`/`queryOneInto<T>()` (checker resolves T's field layout →
+     native hydrates by strict name; `DbError` on mismatch/NULL); PDO object-hydration transpile.
+   - **S3** — remove the old Core.Sql builder prelude + `module_of` row; codemod examples/preludes off
+     Core.Sql; update FEATURES/README; mark UNIFIED-SPEC §Sql Q1–Q7 (old full-builder design)
+     SUPERSEDED by DEC-208. Feeds the Ω-1 web spine.
 9. **DEC-215** — DI L1/L2 refactor stays scheduled at Ω-4/Ω-7 (no action now).
+
+**QUEUE STATUS (2026-07-13, Opus run — updated):** SHIPPED green + committed this run: DEC-213, DEC-210
+(no-code), DEC-209, DEC-214 **part-1**, DEC-207 **part-1** (`::` additive capability), DEC-211 (full,
+sound), DEC-212 **part-1** (tagged templates fn+protocol) + microbench-gate epsilon/load-guard fix — 7
+features. **RULED-NOT-BUILT (resume order, each fresh-context):** DEC-208 (surface ruled above; S1→S3)
+→ DEC-207 **part-2** (enforce `::` + codemod; do AFTER externalization to avoid double-churn) → DEC-214
+**part-2** (remove empty-`[]`; after DEC-208/218) → DEC-215 (DI L1/L2) → DEC-216 (pkg-mgmt split) →
+DEC-218 (web-spine externalize) → DEC-212 **part-2** (html→library). DEC-219 (static overload
+resolution) deferred: byte-identity-soundness-subtle (subtype refinement) — low priority vs the above.
 
 **Sequencing:** correctness (1) → cheap surface fixes (2–4) → the `::` migration (5) → additive
 type/literal work (6–7) → the DB primitive design+build (8, gates Ω-1) → DI at its wave (9).

@@ -153,6 +153,15 @@ pub enum Value {
     /// `spawn` in the synchronous-degenerate path, or when the task's coroutine finishes in the
     /// cooperative path. `join` reads it by id. Opaque to the kernels; never transpiled.
     Task(TaskId),
+    /// An opaque native database resource handle (DEC-208 `Core.Db`) — a connection or a
+    /// lazily-executed prepared statement. Shared-mutable like [`Value::Channel`]/[`Value::Instance`]:
+    /// cloning shares the same `Rc`, so a statement's accumulated binds are visible through every
+    /// binding. **Opaque** to the arithmetic / compare / display kernels (the checker forbids using a
+    /// handle as an operand or interpolating it), so the single-sourced `value.rs` kernels are
+    /// untouched. The concrete rusqlite-backed impl is feature-gated (`db`) in `src/native/db.rs`;
+    /// with `db` off this variant is unconstructable. Quarantined from the PHP oracle (impure natives);
+    /// the transpiler emits faithful PDO (DEC-208, LADDER case 1).
+    Db(Rc<dyn DbObject>),
 }
 
 /// The data of a first-class function value (M3 S3, Task 3).
