@@ -38,6 +38,43 @@ its weights and denominator.
 
 ---
 
+## 0.1 LANGUAGE-RECONSIDERATION BATCH (2026-07-13, Opus run — developer via AskUserQuestion)
+
+> Developer-initiated sweep: "rethink anything opinionated that should not be in the language."
+> Apex filter = CRAFTSMANSHIP. All rulings recorded WITH alternatives in
+> `docs/research/full-audit/raw/C-decisions.md` §"2026-07-13 language-reconsideration batch"
+> (DEC-207…215 + META-4/5). Surface changes land in `docs/specs/UNIFIED-SPEC.md`. This batch
+> takes priority over the parked sqlbuild ≥1.0 ratchet where they intersect (DEC-208 removes the
+> query builder outright, so "sqlbuild" as a Core fixture is retired — the perf mandate now applies
+> to the enhanced-PDO primitive and to each new feature per the PER-FEATURE PERF GATE). Certification
+> ran self-graded (advisor inactive: advisor==main==Opus 4.8).
+
+**Implementation queue (each = its own green, byte-identity-gated slice + Invariant-9 example +
+UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime surface):**
+1. **DEC-213 (BUG, do first)** — unify the reject + variant-mangle builtin-class list onto one shared
+   constant; add a differential example with a `DateTime`/`RuntimeException` variant name. Closes a live
+   G-1 byte-identity break. No surface change.
+2. **DEC-210** — correct the DEC-096 register row (done in the register); ratify statement-only. No code.
+3. **DEC-209** — `E-MATCH-BARE-VARIANT` (reject bare PascalCase arm) + catch-all keyword `default`
+   (parser + checker) + `_` restricted to ignore-placeholder; explain row; codemod existing `_ =>` arms.
+4. **DEC-214** — `new List<T>()`/`new Map<K,V>()` empty construction; remove `[]`/`{}` contextual typing
+   + `List.empty`/`Map.empty`; keep `[1,2,3]`; codemod. Supersedes DEC-201.
+5. **DEC-207** — `::` for class/type-level access (token + parser `sep` field + checker enforcement +
+   formatter). Transpiler already emits `::`; extend the lifter to round-trip `::`↔`->`. Codemod all
+   examples (module fns keep `.`). Spine-adjacent — fresh context, full differential.
+6. **DEC-211** — `T: Interface`/trait generic bounds (parser `parse_type_params` + AST bound field +
+   checker def-site + instantiation enforcement; erase to PHP). Purely additive.
+7. **DEC-212** — general tagged-template primitive; move `html` to a first-party library with the same
+   kernel. Retire the hardcoded `html"` lexer branch.
+8. **DEC-208** — enhanced-PDO DB primitive (needs its OWN design round first: surface + how it beats
+   PDO); remove Core.Sql from the Core registry; any builder is userland. Feeds the Ω-1 web spine.
+9. **DEC-215** — DI L1/L2 refactor stays scheduled at Ω-4/Ω-7 (no action now).
+
+**Sequencing:** correctness (1) → cheap surface fixes (2–4) → the `::` migration (5) → additive
+type/literal work (6–7) → the DB primitive design+build (8, gates Ω-1) → DI at its wave (9).
+
+---
+
 ## 1. GOVERNANCE & STANDING RULES
 
 **G-1 · Byte-identity spine.** `phg run` ≡ `phg runvm` ≡ transpiled PHP under a real `php` (floor

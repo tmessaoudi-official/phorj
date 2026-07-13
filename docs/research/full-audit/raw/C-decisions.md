@@ -354,7 +354,7 @@ Per the developer's standing instruction this batch records EVERY ruling **with 
 considered and why they lost**. All six pending forks + three run-level meta-rulings cleared in
 one sitting (failing programs + after-state previews were embedded in each dialog).
 
-- **DEC-201 — empty collection literals: BOTH contextual typing AND explicit constructors.**
+- **DEC-201 — empty collection literals: BOTH contextual typing AND explicit constructors.** *(SUPERSEDED by DEC-214, 2026-07-13 — empty collections now use `new List<T>()`/`new Map<K,V>()`; `[]`/`{}` contextual typing and `List.empty`/`Map.empty` removed; `[1,2,3]` kept. `List.empty` bypassed mandatory-`new` and the contextual typing was "type-from-later-use" inference the developer ruled out.)*
   `List<int> xs = [];` adopts the annotated type in declarations/assignments/call-args/returns,
   AND `List.empty<T>()` / `Map.empty<K,V>()` ship for expression positions with no context.
   *Alternatives:* contextual-only (loses the no-context expression case), constructors-only
@@ -399,3 +399,104 @@ one sitting (failing programs + after-state previews were embedded in each dialo
   pre-approve `triomphe` for V3b too (broader than needed); decide-per-design (more asks).
 - **META-3 — wave order confirmed as written:** Ω-1 Core.Db → HTTP → sessions, then Ω-2…Ω-9
   in sequence. *Alternatives:* language-surface-first, web-spine-depth-first — both declined.
+
+---
+
+## 2026-07-13 language-reconsideration batch (Opus run — developer via AskUserQuestion, all Mode: ASKED)
+
+Developer-initiated "rethink anything opinionated that should not be in the language," apex filter
+= CRAFTSMANSHIP (SOLID / design patterns / best practice), NOT familiarity or minimalism. Each
+ruling had a failing/before program + per-option previews embedded in its dialog. Session
+certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). All items below are
+**RULED, build-pending** unless marked SHIPPED. Full research: `scratchpad/verify-*.md`,
+`raw-static-access.md`, `raw-core-vs-library.md`, `raw-opinionated-sweep.md`.
+
+- **DEC-207 — static/class-level access separator: adopt `::`.** Class/type-level access uses `::`
+  (static methods, static fields/consts, enum-variant construct + match, `parent`); instance access
+  stays `.`/`?.` (→PHP `->`/`?->`); module functions stay `.` (a module is a namespace, not a class;
+  →PHP free function). Makes static-vs-instance visible at the call site (legibility = a craftsmanship
+  axis) and PHP↔Phorj round-trip lossless (transpiler already emits `Counter::make()`/`parent::`; the
+  lifter today FLATTENS PHP `::` and `->` both into `.`). Does NOT change checker resolution (stays
+  name-based). Migration = mechanical codemod (~182 example files / 962 `Output.printLine`-style occ,
+  though module fns keep `.`). *Alternatives:* `::` for ALL non-instance incl module fns (rejected —
+  conflates namespace with class; dishonest about what a module is); keep unified `.` (rejected —
+  static/instance invisible, lossy round-trip). **Partially supersedes the naming-overhaul "unified `.`".**
+- **DEC-208 — DB: drop the query builder from the language; ship an enhanced-PDO primitive.** The SQL
+  query builder leaves the language AND is NOT a first-party library (any builder = 100% userland).
+  Phorj instead provides an **enhanced PDO-style DB primitive** (better than PHP's PDO — surface TBD
+  in a follow-up design round: typed, Result-returning, prepared-statement-first, no silent coercion).
+  **Strict import discipline reaffirmed: always `import` required, nothing inferred, nothing in the
+  wind.** *Alternatives:* seam — move the web spine (Sql/Db/HTTP/Router/Sessions/Template/Dotenv) to
+  first-party bundled libraries via the existing `phorj.toml`/`phg vendor` path (RECOMMENDED by the
+  analysis but OVERRULED — dev wants the low-level primitive, not a curated builder); keep in Core
+  (rejected — heavier than PHP's floor, couples app concerns to the language). **Supersedes the shipped
+  Core.Sql DBAL slices + the DEC-era Core.Sql design.**
+- **DEC-209 — match legibility: reject bare PascalCase arms; `default` is the catch-all; `_` = ignore-only.**
+  A lone PascalCase ident arm (`Circle =>`) currently becomes a SILENT catch-all binding — verified
+  live: `match(s){Circle=>"c"}` returns "c" for a `Square` (byte-identity holds across all 4 backends,
+  so a legibility/refuse-to-lie footgun, not a spine break). Reject it with `E-MATCH-BARE-VARIANT`
+  (hint the 3 intents). The standalone catch-all keyword becomes **`default`** (PHP-match aligned), NOT
+  `_`; `_` survives ONLY as an ignore-placeholder (type-test `Square _`, unused bindings). *Alternatives:*
+  warn-only (rejected — ignored warnings still ship wrong-but-passing programs); keep silent (rejected);
+  full `Shape.Circle` qualification (rejected — breaks idiomatic bare `Circle() =>`); remove `_` entirely
+  (rejected — forces named-but-unused bindings); keep both `_` and `default` as catch-all (rejected — TIMTOWTDI).
+  Closes DEC-056d.
+- **DEC-210 — `++`/`--` ratified STATEMENT-ONLY; register corrected.** The code is already statement-only
+  (`parser/stmts.rs`, desugar `x=x+1`; `x=i++`/`a[i++]=i++` are parse errors) — the craftsmanship-correct
+  design with no sequence-point footgun expressible. The register's DEC-096 row wrongly marked the
+  expression-form + a `W-SEQUENCE-MUTATION` lint as shipped; both were OVERRULED 2026-06-25 and never
+  built. Ruling: affirm statement-only, mark DEC-096 superseded/never-built. No code change. *Alternatives:*
+  build expr-form + the lint (rejected — reintroduces the eliminated footgun). Corrects/supersedes DEC-096.
+- **DEC-211 — generic type bounds: add `T: Interface`/trait.** A type param may be bounded to an
+  interface/trait, enforced at BOTH the definition site (body limited to the bound's members) and
+  instantiation (the type arg must implement it); erased to PHP interface calls. Bare `<T>` stays legal.
+  Closes the "maximal generics" hole (`function max<T: Comparable>(a:T,b:T):T` is unwritable today —
+  `a>b` on bare `T` is rejected). Reuses the existing interface/trait conformance table. *Alternatives:*
+  stay bound-less (rejected — `max`/`sort` unwritable); hardcode magic `Comparable`/`Numeric` (rejected —
+  the one-domain-hardcode anti-pattern this sweep removes elsewhere). (Doc fix: UNIFIED-SPEC:104 says
+  "monomorphized"; impl is ERASURE everywhere else. Memory index "trait CLOSED" is wrong — DEC-177 blessed traits.)
+- **DEC-212 — domain literals: generalize `html"…"` to a tagged-template primitive.** The language gains
+  ONE general tagged-template mechanism (a user-definable interpolation handler returning a typed
+  newtype); `html` becomes a first-party library on it, keeping the EXACT escaping kernel
+  (`htmlspecialchars(ENT_QUOTES,'UTF-8')`), the erased `Html`/`Attr` newtypes, and byte-identity. No more
+  hardcoded domain literals in the lexer. Consistent with DEC-208 (domains live as libraries; the language
+  provides the primitive) + nothing-in-the-wind (import-gated). *Alternatives:* keep hardcoded `html`,
+  add no more (rejected — a permanent lexer special-case that doesn't generalize).
+- **DEC-213 — PHP-name collision: fix the live byte-identity bug; keep the reject/mangle axis.**
+  BUG (G-1 spine break, verified): the enum-variant mangle list (~17 engine-core names,
+  `transpile/names.rs`) is a strict SUBSET of the DEC-202 reject list (~100 preloaded builtins,
+  `checker/common.rs`), so a variant named `DateTime`/`RuntimeException`/`ArrayObject` runs (exit 0) but
+  its transpiled PHP throws `Cannot redeclare class DateTime` — masked only because no example uses one.
+  Fix: feed BOTH the reject and the mangle from ONE shared builtin-class constant. The reject-vs-mangle
+  AXIS is principled and KEPT (human-chosen API name = loud `E-RESERVED-NAME`; impl-detail variant =
+  silent mangle). *Alternatives:* emission-side isolation / always-namespaced output (would drop both the
+  reject and the mangle so a phorj programmer may name a class `Exception` — truest to "bridge not soul",
+  but a spine-level full byte-identity re-baseline of every single-package example; DECLINED for now,
+  not scheduled); unify toward one policy all-reject/all-mangle (rejected — worse both ways). This is a
+  correctness fix, implemented independent of the surface rulings.
+- **DEC-214 — empty collections via `new List<T>()` / `new Map<K,V>()`; SUPERSEDES DEC-201.** Empty
+  collections are CONSTRUCTED with mandatory `new` (`new List<int>()`, `new Map<string,int>()`); the
+  empty-literal contextual typing (`var xs = [];` inferred from later use) AND the `List.empty<T>()` /
+  `Map.empty<K,V>()` static factories are both REMOVED. Non-empty literals `[1,2,3]` stay (element type
+  is locally obvious, not "in the wind"). Local scalar inference (`var n = 42`) stays. Rationale:
+  `List.empty<T>()` bypassed the mandatory-`new` tenet, and empty-literal "type from later use" is exactly
+  the inference the developer's "nothing inferred" rules out. *Alternatives:* all collections via `new`
+  incl. `[1,2,3]` → `new List<int>(1,2,3)`, remove bracket literals entirely (rejected — loses ergonomic
+  literals where the type is self-evident); keep DEC-201 (rejected — retains the `new`-bypass factory +
+  the type-from-later-use inference). **Supersedes DEC-201.**
+- **DEC-215 — DI stays compile-time; L1/L2 refactor affirmed, scheduled Ω-4/Ω-7.** DI v1 is a 1292-LOC
+  bespoke COMPILER pass (`desugar_di/`, pre-check, `Expr::Inject`) — the same "app framework privileged
+  into the compiler" category as the ejected SQL builder (DEC-208). The spec's own ruling stands: build a
+  generic L1 attribute-reflection primitive (compile-time attribute enumeration + `subjectsWith<Attr>()`
+  discovery) and rewrite DI as an L2 consumer (routing/ORM/validation ride the same L1). DI MUST remain
+  compile-time — a pure-runtime `.phg` DI library is infeasible (`inject<T>()` is type-directed and PHP
+  erases types → byte-identity break). Execute at the SCHEDULED wave (Ω-4/Ω-7); DI v1 stays as-is until
+  then (green, contained). *Alternatives:* pull the L1/L2 refactor forward now (rejected — reorders ahead
+  of priorities, ~1300 LOC, buys nothing while DI v1 works); keep DI compiler-baked permanently (rejected
+  — contradicts the spec's L1/L2 ruling + the DEC-208 principle).
+
+**Session meta-rulings (2026-07-13):**
+- **META-4 — unify ALL plans/specs into the two SSOTs** (developer, mid-session): `MASTER-PLAN.md`
+  (roadmap) + `UNIFIED-SPEC.md` (surface) + this register (decisions). No standalone plan/spec files;
+  the language-reconsideration working plan is folded into MASTER-PLAN and retired.
+- **META-5 — session certification is self-graded + disclosed** (advisor inactive: advisor==main==Opus 4.8).

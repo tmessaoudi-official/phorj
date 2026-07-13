@@ -23,6 +23,25 @@
 >   not a rulebook. For the pure delivery rules see `CLAUDE.md` and `docs/INVARIANTS.md`; for the
 >   roadmap see `docs/plans/MASTER-PLAN.md` (the roadmap SSOT).
 
+> **⚠ PENDING SURFACE CHANGES — 2026-07-13 language-reconsideration batch (RULED, build-pending).**
+> The following developer rulings SUPERSEDE the current text of the affected sections; each section's
+> prose is rewritten in the same change that implements it (G-5). Canonical rulings + alternatives:
+> `docs/research/full-audit/raw/C-decisions.md` §"2026-07-13"; implementation queue: MASTER-PLAN §0.1.
+> - **DEC-207** — class/type-level access uses `::` (statics/consts/enum-variants/`parent`); instance
+>   stays `.`/`?.`; module functions stay `.`. Partially supersedes the naming-overhaul "unified `.`".
+> - **DEC-214 (supersedes DEC-201)** — empty collections via `new List<T>()`/`new Map<K,V>()`;
+>   `[]`/`{}` contextual typing and `List.empty`/`Map.empty` REMOVED; `[1,2,3]` kept.
+> - **DEC-209** — match: bare PascalCase arm rejected (`E-MATCH-BARE-VARIANT`); standalone catch-all
+>   keyword is `default` (not `_`); `_` is an ignore-placeholder only.
+> - **DEC-211** — generic type bounds `T: Interface`/trait (def-site + instantiation, erased).
+> - **DEC-212** — `html"…"` generalizes to a tagged-template primitive; `html` becomes a first-party
+>   library keeping the same escaping kernel. No hardcoded domain literals.
+> - **DEC-208** — the SQL query builder leaves the language (not a first-party lib either); Core gains
+>   an enhanced-PDO DB primitive. Supersedes the Core.Sql DBAL sections. Strict imports; nothing inferred.
+> - **DEC-210** — `++`/`--` ratified statement-only (already the impl). **DEC-213** — PHP-name collision:
+>   one shared builtin-class list feeds both the reject and the variant-mangle (closes a live byte-identity
+>   bug); reject/mangle axis kept. **DEC-215** — DI stays compile-time, L1/L2 refactor scheduled Ω-4/Ω-7.
+
 ## Table of contents
 
 - **Part I — Foundations**
