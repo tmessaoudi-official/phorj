@@ -268,7 +268,7 @@ impl Checker {
             | Expr::Ident(..)
             | Expr::Inject { .. }
             | Expr::This(..) => {}
-            Expr::Str(parts, _) | Expr::Html(parts, _) => {
+            Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 for p in parts {
                     if let StrPart::Expr(inner) = p {
                         self.check_expr_casing(inner);

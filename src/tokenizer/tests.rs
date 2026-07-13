@@ -382,26 +382,33 @@ fn byte_string_literals() {
 #[test]
 fn html_literals() {
     use TokenKind::*;
+    // `html"…"` is now the tag=="html" case of the general tagged-template rule (DEC-212).
     assert_eq!(
         kinds("html\"<h1>Hi</h1>\""),
-        vec![Html("<h1>Hi</h1>".into()), Eof]
+        vec![TaggedTemplate("html".into(), "<h1>Hi</h1>".into()), Eof]
     );
     // interpolation body preserved verbatim (split + desugar happen later).
     assert_eq!(
         kinds("html\"<h1>{name}</h1>\""),
-        vec![Html("<h1>{name}</h1>".into()), Eof]
+        vec![TaggedTemplate("html".into(), "<h1>{name}</h1>".into()), Eof]
     );
     // ordinary escapes work, including `\"` for an attribute quote.
     assert_eq!(
         kinds("html\"<a href=\\\"x\\\">a\\nb</a>\""),
-        vec![Html("<a href=\"x\">a\nb</a>".into()), Eof]
+        vec![
+            TaggedTemplate("html".into(), "<a href=\"x\">a\nb</a>".into()),
+            Eof
+        ]
     );
     // multi-line for free (raw newline copied verbatim, like a plain string).
     assert_eq!(
         kinds("html\"<ul>\n  <li>x</li>\n</ul>\""),
-        vec![Html("<ul>\n  <li>x</li>\n</ul>".into()), Eof]
+        vec![
+            TaggedTemplate("html".into(), "<ul>\n  <li>x</li>\n</ul>".into()),
+            Eof
+        ]
     );
-    // only the exact `html"` sequence triggers it: a bare `html`, `Html.`, `htmlx` are idents.
+    // a bare `html`, `Html.`, `htmlx` are still ordinary idents — only `html` glued to `"` tags.
     assert_eq!(kinds("html"), vec![Ident("html".into()), Eof]);
     assert_eq!(
         kinds("html.text"),
@@ -411,11 +418,41 @@ fn html_literals() {
 }
 
 #[test]
-fn html_literal_errors() {
+fn tagged_template_generalized() {
+    use TokenKind::*;
+    // ANY identifier immediately followed by `"` is a tagged template carrying the tag name.
+    assert_eq!(
+        kinds("sql\"select {x}\""),
+        vec![TaggedTemplate("sql".into(), "select {x}".into()), Eof]
+    );
+    assert_eq!(
+        kinds("css\".x{}\""),
+        vec![TaggedTemplate("css".into(), ".x{}".into()), Eof]
+    );
+    // A SPACE between the identifier and the string means NO tag: ident + plain string.
+    assert_eq!(
+        kinds("html \"hi\""),
+        vec![Ident("html".into()), lit("hi"), Eof]
+    );
+    // The reserved string prefixes stay built-in string forms, NOT tags:
+    //   r"…" is a raw string, b"…" is a byte-string literal.
+    assert_eq!(kinds("r\"a\\n\""), vec![lit("a\\n"), Eof]);
+    assert_eq!(kinds("b\"hi\""), vec![Bytes(b"hi".to_vec()), Eof]);
+    // A keyword glued to `"` is left as a keyword + string (only `Ident` triggers a tag).
+    assert_eq!(kinds("match\"x\""), vec![Match, lit("x"), Eof]);
+}
+
+#[test]
+fn tagged_template_errors() {
+    // error messages are now tag-agnostic; the interpolation/escape machinery is shared.
     assert!(lex("html\"oops")
         .unwrap_err()
         .message
-        .contains("unterminated html literal"));
+        .contains("unterminated tagged-template literal"));
+    assert!(lex("sql\"oops")
+        .unwrap_err()
+        .message
+        .contains("unterminated tagged-template literal"));
     assert!(lex("html\"\\q\"")
         .unwrap_err()
         .message

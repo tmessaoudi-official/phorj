@@ -443,6 +443,7 @@ fn walk_children(e: &mut Expr, en: &Enabled, errs: &mut Vec<Diagnostic>) {
         | Expr::Ident(..)
         | Expr::This(..)
         | Expr::Inject { .. }
+        | Expr::TaggedTemplate { .. }
         | Expr::Html(..) => {}
     }
 }

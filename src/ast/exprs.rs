@@ -244,6 +244,19 @@ pub enum Expr {
     /// it is erased to ordinary native calls before the interpreter/compiler/transpiler run, the same
     /// "compile-time sugar, expanded out" treatment as `type` aliases.
     Html(Vec<StrPart>, Span),
+    /// `tag"…{expr}…"` — a **tagged-template** literal for ANY tag other than `html` (DEC-212
+    /// scaffold). The lexer recognizes any identifier immediately followed by `"` as a tagged
+    /// template; the parser routes `html"…"` to [`Expr::Html`] (unchanged) and every other tag to
+    /// this variant, carrying the `tag` name plus the same interpolation `parts` model as
+    /// [`Expr::Str`]/[`Expr::Html`]. Only the **syntax** is generalized here: the checker currently
+    /// rejects every non-html tag with `E-UNKNOWN-TAG` (the `Expr::TaggedTemplate` arm in
+    /// `checker/expr/core.rs` is the single hook where the general two-mode protocol/function desugar
+    /// is to be added). Because the checker errors, no backend ever sees this variant.
+    TaggedTemplate {
+        tag: String,
+        parts: Vec<StrPart>,
+        span: Span,
+    },
     /// `inject<T>()` / `inject()` — the compile-time dependency-injection composition root (DI v1,
     /// `docs/plans/di-attributes.plan.md` §1+§6). `ty` is the explicit target type `T` for
     /// `inject<T>()`, or `None` for the annotation-driven bare `inject()` (T comes from the expected

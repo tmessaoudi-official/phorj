@@ -521,6 +521,23 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   hardcoded domain literals in the lexer. Consistent with DEC-208 (domains live as libraries; the language
   provides the primitive) + nothing-in-the-wind (import-gated). *Alternatives:* keep hardcoded `html`,
   add no more (rejected — a permanent lexer special-case that doesn't generalize).
+  **SURFACE RULED 2026-07-13 (developer via AskUserQuestion): BOTH modes.** Any `tag"…literal{hole}…"`
+  (an ident directly before `"`) is a tagged template; the checker resolves `tag` and picks the desugar:
+  (1) **protocol mode** — `tag` provides `raw`/`text`/`concat` (+ a typed newtype) → desugars EXACTLY like
+  html today (`tag.concat([tag.raw(lit), tag.text(hole), …])`, escape-by-default kernel); html becomes one
+  such tag, kernel unchanged. (2) **function mode** — `tag` is a function `(List<string> literals,
+  List<H> holes) -> R` → desugars to `tag([lits], [holes])` (JS-style; the handler owns escaping). Part-1 =
+  the general primitive with both modes, html re-expressed as a protocol tag (still built-in, additive);
+  part-2 = migrate `html` to a first-party library once the library-delivery path lands (DEC-218).
+  *(PART-1 SHIPPED 2026-07-13: any `ident"…"` is a tagged template (`TokenKind::TaggedTemplate` + lexer
+  ident-glued-to-`"` rule; `Expr::TaggedTemplate`; `html` kept on its own `Expr::Html` path unchanged).
+  `check_tagged_template` (checker/expr/literals.rs) resolves the tag: FUNCTION mode when it names a
+  non-overloaded free function → `tag([lits],[holes])`; PROTOCOL mode when it names a type/module with
+  raw/text/concat → `tag.concat([tag.raw(lit), tag.text(hole),…])`; else `E-UNKNOWN-TAG`. The desugar is
+  stored + applied by `resolve_html` (erased before backends). Formatter/lift render `tag"…"`. Example
+  `guide/tagged-templates.phg` (both modes), checker test `tagged_template_unknown_tag_rejected`,
+  `phg explain E-UNKNOWN-TAG`. Full oracle 1978 green; clippy both + fmt clean; byte-identical; no new Op.
+  PART-2 remains: migrate `html` off its special path onto this primitive as a first-party library (DEC-218).)*
 - **DEC-213 — PHP-name collision: fix the live byte-identity bug; keep the reject/mangle axis.**
   BUG (G-1 spine break, verified): the enum-variant mangle list (~17 engine-core names,
   `transpile/names.rs`) is a strict SUBSET of the DEC-202 reject list (~100 preloaded builtins,

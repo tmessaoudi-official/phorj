@@ -1,0 +1,40 @@
+// General tagged templates `tag"…literal{hole}…"` (DEC-212) — the mechanism `html"…"` generalizes to.
+// The tag names either a FUNCTION or a TYPE, choosing the desugar:
+//   * FUNCTION mode — `tag` is a function `(List<string> literals, List<T> holes) -> R`: the template
+//     desugars to `tag([literals], [holes])` (JS-style; the handler owns rendering/escaping).
+//   * PROTOCOL mode — `tag` is a (PascalCase) type/module providing `raw`/`text`/`concat`: it desugars
+//     to `tag.concat([tag.raw(lit), tag.text(hole), …])`, the escape-by-default kernel `html` uses.
+// Both are compile-time sugar, erased before any backend (like `html"…"`); byte-identical across both
+// backends and real PHP; no new `Op`.
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.List;
+
+// Function-mode tag: sees the split template as two lists.
+function joined(List<string> lits, List<string> holes): string {
+    return "{List.length(lits)} literals, holes=[{String.join(holes, \", \")}]";
+}
+
+// Protocol-mode tag: a type providing raw/text/concat (here `text` brackets each hole).
+class Bracket {
+    static function raw(string s): string {
+        return s;
+    }
+    static function text(string s): string {
+        return "[{s}]";
+    }
+    static function concat(List<string> parts): string {
+        return String.join(parts, "");
+    }
+}
+
+function main(): void {
+    string a = "one";
+    string b = "two";
+    string f = joined"x{a}y{b}z";
+    Output.printLine(f);
+    string p = Bracket"start {a} mid {b} end";
+    Output.printLine(p);
+}

@@ -253,6 +253,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              (`Html.el(…)`), produce a `string` and let the hole escape it, or wrap audited markup in\n\
              `Html.raw(…)`.\n"
         }
+        "E-UNKNOWN-TAG" => {
+            "E-UNKNOWN-TAG — a tagged-template literal `tag\"…\"` used a tag that has no desugar.\n\n\
+             The tagged-template syntax (any identifier immediately followed by `\"`, e.g. `sql\"…\"`)\n\
+             is generalized, but only `html\"…\"` currently has an implementation. Every other tag is a\n\
+             scaffold placeholder: the general two-mode (protocol / function) desugar is not yet added.\n\
+             Use `html\"…\"`, or a plain string, until the tag you want is implemented.\n"
+        }
         "E-HTML-IMPORT" => {
             "E-HTML-IMPORT — `html\"…\"` was used without importing Core.Html.\n\n\
              The `html\"…\"` literal desugars to `Html.raw`/`Html.text`/`Html.concat` kernel calls, so\n\

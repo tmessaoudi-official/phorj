@@ -414,14 +414,16 @@ impl Lexer<'_> {
         }
     }
 
-    /// Scan an `html"…"` literal (the `html` prefix is already consumed). The body is captured
-    /// exactly like [`Self::scan_string`] — same escapes (`\n \t \r \\ \"`), multi-byte UTF-8 and
-    /// raw newlines copied verbatim, so an `html"…"` literal spans lines for free — and `{`/`}` are
-    /// preserved verbatim: the interpolation split *and* the desugar into `Core.Html` kernel calls
-    /// happen in the parser/checker, not here. The only difference from `scan_string` is the token
-    /// kind, which routes the body to the html desugarer instead of the plain-string one.
-    pub(super) fn scan_html(
+    /// Scan the body of a tagged-template literal `tag"…"` (the `tag` prefix is already consumed; the
+    /// cursor sits on the opening `"`). The body is captured exactly like [`Self::scan_string`] —
+    /// same escapes (`\n \t \r \\ \"`), multi-byte UTF-8 and raw newlines copied verbatim, so a
+    /// tagged template spans lines for free — and `{`/`}` are preserved verbatim: the interpolation
+    /// split *and* the per-tag desugar happen in the parser/checker, not here. The only difference
+    /// from `scan_string` is the token kind, which carries the `tag` name alongside the raw body so
+    /// the parser can route `html"…"` to the html desugarer and every other tag to `E-UNKNOWN-TAG`.
+    pub(super) fn scan_tagged_template(
         &mut self,
+        tag: String,
         start: usize,
         line: u32,
         col: u32,
@@ -434,7 +436,7 @@ impl Lexer<'_> {
                 None => {
                     return Err(Diagnostic::new(
                         Stage::Lex,
-                        "unterminated html literal",
+                        "unterminated tagged-template literal",
                         line,
                         col,
                     ))
@@ -457,7 +459,7 @@ impl Lexer<'_> {
                     None => {
                         return Err(Diagnostic::new(
                             Stage::Lex,
-                            "unterminated html literal",
+                            "unterminated tagged-template literal",
                             line,
                             col,
                         ))
@@ -466,9 +468,9 @@ impl Lexer<'_> {
                 Some(other) => bytes.push(other),
             }
         }
-        let value = String::from_utf8(bytes).expect("source html body is valid UTF-8");
+        let value = String::from_utf8(bytes).expect("source tagged-template body is valid UTF-8");
         Ok(Token {
-            kind: TokenKind::Html(value),
+            kind: TokenKind::TaggedTemplate(tag, value),
             span: Span {
                 start,
                 len: self.pos - start,

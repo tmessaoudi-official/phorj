@@ -60,12 +60,23 @@ impl Parser {
                 self.advance();
                 Ok(Expr::Bytes(b, sp))
             }
-            TokenKind::Html(body) => {
+            TokenKind::TaggedTemplate(tag, body) => {
                 self.advance();
                 // Reuse the exact `{expr}` splitter as plain strings; the type-directed desugar
                 // into `html.concat([…])` kernel calls happens in the checker (which has types).
                 let parts = self.split_interpolation(&body, sp)?;
-                Ok(Expr::Html(parts, sp))
+                // `html"…"` keeps its dedicated node (unchanged path through every backend); any other
+                // tag becomes the general `TaggedTemplate` node, which the checker rejects with
+                // `E-UNKNOWN-TAG` (the scaffold hook for the human's two-mode desugar).
+                if tag == "html" {
+                    Ok(Expr::Html(parts, sp))
+                } else {
+                    Ok(Expr::TaggedTemplate {
+                        tag,
+                        parts,
+                        span: sp,
+                    })
+                }
             }
             TokenKind::Match => self.parse_match(sp),
             TokenKind::If => self.parse_if_expr(sp),

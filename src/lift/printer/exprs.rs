@@ -200,8 +200,10 @@ impl Printer {
             | Expr::Lambda { .. }
             | Expr::CloneWith { .. }
             | Expr::Inject { .. }
+            | Expr::TaggedTemplate { .. }
             | Expr::Html(_, _) => Err(
-                "printer: bytes/lambda/clone-with/inject/html are outside the lift subset".into(),
+                "printer: bytes/lambda/clone-with/inject/html/tagged-template are outside the lift subset"
+                    .into(),
             ),
         }
     }

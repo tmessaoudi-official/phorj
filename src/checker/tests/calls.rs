@@ -2,6 +2,18 @@
 
 use super::support::*;
 
+/// DEC-212 — a tagged template whose tag names neither a function (function mode) nor a type/module
+/// providing raw/text/concat (protocol mode) is `E-UNKNOWN-TAG`. (The two working modes are exercised
+/// end-to-end by `examples/guide/tagged-templates.phg`.)
+#[test]
+fn tagged_template_unknown_tag_rejected() {
+    let bad = errors_of("function main() -> void { string s = nope\"plain\"; }");
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-UNKNOWN-TAG")),
+        "got {bad:?}"
+    );
+}
+
 #[test]
 fn function_call_arity_and_type_checked() {
     assert!(errors_of(

@@ -121,6 +121,96 @@ impl Checker {
         Ty::Html
     }
 
+    /// A general tagged template `tag"…literal{hole}…"` (DEC-212, both modes). The tag is resolved and
+    /// the template desugared to a plain call the backends already lower (stored keyed by span, applied
+    /// by `resolve_html`), so no backend sees the node — the same erased-sugar discipline as `html"…"`.
+    ///
+    /// - **Function mode** — `tag` is a (non-overloaded) free function: desugar to
+    ///   `tag([literal chunks], [hole exprs])` (JS-style; the handler owns rendering/escaping). The
+    ///   result type is the function's return type; a wrong-shaped handler is a normal call type error.
+    /// - **Protocol mode** — `tag` is an imported module or a type providing `raw`/`text`/`concat`:
+    ///   desugar to `tag.concat([tag.raw(lit), tag.text(hole), …])` (escape-by-default kernel, like
+    ///   `html`). Holes are stringified then `text()`-escaped, so a protocol tag takes primitive holes.
+    pub(in crate::checker) fn check_tagged_template(
+        &mut self,
+        tag: &str,
+        parts: &[crate::ast::StrPart],
+        span: Span,
+    ) -> Ty {
+        use crate::ast::{Expr, StrPart};
+        let str_lit = |s: &str| Expr::Str(vec![StrPart::Literal(s.to_string())], span);
+
+        // FUNCTION MODE: a non-overloaded free function named `tag`.
+        if self.funcs.get(tag).is_some_and(|sigs| sigs.len() == 1) {
+            let literals: Vec<Expr> = parts
+                .iter()
+                .filter_map(|p| match p {
+                    StrPart::Literal(s) => Some(str_lit(s)),
+                    StrPart::Expr(_) => None,
+                })
+                .collect();
+            let holes: Vec<Expr> = parts
+                .iter()
+                .filter_map(|p| match p {
+                    StrPart::Expr(e) => Some((**e).clone()),
+                    StrPart::Literal(_) => None,
+                })
+                .collect();
+            let replacement = Expr::Call {
+                callee: Box::new(Expr::Ident(tag.to_string(), span)),
+                args: vec![Expr::List(literals, span), Expr::List(holes, span)],
+                span,
+            };
+            let ty = self.check_expr(&replacement);
+            self.html_resolutions.insert(span.start, replacement);
+            return ty;
+        }
+
+        // PROTOCOL MODE: an imported module or a type providing raw/text/concat.
+        if self.imports.contains_key(tag) || self.classes.contains_key(tag) {
+            let call = |name: &str, args: Vec<Expr>| -> Expr {
+                Expr::Call {
+                    callee: Box::new(Expr::Member {
+                        object: Box::new(Expr::Ident(tag.to_string(), span)),
+                        name: name.to_string(),
+                        safe: false,
+                        sep: crate::ast::MemberSep::Dot,
+                        span,
+                    }),
+                    args,
+                    span,
+                }
+            };
+            let mut elems: Vec<Expr> = Vec::with_capacity(parts.len());
+            for part in parts {
+                match part {
+                    StrPart::Literal(chunk) => elems.push(call("raw", vec![str_lit(chunk)])),
+                    StrPart::Expr(e) => {
+                        // Stringify the hole (primitives auto-stringify via a one-hole interp), then
+                        // escape via `text()` — the safe default. A non-stringifiable hole errors there.
+                        let stringified =
+                            Expr::Str(vec![StrPart::Expr(Box::new((**e).clone()))], span);
+                        elems.push(call("text", vec![stringified]));
+                    }
+                }
+            }
+            let replacement = call("concat", vec![Expr::List(elems, span)]);
+            let ty = self.check_expr(&replacement);
+            self.html_resolutions.insert(span.start, replacement);
+            return ty;
+        }
+
+        self.err_coded(
+            span,
+            format!("unknown template tag `{tag}`"),
+            "E-UNKNOWN-TAG",
+            Some(
+                "a template tag must be a function `(List<string>, List<H>) -> R` (function mode) or a module/type providing `raw`/`text`/`concat` (protocol mode)"
+                    .into(),
+            ),
+        )
+    }
+
     /// The source span of an expression (used to position errors precisely).
     pub(in crate::checker) fn expr_span(e: &crate::ast::Expr) -> Span {
         use crate::ast::Expr;
@@ -155,6 +245,7 @@ impl Checker {
             | Expr::Spawn { span, .. }
             | Expr::Inject { span, .. }
             | Expr::NewColl { span, .. }
+            | Expr::TaggedTemplate { span, .. }
             | Expr::Html(_, span) => *span,
         }
     }

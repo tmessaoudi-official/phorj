@@ -22,6 +22,13 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 Some(r) => rexpr(r.clone(), h),
                 None => Expr::Html(parts, span), // defensive; check populated every literal
             },
+            // DEC-212: a general tagged template `tag"…"` desugars to its checker-built replacement
+            // (protocol `tag.concat([…])` or function `tag([lits],[holes])`), erased before backends
+            // exactly like `html"…"`; re-walk in case the replacement embeds another tagged template.
+            Expr::TaggedTemplate { parts, tag, span } => match h.get(&span.start) {
+                Some(r) => rexpr(r.clone(), h),
+                None => Expr::TaggedTemplate { parts, tag, span },
+            },
             Expr::Str(parts, span) => Expr::Str(
                 parts
                     .into_iter()

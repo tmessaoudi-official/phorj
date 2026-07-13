@@ -323,6 +323,11 @@ impl<'c> Interp<'c> {
             // `html"…"` literals are erased to `html.concat([…])` kernel calls by
             // `checker::resolve_html` before any backend runs; the interpreter never sees one.
             Expr::Html(..) => unreachable!("html literal not resolved before interpretation"),
+            Expr::TaggedTemplate { .. } => {
+                unreachable!(
+                    "non-html tagged template rejected (E-UNKNOWN-TAG) before interpretation"
+                )
+            }
             Expr::Inject { .. } => unreachable!("inject() not expanded before interpretation"),
             Expr::OverloadSelect { .. } => {
                 unreachable!(

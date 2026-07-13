@@ -209,18 +209,6 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
                     continue;
                 }
 
-                // `html"…"` literal — must precede the identifier scan (a bare `html` is a valid
-                // identifier, and the module qualifier in `html.text(…)`). Only the exact `html"`
-                // sequence triggers it: `Html.` / `htmlx` / a bare `html` are ordinary idents.
-                if b == b'h' && lx.src[lx.pos..].starts_with(b"html\"") {
-                    for _ in 0..4 {
-                        lx.bump(); // consume the `html` prefix
-                    }
-                    let t = lx.scan_html(start, line, col)?;
-                    out.push(t);
-                    continue;
-                }
-
                 // `r"…"` / `r#"…"#` raw string — literal bytes, NO escapes, NO interpolation (for
                 // JSON, regex, templates). Rust-style `#`-run delimiter so embedded `"` is
                 // expressible. Triggered only by `r` + zero-or-more `#` + `"`; a bare `r` / `rx` is
@@ -270,6 +258,19 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
 
                 if b == b'_' || b.is_ascii_alphabetic() {
                     let t = lx.scan_ident(start, line, col);
+                    // General tagged-template rule (DEC-212): an *identifier* immediately followed by
+                    // `"` (no whitespace) is a tagged template `tag"…"` — `html"…"`, `sql"…"`, … .
+                    // The reserved string prefixes `r"…"`/`b"…"`/`"""…"""`/`"…"` are lexed above, so
+                    // only genuine tags reach here. A keyword before `"` is left untouched (it stays a
+                    // keyword token, then a separate string) — only `Ident` triggers a tag; `html`
+                    // with a SPACE before `"` is an ordinary ident + string, unaffected.
+                    if lx.peek() == Some(b'"') {
+                        if let TokenKind::Ident(tag) = t.kind {
+                            let tok = lx.scan_tagged_template(tag, start, line, col)?;
+                            out.push(tok);
+                            continue;
+                        }
+                    }
                     out.push(t);
                     continue;
                 }

@@ -420,6 +420,7 @@ impl Ctx {
             | Expr::Ident(..)
             | Expr::This(..)
             | Expr::Inject { .. }
+            | Expr::TaggedTemplate { .. }
             | Expr::Html(..) => {}
         }
     }

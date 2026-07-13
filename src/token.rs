@@ -64,7 +64,12 @@ pub enum TokenKind {
     /// so `\{` literal braces are unambiguous). Empty vec = the empty string `""`.
     Str(Vec<StrSeg>),
     Bytes(Vec<u8>), // `b"…"` raw byte-string literal (no interpolation)
-    Html(String),   // `html"…"` literal body (interpolation split + desugar deferred to parser)
+    /// A tagged-template literal `tag"…body…"` — ANY identifier immediately followed by `"` (no
+    /// whitespace): `html"…"`, `sql"…"`, … . Carries `(tag, body)`; the body's interpolation split
+    /// and the per-tag desugar are deferred to the parser/checker (the tokenizer only captures the
+    /// raw body, exactly as the former `html"…"` special-case did). The two reserved string prefixes
+    /// `r"…"` (raw) and `b"…"` (bytes) are lexed earlier and are NOT tags.
+    TaggedTemplate(String, String),
     Ident(String),
     // keywords
     Function,

@@ -45,7 +45,7 @@ fn collect_free_expr(
         | Expr::Inject { .. }
         | Expr::NewColl { .. }
         | Expr::Bytes(..) => {}
-        Expr::Str(parts, _) | Expr::Html(parts, _) => {
+        Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
             for part in parts {
                 if let StrPart::Expr(inner) = part {
                     collect_free_expr(inner, bound, found);
@@ -292,10 +292,12 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             | Expr::Inject { .. }
             | Expr::NewColl { .. }
             | Expr::Ident(..) => false,
-            Expr::Str(parts, _) | Expr::Html(parts, _) => parts.iter().any(|p| match p {
-                StrPart::Expr(inner) => in_expr(inner),
-                _ => false,
-            }),
+            Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
+                parts.iter().any(|p| match p {
+                    StrPart::Expr(inner) => in_expr(inner),
+                    _ => false,
+                })
+            }
             Expr::List(items, _) => items.iter().any(in_expr),
             Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
             Expr::Unary { expr, .. } => in_expr(expr),
@@ -419,10 +421,12 @@ pub fn uses_concurrency(program: &Program) -> bool {
             | Expr::Inject { .. }
             | Expr::NewColl { .. }
             | Expr::This(_) => false,
-            Expr::Str(parts, _) | Expr::Html(parts, _) => parts.iter().any(|p| match p {
-                StrPart::Expr(inner) => in_expr(inner),
-                _ => false,
-            }),
+            Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
+                parts.iter().any(|p| match p {
+                    StrPart::Expr(inner) => in_expr(inner),
+                    _ => false,
+                })
+            }
             Expr::List(items, _) => items.iter().any(in_expr),
             Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
             Expr::Unary { expr, .. } => in_expr(expr),

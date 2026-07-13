@@ -302,6 +302,21 @@ impl Printer<'_> {
                 s.push('"');
                 Ok(doc::text(s))
             }
+            // A generalized tagged template `tag"…"` — identical rendering to html, only the tag
+            // prefix differs (DEC-212 scaffold).
+            Expr::TaggedTemplate { tag, parts, .. } => {
+                let mut s = format!("{tag}\"");
+                for part in parts {
+                    match part {
+                        StrPart::Literal(lit) => s.push_str(&escape_str(lit)),
+                        StrPart::Expr(e) => {
+                            s.push_str(&format!("{{{}}}", escape_interp(&self.expr(e)?)));
+                        }
+                    }
+                }
+                s.push('"');
+                Ok(doc::text(s))
+            }
         }
     }
 
