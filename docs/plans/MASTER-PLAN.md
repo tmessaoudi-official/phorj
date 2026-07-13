@@ -80,6 +80,20 @@ UNIFIED-SPEC update + per-feature perf micro ≥1.0× where it has a runtime sur
 **Sequencing:** correctness (1) → cheap surface fixes (2–4) → the `::` migration (5) → additive
 type/literal work (6–7) → the DB primitive design+build (8, gates Ω-1) → DI at its wave (9).
 
+**GOVERNING LENS (META-6, developer 2026-07-13):** the language is RICH (does everything PHP does,
+better/faster/safer/secure) + **zero-cost safe sugar** (must not affect perf) — but **NOT bloated**:
+library/packaging concerns are externalized. Adjudicate every feature "in-language vs externalize."
+**Next design activity: a systematic feature-by-feature in-language-vs-externalize audit** of the
+current surface (the developer's "critical thinking for each feature" directive).
+
+**SESSION STATUS (2026-07-13, Opus run):** SHIPPED green + committed — batch unified (`952c6f1`),
+DEC-213 bug fix (`b8dd069`), DEC-209 match `default`/`E-MATCH-BARE-VARIANT` (`2c62b1e`), microbench-gate
+epsilon-band fix (`8b49ff3`, resolves the §0 gate-infra pending question → box-noise no longer wedges a
+push). **DEC-214 WIP is STASHED** (`git stash` — "DEC-214 WIP (NewColl arms)"): the `Expr::NewColl`
+representation + walker/span arms were added; remaining = checker typing (`check_new_coll`), 3 backends
+(build empty coll), formatter/lift printers, parser `new List<T>()` grammar, DEC-201 empty-`[]` removal,
+codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (package mgmt → separate).
+
 ---
 
 ## 1. GOVERNANCE & STANDING RULES

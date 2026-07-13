@@ -506,3 +506,21 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   (roadmap) + `UNIFIED-SPEC.md` (surface) + this register (decisions). No standalone plan/spec files;
   the language-reconsideration working plan is folded into MASTER-PLAN and retired.
 - **META-5 — session certification is self-graded + disclosed** (advisor inactive: advisor==main==Opus 4.8).
+- **META-6 — GOVERNING PHILOSOPHY (developer, 2026-07-13): rich core, zero-cost safe sugar, no bloat.**
+  The language is RICH — it does everything PHP does, **better / faster / safer / more secure** — plus
+  **safe sugar that must NOT affect performance** (zero-cost or it doesn't ship). It is deliberately
+  **NOT bloated**: anything that should be a library IS a library, never baked into the language. Every
+  feature is adjudicated through the **"in-language vs externalize" lens** — IN if it is a core
+  capability that beats PHP or is zero-cost safe sugar; OUT (library / separate tool) if it is an
+  application-domain or packaging concern. Applications so far: DEC-208 (SQL builder → userland),
+  DEC-215 (DI → L1/L2 library), DEC-216 (package management → separate). Refines the craftsmanship apex
+  filter (`memory/philosophy-of-phorge.md`). **Next design activity: a systematic feature-by-feature
+  in-language-vs-externalize audit of the current surface.**
+- **DEC-216 — PENDING (developer lean, 2026-07-13): package management is SEPARATE from the language.**
+  `phg vendor` + `phorj.toml` should likely leave the language — "the language does not need to handle
+  package management; it needs to be separate." Ladder to adjudicate (present with previews, recommended
+  first): (1) **remove entirely** — no dependency mechanism in `phg` at all; (2) **dumb `vendor/`
+  consumption** — `phg` still resolves imports from a pre-populated `vendor/` dir (offline), but the
+  fetch command + manifest leave `phg` to an external companion tool; (3) **external tool owns
+  everything** (manifest + fetch + vendor); `phg` is package-agnostic. Impacts `examples/project/withdeps`
+  + `src/loader/` + `src/manifest.rs`. Blocks nothing; adjudicate after DEC-214.
