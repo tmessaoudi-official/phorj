@@ -359,7 +359,7 @@ one sitting (failing programs + after-state previews were embedded in each dialo
   AND `List.empty<T>()` / `Map.empty<K,V>()` ship for expression positions with no context.
   *Alternatives:* contextual-only (loses the no-context expression case), constructors-only
   (verbose; the annotation is right there). Both was chosen for completeness.
-- **DEC-202 (closes DEC-200) — PHP-reserved top-level type names: REJECT with `E-RESERVED-NAME`.**
+- **DEC-202 (closes DEC-200) — PHP-reserved top-level type names: REJECT with `E-RESERVED-NAME`.** *(SHIPPED 2026-07-13: `is_php_builtin_class_name` in checker/common.rs — ~100 always-loaded Core/SPL/date/json names, case-insensitive, class-position kinds only; foreign `declare class` binds are EXEMPT by design — they bind to the builtin, nothing redeclares; free functions stay legal (separate PHP namespace); tests in checker/tests/casing.rs + `phg explain E-RESERVED-NAME` updated.)*
   Extend `is_php_reserved_symbol_name` with the full keyword set (derived empirically vs php-8.5.8)
   + the PHP builtin-class core (`Exception`/`Error`/`Closure`/…). *Alternatives:* invisible mangle
   (like enum variants — rejected: silently renames a USER-chosen top-level symbol, surprising on

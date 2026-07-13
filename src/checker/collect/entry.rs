@@ -124,6 +124,30 @@ impl Checker {
                     );
                     continue;
                 }
+                // DEC-202: a class-position name colliding with a PHP BUILTIN class would be
+                // a fatal "cannot redeclare" in the transpiled leg — reject loudly (never an
+                // invisible rename of a user-chosen top-level symbol). Type aliases erase
+                // (no PHP symbol) and free functions live in PHP's separate function
+                // namespace, so only class-position kinds are gated. A FOREIGN `declare
+                // class` is exempt by design: it BINDS to the existing PHP builtin (the
+                // whole point of interop) — nothing is redeclared.
+                let is_foreign_bind = matches!(item, Item::Class(c) if c.foreign);
+                if !is_foreign_bind
+                    && matches!(kind, "class" | "enum" | "interface" | "trait")
+                    && is_php_builtin_class_name(name)
+                {
+                    self.err_coded(
+                        span,
+                        format!(
+                            "`{name}` collides with a PHP builtin class and cannot name a {kind}"
+                        ),
+                        "E-RESERVED-NAME",
+                        Some(format!(
+                            "PHP preloads `{name}` (Core/SPL/date/json) — rename this {kind}, e.g. `My{name}`"
+                        )),
+                    );
+                    continue;
+                }
             }
             match item {
                 Item::Function(f) => self.collect_function(f),

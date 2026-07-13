@@ -52,7 +52,10 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-RESERVED-NAME" => {
             "E-RESERVED-NAME — a function / class / enum / interface / trait / type was named with a\n\
-             word PHP reserves for that symbol position (e.g. `var`, `list`, `print`, `array`, `int`).\n\n\
+             word PHP reserves for that symbol position (e.g. `var`, `list`, `print`, `array`, `int`),\n\
+             or a class-position symbol collides with a PHP BUILTIN class (Core/SPL/date/json —\n\
+             e.g. `Exception`, `DateTime`, `ArrayObject`): the transpiled declaration would be a\n\
+             parse error or a fatal redeclare, so Phorj rejects the name up front.\n\n\
              These words are perfectly good Phorj *value* identifiers — a variable, parameter, field,\n\
              property, or method may be named `var` / `list` / `int` (they map to a legal PHP `$list`\n\
              / `->list()`). But PHP rejects them as a *symbol* name: `function list()` or `class int {}`\n\

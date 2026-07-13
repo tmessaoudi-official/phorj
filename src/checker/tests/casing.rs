@@ -203,3 +203,30 @@ fn case_converters() {
     assert_eq!(to_pascal("shape"), "Shape");
     assert_eq!(to_pascal("http_request"), "HttpRequest");
 }
+
+#[test]
+fn php_builtin_class_names_are_rejected_at_class_positions() {
+    // DEC-202: a class-position symbol colliding with a PHP builtin (Core/SPL/date/json)
+    // would be a fatal "cannot redeclare" in the transpiled leg — reject with the same
+    // E-RESERVED-NAME code, loudly (never an invisible rename of a user-chosen symbol).
+    for src in [
+        "package Main; class DateTime {}",
+        "package Main; enum Exception { Boom() }",
+        "package Main; interface Throwable {}",
+        "package Main; class ArrayObject {}",
+        // PHP class names are case-insensitive — the collision is too.
+        "package Main; class DATETIME {}",
+    ] {
+        let e = errors_of_raw(src);
+        assert!(
+            e.iter().any(|d| d.code == Some("E-RESERVED-NAME")),
+            "{src} → got {e:?}"
+        );
+    }
+    // Free FUNCTIONS live in PHP's separate function namespace — `function dateTime` is fine.
+    let e = errors_of_raw("package Main; function dateTime() -> int { return 1; }");
+    assert!(
+        !e.iter().any(|d| d.code == Some("E-RESERVED-NAME")),
+        "a free function named like a builtin CLASS is legal PHP — got {e:?}"
+    );
+}
