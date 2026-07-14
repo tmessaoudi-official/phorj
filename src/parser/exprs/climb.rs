@@ -212,6 +212,7 @@ impl Parser {
                 Expr::Call {
                     callee: Box::new(rhs),
                     args: vec![lhs],
+                    type_args: Vec::new(),
                     span: sp,
                 }
             } else {
@@ -316,6 +317,41 @@ impl Parser {
         })
     }
 
+    /// DEC-208 slice A: try to parse a turbofish `< TypeList >` that is **immediately followed by
+    /// `(`**, at a call head. Returns `Some(types)` (cursor positioned on the `(`) on success, or
+    /// `None` with the cursor **fully restored** on any failure — so the caller falls back to treating
+    /// `<` as the comparison operator. The type list reuses [`Self::parse_type`], so a nested generic
+    /// (`foo<List<int>>(x)`) consumes its own inner `>` and the outer `>` closes the turbofish; the
+    /// `>>`-is-two-`Gt` tokenization (never a single shift token) is what makes that work. Backtracking
+    /// is clean because the parser records errors only through `Result` (no side buffer) — restoring
+    /// `self.pos` is sufficient.
+    fn try_turbofish(&mut self) -> Option<Vec<Type>> {
+        let start = self.pos;
+        if !self.eat(&TokenKind::Lt) {
+            return None;
+        }
+        let mut types = Vec::new();
+        loop {
+            match self.parse_type() {
+                Ok(t) => types.push(t),
+                Err(_) => {
+                    self.pos = start;
+                    return None;
+                }
+            }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        // Close the type list, then require an immediate `(` — the disambiguator that makes this a
+        // call turbofish rather than a chain of comparisons.
+        if !self.eat(&TokenKind::Gt) || !matches!(self.peek(), TokenKind::LParen) {
+            self.pos = start;
+            return None;
+        }
+        Some(types)
+    }
+
     pub(in crate::parser) fn parse_postfix(&mut self) -> Result<Expr, Diagnostic> {
         // Feature C: `new <Name>(<args>)` — the mandatory construction keyword. Parse exactly the
         // construction call (a primary callee + its argument list) and wrap it in `Expr::New`; the
@@ -390,6 +426,7 @@ impl Parser {
                 let call = Expr::Call {
                     callee: Box::new(callee),
                     args,
+                    type_args: Vec::new(),
                     span: sp,
                 };
                 Expr::New(Box::new(call), sp)
@@ -397,9 +434,26 @@ impl Parser {
         } else {
             self.parse_primary()?
         };
+        // DEC-208 slice A: turbofish type arguments parsed just before a call's `(` — `foo<A, B>(x)`,
+        // `obj.method<T>(args)`. The try-parse below leaves them here; the next `(` iteration attaches
+        // them to the `Expr::Call` it builds. Empty in the common (inferred) form.
+        let mut pending_type_args: Vec<Type> = Vec::new();
         loop {
             let sp = self.peek_span();
             match self.peek() {
+                // DEC-208 slice A: a `<` after a call head (`name` / `obj.method`) is a turbofish only
+                // if it parses as `< TypeList >` immediately followed by `(`. Otherwise BACKTRACK
+                // cleanly (restore the cursor) and fall through to break, so `<` is the comparison
+                // operator `parse_binary` handles. The only program this could shadow is
+                // `(head < T) > (args)` — comparing a method/function reference against a type name —
+                // which is always type-invalid, so no valid program changes meaning.
+                TokenKind::Lt => match self.try_turbofish() {
+                    Some(targs) => {
+                        pending_type_args = targs;
+                        continue;
+                    }
+                    None => break,
+                },
                 TokenKind::Dot | TokenKind::QuestionDot | TokenKind::ColonColon => {
                     let safe = matches!(self.peek(), TokenKind::QuestionDot);
                     // DEC-207: `::` is the class/type-level access separator, recorded on the
@@ -448,6 +502,10 @@ impl Parser {
                     e = Expr::Call {
                         callee: Box::new(e),
                         args,
+                        // Attach any turbofish parsed by the `Lt` arm immediately above; `try_turbofish`
+                        // guarantees a `(` follows, so this is the very next iteration and nothing else
+                        // can consume `pending_type_args`.
+                        type_args: std::mem::take(&mut pending_type_args),
                         span: sp,
                     };
                 }

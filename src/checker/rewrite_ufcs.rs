@@ -29,9 +29,15 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
             // `kind` call: re-walk the children. The call's own span is the original key or synthetic
             // (never re-matched — the root is reconstructed directly), and its args carry their own
             // distinct spans, so nested sugar in them resolves without looping.
-            Expr::Call { callee, args, span } => Expr::Call {
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } => Expr::Call {
                 callee: Box::new(rexpr((**callee).clone(), u)),
                 args: args.iter().cloned().map(|a| rexpr(a, u)).collect(),
+                type_args: type_args.clone(),
                 span: *span,
             },
             // A `match` replacement: the `?.` UFCS null-safe desugar (`x?.f(a)`) AND `typeName`'s
@@ -64,11 +70,17 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
             // its (larger) match over replacement shapes does not inflate `rexpr`'s own stack frame.
             // `rexpr` is the deeply-recursive walker (a nested expression recurses one `rexpr` frame
             // per level), so its frame size is stack-critical; a recorded match is rare and shallow.
-            Expr::Call { callee, args, span } => match u.get(&span.start) {
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } => match u.get(&span.start) {
                 Some(repl) => apply_repl(repl, u),
                 None => Expr::Call {
                     callee: Box::new(rexpr(*callee, u)),
                     args: args.into_iter().map(|a| rexpr(a, u)).collect(),
+                    type_args,
                     span,
                 },
             },

@@ -115,6 +115,13 @@ pub enum Expr {
     Call {
         callee: Box<Expr>,
         args: Vec<Expr>,
+        /// DEC-208 slice A: explicit turbofish type arguments written at the call site
+        /// (`identity<int>(5)`, `r.queryInto<User>()`). Empty for the common inferred form. The
+        /// checker binds these to the callee's generic type parameters (arity + agreement checked);
+        /// generics are then erased like any other, so both backends and the PHP output see the
+        /// same monomorphic call whether or not turbofish was written (byte-identity). Only the
+        /// formatter renders them — every backend match arm ignores this field via `..`.
+        type_args: Vec<Type>,
         span: Span,
     },
     /// `object.name` (`safe == false`) or `object?.name` (`safe == true`, nullsafe access:

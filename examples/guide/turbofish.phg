@@ -1,0 +1,60 @@
+// Turbofish — explicit type arguments at a call site (DEC-208 slice A).
+//
+// A generic function or method usually INFERS its type parameters from the argument values
+// (`identity(5)` ⇒ `T = int`). Turbofish lets you write them EXPLICITLY instead, directly in `<>`
+// before the argument list: `identity<int>(5)`. The two forms are equivalent — the checker binds the
+// type parameters to the written types (and still verifies the arguments agree), then generics are
+// erased exactly as before, so the interpreter, the bytecode VM, and the transpiled PHP all run the
+// SAME type-variable-free code and print byte-for-byte identical output whether or not turbofish was
+// written.
+//
+// The syntax is direct `<>` (not `::<>`). The parser recognizes a turbofish only when `< TypeList >`
+// is immediately followed by `(`; otherwise a `<` is the ordinary less-than operator, so a genuine
+// comparison chain (`a < b`) is never mistaken for a type-argument list.
+package Main;
+
+import Core.Output;
+import Core.List;
+
+// A generic identity function.
+function identity<T>(T x): T {
+    return x;
+}
+
+// A generic function whose type parameter `T` appears ONLY in the return type, with NO value
+// argument to infer it from — so the turbofish is the SOLE source of `T`. This is exactly the shape
+// that makes turbofish necessary rather than merely convenient (`queryInto<User>()` is the same
+// shape); without the explicit `<int>` the checker could not know the element type.
+function makeEmpty<T>(): List<T> {
+    return new List<T>();
+}
+
+// Two type parameters — a comma in the list makes it unambiguously a turbofish. Returns the first
+// argument (typed `A`); `B` is used only in the second parameter's type.
+function firstOf<A, B>(A a, B b): A {
+    return a;
+}
+
+// A class with a GENERIC METHOD (its own `<T>`). Turbofish works on methods too.
+class Maker {
+    function repeat<T>(T x): List<T> {
+        return [x, x];
+    }
+}
+
+function main(): void {
+    // Explicit type arguments (turbofish):
+    Output.printLine("{identity<int>(5)}");
+    Output.printLine(identity<string>("hello"));
+    // Inference still works and is byte-identical to the explicit form:
+    Output.printLine("{identity(5)}");
+    // Two type arguments:
+    Output.printLine("{firstOf<int, string>(1, \"x\")}");
+    // Turbofish on a generic method:
+    var maker = new Maker();
+    List<int> xs = maker.repeat<int>(7);
+    Output.printLine("{xs[0]},{xs[1]}");
+    // Return-only type parameter — `T` comes SOLELY from the turbofish (no value argument):
+    List<int> none = makeEmpty<int>();
+    Output.printLine("{List.length(none)}");
+}

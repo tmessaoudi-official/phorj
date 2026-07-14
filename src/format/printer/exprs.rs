@@ -121,8 +121,14 @@ impl Printer<'_> {
                     self.args_doc(args)?,
                 ]))
             }
-            Expr::Call { callee, args, .. } => Ok(doc::concat(vec![
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                ..
+            } => Ok(doc::concat(vec![
                 self.postfix_doc(callee)?,
+                self.turbofish_doc(type_args)?,
                 self.args_doc(args)?,
             ])),
             Expr::Member {
@@ -522,6 +528,17 @@ impl Printer<'_> {
         Ok(bracketed("(", xs?, ")"))
     }
 
+    /// DEC-208 slice A: render a call's turbofish type arguments (`<T, U>`) immediately before its
+    /// `(args)`. Empty doc in the common inferred form (`type_args` empty), so a non-turbofish call is
+    /// byte-identical to before.
+    pub(super) fn turbofish_doc(&self, type_args: &[Type]) -> Result<Doc, String> {
+        if type_args.is_empty() {
+            return Ok(doc::text(String::new()));
+        }
+        let ts: Result<Vec<_>, _> = type_args.iter().map(ty).collect();
+        Ok(doc::text(format!("<{}>", ts?.join(", "))))
+    }
+
     /// If `e` is a postfix "call chain" spine with ≥2 member accesses (`a.b(…).c(…)`), lay it out as a
     /// single break group: the head (plus any leading `()`/`[]`/`!`/`?` before the first dot) stays on
     /// line 1, then each `.`/`?.` link breaks onto its own line (indented four columns) when the chain
@@ -530,7 +547,9 @@ impl Printer<'_> {
     pub(super) fn chain_doc(&self, e: &Expr) -> Result<Option<Doc>, String> {
         enum Seg<'a> {
             Dot(&'a str, bool, crate::ast::MemberSep),
-            Args(&'a [Expr]),
+            // DEC-208 slice A: a call segment carries its turbofish type arguments (empty in the
+            // common form) so `.method<T>(args)` round-trips through the chain layout.
+            Args(&'a [Expr], &'a [Type]),
             Index(&'a Expr),
             Force,
             Propagate,
@@ -549,8 +568,13 @@ impl Printer<'_> {
                     segs.push(Seg::Dot(name, *safe, *sep));
                     cur = object;
                 }
-                Expr::Call { callee, args, .. } => {
-                    segs.push(Seg::Args(args));
+                Expr::Call {
+                    callee,
+                    args,
+                    type_args,
+                    ..
+                } => {
+                    segs.push(Seg::Args(args, type_args));
                     cur = callee;
                 }
                 Expr::Index { object, index, .. } => {
@@ -583,7 +607,9 @@ impl Printer<'_> {
                     };
                     doc::text(format!("{d}{name}"))
                 }
-                Seg::Args(args) => pr.args_doc(args)?,
+                Seg::Args(args, type_args) => {
+                    doc::concat(vec![pr.turbofish_doc(type_args)?, pr.args_doc(args)?])
+                }
                 Seg::Index(ix) => {
                     doc::concat(vec![doc::text("["), pr.expr_doc(ix)?, doc::text("]")])
                 }

@@ -64,6 +64,7 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         php::PhpExpr::Call { callee, args } => Expr::Call {
             callee: Box::new(lift_expr(callee)?),
             args: lift_exprs(args)?,
+            type_args: Vec::new(),
             span: SP,
         },
         php::PhpExpr::MethodCall {
@@ -81,6 +82,7 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
                 span: SP,
             }),
             args: lift_exprs(args)?,
+            type_args: Vec::new(),
             span: SP,
         },
         php::PhpExpr::Member {
@@ -98,6 +100,7 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         php::PhpExpr::StaticCall { class, name, args } => Expr::Call {
             callee: Box::new(static_member(class, name)),
             args: lift_exprs(args)?,
+            type_args: Vec::new(),
             span: SP,
         },
         php::PhpExpr::ClassConst { class, name } | php::PhpExpr::StaticProp { class, name } => {
@@ -112,6 +115,7 @@ pub(super) fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             Box::new(Expr::Call {
                 callee: Box::new(Expr::Ident(class.clone(), SP)),
                 args: lift_exprs(args)?,
+                type_args: Vec::new(),
                 span: SP,
             }),
             SP,
@@ -396,6 +400,7 @@ pub(super) fn console_print(arg: Expr) -> Expr {
             span: SP,
         }),
         args: vec![arg],
+        type_args: Vec::new(),
         span: SP,
     }
 }

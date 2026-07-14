@@ -292,6 +292,7 @@ impl Checker {
         self.overload_resolutions.insert(
             rewrite_key,
             Expr::Call {
+                type_args: Vec::new(),
                 callee: Box::new(Expr::Member {
                     object: Box::new(object.clone()),
                     name: chosen.2.clone(),
@@ -320,7 +321,9 @@ impl Checker {
         let sel = self.resolve_type(ty);
         // The selector must prefix a direct free-function call `f(args)` (callee is a bare identifier).
         let (name, args, call_span) = match call {
-            Expr::Call { callee, args, span } => match &**callee {
+            Expr::Call {
+                callee, args, span, ..
+            } => match &**callee {
                 Expr::Ident(n, _) => (n.clone(), args.clone(), *span),
                 // M-RT S2.2: `<Type>obj.m(args)` — a method return-overload selector. Resolved against
                 // the receiver's class (the free-fn arms below never see a method callee).
@@ -407,7 +410,9 @@ impl Checker {
     /// sink never silently passes an unresolved selector-less call to a backend.
     pub(super) fn try_resolve_sink_overload(&mut self, call: &Expr, expected: &Ty) -> Option<Ty> {
         let (name, args, call_span) = match call {
-            Expr::Call { callee, args, span } => match &**callee {
+            Expr::Call {
+                callee, args, span, ..
+            } => match &**callee {
                 Expr::Ident(n, _) if self.return_overload_sets.contains_key(n) => {
                     (n.clone(), args.clone(), *span)
                 }
@@ -532,6 +537,7 @@ impl Checker {
             Expr::Call {
                 callee: Box::new(Expr::Ident(chosen.1.clone(), call_span)),
                 args: args.to_vec(),
+                type_args: Vec::new(),
                 span: call_span,
             },
         );

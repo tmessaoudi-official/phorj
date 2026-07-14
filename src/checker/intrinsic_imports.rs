@@ -289,7 +289,10 @@ fn walk_stmt(s: &mut Stmt, en: &Enabled, errs: &mut Vec<Diagnostic>) {
 }
 
 fn walk_expr(e: &mut Expr, en: &Enabled, errs: &mut Vec<Diagnostic>) {
-    if let Expr::Call { callee, args, span } = e {
+    if let Expr::Call {
+        callee, args, span, ..
+    } = e
+    {
         // Recurse into children first (nested intrinsic calls, args), then inspect/normalize THIS
         // call's callee. Inspect read-only, decide, THEN mutate — so the `*callee` reassignment for
         // the qualified→bare rewrite does not overlap the borrow used to inspect it.

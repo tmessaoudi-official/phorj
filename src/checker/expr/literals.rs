@@ -71,6 +71,7 @@ impl Checker {
                     span,
                 }),
                 args,
+                type_args: Vec::new(),
                 span,
             }
         };
@@ -159,6 +160,7 @@ impl Checker {
             let replacement = Expr::Call {
                 callee: Box::new(Expr::Ident(tag.to_string(), span)),
                 args: vec![Expr::List(literals, span), Expr::List(holes, span)],
+                type_args: Vec::new(),
                 span,
             };
             let ty = self.check_expr(&replacement);
@@ -178,6 +180,7 @@ impl Checker {
                         span,
                     }),
                     args,
+                    type_args: Vec::new(),
                     span,
                 }
             };

@@ -38,6 +38,7 @@ mod support;
 mod throws;
 mod totality;
 mod traits;
+mod turbofish;
 mod types;
 mod unions;
 mod uniqueness;

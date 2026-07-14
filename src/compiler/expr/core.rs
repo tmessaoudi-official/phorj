@@ -188,7 +188,9 @@ impl Compiler<'_> {
                 self.patch_jump(end_j); // both paths leave one value at `slot`
                 self.height = h_merge;
             }
-            Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
+            Expr::Call {
+                callee, args, span, ..
+            } => self.compile_call(callee, args, span.line)?,
             // `spawn <call>` (M6 W4): synchronous-degenerate — compile the call (it runs inline,
             // leaving its result on top), then `Op::Spawn` registers a finished task. Compiling the
             // call inline (rather than wrapping it in a thunk lambda) keeps the fault stack trace

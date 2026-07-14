@@ -8,6 +8,7 @@ impl Checker {
         object: &crate::ast::Expr,
         name: &str,
         args: &[crate::ast::Expr],
+        tf: &[Ty],
         safe: bool,
         span: Span,
     ) -> Ty {
@@ -67,6 +68,7 @@ impl Checker {
             // user class. `?.` on a (never-optional) handle behaves like a plain call.
             Ty::Named(ref cls, ref cargs) if cls == "Channel" || cls == "Task" => {
                 let elem = cargs.first().cloned().unwrap_or(Ty::Error);
+                self.reject_turbofish(tf, name, span);
                 return self
                     .check_concurrency_method(cls, &elem, name, args, span)
                     .expect("concurrency method dispatch is total");
@@ -150,6 +152,16 @@ impl Checker {
                             .get(&cls)
                             .and_then(|i| i.method_vis.get(name).cloned());
                         self.enforce_member_vis(v, name, span, false);
+                        // DEC-208 slice A: the method's ordered type-parameter names for turbofish
+                        // seeding — a generic method is single-overload (overloaded generics are
+                        // rejected at collection), so only a lone signature contributes names.
+                        let method_tps: Vec<String> = self
+                            .classes
+                            .get(&cls)
+                            .and_then(|i| i.methods.get(name))
+                            .filter(|v| v.len() == 1)
+                            .map(|v| v[0].type_params.clone())
+                            .unwrap_or_default();
                         let applied: Vec<MethodSig> = sigs
                             .iter()
                             .map(|(ps, r, th)| {
@@ -160,12 +172,13 @@ impl Checker {
                                 )
                             })
                             .collect();
-                        self.check_method_sigs(name, &applied, args, span)
+                        self.check_method_sigs(name, &applied, &method_tps, args, tf, span)
                     }
                     None => {
                         // UFCS fallback (Slice 6): `inst.f(args)` with no method `f` may be the free
                         // function / imported native `f(inst, args)`. `?.` desugars to a null-safe
                         // `match` (F-002).
+                        self.reject_turbofish(tf, name, span);
                         if let Some(ret) = self.try_ufcs(
                             object,
                             &Ty::Named(cls.clone(), cargs.clone()),
@@ -190,6 +203,9 @@ impl Checker {
                 // site), so first-found is unambiguous. None → E-INTERSECT-NO-MEMBER. The value is a
                 // concrete instance underneath, so dispatch is polymorphic at runtime — no Op change.
                 let mut found: Option<Vec<MethodSig>> = None;
+                // DEC-208 slice A: ordered type-parameter names of the resolved member method (for
+                // turbofish seeding). Only a lone class-method signature contributes any.
+                let mut found_tps: Vec<String> = Vec::new();
                 for m in &members {
                     if let Ty::Named(mn, margs) = m {
                         let sig = self
@@ -212,6 +228,13 @@ impl Checker {
                                 }
                             });
                         if let Some(sigs) = sig {
+                            found_tps = self
+                                .classes
+                                .get(mn)
+                                .and_then(|info| info.methods.get(name))
+                                .filter(|v| v.len() == 1)
+                                .map(|v| v[0].type_params.clone())
+                                .unwrap_or_default();
                             let theta = self.class_subst(mn, margs);
                             found = Some(
                                 sigs.iter()
@@ -229,8 +252,11 @@ impl Checker {
                     }
                 }
                 match found {
-                    Some(applied) => self.check_method_sigs(name, &applied, args, span),
+                    Some(applied) => {
+                        self.check_method_sigs(name, &applied, &found_tps, args, tf, span)
+                    }
                     None => {
+                        self.reject_turbofish(tf, name, span);
                         if let Some(ret) = self.try_ufcs(
                             object,
                             &Ty::Intersection(members.clone()),
@@ -260,7 +286,9 @@ impl Checker {
             other => {
                 // UFCS fallback (Slice 6): a member call on a primitive/container receiver (`xs.map(g)`,
                 // `s.upper()`) is `f(receiver, args)` — a free function or imported native. A `?.` call
-                // desugars to a null-safe `match` (F-002).
+                // desugars to a null-safe `match` (F-002). Turbofish on a UFCS-dispatched free function
+                // is a slice-A limitation.
+                self.reject_turbofish(tf, name, span);
                 if let Some(ret) = self.try_ufcs(object, &other, name, args, span, ufcs_nav) {
                     return ret;
                 }
@@ -287,6 +315,7 @@ impl Checker {
         cls: &str,
         name: &str,
         args: &[crate::ast::Expr],
+        tf: &[Ty],
         span: Span,
     ) -> Ty {
         let sigs: Option<Vec<MethodSig>> = self
@@ -298,6 +327,15 @@ impl Checker {
                     .map(|s| (s.params.clone(), s.ret.clone(), s.throws.clone()))
                     .collect()
             });
+        // DEC-208 slice A: ordered type-parameter names of a lone static method signature (for
+        // turbofish seeding).
+        let method_tps: Vec<String> = self
+            .classes
+            .get(cls)
+            .and_then(|i| i.methods.get(name))
+            .filter(|v| v.len() == 1)
+            .map(|v| v[0].type_params.clone())
+            .unwrap_or_default();
         let Some(sigs) = sigs else {
             for a in args {
                 self.check_expr(a);
@@ -328,7 +366,7 @@ impl Checker {
             .get(cls)
             .and_then(|i| i.method_vis.get(name).cloned());
         self.enforce_member_vis(v, name, span, false);
-        self.check_method_sigs(name, &sigs, args, span)
+        self.check_method_sigs(name, &sigs, &method_tps, args, tf, span)
     }
 
     pub(in crate::checker) fn check_member(

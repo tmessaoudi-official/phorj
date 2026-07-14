@@ -183,9 +183,15 @@ pub fn erase_generics(program: Program) -> Program {
                 type_name: type_name.clone(),
                 span: *span,
             },
-            Expr::Call { callee, args, span } => Expr::Call {
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } => Expr::Call {
                 callee: Box::new(rexpr(callee, params)),
                 args: args.iter().map(|a| rexpr(a, params)).collect(),
+                type_args: type_args.clone(),
                 span: *span,
             },
             // A return-overload selector (Slice C1) / a `parent` call (super/parent): recurse the

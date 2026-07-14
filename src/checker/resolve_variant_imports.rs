@@ -221,6 +221,7 @@ fn rexpr(e: Expr, m: &VarMap) -> Expr {
             if let Expr::Call {
                 callee,
                 args,
+                type_args,
                 span: cspan,
             } = inner
             {
@@ -241,6 +242,7 @@ fn rexpr(e: Expr, m: &VarMap) -> Expr {
                     Box::new(Expr::Call {
                         callee,
                         args,
+                        type_args,
                         span: cspan,
                     }),
                     span,
@@ -249,9 +251,15 @@ fn rexpr(e: Expr, m: &VarMap) -> Expr {
                 Expr::New(Box::new(inner), span)
             }
         }
-        Expr::Call { callee, args, span } => Expr::Call {
+        Expr::Call {
+            callee,
+            args,
+            type_args,
+            span,
+        } => Expr::Call {
             callee: Box::new(rexpr(*callee, m)),
             args: args.into_iter().map(|a| rexpr(a, m)).collect(),
+            type_args,
             span,
         },
         Expr::Str(parts, span) => Expr::Str(

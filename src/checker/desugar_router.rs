@@ -142,6 +142,7 @@ fn method_handler_lambda(class: &str, method: &str, sp: Span) -> Expr {
             span: sp,
         }),
         args: vec![Expr::Ident("req".to_string(), sp)],
+        type_args: Vec::new(),
         span: sp,
     };
     Expr::Lambda {
@@ -202,6 +203,7 @@ fn build_router(routes: &[Route], sp: Span) -> Expr {
         Box::new(Expr::Call {
             callee: Box::new(Expr::Ident("Router".into(), sp)),
             args: vec![empty_routes, empty_mws],
+            type_args: Vec::new(),
             span: sp,
         }),
         sp,
@@ -216,6 +218,7 @@ fn build_router(routes: &[Route], sp: Span) -> Expr {
                 span: sp,
             }),
             args: vec![method.clone(), pattern.clone(), handler.clone()],
+            type_args: Vec::new(),
             span: sp,
         };
     }
@@ -234,13 +237,19 @@ fn is_auto_router(callee: &Expr, args: &[Expr]) -> bool {
 
 fn rexpr(e: Expr, r: &[Route]) -> Expr {
     match e {
-        Expr::Call { callee, args, span } => {
+        Expr::Call {
+            callee,
+            args,
+            type_args,
+            span,
+        } => {
             if is_auto_router(&callee, &args) {
                 build_router(r, span)
             } else {
                 Expr::Call {
                     callee: Box::new(rexpr(*callee, r)),
                     args: args.into_iter().map(|a| rexpr(a, r)).collect(),
+                    type_args,
                     span,
                 }
             }

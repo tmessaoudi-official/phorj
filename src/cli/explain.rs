@@ -1505,11 +1505,20 @@ pub fn explain_text(code: &str) -> Option<String> {
              parameters of the same declaration. Rename the parameter (e.g. `T`, `K`, `V`, `Elem`).\n"
         }
         "E-TYPE-ARG-COUNT" => {
-            "E-TYPE-ARG-COUNT — a type was given the wrong number of type arguments.\n\n\
+            "E-TYPE-ARG-COUNT — a type or a turbofish call was given the wrong number of type arguments.\n\n\
              A generic type takes exactly its declared arity: `List<T>`/`Set<T>`/`Optional<T>` and a\n\
              one-parameter user type take one; `Map<K, V>` takes two; `Box<T>`/`Pair<A, B>` take their\n\
              declared count. A non-generic type (and an opaque type *parameter*) takes none — drop the\n\
-             `<…>`. Supply exactly the arguments the declaration expects.\n"
+             `<…>`. The same rule applies to a call-site turbofish (`identity<int>(5)`,\n\
+             `obj.method<T, U>(…)`): the explicit type-argument list must match the callee's declared\n\
+             type-parameter count — or omit it entirely to infer them from the arguments.\n"
+        }
+        "E-TURBOFISH-NON-GENERIC" => {
+            "E-TURBOFISH-NON-GENERIC — explicit type arguments on a call that takes none.\n\n\
+             A call-site turbofish (`f<int>(x)`, `obj.method<T>(…)`) is only valid on a generic function\n\
+             or method — one declared with `<…>` type parameters. A non-generic function/method, a\n\
+             constructor, an enum-variant construction, a lambda value, a built-in (native) function, and\n\
+             a return-type-overloaded call take no explicit type arguments. Remove the `<…>`.\n"
         }
         "E-DUP-TYPE" => {
             "E-DUP-TYPE — a type name is declared more than once.\n\n\

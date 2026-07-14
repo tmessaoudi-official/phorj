@@ -212,6 +212,7 @@ impl Checker {
             Expr::Call {
                 callee: Box::new(callee),
                 args: new_args,
+                type_args: Vec::new(),
                 span: call_span,
             }
         };

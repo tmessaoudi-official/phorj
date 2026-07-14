@@ -141,6 +141,7 @@ fn reflect_call(qual: &str, name: &str, value: Expr) -> Expr {
             span: synth_span(),
         }),
         args: vec![value],
+        type_args: Vec::new(),
         span: synth_span(),
     }
 }

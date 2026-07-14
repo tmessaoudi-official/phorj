@@ -164,7 +164,12 @@ impl Checker {
                 type_name,
                 span,
             } => self.check_cast(value, type_name, *span),
-            Expr::Call { callee, args, span } => self.check_call(callee, args, *span), // Task 4
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } => self.check_call(callee, args, type_args, *span), // Task 4
             // `<Type>f(args)` — a return-type overload selector (M-RT Slice C1).
             Expr::OverloadSelect { ty, call, span } => self.check_overload_select(ty, call, *span),
             // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).

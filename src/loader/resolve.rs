@@ -352,7 +352,12 @@ pub(super) fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
 
 pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
     match expr {
-        Expr::Call { callee, args, span } => resolve_call(*callee, args, span, ctx),
+        Expr::Call {
+            callee,
+            args,
+            type_args,
+            span,
+        } => resolve_call(*callee, args, type_args, span, ctx),
         Expr::Member {
             object,
             name,
@@ -601,8 +606,16 @@ pub(super) fn check_fn_visibility(ctx: &ResolveCtx, pkg: &str, name: &str) {
     }
 }
 
-pub(super) fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &ResolveCtx) -> Expr {
+pub(super) fn resolve_call(
+    callee: Expr,
+    args: Vec<Expr>,
+    type_args: Vec<Type>,
+    span: Span,
+    ctx: &ResolveCtx,
+) -> Expr {
     let args: Vec<Expr> = args.into_iter().map(|a| resolve_expr(a, ctx)).collect();
+    // DEC-208 slice A: preserve the call's turbofish type arguments through import resolution — the
+    // checker resolves the type names downstream like any other type annotation.
     match callee {
         Expr::Ident(n, isp) => {
             // A type name wins (a constructor call `Point(x)` — a name is a type XOR a function in a
@@ -630,6 +643,7 @@ pub(super) fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &Reso
             Expr::Call {
                 callee: Box::new(Expr::Ident(resolved, isp)),
                 args,
+                type_args,
                 span,
             }
         }
@@ -649,6 +663,7 @@ pub(super) fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &Reso
                             return Expr::Call {
                                 callee: Box::new(Expr::Ident(mangled.clone(), msp)),
                                 args,
+                                type_args,
                                 span,
                             };
                         }
@@ -664,12 +679,14 @@ pub(super) fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &Reso
                     span: msp,
                 }),
                 args,
+                type_args,
                 span,
             }
         }
         other => Expr::Call {
             callee: Box::new(resolve_expr(other, ctx)),
             args,
+            type_args,
             span,
         },
     }

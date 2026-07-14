@@ -989,6 +989,15 @@ parameters are erased to PHP `mixed` before any backend; a generic class/enum va
 type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements are deliberately deferred
 (each rejected cleanly or simply unavailable, never a crash):
 
+- **Turbofish (DEC-208 slice A) — call-site scope.** Explicit type arguments (`identity<int>(5)`,
+  `obj.method<T, U>(…)`) are supported on **user generic free functions and user generic methods**
+  (instance and static), byte-identical to the inferred form (see `examples/guide/turbofish.phg`).
+  Explicit type arguments on any *non-generic* callee, and on a **native/built-in** function
+  (`List.reverse<int>(…)`), a **UFCS-dispatched** free function called method-style, a **constructor**
+  / enum-variant construction, a **lambda value**, or a **return-type-overloaded** call are rejected
+  (`E-TURBOFISH-NON-GENERIC`) — natives carry no ordered type-parameter list, so native turbofish is a
+  clean follow-up, not a crash. Wrong type-argument count is `E-TYPE-ARG-COUNT`.
+
 - **A generic-typed *result* is a specialized operand only when the return *echoes a parameter*
   (S2.1 — partial).** A generic free function whose declared return is *exactly* one of its own
   parameters (`id<T>(T x): T`, `firstOr<T>(List<T>, T): T`) now records that parameter index

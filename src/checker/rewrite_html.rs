@@ -60,9 +60,15 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 rhs: Box::new(rexpr(*rhs, h)),
                 span,
             },
-            Expr::Call { callee, args, span } => Expr::Call {
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } => Expr::Call {
                 callee: Box::new(rexpr(*callee, h)),
                 args: args.into_iter().map(|a| rexpr(a, h)).collect(),
+                type_args,
                 span,
             },
             // A return-overload selector (Slice C1) / a `parent` call (super/parent): recurse the

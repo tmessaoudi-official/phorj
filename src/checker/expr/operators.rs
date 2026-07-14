@@ -504,6 +504,7 @@ impl Checker {
             Expr::Call {
                 callee: Box::new(callee),
                 args: call_args,
+                type_args: Vec::new(),
                 span,
             },
         );

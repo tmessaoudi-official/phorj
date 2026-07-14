@@ -291,7 +291,9 @@ impl Checker {
         &mut self,
         name: &str,
         applied: &[MethodSig],
+        type_params: &[String],
         args: &[crate::ast::Expr],
+        tf: &[Ty],
         span: Span,
     ) -> Ty {
         // Batch C: a method call discharges its declared checked exceptions exactly like a free-fn
@@ -307,12 +309,18 @@ impl Checker {
             return if params.iter().any(ty_has_param) || ty_has_param(ret) {
                 // Bounds on an OVERLOADED generic function are a documented deferral (the `applied`
                 // tuples don't carry them); the common non-overloaded path (core.rs) enforces them.
-                self.check_generic_call(name, params, ret, &[], args, span)
+                // DEC-208 slice A: a generic method accepts turbofish (`obj.queryInto<User>()`),
+                // consumed by `check_generic_call` to pre-seed the substitution.
+                self.check_generic_call(name, type_params, params, ret, &[], tf, args, span)
             } else {
+                self.reject_turbofish(tf, name, span);
                 self.check_args(name, params, args, span);
                 ret.clone()
             };
         }
+        // A multi-overload method set is monomorphic (overloaded generics are rejected at collection),
+        // so it takes no turbofish (DEC-208 slice A).
+        self.reject_turbofish(tf, name, span);
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
         // Discharge the union of every statically-matching overload's throws — runtime dispatch may
         // pick any of them (mirrors `check_overload_call`).
@@ -381,12 +389,15 @@ impl Checker {
     /// `θ`, then applies `θ` to the declared return type. First-binding-wins, structural; `θ` lives
     /// only here and never touches the AST (the function's type params are erased separately, before
     /// any backend). A unification failure is a normal argument-type error.
+    #[allow(clippy::too_many_arguments)]
     pub(in crate::checker) fn check_generic_call(
         &mut self,
         name: &str,
+        type_params: &[String],
         params: &[Ty],
         ret: &Ty,
         bounds: &[(String, String)],
+        turbofish: &[Ty],
         args: &[crate::ast::Expr],
         span: Span,
     ) -> Ty {
@@ -405,6 +416,32 @@ impl Checker {
             return Ty::Error;
         }
         let mut theta: HashMap<String, Ty> = HashMap::new();
+        // DEC-208 slice A: an explicit turbofish pre-seeds the substitution. Its arity must equal the
+        // callee's declared type-parameter count (`E-TYPE-ARG-COUNT`); each `type_params[i]` binds to
+        // `turbofish[i]`, and the unify loop below then verifies every value argument AGREES with the
+        // seeded binding (a disagreement surfaces as the ordinary argument-type error). Empty in the
+        // common inferred form, leaving the pure-inference path byte-identical.
+        if !turbofish.is_empty() {
+            if turbofish.len() != type_params.len() {
+                self.err_coded(
+                    span,
+                    format!(
+                        "`{name}` takes {} type argument(s), found {}",
+                        type_params.len(),
+                        turbofish.len()
+                    ),
+                    "E-TYPE-ARG-COUNT",
+                    Some(format!(
+                        "write {} explicit type argument(s) between `<` and `>`, or none to infer them",
+                        type_params.len()
+                    )),
+                );
+            } else {
+                for (p, t) in type_params.iter().zip(turbofish) {
+                    theta.insert(p.clone(), t.clone());
+                }
+            }
+        }
         let mut ok = true;
         for (i, (param, arg)) in params.iter().zip(args).enumerate() {
             let at = self.check_arg(arg, param);

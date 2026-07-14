@@ -325,6 +325,7 @@ impl Di<'_> {
             Some(fname) => Expr::Call {
                 callee: Box::new(Expr::Ident(fname, span)),
                 args: Vec::new(),
+                type_args: Vec::new(),
                 span,
             },
             None => self.di_error_placeholder(span),
@@ -335,6 +336,7 @@ impl Di<'_> {
         Expr::Call {
             callee: Box::new(Expr::Ident("__phorj_di_error".to_string(), span)),
             args: Vec::new(),
+            type_args: Vec::new(),
             span,
         }
     }
@@ -372,16 +374,20 @@ impl Di<'_> {
                 qualified,
                 span,
             } => self.rinject(ty, qualified, expected, span),
-            Expr::Call { callee, args, span } if args.is_empty() => {
-                match self.annotation_inject(&callee) {
-                    Some(qualified) => self.rinject(None, qualified, expected, span),
-                    None => Expr::Call {
-                        callee: Box::new(self.rexpr(*callee)),
-                        args: Vec::new(),
-                        span,
-                    },
-                }
-            }
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } if args.is_empty() => match self.annotation_inject(&callee) {
+                Some(qualified) => self.rinject(None, qualified, expected, span),
+                None => Expr::Call {
+                    callee: Box::new(self.rexpr(*callee)),
+                    args: Vec::new(),
+                    type_args,
+                    span,
+                },
+            },
             other => self.rexpr(other),
         }
     }
@@ -399,19 +405,29 @@ impl Di<'_> {
             } => self.rinject(ty, qualified, None, span),
             // Recognize an annotation-form composition root written as an ordinary call — but only when
             // the matching import is present; otherwise it is a genuine user call and recurses normally.
-            Expr::Call { callee, args, span } if args.is_empty() => {
-                match self.annotation_inject(&callee) {
-                    Some(qualified) => self.rinject(None, qualified, None, span),
-                    None => Expr::Call {
-                        callee: Box::new(self.rexpr(*callee)),
-                        args: Vec::new(),
-                        span,
-                    },
-                }
-            }
-            Expr::Call { callee, args, span } => Expr::Call {
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } if args.is_empty() => match self.annotation_inject(&callee) {
+                Some(qualified) => self.rinject(None, qualified, None, span),
+                None => Expr::Call {
+                    callee: Box::new(self.rexpr(*callee)),
+                    args: Vec::new(),
+                    type_args,
+                    span,
+                },
+            },
+            Expr::Call {
+                callee,
+                args,
+                type_args,
+                span,
+            } => Expr::Call {
                 callee: Box::new(self.rexpr(*callee)),
                 args: args.into_iter().map(|a| self.rexpr(a)).collect(),
+                type_args,
                 span,
             },
             Expr::ParentCall {

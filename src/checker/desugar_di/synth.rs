@@ -123,6 +123,7 @@ pub(super) fn build_expr(node: &Built, sp: Span) -> Expr {
             Box::new(Expr::Call {
                 callee: Box::new(Expr::Ident(class.clone(), sp)),
                 args,
+                type_args: Vec::new(),
                 span: sp,
             }),
             sp,
@@ -138,6 +139,7 @@ pub(super) fn build_expr(node: &Built, sp: Span) -> Expr {
                 span: sp,
             }),
             args,
+            type_args: Vec::new(),
             span: sp,
         },
     }

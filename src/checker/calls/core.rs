@@ -4,19 +4,44 @@
 use super::*;
 
 impl Checker {
+    /// DEC-208 slice A: emit `E-TURBOFISH-NON-GENERIC` when explicit type arguments were written at a
+    /// call site whose callee cannot take them (a non-generic user function, an intrinsic, a native, a
+    /// constructor, a lambda value, …). Non-fatal — the caller then type-checks the call as if no
+    /// turbofish were present, so argument diagnostics are still produced.
+    pub(in crate::checker) fn reject_turbofish(&mut self, tf: &[Ty], what: &str, span: Span) {
+        if tf.is_empty() {
+            return;
+        }
+        self.err_coded(
+            span,
+            format!("`{what}` does not take explicit type arguments"),
+            "E-TURBOFISH-NON-GENERIC",
+            Some(
+                "remove the `<…>` — only a generic function or method accepts explicit type arguments"
+                    .into(),
+            ),
+        );
+    }
+
     pub(in crate::checker) fn check_call(
         &mut self,
         callee: &crate::ast::Expr,
         args: &[crate::ast::Expr],
+        type_args: &[crate::ast::Type],
         span: Span,
     ) -> Ty {
         use crate::ast::Expr;
+        // DEC-208 slice A: resolve the written turbofish types once. Empty in the common inferred form.
+        // Threaded to the generic free-fn / method seams (which consume it); the non-generic terminal
+        // branches call `reject_turbofish` so a stray `<…>` is a clear error, never silently ignored.
+        let tf: Vec<Ty> = type_args.iter().map(|t| self.resolve_type(t)).collect();
         match callee {
             Expr::Ident(name, _) => {
                 // Built-in fault intrinsics (M-faults 2a): `panic`/`todo`/`unreachable` (→ `never`) and
                 // `assert` (→ `unit`). Recognized here before any user-function lookup; the names are
                 // reserved (`E-RESERVED-INTRINSIC`) so this can't be shadowed.
                 if let Some(t) = self.check_intrinsic_call(name, args, span) {
+                    self.reject_turbofish(&tf, name, span);
                     return t;
                 }
                 // If the name is a local (or a `match`-arm binding) with function type, treat it
@@ -28,13 +53,16 @@ impl Checker {
                     // of a throwing function VALUE discharges (or propagates) exactly like a named
                     // throwing call. Taken BEFORE `check_args` so it cannot leak into an argument.
                     let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
+                    // DEC-208 slice A: a function-value (lambda-typed local) call is non-generic —
+                    // a stray turbofish on it is a clear error, never silently ignored.
+                    self.reject_turbofish(&tf, name, span);
                     self.check_args("<lambda>", &param_tys, args, span);
                     for e in &throws {
                         self.route_call_throw(skip_throws, "<lambda>", e, span);
                     }
                     return *ret_ty;
                 }
-                let ty = self.check_named_call(name, args, span);
+                let ty = self.check_named_call(name, args, &tf, span);
                 self.record_pending_fill(callee, args, span);
                 ty
             }
@@ -66,6 +94,9 @@ impl Checker {
                                 return self.check_string_format(args, span);
                             }
                             self.require_option_for_result_bridge(n.module, n.name, span);
+                            // Native turbofish is a slice-A limitation (natives carry no ordered
+                            // type-parameter list); reject explicit type arguments on a native call.
+                            self.reject_turbofish(&tf, name, span);
                             let ty = self.check_native_call(idx, args, span);
                             self.record_pending_fill(callee, args, span);
                             return ty;
@@ -79,13 +110,14 @@ impl Checker {
                 if !*safe {
                     if let Expr::Ident(cls, _) = &**object {
                         if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
-                            return self.check_static_method_call(cls, name, args, span);
+                            return self.check_static_method_call(cls, name, args, &tf, span);
                         }
                         // Built-in concurrency static — `Channel.new()` (M6 W4). `Channel`/`Task` are
                         // reserved built-in type names (not user classes), so route them before the
                         // instance-method fallthrough (which would type `Channel` as an unknown value).
                         if (cls == "Channel" || cls == "Task") && self.lookup_binding(cls).is_none()
                         {
+                            self.reject_turbofish(&tf, name, span);
                             return self.check_concurrency_static(cls, name, args, span);
                         }
                         // Qualified injected-type construction `new Http.Router(args)` /
@@ -112,6 +144,7 @@ impl Checker {
                             // `throws`, so the discharge set is empty — pass `false` (bare discharge).
                             if let Some(t) = self.try_variant_or_class_call(name, args, span, false)
                             {
+                                self.reject_turbofish(&tf, name, span);
                                 return t;
                             }
                         }
@@ -121,11 +154,12 @@ impl Checker {
                         // Erased to the bare variant call before any backend (see
                         // `check_qualified_variant_call`).
                         if self.lookup_binding(cls).is_none() && self.enums.contains_key(cls) {
+                            self.reject_turbofish(&tf, name, span);
                             return self.check_qualified_variant_call(cls, name, args, span);
                         }
                     }
                 }
-                self.check_method_call(object, name, args, *safe, span)
+                self.check_method_call(object, name, args, &tf, *safe, span)
             }
             other => {
                 // A callee expression that is itself a call (`f()()`, `getFn()?()`) may carry a
@@ -136,6 +170,7 @@ impl Checker {
                 let callee_ty = self.check_expr(other);
                 match callee_ty {
                     Ty::Function(param_tys, ret_ty, throws) => {
+                        self.reject_turbofish(&tf, "call", span);
                         self.check_args("<lambda>", &param_tys, args, span);
                         // DEC-222: route each declared throw of the called function value.
                         for e in &throws {
@@ -175,6 +210,7 @@ impl Checker {
         &mut self,
         name: &str,
         args: &[crate::ast::Expr],
+        tf: &[Ty],
         span: Span,
     ) -> Ty {
         // Consume the throws-mode `?` suppression flag up front (a throwing call under `?` propagates
@@ -193,6 +229,9 @@ impl Checker {
             );
         }
         if let Some(t) = self.try_variant_or_class_call(name, args, span, skip_throws) {
+            // A variant constructor / class construction is not a generic call site here (DEC-208
+            // slice A leaves construction turbofish out of scope).
+            self.reject_turbofish(tf, name, span);
             return t;
         }
         let sigs = match self.funcs.get(name) {
@@ -202,6 +241,8 @@ impl Checker {
                 // ⇒ `printLine(x)`). Resolved AFTER user functions, so `local > user fn > imported native`
                 // holds (locals are handled earlier in `check_call`, user funcs in the `Some` arm above).
                 if let Some((module, real)) = self.fn_imports.get(name).cloned() {
+                    // Member-imported natives carry no ordered type-parameter list (slice-A limitation).
+                    self.reject_turbofish(tf, name, span);
                     return self.resolve_bare_fn_import(&module, &real, args, span);
                 }
                 for a in args {
@@ -214,6 +255,7 @@ impl Checker {
         // context to choose a member (the selector arm `check_overload_select` handles the resolved
         // case and never funnels here). C2 will resolve these from a shallow sink; in C1 it is an error.
         if self.return_overload_sets.contains_key(name) {
+            self.reject_turbofish(tf, name, span);
             for a in args {
                 self.check_expr(a);
             }
@@ -235,14 +277,19 @@ impl Checker {
             return if sig.type_params.is_empty() {
                 // M4: defaulted-arity check (a non-default function has all-`None` defaults, so this
                 // is exactly the old exact-arity `check_args`).
+                self.reject_turbofish(tf, name, span);
                 self.check_args_defaulted(name, &sig.params, &sig.defaults, args, span);
                 sig.ret.clone()
             } else {
+                // DEC-208 slice A: a generic free function accepts turbofish (`identity<int>(5)`),
+                // consumed by `check_generic_call` to pre-seed the substitution.
                 self.check_generic_call(
                     name,
+                    &sig.type_params,
                     &sig.params,
                     &sig.ret,
                     &sig.type_param_bounds,
+                    tf,
                     args,
                     span,
                 )
@@ -251,6 +298,7 @@ impl Checker {
         // Overload set (M-RT): generic members were rejected at collection, so every overload is
         // monomorphic. The call's result is the shared return type (`E-OVERLOAD-RETURN`); resolution
         // here is *static* (for typing) — the runtime dispatch is byte-identical by construction.
+        self.reject_turbofish(tf, name, span);
         self.check_overload_call(name, &sigs, args, span, skip_throws)
     }
 
@@ -286,6 +334,7 @@ impl Checker {
                     span,
                 }),
                 args: args.to_vec(),
+                type_args: Vec::new(),
                 span,
             };
             self.ufcs_resolutions.insert(span.start, qualified);
@@ -308,6 +357,7 @@ impl Checker {
                 span,
             }),
             args: full,
+            type_args: Vec::new(),
             span,
         };
         self.ufcs_resolutions.insert(span.start, qualified);

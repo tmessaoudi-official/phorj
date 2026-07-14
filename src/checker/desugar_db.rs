@@ -466,7 +466,12 @@ impl Db<'_> {
         let mut cur = recv;
         loop {
             match cur {
-                Expr::Call { callee, args, span } => {
+                Expr::Call {
+                    callee,
+                    args,
+                    span,
+                    type_args: _,
+                } => {
                     if let Expr::Member {
                         object,
                         name,
@@ -582,6 +587,7 @@ impl Db<'_> {
             callee: Box::new(helper),
             args: vec![recv],
             span,
+            type_args: Vec::new(),
         }
     }
 
@@ -1087,6 +1093,7 @@ impl Db<'_> {
             callee: Box::new(callee),
             args,
             span,
+            type_args: Vec::new(),
         }
     }
 
@@ -1112,6 +1119,7 @@ impl Db<'_> {
             callee: Box::new(callee),
             args,
             span: csp,
+            type_args: Vec::new(),
         };
         let span = self.sp();
         Expr::New(Box::new(call), span)
@@ -1212,6 +1220,7 @@ impl Db<'_> {
             callee: Box::new(callee),
             args: Vec::new(),
             span: csp,
+            type_args: Vec::new(),
         };
         let nsp = self.sp();
         Expr::New(Box::new(call), nsp)
@@ -2006,19 +2015,23 @@ impl Db<'_> {
     fn rexpr_expected(&mut self, e: Expr, expected: Option<&Type>) -> Expr {
         let expected = expected.filter(|t| !matches!(t, Type::Infer(_)));
         match e {
-            Expr::Call { callee, args, span } if args.is_empty() => {
-                match Self::query_call_kind(&callee) {
-                    Some(kind) => self.rewrite(*callee, kind, expected, span),
-                    None => {
-                        let callee = Box::new(self.rexpr(*callee));
-                        Expr::Call {
-                            callee,
-                            args: Vec::new(),
-                            span,
-                        }
+            Expr::Call {
+                callee,
+                args,
+                span,
+                type_args,
+            } if args.is_empty() => match Self::query_call_kind(&callee) {
+                Some(kind) => self.rewrite(*callee, kind, expected, span),
+                None => {
+                    let callee = Box::new(self.rexpr(*callee));
+                    Expr::Call {
+                        callee,
+                        args: Vec::new(),
+                        span,
+                        type_args,
                     }
                 }
-            }
+            },
             // `List<User> u = stmt.queryInto()?;` — a `?`-propagation in annotation position: look
             // THROUGH the `?` so the sink type still reaches the recognizer, then keep the `?` on the
             // rewritten throwing helper call (the idiomatic form inside a `throws DbError` function).
@@ -2027,6 +2040,7 @@ impl Db<'_> {
                     callee,
                     args,
                     span: cspan,
+                    type_args: _,
                 } if args.is_empty() && Self::query_call_kind(&callee).is_some() => {
                     let kind = Self::query_call_kind(&callee).expect("guarded above");
                     let rewritten = self.rewrite(*callee, kind, expected, cspan);
@@ -2048,23 +2062,33 @@ impl Db<'_> {
         match e {
             // A nullary call may be a `recv.queryInto()` — but here there is no annotation, so it is
             // `E-DB-INTO-NO-TYPE` (via `rewrite` with `expected = None`).
-            Expr::Call { callee, args, span } if args.is_empty() => {
-                match Self::query_call_kind(&callee) {
-                    Some(kind) => self.rewrite(*callee, kind, None, span),
-                    None => {
-                        let callee = Box::new(self.rexpr(*callee));
-                        Expr::Call {
-                            callee,
-                            args: Vec::new(),
-                            span,
-                        }
+            Expr::Call {
+                callee,
+                args,
+                span,
+                type_args,
+            } if args.is_empty() => match Self::query_call_kind(&callee) {
+                Some(kind) => self.rewrite(*callee, kind, None, span),
+                None => {
+                    let callee = Box::new(self.rexpr(*callee));
+                    Expr::Call {
+                        callee,
+                        args: Vec::new(),
+                        span,
+                        type_args,
                     }
                 }
-            }
-            Expr::Call { callee, args, span } => Expr::Call {
+            },
+            Expr::Call {
+                callee,
+                args,
+                span,
+                type_args,
+            } => Expr::Call {
                 callee: Box::new(self.rexpr(*callee)),
                 args: args.into_iter().map(|a| self.rexpr(a)).collect(),
                 span,
+                type_args,
             },
             Expr::ParentCall {
                 ancestor,
