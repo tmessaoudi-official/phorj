@@ -42,8 +42,13 @@ function setup(Db db): void throws DbError {
 }
 
 function balOf(Db db, int id): int throws DbError {
-    Statement s = db.prepare("SELECT bal FROM acct WHERE id = {id}")?;
-    List<Row> rows = s.query()?;
+    // A `?` placeholder + `.bind(id)` — never interpolate a value into SQL (that would trip the
+    // W-SQL-INJECTION lint and, with real user input, allow SQL injection). The bound value is sent
+    // to the database separately from the SQL text. (Each throwing call is propagated with `?`; the
+    // bind is a separate binding so the `?` propagate is not read as the `?.` safe-navigation operator.)
+    Statement s = db.prepare("SELECT bal FROM acct WHERE id = ?")?;
+    Statement bound = s.bind(id)?;
+    List<Row> rows = bound.query()?;
     return rows[0].getInt("bal")?;
 }
 

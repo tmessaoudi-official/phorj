@@ -218,6 +218,22 @@ pub fn explain_text(code: &str) -> Option<String> {
              the sink at all. (The lint is syntactic on the direct argument; a value laundered through\n\
              a local is not flagged — the type-system non-printability is the real guarantee.)\n"
         }
+        "W-SQL-INJECTION" => {
+            "W-SQL-INJECTION — a value is string-interpolated into `Core.Db` SQL (lint, DEC-208).\n\n\
+             `db.prepare(\"SELECT * FROM users WHERE id = {userId}\")` splices `userId` straight into the\n\
+             SQL text: if it carries user input, an attacker can inject arbitrary SQL. This lint is\n\
+             type-directed — it fires only on `Core.Db`'s `Db.prepare(...)` when the SQL is an interpolated\n\
+             literal whose hole is a NON-constant value (a variable, field, or call). A fully-constant\n\
+             interpolation (every hole a literal) and a plain non-interpolated literal never warn.\n\n\
+             The fix is a bound placeholder — the value is sent to the database SEPARATELY from the SQL\n\
+             text and can never be parsed as SQL:\n\n\
+             \x20   Statement s = db.prepare(\"SELECT * FROM users WHERE id = ?\")?;\n\
+             \x20   List<Row> rows = s.bind(userId)?.query()?;\n\n\
+             (or a named placeholder `:id` with `.bindNamed(\"id\", userId)`). This is a WARNING, not an\n\
+             error: a deliberately-built constant query still compiles — but interpolating a value is\n\
+             almost always the wrong tool, so the lint is loud. Like every `W-…` lint it rides the warning\n\
+             channel and never fails the build.\n"
+        }
         "W-DEPRECATED" => {
             "W-DEPRECATED — a deprecated stdlib symbol is used (lint).\n\n\
              The symbol still works, but it is slated for removal: this lint names its replacement and\n\

@@ -303,6 +303,44 @@ not a panic:
   routed to the JSON-parse path and fail loud (`Json.parse` unresolved) — pathological and non-silent.
   Example `examples/db/mapping.phg`; fixtures in `tests/db.rs`.
 
+- **`Core.Db` compile-time safety (DEC-208 slice F) — SQL-injection lint shipped; arity check DEFERRED.**
+  **Shipped:** the `W-SQL-INJECTION` compile-time lint (`src/checker/calls/methods.rs`,
+  `lint_sql_injection`). It is TYPE-DIRECTED and import-gated ("nothing in the wind"): it fires only when
+  the receiver types to the `Core.Db` `Db` class AND the program imports `Core.Db` (module or member
+  form) AND the method is `prepare` AND the SQL argument is a string-INTERPOLATED literal with at least
+  one NON-constant hole (a variable / field / call / index / … — anything but a literal scalar, or a
+  string whose holes are all literal, recursively). A fully-constant interpolation and a plain
+  non-interpolated literal never warn; a coincidental user class named `Db` with a `prepare` method never
+  warns (no `Core.Db` import). It is a WARNING (rides the warning channel, never fails the build) so a
+  deliberately-built constant query still compiles. `phg explain W-SQL-INJECTION`; checker fixtures in
+  `src/checker/tests/db_lint.rs`. (The shipped `examples/db/transactions.phg` was migrated from an
+  interpolated `WHERE id = {id}` to a bound `WHERE id = ?` + `.bind(id)` — the correct fix the lint
+  steers to; output byte-identical, verified by `tests/db.rs`.)
+  - **Disclosures / boundaries:** (a) The lint is SYNTACTIC on the direct `prepare` argument — a SQL
+    string built in a variable and passed as `prepare(sql)`, or interpolated at a helper's call site and
+    laundered through a `string` parameter into `prepare`, is not flagged (it is not an interpolated
+    literal at the `prepare` call). The type-directed literal case is the high-signal one; laundered
+    dynamic SQL is out of scope (same shape as the `W-SECRET` laundering boundary). (b) String
+    CONCATENATION into `prepare` (`prepare("… " + userVar)`) is likewise out of scope — the spec scopes
+    slice F item 1 to interpolation; a `+`-concatenated variable is a `Binary` node, not an interpolated
+    `Str`. (c) A named/class `const` interpolated into SQL still warns (the "constant" test is literals
+    only) — a conservative simplification; steering a constant to a bind is harmless.
+  - **DEFERRED — the placeholder/bind arity check (`E-BIND-ARITY`).** Not shipped: a sound compile-time
+    `?`-count-vs-`.bind()`-count check cannot be built without false positives, and per the slice's own
+    ruling *a false positive is worse than not having it*. Three blockers: (1) **the runtime count is
+    not always naive.** With ≥1 `.bind()` the positional path uses `expand_placeholders` (a naive
+    quote-aware `?` scan a compile-time check could mirror exactly), but with ZERO binds the `Binds::None`
+    path hands the SQL straight to rusqlite, whose parser is comment- and numbered-param-aware — so a
+    naive `?` scan false-positives on `SELECT 1 -- huh?` (a `?` in a comment) or `?1`/`?2`/stray `:name`.
+    (2) **the sound case is narrow.** Only a fully-INLINE closed chain `db.prepare("…").bind(a)…query()`
+    is statically complete; the common `Statement s = db.prepare(…); s.bind(…); s.query();` staged form,
+    loops, `bindList` (one `?` → N), and `bindNamed` (`:name`) all defeat static counting. (3) **desugar
+    interaction.** The check would hook after `desugar_db` rewrites `queryInto`/etc. into synthesized
+    `query()` calls, so a terminal-walker risks misreading generated chains. The runtime ALREADY throws a
+    clean, catchable `DbError` on any `?`/bind mismatch (`expand_placeholders` and rusqlite both error),
+    so this is a convenience lint, not a correctness gap — deferred until a schema-aware or turbofish
+    (slice A) foundation makes a sound check cheap. See `docs/specs/2026-07-14-core-db.md` slice F.
+
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
   the backends. Deferrals (each a clean compile error, never a panic): (1) **free functions only** — a

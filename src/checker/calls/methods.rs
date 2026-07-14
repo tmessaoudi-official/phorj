@@ -56,6 +56,11 @@ impl Checker {
             },
             _ => base,
         };
+        // DEC-208 slice F — SQL-injection compile-time lint (`W-SQL-INJECTION`). Type-directed: fires
+        // only on `Core.Db`'s `Db.prepare(<interpolated SQL>)` when a hole splices a non-constant value
+        // (a variable / field / call) into the SQL text — steering to a `?` placeholder + `.bind(...)`.
+        // A non-fatal lint (the program still compiles — the interpolation escape hatch is preserved).
+        self.lint_sql_injection(&base, name, args, span);
         let ret = match base {
             // Built-in concurrency handles (M6 W4): `Channel<T>` (send/recv), `Task<T>` (join).
             // Dispatched before user-class lookup — `Channel`/`Task` are reserved built-ins, never a
@@ -673,5 +678,80 @@ impl Checker {
                 ),
             );
         }
+    }
+
+    /// DEC-208 slice F — the SQL-injection lint. Fires `W-SQL-INJECTION` when a `Core.Db` `Db.prepare`
+    /// receives a string-INTERPOLATED literal whose hole splices a NON-constant value into the SQL text.
+    ///
+    /// Type-directed and import-gated ("nothing in the wind"): the receiver must type to the `Db` class
+    /// AND the program must import `Core.Db` (module or member form), so a user class happening to be
+    /// named `Db` with a `prepare` method is never hijacked. A fully-constant interpolation (every hole a
+    /// literal) does NOT warn; a plain non-interpolated literal has no hole so never warns. This is a
+    /// non-fatal lint — the program still compiles (the deliberately-built-query escape hatch stays open).
+    fn lint_sql_injection(&mut self, base: &Ty, name: &str, args: &[crate::ast::Expr], span: Span) {
+        if name != "prepare" {
+            return;
+        }
+        // Receiver must be the `Db` class …
+        if !matches!(base, Ty::Named(cls, _) if cls == "Db") {
+            return;
+        }
+        // … and it must be Core.Db's `Db` (imported — module `Core.Db` or a member `Core.Db.X`), never a
+        // coincidental user class named `Db`.
+        if !self
+            .imports
+            .values()
+            .any(|m| m == "Core.Db" || m.starts_with("Core.Db."))
+        {
+            return;
+        }
+        // The SQL argument must be a string LITERAL with at least one NON-constant interpolation hole.
+        let crate::ast::Expr::Str(parts, _) = (match args.first() {
+            Some(a) => a,
+            None => return,
+        }) else {
+            return;
+        };
+        let has_nonconst_hole = parts.iter().any(|p| match p {
+            crate::ast::StrPart::Literal(_) => false,
+            crate::ast::StrPart::Expr(inner) => !expr_is_const_sql(inner),
+        });
+        if !has_nonconst_hole {
+            return;
+        }
+        self.warn_coded(
+            span,
+            "interpolating a value into SQL risks injection — use a `?` placeholder and `.bind(...)`",
+            "W-SQL-INJECTION",
+            Some(
+                "replace the interpolated `{…}` with a `?` placeholder and pass the value to `.bind(...)` \
+                 (or a `:name` placeholder + `.bindNamed(...)`) — the value is then sent separately from the \
+                 SQL text and can never be parsed as SQL"
+                    .to_string(),
+            ),
+        );
+    }
+}
+
+/// True iff `e` is a compile-time constant for the SQL-injection lint (DEC-208 slice F): a literal
+/// scalar, or a string literal whose every interpolation hole is itself constant (recursively). Any
+/// other form — a variable, field access, call, index, arithmetic, cast, … — is NON-constant: it may
+/// carry user data, so splicing it into SQL text is the injection risk the lint flags. Conservative by
+/// design (a named/class `const` interpolated into SQL still warns — steering it to a bind is harmless
+/// and keeps the rule simple); the escape hatch is that it is only a warning, never an error.
+fn expr_is_const_sql(e: &crate::ast::Expr) -> bool {
+    use crate::ast::{Expr, StrPart};
+    match e {
+        Expr::Int(..)
+        | Expr::Float(..)
+        | Expr::Bool(..)
+        | Expr::Null(..)
+        | Expr::Bytes(..)
+        | Expr::Decimal { .. } => true,
+        Expr::Str(parts, _) => parts.iter().all(|p| match p {
+            StrPart::Literal(_) => true,
+            StrPart::Expr(inner) => expr_is_const_sql(inner),
+        }),
+        _ => false,
     }
 }
