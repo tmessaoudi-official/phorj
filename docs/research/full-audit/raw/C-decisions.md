@@ -877,3 +877,50 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   `Response.capture((() -> void) render): Response { return Response.html(Output.capture(render)); }`; example
   `examples/web/response-capture.phg`. Recommended: (d) if a capture surface is wanted now without the
   architectural change, else (a) to ship `Response.capture` as ruled.
+
+## 2026-07-15 mailer + quarantine-reopen batch (Opus run — developer via AskUserQuestion; DEC-223 RULED build-pending, DEC-224/225/226 REOPENED-PENDING for the Fable handover)
+
+Developer idea: "we need a native mailer too." Full research/brainstorm ran (twin-of-Core.Db
+architecture). Self-graded certification (advisor==main==Opus). The mailer is RULED and locked to a
+spec (`docs/specs/2026-07-15-core-mail.md`); build handed to Fable. Alongside it, the developer asked
+for the full non-transpilable inventory and chose to REOPEN three native-only rulings — recorded here
+as PENDING (NOT re-ruled this session, per the developer's "just note all of this and hand to Fable").
+
+- **DEC-223 — native mailer `Core.Mail` (RULED, build-pending; full spec `docs/specs/2026-07-15-core-mail.md`).**
+  A native email primitive, architecturally a **twin of Core.Db** (DEC-208): native-only, spine-quarantined
+  (`pure:false` natives → `uses_impure_native` excludes it from `differential.rs`), tested against the
+  stack's **Mailpit** faker + deterministic `file`/`null` transports. **LADDER (invariant 14) = case 2,
+  native-only:** transpile is a HARD ERROR `E-TRANSPILE-MAIL` — PHP's stdlib `mail()` has no SMTP auth,
+  no TLS, and is header-injection-prone, so there is no faithful safe PHP map and any attempt (e.g.
+  text-only→`mail()`) would silently drop auth/TLS/attachments (a rule-14-forbidden downgrade). Mailer
+  joins the `E-TRANSPILE-*` list (concurrency/unchecked/mongo). **Transports** (behind a `MailTransport`
+  trait, mirroring the Db driver trait): **SMTP with OPTIONAL auth** (Mailpit/MailHog fakers accept
+  no-credential connections) · **sendmail** (local MTA) · **file** (`.eml` → dir, deterministic offline
+  tests) · **null** (dry-run/discard). **Composition** = full rich surface: `new Email()` builder
+  (`from`/`to`/`cc`/`bcc`/`replyTo`/`subject`/`text`/`html`), `.html(body)` **auto-derives a plaintext
+  alternative** (`multipart/alternative`), `.attachInline(cid, img)` inline CID images, `.attach(file)`
+  attachments; typed injection-safe `Address` (no raw-header injection possible — the #1 PHP `mail()`
+  footgun), TLS-by-default, credential **`Secret`** (the same Secret from Core.Db driver slice G),
+  RFC-correct MIME. **Typed `MailError` taxonomy** (ConnectionFailed / AuthFailed / RecipientRejected /
+  TlsError / …), shaped like `DbError`, via the same prelude-wrapper `MailResult<T>` Ok|Err mechanism.
+  **Dependency amendment — ADMIT `lettre`** (feature `mail`, non-default, non-wasm): the mature de-facto
+  standard, RFC-correct MIME/multipart, SMTP auth, STARTTLS/implicit TLS via already-admitted **rustls**,
+  optional **DKIM** signing, and crucially a **blocking `SmtpTransport`** so it stays **no-tokio**.
+  `lettre = { version="0.11", default-features=false, features=["smtp-transport","rustls-tls","builder","dkim"] }`.
+  *Alternatives:* `mail-send`+`mail-builder` (Stalwart) — modern, extremely RFC-correct, DKIM built-in,
+  but **tokio-async** → pulls tokio, violates the no-tokio policy (rejected for that reason); hand-roll
+  SMTP+MIME over std+rustls (rejected — large RFC/MIME/encoding bug surface lettre already gets right);
+  transpile trivial text emails to PHP `mail()` (rejected — silent downgrade, rule 14).
+- **DEC-224 — REOPENED (PENDING, for Fable): MongoDB.** Developer chose to reopen MongoDB rather than
+  leave it a deferred future LADDER item. Current status: NOT built; documented `E-TRANSPILE-MONGO`
+  candidate (non-SQL, no PDO analog, async-driver problem). To decide with Fable: native-only driver
+  shape (twin-of-Db, spine-quarantined, `E-TRANSPILE-MONGO`) vs continue deferring. NOT re-ruled this
+  session.
+- **DEC-225 — REOPENED (PENDING, for Fable): concurrency PHP leg.** Developer chose to reopen whether
+  `spawn`/channels (green threads, DEC-133) should attempt any PHP mapping. Current status: no PHP leg
+  (`E-CONCURRENCY-NO-PHP` + `--sequential-concurrency` opt-in warn). ⚠ Any PHP mapping serializes the
+  program silently — a rule-14 downgrade risk to weigh. NOT re-ruled this session.
+- **DEC-226 — REOPENED (PENDING, for Fable): `#[UncheckedOverflow]` transpile.** Developer chose to
+  reopen whether unchecked wrapping arithmetic should try a PHP map. Current status: hard error
+  `E-TRANSPILE-UNCHECKED` (PHP overflows int→float — no faithful wrapping-int mapping exists). NOT
+  re-ruled this session.
