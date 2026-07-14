@@ -1387,10 +1387,46 @@ pub fn explain_text(code: &str) -> Option<String> {
              parameters as promoted fields: `constructor(public string name, public int age) {}`.\n"
         }
         "E-DB-HYDRATE-FIELD-TYPE" => {
-            "E-DB-HYDRATE-FIELD-TYPE — a hydrated field has a type with no DB column accessor.\n\n\
-             A hydrated field must be a scalar column type: `int`, `string`, `float`, or `bool`, or their\n\
-             optional forms (`int?`, `string?`, …) which admit a SQL NULL. A field of any other type (a\n\
-             class, list, map, enum, …) cannot be read from a single result column.\n"
+            "E-DB-HYDRATE-FIELD-TYPE — a hydrated field has a type that cannot be mapped.\n\n\
+             A hydrated field must be either a scalar column type — `int`, `string`, `float`, or `bool`,\n\
+             or their optional forms (`int?`, `string?`, …) which admit a SQL NULL — OR a class with a\n\
+             promoted-field constructor (a NESTED entity, hydrated eagerly from dotted `\"field.sub\"`\n\
+             aliased columns; an optional entity field `T? x` is `null` when all its columns are NULL).\n\
+             A field of any other type (list, map, enum, …) cannot be hydrated from a result.\n"
+        }
+        "E-DB-HYDRATE-CYCLE" => {
+            "E-DB-HYDRATE-CYCLE — a row class's nested-entity fields form a cycle.\n\n\
+             Nested hydration is EAGER and whole-graph (one JOIN, dotted `\"order.total\"` aliases), so a\n\
+             self-referential relation (`class Employee { …, public Employee? manager; }`) would recurse\n\
+             without bound and cannot be resolved at compile time. Break the cycle: drop the back-reference\n\
+             from the row class, or load the related rows with a second query. (This is a deliberate limit\n\
+             of the primitive — recursive/graph loading is ORM territory, DEC-208.)\n"
+        }
+        "E-DB-SCALAR-BAD-TYPE" => {
+            "E-DB-SCALAR-BAD-TYPE — `queryScalar()`'s binding is not a scalar.\n\n\
+             `queryScalar()` reads ONE typed value from a single-row, single-column result (`SELECT\n\
+             COUNT(*)`, `SELECT MAX(price)`, …). Its type comes from the binding, which must be a scalar —\n\
+             `int`, `string`, `float`, `bool`, or a `?` form: `int total = stmt.queryScalar();`. More than\n\
+             one row, or more than one column, throws a catchable `DbError` at runtime.\n"
+        }
+        "E-DB-MAP-BAD-SINK" => {
+            "E-DB-MAP-BAD-SINK — `queryMap()`'s binding is not a `Map<K, V>`.\n\n\
+             `queryMap()` indexes rows into a `Map<K, V>` keyed by the FIRST selected column (K). Bind it\n\
+             to a `Map<K, V>` declaration so both types are inferred — `Map<int, User> byId =\n\
+             stmt.queryMap();` (K = the id column, V = a hydrated `User`) or `Map<string, int> counts =\n\
+             stmt.queryMap();` (V = the second column).\n"
+        }
+        "E-DB-MAP-KEY-TYPE" => {
+            "E-DB-MAP-KEY-TYPE — `queryMap()`'s key type is not a valid map key.\n\n\
+             A `Map` key is `int` or `string` only (matching the language's map-key rule). The key is read\n\
+             from the FIRST selected column, so declare the binding `Map<int, V>` or `Map<string, V>`.\n"
+        }
+        "E-DB-MAP-VALUE-TYPE" => {
+            "E-DB-MAP-VALUE-TYPE — `queryMap()`'s value type cannot be produced from a row.\n\n\
+             The `V` in `Map<K, V>` is either a scalar (the SECOND selected column — `int`/`string`/\n\
+             `float`/`bool` or a `?` form) or a class with a promoted-field constructor (hydrated by field\n\
+             name from the remaining columns, nested rules identical to `queryInto`). A list/map/enum V is\n\
+             not supported.\n"
         }
         "E-STATIC-NO-INIT" => {
             "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\

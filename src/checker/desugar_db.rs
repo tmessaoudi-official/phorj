@@ -1,11 +1,15 @@
-//! DEC-208 S2 — typed-generic `Core.Db` result hydration (`queryInto` / `queryOneInto`).
+//! DEC-208 — typed-generic `Core.Db` result hydration. S2 shipped `queryInto`/`queryOneInto`; slice B
+//! adds NESTED hydration (a field that is itself an entity, from dotted `"order.total"` aliases, eager,
+//! optional-entity→null on all-NULL) + `queryScalar<T>` (one value) + `queryMap<K,V>` (keyed rows).
 //!
-//! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`]): it lowers the two type-directed
-//! hydration calls into plain, already-working S1 primitives BEFORE the type-checker, so the generated
+//! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`]): it lowers the four type-directed
+//! result calls into plain, already-working S1 primitives BEFORE the type-checker, so the generated
 //! code type-checks like hand-written source and every backend sees the same explicit construction
 //! (Inv-5). Byte-identity is trivial (`run ≡ runvm`: both backends run the one desugared AST) and there
 //! is no runtime reflection — generics are erased before the backends, so a native could never see `T`'s
-//! fields; the field layout is resolved HERE, at compile time, from `T`'s constructor.
+//! fields; the field layout is resolved HERE, at compile time, from `T`'s constructor (recursively for a
+//! nested entity — cycles are rejected `E-DB-HYDRATE-CYCLE`, since eager whole-graph loading is
+//! unbounded on a self-reference).
 //!
 //! SURFACE (contextual, no turbofish — DEC-208's `<T>` notation is inferred from the sink type, exactly
 //! like DEC-201 empty collections):
@@ -31,9 +35,10 @@
 //! propagation — no new native, the same catchable model as S1.
 //!
 //! IMPORT DISCIPLINE (nothing in the wind): active only when `Core.Db` is imported. Under that import
-//! `queryInto`/`queryOneInto` are the reserved hydration method names (like `inject` under `Core.DI`);
-//! the generated helper takes a `Statement` parameter, so a `queryInto()` on any other receiver is a
-//! clean argument-type error rather than silent misbehaviour. Disclosed in KNOWN_ISSUES.
+//! `queryInto`/`queryOneInto`/`queryScalar`/`queryMap` are the reserved result method names (like
+//! `inject` under `Core.DI`); each generated helper takes a `Statement` parameter, so one of these on
+//! any other receiver is a clean argument-type error rather than silent misbehaviour. Disclosed in
+//! KNOWN_ISSUES.
 //!
 //! INVARIANT — keep the rewriter TOTAL (matching `desugar_di`): `ritem`/`rfn`/`rmember`/`rexpr`/`rstmt`
 //! recurse EVERY expression-bearing position so a `queryInto` in any position is either rewritten or
@@ -41,7 +46,8 @@
 
 use crate::ast::{
     ctor_plan, BinaryOp, CatchClause, ClassMember, CollKind, CtorParam, Expr, FunctionDecl, Item,
-    LambdaBody, MatchArm, MemberSep, Modifier, Param, Program, Stmt, StrPart, Type, Visibility,
+    LambdaBody, MatchArm, MemberSep, Modifier, Param, Program, Stmt, StrPart, Type, UnaryOp,
+    Visibility,
 };
 use crate::diagnostic::{Diagnostic, Stage};
 use crate::token::Span;
@@ -53,36 +59,110 @@ use std::collections::BTreeMap;
 /// `usize::MAX` sentinel above, with room for far more nodes than any program could generate.
 const SYNTH_BASE: usize = usize::MAX / 2;
 
+/// The four type-directed `Core.Db` result calls this pass lowers (all nullary member calls).
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Kind {
+enum Call {
+    /// `List<T> = stmt.queryInto()` — one `T` per row.
+    IntoList,
+    /// `T? = stmt.queryOneInto()` — 0 → null, 1 → the object, >1 → `DbError`.
+    IntoOne,
+    /// `T v = stmt.queryScalar()` — one typed value from a single-row, single-column result.
+    Scalar,
+    /// `Map<K, V> = stmt.queryMap()` — rows keyed by the first column (K), V from the rest.
+    Map,
+}
+
+/// Whether a class-hydration helper produces a `List<T>` (`queryInto`) or a `T?` (`queryOneInto`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ClassKind {
     List,
     One,
 }
 
-/// One field to hydrate: the promoted-param/field name (= column name), the S1 `Row` accessor for its
-/// type, and the field's declared type (for the extracting local's annotation).
-struct FieldMap {
-    name: String,
-    accessor: &'static str,
-    ty: Type,
+/// How the VALUE of a `queryMap` entry is produced from a row: a scalar column, or a hydrated entity.
+enum MapVal {
+    /// A single column read by `accessor` (the second selected column); its declared type is the
+    /// enclosing [`HelperSpec::Map::val_ty`].
+    Scalar { accessor: &'static str },
+    /// An entity hydrated by field name from the row (same rules as `queryInto`, dotted for nested).
+    Entity { class: String },
 }
 
-/// A resolved hydration helper to synthesize: `phorjQueryInto{List,One}<Class>`.
-struct HelperSpec {
-    kind: Kind,
-    class: String,
-    fields: Vec<FieldMap>,
+/// A resolved hydration helper to synthesize (deduped by name). Nested class hydration is resolved
+/// recursively at synthesis time from `ctor_params` (not precomputed), so a `Class`/`Map`-entity
+/// helper carries only the top class name.
+enum HelperSpec {
+    /// `phorjQueryIntoList<Class>` / `phorjQueryOneInto<Class>`.
+    Class { kind: ClassKind, class: String },
+    /// `phorjQueryScalar<Label>` — a single typed value; `ret` is the scalar (or `T?` scalar) type.
+    Scalar { accessor: &'static str, ret: Type },
+    /// `phorjQueryMap<KLabel><VLabel>` — a `Map<key_ty, val_ty>` keyed by the first column.
+    Map {
+        key_acc: &'static str,
+        key_ty: Type,
+        val: MapVal,
+        val_ty: Type,
+    },
 }
 
-/// `phorjQueryIntoList<Class>` / `phorjQueryOneInto<Class>` — a camelCase synthetic free-function name
-/// (free functions are `E-NAME-CASE`-checked; `Class` is PascalCase, so the whole name is camelCase).
-/// Collision with a hand-written `phorjQueryInto…` is astronomically unlikely and disclosed
-/// (KNOWN_ISSUES), matching the `phorjInject…` convention.
-fn helper_name(kind: Kind, class: &str) -> String {
+/// A camelCase synthetic free-function name (free functions are `E-NAME-CASE`-checked; `Class`/type
+/// labels are PascalCase, so the whole name is camelCase). Collision with a hand-written
+/// `phorjQuery…` is astronomically unlikely and disclosed (KNOWN_ISSUES), matching `phorjInject…`.
+fn class_helper_name(kind: ClassKind, class: &str) -> String {
     match kind {
-        Kind::List => format!("phorjQueryIntoList{class}"),
-        Kind::One => format!("phorjQueryOneInto{class}"),
+        ClassKind::List => format!("phorjQueryIntoList{class}"),
+        ClassKind::One => format!("phorjQueryOneInto{class}"),
     }
+}
+
+/// A PascalCase label for a scalar (or optional scalar) type, for use inside a synthetic helper name:
+/// `int` → `Int`, `string?` → `StringOpt`. No `?`/`_` so the composed name stays camelCase.
+fn scalar_label(ty: &Type) -> Option<String> {
+    fn cap(name: &str) -> Option<String> {
+        match name {
+            "int" => Some("Int".into()),
+            "string" => Some("String".into()),
+            "float" => Some("Float".into()),
+            "bool" => Some("Bool".into()),
+            _ => None,
+        }
+    }
+    match ty {
+        Type::Named { name, args, .. } if args.is_empty() => cap(name),
+        Type::Optional { inner, .. } => match &**inner {
+            Type::Named { name, args, .. } if args.is_empty() => Some(format!("{}Opt", cap(name)?)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The classification of a hydrated field: a scalar column, or a nested entity (a class), which may
+/// be optional (`Order? order` → `null` when all its columns are NULL, for a LEFT JOIN).
+enum FieldKind {
+    Scalar { accessor: &'static str },
+    Entity { class: String, optional: bool },
+}
+
+/// The column name for `field` under `prefix`: `field` at the top level, `prefix.field` (the dotted
+/// alias convention, DEC-208 slice B) when nested — the string key the S1 `getX` accessor looks up.
+fn col_name(prefix: &str, field: &str) -> String {
+    if prefix.is_empty() {
+        field.to_string()
+    } else {
+        format!("{prefix}.{field}")
+    }
+}
+
+/// True iff a constructor parameter is a promoted field (carries a visibility modifier) — the S2
+/// invariant that makes "parameter name == field name == column name" hold.
+fn is_promoted(p: &CtorParam) -> bool {
+    p.modifiers.iter().any(|m| {
+        matches!(
+            m,
+            Modifier::Public | Modifier::Private | Modifier::Protected
+        )
+    })
 }
 
 /// The S1 `Row` accessor for a hydrated field type: the non-nullable accessor for a scalar (`int`→
@@ -157,6 +237,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
         diags: Vec::new(),
         current_ret: None,
         next_span: SYNTH_BASE,
+        next_local: 0,
     };
     let mut items: Vec<Item> = items.into_iter().map(|it| db.ritem(it)).collect();
     if !db.diags.is_empty() {
@@ -164,8 +245,8 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
     }
     // Append one hydration helper per (kind, class) used, sorted by name (Inv-10 determinism).
     let helpers = std::mem::take(&mut db.helpers);
-    for spec in helpers.values() {
-        let f = db.synth_helper(spec);
+    for (name, spec) in &helpers {
+        let f = db.synth_helper(name, spec);
         items.push(f);
     }
     Ok(Program {
@@ -185,6 +266,10 @@ struct Db<'a> {
     current_ret: Option<Type>,
     /// Monotonic synthetic-span allocator (see [`SYNTH_BASE`]).
     next_span: usize,
+    /// Monotonic counter for unique per-field local names (`phorjV0`, `phorjV1`, …) in a synthesized
+    /// helper body — camelCase (lowercase head, no `_`) so it passes `E-NAME-CASE`, and disjoint from
+    /// the fixed `phorjRows`/`phorjOut`/… locals and from every user field name.
+    next_local: usize,
 }
 
 impl Db<'_> {
@@ -215,33 +300,38 @@ impl Db<'_> {
 
     // ── recognition + rewrite ────────────────────────────────────────────────────────────────────
 
-    /// If `callee` is a nullary `recv.queryInto()` / `recv.queryOneInto()` member call, its kind.
-    fn query_into_kind(callee: &Expr) -> Option<Kind> {
+    /// If `callee` is a nullary `recv.query{Into,OneInto,Scalar,Map}()` member call, which one.
+    fn query_call_kind(callee: &Expr) -> Option<Call> {
         match callee {
             Expr::Member {
                 name, safe: false, ..
             } => match name.as_str() {
-                "queryInto" => Some(Kind::List),
-                "queryOneInto" => Some(Kind::One),
+                "queryInto" => Some(Call::IntoList),
+                "queryOneInto" => Some(Call::IntoOne),
+                "queryScalar" => Some(Call::Scalar),
+                "queryMap" => Some(Call::Map),
                 _ => None,
             },
             _ => None,
         }
     }
 
-    /// Rewrite `recv.queryInto()` / `recv.queryOneInto()` into a call to the synthesized hydration
-    /// helper (`helper(recv)`), drawing `T` from `expected`. On any resolution failure a diagnostic is
-    /// recorded and a placeholder is returned (the pipeline aborts on the non-empty `diags`).
-    fn rewrite(&mut self, callee: Expr, kind: Kind, expected: Option<&Type>, span: Span) -> Expr {
+    /// Rewrite a recognized `recv.query…()` into a call to its synthesized helper (`helper(recv)`),
+    /// drawing the target type(s) from `expected`. On any resolution failure a diagnostic is recorded
+    /// and a placeholder is returned (the pipeline aborts on the non-empty `diags`).
+    fn rewrite(&mut self, callee: Expr, call: Call, expected: Option<&Type>, span: Span) -> Expr {
         let Expr::Member { object, .. } = callee else {
-            unreachable!("query_into_kind guarantees a Member callee");
+            unreachable!("query_call_kind guarantees a Member callee");
         };
         let recv = self.rexpr(*object);
         let expected = expected.cloned();
-        let Some(class) = self.resolve_target(kind, expected.as_ref(), span) else {
-            return self.placeholder();
+        let name = match call {
+            Call::IntoList => self.resolve_class(ClassKind::List, expected.as_ref(), span),
+            Call::IntoOne => self.resolve_class(ClassKind::One, expected.as_ref(), span),
+            Call::Scalar => self.resolve_scalar(expected.as_ref(), span),
+            Call::Map => self.resolve_map(expected.as_ref(), span),
         };
-        let Some(name) = self.ensure_helper(kind, &class, span) else {
+        let Some(name) = name else {
             return self.placeholder();
         };
         let helper = Expr::Ident(name, span);
@@ -252,16 +342,141 @@ impl Db<'_> {
         }
     }
 
-    /// Resolve the row class `T` from the sink type: `List<T>` for `queryInto`, `T?` for `queryOneInto`.
-    fn resolve_target(
+    /// Classify a field type for hydration: a scalar column, an entity (a class in `ctor_params`,
+    /// optionally `?`), or unhydratable (`None`). A `T?` scalar routes through `accessor_for` (which
+    /// handles the optional scalar accessors); an `Optional` wrapping a class routes to `Entity`.
+    fn classify_field(&self, ty: &Type) -> Option<FieldKind> {
+        if let Some(accessor) = accessor_for(ty) {
+            return Some(FieldKind::Scalar { accessor });
+        }
+        match ty {
+            Type::Named { name, args, .. }
+                if args.is_empty() && self.ctor_params.contains_key(name) =>
+            {
+                Some(FieldKind::Entity {
+                    class: name.clone(),
+                    optional: false,
+                })
+            }
+            Type::Optional { inner, .. } => match &**inner {
+                Type::Named { name, args, .. }
+                    if args.is_empty() && self.ctor_params.contains_key(name) =>
+                {
+                    Some(FieldKind::Entity {
+                        class: name.clone(),
+                        optional: true,
+                    })
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Recursively validate that `class` (and every entity it nests) is hydratable: a promoted-field
+    /// constructor, every parameter promoted, every field a scalar or a valid nested entity. `path` is
+    /// the DFS ancestor stack — a class already on it is a CYCLE (unbounded eager hydration), rejected
+    /// with `E-DB-HYDRATE-CYCLE`. A non-cyclic diamond (two fields reaching the same class by distinct
+    /// column prefixes) is fine — only a true ancestor-on-path is a cycle.
+    fn validate_class(&mut self, class: &str, span: Span, path: &mut Vec<String>) -> bool {
+        if path.iter().any(|c| c == class) {
+            let chain = {
+                let mut c = path.clone();
+                c.push(class.to_string());
+                c.join(" → ")
+            };
+            self.diag(
+                span,
+                format!("cannot hydrate `{class}`: its fields form a cycle ({chain})"),
+                "E-DB-HYDRATE-CYCLE",
+                "eager whole-graph hydration cannot resolve a self-referential relation; break the cycle (drop the back-reference from the row class, or load it with a second query)".into(),
+            );
+            return false;
+        }
+        let params = self.ctor_params.get(class).cloned().unwrap_or_default();
+        if params.is_empty() {
+            self.diag(
+                span,
+                format!("cannot hydrate `{class}`: it has no constructor to map columns into"),
+                "E-DB-HYDRATE-NO-CTOR",
+                format!(
+                    "give `{class}` a promoted-field constructor — `constructor(public string name, public int age) {{}}`"
+                ),
+            );
+            return false;
+        }
+        path.push(class.to_string());
+        let mut ok = true;
+        for p in &params {
+            if !is_promoted(p) {
+                ok = false;
+                self.diag(
+                    p.span,
+                    format!(
+                        "cannot hydrate `{class}`: constructor parameter `{}` is not a promoted field",
+                        p.name
+                    ),
+                    "E-DB-HYDRATE-UNPROMOTED",
+                    "every constructor parameter must be a promoted field (carry `public`/`private`/`protected`) so its name is the column name".into(),
+                );
+                continue;
+            }
+            match self.classify_field(&p.ty) {
+                Some(FieldKind::Scalar { .. }) => {}
+                Some(FieldKind::Entity { class: d, .. }) => {
+                    if !self.validate_class(&d, p.span, path) {
+                        ok = false;
+                    }
+                }
+                None => {
+                    ok = false;
+                    self.diag(
+                        p.span,
+                        format!(
+                            "cannot hydrate field `{}` of `{class}`: type `{}` has no DB column accessor",
+                            p.name,
+                            type_label(&p.ty)
+                        ),
+                        "E-DB-HYDRATE-FIELD-TYPE",
+                        "a hydrated field must be a scalar (`int`/`string`/`float`/`bool`, or their `?` forms), or a class with a promoted-field constructor (nested/optional entity)".into(),
+                    );
+                }
+            }
+        }
+        path.pop();
+        ok
+    }
+
+    /// Validate + register a class-hydration helper (`queryInto`/`queryOneInto`), returning its name.
+    fn ensure_class_helper(&mut self, kind: ClassKind, class: &str, span: Span) -> Option<String> {
+        let name = class_helper_name(kind, class);
+        if self.helpers.contains_key(&name) {
+            return Some(name);
+        }
+        if !self.validate_class(class, span, &mut Vec::new()) {
+            return None;
+        }
+        self.helpers.insert(
+            name.clone(),
+            HelperSpec::Class {
+                kind,
+                class: class.to_string(),
+            },
+        );
+        Some(name)
+    }
+
+    /// Resolve the row class `T` from the sink type: `List<T>` (`queryInto`) or `T?` (`queryOneInto`),
+    /// then validate + register its helper.
+    fn resolve_class(
         &mut self,
-        kind: Kind,
+        kind: ClassKind,
         expected: Option<&Type>,
         span: Span,
     ) -> Option<String> {
         let (method, want) = match kind {
-            Kind::List => ("queryInto", "List<Row>"),
-            Kind::One => ("queryOneInto", "Row?"),
+            ClassKind::List => ("queryInto", "List<Row>"),
+            ClassKind::One => ("queryOneInto", "Row?"),
         };
         let Some(expected) = expected else {
             self.diag(
@@ -275,10 +490,12 @@ impl Db<'_> {
             return None;
         };
         let inner: &Type = match (kind, expected) {
-            (Kind::List, Type::Named { name, args, .. }) if name == "List" && args.len() == 1 => {
+            (ClassKind::List, Type::Named { name, args, .. })
+                if name == "List" && args.len() == 1 =>
+            {
                 &args[0]
             }
-            (Kind::One, Type::Optional { inner, .. }) => inner,
+            (ClassKind::One, Type::Optional { inner, .. }) => inner,
             _ => {
                 self.diag(
                     span,
@@ -288,8 +505,8 @@ impl Db<'_> {
                     ),
                     "E-DB-INTO-BAD-SINK",
                     match kind {
-                        Kind::List => "declare the binding `List<YourClass>`".into(),
-                        Kind::One => "declare the binding `YourClass?`".into(),
+                        ClassKind::List => "declare the binding `List<YourClass>`".into(),
+                        ClassKind::One => "declare the binding `YourClass?`".into(),
                     },
                 );
                 return None;
@@ -299,7 +516,8 @@ impl Db<'_> {
             Type::Named { name, args, .. }
                 if args.is_empty() && self.ctor_params.contains_key(name) =>
             {
-                Some(name.clone())
+                let class = name.clone();
+                self.ensure_class_helper(kind, &class, span)
             }
             _ => {
                 self.diag(
@@ -316,79 +534,140 @@ impl Db<'_> {
         }
     }
 
-    /// Ensure a helper spec exists for `(kind, class)` (validating its constructor), returning its name.
-    fn ensure_helper(&mut self, kind: Kind, class: &str, span: Span) -> Option<String> {
-        let name = helper_name(kind, class);
-        if self.helpers.contains_key(&name) {
-            return Some(name);
-        }
-        let params = self.ctor_params.get(class).cloned().unwrap_or_default();
-        if params.is_empty() {
+    /// Resolve `queryScalar<T>()`: the sink type IS `T` (a scalar, or an optional scalar), which must
+    /// have a `Row` accessor. Registers a per-type scalar helper.
+    fn resolve_scalar(&mut self, expected: Option<&Type>, span: Span) -> Option<String> {
+        let Some(expected) = expected else {
             self.diag(
                 span,
-                format!("cannot hydrate `{class}`: it has no constructor to map columns into"),
-                "E-DB-HYDRATE-NO-CTOR",
-                format!(
-                    "give `{class}` a promoted-field constructor — `constructor(public string name, public int age) {{}}`"
-                ),
+                "`queryScalar()` has no type to infer its value type from".into(),
+                "E-DB-INTO-NO-TYPE",
+                "bind it to a typed declaration — e.g. `int total = stmt.queryScalar();`".into(),
             );
             return None;
-        }
-        let mut fields = Vec::new();
-        let mut ok = true;
-        for p in &params {
-            let promoted = p.modifiers.iter().any(|m| {
-                matches!(
-                    m,
-                    Modifier::Public | Modifier::Private | Modifier::Protected
-                )
-            });
-            if !promoted {
-                ok = false;
-                self.diag(
-                    p.span,
-                    format!(
-                        "cannot hydrate `{class}`: constructor parameter `{}` is not a promoted field",
-                        p.name
-                    ),
-                    "E-DB-HYDRATE-UNPROMOTED",
-                    "every constructor parameter must be a promoted field (carry `public`/`private`/`protected`) so its name is the column name".into(),
-                );
-                continue;
-            }
-            match accessor_for(&p.ty) {
-                Some(accessor) => fields.push(FieldMap {
-                    name: p.name.clone(),
-                    accessor,
-                    ty: p.ty.clone(),
-                }),
-                None => {
-                    ok = false;
-                    self.diag(
-                        p.span,
-                        format!(
-                            "cannot hydrate field `{}` of `{class}`: type `{}` has no DB column accessor",
-                            p.name,
-                            type_label(&p.ty)
-                        ),
-                        "E-DB-HYDRATE-FIELD-TYPE",
-                        "a hydrated field must be `int`, `string`, `float`, `bool`, or their `?` forms (e.g. `int?`)".into(),
-                    );
-                }
-            }
-        }
-        if !ok {
+        };
+        let Some(accessor) = accessor_for(expected) else {
+            self.diag(
+                span,
+                format!(
+                    "`queryScalar()` reads one column into a scalar, but the binding's type is `{}`",
+                    type_label(expected)
+                ),
+                "E-DB-SCALAR-BAD-TYPE",
+                "declare the binding a scalar — `int`/`string`/`float`/`bool`, or a `?` form".into(),
+            );
             return None;
+        };
+        let label = scalar_label(expected).expect("accessor_for ⇒ a scalar label exists");
+        let name = format!("phorjQueryScalar{label}");
+        if !self.helpers.contains_key(&name) {
+            self.helpers.insert(
+                name.clone(),
+                HelperSpec::Scalar {
+                    accessor,
+                    ret: expected.clone(),
+                },
+            );
         }
-        self.helpers.insert(
-            name.clone(),
-            HelperSpec {
-                kind,
-                class: class.to_string(),
-                fields,
-            },
-        );
         Some(name)
+    }
+
+    /// Resolve `queryMap<K, V>()`: the sink type must be `Map<K, V>`. `K` must be an `int`/`string`
+    /// scalar (the only map-key types); `V` is a scalar OR a hydratable entity (same rules as
+    /// `queryInto`). Registers a per-(K, V) map helper.
+    fn resolve_map(&mut self, expected: Option<&Type>, span: Span) -> Option<String> {
+        let Some(expected) = expected else {
+            self.diag(
+                span,
+                "`queryMap()` has no type to infer its key/value types from".into(),
+                "E-DB-MAP-BAD-SINK",
+                "bind it to a `Map<K, V>` declaration — e.g. `Map<int, User> byId = stmt.queryMap();`"
+                    .into(),
+            );
+            return None;
+        };
+        let (k_ty, v_ty) = match expected {
+            Type::Named { name, args, .. } if name == "Map" && args.len() == 2 => {
+                (args[0].clone(), args[1].clone())
+            }
+            _ => {
+                self.diag(
+                    span,
+                    format!(
+                        "`queryMap()` maps rows into `Map<K, V>`, but the binding's type is `{}`",
+                        type_label(expected)
+                    ),
+                    "E-DB-MAP-BAD-SINK",
+                    "declare the binding `Map<KeyType, ValueType>`".into(),
+                );
+                return None;
+            }
+        };
+        // Key: int|string only (the map-key types), read by a non-nullable accessor.
+        let key_acc = match accessor_for(&k_ty) {
+            Some(a @ ("getInt" | "getString")) => a,
+            _ => {
+                self.diag(
+                    span,
+                    format!(
+                        "`queryMap()` key column type `{}` is not a valid map key",
+                        type_label(&k_ty)
+                    ),
+                    "E-DB-MAP-KEY-TYPE",
+                    "a map key must be `int` or `string` (the first selected column)".into(),
+                );
+                return None;
+            }
+        };
+        // Value: a scalar (second column) OR a hydratable entity (by field name).
+        let val = if let Some(accessor) = accessor_for(&v_ty) {
+            MapVal::Scalar { accessor }
+        } else if let Type::Named { name, args, .. } = &v_ty {
+            if args.is_empty() && self.ctor_params.contains_key(name) {
+                if !self.validate_class(name, span, &mut Vec::new()) {
+                    return None;
+                }
+                MapVal::Entity {
+                    class: name.clone(),
+                }
+            } else {
+                self.map_value_error(&v_ty, span);
+                return None;
+            }
+        } else {
+            self.map_value_error(&v_ty, span);
+            return None;
+        };
+        let k_label = scalar_label(&k_ty).expect("int/string key ⇒ a scalar label exists");
+        let v_label = match &val {
+            MapVal::Scalar { .. } => scalar_label(&v_ty).expect("scalar value ⇒ a label"),
+            MapVal::Entity { class } => class.clone(),
+        };
+        let name = format!("phorjQueryMap{k_label}{v_label}");
+        if !self.helpers.contains_key(&name) {
+            self.helpers.insert(
+                name.clone(),
+                HelperSpec::Map {
+                    key_acc,
+                    key_ty: k_ty,
+                    val,
+                    val_ty: v_ty,
+                },
+            );
+        }
+        Some(name)
+    }
+
+    fn map_value_error(&mut self, v_ty: &Type, span: Span) {
+        self.diag(
+            span,
+            format!(
+                "`queryMap()` value type `{}` is neither a scalar column nor a hydratable class",
+                type_label(v_ty)
+            ),
+            "E-DB-MAP-VALUE-TYPE",
+            "the value must be a scalar (`int`/`string`/`float`/`bool`, or a `?` form) — the second selected column — or a class with a promoted-field constructor".into(),
+        );
     }
 
     // ── synthesis (all nodes get unique synthetic spans) ─────────────────────────────────────────
@@ -507,38 +786,230 @@ impl Db<'_> {
         Expr::New(Box::new(call), span)
     }
 
-    /// The per-field extracting locals (`T name = row.getT("name")?;`) and the constructor arguments
-    /// (`Ident(name)` for each). Locals are named after the fields — disjoint from the fixed `phorj…`
-    /// locals below.
-    fn field_binds(&mut self, spec: &HelperSpec, row_var: &str) -> (Vec<Stmt>, Vec<Expr>) {
-        let fields: Vec<(String, &'static str, Type)> = spec
-            .fields
-            .iter()
-            .map(|f| (f.name.clone(), f.accessor, f.ty.clone()))
-            .collect();
-        let mut binds = Vec::new();
-        let mut args = Vec::new();
-        for (name, accessor, ty) in fields {
-            let row = self.ident(row_var);
-            let col = self.str_lit(&name);
-            let acc = self.member_call(row, accessor, vec![col]);
-            let init = self.propagate(acc);
-            let ty = self.retype(&ty);
-            let span = self.sp();
-            binds.push(Stmt::VarDecl {
-                ty,
-                name: name.clone(),
-                init,
-                mutable: false,
-                span,
-            });
-            args.push(self.ident(&name));
-        }
-        (binds, args)
+    /// A fresh unique per-field local name (`phorjV0`, `phorjV1`, …) — camelCase, disjoint from the
+    /// fixed helper locals and every user field.
+    fn fresh_local(&mut self) -> String {
+        let n = self.next_local;
+        self.next_local += 1;
+        format!("phorjV{n}")
     }
 
-    fn synth_helper(&mut self, spec: &HelperSpec) -> Item {
-        let class = spec.class.clone();
+    fn str_list_ty(&mut self) -> Type {
+        let s = self.named("string");
+        self.generic1("List", s)
+    }
+
+    fn map_ty(&mut self, k: &Type, v: &Type) -> Type {
+        let kk = self.retype(k);
+        let vv = self.retype(v);
+        let span = self.sp();
+        Type::Named {
+            name: "Map".into(),
+            args: vec![kk, vv],
+            span,
+        }
+    }
+
+    /// `list[n]` — an index expression on a local list binding.
+    fn index_ident(&mut self, list: &str, n: i64) -> Expr {
+        let obj = self.ident(list);
+        let idx = self.int_lit(n);
+        let span = self.sp();
+        Expr::Index {
+            object: Box::new(obj),
+            index: Box::new(idx),
+            span,
+        }
+    }
+
+    /// `Row phorjRow = phorjRows[0];`
+    fn row0_local(&mut self) -> Stmt {
+        let index = self.index_ident("phorjRows", 0);
+        let ty = self.named("Row");
+        let span = self.sp();
+        Stmt::VarDecl {
+            ty,
+            name: "phorjRow".into(),
+            init: index,
+            mutable: false,
+            span,
+        }
+    }
+
+    /// `if (List.length(<list_var>) <op> <n>) { throw new DbError(<msg>); }` — an arity guard.
+    fn len_guard(&mut self, list_var: &str, op: BinaryOp, n: i64, msg: &str) -> Stmt {
+        let v = self.ident(list_var);
+        let len = self.qual_call("List", "length", vec![v]);
+        let rhs = self.int_lit(n);
+        let cmp_span = self.sp();
+        let cond = Expr::Binary {
+            op,
+            lhs: Box::new(len),
+            rhs: Box::new(rhs),
+            span: cmp_span,
+        };
+        let m = self.str_lit(msg);
+        let err = self.new_obj("DbError", vec![m]);
+        let throw_span = self.sp();
+        let throw = Stmt::Throw {
+            value: err,
+            span: throw_span,
+        };
+        let if_span = self.sp();
+        Stmt::If {
+            cond,
+            bind: None,
+            then_block: vec![throw],
+            else_block: None,
+            span: if_span,
+        }
+    }
+
+    /// Recursively construct `class` from `row_var`, resolving fields by the dotted column convention
+    /// (`prefix.field`). Emits the per-field extracting locals into `out` (a scalar → one `getX` local;
+    /// a required entity → its sub-locals then a `new D(..)` local; an optional entity → a
+    /// `D? = null` local guarded by an `if (!(all-columns-null)) { … }`), then returns `new Class(..)`.
+    /// Assumes `class` is validated (`validate_class`), so `classify_field` never returns `None`.
+    fn build_class(
+        &mut self,
+        class: &str,
+        prefix: &str,
+        row_var: &str,
+        out: &mut Vec<Stmt>,
+    ) -> Expr {
+        let params = self.ctor_params.get(class).cloned().unwrap_or_default();
+        let mut args = Vec::new();
+        for p in &params {
+            let col = col_name(prefix, &p.name);
+            let local = self.fresh_local();
+            match self
+                .classify_field(&p.ty)
+                .expect("validate_class ⇒ every field classifies")
+            {
+                FieldKind::Scalar { accessor } => {
+                    // <ty> local = row.accessor("col")?;
+                    let row = self.ident(row_var);
+                    let col_e = self.str_lit(&col);
+                    let acc = self.member_call(row, accessor, vec![col_e]);
+                    let init = self.propagate(acc);
+                    let ty = self.retype(&p.ty);
+                    let span = self.sp();
+                    out.push(Stmt::VarDecl {
+                        ty,
+                        name: local.clone(),
+                        init,
+                        mutable: false,
+                        span,
+                    });
+                    args.push(self.ident(&local));
+                }
+                FieldKind::Entity {
+                    class: d,
+                    optional: false,
+                } => {
+                    // required: emit D's locals, then `D local = new D(..);`
+                    let sub = self.build_class(&d, &col, row_var, out);
+                    let ty = self.named(&d);
+                    let span = self.sp();
+                    out.push(Stmt::VarDecl {
+                        ty,
+                        name: local.clone(),
+                        init: sub,
+                        mutable: false,
+                        span,
+                    });
+                    args.push(self.ident(&local));
+                }
+                FieldKind::Entity {
+                    class: d,
+                    optional: true,
+                } => {
+                    // optional: `D? local = null; if (!(all-null)) { <D locals>; local = new D(..); }`
+                    let opt_ty = self.opt_ty(&d);
+                    let null_init = self.placeholder();
+                    let decl_span = self.sp();
+                    out.push(Stmt::VarDecl {
+                        ty: opt_ty,
+                        name: local.clone(),
+                        init: null_init,
+                        mutable: true,
+                        span: decl_span,
+                    });
+                    let all_null = self.all_null(&d, &col, row_var);
+                    let not_span = self.sp();
+                    let cond = Expr::Unary {
+                        op: UnaryOp::Not,
+                        expr: Box::new(all_null),
+                        span: not_span,
+                    };
+                    let mut ifb = Vec::new();
+                    let sub = self.build_class(&d, &col, row_var, &mut ifb);
+                    let target = self.ident(&local);
+                    let assign_span = self.sp();
+                    ifb.push(Stmt::Assign {
+                        target,
+                        value: sub,
+                        span: assign_span,
+                    });
+                    let if_span = self.sp();
+                    out.push(Stmt::If {
+                        cond,
+                        bind: None,
+                        then_block: ifb,
+                        else_block: None,
+                        span: if_span,
+                    });
+                    args.push(self.ident(&local));
+                }
+            }
+        }
+        self.new_obj(class, args)
+    }
+
+    /// A boolean expression true iff EVERY (recursively-reached) leaf column of `class` at `prefix` is
+    /// SQL NULL — `row.isNull("c0")? && row.isNull("c1")? && …`. Drives an optional nested entity's
+    /// "LEFT JOIN missed → the whole entity is null" test. A validated tree always has ≥1 leaf.
+    fn all_null(&mut self, class: &str, prefix: &str, row_var: &str) -> Expr {
+        let mut leaves = Vec::new();
+        self.collect_leaves(class, prefix, &mut leaves);
+        let mut terms = Vec::new();
+        for col in leaves {
+            let row = self.ident(row_var);
+            let col_e = self.str_lit(&col);
+            let call = self.member_call(row, "isNull", vec![col_e]);
+            terms.push(self.propagate(call));
+        }
+        let mut it = terms.into_iter();
+        let mut acc = it
+            .next()
+            .expect("a validated entity has at least one scalar leaf column");
+        for t in it {
+            let span = self.sp();
+            acc = Expr::Binary {
+                op: BinaryOp::And,
+                lhs: Box::new(acc),
+                rhs: Box::new(t),
+                span,
+            };
+        }
+        acc
+    }
+
+    /// Collect every scalar leaf column name of `class` at `prefix`, recursing through nested entities
+    /// (required and optional alike). Terminates: a validated tree is acyclic.
+    fn collect_leaves(&self, class: &str, prefix: &str, acc: &mut Vec<String>) {
+        let params = self.ctor_params.get(class).cloned().unwrap_or_default();
+        for p in &params {
+            let col = col_name(prefix, &p.name);
+            match self.classify_field(&p.ty) {
+                Some(FieldKind::Scalar { .. }) => acc.push(col),
+                Some(FieldKind::Entity { class: d, .. }) => self.collect_leaves(&d, &col, acc),
+                None => {}
+            }
+        }
+    }
+
+    fn synth_helper(&mut self, name: &str, spec: &HelperSpec) -> Item {
         let stmt_ty = self.named("Statement");
         let psp = self.sp();
         let param = Param {
@@ -547,14 +1018,39 @@ impl Db<'_> {
             default: None,
             span: psp,
         };
-        let (ret, body) = match spec.kind {
-            Kind::List => {
-                let ty = self.list_ty(&class);
-                (ty, self.list_body(spec))
+        let (ret, body) = match spec {
+            HelperSpec::Class {
+                kind: ClassKind::List,
+                class,
+            } => {
+                let ty = self.list_ty(class);
+                let c = class.clone();
+                (ty, self.list_body(&c))
             }
-            Kind::One => {
-                let ty = self.opt_ty(&class);
-                (ty, self.one_body(spec))
+            HelperSpec::Class {
+                kind: ClassKind::One,
+                class,
+            } => {
+                let ty = self.opt_ty(class);
+                let c = class.clone();
+                (ty, self.one_body(&c))
+            }
+            HelperSpec::Scalar { accessor, ret } => {
+                let r = self.retype(ret);
+                (r, self.scalar_body(accessor))
+            }
+            HelperSpec::Map {
+                key_acc,
+                key_ty,
+                val,
+                val_ty,
+            } => {
+                let ret = self.map_ty(key_ty, val_ty);
+                let k = key_ty.clone();
+                let v = val_ty.clone();
+                // `val` (MapVal) is a struct ref; extract its data before the mutable-self body call.
+                let body = self.map_body(key_acc, &k, val, &v);
+                (ret, body)
             }
         };
         let throws = vec![self.named("DbError")];
@@ -563,7 +1059,7 @@ impl Db<'_> {
             modifiers: Vec::new(),
             attrs: Vec::new(),
             vis: Visibility::Public,
-            name: helper_name(spec.kind, &class),
+            name: name.to_string(),
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),
             params: vec![param],
@@ -576,7 +1072,7 @@ impl Db<'_> {
         })
     }
 
-    /// `List<Row> phorjRows = phorjStmt.query()?;` — the shared first statement of both helpers.
+    /// `List<Row> phorjRows = phorjStmt.query()?;` — the shared first statement of every helper.
     fn query_rows_stmt(&mut self) -> Stmt {
         let s = self.ident("phorjStmt");
         let q = self.member_call(s, "query", vec![]);
@@ -592,12 +1088,12 @@ impl Db<'_> {
         }
     }
 
-    fn list_body(&mut self, spec: &HelperSpec) -> Vec<Stmt> {
+    fn list_body(&mut self, class: &str) -> Vec<Stmt> {
         let mut body = Vec::new();
         body.push(self.query_rows_stmt());
         // mutable List<Class> phorjOut = new List<Class>();
-        let out_ty = self.list_ty(&spec.class);
-        let ct = self.named(&spec.class);
+        let out_ty = self.list_ty(class);
+        let ct = self.named(class);
         let coll_span = self.sp();
         let coll = Expr::NewColl {
             kind: CollKind::List,
@@ -612,9 +1108,9 @@ impl Db<'_> {
             mutable: true,
             span: out_span,
         });
-        // for (Row phorjRow in phorjRows) { <field binds>; phorjOut = List.append(phorjOut, new Class(..)); }
-        let (mut loop_body, args) = self.field_binds(spec, "phorjRow");
-        let newc = self.new_obj(&spec.class, args);
+        // for (Row phorjRow in phorjRows) { <build locals>; phorjOut = List.append(phorjOut, new Class(..)); }
+        let mut loop_body = Vec::new();
+        let newc = self.build_class(class, "", "phorjRow", &mut loop_body);
         let out_ref = self.ident("phorjOut");
         let appended = self.qual_call("List", "append", vec![out_ref, newc]);
         let target = self.ident("phorjOut");
@@ -644,7 +1140,7 @@ impl Db<'_> {
         body
     }
 
-    fn one_body(&mut self, spec: &HelperSpec) -> Vec<Stmt> {
+    fn one_body(&mut self, class: &str) -> Vec<Stmt> {
         let mut body = Vec::new();
         body.push(self.query_rows_stmt());
         // int phorjN = List.length(phorjRows);
@@ -694,8 +1190,7 @@ impl Db<'_> {
             span: gt_span,
         };
         let msg = self.str_lit(&format!(
-            "Core.Db.queryOneInto: expected at most one row for `{}`",
-            spec.class
+            "Core.Db.queryOneInto: expected at most one row for `{class}`"
         ));
         let dberr = self.new_obj("DbError", vec![msg]);
         let throw_span = self.sp();
@@ -712,30 +1207,170 @@ impl Db<'_> {
             span: if1_span,
         });
         // Row phorjRow = phorjRows[0];
-        let rows_ref2 = self.ident("phorjRows");
-        let idx0 = self.int_lit(0);
-        let idx_span = self.sp();
-        let index = Expr::Index {
-            object: Box::new(rows_ref2),
-            index: Box::new(idx0),
-            span: idx_span,
-        };
-        let row_ty = self.named("Row");
-        let row_span = self.sp();
-        body.push(Stmt::VarDecl {
-            ty: row_ty,
-            name: "phorjRow".into(),
-            init: index,
-            mutable: false,
-            span: row_span,
-        });
-        // <field binds>; return new Class(..);
-        let (binds, args) = self.field_binds(spec, "phorjRow");
-        body.extend(binds);
-        let newc = self.new_obj(&spec.class, args);
-        let ret_span = self.sp();
+        body.push(self.row0_local());
+        // <build locals>; return new Class(..);
+        let mut pre = Vec::new();
+        let newc = self.build_class(class, "", "phorjRow", &mut pre);
+        body.extend(pre);
+        let ret_span2 = self.sp();
         body.push(Stmt::Return {
             value: Some(newc),
+            span: ret_span2,
+        });
+        body
+    }
+
+    /// `queryScalar` body: exactly one row AND exactly one column → the typed value; else `DbError`.
+    /// The sole column name is unknown at compile time (`COUNT(*)`), so it is read via `columnNames`.
+    fn scalar_body(&mut self, accessor: &str) -> Vec<Stmt> {
+        let mut body = Vec::new();
+        body.push(self.query_rows_stmt());
+        body.push(self.len_guard(
+            "phorjRows",
+            BinaryOp::NotEq,
+            1,
+            "Core.Db.queryScalar: expected exactly one row",
+        ));
+        body.push(self.row0_local());
+        // List<string> phorjCols = phorjRow.columnNames()?;
+        let row = self.ident("phorjRow");
+        let cn = self.member_call(row, "columnNames", vec![]);
+        let cn_init = self.propagate(cn);
+        let cols_ty = self.str_list_ty();
+        let cols_span = self.sp();
+        body.push(Stmt::VarDecl {
+            ty: cols_ty,
+            name: "phorjCols".into(),
+            init: cn_init,
+            mutable: false,
+            span: cols_span,
+        });
+        body.push(self.len_guard(
+            "phorjCols",
+            BinaryOp::NotEq,
+            1,
+            "Core.Db.queryScalar: expected exactly one column",
+        ));
+        // return phorjRow.accessor(phorjCols[0])?;
+        let row2 = self.ident("phorjRow");
+        let cols0 = self.index_ident("phorjCols", 0);
+        let acc = self.member_call(row2, accessor, vec![cols0]);
+        let ret_v = self.propagate(acc);
+        let ret_span = self.sp();
+        body.push(Stmt::Return {
+            value: Some(ret_v),
+            span: ret_span,
+        });
+        body
+    }
+
+    /// `queryMap` body: index rows into a `Map<K, V>` keyed by the FIRST column; V is the SECOND column
+    /// (scalar) or an entity hydrated by field name from the whole row (nested rules as `queryInto`).
+    fn map_body(&mut self, key_acc: &str, key_ty: &Type, val: &MapVal, val_ty: &Type) -> Vec<Stmt> {
+        let mut body = Vec::new();
+        body.push(self.query_rows_stmt());
+        // mutable Map<K,V> phorjOut = new Map<K,V>();
+        let out_ty = self.map_ty(key_ty, val_ty);
+        let kk = self.retype(key_ty);
+        let vv = self.retype(val_ty);
+        let coll_span = self.sp();
+        let coll = Expr::NewColl {
+            kind: CollKind::Map,
+            args: vec![kk, vv],
+            span: coll_span,
+        };
+        let out_span = self.sp();
+        body.push(Stmt::VarDecl {
+            ty: out_ty,
+            name: "phorjOut".into(),
+            init: coll,
+            mutable: true,
+            span: out_span,
+        });
+        // for (Row phorjRow in phorjRows) { … }
+        let mut loop_body = Vec::new();
+        // List<string> phorjCols = phorjRow.columnNames()?;
+        let row = self.ident("phorjRow");
+        let cn = self.member_call(row, "columnNames", vec![]);
+        let cn_init = self.propagate(cn);
+        let cols_ty = self.str_list_ty();
+        let cols_span = self.sp();
+        loop_body.push(Stmt::VarDecl {
+            ty: cols_ty,
+            name: "phorjCols".into(),
+            init: cn_init,
+            mutable: false,
+            span: cols_span,
+        });
+        // K phorjKey = phorjRow.<key_acc>(phorjCols[0])?;
+        let row2 = self.ident("phorjRow");
+        let cols0 = self.index_ident("phorjCols", 0);
+        let kacc = self.member_call(row2, key_acc, vec![cols0]);
+        let k_init = self.propagate(kacc);
+        let k_ty2 = self.retype(key_ty);
+        let k_span = self.sp();
+        loop_body.push(Stmt::VarDecl {
+            ty: k_ty2,
+            name: "phorjKey".into(),
+            init: k_init,
+            mutable: false,
+            span: k_span,
+        });
+        // V phorjVal = <scalar second column | hydrated entity>;
+        let val_expr = match val {
+            MapVal::Scalar { accessor, .. } => {
+                loop_body.push(self.len_guard(
+                    "phorjCols",
+                    BinaryOp::Lt,
+                    2,
+                    "Core.Db.queryMap: expected at least two columns for a scalar value",
+                ));
+                let row3 = self.ident("phorjRow");
+                let cols1 = self.index_ident("phorjCols", 1);
+                let vacc = self.member_call(row3, accessor, vec![cols1]);
+                self.propagate(vacc)
+            }
+            MapVal::Entity { class } => {
+                let c = class.clone();
+                self.build_class(&c, "", "phorjRow", &mut loop_body)
+            }
+        };
+        let v_ty2 = self.retype(val_ty);
+        let v_span = self.sp();
+        loop_body.push(Stmt::VarDecl {
+            ty: v_ty2,
+            name: "phorjVal".into(),
+            init: val_expr,
+            mutable: false,
+            span: v_span,
+        });
+        // phorjOut = Map.set(phorjOut, phorjKey, phorjVal);
+        let out_ref = self.ident("phorjOut");
+        let key_ref = self.ident("phorjKey");
+        let val_ref = self.ident("phorjVal");
+        let set = self.qual_call("Map", "set", vec![out_ref, key_ref, val_ref]);
+        let target = self.ident("phorjOut");
+        let assign_span = self.sp();
+        loop_body.push(Stmt::Assign {
+            target,
+            value: set,
+            span: assign_span,
+        });
+        let for_ty = self.named("Row");
+        let iter = self.ident("phorjRows");
+        let for_span = self.sp();
+        body.push(Stmt::For {
+            ty: for_ty,
+            name: "phorjRow".into(),
+            val: None,
+            iter,
+            body: loop_body,
+            span: for_span,
+        });
+        let ret_val = self.ident("phorjOut");
+        let ret_span = self.sp();
+        body.push(Stmt::Return {
+            value: Some(ret_val),
             span: ret_span,
         });
         body
@@ -812,7 +1447,7 @@ impl Db<'_> {
         let expected = expected.filter(|t| !matches!(t, Type::Infer(_)));
         match e {
             Expr::Call { callee, args, span } if args.is_empty() => {
-                match Self::query_into_kind(&callee) {
+                match Self::query_call_kind(&callee) {
                     Some(kind) => self.rewrite(*callee, kind, expected, span),
                     None => {
                         let callee = Box::new(self.rexpr(*callee));
@@ -832,8 +1467,8 @@ impl Db<'_> {
                     callee,
                     args,
                     span: cspan,
-                } if args.is_empty() && Self::query_into_kind(&callee).is_some() => {
-                    let kind = Self::query_into_kind(&callee).expect("guarded above");
+                } if args.is_empty() && Self::query_call_kind(&callee).is_some() => {
+                    let kind = Self::query_call_kind(&callee).expect("guarded above");
                     let rewritten = self.rewrite(*callee, kind, expected, cspan);
                     Expr::Propagate {
                         inner: Box::new(rewritten),
@@ -854,7 +1489,7 @@ impl Db<'_> {
             // A nullary call may be a `recv.queryInto()` — but here there is no annotation, so it is
             // `E-DB-INTO-NO-TYPE` (via `rewrite` with `expected = None`).
             Expr::Call { callee, args, span } if args.is_empty() => {
-                match Self::query_into_kind(&callee) {
+                match Self::query_call_kind(&callee) {
                     Some(kind) => self.rewrite(*callee, kind, None, span),
                     None => {
                         let callee = Box::new(self.rexpr(*callee));

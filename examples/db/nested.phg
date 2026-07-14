@@ -1,0 +1,86 @@
+// Typed-generic result hydration, slice B (DEC-208) — the three shape-directed completions:
+//
+//   * NESTED hydration — a field that is itself an ENTITY is hydrated (eagerly, one query) from
+//     columns aliased with a DOTTED prefix: `Order order` reads `"order.id"`/`"order.total"`, and it
+//     recurses to ARBITRARY DEPTH (`"order.customer.country.name"` here). An OPTIONAL entity field
+//     (`Country? shipTo`) becomes `null` when ALL its columns are NULL — the natural LEFT-JOIN "miss".
+//   * `queryScalar<T>()` — one typed value from a single-row, single-column result (`SELECT COUNT(*)`).
+//   * `queryMap<K, V>()` — index rows into a `Map<K, V>` keyed by the first selected column (K).
+//
+// Everything is resolved at COMPILE TIME from each class's field layout and lowered to the shipped S1
+// `Row` accessors (`new Sale(row.getString("product")?, new Order(row.getInt("order.id")?, …), …)`),
+// so there is no runtime reflection and `run ≡ runvm` holds by construction. Like every `Core.Db`
+// program it opens real bundled SQLite (`rusqlite`) → quarantined from the byte-identity differential;
+// validated by `tests/db.rs` on both backends. Built only under `--features db`.
+package Main;
+
+import Core.Output;
+import Core.Map;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+
+// Every field is a PROMOTED constructor parameter, so its name IS its (possibly dotted) column name.
+class Country {
+    constructor(public string code, public string name) {}
+}
+
+class Customer {
+    constructor(public int id, public string name, public Country country) {}
+}
+
+class Order {
+    constructor(public int id, public int total, public Customer customer) {}
+}
+
+class Sale {
+    constructor(public string product, public Order order, public Country? shipTo) {}
+}
+
+// `order` is a REQUIRED nested entity (depth 4: order.customer.country.*); `shipTo` is an OPTIONAL
+// nested entity — `null` when the LEFT JOIN finds no shipping country.
+function main(): void {
+    try {
+        Db db = new Db("sqlite::memory:");
+        discard db.prepare("CREATE TABLE countries(code TEXT, name TEXT)").exec();
+        discard db
+            .prepare("CREATE TABLE customers(id INTEGER, name TEXT, country_code TEXT)")
+            .exec();
+        discard db
+            .prepare("CREATE TABLE orders(id INTEGER, total INTEGER, customer_id INTEGER)")
+            .exec();
+        discard db
+            .prepare(
+                "CREATE TABLE sales(id INTEGER, product TEXT, order_id INTEGER, ship_to_code TEXT)"
+            )
+            .exec();
+        discard db.prepare("INSERT INTO countries VALUES('FR', 'France')").exec();
+        discard db.prepare("INSERT INTO countries VALUES('JP', 'Japan')").exec();
+        discard db.prepare("INSERT INTO customers VALUES(1, 'Ada', 'FR')").exec();
+        discard db.prepare("INSERT INTO customers VALUES(2, 'Grace', 'JP')").exec();
+        discard db.prepare("INSERT INTO orders VALUES(10, 299, 1)").exec();
+        discard db.prepare("INSERT INTO orders VALUES(20, 150, 2)").exec();
+        discard db.prepare("INSERT INTO sales VALUES(100, 'Book', 10, 'JP')").exec();
+        discard db.prepare("INSERT INTO sales VALUES(200, 'Pen', 20, NULL)").exec();
+        // 1) Deep nested hydration + an optional entity from a LEFT JOIN, in ONE query.
+        List<Sale> sales = db
+            .prepare(
+                "SELECT s.product AS product, o.id AS \"order.id\", o.total AS \"order.total\", c.id AS \"order.customer.id\", c.name AS \"order.customer.name\", co.code AS \"order.customer.country.code\", co.name AS \"order.customer.country.name\", ship.code AS \"shipTo.code\", ship.name AS \"shipTo.name\" FROM sales s JOIN orders o ON o.id = s.order_id JOIN customers c ON c.id = o.customer_id JOIN countries co ON co.code = c.country_code LEFT JOIN countries ship ON ship.code = s.ship_to_code ORDER BY s.id"
+            )
+            .queryInto();
+        for (Sale s in sales) {
+            Output.printLine(
+                "{s.product}: order {s.order.id} total {s.order.total} by {s.order.customer.name} of {s.order.customer.country.name}, ships to {s.shipTo?.name ?? \"-\"}"
+            );
+        }
+        // 2) queryScalar — a single typed value from a one-row, one-column result.
+        int total = db.prepare("SELECT COUNT(*) FROM sales").queryScalar();
+        Output.printLine("sales: {total}");
+        // 3) queryMap — index rows by the first column (id) into a Map<int, string>.
+        Map<int, string> byId = db.prepare("SELECT id, product FROM sales ORDER BY id").queryMap();
+        Output.printLine("100 -> {Map.get(byId, 100) ?? \"?\"}");
+        Output.printLine("200 -> {Map.get(byId, 200) ?? \"?\"}");
+    } catch (DbError e) {
+        Output.printLine("DB error: {e.message}");
+    }
+}

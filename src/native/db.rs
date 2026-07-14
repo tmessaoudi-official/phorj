@@ -466,6 +466,43 @@ fn get_bool_or_null_inner(args: &[Value]) -> Result<Value, String> {
     }
 }
 
+// --- Column introspection (DEC-208 slice B): two capabilities the desugared `queryScalar` /
+// `queryMap` / nested-hydration helpers need, routed through the SAME `DbResult`/`wrap` protocol as
+// the accessors (NOT a duplication of `getX` — genuinely new operations). `columnNames` gives the
+// ORDERED column names of a row (the row is an insertion-ordered `Map`, so selection order is
+// preserved) — `queryScalar` reads the sole column whose name is unpredictable (`COUNT(*)`), and
+// `queryMap` keys on the first / reads the second. `isNull` reports whether a column is SQL NULL
+// (type-agnostic) — the nested-optional-entity hydration tests "all this entity's columns are NULL"
+// (a LEFT JOIN miss → the whole entity is `null`); it cannot use `== null` (phorj rejects a
+// cross-type `T? == null` comparison), so this boolean primitive is required. ---
+
+/// `row.columnNames()` → the ordered `List<string>` of this row's column names (selection order).
+fn column_names_inner(args: &[Value]) -> Result<Value, String> {
+    match args {
+        [Value::Map(pairs)] => {
+            let names: Vec<Value> = pairs
+                .iter()
+                // Column names are always text from SQL; the non-Str arms are unreachable in practice
+                // but kept total (a row is a general `Map`).
+                .map(|(k, _)| match k {
+                    HKey::Str(s) => Value::Str(s.clone()),
+                    HKey::Int(n) => Value::Str(n.to_string().into()),
+                    HKey::Bool(b) => Value::Str(b.to_string().into()),
+                })
+                .collect();
+            Ok(Value::List(Rc::new(names)))
+        }
+        _ => Err("Core.Db.columnNames expects (Row)".into()),
+    }
+}
+
+/// `row.isNull(column)` → `true` iff the column is SQL NULL; a DB error if the column is absent
+/// (reusing `row_cell`, so a missing nested column is a strict error exactly like the accessors).
+fn is_null_inner(args: &[Value]) -> Result<Value, String> {
+    let (v, _k) = row_cell(args, "isNull")?;
+    Ok(Value::Bool(matches!(v, Value::Null)))
+}
+
 // --- Public natives: each wraps its inner body so a DB error becomes `Result.Failure` (a value the
 // prelude throws on), never a hard fault. `_out` (the stdout buffer) is unused — DB ops have no stdout. ---
 
@@ -490,6 +527,8 @@ db_native!(row_get_int_or_null, get_int_or_null_inner);
 db_native!(row_get_string_or_null, get_string_or_null_inner);
 db_native!(row_get_float_or_null, get_float_or_null_inner);
 db_native!(row_get_bool_or_null, get_bool_or_null_inner);
+db_native!(row_column_names, column_names_inner);
+db_native!(row_is_null, is_null_inner);
 
 /// The `Core.DbSys` registry entries — the INTERNAL natives the phorj-source `Core.Db` prelude wraps.
 /// They live under the `DbSys` qualifier (NOT `Db`) so a prelude `class Db` calling `DbSys.open(..)`
@@ -650,6 +689,27 @@ pub fn db_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(row_get_bool_or_null),
             php: |a| format!("(({0}[{1}] === null) ? null : (bool) {0}[{1}])", a[0], a[1]),
         },
+        // Column introspection (DEC-208 slice B). `columnNames` → ordered `List<string>`; `isNull` →
+        // `bool`. Used by the `queryScalar`/`queryMap`/nested-hydration desugar; PHP emitters are
+        // placeholders (Core.Db is spine-quarantined, transpile finalized in a later slice).
+        NativeFn {
+            module: "Core.DbSys",
+            name: "columnNames",
+            params: vec![handle()],
+            ret: res(Ty::List(Box::new(Ty::String))),
+            pure: false,
+            eval: NativeEval::Pure(row_column_names),
+            php: |a| format!("array_keys({})", a[0]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "isNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Bool),
+            pure: false,
+            eval: NativeEval::Pure(row_is_null),
+            php: |a| format!("({0}[{1}] === null)", a[0], a[1]),
+        },
     ]
 }
 
@@ -791,5 +851,59 @@ mod tests {
         let msg =
             err_of(row_get_int(&[rows[0].clone(), Value::Str("x".into())], &mut out).unwrap());
         assert!(msg.contains("NULL"), "got: {msg}");
+    }
+
+    #[test]
+    fn column_names_are_selection_ordered() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        let s = ok_of(
+            db_prepare(
+                &[db, Value::Str("SELECT 1 AS a, 2 AS b, 3 AS c".into())],
+                &mut out,
+            )
+            .unwrap(),
+        );
+        let rows = ok_of(db_query(&[s], &mut out).unwrap());
+        let Value::List(rows) = rows else { panic!() };
+        let cols = ok_of(row_column_names(&[rows[0].clone()], &mut out).unwrap());
+        let Value::List(cols) = cols else {
+            panic!("columnNames must return a list")
+        };
+        let got: Vec<&str> = cols
+            .iter()
+            .map(|v| match v {
+                Value::Str(s) => s.as_str(),
+                _ => panic!("column name not a string"),
+            })
+            .collect();
+        assert_eq!(got, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn is_null_reports_null_and_present() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        let s = ok_of(
+            db_prepare(
+                &[db, Value::Str("SELECT NULL AS a, 7 AS b".into())],
+                &mut out,
+            )
+            .unwrap(),
+        );
+        let rows = ok_of(db_query(&[s], &mut out).unwrap());
+        let Value::List(rows) = rows else { panic!() };
+        assert!(
+            ok_of(row_is_null(&[rows[0].clone(), Value::Str("a".into())], &mut out).unwrap())
+                .eq_val(&Value::Bool(true))
+        );
+        assert!(
+            ok_of(row_is_null(&[rows[0].clone(), Value::Str("b".into())], &mut out).unwrap())
+                .eq_val(&Value::Bool(false))
+        );
+        // A missing column is a strict DB error (reuses `row_cell`).
+        let msg =
+            err_of(row_is_null(&[rows[0].clone(), Value::Str("zzz".into())], &mut out).unwrap());
+        assert!(msg.contains("no column"), "got: {msg}");
     }
 }

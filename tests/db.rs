@@ -36,6 +36,15 @@ fn both(src: &str, expected: &str) {
     );
 }
 
+/// Assert that a program FAILS to compile with a message containing `needle` (a compile-time reject,
+/// not a runtime `DbError`). Checked on the interpreter path (the checker runs identically for the VM).
+fn fails_with(src: &str, needle: &str) {
+    match cmd_treewalk(src) {
+        Ok(out) => panic!("expected a compile error containing {needle:?}, but it ran: {out:?}"),
+        Err(e) => assert!(e.contains(needle), "error {e:?} did not contain {needle:?}"),
+    }
+}
+
 #[test]
 fn db_typed_example_runs_on_both_backends() {
     let src = std::fs::read_to_string("examples/db/typed.phg").expect("read examples/db/typed.phg");
@@ -194,4 +203,212 @@ function main(): void {
 }
 "#;
     both(src, "Ada=36\nGrace=-1\n");
+}
+
+// ── DEC-208 slice B: nested hydration + queryScalar + queryMap ────────────────────────────────────
+
+#[test]
+fn db_nested_example_runs_on_both_backends() {
+    let src =
+        std::fs::read_to_string("examples/db/nested.phg").expect("read examples/db/nested.phg");
+    let expected = "Book: order 10 total 299 by Ada of France, ships to Japan\n\
+                    Pen: order 20 total 150 by Grace of Japan, ships to -\n\
+                    sales: 2\n\
+                    100 -> Book\n\
+                    200 -> Pen\n";
+    both(&src, expected);
+}
+
+/// The shared nested scaffold: a `sales` join producing dotted-aliased columns for a required nested
+/// `Order` and an optional nested `Country` (`shipTo`, LEFT JOIN). `body` runs inside a `try/catch`.
+fn nested_program(rows: &str, body: &str) -> String {
+    format!(
+        r#"package Main;
+import Core.Output;
+import Core.Map;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Country {{ constructor(public string code, public string name) {{}} }}
+class Customer {{ constructor(public int id, public string name, public Country country) {{}} }}
+class Order {{ constructor(public int id, public int total, public Customer customer) {{}} }}
+class Sale {{ constructor(public string product, public Order order, public Country? shipTo) {{}} }}
+function main(): void {{
+  try {{
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE countries(code TEXT, name TEXT)").exec();
+    discard db.prepare("CREATE TABLE customers(id INTEGER, name TEXT, country_code TEXT)").exec();
+    discard db.prepare("CREATE TABLE orders(id INTEGER, total INTEGER, customer_id INTEGER)").exec();
+    discard db.prepare("CREATE TABLE sales(id INTEGER, product TEXT, order_id INTEGER, ship_to_code TEXT)").exec();
+    discard db.prepare("INSERT INTO countries VALUES('FR', 'France')").exec();
+    discard db.prepare("INSERT INTO countries VALUES('JP', 'Japan')").exec();
+    discard db.prepare("INSERT INTO customers VALUES(1, 'Ada', 'FR')").exec();
+    discard db.prepare("INSERT INTO customers VALUES(2, 'Grace', 'JP')").exec();
+    discard db.prepare("INSERT INTO orders VALUES(10, 299, 1)").exec();
+    discard db.prepare("INSERT INTO orders VALUES(20, 150, 2)").exec();
+    {rows}
+    {body}
+  }} catch (DbError e) {{ Output.printLine("caught: {{e.message}}"); }}
+}}
+"#
+    )
+}
+
+/// The deep (depth-4) select with a required `order.*` graph and an optional `shipTo.*` LEFT JOIN.
+const NESTED_SELECT: &str = "SELECT s.product AS product, o.id AS \\\"order.id\\\", o.total AS \\\"order.total\\\", c.id AS \\\"order.customer.id\\\", c.name AS \\\"order.customer.name\\\", co.code AS \\\"order.customer.country.code\\\", co.name AS \\\"order.customer.country.name\\\", ship.code AS \\\"shipTo.code\\\", ship.name AS \\\"shipTo.name\\\" FROM sales s JOIN orders o ON o.id = s.order_id JOIN customers c ON c.id = o.customer_id JOIN countries co ON co.code = c.country_code LEFT JOIN countries ship ON ship.code = s.ship_to_code ORDER BY s.id";
+
+#[test]
+fn db_nested_hydrates_deep_graph_and_optional_present() {
+    // A sale that DOES ship (shipTo present) — the whole 4-deep graph is hydrated.
+    let src = nested_program(
+        "discard db.prepare(\"INSERT INTO sales VALUES(100, 'Book', 10, 'JP')\").exec();",
+        &format!(
+            r#"List<Sale> ss = db.prepare("{NESTED_SELECT}").queryInto();
+       for (Sale s in ss) {{ Output.printLine("{{s.product}}/{{s.order.customer.country.name}}/{{s.shipTo?.name ?? "-"}}"); }}"#
+        ),
+    );
+    both(&src, "Book/France/Japan\n");
+}
+
+#[test]
+fn db_nested_optional_entity_is_null_when_all_columns_null() {
+    // A sale with ship_to_code NULL → the LEFT JOIN yields all-NULL shipTo columns → `shipTo` is null.
+    let src = nested_program(
+        "discard db.prepare(\"INSERT INTO sales VALUES(200, 'Pen', 20, NULL)\").exec();",
+        &format!(
+            r#"List<Sale> ss = db.prepare("{NESTED_SELECT}").queryInto();
+       for (Sale s in ss) {{ Output.printLine("{{s.product}}/{{s.shipTo?.name ?? "-"}}"); }}"#
+        ),
+    );
+    both(&src, "Pen/-\n");
+}
+
+#[test]
+fn db_nested_required_partial_null_throws() {
+    // A REQUIRED nested `Order` with a NULL `order.total` column is NOT a null-parent — the strict
+    // `getInt` on the non-optional subfield throws (this is what distinguishes required from optional).
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Order { constructor(public int id, public int total) {} }
+class Sale { constructor(public string product, public Order order) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE sales(product TEXT, oid INTEGER, ototal INTEGER)").exec();
+    discard db.prepare("INSERT INTO sales VALUES('Book', 10, NULL)").exec();
+    List<Sale> ss = db.prepare("SELECT product AS product, oid AS \"order.id\", ototal AS \"order.total\" FROM sales").queryInto();
+    Output.printLine("{List.length(ss)}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(
+        src,
+        "caught: Core.Db.getInt: column `order.total` is NULL (use int?)\n",
+    );
+}
+
+#[test]
+fn db_hydrate_cycle_is_rejected() {
+    // A self-referential row class cannot be eagerly whole-graph hydrated (unbounded) → compile error,
+    // not a compiler stack overflow. The optional back-reference is still caught (cycle check on entry).
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Employee { constructor(public string name, public Employee? manager) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    List<Employee> es = db.prepare("SELECT name FROM e").queryInto();
+    Output.printLine("{List.length(es)}");
+  } catch (DbError e) { Output.printLine("caught"); }
+}
+"#;
+    fails_with(src, "E-DB-HYDRATE-CYCLE");
+}
+
+#[test]
+fn db_query_scalar_returns_a_typed_value() {
+    let src = typed_program(
+        r#"int n = db.prepare("SELECT COUNT(*) FROM users").queryScalar();
+       Output.printLine("{n}");"#,
+    );
+    both(&src, "2\n");
+}
+
+#[test]
+fn db_query_scalar_wrong_row_count_throws() {
+    // More than one row → DbError (queryScalar requires exactly one).
+    let src = typed_program(
+        r#"int n = db.prepare("SELECT age FROM users").queryScalar();
+       Output.printLine("{n}");"#,
+    );
+    both(
+        &src,
+        "caught: Core.Db.queryScalar: expected exactly one row\n",
+    );
+}
+
+#[test]
+fn db_query_scalar_wrong_column_count_throws() {
+    let src = typed_program(
+        r#"int n = db.prepare("SELECT age, name FROM users WHERE name = 'Ada'").queryScalar();
+       Output.printLine("{n}");"#,
+    );
+    both(
+        &src,
+        "caught: Core.Db.queryScalar: expected exactly one column\n",
+    );
+}
+
+#[test]
+fn db_query_map_scalar_value_keys_by_first_column() {
+    // Map<int, string>: keyed by the first column (age), value = the second column (name).
+    let src = typed_program(
+        r#"Map<int, string> byAge = db.prepare("SELECT age, name FROM users").queryMap();
+       Output.printLine("36 -> {Map.get(byAge, 36) ?? "?"}");
+       Output.printLine("45 -> {Map.get(byAge, 45) ?? "?"}");"#,
+    );
+    both(&src, "36 -> Ada\n45 -> Grace\n");
+}
+
+#[test]
+fn db_query_map_string_key() {
+    // Map<string, int>: a string key column.
+    let src = typed_program(
+        r#"Map<string, int> byName = db.prepare("SELECT name, age FROM users").queryMap();
+       Output.printLine("Ada -> {Map.get(byName, "Ada") ?? -1}");
+       Output.printLine("Grace -> {Map.get(byName, "Grace") ?? -1}");"#,
+    );
+    both(&src, "Ada -> 36\nGrace -> 45\n");
+}
+
+#[test]
+fn db_query_map_entity_value_hydrates_by_field_name() {
+    // Map<int, User>: value is a hydrated entity (by field name from the whole row); key is the first
+    // column. Extra columns (the id key) are ignored by the entity mapping.
+    let src = r#"package Main;
+import Core.Output;
+import Core.Map;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class User { constructor(public string name, public int age) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE users(id INTEGER, name TEXT, age INTEGER)").exec();
+    discard db.prepare("INSERT INTO users VALUES(1, 'Ada', 36)").exec();
+    discard db.prepare("INSERT INTO users VALUES(2, 'Grace', 45)").exec();
+    Map<int, User> byId = db.prepare("SELECT id, name, age FROM users").queryMap();
+    User? one = Map.get(byId, 2);
+    Output.printLine("{one?.name ?? "?"}/{one?.age ?? -1}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "Grace/45\n");
 }

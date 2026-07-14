@@ -476,6 +476,11 @@ pub(super) struct VirtualModule {
 pub(super) const DB_PRELUDE: &str = r#"
 import Core.DbSys;
 import Core.List;
+// `Core.Map` is imported for the `queryMap<K,V>` hydration helpers the `desugar_db` pass generates
+// into a `Core.Db` program (they build the result `Map` via `Map.set`); like the `Core.List` import
+// above it makes the module's ops available to the generated helpers (and, as with `List`, to user
+// code under an `import Core.Db`).
+import Core.Map;
 
 // Prelude-local result carrier (NOT Core.Result — see the native docs on injection order).
 enum DbResult<T> { Ok(T value), Err(string message) }
@@ -516,6 +521,14 @@ class Row {
   }
   function getBoolOrNull(string column): bool? throws DbError {
     return match (DbSys.getBoolOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  // Column introspection (DEC-208 slice B) — the desugared `queryScalar`/`queryMap`/nested-hydration
+  // helpers use these. `columnNames` is selection-ordered; `isNull` tests a column for SQL NULL.
+  function columnNames(): List<string> throws DbError {
+    return match (DbSys.columnNames(this.raw)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function isNull(string column): bool throws DbError {
+    return match (DbSys.isNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
   }
 }
 

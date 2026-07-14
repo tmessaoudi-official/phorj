@@ -197,6 +197,26 @@ not a panic:
   discloses). (4) A hand-written `phorjQueryIntoList…`/`phorjQueryOneInto…` free function could collide
   with a synthesized helper name (astronomically unlikely; matches the `phorjInject…` convention).
 
+- **`Core.Db` typed hydration completion (DEC-208 slice B) — shipped + disclosures.** Three shape-directed
+  extensions of the S2 desugar (`src/checker/desugar_db.rs`), same PRE-check lowering to S1 primitives, so
+  `run ≡ runvm` stays automatic. (1) **Nested hydration:** a field that is itself an entity is hydrated
+  eagerly (one query) from columns aliased with a DOTTED prefix (`"order.total"`, a quoted identifier),
+  recursing to arbitrary depth; an OPTIONAL entity field (`Order? order`) is `null` when ALL its columns
+  are NULL (a LEFT-JOIN miss, tested via the new `Row.isNull` accessor), else it hydrates strictly (a NULL
+  in a *non*-optional subfield still throws). (2) **`queryScalar<T>()`** — one typed value; more than one
+  row OR more than one column throws `DbError` (the sole column name, e.g. `COUNT(*)`, is read via the new
+  `Row.columnNames`). (3) **`queryMap<K, V>()`** — rows keyed by the FIRST selected column (`K`, `int` or
+  `string` only); `V` is the SECOND column (scalar — a result of `<2` columns throws) or an entity hydrated
+  by field name. **Disclosures:** (a) `queryScalar`/`queryMap` join `queryInto`/`queryOneInto` as reserved
+  method names under `import Core.Db`. (b) A self-referential row class (`class Employee { …, public
+  Employee? manager; }`) is a compile error `E-DB-HYDRATE-CYCLE`, not a stack overflow — eager whole-graph
+  hydration cannot bound a cycle; graph/recursive loading is deliberately ORM territory (DEC-208). (c) The
+  synthesized helper names extend to `phorjQueryScalar<Label>` / `phorjQueryMap<KLabel><VLabel>` (same
+  astronomical-collision disclosure). (d) A **column naming strategy** (snake_case-DB ↔ camelCase-phorj,
+  the 4th slice-B item) is **NOT shipped** — deferred to a follow-up slice B2 pending a developer ruling on
+  its surface (see `docs/plans/MASTER-PLAN.md` DEC-208 PENDING). The default (strict-exact by-name mapping)
+  is unchanged.
+
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
   the backends. Deferrals (each a clean compile error, never a panic): (1) **free functions only** — a
