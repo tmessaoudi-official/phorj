@@ -210,19 +210,26 @@ not a panic:
   incl. the S2 `queryInto` helpers — auto-upgrades to the precise type with no call-site change); and
   deterministic idempotent `db.close()` (further use of the connection or a derived `Statement` faults
   with `ConnectionError`).
-  - **PENDING adjudication (Invariant 15) — the closure form `db.transaction(() => { … })` + closure
-    retry.** BLOCKED on a phorj type-system limitation, not a scope choice: a **lambda cannot declare or
-    propagate a checked exception** (`Type::Function` has no `throws` clause — `src/parser/types.rs`; and
-    `cur_throws` is empty inside a lambda body — `src/checker/mod.rs`). So a closure that does real DB
-    work (`s.exec()?`) cannot carry the `throws DbError` those ops raise, and cannot surface a *catchable
-    typed* error to the wrapper for auto-rollback / transient-retry. Minimal failing program:
-    `function tx(() => int f): int throws DbError { return f(); } … tx(function(): int { throw new DbError("x"); });`
-    → `E-THROW-UNDECLARED` at the `throw` inside the lambda. Enabling the closure form needs
-    **throwing-closure function types** (`() => T throws E`) — a user-visible language surface change
-    (parser/AST/checker function-type subtyping/both backends/transpiler) that affects ALL higher-order
-    code, so it is the developer's ruling, not an autonomous one. Retry (`db.transaction(retries: N, fn)`)
-    rides along with it (same limitation; the transient class `SerializationFailure` is already mapped and
-    tested, so retry is emit-only once the closure form lands).
+  - **SHIPPED (unblocked by DEC-222) — the closure form `db.transaction(fn)` + retry**
+    (`examples/db/transaction-closure.phg`, `tests/db.rs`). DEC-222 (throwing-closure function types,
+    `() => T throws E`) lifted the block: `db.transaction(function(): T throws DbError { … })` runs the
+    closure inside a transaction — COMMIT on a normal return (returning the closure's VALUE),
+    auto-ROLLBACK + **re-throw the ORIGINAL typed error** on a throw. Mechanism: a `HigherOrder` native
+    (`DbSys.transaction`, `src/native/db.rs`) begins, invokes the closure re-entrantly on the calling
+    backend, commits on `Ok`, and on the invoker's `Err` rolls back and re-propagates the *unchanged*
+    error — `rollback_inner` is pure `rusqlite` and never re-enters the backend, so the thrown value in
+    `pending_throw` survives and the caller catches the exact `DbError` (not a generic one). A nested
+    `db.transaction` is a SAVEPOINT (composable partial rollback, reusing the slice-C depth). The manual
+    `begin`/`commit`/`rollback`/`rollbackQuiet` stay (developer ruled BOTH). **Retry:**
+    `db.transactionRetry(fn, retries)` re-runs the whole transaction on the transient
+    `SerializationFailure` only; the retry loop lives in the prelude (only phorj source can `catch` the
+    TYPED error — `pending_throw` is invisible to a native).
+    - **PENDING adjudication (Invariant 15) — retry SURFACE.** The spec (§5) illustrates one method
+      `db.transaction(retries: N, fn)`, but the language has NO named args, NO method default params, and
+      NO generic-method overloading, so a single generic `transaction` cannot carry an optional `retries`.
+      Realized as a distinct `db.transactionRetry(fn, retries)` (recorded in `C-decisions.md`); developer
+      to confirm the final name/shape. Isolation-level retry (`db.transaction(Isolation.Serializable, fn)`)
+      still rides with the isolation slice below (deferred).
   - **Deferred (not blocked):** (1) **`using`/`Closable` auto-close (DEC-203)** — `db.close()` ships, but
     the `using (Db db = …) { … }` sugar that would call it at scope exit is DEC-203, a separate ruled-but-
     unbuilt language slice (lexer/parser/checker/backends); defining `Closable` here now would collide with

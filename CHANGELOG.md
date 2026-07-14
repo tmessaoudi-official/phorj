@@ -24,6 +24,31 @@ the exception at the call site, exactly like a named `function … throws E`:
 - Checker/parser-only — no runtime change (the throw is the existing `Op::Throw`), so
   `run ≡ runvm ≡ php` stays byte-identical. Example: `examples/guide/throwing-closures.phg`.
 
+### Added — DEC-208 slice C: closure-form transactions `db.transaction(fn)` + retry (unblocked by DEC-222)
+
+The closure form of `Core.Db` transactions, the language dependency DEC-222 was built for:
+
+- **Surface**: `db.transaction(function(): T throws DbError { … })` — BEGIN, run the closure,
+  COMMIT on a normal return (returning the closure's VALUE), auto-ROLLBACK + **re-throw the
+  ORIGINAL typed error** on a throw. A NESTED `db.transaction` opens a SAVEPOINT (composable
+  partial rollback, reusing the slice-C depth). BOTH this closure form AND the manual
+  `begin`/`commit`/`rollback`/`rollbackQuiet` (slice C) are supported — developer ruled BOTH.
+- **Retry**: `db.transactionRetry(fn, retries)` re-runs the whole transaction on the transient
+  `SerializationFailure` only; any other `DbError` (and an exhausted budget) propagates immediately.
+- **Mechanism**: a `HigherOrder` native (`DbSys.transaction`) invokes the closure re-entrantly on
+  the calling backend. Throw preservation is the load-bearing part — a closure throw reaches the
+  native as `Err(THROW_SENTINEL)` with the thrown value in the backend's `pending_throw`;
+  `rollback_inner` is pure `rusqlite` (never re-enters the backend), so `pending_throw` survives and
+  returning the same `Err` unchanged lets the backend rebuild the ORIGINAL typed `DbError`. The
+  retry loop lives in the PRELUDE (only phorj source can `catch` the typed error — `pending_throw`
+  is invisible to a native).
+- **Surface deviation (PENDING adjudication)**: the spec illustrates one method
+  `db.transaction(retries: N, fn)`, but the language has no named args, no method default params, and
+  no generic-method overloading — so retry is realized as a distinct `db.transactionRetry(fn,
+  retries)` (developer to confirm the name/shape). Isolation levels remain deferred.
+- Spine-quarantined (`Core.Db`, `pure:false`); `run ≡ runvm` holds (shared native/closure bodies).
+  Example `examples/db/transaction-closure.phg`; fixtures in `tests/db.rs` (both backends).
+
 ### Added — JIT W9 + S8: the sqlbuild builder pipeline compiles end to end (borrowed-arg clone-at-boundary, Return frame teardown, deferred pad seeding, flattened JoinClause)
 
 The whole `Core.Sql` immutable-builder shape — union Dyn wheres, joins, `toQuery()`,

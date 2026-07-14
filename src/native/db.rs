@@ -1067,6 +1067,51 @@ fn db_exec_returning_id(args: &[Value], invoke: &mut ClosureInvoker) -> Result<V
     with_hook(args, invoke, exec_returning_id_inner)
 }
 
+/// `db.transaction(fn)` (DEC-208 slice C, the closure form — unblocked by DEC-222 throwing closures) —
+/// ONE transactional attempt: `BEGIN`, run the closure, `COMMIT` on a normal return (returning the
+/// closure's value), and auto-`ROLLBACK` + **re-propagate the ORIGINAL thrown value** on a throw. A
+/// NESTED call opens a `SAVEPOINT` (via the shared `tx_depth`), so it composes into partial rollback.
+/// The RETRY loop lives in the prelude, not here: retry must inspect the TYPED error to decide whether
+/// it is transient (`SerializationFailure`), and that thrown value sits in the backend's `pending_throw`
+/// — invisible to a native. So this native is a single attempt; the prelude's `catch (SerializationFailure)`
+/// loop drives the retries.
+///
+/// **Throw preservation** (the load-bearing part): a closure `throw` reaches the invoker as
+/// `Err(THROW_SENTINEL)` with the thrown `Value` stashed in the backend's `pending_throw`.
+/// [`rollback_inner`] runs pure `rusqlite` SQL ([`control`] → `execute_batch`) and NEVER re-enters the
+/// backend, so `pending_throw` stays intact; returning the SAME `Err(e)` unchanged lets the outer
+/// backend arm (interpreter `call.rs` / VM `exec.rs`, both keyed on the sentinel) rebuild the ORIGINAL
+/// typed `DbError` — the caller catches the exact error the closure threw, never a generic one.
+fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
+    let (db, fnv) = match args {
+        [db, fnv] => (db, fnv),
+        _ => return Err("Core.Db.__transaction expects (Db, fn)".into()),
+    };
+    // BEGIN. A DB error opening the (save)point is a catchable `DbResult.Err`, never a hard fault.
+    if let Err(msg) = begin_inner(std::slice::from_ref(db)) {
+        return Ok(failure(msg));
+    }
+    match invoke(fnv, Vec::new()) {
+        // Normal return: COMMIT and hand back the closure's value. If the COMMIT itself fails, roll
+        // back best-effort (to reset the shared `tx_depth`) and surface the commit error as a
+        // catchable `DbResult.Err` — the closure's work is not returned.
+        Ok(v) => match commit_inner(std::slice::from_ref(db)) {
+            Ok(_) => Ok(success(v)),
+            Err(msg) => {
+                let _ = rollback_inner(std::slice::from_ref(db));
+                Ok(failure(msg))
+            }
+        },
+        // The closure threw (sentinel + `pending_throw`) or hard-faulted: roll back best-effort — a
+        // rollback error must NEVER mask the original — then re-propagate the SAME `Err` unchanged, so
+        // the backend reconstructs the ORIGINAL typed throw (`pending_throw` is untouched by rollback).
+        Err(e) => {
+            let _ = rollback_inner(std::slice::from_ref(db));
+            Err(e)
+        }
+    }
+}
+
 /// The `Core.DbSys` registry entries — the INTERNAL natives the phorj-source `Core.Db` prelude wraps.
 /// They live under the `DbSys` qualifier (NOT `Db`) so a prelude `class Db` calling `DbSys.open(..)`
 /// never collides with the class. Every opaque connection / statement / row handle is typed `DbHandle`
@@ -1261,6 +1306,28 @@ pub fn db_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(db_close),
             // PDO closes when the last reference is unset; there is no explicit close() method.
             php: |_a| "null".to_string(),
+        },
+        // Closure-form transaction (DEC-208 slice C, unblocked by DEC-222). GENERIC over the closure's
+        // return type `T` (so `db.transaction(fn)` returns the closure's value); the closure param is a
+        // THROWING function type `() => T throws DbError` — the `throws DbError` set is REQUIRED so the
+        // user's throwing closure is accepted (variance rejects a throwing fn into a non-throwing slot).
+        // HigherOrder: it invokes the closure re-entrantly on the calling backend. PHP is a placeholder
+        // (Core.Db is spine-quarantined; nested-savepoint PDO emission is finalized in the transpile slice).
+        NativeFn {
+            module: "Core.DbSys",
+            name: "transaction",
+            params: vec![
+                handle(),
+                Ty::Function(
+                    vec![],
+                    Box::new(Ty::Param("T".into())),
+                    vec![Ty::Named("DbError".into(), vec![])],
+                ),
+            ],
+            ret: res(Ty::Param("T".into())),
+            pure: false,
+            eval: NativeEval::HigherOrder(db_transaction),
+            php: |a| format!("/* db.transaction finalized in transpile slice */ {}", a[0]),
         },
         NativeFn {
             module: "Core.DbSys",

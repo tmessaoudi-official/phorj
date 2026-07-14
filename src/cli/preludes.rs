@@ -695,6 +695,40 @@ class Db {
   function rollbackQuiet(): void {
     match (DbSys.rollback(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(_) => Db.ok() };
   }
+  // Closure-form transaction (DEC-208 slice C, spec §5 — unblocked by DEC-222 throwing closures). BEGIN,
+  // run the closure, COMMIT on a normal return (returning its value), auto-ROLLBACK + re-throw the
+  // ORIGINAL typed error on a throw (`DbSys.transaction` preserves the thrown value through the rollback
+  // via the backend's `pending_throw`, so the caller catches the exact `DbError` the closure threw — not
+  // a generic one). A NESTED `db.transaction(fn)` opens a SAVEPOINT (composable partial rollback), so
+  // transactions compose. The closure is a THROWING function type — `db.transaction(function(): T throws
+  // DbError { … })` — since DB work raises a checked `DbError` (a non-throwing closure is also accepted:
+  // fewer-throws variance). BOTH this closure form AND the manual begin()/commit()/rollback() above are
+  // supported (developer ruled BOTH).
+  function transaction<T>(() => T throws DbError fn): T throws DbError {
+    return match (DbSys.transaction(this.raw, fn)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  // Retrying transaction (DEC-208 slice C, spec §5 retry). Re-runs the WHOLE transaction up to `retries`
+  // times on the transient `SerializationFailure` ONLY (SQLite SQLITE_BUSY/LOCKED — the class Serializable
+  // isolation needs); any OTHER `DbError` (and an exhausted retry budget) rolls back and propagates
+  // immediately. The retry loop lives HERE, not in the native, because only phorj source can `catch` the
+  // TYPED error (the thrown value is backend-side `pending_throw`, invisible to a native).
+  // SURFACE (PENDING adjudication): the spec illustrates one method `db.transaction(retries: N, fn)`, but
+  // the language has NO named args, NO method default params, and NO generic-method overloading — so a
+  // single generic `transaction` cannot carry an optional `retries`. Realized as this distinct
+  // `db.transactionRetry(fn, retries)`; developer to confirm the name/shape.
+  // NOTE (timeout): with `db.timeout(ms)` armed a transient busy is reclassified `Timeout`, not
+  // `SerializationFailure` (slice D) — so it is NOT retried; leave the timeout unset when relying on retry.
+  function transactionRetry<T>(() => T throws DbError fn, int retries): T throws DbError {
+    mutable int attempt = 0;
+    while (true) {
+      try {
+        return match (DbSys.transaction(this.raw, fn)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+      } catch (SerializationFailure e) {
+        if (attempt >= retries) { throw e; }
+        attempt = attempt + 1;
+      }
+    }
+  }
   // Deterministic close (spec §1): idempotent, never throws. After close(), any further use of this
   // connection (or a Statement derived from it) fails with `ConnectionError`. The `using`/`Closable`
   // sugar that would call this automatically at scope exit is DEC-203 — a separate language slice

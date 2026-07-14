@@ -752,6 +752,28 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   (`this.op(x)`) is not a reachable path — phorj already rejects it as `no method` before throws is
   considered — so no discharge site is needed there. Checker/parser-only — no runtime change (the throw
   is the existing `Op::Throw`), so byte-identical (`run ≡ runvm ≡ php`).
+- **DEC-208 slice C closure form — SHIPPED (2026-07-14, unblocked by DEC-222).** The closure form
+  `db.transaction(function(): T throws DbError { … })` + retry, previously BLOCKED (KNOWN_ISSUES) on the
+  lambda-can't-throw limitation DEC-222 fixed. Built: a `HigherOrder` native `DbSys.transaction(handle,
+  fn)` — one attempt: BEGIN, invoke the closure re-entrantly, COMMIT on `Ok` (return the closure's
+  value), ROLLBACK + re-propagate the ORIGINAL thrown value on the invoker's `Err`. Throw preservation
+  is the load-bearing part: a closure throw arrives as `Err(THROW_SENTINEL)` with the thrown value in the
+  backend's `pending_throw`, and `rollback_inner` runs pure `rusqlite` (never re-enters the backend), so
+  `pending_throw` survives and returning the same `Err` unchanged lets the backend rebuild the exact
+  typed `DbError` — the caller catches the original, not a generic error. A nested `db.transaction` is a
+  SAVEPOINT (reuses the slice-C `tx_depth`). The manual `begin`/`commit`/`rollback`/`rollbackQuiet` stay
+  (developer ruled BOTH). Retry loop lives in the PRELUDE (`db.transactionRetry`) because only phorj
+  source can `catch` the TYPED `SerializationFailure` (`pending_throw` is invisible to a native).
+  - **PENDING adjudication (Invariant 15) — retry SURFACE.** The spec (§5) illustrates one method
+    `db.transaction(retries: N, fn)`, but the language supports NEITHER named args, NOR method default
+    params, NOR generic-method overloading — three independent walls that make a single generic
+    `transaction` carrying an optional `retries` impossible. Realized as a distinct
+    `db.transactionRetry(fn, retries)` (retries trailing, positional). *Alternatives (all unbuildable):*
+    (a) `transaction(fn, retries = 0)` — `E-DEFAULT-PARAM-CONTEXT` (methods can't default); (b)
+    `transaction(fn)` + `transaction(fn, retries)` overload — `E-OVERLOAD-GENERIC` (generic methods can't
+    overload); (c) `transaction(retries: N, fn)` — no named args. Developer to confirm the final
+    name/shape. Isolation-arg retry (`db.transaction(Isolation.Serializable, fn)`) rides with the
+    deferred isolation slice. Example `examples/db/transaction-closure.phg`; `tests/db.rs`; both backends.
 - **DEC-221 — RULED (ASKED 2026-07-13): throwing constructors.** phorj constructors could not declare
   `throws` (a `constructor(...) throws E` was a parse error; a throwing call in a ctor body had no
   `?`/try escape), which forced DEC-208's fail-able open into a static factory `Db.connect(dsn)` —

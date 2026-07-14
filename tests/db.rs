@@ -702,6 +702,169 @@ fn db_close_then_use_is_connection_error() {
     both(&src, "caught: Core.Db: the connection is closed\n");
 }
 
+// ── DEC-208 slice C: the CLOSURE form of transactions (`db.transaction(fn)` / `db.transactionRetry`) ──
+// Unblocked by DEC-222 (throwing-closure function types). BEGIN → run closure → COMMIT on normal return
+// (returning its value) / auto-ROLLBACK + re-throw the ORIGINAL typed error on a throw; a nested call is
+// a SAVEPOINT; `transactionRetry` re-runs on the transient `SerializationFailure` only.
+
+/// The shipped `examples/db/transaction-closure.phg` — the SOLE gate that runs the closure-form
+/// transaction surface (commit / value-return / auto-rollback-and-rethrow / nested savepoint / retry)
+/// through the real language on BOTH backends (quarantined from the byte-identity differential).
+#[test]
+fn db_transaction_closure_example_runs_on_both_backends() {
+    let src = std::fs::read_to_string("examples/db/transaction-closure.phg")
+        .expect("read examples/db/transaction-closure.phg");
+    let expected = "after commit: acct1=70 acct2=30\n\
+                    total in tx: 100\n\
+                    caught UniqueViolation; transaction rolled back\n\
+                    after rollback: acct1=70 acct2=30\n\
+                    inner savepoint rolled back: outer continues\n\
+                    after nested: acct1=500 acct2=30\n\
+                    after retry: acct2=42 (succeeded on attempt 2)\n";
+    both(&src, expected);
+}
+
+#[test]
+fn db_transaction_closure_commits_on_normal_return() {
+    // The closure's writes persist after a normal return (COMMIT), and the closure's value is returned.
+    let src = tx_program(
+        r#"int v = db.transaction(function(): int throws DbError {
+             run(db, "UPDATE acct SET bal = 150 WHERE id = 1")?;
+             return bal(db)?;
+           })?;
+       Output.printLine("returned={v} persisted={bal(db)?}");"#,
+    );
+    both(&src, "returned=150 persisted=150\n");
+}
+
+#[test]
+fn db_transaction_closure_auto_rolls_back_and_rethrows_the_typed_error() {
+    // A throw inside the closure auto-rolls-back AND re-propagates the ORIGINAL typed error — caught as
+    // the precise `UniqueViolation` subtype outside the transaction; the balance change is discarded.
+    let src = tx_program(
+        r#"try {
+         discard db.transaction(function(): int throws DbError {
+           run(db, "UPDATE acct SET bal = 999 WHERE id = 1")?;
+           run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // duplicate PK -> UniqueViolation
+           return 0;
+         })?;
+       } catch (UniqueViolation e) {
+         Output.printLine("rolled back on: {e.message}");
+       }
+       Output.printLine("bal={bal(db)?}");"#,
+    );
+    both(
+        &src,
+        "rolled back on: Core.Db: UNIQUE constraint failed: acct.id\nbal=100\n",
+    );
+}
+
+#[test]
+fn db_transaction_closure_nested_is_a_savepoint() {
+    // A nested `db.transaction` is a SAVEPOINT: the inner throw rolls back only the inner change; the
+    // outer transaction (caught the inner failure) commits its own change. acct stays 1 row (id=1).
+    let src = tx_program(
+        r#"db.transaction(function(): void throws DbError {
+             run(db, "UPDATE acct SET bal = 200 WHERE id = 1")?;
+             try {
+               db.transaction(function(): void throws DbError {
+                 run(db, "UPDATE acct SET bal = 777 WHERE id = 1")?;
+                 run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // dup PK -> throws
+               });
+             } catch (DbError inner) { Output.printLine("inner rolled back"); }
+           })?;
+       Output.printLine("bal={bal(db)?}");"#,
+    );
+    // The inner UPDATE-to-777 is discarded to the savepoint; the outer UPDATE-to-200 survives + commits.
+    both(&src, "inner rolled back\nbal=200\n");
+}
+
+/// A scaffold with a captured mutable counter and the `SerializationFailure` import, for the retry
+/// tests: `body` runs inside `act(db): void throws DbError`, `tries` is a shared counter object.
+fn retry_program(body: &str) -> String {
+    format!(
+        r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Statement;
+import Core.Db.Row;
+import Core.Db.DbError;
+import Core.Db.UniqueViolation;
+import Core.Db.SerializationFailure;
+class Tries {{ mutable int n; constructor() {{ this.n = 0; }} function bump(): int {{ this.n = this.n + 1; return this.n; }} }}
+function bal(Db db): int throws DbError {{
+  Statement s = db.prepare("SELECT bal FROM acct WHERE id = 1")?;
+  List<Row> rows = s.query()?;
+  return rows[0].getInt("bal")?;
+}}
+function run(Db db, string sql): void throws DbError {{ Statement s = db.prepare(sql)?; discard s.exec()?; }}
+function act(Db db, Tries tries): void throws DbError {{
+  {body}
+}}
+function main(): void {{
+  try {{
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)").exec();
+    discard db.prepare("INSERT INTO acct(id, bal) VALUES(1, 100)").exec();
+    act(db, new Tries());
+  }} catch (DbError e) {{ Output.printLine("caught: {{e.message}}"); }}
+}}
+"#
+    )
+}
+
+#[test]
+fn db_transaction_retry_succeeds_after_a_transient_failure() {
+    // The closure throws a transient `SerializationFailure` on the first attempt, then succeeds; with
+    // retries=2 the transaction is re-run and the write lands (on the 2nd attempt).
+    let src = retry_program(
+        r#"db.transactionRetry(function(): void throws DbError {
+             int k = tries.bump();
+             if (k <= 1) { throw new SerializationFailure("busy"); }
+             run(db, "UPDATE acct SET bal = 42 WHERE id = 1")?;
+           }, 2)?;
+       Output.printLine("bal={bal(db)?} attempts={tries.n}");"#,
+    );
+    both(&src, "bal=42 attempts=2\n");
+}
+
+#[test]
+fn db_transaction_retry_gives_up_after_the_budget_and_propagates() {
+    // The closure always throws `SerializationFailure`; with retries=1 (2 attempts) the budget is
+    // exhausted and the LAST transient error propagates (still a catchable `SerializationFailure`).
+    let src = retry_program(
+        r#"try {
+         db.transactionRetry(function(): void throws DbError {
+           discard tries.bump();
+           throw new SerializationFailure("always busy");
+         }, 1)?;
+       } catch (SerializationFailure e) {
+         Output.printLine("gave up after {tries.n} attempts: {e.message}");
+       }"#,
+    );
+    // A user-thrown SerializationFailure carries its message verbatim (no `Core.Db:` native prefix).
+    both(&src, "gave up after 2 attempts: always busy\n");
+}
+
+#[test]
+fn db_transaction_retry_does_not_retry_a_non_transient_error() {
+    // A non-transient `DbError` (a UNIQUE violation) is NOT retried — it rolls back and propagates on
+    // the FIRST attempt, even with a generous retry budget. `tries.n` proves exactly one attempt ran.
+    let src = retry_program(
+        r#"try {
+         db.transactionRetry(function(): void throws DbError {
+           discard tries.bump();
+           run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // duplicate PK -> UniqueViolation
+         }, 5)?;
+       } catch (UniqueViolation e) {
+         Output.printLine("not retried; attempts={tries.n}");
+       }
+       Output.printLine("bal={bal(db)?}");"#,
+    );
+    both(&src, "not retried; attempts=1\nbal=100\n");
+}
+
 // ── DEC-208 slice D: writes + robustness (lastInsertId / executeMany / bindList / timeout / onQuery) ──
 
 /// The SOLE gate that runs the slice-D write surface (`execReturningId`/`lastInsertId`/`executeMany`/

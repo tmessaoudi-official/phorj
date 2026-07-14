@@ -13,11 +13,11 @@
 //     `catch (DbError e)` still catches them all.
 //   * `db.close()` — deterministic teardown; further use faults with `ConnectionError`.
 //
-// NOTE (DEC-208 slice C): the specced closure form `db.transaction(() => { … })` with auto-rollback
-// is BLOCKED on a phorj limitation — a lambda cannot propagate a checked exception, so a closure
-// cannot carry the `throws DbError` that DB work raises. It is recorded as a PENDING adjudication
-// (see KNOWN_ISSUES.md). The named-function `try { … } finally { rollbackQuiet() }` idiom below is
-// exactly what that closure form would run internally.
+// NOTE (DEC-208 slice C): the closure form `db.transaction(function(): T throws DbError { … })` with
+// auto-rollback is now SHIPPED (unblocked by DEC-222 throwing closures) — see
+// `examples/db/transaction-closure.phg`. This file keeps the MANUAL, PDO-faithful control
+// (`begin`/`commit`/`rollback`/`rollbackQuiet`); BOTH APIs are supported (developer ruled BOTH). The
+// `try { … } finally { rollbackQuiet() }` idiom below is exactly what the closure form runs internally.
 package Main;
 
 import Core.Output;
