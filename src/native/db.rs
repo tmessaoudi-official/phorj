@@ -25,7 +25,7 @@ use super::{NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::{DbObject, EnumVal, HKey, Value};
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// Wrap a success payload as `DbResult.Ok(v)`. The natives here NEVER fault on a DB error (a native
@@ -64,9 +64,17 @@ fn wrap(inner: Result<Value, String>) -> Value {
 
 /// A live SQLite connection handle (`Value::Db` payload). Shared-mutable: cloning the `Value::Db`
 /// shares this `Rc`, so all bindings name the same connection.
+///
+/// The connection is wrapped in an `Option` so `close()` (DEC-208 slice C) can deterministically drop
+/// it — every derived `DbStmt` shares the same `Rc<RefCell<Option<…>>>`, so closing invalidates all of
+/// them (a later op then faults with `<<ConnectionError>>`). `tx_depth` is the transaction / savepoint
+/// nesting level (0 = no open transaction), shared across every binding of the connection: `begin`
+/// opens `BEGIN` at depth 0 and a `SAVEPOINT` deeper, `commit`/`rollback` `RELEASE`/`ROLLBACK TO` the
+/// innermost level — so transactional helpers compose (an inner rollback never aborts the outer).
 #[derive(Debug)]
 struct DbConn {
-    conn: Rc<RefCell<rusqlite::Connection>>,
+    conn: Rc<RefCell<Option<rusqlite::Connection>>>,
+    tx_depth: Cell<u32>,
 }
 
 impl DbObject for DbConn {
@@ -95,7 +103,7 @@ enum Binds {
 /// in place and returns the same shared handle.
 #[derive(Debug)]
 struct DbStmt {
-    conn: Rc<RefCell<rusqlite::Connection>>,
+    conn: Rc<RefCell<Option<rusqlite::Connection>>>,
     sql: String,
     binds: RefCell<Binds>,
 }
@@ -171,8 +179,55 @@ fn from_sql(v: rusqlite::types::Value) -> Value {
     }
 }
 
+/// Classify a `rusqlite` error into the taxonomy marker the prelude's `DbError.fail` reads (DEC-208
+/// slice C, spec §6). The mapping keys off SQLite's (extended) result codes: `SQLITE_CONSTRAINT_UNIQUE`
+/// / `_PRIMARYKEY` → `UniqueViolation`, generic `SQLITE_CONSTRAINT` → `ConstraintViolation`,
+/// `SQLITE_BUSY`/`SQLITE_LOCKED` → `SerializationFailure` (the transient class retry targets — the
+/// spec's `Deadlock` under one name), `SQLITE_CANTOPEN`/`SQLITE_NOTADB` → `ConnectionError`, generic
+/// `SQLITE_ERROR` (a mis-typed statement at prepare time) → `SyntaxError`. Anything else stays generic
+/// (no marker → the base `DbError`). `Timeout` has no SQLite source yet (it arrives with query
+/// `.timeout(ms)`, slice D); the subtype exists in the taxonomy and the classifier already reads its
+/// marker, so wiring it later is emit-only.
+fn err_kind(e: &rusqlite::Error) -> Option<&'static str> {
+    // Both a runtime failure (`SqliteFailure`) and a prepare-time SQL error (`SqlInputError`, which
+    // carries the byte offset) wrap an `ffi::Error` with the result codes we classify on.
+    let err = match e {
+        rusqlite::Error::SqliteFailure(err, _) => err,
+        rusqlite::Error::SqlInputError { error, .. } => error,
+        _ => return None,
+    };
+    let ext = err.extended_code;
+    if ext == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+        || ext == rusqlite::ffi::SQLITE_CONSTRAINT_PRIMARYKEY
+    {
+        return Some("UniqueViolation");
+    }
+    // The primary result code is the low byte of the extended code.
+    match ext & 0xff {
+        rusqlite::ffi::SQLITE_CONSTRAINT => Some("ConstraintViolation"),
+        rusqlite::ffi::SQLITE_BUSY | rusqlite::ffi::SQLITE_LOCKED => Some("SerializationFailure"),
+        rusqlite::ffi::SQLITE_CANTOPEN | rusqlite::ffi::SQLITE_NOTADB => Some("ConnectionError"),
+        rusqlite::ffi::SQLITE_ERROR => Some("SyntaxError"),
+        _ => None,
+    }
+}
+
+/// Render a `rusqlite` error as the `DbResult.Err` message the prelude throws on, PREFIXED with a
+/// `<<Kind>>` marker when the error classifies into the typed taxonomy (see [`err_kind`]). The prelude's
+/// single `DbError.fail` classification point strips the marker and throws the matching subtype.
 fn sql_err(e: rusqlite::Error) -> String {
-    format!("Core.Db: {e}")
+    let kind = err_kind(&e);
+    let base = format!("Core.Db: {e}");
+    match kind {
+        Some(tag) => format!("<<{tag}>>{base}"),
+        None => base,
+    }
+}
+
+/// The catchable message for using a connection (or a statement derived from it) after `close()`.
+/// Tagged `ConnectionError` so `catch (ConnectionError e)` is precise.
+fn conn_closed() -> String {
+    "<<ConnectionError>>Core.Db: the connection is closed".to_string()
 }
 
 // --- Internal bodies: `Ok(payload)` on success, `Err(db-error-message)` on a DB error. `wrap` maps
@@ -193,7 +248,8 @@ fn open_inner(args: &[Value]) -> Result<Value, String> {
     }
     .map_err(sql_err)?;
     Ok(Value::Db(Rc::new(DbConn {
-        conn: Rc::new(RefCell::new(conn)),
+        conn: Rc::new(RefCell::new(Some(conn))),
+        tx_depth: Cell::new(0),
     })))
 }
 
@@ -203,6 +259,11 @@ fn prepare_inner(args: &[Value]) -> Result<Value, String> {
         [c, Value::Str(s)] => (as_conn(c)?, s.as_str().to_string()),
         _ => return Err("Core.Db.__prepare expects (Db, string sql)".into()),
     };
+    // Reject preparing on a closed connection eagerly (the statement would otherwise fault only at
+    // query/exec time).
+    if conn.conn.borrow().is_none() {
+        return Err(conn_closed());
+    }
     Ok(Value::Db(Rc::new(DbStmt {
         conn: Rc::clone(&conn.conn),
         sql,
@@ -266,7 +327,8 @@ fn query_inner(args: &[Value]) -> Result<Value, String> {
         [s] => as_stmt(s)?,
         _ => return Err("Core.Db.__query expects (Statement)".into()),
     };
-    let conn = stmt.conn.borrow();
+    let guard = stmt.conn.borrow();
+    let conn = guard.as_ref().ok_or_else(conn_closed)?;
     let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
     let cols: Vec<String> = prepared
         .column_names()
@@ -309,7 +371,8 @@ fn exec_inner(args: &[Value]) -> Result<Value, String> {
         [s] => as_stmt(s)?,
         _ => return Err("Core.Db.__exec expects (Statement)".into()),
     };
-    let conn = stmt.conn.borrow();
+    let guard = stmt.conn.borrow();
+    let conn = guard.as_ref().ok_or_else(conn_closed)?;
     let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
     let binds = stmt.binds.borrow();
     let n = match &*binds {
@@ -334,6 +397,95 @@ fn exec_inner(args: &[Value]) -> Result<Value, String> {
         }
     };
     Ok(Value::Int(n as i64))
+}
+
+/// Run one SQL control statement (`BEGIN`/`COMMIT`/`SAVEPOINT`/…) on the live connection, or a clean
+/// `<<ConnectionError>>` if the connection was closed.
+fn control(conn: &DbConn, sql: &str) -> Result<(), String> {
+    let guard = conn.conn.borrow();
+    let live = guard.as_ref().ok_or_else(conn_closed)?;
+    live.execute_batch(sql).map_err(sql_err)
+}
+
+/// `db.begin()` → open a transaction (DEC-208 slice C). At depth 0 this is a top-level `BEGIN`; nested,
+/// it opens `SAVEPOINT phorj_sp_<depth>` so transactional helpers compose. Increments the depth only on
+/// success. Returns the new depth (the prelude ignores the payload; it is handy for tests/debugging).
+fn begin_inner(args: &[Value]) -> Result<Value, String> {
+    let conn = match args {
+        [c] => as_conn(c)?,
+        _ => return Err("Core.Db.__begin expects (Db)".into()),
+    };
+    let depth = conn.tx_depth.get();
+    let sql = if depth == 0 {
+        "BEGIN".to_string()
+    } else {
+        format!("SAVEPOINT phorj_sp_{depth}")
+    };
+    control(conn, &sql)?;
+    let new_depth = depth + 1;
+    conn.tx_depth.set(new_depth);
+    Ok(Value::Int(i64::from(new_depth)))
+}
+
+/// `db.commit()` → commit the innermost open transaction level. At the outermost level (depth 1) this is
+/// `COMMIT`; nested, it `RELEASE`s the matching savepoint. A commit with no open transaction (depth 0) is
+/// a best-effort no-op so a secondary fault can never mask an original one. Returns the remaining depth.
+fn commit_inner(args: &[Value]) -> Result<Value, String> {
+    let conn = match args {
+        [c] => as_conn(c)?,
+        _ => return Err("Core.Db.__commit expects (Db)".into()),
+    };
+    let depth = conn.tx_depth.get();
+    if depth == 0 {
+        return Ok(Value::Int(0));
+    }
+    let remaining = depth - 1;
+    let sql = if remaining == 0 {
+        "COMMIT".to_string()
+    } else {
+        format!("RELEASE phorj_sp_{remaining}")
+    };
+    control(conn, &sql)?;
+    conn.tx_depth.set(remaining);
+    Ok(Value::Int(i64::from(remaining)))
+}
+
+/// `db.rollback()` → roll back the innermost open transaction level. At the outermost level this is
+/// `ROLLBACK`; nested, it `ROLLBACK`s to and `RELEASE`s the matching savepoint (so the outer transaction
+/// survives an inner rollback). A rollback with no open transaction is a best-effort no-op. The depth is
+/// decremented BEFORE issuing the SQL, so the counter stays consistent even if the driver rejects the
+/// statement (a doomed transaction is reset by SQLite regardless). Returns the remaining depth.
+fn rollback_inner(args: &[Value]) -> Result<Value, String> {
+    let conn = match args {
+        [c] => as_conn(c)?,
+        _ => return Err("Core.Db.__rollback expects (Db)".into()),
+    };
+    let depth = conn.tx_depth.get();
+    if depth == 0 {
+        return Ok(Value::Int(0));
+    }
+    let remaining = depth - 1;
+    conn.tx_depth.set(remaining);
+    let sql = if remaining == 0 {
+        "ROLLBACK".to_string()
+    } else {
+        format!("ROLLBACK TO phorj_sp_{remaining}; RELEASE phorj_sp_{remaining}")
+    };
+    control(conn, &sql)?;
+    Ok(Value::Int(i64::from(remaining)))
+}
+
+/// `db.close()` → deterministically drop the connection (DEC-208 slice C, spec §1). Idempotent and
+/// never a DB error: every `Value::Db`/`DbStmt` shares the same `Rc<RefCell<Option<…>>>`, so setting it
+/// to `None` invalidates all of them — a later op faults with `<<ConnectionError>>`. Resets the tx depth.
+fn close_inner(args: &[Value]) -> Result<Value, String> {
+    let conn = match args {
+        [c] => as_conn(c)?,
+        _ => return Err("Core.Db.__close expects (Db)".into()),
+    };
+    *conn.conn.borrow_mut() = None;
+    conn.tx_depth.set(0);
+    Ok(Value::Int(0))
 }
 
 /// Look up a column in a `Row` (a `Map`), or a DB error if the column is absent.
@@ -519,6 +671,10 @@ db_native!(db_bind, bind_inner);
 db_native!(db_bind_named, bind_named_inner);
 db_native!(db_query, query_inner);
 db_native!(db_exec, exec_inner);
+db_native!(db_begin, begin_inner);
+db_native!(db_commit, commit_inner);
+db_native!(db_rollback, rollback_inner);
+db_native!(db_close, close_inner);
 db_native!(row_get_int, get_int_inner);
 db_native!(row_get_string, get_string_inner);
 db_native!(row_get_float, get_float_inner);
@@ -604,6 +760,46 @@ pub fn db_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_exec),
             php: |a| format!("{}->execute()", a[0]),
+        },
+        // --- Transaction control (DEC-208 slice C). Savepoint-aware via the connection's depth counter
+        // (managed in the native, shared across handles). The `php` emitters map to PDO's transaction
+        // methods (LADDER case 1); nested-savepoint PDO emission is finalized in the transpile slice. ---
+        NativeFn {
+            module: "Core.DbSys",
+            name: "begin",
+            params: vec![handle()],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_begin),
+            php: |a| format!("{}->beginTransaction()", a[0]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "commit",
+            params: vec![handle()],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_commit),
+            php: |a| format!("{}->commit()", a[0]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "rollback",
+            params: vec![handle()],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_rollback),
+            php: |a| format!("{}->rollBack()", a[0]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "close",
+            params: vec![handle()],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_close),
+            // PDO closes when the last reference is unset; there is no explicit close() method.
+            php: |_a| "null".to_string(),
         },
         NativeFn {
             module: "Core.DbSys",
@@ -851,6 +1047,132 @@ mod tests {
         let msg =
             err_of(row_get_int(&[rows[0].clone(), Value::Str("x".into())], &mut out).unwrap());
         assert!(msg.contains("NULL"), "got: {msg}");
+    }
+
+    // ── DEC-208 slice C: transactions, savepoints, taxonomy, close ─────────────────────────────
+
+    /// Open an in-memory DB and run one `exec` statement, panicking on any failure.
+    fn exec1(db: &Value, sql: &str, out: &mut String) {
+        let s = ok_of(db_prepare(&[db.clone(), Value::Str(sql.into())], out).unwrap());
+        ok_of(db_exec(&[s], out).unwrap());
+    }
+
+    /// Read a single-int scalar from `sql`.
+    fn scalar(db: &Value, sql: &str, col: &str, out: &mut String) -> i64 {
+        let s = ok_of(db_prepare(&[db.clone(), Value::Str(sql.into())], out).unwrap());
+        let rows = ok_of(db_query(&[s], out).unwrap());
+        let Value::List(rows) = rows else {
+            panic!("query returns a list")
+        };
+        let v = ok_of(row_get_int(&[rows[0].clone(), Value::Str(col.into())], out).unwrap());
+        match v {
+            Value::Int(n) => n,
+            other => panic!("expected int, got {other:?}"),
+        }
+    }
+
+    /// A UNIQUE / PRIMARY KEY collision maps (via the extended result code) to the `UniqueViolation`
+    /// marker the prelude classifier reads.
+    #[test]
+    fn unique_violation_is_tagged() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        exec1(&db, "CREATE TABLE t(id INTEGER PRIMARY KEY)", &mut out);
+        exec1(&db, "INSERT INTO t(id) VALUES(1)", &mut out);
+        let s = ok_of(
+            db_prepare(
+                &[db, Value::Str("INSERT INTO t(id) VALUES(1)".into())],
+                &mut out,
+            )
+            .unwrap(),
+        );
+        let msg = err_of(db_exec(&[s], &mut out).unwrap());
+        assert!(msg.starts_with("<<UniqueViolation>>"), "got: {msg}");
+    }
+
+    /// A malformed statement maps to the `SyntaxError` marker.
+    #[test]
+    fn syntax_error_is_tagged() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        let s = ok_of(db_prepare(&[db, Value::Str("SELCT oops".into())], &mut out).unwrap());
+        let msg = err_of(db_query(&[s], &mut out).unwrap());
+        assert!(msg.starts_with("<<SyntaxError>>"), "got: {msg}");
+    }
+
+    /// A concurrent write lock (`SQLITE_BUSY`) maps to `SerializationFailure` — the transient class
+    /// `retry` would target. Provoked deterministically with two file connections and no busy handler.
+    #[test]
+    fn busy_maps_to_serialization_failure() {
+        let path = std::env::temp_dir().join(format!(
+            "phorj_db_busy_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let c1 = rusqlite::Connection::open(&path).unwrap();
+        c1.execute_batch("CREATE TABLE t(x)").unwrap();
+        // c1 takes a write lock and holds it.
+        c1.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let c2 = rusqlite::Connection::open(&path).unwrap();
+        // c2's write attempt cannot acquire the lock → SQLITE_BUSY (no busy timeout set).
+        let err = c2.execute_batch("BEGIN IMMEDIATE").unwrap_err();
+        let msg = sql_err(err);
+        let _ = std::fs::remove_file(&path);
+        assert!(msg.starts_with("<<SerializationFailure>>"), "got: {msg}");
+    }
+
+    /// A committed transaction persists; a rolled-back one is discarded.
+    #[test]
+    fn commit_persists_rollback_discards() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        exec1(&db, "CREATE TABLE t(n INTEGER)", &mut out);
+
+        ok_of(db_begin(std::slice::from_ref(&db), &mut out).unwrap());
+        exec1(&db, "INSERT INTO t(n) VALUES(1)", &mut out);
+        ok_of(db_commit(std::slice::from_ref(&db), &mut out).unwrap());
+        assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 1);
+
+        ok_of(db_begin(std::slice::from_ref(&db), &mut out).unwrap());
+        exec1(&db, "INSERT INTO t(n) VALUES(2)", &mut out);
+        ok_of(db_rollback(std::slice::from_ref(&db), &mut out).unwrap());
+        // Still one row — the second insert was rolled back.
+        assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 1);
+    }
+
+    /// A nested `begin` is a SAVEPOINT: rolling it back leaves the outer transaction's work intact.
+    #[test]
+    fn savepoint_partial_rollback() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        exec1(&db, "CREATE TABLE t(n INTEGER)", &mut out);
+
+        ok_of(db_begin(std::slice::from_ref(&db), &mut out).unwrap()); // outer
+        exec1(&db, "INSERT INTO t(n) VALUES(1)", &mut out);
+        ok_of(db_begin(std::slice::from_ref(&db), &mut out).unwrap()); // savepoint
+        exec1(&db, "INSERT INTO t(n) VALUES(2)", &mut out);
+        ok_of(db_rollback(std::slice::from_ref(&db), &mut out).unwrap()); // roll back savepoint only
+        ok_of(db_commit(std::slice::from_ref(&db), &mut out).unwrap()); // commit outer
+                                                                        // Only the outer insert (n=1) survives.
+        assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 1);
+        assert_eq!(scalar(&db, "SELECT n FROM t", "n", &mut out), 1);
+    }
+
+    /// `close` is idempotent and invalidates every derived handle; a later op faults with the
+    /// `ConnectionError` marker.
+    #[test]
+    fn close_invalidates_connection() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        exec1(&db, "CREATE TABLE t(n INTEGER)", &mut out);
+        ok_of(db_close(std::slice::from_ref(&db), &mut out).unwrap());
+        // Idempotent: a second close is still Ok.
+        ok_of(db_close(std::slice::from_ref(&db), &mut out).unwrap());
+        let msg = err_of(db_prepare(&[db, Value::Str("SELECT 1".into())], &mut out).unwrap());
+        assert!(msg.starts_with("<<ConnectionError>>"), "got: {msg}");
     }
 
     #[test]

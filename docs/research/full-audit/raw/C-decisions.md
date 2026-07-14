@@ -505,6 +505,27 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
     extend the native ABI with a `throws` channel (cleaner call sites, benefits all future throwing
     natives, but a cross-cutting spine-adjacent change — REJECTED as too big for the need now); C —
     DbError as a hard uncatchable fault (REJECTED — reverses Q6, un-PDO-like, no in-language recovery).
+  - **SLICE C SHIPPED (2026-07-14) — transactions & correctness (partial), one PENDING adjudication.**
+    Shipped on the SQLite driver, designed for later drivers: manual PDO-faithful `db.begin()`/`commit()`/
+    `rollback()` (savepoint-aware — a nested `begin()` opens `SAVEPOINT phorj_sp_<depth>`, depth tracked
+    in `src/native/db.rs` shared across handles, so transactional helpers compose) + `db.rollbackQuiet()`
+    (never-throwing, for the `finally` auto-rollback idiom) + a typed `DbError` taxonomy (`open class
+    DbError` + `UniqueViolation`/`ConstraintViolation`/`ConnectionError`/`SerializationFailure`/`Timeout`/
+    `SyntaxError` — mapped from SQLite extended result codes at the native boundary, classified at the
+    single `DbError.fail` throw-helper so every method incl. the S2 `queryInto` helpers auto-upgrades to
+    the precise catchable type) + deterministic idempotent `db.close()` (`Option`-wrapped connection;
+    later use → `ConnectionError`). Files: `src/native/db.rs`, `DB_PRELUDE` in `src/cli/preludes.rs`,
+    `tests/db.rs` (9 native unit + 6 phorj fixtures), `examples/db/transactions.phg`. `run ≡ runvm`;
+    spine-quarantined (impure); nothing-in-the-wind (subtypes member-gated in `bare_types`).
+    - **PENDING (Invariant 15) — the closure form `db.transaction(() => { … })` + closure `retry`.** NOT a
+      scope choice: a phorj **lambda cannot declare or propagate a checked exception** (`Type::Function`
+      has no `throws` clause in the parser/AST; `cur_throws` is empty in a lambda body), so a closure that
+      does real DB work cannot carry `throws DbError` nor surface a *catchable typed* error to the wrapper
+      for auto-rollback/transient-retry. Minimal failing program in `KNOWN_ISSUES.md`. Enabling it needs
+      **throwing-closure function types** (`() => T throws E`) — a cross-cutting user-visible language
+      change (affects ALL higher-order code) = the developer's ruling. *Deferred, not blocked:* `using`/
+      `Closable` auto-close (DEC-203 — separate language slice; `close()` ships) and isolation levels
+      (SQLite has ~one; meaningful once Postgres lands — kept out to keep the overload set arity-clean).
 - **DEC-209 — match legibility: reject bare PascalCase arms; `default` is the catch-all; `_` = ignore-only.**
   A lone PascalCase ident arm (`Circle =>`) currently becomes a SILENT catch-all binding — verified
   live: `match(s){Circle=>"c"}` returns "c" for a `Square` (byte-identity holds across all 4 backends,

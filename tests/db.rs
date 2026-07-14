@@ -412,3 +412,131 @@ function main(): void {
 "#;
     both(src, "Grace/45\n");
 }
+
+// ── DEC-208 slice C: transactions, savepoints, taxonomy, close ───────────────────────────────────
+
+/// The shipped `examples/db/transactions.phg` — the SOLE gate that runs the transaction/savepoint/
+/// taxonomy/close surface through the real language on BOTH backends (it is quarantined from the
+/// byte-identity differential like every `Core.Db` example).
+#[test]
+fn db_transactions_example_runs_on_both_backends() {
+    let src = std::fs::read_to_string("examples/db/transactions.phg")
+        .expect("read examples/db/transactions.phg");
+    let expected = "after commit: acct1=70 acct2=30\n\
+                    caught UniqueViolation; transaction rolled back\n\
+                    after rollback: acct1=70 acct2=30\n\
+                    after nested: acct1=500 acct2=30\n\
+                    after close: Core.Db: the connection is closed\n";
+    both(&src, expected);
+}
+
+/// A scaffold: a one-row `acct(id PK, bal)` table (id=1, bal=100), then `body` runs inside an
+/// `act(db): void throws DbError` helper (so it may use idiomatic `?` propagation), which `main`
+/// drives inside `try { … } catch (DbError e) { print }`.
+fn tx_program(body: &str) -> String {
+    format!(
+        r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Statement;
+import Core.Db.Row;
+import Core.Db.DbError;
+import Core.Db.UniqueViolation;
+function bal(Db db): int throws DbError {{
+  Statement s = db.prepare("SELECT bal FROM acct WHERE id = 1")?;
+  List<Row> rows = s.query()?;
+  return rows[0].getInt("bal")?;
+}}
+function run(Db db, string sql): void throws DbError {{
+  Statement s = db.prepare(sql)?;
+  discard s.exec()?;
+}}
+function act(Db db): void throws DbError {{
+  {body}
+}}
+function main(): void {{
+  try {{
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)").exec();
+    discard db.prepare("INSERT INTO acct(id, bal) VALUES(1, 100)").exec();
+    act(db);
+  }} catch (DbError e) {{ Output.printLine("caught: {{e.message}}"); }}
+}}
+"#
+    )
+}
+
+#[test]
+fn db_commit_persists() {
+    let src = tx_program(
+        r#"db.begin()?;
+       run(db, "UPDATE acct SET bal = 150 WHERE id = 1")?;
+       db.commit()?;
+       Output.printLine("{bal(db)?}");"#,
+    );
+    both(&src, "150\n");
+}
+
+#[test]
+fn db_rollback_on_throw_via_finally_idiom() {
+    // The auto-rollback idiom: a UNIQUE violation inside the transaction unwinds through `finally`,
+    // which rolls back — the balance change is discarded and the typed error propagates.
+    let src = tx_program(
+        r#"db.begin()?;
+       mutable bool ok = false;
+       try {
+         run(db, "UPDATE acct SET bal = 999 WHERE id = 1")?;
+         run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?;
+         db.commit()?;
+         ok = true;
+       } catch (UniqueViolation e) {
+         Output.printLine("rolled back on: {e.message}");
+       } finally {
+         if (!ok) { db.rollbackQuiet(); }
+       }
+       Output.printLine("bal={bal(db)?}");"#,
+    );
+    // The UPDATE-to-999 is discarded by the rollback: re-querying shows the original 100.
+    both(
+        &src,
+        "rolled back on: Core.Db: UNIQUE constraint failed: acct.id\nbal=100\n",
+    );
+}
+
+#[test]
+fn db_savepoint_partial_rollback() {
+    // Nested begin = savepoint: the inner rollback leaves the outer update intact.
+    let src = tx_program(
+        r#"db.begin()?;
+       run(db, "UPDATE acct SET bal = 200 WHERE id = 1")?;
+       db.begin()?;
+       run(db, "UPDATE acct SET bal = 777 WHERE id = 1")?;
+       db.rollback()?;
+       db.commit()?;
+       Output.printLine("{bal(db)?}");"#,
+    );
+    both(&src, "200\n");
+}
+
+#[test]
+fn db_unique_violation_caught_specifically() {
+    // `catch (UniqueViolation e)` catches the precise subtype; the base `catch (DbError)` never runs.
+    let src = tx_program(
+        r#"try {
+         run(db, "INSERT INTO acct(id, bal) VALUES(1, 5)")?;
+       } catch (UniqueViolation e) {
+         Output.printLine("unique");
+       }"#,
+    );
+    both(&src, "unique\n");
+}
+
+#[test]
+fn db_close_then_use_is_connection_error() {
+    let src = tx_program(
+        r#"db.close();
+       discard bal(db)?;"#,
+    );
+    both(&src, "caught: Core.Db: the connection is closed\n");
+}

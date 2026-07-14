@@ -476,6 +476,7 @@ pub(super) struct VirtualModule {
 pub(super) const DB_PRELUDE: &str = r#"
 import Core.DbSys;
 import Core.List;
+import Core.String;
 // `Core.Map` is imported for the `queryMap<K,V>` hydration helpers the `desugar_db` pass generates
 // into a `Core.Db` program (they build the result `Map` via `Map.set`); like the `Core.List` import
 // above it makes the module's ops available to the generated helpers (and, as with `List`, to user
@@ -485,14 +486,42 @@ import Core.Map;
 // Prelude-local result carrier (NOT Core.Result — see the native docs on injection order).
 enum DbResult<T> { Ok(T value), Err(string message) }
 
-class DbError implements Error {
+open class DbError implements Error {
   constructor(public string message) {}
   // `throw` is a statement, not an expression, so it cannot be a `match` arm value directly. This
-  // `never`-returning helper lets a `DbResult.Err(e)` arm raise a catchable `DbError` as an expression
-  // (`DbResult.Err(e) => DbError.fail(e)`) — a call to a `never` function types as the bottom type, unifying
-  // with the `Success` arm's value type.
-  static function fail(string message): never throws DbError { throw new DbError(message); }
+  // `never`-returning helper lets a `DbResult.Err(e)` arm raise a catchable exception as an expression
+  // (`DbResult.Err(e) => DbError.fail(e)`) — a call to a `never` function types as the bottom type,
+  // unifying with the success arm's value type.
+  //
+  // It is ALSO the single classification point (DEC-208 slice C, spec §6): the native tags a driver
+  // error with a `<<Kind>>` marker prefix (`src/native/db.rs` `err_kind`), and `fail` strips the marker
+  // and throws the matching TYPED subtype. Because every Row/Statement/Db method — including the S2
+  // `queryInto` hydration helpers — funnels its `DbResult.Err` through here, they all yield the precise
+  // `catch (UniqueViolation e)` type with zero change at the call sites. An untagged message (a logic /
+  // usage error, e.g. mixed bind styles, or a plain SQLite failure) throws the base `DbError`.
+  static function fail(string message): never throws DbError {
+    if (String.startsWith(message, "<<UniqueViolation>>")) { throw new UniqueViolation(String.removePrefix(message, "<<UniqueViolation>>")); }
+    if (String.startsWith(message, "<<ConstraintViolation>>")) { throw new ConstraintViolation(String.removePrefix(message, "<<ConstraintViolation>>")); }
+    if (String.startsWith(message, "<<ConnectionError>>")) { throw new ConnectionError(String.removePrefix(message, "<<ConnectionError>>")); }
+    if (String.startsWith(message, "<<SerializationFailure>>")) { throw new SerializationFailure(String.removePrefix(message, "<<SerializationFailure>>")); }
+    if (String.startsWith(message, "<<Timeout>>")) { throw new Timeout(String.removePrefix(message, "<<Timeout>>")); }
+    if (String.startsWith(message, "<<SyntaxError>>")) { throw new SyntaxError(String.removePrefix(message, "<<SyntaxError>>")); }
+    throw new DbError(message);
+  }
 }
+
+// Typed error taxonomy (DEC-208 slice C, spec §6). Each `extends DbError`, so `catch (DbError e)`
+// still catches EVERY DB error while `catch (UniqueViolation e)` catches exactly one kind. The native
+// maps rusqlite (extended) result codes to the marker `DbError.fail` reads. `SerializationFailure` is
+// the transient class `retry` targets (SQLite `SQLITE_BUSY`/`SQLITE_LOCKED`) — it is the spec's
+// `Deadlock` under a single name. `Timeout` is part of the taxonomy contract; SQLite has no source for
+// it yet (it arrives with query `.timeout(ms)`, slice D), so it is currently only ever caught, not thrown.
+class UniqueViolation extends DbError { constructor(string message) { parent.constructor(message); } }
+class ConstraintViolation extends DbError { constructor(string message) { parent.constructor(message); } }
+class ConnectionError extends DbError { constructor(string message) { parent.constructor(message); } }
+class SerializationFailure extends DbError { constructor(string message) { parent.constructor(message); } }
+class Timeout extends DbError { constructor(string message) { parent.constructor(message); } }
+class SyntaxError extends DbError { constructor(string message) { parent.constructor(message); } }
 
 class Row {
   constructor(private DbHandle raw) {}
@@ -568,6 +597,41 @@ class Db {
   }
   function prepare(string sql): Statement throws DbError {
     return match (DbSys.prepare(this.raw, sql)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
+
+  // A void no-op, used as the success arm of the `void`-returning transaction methods below — a `match`
+  // arm must be an EXPRESSION, so `DbResult.Ok(_) => Db.ok()` yields `void` cleanly (a bare `{}` block
+  // is not an expression here). The `?` in the error arm makes that arm `never`, unifying to `void`.
+  private static function ok(): void {}
+
+  // --- Transactions & correctness (DEC-208 slice C, spec §5). Manual, PDO-faithful control. A nested
+  // begin() opens a SAVEPOINT (composable partial rollback); commit()/rollback() release / roll back the
+  // innermost level. commit()/rollback() at depth 0 are best-effort no-ops (the native guards the depth),
+  // so a secondary fault can never mask the original. The closure form `db.transaction(fn)` + retry are
+  // BLOCKED on phorj lambdas being unable to propagate a checked exception (see docs/KNOWN_ISSUES) —
+  // recorded as a PENDING adjudication; this manual surface is what the closure form would build on. ---
+  function begin(): void throws DbError {
+    match (DbSys.begin(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function commit(): void throws DbError {
+    match (DbSys.commit(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function rollback(): void throws DbError {
+    match (DbSys.rollback(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+  }
+  // Best-effort rollback that NEVER throws — safe inside a `finally` (a throwing rollback there would
+  // mask the original exception). The auto-rollback idiom is: `db.begin(); mutable bool ok = false;
+  // try { …work…; db.commit(); ok = true; } finally { if (!ok) db.rollbackQuiet(); }` — demonstrated in
+  // examples/db/transactions.phg.
+  function rollbackQuiet(): void {
+    match (DbSys.rollback(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(_) => Db.ok() };
+  }
+  // Deterministic close (spec §1): idempotent, never throws. After close(), any further use of this
+  // connection (or a Statement derived from it) fails with `ConnectionError`. The `using`/`Closable`
+  // sugar that would call this automatically at scope exit is DEC-203 — a separate language slice
+  // (see KNOWN_ISSUES); until then, call close() explicitly (or rely on drop at program end).
+  function close(): void {
+    match (DbSys.close(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(_) => Db.ok() };
   }
 }
 "#;
@@ -650,7 +714,21 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         src: Some(DB_PRELUDE),
         respond_bridge: None,
         member_gated: true,
-        bare_types: &["Db", "Statement", "Row", "DbError", "DbHandle"],
+        bare_types: &[
+            "Db",
+            "Statement",
+            "Row",
+            "DbError",
+            "DbHandle",
+            // DEC-208 slice C typed taxonomy — member-gated so `catch (UniqueViolation e)` resolves
+            // in user code after `import Core.Db.UniqueViolation;` (nothing in the wind).
+            "UniqueViolation",
+            "ConstraintViolation",
+            "ConnectionError",
+            "SerializationFailure",
+            "Timeout",
+            "SyntaxError",
+        ],
     },
     // `Core.DbSys` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.Db` prelude
     // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Db` never collides with

@@ -197,6 +197,39 @@ not a panic:
   discloses). (4) A hand-written `phorjQueryIntoList…`/`phorjQueryOneInto…` free function could collide
   with a synthesized helper name (astronomically unlikely; matches the `phorjInject…` convention).
 
+- **`Core.Db` transactions & correctness (DEC-208 slice C) — shipped subset + one PENDING adjudication.**
+  Shipped (`examples/db/transactions.phg`, `tests/db.rs`): manual PDO-faithful transaction control
+  `db.begin()` / `db.commit()` / `db.rollback()` — **savepoint-aware** (a nested `begin()` opens
+  `SAVEPOINT phorj_sp_<depth>`, so an inner rollback leaves the outer transaction intact), depth tracked
+  in the native (`src/native/db.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
+  throws — the auto-rollback idiom `try { …; commit(); ok = true; } finally { if (!ok) rollbackQuiet(); }`
+  in a **named** function); a **typed error taxonomy** — `open class DbError` subtyped `UniqueViolation` /
+  `ConstraintViolation` / `ConnectionError` / `SerializationFailure` / `Timeout` / `SyntaxError`, each
+  `extends DbError` so `catch (DbError e)` still catches all, mapped from SQLite (extended) result codes
+  at the native boundary and classified at the single `DbError.fail` throw-helper (every existing method —
+  incl. the S2 `queryInto` helpers — auto-upgrades to the precise type with no call-site change); and
+  deterministic idempotent `db.close()` (further use of the connection or a derived `Statement` faults
+  with `ConnectionError`).
+  - **PENDING adjudication (Invariant 15) — the closure form `db.transaction(() => { … })` + closure
+    retry.** BLOCKED on a phorj type-system limitation, not a scope choice: a **lambda cannot declare or
+    propagate a checked exception** (`Type::Function` has no `throws` clause — `src/parser/types.rs`; and
+    `cur_throws` is empty inside a lambda body — `src/checker/mod.rs`). So a closure that does real DB
+    work (`s.exec()?`) cannot carry the `throws DbError` those ops raise, and cannot surface a *catchable
+    typed* error to the wrapper for auto-rollback / transient-retry. Minimal failing program:
+    `function tx(() => int f): int throws DbError { return f(); } … tx(function(): int { throw new DbError("x"); });`
+    → `E-THROW-UNDECLARED` at the `throw` inside the lambda. Enabling the closure form needs
+    **throwing-closure function types** (`() => T throws E`) — a user-visible language surface change
+    (parser/AST/checker function-type subtyping/both backends/transpiler) that affects ALL higher-order
+    code, so it is the developer's ruling, not an autonomous one. Retry (`db.transaction(retries: N, fn)`)
+    rides along with it (same limitation; the transient class `SerializationFailure` is already mapped and
+    tested, so retry is emit-only once the closure form lands).
+  - **Deferred (not blocked):** (1) **`using`/`Closable` auto-close (DEC-203)** — `db.close()` ships, but
+    the `using (Db db = …) { … }` sugar that would call it at scope exit is DEC-203, a separate ruled-but-
+    unbuilt language slice (lexer/parser/checker/backends); defining `Closable` here now would collide with
+    that slice, so it is left to DEC-203. (2) **Isolation levels** (`Isolation` enum + `db.begin(Isolation)`)
+    — SQLite has effectively one isolation, so it is minimally meaningful until the Postgres driver lands;
+    deferred to keep the overload set arity-distinguished and the slice tight.
+
 - **`Core.Db` typed hydration completion (DEC-208 slice B) — shipped + disclosures.** Three shape-directed
   extensions of the S2 desugar (`src/checker/desugar_db.rs`), same PRE-check lowering to S1 primitives, so
   `run ≡ runvm` stays automatic. (1) **Nested hydration:** a field that is itself an entity is hydrated
