@@ -15,8 +15,8 @@
 //! `Expr::Call` arm, which substitutes a freshly built router for an `Http.autoRouter()` shape.
 
 use crate::ast::{
-    CatchClause, ClassMember, Expr, Item, LambdaBody, MatchArm, Modifier, Param, Program, Stmt,
-    StrPart, Type,
+    CatchClause, ClassMember, CollKind, Expr, Item, LambdaBody, MatchArm, Modifier, Param, Program,
+    Stmt, StrPart, Type,
 };
 use crate::token::Span;
 
@@ -165,11 +165,40 @@ fn method_handler_lambda(class: &str, method: &str, sp: Span) -> Expr {
 /// `function(Request req) => Class.method(req)` lambda for a static method). The `new`/`.route` wrapper nodes
 /// carry the `Http.autoRouter()` call's span, so a downstream type error points at the call site.
 fn build_router(routes: &[Route], sp: Span) -> Expr {
+    // `new Router(new List<Route>(), new List<(Request, (Request) -> Response) -> Response>())` —
+    // an empty route table + empty middleware list (M6 W2-ext slice 1). DEC-214 part-2: empty
+    // collections are CONSTRUCTED (bare `[]` is now `E-EMPTY-LITERAL`), so the type args are spelled
+    // to match the `Router` constructor's `List<Route>` / `List<mw>` parameters exactly.
+    let named = |n: &str| Type::Named {
+        name: n.into(),
+        args: Vec::new(),
+        span: sp,
+    };
+    // `(Request) -> Response` (the `next` continuation), then `(Request, next) -> Response` (a mw).
+    let next_fn = Type::Function {
+        params: vec![named("Request")],
+        ret: Box::new(named("Response")),
+        span: sp,
+    };
+    let mw_ty = Type::Function {
+        params: vec![named("Request"), next_fn],
+        ret: Box::new(named("Response")),
+        span: sp,
+    };
+    let empty_routes = Expr::NewColl {
+        kind: CollKind::List,
+        args: vec![named("Route")],
+        span: sp,
+    };
+    let empty_mws = Expr::NewColl {
+        kind: CollKind::List,
+        args: vec![mw_ty],
+        span: sp,
+    };
     let mut e = Expr::New(
         Box::new(Expr::Call {
             callee: Box::new(Expr::Ident("Router".into(), sp)),
-            // `new Router([], [])` — empty route table + empty middleware list (M6 W2-ext slice 1).
-            args: vec![Expr::List(Vec::new(), sp), Expr::List(Vec::new(), sp)],
+            args: vec![empty_routes, empty_mws],
             span: sp,
         }),
         sp,

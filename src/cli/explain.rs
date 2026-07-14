@@ -38,6 +38,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              `float`, list, instance, or other composite can't be a key. Change the key type, or\n\
              model the lookup differently (e.g. key by a `string` id).\n"
         }
+        "E-EMPTY-LITERAL" => {
+            "E-EMPTY-LITERAL — a bare empty `[]` literal has no element type (DEC-214).\n\n\
+             An empty collection is CONSTRUCTED with mandatory `new`, self-typed from its type\n\
+             arguments — `new List<T>()` or `new Map<K,V>()` — never inferred from the surrounding\n\
+             declaration, return, or argument type (\"nothing in the wind\": no type-from-later-use).\n\
+             A non-empty literal `[1, 2, 3]` / `[\"a\" => 1]` is unchanged — its element type is\n\
+             locally obvious. Write `List<int> xs = new List<int>();` (not `List<int> xs = [];`).\n"
+        }
         "E-NO-PACKAGE" => {
             "E-NO-PACKAGE — a file has no `package` declaration.\n\n\
              Everything is namespaced (\"nothing in the wind\"): every file must declare its package\n\

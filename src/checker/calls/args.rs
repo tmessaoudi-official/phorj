@@ -94,23 +94,19 @@ impl Checker {
         false
     }
 
-    /// Check a single call argument against its expected parameter type. Identical to `check_expr`
-    /// except that an **empty list literal** `[]` — which has no element to infer a type from —
-    /// adopts the expected `List<T>` element type instead of erroring with "cannot infer element
-    /// type". This is the one place an expected type is threaded into expression checking
-    /// (bidirectional, call-argument-only by design); an empty `[]` in any other position (a
-    /// declaration initializer, a `return`) still requires a non-empty literal. It lets the
-    /// zero-attribute / zero-child HTML builders read naturally — `el("p", [], [text("hi")])`.
+    /// Check a single call argument against its expected parameter type. Like `check_expr`, but a
+    /// NON-empty list/map literal is threaded against a concrete collection param (so `f([1, "x"])`
+    /// checks each element against a `List<int | string>` param — UA-1.6 / DEC-178). A bare **empty
+    /// `[]`** is rejected here with `E-EMPTY-LITERAL` (DEC-214 part-2): this was formerly the one
+    /// bidirectional position where an empty `[]` adopted the param's `List<T>` element type, but an
+    /// empty collection now must be constructed with `new List<T>()` / `new Map<K,V>()`.
     pub(in crate::checker) fn check_arg(&mut self, arg: &crate::ast::Expr, expected: &Ty) -> Ty {
-        // An EMPTY `[]` against any `List<T>` param (concrete OR generic `T`) types as that list — the
-        // original behavior, which lets a generic callee's unifier bind `T` from the other args
-        // (`SomeGeneric.of([])`). Must come first: the `ty_has_param` guard below would otherwise drop
-        // an empty-`[]`→`List<T>` arg to `check_expr`, which cannot infer an empty literal's element.
-        if let crate::ast::Expr::List(elems, _) = arg {
+        // DEC-214 part-2: a bare empty `[]` call argument is rejected — an empty collection needs
+        // `new List<T>()` / `new Map<K,V>()`, never contextual inference from the parameter type (this
+        // was the one bidirectional empty-`[]`→`List<T>` position; it is now a hard `E-EMPTY-LITERAL`).
+        if let crate::ast::Expr::List(elems, span) = arg {
             if elems.is_empty() {
-                if let Ty::List(inner) = expected {
-                    return Ty::List(inner.clone());
-                }
+                return self.err_empty_literal(*span);
             }
         }
         // Thread a NON-empty list/map LITERAL against a CONCRETE collection type — so `f([1, "x"])`

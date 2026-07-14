@@ -53,8 +53,8 @@ function showPost(Request req): Response {
 // Build the router once: registration order does not affect literal>param precedence.
 function app(): Router {
     return new Router(
-        [],
-        []
+        new List<Route>(),
+        new List<(Request, (Request) => Response) => Response>()
     )
         .route("GET", "/", home)
         .route("GET", "/health", health)

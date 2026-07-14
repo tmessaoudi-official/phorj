@@ -570,15 +570,21 @@ fn call_arg_list_literal_still_rejects_off_union_element() {
 }
 
 #[test]
-fn call_arg_empty_list_to_generic_callee_still_binds() {
-    // REGRESSION LOCK (Wave C foundation): an empty `[]` passed to a GENERIC callee (`List<T>` param)
-    // must still type as `List<T>` so the unifier binds `T` from the other args — the `check_arg`
-    // empty-`[]` special-case must run BEFORE the concrete-only threading guard. (This exact case
-    // broke twice while building the slice: the guard dropped empty-`[]`→`List<T>` to `check_expr`,
-    // which cannot infer an empty literal's element type.) `List.isEmpty` is `List<T> -> bool`.
+fn call_arg_empty_list_to_generic_callee_rejected() {
+    // DEC-214 part-2: the former empty-`[]`→`List<T>` call-argument special-case is GONE — a bare `[]`
+    // passed to a generic callee (`List<T>` param) is now `E-EMPTY-LITERAL`. The empty collection is
+    // built with `new List<int>()`, which binds `T` explicitly. `List.isEmpty` is `List<T> -> bool`.
+    let e = errors_of(
+        "import Core.Output; import Core.List; \
+         function main() -> void { Output.printLine(\"{List.isEmpty([])}\"); }",
+    );
+    assert!(
+        e.iter().any(|d| d.code == Some("E-EMPTY-LITERAL")),
+        "got {e:?}"
+    );
     assert!(errors_of(
         "import Core.Output; import Core.List; \
-         function main() -> void { Output.printLine(\"{List.isEmpty([])}\"); }"
+         function main() -> void { Output.printLine(\"{List.isEmpty(new List<int>())}\"); }"
     )
     .is_empty());
 }

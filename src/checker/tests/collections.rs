@@ -173,29 +173,60 @@ fn list_indexing_yields_element() {
 }
 
 #[test]
-fn empty_list_literal_infers_from_declared_annotation() {
-    // `List<T> xs = []` takes the element type from the annotation (expected-type at the decl site).
+fn empty_list_literal_rejected_at_declaration() {
+    // DEC-214 part-2: a bare `[]` no longer takes its element type from the annotation — it is a hard
+    // `E-EMPTY-LITERAL`. The empty collection must be CONSTRUCTED with `new List<T>()`.
+    let e = errors_of("function main() -> void { List<string> xs = []; }");
     assert!(
-        errors_of("function main() -> void { List<string> xs = []; }").is_empty(),
-        "{:?}",
-        errors_of("function main() -> void { List<string> xs = []; }")
+        e.iter().any(|d| d.code == Some("E-EMPTY-LITERAL")),
+        "got {e:?}"
     );
-    assert!(errors_of("function main() -> void { List<int> xs = []; int n = xs[0]; }").is_empty());
+    // The `new List<T>()` form is clean; a non-empty literal `[1, 2, 3]` is unchanged.
+    assert!(errors_of(
+        "function main() -> void { List<int> xs = new List<int>(); int n = xs[0]; }"
+    )
+    .is_empty());
+    assert!(
+        errors_of("function main() -> void { List<int> xs = [1, 2, 3]; int n = xs[0]; }")
+            .is_empty()
+    );
 }
 
 #[test]
-fn empty_list_literal_infers_from_return_type() {
+fn empty_list_literal_rejected_at_return() {
+    // DEC-214 part-2: `return []` against a `-> List<T>` return type is `E-EMPTY-LITERAL`.
+    let e = errors_of("function f() -> List<int> { return []; }");
     assert!(
-        errors_of("function f() -> List<int> { return []; }").is_empty(),
-        "{:?}",
-        errors_of("function f() -> List<int> { return []; }")
+        e.iter().any(|d| d.code == Some("E-EMPTY-LITERAL")),
+        "got {e:?}"
     );
+    // `return new List<int>()` is clean.
+    assert!(errors_of("function f() -> List<int> { return new List<int>(); }").is_empty());
 }
 
 #[test]
-fn empty_list_literal_still_needs_context() {
-    // No expected type (`var`) → still an error; the fix is expected-type-driven, not a blanket default.
-    assert!(!errors_of("function main() -> void { var xs = []; }").is_empty());
+fn empty_list_literal_rejected_at_call_argument() {
+    // DEC-214 part-2: the former bidirectional empty-`[]`→`List<T>` call-arg position now rejects too.
+    let e = errors_of("import Core.List; function main() -> void { bool b = List.isEmpty([]); }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-EMPTY-LITERAL")),
+        "got {e:?}"
+    );
+    // `new List<int>()` as the argument is clean.
+    assert!(errors_of(
+        "import Core.List; function main() -> void { bool b = List.isEmpty(new List<int>()); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn empty_list_literal_rejected_with_var() {
+    // No expected type (`var`) → `E-EMPTY-LITERAL`, same as every other position (DEC-214 part-2).
+    let e = errors_of("function main() -> void { var xs = []; }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-EMPTY-LITERAL")),
+        "got {e:?}"
+    );
 }
 
 #[test]

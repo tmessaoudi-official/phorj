@@ -2,7 +2,8 @@
 //
 // Empty collections are built with mandatory `new` — `new List<T>()` / `new Map<K,V>()` — self-typed
 // from their type arguments (no context needed, no "type from later use" inference, no static
-// factory). This is consistent with the language's mandatory-`new` rule. Non-empty literals
+// factory). This is consistent with the language's mandatory-`new` rule. A bare empty `[]` is a
+// compile error (E-EMPTY-LITERAL, DEC-214 part-2) — `new` is the only empty form. Non-empty literals
 // `[1, 2, 3]` are unchanged. Empty construction transpiles to a PHP empty array `[]`; byte-identical
 // across both backends and real PHP. (`new Set<T>()` is a follow-up — the VM has no empty-set op yet.)
 package Main;

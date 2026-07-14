@@ -621,7 +621,17 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   DEC-208 EXTERNALIZES. Doing part-2 now = prelude surgery + double-churn on code about to leave the
   language. CORRECT ORDER: DEC-208 (Sql prelude → userland) + DEC-218 (web spine → userland) FIRST,
   THEN part-2 codemods only the small remaining general-purpose empty-`[]` set. Part-2 depends on
-  DEC-208/DEC-218.)*
+  DEC-208/DEC-218.)* **PART-2 SHIPPED (2026-07-14, developer override of the resequencing — done
+  now, accepting the web/Sql-prelude double-churn):** a bare empty `[]` is rejected everywhere with
+  `E-EMPTY-LITERAL` ("an empty collection needs its type") — one `err_empty_literal` helper wired to
+  the three typing sites (`check_list`, `thread_literal_expected` for decl/return, `check_arg` for
+  call args; the former bidirectional empty-`[]`→`List<T>` arg case is gone). No `List.empty`/`Map.empty`
+  factory ever existed (nothing to remove). `desugar_router`'s synthesized `new Router([], [])` now
+  emits `Expr::NewColl` with the ctor's exact `List<Route>` / `List<mw>` types. Codemod (mechanical,
+  by class): HTTP prelude 3 sites; `examples/**` 9 sites (web + guide); `conformance/web/**` 12 sites;
+  Rust `.phg` fixtures 8 sites (differential + checker/JIT tests); the gitignored `var/phorj-app`
+  bench 2 sites. `phg explain E-EMPTY-LITERAL` added. The lifter still emits `[]` for an untyped PHP
+  `[]` (no type context in PHP source) — noted in KNOWN_ISSUES, not gate-exercised.*
 - **DEC-215 — DI stays compile-time; L1/L2 refactor affirmed, scheduled Ω-4/Ω-7.** DI v1 is a 1292-LOC
   bespoke COMPILER pass (`desugar_di/`, pre-check, `Expr::Inject`) — the same "app framework privileged
   into the compiler" category as the ejected SQL builder (DEC-208). The spec's own ruling stands: build a

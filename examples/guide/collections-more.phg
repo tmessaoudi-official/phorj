@@ -9,7 +9,7 @@ import Core.Set;
 // set→list conversion. Each maps to an idiomatic PHP array operation, byte-identical on both backends and PHP.
 function main(): void {
     // List.isEmpty
-    Output.printLine("empty []   = {List.isEmpty([])}");
+    Output.printLine("empty []   = {List.isEmpty(new List<int>())}");
     Output.printLine("empty [1,2] = {List.isEmpty([1, 2])}");
     // List.flatten — concatenate a list of lists.
     List<int> flat = List.flatten([[1, 2], [3], [4, 5]]);

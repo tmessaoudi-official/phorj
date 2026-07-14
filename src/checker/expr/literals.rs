@@ -280,11 +280,24 @@ impl Checker {
         }
     }
 
+    /// DEC-214 part-2: a bare empty `[]` literal is rejected everywhere — an empty collection must be
+    /// CONSTRUCTED with mandatory `new` (`new List<T>()` / `new Map<K,V>()`), never inferred from
+    /// context. Single-sourced so the three typing sites (`check_list`, `thread_literal_expected`, and
+    /// the call-argument `check_arg`) emit one identical `E-EMPTY-LITERAL`. Returns `Ty::Error`.
+    pub(in crate::checker) fn err_empty_literal(&mut self, span: Span) -> Ty {
+        self.err_coded(
+            span,
+            "an empty collection needs its type",
+            "E-EMPTY-LITERAL",
+            Some("write `new List<T>()` or `new Map<K,V>()`".into()),
+        )
+    }
+
     pub(in crate::checker) fn check_list(&mut self, elems: &[crate::ast::Expr], span: Span) -> Ty {
         if elems.is_empty() {
-            // empty list element type cannot be inferred without an expected type;
-            // the §6 sample has no empty list (YAGNI to thread expected types now).
-            return self.err(span, "cannot infer element type of empty list literal");
+            // DEC-214 part-2: a bare empty `[]` has no element type and is no longer contextually
+            // inferred — it must be built with `new List<T>()` / `new Map<K,V>()`.
+            return self.err_empty_literal(span);
         }
         let first = self.check_expr(&elems[0]);
         for e in &elems[1..] {

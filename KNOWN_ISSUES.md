@@ -8,21 +8,25 @@ parse error, non-zero exit) — never a crash.
 ## Design forks — ADJUDICATED 2026-07-12 (developer via AskUserQuestion; full rulings + alternatives in `docs/research/full-audit/raw/C-decisions.md` §"2026-07-12 adjudication batch")
 
 > Every fork below is now RULED and queued for its wave slot; the original analyses are kept
-> for context. **DEC-201** empty literals → BOTH contextual typing + `List.empty<T>()`/`Map.empty<K,V>()`.
+> for context. **DEC-201** empty literals → SUPERSEDED by **DEC-214** (empty collections via `new List<T>()`/`new Map<K,V>()`, mandatory `new`; bare `[]` rejected `E-EMPTY-LITERAL`; `List.empty`/`Map.empty` and `[]` contextual typing dropped) — SHIPPED (part-1 the `new` capability, part-2 the `[]` rejection + repo codemod).
 > **DEC-202** reserved top-level names → reject `E-RESERVED-NAME` (full keyword set + PHP builtin classes).
 > **DEC-203** scope guard → `using` block + `Closable` contract (PHP try/finally).
 > **DEC-204** shutdown → `Runtime.onShutdown(fn)` (lands with Ω-2 Core.Process).
 > **DEC-205** cycles → BOTH, PHASED: PHP-style threshold collector first, `Weak<T>` (→ PHP WeakReference) second.
 > **DEC-206** bare `DateTime` → gated (`E-INJECTED-TYPE-BARE`) like its siblings.
 
-- **DEC-PENDING: empty collection literals take no contextual type.** `List<int> xs = [];` and
-  `Map<string, int> m = [];` both fail with `cannot infer element type of empty list literal`
-  even though the annotation names the type, and there are no `List.empty()` / `Map.empty()`
-  constructors — today the only way to a fresh empty collection is a seeded literal (see
-  `bench/micro/listappend.phg`). Options for adjudication: (a) contextual typing for collection
-  literals in annotated declarations/assignments (the annotation is right there — RECOMMENDED);
-  (b) `List.empty<T>()` / `Map.empty<K,V>()` stdlib constructors; (c) both.
-  Failing program: `function f(): int { List<int> xs = []; return List.length(xs); }`.
+- **RESOLVED (DEC-214): empty collections are constructed with `new`.** A fresh empty collection is
+  `new List<T>()` / `new Map<K,V>()` (mandatory `new`, self-typed from the type arguments). A bare
+  empty `[]` is rejected with `E-EMPTY-LITERAL` ("an empty collection needs its type") — there is no
+  contextual "type from later use" inference and no `List.empty`/`Map.empty` factory (the DEC-201
+  ruling was superseded). Non-empty literals `[1, 2, 3]` / `["a" => 1]` are unchanged.
+  Was: `List<int> xs = [];` failed with "cannot infer element type"; now write
+  `List<int> xs = new List<int>();`.
+  - **Lifter caveat (DEC-214):** the PHP→Phorj lifter still emits `[]` for an untyped PHP empty
+    array (`[]`) — PHP source carries no element type to spell `new List<T>()`, so lifted code with
+    an empty array will now fail the checker with `E-EMPTY-LITERAL` and must be typed by hand. The
+    lifter is best-effort (Tier-1) and its output is not gate-exercised; a type-inferring empty-array
+    lift is deferred.
 
 - **DEC-PENDING: the Rc CYCLE-LEAK answer (§15 fork — the representation slice's design half,
   2026-07-12 session 5).** Instances are `Rc`-shared mutable handles: `a.next = b; b.next = a`

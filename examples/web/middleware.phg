@@ -58,8 +58,8 @@ function show(Router rt, bytes raw): void {
 function main(): void {
     // `logging` applies to every route; the `/admin` group adds `requireAuth` to just its routes.
     Router rt = new Router(
-        [],
-        []
+        new List<Route>(),
+        new List<(Request, (Request) => Response) => Response>()
     )
         .use(logging)
         .route("GET", "/", home)

@@ -30,7 +30,9 @@ function showArchive(Request req): Response {
 }
 
 function show(Router rt, string method, string path): void {
-    Response resp = rt.handle(new Request(method, path, b"", [], []));
+    Response resp = rt.handle(
+        new Request(method, path, b"", new List<string>(), new List<string>())
+    );
     int st = resp.status;
     string body = Bytes.toString(resp.body) ?? "?";
     Output.printLine("{method} {path} -> {st}: {body}");
@@ -38,8 +40,8 @@ function show(Router rt, string method, string path): void {
 
 function main(): void {
     Router rt = new Router(
-        [],
-        []
+        new List<Route>(),
+        new List<(Request, (Request) => Response) => Response>()
     )
         .route("GET", "/users/\{id:\\d+\}", showUser)
         .route("GET", "/users/\{name\}", showProfile)

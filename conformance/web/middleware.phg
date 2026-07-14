@@ -31,7 +31,7 @@ function requireAuth(Request req, (Request) => Response next): Response {
 }
 
 function show(Router rt, string method, string path, List<string> headers): void {
-    Response resp = rt.handle(new Request(method, path, b"", headers, []));
+    Response resp = rt.handle(new Request(method, path, b"", headers, new List<string>()));
     int st = resp.status;
     string body = Bytes.toString(resp.body) ?? "?";
     Output.printLine("{method} {path} -> {st} {body}");
@@ -39,8 +39,8 @@ function show(Router rt, string method, string path, List<string> headers): void
 
 function main(): void {
     Router rt = new Router(
-        [],
-        []
+        new List<Route>(),
+        new List<(Request, (Request) => Response) => Response>()
     )
         .use(tag)
         .route("GET", "/", home)
@@ -48,9 +48,9 @@ function main(): void {
             "/admin",
             function(Router r): Router { return r.use(requireAuth).route("GET", "/x", secret); }
         );
-    show(rt, "GET", "/", []);
+    show(rt, "GET", "/", new List<string>());
     // tag wraps home
-    show(rt, "GET", "/admin/x", []);
+    show(rt, "GET", "/admin/x", new List<string>());
     // auth 401 (still tag-wrapped)
     show(rt, "GET", "/admin/x", ["Authorization: t"]);
 }

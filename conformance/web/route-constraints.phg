@@ -22,7 +22,9 @@ function ymd(Request req): Response {
 }
 
 function show(Router rt, string path): void {
-    Response resp = rt.handle(new Request("GET", path, b"", [], []));
+    Response resp = rt.handle(
+        new Request("GET", path, b"", new List<string>(), new List<string>())
+    );
     int st = resp.status;
     string body = Bytes.toString(resp.body) ?? "?";
     Output.printLine("{path} -> {st} {body}");
@@ -30,8 +32,8 @@ function show(Router rt, string path): void {
 
 function main(): void {
     Router rt = new Router(
-        [],
-        []
+        new List<Route>(),
+        new List<(Request, (Request) => Response) => Response>()
     )
         .route("GET", "/u/\{id:\\d+\}", byId)
         .route("GET", "/u/\{name\}", byName)

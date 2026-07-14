@@ -55,8 +55,8 @@ function main(): void {
     );
     Output.printLine(Html.render(link));
     // <a href="/p?x=1&amp;y=2">Tom &amp; Jerry</a>
-    // A no-attribute element — empty [] is accepted in call-argument position.
-    Html para = Html.element("p", [], [Html.text(bio)]);
+    // A no-attribute element — an empty attribute list is built with `new List<Attr>()` (DEC-214).
+    Html para = Html.element("p", new List<Attr>(), [Html.text(bio)]);
     Output.printLine(Html.render(para));
     // <p>&lt;script&gt;alert(1)&lt;/script&gt;</p>
     // A self-closing void element with an attribute.
@@ -94,10 +94,13 @@ function main(): void {
     );
     Output.printLine(Html.render(bar));
     // <nav class="top"><a href="/?a=1&amp;b=2">Home &amp; Away</a></nav>
-    Html items = Html.ul([], [Html.li([], [Html.text(name)]), Html.li([], [Html.text(bio)])]);
+    Html items = Html.ul(
+        new List<Attr>(),
+        [Html.li(new List<Attr>(), [Html.text(name)]), Html.li(new List<Attr>(), [Html.text(bio)])]
+    );
     // <ul><li>Tom &amp; &quot;Jerry&quot;</li><li>&lt;script&gt;alert(1)&lt;/script&gt;</li></ul>
     Output.printLine(Html.render(items));
-    Html rule = Html.hr([]);
+    Html rule = Html.hr(new List<Attr>());
     // a void element: <hr/>
     Output.printLine(Html.render(rule));
 }

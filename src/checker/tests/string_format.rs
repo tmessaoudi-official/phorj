@@ -43,7 +43,7 @@ fn heterogeneous_value_list_is_accepted() {
         expand(
             "package Main; import Core.String; \
              function main(): void { var a = String.format(\"%s %d %d\", [\"x\", 1, 2]); \
-                                     var b = String.format(\"plain\", []); }"
+                                     var b = String.format(\"plain\", new List<string>()); }"
         )
         .is_ok(),
         "a heterogeneous / empty value list should type-check"

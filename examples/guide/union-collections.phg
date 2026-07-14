@@ -73,7 +73,7 @@ function main(): void {
         }
     );
     // The same shape over an empty list takes the `null` arm.
-    List<int | string> none = [];
+    List<int | string> none = new List<int | string>();
     Output.printLine(
         match (none.first()) {
             int n => "int(" + (n as string) + ")",

@@ -639,7 +639,7 @@ fn phg_run_hook_hits_the_jit_on_union_dyn_params() {
           mutable int acc = 0;\n\
           mutable int i = 0;\n\
           while (i < iters) {\n\
-            Q q = new Q([], 0).add(i).add(\"paid\").add(true);\n\
+            Q q = new Q(new List<string | int | float | bool>(), 0).add(i).add(\"paid\").add(true);\n\
             acc = acc + q.size() + q.n;\n\
             i = i + 1;\n\
           }\n\

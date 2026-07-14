@@ -96,7 +96,7 @@ class Request {
     List<string> rl = String.split(requestLine, " ");
     string method = rl[0];
     string path = rl[1];
-    return new Request(method, path, body, lines, []);
+    return new Request(method, path, body, lines, new List<string>());
   }
 }
 class Response {
@@ -162,7 +162,7 @@ class Router {
   // in `handle`.
   function group(string prefix, (Router) -> Router build): Router {
     var builder = build;
-    Router sub = builder(new Router([], []));
+    Router sub = builder(new Router(new List<Route>(), new List<(Request, (Request) -> Response) -> Response>()));
     mutable List<Route> merged = this.table;
     for (Route r in sub.table) {
       var h = r.handler;
@@ -237,7 +237,7 @@ class Router {
   static function extractParams(string pattern, string path): List<string> {
     List<string> ps = String.split(pattern, "/");
     List<string> xs = String.split(path, "/");
-    mutable List<string> out = Router.idStrs([]);
+    mutable List<string> out = Router.idStrs(new List<string>());
     mutable int i = 0;
     int n = List.length(ps);
     while (i < n) {

@@ -70,5 +70,5 @@ function main(): void {
     // whole, no mojibake) and %.5s keeps all of "café". All three backends char-truncate identically.
     Output.printLine(String.format("[%.4s][%.5s]", ["café", "café"]));
     // A format string with no directives passes through unchanged (empty value list).
-    Output.printLine(String.format("no placeholders here", []));
+    Output.printLine(String.format("no placeholders here", new List<string>()));
 }

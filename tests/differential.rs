@@ -1783,9 +1783,9 @@ fn generic_methods_agree() {
     // generic free function (M-RT generics-all). `identity` reused at three concrete types.
     agree("import Core.Output; class U { function id<T>(T x)->T { return x; } } function main()-> void { var u=new U(); Output.printLine(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
                                                                                                                                                                                               // `T` inferred from a `List<T>` argument; the fallback shares it.
-    agree("import Core.Output; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main()-> void { var u=new U(); Output.printLine(\"{u.firstOr([10,20], -1)} {u.firstOr([], 99)}\"); }"); // 10 99
-                                                                                                                                                                                                                                                // A type parameter inside a function-typed parameter, and the closure invoked in the method body
-                                                                                                                                                                                                                                                // (exercises the VM's re-entrant closure path from inside a generic method).
+    agree("import Core.Output; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main()-> void { var u=new U(); Output.printLine(\"{u.firstOr([10,20], -1)} {u.firstOr(new List<int>(), 99)}\"); }"); // 10 99
+                                                                                                                                                                                                                                                             // A type parameter inside a function-typed parameter, and the closure invoked in the method body
+                                                                                                                                                                                                                                                             // (exercises the VM's re-entrant closure path from inside a generic method).
     agree("import Core.Output; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=new U(); Output.printLine(\"{u.applyTwice(5, function(int v)=>v+1)}\"); }");
     // 7
 }
@@ -2033,17 +2033,17 @@ fn named_tag_helpers_agree() {
     agree(
         r#"import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.a([Html.attr("href","/?x=1&y=2")],[Html.text("A & B")]))); }"#,
     ); // <a href="/?x=1&amp;y=2">A &amp; B</a>
-       // Empty attr list accepted in call-arg position; tags nest.
+       // Empty attr list built with `new List<Attr>()` (DEC-214); tags nest.
     agree(
-        r#"import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.ul([],[Html.li([],[Html.text("x")])]))); }"#,
+        r#"import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.ul(new List<Attr>(),[Html.li(new List<Attr>(),[Html.text("x")])]))); }"#,
     ); // <ul><li>x</li></ul>
        // A void (self-closing) element.
     agree(
-        r#"import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.hr([]))); }"#,
+        r#"import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.hr(new List<Attr>()))); }"#,
     ); // <hr/>
        // A tag helper and the equivalent el() call produce identical bytes.
     agree(
-        r#"import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.p([],[Html.text("hi")]))); Output.printLine(Html.render(Html.el("p",[],[Html.text("hi")]))); }"#,
+        r#"import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.p(new List<Attr>(),[Html.text("hi")]))); Output.printLine(Html.render(Html.el("p",new List<Attr>(),[Html.text("hi")]))); }"#,
     ); // <p>hi</p>\n<p>hi</p>
 }
 
@@ -2051,7 +2051,7 @@ fn named_tag_helpers_agree() {
 fn transpiles_named_tag_to_baked_php() {
     // A named tag erases to the same baked closure the kernel uses, with the tag compiled in (no $t).
     let php = transpile_ok(
-        r#"package Main; import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.div([],[Html.text("x")]))); }"#,
+        r#"package Main; import Core.Output; import Core.Html; function main()-> void { Output.printLine(Html.render(Html.div(new List<Attr>(),[Html.text("x")]))); }"#,
     );
     assert!(php.contains("'<div'"), "{php}");
     assert!(php.contains("'</div>'"), "{php}");

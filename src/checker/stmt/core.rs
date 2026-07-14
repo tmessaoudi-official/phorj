@@ -41,6 +41,14 @@ impl Checker {
         e: &crate::ast::Expr,
         expected: &Ty,
     ) -> Option<Ty> {
+        // DEC-214 part-2: a bare empty `[]` is rejected before any expected-type threading — an empty
+        // collection needs `new List<T>()` / `new Map<K,V>()`, never contextual inference from the
+        // declared/return type. (Return `Some(Error)` so the caller reports exactly once.)
+        if let crate::ast::Expr::List(elems, span) = e {
+            if elems.is_empty() {
+                return Some(self.err_empty_literal(*span));
+            }
+        }
         match (e, expected) {
             (crate::ast::Expr::List(elems, _), Ty::List(elem_ty)) => {
                 for el in elems {
