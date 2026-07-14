@@ -5,6 +5,15 @@
 //! NAME matches; zero-payload variants only; unknown value → `DbError`), a `decimal` field (exact money
 //! via `Row.getDecimal`), and a `Core.Json` field (TEXT column parsed via `Json.parse`). Each composes
 //! with nested hydration and admits NULL in its `?` form (timestamp→`DateTime` is deferred on DEC-206).
+//! Slice B2 adds the COLUMN NAMING STRATEGY: a `.namingStrategy(new Naming.SnakeToCamel())` call in the
+//! query chain makes the desugar emit the `snake_case` of each field name as its column literal
+//! (`userName` → `getString("user_name")`), applied per dotted segment for a nested alias. It is read
+//! at COMPILE TIME from the chain (the prelude method is a no-op returning `this`); the strict-exact
+//! default (`Naming::Exact`) is unchanged, so a query with no `namingStrategy` is byte-for-byte as
+//! before. A non-literal strategy argument is rejected (`E-DB-NAMING-NOT-CONST`) — never silently
+//! downgraded. The transform touches only by-field-name hydration (`queryInto`/`queryOneInto`, and a
+//! `queryMap` entity value); a scalar column (`queryScalar`, a scalar map value/key) is read by
+//! position and ignores it.
 //!
 //! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`]): it lowers the four type-directed
 //! result calls into plain, already-working S1 primitives BEFORE the type-checker, so the generated
@@ -83,6 +92,73 @@ enum ClassKind {
     One,
 }
 
+/// DEC-208 slice B2 — the per-query COLUMN NAMING STRATEGY, read from a `.namingStrategy(new
+/// Naming.X())` call in the receiver chain AT COMPILE TIME (the developer's ruling: compile-time,
+/// per-query). It changes only the generated column-name string literal; there is no runtime component
+/// (the prelude `Statement.namingStrategy` is a chainable no-op returning `this`, present solely so the
+/// chain type-checks). Because the transform runs before the backends, `run ≡ runvm` is trivial.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Naming {
+    /// The default (unchanged from slice B): the column name IS the field name (strict-exact).
+    Exact,
+    /// DB `snake_case` ↔ phorj `camelCase`: the column name is the `snake_case` of the field name
+    /// (`userName` → `user_name`). Applied PER dotted segment for a nested alias (a nested
+    /// `shipTo.postalCode` reads `"ship_to.postal_code"`).
+    SnakeToCamel,
+}
+
+/// The result of scanning a `query…()` receiver chain for a `.namingStrategy(...)` call.
+enum NamingFind {
+    /// No `namingStrategy` in the chain — the default `Exact`.
+    None,
+    /// A `namingStrategy(new Naming.X())` with a recognized compile-time literal.
+    Found(Naming),
+    /// A `namingStrategy(...)` whose argument is NOT a `new Naming.{Exact,SnakeToCamel}()` literal:
+    /// rejected (`E-DB-NAMING-NOT-CONST`). The strategy MUST be a compile-time literal — a runtime
+    /// value would silently fall through to `Exact` (a forbidden silent downgrade). Carries the call
+    /// span for the diagnostic.
+    Bad(Span),
+}
+
+/// The synthetic-helper-name suffix distinguishing the naming strategies, so two calls that hydrate
+/// the same class under different strategies dedup to two distinct helpers with distinct column
+/// literals. `Exact` keeps the historic (unsuffixed) name → a program with no `namingStrategy` is
+/// byte-for-byte unchanged.
+fn naming_suffix(naming: Naming) -> &'static str {
+    match naming {
+        Naming::Exact => "",
+        Naming::SnakeToCamel => "SnakeToCamel",
+    }
+}
+
+/// `camelCase` → `snake_case` for the DB column of a phorj field under `Naming::SnakeToCamel`
+/// (`userName` → `user_name`, `firstName` → `first_name`). ACRONYM rule: an `_` is inserted before an
+/// uppercase letter that is either (a) preceded by a lowercase letter or digit, OR (b) the start of a
+/// new word inside an acronym run (an uppercase FOLLOWED by a lowercase). So `userId`/`userID` both →
+/// `user_id`, `parseHTTPResponse` → `parse_http_response`, and an already-lowercase `id` → `id`.
+/// Deterministic and ASCII-oriented (phorj identifiers are ASCII; any non-ASCII passes through
+/// lowercased by `char::to_lowercase`). A leading uppercase gets no leading `_` (fields are camelCase
+/// anyway, so this is defensive).
+fn snake_case(field: &str) -> String {
+    let chars: Vec<char> = field.chars().collect();
+    let mut out = String::with_capacity(field.len() + 4);
+    for (i, &c) in chars.iter().enumerate() {
+        if c.is_ascii_uppercase() {
+            let prev = if i > 0 { Some(chars[i - 1]) } else { None };
+            let next = chars.get(i + 1).copied();
+            let boundary = matches!(prev, Some(p) if p.is_ascii_lowercase() || p.is_ascii_digit())
+                || matches!((prev, next), (Some(p), Some(n)) if p.is_ascii_uppercase() && n.is_ascii_lowercase());
+            if boundary {
+                out.push('_');
+            }
+            out.extend(c.to_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// How the VALUE of a `queryMap` entry is produced from a row: a scalar column, or a hydrated entity.
 enum MapVal {
     /// A single column read by `accessor` (the second selected column); its declared type is the
@@ -96,26 +172,36 @@ enum MapVal {
 /// recursively at synthesis time from `ctor_params` (not precomputed), so a `Class`/`Map`-entity
 /// helper carries only the top class name.
 enum HelperSpec {
-    /// `phorjQueryIntoList<Class>` / `phorjQueryOneInto<Class>`.
-    Class { kind: ClassKind, class: String },
+    /// `phorjQueryIntoList<Class>[<Naming>]` / `phorjQueryOneInto<Class>[<Naming>]`. `naming` bakes the
+    /// column-name transform (DEC-208 slice B2) into the generated `getX("…")` literals.
+    Class {
+        kind: ClassKind,
+        class: String,
+        naming: Naming,
+    },
     /// `phorjQueryScalar<Label>` — a single typed value; `ret` is the scalar (or `T?` scalar) type.
+    /// (No `naming`: a scalar is read by column POSITION, not by field name.)
     Scalar { accessor: &'static str, ret: Type },
-    /// `phorjQueryMap<KLabel><VLabel>` — a `Map<key_ty, val_ty>` keyed by the first column.
+    /// `phorjQueryMap<KLabel><VLabel>[<Naming>]` — a `Map<key_ty, val_ty>` keyed by the first column.
+    /// `naming` applies only to an ENTITY value (hydrated by field name); a scalar value is by
+    /// position, so a scalar-value map always carries `Naming::Exact`.
     Map {
         key_acc: &'static str,
         key_ty: Type,
         val: MapVal,
         val_ty: Type,
+        naming: Naming,
     },
 }
 
 /// A camelCase synthetic free-function name (free functions are `E-NAME-CASE`-checked; `Class`/type
 /// labels are PascalCase, so the whole name is camelCase). Collision with a hand-written
 /// `phorjQuery…` is astronomically unlikely and disclosed (KNOWN_ISSUES), matching `phorjInject…`.
-fn class_helper_name(kind: ClassKind, class: &str) -> String {
+fn class_helper_name(kind: ClassKind, class: &str, naming: Naming) -> String {
+    let sfx = naming_suffix(naming);
     match kind {
-        ClassKind::List => format!("phorjQueryIntoList{class}"),
-        ClassKind::One => format!("phorjQueryOneInto{class}"),
+        ClassKind::List => format!("phorjQueryIntoList{class}{sfx}"),
+        ClassKind::One => format!("phorjQueryOneInto{class}{sfx}"),
     }
 }
 
@@ -164,16 +250,6 @@ enum FieldKind {
     Json {
         optional: bool,
     },
-}
-
-/// The column name for `field` under `prefix`: `field` at the top level, `prefix.field` (the dotted
-/// alias convention, DEC-208 slice B) when nested — the string key the S1 `getX` accessor looks up.
-fn col_name(prefix: &str, field: &str) -> String {
-    if prefix.is_empty() {
-        field.to_string()
-    } else {
-        format!("{prefix}.{field}")
-    }
 }
 
 /// True iff a constructor parameter is a promoted field (carries a visibility modifier) — the S2
@@ -294,6 +370,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
         current_ret: None,
         next_span: SYNTH_BASE,
         next_local: 0,
+        current_naming: Naming::Exact,
     };
     let mut items: Vec<Item> = items.into_iter().map(|it| db.ritem(it)).collect();
     if !db.diags.is_empty() {
@@ -328,6 +405,11 @@ struct Db<'a> {
     /// helper body — camelCase (lowercase head, no `_`) so it passes `E-NAME-CASE`, and disjoint from
     /// the fixed `phorjRows`/`phorjOut`/… locals and from every user field name.
     next_local: usize,
+    /// The column naming strategy of the helper CURRENTLY being synthesized (DEC-208 slice B2). Set as
+    /// the first line of [`Db::synth_helper`] from the helper's spec, read by [`Db::col`]/[`Db::seg`]
+    /// while building that one helper's body. Synthesis is strictly sequential (one helper fully built
+    /// before the next), so a transient field is sound — no interleaving.
+    current_naming: Naming,
 }
 
 impl Db<'_> {
@@ -374,6 +456,94 @@ impl Db<'_> {
         }
     }
 
+    /// DEC-208 slice B2 — scan a `query…()` receiver chain (down the `.object` spine) for a
+    /// `.namingStrategy(arg)` call and read its compile-time strategy. The FIRST one found (the call
+    /// closest to the `query…()`) wins; a chain with no `namingStrategy` is `Exact`. The strategy MUST
+    /// be a `new Naming.{Exact,SnakeToCamel}()` literal — anything else is `Bad` (`E-DB-NAMING-NOT-
+    /// CONST`) rather than a silent downgrade. The `namingStrategy` call itself is a no-op left intact
+    /// in the receiver (a real chainable prelude method), so `recv` still type-checks as a `Statement`.
+    fn naming_of_recv(recv: &Expr) -> NamingFind {
+        let mut cur = recv;
+        loop {
+            match cur {
+                Expr::Call { callee, args, span } => {
+                    if let Expr::Member {
+                        object,
+                        name,
+                        safe: false,
+                        ..
+                    } = &**callee
+                    {
+                        if name == "namingStrategy" {
+                            return match args.first().and_then(Self::naming_from_arg) {
+                                Some(n) => NamingFind::Found(n),
+                                None => NamingFind::Bad(*span),
+                            };
+                        }
+                        cur = object;
+                    } else {
+                        return NamingFind::None;
+                    }
+                }
+                Expr::Member { object, .. } => cur = object,
+                _ => return NamingFind::None,
+            }
+        }
+    }
+
+    /// A `namingStrategy` argument → a compile-time [`Naming`], iff it is a `new Naming.{Exact,
+    /// SnakeToCamel}()` literal — the only form resolvable at desugar time. Anything else → `None`
+    /// (mapped to `NamingFind::Bad`): a runtime `Naming` value cannot drive a compile-time column
+    /// rewrite, and falling back to `Exact` would be a silent semantic downgrade.
+    fn naming_from_arg(e: &Expr) -> Option<Naming> {
+        let Expr::New(inner, _) = e else {
+            return None;
+        };
+        let Expr::Call { callee, args, .. } = &**inner else {
+            return None;
+        };
+        if !args.is_empty() {
+            return None;
+        }
+        let Expr::Member { object, name, .. } = &**callee else {
+            return None;
+        };
+        let Expr::Ident(id, _) = &**object else {
+            return None;
+        };
+        if id != "Naming" {
+            return None;
+        }
+        match name.as_str() {
+            "Exact" => Some(Naming::Exact),
+            "SnakeToCamel" => Some(Naming::SnakeToCamel),
+            _ => None,
+        }
+    }
+
+    /// The DB column SEGMENT for a field under the current naming strategy (DEC-208 slice B2): the
+    /// field name verbatim (`Exact`) or its `snake_case` (`SnakeToCamel`).
+    fn seg(&self, field: &str) -> String {
+        match self.current_naming {
+            Naming::Exact => field.to_string(),
+            Naming::SnakeToCamel => snake_case(field),
+        }
+    }
+
+    /// The full column name for `field` under `prefix`: the (strategy-transformed) segment at the top
+    /// level, `prefix.<segment>` (the dotted alias convention, DEC-208 slice B) when nested — the
+    /// string key the S1 `getX` accessor looks up. Under `SnakeToCamel` each dotted segment is
+    /// transformed independently, and since a nested entity's `prefix` is itself an already-transformed
+    /// column built by the parent, a deep alias reads e.g. `"ship_to.postal_code"`.
+    fn col(&self, prefix: &str, field: &str) -> String {
+        let f = self.seg(field);
+        if prefix.is_empty() {
+            f
+        } else {
+            format!("{prefix}.{f}")
+        }
+    }
+
     /// Rewrite a recognized `recv.query…()` into a call to its synthesized helper (`helper(recv)`),
     /// drawing the target type(s) from `expected`. On any resolution failure a diagnostic is recorded
     /// and a placeholder is returned (the pipeline aborts on the non-empty `diags`).
@@ -381,13 +551,28 @@ impl Db<'_> {
         let Expr::Member { object, .. } = callee else {
             unreachable!("query_call_kind guarantees a Member callee");
         };
+        // DEC-208 slice B2: read the per-query column naming strategy from the chain BEFORE the recv is
+        // consumed. A non-literal `namingStrategy` argument is rejected here (no silent downgrade).
+        let naming = match Self::naming_of_recv(&object) {
+            NamingFind::None => Naming::Exact,
+            NamingFind::Found(n) => n,
+            NamingFind::Bad(bad) => {
+                self.diag(
+                    bad,
+                    "`namingStrategy` needs a compile-time `Naming` literal argument".into(),
+                    "E-DB-NAMING-NOT-CONST",
+                    "pass a literal `new Naming.SnakeToCamel()` or `new Naming.Exact()` — the column naming strategy is resolved at compile time, so a variable or computed value cannot drive it".into(),
+                );
+                return self.placeholder();
+            }
+        };
         let recv = self.rexpr(*object);
         let expected = expected.cloned();
         let name = match call {
-            Call::IntoList => self.resolve_class(ClassKind::List, expected.as_ref(), span),
-            Call::IntoOne => self.resolve_class(ClassKind::One, expected.as_ref(), span),
+            Call::IntoList => self.resolve_class(ClassKind::List, expected.as_ref(), span, naming),
+            Call::IntoOne => self.resolve_class(ClassKind::One, expected.as_ref(), span, naming),
             Call::Scalar => self.resolve_scalar(expected.as_ref(), span),
-            Call::Map => self.resolve_map(expected.as_ref(), span),
+            Call::Map => self.resolve_map(expected.as_ref(), span, naming),
         };
         let Some(name) = name else {
             return self.placeholder();
@@ -570,8 +755,14 @@ impl Db<'_> {
     }
 
     /// Validate + register a class-hydration helper (`queryInto`/`queryOneInto`), returning its name.
-    fn ensure_class_helper(&mut self, kind: ClassKind, class: &str, span: Span) -> Option<String> {
-        let name = class_helper_name(kind, class);
+    fn ensure_class_helper(
+        &mut self,
+        kind: ClassKind,
+        class: &str,
+        span: Span,
+        naming: Naming,
+    ) -> Option<String> {
+        let name = class_helper_name(kind, class, naming);
         if self.helpers.contains_key(&name) {
             return Some(name);
         }
@@ -583,6 +774,7 @@ impl Db<'_> {
             HelperSpec::Class {
                 kind,
                 class: class.to_string(),
+                naming,
             },
         );
         Some(name)
@@ -595,6 +787,7 @@ impl Db<'_> {
         kind: ClassKind,
         expected: Option<&Type>,
         span: Span,
+        naming: Naming,
     ) -> Option<String> {
         let (method, want) = match kind {
             ClassKind::List => ("queryInto", "List<Row>"),
@@ -639,7 +832,7 @@ impl Db<'_> {
                 if args.is_empty() && self.ctor_params.contains_key(name) =>
             {
                 let class = name.clone();
-                self.ensure_class_helper(kind, &class, span)
+                self.ensure_class_helper(kind, &class, span, naming)
             }
             _ => {
                 self.diag(
@@ -697,7 +890,12 @@ impl Db<'_> {
     /// Resolve `queryMap<K, V>()`: the sink type must be `Map<K, V>`. `K` must be an `int`/`string`
     /// scalar (the only map-key types); `V` is a scalar OR a hydratable entity (same rules as
     /// `queryInto`). Registers a per-(K, V) map helper.
-    fn resolve_map(&mut self, expected: Option<&Type>, span: Span) -> Option<String> {
+    fn resolve_map(
+        &mut self,
+        expected: Option<&Type>,
+        span: Span,
+        naming: Naming,
+    ) -> Option<String> {
         let Some(expected) = expected else {
             self.diag(
                 span,
@@ -765,7 +963,17 @@ impl Db<'_> {
             MapVal::Scalar { .. } => scalar_label(&v_ty).expect("scalar value ⇒ a label"),
             MapVal::Entity { class } => class.clone(),
         };
-        let name = format!("phorjQueryMap{k_label}{v_label}");
+        // The naming strategy only affects an ENTITY value (hydrated by field name); a scalar value is
+        // read by column POSITION, so a scalar-value map is `Exact` regardless of any `namingStrategy`
+        // prefix — the same helper is reused (no meaningless suffix proliferation).
+        let eff_naming = match &val {
+            MapVal::Entity { .. } => naming,
+            MapVal::Scalar { .. } => Naming::Exact,
+        };
+        let name = format!(
+            "phorjQueryMap{k_label}{v_label}{}",
+            naming_suffix(eff_naming)
+        );
         if !self.helpers.contains_key(&name) {
             self.helpers.insert(
                 name.clone(),
@@ -774,6 +982,7 @@ impl Db<'_> {
                     key_ty: k_ty,
                     val,
                     val_ty: v_ty,
+                    naming: eff_naming,
                 },
             );
         }
@@ -1123,7 +1332,7 @@ impl Db<'_> {
         let params = self.ctor_params.get(class).cloned().unwrap_or_default();
         let mut args = Vec::new();
         for p in &params {
-            let col = col_name(prefix, &p.name);
+            let col = self.col(prefix, &p.name);
             let local = self.fresh_local();
             match self
                 .classify_field(&p.ty)
@@ -1338,7 +1547,7 @@ impl Db<'_> {
     fn collect_leaves(&self, class: &str, prefix: &str, acc: &mut Vec<String>) {
         let params = self.ctor_params.get(class).cloned().unwrap_or_default();
         for p in &params {
-            let col = col_name(prefix, &p.name);
+            let col = self.col(prefix, &p.name);
             match self.classify_field(&p.ty) {
                 // A scalar, an enum, and a Json field each occupy exactly ONE column (a leaf).
                 Some(FieldKind::Scalar { .. })
@@ -1351,6 +1560,13 @@ impl Db<'_> {
     }
 
     fn synth_helper(&mut self, name: &str, spec: &HelperSpec) -> Item {
+        // DEC-208 slice B2 — set the strategy for THIS helper's column literals before any body node is
+        // built (the recursive `build_class`/`collect_leaves`/`all_null` all read `current_naming` via
+        // `col`/`seg`). Must be the first line: synthesis is one-helper-at-a-time.
+        self.current_naming = match spec {
+            HelperSpec::Class { naming, .. } | HelperSpec::Map { naming, .. } => *naming,
+            HelperSpec::Scalar { .. } => Naming::Exact,
+        };
         let stmt_ty = self.named("Statement");
         let psp = self.sp();
         let param = Param {
@@ -1363,6 +1579,7 @@ impl Db<'_> {
             HelperSpec::Class {
                 kind: ClassKind::List,
                 class,
+                ..
             } => {
                 let ty = self.list_ty(class);
                 let c = class.clone();
@@ -1371,6 +1588,7 @@ impl Db<'_> {
             HelperSpec::Class {
                 kind: ClassKind::One,
                 class,
+                ..
             } => {
                 let ty = self.opt_ty(class);
                 let c = class.clone();
@@ -1385,6 +1603,7 @@ impl Db<'_> {
                 key_ty,
                 val,
                 val_ty,
+                ..
             } => {
                 let ret = self.map_ty(key_ty, val_ty);
                 let k = key_ty.clone();
@@ -2159,5 +2378,37 @@ impl Db<'_> {
             },
             leaf => leaf, // Break / Continue carry no expression
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::snake_case;
+
+    #[test]
+    fn snake_case_camel_boundaries() {
+        // The `SnakeToCamel` core case (DEC-208 slice B2): a camelCase field → its snake_case column.
+        assert_eq!(snake_case("userName"), "user_name");
+        assert_eq!(snake_case("firstName"), "first_name");
+        assert_eq!(snake_case("streetName"), "street_name");
+        assert_eq!(snake_case("postalCode"), "postal_code");
+        assert_eq!(snake_case("homeAddress"), "home_address");
+    }
+
+    #[test]
+    fn snake_case_acronyms() {
+        // An interior/trailing ACRONYM run stays together; the run ends where a lowercase word begins.
+        assert_eq!(snake_case("userId"), "user_id");
+        assert_eq!(snake_case("userID"), "user_id");
+        assert_eq!(snake_case("httpServer"), "http_server");
+        assert_eq!(snake_case("parseHTTPResponse"), "parse_http_response");
+    }
+
+    #[test]
+    fn snake_case_digits_and_noop() {
+        // A digit is a word boundary before an uppercase; an all-lowercase name is unchanged.
+        assert_eq!(snake_case("field2Name"), "field2_name");
+        assert_eq!(snake_case("id"), "id");
+        assert_eq!(snake_case("plain"), "plain");
     }
 }

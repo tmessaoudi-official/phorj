@@ -486,6 +486,13 @@ import Core.Map;
 // Prelude-local result carrier (NOT Core.Result — see the native docs on injection order).
 enum DbResult<T> { Ok(T value), Err(string message) }
 
+// Column NAMING STRATEGY (DEC-208 slice B2): the per-query mapping between DB column names and phorj
+// field names, passed to `Statement.namingStrategy(...)`. Zero-payload variants (construct with
+// `new Naming.SnakeToCamel()`, like `RoundingMode`). Member-gated (`import Core.Db.Naming;`) — nothing
+// in the wind. The strategy is resolved AT COMPILE TIME by the `desugar_db` pass, so this type is only
+// ever an argument literal; it carries no runtime state.
+enum Naming { Exact(), SnakeToCamel() }
+
 open class DbError implements Error {
   constructor(public string message) {}
   // `throw` is a statement, not an expression, so it cannot be a `match` arm value directly. This
@@ -601,6 +608,19 @@ class Statement {
   function execReturningId(): int throws DbError {
     return match (DbSys.execReturningId(this.raw)) { DbResult.Ok(id) => id, DbResult.Err(e) => DbError.fail(e)? };
   }
+  // Column naming strategy (DEC-208 slice B2, spec §3) — chainable, per query:
+  // `stmt.namingStrategy(new Naming.SnakeToCamel()).queryInto()` maps a `userName` field from a
+  // `user_name` column. This method is a compile-time marker realized as a runtime NO-OP (returns
+  // `this` unchanged): the `desugar_db` pass reads the strategy from the call chain at COMPILE TIME and
+  // bakes the transformed column-name literals straight into the generated `getX("user_name")` calls
+  // (zero runtime cost). It exists so the chain type-checks; the argument must be a `new Naming.X()`
+  // literal (a runtime value is rejected, `E-DB-NAMING-NOT-CONST` — the strategy cannot vary at run
+  // time). Applies only to by-field-name hydration (`queryInto`/`queryOneInto`, and a `queryMap` entity
+  // value); `queryScalar`/scalar map values read by column position and ignore it. NOTE: the strategy is
+  // read from the query call's OWN chain, so keep it in one expression — break it into a stored
+  // `Statement s = stmt.namingStrategy(...); s.queryInto();` and the query reverts to `Exact` (a missing
+  // column then faults loudly at run time, never silently wrong).
+  function namingStrategy(Naming strategy): Statement { return this; }
   function query(): List<Row> throws DbError {
     return match (DbSys.query(this.raw)) { DbResult.Ok(rows) => Statement.wrapRows(rows), DbResult.Err(e) => DbError.fail(e)? };
   }
@@ -769,6 +789,9 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "Row",
             "DbError",
             "DbHandle",
+            // DEC-208 slice B2 — the column naming strategy enum, member-gated so
+            // `new Naming.SnakeToCamel()` resolves after `import Core.Db.Naming;` (nothing in the wind).
+            "Naming",
             // DEC-208 slice C typed taxonomy — member-gated so `catch (UniqueViolation e)` resolves
             // in user code after `import Core.Db.UniqueViolation;` (nothing in the wind).
             "UniqueViolation",

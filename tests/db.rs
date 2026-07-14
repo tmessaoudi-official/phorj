@@ -413,6 +413,167 @@ function main(): void {
     both(src, "Grace/45\n");
 }
 
+// ── DEC-208 slice B2: column naming strategy (SnakeToCamel) ──────────────────────────────────────
+
+#[test]
+fn db_naming_example_runs_on_both_backends() {
+    let src =
+        std::fs::read_to_string("examples/db/naming.phg").expect("read examples/db/naming.phg");
+    let expected = "1: Ada (@ada) lives on Rue de Rivoli, 75001\n\
+                    2: Grace (@grace) lives on Baker Street, NW16XE\n";
+    both(&src, expected);
+}
+
+#[test]
+fn db_naming_snake_to_camel_maps_camel_fields() {
+    // `.namingStrategy(new Naming.SnakeToCamel())` makes a `userName` field read the `user_name`
+    // column and `firstName` read `first_name` — the desugar bakes the snake_case column literal in.
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Naming;
+import Core.Db.DbError;
+class Member { constructor(public string userName, public string firstName) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE members(user_name TEXT, first_name TEXT)").exec();
+    discard db.prepare("INSERT INTO members VALUES('ada', 'Ada')").exec();
+    discard db.prepare("INSERT INTO members VALUES('grace', 'Grace')").exec();
+    List<Member> ms = db.prepare("SELECT user_name, first_name FROM members ORDER BY user_name")
+      .namingStrategy(new Naming.SnakeToCamel()).queryInto();
+    for (Member m in ms) { Output.printLine("{m.firstName}/@{m.userName}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "Ada/@ada\nGrace/@grace\n");
+}
+
+#[test]
+fn db_naming_default_exact_needs_exact_column() {
+    // The strict-exact DEFAULT is unchanged: with no `namingStrategy`, a camelCase field looks up a
+    // camelCase column, so a snake_case column is a runtime `no column` DbError (not a naming bug).
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Member { constructor(public string userName) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE members(user_name TEXT)").exec();
+    discard db.prepare("INSERT INTO members VALUES('ada')").exec();
+    List<Member> ms = db.prepare("SELECT user_name FROM members").queryInto();
+    for (Member m in ms) { Output.printLine(m.userName); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(
+        src,
+        "caught: Core.Db.getString: no column `userName` in this row\n",
+    );
+}
+
+#[test]
+fn db_naming_snake_to_camel_nested_entity() {
+    // The transform applies PER dotted segment: a nested `homeAddress.streetName` reads the alias
+    // `"home_address.street_name"` (segment `home_address` from the field, `.street_name` from the sub).
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Naming;
+import Core.Db.DbError;
+class Address { constructor(public string streetName) {} }
+class Member { constructor(public string userName, public Address homeAddress) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE m(user_name TEXT, street_name TEXT)").exec();
+    discard db.prepare("INSERT INTO m VALUES('ada', 'Rue de Rivoli')").exec();
+    List<Member> ms = db.prepare("SELECT user_name AS user_name, street_name AS \"home_address.street_name\" FROM m")
+      .namingStrategy(new Naming.SnakeToCamel()).queryInto();
+    for (Member x in ms) { Output.printLine("@{x.userName}: {x.homeAddress.streetName}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "@ada: Rue de Rivoli\n");
+}
+
+#[test]
+fn db_naming_query_map_entity_value_under_strategy() {
+    // `queryMap` with an ENTITY value hydrates it by field name, so the strategy applies to the value
+    // fields; the key (first column) and any scalar are read by position and are unaffected.
+    let src = r#"package Main;
+import Core.Output;
+import Core.Map;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Naming;
+import Core.Db.DbError;
+class Member { constructor(public string userName, public string firstName) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE m(id INTEGER, user_name TEXT, first_name TEXT)").exec();
+    discard db.prepare("INSERT INTO m VALUES(1, 'ada', 'Ada')").exec();
+    discard db.prepare("INSERT INTO m VALUES(2, 'grace', 'Grace')").exec();
+    Map<int, Member> byId = db.prepare("SELECT id, user_name, first_name FROM m")
+      .namingStrategy(new Naming.SnakeToCamel()).queryMap();
+    Member? g = Map.get(byId, 2);
+    Output.printLine("{g?.firstName ?? "?"}/@{g?.userName ?? "?"}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "Grace/@grace\n");
+}
+
+#[test]
+fn db_naming_non_literal_argument_is_rejected() {
+    // The strategy must be a compile-time `new Naming.X()` literal — a variable cannot drive a
+    // compile-time column rewrite, and silently falling back to `Exact` would be a forbidden downgrade.
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Naming;
+import Core.Db.DbError;
+class U { constructor(public string userName) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    Naming n = new Naming.SnakeToCamel();
+    List<U> us = db.prepare("SELECT 1 AS user_name").namingStrategy(n).queryInto();
+    for (U u in us) { Output.printLine(u.userName); }
+  } catch (DbError e) { Output.printLine("x"); }
+}
+"#;
+    fails_with(src, "E-DB-NAMING-NOT-CONST");
+}
+
+#[test]
+fn db_naming_unknown_variant_is_rejected() {
+    // An unrecognized `Naming` variant is not a valid compile-time strategy literal either.
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Naming;
+import Core.Db.DbError;
+class U { constructor(public string userName) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    List<U> us = db.prepare("SELECT 1 AS user_name").namingStrategy(new Naming.Bogus()).queryInto();
+    for (U u in us) { Output.printLine(u.userName); }
+  } catch (DbError e) { Output.printLine("x"); }
+}
+"#;
+    fails_with(src, "E-DB-NAMING-NOT-CONST");
+}
+
 // ── DEC-208 slice C: transactions, savepoints, taxonomy, close ───────────────────────────────────
 
 /// The shipped `examples/db/transactions.phg` — the SOLE gate that runs the transaction/savepoint/

@@ -1439,6 +1439,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              name from the remaining columns, nested rules identical to `queryInto`). A list/map/enum V is\n\
              not supported.\n"
         }
+        "E-DB-NAMING-NOT-CONST" => {
+            "E-DB-NAMING-NOT-CONST — `namingStrategy()` was given a non-literal argument.\n\n\
+             The column naming strategy (DEC-208 slice B2) is resolved at COMPILE TIME: the `desugar_db`\n\
+             pass reads it from the call chain and bakes the transformed column names straight into the\n\
+             generated accessors. It therefore must be a `Naming` LITERAL — `new Naming.SnakeToCamel()`\n\
+             or `new Naming.Exact()` — not a variable, field, or computed value (which could only be\n\
+             known at run time). Inline the literal at the call site:\n\
+             `stmt.namingStrategy(new Naming.SnakeToCamel()).queryInto()`.\n"
+        }
         "E-STATIC-NO-INIT" => {
             "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\
              A `static` field is class-level state with no constructor to set it, so it must be\n\

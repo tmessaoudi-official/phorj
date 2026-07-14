@@ -1,0 +1,66 @@
+// Column NAMING STRATEGY, slice B2 (DEC-208) — map snake_case DB columns to camelCase phorj fields
+// without aliasing every column by hand.
+//
+//   * `stmt.namingStrategy(new Naming.SnakeToCamel()).queryInto()` makes the desugar generate
+//     `getString("user_name")` for a `userName` field and `getString("first_name")` for `firstName` —
+//     the column literal is the `snake_case` of the field name, computed AT COMPILE TIME (zero runtime
+//     cost: `namingStrategy` is a no-op returning `this`; the transformed name is baked into the
+//     generated accessor).
+//   * The transform applies PER dotted segment, so a NESTED entity field `homeAddress` with a subfield
+//     `streetName` reads the alias `"home_address.street_name"` — the SELECT below names it exactly so.
+//   * The strategy MUST be a `new Naming.X()` literal (a runtime value → `E-DB-NAMING-NOT-CONST`); the
+//     strict-exact default (no `namingStrategy`) is unchanged — the column name must equal the field.
+//
+// Like every Core.Db program this opens real bundled SQLite (rusqlite) → quarantined from the byte-
+// identity differential; `run ≡ runvm` holds (a compile-time desugar produces ONE AST for both
+// backends). Built only under `--features db`; validated by tests/db.rs on both backends.
+package Main;
+
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Naming;
+import Core.Db.DbError;
+
+// camelCase phorj fields; the DB stores them snake_case (`user_name`, `first_name`, `street_name`, …).
+class Address {
+    constructor(public string streetName, public string postalCode) {}
+}
+
+class Member {
+    constructor(public int id, public string userName, public string firstName, public Address homeAddress) {}
+}
+
+function main(): void {
+    try {
+        Db db = new Db("sqlite::memory:");
+        discard db
+            .prepare(
+                "CREATE TABLE members(id INTEGER, user_name TEXT, first_name TEXT, address_id INTEGER)"
+            )
+            .exec();
+        discard db
+            .prepare("CREATE TABLE addresses(id INTEGER, street_name TEXT, postal_code TEXT)")
+            .exec();
+        discard db.prepare("INSERT INTO addresses VALUES(1, 'Rue de Rivoli', '75001')").exec();
+        discard db.prepare("INSERT INTO addresses VALUES(2, 'Baker Street', 'NW16XE')").exec();
+        discard db.prepare("INSERT INTO members VALUES(1, 'ada', 'Ada', 1)").exec();
+        discard db.prepare("INSERT INTO members VALUES(2, 'grace', 'Grace', 2)").exec();
+        // Each column is named by its snake_case DB name; the flat aliases are the snake_case names and
+        // the nested entity uses DOTTED snake_case aliases (`"home_address.street_name"`). Under
+        // SnakeToCamel the desugar looks these exact names up for the camelCase fields.
+        List<Member> members = db
+            .prepare(
+                "SELECT m.id AS id, m.user_name AS user_name, m.first_name AS first_name, a.street_name AS \"home_address.street_name\", a.postal_code AS \"home_address.postal_code\" FROM members m JOIN addresses a ON a.id = m.address_id ORDER BY m.id"
+            )
+            .namingStrategy(new Naming.SnakeToCamel())
+            .queryInto();
+        for (Member m in members) {
+            Output.printLine(
+                "{m.id}: {m.firstName} (@{m.userName}) lives on {m.homeAddress.streetName}, {m.homeAddress.postalCode}"
+            );
+        }
+    } catch (DbError e) {
+        Output.printLine("DB error: {e.message}");
+    }
+}
