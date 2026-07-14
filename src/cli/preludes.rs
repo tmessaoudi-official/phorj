@@ -483,6 +483,20 @@ class Row {
   function getBool(string column): bool throws DbError {
     return match (DbSys.getBool(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
   }
+  // Nullable accessors (DEC-208 S2): a SQL NULL yields `null` rather than throwing; a wrong non-null
+  // storage type still throws. Used by the dynamic path and by the `queryInto` hydration of `T?` fields.
+  function getIntOrNull(string column): int? throws DbError {
+    return match (DbSys.getIntOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getStringOrNull(string column): string? throws DbError {
+    return match (DbSys.getStringOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getFloatOrNull(string column): float? throws DbError {
+    return match (DbSys.getFloatOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getBoolOrNull(string column): bool? throws DbError {
+    return match (DbSys.getBoolOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
 }
 
 class Statement {

@@ -408,6 +408,64 @@ fn get_bool_inner(args: &[Value]) -> Result<Value, String> {
     }
 }
 
+// --- Nullable Row accessors (DEC-208 S2): a `T?`-typed hydration field admits a SQL NULL, so these
+// return `null` for a NULL column instead of faulting. A wrong non-null storage type is still a DB
+// error, and a missing column is still a DB error (`row_cell`). Shared by the dynamic path and the
+// generic hydration desugar. ---
+
+fn get_int_or_null_inner(args: &[Value]) -> Result<Value, String> {
+    let (v, k) = row_cell(args, "getIntOrNull")?;
+    match v {
+        Value::Int(n) => Ok(Value::Int(*n)),
+        Value::Null => Ok(Value::Null),
+        other => Err(format!(
+            "Core.Db.getIntOrNull: column `{k}` is {}, not int",
+            other.type_name()
+        )),
+    }
+}
+
+fn get_string_or_null_inner(args: &[Value]) -> Result<Value, String> {
+    let (v, k) = row_cell(args, "getStringOrNull")?;
+    match v {
+        Value::Str(s) => Ok(Value::Str(s.clone())),
+        Value::Null => Ok(Value::Null),
+        other => Err(format!(
+            "Core.Db.getStringOrNull: column `{k}` is {}, not string",
+            other.type_name()
+        )),
+    }
+}
+
+fn get_float_or_null_inner(args: &[Value]) -> Result<Value, String> {
+    let (v, k) = row_cell(args, "getFloatOrNull")?;
+    match v {
+        Value::Float(f) => Ok(Value::Float(*f)),
+        // SQLite stores an integral REAL as INTEGER; widen int→float, matching the non-nullable accessor.
+        Value::Int(n) => Ok(Value::Float(*n as f64)),
+        Value::Null => Ok(Value::Null),
+        other => Err(format!(
+            "Core.Db.getFloatOrNull: column `{k}` is {}, not float",
+            other.type_name()
+        )),
+    }
+}
+
+fn get_bool_or_null_inner(args: &[Value]) -> Result<Value, String> {
+    let (v, k) = row_cell(args, "getBoolOrNull")?;
+    match v {
+        // SQLite has no bool: it round-trips as 0/1 integer (matching the `to_sql` bind side).
+        Value::Int(0) => Ok(Value::Bool(false)),
+        Value::Int(_) => Ok(Value::Bool(true)),
+        Value::Bool(b) => Ok(Value::Bool(*b)),
+        Value::Null => Ok(Value::Null),
+        other => Err(format!(
+            "Core.Db.getBoolOrNull: column `{k}` is {}, not bool",
+            other.type_name()
+        )),
+    }
+}
+
 // --- Public natives: each wraps its inner body so a DB error becomes `Result.Failure` (a value the
 // prelude throws on), never a hard fault. `_out` (the stdout buffer) is unused — DB ops have no stdout. ---
 
@@ -428,6 +486,10 @@ db_native!(row_get_int, get_int_inner);
 db_native!(row_get_string, get_string_inner);
 db_native!(row_get_float, get_float_inner);
 db_native!(row_get_bool, get_bool_inner);
+db_native!(row_get_int_or_null, get_int_or_null_inner);
+db_native!(row_get_string_or_null, get_string_or_null_inner);
+db_native!(row_get_float_or_null, get_float_or_null_inner);
+db_native!(row_get_bool_or_null, get_bool_or_null_inner);
 
 /// The `Core.DbSys` registry entries — the INTERNAL natives the phorj-source `Core.Db` prelude wraps.
 /// They live under the `DbSys` qualifier (NOT `Db`) so a prelude `class Db` calling `DbSys.open(..)`
@@ -539,6 +601,54 @@ pub fn db_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(row_get_bool),
             php: |a| format!("(bool) {}[{}]", a[0], a[1]),
+        },
+        // Nullable accessors (DEC-208 S2): a NULL column yields `null`; a wrong non-null type is still
+        // a DB error. `ret` is `DbResult<T?>` so the prelude method types as `T?`.
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getIntOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::Int))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_int_or_null),
+            php: |a| format!("(({0}[{1}] === null) ? null : (int) {0}[{1}])", a[0], a[1]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getStringOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::String))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_string_or_null),
+            php: |a| {
+                format!(
+                    "(({0}[{1}] === null) ? null : (string) {0}[{1}])",
+                    a[0], a[1]
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getFloatOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::Float))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_float_or_null),
+            php: |a| {
+                format!(
+                    "(({0}[{1}] === null) ? null : (float) {0}[{1}])",
+                    a[0], a[1]
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getBoolOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::Bool))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_bool_or_null),
+            php: |a| format!("(({0}[{1}] === null) ? null : (bool) {0}[{1}])", a[0], a[1]),
         },
     ]
 }

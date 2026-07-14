@@ -110,6 +110,18 @@ pub fn check_and_expand_reified(
             return Err(lines.join("\n"));
         }
     };
+    // DEC-208 S2: lower the type-directed `Core.Db` hydration calls `stmt.queryInto()` /
+    // `stmt.queryOneInto()` into plain construction via synthesized per-class helpers, drawing the row
+    // class from the binding's declared type (contextual, no turbofish). Pre-check, so the generated
+    // `new T(row.getX(..)?)` graph type-checks like hand-written code and both backends run the one
+    // desugared AST (Inv-5; `run ≡ runvm` automatic). A no-op unless `Core.Db` is imported.
+    let routed = match crate::checker::desugar_db(routed) {
+        Ok(p) => p,
+        Err(ds) => {
+            let lines: Vec<String> = ds.iter().map(|e| e.render(diag_src)).collect();
+            return Err(lines.join("\n"));
+        }
+    };
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs, overload_renames, reified)) => {

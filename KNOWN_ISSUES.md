@@ -161,6 +161,24 @@ not a panic:
   class or a non-guarded reserved keyword (e.g. `Fn`/`Match`/`Static`/`Null`/`True`/`False`)
   (`examples/guide/core-result.phg` sidesteps it — `ParseFault`, not `ParseError`).
 
+- **`Core.Db` typed-generic hydration (DEC-208 S2) — shipped + disclosures.** `List<T> = stmt.queryInto()`
+  and `T? = stmt.queryOneInto()` map result rows into a class, by field NAME, STRICT (a missing column /
+  type mismatch / SQL-NULL-into-non-optional throws `DbError`; a `T?` field admits NULL; extra columns
+  ignored). Lowered PRE-check to plain `new T(row.getX("col")?)` construction over the S1 primitives
+  (`src/checker/desugar_db.rs`), so there is no runtime reflection and `run ≡ runvm` is automatic.
+  **Surface deviation (developer-authorized):** contextual inference, NOT the `<T>` turbofish DEC-208/
+  MASTER-PLAN wrote — `T` comes from the binding's declared type (a typed `var` decl, a `return`, or a
+  lambda expr-body return), exactly like DEC-201 empty collections. A `queryInto()` with no inferable sink
+  type is `E-DB-INTO-NO-TYPE`. **Disclosures:** (1) under `import Core.Db`, `queryInto`/`queryOneInto` are
+  reserved method names (like `inject` under `Core.DI`) — a user method of either name on a non-`Statement`
+  receiver is rewritten and then fails as an argument-type error (the generated helper takes a `Statement`).
+  (2) The row class must have a promoted-field constructor (`E-DB-HYDRATE-UNPROMOTED`/`-NO-CTOR`); each
+  hydrated field must be `int`/`string`/`float`/`bool` or their `?` forms (`E-DB-HYDRATE-FIELD-TYPE`).
+  (3) The sink type must be a literal `List<Class>` / `Class?` — an *aliased* sink (`type Users =
+  List<User>`) is not resolved (this pass runs before alias expansion, same limitation `desugar_di`
+  discloses). (4) A hand-written `phorjQueryIntoList…`/`phorjQueryOneInto…` free function could collide
+  with a synthesized helper name (astronomically unlikely; matches the `phorjInject…` convention).
+
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
   the backends. Deferrals (each a clean compile error, never a panic): (1) **free functions only** — a

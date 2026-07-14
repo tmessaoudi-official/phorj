@@ -1353,6 +1353,37 @@ pub fn explain_text(code: &str) -> Option<String> {
              The DI attributes follow the same rule: `#[DI.Injectable]` with `import Core.DI;`, or bare\n\
              `#[Injectable]` with `import Core.DI.Injectable;`.\n"
         }
+        "E-DB-INTO-NO-TYPE" => {
+            "E-DB-INTO-NO-TYPE — `queryInto()` / `queryOneInto()` had no type to infer its row class from.\n\n\
+             The typed-generic hydration (DEC-208 S2) draws its row class `T` from the binding's declared\n\
+             type — there is no turbofish. Bind the result to a typed declaration: `List<User> rows =\n\
+             stmt.queryInto();` (one `User` per row) or `User? one = stmt.queryOneInto();` (0 → null,\n\
+             1 → the object, >1 → `DbError`). A `var` binding or a call argument gives it no target type.\n"
+        }
+        "E-DB-INTO-BAD-SINK" => {
+            "E-DB-INTO-BAD-SINK — the binding type is not a valid hydration sink.\n\n\
+             `queryInto()` maps rows into `List<T>` and `queryOneInto()` into `T?`, where `T` is a user\n\
+             class with a promoted-field constructor. Declare the binding accordingly — `List<User> rows =\n\
+             stmt.queryInto();` or `User? one = stmt.queryOneInto();` — naming a real class as the row type.\n"
+        }
+        "E-DB-HYDRATE-NO-CTOR" => {
+            "E-DB-HYDRATE-NO-CTOR — the row class has no constructor to map columns into.\n\n\
+             `queryInto()`/`queryOneInto()` hydrate a row by calling the class's constructor, one argument\n\
+             per column, matched by field name. Give the row class a promoted-field constructor:\n\
+             `class User { constructor(public string name, public int age) {} }`.\n"
+        }
+        "E-DB-HYDRATE-UNPROMOTED" => {
+            "E-DB-HYDRATE-UNPROMOTED — a constructor parameter of the row class is not a promoted field.\n\n\
+             Row→object mapping is by field name, so every constructor parameter must be a promoted field\n\
+             (carry `public`/`private`/`protected`) — then its name is the column name. Rewrite plain\n\
+             parameters as promoted fields: `constructor(public string name, public int age) {}`.\n"
+        }
+        "E-DB-HYDRATE-FIELD-TYPE" => {
+            "E-DB-HYDRATE-FIELD-TYPE — a hydrated field has a type with no DB column accessor.\n\n\
+             A hydrated field must be a scalar column type: `int`, `string`, `float`, or `bool`, or their\n\
+             optional forms (`int?`, `string?`, …) which admit a SQL NULL. A field of any other type (a\n\
+             class, list, map, enum, …) cannot be read from a single result column.\n"
+        }
         "E-STATIC-NO-INIT" => {
             "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\
              A `static` field is class-level state with no constructor to set it, so it must be\n\

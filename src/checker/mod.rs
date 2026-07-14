@@ -13,6 +13,7 @@ use crate::types::Ty;
 // expansion run before the backends (alias expansion, generic erasure, `html"…"` hole resolution).
 // Re-exported so callers keep using `checker::expand_aliases` etc.
 mod collapse_injected;
+mod desugar_db;
 mod desugar_di;
 mod desugar_router;
 mod enforce_injected;
@@ -27,6 +28,7 @@ mod rewrite_html;
 mod rewrite_new;
 mod rewrite_ufcs;
 pub use collapse_injected::collapse_injected_type_qualifiers;
+pub use desugar_db::desugar_db;
 pub use desugar_di::desugar_di;
 pub use desugar_router::desugar_auto_router;
 pub use enforce_injected::enforce_injected_discipline;
