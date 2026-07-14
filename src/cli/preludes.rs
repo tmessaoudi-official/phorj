@@ -569,8 +569,28 @@ class Statement {
   function bindNamed(string name, string | int | float | bool value): Statement throws DbError {
     return match (DbSys.bindNamed(this.raw, name, value)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
   }
+  // Typed IN-list bind (DEC-208 slice D, spec §2): occupies one positional `?` slot (left-to-right
+  // with bind()) that expands to `(?,?,…)` — one placeholder per value — at execute time; an empty list
+  // becomes `(NULL)` (a never-true IN). Strictly safer than PDO (which cannot bind an array to IN).
+  // Generic over the element type (a `List<int>`/`List<string>`/… all bind); a non-scalar element is a
+  // runtime DbError (an invariant `List<bindable>` union cannot accept a homogeneous list argument).
+  function bindList<T>(List<T> values): Statement throws DbError {
+    return match (DbSys.bindList(this.raw, values)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
   function exec(): int throws DbError {
     return match (DbSys.exec(this.raw)) { DbResult.Ok(n) => n, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  // Bulk write (DEC-208 slice D, spec §4): prepare ONCE, execute for each row of positional binds,
+  // inside one savepoint (atomic + far faster than a loop). `rows` carries ALL binds (do not also call
+  // bind()/bindNamed()). Returns the total affected rows. Generic over the row element type (same
+  // reason as bindList); a non-scalar bind value is a runtime DbError.
+  function executeMany<T>(List<List<T>> rows): int throws DbError {
+    return match (DbSys.executeMany(this.raw, rows)) { DbResult.Ok(n) => n, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  // Exec an INSERT and return the auto-generated rowid / PK (DEC-208 slice D, spec §4) — exec + the
+  // connection's last insert id in one call. (Db.lastInsertId() reads the same value standalone.)
+  function execReturningId(): int throws DbError {
+    return match (DbSys.execReturningId(this.raw)) { DbResult.Ok(id) => id, DbResult.Err(e) => DbError.fail(e)? };
   }
   function query(): List<Row> throws DbError {
     return match (DbSys.query(this.raw)) { DbResult.Ok(rows) => Statement.wrapRows(rows), DbResult.Err(e) => DbError.fail(e)? };
@@ -597,6 +617,26 @@ class Db {
   }
   function prepare(string sql): Statement throws DbError {
     return match (DbSys.prepare(this.raw, sql)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
+
+  // --- Writes & robustness (DEC-208 slice D, spec §4/§7). ---
+  // The auto-generated rowid / PK of the most recent INSERT on this connection.
+  function lastInsertId(): int throws DbError {
+    return match (DbSys.lastInsertId(this.raw)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  // Arm a query timeout (ms): a bounded lock-wait (SQLite busy_timeout). Once set, a busy/locked
+  // failure surfaces as `Timeout` rather than `SerializationFailure`. Chainable (returns this).
+  function timeout(int ms): Db throws DbError {
+    match (DbSys.timeout(this.raw, ms)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+    return this;
+  }
+  // Register a per-query observability hook (logging / metrics / slow-query). The `(string sql, int
+  // ms) => void` closure fires after each query/exec with the SQL text + elapsed ms. A logging hook is
+  // `void` (cannot throw a checked error), so registration never fails. Chainable (returns this).
+  // NOTE: `ms` is wall-clock (non-deterministic) — do not print it raw in a byte-identity example.
+  function onQuery((string, int) => void hook): Db {
+    match (DbSys.onQuery(this.raw, hook)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(_) => Db.ok() };
+    return this;
   }
 
   // A void no-op, used as the success arm of the `void`-returning transaction methods below — a `match`

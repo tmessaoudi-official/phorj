@@ -21,7 +21,7 @@
 //! `run ≡ runvm` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
 
-use super::{NativeEval, NativeFn};
+use super::{ClosureInvoker, NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::{DbObject, EnumVal, HKey, Value};
 use std::any::Any;
@@ -75,6 +75,17 @@ fn wrap(inner: Result<Value, String>) -> Value {
 struct DbConn {
     conn: Rc<RefCell<Option<rusqlite::Connection>>>,
     tx_depth: Cell<u32>,
+    /// The `onQuery` observability hook (DEC-208 slice D, spec §7): a `(string sql, int ms) => void`
+    /// phorj closure invoked after each `query`/`exec`, or `None`. Held behind a SHARED `Rc<RefCell>`
+    /// so a [`DbStmt`] derived from this connection observes the SAME hook — a statement carries only
+    /// the connection's shared cells (not the whole `DbConn`), and a hook registered AFTER `prepare`
+    /// must still fire. Storing a `Value::Closure` is cheap (an `Rc` bump) and never inspected here.
+    hook: Rc<RefCell<Option<Value>>>,
+    /// The connection's query timeout in ms (DEC-208 slice D, spec §7), `0` = unset. Shared with
+    /// derived statements (same rationale as `hook`). Setting it also arms SQLite's `busy_timeout`; when
+    /// `> 0`, a transient `busy`/`locked` failure is reclassified `SerializationFailure` → `Timeout`
+    /// (the bounded lock-wait was exceeded). See [`remap_timeout`].
+    timeout_ms: Rc<Cell<i64>>,
 }
 
 impl DbObject for DbConn {
@@ -86,13 +97,23 @@ impl DbObject for DbConn {
     }
 }
 
+/// One positional bind entry. A plain `bind(v)` is [`One`](PosBind::One) — it fills a single `?`. A
+/// `bindList([..])` (DEC-208 slice D) is [`List`](PosBind::List) — it also occupies exactly ONE `?`
+/// slot (left-to-right with `One`), but that `?` is EXPANDED to `(?,?,…)` at execute time, one `?` per
+/// value ([`expand_placeholders`]), giving a typed `IN`-list bind PDO cannot do.
+#[derive(Debug, Clone)]
+enum PosBind {
+    One(Value),
+    List(Vec<Value>),
+}
+
 /// Accumulated bind parameters for a prepared statement. Positional and named are mutually exclusive
 /// per statement (the surface's contract) — mixing is a DB error (`Failure`, catchable).
 #[derive(Debug, Default, Clone)]
 enum Binds {
     #[default]
     None,
-    Positional(Vec<Value>),
+    Positional(Vec<PosBind>),
     Named(Vec<(String, Value)>),
 }
 
@@ -106,6 +127,11 @@ struct DbStmt {
     conn: Rc<RefCell<Option<rusqlite::Connection>>>,
     sql: String,
     binds: RefCell<Binds>,
+    /// The originating connection's `onQuery` hook and query timeout, shared by `Rc` (see [`DbConn`]).
+    /// A statement carries these (not the whole `DbConn`) so `query`/`exec` can fire the hook and apply
+    /// the timeout classification without a back-reference to the connection object.
+    hook: Rc<RefCell<Option<Value>>>,
+    timeout_ms: Rc<Cell<i64>>,
 }
 
 impl DbObject for DbStmt {
@@ -250,6 +276,8 @@ fn open_inner(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Db(Rc::new(DbConn {
         conn: Rc::new(RefCell::new(Some(conn))),
         tx_depth: Cell::new(0),
+        hook: Rc::new(RefCell::new(None)),
+        timeout_ms: Rc::new(Cell::new(0)),
     })))
 }
 
@@ -268,6 +296,8 @@ fn prepare_inner(args: &[Value]) -> Result<Value, String> {
         conn: Rc::clone(&conn.conn),
         sql,
         binds: RefCell::new(Binds::None),
+        hook: Rc::clone(&conn.hook),
+        timeout_ms: Rc::clone(&conn.timeout_ms),
     })))
 }
 
@@ -279,14 +309,101 @@ fn bind_inner(args: &[Value]) -> Result<Value, String> {
     };
     let mut binds = stmt.binds.borrow_mut();
     match &mut *binds {
-        Binds::None => *binds = Binds::Positional(vec![val.clone()]),
-        Binds::Positional(v) => v.push(val.clone()),
+        Binds::None => *binds = Binds::Positional(vec![PosBind::One(val.clone())]),
+        Binds::Positional(v) => v.push(PosBind::One(val.clone())),
         Binds::Named(_) => {
             return Err("Core.Db: cannot mix positional bind() with named bindNamed()".into())
         }
     }
     drop(binds);
     Ok(args[0].clone())
+}
+
+/// `stmt.bindList(values)` → record a list-valued positional bind (DEC-208 slice D, spec §2). It
+/// occupies ONE positional `?` slot (left-to-right with `bind()`); at execute time that `?` expands to
+/// `(?,?,…)` — one placeholder per value — so `… WHERE id IN (?)` binds the whole list, strictly safer
+/// than PDO (which cannot bind an array to `IN`). An EMPTY list expands to `(NULL)`: `x IN (NULL)` is
+/// never true, so an empty `IN` matches nothing (documented, sane default). Mixing with `bindNamed()`
+/// is an error, exactly like `bind()`. Returns the same shared handle (chainable).
+fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
+    let (stmt, vals) = match args {
+        [s, Value::List(vs)] => (as_stmt(s)?, vs),
+        _ => return Err("Core.Db.__bindList expects (Statement, List<value>)".into()),
+    };
+    let entry = PosBind::List(vals.iter().cloned().collect());
+    let mut binds = stmt.binds.borrow_mut();
+    match &mut *binds {
+        Binds::None => *binds = Binds::Positional(vec![entry]),
+        Binds::Positional(v) => v.push(entry),
+        Binds::Named(_) => {
+            return Err("Core.Db: cannot mix positional bindList() with named bindNamed()".into())
+        }
+    }
+    drop(binds);
+    Ok(args[0].clone())
+}
+
+/// Render a positional-bind statement: walk the SQL, and for each bare `?` placeholder (bare `?` only —
+/// numbered `?NNN` and named `:name` are NOT rewritten; `?` inside `'single'`/`"double"` quotes is
+/// skipped) substitute the matching [`PosBind`] left-to-right — a [`One`](PosBind::One) keeps the `?`
+/// and binds one value; a [`List`](PosBind::List) expands to `(?,?,…)` (or `(NULL)` when empty) and
+/// binds each element. Returns the effective SQL + the flattened parameter vector. A `?`/bind count
+/// mismatch is a clean DB error (catchable), never a silent misbind.
+fn expand_placeholders(
+    sql: &str,
+    binds: &[PosBind],
+) -> Result<(String, Vec<rusqlite::types::Value>), String> {
+    let mut out = String::with_capacity(sql.len());
+    let mut params: Vec<rusqlite::types::Value> = Vec::new();
+    let mut idx = 0usize;
+    let mut in_squote = false;
+    let mut in_dquote = false;
+    for c in sql.chars() {
+        match c {
+            '\'' if !in_dquote => {
+                in_squote = !in_squote;
+                out.push(c);
+            }
+            '"' if !in_squote => {
+                in_dquote = !in_dquote;
+                out.push(c);
+            }
+            '?' if !in_squote && !in_dquote => {
+                let b = binds
+                    .get(idx)
+                    .ok_or_else(|| "Core.Db: more ? placeholders than bound values".to_string())?;
+                idx += 1;
+                match b {
+                    PosBind::One(v) => {
+                        out.push('?');
+                        params.push(to_sql(v)?);
+                    }
+                    // A list expands the SINGLE `?` in place to a comma list of placeholders, reusing the
+                    // user's surrounding parens (`… IN (?)` → `… IN (?,?,?)`). An EMPTY list becomes the
+                    // literal `NULL` (`… IN (NULL)` — a never-true membership, the sane empty-IN default).
+                    PosBind::List(vs) if vs.is_empty() => out.push_str("NULL"),
+                    PosBind::List(vs) => {
+                        for (i, v) in vs.iter().enumerate() {
+                            if i > 0 {
+                                out.push(',');
+                            }
+                            out.push('?');
+                            params.push(to_sql(v)?);
+                        }
+                    }
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    if idx != binds.len() {
+        return Err(format!(
+            "Core.Db: {} bound value(s) but {} ? placeholder(s) in the SQL",
+            binds.len(),
+            idx
+        ));
+    }
+    Ok((out, params))
 }
 
 /// `stmt.bindNamed(name, value)` → append a named bind; returns the same shared handle (chainable).
@@ -321,7 +438,17 @@ fn collect_rows(rows: &mut rusqlite::Rows, cols: &[String]) -> Result<Vec<Value>
     Ok(out)
 }
 
-/// `stmt.query()` → run the prepared+bound statement and return `List<Row>` (fetch-all).
+/// The selection-ordered column names of a prepared statement.
+fn col_names(prepared: &rusqlite::Statement) -> Vec<String> {
+    prepared
+        .column_names()
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
+}
+
+/// `stmt.query()` → run the prepared+bound statement and return `List<Row>` (fetch-all). Positional
+/// binds go through [`expand_placeholders`] so a `bindList` `IN (?)` is expanded before prepare.
 fn query_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
@@ -329,27 +456,26 @@ fn query_inner(args: &[Value]) -> Result<Value, String> {
     };
     let guard = stmt.conn.borrow();
     let conn = guard.as_ref().ok_or_else(conn_closed)?;
-    let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
-    let cols: Vec<String> = prepared
-        .column_names()
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect();
     let binds = stmt.binds.borrow();
     let rows = match &*binds {
         Binds::None => {
+            let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
+            let cols = col_names(&prepared);
             let mut r = prepared.query([]).map_err(sql_err)?;
             collect_rows(&mut r, &cols)?
         }
-        Binds::Positional(vs) => {
-            let sv: Vec<rusqlite::types::Value> =
-                vs.iter().map(to_sql).collect::<Result<_, _>>()?;
+        Binds::Positional(pbs) => {
+            let (sql, sv) = expand_placeholders(&stmt.sql, pbs)?;
+            let mut prepared = conn.prepare(&sql).map_err(sql_err)?;
+            let cols = col_names(&prepared);
             let mut r = prepared
                 .query(rusqlite::params_from_iter(sv.iter()))
                 .map_err(sql_err)?;
             collect_rows(&mut r, &cols)?
         }
         Binds::Named(pairs) => {
+            let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
+            let cols = col_names(&prepared);
             let sv: Vec<(String, rusqlite::types::Value)> = pairs
                 .iter()
                 .map(|(k, v)| Ok((format!(":{k}"), to_sql(v)?)))
@@ -365,26 +491,23 @@ fn query_inner(args: &[Value]) -> Result<Value, String> {
     Ok(Value::List(Rc::new(rows)))
 }
 
-/// `stmt.exec()` → run a write (INSERT/UPDATE/DELETE/DDL) and return the affected-row count.
-fn exec_inner(args: &[Value]) -> Result<Value, String> {
-    let stmt = match args {
-        [s] => as_stmt(s)?,
-        _ => return Err("Core.Db.__exec expects (Statement)".into()),
-    };
-    let guard = stmt.conn.borrow();
-    let conn = guard.as_ref().ok_or_else(conn_closed)?;
-    let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
-    let binds = stmt.binds.borrow();
-    let n = match &*binds {
-        Binds::None => prepared.execute([]).map_err(sql_err)?,
-        Binds::Positional(vs) => {
-            let sv: Vec<rusqlite::types::Value> =
-                vs.iter().map(to_sql).collect::<Result<_, _>>()?;
+/// Prepare `sql`, bind `binds`, and execute a write on `conn`, returning the affected-row count.
+/// Shared by `exec`, `execReturningId`, and the per-row loop of `executeMany` (all DEC-208).
+fn exec_bound(conn: &rusqlite::Connection, sql: &str, binds: &Binds) -> Result<usize, String> {
+    match binds {
+        Binds::None => {
+            let mut prepared = conn.prepare(sql).map_err(sql_err)?;
+            prepared.execute([]).map_err(sql_err)
+        }
+        Binds::Positional(pbs) => {
+            let (esql, sv) = expand_placeholders(sql, pbs)?;
+            let mut prepared = conn.prepare(&esql).map_err(sql_err)?;
             prepared
                 .execute(rusqlite::params_from_iter(sv.iter()))
-                .map_err(sql_err)?
+                .map_err(sql_err)
         }
         Binds::Named(pairs) => {
+            let mut prepared = conn.prepare(sql).map_err(sql_err)?;
             let sv: Vec<(String, rusqlite::types::Value)> = pairs
                 .iter()
                 .map(|(k, v)| Ok((format!(":{k}"), to_sql(v)?)))
@@ -393,10 +516,192 @@ fn exec_inner(args: &[Value]) -> Result<Value, String> {
                 .iter()
                 .map(|(k, v)| (k.as_str(), v as &dyn rusqlite::ToSql))
                 .collect();
-            prepared.execute(refs.as_slice()).map_err(sql_err)?
+            prepared.execute(refs.as_slice()).map_err(sql_err)
         }
+    }
+}
+
+/// `stmt.exec()` → run a write (INSERT/UPDATE/DELETE/DDL) and return the affected-row count.
+fn exec_inner(args: &[Value]) -> Result<Value, String> {
+    let stmt = match args {
+        [s] => as_stmt(s)?,
+        _ => return Err("Core.Db.__exec expects (Statement)".into()),
     };
+    let guard = stmt.conn.borrow();
+    let conn = guard.as_ref().ok_or_else(conn_closed)?;
+    let binds = stmt.binds.borrow();
+    let n = exec_bound(conn, &stmt.sql, &binds)?;
     Ok(Value::Int(n as i64))
+}
+
+/// `stmt.execReturningId()` → run an INSERT and return the auto-generated rowid / PK (DEC-208 slice D,
+/// spec §4). SQLite: `last_insert_rowid()` on the same connection, read immediately after the write.
+fn exec_returning_id_inner(args: &[Value]) -> Result<Value, String> {
+    let stmt = match args {
+        [s] => as_stmt(s)?,
+        _ => return Err("Core.Db.__execReturningId expects (Statement)".into()),
+    };
+    let guard = stmt.conn.borrow();
+    let conn = guard.as_ref().ok_or_else(conn_closed)?;
+    let binds = stmt.binds.borrow();
+    exec_bound(conn, &stmt.sql, &binds)?;
+    Ok(Value::Int(conn.last_insert_rowid()))
+}
+
+/// `stmt.executeMany(rows)` → prepare ONCE and execute the statement for each row of binds (DEC-208
+/// slice D, spec §4) — far faster than a per-row `prepare`+`exec` loop. `rows` is a `List<List<value>>`
+/// (each inner list = one positional bind-set, matching the `?` count). The whole batch runs inside a
+/// dedicated SAVEPOINT (`phorj_bulk`) for atomicity + speed: it commits (`RELEASE`) on success and
+/// rolls back the entire batch on ANY row's failure. A savepoint composes with an outer `begin()`
+/// transaction and never touches the `begin()`/`rollback()` depth counter. Returns the TOTAL affected
+/// rows. `executeMany` carries all its binds via `rows`; a statement that also has accumulated
+/// `bind()`/`bindNamed()` binds is a usage error (ambiguous).
+fn execute_many_inner(args: &[Value]) -> Result<Value, String> {
+    let (stmt, rows) = match args {
+        [s, Value::List(rows)] => (as_stmt(s)?, rows),
+        _ => return Err("Core.Db.__executeMany expects (Statement, List<List<value>>)".into()),
+    };
+    if !matches!(&*stmt.binds.borrow(), Binds::None) {
+        return Err(
+            "Core.Db.executeMany: pass all values via the rows argument, not bind()/bindNamed()"
+                .into(),
+        );
+    }
+    let guard = stmt.conn.borrow();
+    let conn = guard.as_ref().ok_or_else(conn_closed)?;
+    conn.execute_batch("SAVEPOINT phorj_bulk")
+        .map_err(sql_err)?;
+    let run = || -> Result<i64, String> {
+        let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
+        let mut total = 0i64;
+        for row in rows.iter() {
+            let vals = match row {
+                Value::List(v) => v,
+                other => {
+                    return Err(format!(
+                        "Core.Db.executeMany: each row must be a list, got {}",
+                        other.type_name()
+                    ))
+                }
+            };
+            let sv: Vec<rusqlite::types::Value> =
+                vals.iter().map(to_sql).collect::<Result<_, _>>()?;
+            let n = prepared
+                .execute(rusqlite::params_from_iter(sv.iter()))
+                .map_err(sql_err)?;
+            total += n as i64;
+        }
+        Ok(total)
+    };
+    match run() {
+        Ok(total) => {
+            conn.execute_batch("RELEASE phorj_bulk").map_err(sql_err)?;
+            Ok(Value::Int(total))
+        }
+        Err(e) => {
+            // Best-effort unwind of the whole batch; return the ORIGINAL error (a rollback failure must
+            // not mask it). Same defer-don't-fail discipline as `rollback`'s no-op guard.
+            let _ = conn.execute_batch("ROLLBACK TO phorj_bulk; RELEASE phorj_bulk");
+            Err(e)
+        }
+    }
+}
+
+/// `db.lastInsertId()` → the auto-generated rowid / PK of the most recent INSERT on this connection
+/// (DEC-208 slice D, spec §4). SQLite: `last_insert_rowid()`.
+fn last_insert_id_inner(args: &[Value]) -> Result<Value, String> {
+    let conn = match args {
+        [c] => as_conn(c)?,
+        _ => return Err("Core.Db.__lastInsertId expects (Db)".into()),
+    };
+    let guard = conn.conn.borrow();
+    let live = guard.as_ref().ok_or_else(conn_closed)?;
+    Ok(Value::Int(live.last_insert_rowid()))
+}
+
+/// `db.timeout(ms)` → arm the connection's query timeout (DEC-208 slice D, spec §7). SQLite:
+/// `busy_timeout(ms)` bounds how long a statement waits on a held lock before failing — a genuine
+/// statement-runtime cap needs a progress-handler/interrupt (not wired here; the busy-wait cap is what
+/// SQLite supports cleanly). Storing `timeout_ms > 0` makes a subsequent `busy`/`locked` failure
+/// reclassify to `Timeout` ([`remap_timeout`]). A negative `ms` clamps to 0 (unset). Idempotent.
+fn timeout_inner(args: &[Value]) -> Result<Value, String> {
+    let (conn, ms) = match args {
+        [c, Value::Int(ms)] => (as_conn(c)?, *ms),
+        _ => return Err("Core.Db.__timeout expects (Db, int ms)".into()),
+    };
+    let clamped = ms.max(0);
+    {
+        let guard = conn.conn.borrow();
+        let live = guard.as_ref().ok_or_else(conn_closed)?;
+        live.busy_timeout(std::time::Duration::from_millis(clamped as u64))
+            .map_err(sql_err)?;
+    }
+    conn.timeout_ms.set(clamped);
+    Ok(Value::Int(clamped))
+}
+
+/// `db.onQuery(hook)` → register the observability hook (DEC-208 slice D, spec §7). Stores the
+/// `(string, int) => void` closure in the shared cell every derived statement reads; `query`/`exec`
+/// then invoke it after each op with `(sql, elapsed_ms)`. Stored eagerly (an `Rc` bump); a re-register
+/// replaces the previous hook. Never a DB error.
+fn on_query_inner(args: &[Value]) -> Result<Value, String> {
+    let (conn, hook) = match args {
+        [c, h] => (as_conn(c)?, h.clone()),
+        _ => return Err("Core.Db.__onQuery expects (Db, hook)".into()),
+    };
+    *conn.hook.borrow_mut() = Some(hook);
+    Ok(Value::Int(0))
+}
+
+/// When a query timeout is active (`db.timeout(ms)`), reclassify a transient `SerializationFailure`
+/// (SQLite `busy`/`locked`) as `Timeout`: `busy_timeout` bounded the lock-wait, so reaching it means
+/// the wait was exceeded. CONSEQUENCE: with a timeout set you no longer observe `SerializationFailure`
+/// (the class a future closure-`retry` would target) — acceptable while retry is deferred, documented
+/// in `KNOWN_ISSUES.md` + the spec.
+fn remap_timeout(res: Result<Value, String>, active: bool) -> Result<Value, String> {
+    if active {
+        if let Err(msg) = &res {
+            if let Some(rest) = msg.strip_prefix("<<SerializationFailure>>") {
+                return Err(format!("<<Timeout>>{rest}"));
+            }
+        }
+    }
+    res
+}
+
+/// Run a statement-executing inner body, then (a) reclassify a busy failure as `Timeout` when a
+/// timeout is active and (b) fire the connection's `onQuery` hook with `(sql, elapsed_ms)`. This is why
+/// `query`/`exec`/`executeMany`/`execReturningId` are `HigherOrder` natives: they must call BACK into
+/// the calling backend to invoke the stored `Value::Closure` (the same re-entrant `invoke` the
+/// interpreter/VM hand to `List.map`). A well-typed `(string, int) => void` hook cannot raise a checked
+/// exception, so its error (reachable only via a hard fault / the throw sentinel) is PROPAGATED, never
+/// swallowed — swallowing would strand the backend's throw sentinel. `elapsed_ms` is wall-clock and
+/// thus NON-deterministic across the two backends: examples/tests must never print it raw, or
+/// `run ≡ runvm` breaks. When no hook is set and no timeout is armed, this is byte-identical to the old
+/// `Ok(wrap(inner(args)))`.
+fn with_hook(
+    args: &[Value],
+    invoke: &mut ClosureInvoker,
+    inner: fn(&[Value]) -> Result<Value, String>,
+) -> Result<Value, String> {
+    let stmt = args.first().and_then(|v| as_stmt(v).ok());
+    let start = std::time::Instant::now();
+    let mut result = inner(args);
+    if let Some(s) = stmt {
+        result = remap_timeout(result, s.timeout_ms.get() > 0);
+        let ms = i64::try_from(start.elapsed().as_millis()).unwrap_or(i64::MAX);
+        // TAKE the hook out of the shared cell for the duration of its own call: a hook that itself
+        // issues a query/exec on the same connection would otherwise re-enter here and recurse without
+        // bound (stack overflow). With it removed, the nested op sees no hook and runs normally; the
+        // hook is restored afterward (even if it faulted, so the error still propagates).
+        let hook = s.hook.borrow_mut().take();
+        if let Some(h) = hook {
+            let fired = invoke(&h, vec![Value::Str(s.sql.as_str().into()), Value::Int(ms)]);
+            *s.hook.borrow_mut() = Some(h);
+            fired?;
+        }
+    }
+    Ok(wrap(result))
 }
 
 /// Run one SQL control statement (`BEGIN`/`COMMIT`/`SAVEPOINT`/…) on the live connection, or a clean
@@ -669,8 +974,10 @@ db_native!(db_open, open_inner);
 db_native!(db_prepare, prepare_inner);
 db_native!(db_bind, bind_inner);
 db_native!(db_bind_named, bind_named_inner);
-db_native!(db_query, query_inner);
-db_native!(db_exec, exec_inner);
+db_native!(db_bind_list, bind_list_inner);
+db_native!(db_last_insert_id, last_insert_id_inner);
+db_native!(db_timeout, timeout_inner);
+db_native!(db_on_query, on_query_inner);
 db_native!(db_begin, begin_inner);
 db_native!(db_commit, commit_inner);
 db_native!(db_rollback, rollback_inner);
@@ -686,6 +993,23 @@ db_native!(row_get_bool_or_null, get_bool_or_null_inner);
 db_native!(row_column_names, column_names_inner);
 db_native!(row_is_null, is_null_inner);
 
+// HigherOrder natives (DEC-208 slice D): the statement-executing paths route through `with_hook` so
+// they can fire the `onQuery` closure and apply the timeout classification. `wrap` still turns a DB
+// error into a catchable `DbResult.Err`; the `Result<_, String>` a HigherOrder body returns is used
+// ONLY for the hook-invoke propagation (a hard fault / throw sentinel), never for a DB error.
+fn db_query(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
+    with_hook(args, invoke, query_inner)
+}
+fn db_exec(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
+    with_hook(args, invoke, exec_inner)
+}
+fn db_execute_many(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
+    with_hook(args, invoke, execute_many_inner)
+}
+fn db_exec_returning_id(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
+    with_hook(args, invoke, exec_returning_id_inner)
+}
+
 /// The `Core.DbSys` registry entries — the INTERNAL natives the phorj-source `Core.Db` prelude wraps.
 /// They live under the `DbSys` qualifier (NOT `Db`) so a prelude `class Db` calling `DbSys.open(..)`
 /// never collides with the class. Every opaque connection / statement / row handle is typed `DbHandle`
@@ -697,8 +1021,11 @@ db_native!(row_is_null, is_null_inner);
 pub fn db_natives() -> Vec<NativeFn> {
     let handle = || Ty::Named("DbHandle".into(), vec![]);
     let res = |t: Ty| Ty::Named("DbResult".into(), vec![t]);
-    // A bindable scalar — the same union the old Core.Sql `Query.bind` used.
-    let bindable = || Ty::Union(vec![Ty::String, Ty::Int, Ty::Float, Ty::Bool]);
+    // A bindable scalar. Built via `Ty::union_of` so members are in the checker's CANONICAL (sorted-by-
+    // Display) order — load-bearing for the `List<bindable>` params (`bindList`/`executeMany`): a list
+    // literal is contextually typed to `List<canonical-union>`, and generics are invariant, so a native
+    // param whose union order differed would reject the well-typed argument.
+    let bindable = || Ty::union_of(vec![Ty::String, Ty::Int, Ty::Float, Ty::Bool]);
     vec![
         NativeFn {
             module: "Core.DbSys",
@@ -744,7 +1071,8 @@ pub fn db_natives() -> Vec<NativeFn> {
             params: vec![handle()],
             ret: res(Ty::List(Box::new(handle()))),
             pure: false,
-            eval: NativeEval::Pure(db_query),
+            // HigherOrder (DEC-208 slice D): fires the `onQuery` hook + applies timeout classification.
+            eval: NativeEval::HigherOrder(db_query),
             php: |a| {
                 format!(
                     "{}->execute() /* fetchAll finalized in transpile slice */",
@@ -758,8 +1086,84 @@ pub fn db_natives() -> Vec<NativeFn> {
             params: vec![handle()],
             ret: res(Ty::Int),
             pure: false,
-            eval: NativeEval::Pure(db_exec),
+            eval: NativeEval::HigherOrder(db_exec),
             php: |a| format!("{}->execute()", a[0]),
+        },
+        // --- Writes & robustness (DEC-208 slice D, spec §4/§7). `bindList` (IN-list) is Pure (records
+        // a bind); `executeMany`/`execReturningId` are HigherOrder (they run SQL → fire `onQuery`);
+        // `lastInsertId`/`timeout`/`onQuery` are connection-level Pure. All `pure:false` (real DB I/O →
+        // byte-identity quarantine). PHP emitters are placeholders (Core.Db transpile finalized later). ---
+        // `bindList`/`executeMany` are GENERIC over the element type `T` (not `List<bindable>`): an
+        // invariant `List<union>` param cannot accept a homogeneous list literal/variable (a `List<int>`
+        // is not a `List<string | int | float | bool>`), so bindability is enforced at RUNTIME by
+        // `to_sql` (a non-scalar element → a catchable `DbError`) instead of at compile time. `T` is
+        // inferred from the argument's element type (same as `List.firstOr<T>`).
+        NativeFn {
+            module: "Core.DbSys",
+            name: "bindList",
+            params: vec![handle(), Ty::List(Box::new(Ty::Param("T".into())))],
+            ret: res(handle()),
+            pure: false,
+            eval: NativeEval::Pure(db_bind_list),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "executeMany",
+            params: vec![
+                handle(),
+                Ty::List(Box::new(Ty::List(Box::new(Ty::Param("T".into()))))),
+            ],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::HigherOrder(db_execute_many),
+            php: |a| {
+                format!(
+                    "{}->execute() /* executeMany finalized in transpile slice */",
+                    a[0]
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "execReturningId",
+            params: vec![handle()],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::HigherOrder(db_exec_returning_id),
+            php: |a| format!("{}->execute()", a[0]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "lastInsertId",
+            params: vec![handle()],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_last_insert_id),
+            php: |a| format!("(int) {}->lastInsertId()", a[0]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "timeout",
+            params: vec![handle(), Ty::Int],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_timeout),
+            // PDO: ATTR_TIMEOUT (seconds); the receiver is threaded through for now.
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "onQuery",
+            params: vec![
+                handle(),
+                Ty::Function(vec![Ty::String, Ty::Int], Box::new(Ty::Void)),
+            ],
+            ret: res(Ty::Int),
+            pure: false,
+            eval: NativeEval::Pure(db_on_query),
+            // No faithful PDO analog (PDO has no per-query hook); placeholder, quarantined.
+            php: |_a| "null".to_string(),
         },
         // --- Transaction control (DEC-208 slice C). Savepoint-aware via the connection's depth counter
         // (managed in the native, shared across handles). The `php` emitters map to PDO's transaction
@@ -913,6 +1317,18 @@ pub fn db_natives() -> Vec<NativeFn> {
 mod tests {
     use super::*;
 
+    // Slice D flipped `db_query`/`db_exec` from `Pure` to `HigherOrder`; the in-module tests call them
+    // directly, so these shims supply a no-op closure invoker (no hook registered → never invoked) and
+    // keep the `(args, &mut out)` call ergonomics. Return shape is unchanged (`Ok(wrap(..))`).
+    fn q(args: &[Value], _out: &mut String) -> Result<Value, String> {
+        let mut noop = |_: &Value, _: Vec<Value>| Ok(Value::Null);
+        db_query(args, &mut noop)
+    }
+    fn x(args: &[Value], _out: &mut String) -> Result<Value, String> {
+        let mut noop = |_: &Value, _: Vec<Value>| Ok(Value::Null);
+        db_exec(args, &mut noop)
+    }
+
     /// Extract the payload of a `Result.Success(v)` value the natives now return; panic on `Failure`.
     fn ok_of(v: Value) -> Value {
         match v {
@@ -951,7 +1367,7 @@ mod tests {
             )
             .unwrap(),
         );
-        assert!(ok_of(db_exec(&[stmt], &mut out).unwrap()).eq_val(&Value::Int(0)));
+        assert!(ok_of(x(&[stmt], &mut out).unwrap()).eq_val(&Value::Int(0)));
 
         // INSERT with positional binds.
         let ins = ok_of(
@@ -966,7 +1382,7 @@ mod tests {
         );
         let ins = ok_of(db_bind(&[ins, Value::Str("Ada".into())], &mut out).unwrap());
         let ins = ok_of(db_bind(&[ins, Value::Int(36)], &mut out).unwrap());
-        assert!(ok_of(db_exec(&[ins], &mut out).unwrap()).eq_val(&Value::Int(1)));
+        assert!(ok_of(x(&[ins], &mut out).unwrap()).eq_val(&Value::Int(1)));
 
         // INSERT with named binds.
         let ins2 = ok_of(
@@ -989,7 +1405,7 @@ mod tests {
         let ins2 = ok_of(
             db_bind_named(&[ins2, Value::Str("a".into()), Value::Int(45)], &mut out).unwrap(),
         );
-        assert!(ok_of(db_exec(&[ins2], &mut out).unwrap()).eq_val(&Value::Int(1)));
+        assert!(ok_of(x(&[ins2], &mut out).unwrap()).eq_val(&Value::Int(1)));
 
         // Query back, ordered, and read via Row accessors.
         let sel = ok_of(
@@ -1003,7 +1419,7 @@ mod tests {
             .unwrap(),
         );
         let sel = ok_of(db_bind(&[sel, Value::Int(30)], &mut out).unwrap());
-        let rows = ok_of(db_query(&[sel], &mut out).unwrap());
+        let rows = ok_of(q(&[sel], &mut out).unwrap());
         let Value::List(rows) = rows else {
             panic!("query must return a list")
         };
@@ -1042,7 +1458,7 @@ mod tests {
         let mut out = String::new();
         let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
         let s = ok_of(db_prepare(&[db, Value::Str("SELECT NULL AS x".into())], &mut out).unwrap());
-        let rows = ok_of(db_query(&[s], &mut out).unwrap());
+        let rows = ok_of(q(&[s], &mut out).unwrap());
         let Value::List(rows) = rows else { panic!() };
         let msg =
             err_of(row_get_int(&[rows[0].clone(), Value::Str("x".into())], &mut out).unwrap());
@@ -1054,13 +1470,13 @@ mod tests {
     /// Open an in-memory DB and run one `exec` statement, panicking on any failure.
     fn exec1(db: &Value, sql: &str, out: &mut String) {
         let s = ok_of(db_prepare(&[db.clone(), Value::Str(sql.into())], out).unwrap());
-        ok_of(db_exec(&[s], out).unwrap());
+        ok_of(x(&[s], out).unwrap());
     }
 
     /// Read a single-int scalar from `sql`.
     fn scalar(db: &Value, sql: &str, col: &str, out: &mut String) -> i64 {
         let s = ok_of(db_prepare(&[db.clone(), Value::Str(sql.into())], out).unwrap());
-        let rows = ok_of(db_query(&[s], out).unwrap());
+        let rows = ok_of(q(&[s], out).unwrap());
         let Value::List(rows) = rows else {
             panic!("query returns a list")
         };
@@ -1086,7 +1502,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let msg = err_of(db_exec(&[s], &mut out).unwrap());
+        let msg = err_of(x(&[s], &mut out).unwrap());
         assert!(msg.starts_with("<<UniqueViolation>>"), "got: {msg}");
     }
 
@@ -1096,7 +1512,7 @@ mod tests {
         let mut out = String::new();
         let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
         let s = ok_of(db_prepare(&[db, Value::Str("SELCT oops".into())], &mut out).unwrap());
-        let msg = err_of(db_query(&[s], &mut out).unwrap());
+        let msg = err_of(q(&[s], &mut out).unwrap());
         assert!(msg.starts_with("<<SyntaxError>>"), "got: {msg}");
     }
 
@@ -1186,7 +1602,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let rows = ok_of(db_query(&[s], &mut out).unwrap());
+        let rows = ok_of(q(&[s], &mut out).unwrap());
         let Value::List(rows) = rows else { panic!() };
         let cols = ok_of(row_column_names(&[rows[0].clone()], &mut out).unwrap());
         let Value::List(cols) = cols else {
@@ -1213,7 +1629,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let rows = ok_of(db_query(&[s], &mut out).unwrap());
+        let rows = ok_of(q(&[s], &mut out).unwrap());
         let Value::List(rows) = rows else { panic!() };
         assert!(
             ok_of(row_is_null(&[rows[0].clone(), Value::Str("a".into())], &mut out).unwrap())
@@ -1227,5 +1643,182 @@ mod tests {
         let msg =
             err_of(row_is_null(&[rows[0].clone(), Value::Str("zzz".into())], &mut out).unwrap());
         assert!(msg.contains("no column"), "got: {msg}");
+    }
+
+    // ── DEC-208 slice D: writes + robustness ──────────────────────────────────────────────────
+
+    /// `bindList` expands the single `?` in place (reusing the caller's parens) to a comma list, and to
+    /// `NULL` when empty; a `?`/bind mismatch is a clean error.
+    #[test]
+    fn bind_list_placeholder_expansion() {
+        let one = PosBind::List(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
+        let (sql, params) = expand_placeholders("SELECT * FROM t WHERE id IN (?)", &[one]).unwrap();
+        assert_eq!(sql, "SELECT * FROM t WHERE id IN (?,?,?)");
+        assert_eq!(params.len(), 3);
+        // Empty list → `IN (NULL)`, no params.
+        let empty = PosBind::List(vec![]);
+        let (sql, params) =
+            expand_placeholders("SELECT * FROM t WHERE id IN (?)", &[empty]).unwrap();
+        assert_eq!(sql, "SELECT * FROM t WHERE id IN (NULL)");
+        assert!(params.is_empty());
+        // Mixed with a positional One, left-to-right; a `?` inside a string literal is NOT a placeholder.
+        let (sql, params) = expand_placeholders(
+            "SELECT '?' , x WHERE a = ? AND b IN (?)",
+            &[
+                PosBind::One(Value::Str("hi".into())),
+                PosBind::List(vec![Value::Int(9)]),
+            ],
+        )
+        .unwrap();
+        assert_eq!(sql, "SELECT '?' , x WHERE a = ? AND b IN (?)");
+        assert_eq!(params.len(), 2);
+        // Too few binds for the ? count is a clean error.
+        assert!(expand_placeholders("a = ?", &[]).is_err());
+    }
+
+    /// `execute_many` inserts every row atomically and returns the total; a mid-batch failure rolls the
+    /// WHOLE batch back (savepoint), leaving nothing behind.
+    #[test]
+    fn execute_many_atomic() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        exec1(
+            &db,
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT)",
+            &mut out,
+        );
+        let s = ok_of(
+            db_prepare(
+                &[
+                    db.clone(),
+                    Value::Str("INSERT INTO t(id, v) VALUES(?, ?)".into()),
+                ],
+                &mut out,
+            )
+            .unwrap(),
+        );
+        let rows = Value::List(Rc::new(vec![
+            Value::List(Rc::new(vec![Value::Int(1), Value::Str("a".into())])),
+            Value::List(Rc::new(vec![Value::Int(2), Value::Str("b".into())])),
+        ]));
+        // The `_inner` bodies return the RAW `Result` (the public HO natives `wrap` it); assert directly.
+        let n = execute_many_inner(&[s, rows]).unwrap();
+        assert!(n.eq_val(&Value::Int(2)));
+        assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 2);
+
+        // A duplicate PK mid-batch → the whole savepoint rolls back (still 2 rows, none of the batch).
+        let s2 = ok_of(
+            db_prepare(
+                &[
+                    db.clone(),
+                    Value::Str("INSERT INTO t(id, v) VALUES(?, ?)".into()),
+                ],
+                &mut out,
+            )
+            .unwrap(),
+        );
+        let bad = Value::List(Rc::new(vec![
+            Value::List(Rc::new(vec![Value::Int(3), Value::Str("c".into())])),
+            Value::List(Rc::new(vec![Value::Int(1), Value::Str("dup".into())])),
+        ]));
+        let msg = execute_many_inner(&[s2, bad]).unwrap_err();
+        assert!(msg.starts_with("<<UniqueViolation>>"), "got: {msg}");
+        assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 2);
+    }
+
+    /// `execReturningId` / `lastInsertId` report the auto-generated rowid.
+    #[test]
+    fn insert_id_helpers() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        exec1(
+            &db,
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT)",
+            &mut out,
+        );
+        let ins = ok_of(
+            db_prepare(
+                &[
+                    db.clone(),
+                    Value::Str("INSERT INTO t(v) VALUES('a')".into()),
+                ],
+                &mut out,
+            )
+            .unwrap(),
+        );
+        let id = exec_returning_id_inner(&[ins]).unwrap();
+        assert!(id.eq_val(&Value::Int(1)));
+        exec1(&db, "INSERT INTO t(v) VALUES('b')", &mut out);
+        let last = last_insert_id_inner(std::slice::from_ref(&db)).unwrap();
+        assert!(last.eq_val(&Value::Int(2)));
+    }
+
+    /// `remap_timeout` reclassifies a transient `SerializationFailure` as `Timeout` only when a timeout
+    /// is armed (mapping unit — deterministic, no lock races).
+    #[test]
+    fn remap_timeout_only_when_armed() {
+        let armed = remap_timeout(
+            Err("<<SerializationFailure>>Core.Db: database is locked".into()),
+            true,
+        );
+        assert!(
+            matches!(&armed, Err(m) if m.starts_with("<<Timeout>>")),
+            "got: {armed:?}"
+        );
+        let unarmed = remap_timeout(Err("<<SerializationFailure>>x".into()), false);
+        assert!(matches!(&unarmed, Err(m) if m.starts_with("<<SerializationFailure>>")));
+        // A non-busy error is never touched, armed or not.
+        let other = remap_timeout(Err("<<SyntaxError>>x".into()), true);
+        assert!(matches!(&other, Err(m) if m.starts_with("<<SyntaxError>>")));
+    }
+
+    /// End-to-end: with `db.timeout(ms)` armed, a genuine lock contention (a second connection blocked
+    /// by a held write lock) surfaces as `Timeout` (not `SerializationFailure`). Deterministic: the
+    /// first connection holds the lock for the whole test, so the second always exhausts its busy wait.
+    #[test]
+    fn armed_timeout_maps_busy_to_timeout_end_to_end() {
+        let mut out = String::new();
+        let path = std::env::temp_dir().join(format!(
+            "phorj_db_to_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let dsn = format!("sqlite:{}", path.display());
+        let c1 = ok_of(db_open(&[Value::Str(dsn.as_str().into())], &mut out).unwrap());
+        exec1(&c1, "CREATE TABLE t(x INTEGER)", &mut out);
+        // c1 opens a transaction and takes a write lock, holding it for the rest of the test.
+        ok_of(db_begin(std::slice::from_ref(&c1), &mut out).unwrap());
+        exec1(&c1, "INSERT INTO t(x) VALUES(1)", &mut out);
+        // c2 arms a short busy timeout, then its write waits for and fails to get the lock → Timeout.
+        let c2 = ok_of(db_open(&[Value::Str(dsn.as_str().into())], &mut out).unwrap());
+        ok_of(db_timeout(&[c2.clone(), Value::Int(30)], &mut out).unwrap());
+        let s = ok_of(
+            db_prepare(
+                &[c2, Value::Str("INSERT INTO t(x) VALUES(2)".into())],
+                &mut out,
+            )
+            .unwrap(),
+        );
+        let msg = err_of(x(&[s], &mut out).unwrap());
+        let _ = std::fs::remove_file(&path);
+        assert!(msg.starts_with("<<Timeout>>"), "got: {msg}");
+    }
+
+    /// A hook registered via `onQuery` is stored and returned by the shared cell; a Pure store never
+    /// fails. (Invocation with `(sql, ms)` is exercised end-to-end by `tests/db.rs`, which has a real
+    /// backend to run the closure.)
+    #[test]
+    fn on_query_stores_the_hook() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
+        // A non-closure stand-in is fine here: the native only stores the value; the checker enforces
+        // the `(string, int) => void` shape at the call site.
+        let sentinel = Value::Int(42);
+        ok_of(db_on_query(&[db.clone(), sentinel], &mut out).unwrap());
+        let conn = as_conn(&db).unwrap();
+        assert!(conn.hook.borrow().is_some());
     }
 }

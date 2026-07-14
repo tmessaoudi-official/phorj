@@ -230,6 +230,29 @@ not a panic:
     — SQLite has effectively one isolation, so it is minimally meaningful until the Postgres driver lands;
     deferred to keep the overload set arity-distinguished and the slice tight.
 
+- **`Core.Db` writes & robustness (DEC-208 slice D) — shipped + disclosures.** Shipped
+  (`examples/db/writes.phg`, `tests/db.rs`): `db.lastInsertId(): int` + `stmt.execReturningId(): int`
+  (SQLite `last_insert_rowid()`); `stmt.executeMany(rows): int` (prepare once, run all bind-sets inside
+  one `phorj_bulk` savepoint → atomic + fast, returns total affected); `stmt.bindList(values): Statement`
+  (the single `?` in `… IN (?)` expands in place to a comma placeholder list — empty → `IN (NULL)`,
+  matches nothing; interleaves left-to-right with `bind()`; a `?` inside a string literal is not a
+  placeholder); `db.timeout(ms): Db`; `db.onQuery((string, int) => void): Db` (a per-query hook, invoked
+  after each query/exec — `query`/`exec`/`executeMany`/`execReturningId` are therefore `HigherOrder`
+  natives that call back into the backend to run the stored closure).
+  - **Disclosures / deviations:** (1) **`bindList<T>` / `executeMany<T>` are generic over the element
+    type, not `List<bindable-union>`.** phorj generics are invariant, so a `List<int>` is not a
+    `List<string | int | float | bool>`; bindability is therefore enforced at RUNTIME (`to_sql` → a
+    catchable `DbError` on a non-scalar), not at compile time. (2) **`executeMany` rows are homogeneously-
+    typed lists** — a phorj list literal must share one element type, so a mixed-column bulk row is written
+    with a per-row typed binding (`List<string | int> r = [1, "x"]; …executeMany([r, …]);`) rather than a
+    bare mixed literal `[1, "x"]`. (3) **`db.timeout(ms)` bounds LOCK-WAIT only** (SQLite `busy_timeout`),
+    not a CPU-bound runaway query (a statement-runtime cap needs a progress-handler/interrupt, not wired).
+    While a timeout is armed, a transient `busy`/`locked` is reclassified `SerializationFailure` →
+    `Timeout`, so `SerializationFailure` (the class a future closure-`retry` would target) is not observed
+    with a timeout set — acceptable while retry stays deferred (slice C PENDING). (4) The hook's `ms` is
+    wall-clock and NON-deterministic across the two backends, so no byte-identity example/test prints it
+    raw (only the SQL text, or `ms >= 0`).
+
 - **`Core.Db` typed hydration completion (DEC-208 slice B) — shipped + disclosures.** Three shape-directed
   extensions of the S2 desugar (`src/checker/desugar_db.rs`), same PRE-check lowering to S1 primitives, so
   `run ≡ runvm` stays automatic. (1) **Nested hydration:** a field that is itself an entity is hydrated

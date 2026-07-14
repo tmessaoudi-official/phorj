@@ -540,3 +540,152 @@ fn db_close_then_use_is_connection_error() {
     );
     both(&src, "caught: Core.Db: the connection is closed\n");
 }
+
+// ── DEC-208 slice D: writes + robustness (lastInsertId / executeMany / bindList / timeout / onQuery) ──
+
+/// The SOLE gate that runs the slice-D write surface (`execReturningId`/`lastInsertId`/`executeMany`/
+/// `bindList`/`timeout`/`onQuery`) through the real language on BOTH backends (quarantined from the
+/// byte-identity differential like every `Core.Db` example). The `onQuery` hook logs only the SQL text
+/// (its `ms` is wall-clock → excluded, or `run ≢ runvm`).
+#[test]
+fn db_writes_example_runs_on_both_backends() {
+    let src =
+        std::fs::read_to_string("examples/db/writes.phg").expect("read examples/db/writes.phg");
+    let expected = concat!(
+        "inserted Ada -> id 1\n",
+        "inserted Grace -> id 2\n",
+        "bulk inserted 3\n",
+        "  [query] SELECT name FROM people WHERE id IN (?) ORDER BY id\n",
+        "in-list: Ada\n",
+        "in-list: Bob\n",
+        "in-list: Dan\n",
+        "in-list count 3\n",
+    );
+    both(&src, expected);
+}
+
+/// A scaffold: an empty `people(id PK, name, city)` table, then `body` inside a `try/catch(DbError)`.
+fn writes_program(body: &str) -> String {
+    format!(
+        r#"package Main;
+import Core.Output;
+import Core.List;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Row;
+import Core.Db.DbError;
+function main(): void {{
+  try {{
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE people(id INTEGER PRIMARY KEY, name TEXT, city TEXT)").exec();
+    {body}
+  }} catch (DbError e) {{ Output.printLine("caught: {{e.message}}"); }}
+}}
+"#
+    )
+}
+
+#[test]
+fn db_exec_returning_id_and_last_insert_id_agree() {
+    // execReturningId returns the new PK; a following lastInsertId reads the most recent one.
+    let src = writes_program(
+        r#"int a = db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").bind("Ada").bind("Paris").execReturningId();
+       discard db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").bind("Bo").bind("X").exec();
+       int last = db.lastInsertId();
+       Output.printLine("{a}/{last}");"#,
+    );
+    both(&src, "1/2\n");
+}
+
+#[test]
+fn db_execute_many_inserts_all_rows() {
+    let src = writes_program(
+        r#"int n = db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").executeMany([["A", "P"], ["B", "Q"], ["C", "R"]]);
+       List<Row> rows = db.prepare("SELECT name FROM people ORDER BY id").query();
+       Output.printLine("{n}/{List.length(rows)}");"#,
+    );
+    both(&src, "3/3\n");
+}
+
+#[test]
+fn db_execute_many_rolls_back_whole_batch_on_error() {
+    // A duplicate PK mid-batch fails; the savepoint rolls back the ENTIRE batch (nothing persists).
+    // Rows are homogeneous (all string) — a phorj list literal must share one element type, so a
+    // mixed-column bulk row needs per-row typed bindings; here a TEXT primary key gives the collision.
+    let src = r#"package Main;
+import Core.Output;
+import Core.List;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Row;
+import Core.Db.DbError;
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE t(k TEXT PRIMARY KEY, v TEXT)").exec();
+    try {
+      discard db.prepare("INSERT INTO t(k, v) VALUES(?, ?)").executeMany([["1", "a"], ["1", "b"]]);
+    } catch (DbError e) { Output.printLine("err"); }
+    List<Row> rows = db.prepare("SELECT k FROM t").query();
+    Output.printLine("rows={List.length(rows)}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "err\nrows=0\n");
+}
+
+#[test]
+fn db_bind_list_expands_and_filters() {
+    let src = writes_program(
+        r#"discard db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").executeMany([["A", "P"], ["B", "Q"], ["C", "R"], ["D", "S"]]);
+       List<Row> rows = db.prepare("SELECT name FROM people WHERE id IN (?) ORDER BY id").bindList([1, 3]).query();
+       mutable string acc = "";
+       for (Row r in rows) { acc = acc + r.getString("name"); }
+       Output.printLine("{acc}");"#,
+    );
+    both(&src, "AC\n");
+}
+
+#[test]
+fn db_bind_list_empty_matches_nothing() {
+    // An empty IN-list expands to `IN (NULL)` → matches no rows (never a syntax error).
+    let src = writes_program(
+        r#"discard db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").executeMany([["A", "P"], ["B", "Q"]]);
+       List<int> none = new List<int>();
+       List<Row> rows = db.prepare("SELECT name FROM people WHERE id IN (?)").bindList(none).query();
+       Output.printLine("{List.length(rows)}");"#,
+    );
+    both(&src, "0\n");
+}
+
+#[test]
+fn db_bind_list_mixes_with_positional_bind() {
+    // `bind()` and `bindList()` interleave: the ? placeholders map left-to-right (bind → city, bindList
+    // → the IN-list). Only rows matching BOTH the city bind and the id list are returned.
+    let src = writes_program(
+        r#"discard db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").executeMany([["A", "P"], ["B", "P"], ["C", "Q"]]);
+       List<Row> rows = db.prepare("SELECT name FROM people WHERE city = ? AND id IN (?) ORDER BY id").bind("P").bindList([1, 2, 3]).query();
+       mutable string acc = "";
+       for (Row r in rows) { acc = acc + r.getString("name"); }
+       Output.printLine("{acc}");"#,
+    );
+    both(&src, "AB\n");
+}
+
+#[test]
+fn db_on_query_hook_fires_with_sql_and_ms() {
+    // The hook fires after each exec/query with the (original) SQL text + an int ms. `ms` is wall-clock
+    // so only `ms >= 0` (always true) is printed — printing ms raw would break run ≡ runvm.
+    let src = writes_program(
+        r#"discard db.onQuery(function(string sql, int ms) => Output.printLine("hook:{sql}:{ms >= 0}"));
+       discard db.prepare("INSERT INTO people(name, city) VALUES(?, ?)").bind("A").bind("P").exec();
+       List<Row> rows = db.prepare("SELECT name FROM people").query();
+       Output.printLine("done {List.length(rows)}");"#,
+    );
+    both(
+        &src,
+        "hook:INSERT INTO people(name, city) VALUES(?, ?):true\n\
+         hook:SELECT name FROM people:true\n\
+         done 1\n",
+    );
+}
