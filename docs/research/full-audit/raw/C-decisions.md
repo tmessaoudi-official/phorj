@@ -736,3 +736,34 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   · S2 `Response` builders (`.html/.text/.json/.status/.withHeader/.withCookie`) replacing raw
   `new Response(status,bytes,headers)` + remove the serve Output→stderr redirect (Output stays stdout) ·
   S3 `Response.capture(fn)` opt-in buffering. Each = Invariant-9 example + gate.
+  *STATUS:* S1 SHIPPED (`Core.Log`). **S2 SHIPPED** (2026-07-14): `Response.html/json` + immutable
+  `.status(n)`/`.withHeader(k,v)`/`.withCookie(k,v)` in `HTTP_PRELUDE`; serve `respond_once` now sends a
+  handler's captured stdout to the server's real STDOUT (was stderr); example
+  `examples/web/response-builders.phg` byte-identical `run`≡`runvm`≡php-8.5.8; full gate green.
+  **S3 = PENDING (blocked on a design/adjudication call — DEC-220-S3 below).**
+- **DEC-220-S3 — PENDING (autonomous, 2026-07-14): `Response.capture` forces a new ambient name via the
+  prelude.** A working, byte-identical (`run`≡`runvm`≡php-8.5.8) implementation was built and then
+  REVERTED (not shipped) because it violates the hard "nothing in the wind" rule. Mechanism: `Response`
+  lives in `HTTP_PRELUDE`; for its static `Response.capture` to call the capture native it must resolve
+  `Output.capture`, and phorj has NO fully-qualified `Core.Output.capture(...)` call form (that parses as
+  `unknown identifier Core`) — the only way is `import Core.Output;` in the prelude. But prelude top-level
+  imports MERGE into user scope (a pre-existing behavior: `import Core.Http` already makes
+  `Bytes`/`String`/`List`/`Regex` resolvable without the user importing them), so adding `import Core.Output`
+  makes `Output.*` resolvable in ANY program that does `import Core.Http.Response` alone. Embedded evidence
+  (the leak, minimal): a program with `import Core.Http.Response;` + `Output.printLine("x")` in `main`
+  type-checks and runs (Output resolves) ONLY when the prelude imports Core.Output; with zero imports
+  `Output` is correctly `unknown identifier`. *Options for the developer:* (a) ACCEPT the leak as consistent
+  with the existing 4-module prelude-transitive-import behavior (batteries-included facade); (b) REJECT it;
+  (c) the real fix — scope prelude imports so they do NOT merge into user scope (also removes the 4
+  pre-existing leaks, but changes shipped behavior → riskier); (d) sanction `Output.capture(() -> void) ->
+  string` as an explicit, import-gated PRIMITIVE (user writes `import Core.Output;` themselves → no leak) and
+  drop the prelude `Response.capture` wrapper (deviates from the ruled surface). *Implementation that was
+  proven (ready to re-apply once ruled):* new `NativeEval::Capturing` variant + `CapturingInvoker` type
+  (`native/mod.rs`); `output_capture` native (`Core.Output.capture`, `pure:true` — byte-identical like
+  `List.map`); interpreter arm (`interpreter/call.rs`, mirrors the HigherOrder throw structure) + VM arm
+  (`vm/exec.rs`), both doing `out.split_off(start)` to divert the closure's output; transpile gated helper
+  `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }` (`transpile/{mod,call,runtime_php}.rs`)
+  + `ob_start`/`ob_get_clean` added to `TIER1_PHP` in `tests/differential.rs`; prelude static
+  `Response.capture((() -> void) render): Response { return Response.html(Output.capture(render)); }`; example
+  `examples/web/response-capture.phg`. Recommended: (d) if a capture surface is wanted now without the
+  architectural change, else (a) to ship `Response.capture` as ruled.

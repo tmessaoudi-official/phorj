@@ -180,13 +180,18 @@ pub fn serve<T: Transport>(
 }
 
 /// Invoke `respond(bytes) -> bytes` once. Any captured stdout (a handler calling `Output.printLine`)
-/// is treated as a server log line and written to stderr, keeping the HTTP response body clean.
-/// A non-`bytes` return or a runtime fault degrades to a 500 — never a panic (EV-7).
+/// goes to the server's real STDOUT — `Output.*` is ALWAYS stdout (DEC-220 removed the old
+/// serve-only Output→stderr "log" redirect; leveled server logging is now `Core.Log` → stderr, and
+/// the browser body comes from the returned `Response`). The stdout write's flush error is swallowed
+/// (a closed/redirected stdout is an ambient condition, not a program fault — same resilience the
+/// `send failed` path above uses; mirrors `Core.Log`'s swallowed stderr write). A non-`bytes` return
+/// or a runtime fault degrades to a 500 — never a panic (EV-7).
 pub(super) fn respond_once(handler: &mut Handler, raw: &[u8], dev: bool) -> Vec<u8> {
     match handler(raw) {
         Ok((Value::Bytes(b), out)) => {
             if !out.is_empty() {
-                eprint!("{out}");
+                print!("{out}");
+                let _ = io::stdout().flush();
             }
             b.as_ref().clone()
         }

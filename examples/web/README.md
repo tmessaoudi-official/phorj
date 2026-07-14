@@ -10,6 +10,7 @@ a real socket — one native, one PHP — and both call the *same* `handle`.
 | `handler.phg` | **W1** — the handler model: `Request`/`Response` classes, `parseRequest(bytes) -> Request?`, `serializeResponse(Response) -> bytes`, `handle(Request) -> Response`. Bodies are `bytes`; headers are raw `List<string>` lines behind `req.header(name)`. No socket. |
 | `router.phg` | **W2** — a static exact-match router: a `List<Route>` table + linear `(method, path)` scan → a `Handler` enum tag → exhaustive `match` dispatch. Pure Phorj, no new language feature. |
 | `server.phg` | **W4** — the full served app: W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes`. This is what `phg serve` runs. |
+| `response-builders.phg` | **DEC-220 S2** — the `Response` builders (the browser-bound sink of the 3-sink output system): `Response.html/json/text` constructors + immutable chainable `.status(n)`/`.withHeader(k,v)`/`.withCookie(k,v)`. Headers-before-body is structural (Response is a value), so PHP's "headers already sent" is impossible. Pure value construction ⇒ byte-identical on both backends and real PHP. |
 | `password-verify.phg` | **`Core.Cryptography`** — verify a password against a committed Argon2id PHC hash. Deterministic ⇒ byte-identity-gated; the non-deterministic `hashPassword` is documented below. |
 
 ## `Core.Cryptography` — password hashing (Argon2id)

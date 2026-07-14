@@ -104,6 +104,26 @@ class Response {
   static function text(int status, string body): Response {
     return new Response(status, Bytes.fromString(body), ["Content-Type: text/plain"]);
   }
+  // DEC-220 S2 — ergonomic, IMMUTABLE, chainable builders (the browser-bound sink). `html`/`json`
+  // are 200-status constructors setting a sensible Content-Type; chain `.status(n)` to change it.
+  static function html(string body): Response {
+    return new Response(200, Bytes.fromString(body), ["Content-Type: text/html; charset=utf-8"]);
+  }
+  static function json(string body): Response {
+    return new Response(200, Bytes.fromString(body), ["Content-Type: application/json"]);
+  }
+  // Each returns a NEW Response (headers-before-body is structural — Response is a value, so PHP's
+  // "headers already sent" is impossible). `status` renames the field-free way to set the code;
+  // `withHeader`/`withCookie` append a header line (immutable, like `Router.route`).
+  function status(int newStatus): Response {
+    return new Response(newStatus, this.body, this.headerLines);
+  }
+  function withHeader(string name, string value): Response {
+    return new Response(this.status, this.body, List.concat(this.headerLines, ["{name}: {value}"]));
+  }
+  function withCookie(string name, string value): Response {
+    return new Response(this.status, this.body, List.concat(this.headerLines, ["Set-Cookie: {name}={value}"]));
+  }
   static function reason(int s): string {
     return if (s == 200) { "OK" }
       else { if (s == 400) { "Bad Request" }

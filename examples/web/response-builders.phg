@@ -1,0 +1,50 @@
+// DEC-220 S2 — the `Response` builders: the browser-bound sink of the 3-sink output system.
+//
+// `Response` is an IMMUTABLE value; every builder returns a NEW Response, so headers are always set
+// before the body exists on the wire — PHP's "headers already sent" is structurally impossible.
+//   * `Response.text(status, body)`     — a text/plain response (status is explicit)
+//   * `Response.html(body)`             — a 200 text/html response
+//   * `Response.json(body)`             — a 200 application/json response
+//   * `resp.status(n)`                  — a copy with a different status code
+//   * `resp.withHeader(name, value)`    — a copy with one header appended
+//   * `resp.withCookie(name, value)`    — a copy with a `Set-Cookie` header appended
+//   * `resp.serialize() -> bytes`       — render to the HTTP/1.1 wire form
+// Pure value construction → byte-identical across `run`, `runvm`, and real PHP.
+package Main;
+
+import Core.Output;
+import Core.Bytes;
+import Core.String;
+import Core.Http.Response;
+
+// Render a response's wire form as one clean ASCII line (CRLFs shown as " | ").
+function wireLine(Response resp): string {
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    bytes wire = resp.serialize();
+    int n = Bytes.length(wire);
+    string oneLine = String.replace(Bytes.toString(wire) ?? "", nl, " | ");
+    return "({n}B) {oneLine}";
+}
+
+function main(): void {
+    // A plain text/plain response with an explicit status.
+    Response t = Response.text(200, "hello");
+    Output.printLine("text:   {wireLine(t)}");
+    // An HTML page — 200 by default, text/html content type.
+    Response h = Response.html("<h1>Hi</h1>");
+    Output.printLine("html:   {wireLine(h)}");
+    // A JSON body — 200 by default, application/json content type. Literal braces are escaped `\{`/`\}`
+    // (a bare `{` starts string interpolation in Phorj).
+    Response j = Response.json("\{\"ok\":true\}");
+    Output.printLine("json:   {wireLine(j)}");
+    // Chained, immutable builders: change the status and append headers + a cookie. Each step is a
+    // fresh Response. `.status(n)` sets the code (404 → the known "Not Found" reason phrase).
+    Response chained = Response
+        .html("<h1>Gone</h1>")
+        .status(404)
+        .withHeader("X-Request-Id", "abc123")
+        .withCookie("session", "s3cr3t");
+    Output.printLine("chain:  {wireLine(chained)}");
+    // The original json response is untouched (immutability): still 200, no extra headers.
+    Output.printLine("orig:   {wireLine(j)}");
+}
