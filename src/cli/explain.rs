@@ -1388,11 +1388,13 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-DB-HYDRATE-FIELD-TYPE" => {
             "E-DB-HYDRATE-FIELD-TYPE — a hydrated field has a type that cannot be mapped.\n\n\
-             A hydrated field must be either a scalar column type — `int`, `string`, `float`, or `bool`,\n\
-             or their optional forms (`int?`, `string?`, …) which admit a SQL NULL — OR a class with a\n\
-             promoted-field constructor (a NESTED entity, hydrated eagerly from dotted `\"field.sub\"`\n\
-             aliased columns; an optional entity field `T? x` is `null` when all its columns are NULL).\n\
-             A field of any other type (list, map, enum, …) cannot be hydrated from a result.\n"
+             A hydrated field must be one of: a scalar column type — `int`, `string`, `float`, `bool`, or\n\
+             `decimal` (exact money), or their optional forms (`int?`, …) which admit a SQL NULL; a phorj\n\
+             `enum` (mapped from a TEXT column by variant name, zero-payload variants only); `Core.Json`\n\
+             (parsed from a TEXT column, needs `import Core.Json`); OR a class with a promoted-field\n\
+             constructor (a NESTED entity, hydrated eagerly from dotted `\"field.sub\"` aliased columns; an\n\
+             optional entity field `T? x` is `null` when all its columns are NULL). A field of any other\n\
+             type (list, map, …) cannot be hydrated from a result.\n"
         }
         "E-DB-HYDRATE-CYCLE" => {
             "E-DB-HYDRATE-CYCLE — a row class's nested-entity fields form a cycle.\n\n\
@@ -1401,6 +1403,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              without bound and cannot be resolved at compile time. Break the cycle: drop the back-reference\n\
              from the row class, or load the related rows with a second query. (This is a deliberate limit\n\
              of the primitive — recursive/graph loading is ORM territory, DEC-208.)\n"
+        }
+        "E-DB-HYDRATE-ENUM-PAYLOAD" => {
+            "E-DB-HYDRATE-ENUM-PAYLOAD — an enum field's enum is not mappable from a single column.\n\n\
+             An `enum`-typed hydration field maps from one TEXT column by matching the column value against\n\
+             a variant NAME, so it supports ZERO-payload variants only (`enum Status { Active(),\n\
+             Inactive() }`). An enum with a data-carrying variant (`Circle(float radius)`) cannot be built\n\
+             from a single column, and an enum with no variants has nothing to map onto — both are this\n\
+             error. Give the row class an enum whose variants are all nullary, or read the column as a\n\
+             scalar and construct the richer value yourself.\n"
         }
         "E-DB-SCALAR-BAD-TYPE" => {
             "E-DB-SCALAR-BAD-TYPE — `queryScalar()`'s binding is not a scalar.\n\n\

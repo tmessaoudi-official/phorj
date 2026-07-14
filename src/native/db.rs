@@ -923,6 +923,61 @@ fn get_bool_or_null_inner(args: &[Value]) -> Result<Value, String> {
     }
 }
 
+// --- Decimal accessor (DEC-208 slice E): a `decimal`-typed hydration field maps its column here.
+// Exact money, never float: a TEXT column is parsed EXACTLY via the shared `…d`-literal grammar
+// (`value::decimal_of`) — the money path; an INTEGER is exact at scale 0. A REAL is converted through
+// its shortest round-trip decimal string (a REAL column cannot store money exactly — store decimal
+// columns as TEXT for guaranteed exactness; this is a best-effort convenience). A missing column /
+// wrong storage type / NULL-into-non-optional is a strict DB error (no silent coercion); the nullable
+// accessor admits NULL. Shared by the dynamic path and the generic hydration desugar. ---
+
+/// Convert a fetched cell to a phorj `decimal` (DEC-208 slice E). See the section note for the
+/// TEXT/INTEGER/REAL conventions. `null_ok` selects the `decimal?` (admit NULL) vs `decimal` (strict)
+/// behaviour; `who` names the accessor for the error message.
+fn decimal_from_cell(v: &Value, k: &str, who: &str, null_ok: bool) -> Result<Value, String> {
+    match v {
+        // Already a decimal (defensive — SQLite storage classes never produce this, but a row is a
+        // general `Map`, so the accessor stays total).
+        Value::Decimal { .. } => Ok(v.clone()),
+        Value::Int(n) => Ok(Value::Decimal {
+            unscaled: i128::from(*n),
+            scale: 0,
+        }),
+        // The money path: parse the exact decimal grammar from the stored text (no float round-trip).
+        Value::Str(s) => match crate::value::decimal_of(s) {
+            Some((unscaled, scale)) => Ok(Value::Decimal { unscaled, scale }),
+            None => Err(format!(
+                "Core.Db.{who}: column `{k}` value `{s}` is not a valid decimal"
+            )),
+        },
+        // Best-effort REAL → shortest round-trip decimal string → exact decimal of THAT string.
+        Value::Float(f) => match crate::value::decimal_of(&format!("{f}")) {
+            Some((unscaled, scale)) => Ok(Value::Decimal { unscaled, scale }),
+            None => Err(format!(
+                "Core.Db.{who}: column `{k}` REAL value cannot be represented as a decimal"
+            )),
+        },
+        Value::Null if null_ok => Ok(Value::Null),
+        Value::Null => Err(format!(
+            "Core.Db.{who}: column `{k}` is NULL (use decimal?)"
+        )),
+        other => Err(format!(
+            "Core.Db.{who}: column `{k}` is {}, not decimal",
+            other.type_name()
+        )),
+    }
+}
+
+fn get_decimal_inner(args: &[Value]) -> Result<Value, String> {
+    let (v, k) = row_cell(args, "getDecimal")?;
+    decimal_from_cell(v, k, "getDecimal", false)
+}
+
+fn get_decimal_or_null_inner(args: &[Value]) -> Result<Value, String> {
+    let (v, k) = row_cell(args, "getDecimalOrNull")?;
+    decimal_from_cell(v, k, "getDecimalOrNull", true)
+}
+
 // --- Column introspection (DEC-208 slice B): two capabilities the desugared `queryScalar` /
 // `queryMap` / nested-hydration helpers need, routed through the SAME `DbResult`/`wrap` protocol as
 // the accessors (NOT a duplication of `getX` — genuinely new operations). `columnNames` gives the
@@ -990,6 +1045,8 @@ db_native!(row_get_int_or_null, get_int_or_null_inner);
 db_native!(row_get_string_or_null, get_string_or_null_inner);
 db_native!(row_get_float_or_null, get_float_or_null_inner);
 db_native!(row_get_bool_or_null, get_bool_or_null_inner);
+db_native!(row_get_decimal, get_decimal_inner);
+db_native!(row_get_decimal_or_null, get_decimal_or_null_inner);
 db_native!(row_column_names, column_names_inner);
 db_native!(row_is_null, is_null_inner);
 
@@ -1288,6 +1345,32 @@ pub fn db_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(row_get_bool_or_null),
             php: |a| format!("(({0}[{1}] === null) ? null : (bool) {0}[{1}])", a[0], a[1]),
+        },
+        // Decimal accessor (DEC-208 slice E): a `decimal`-typed hydration field maps its column here
+        // (exact money — TEXT parsed exactly, never through float). PHP emitters are placeholders
+        // (Core.Db is spine-quarantined; the transpile is finalized in a later slice).
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getDecimal",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Decimal),
+            pure: false,
+            eval: NativeEval::Pure(row_get_decimal),
+            php: |a| format!("__phorj_dec_of((string) {}[{}])", a[0], a[1]),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getDecimalOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::Decimal))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_decimal_or_null),
+            php: |a| {
+                format!(
+                    "(({0}[{1}] === null) ? null : __phorj_dec_of((string) {0}[{1}]))",
+                    a[0], a[1]
+                )
+            },
         },
         // Column introspection (DEC-208 slice B). `columnNames` → ordered `List<string>`; `isNull` →
         // `bool`. Used by the `queryScalar`/`queryMap`/nested-hydration desugar; PHP emitters are

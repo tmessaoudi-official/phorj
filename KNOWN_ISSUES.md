@@ -273,6 +273,29 @@ not a panic:
   its surface (see `docs/plans/MASTER-PLAN.md` DEC-208 PENDING). The default (strict-exact by-name mapping)
   is unchanged.
 
+- **`Core.Db` value mapping (DEC-208 slice E) — shipped subset (enum/decimal/JSON) + `DateTime` deferred.**
+  Three column→type conversions the hydration desugar performs at compile time, composing with the
+  flat/nested/optional shapes (`src/checker/desugar_db.rs`; `run ≡ runvm` stays automatic). (1) **enum** — a
+  phorj-`enum` field maps from a TEXT column by matching the value against the variant NAME (case-sensitive,
+  `'Active'` → `Status.Active()`), **zero-payload variants ONLY** (a data-carrying variant → the compile
+  error `E-DB-HYDRATE-ENUM-PAYLOAD`); an unknown value → catchable `DbError`; `enum?` admits NULL. (2)
+  **decimal** — a `decimal`/`decimal?` field maps via the new `Row.getDecimal`/`getDecimalOrNull` accessor:
+  **exact money, never float** — a TEXT column is parsed with the exact `…d`-literal grammar (`'0.10'` is
+  exactly `0.10`), an INTEGER is exact, a REAL is best-effort via its shortest round-trip string (store
+  decimal columns as TEXT for guaranteed exactness); NULL-into-non-optional / a non-decimal value →
+  `DbError`. (3) **JSON** — a `Json`/`Json?` field parses a TEXT column via `Json.parse` (needs the
+  program's own `import Core.Json` — nothing in the wind); invalid JSON → `DbError`; `Json?` admits NULL.
+  **Disclosures / boundaries:** (a) **timestamp → `DateTime` is DEFERRED** — gated on DEC-206, which has not
+  built `DateTime`; not implemented. (b) enum/Json are FIELD-level mappings, not scalar column accessors, so
+  a *direct* `queryScalar<Status>()` / `queryMap<_, Status>()` (a bare enum/Json as the whole scalar/map
+  value) is out of scope — a lone scalar column cannot name its target enum, and it stays
+  `E-DB-SCALAR-BAD-TYPE` / `E-DB-MAP-VALUE-TYPE`; `decimal` IS a scalar and works as a direct
+  `queryScalar<decimal>` / map value. (c) The `Json` field type is matched by NAME; a user-declared
+  `class Json` (DEC-202 permits it — `Json` is not a PHP builtin) used as a row field is respected (it
+  hydrates as an ordinary entity), but a user-declared `enum Json` without `import Core.Json` would be
+  routed to the JSON-parse path and fail loud (`Json.parse` unresolved) — pathological and non-silent.
+  Example `examples/db/mapping.phg`; fixtures in `tests/db.rs`.
+
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
   the backends. Deferrals (each a clean compile error, never a panic): (1) **free functions only** — a

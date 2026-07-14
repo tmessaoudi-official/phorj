@@ -689,3 +689,287 @@ fn db_on_query_hook_fires_with_sql_and_ms() {
          done 1\n",
     );
 }
+
+// ── DEC-208 slice E: value mapping (enum / decimal / Json) ───────────────────────────────────────
+
+#[test]
+fn db_mapping_example_runs_on_both_backends() {
+    let src =
+        std::fs::read_to_string("examples/db/mapping.phg").expect("read examples/db/mapping.phg");
+    let expected = "Ada: pro credit=19.99 meta=[1,2,3] overdraft=-5.50 extra={\"beta\":true} | billing enterprise 100.00 {\"seats\":9}\n\
+                    Bob: free credit=0.10 meta={\"n\":0} overdraft=0.00 extra=- | billing free 0.00 []\n";
+    both(&src, expected);
+}
+
+/// An enum field maps from a TEXT column by matching the column value against the variant name.
+#[test]
+fn db_maps_enum_by_variant_name() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+enum Status { Active(), Suspended() }
+class Acct { constructor(public string name, public Status status) {} }
+function label(Status s): string { return match (s) { Active() => "A", Suspended() => "S" }; }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
+    discard db.prepare("INSERT INTO t VALUES('Ada', 'Active')").exec();
+    discard db.prepare("INSERT INTO t VALUES('Bob', 'Suspended')").exec();
+    List<Acct> rows = db.prepare("SELECT name, status FROM t ORDER BY name").queryInto();
+    for (Acct r in rows) { Output.printLine("{r.name}={label(r.status)}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "Ada=A\nBob=S\n");
+}
+
+/// An unknown column value for an enum field is a catchable `DbError` (strict — no silent coercion).
+#[test]
+fn db_maps_enum_unknown_value_throws() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+enum Status { Active(), Suspended() }
+class Acct { constructor(public string name, public Status status) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
+    discard db.prepare("INSERT INTO t VALUES('X', 'Bogus')").exec();
+    List<Acct> rows = db.prepare("SELECT name, status FROM t").queryInto();
+    Output.printLine("{List.length(rows)}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(
+        src,
+        "caught: Core.Db: column `status` value is not a variant of enum `Status`\n",
+    );
+}
+
+/// An optional enum field (`Status?`) admits a NULL column (→ `null`) and maps a present value.
+#[test]
+fn db_maps_optional_enum_admits_null() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+enum Status { Active() }
+class Acct { constructor(public string name, public Status? status) {} }
+function show(Status? s): string { if (var x = s) { return "active"; } return "none"; }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
+    discard db.prepare("INSERT INTO t VALUES('Ada', 'Active')").exec();
+    discard db.prepare("INSERT INTO t VALUES('Bob', NULL)").exec();
+    List<Acct> rows = db.prepare("SELECT name, status FROM t ORDER BY name").queryInto();
+    for (Acct r in rows) { Output.printLine("{r.name}={show(r.status)}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "Ada=active\nBob=none\n");
+}
+
+/// A `decimal` field maps EXACTLY from a TEXT column: `0.1 + 0.2` is exactly `0.3` (a value `float`
+/// cannot represent — it would print `0.30000000000000004`).
+#[test]
+fn db_maps_decimal_exactly() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Money { constructor(public decimal a, public decimal b) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE m(a TEXT, b TEXT)").exec();
+    discard db.prepare("INSERT INTO m VALUES('0.1', '0.2')").exec();
+    List<Money> ms = db.prepare("SELECT a, b FROM m").queryInto();
+    for (Money x in ms) { Output.printLine("{x.a + x.b}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "0.3\n");
+}
+
+/// A `decimal` field also maps from INTEGER (exact, scale 0) and REAL (shortest round-trip) columns —
+/// the non-TEXT storage classes the task names. (TEXT stays the exact-money path; a REAL column that
+/// round-trips to a long decimal is why the convention is "store decimal columns as TEXT".)
+#[test]
+fn db_maps_decimal_from_integer_and_real_columns() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Nums { constructor(public decimal i, public decimal half, public decimal tenth) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE t(i INTEGER, half REAL, tenth REAL)").exec();
+    discard db.prepare("INSERT INTO t VALUES(42, 0.5, 0.1)").exec();
+    List<Nums> rows = db.prepare("SELECT i, half, tenth FROM t").queryInto();
+    for (Nums n in rows) { Output.printLine("{n.i} {n.half} {n.tenth}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "42 0.5 0.1\n");
+}
+
+/// A NULL column into a non-optional `decimal` field throws; a `decimal?` admits NULL.
+#[test]
+fn db_maps_decimal_null_into_non_optional_throws() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Money { constructor(public decimal amount) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE m(amount TEXT)").exec();
+    discard db.prepare("INSERT INTO m VALUES(NULL)").exec();
+    List<Money> ms = db.prepare("SELECT amount FROM m").queryInto();
+    Output.printLine("{List.length(ms)}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(
+        src,
+        "caught: Core.Db.getDecimal: column `amount` is NULL (use decimal?)\n",
+    );
+}
+
+/// A non-decimal TEXT value for a `decimal` field is a catchable `DbError`.
+#[test]
+fn db_maps_decimal_invalid_text_throws() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Money { constructor(public decimal amount) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE m(amount TEXT)").exec();
+    discard db.prepare("INSERT INTO m VALUES('not-a-number')").exec();
+    List<Money> ms = db.prepare("SELECT amount FROM m").queryInto();
+    Output.printLine("{List.length(ms)}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(
+        src,
+        "caught: Core.Db.getDecimal: column `amount` value `not-a-number` is not a valid decimal\n",
+    );
+}
+
+/// A `Json` field is parsed from a TEXT column via `Core.Json`; a `Json?` admits NULL.
+#[test]
+fn db_maps_json_and_optional_admits_null() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Json;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Doc { constructor(public Json body, public Json? note) {} }
+function showNote(Json? j): string { if (var x = j) { return Json.stringify(x); } return "-"; }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE d(body TEXT, note TEXT)").exec();
+    discard db.prepare("INSERT INTO d VALUES('[1,2]', '\{\"n\":1\}')").exec();
+    discard db.prepare("INSERT INTO d VALUES('\{\"k\":true\}', NULL)").exec();
+    List<Doc> ds = db.prepare("SELECT body, note FROM d").queryInto();
+    for (Doc x in ds) { Output.printLine("{Json.stringify(x.body)} / {showNote(x.note)}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "[1,2] / {\"n\":1}\n{\"k\":true} / -\n");
+}
+
+/// Invalid JSON text for a `Json` field is a catchable `DbError`.
+#[test]
+fn db_maps_invalid_json_throws() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Json;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Doc { constructor(public Json body) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE d(body TEXT)").exec();
+    discard db.prepare("INSERT INTO d VALUES('not json')").exec();
+    List<Doc> ds = db.prepare("SELECT body FROM d").queryInto();
+    Output.printLine("{List.length(ds)}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(
+        src,
+        "caught: Core.Db: column `body` does not contain valid JSON\n",
+    );
+}
+
+/// Value mapping COMPOSES with nested hydration: a nested entity's enum + decimal + Json fields are
+/// hydrated from dotted `"inner.*"` columns in the same query.
+#[test]
+fn db_maps_enum_decimal_json_inside_nested_entity() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Json;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+enum Tier { Gold(), Silver() }
+class Wallet { constructor(public Tier tier, public decimal balance, public Json flags) {} }
+class User { constructor(public string name, public Wallet wallet) {} }
+function tierName(Tier t): string { return match (t) { Gold() => "gold", Silver() => "silver" }; }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE u(name TEXT, tier TEXT, balance TEXT, flags TEXT)").exec();
+    discard db.prepare("INSERT INTO u VALUES('Ada', 'Gold', '12.50', '[true]')").exec();
+    List<User> us = db.prepare("SELECT name, tier AS \"wallet.tier\", balance AS \"wallet.balance\", flags AS \"wallet.flags\" FROM u").queryInto();
+    for (User x in us) { Output.printLine("{x.name}: {tierName(x.wallet.tier)} {x.wallet.balance} {Json.stringify(x.wallet.flags)}"); }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "Ada: gold 12.50 [true]\n");
+}
+
+/// An enum with a data-carrying variant cannot be mapped from a single column — a compile error, not a
+/// silent mismap (only ZERO-payload variants are supported).
+#[test]
+fn db_maps_enum_with_payload_variant_is_rejected() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+enum Shape { Circle(float radius), Square() }
+class Row4 { constructor(public string name, public Shape shape) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    List<Row4> rows = db.prepare("SELECT name, shape FROM t").queryInto();
+    Output.printLine("{List.length(rows)}");
+  } catch (DbError e) { Output.printLine("caught"); }
+}
+"#;
+    fails_with(src, "E-DB-HYDRATE-ENUM-PAYLOAD");
+}

@@ -1,6 +1,10 @@
 //! DEC-208 — typed-generic `Core.Db` result hydration. S2 shipped `queryInto`/`queryOneInto`; slice B
 //! adds NESTED hydration (a field that is itself an entity, from dotted `"order.total"` aliases, eager,
 //! optional-entity→null on all-NULL) + `queryScalar<T>` (one value) + `queryMap<K,V>` (keyed rows).
+//! Slice E adds VALUE MAPPING for a field's type: a phorj `enum` field (TEXT column → the variant whose
+//! NAME matches; zero-payload variants only; unknown value → `DbError`), a `decimal` field (exact money
+//! via `Row.getDecimal`), and a `Core.Json` field (TEXT column parsed via `Json.parse`). Each composes
+//! with nested hydration and admits NULL in its `?` form (timestamp→`DateTime` is deferred on DEC-206).
 //!
 //! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`]): it lowers the four type-directed
 //! result calls into plain, already-working S1 primitives BEFORE the type-checker, so the generated
@@ -46,8 +50,8 @@
 
 use crate::ast::{
     ctor_plan, BinaryOp, CatchClause, ClassMember, CollKind, CtorParam, Expr, FunctionDecl, Item,
-    LambdaBody, MatchArm, MemberSep, Modifier, Param, Program, Stmt, StrPart, Type, UnaryOp,
-    Visibility,
+    LambdaBody, MatchArm, MemberSep, Modifier, Param, Pattern, Program, Stmt, StrPart, Type,
+    UnaryOp, Visibility,
 };
 use crate::diagnostic::{Diagnostic, Stage};
 use crate::token::Span;
@@ -124,6 +128,7 @@ fn scalar_label(ty: &Type) -> Option<String> {
             "string" => Some("String".into()),
             "float" => Some("Float".into()),
             "bool" => Some("Bool".into()),
+            "decimal" => Some("Decimal".into()),
             _ => None,
         }
     }
@@ -140,8 +145,25 @@ fn scalar_label(ty: &Type) -> Option<String> {
 /// The classification of a hydrated field: a scalar column, or a nested entity (a class), which may
 /// be optional (`Order? order` → `null` when all its columns are NULL, for a LEFT JOIN).
 enum FieldKind {
-    Scalar { accessor: &'static str },
-    Entity { class: String, optional: bool },
+    Scalar {
+        accessor: &'static str,
+    },
+    Entity {
+        class: String,
+        optional: bool,
+    },
+    /// DEC-208 slice E: a phorj `enum` field, mapped from a TEXT column by matching the column value
+    /// against the variant NAME (zero-payload variants only — validated in [`Db::validate_class`]).
+    /// `optional` (`Status?`) admits a NULL column (→ `null`).
+    Enum {
+        name: String,
+        optional: bool,
+    },
+    /// DEC-208 slice E: a `Core.Json` field, mapped from a TEXT column by parsing it via `Json.parse`
+    /// (requires the program's own `import Core.Json`). `optional` (`Json?`) admits a NULL column.
+    Json {
+        optional: bool,
+    },
 }
 
 /// The column name for `field` under `prefix`: `field` at the top level, `prefix.field` (the dotted
@@ -175,6 +197,8 @@ fn accessor_for(ty: &Type) -> Option<&'static str> {
             "string" => Some("getString"),
             "float" => Some("getFloat"),
             "bool" => Some("getBool"),
+            // DEC-208 slice E: a `decimal` field maps exact-money via `Row.getDecimal`.
+            "decimal" => Some("getDecimal"),
             _ => None,
         },
         Type::Optional { inner, .. } => match &**inner {
@@ -183,8 +207,23 @@ fn accessor_for(ty: &Type) -> Option<&'static str> {
                 "string" => Some("getStringOrNull"),
                 "float" => Some("getFloatOrNull"),
                 "bool" => Some("getBoolOrNull"),
+                "decimal" => Some("getDecimalOrNull"),
                 _ => None,
             },
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Is `ty` `Core.Json`'s `Json` (or `Json?`)? Returns `Some(optional)` (DEC-208 slice E). Matched by
+/// name — the only way `Json` is nameable is the program's own `import Core.Json`, which injects the
+/// enum (so no user type can shadow it here).
+fn json_kind(ty: &Type) -> Option<bool> {
+    match ty {
+        Type::Named { name, args, .. } if args.is_empty() && name == "Json" => Some(false),
+        Type::Optional { inner, .. } => match &**inner {
+            Type::Named { name, args, .. } if args.is_empty() && name == "Json" => Some(true),
             _ => None,
         },
         _ => None,
@@ -226,6 +265,22 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
             ctor_params.insert(c.name.clone(), params);
         }
     }
+    // Enum variant layout for every declared/injected enum (DEC-208 slice E) — name → `[(variant,
+    // payload-arity)]`. Drives enum-field hydration (a TEXT column → the matching variant) and the
+    // zero-payload validation (a variant carrying data cannot be built from one column). Injected
+    // enums are present here too (injection runs before this pass); `Json` is name-special-cased ahead
+    // of the generic-enum path, so its payload variants never reach the rejection.
+    let mut enum_variants: BTreeMap<String, Vec<(String, usize)>> = BTreeMap::new();
+    for it in &program.items {
+        if let Item::Enum(e) = it {
+            let variants = e
+                .variants
+                .iter()
+                .map(|v| (v.name.clone(), v.fields.len()))
+                .collect();
+            enum_variants.insert(e.name.clone(), variants);
+        }
+    }
     let Program {
         package,
         items,
@@ -233,6 +288,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
     } = program;
     let mut db = Db {
         ctor_params: &ctor_params,
+        enum_variants: &enum_variants,
         helpers: BTreeMap::new(),
         diags: Vec::new(),
         current_ret: None,
@@ -258,6 +314,8 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
 
 struct Db<'a> {
     ctor_params: &'a BTreeMap<String, Vec<CtorParam>>,
+    /// enum name → `[(variant, payload-arity)]` for every declared/injected enum (DEC-208 slice E).
+    enum_variants: &'a BTreeMap<String, Vec<(String, usize)>>,
     /// helper name → spec, deduped (one helper per (kind, class)) and iterated sorted.
     helpers: BTreeMap<String, HelperSpec>,
     diags: Vec<Diagnostic>,
@@ -342,12 +400,48 @@ impl Db<'_> {
         }
     }
 
+    /// Is `ty` a phorj `enum` (or `enum?`) — a non-generic named type in `enum_variants`? Returns
+    /// `Some((name, optional))` (DEC-208 slice E). `Json` is handled by [`json_kind`] BEFORE this, so a
+    /// `Json` field never reaches here (it is also in `enum_variants` as an injected enum).
+    fn enum_kind(&self, ty: &Type) -> Option<(String, bool)> {
+        match ty {
+            Type::Named { name, args, .. }
+                if args.is_empty() && self.enum_variants.contains_key(name) =>
+            {
+                Some((name.clone(), false))
+            }
+            Type::Optional { inner, .. } => match &**inner {
+                Type::Named { name, args, .. }
+                    if args.is_empty() && self.enum_variants.contains_key(name) =>
+                {
+                    Some((name.clone(), true))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Classify a field type for hydration: a scalar column, an entity (a class in `ctor_params`,
     /// optionally `?`), or unhydratable (`None`). A `T?` scalar routes through `accessor_for` (which
     /// handles the optional scalar accessors); an `Optional` wrapping a class routes to `Entity`.
     fn classify_field(&self, ty: &Type) -> Option<FieldKind> {
         if let Some(accessor) = accessor_for(ty) {
             return Some(FieldKind::Scalar { accessor });
+        }
+        // `Core.Json`'s injected `Json` enum — matched by NAME before the generic-enum arm below
+        // (`Json` has payload variants, which that path rejects). The program's own `import Core.Json`
+        // is what makes `Json` nameable as a field type (nothing in the wind). A user-declared
+        // `class Json` (in `ctor_params`) takes precedence — it hydrates as an ordinary entity, not the
+        // parse path (see KNOWN_ISSUES for the residual `enum Json` collision).
+        if let Some(optional) = json_kind(ty) {
+            if !self.ctor_params.contains_key("Json") {
+                return Some(FieldKind::Json { optional });
+            }
+        }
+        // A phorj `enum` field (zero-payload variants validated in `validate_class`).
+        if let Some((name, optional)) = self.enum_kind(ty) {
+            return Some(FieldKind::Enum { name, optional });
         }
         match ty {
             Type::Named { name, args, .. }
@@ -422,7 +516,35 @@ impl Db<'_> {
                 continue;
             }
             match self.classify_field(&p.ty) {
-                Some(FieldKind::Scalar { .. }) => {}
+                Some(FieldKind::Scalar { .. }) | Some(FieldKind::Json { .. }) => {}
+                Some(FieldKind::Enum { name, .. }) => {
+                    // A single column maps only to a ZERO-payload variant — reject an enum that has
+                    // any data-carrying variant (cannot be built from one column) or no variants.
+                    let variants = self.enum_variants.get(&name).cloned().unwrap_or_default();
+                    if variants.is_empty() {
+                        ok = false;
+                        self.diag(
+                            p.span,
+                            format!(
+                                "cannot hydrate field `{}` of `{class}`: enum `{name}` has no variants",
+                                p.name
+                            ),
+                            "E-DB-HYDRATE-ENUM-PAYLOAD",
+                            "a hydrated enum needs at least one zero-payload variant to map a column value onto".into(),
+                        );
+                    } else if variants.iter().any(|(_, arity)| *arity > 0) {
+                        ok = false;
+                        self.diag(
+                            p.span,
+                            format!(
+                                "cannot hydrate field `{}` of `{class}`: enum `{name}` has a variant with associated data",
+                                p.name
+                            ),
+                            "E-DB-HYDRATE-ENUM-PAYLOAD",
+                            "a DB column maps only to a ZERO-payload enum variant (`enum Status { Active(), Inactive() }`); a variant carrying data cannot be built from a single column".into(),
+                        );
+                    }
+                }
                 Some(FieldKind::Entity { class: d, .. }) => {
                     if !self.validate_class(&d, p.span, path) {
                         ok = false;
@@ -865,6 +987,127 @@ impl Db<'_> {
         }
     }
 
+    /// `new EnumName.Variant()` — construct a zero-payload enum variant (qualified, DEC-208 slice E).
+    fn new_variant(&mut self, enum_name: &str, variant: &str) -> Expr {
+        let obj = self.ident(enum_name);
+        let msp = self.sp();
+        let callee = Expr::Member {
+            object: Box::new(obj),
+            name: variant.into(),
+            safe: false,
+            sep: MemberSep::Dot,
+            span: msp,
+        };
+        let csp = self.sp();
+        let call = Expr::Call {
+            callee: Box::new(callee),
+            args: Vec::new(),
+            span: csp,
+        };
+        let nsp = self.sp();
+        Expr::New(Box::new(call), nsp)
+    }
+
+    /// `string <fresh> = <row_var>.getString("col")?;` — emit the statement, return the local name.
+    fn getstr_local(&mut self, col: &str, row_var: &str, out: &mut Vec<Stmt>) -> String {
+        let local = self.fresh_local();
+        let row = self.ident(row_var);
+        let col_e = self.str_lit(col);
+        let acc = self.member_call(row, "getString", vec![col_e]);
+        let init = self.propagate(acc);
+        let ty = self.named("string");
+        let span = self.sp();
+        out.push(Stmt::VarDecl {
+            ty,
+            name: local.clone(),
+            init,
+            mutable: false,
+            span,
+        });
+        local
+    }
+
+    /// `!(<row_var>.isNull("col")?)` — the guard for an OPTIONAL enum/Json field (a NULL column → the
+    /// field stays `null`; reuses the strict `isNull` accessor, matching the optional-entity path).
+    fn not_is_null(&mut self, col: &str, row_var: &str) -> Expr {
+        let row = self.ident(row_var);
+        let col_e = self.str_lit(col);
+        let call = self.member_call(row, "isNull", vec![col_e]);
+        let p = self.propagate(call);
+        let span = self.sp();
+        Expr::Unary {
+            op: UnaryOp::Not,
+            expr: Box::new(p),
+            span,
+        }
+    }
+
+    /// `match (<scrutinee_local>) { "V0" => new Enum.V0(), … default => DbError.fail(msg)? }` — the
+    /// enum-column → variant match (DEC-208 slice E). `enum_name`'s variants are all zero-payload
+    /// (validated), so each arm is a nullary construction; an unmatched value throws a catchable
+    /// `DbError` via the prelude's single `DbError.fail` classification point.
+    fn enum_match(&mut self, enum_name: &str, scrutinee_local: &str, col: &str) -> Expr {
+        let variants = self
+            .enum_variants
+            .get(enum_name)
+            .cloned()
+            .unwrap_or_default();
+        let mut arms = Vec::new();
+        for (variant, _arity) in &variants {
+            let pat_span = self.sp();
+            let pattern = Pattern::Str(variant.clone(), pat_span);
+            let body = self.new_variant(enum_name, variant);
+            let arm_span = self.sp();
+            arms.push(MatchArm {
+                pattern,
+                guard: None,
+                body,
+                span: arm_span,
+            });
+        }
+        let msg = format!("Core.Db: column `{col}` value is not a variant of enum `{enum_name}`");
+        let m = self.str_lit(&msg);
+        let fail = self.qual_call("DbError", "fail", vec![m]);
+        let body = self.propagate(fail);
+        let pat_span = self.sp();
+        let arm_span = self.sp();
+        arms.push(MatchArm {
+            pattern: Pattern::Wildcard(pat_span),
+            guard: None,
+            body,
+            span: arm_span,
+        });
+        let scrut = self.ident(scrutinee_local);
+        let span = self.sp();
+        Expr::Match {
+            scrutinee: Box::new(scrut),
+            arms,
+            span,
+        }
+    }
+
+    /// `Json.parse(<row_var>.getString("col")?) ?? DbError.fail(msg)?` — the JSON-column → `Json` parse
+    /// (DEC-208 slice E). Requires the program's own `import Core.Json` (nothing in the wind); an
+    /// invalid JSON string (`Json.parse` → null) throws a catchable `DbError`.
+    fn json_parse_expr(&mut self, col: &str, row_var: &str) -> Expr {
+        let row = self.ident(row_var);
+        let col_e = self.str_lit(col);
+        let getstr = self.member_call(row, "getString", vec![col_e]);
+        let getstr_p = self.propagate(getstr);
+        let parse = self.qual_call("Json", "parse", vec![getstr_p]);
+        let msg = format!("Core.Db: column `{col}` does not contain valid JSON");
+        let m = self.str_lit(&msg);
+        let fail = self.qual_call("DbError", "fail", vec![m]);
+        let fail_p = self.propagate(fail);
+        let span = self.sp();
+        Expr::Binary {
+            op: BinaryOp::Coalesce,
+            lhs: Box::new(parse),
+            rhs: Box::new(fail_p),
+            span,
+        }
+    }
+
     /// Recursively construct `class` from `row_var`, resolving fields by the dotted column convention
     /// (`prefix.field`). Emits the per-field extracting locals into `out` (a scalar → one `getX` local;
     /// a required entity → its sub-locals then a `new D(..)` local; an optional entity → a
@@ -886,6 +1129,101 @@ impl Db<'_> {
                 .classify_field(&p.ty)
                 .expect("validate_class ⇒ every field classifies")
             {
+                FieldKind::Enum { name: en, optional } => {
+                    if optional {
+                        // mutable EnumT? local = null; if (!row.isNull("col")?) { string s =
+                        // row.getString("col")?; local = match (s) { … }; }
+                        let opt_ty = self.opt_ty(&en);
+                        let null_init = self.placeholder();
+                        let decl_span = self.sp();
+                        out.push(Stmt::VarDecl {
+                            ty: opt_ty,
+                            name: local.clone(),
+                            init: null_init,
+                            mutable: true,
+                            span: decl_span,
+                        });
+                        let cond = self.not_is_null(&col, row_var);
+                        let mut ifb = Vec::new();
+                        let sn = self.getstr_local(&col, row_var, &mut ifb);
+                        let m = self.enum_match(&en, &sn, &col);
+                        let target = self.ident(&local);
+                        let assign_span = self.sp();
+                        ifb.push(Stmt::Assign {
+                            target,
+                            value: m,
+                            span: assign_span,
+                        });
+                        let if_span = self.sp();
+                        out.push(Stmt::If {
+                            cond,
+                            bind: None,
+                            then_block: ifb,
+                            else_block: None,
+                            span: if_span,
+                        });
+                    } else {
+                        // string s = row.getString("col")?; EnumT local = match (s) { … };
+                        let sn = self.getstr_local(&col, row_var, out);
+                        let m = self.enum_match(&en, &sn, &col);
+                        let ty = self.named(&en);
+                        let span = self.sp();
+                        out.push(Stmt::VarDecl {
+                            ty,
+                            name: local.clone(),
+                            init: m,
+                            mutable: false,
+                            span,
+                        });
+                    }
+                    args.push(self.ident(&local));
+                }
+                FieldKind::Json { optional } => {
+                    if optional {
+                        // mutable Json? local = null; if (!row.isNull("col")?) { local =
+                        // Json.parse(row.getString("col")?) ?? DbError.fail(…)?; }
+                        let opt_ty = self.opt_ty("Json");
+                        let null_init = self.placeholder();
+                        let decl_span = self.sp();
+                        out.push(Stmt::VarDecl {
+                            ty: opt_ty,
+                            name: local.clone(),
+                            init: null_init,
+                            mutable: true,
+                            span: decl_span,
+                        });
+                        let cond = self.not_is_null(&col, row_var);
+                        let j = self.json_parse_expr(&col, row_var);
+                        let target = self.ident(&local);
+                        let assign_span = self.sp();
+                        let ifb = vec![Stmt::Assign {
+                            target,
+                            value: j,
+                            span: assign_span,
+                        }];
+                        let if_span = self.sp();
+                        out.push(Stmt::If {
+                            cond,
+                            bind: None,
+                            then_block: ifb,
+                            else_block: None,
+                            span: if_span,
+                        });
+                    } else {
+                        // Json local = Json.parse(row.getString("col")?) ?? DbError.fail(…)?;
+                        let j = self.json_parse_expr(&col, row_var);
+                        let ty = self.named("Json");
+                        let span = self.sp();
+                        out.push(Stmt::VarDecl {
+                            ty,
+                            name: local.clone(),
+                            init: j,
+                            mutable: false,
+                            span,
+                        });
+                    }
+                    args.push(self.ident(&local));
+                }
                 FieldKind::Scalar { accessor } => {
                     // <ty> local = row.accessor("col")?;
                     let row = self.ident(row_var);
@@ -1002,7 +1340,10 @@ impl Db<'_> {
         for p in &params {
             let col = col_name(prefix, &p.name);
             match self.classify_field(&p.ty) {
-                Some(FieldKind::Scalar { .. }) => acc.push(col),
+                // A scalar, an enum, and a Json field each occupy exactly ONE column (a leaf).
+                Some(FieldKind::Scalar { .. })
+                | Some(FieldKind::Enum { .. })
+                | Some(FieldKind::Json { .. }) => acc.push(col),
                 Some(FieldKind::Entity { class: d, .. }) => self.collect_leaves(&d, &col, acc),
                 None => {}
             }

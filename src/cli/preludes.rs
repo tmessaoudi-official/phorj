@@ -551,6 +551,15 @@ class Row {
   function getBoolOrNull(string column): bool? throws DbError {
     return match (DbSys.getBoolOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
   }
+  // Decimal accessors (DEC-208 slice E): a `decimal`/`decimal?` hydration field maps its column here —
+  // exact money (a TEXT column is parsed exactly; never through float). Used by the dynamic path and by
+  // the `queryInto` hydration of a `decimal` field (via `desugar_db`'s `accessor_for`).
+  function getDecimal(string column): decimal throws DbError {
+    return match (DbSys.getDecimal(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getDecimalOrNull(string column): decimal? throws DbError {
+    return match (DbSys.getDecimalOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
   // Column introspection (DEC-208 slice B) — the desugared `queryScalar`/`queryMap`/nested-hydration
   // helpers use these. `columnNames` is selection-ordered; `isNull` tests a column for SQL NULL.
   function columnNames(): List<string> throws DbError {
