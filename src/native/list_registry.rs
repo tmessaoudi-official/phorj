@@ -74,7 +74,10 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "map",
-            params: vec![list(t()), Ty::Function(vec![t()], Box::new(u()))],
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(u()), Vec::new()),
+            ],
             ret: list(u()),
             pure: true,
             eval: NativeEval::HigherOrder(list_map),
@@ -84,7 +87,10 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "filter",
-            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
             ret: list(t()),
             pure: true,
             eval: NativeEval::HigherOrder(list_filter),
@@ -94,7 +100,11 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "reduce",
-            params: vec![list(t()), u(), Ty::Function(vec![u(), t()], Box::new(u()))],
+            params: vec![
+                list(t()),
+                u(),
+                Ty::Function(vec![u(), t()], Box::new(u()), Vec::new()),
+            ],
             ret: u(),
             pure: true,
             eval: NativeEval::HigherOrder(list_reduce),
@@ -123,7 +133,10 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "sortWith",
-            params: vec![list(t()), Ty::Function(vec![t(), t()], Box::new(Ty::Int))],
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t(), t()], Box::new(Ty::Int), Vec::new()),
+            ],
             ret: list(t()),
             pure: true,
             eval: NativeEval::HigherOrder(list_sort_with),
@@ -277,7 +290,10 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "find",
-            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::HigherOrder(list_find),
@@ -286,7 +302,10 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "any",
-            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::HigherOrder(list_any),
@@ -295,7 +314,10 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "all",
-            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::HigherOrder(list_all),
@@ -323,7 +345,10 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.List",
             name: "count",
-            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::HigherOrder(list_count),

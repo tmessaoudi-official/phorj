@@ -111,10 +111,21 @@ impl Parser {
             )?;
             // A-1: function types use `=>` (`(int) => bool`); `->` stays as a silent transition alias.
             let mut t = if self.eat(&TokenKind::FatArrow) || self.eat(&TokenKind::Arrow) {
-                // `( … ) => R` — a function type with the parsed parameter list.
+                // `( … ) => R [throws E]` — a function type with the parsed parameter list. DEC-222:
+                // an optional `throws` clause after the return type declares the callable's checked
+                // exceptions (`(int) => string throws MyError`); absent ⇒ empty. `throws` binds to the
+                // nearest (innermost) function type, so `() => (int) => B throws E` puts `E` on the
+                // inner `(int) => B` (parsed there by the recursive `parse_type`).
+                let ret = Box::new(self.parse_type()?);
+                let throws = if self.eat(&TokenKind::Throws) {
+                    self.parse_throws_clause()?
+                } else {
+                    Vec::new()
+                };
                 Type::Function {
                     params,
-                    ret: Box::new(self.parse_type()?),
+                    ret,
+                    throws,
                     span: sp,
                 }
             } else {

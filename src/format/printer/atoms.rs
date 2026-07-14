@@ -50,9 +50,21 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
             let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
             Ok(m?.join(" & "))
         }
-        Type::Function { params, ret, .. } => {
+        Type::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             let ps: Result<Vec<_>, _> = params.iter().map(ty).collect();
-            Ok(format!("({}) => {}", ps?.join(", "), ty(ret)?))
+            let base = format!("({}) => {}", ps?.join(", "), ty(ret)?);
+            // DEC-222: render the `throws` clause so a function type round-trips through `phg format`.
+            if throws.is_empty() {
+                Ok(base)
+            } else {
+                let es: Result<Vec<_>, _> = throws.iter().map(ty).collect();
+                Ok(format!("{base} throws {}", es?.join(", ")))
+            }
         }
         Type::FixedList { elem, len, .. } => Ok(format!("[{}; {len}]", ty(elem)?)),
         // `Type::Erased` is produced only by the post-check `erase_generics` pass, which `phg format`

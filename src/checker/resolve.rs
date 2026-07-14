@@ -161,10 +161,27 @@ impl Checker {
                 }
                 norm
             }
-            Type::Function { params, ret, .. } => Ty::Function(
-                params.iter().map(|p| self.resolve_type(p)).collect(),
-                Box::new(self.resolve_type(ret)),
-            ),
+            Type::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                // DEC-222: resolve the declared throws set, flatten any union members, and canonical-
+                // sort (by `Display`) so member order never affects the type's identity or `Display` —
+                // matching how `cur_throws`/union members are normalized. NOT Error-validated here (a
+                // bare function-type annotation is structural; validation happens at the lambda
+                // definition site, `check_lambda`).
+                let resolved: Vec<Ty> = throws.iter().map(|t| self.resolve_type(t)).collect();
+                let mut es = Self::flatten_throws(resolved);
+                es.sort_by_key(std::string::ToString::to_string);
+                es.dedup();
+                Ty::Function(
+                    params.iter().map(|p| self.resolve_type(p)).collect(),
+                    Box::new(self.resolve_type(ret)),
+                    es,
+                )
+            }
             // `[T; N]` (Phase 1 types slice): a fixed-length list. The element resolves like a
             // `List<T>` element; the length rides along for static bounds + length-checked init.
             Type::FixedList { elem, len, .. } => {

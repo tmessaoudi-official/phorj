@@ -475,7 +475,10 @@ impl Checker {
             (Ty::Map(dk, dv), Ty::Map(ak, av)) => {
                 self.unify(dk, ak, theta) && self.unify(dv, av, theta)
             }
-            (Ty::Function(dp, dr), Ty::Function(ap, ar)) => {
+            // Unify params + ret only; the `throws` sets (DEC-222) are not a unification position (no
+            // native carries a throwing function param, and a throws set has no positional arity to
+            // bind against) — a type param appearing solely in a throws position is not inferred.
+            (Ty::Function(dp, dr, _), Ty::Function(ap, ar, _)) => {
                 dp.len() == ap.len()
                     && dp.iter().zip(ap).all(|(d, a)| self.unify(d, a, theta))
                     && self.unify(dr, ar, theta)

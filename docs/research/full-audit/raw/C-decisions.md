@@ -728,6 +728,30 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   selection (`f(Animal)`+`f(Dog)`, arg static `Animal` holding a `Dog`) — the sound subset is where no
   runtime refinement can change the selection (safe approx: primitive/leaf arg types). Deferred (low
   priority vs the DB/output work).
+- **DEC-222 — RULED (autonomous, parallel to DEC-221): throwing-closure function types.** A function
+  TYPE and a lambda literal could not carry a checked exception, so a closure that did `x?` / `throw new
+  E(...)` hit `E-THROW-UNDECLARED` (a lambda body was always checked with an EMPTY `cur_throws`), and a
+  call of a function VALUE discharged nothing — blocking the closure form `db.transaction(() => {…})`.
+  Ruling: **add a `throws` component to the function type `(A) => B throws E` and to the lambda literal
+  `(x): T throws E => …`**, the exact parallel of DEC-221 (throwing constructors) for callables. A lambda
+  DECLARES its throws (explicit clause — no inference, matching named functions/ctors which declare not
+  infer); its body is checked with those throws in `cur_throws`; a call of a `throws E` function value
+  routes E through `route_call_throw` so the caller must handle/propagate (`E-CALL-UNHANDLED`). *Variance
+  (the sound rule chosen):* a function that throws FEWER exceptions is substitutable where one throwing
+  MORE is expected — `from ⊑ to` iff params/ret match (exact, spec A6) AND every exception in `from`'s
+  throws is `<:` some member of `to`'s throws (using the nominal subtype oracle). So a plain `() => T`
+  (throws nothing) passes where `() => T throws E` is expected; the reverse is rejected. *Alternatives:*
+  contextual/expected-type throws inference for a clause-less lambda (rejected — the expected-type
+  threading is not wired into `check_args`, and inference of a throws set from a body is a larger,
+  riskier feature; explicit declaration is the DEC-221-parallel, lower-risk path); no variance / exact
+  throws match (rejected — a non-throwing lambda then could not pass where a throwing type is expected,
+  the required capability). *Scope note:* throws on a bare function-TYPE annotation are resolved but not
+  Error-validated (validation happens at the lambda DEFINITION site, `check_lambda`, like a fn/ctor decl).
+  Discharge covers both callable-value paths — a function-typed LOCAL/PARAM `f(x)` (`calls/core.rs:26`)
+  and a general callee expression `(expr)(x)` (`calls/core.rs` `other` arm). A function-typed FIELD call
+  (`this.op(x)`) is not a reachable path — phorj already rejects it as `no method` before throws is
+  considered — so no discharge site is needed there. Checker/parser-only — no runtime change (the throw
+  is the existing `Op::Throw`), so byte-identical (`run ≡ runvm ≡ php`).
 - **DEC-221 — RULED (ASKED 2026-07-13): throwing constructors.** phorj constructors could not declare
   `throws` (a `constructor(...) throws E` was a parse error; a throwing call in a ctor body had no
   `?`/try escape), which forced DEC-208's fail-able open into a static factory `Db.connect(dsn)` —

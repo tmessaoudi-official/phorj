@@ -29,8 +29,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Indexing `xs[i]` | ✅ | bounds-checked; out-of-range → clean runtime fault, never a panic |
 | Integer ranges `a..b` / `a..=b` | ✅ | materialize to `List<int>`; mainly `for (int i in 0..n)` |
 | Expression `if` | ✅ | `var x = if (c) { 1 } else { 2 };` (value position; `else` required) |
-| Lambdas / closures | ✅ | `function(int x) => x * 2` (expression body) and `function(int x): int { … }` (statement body, `: T` required); capture enclosing locals by value |
-| First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) => int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
+| Lambdas / closures | ✅ | `function(int x) => x * 2` (expression body) and `function(int x): int { … }` (statement body, `: T` required); capture enclosing locals by value; may declare a checked exception `function(int x): int throws E => …` (DEC-222) |
+| First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) => int` and throwing function types `(int) => int throws E` (DEC-222 — calling such a value discharges `E` at the call site, like a named `throws` fn; a non-throwing fn is substitutable where a throwing one is expected); transpile to PHP arrow fn / `function(){} use()` / first-class callable |
 | `Map<K, V>` literals `[k => v]` + indexing `m[k]` | ✅ | keys are `int`/`bool`/`string`; insertion-ordered; a missing key faults cleanly; transpiles to a PHP `[k => v]` array (M-RT S3) |
 | `Core.Map` query: `keys`/`values`/`has`/`size`; `Core.List` `reverse`/`sum` | ✅ | the first generic stdlib natives — type params inferred at the call site, erased to PHP `array_keys`/`array_values`/`array_key_exists`/`count`/`array_reverse`/`array_sum` (M-RT S7b) |
 | `Set<T>`: `Core.Set` `of`/`contains`/`size` + algebra `union`/`intersection`/`difference`/`isSubset` | ✅ | insertion-ordered, deduped (the Map discipline); generic, erases to `array_unique`/`in_array`/`count` (M-RT S7b); see `examples/guide/set-ops.phg` |

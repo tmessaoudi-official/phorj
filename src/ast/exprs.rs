@@ -196,11 +196,15 @@ pub enum Expr {
         else_expr: Box<Expr>,
         span: Span,
     },
-    /// `function(Type param, …) [-> RetType] => expr` — an expression-body lambda (M3 S3, Task 3).
-    /// Block-body lambdas (`function(…) { … }`) are Task 6.
+    /// `function(Type param, …) [: RetType] [throws E] => expr` — an expression-body lambda (M3 S3,
+    /// Task 3). Block-body lambdas (`function(…) { … }`) are Task 6. `throws` (DEC-222) is the lambda's
+    /// declared checked-exception set (empty when absent); its body is checked with these throws in
+    /// context (so `throw`/`?` inside discharge against them), and the lambda's function type carries
+    /// them. Checker-time only — the backends see an ordinary closure.
     Lambda {
         params: Vec<Param>,
         ret: Option<Type>,
+        throws: Vec<Type>,
         body: LambdaBody,
         span: Span,
     },

@@ -139,6 +139,14 @@ impl Parser {
                 } else {
                     None
                 };
+                // DEC-222: an optional `throws` clause after the return type (before the body) declares
+                // the lambda's checked exceptions (`function(int x): int throws E => …`); absent ⇒
+                // empty. Reuses the shared clause parser (function/interface/ctor form).
+                let throws = if self.eat(&TokenKind::Throws) {
+                    self.parse_throws_clause()?
+                } else {
+                    Vec::new()
+                };
                 let body = if self.eat(&TokenKind::FatArrow) {
                     LambdaBody::Expr(Box::new(self.parse_expr()?))
                 } else if self.check(&TokenKind::LBrace) {
@@ -149,6 +157,7 @@ impl Parser {
                 Ok(Expr::Lambda {
                     params,
                     ret,
+                    throws,
                     body,
                     span: sp,
                 })

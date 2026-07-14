@@ -1214,7 +1214,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             name: "onQuery",
             params: vec![
                 handle(),
-                Ty::Function(vec![Ty::String, Ty::Int], Box::new(Ty::Void)),
+                Ty::Function(vec![Ty::String, Ty::Int], Box::new(Ty::Void), vec![]),
             ],
             ret: res(Ty::Int),
             pure: false,

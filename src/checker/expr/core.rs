@@ -87,7 +87,11 @@ impl Checker {
                         let sig = &sigs[0];
                         let param_tys = sig.params.clone();
                         let ret_ty = sig.ret.clone();
-                        return Ty::Function(param_tys, Box::new(ret_ty));
+                        // DEC-222: a named `throws E` function used as a first-class value carries its
+                        // throws obligation into the function type, so calling the value discharges E
+                        // exactly like calling the function directly.
+                        let throws = sig.throws.clone();
+                        return Ty::Function(param_tys, Box::new(ret_ty), throws);
                     }
                     // A bare instance-field reference. Phorj requires `this.field` everywhere (like
                     // PHP's `$this->field`; no bare field access) — so this is always an error, with a
@@ -227,9 +231,10 @@ impl Checker {
             Expr::Lambda {
                 params,
                 ret,
+                throws,
                 body,
                 span,
-            } => self.check_lambda(params, ret, body, *span),
+            } => self.check_lambda(params, ret, throws, body, *span),
             Expr::Html(parts, span) => self.check_html(parts, *span),
             Expr::TaggedTemplate { tag, parts, span } => {
                 self.check_tagged_template(tag, parts, *span)

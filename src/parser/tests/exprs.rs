@@ -470,3 +470,25 @@ fn parses_force_unwrap() {
         other => panic!("got {other:?}"),
     }
 }
+
+#[test]
+fn parses_lambda_throws_clause() {
+    // DEC-222: a lambda declares its throws after the return type, before the body.
+    match expr("function(int n): int throws E => n") {
+        Expr::Lambda { throws, ret, .. } => {
+            assert!(ret.is_some());
+            assert_eq!(throws.len(), 1);
+            assert!(matches!(&throws[0], Type::Named { name, .. } if name == "E"));
+        }
+        other => panic!("expected lambda, got {other:?}"),
+    }
+    // Block body carries throws too; a clause-less lambda has an empty throws set.
+    match expr("function(int n): int throws E { return n; }") {
+        Expr::Lambda { throws, .. } => assert_eq!(throws.len(), 1),
+        other => panic!("expected lambda, got {other:?}"),
+    }
+    match expr("function(int n): int => n") {
+        Expr::Lambda { throws, .. } => assert!(throws.is_empty()),
+        other => panic!("expected lambda, got {other:?}"),
+    }
+}

@@ -161,11 +161,13 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
             Expr::Lambda {
                 params,
                 ret,
+                throws,
                 body,
                 span,
             } => Expr::Lambda {
                 params,
                 ret,
+                throws,
                 body: match body {
                     LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(rexpr(*e, h))),
                     LambdaBody::Block(stmts) => LambdaBody::Block(rblock(stmts, h)),

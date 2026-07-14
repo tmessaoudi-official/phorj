@@ -380,7 +380,7 @@ fn build() -> Vec<NativeFn> {
     registry.push(NativeFn {
         module: "Core.Output",
         name: "capture",
-        params: vec![Ty::Function(vec![], Box::new(Ty::Void))],
+        params: vec![Ty::Function(vec![], Box::new(Ty::Void), vec![])],
         ret: Ty::String,
         pure: true,
         eval: NativeEval::Capturing(output_capture),

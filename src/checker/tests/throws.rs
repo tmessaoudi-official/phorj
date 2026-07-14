@@ -485,3 +485,170 @@ fn inherited_throwing_ctor_propagates_to_subclass_construction() {
         "expected E-CALL-UNHANDLED for an inherited throwing ctor, got {bad:?}"
     );
 }
+
+// ── DEC-222: throwing-closure function types ───────────────────────────────────────────────
+
+#[test]
+fn throwing_lambda_declared_throw_is_clean() {
+    // A lambda that DECLARES `throws BadInput` discharges its own `throw` against that clause — no
+    // `E-THROW-UNDECLARED`. The call is handled with `try`/`catch`, so the whole program is clean.
+    let ok = errors_of(&format!(
+        "{ERRDEF} function main() -> void {{ \
+             var f = function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}; \
+             try {{ var y = f(1); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(
+        !ok.iter().any(|d| d.code == Some("E-THROW-UNDECLARED")),
+        "a declared-throws lambda must not raise E-THROW-UNDECLARED, got {ok:?}"
+    );
+    assert!(ok.is_empty(), "expected fully clean, got {ok:?}");
+}
+
+#[test]
+fn throwing_lambda_without_clause_is_undeclared() {
+    // A lambda body `throw` with NO `throws` clause still discharges against an empty set —
+    // `E-THROW-UNDECLARED`, exactly like a named function with no `throws` (DEC-222 does NOT infer).
+    let bad = errors_of(&format!(
+        "{ERRDEF} function main() -> void {{ \
+             var f = function(int n): int {{ throw new BadInput(\"x\"); }}; }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-THROW-UNDECLARED")),
+        "expected E-THROW-UNDECLARED for an undeclared throwing lambda, got {bad:?}"
+    );
+}
+
+#[test]
+fn call_of_throwing_fn_value_is_unhandled() {
+    // Calling a `throws`-typed function VALUE with neither `try`/`catch` nor `?`-propagation is
+    // `E-CALL-UNHANDLED` — the call discharges the closure's declared throw at the call site.
+    let bad = errors_of(&format!(
+        "{ERRDEF} function main() -> void {{ \
+             var f = function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}; \
+             var y = f(-1); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED for an unhandled throwing closure call, got {bad:?}"
+    );
+}
+
+#[test]
+fn call_of_throwing_fn_value_caught_is_clean() {
+    // The same call wrapped in a `try`/`catch` of the declared type discharges cleanly.
+    let ok = errors_of(&format!(
+        "{ERRDEF} function main() -> void {{ \
+             var f = function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}; \
+             try {{ var y = f(-1); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn higher_order_throwing_param_call_unhandled_then_propagated() {
+    // A param typed `(int) => int throws BadInput`: calling it may throw. A HOF that neither catches
+    // nor declares the throw is `E-CALL-UNHANDLED`; one that `?`-propagates AND declares it is clean.
+    let bad = errors_of(&format!(
+        "{ERRDEF} function apply((int) => int throws BadInput op) -> int {{ return op(1); }} \
+             function main() -> void {{}}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED calling a throwing function param, got {bad:?}"
+    );
+
+    let ok = errors_of(&format!(
+        "{ERRDEF} function apply((int) => int throws BadInput op) -> int throws BadInput {{ return op(1)?; }} \
+             function main() -> void {{ \
+                 try {{ var y = apply(function(int n): int throws BadInput {{ return n; }}); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn non_throwing_lambda_passes_where_throwing_expected() {
+    // VARIANCE (the sound rule): a non-throwing lambda `(int) => int` is accepted where a
+    // `(int) => int throws BadInput` type is expected — a function throwing fewer exceptions is
+    // substitutable for one throwing more.
+    let ok = errors_of(&format!(
+        "{ERRDEF} function apply((int) => int throws BadInput op) -> int {{ \
+                 try {{ return op(1); }} catch (BadInput e) {{ return 0; }} }} \
+             function main() -> void {{ var y = apply(function(int n): int => n + 1); }}"
+    ));
+    assert!(
+        ok.is_empty(),
+        "a non-throwing lambda must pass where a throwing type is expected, got {ok:?}"
+    );
+}
+
+#[test]
+fn throwing_lambda_where_nonthrowing_expected_is_rejected() {
+    // The reverse of variance: a `throws BadInput` lambda is NOT assignable where a non-throwing
+    // `(int) => int` is expected (the caller is not prepared to handle the exception).
+    let bad = errors_of(&format!(
+        "{ERRDEF} function apply((int) => int op) -> int {{ return op(1); }} \
+             function main() -> void {{ \
+                 var y = apply(function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}); }}"
+    ));
+    assert!(
+        !bad.is_empty(),
+        "expected a type error passing a throwing lambda where a non-throwing type is expected, got clean"
+    );
+}
+
+#[test]
+fn throwing_lambda_non_error_type_is_rejected() {
+    // A lambda `throws` type that does not implement `Error` is `E-THROW-TYPE` — the same per-type
+    // validation as functions/ctors, shared via `validate_throw_types`.
+    let bad =
+        errors_of("function main() -> void { var f = function(): int throws int { return 1; }; }");
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-THROW-TYPE")),
+        "expected E-THROW-TYPE for a non-Error lambda throws, got {bad:?}"
+    );
+}
+
+#[test]
+fn named_throwing_fn_as_value_carries_throws() {
+    // A named `throws BadInput` function used as a first-class VALUE keeps its throws obligation —
+    // calling the value is `E-CALL-UNHANDLED` unless handled (FnSig.throws wired into the fn-value type).
+    let bad = errors_of(&format!(
+        "{ERRDEF} function boom(int n) -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
+             function main() -> void {{ var f = boom; var y = f(1); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED calling a throwing named-fn value, got {bad:?}"
+    );
+}
+
+#[test]
+fn throws_variance_uses_subtype_oracle() {
+    // The SUBTYPE leg of variance (uses the nominal subtype oracle, not `==`): a lambda `throws Sub`
+    // (Sub <: Base) flows into a `throws Base` slot — its exceptions are covered. The reverse
+    // (`throws Base` into a `throws Sub` slot) is rejected — Base is not covered by Sub.
+    const HIER: &str =
+        "open class Base implements Error { constructor(public string message) {} } \
+                        class Sub extends Base {}";
+    let ok = errors_of(&format!(
+        "{HIER} function apply((int) => int throws Base op) -> int {{ \
+                 try {{ return op(1); }} catch (Base e) {{ return 0; }} }} \
+             function main() -> void {{ \
+                 var y = apply(function(int n): int throws Sub {{ if (n < 0) {{ throw new Sub(\"x\"); }} return n; }}); }}"
+    ));
+    assert!(
+        ok.is_empty(),
+        "a `throws Sub` lambda must pass where `throws Base` is expected (Sub <: Base), got {ok:?}"
+    );
+
+    let bad = errors_of(&format!(
+        "{HIER} function apply((int) => int throws Sub op) -> int {{ \
+                 try {{ return op(1); }} catch (Sub e) {{ return 0; }} }} \
+             function main() -> void {{ \
+                 var y = apply(function(int n): int throws Base {{ if (n < 0) {{ throw new Base(\"x\"); }} return n; }}); }}"
+    ));
+    assert!(
+        !bad.is_empty(),
+        "a `throws Base` lambda must NOT pass where `throws Sub` is expected (Base ⊄ Sub), got clean"
+    );
+}

@@ -207,6 +207,7 @@ impl Compiler<'_> {
             body,
             ret,
             span,
+            ..
         } = callee
         {
             self.compile_lambda(params, body, ret.as_ref(), span.line)?;

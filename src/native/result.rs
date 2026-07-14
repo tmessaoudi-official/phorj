@@ -164,7 +164,10 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.Result",
             name: "map",
-            params: vec![res(t(), e()), Ty::Function(vec![t()], Box::new(u()))],
+            params: vec![
+                res(t(), e()),
+                Ty::Function(vec![t()], Box::new(u()), Vec::new()),
+            ],
             ret: res(u(), e()),
             pure: true,
             eval: NativeEval::HigherOrder(result_map),
@@ -173,7 +176,10 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.Result",
             name: "mapErr",
-            params: vec![res(t(), e()), Ty::Function(vec![e()], Box::new(f()))],
+            params: vec![
+                res(t(), e()),
+                Ty::Function(vec![e()], Box::new(f()), Vec::new()),
+            ],
             ret: res(t(), f()),
             pure: true,
             eval: NativeEval::HigherOrder(result_map_err),
@@ -184,7 +190,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             name: "andThen",
             params: vec![
                 res(t(), e()),
-                Ty::Function(vec![t()], Box::new(res(u(), e()))),
+                Ty::Function(vec![t()], Box::new(res(u(), e())), Vec::new()),
             ],
             ret: res(u(), e()),
             pure: true,
@@ -205,7 +211,7 @@ pub(crate) fn result_natives() -> Vec<NativeFn> {
             name: "orElse",
             params: vec![
                 res(t(), e()),
-                Ty::Function(vec![e()], Box::new(res(t(), f()))),
+                Ty::Function(vec![e()], Box::new(res(t(), f())), Vec::new()),
             ],
             ret: res(t(), f()),
             pure: true,

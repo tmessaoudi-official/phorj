@@ -54,9 +54,16 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 inner: Box::new(rt(inner)),
                 span: *span,
             },
-            Type::Function { params, ret, span } => Type::Function {
+            Type::Function {
+                params,
+                ret,
+                throws,
+                span,
+            } => Type::Function {
                 params: params.iter().map(rt).collect(),
                 ret: Box::new(rt(ret)),
+                // DEC-222: collapse injected qualifiers in the throws types too.
+                throws: throws.iter().map(rt).collect(),
                 span: *span,
             },
             Type::Union(members, span) => Type::Union(members.iter().map(rt).collect(), *span),

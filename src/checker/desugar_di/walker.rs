@@ -542,6 +542,7 @@ impl Di<'_> {
             Expr::Lambda {
                 params,
                 ret,
+                throws,
                 body,
                 span,
             } => {
@@ -560,6 +561,7 @@ impl Di<'_> {
                 Expr::Lambda {
                     params,
                     ret,
+                    throws,
                     body: new_body,
                     span,
                 }

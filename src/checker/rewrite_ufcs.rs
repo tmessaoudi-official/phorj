@@ -226,11 +226,13 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
             Expr::Lambda {
                 params,
                 ret,
+                throws,
                 body,
                 span,
             } => Expr::Lambda {
                 params,
                 ret,
+                throws,
                 body: match body {
                     LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(rexpr(*e, u))),
                     LambdaBody::Block(stmts) => LambdaBody::Block(rblock(stmts, u)),

@@ -2203,6 +2203,7 @@ impl Db<'_> {
                 ret,
                 body,
                 span,
+                throws,
             } => {
                 let prev_ret = std::mem::replace(&mut self.current_ret, ret.clone());
                 let new_body = match body {
@@ -2218,6 +2219,7 @@ impl Db<'_> {
                     ret,
                     body: new_body,
                     span,
+                    throws,
                 }
             }
             Expr::CloneWith {

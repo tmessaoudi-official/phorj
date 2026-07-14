@@ -45,9 +45,16 @@ pub(super) fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
             inner: Box::new(resolve_type(inner, ctx)),
             span: *span,
         },
-        Type::Function { params, ret, span } => Type::Function {
+        Type::Function {
+            params,
+            ret,
+            throws,
+            span,
+        } => Type::Function {
             params: params.iter().map(|p| resolve_type(p, ctx)).collect(),
             ret: Box::new(resolve_type(ret, ctx)),
+            // DEC-222: a thrown type name mangles across packages exactly like any other type.
+            throws: throws.iter().map(|t| resolve_type(t, ctx)).collect(),
             span: *span,
         },
         // A union resolves each member (a cross-package member name mangles like anywhere else), M-RT S4.
@@ -528,6 +535,7 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
         Expr::Lambda {
             params,
             ret,
+            throws,
             body,
             span,
         } => Expr::Lambda {
@@ -539,6 +547,8 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
                 })
                 .collect(),
             ret: ret.as_ref().map(|r| resolve_type(r, ctx)),
+            // DEC-222: a thrown type name mangles across packages like any other type.
+            throws: throws.iter().map(|t| resolve_type(t, ctx)).collect(),
             body: match body {
                 LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(resolve_expr(*e, ctx))),
                 LambdaBody::Block(stmts) => LambdaBody::Block(resolve_block(stmts, ctx)),

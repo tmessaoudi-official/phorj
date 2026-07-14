@@ -230,7 +230,11 @@ pub(crate) fn test_natives() -> Vec<NativeFn> {
             name: "assertFaults",
             // `() -> T`: a zero-arg closure returning any T. `T` is inferred from the closure's
             // declared/inferred return type (the native-generic path), though the value is discarded.
-            params: vec![Ty::Function(vec![], Box::new(Ty::Param("T".into())))],
+            params: vec![Ty::Function(
+                vec![],
+                Box::new(Ty::Param("T".into())),
+                Vec::new(),
+            )],
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::HigherOrder(test_assert_faults),

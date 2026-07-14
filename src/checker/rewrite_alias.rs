@@ -40,9 +40,16 @@ pub fn expand_aliases(program: &Program) -> Program {
                 inner: Box::new(rt(inner, a, depth + 1)),
                 span: *span,
             },
-            Type::Function { params, ret, span } => Type::Function {
+            Type::Function {
+                params,
+                ret,
+                throws,
+                span,
+            } => Type::Function {
                 params: params.iter().map(|p| rt(p, a, depth + 1)).collect(),
                 ret: Box::new(rt(ret, a, depth + 1)),
+                // DEC-222: dealias the throws types too (an alias used as a thrown type dealiases here).
+                throws: throws.iter().map(|t| rt(t, a, depth + 1)).collect(),
                 span: *span,
             },
             // A union expands each member (an alias used as a member dealiases here), M-RT S4.

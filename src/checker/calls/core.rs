@@ -23,8 +23,15 @@ impl Checker {
                 // as a function-value call rather than a named-function call — the latter only
                 // looks in `self.funcs` (top-level declarations) and would report "unknown
                 // function `name`" for a lambda-typed local (M3 S3 Task 4).
-                if let Some(Ty::Function(param_tys, ret_ty)) = self.lookup(name) {
+                if let Some(Ty::Function(param_tys, ret_ty, throws)) = self.lookup(name) {
+                    // DEC-222: consume the `?`-suppression flag and route each declared throw so a call
+                    // of a throwing function VALUE discharges (or propagates) exactly like a named
+                    // throwing call. Taken BEFORE `check_args` so it cannot leak into an argument.
+                    let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
                     self.check_args("<lambda>", &param_tys, args, span);
+                    for e in &throws {
+                        self.route_call_throw(skip_throws, "<lambda>", e, span);
+                    }
                     return *ret_ty;
                 }
                 let ty = self.check_named_call(name, args, span);
@@ -121,11 +128,19 @@ impl Checker {
                 self.check_method_call(object, name, args, *safe, span)
             }
             other => {
+                // A callee expression that is itself a call (`f()()`, `getFn()?()`) may carry a
+                // `?`-suppression flag meant for THIS outer call — take it before evaluating the callee
+                // so `check_expr(other)` doesn't consume it, then apply it to the outer call's throws.
+                let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
                 // Evaluate the callee to see if it is a function value (closure or named-fn ref).
                 let callee_ty = self.check_expr(other);
                 match callee_ty {
-                    Ty::Function(param_tys, ret_ty) => {
+                    Ty::Function(param_tys, ret_ty, throws) => {
                         self.check_args("<lambda>", &param_tys, args, span);
+                        // DEC-222: route each declared throw of the called function value.
+                        for e in &throws {
+                            self.route_call_throw(skip_throws, "<lambda>", e, span);
+                        }
                         *ret_ty
                     }
                     Ty::Optional(inner) if matches!(*inner, Ty::Function(..)) => {

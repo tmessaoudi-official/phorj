@@ -99,8 +99,12 @@ pub enum Ty {
     /// Poison type: a failed sub-expression yields this. Assignable both ways so a
     /// single error does not cascade into many.
     Error,
-    /// A function type: `(int, string) -> bool`. Exact match only — no subtyping variance (A6).
-    Function(Vec<Ty>, Box<Ty>),
+    /// A function type: `(int, string) -> bool [throws E]`. Params/ret are exact-match (A6); the third
+    /// field is the declared checked-exception set (DEC-222, empty for a non-throwing function). Throws
+    /// is **covariant in the "fewer" direction**: a function throwing fewer/no exceptions is
+    /// substitutable where one throwing more is expected (see [`Ty::assignable_with`]). The set is
+    /// flattened + canonical-sorted at construction so member order never affects identity or `Display`.
+    Function(Vec<Ty>, Box<Ty>, Vec<Ty>),
 }
 
 impl Ty {
@@ -217,9 +221,20 @@ impl Ty {
             // only, not `List<float>`). The reverse (`List` → `[T; N]`) is *not* an edge: a list has
             // unknown length. `[T; N]` → `[T; N]` and `List` → `List` are covered by `from == to`.
             (Ty::FixedList(fe, _), Ty::List(te)) => fe == te,
-            // Function types are exact-match only — no co/contra-variance (spec A6).
-            (Ty::Function(fp, fr), Ty::Function(tp, tr)) => {
-                fp.len() == tp.len() && fp.iter().zip(tp.iter()).all(|(a, b)| a == b) && fr == tr
+            // Params/ret are exact-match — no co/contra-variance (spec A6). The `throws` set (DEC-222)
+            // is covariant in the "fewer" direction: `from` is usable where `to` is expected only if
+            // every exception `from` may throw is covered by (`<:` some member of) `to`'s declared set.
+            // So a non-throwing `() => T` (empty `fe`) passes where `() => T throws E` is expected
+            // (vacuously — nothing to cover), while a throwing fn is rejected where a non-throwing one
+            // is expected. Subtyping (not `==`) is used so a subclass thrown where a superclass is
+            // declared is accepted.
+            (Ty::Function(fp, fr, fe), Ty::Function(tp, tr, te)) => {
+                fp.len() == tp.len()
+                    && fp.iter().zip(tp.iter()).all(|(a, b)| a == b)
+                    && fr == tr
+                    && fe
+                        .iter()
+                        .all(|f| te.iter().any(|t| Ty::assignable_with(f, t, subtype)))
             }
             // Nominal types: a subtype edge (class→interface, interface→parent interface) by name, or
             // the same head with **invariant** type arguments (matching `List`/`Map`/`Set`: `Box<int>`
@@ -317,13 +332,24 @@ impl fmt::Display for Ty {
                 write!(f, "{m}")
             }
             Ty::Error => write!(f, "<error>"),
-            Ty::Function(params, ret) => {
+            Ty::Function(params, ret, throws) => {
                 let ps = params
                     .iter()
                     .map(|p| p.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
-                write!(f, "({ps}) -> {ret}")
+                // A non-throwing function prints exactly as before (byte-identity of existing messages);
+                // a throwing one appends ` throws A, B` in the canonical sorted order (DEC-222).
+                if throws.is_empty() {
+                    write!(f, "({ps}) -> {ret}")
+                } else {
+                    let es = throws
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    write!(f, "({ps}) -> {ret} throws {es}")
+                }
             }
         }
     }
@@ -540,9 +566,9 @@ mod tests {
 
     #[test]
     fn function_type_assignability_is_exact() {
-        let int_to_int = Ty::Function(vec![Ty::Int], Box::new(Ty::Int));
-        let int_to_int2 = Ty::Function(vec![Ty::Int], Box::new(Ty::Int));
-        let int_to_float = Ty::Function(vec![Ty::Int], Box::new(Ty::Float));
+        let int_to_int = Ty::Function(vec![Ty::Int], Box::new(Ty::Int), Vec::new());
+        let int_to_int2 = Ty::Function(vec![Ty::Int], Box::new(Ty::Int), Vec::new());
+        let int_to_float = Ty::Function(vec![Ty::Int], Box::new(Ty::Float), Vec::new());
         assert!(Ty::assignable(&int_to_int, &int_to_int2));
         assert!(!Ty::assignable(&int_to_int, &int_to_float)); // no variance (A6)
         assert!(!Ty::assignable(&Ty::Int, &int_to_int)); // int is not a function

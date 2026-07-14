@@ -27,10 +27,15 @@ pub enum Type {
     /// `var` — placeholder for an inferred local binding type (resolved by the checker from the
     /// initializer, erased everywhere else). Only valid as a `Stmt::VarDecl` type.
     Infer(Span),
-    /// `(int, string) -> bool` — a first-class function type (M3 S3).
+    /// `(int, string) => bool [throws E]` — a first-class function type (M3 S3; DEC-222 adds `throws`).
+    /// `throws` is the declared checked-exception set carried by the callable type (empty when the
+    /// clause is absent); it is a checker-time discipline (the backends ignore it — a function value is
+    /// a plain closure at runtime), so it must be PRESERVED by every rebuild pass (rewrite_alias /
+    /// collapse_injected / rewrite_generics), dropped only where the whole type is dropped.
     Function {
         params: Vec<Type>,
         ret: Box<Type>,
+        throws: Vec<Type>,
         span: Span,
     },
     /// `[T; N]` — a **fixed-length list** (Phase 1 types slice): a `List<T>` whose length is a

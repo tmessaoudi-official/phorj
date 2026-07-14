@@ -184,3 +184,26 @@ fn parses_parenthesized_return_position_function_type() {
     assert!(parser("(int, string)").parse_type().is_err());
     assert!(parser("()").parse_type().is_err());
 }
+
+#[test]
+fn parse_function_type_throws_clause() {
+    // DEC-222: a function type may carry a `throws` clause after the return type. Absent ⇒ empty.
+    match ty("(int) => string throws MyError") {
+        Type::Function { throws, ret, .. } => {
+            assert_eq!(throws.len(), 1, "one thrown type");
+            assert!(matches!(&throws[0], Type::Named { name, .. } if name == "MyError"));
+            assert!(matches!(ret.as_ref(), Type::Named { name, .. } if name == "string"));
+        }
+        other => panic!("expected function type, got {other:?}"),
+    }
+    // No clause ⇒ empty throws (byte-identical to the pre-DEC-222 shape).
+    match ty("(int) => string") {
+        Type::Function { throws, .. } => assert!(throws.is_empty()),
+        other => panic!("expected function type, got {other:?}"),
+    }
+    // Comma / union forms both parse (flattened by the checker).
+    match ty("() => int throws A, B") {
+        Type::Function { throws, .. } => assert_eq!(throws.len(), 2),
+        other => panic!("expected function type, got {other:?}"),
+    }
+}

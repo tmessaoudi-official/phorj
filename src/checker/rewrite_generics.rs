@@ -63,10 +63,14 @@ pub fn erase_generics(program: Program) -> Program {
             Type::Function {
                 params: ps,
                 ret,
+                throws,
                 span,
             } => Type::Function {
                 params: ps.iter().map(|p| rty(p, params)).collect(),
                 ret: Box::new(rty(ret, params)),
+                // DEC-222: erase generics in the throws types too (a type-param thrown type becomes
+                // `Type::Erased`, like any other position — the whole function type survives erasure).
+                throws: throws.iter().map(|t| rty(t, params)).collect(),
                 span: *span,
             },
             // A union erases each member (a type-param member becomes `Type::Erased`); the union
@@ -118,15 +122,18 @@ pub fn erase_generics(program: Program) -> Program {
     }
     fn rexpr(e: &Expr, params: &Params) -> Expr {
         match e {
-            // The only expression that carries types: a lambda's parameters and return annotation.
+            // The only expression that carries types: a lambda's parameters, return, and throws.
             Expr::Lambda {
                 params: lp,
                 ret,
+                throws,
                 body,
                 span,
             } => Expr::Lambda {
                 params: lp.iter().map(|p| rparam(p, params)).collect(),
                 ret: ret.as_ref().map(|t| rty(t, params)),
+                // DEC-222: erase generics in a lambda's declared throws types too.
+                throws: throws.iter().map(|t| rty(t, params)).collect(),
                 body: match body {
                     LambdaBody::Expr(inner) => LambdaBody::Expr(Box::new(rexpr(inner, params))),
                     LambdaBody::Block(stmts) => {

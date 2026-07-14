@@ -228,24 +228,36 @@ impl Printer<'_> {
             }
             Expr::Bytes(bytes, _) => Ok(doc::text(format!("b\"{}\"", escape_bytes(bytes)))),
             Expr::Lambda {
-                params, ret, body, ..
+                params,
+                ret,
+                throws,
+                body,
+                ..
             } => {
                 let ps = self.params(params)?;
+                // DEC-222: render the lambda's `throws` clause (after the return annotation, before the
+                // body) so a throwing lambda round-trips through `phg format`. Empty ⇒ nothing.
+                let th = if throws.is_empty() {
+                    String::new()
+                } else {
+                    let es: Result<Vec<_>, _> = throws.iter().map(ty).collect();
+                    format!(" throws {}", es?.join(", "))
+                };
                 match body {
                     LambdaBody::Expr(e) => {
-                        // Expression body: `function(params)[: Ret] => expr` (the `: Ret` annotation is
-                        // optional on an expression lambda; print it when present).
+                        // Expression body: `function(params)[: Ret] [throws E] => expr` (the `: Ret`
+                        // annotation is optional on an expression lambda; print it when present).
                         let r = match ret {
                             Some(t) => format!(": {}", ty(t)?),
                             None => String::new(),
                         };
                         Ok(doc::concat(vec![
-                            doc::text(format!("function({ps}){r} => ")),
+                            doc::text(format!("function({ps}){r}{th} => ")),
                             self.expr_doc(e)?,
                         ]))
                     }
                     LambdaBody::Block(stmts) => {
-                        // Statement body: `function(params): Ret { … }` (the return type is required).
+                        // Statement body: `function(params): Ret [throws E] { … }` (return type required).
                         let r = match ret {
                             Some(t) => format!(": {}", ty(t)?),
                             None => String::new(),
@@ -253,7 +265,7 @@ impl Printer<'_> {
                         // A lambda is an expression, so its block body is rendered on one line (v1 has
                         // no reflow). `inline_block` handles any statement, including control flow.
                         Ok(doc::text(format!(
-                            "function({ps}){r} {{ {} }}",
+                            "function({ps}){r}{th} {{ {} }}",
                             self.inline_block(stmts)?
                         )))
                     }

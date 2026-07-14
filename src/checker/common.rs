@@ -154,9 +154,10 @@ pub(super) fn apply_subst(ty: &Ty, theta: &HashMap<String, Ty>) -> Ty {
             Box::new(apply_subst(k, theta)),
             Box::new(apply_subst(v, theta)),
         ),
-        Ty::Function(ps, r) => Ty::Function(
+        Ty::Function(ps, r, es) => Ty::Function(
             ps.iter().map(|p| apply_subst(p, theta)).collect(),
             Box::new(apply_subst(r, theta)),
+            es.iter().map(|e| apply_subst(e, theta)).collect(),
         ),
         // A generic class instance type carries its arguments — substitute through them so a
         // `Box<T>` return / field resolves to `Box<int>` (M-RT generics-all).
@@ -176,7 +177,9 @@ pub(super) fn ty_has_param(ty: &Ty) -> bool {
         Ty::Param(_) => true,
         Ty::List(e) | Ty::Set(e) | Ty::Optional(e) => ty_has_param(e),
         Ty::Map(k, v) => ty_has_param(k) || ty_has_param(v),
-        Ty::Function(ps, r) => ps.iter().any(ty_has_param) || ty_has_param(r),
+        Ty::Function(ps, r, es) => {
+            ps.iter().any(ty_has_param) || ty_has_param(r) || es.iter().any(ty_has_param)
+        }
         Ty::Named(_, args) => args.iter().any(ty_has_param),
         _ => false,
     }

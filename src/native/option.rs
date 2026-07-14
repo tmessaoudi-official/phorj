@@ -118,7 +118,7 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.Option",
             name: "map",
-            params: vec![opt(t()), Ty::Function(vec![t()], Box::new(u()))],
+            params: vec![opt(t()), Ty::Function(vec![t()], Box::new(u()), Vec::new())],
             ret: opt(u()),
             pure: true,
             eval: NativeEval::HigherOrder(option_map),
@@ -127,7 +127,10 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.Option",
             name: "andThen",
-            params: vec![opt(t()), Ty::Function(vec![t()], Box::new(opt(u())))],
+            params: vec![
+                opt(t()),
+                Ty::Function(vec![t()], Box::new(opt(u())), Vec::new()),
+            ],
             ret: opt(u()),
             pure: true,
             eval: NativeEval::HigherOrder(option_and_then),
@@ -136,7 +139,10 @@ pub(crate) fn option_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.Option",
             name: "filter",
-            params: vec![opt(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            params: vec![
+                opt(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
             ret: opt(t()),
             pure: true,
             eval: NativeEval::HigherOrder(option_filter),

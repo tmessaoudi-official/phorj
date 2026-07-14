@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-222: throwing-closure function types
+
+The closure parallel of DEC-221 (throwing constructors). A function TYPE and a lambda can now
+declare a checked exception, so a closure can `throw` / `?`-propagate and a call of it discharges
+the exception at the call site, exactly like a named `function … throws E`:
+
+- **Surface**: `(int) => string throws MyError` on a function-type annotation; `function(int n):
+  int throws E => …` (and the block-body form) on a lambda literal. Absent clause ⇒ non-throwing.
+- **Checker**: a lambda body is checked with its DECLARED throws in context (no more forced
+  `E-THROW-UNDECLARED` inside a throwing lambda); a call of a `throws E` function value routes `E`
+  through the same discharge path as a named throwing call (`E-CALL-UNHANDLED` unless caught /
+  `?`-propagated). No inference — a throwing lambda declares its throws, like a named fn/ctor.
+- **Variance** (the sound rule): a function throwing FEWER exceptions is substitutable where one
+  throwing MORE is expected — every exception `from` may throw must be `<:` some member of `to`'s
+  set. So a plain `() => T` passes where `() => T throws E` is expected; the reverse is rejected.
+- Checker/parser-only — no runtime change (the throw is the existing `Op::Throw`), so
+  `run ≡ runvm ≡ php` stays byte-identical. Example: `examples/guide/throwing-closures.phg`.
+
 ### Added — JIT W9 + S8: the sqlbuild builder pipeline compiles end to end (borrowed-arg clone-at-boundary, Return frame teardown, deferred pad seeding, flattened JoinClause)
 
 The whole `Core.Sql` immutable-builder shape — union Dyn wheres, joins, `toQuery()`,

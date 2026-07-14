@@ -277,7 +277,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.Map",
             name: "map",
-            params: vec![map(), Ty::Function(vec![v()], Box::new(w()))],
+            params: vec![map(), Ty::Function(vec![v()], Box::new(w()), Vec::new())],
             ret: Ty::Map(Box::new(k()), Box::new(w())),
             pure: true,
             eval: NativeEval::HigherOrder(map_map),
@@ -287,7 +287,10 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
         NativeFn {
             module: "Core.Map",
             name: "filter",
-            params: vec![map(), Ty::Function(vec![v()], Box::new(Ty::Bool))],
+            params: vec![
+                map(),
+                Ty::Function(vec![v()], Box::new(Ty::Bool), Vec::new()),
+            ],
             ret: map(),
             pure: true,
             eval: NativeEval::HigherOrder(map_filter),

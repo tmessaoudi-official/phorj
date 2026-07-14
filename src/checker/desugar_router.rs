@@ -152,6 +152,7 @@ fn method_handler_lambda(class: &str, method: &str, sp: Span) -> Expr {
             span: sp,
         }],
         ret: Some(named("Response")),
+        throws: Vec::new(),
         body: LambdaBody::Block(vec![Stmt::Return {
             value: Some(call),
             span: sp,
@@ -178,11 +179,13 @@ fn build_router(routes: &[Route], sp: Span) -> Expr {
     let next_fn = Type::Function {
         params: vec![named("Request")],
         ret: Box::new(named("Response")),
+        throws: Vec::new(),
         span: sp,
     };
     let mw_ty = Type::Function {
         params: vec![named("Request"), next_fn],
         ret: Box::new(named("Response")),
+        throws: Vec::new(),
         span: sp,
     };
     let empty_routes = Expr::NewColl {
@@ -363,11 +366,13 @@ fn rexpr(e: Expr, r: &[Route]) -> Expr {
         Expr::Lambda {
             params,
             ret,
+            throws,
             body,
             span,
         } => Expr::Lambda {
             params,
             ret,
+            throws,
             body: match body {
                 LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(rexpr(*e, r))),
                 LambdaBody::Block(stmts) => LambdaBody::Block(rblock(stmts, r)),

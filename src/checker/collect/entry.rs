@@ -284,11 +284,20 @@ pub(in crate::checker) fn collect_alias_refs(
                 collect_alias_refs(m, aliases, out);
             }
         }
-        Type::Function { params, ret, .. } => {
+        Type::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
             for p in params {
                 collect_alias_refs(p, aliases, out);
             }
             collect_alias_refs(ret, aliases, out);
+            // DEC-222: a thrown type may name an alias too.
+            for t in throws {
+                collect_alias_refs(t, aliases, out);
+            }
         }
         Type::FixedList { elem, .. } => collect_alias_refs(elem, aliases, out),
         Type::Infer(_) | Type::Erased(_) => {}

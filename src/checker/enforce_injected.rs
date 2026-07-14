@@ -133,11 +133,20 @@ impl Ctx {
                 }
             }
             Type::Optional { inner, .. } => self.walk_type(inner, errs),
-            Type::Function { params, ret, .. } => {
+            Type::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
                 for p in params {
                     self.walk_type(p, errs);
                 }
                 self.walk_type(ret, errs);
+                // DEC-222: a thrown type may name an injected type too.
+                for t in throws {
+                    self.walk_type(t, errs);
+                }
             }
             Type::Union(members, _) | Type::Intersection(members, _) => {
                 for m in members {

@@ -467,7 +467,8 @@ impl Checker {
         }
     }
 
-    /// Type-check a lambda expression (M3 S3, Task 3). Returns `Ty::Function(params, ret)`.
+    /// Type-check a lambda expression (M3 S3, Task 3). Returns `Ty::Function(params, ret, throws)`
+    /// (DEC-222 — the lambda's declared checked-exception set; empty when no `throws` clause).
     ///
     /// Type-checks a lambda. A method-body lambda **may** capture `this` (Phase 1 closures slice): it
     /// is captured by value (the `Rc` instance handle, so mutations stay live), `this` types as the
@@ -478,6 +479,7 @@ impl Checker {
         &mut self,
         params: &[crate::ast::Param],
         ret: &Option<crate::ast::Type>,
+        throws: &[crate::ast::Type],
         body: &crate::ast::LambdaBody,
         span: Span,
     ) -> Ty {
@@ -492,12 +494,26 @@ impl Checker {
             );
         }
         let param_tys: Vec<Ty> = params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+        // DEC-222: resolve + normalize the lambda's DECLARED throws (flatten unions, canonical-sort,
+        // dedupe — like `resolve_type`'s function-type path), validate each is an `Error` subtype
+        // (`E-THROW-TYPE`/`E-THROWS-TOO-BROAD`, shared with fn/ctor decls), and check the body with
+        // these throws in context. Absent clause ⇒ empty set ⇒ a `throw`/`?` in the body still hits
+        // `E-THROW-UNDECLARED`/`E-CALL-UNHANDLED` (a bare closure declares nothing, exactly like a
+        // named function with no `throws`). No inference — a throwing lambda must declare its throws.
+        let lambda_throws: Vec<Ty> = {
+            let resolved: Vec<Ty> = throws.iter().map(|t| self.resolve_type(t)).collect();
+            let mut es = Self::flatten_throws(resolved);
+            es.sort_by_key(std::string::ToString::to_string);
+            es.dedup();
+            self.validate_throw_types(&es, span);
+            es
+        };
         // Save and replace the current return type (a lambda has its own return scope).
         let saved_ret = std::mem::replace(&mut self.cur_ret, Ty::Error);
-        // A lambda is a separate callable: it declares no `throws`, and it does not see the lexical
-        // `try` it is written inside (it may be invoked elsewhere — e.g. passed to a native). So a
-        // `throw` in its body discharges against an empty context (M-faults 2b).
-        let saved_throws = std::mem::take(&mut self.cur_throws);
+        // A lambda is a separate callable: its body discharges against ITS OWN declared throws
+        // (DEC-222), and it does not see the lexical `try` it is written inside (it may be invoked
+        // elsewhere — e.g. passed to a native), so the enclosing `try` stack is cleared (M-faults 2b).
+        let saved_throws = std::mem::replace(&mut self.cur_throws, lambda_throws.clone());
         let saved_try = std::mem::take(&mut self.try_catch_stack);
         let saved_main = std::mem::replace(&mut self.cur_is_main, false);
         self.push_scope();
@@ -544,6 +560,6 @@ impl Checker {
         self.cur_throws = saved_throws;
         self.try_catch_stack = saved_try;
         self.cur_is_main = saved_main;
-        Ty::Function(param_tys, Box::new(ret_ty))
+        Ty::Function(param_tys, Box::new(ret_ty), lambda_throws)
     }
 }
