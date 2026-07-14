@@ -264,6 +264,9 @@ struct Transpiler {
     /// `<=>`) to match Rust's natural order, `sortWith` defers to the user closure.
     uses_list_sort: bool,
     uses_list_sort_with: bool,
+    /// Set when `Output.capture(fn)` is emitted (DEC-220-S3) — gates the once-per-file
+    /// `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }` helper.
+    uses_capture: bool,
     /// Set when the matching `Core.List` breadth op is emitted — each defines a `__phorj_*` helper
     /// once per file (List breadth slice). They exist instead of inlining PHP `min`/`max`/`array_unique`
     /// because those juggle numeric strings, diverging from the Rust backends' byte-order; `find`/`any`/
@@ -484,6 +487,7 @@ impl Transpiler {
             uses_result_to_option: false,
             uses_text_parse_int: false,
             uses_list_sort: false,
+            uses_capture: false,
             uses_list_sort_with: false,
             uses_list_unique: false,
             uses_list_min: false,

@@ -106,6 +106,20 @@ not a panic:
   slices are each a byte-match-PHP-`sprintf` increment. `{}` remains interpolation-only; interpolation
   specifiers (`"{x:>8}"`) are a separate future decision (W5-1).
 
+- **`Output.capture` with a THROWING closure — not a gated byte-identity claim (DEC-220-S3).**
+  `Output.capture(fn)` (the opt-in output-buffering primitive) is `run`≡`runvm`≡real-PHP byte-identical
+  for the ONLY shape a lambda can take here: a `() -> void` closure that prints and returns (a lambda
+  literal cannot declare `throws` — parse error — and a lambda body that throws is
+  `E-THROW-UNDECLARED`). A *named* throwing function CAN still be passed by reference
+  (`Output.capture(boomer)` where `boomer(): void throws Boom`), and that DOES type-check. On such a
+  mid-capture throw, `run`≡`runvm` still holds on every path (both backends leave the partial output in
+  the main buffer and never `split_off` on a fault); the transpile leaves PHP's `ob_start` buffer
+  dangling until script-end auto-flush, which happens to byte-match in the simple propagate-and-catch
+  case but is NOT guaranteed identical for arbitrarily nested capture/output shapes. This path is
+  therefore kept out of the byte-identity example set and never claimed byte-identical — exactly like
+  the non-finite `sprintf` divergence above. The shipped example
+  (`examples/web/response-capture.phg`) exercises only the gated happy path.
+
 - **Static method call sites — shipped corners + deferrals.** `ClassName.method(args)` calls a `static`
   method directly on the class (the static-factory pattern, e.g. `Greeter.make("w")`); calling an
   *instance* method this way is `E-STATIC-CALL`. **Inherited / trait static methods now work**

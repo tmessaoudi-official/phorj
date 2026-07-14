@@ -843,6 +843,19 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `Output.capture(fn)` (DEC-220-S3): run the closure with output buffering on and return the
+        // captured bytes. `ob_start`/`ob_get_clean` are the exact PHP analogue of the backends'
+        // `out.split_off(start)` — the closure's `echo` (from `Output.*`) lands in the buffer, not the
+        // page. Byte-identical for the happy path (a printing, returning closure).
+        if self.uses_capture {
+            self.line("function __phorj_capture($fn) {");
+            self.indent += 1;
+            self.line("ob_start();");
+            self.line("$fn();");
+            self.line("return ob_get_clean();");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_list_sort {
             // Natural ascending over a COPY (Phorj lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via

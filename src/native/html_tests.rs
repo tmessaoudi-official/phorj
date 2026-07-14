@@ -115,7 +115,7 @@ fn tag_helpers_eval_and_emit() {
     let eval = |n: &str, args: &[Value]| -> Result<Value, String> {
         match registry()[index_of("Core.Html", n).unwrap()].eval {
             NativeEval::Pure(f) => f(args, &mut String::new()),
-            NativeEval::HigherOrder(_) | NativeEval::Reflective(_) => {
+            NativeEval::HigherOrder(_) | NativeEval::Reflective(_) | NativeEval::Capturing(_) => {
                 panic!("{n} is not a pure native")
             }
         }

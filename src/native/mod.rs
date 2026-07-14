@@ -128,6 +128,16 @@ pub fn deprecation_of(module: &str, name: &str) -> Option<Deprecated> {
 /// the VM wraps `call_closure_value` (a nested `run_until` over the shared `exec_op`).
 pub type ClosureInvoker<'a> = dyn FnMut(&Value, Vec<Value>) -> Result<Value, String> + 'a;
 
+/// A backend's re-entrant **capturing** closure invoker, handed to a [`NativeEval::Capturing`] body
+/// (`Core.Output.capture`, DEC-220-S3): given a zero-arg `Value::Closure`, run it on the calling
+/// backend and return the STRING it appended to the program output buffer while running (the closure's
+/// `Output.*` output), diverted out of the buffer via `out.split_off(start)`. Unlike [`ClosureInvoker`]
+/// (which returns the closure's *value*), this returns the *captured output*; the split_off happens in
+/// each backend arm (interpreter/VM) — the one spot with both the output buffer and the closure runner
+/// borrowed together — so the native body itself never touches `out`. A closure fault propagates as a
+/// plain `String` (the backend-shared contract), exactly like the higher-order path.
+pub type CapturingInvoker<'a> = dyn FnMut(&Value) -> Result<String, String> + 'a;
+
 /// How a native computes its result (M-RT S7b-3). Most natives are [`Pure`](NativeEval::Pure): a
 /// function of their argument values, threading the program output buffer so a side-effecting native
 /// (`Output.printLine`) can append to it. A [`HigherOrder`](NativeEval::HigherOrder) native instead
@@ -151,6 +161,15 @@ pub enum NativeEval {
     /// table as a PHP static map, so the result is byte-identical by construction (both sides read the
     /// one `ClassTables`, never PHP's `class_*`/`get_class_methods` builtins with their own semantics).
     Reflective(fn(&[Value], &ClassTables) -> Result<Value, String>),
+    /// `(args, capture) -> result` (DEC-220-S3, `Core.Output.capture`): a higher-order native that runs
+    /// a zero-arg closure and needs the STRING it appended to the output buffer, not the closure's
+    /// value. `capture(closure)` runs it on the calling backend and returns that captured output
+    /// (`out.split_off(start)`); the native wraps it into the result `Value`. Distinct from
+    /// [`HigherOrder`](NativeEval::HigherOrder) precisely by the invoker's return (captured output vs
+    /// closure value) — the reason a new variant + [`CapturingInvoker`] exists. Transpiles to a gated
+    /// `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }`, byte-identical for the
+    /// happy path (a closure that prints and returns).
+    Capturing(fn(&[Value], &mut CapturingInvoker) -> Result<Value, String>),
 }
 
 /// The program's static class hierarchy, precomputed once and shared by the interpreter, the VM
@@ -297,6 +316,22 @@ fn console_print(args: &[Value], out: &mut String) -> Result<Value, String> {
     Ok(Value::Unit)
 }
 
+/// `Output.capture(() -> void) -> string` (DEC-220-S3) — run the zero-arg closure and return the
+/// string it echoed via `Output.*`, WITHOUT any of it reaching the program's own output. The
+/// backend-supplied `capture` invoker diverts the closure's output (`out.split_off(start)`) and hands
+/// it back; this body just wraps it into a `Value::Str`. Opt-in, explicit scope, no ambient state —
+/// the import-gated primitive users wrap as `Response.html(Output.capture(() => { … }))`. Shared
+/// verbatim by both backends (structural parity, like `List.map`); byte-identical across `run`/`runvm`
+/// /PHP for the gated happy path (a printing, returning closure). A lambda cannot introduce a throw
+/// here (a lambda can't declare `throws`, and a throwing lambda body is `E-THROW-UNDECLARED`), but a
+/// NAMED throwing function may be passed by reference — on such a mid-capture throw `run`≡`runvm` still
+/// holds (the throw propagates via the sentinel BEFORE `split_off`, so the partial output stays in
+/// `out`), while the PHP `ob_get_clean` path is not a gated byte-identity claim (see `KNOWN_ISSUES.md`).
+fn output_capture(args: &[Value], capture: &mut CapturingInvoker) -> Result<Value, String> {
+    let captured = capture(&args[0])?;
+    Ok(Value::Str(captured.into()))
+}
+
 /// Index helper for a native's PHP emission: the already-emitted PHP for argument `i`, or `""` if
 /// absent (the checker guarantees arity before `php` is ever called). Keeps the `php` closures terse.
 fn parg(args: &[String], i: usize) -> &str {
@@ -337,6 +372,22 @@ fn build() -> Vec<NativeFn> {
                 .map_or_else(|| "\"\"".to_string(), String::clone);
             format!("echo {a}")
         },
+    });
+    // `Output.capture(() -> void) -> string` (DEC-220-S3) — the explicit, import-gated capture
+    // primitive. Reachable ONLY through the user's own `import Core.Output;` (no prelude imports
+    // Core.Output), so it can never leak `Output.*` into a program that didn't ask for it (the "nothing
+    // in the wind" invariant — the reason the ruled `Response.capture` prelude wrapper was rejected).
+    registry.push(NativeFn {
+        module: "Core.Output",
+        name: "capture",
+        params: vec![Ty::Function(vec![], Box::new(Ty::Void))],
+        ret: Ty::String,
+        pure: true,
+        eval: NativeEval::Capturing(output_capture),
+        // Gated `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }` (set the flag in
+        // transpile/call.rs — a native's `php` closure has no `&mut self`). The closure's `Output.*`
+        // (`echo …`) writes into the started buffer; `ob_get_clean()` returns exactly the captured bytes.
+        php: |a| format!("__phorj_capture({})", parg(a, 0)),
     });
     registry.extend(math::math_natives());
     registry.extend(text_registry::text_natives());

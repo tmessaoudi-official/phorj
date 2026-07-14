@@ -750,8 +750,41 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
   `.status(n)`/`.withHeader(k,v)`/`.withCookie(k,v)` in `HTTP_PRELUDE`; serve `respond_once` now sends a
   handler's captured stdout to the server's real STDOUT (was stderr); example
   `examples/web/response-builders.phg` byte-identical `run`≡`runvm`≡php-8.5.8; full gate green.
-  **S3 = PENDING (blocked on a design/adjudication call — DEC-220-S3 below).**
-- **DEC-220-S3 — PENDING (autonomous, 2026-07-14): `Response.capture` forces a new ambient name via the
+  **S3 SHIPPED (2026-07-14): `Output.capture(fn): string`, an import-gated primitive (option (d) — the
+  ruled `Response.capture` prelude wrapper was dropped, it had no leak-free path). Detail in DEC-220-S3 below.
+  DEC-220 now fully shipped (S1+S2+S3).**
+- **DEC-220-S3 — SHIPPED (2026-07-14, option (d) ruled by the dev): `Output.capture(() -> void) -> string`,
+  an explicit IMPORT-GATED capture primitive — no leak.** The ruled `Response.capture` PRELUDE wrapper was
+  DROPPED because its only path to the native (`import Core.Output` inside `HTTP_PRELUDE`) leaked `Output.*`
+  into every `import Core.Http.Response` program (the "nothing in the wind" violation recorded below). The
+  shipped surface is the primitive `Output.capture(fn)` reachable ONLY via the user's own `import Core.Output;`
+  (the same import `Output.printLine` already needs); the ruled `Response.capture` shape is expressed by
+  WRAPPING it — `Response.html(Output.capture(() => { … }))`. No prelude / `CORE_MODULES` code changed, so
+  `Output`'s reachability is byte-for-byte identical to HEAD; a leak-probe test (`checker::tests::output_capture`)
+  proves both legs: `Output.capture` resolves under `import Core.Output`, and a program importing ONLY
+  `Core.Http.Response` still gets `E-UNKNOWN-IDENT` for bare `Output`. *Deviation from the ruled surface,
+  noted per the ruling:* the capture entry point is `Output.capture(fn): string` + a manual `Response.html(...)`
+  wrap, NOT a `Response.capture(fn): Response` prelude method — because that wrapper had no leak-free path.
+  *Implementation (all sites, as the prior proof predicted):* new `NativeEval::Capturing` variant +
+  `CapturingInvoker` type (`native/mod.rs`); `output_capture` native (`Core.Output.capture`, `pure:true`,
+  params `[() -> void]`, ret `string`); interpreter arm (`interpreter/call.rs`) + VM arm (`vm/exec.rs`), both
+  doing `out.split_off(start)` in the backend invoker (the one spot holding both `out` and the closure runner);
+  transpile gated helper `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }`
+  (`transpile/{mod,call,runtime_php}.rs`) + `ob_start`/`ob_get_clean` added to `TIER1_PHP`
+  (`tests/differential.rs`); example `examples/web/response-capture.phg` (byte-identical `run`≡`runvm`≡php-8.5.8,
+  formatter-idempotent) + `examples/README.md` row. The gated byte-identity claim covers the happy path only
+  (a printing, returning closure). A LAMBDA cannot introduce a mid-capture throw (a lambda literal can't declare
+  `throws` — parse error — and a throwing lambda body is `E-THROW-UNDECLARED`, both verified), but a NAMED
+  throwing function CAN be passed by reference (`Output.capture(boomer)`, verified type-checks). On such a throw
+  `run`≡`runvm` still holds on every path (both backends leave the partial output in `out` and never `split_off`
+  on a fault; the interpreter/VM throw-sentinel handling is kept for parity with the higher-order path); the PHP
+  leg leaves `ob_start` dangling until script-end auto-flush — byte-matches in the simple propagate-and-catch
+  case (verified) but not guaranteed for nested shapes, so this path is kept out of the byte-identity example set
+  and recorded in `KNOWN_ISSUES.md` (like the non-finite `sprintf` divergence). Full gate green: build + clippy (default /
+  `--no-default-features` / `--features db`, warnings deny) + `fmt --check` + `PHORJ_REQUIRE_PHP=1 nextest
+  --features jit` (1993 passed). *DEC-220 now fully shipped (S1+S2+S3).*
+- **DEC-220-S3 — [SUPERSEDED by the SHIPPED entry above] PENDING (autonomous, 2026-07-14): `Response.capture`
+  forces a new ambient name via the
   prelude.** A working, byte-identical (`run`≡`runvm`≡php-8.5.8) implementation was built and then
   REVERTED (not shipped) because it violates the hard "nothing in the wind" rule. Mechanism: `Response`
   lives in `HTTP_PRELUDE`; for its static `Response.capture` to call the capture native it must resolve

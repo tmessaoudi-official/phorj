@@ -2507,6 +2507,9 @@ const TIER1_PHP: &[&str] = &[
     "time",
     // structured logging (Core.Log → error_log, Zend core) — DEC-220
     "error_log",
+    // output buffering (Core.Output.capture → __phorj_capture, Zend core) — DEC-220-S3
+    "ob_get_clean",
+    "ob_start",
 ];
 
 /// PHP language constructs that appear as bareword-before-`(` but are NOT extension functions.

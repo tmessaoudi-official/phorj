@@ -1,0 +1,53 @@
+// DEC-220 S3 — `Output.capture`: opt-in, explicit-scope buffering of `Output.*` into a string.
+//
+// The 3-sink output system (DEC-220) keeps `Output.*` bound to STDOUT — nothing is ever silently
+// rerouted. `Output.capture(fn)` is the ONE explicit escape hatch: it runs a zero-arg closure and
+// returns whatever that closure printed via `Output.*` as a string, WITHOUT any of it reaching the
+// real output. It is a plain import-gated primitive (`import Core.Output;` — the same import
+// `Output.printLine` already needs), so it can never leak an ambient name: a program that does not
+// import `Core.Output` cannot name `Output` at all ("nothing in the wind").
+//
+// The ruled `Response.capture` sugar is expressed by WRAPPING the primitive — `Response.html(
+// Output.capture(() => { … }))` — which keeps the capture surface a single explicit primitive rather
+// than a prelude method that would have had to reach the native through a leaking `import Core.Output`.
+//
+// Pure buffering of deterministic prints → byte-identical across `run`, `runvm`, and real PHP
+// (`ob_start`/`ob_get_clean`).
+package Main;
+
+import Core.Output;
+import Core.Bytes;
+import Core.String;
+import Core.Http.Response;
+
+// Render a response's wire form as one clean ASCII line (CRLFs shown as " | ").
+function wireLine(Response resp): string {
+    string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+    bytes wire = resp.serialize();
+    int n = Bytes.length(wire);
+    string oneLine = String.replace(Bytes.toString(wire) ?? "", nl, " | ");
+    return "({n}B) {oneLine}";
+}
+
+function main(): void {
+    // A direct print — goes straight to STDOUT, as always.
+    Output.printLine("before: direct to stdout");
+    // Capture a block of `Output.*` output into a string instead of the page. The closure prints
+    // three list items; NONE of it reaches stdout — `capture` diverts it and hands back the bytes.
+    string body = Output.capture(
+        function(): void { Output.printLine("<li>one</li>"); Output.printLine("<li>two</li>"); Output.printLine("<li>three</li>"); }
+    );
+    // The captured string is an ordinary value: measure it, print it back explicitly.
+    Output.printLine("captured {String.length(body)} bytes:");
+    Output.print(body);
+    // The ruled `Response.capture` shape, expressed by wrapping the primitive: capture a rendered
+    // fragment straight into an HTML response body. Header-before-body is still structural.
+    Response page = Response.html(
+        Output.capture(
+            function(): void { Output.print("<ul>"); Output.print(body); Output.print("</ul>"); }
+        )
+    );
+    Output.printLine("response: {wireLine(page)}");
+    // Capture is opt-in and scoped — this print is unaffected, straight to stdout.
+    Output.printLine("after: direct to stdout");
+}

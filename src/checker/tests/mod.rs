@@ -26,6 +26,7 @@ mod mtest;
 mod must_use;
 mod mutation;
 mod optionals;
+mod output_capture;
 mod overloading;
 mod parent_dispatch;
 mod reflect;

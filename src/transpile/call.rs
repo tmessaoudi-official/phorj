@@ -129,6 +129,10 @@ impl Transpiler {
                         // closure has no `&mut self` to set the flag, so set it here (the established
                         // gated-helper pattern — see `emit_runtime_helpers`).
                         let nat = &crate::native::registry()[idx];
+                        // `Output.capture` erases to the gated `__phorj_capture` helper (DEC-220-S3).
+                        if nat.module == "Core.Output" && nat.name == "capture" {
+                            self.uses_capture = true;
+                        }
                         if nat.module == "Core.String" && nat.name == "format" {
                             self.uses_string_format = true;
                             // `__phorj_format`'s `%s` stringifies via `__phorj_str` (the same kernel

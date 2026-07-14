@@ -53,6 +53,32 @@ impl<'c> Interp<'c> {
                                 crate::native::NativeEval::Reflective(f) => {
                                     f(&argv, &self.class_tables)
                                 }
+                                // Capturing native (`Output.capture`, DEC-220-S3): run the zero-arg
+                                // closure and hand its diverted output back as a `String`. The invoker
+                                // records the output length, runs the closure (whose `Output.*` appends
+                                // to `self.out`), then `split_off`s exactly that suffix — the one place
+                                // that holds both `out` and the closure runner. Throw handling mirrors
+                                // the higher-order arm (sentinel + `pending_throw`).
+                                crate::native::NativeEval::Capturing(f) => {
+                                    let mut capture = |fv: &Value| match fv {
+                                        Value::Closure(rc) => {
+                                            let start = self.out.len();
+                                            match self.call_closure(rc.clone(), Vec::new()) {
+                                                Ok(_) => Ok(self.out.split_off(start)),
+                                                Err(Signal::Throw(v)) => {
+                                                    self.pending_throw = Some(v);
+                                                    Err(THROW_SENTINEL.to_string())
+                                                }
+                                                Err(other) => Err(signal_msg(other)),
+                                            }
+                                        }
+                                        v => Err(format!(
+                                            "cannot call {} as a function",
+                                            v.type_name()
+                                        )),
+                                    };
+                                    f(&argv, &mut capture)
+                                }
                             };
                             return match result {
                                 Ok(v) => Ok(v),

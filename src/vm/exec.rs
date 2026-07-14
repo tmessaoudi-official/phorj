@@ -454,6 +454,19 @@ impl<'a> Vm<'a> {
                             |fv: &Value, cargs: Vec<Value>| self.call_closure_value(fv, cargs);
                         f(&args, &mut invoke)?
                     }
+                    crate::native::NativeEval::Capturing(f) => {
+                        // Capturing native (`Output.capture`, DEC-220-S3): run the zero-arg closure
+                        // re-entrantly and return the output it appended to `self.out`, diverted via
+                        // `split_off` — mirrors the interpreter arm (structural parity). A closure
+                        // throw propagates the `THROW_SENTINEL` string (with `pending_throw` intact),
+                        // exactly as the higher-order path does, so the outer `run` loop unwinds it.
+                        let mut capture = |fv: &Value| {
+                            let start = self.out.len();
+                            self.call_closure_value(fv, Vec::new())?;
+                            Ok(self.out.split_off(start))
+                        };
+                        f(&args, &mut capture)?
+                    }
                 };
                 self.stack.push(result);
             }
