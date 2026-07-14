@@ -19,6 +19,16 @@ cat >/dev/null || true
 # not already reachable (keeps the hook working under git's reduced environment).
 command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
 
+# Build NON-incrementally for the gate. This box links with `mold` (machine-local, gitignored
+# config), and `mold` + rustc incremental compilation intermittently fail to link with
+# `undefined symbol: anon.<hash>.llvm.<n>` referencing stale `*.rcgu.o` incremental codegen units —
+# a known mold+incremental interaction, triggered whenever an earlier build was interrupted and left
+# stale units behind. It is NOT a code error (the same tree links + tests clean non-incrementally).
+# The pre-push gate is a full-suite build where incremental buys little, so disabling it here makes
+# the gate robust against the corruption without slowing the fast pre-commit tier (which keeps
+# incremental). Root cause: stale incremental units; fix: from-scratch codegen (no stale units).
+export CARGO_INCREMENTAL=0
+
 # Gate against the 8.5 transpile floor (NOT the 8.6-dev php on PATH). A missing php FAILS.
 # The oracle path is configured in scripts/toolchain.env (edit there when the stack php version
 # changes); resolve it via the repo root so this works whichever way the hook is invoked.
