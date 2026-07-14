@@ -76,6 +76,14 @@ jit = ["dep:cranelift", "dep:cranelift-jit", "dep:cranelift-module"]
 # SPINE-QUARANTINED: Core.Db natives are `pure:false`, so `uses_impure_native` auto-excludes every
 # `import Core.Db` example from the byte-identity differential (tested via the tests/db.rs fixture).
 db = ["dep:rusqlite"]
+# Postgres driver for `Core.Db` (DEC-208 slice I). Admits the SYNC `postgres` crate (native-protocol,
+# no libpq/system dependency; TLS left off → no OpenSSL). `db-postgres` implies `db` (it plugs a driver
+# into the shared multi-driver seam). The crate's async/tokio usage is its INTERNAL blocking-wrapper
+# impl detail (feature-gated, non-default, non-wasm) — the phorj-facing API stays sync, per the
+# dependency policy (SQL domain: SQLite+Postgres+MySQL sync). Off by default and off for wasm.
+db-postgres = ["db", "dep:postgres"]
+# Convenience: every admitted SQL driver at once.
+db-all = ["db", "db-postgres"]
 
 [dependencies]
 # FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
@@ -99,6 +107,14 @@ corosensei = { version = "0.3", optional = true }
 # internal to the crate (like argon2/corosensei/cranelift) — phorj's own crate stays unsafe-free.
 # Native-only: no SQLite on wasm32. Feature-gated (`db`), spine-quarantined (Tier-3 fixture-tested).
 rusqlite = { version = "0.40", optional = true, features = ["bundled"] }
+
+# EIGHTH domain, second driver (Postgres, DEC-208 slice I). The SYNC `postgres` crate (sfackler) speaks
+# the native Postgres wire protocol in pure Rust — NO libpq / system dependency, and with TLS left off
+# it needs no OpenSSL. It is a thin BLOCKING wrapper over `tokio-postgres`, so tokio is pulled
+# transitively as the crate's internal impl detail (feature-gated behind `db-postgres`, non-default,
+# non-wasm); the phorj-facing driver API is fully sync. Its `unsafe` is confined to the dependency, like
+# rusqlite — phorj's own crate stays unsafe-free. See UNIFIED-SPEC #external-dependency-policy (SQL domain).
+postgres = { version = "0.19", optional = true }
 
 # SEVENTH external-dependency domain (native codegen, developer-authorized 2026-07-06). Cranelift
 # (Bytecode Alliance — the wasmtime code generator, fuzzed + production-hardened) is the JIT backend

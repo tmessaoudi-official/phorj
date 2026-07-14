@@ -893,7 +893,11 @@ is stated completely.
 shape: native-only, feature-gated, quarantined from the byte-identity spine. Gating both W3-1
 (DB access) and W3-2 (HTTP client); **the crates enter the tree with those builds** (not yet present
 at HEAD). Companion rulings: the DB layer is a multi-driver **SQL DBAL** (PDO/Doctrine-DBAL analog):
-SQLite (P1) + Postgres (`postgres` sync) + MySQL/MariaDB (`mysql` sync) — ALL sync, no tokio;
+SQLite (P1) + Postgres (`postgres` sync) + MySQL/MariaDB (`mysql` sync) — ALL sync, no tokio at the
+phorj-facing API (the `postgres` crate wraps `tokio-postgres` in a single internal blocking runtime —
+its own impl detail, feature-gated, non-default, non-wasm). **Realized 2026-07-14 (DEC-208 slice I):
+`rusqlite` (`db`) + `postgres` (`db-postgres`) are now in the tree behind a `DriverConn` seam** (SQLite
+shipped earlier); `mysql` (`db-mysql`, slice J) is the remaining admission.
 **Oracle deferred** (closed Instant Client → clause 2 fails); **MongoDB is a separate LADDER item**
 (non-SQL, no PDO analog → native-only `E-TRANSPILE-MONGO`; async-driver problem) requiring its own
 future design. Both W3-1/W3-2 ship a pure zero-dep P0 first (`Core.Sql` Tier-A value; `Core.Url`).

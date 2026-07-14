@@ -1,11 +1,17 @@
-//! `Core.Db` — the enhanced-PDO database primitive (DEC-208), backed by `rusqlite` (bundled SQLite).
+//! `Core.Db` — the enhanced-PDO database primitive (DEC-208), a MULTI-DRIVER runtime behind a scheme-
+//! dispatched [`DriverConn`] trait (DEC-208 slice I): `sqlite:…` → [`sqlite`] (bundled `rusqlite`),
+//! `postgres://…` → [`postgres`] (the sync `postgres` crate, `db-postgres` feature).
 //!
-//! Feature-gated (`db`) and native-only. This module owns the RUNTIME layer: the opaque connection /
-//! statement handles ([`DbConn`] / [`DbStmt`], carried by [`Value::Db`] via the [`DbObject`] trait) and
-//! the internal `Core.DbSys` native bodies for connect / prepare / bind / bindNamed / query / exec and
-//! the Row accessors. The public `Core.Db` SURFACE (`Db`/`Statement`/`Row` + `new Db(dsn)` +
-//! `db.prepare(sql).bind(v).query()`) is the phorj-source `DB_PRELUDE` (`src/cli/preludes.rs`) on top of
-//! these — the natives live under the `DbSys` qualifier so a prelude `class Db` never collides with them.
+//! Feature-gated (`db`) and native-only. This module owns the BACKEND-AGNOSTIC layer: the opaque
+//! connection / statement handles ([`DbConn`] / [`DbStmt`], carried by [`Value::Db`] via the
+//! [`DbObject`] trait, each holding a `Box<dyn DriverConn>`); the bind accumulator ([`Binds`]); the
+//! internal `Core.DbSys` native bodies for connect / prepare / bind / bindNamed / query / exec; the Row
+//! accessors; and the (portable) transaction-control SQL (`BEGIN`/`COMMIT`/`SAVEPOINT`/`RELEASE`/
+//! `ROLLBACK TO`, which SQLite and Postgres both accept). Each concrete backend implements only its
+//! genuinely dialect-specific pieces (value mapping, placeholder syntax, error-code taxonomy) in its own
+//! submodule. The public `Core.Db` SURFACE (`Db`/`Statement`/`Row` + `new Db(dsn)`) is the phorj-source
+//! `DB_PRELUDE` (`src/cli/preludes.rs`) on top of these — the natives live under the `DbSys` qualifier so
+//! a prelude `class Db` never collides with them.
 //!
 //! **Error mechanism (DEC-208 = prelude-wrapper).** phorj's native ABI has no throws channel: a native's
 //! `Err(String)` is an uncatchable HARD fault (`vm/exec.rs`), so it cannot express the ruled catchable
@@ -14,12 +20,18 @@
 //! prelude `match`es it and `throw`s a catchable `DbError` (a real `Op::Throw`). `DbResult` is a
 //! prelude-LOCAL enum (not `Core.Result`, whose injection sits earlier in the module chain and so is not
 //! pulled in by `Core.Db`'s transitive import). Only a checker-unreachable arity/shape bug returns `Err`.
+//! Each driver prefixes a `<<Kind>>` taxonomy marker on a classified error; the prelude's single
+//! `DbError.fail` strips it and throws the matching typed subtype.
 //!
 //! **Spine treatment.** Every native is `pure: false`, so `uses_impure_native` auto-excludes any
 //! `import Core.Db` program from the byte-identity differential (live DB I/O can't be byte-identical
-//! across rusqlite and PHP PDO). Correctness: the in-module unit tests + the `tests/db.rs` fixture.
+//! across the drivers and PHP PDO). Correctness: the in-module unit tests + the `tests/db.rs` fixture.
 //! `run ≡ runvm` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
+
+#[cfg(feature = "db-postgres")]
+mod postgres;
+mod sqlite;
 
 use super::{ClosureInvoker, NativeEval, NativeFn};
 use crate::types::Ty;
@@ -27,6 +39,100 @@ use crate::value::{DbObject, EnumVal, HKey, Value};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+
+/// A live database connection behind one backend (SQLite / Postgres / …). This is the multi-driver seam
+/// (DEC-208 slice I): the generic layer holds a `Box<dyn DriverConn>` (carried by [`DbConn`] / [`DbStmt`]
+/// and set to `None` on `close()`) and threads the accumulated [`Binds`] + portable transaction-control
+/// SQL through it, never touching a dialect detail. Methods take `&self` (a backend needing `&mut` — like
+/// the `postgres` client — wraps it in a `RefCell` internally); a DB error is a plain `Err(String)` with
+/// an optional leading `<<Kind>>` taxonomy marker (the generic layer wraps it into a `DbResult.Err`).
+trait DriverConn: std::fmt::Debug {
+    /// Run a SELECT with the accumulated binds; returns `Ok(List<Row>)` (each Row a column→value `Map`).
+    fn query(&self, sql: &str, binds: &Binds) -> Result<Value, String>;
+    /// Run a write with the accumulated binds; returns the affected-row count.
+    fn exec(&self, sql: &str, binds: &Binds) -> Result<i64, String>;
+    /// Run an INSERT and return the auto-generated id (SQLite `last_insert_rowid()`; Postgres
+    /// `RETURNING`/`lastval()`).
+    fn exec_returning_id(&self, sql: &str, binds: &Binds) -> Result<i64, String>;
+    /// The connection-level last-insert id.
+    fn last_insert_id(&self) -> Result<i64, String>;
+    /// Bulk insert: prepare once, execute for each positional-value row, atomically. `in_transaction`
+    /// tells the backend whether a caller transaction is already open (Postgres opens its own `BEGIN` at
+    /// depth 0 since it rejects a standalone `SAVEPOINT`; SQLite ignores the flag).
+    fn execute_many(&self, sql: &str, rows: &[Value], in_transaction: bool) -> Result<i64, String>;
+    /// Run a transaction-control statement (portable `BEGIN`/`COMMIT`/`SAVEPOINT`/`RELEASE`/`ROLLBACK`).
+    fn control(&self, sql: &str) -> Result<(), String>;
+    /// Arm a query/lock timeout in ms (`0` = unset). SQLite: `busy_timeout`; Postgres: `statement_timeout`.
+    fn set_timeout(&self, ms: i64) -> Result<(), String>;
+}
+
+/// Dispatch a DSN onto its backend driver (DEC-208 slice I). `postgres://` / `postgresql://` →
+/// [`postgres`] (feature `db-postgres`; a clear feature-gated `ConnectionError` when it is off — never a
+/// fall-through to the SQLite file path); everything else (`sqlite:`, `:memory:`, `sqlite::memory:`, or a
+/// bare path) → [`sqlite`], unchanged from the shipped runtime.
+fn open_driver(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
+    if dsn.starts_with("postgres://") || dsn.starts_with("postgresql://") {
+        return open_postgres(dsn);
+    }
+    sqlite::open(dsn)
+}
+
+#[cfg(feature = "db-postgres")]
+fn open_postgres(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
+    postgres::open(dsn)
+}
+
+#[cfg(not(feature = "db-postgres"))]
+fn open_postgres(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
+    Err(
+        "<<ConnectionError>>Core.Db: the postgres driver is not compiled in \
+         (build with --features db-postgres)"
+            .to_string(),
+    )
+}
+
+/// Inject a password into a `postgres://` DSN's authority (DEC-208 slice G — the `Db.withPassword`
+/// factory). The password is percent-encoded and placed as the userinfo password
+/// (`postgres://user:PW@host/…`); an existing DSN password is replaced. This is a PURE string transform
+/// (no `postgres` dep), so the `Db.withPassword` surface type-checks under the plain `db` feature; the
+/// resulting DSN is consumed IMMEDIATELY by `new Db(...)` inside the factory (never surfaced to user
+/// code), and the driver parses the password back OUT into its config and stores only a redacted DSN, so
+/// nothing retains the plaintext. A non-postgres DSN is returned unchanged (SQLite has no password).
+fn inject_pg_password(dsn: &str, pw: &str) -> String {
+    if !(dsn.starts_with("postgres://") || dsn.starts_with("postgresql://")) {
+        return dsn.to_string();
+    }
+    let Some(idx) = dsn.find("://") else {
+        return dsn.to_string();
+    };
+    let enc = percent_encode(pw);
+    let (scheme, rest) = dsn.split_at(idx + 3);
+    let auth_end = rest.find(['/', '?']).unwrap_or(rest.len());
+    let (authority, tail) = rest.split_at(auth_end);
+    match authority.find('@') {
+        Some(at) => {
+            let userinfo = &authority[..at];
+            let hostpart = &authority[at..]; // includes the '@'
+            let user = userinfo.split(':').next().unwrap_or(userinfo);
+            format!("{scheme}{user}:{enc}{hostpart}{tail}")
+        }
+        None => format!("{scheme}:{enc}@{authority}{tail}"),
+    }
+}
+
+/// Percent-encode a string for a DSN userinfo component (RFC 3986 unreserved set kept verbatim).
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
 
 /// Wrap a success payload as `DbResult.Ok(v)`. The natives here NEVER fault on a DB error (a native
 /// `Err(String)` is an uncatchable hard fault — `vm/exec.rs`); instead they return this `DbResult<T>`
@@ -62,19 +168,21 @@ fn wrap(inner: Result<Value, String>) -> Value {
     }
 }
 
-/// A live SQLite connection handle (`Value::Db` payload). Shared-mutable: cloning the `Value::Db`
+/// A live database connection handle (`Value::Db` payload). Shared-mutable: cloning the `Value::Db`
 /// shares this `Rc`, so all bindings name the same connection.
 ///
-/// The connection is wrapped in an `Option` so `close()` (DEC-208 slice C) can deterministically drop
-/// it — every derived `DbStmt` shares the same `Rc<RefCell<Option<…>>>`, so closing invalidates all of
-/// them (a later op then faults with `<<ConnectionError>>`). `tx_depth` is the transaction / savepoint
-/// nesting level (0 = no open transaction), shared across every binding of the connection: `begin`
-/// opens `BEGIN` at depth 0 and a `SAVEPOINT` deeper, `commit`/`rollback` `RELEASE`/`ROLLBACK TO` the
-/// innermost level — so transactional helpers compose (an inner rollback never aborts the outer).
+/// The driver is wrapped in an `Option` so `close()` (DEC-208 slice C) can deterministically drop it —
+/// every derived `DbStmt` shares the same `Rc<RefCell<Option<Box<dyn DriverConn>>>>`, so closing
+/// invalidates all of them (a later op then faults with `<<ConnectionError>>`). `tx_depth` is the
+/// transaction / savepoint nesting level (0 = no open transaction), shared (`Rc<Cell>`) across every
+/// binding of the connection AND every derived statement: `begin` opens `BEGIN` at depth 0 and a
+/// `SAVEPOINT` deeper, `commit`/`rollback` `RELEASE`/`ROLLBACK TO` the innermost level — so transactional
+/// helpers compose (an inner rollback never aborts the outer), and a statement's `executeMany` can tell
+/// whether a caller transaction is already open (load-bearing for the Postgres driver's bulk savepoint).
 #[derive(Debug)]
 struct DbConn {
-    conn: Rc<RefCell<Option<rusqlite::Connection>>>,
-    tx_depth: Cell<u32>,
+    driver: Rc<RefCell<Option<Box<dyn DriverConn>>>>,
+    tx_depth: Rc<Cell<u32>>,
     /// The `onQuery` observability hook (DEC-208 slice D, spec §7): a `(string sql, int ms) => void`
     /// phorj closure invoked after each `query`/`exec`, or `None`. Held behind a SHARED `Rc<RefCell>`
     /// so a [`DbStmt`] derived from this connection observes the SAME hook — a statement carries only
@@ -124,7 +232,7 @@ enum Binds {
 /// in place and returns the same shared handle.
 #[derive(Debug)]
 struct DbStmt {
-    conn: Rc<RefCell<Option<rusqlite::Connection>>>,
+    driver: Rc<RefCell<Option<Box<dyn DriverConn>>>>,
     sql: String,
     binds: RefCell<Binds>,
     /// The originating connection's `onQuery` hook and query timeout, shared by `Rc` (see [`DbConn`]).
@@ -132,6 +240,9 @@ struct DbStmt {
     /// the timeout classification without a back-reference to the connection object.
     hook: Rc<RefCell<Option<Value>>>,
     timeout_ms: Rc<Cell<i64>>,
+    /// The shared transaction depth (see [`DbConn::tx_depth`]) — `executeMany` reads it to decide whether
+    /// to open its own transaction (Postgres) or ride an existing one (savepoint).
+    tx_depth: Rc<Cell<u32>>,
 }
 
 impl DbObject for DbStmt {
@@ -171,85 +282,6 @@ fn as_stmt(v: &Value) -> Result<&DbStmt, String> {
     }
 }
 
-/// Phorj value → SQLite storage value (bind side). Only the storable scalars are bindable; anything
-/// else (list/map/instance/…) is a clean DB error, never a silent coercion (DEC-208 "no silent coercion").
-fn to_sql(v: &Value) -> Result<rusqlite::types::Value, String> {
-    use rusqlite::types::Value as S;
-    Ok(match v {
-        Value::Int(n) => S::Integer(*n),
-        Value::Float(f) => S::Real(*f),
-        Value::Str(s) => S::Text(s.as_str().to_string()),
-        // SQLite has no boolean storage class — PDO/rusqlite both store it as an integer 0/1.
-        Value::Bool(b) => S::Integer(i64::from(*b)),
-        Value::Null => S::Null,
-        Value::Bytes(b) => S::Blob((**b).clone()),
-        other => {
-            return Err(format!(
-                "Core.Db: cannot bind a {} value",
-                other.type_name()
-            ))
-        }
-    })
-}
-
-/// SQLite storage value → phorj value (fetch side). The dynamic `query()` path returns each column's
-/// natural type; `Row.getInt`/etc. then assert the expected type at the accessor (no silent coercion).
-fn from_sql(v: rusqlite::types::Value) -> Value {
-    use rusqlite::types::Value as S;
-    match v {
-        S::Null => Value::Null,
-        S::Integer(n) => Value::Int(n),
-        S::Real(f) => Value::Float(f),
-        S::Text(s) => Value::Str(s.into()),
-        S::Blob(b) => Value::Bytes(Rc::new(b)),
-    }
-}
-
-/// Classify a `rusqlite` error into the taxonomy marker the prelude's `DbError.fail` reads (DEC-208
-/// slice C, spec §6). The mapping keys off SQLite's (extended) result codes: `SQLITE_CONSTRAINT_UNIQUE`
-/// / `_PRIMARYKEY` → `UniqueViolation`, generic `SQLITE_CONSTRAINT` → `ConstraintViolation`,
-/// `SQLITE_BUSY`/`SQLITE_LOCKED` → `SerializationFailure` (the transient class retry targets — the
-/// spec's `Deadlock` under one name), `SQLITE_CANTOPEN`/`SQLITE_NOTADB` → `ConnectionError`, generic
-/// `SQLITE_ERROR` (a mis-typed statement at prepare time) → `SyntaxError`. Anything else stays generic
-/// (no marker → the base `DbError`). `Timeout` has no SQLite source yet (it arrives with query
-/// `.timeout(ms)`, slice D); the subtype exists in the taxonomy and the classifier already reads its
-/// marker, so wiring it later is emit-only.
-fn err_kind(e: &rusqlite::Error) -> Option<&'static str> {
-    // Both a runtime failure (`SqliteFailure`) and a prepare-time SQL error (`SqlInputError`, which
-    // carries the byte offset) wrap an `ffi::Error` with the result codes we classify on.
-    let err = match e {
-        rusqlite::Error::SqliteFailure(err, _) => err,
-        rusqlite::Error::SqlInputError { error, .. } => error,
-        _ => return None,
-    };
-    let ext = err.extended_code;
-    if ext == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
-        || ext == rusqlite::ffi::SQLITE_CONSTRAINT_PRIMARYKEY
-    {
-        return Some("UniqueViolation");
-    }
-    // The primary result code is the low byte of the extended code.
-    match ext & 0xff {
-        rusqlite::ffi::SQLITE_CONSTRAINT => Some("ConstraintViolation"),
-        rusqlite::ffi::SQLITE_BUSY | rusqlite::ffi::SQLITE_LOCKED => Some("SerializationFailure"),
-        rusqlite::ffi::SQLITE_CANTOPEN | rusqlite::ffi::SQLITE_NOTADB => Some("ConnectionError"),
-        rusqlite::ffi::SQLITE_ERROR => Some("SyntaxError"),
-        _ => None,
-    }
-}
-
-/// Render a `rusqlite` error as the `DbResult.Err` message the prelude throws on, PREFIXED with a
-/// `<<Kind>>` marker when the error classifies into the typed taxonomy (see [`err_kind`]). The prelude's
-/// single `DbError.fail` classification point strips the marker and throws the matching subtype.
-fn sql_err(e: rusqlite::Error) -> String {
-    let kind = err_kind(&e);
-    let base = format!("Core.Db: {e}");
-    match kind {
-        Some(tag) => format!("<<{tag}>>{base}"),
-        None => base,
-    }
-}
-
 /// The catchable message for using a connection (or a statement derived from it) after `close()`.
 /// Tagged `ConnectionError` so `catch (ConnectionError e)` is precise.
 fn conn_closed() -> String {
@@ -259,29 +291,36 @@ fn conn_closed() -> String {
 // --- Internal bodies: `Ok(payload)` on success, `Err(db-error-message)` on a DB error. `wrap` maps
 // these onto the `Result<T, string>` VALUE the public `__`-natives return (Success | Failure). ---
 
-/// `new Db(dsn)` → open a connection. `dsn` is `"sqlite:PATH"` or `"sqlite::memory:"` (the PDO DSN
-/// shape); a bare path is also accepted.
+/// `new Db(dsn)` → open a connection, dispatching on the DSN scheme onto the right backend driver
+/// ([`open_driver`]): `sqlite:PATH` / `sqlite::memory:` / a bare path → SQLite; `postgres://…` →
+/// Postgres. The driver behind [`Value::Db`] is opaque to the generic layer.
 fn open_inner(args: &[Value]) -> Result<Value, String> {
     let dsn = match args {
         [Value::Str(s)] => s.as_str(),
         _ => return Err("Core.Db.__open expects (string dsn)".into()),
     };
-    let conn = if dsn == "sqlite::memory:" || dsn == ":memory:" {
-        rusqlite::Connection::open_in_memory()
-    } else {
-        let path = dsn.strip_prefix("sqlite:").unwrap_or(dsn);
-        rusqlite::Connection::open(path)
-    }
-    .map_err(sql_err)?;
+    let driver = open_driver(dsn)?;
     Ok(Value::Db(Rc::new(DbConn {
-        conn: Rc::new(RefCell::new(Some(conn))),
-        tx_depth: Cell::new(0),
+        driver: Rc::new(RefCell::new(Some(driver))),
+        tx_depth: Rc::new(Cell::new(0)),
         hook: Rc::new(RefCell::new(None)),
         timeout_ms: Rc::new(Cell::new(0)),
     })))
 }
 
-/// `db.prepare(sql)` → a lazily-executed statement handle carrying the connection + SQL.
+/// `DbSys.dsnWithPassword(dsn, password)` → the DSN with `password` injected as its credential (DEC-208
+/// slice G, the `Db.withPassword` factory). A pure string transform ([`inject_pg_password`]); the result
+/// is consumed immediately by `new Db(...)` and never retained in plaintext (the driver parses the
+/// password out and stores only a redacted DSN). A non-postgres DSN is returned unchanged.
+fn dsn_with_password_inner(args: &[Value]) -> Result<Value, String> {
+    let (dsn, pw) = match args {
+        [Value::Str(d), Value::Str(p)] => (d.as_str(), p.as_str()),
+        _ => return Err("Core.Db.__dsnWithPassword expects (string dsn, string password)".into()),
+    };
+    Ok(Value::Str(inject_pg_password(dsn, pw).into()))
+}
+
+/// `db.prepare(sql)` → a lazily-executed statement handle carrying the connection driver + SQL.
 fn prepare_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, sql) = match args {
         [c, Value::Str(s)] => (as_conn(c)?, s.as_str().to_string()),
@@ -289,15 +328,16 @@ fn prepare_inner(args: &[Value]) -> Result<Value, String> {
     };
     // Reject preparing on a closed connection eagerly (the statement would otherwise fault only at
     // query/exec time).
-    if conn.conn.borrow().is_none() {
+    if conn.driver.borrow().is_none() {
         return Err(conn_closed());
     }
     Ok(Value::Db(Rc::new(DbStmt {
-        conn: Rc::clone(&conn.conn),
+        driver: Rc::clone(&conn.driver),
         sql,
         binds: RefCell::new(Binds::None),
         hook: Rc::clone(&conn.hook),
         timeout_ms: Rc::clone(&conn.timeout_ms),
+        tx_depth: Rc::clone(&conn.tx_depth),
     })))
 }
 
@@ -343,69 +383,6 @@ fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
     Ok(args[0].clone())
 }
 
-/// Render a positional-bind statement: walk the SQL, and for each bare `?` placeholder (bare `?` only —
-/// numbered `?NNN` and named `:name` are NOT rewritten; `?` inside `'single'`/`"double"` quotes is
-/// skipped) substitute the matching [`PosBind`] left-to-right — a [`One`](PosBind::One) keeps the `?`
-/// and binds one value; a [`List`](PosBind::List) expands to `(?,?,…)` (or `(NULL)` when empty) and
-/// binds each element. Returns the effective SQL + the flattened parameter vector. A `?`/bind count
-/// mismatch is a clean DB error (catchable), never a silent misbind.
-fn expand_placeholders(
-    sql: &str,
-    binds: &[PosBind],
-) -> Result<(String, Vec<rusqlite::types::Value>), String> {
-    let mut out = String::with_capacity(sql.len());
-    let mut params: Vec<rusqlite::types::Value> = Vec::new();
-    let mut idx = 0usize;
-    let mut in_squote = false;
-    let mut in_dquote = false;
-    for c in sql.chars() {
-        match c {
-            '\'' if !in_dquote => {
-                in_squote = !in_squote;
-                out.push(c);
-            }
-            '"' if !in_squote => {
-                in_dquote = !in_dquote;
-                out.push(c);
-            }
-            '?' if !in_squote && !in_dquote => {
-                let b = binds
-                    .get(idx)
-                    .ok_or_else(|| "Core.Db: more ? placeholders than bound values".to_string())?;
-                idx += 1;
-                match b {
-                    PosBind::One(v) => {
-                        out.push('?');
-                        params.push(to_sql(v)?);
-                    }
-                    // A list expands the SINGLE `?` in place to a comma list of placeholders, reusing the
-                    // user's surrounding parens (`… IN (?)` → `… IN (?,?,?)`). An EMPTY list becomes the
-                    // literal `NULL` (`… IN (NULL)` — a never-true membership, the sane empty-IN default).
-                    PosBind::List(vs) if vs.is_empty() => out.push_str("NULL"),
-                    PosBind::List(vs) => {
-                        for (i, v) in vs.iter().enumerate() {
-                            if i > 0 {
-                                out.push(',');
-                            }
-                            out.push('?');
-                            params.push(to_sql(v)?);
-                        }
-                    }
-                }
-            }
-            _ => out.push(c),
-        }
-    }
-    if idx != binds.len() {
-        return Err(format!(
-            "Core.Db: {} bound value(s) but {} ? placeholder(s) in the SQL",
-            binds.len(),
-            idx
-        ));
-    }
-    Ok((out, params))
-}
-
 /// `stmt.bindNamed(name, value)` → append a named bind; returns the same shared handle (chainable).
 fn bind_named_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, name, val) = match args {
@@ -424,101 +401,27 @@ fn bind_named_inner(args: &[Value]) -> Result<Value, String> {
     Ok(args[0].clone())
 }
 
-/// Materialize a rusqlite `Rows` cursor into a `List<Row>` (each `Row` is a column-name→value `Map`).
-fn collect_rows(rows: &mut rusqlite::Rows, cols: &[String]) -> Result<Vec<Value>, String> {
-    let mut out = Vec::new();
-    while let Some(row) = rows.next().map_err(sql_err)? {
-        let mut pairs = Vec::with_capacity(cols.len());
-        for (i, name) in cols.iter().enumerate() {
-            let cell: rusqlite::types::Value = row.get(i).map_err(sql_err)?;
-            pairs.push((HKey::Str(name.as_str().into()), from_sql(cell)));
-        }
-        out.push(Value::Map(Rc::new(pairs)));
+/// Borrow the live driver behind a statement, or a clean `<<ConnectionError>>` if the connection was
+/// closed. The returned guard keeps the driver borrowed for the caller's operation.
+fn stmt_driver(stmt: &DbStmt) -> Result<std::cell::Ref<'_, Option<Box<dyn DriverConn>>>, String> {
+    let guard = stmt.driver.borrow();
+    if guard.is_none() {
+        return Err(conn_closed());
     }
-    Ok(out)
+    Ok(guard)
 }
 
-/// The selection-ordered column names of a prepared statement.
-fn col_names(prepared: &rusqlite::Statement) -> Vec<String> {
-    prepared
-        .column_names()
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect()
-}
-
-/// `stmt.query()` → run the prepared+bound statement and return `List<Row>` (fetch-all). Positional
-/// binds go through [`expand_placeholders`] so a `bindList` `IN (?)` is expanded before prepare.
+/// `stmt.query()` → run the prepared+bound statement and return `List<Row>` (fetch-all), delegating the
+/// dialect-specific placeholder + value handling to the connection's driver.
 fn query_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
         _ => return Err("Core.Db.__query expects (Statement)".into()),
     };
-    let guard = stmt.conn.borrow();
-    let conn = guard.as_ref().ok_or_else(conn_closed)?;
+    let guard = stmt_driver(stmt)?;
+    let driver = guard.as_ref().expect("driver liveness checked");
     let binds = stmt.binds.borrow();
-    let rows = match &*binds {
-        Binds::None => {
-            let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
-            let cols = col_names(&prepared);
-            let mut r = prepared.query([]).map_err(sql_err)?;
-            collect_rows(&mut r, &cols)?
-        }
-        Binds::Positional(pbs) => {
-            let (sql, sv) = expand_placeholders(&stmt.sql, pbs)?;
-            let mut prepared = conn.prepare(&sql).map_err(sql_err)?;
-            let cols = col_names(&prepared);
-            let mut r = prepared
-                .query(rusqlite::params_from_iter(sv.iter()))
-                .map_err(sql_err)?;
-            collect_rows(&mut r, &cols)?
-        }
-        Binds::Named(pairs) => {
-            let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
-            let cols = col_names(&prepared);
-            let sv: Vec<(String, rusqlite::types::Value)> = pairs
-                .iter()
-                .map(|(k, v)| Ok((format!(":{k}"), to_sql(v)?)))
-                .collect::<Result<_, String>>()?;
-            let refs: Vec<(&str, &dyn rusqlite::ToSql)> = sv
-                .iter()
-                .map(|(k, v)| (k.as_str(), v as &dyn rusqlite::ToSql))
-                .collect();
-            let mut r = prepared.query(refs.as_slice()).map_err(sql_err)?;
-            collect_rows(&mut r, &cols)?
-        }
-    };
-    Ok(Value::List(Rc::new(rows)))
-}
-
-/// Prepare `sql`, bind `binds`, and execute a write on `conn`, returning the affected-row count.
-/// Shared by `exec`, `execReturningId`, and the per-row loop of `executeMany` (all DEC-208).
-fn exec_bound(conn: &rusqlite::Connection, sql: &str, binds: &Binds) -> Result<usize, String> {
-    match binds {
-        Binds::None => {
-            let mut prepared = conn.prepare(sql).map_err(sql_err)?;
-            prepared.execute([]).map_err(sql_err)
-        }
-        Binds::Positional(pbs) => {
-            let (esql, sv) = expand_placeholders(sql, pbs)?;
-            let mut prepared = conn.prepare(&esql).map_err(sql_err)?;
-            prepared
-                .execute(rusqlite::params_from_iter(sv.iter()))
-                .map_err(sql_err)
-        }
-        Binds::Named(pairs) => {
-            let mut prepared = conn.prepare(sql).map_err(sql_err)?;
-            let sv: Vec<(String, rusqlite::types::Value)> = pairs
-                .iter()
-                .map(|(k, v)| Ok((format!(":{k}"), to_sql(v)?)))
-                .collect::<Result<_, String>>()?;
-            let refs: Vec<(&str, &dyn rusqlite::ToSql)> = sv
-                .iter()
-                .map(|(k, v)| (k.as_str(), v as &dyn rusqlite::ToSql))
-                .collect();
-            prepared.execute(refs.as_slice()).map_err(sql_err)
-        }
-    }
+    driver.query(&stmt.sql, &binds)
 }
 
 /// `stmt.exec()` → run a write (INSERT/UPDATE/DELETE/DDL) and return the affected-row count.
@@ -527,25 +430,23 @@ fn exec_inner(args: &[Value]) -> Result<Value, String> {
         [s] => as_stmt(s)?,
         _ => return Err("Core.Db.__exec expects (Statement)".into()),
     };
-    let guard = stmt.conn.borrow();
-    let conn = guard.as_ref().ok_or_else(conn_closed)?;
+    let guard = stmt_driver(stmt)?;
+    let driver = guard.as_ref().expect("driver liveness checked");
     let binds = stmt.binds.borrow();
-    let n = exec_bound(conn, &stmt.sql, &binds)?;
-    Ok(Value::Int(n as i64))
+    driver.exec(&stmt.sql, &binds).map(Value::Int)
 }
 
 /// `stmt.execReturningId()` → run an INSERT and return the auto-generated rowid / PK (DEC-208 slice D,
-/// spec §4). SQLite: `last_insert_rowid()` on the same connection, read immediately after the write.
+/// spec §4). Backend-specific: SQLite `last_insert_rowid()`; Postgres `RETURNING`/`lastval()`.
 fn exec_returning_id_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
         _ => return Err("Core.Db.__execReturningId expects (Statement)".into()),
     };
-    let guard = stmt.conn.borrow();
-    let conn = guard.as_ref().ok_or_else(conn_closed)?;
+    let guard = stmt_driver(stmt)?;
+    let driver = guard.as_ref().expect("driver liveness checked");
     let binds = stmt.binds.borrow();
-    exec_bound(conn, &stmt.sql, &binds)?;
-    Ok(Value::Int(conn.last_insert_rowid()))
+    driver.exec_returning_id(&stmt.sql, &binds).map(Value::Int)
 }
 
 /// `stmt.executeMany(rows)` → prepare ONCE and execute the statement for each row of binds (DEC-208
@@ -567,56 +468,26 @@ fn execute_many_inner(args: &[Value]) -> Result<Value, String> {
                 .into(),
         );
     }
-    let guard = stmt.conn.borrow();
-    let conn = guard.as_ref().ok_or_else(conn_closed)?;
-    conn.execute_batch("SAVEPOINT phorj_bulk")
-        .map_err(sql_err)?;
-    let run = || -> Result<i64, String> {
-        let mut prepared = conn.prepare(&stmt.sql).map_err(sql_err)?;
-        let mut total = 0i64;
-        for row in rows.iter() {
-            let vals = match row {
-                Value::List(v) => v,
-                other => {
-                    return Err(format!(
-                        "Core.Db.executeMany: each row must be a list, got {}",
-                        other.type_name()
-                    ))
-                }
-            };
-            let sv: Vec<rusqlite::types::Value> =
-                vals.iter().map(to_sql).collect::<Result<_, _>>()?;
-            let n = prepared
-                .execute(rusqlite::params_from_iter(sv.iter()))
-                .map_err(sql_err)?;
-            total += n as i64;
-        }
-        Ok(total)
-    };
-    match run() {
-        Ok(total) => {
-            conn.execute_batch("RELEASE phorj_bulk").map_err(sql_err)?;
-            Ok(Value::Int(total))
-        }
-        Err(e) => {
-            // Best-effort unwind of the whole batch; return the ORIGINAL error (a rollback failure must
-            // not mask it). Same defer-don't-fail discipline as `rollback`'s no-op guard.
-            let _ = conn.execute_batch("ROLLBACK TO phorj_bulk; RELEASE phorj_bulk");
-            Err(e)
-        }
-    }
+    let guard = stmt_driver(stmt)?;
+    let driver = guard.as_ref().expect("driver liveness checked");
+    // The driver's bulk savepoint needs to know whether a caller transaction is already open (Postgres
+    // opens its own `BEGIN` at depth 0; SQLite auto-txns a standalone savepoint and ignores the flag).
+    let in_transaction = stmt.tx_depth.get() > 0;
+    driver
+        .execute_many(&stmt.sql, rows.as_slice(), in_transaction)
+        .map(Value::Int)
 }
 
 /// `db.lastInsertId()` → the auto-generated rowid / PK of the most recent INSERT on this connection
-/// (DEC-208 slice D, spec §4). SQLite: `last_insert_rowid()`.
+/// (DEC-208 slice D, spec §4). Backend-specific: SQLite `last_insert_rowid()`; Postgres `lastval()`.
 fn last_insert_id_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
         _ => return Err("Core.Db.__lastInsertId expects (Db)".into()),
     };
-    let guard = conn.conn.borrow();
-    let live = guard.as_ref().ok_or_else(conn_closed)?;
-    Ok(Value::Int(live.last_insert_rowid()))
+    let guard = conn.driver.borrow();
+    let driver = guard.as_ref().ok_or_else(conn_closed)?;
+    driver.last_insert_id().map(Value::Int)
 }
 
 /// `db.timeout(ms)` → arm the connection's query timeout (DEC-208 slice D, spec §7). SQLite:
@@ -631,10 +502,9 @@ fn timeout_inner(args: &[Value]) -> Result<Value, String> {
     };
     let clamped = ms.max(0);
     {
-        let guard = conn.conn.borrow();
-        let live = guard.as_ref().ok_or_else(conn_closed)?;
-        live.busy_timeout(std::time::Duration::from_millis(clamped as u64))
-            .map_err(sql_err)?;
+        let guard = conn.driver.borrow();
+        let driver = guard.as_ref().ok_or_else(conn_closed)?;
+        driver.set_timeout(clamped)?;
     }
     conn.timeout_ms.set(clamped);
     Ok(Value::Int(clamped))
@@ -704,12 +574,13 @@ fn with_hook(
     Ok(wrap(result))
 }
 
-/// Run one SQL control statement (`BEGIN`/`COMMIT`/`SAVEPOINT`/…) on the live connection, or a clean
-/// `<<ConnectionError>>` if the connection was closed.
+/// Run one portable SQL control statement (`BEGIN`/`COMMIT`/`SAVEPOINT`/`RELEASE`/`ROLLBACK[ TO]`) on
+/// the live connection's driver, or a clean `<<ConnectionError>>` if the connection was closed. These
+/// forms are accepted identically by SQLite and Postgres, so transaction management stays generic.
 fn control(conn: &DbConn, sql: &str) -> Result<(), String> {
-    let guard = conn.conn.borrow();
-    let live = guard.as_ref().ok_or_else(conn_closed)?;
-    live.execute_batch(sql).map_err(sql_err)
+    let guard = conn.driver.borrow();
+    let driver = guard.as_ref().ok_or_else(conn_closed)?;
+    driver.control(sql)
 }
 
 /// `db.begin()` → open a transaction (DEC-208 slice C). At depth 0 this is a top-level `BEGIN`; nested,
@@ -788,7 +659,7 @@ fn close_inner(args: &[Value]) -> Result<Value, String> {
         [c] => as_conn(c)?,
         _ => return Err("Core.Db.__close expects (Db)".into()),
     };
-    *conn.conn.borrow_mut() = None;
+    *conn.driver.borrow_mut() = None;
     conn.tx_depth.set(0);
     Ok(Value::Int(0))
 }
@@ -1026,6 +897,11 @@ macro_rules! db_native {
     };
 }
 db_native!(db_open, open_inner);
+/// `dsnWithPassword` returns a plain `string` (the authenticated DSN), NOT a `DbResult` — it is a pure
+/// string transform with no DB error, so it does not go through `wrap`.
+fn db_dsn_with_password(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    dsn_with_password_inner(args)
+}
 db_native!(db_prepare, prepare_inner);
 db_native!(db_bind, bind_inner);
 db_native!(db_bind_named, bind_named_inner);
@@ -1137,6 +1013,20 @@ pub fn db_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(db_open),
             php: |a| format!("new \\PDO({})", a.first().map_or("''", |s| s)),
+        },
+        // Credential-Secret DSN builder (DEC-208 slice G): inject a `Core.Secret` password into a
+        // `postgres://` DSN (`Db.withPassword`). Returns a plain `string` (the authenticated DSN),
+        // consumed immediately by `new Db(...)`; the driver parses the password out and retains only a
+        // redacted DSN. A non-postgres DSN is returned unchanged. `pure:false` keeps the module
+        // spine-quarantined (a program using it also connects). PHP: no faithful analog (quarantined).
+        NativeFn {
+            module: "Core.DbSys",
+            name: "dsnWithPassword",
+            params: vec![Ty::String, Ty::String],
+            ret: Ty::String,
+            pure: false,
+            eval: NativeEval::Pure(db_dsn_with_password),
+            php: |a| a.first().cloned().unwrap_or_else(|| "''".to_string()),
         },
         NativeFn {
             module: "Core.DbSys",
@@ -1666,30 +1556,6 @@ mod tests {
         assert!(msg.starts_with("<<SyntaxError>>"), "got: {msg}");
     }
 
-    /// A concurrent write lock (`SQLITE_BUSY`) maps to `SerializationFailure` — the transient class
-    /// `retry` would target. Provoked deterministically with two file connections and no busy handler.
-    #[test]
-    fn busy_maps_to_serialization_failure() {
-        let path = std::env::temp_dir().join(format!(
-            "phorj_db_busy_{}_{}.db",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let c1 = rusqlite::Connection::open(&path).unwrap();
-        c1.execute_batch("CREATE TABLE t(x)").unwrap();
-        // c1 takes a write lock and holds it.
-        c1.execute_batch("BEGIN IMMEDIATE").unwrap();
-        let c2 = rusqlite::Connection::open(&path).unwrap();
-        // c2's write attempt cannot acquire the lock → SQLITE_BUSY (no busy timeout set).
-        let err = c2.execute_batch("BEGIN IMMEDIATE").unwrap_err();
-        let msg = sql_err(err);
-        let _ = std::fs::remove_file(&path);
-        assert!(msg.starts_with("<<SerializationFailure>>"), "got: {msg}");
-    }
-
     /// A committed transaction persists; a rolled-back one is discarded.
     #[test]
     fn commit_persists_rollback_discards() {
@@ -1796,35 +1662,6 @@ mod tests {
     }
 
     // ── DEC-208 slice D: writes + robustness ──────────────────────────────────────────────────
-
-    /// `bindList` expands the single `?` in place (reusing the caller's parens) to a comma list, and to
-    /// `NULL` when empty; a `?`/bind mismatch is a clean error.
-    #[test]
-    fn bind_list_placeholder_expansion() {
-        let one = PosBind::List(vec![Value::Int(1), Value::Int(2), Value::Int(3)]);
-        let (sql, params) = expand_placeholders("SELECT * FROM t WHERE id IN (?)", &[one]).unwrap();
-        assert_eq!(sql, "SELECT * FROM t WHERE id IN (?,?,?)");
-        assert_eq!(params.len(), 3);
-        // Empty list → `IN (NULL)`, no params.
-        let empty = PosBind::List(vec![]);
-        let (sql, params) =
-            expand_placeholders("SELECT * FROM t WHERE id IN (?)", &[empty]).unwrap();
-        assert_eq!(sql, "SELECT * FROM t WHERE id IN (NULL)");
-        assert!(params.is_empty());
-        // Mixed with a positional One, left-to-right; a `?` inside a string literal is NOT a placeholder.
-        let (sql, params) = expand_placeholders(
-            "SELECT '?' , x WHERE a = ? AND b IN (?)",
-            &[
-                PosBind::One(Value::Str("hi".into())),
-                PosBind::List(vec![Value::Int(9)]),
-            ],
-        )
-        .unwrap();
-        assert_eq!(sql, "SELECT '?' , x WHERE a = ? AND b IN (?)");
-        assert_eq!(params.len(), 2);
-        // Too few binds for the ? count is a clean error.
-        assert!(expand_placeholders("a = ?", &[]).is_err());
-    }
 
     /// `execute_many` inserts every row atomically and returns the total; a mid-batch failure rolls the
     /// WHOLE batch back (savepoint), leaving nothing behind.
@@ -1970,5 +1807,49 @@ mod tests {
         ok_of(db_on_query(&[db.clone(), sentinel], &mut out).unwrap());
         let conn = as_conn(&db).unwrap();
         assert!(conn.hook.borrow().is_some());
+    }
+
+    // ── DEC-208 slice I: multi-driver DSN dispatch + slice G credential injection ────────────────
+
+    /// A `sqlite:`/`:memory:` DSN dispatches to the SQLite driver (unchanged behaviour): the open
+    /// succeeds and a round-trip through the resulting connection works — the dispatch never misroutes a
+    /// sqlite DSN. (The postgres branch is proven by `postgres_dsn_without_feature_is_a_clean_error`.)
+    #[test]
+    fn sqlite_dsn_dispatches_to_sqlite() {
+        let mut out = String::new();
+        let db = ok_of(db_open(&[Value::Str("sqlite::memory:".into())], &mut out).unwrap());
+        assert!(as_conn(&db).is_ok());
+        exec1(&db, "CREATE TABLE t(n INTEGER)", &mut out);
+        assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 0);
+    }
+
+    /// A `postgres://` DSN dispatches to the postgres driver — which, when `db-postgres` is OFF, is a
+    /// clean feature-gated `ConnectionError`, NEVER a fall-through to the SQLite file path (which would
+    /// silently create a file literally named `postgres://…`).
+    #[cfg(not(feature = "db-postgres"))]
+    #[test]
+    fn postgres_dsn_without_feature_is_a_clean_error() {
+        let mut out = String::new();
+        let msg = err_of(db_open(&[Value::Str("postgres://u@h/db".into())], &mut out).unwrap());
+        assert!(msg.starts_with("<<ConnectionError>>"), "got: {msg}");
+        assert!(msg.contains("not compiled in"), "got: {msg}");
+    }
+
+    /// `dsnWithPassword` (slice G) percent-encodes and injects a password into a postgres DSN, replaces
+    /// an existing one, and leaves a non-postgres DSN untouched.
+    #[test]
+    fn dsn_with_password_injects_for_postgres_only() {
+        assert_eq!(
+            inject_pg_password("postgres://user@host:5432/db", "p@ss:w/d"),
+            "postgres://user:p%40ss%3Aw%2Fd@host:5432/db"
+        );
+        assert_eq!(
+            inject_pg_password("postgres://user:old@host/db", "new"),
+            "postgres://user:new@host/db"
+        );
+        assert_eq!(
+            inject_pg_password("sqlite::memory:", "x"),
+            "sqlite::memory:"
+        );
     }
 }

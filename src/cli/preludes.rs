@@ -482,6 +482,12 @@ import Core.String;
 // above it makes the module's ops available to the generated helpers (and, as with `List`, to user
 // code under an `import Core.Db`).
 import Core.Map;
+// `Core.Secret` (Fork B) provides the opaque `Secret<T>` credential wrapper used by the `Db.withPassword`
+// factory (DEC-208 slice G): a connection password is passed as a `Secret<string>` so it never sits in
+// plaintext in user code, and — because the driver parses it out of the DSN and retains only a redacted
+// DSN — is masked in every connect error / log. Secret is registered before Db (see CORE_MODULES order),
+// so this transitive import injects the class here exactly as List/String/Map above.
+import Core.Secret;
 
 // Prelude-local result carrier (NOT Core.Result — see the native docs on injection order).
 enum DbResult<T> { Ok(T value), Err(string message) }
@@ -644,6 +650,16 @@ class Db {
   constructor(string dsn) throws DbError {
     this.raw = match (DbSys.connect(dsn)) { DbResult.Ok(h) => h, DbResult.Err(e) => DbError.fail(e)? };
   }
+  // Credential-safe connect (DEC-208 slice G, spec §1). The password is supplied as a `Core.Secret` —
+  // kept out of plaintext in user code — and injected into the DSN only at the connect boundary. It is
+  // NEVER retained: the driver parses it back out into its connection config and stores only a redacted
+  // DSN, so a connect error prints the host but never the password (unlike PDO, which leaks the DSN in
+  // exceptions). Use for a `postgres://user@host/db` DSN (no inline password); SQLite has no password,
+  // so the DSN is passed through unchanged. Example:
+  //   `Db db = Db.withPassword("postgres://app@db.host:5432/prod", new Secret(env));`
+  static function withPassword(string dsn, Secret<string> password): Db throws DbError {
+    return new Db(DbSys.dsnWithPassword(dsn, password.expose()))?;
+  }
   function prepare(string sql): Statement throws DbError {
     return match (DbSys.prepare(this.raw, sql)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
   }
@@ -794,14 +810,6 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         bare_types: &[],
     },
     VirtualModule {
-        module: &["Core", "Secret"],
-        qualifier: "Secret",
-        src: Some(SECRET_PRELUDE),
-        respond_bridge: None,
-        member_gated: false,
-        bare_types: &[],
-    },
-    VirtualModule {
         module: &["Core", "Time"],
         qualifier: "Time",
         src: Some(TIME_PRELUDE),
@@ -835,6 +843,21 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "Timeout",
             "SyntaxError",
         ],
+    },
+    // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.Db` because
+    // `Core.Db`'s `import Core.Secret` (for the `Db.withPassword(dsn, Secret<string>)` factory, DEC-208
+    // slice G) transitively injects it, and transitive injection only reaches modules that appear LATER
+    // in this list (the same forward-fold rule as Http→Regex — an EARLIER module is never pulled by a
+    // later importer). A direct `import Core.Secret;` in user code works from any position (user imports
+    // seed the injected set), so this move does not affect standalone Secret programs. Nothing else
+    // imports Core.Secret, so nothing needs it injected before this point.
+    VirtualModule {
+        module: &["Core", "Secret"],
+        qualifier: "Secret",
+        src: Some(SECRET_PRELUDE),
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
     },
     // `Core.DbSys` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.Db` prelude
     // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Db` never collides with

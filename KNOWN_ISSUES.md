@@ -341,6 +341,36 @@ not a panic:
     so this is a convenience lint, not a correctness gap — deferred until a schema-aware or turbofish
     (slice A) foundation makes a sound check cheap. See `docs/specs/2026-07-14-core-db.md` slice F.
 
+- **`Core.Db` multi-driver + Postgres (DEC-208 slice I) + credential Secret (slice G) — shipped subset +
+  disclosures.** `new Db(dsn)` dispatches on the DSN scheme behind a `DriverConn` trait
+  (`src/native/db/{mod,sqlite,postgres}.rs`): `sqlite:` → the unchanged rusqlite driver (byte-identical,
+  all shipped `db` tests green); `postgres://`/`postgresql://` → the sync `postgres` crate under the new
+  non-default `db-postgres` feature (`db-all` = both). `Db.withPassword(dsn, Secret<string>)` (slice G)
+  keeps the password out of plaintext user code and out of every error/log (the driver retains only a
+  redacted DSN). Deterministic driver coverage (dispatch, `?`/`:name`→`$n` translation, SQLSTATE→taxonomy,
+  redaction) is in `src/native/db/postgres.rs`; the LIVE round-trip is `tests/db_postgres.rs`, opt-in via
+  `PHORJ_PG_TEST_DSN` (skip-loudly if unset — the standard gate never requires a server).
+  - **Disclosures / boundaries:** (a) **No oracle.** There is no clean pure-Rust *synchronous* Postgres
+    driver to differential the PHP-PDO leg against, so Postgres (like all of `Core.Db`) is
+    spine-quarantined (`pure:false`); correctness rests on `run ≡ runvm` (shared eval) + the unit/gated
+    tests. (b) **Value-mapping subset.** Fetched columns are read by the binary protocol on the column's
+    type OID: bool, int2/int4/int8, float4/float8, text/varchar/bpchar/name, bytea. Richer types
+    (`numeric`, `json`/`jsonb`, `timestamp`/`timestamptz`, arrays) are NOT read directly — select them
+    with a `::text` cast (a clear `DbError` guides you), which is also exactly slice E's "store decimal
+    columns as TEXT for exact money" path (`Row.getDecimal` then parses the text). A `decimal` BIND is
+    likewise written as text + a `::numeric` cast (no arbitrary-precision numeric dependency admitted).
+    Postgres array → `List<T>` is slice K (not yet). (c) **`execReturningId` / `lastInsertId`.** Postgres
+    has no `last_insert_rowid()`: `execReturningId` reads the FIRST column of a `RETURNING` clause (so you
+    write `INSERT … RETURNING id`) and falls back to `lastval()` when the statement has no `RETURNING`;
+    `lastInsertId` is `lastval()` (errors if no sequence was advanced on the session → a catchable
+    `DbError`). Never a silent assumption of `RETURNING id`. (d) **NULL bind** is sent as a text-typed
+    `NULL` (Postgres coerces it in context); an unusual context could need an explicit `$1::type` cast.
+    (e) **tokio transitively.** The sync `postgres` crate wraps `tokio-postgres` (a single internal
+    blocking runtime); this is the crate's impl detail (feature-gated behind `db-postgres`, non-default,
+    non-wasm) — the phorj-facing driver API is fully synchronous, consistent with the dependency policy's
+    SQL-domain admission. (f) **MySQL/MariaDB (slice J)** is not built; the `DriverConn` seam is ready for
+    it (one impl + one dep admission). See `docs/specs/2026-07-14-core-db.md` slices G/I/J/K.
+
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
   the backends. Deferrals (each a clean compile error, never a panic): (1) **free functions only** — a

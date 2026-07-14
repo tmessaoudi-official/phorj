@@ -1,0 +1,91 @@
+// `Core.Db` — the Postgres driver (DEC-208 slice I) + credential Secret (slice G).
+//
+// `Core.Db` is a MULTI-DRIVER primitive: `new Db(dsn)` dispatches on the DSN scheme behind a driver
+// trait — `sqlite:…` (bundled SQLite, the default `db` feature) and `postgres://…` (the sync `postgres`
+// crate, the `db-postgres` feature). The whole surface is identical across drivers — the SAME
+// `prepare`/`bind`/`bindNamed`/`query`/`exec`/`execReturningId`/`transaction`/typed-`DbError` API — so
+// porting between SQLite and Postgres is a one-line DSN change.
+//
+// ── RUNNING THIS EXAMPLE ─────────────────────────────────────────────────────────────────────────
+// Unlike the other `examples/db/*.phg` (which use in-memory SQLite and run headless), this one needs a
+// LIVE Postgres, so it is NOT part of the automatic gate — it is a hand-runnable reference. Build with
+// the driver and point it at your server:
+//
+//     cargo build --release --features db-postgres
+//     # edit the DSN below to your server, then:
+//     target/release/phg run examples/db/postgres.phg
+//
+// The automatic, server-free driver coverage (DSN dispatch, `?`/`:name`→`$1,$2` translation,
+// SQLSTATE→typed-error mapping, credential redaction) lives in `src/native/db/postgres.rs`; the live
+// round-trip is `tests/db_postgres.rs` (opt in via `PHORJ_PG_TEST_DSN`).
+package Main;
+
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Row;
+import Core.Db.DbError;
+import Core.Db.UniqueViolation;
+import Core.Secret;
+
+function main(): void {
+    // Postgres-specific placeholders (`$1,$2`) are handled for you — you still write `?` / `:name`.
+    // The dispatch is purely on the scheme: `postgres://` or `postgresql://` → the Postgres driver.
+    string dsn = "postgres://developer@localhost:42710/testx";
+    // ── Credential safety (slice G) ──────────────────────────────────────────────────────────────
+    // The password is a `Core.Secret`, so it never sits in plaintext in your code and — because the
+    // driver parses it OUT of the DSN into its config and retains only a REDACTED DSN — it is masked in
+    // every connect error / log (unlike PDO, which leaks the DSN in exceptions). `Db.withPassword`
+    // injects the Secret into a password-less DSN at the connect boundary.
+    Secret<string> password = new Secret("developer");
+    try {
+        Db db = Db.withPassword(dsn, password);
+        discard db.prepare("DROP TABLE IF EXISTS phorj_pg_demo").exec();
+        discard db
+            .prepare("CREATE TABLE phorj_pg_demo(id INT PRIMARY KEY, name TEXT, active BOOLEAN)")
+            .exec();
+        // Positional `?` binds (translated to `$1,$2,$3`).
+        discard db
+            .prepare("INSERT INTO phorj_pg_demo(id, name, active) VALUES(?, ?, ?)")
+            .bind(1)
+            .bind("Ada")
+            .bind(true)
+            .exec();
+        // Named `:name` binds (translated to `$1,$2`; `::` casts are left untouched).
+        discard db
+            .prepare("INSERT INTO phorj_pg_demo(id, name, active) VALUES(:id, :name, false)")
+            .bindNamed("id", 2)
+            .bindNamed("name", "Grace")
+            .exec();
+        // Query back — values are mapped from the Postgres column types (int4/text/bool).
+        List<Row> rows = db
+            .prepare("SELECT id, name FROM phorj_pg_demo WHERE id > ? ORDER BY id")
+            .bind(0)
+            .query();
+        for (Row r in rows) {
+            string name = r.getString("name");
+            int id = r.getInt("id");
+            Output.printLine("{id} = {name}");
+        }
+        // Postgres has no rowid; the auto-generated key comes from a RETURNING clause.
+        int newId = db
+            .prepare(
+                "INSERT INTO phorj_pg_demo(id, name, active) VALUES(3, 'Lin', true) RETURNING id"
+            )
+            .execReturningId();
+        Output.printLine("inserted id {newId}");
+        // A duplicate PK surfaces as the typed `UniqueViolation` (PG SQLSTATE 23505), not a silent error.
+        try {
+            discard db
+                .prepare("INSERT INTO phorj_pg_demo(id, name, active) VALUES(1, 'dup', true)")
+                .exec();
+        } catch (UniqueViolation e) {
+            Output.printLine("caught a unique violation");
+        }
+        discard db.prepare("DROP TABLE phorj_pg_demo").exec();
+        db.close();
+    } catch (DbError e) {
+        // A connect error prints the host but NEVER the password (redacted by the driver).
+        Output.printLine("DB error: {e.message}");
+    }
+}
