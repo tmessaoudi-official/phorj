@@ -622,3 +622,47 @@ PASS 3 (45 DEF): 39 FIXED · 4 PARTIALLY-FIXED (DEF-016 string-bytes [inherited 
 
 Top-5 gaps: database access · HTTP client · sessions/auth · sprintf family · filesystem breadth
 ```
+
+### 4.8 Recompute at HEAD (2026-07-16 — the DEC-208 Core.Db execution wave + Core.Mail, fable overnight run)
+
+**Scope of the span (bea7f61 → HEAD, ~40 commits, 2026-07-13→16):** the ENTIRE `Core.Db` execution
+layer (DEC-208 slices S1/S2/B–K: prepare/bind/bindNamed/bindList/query/exec/executeMany/
+execReturningId/lastInsertId, typed Row accessors incl. decimal/enum/JSON/arrays, queryInto/
+queryOneInto/queryScalar/queryMap hydration + naming strategies + turbofish, lazy streamInto,
+manual + closure transactions + savepoints + retry, typed DbError taxonomy, timeout, onQuery,
+Secret credentials, W-SQL-INJECTION lint, THREE drivers: bundled SQLite + Postgres + MySQL/MariaDB,
+`db` a DEFAULT feature) · `Core.Mail` (DEC-223: injection-safe composition, 4 transports, DKIM,
+typed taxonomy) · `Core.Log` · DEC-221/222 throwing ctors + closures · DEC-214 collections ·
+E-TRANSPILE-DB/MAIL ladder gates · 2 macro benches.
+
+**Row flips [Verified: tests/db.rs 79 rows-of-coverage + tests/mail.rs + shipped commits]:**
+
+| # | Row(s) | Was | Now | Δ | Evidence |
+|---|---|---|---|--|---|
+| 1 | FN-DB (10 rows — "entire database surface absent", TOP-20 #1) | 10 GAP-planned | 9 COVERED + 1 P | T2 +9.5 | PDO/mysqli execution parity and beyond: prepared/named binds, typed fetch, transactions incl. savepoints+retry (PDO has no retry), lastInsertId/RETURNING, bulk executeMany, IN-list binds (PDO cannot), 3 drivers, typed error taxonomy (PDO: string codes). The 1 P: isolation-level surface + fetch-mode variety corners deferred [Verified: tests/db.rs on both backends; tests/db_postgres.rs/db_mysql.rs live legs] |
+| 2 | FN-NET `mail()` (1 row) | GAP-unplanned | COVERED | T2 +1 | Core.Mail exceeds mail(): SMTP auth+TLS+attachments+DKIM vs none of those; DEF-031 header injection = structurally impossible (typed Address) vs PHP's mitigable [Verified: tests/mail.rs both backends] |
+| 3 | FN-NET `syslog` (1 row) | GAP-planned | COVERED | T2 +1 | Core.Log shipped in-span (3-sink) [Verified: tests/log.rs] |
+| 4 | DEF-031 scorecard | N/A ("no mail facility") | **BETTER-THAN-PHP** | — | the injection class is unrepresentable, not merely mitigated |
+
+**Recomputed arithmetic (additive delta on §4.7):**
+- T2 score 18.5 → 30 / den 140; Δweighted = 2×11.5 / 1264 = +1.8pp → FN usage-weighted 35.2 → **37.0%**
+- SYN unchanged **79.8%** (turbofish/throwing-ctors are phorj-side ergonomics, not PHP-parity syntax
+  rows — the DEC-202 precedent) · RT unchanged **75.0%**
+- **PHP-parity = 0.35×79.8 + 0.40×37.0 + 0.25×75.0 = 27.9 + 14.8 + 18.75 ≈ 62%** (was ≈61)
+- Raw floor: (103 + 166 + 13.5)/665 ≈ **42%**
+
+**Vision %** — programme deltas: **GA-M12 62→78** (the DB story is now BOTH halves — execution +
+3 drivers + typed hydration + streaming — AND the mailer battery; not higher: HTTP client, sessions,
+FS remain). **M-perf holds 70** (21 micros hold ≥1.0; the two NEW macro benches land as honest
+flagged losses — jsonround 0.25×, dbwork 0.63× — with recorded anatomy+levers; crediting perf while
+adding known losses would be dishonest). Mean = (1092 + 16)/16 = 1108/16 = **69.3%**.
+**Vision = 0.70×62.0 + 0.30×69.3 = 43.4 + 20.8 ≈ 64%** (was ≈63).
+
+**Grade:** row flips **[Verified]** (per-row evidence above); headline **[Inferred]** (additive
+delta on the ratified model, quoted with the 35/40/25 weights); programme scores **[Speculative]**
+(judgment, as always).
+
+**The same finding, again sharpened:** the single largest migration blocker (TOP-20 #1, all 10
+FN-DB rows) fell this span and the headline moved +1 (61→62) — stdlib breadth remains the drag
+because the NEXT blockers are untouched: HTTP client (#2), sessions (#3), FS/streams (#5). Those
+are exactly the run's Web/Runtime pillar packs; §11.3's ≈65–66% projection needs all three.
