@@ -1373,3 +1373,23 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   (+ the existing W-SECRET lint). PHP twin redacts identically. Interpolation already refuses at
   compile time (verified). *Alternatives (offered): E-SECRET-DUMP type error (kills dump's
   config-debugging value); document-only (abandons safer-than-PHP for the corner).* HIGH build.
+
+- **DEC-264 — RULED (audit flag F-026, HIGH security): HttpClient strips sensitive headers on
+  cross-origin redirect + on TLS downgrade.** On a redirect whose target ORIGIN (scheme+host+port)
+  differs from the current, DROP {`Authorization`, `Cookie`, `Proxy-Authorization`,
+  `WWW-Authenticate`} before the next hop; ALSO drop them on any https→http downgrade even
+  same-host; same-origin same-scheme hops keep all headers. Closes the credential-leak-on-redirect
+  class (curl CVE-2022-27774) and makes the "beyond PHP curl" claim true. Proxy usage unaffected
+  (Proxy-Authorization is consumed at the configured proxy transport, never forwarded to origin —
+  explained + confirmed). Cross-language: reqwest/curl-post-CVE/browsers use exactly this RFC set.
+  *Alternatives (offered): strip on ANY redirect (occasionally over-strips same-origin re-auth);
+  error on redirect-with-credentials (breaks OAuth flows); broaden to heuristic X-Api-Key/token
+  matching (over-strip risk — the RFC set is precise/predictable).* Build in the security wave.
+- **DEC-265 — RULED (audit flag F-027, security): SMTP REQUIRES TLS when credentials are set.**
+  If `SmtpConfig` carries a user/password → FORCE `Tls::Required` (fail the send if the server
+  won't STARTTLS); credentials NEVER touch a cleartext channel. Unauthenticated sends (`user==""`,
+  Mailpit-style fakers) keep `Opportunistic` so local dev works. Plus the explicit knob
+  (`Tls::Required`/`Opportunistic`/`None`) for override — subsumes the queued DEC-230 TLS-knob item
+  with the security lens. Cross-language: Symfony Mailer / nodemailer default to this.
+  *Alternatives (offered): knob-only keep-opportunistic-default (unsafe default); implicit-TLS
+  on 465 (more spec-accurate, more logic — fold in later if wanted).*
