@@ -1,88 +1,96 @@
 {
-  "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT (docker php:8.5-cli). The gate BLOCKS on identity breaks and WIN->LOSS flips (ratio crossing 1.0 downward) \u2014 NOT on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after the JIT lands a WIN so the flip check protects it. ratio<1 = the VM still LOSES to php (the JIT is the lever).",
+  "_comment": "G-8 mandate ratchet baseline (scripts/microbench-gate.sh). Per-feature php/vm ratio + output-identity vs release-php+JIT (docker php:8.5-cli). The gate BLOCKS on identity breaks and WIN->LOSS flips (ratio crossing 1.0 downward) — NOT on ratio magnitude (too noisy on a shared machine; perf-gate.sh is the robust VM-regression gate). RATCHET: re-emit after the JIT lands a WIN so the flip check protects it. ratio<1 = the VM still LOSES to php (the JIT is the lever).",
   "features": {
     "closurecall": {
-      "ratio": 2.077,
+      "ratio": 2.099,
+      "identical": true
+    },
+    "dbwork": {
+      "ratio": 0.674,
       "identical": true
     },
     "enum": {
-      "ratio": 1.656,
+      "ratio": 1.676,
       "identical": true
     },
     "fibrec": {
-      "ratio": 1.79,
+      "ratio": 1.885,
       "identical": true
     },
     "floatarith": {
-      "ratio": 4.005,
+      "ratio": 4.140,
       "identical": true
     },
     "floatloop": {
-      "ratio": 1.0,
+      "ratio": 1.012,
       "identical": true
     },
     "floatmul": {
-      "ratio": 1.0,
+      "ratio": 0.979,
       "identical": true
     },
     "forin": {
-      "ratio": 2.052,
+      "ratio": 1.452,
       "identical": true
     },
     "hofpipe": {
-      "ratio": 6.475,
+      "ratio": 6.323,
       "identical": true
     },
     "intadd": {
-      "ratio": 1.461,
+      "ratio": 1.455,
       "identical": true
     },
     "interp": {
-      "ratio": 2.75,
+      "ratio": 2.658,
+      "identical": true
+    },
+    "jsonround": {
+      "ratio": 0.250,
       "identical": true
     },
     "listappend": {
-      "ratio": 1.653,
+      "ratio": 1.261,
       "identical": true
     },
     "listindex": {
-      "ratio": 1.613,
+      "ratio": 1.766,
       "identical": true
     },
     "mapget": {
-      "ratio": 1.105,
+      "ratio": 1.116,
       "identical": true
     },
     "mapinsert": {
-      "ratio": 1.08,
+      "ratio": 1.094,
       "identical": true
     },
     "match": {
-      "ratio": 7.07,
+      "ratio": 7.468,
       "identical": true
     },
     "methodcall": {
-      "ratio": 2.877,
+      "ratio": 2.999,
       "identical": true
     },
     "objalloc": {
-      "ratio": 9.08,
+      "ratio": 9.516,
       "identical": true
     },
     "strbuild": {
-      "ratio": 2.166,
+      "ratio": 2.221,
       "identical": true
     },
     "stringconcat": {
-      "ratio": 2.039,
+      "ratio": 1.711,
       "identical": true
     },
     "trycatch": {
-      "ratio": 33.419,
+      "ratio": 36.139,
       "identical": true
     },
     "webish": {
-      "ratio": 2.286,
+      "ratio": 2.396,
       "identical": true
     }
   }

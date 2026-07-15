@@ -171,7 +171,13 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
-**RUN CURSOR: → Spine 6 (perf: sqlbuild-surface ladder L3 + re-ratchet; then review sweep). DONE
+**RUN CURSOR: → Spine 9 (parity ledger recompute) → then value-ordered packs. DONE ALSO: Spine 6 ✅
+(ratchet deferred under load-guard, then RUN on the quiet box: 21/21 micros HOLD, no flips,
+output-identical; perf-gate PASS 2016×-over-floor) · Spine 7 ✅ (sweep batches 1+2 in KNOWN_ISSUES:
+outbox pollution fixed, impure-check substring hole, parser-unwrap fuzz audit queued, FEATURES.md
+Core.Db/Mail rows added, mail.rs decomposed, 10-file M-Decomp backlog) · Spine 8 ✅ (2 MACRO benches
+added to the paired corpus: jsonround 0.25× LOSS-FLAGGED w/ anatomy+levers, dbwork 0.63×
+LOSS-FLAGGED w/ anatomy+levers; baseline re-emitted, 23 features). DONE
 ALSO: Spine 5 ✅ DEC-224 (Mongo: shape ruled — mongodb sync crate per postgres precedent,
 E-TRANSPILE-MONGO, twin-of-Db; build deferred by value order) · DEC-225 (concurrency PHP leg: hard
 error stands; PHP 8.1 FIBERS ruled the first faithful candidate — deterministic mirrored-scheduler

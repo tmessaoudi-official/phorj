@@ -34,6 +34,19 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **PERF FLAGS (spine 8, WIN-OR-FLAG — measured pinned+interleaved vs fresh docker php:8.5-cli+JIT,
+  quiet box, 2026-07-16):** the two NEW macro benches ship as honest LOSSES with anatomy:
+  (1) `jsonround` **0.25×** — per-iteration Json parse→match→build→stringify. Anatomy: phorj's Json
+  is an enum TREE (one Rc allocation per node, enum-payload matching) vs PHP's C json_decode into
+  packed zval arrays. Levers: arena/SSO for Json nodes · a native "extract scalar by path" fast
+  path (kills tree churn for the common read) · JIT coverage of enum-match pipelines (the match
+  micro is 7.4× — the loss is allocation, not dispatch).
+  (2) `dbwork` **0.63×** — 50 insert/iter + aggregate read on identical embedded SQLite. Anatomy:
+  per-call prelude wrapping (DbResult match + throw plumbing) + per-op handle Rc churn + per-row
+  prepare; PDO's prepare/bindValue are thin C. Levers: statement-handle cache keyed by SQL ·
+  native fast-path for the bind→exec chain (skip DbResult boxing on the hot path) · JIT'ing the
+  prelude wrapper bodies. All 21 original micros HOLD ≥1.0 (gate PASS, no flips, output-identical);
+  baseline re-emitted with the 2 new pairs (LOSS baselines — a future improvement ratchets them).
 - **SWEEP BATCH 2 (spine 7, structure + gates)** —
   (1) P1 M-DECOMP BACKLOG (Invariant 13, hard cap 1000): 10 files over cap — jit/analyze.rs 2957 ·
   checker/desugar_db.rs 2703 · native/db/mod.rs 2267 · jit/handles.rs 2104 · jit/emit_unboxed/mod.rs

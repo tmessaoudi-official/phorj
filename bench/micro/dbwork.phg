@@ -1,0 +1,52 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+import Core.Db.Statement;
+
+// MACRO bench: a database work slice — per outer iteration: one prepared parameterized INSERT
+// executed for 50 rows (statement reuse via executeMany's prepare-once path would hide the bind
+// cost, so this uses per-row prepare+bind+exec like a naive request handler), then an aggregate
+// SELECT read back through the typed scalar path. Paired against PHP PDO sqlite (both sides run
+// the SAME embedded C SQLite — the delta measured is the LANGUAGE-side binding/dispatch overhead,
+// which is exactly the fair fight). Connection opened once outside the loop (both sides).
+function bench(Db db, int iters): int throws DbError {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Statement del = db.prepare("DELETE FROM t")?;
+        discard del.exec()?;
+        mutable int r = 0;
+        while (r < 50) {
+            Statement ins = db.prepare("INSERT INTO t(k, v) VALUES(?, ?)")?;
+            Statement b1 = ins.bind(r)?;
+            Statement b2 = b1.bind(r * 3 + i % 7)?;
+            discard b2.exec()?;
+            r = r + 1;
+        }
+        Statement sel = db.prepare("SELECT SUM(v) FROM t")?;
+        int total = sel.queryScalar<int>()?;
+        acc = acc + total;
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    try {
+        Db db = new Db("sqlite::memory:");
+        discard db.prepare("CREATE TABLE t(k INTEGER, v INTEGER)").exec();
+        int iters = 400;
+        int warm = bench(db, iters);
+        int guard = warm - warm;
+        int t = Runtime.monotonicNanos();
+        int acc = bench(db, iters);
+        int d = Runtime.monotonicNanos() - t;
+        Output.printLine("dbwork\t{d + guard}\t{acc}");
+    } catch (DbError e) {
+        Output.printLine("dbwork\t0\tERROR {e.message}");
+    }
+}

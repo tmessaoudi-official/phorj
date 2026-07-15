@@ -1,0 +1,66 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.String;
+import Core.Json;
+import Core.Map;
+
+// MACRO bench: a JSON round-trip slice (the serialization CPU of an API response) — parse a fixed
+// document, read two fields out of the tree by match, rebuild a response object, stringify it, and
+// fold the rendered length + extracted values into the checksum. Mixes the parser, enum matching,
+// map/list construction, and the encoder — the "does the whole Json pipeline hold up?" compass,
+// paired against PHP's C-native json_decode/json_encode (the hardest fair baseline).
+function extractInt(Json j, string key): int {
+    return match (j) {
+        Json.Object(es) => match (Map.get(es, key) ?? new Json.Null()) {
+            Json.Int(n) => n,
+            Json.Null() => 0,
+            Json.Bool(b) => 0,
+            Json.Float(f) => 0,
+            Json.String(s) => 0,
+            Json.Array(xs) => 0,
+            Json.Object(inner) => 0
+        },
+        Json.Null() => 0,
+        Json.Bool(b2) => 0,
+        Json.Int(n2) => 0,
+        Json.Float(f2) => 0,
+        Json.String(s2) => 0,
+        Json.Array(xs2) => 0
+    };
+}
+
+function bench(int iters): int {
+    string doc = "\{\"id\": 7, \"qty\": 3, \"name\": \"widget\", \"tags\": [\"a\", \"b\"], \"price\": 9.5\}";
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Json? parsed = Json.parse(doc);
+        if (var j = parsed) {
+            int id = extractInt(j, "id");
+            int qty = extractInt(j, "qty");
+            Json resp = new Json.Object(
+                [
+                    "ok" => new Json.Bool(true),
+                    "id" => new Json.Int(id),
+                    "total" => new Json.Int(id * qty)
+                ]
+            );
+            string body = Json.stringify(resp);
+            acc = acc + String.length(body) + id + qty;
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+function main(): void {
+    int iters = 200000;
+    int warm = bench(iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("jsonround\t{d + guard}\t{acc}");
+}
