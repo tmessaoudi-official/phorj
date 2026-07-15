@@ -179,7 +179,93 @@ HOPES to do · green-thread concurrency ⊃ True Async (draft) · Debug.dump enu
 
 ## D1 — Decision register reopen
 
-<!-- one verdict line per DEC row -->
+> Every row re-verdicted at full depth against the better-than-PHP bar. Vocabulary:
+> JUSTIFIED(why) / FLAGGED(F-###) / OBSOLETE / SUPERSEDED(by). "probe" = re-run live this audit.
+
+### §1 Foundational doctrine (DEC-001…016)
+
+- DEC-001 **JUSTIFIED** — the 3-backend byte-identity spine is the project's core safety asset; re-verified daily by the differential harness (2158 tests green at baseline).
+- DEC-002 **JUSTIFIED** — D-L9 (Phorj:PHP :: TS:JS) still the governing bridge contract; consistent with the ladder rule for no-analog features.
+- DEC-003 **JUSTIFIED** — PHP oracle fails-not-skips; verified in the pre-push gate.
+- DEC-004 **JUSTIFIED** doctrine — craftsmanship as apex filter is literally this audit's bar.
+- DEC-005 **JUSTIFIED** doctrine — transpile-is-a-bridge; re-affirmed by DEC-240 (Uri twin is an EMISSION target, native impl stays the source of truth).
+- DEC-006 **JUSTIFIED** — compile-time config; byte-identity argument still airtight.
+- DEC-007 **JUSTIFIED** — Tier A/B determinism partition held through this run's Db/Mail/HttpClient/Fs/Session admissions (all quarantined case-by-case).
+- DEC-008 **SUPERSEDED** (DEC-009) — already marked; no action.
+- DEC-009 **JUSTIFIED** — per-domain vetted deps; every later admission (rusqlite/postgres/mysql/lettre/rustls) went through a recorded ruling. FEATURES.md count was stale → fixed this audit (F-003).
+- DEC-010 **JUSTIFIED** standing — bounded-autonomy refinements (2026-07-15) are amendments, not conflicts.
+- DEC-011 **JUSTIFIED** standing (= Invariant 9).
+- DEC-012 **JUSTIFIED**, refined by the 2026-07-15 AUTO-RULED(REOPENABLE) protocol — supersession chain intact.
+- DEC-013 **JUSTIFIED**; register row STALE — [Verified probe: `git remote -v` = tmessaoudi-official/phorj; cwd = /stack/projects/phorj] the "still manual" rename residue is DONE → register updated (D6).
+- DEC-014 **JUSTIFIED** (`phg` binary, ripgrep model).
+- DEC-015 **JUSTIFIED** — BETTER/SAME/WORSE(reject) bar = this audit's mandate, ratified again today.
+- DEC-016 **OBSOLETE** — that audit completed (this register is its artifact); row's "in progress" stale → register updated (D6).
+
+### §2 Namespace / modules / packages (DEC-020…049)
+
+- DEC-020 **JUSTIFIED** — nothing-in-the-wind; [Verified probe: bare `panic(…)`/`assert(…)` → "fault intrinsic and needs an import"] the DEC-047 gap is CLOSED in code.
+- DEC-021 **JUSTIFIED** — Go-style leaf-qualified calls; the D-L9-compatible choice.
+- DEC-022 **SUPERSEDED** (DEC-034 casing, DEC-113 renames) — already marked.
+- DEC-023 / DEC-024 **JUSTIFIED** — explicit stdlib imports diverge from PHP's ambient functions; justification = the anti-wind doctrine (recorded, strict).
+- DEC-025 **JUSTIFIED** — mandatory `package`, Go model.
+- DEC-026 / DEC-027 **JUSTIFIED** — native registry + shadow guard, structural-parity wins.
+- DEC-028 **JUSTIFIED** — phorj.toml exact-pin; divergence from Composer ranges justified by determinism (DEC-010 of the module world). Transitive deps still open → tracked (FEATURES row).
+- DEC-029 / DEC-030 / DEC-031 **JUSTIFIED** — loader-side enforcement/mangling; single-file PHP emission (PSR-4 autoload can't load free functions — reason still valid).
+- DEC-032 **SUPERSEDED** (DEC-036) — already marked.
+- DEC-033 **JUSTIFIED** — vendor-only network; `E-VENDOR-MISSING` offline discipline. Transitive deps deferred = tracked gap.
+- DEC-034 / DEC-035 **JUSTIFIED** — PascalCase everywhere, hard errors; divergence from PHP's anything-goes justified: phorj ENFORCES what PSR merely suggests (better-than-PHP by construction).
+- DEC-036 **SUPERSEDED** — the `import type` syntax it introduced was retired 2026-07-03 by the unified `import` (loader classifies module-vs-type); register row said plain ✅ → supersession note added (D6).
+- DEC-037 **JUSTIFIED** (no wildcard import — PHP has none either); the selective-import mechanics folded into unified import.
+- DEC-047 **JUSTIFIED**, register STALE — 📐 → shipped-in-substance [Verified probe above]; residual de-reservations (Core.Async naming) tracked in D2 sweep.
+- DEC-048 **JUSTIFIED** as designed-deferred [Verified: no `[packages]` parsing in loader] — stays 📐, tracked.
+- DEC-049 **JUSTIFIED** — keyword-vs-import 3-way rule; the Java-autoboxing rejection ages well.
+
+### §3 Type system & generics (DEC-050…070)
+
+- DEC-050 **JUSTIFIED** — maximal type system is phorj's core ahead-of-PHP asset; PHP 9.0's error-promotion RFCs validate the direction (D0.4).
+- DEC-051 **JUSTIFIED** — `instanceof` lowercase, PHP-familiar; smart-casts beat PHP.
+- DEC-052 **JUSTIFIED** — shared `class_implements` = structural parity.
+- DEC-053 **JUSTIFIED** — full erasure matches the PHP-target reality; reified-in-checker keeps static safety.
+- DEC-054 **JUSTIFIED** — generics-everywhere.
+- DEC-055 **SUPERSEDED** (DEC-208 slice A shipped call-site turbofish `69a9151e`) — register row unmarked → supersession note added (D6).
+- DEC-056 **JUSTIFIED**; its "lone `Circle =>` catch-all footgun deliberately preserved" was later CLOSED by DEC-209 (`E-MATCH-BARE-VARIANT` + `default`) — supersession-in-part noted (D6).
+- DEC-057 **JUSTIFIED** + **FLAGGED(F-010)** — the recorded "revisit E-INTERSECT-SIG when overloading lands" is now DUE (overloading shipped, DEC-058/059) and nobody reopened it: intersections still require signature agreement instead of overload-resolving. Design debt, needs a ruling.
+- DEC-058 / DEC-059 **JUSTIFIED** — overloading incl. return-type overloading; beyond-PHP power with compile-time ambiguity errors (PHP has neither).
+- DEC-060 / DEC-061 **JUSTIFIED** — totality cluster; generic enums.
+- DEC-062 **JUSTIFIED** — explicit-resolution MI; Model-3 (C3) deferral tracked.
+- DEC-063 **JUSTIFIED** — final-by-default diverges from PHP open-by-default; justification recorded (consistency with immutable-by-default; Kotlin precedent; `open` is one keyword away).
+- DEC-064 **JUSTIFIED** — traits with every PHP footgun promoted to compile-time diagnostics: a flagship better-than-PHP row.
+- DEC-065 **JUSTIFIED**, superseded-in-part by DEC-205 — "no tracing GC (acyclic)" was amended: cycles CAN form, DEC-205 ruled the phased collector (php-style threshold first, `Weak<T>` second). Chain noted in register (D6).
+- DEC-066 **JUSTIFIED** — explicit `this.field` (PHP-faithful, reader-honest).
+- DEC-067 **JUSTIFIED** — compile-time visibility beats PHP's runtime-only.
+- DEC-068 **JUSTIFIED** — three-tier error model; checked `throws` + Result + faults is strictly richer than PHP's untyped exceptions.
+- DEC-069 / DEC-070 **JUSTIFIED**.
+
+### §4 Language surface (DEC-080…105)
+
+- DEC-080 / DEC-081 **JUSTIFIED** — S0 DX + null-safety suite (compile-time null safety: the single biggest better-than-PHP claim, and it holds).
+- DEC-082 **JUSTIFIED**, superseded-in-part by **DEC-239** (pipe package: precedence fix + `%` + contextual lambda; capture-by-value and parser-lowering stand).
+- DEC-083 **JUSTIFIED** — mandatory `new` uniformity (classes + variants).
+- DEC-084 / DEC-085 **JUSTIFIED** — consts + eager statics (deterministic init order; PHP's lazy static init is the wart avoided).
+- DEC-086 **JUSTIFIED** (void/empty split, reshaped by DEC-113).
+- DEC-087 **JUSTIFIED** — UFCS method-first; beyond PHP, deterministic resolution recorded.
+- DEC-088 **JUSTIFIED** — return-type mandate with expr-lambda inference; DEC-239's pipe-position param inference is a consistent extension of the same principle.
+- DEC-089 **JUSTIFIED** batch — incl. `s[0]` deferral: PHP's byte-offset string indexing is a UTF-8 wart; `String.characters`/`substring` are the codepoint-safe answer (divergence justified, recorded).
+- DEC-090 **JUSTIFIED** — ternary stays deferred; expression-`if` covers the capability and `?` already means optionals + throws-propagation (three-meanings hazard real).
+- DEC-091 **JUSTIFIED** — `\{`/`\}` + raw strings.
+- DEC-092 **JUSTIFIED** — no ambient superglobals EVER: categorically safer than PHP.
+- DEC-093 **JUSTIFIED** — `: T` returns.
+- DEC-094 **FLAGGED(F-009)** — ruled "foreach REPLACES for-in", shipped ALONGSIDE (conflict C-2 confirmed live: both run today) — and the two forms are inconsistent: `foreach (xs as x)` binds UNTYPED while `for (int x in xs)` requires the type [Verified probes]. Redundant double surface violates the one-way principle; needs a ruling.
+- DEC-095 **JUSTIFIED** — type-first params (PHP-minus-sigil).
+- DEC-096 **JUSTIFIED** as corrected by DEC-210 — `++`/`--` statement-only; divergence from PHP's expression form justified (sequence-point hazards; PHP's own left-to-right pinning is the confession).
+- DEC-097 **JUSTIFIED** — one interpolating string + raw mode; single-quote rejection recorded (PHP's two-string-type split is the wart).
+- DEC-098 / DEC-099 **JUSTIFIED**.
+- DEC-100 **JUSTIFIED** — contextual `var` (the recorded same-day reversal is the register working as intended).
+- DEC-101 **JUSTIFIED** — default params; DEC-236 extended to ctors consistently.
+- DEC-102 **JUSTIFIED** — `length`(ordered)/`size`(keyed) semantic split beats PHP's count-everything; hard rename, no aliases.
+- DEC-103 **JUSTIFIED** — both entry-point forms (developer overrule recorded with reasons).
+- DEC-104 **JUSTIFIED** — checked `as` casts beat PHP's silent coercions.
+- DEC-105 **JUSTIFIED** — B1 iteration protocol (but see F-009 for the surface duality).
 
 ## D2 — KNOWN_ISSUES reopen
 
