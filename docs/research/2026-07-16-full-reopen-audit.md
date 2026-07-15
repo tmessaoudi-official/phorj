@@ -472,6 +472,49 @@ fmt guarantees meaning-preservation with tracked cosmetic gaps · parked-perf se
 
 ## D3 — Architecture
 
+> Repo shape at baseline: 351 Rust files, 124,035 lines. The M-Decomp hybrid discipline is
+> visibly applied (checker/vm/jit/format all sub-moduled; the `*_tests.rs` sibling convention is
+> uniform across native/) — the architecture is fundamentally healthy. Findings below.
+
+### D3.1 File-size cap violations [Verified: `wc -l` sweep this audit]
+
+**Hard cap (1000) — 10 files:** jit/analyze.rs **2957** · checker/desugar_db.rs **2703** ·
+native/db/mod.rs **2267** · jit/handles.rs **2104** · jit/emit_unboxed/mod.rs **1952** ·
+jit/tests/verticals.rs **1847** · cli/preludes.rs **1750** (grew +390 during the office arc — every
+new Core module inflates it) · cli/explain.rs **1727** (grows with every diagnostic) ·
+transpile/runtime_php.rs **1116** (grows with every PHP twin) · jit/emit_unboxed/verticals.rs
+**1025**. **Soft cap (800):** vm/exec.rs 983 · native/mail.rs 936.
+Note: KNOWN_ISSUES' fmt/printer.rs 1680 entry is STALE — the printer was split (printer/exprs.rs
+728 today) → D6. Structural observation: preludes/explain/runtime_php are **growth-coupled** files
+(every feature adds to all three) — their split should be BY MODULE/TOPIC so future features add
+files, not lines (kills the regrowth class, not just today's numbers).
+
+### D3.2 Folder-structure findings (src/ root has 19 loose files)
+
+- **F-021**: cohesion groupings proposed — (a) `manifest.rs + lock.rs + vendor.rs` → `src/package/`
+  (pre-stages the DEC-216 companion-tool extraction — the boundary becomes one directory move);
+  (b) `dap.rs + debug.rs + dump.rs + inspect.rs + profile.rs + mem.rs` → `src/devtools/` (the
+  debugger/introspection family); (c) `token.rs` → `src/tokenizer/token.rs` (it IS the tokenizer's
+  vocabulary). Root keeps the genuinely-core singletons (types, diagnostic, dispatch, phstr,
+  limits, php_names, json).
+
+### D3.3 Domain-coupling findings (the non-generic/opinionated lens)
+
+- checker/desugar_db.rs (2703) + desugar_router.rs (536) + desugar_di/ (1292) = **~4500 lines of
+  APPLICATION-DOMAIN compiler passes inside the checker** — the exact category DEC-215/the
+  externalize audit ruled must become one generic L1 attribute-reflection primitive + L2 consumers
+  (scheduled Ω-4/Ω-7). D3 confirms the finding and its ruled fix; the open question is only TIMING
+  (the biggest single non-JIT compiler file is a domain pass).
+- JIT = 5 of the 10 hard-cap violations — all spine-sensitive, each split needs a FRESH context
+  (the standing M-Decomp rule).
+
+### D3.4 Structural positives (recorded so they never regress silently)
+
+Single `check_and_expand` chokepoint (sugar never reaches backends) · value kernels single-sourced ·
+Op three-match discipline wildcard-free · native registry one-keyed · `# Sources:` header convention ·
+CORE_MODULES registry (1 row per module) · Transport seam quarantining sockets · per-worker heap
+isolation in serve · the *_tests.rs sibling convention.
+
 ## D4 — Security
 
 ## D5 — Perf ledger
