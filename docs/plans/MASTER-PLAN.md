@@ -180,6 +180,14 @@ DEC-236 ctor default params IN · DEC-237 overnight batch RATIFIED (run-end full
 rulings DEC-239…267 + META-7 recorded in `C-decisions.md`. The AUDIT BUILD QUEUE below is the
 new work order; all builds start fresh-context.**
 
+**POST-AUDIT REVIEW RULINGS (2026-07-16, developer via AskUserQuestion, post-consolidation
+`f344dd2c`):** (1) **advisor = re-enabled as OPUS for the ENTIRE build phase** — every slice's
+3C/6C certification runs independent (model diversity vs Fable main), not self-graded;
+(2) **sequencing = QUEUE FIRST, THEN PACKS** — all 5 queue tiers complete before the locked
+feature packs resume (overlapping items — DateTime, extension methods, pipe — build once, in
+the queue; the packs then run minus what the queue delivered); (3) audit + consolidation
+**PUSHED** by the developer at `f344dd2c` — the pre-build checkpoint is durable.
+
 ### AUDIT BUILD QUEUE (2026-07-16 — ordered by developer-set priority; each a fresh-context slice)
 
 **Tier 1 — HIGH correctness/security (do first):**
