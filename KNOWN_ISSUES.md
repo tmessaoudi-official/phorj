@@ -1,5 +1,13 @@
 # Known Issues & Limitations
 
+> **⚠ 2026-07-16 FULL REOPEN AUDIT — this file was fully re-verdicted.** Every row was reopened;
+> 17 rows are STALE (superseded by later shipped work) and 8 new flags were raised and ruled.
+> The authoritative current-state record + all rulings (DEC-239…267) live in
+> `docs/research/2026-07-16-full-reopen-audit.md` §D2 and `docs/research/full-audit/raw/C-decisions.md`.
+> The AUDIT BUILD QUEUE (ordered) is in `docs/plans/MASTER-PLAN.md` §0.2. Individual stale rows
+> below are corrected as their build slices land; until then, cross-check against the audit report.
+
+
 Phorj is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
 **deliberate scope boundaries** — features that are *planned* (see [ROADMAP.md](ROADMAP.md)) rather
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or

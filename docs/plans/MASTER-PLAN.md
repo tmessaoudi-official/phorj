@@ -175,8 +175,62 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 (`catch (Db.Timeout e)`; `as`-alias shorthand confirmed) · DEC-235 pipe `|>` = first-arg insertion ·
 DEC-236 ctor default params IN · DEC-237 overnight batch RATIFIED (run-end full-reopen stands).**
 
-**RUN CURSOR: ⏹ SUPERSEDED by the FULL REOPEN AUDIT (below) — the NEXT-slice queue (pipe |>,
-DEC-234, M-Decomp, JIT levers) resumes AFTER audit triage rules on the flags.**
+**RUN CURSOR: ▶ FULL REOPEN AUDIT COMPLETE (2026-07-16) — all 6 dimensions closed, 29 new
+rulings DEC-239…267 + META-7 recorded in `C-decisions.md`. The AUDIT BUILD QUEUE below is the
+new work order; all builds start fresh-context.**
+
+### AUDIT BUILD QUEUE (2026-07-16 — ordered by developer-set priority; each a fresh-context slice)
+
+**Tier 1 — HIGH correctness/security (do first):**
+1. **DEC-263** universal `Secret` redaction on all render surfaces (dump/dd leak — SECURITY).
+2. **DEC-264** HttpClient strip {Authorization,Cookie,Proxy-Authorization,WWW-Authenticate} on
+   cross-origin redirect + TLS downgrade (credential-leak — SECURITY).
+3. **DEC-265** SMTP require TLS when credentials set + explicit knob (auth-downgrade — SECURITY).
+4. **DEC-251** three PHP-enforcement-ahead checks (override-param variance / private-static /
+   intersection-receiver visibility — latent transpile-fatal).
+5. **DEC-252** LSP prelude-injection fix + the check≡LSP standing rule.
+6. **DEC-255** fault-parity exit-status sweep (find silent PHP-succeeds-where-phorj-faults).
+
+**Tier 2 — language-surface (the ruled features):**
+7. **DEC-239** pipe `|>`: precedence fix + `%` placeholder + contextual pipe lambda (DEC-235 revoked).
+8. **DEC-240** `Core.Uri` (RFC 3986, typed errors, PHP-8.5 twin).
+9. **DEC-247** `Core.DateTime` (immutable + Duration + tz; twin to DateTimeImmutable).
+10. **DEC-248** loop alignment: typed `foreach` + `k=>v` + retire `for-in` (codemod).
+11. **DEC-253** nullable unions `(A|B)?` / `A|B|null`.
+12. **DEC-254** in-place mutation: slice 1b (`obj.f[i]=v`) + `ref` params (copy-out) + mutability triad.
+13. **DEC-249** method default params → Db `transaction(fn, retries=0)`.
+14. **DEC-245** intersection overload-set resolution.
+15. **DEC-241** asymmetric visibility · **DEC-244** extension methods · **DEC-234** member-error namespacing.
+16. **DEC-250** Optional<enum> variant-pattern match · **DEC-257** Iterator interface (foreach-able).
+17. **DEC-256** W4-4 Unicode FULL: codepoint `length` + Unicode case + grapheme family.
+18. **DEC-243** String.levenshtein+similarText · **DEC-242** partitioned cookies · **DEC-258** Db column naming.
+
+**Tier 3 — architecture/quality (structural):**
+19. **DEC-262** M-Decomp under the NEW soft-300/hard-500 cap: growth-coupled 3 first
+    (preludes/explain/runtime_php → per-topic files), then non-JIT by size, JIT five last (each fresh).
+20. **DEC-260** folder moves (`src/package/`, `src/devtools/`, token→tokenizer).
+21. **DEC-261** DI/router L1/L2 refactor (advanced from Ω-4/Ω-7).
+22. **DEC-246** `clippy::pedantic` + fix all · cargo-fuzz dev-dep + parser/lift unwrap audit ·
+    prelude-parse-failure loud assert.
+
+**Tier 4 — perf (after correctness):**
+23. **DEC-266** loss levers: jsonround (Json arena + scalar-by-path + enum-match JIT), dbwork
+    (statement cache + native bind→exec), HttpClient keep-alive.
+24. **DEC-267** perf-suite expansion: I/O fixture benches + real-app macros (`var/phorj-app` vs PHP)
+    + F-024 JIT-coverage metric. Re-ratchet the 21 micros against current HEAD (owed).
+
+**Tier 5 — externalize wave (unchanged Ω schedule, now with a companion tool):**
+25. **DEC-216** vendor/manifest → companion tool · **DEC-218** web-spine → userland libs ·
+    **DEC-212** part-2 html→library · **DEC-214** `new Set<T>()` · **DEC-224** Mongo · **DEC-225** Fibers spike.
+
+**Standing rules added this audit (in CLAUDE.md invariants 13/16/17/18):** file cap soft-300/hard-500 ·
+META-7 (cross-language scan + byte-identity-is-a-tool, always asked) · check≡LSP + transpile/lift
+always-current · perf-bench-everything doctrine.
+
+---
+
+*(historical) The pre-audit NEXT-slice queue (pipe |>, DEC-234, M-Decomp, JIT levers) is
+SUBSUMED by the queue above.*
 
 **FULL REOPEN AUDIT (2026-07-16, developer at desk — ACTIVE). Mandate: everything reopened
 (all 149 DEC rows + all KNOWN_ISSUES), bar = phorj better/faster/safer/more-secure/more-intuitive
