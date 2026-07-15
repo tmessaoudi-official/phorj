@@ -1260,3 +1260,22 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   and exhaustive over `Color?` ("exhaustive matching is a flagship; an Optional-of-enum failing it
   undermines the story" — ruled soundness-adjacent). *Alternatives (offered): normal queue slot;
   leave recorded.* 
+
+- **META-7 — STANDING RULES (developer, 2026-07-16 audit, verbatim intent):** (1) **cross-language
+  scan mandatory** — whenever phorj sets out to do something better than PHP, survey how OTHER
+  languages (Rust/Kotlin/Swift/TS/Go/C#…) solved it before designing; (2) **byte-identity is NOT
+  the priority ordering** — emitting a `__phorj_*` helper to make the PHP leg identical is always
+  an acceptable tool; the choice is ALWAYS surfaced with an explanation and ruled by the developer,
+  never self-decided. Applies to every future design and build slice.
+- **DEC-251 — RULED (audit flag F-014): build ALL THREE PHP-enforcement-ahead checks, HIGH
+  priority** — (a) override parameter-compatibility (E-OVERRIDE-SIG extension; the latent
+  transpile-fatal twin of the fixed return-covariance case), (b) private/protected STATIC field
+  external-read enforcement, (c) visibility through intersection-typed receivers. Checker-only,
+  byte-identity strictly improves. Per META-7: design pass surveys Kotlin/C#/TS override-variance
+  rules first. *Alternatives (offered): (a)-only; keep tracked — both rejected.*
+- **DEC-252 — RULED (audit flag F-015): LSP prelude-injection fix, HIGH priority** — route
+  `diagnostics_for` through the same `check_and_expand` the CLI uses (injected types + intrinsic
+  imports), test pinning an injected-type program LSP-clean on both editors. **STANDING RULE
+  (developer): `phg check` and the LSP must never diverge — same pipeline, kept in sync as part
+  of every diagnostics change** (extends the both-editors-same-change DoD). *Alternative (offered):
+  normal queue — rejected.*
