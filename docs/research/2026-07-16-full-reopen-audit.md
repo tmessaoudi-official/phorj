@@ -44,6 +44,9 @@
 | F-006 | D0 | LOW | Core.String lacks similarity family (levenshtein/similar/soundex) | **RULED DEC-243**: levenshtein+similarText grapheme-aware; phonetics rejected |
 | F-007 | D0 | MED | extension methods: PHP 8.6 drafts it — phorj should ship first | **RULED DEC-244**: early sugar-wave slot |
 | F-008 | D0 | LOW | HttpClient per-request connects vs PHP persistent share handles | pending (D5) |
+| F-025 | D4 | HIGH | Debug.dump leaks Secret<T> plaintext (direct + transitive, probed) | **RULED DEC-263**: universal Secret redaction on all render surfaces |
+| F-026 | D4 | HIGH | HttpClient resends Authorization/Cookie to cross-host redirects (no strip) | pending |
+| F-027 | D4 | MED-HIGH | SMTP AUTH creds over downgradeable Tls::Opportunistic | pending |
 
 ---
 
@@ -516,6 +519,58 @@ CORE_MODULES registry (1 row per module) · Transport seam quarantining sockets 
 isolation in serve · the *_tests.rs sibling convention.
 
 ## D4 — Security
+
+> Every native I/O surface reviewed against its PHP equivalent + modern-client best practice
+> (META-7 cross-language lens: reqwest/curl/browsers, Symfony/Laravel dumpers). Three real findings
+> (one ruled inline), the rest confirmed sound.
+
+### D4 findings
+
+- **F-025 (HIGH) → RULED DEC-263**: `Debug.dump` leaks `Secret<T>` in plaintext — probed live
+  `Secret { value: "hunter2" }`, and transitively `Cfg { pw: Secret { value: "top" } }`. Defeats
+  Secret's non-printability guarantee through the newest module. Ruled: UNIVERSAL redaction
+  (`Secret { *** }`) on every generic render surface; `.expose()` the sole read path.
+- **F-026 (HIGH)**: HttpClient re-sends ALL request headers (incl. `Authorization`/`Cookie`) to
+  EVERY redirect hop with **no host/origin check** [Verified: `run_request` loops `exchange(&url,
+  &method, headers, …)` with the same `headers` slice; no host comparison, no stripping]. The
+  credential-leak-on-redirect class (curl CVE-2022-27774; reqwest/browsers strip `Authorization`
+  cross-origin). A redirect to `attacker.com` steals the bearer token. The shipped claim "security
+  defaults beyond PHP curl" is currently FALSE here — weaker than modern clients. Needs a ruling.
+- **F-027 (MED-HIGH)**: SMTP credentials ride `Tls::Opportunistic` [Verified: `smtp_inner`,
+  `builder_dangerous(host)` + `Tls::Opportunistic`] — a MITM stripping the STARTTLS offer forces
+  plaintext, and lettre then sends AUTH creds over the cleartext channel. Overlaps the queued
+  DEC-230 `Tls::Required` knob but the security framing (auth-over-downgradeable-TLS) is sharper.
+  Needs a ruling.
+
+### D4 confirmed-sound (positives, recorded)
+
+- **DSN password redaction** — `redact_dsn_password` covers both URL (`user:pass@`) and keyword
+  (`password=…` / `password='…'`) forms; password parsed out at connect, only a redacted DSN
+  retained (all drivers: sqlite/postgres/mysql). ✓
+- **Secret interpolation** — `"{s}"` is a compile-time type error (verified). ✓ (dump was the hole.)
+- **Session ids** — 128-bit from `/dev/urandom` + collision-retry; secure-by-default cookies
+  (`HttpOnly; SameSite=Lax; Path=/`, ahead of PHP's opt-in); `regenerate()` fixation defense. The
+  non-unix fallback is weak but `#[cfg(not(unix))]` (never compiles on the Linux-only host) +
+  documented. ✓
+- **Mail header injection** — `Address` parsing is injection-safe by construction (raw-header
+  injection `a@b\r\nBcc:` structurally impossible); native-only ladder (E-TRANSPILE-MAIL). ✓
+- **HttpClient** — CR/LF header-injection gate, URL-userinfo rejection, 64MB body cap, https via
+  rustls+webpki-roots (real cert verification on the primary request). ✓ (redirect is the gap.)
+- **`unsafe`-island** — machine-enforced: an `unsafe-island` build gate FAILS if an unsafe-code
+  allow-attribute appears anywhere outside `src/jit/` [Verified: all 5 non-jit `unsafe` grep hits
+  are comments]. Stronger than a convention. ✓
+- **No shell-exec surface** — `Core.Process` is argv/env READS only (`arguments`/`get`/`all`); no
+  `exec`/`system`/`shell_exec`/backtick equivalent exists → command-injection is categorically
+  impossible, a deliberate posture strictly safer than PHP. ✓
+- **W-SQL-INJECTION** lint (type-directed, import-gated) + **W-SECRET** lint. ✓
+- **prod = bare 500** (DEC-155) — traces/source never leak to the browser in non-dev serve. ✓
+
+> Method: every native surface probed live or code-read against its PHP equivalent, at `HEAD`
+> with a FRESH release binary (see the process finding).
+
+### D4 verdicts — strong (each verified this audit, vs the PHP equivalent)
+
+- **Sessions**: 128-bit `/dev/urandom` ids, HttpOnly+SameSite=Lax+
 
 ## D5 — Perf ledger
 

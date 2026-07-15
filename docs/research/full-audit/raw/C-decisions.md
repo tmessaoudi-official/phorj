@@ -1365,3 +1365,11 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   exhaustive-match units use index/dispatcher patterns to comply; enforcement = a pre-commit
   line-count warning (queued with the rule). Applies to new code immediately, to existing files as
   M-Decomp reaches them. *Alternatives (offered): 400/600 (recommended, declined); 500/800.*
+
+- **DEC-263 — RULED (audit flag F-025): UNIVERSAL SECRET REDACTION** — `Secret<T>` renders
+  REDACTED (`Secret { *** }`) on EVERY generic value-rendering surface: Debug.dump/dd (found
+  leaking, probed live: transitive `Cfg { pw: Secret { value: "top" } }`), error messages,
+  reflection dumps, and every future serializer/trace surface. `.expose()` is the SOLE read path
+  (+ the existing W-SECRET lint). PHP twin redacts identically. Interpolation already refuses at
+  compile time (verified). *Alternatives (offered): E-SECRET-DUMP type error (kills dump's
+  config-debugging value); document-only (abandons safer-than-PHP for the corner).* HIGH build.
