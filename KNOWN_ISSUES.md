@@ -28,6 +28,12 @@ parse error, non-zero exit) — never a crash.
   `PHORJ_MYSQL_TEST_DSN='mysql://developer:developer@localhost:42708/<db>' cargo test --features
   db-mysql --test db_mysql` against the stack MySQL in the morning. Temporal columns + `numeric[]`
   read via CAST/`::text[]` (documented steering, not silent).
+- **DEC-230 · Core.Mail BUILT** (twin-of-Db; four transports; typed taxonomy; DKIM; ladder-gated).
+  Morning items: (a) run the live legs against the stack — Mailpit
+  (`PHORJ_MAILPIT_SMTP=localhost:<port> cargo test --features mail --test mail`) and MySQL
+  (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
+  params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
+  sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
 - **FIXED en route · `rewrite_html` walker missed `Expr::New`** — any throws-`?` / `html"…"` / tagged
   template nested in `new C(args)` was silently left un-rewritten (VM compile error / interpreter
   runtime fault). Severity: P0 correctness (pre-existing, latent). Pinned by

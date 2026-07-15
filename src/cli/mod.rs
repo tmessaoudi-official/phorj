@@ -35,6 +35,9 @@ mod preludes;
 pub use self::help::*;
 pub use self::pipeline::*;
 pub(crate) use self::preludes::*;
+// Public seam for the test harnesses: which feature-gated Core modules are absent in this build
+// (differential/example sweeps skip their examples loudly instead of failing E-MODULE-UNAVAILABLE).
+pub use self::preludes::unavailable_gated_modules;
 
 #[cfg(test)]
 mod tests;

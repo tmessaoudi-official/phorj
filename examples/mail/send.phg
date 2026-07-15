@@ -1,0 +1,46 @@
+// `Core.Mail` (DEC-223) — the native mailer: compose with a typed, injection-safe builder and send
+// over one of four transports (SMTP / sendmail / file / null) behind the same `send`/`sendAll` API.
+//
+// This example uses the deterministic offline transports (`file` writes RFC-shaped `.eml` files;
+// `null` discards), so it runs headless. The SMTP walkthrough (Mailpit, auth, TLS, DKIM) is in
+// `examples/mail/README.md`. `Core.Mail` is NATIVE-ONLY: `phg transpile` rejects it with
+// `E-TRANSPILE-MAIL` (PHP's mail() has no auth/TLS and is header-injection-prone — no faithful map).
+package Main;
+
+import Core.Output;
+import Core.Mail;
+import Core.Mail.Mailer;
+import Core.Mail.Email;
+import Core.Mail.Address;
+import Core.Mail.FileTransport;
+import Core.Mail.NullTransport;
+import Core.Mail.InvalidAddress;
+import Core.Mail.MailError;
+
+function main(): void {
+    try {
+        // A file-transport mailer: every send writes outbox/phorj-mail-<n>.eml.
+        Mailer m = new Mailer(new FileTransport("outbox"));
+        // The builder is chainable; `.html` AUTO-DERIVES a plaintext alternative part.
+        Email e = new Email()
+            .from(new Address("app@example.io", "My App"))
+            .to(Address.of("user@example.org"))
+            .subject("Welcome!")
+            .html("<h1>Hello</h1><p>Caf&eacute; &amp; friends</p>");
+        m.send(e);
+        Output.printLine("wrote outbox/phorj-mail-0.eml");
+        // Addresses are validated AT CONSTRUCTION — header injection is structurally impossible.
+        try {
+            Address bad = new Address("not-an-address", "");
+            Output.printLine("unreachable {bad.email}");
+        } catch (InvalidAddress ie) {
+            Output.printLine("rejected an invalid address at construction");
+        }
+        // Batch over one transport; returns the sent count.
+        Mailer devNull = new Mailer(new NullTransport());
+        int n = devNull.sendAll([e, e]);
+        Output.printLine("null transport swallowed {n}");
+    } catch (MailError err) {
+        Output.printLine("mail error: {err.message}");
+    }
+}

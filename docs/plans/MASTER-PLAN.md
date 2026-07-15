@@ -171,7 +171,10 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
-**RUN CURSOR: → Spine 4 (Core.Mail build per DEC-223 locked spec). DONE ALSO: Spine 3 ✅ DEC-229
+**RUN CURSOR: → Spine 5 (DEC-224/225/226 rulings under bounded autonomy). DONE ALSO: Spine 4 ✅
+DEC-223 built + DEC-230 realizations (Core.Mail: 4 transports, injection-safe Address, html
+auto-plaintext, CID/byte attachments, MailError taxonomy, Secret creds, DKIM, sendAll,
+E-TRANSPILE-MAIL; 2147 green with mail, 2135 default; ctor-default-params language gap flagged). DONE ALSO: Spine 3 ✅ DEC-229
 (MySQL/MariaDB driver `db-mysql` + slice-K Postgres arrays→List<T> + withPassword mysql-DSN fix +
 bare-path fallthrough killed; 79 db tests + 21 lib tests; live round-trip opt-in vs stack MySQL
 42708). DONE: Spine 1 ✅ (query…() turbofish,

@@ -86,6 +86,12 @@ db-postgres = ["db", "dep:postgres"]
 # (`minimal-rust`: pure-Rust wire protocol, no compression/TLS/chrono extras — the smallest surface).
 # `db-mysql` implies `db` (same multi-driver seam as `db-postgres`). Off by default and off for wasm.
 db-mysql = ["db", "dep:mysql"]
+# Native mailer `Core.Mail` (DEC-223, twin-of-Db). Admits `lettre` (11th external-dependency domain):
+# RFC-correct MIME/multipart, SMTP with optional auth, STARTTLS/implicit TLS via the already-admitted
+# rustls, optional DKIM, and a BLOCKING SmtpTransport (no tokio at the phorj-facing API). Native-only
+# (`E-TRANSPILE-MAIL` — PHP mail() has no auth/TLS and is header-injection-prone; no faithful map).
+# Non-default, non-wasm; spine-quarantined (pure:false natives).
+mail = ["dep:lettre"]
 # Convenience: every admitted SQL driver at once.
 db-all = ["db", "db-postgres", "db-mysql"]
 
@@ -103,6 +109,12 @@ argon2 = { version = "0.5", optional = true, features = ["std"] }
 # corosensei fails to compile there), so the dep is gated to non-wasm targets and the `green` feature.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 corosensei = { version = "0.3", optional = true }
+
+# ELEVENTH external-dependency domain (native mailer, DEC-223 developer-ruled 2026-07-15). `lettre`
+# under a minimal feature set: blocking SMTP (NO tokio at the API), rustls TLS, RFC-correct MIME
+# builder, DKIM, sendmail pipe. Its `unsafe`/async internals stay inside the dependency (the
+# rusqlite/postgres criterion). Feature-gated (`mail`), non-default, non-wasm, spine-quarantined.
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder", "dkim", "sendmail-transport"], optional = true }
 
 # EIGHTH external-dependency domain (embedded SQL, admitted 2026-07-03). Powers the `Core.Db`
 # enhanced-PDO primitive (DEC-208) over SQLite. `bundled` compiles SQLite from vendored C source, so

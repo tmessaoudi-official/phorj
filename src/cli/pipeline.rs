@@ -463,11 +463,18 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
 /// code. Never a silent degrade, and never the wall of prelude-internal errors the check would
 /// otherwise produce. New native-only module = one row here.
 fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
-    const NATIVE_ONLY: &[(&[&str], &str, &str)] = &[(
-        &["Core", "Db"],
-        "E-TRANSPILE-DB",
-        "`Core.Db` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
-    )];
+    const NATIVE_ONLY: &[(&[&str], &str, &str)] = &[
+        (
+            &["Core", "Db"],
+            "E-TRANSPILE-DB",
+            "`Core.Db` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
+        ),
+        (
+            &["Core", "Mail"],
+            "E-TRANSPILE-MAIL",
+            "`Core.Mail` is native-only (DEC-223): PHP's mail() has no SMTP auth, no TLS, and is header-injection-prone — any mapping would silently drop auth/TLS/attachments (THE LADDER RULE forbids the downgrade). Run this program with `phg run`.",
+        ),
+    ];
     use crate::ast::Item;
     for it in &prog.items {
         let Item::Import { path, span, .. } = it else {

@@ -984,3 +984,19 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   README already promises it). Risk example: `new Db("mysql://app@db:3306/prod")` previously fell
   through to the SQLITE FILE PATH driver (opening a local file literally named the DSN!) — now a
   clean feature-gated ConnectionError or the real driver.
+
+- **DEC-230 — AUTO-RULED (REOPENABLE): Core.Mail surface realizations where the locked spec exceeded
+  the language.** (1) `new SmtpConfig(host, port, user, Secret pw)` → static factory
+  `SmtpConfig.withAuth(host, port, user, Secret)` and `new SendmailTransport()` path override →
+  `SendmailTransport.at(path)`: phorj has NO constructor default params (probe: parse error at
+  `constructor(... string user = "")`) and no ctor overloading — LANGUAGE GAP flagged in
+  KNOWN_ISSUES for the sugar wave (functions have defaults; ctors don't — an inconsistency).
+  (2) Taxonomy subtypes `Timeout`/`Io` realized as `MailTimeout`/`MailIo` — bare `Timeout` already
+  belongs to Core.Db's injected taxonomy and two injected classes may not collide (risk example:
+  `import Core.Db; import Core.Mail;` in one program — both preludes inject). (3) `Address.of(email)`
+  static = the display-name-less form. (4) SMTP TLS = STARTTLS-opportunistic default (fakers work,
+  TLS used when offered); implicit-TLS config knob QUEUED (real adjudication: config surface shape).
+  *Alternatives:* per-field builder on SmtpConfig (more chatty); a Db-style union ctor arg for auth
+  (rejected — a Secret-bearing variant reads worse). En route: `all_examples_transpile_and_match_php`
+  gained the generic `E-TRANSPILE-*` ladder-skip arm; the differential run≡runvm glob gained the
+  feature-gated-module skip via the new `phorj::cli::unavailable_gated_modules()` seam.

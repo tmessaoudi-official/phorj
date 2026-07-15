@@ -1272,6 +1272,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              (§14 LADDER: no silent semantic downgrade). Run database programs with `phg run` /\n\
              `phg runvm`, or serve them with `phg serve`.\n"
         }
+        "E-TRANSPILE-MAIL" => {
+            "E-TRANSPILE-MAIL — a program importing `Core.Mail` cannot be transpiled to PHP.\n\n\
+             `Core.Mail` is native-only (DEC-223): PHP's stdlib `mail()` has no SMTP authentication,\n\
+             no TLS, and is header-injection-prone, so there is no faithful safe mapping — any\n\
+             attempt (e.g. text-only mails through mail()) would silently drop auth/TLS/attachments,\n\
+             a forbidden semantic downgrade (§14 LADDER). Run mail programs with `phg run`, or keep\n\
+             the mail-sending part native and transpile only the rest of your program.\n"
+        }
         "E-MODULE-UNAVAILABLE" => {
             "E-MODULE-UNAVAILABLE — this `phg` binary was built without the imported module's feature.\n\n\
              Some Core modules carry native code behind a cargo feature (e.g. `Core.Db` behind `db`,\n\

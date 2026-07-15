@@ -1065,6 +1065,14 @@ fn p4c_programs_match_between_backends() {
 /// `docs/specs/2026-06-25-process-io-quarantine-seam-design.md`). The impure-module set is **derived
 /// from the `NativeFn::pure` flag**, not hardcoded here, so a future impure module is covered with no
 /// harness edit (the seam the `pure` marker exists for).
+/// True iff the source imports a feature-gated Core module NOT compiled into this build (derived
+/// from the cli's gated-module registry — a future gated module is covered with no harness edit).
+fn uses_unavailable_gated_module(src: &str) -> bool {
+    phorj::cli::unavailable_gated_modules()
+        .iter()
+        .any(|m| src.contains(&format!("import {m}")))
+}
+
 fn uses_impure_native(src: &str) -> bool {
     use std::collections::HashSet;
     let impure: HashSet<&str> = phorj::native::registry()
@@ -1173,6 +1181,16 @@ fn all_examples_match_between_backends() {
         // Quarantined (ambient-environment) examples are tested in tests/process.rs, not here.
         if uses_impure_native(&src) {
             eprintln!("differential: SKIP (impure/quarantined) {}", path.display());
+            continue;
+        }
+        // Feature-gated examples (e.g. examples/mail/ without `--features mail`): the module's
+        // natives are absent in THIS build, so running would fail E-MODULE-UNAVAILABLE — skip
+        // loudly; the feature's own gate (`cargo test --features mail --test mail`) covers them.
+        if uses_unavailable_gated_module(&src) {
+            eprintln!(
+                "differential: SKIP (feature-gated module absent) {}",
+                path.display()
+            );
             continue;
         }
         eprintln!("differential: {}", path.display()); // names the file if agree() panics
@@ -2292,6 +2310,16 @@ fn all_examples_transpile_and_match_php() {
             // gates it byte-identically.
             Err(e) if e.contains("E-TRANSPILE-UNCHECKED") => {
                 eprintln!("SKIP (unchecked/quarantined) {label}");
+                continue;
+            }
+            // NATIVE-ONLY ladder modules (§14 case 2 — `E-TRANSPILE-DB`, `E-TRANSPILE-MAIL`, …):
+            // transpile refuses BY DESIGN (disclosed, register-recorded exclusions), so their
+            // examples are oracle-quarantined here exactly like concurrency; the run≡runvm glob (or
+            // the module's own fixture suite) still gates them byte-identically. The `E-TRANSPILE-`
+            // prefix is reserved for deliberate ladder artifacts, so this arm can never hide an
+            // accidental transpiler regression (those surface as other codes → the panic below).
+            Err(e) if e.contains("E-TRANSPILE-") => {
+                eprintln!("SKIP (native-only ladder module) {label}");
                 continue;
             }
             // A transpiler feature the backend explicitly defers (e.g. literal `match` patterns,

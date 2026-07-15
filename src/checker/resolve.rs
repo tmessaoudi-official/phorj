@@ -248,6 +248,11 @@ impl Checker {
                 "DbHandle" if self.imports.values().any(|m| m == "Core.DbSys") => {
                     Ty::Named("DbHandle".into(), vec![])
                 }
+                // `MailHandle` (DEC-223) — the `Core.Mail` twin of `DbHandle`: the opaque native
+                // mailer/draft handle, import-gated on `Core.MailSys` (nothing in the wind).
+                "MailHandle" if self.imports.values().any(|m| m == "Core.MailSys") => {
+                    Ty::Named("MailHandle".into(), vec![])
+                }
                 "double" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => self.err(
                     *span,
                     format!("the numeric type `{name}` is not yet supported in M1"),

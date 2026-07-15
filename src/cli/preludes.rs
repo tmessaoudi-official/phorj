@@ -292,6 +292,194 @@ pub(super) const REGEX_PRELUDE: &str = "class Regex { constructor(public string 
 
 /// The `Secret<T>` opaque-wrapper type, injected when a program imports `Core.Secret` (Fork B,
 /// `docs/specs/2026-06-28-secret-type-design.md`). A `Secret<T>` value is constructed `new Secret(x)`
+/// `Core.Mail` (DEC-223) — the native mailer prelude, a TWIN of `Core.Db`: prelude classes wrap the
+/// `Core.MailSys` natives, errors flow through the prelude-local `MailResult<T>` + a `<<Kind>>`-parsing
+/// `MailError.fail`, and the transport credential is a `Core.Secret`. Native-only (`E-TRANSPILE-MAIL`
+/// — see the pipeline ladder gate); every symbol import-gated (nothing in the wind). Surface notes
+/// realized under bounded autonomy (developer to confirm, recorded in C-decisions DEC-230): the spec's
+/// `new SmtpConfig(host, port, user, Secret pw)` 4-arg form is realized as the static factory
+/// `SmtpConfig.withAuth(...)` (phorj has NO constructor default params / overloading — gap flagged in
+/// KNOWN_ISSUES), and `new SendmailTransport()` path override is `SendmailTransport.at(path)`.
+pub(super) const MAIL_PRELUDE: &str = r#"
+import Core.MailSys;
+import Core.String;
+import Core.List;
+// `Core.Secret` provides the opaque credential wrapper for `SmtpConfig.withAuth` (the Db.withPassword
+// discipline): the SMTP password never sits in plaintext in user code and is never retained by the
+// transport (only a redacted `smtp://host:port` description is stored).
+import Core.Secret;
+
+// Prelude-local result carrier (NOT Core.Result — see the Core.Db native docs on injection order).
+enum MailResult<T> { Ok(T value), Err(string message) }
+
+open class MailError implements Error {
+  constructor(public string message) {}
+  // The single classification point (the `DbError.fail` mechanism): natives tag failures with a
+  // `<<Kind>>` marker; this strips it and throws the matching TYPED subtype, so
+  // `catch (AuthFailed e)` is precise while `catch (MailError e)` still catches everything.
+  static function fail(string message): never throws MailError {
+    if (String.startsWith(message, "<<ConnectionFailed>>")) { throw new ConnectionFailed(String.removePrefix(message, "<<ConnectionFailed>>")); }
+    if (String.startsWith(message, "<<AuthFailed>>")) { throw new AuthFailed(String.removePrefix(message, "<<AuthFailed>>")); }
+    if (String.startsWith(message, "<<RecipientRejected>>")) { throw new RecipientRejected(String.removePrefix(message, "<<RecipientRejected>>")); }
+    if (String.startsWith(message, "<<TlsError>>")) { throw new TlsError(String.removePrefix(message, "<<TlsError>>")); }
+    if (String.startsWith(message, "<<InvalidAddress>>")) { throw new InvalidAddress(String.removePrefix(message, "<<InvalidAddress>>")); }
+    if (String.startsWith(message, "<<MessageBuildFailed>>")) { throw new MessageBuildFailed(String.removePrefix(message, "<<MessageBuildFailed>>")); }
+    if (String.startsWith(message, "<<Timeout>>")) { throw new MailTimeout(String.removePrefix(message, "<<Timeout>>")); }
+    if (String.startsWith(message, "<<Io>>")) { throw new MailIo(String.removePrefix(message, "<<Io>>")); }
+    throw new MailError(message);
+  }
+}
+
+// Typed error taxonomy (spec §5, shaped like DbError's). `MailTimeout`/`MailIo` carry the Mail prefix
+// because bare `Timeout` already belongs to Core.Db's taxonomy (two injected classes may not collide).
+class ConnectionFailed extends MailError { constructor(string message) { parent.constructor(message); } }
+class AuthFailed extends MailError { constructor(string message) { parent.constructor(message); } }
+class RecipientRejected extends MailError { constructor(string message) { parent.constructor(message); } }
+class TlsError extends MailError { constructor(string message) { parent.constructor(message); } }
+class InvalidAddress extends MailError { constructor(string message) { parent.constructor(message); } }
+class MessageBuildFailed extends MailError { constructor(string message) { parent.constructor(message); } }
+class MailTimeout extends MailError { constructor(string message) { parent.constructor(message); } }
+class MailIo extends MailError { constructor(string message) { parent.constructor(message); } }
+
+// A typed, injection-safe address (spec §4): validated AT CONSTRUCTION (DEC-221 throwing ctor), so an
+// `Address` value is valid-by-construction everywhere downstream — raw-header injection (the #1 PHP
+// mail() footgun) is structurally impossible.
+class Address {
+  constructor(public string email, public string name) throws MailError {
+    match (MailSys.addressCheck(email, name)) { MailResult.Ok(_) => Address.ok(), MailResult.Err(e) => MailError.fail(e)? };
+  }
+  // The name-less form (`Address.of("a@b.c")`) — phorj has no ctor default params.
+  static function of(string email): Address throws MailError { return new Address(email, "")?; }
+  private static function ok(): void {}
+}
+
+// An attachment source: a filesystem path (`fromFile`) or in-memory bytes (`fromBytes`). `mime` may be
+// "" for `fromFile` (guessed from the extension; pass it explicitly for anything exotic).
+class Attachment {
+  private constructor(public string path, public string name, public string mime, public bytes? data) {}
+  static function fromFile(string path): Attachment { return new Attachment(path, "", "", null); }
+  static function fromFileTyped(string path, string mime): Attachment { return new Attachment(path, "", mime, null); }
+  static function fromBytes(string name, string mime, bytes data): Attachment { return new Attachment("", name, mime, data); }
+}
+
+// Transport configs — plain data carriers `new Mailer(...)` dispatches on (match-over-union).
+class SmtpConfig {
+  public mutable string user;
+  public mutable Secret<string>? password;
+  constructor(public string host, public int port) { this.user = ""; this.password = null; }
+  // The authenticated form (spec's 4-arg constructor; realized as a factory — no ctor overloading).
+  static function withAuth(string host, int port, string user, Secret<string> password): SmtpConfig {
+    SmtpConfig c = new SmtpConfig(host, port);
+    c.user = user;
+    c.password = password;
+    return c;
+  }
+}
+class SendmailTransport {
+  public mutable string path;
+  constructor() { this.path = ""; }
+  // Override the sendmail binary path (default: /usr/sbin/sendmail).
+  static function at(string path): SendmailTransport { SendmailTransport t = new SendmailTransport(); t.path = path; return t; }
+}
+class FileTransport { constructor(public string dir) {} }
+class NullTransport { constructor() {} }
+
+// The message builder (spec §4): chainable, accumulating `to`/`cc`/`bcc` on repeat calls. `.html`
+// auto-derives a plaintext alternative (multipart/alternative); `.text` overrides it. Attachments:
+// `.attach` (multipart/mixed) and `.attachInline(cid, …)` (multipart/related, referenced `cid:<cid>`).
+class Email {
+  private mutable MailHandle raw;
+  constructor() {
+    this.raw = MailSys.emailNew();
+  }
+  function from(Address a): Email throws MailError {
+    this.raw = match (MailSys.from(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function replyTo(Address a): Email throws MailError {
+    this.raw = match (MailSys.replyTo(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function to(Address a): Email throws MailError {
+    this.raw = match (MailSys.to(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function cc(Address a): Email throws MailError {
+    this.raw = match (MailSys.cc(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function bcc(Address a): Email throws MailError {
+    this.raw = match (MailSys.bcc(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function subject(string s): Email throws MailError {
+    this.raw = match (MailSys.subject(this.raw, s)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function text(string body): Email throws MailError {
+    this.raw = match (MailSys.text(this.raw, body)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function html(string body): Email throws MailError {
+    this.raw = match (MailSys.html(this.raw, body)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function attach(Attachment a): Email throws MailError {
+    if (var d = a.data) {
+      this.raw = match (MailSys.attachBytes(this.raw, a.name, a.mime, d)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    } else {
+      this.raw = match (MailSys.attachFile(this.raw, a.path, a.mime)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    }
+    return this;
+  }
+  function attachInline(string cid, Attachment a): Email throws MailError {
+    if (var d = a.data) {
+      this.raw = match (MailSys.attachInlineBytes(this.raw, cid, a.mime, d)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    } else {
+      this.raw = match (MailSys.attachInline(this.raw, cid, a.path, a.mime)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    }
+    return this;
+  }
+  function handle(): MailHandle { return this.raw; }
+}
+
+// The mailer (spec §3): one of four transports behind the same `send`/`sendAll` surface. TLS on SMTP
+// is STARTTLS-opportunistic (used when the server offers it — Mailpit-style no-TLS fakers still
+// work); credentials only via `SmtpConfig.withAuth` + `Secret`.
+class Mailer {
+  private mutable MailHandle raw;
+  constructor(SmtpConfig | SendmailTransport | FileTransport | NullTransport transport) throws MailError {
+    this.raw = match (transport) {
+      SmtpConfig s => Mailer.connectSmtp(s)?,
+      SendmailTransport s => match (MailSys.sendmail(s.path)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? },
+      FileTransport f => match (MailSys.fileTransport(f.dir)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? },
+      NullTransport n => match (MailSys.nullTransport()) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? }
+    };
+  }
+  private static function connectSmtp(SmtpConfig cfg): MailHandle throws MailError {
+    mutable string pw = "";
+    if (var s = cfg.password) { pw = s.expose(); }
+    return match (MailSys.smtp(cfg.host, cfg.port, cfg.user, pw)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+  }
+  // Arm DKIM signing (RSA key PEM as a `Secret`) for every subsequent send on this mailer.
+  function dkim(string domain, string selector, Secret<string> privateKeyPem): Mailer throws MailError {
+    match (MailSys.dkim(this.raw, domain, selector, privateKeyPem.expose())) { MailResult.Ok(_) => Mailer.ok(), MailResult.Err(e) => MailError.fail(e)? };
+    return this;
+  }
+  function send(Email e): void throws MailError {
+    match (MailSys.send(this.raw, e.handle())) { MailResult.Ok(_) => Mailer.ok(), MailResult.Err(e2) => MailError.fail(e2)? };
+  }
+  // Batch over one reused transport connection. Fail-fast: the first failure aborts with that
+  // message's typed error (the count already delivered is in the message). Returns the sent count.
+  function sendAll(List<Email> emails): int throws MailError {
+    mutable List<MailHandle> handles = new List<MailHandle>();
+    for (Email e in emails) { handles = List.append(handles, e.handle()); }
+    return match (MailSys.sendAll(this.raw, handles)) { MailResult.Ok(n) => n, MailResult.Err(e) => MailError.fail(e)? };
+  }
+  private static function ok(): void {}
+}
+"#;
+
 /// and read only through `expose()` — the `value` field is private, and a `Secret` instance is not a
 /// `string`, so printing/interpolating it is a clean type error (the primary, loud guarantee; no
 /// runtime `***`). Reuses the generic-class machinery (`Box<T>`) wholesale — no new `Op`/`Value`/`Ty`.
@@ -912,6 +1100,38 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "SyntaxError",
         ],
     },
+    // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.Db`). MUST precede `Core.Secret`
+    // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Db→Secret) and
+    // `Core.MailSys` (its natives).
+    VirtualModule {
+        module: &["Core", "Mail"],
+        qualifier: "Mail",
+        src: Some(MAIL_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &[
+            "Mailer",
+            "Email",
+            "Address",
+            "Attachment",
+            "MailError",
+            "MailHandle",
+            "SmtpConfig",
+            "SendmailTransport",
+            "FileTransport",
+            "NullTransport",
+            // The typed taxonomy — member-gated so `catch (AuthFailed e)` resolves after
+            // `import Core.Mail.AuthFailed;` (nothing in the wind).
+            "ConnectionFailed",
+            "AuthFailed",
+            "RecipientRejected",
+            "TlsError",
+            "InvalidAddress",
+            "MessageBuildFailed",
+            "MailTimeout",
+            "MailIo",
+        ],
+    },
     // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.Db` because
     // `Core.Db`'s `import Core.Secret` (for the `Db.withPassword(dsn, Secret<string>)` factory, DEC-208
     // slice G) transitively injects it, and transitive injection only reaches modules that appear LATER
@@ -933,6 +1153,16 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "DbSys"],
         qualifier: "DbSys",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    // `Core.MailSys` — the INTERNAL mailer natives the `Core.Mail` prelude wraps (the `Core.DbSys`
+    // twin, DEC-223). Feature-gated (`mail`): the natives only exist under `--features mail`.
+    VirtualModule {
+        module: &["Core", "MailSys"],
+        qualifier: "MailSys",
         src: None,
         respond_bridge: None,
         member_gated: false,
@@ -984,7 +1214,20 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
 const GATED_CORE_MODULES: &[(&[&str], bool, &str)] = &[
     (&["Core", "Db"], cfg!(feature = "db"), "db"),
     (&["Core", "DbSys"], cfg!(feature = "db"), "db"),
+    (&["Core", "Mail"], cfg!(feature = "mail"), "mail"),
+    (&["Core", "MailSys"], cfg!(feature = "mail"), "mail"),
 ];
+
+/// The dotted names of feature-gated Core modules NOT compiled into THIS build. Test harnesses
+/// (the differential/example sweeps) use it to skip gated examples loudly on reduced builds instead
+/// of failing on `E-MODULE-UNAVAILABLE` (e.g. `examples/mail/` on a build without `--features mail`).
+pub fn unavailable_gated_modules() -> Vec<String> {
+    GATED_CORE_MODULES
+        .iter()
+        .filter(|(_, available, _)| !available)
+        .map(|(m, _, _)| m.join("."))
+        .collect()
+}
 
 /// If the program imports a feature-gated Core module whose feature is compiled out, the diagnostic
 /// to abort with (checked on the RAW program, before any prelude injection).
@@ -1009,7 +1252,7 @@ pub(super) fn unavailable_core_module(prog: &Program) -> Option<crate::diagnosti
                     )
                     .with_code("E-MODULE-UNAVAILABLE")
                     .with_hint(format!(
-                        "rebuild with `cargo build --features {feature}` (the `{feature}` feature is part of the default set — this binary was built with `--no-default-features`)"
+                        "rebuild this `phg` with the `{feature}` cargo feature — `cargo build --features {feature}` (default-set features are absent only under `--no-default-features`)"
                     )),
                 );
             }
