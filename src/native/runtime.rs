@@ -71,10 +71,38 @@ fn kb_to_bytes(kb: Option<u64>) -> i64 {
         .unwrap_or(0)
 }
 
+/// `Runtime.exit(code)` — emits the clean-exit sentinel the backend run loops intercept
+/// (`chunk::EXIT_SENTINEL_PREFIX` → a normal `(stdout, code)` completion on the Batch-1-B channel).
+fn runtime_exit(args: &[Value], _out: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(code)] => Err(format!("{}{code}", crate::chunk::EXIT_SENTINEL_PREFIX)),
+        _ => Err("Core.Runtime.exit expects (int code)".into()),
+    }
+}
+
 /// The `Core.Runtime` registry entries. All `pure: false` — they read the live process, so a program
 /// that imports this module is quarantined from the byte-identity differential (see the module docs).
 pub(crate) fn runtime_natives() -> Vec<NativeFn> {
     vec![
+        // `Runtime.exit(code)` (DEC-238 slice 2) — CLEAN deliberate termination: no trace, no error
+        // framing, stdout flushed, the given process exit code. Distinct from `panic` (a FAULT with a
+        // stack trace — bugs) and from `main`'s `return n` (structured completion). PHP-faithful
+        // (`exit($code)`). NOTE: exit is IMMEDIATE — enclosing `finally` blocks do not run (the PHP
+        // `exit()` semantic; documented in explain + FEATURES).
+        NativeFn {
+            module: "Core.Runtime",
+            name: "exit",
+            params: vec![Ty::Int],
+            ret: Ty::Never,
+            pure: false,
+            eval: NativeEval::Pure(runtime_exit),
+            php: |a| {
+                format!(
+                    "exit((int) {})",
+                    a.first().cloned().unwrap_or_else(|| "0".into())
+                )
+            },
+        },
         NativeFn {
             module: "Core.Runtime",
             name: "monotonicNanos",

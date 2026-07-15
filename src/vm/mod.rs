@@ -335,7 +335,15 @@ impl<'a> Vm<'a> {
             ip: 0,
             slot_base: 0,
         });
-        self.run_to_completion()?;
+        match self.run_to_completion() {
+            Ok(()) => {}
+            // `Runtime.exit(code)` (DEC-238): the clean-exit sentinel is a NORMAL completion.
+            Err(e) if crate::chunk::exit_sentinel_code(&e.message).is_some() => {
+                let code = crate::chunk::exit_sentinel_code(&e.message).expect("guarded");
+                return Ok((self.out, code));
+            }
+            Err(e) => return Err(e),
+        }
         // `main`'s return value was stashed into `exit_value` by its `Op::Return` (or left `Unit` for a
         // `void` `main`); the CLI maps the code to the process exit status.
         let exit = exit_code_of(&self.exit_value);

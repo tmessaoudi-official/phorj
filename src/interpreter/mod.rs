@@ -371,6 +371,12 @@ fn run_program_main(
         Ok(v) => Ok((interp.out, exit_code_of(&v))),
         // Defensive: a `Return` that escapes `run_call` uncaught carries the same exit value.
         Err(Signal::Return(v)) => Ok((interp.out, exit_code_of(&v))),
+        // `Runtime.exit(code)` (DEC-238): the clean-exit sentinel is a NORMAL completion carrying
+        // the chosen code on the Batch-1-B channel — output flushed, no trace.
+        Err(Signal::Runtime(e)) if crate::chunk::exit_sentinel_code(&e.message).is_some() => {
+            let code = crate::chunk::exit_sentinel_code(&e.message).expect("guarded");
+            Ok((interp.out, code))
+        }
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
         // An exception that escapes `main` uncaught (defensive — the checker's `E-UNCAUGHT-THROW`
         // guarantees `main` handles every throw, so this is unreachable for a checked program).
@@ -486,6 +492,9 @@ pub fn call_named(
     ) {
         Ok(v) => Ok((v, interp.out)),
         Err(Signal::Return(v)) => Ok((v, interp.out)),
+        // NOTE: the clean-exit sentinel is NOT intercepted here — this is the per-call entry the
+        // serve runtime uses, where an `exit` inside a handler surfaces as an error (a 500), never
+        // a silent worker death. Whole-program exit is intercepted in `run_program_main`.
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
         Err(Signal::Throw(v)) => Err(Diagnostic::runtime(format!(
             "uncaught exception `{}`",

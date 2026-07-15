@@ -1128,3 +1128,23 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   clean deferral (fill runs before type-arg inference). SmtpConfig/SendmailTransport rewritten to
   the spec's direct forms (withAuth/at stay as thin aliases). Conformance golden (3 backends) +
   4 checker tests. ALSO: microbench.sh gained positional per-micro filtering (developer request).
+
+- **DEC-238 — RULED (developer, office batch) + BUILT (slice 1+2a): `Core.Debug` dump/dd +
+  `Runtime.exit`.** Rulings: full pack incl. PHP twin (twin = next slice; transpile gated
+  E-TRANSPILE-DEBUG meanwhile) · dump = ONE function carrying BOTH products via the `Dumped<T>`
+  result object (`.value()` pass-through + `.text()` capture — chosen over bare-passthrough+`last()`
+  (hidden state) and sink-overload (closures capture by VALUE — probed live, capture-to-local
+  impossible)) · dd exits 1 · `Runtime.exit(code)` clean termination, distinct from `panic`
+  (fault+trace) and from `main`'s return — three roles ratified, no duplication. Implementation:
+  deterministic versioned renderer (`native/debug.rs`, format pinned by unit tests: sorted instance
+  fields per ClassLayout, inline≤60-col containers, `*RECURSION*` cycle cut by container identity,
+  canonical scalar kernel, quoted/escaped strings); exit = `__phorj_exit__:<code>` sentinel
+  intercepted at BOTH top-level run loops onto the existing Batch-1-B exit-code channel (serve's
+  per-call entry deliberately does NOT intercept — an exit in a handler is a 500, never a silent
+  worker death; finally blocks do NOT run — the PHP exit() semantic, documented); totality
+  enhancement: `expr_is_never` now recognizes QUALIFIED never-calls (never natives like
+  `Runtime.exit` + never static methods like `DbError.fail`) — code after `dd`/`exit` correctly
+  flags W-UNREACHABLE. Tests: 6 renderer units (format pinned) + 5 both-backend integration (incl.
+  exit codes via cmd_*_exit). QUEUED: the PHP twin (`__phorj_debug_render`, common domain first —
+  enums/sets erase to indistinguishable PHP shapes, so the twin FAULTS on those rather than lying);
+  TTY-colorized rendering (byte-identity keeps v1 plain).

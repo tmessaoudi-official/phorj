@@ -1,0 +1,37 @@
+// `Core.Debug` (DEC-238) — the beautiful dumper: ONE function, BOTH products.
+//
+//   Debug.dump(x)  renders x deeply, PRINTS it, and returns a Dumped<T>:
+//     .value()  — the pass-through (wrap any mid-expression value, flow unbroken)
+//     .text()   — the captured rendering (log it, snapshot it, assert on it)
+//   Debug.dd(x)    dump-and-die: prints, then a CLEAN exit 1 (no trace — that's `panic`'s job)
+//   Runtime.exit(code)  clean deliberate termination (PHP's exit(), which phorj was missing)
+//
+// The format is deterministic (sorted instance fields, stable container layout) and versioned in
+// `src/native/debug.rs`. Nothing is in the wind: everything sits behind `import Core.Debug`.
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.Debug;
+import Core.Debug.Debug;
+
+class Wallet {
+    constructor(public string tier, public decimal balance) {}
+}
+
+class User {
+    constructor(public string name, public int age, public List<string> tags, public Wallet wallet) {}
+}
+
+function main(): void {
+    User u = new User("Ada", 36, ["math", "engines"], new Wallet("gold", 12.50d));
+    // Pass-through: inspect a value MID-EXPRESSION without restructuring the code.
+    int doubled = Debug.dump(u.age).value() * 2;
+    Output.printLine("doubled: {doubled}");
+    // Deep dump: nested instances, lists, maps — printed AND captured in one call.
+    string snapshot = Debug.dump(u).text();
+    Output.printLine("snapshot is {String.length(snapshot)} chars");
+    // Containers inline when short, wrap when long.
+    discard Debug.dump(["k" => [1, 2, 3]]);
+}
+// Debug.dd(u) here would print the dump and exit(1) — try it.

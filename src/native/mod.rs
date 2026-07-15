@@ -27,6 +27,7 @@ mod convert;
 #[cfg(feature = "crypto")]
 mod crypto;
 mod csv;
+mod debug;
 mod decimal;
 mod encoding;
 mod file;
@@ -434,6 +435,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(http_client::http_client_natives());
     registry.extend(fs::fs_natives());
     registry.extend(session::session_natives());
+    registry.extend(debug::debug_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(

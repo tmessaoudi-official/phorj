@@ -55,6 +55,40 @@ pub(super) const RESULT_PRELUDE: &str = "enum Result<T, E> { Success(T value), F
 /// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.String` (so the prelude also
 /// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
 /// stdlib behind the static-method API (slice B0). Flows through every backend as ordinary classes.
+/// `Core.Debug` (DEC-238) — the beautiful dumper. ONE function carrying both products (developer-
+/// ruled): `Debug.dump(x)` renders deeply (the versioned v1 format in `native/debug.rs`), PRINTS,
+/// and returns `Dumped<T>` — `.value()` is the pass-through, `.text()` the captured rendering.
+/// `Debug.dd(x)` (dump + exit 1) and `Runtime.exit` land in slice 2. Nothing in the wind: only
+/// reachable through `import Core.Debug`.
+pub(super) const DEBUG_PRELUDE: &str = r#"
+import Core.DebugSys;
+import Core.Output;
+import Core.Runtime;
+
+// The dump result: BOTH the pass-through value and the rendering, explicitly.
+class Dumped<T> {
+  constructor(private T v, private string s) {}
+  function value(): T { return this.v; }
+  function text(): string { return this.s; }
+}
+
+class Debug {
+  // Render + PRINT + carry: `int t = Debug.dump(price).value() * qty;` flows on;
+  // `string snap = Debug.dump(cfg).text();` captures (already printed).
+  static function dump<T>(T v): Dumped<T> {
+    string s = DebugSys.render(v);
+    Output.printLine(s);
+    return new Dumped(v, s);
+  }
+  // dump-and-die (the debugging convention): print the rendering, then a CLEAN exit 1 (deliberate
+  // abort — never a stack trace; that's `panic`'s job).
+  static function dd<T>(T v): never {
+    discard Debug.dump(v);
+    Runtime.exit(1);
+  }
+}
+"#;
+
 /// `Core.Session` (W3, TOP-20 #3 blocker) — HTTP sessions for `phg serve`, on top of the
 /// `Core.Http` `Request`/`Response` value types. THROW-FREE surface (in-memory store ops are
 /// total). Security defaults ON — better than PHP's opt-in ini flags: the cookie is
@@ -1294,6 +1328,24 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         src: Some(RESULT_PRELUDE),
         respond_bridge: None,
         member_gated: true,
+        bare_types: &[],
+    },
+    // `Core.Debug` (DEC-238) — the dumper prelude (std-only, always compiled).
+    VirtualModule {
+        module: &["Core", "Debug"],
+        qualifier: "Debug",
+        src: Some(DEBUG_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Debug", "Dumped"],
+    },
+    // `Core.DebugSys` — the INTERNAL renderer native.
+    VirtualModule {
+        module: &["Core", "DebugSys"],
+        qualifier: "DebugSys",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
         bare_types: &[],
     },
     // `Core.Session` (W3, TOP-20 #3) — HTTP sessions over the Core.Http value types. MUST precede

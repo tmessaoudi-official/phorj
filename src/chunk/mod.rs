@@ -90,6 +90,19 @@ mod tests;
 /// Not a valid source identifier, so it can never collide with a real fault message.
 pub const THROW_SENTINEL: &str = "__phorj_throw__";
 
+/// `Runtime.exit(code)` (DEC-238 slice 2) — the CLEAN-termination sentinel. The native returns
+/// `Err("__phorj_exit__:<code>")`; each backend's TOP-LEVEL run loop intercepts it and converts to
+/// a normal `(stdout-so-far, code)` completion riding the existing Batch-1-B exit-code channel —
+/// no trace, no error framing, output flushed. Mid-frame propagation reuses the ordinary error
+/// path, so `finally` blocks between the exit call and `main` do NOT run (exit is immediate, the
+/// PHP `exit()` semantic — documented).
+pub const EXIT_SENTINEL_PREFIX: &str = "__phorj_exit__:";
+
+/// Parse an error message as the exit sentinel: `Some(code)` iff it IS a clean exit.
+pub fn exit_sentinel_code(msg: &str) -> Option<i64> {
+    msg.strip_prefix(EXIT_SENTINEL_PREFIX)?.parse().ok()
+}
+
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
 /// source-line table (for runtime-error reporting).
 #[derive(Debug, Clone, Default)]

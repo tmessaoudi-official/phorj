@@ -148,17 +148,45 @@ impl Checker {
         use crate::ast::Expr;
         match e {
             Expr::Call { callee, .. } => {
-                if let Expr::Ident(name, _) = &**callee {
-                    // A `never`-typed fault intrinsic (`panic`/`todo`/`unreachable` — not `assert`,
-                    // which is `unit`), or a user function declared `-> never` (M-faults 2a).
-                    matches!(name.as_str(), "panic" | "todo" | "unreachable")
-                        || self
-                            .funcs
-                            .get(name)
-                            .and_then(|v| v.first())
-                            .is_some_and(|s| s.ret == Ty::Never)
-                } else {
-                    false
+                match &**callee {
+                    Expr::Ident(name, _) => {
+                        // A `never`-typed fault intrinsic (`panic`/`todo`/`unreachable` — not
+                        // `assert`, which is `unit`), or a user function declared `-> never`
+                        // (M-faults 2a).
+                        matches!(name.as_str(), "panic" | "todo" | "unreachable")
+                            || self
+                                .funcs
+                                .get(name)
+                                .and_then(|v| v.first())
+                                .is_some_and(|s| s.ret == Ty::Never)
+                    }
+                    // DEC-238: a QUALIFIED `never` call diverges too — a never-returning NATIVE
+                    // (`Runtime.exit(1)`) or a `never` STATIC method (`DbError.fail(e)`). Same
+                    // conservative direction: only a provable `Ty::Never` return counts.
+                    Expr::Member {
+                        object,
+                        name,
+                        safe: false,
+                        ..
+                    } => {
+                        if let Expr::Ident(q, _) = &**object {
+                            let native_never = self
+                                .imports
+                                .get(q)
+                                .and_then(|m| crate::native::index_of(m, name))
+                                .is_some_and(|idx| crate::native::registry()[idx].ret == Ty::Never);
+                            let static_never = self.classes.get(q).is_some_and(|info| {
+                                info.methods
+                                    .get(name)
+                                    .and_then(|v| v.first())
+                                    .is_some_and(|s| s.ret == Ty::Never)
+                            });
+                            native_never || static_never
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
                 }
             }
             Expr::If {
