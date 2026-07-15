@@ -181,8 +181,11 @@ DEC-236 ctor default params IN · DEC-237 overnight batch RATIFIED (run-end full
 golden). Sugar/DX item 2 ✅ DEC-238 Core.Debug dump/dd + Runtime.exit BUILT (Dumped<T> ruling; totality
 knows qualified never-calls; PHP twin queued = the gate lift). Playground truth pass ✅ (interpreter/VM labels + JIT reality). PHP twin ✅ (__phorj_debug_render +
 enum table; gate LIFTED; conformance lang/dump.phg pins 3-backend byte-identity; erased-shape
-disclosure recorded). NEXT: pipe |> (DEC-235) → member-error namespacing (DEC-234) → M-Decomp
-backlog → JIT levers (fresh context) → Data-pillar
+disclosure recorded). NEXT (each is an AST/checker-WIDE slice — per the repo's own fresh-context discipline for
+spine-sensitive changes, START EACH IN A FRESH CONTEXT): pipe |> (DEC-235: new Expr node +
+tokenizer + parser lowest-precedence + ~10 walker arms + formatter render + pre-backend erasure —
+the html/alias discipline) → member-error namespacing (DEC-234: qualified names in
+catch/throw/extends + deprecated aliases) → M-Decomp 10-file backlog → JIT structural levers → Data-pillar
 Iterator protocol (for-in over DbStream) → M-Decomp backlog → JIT structural levers (FRESH
 context). SESS parity rows flip at the next §4 recompute. Morning triage list still pending
 developer review: KNOWN_ISSUES §"Fable overnight run — morning triage" (DEC-227…233). Spine 9 ✅ §4.8 recompute: parity
