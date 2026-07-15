@@ -34,6 +34,19 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **SWEEP BATCH 2 (spine 7, structure + gates)** —
+  (1) P1 M-DECOMP BACKLOG (Invariant 13, hard cap 1000): 10 files over cap — jit/analyze.rs 2957 ·
+  checker/desugar_db.rs 2703 · native/db/mod.rs 2267 · jit/handles.rs 2104 · jit/emit_unboxed/mod.rs
+  1952 · jit/tests/verticals.rs 1847 · cli/explain.rs 1696 · cli/preludes.rs 1360 · transpile/
+  runtime_php.rs 1028 · jit/emit_unboxed/verticals.rs 1025. Each needs its own cohesion split
+  (JIT ones in FRESH context — spine-sensitive). mail.rs was split tonight (936 + sibling tests,
+  the *_tests.rs convention).
+  (2) NOTE (per-feature perf gate): tonight's features are I/O-bound native modules (Db streaming,
+  MySQL driver, Core.Mail) — no ≥1.0× micro landed with them, matching the earlier DB slices'
+  treatment (network/disk-bound work is not micro-gateable against php in-process). Developer to
+  confirm this standing carve-out or demand I/O-fixture benches.
+  (3) NOTE: microbench-gate ratchet SKIPPED at load 4.2 (its own guard); retry queued for a quiet
+  moment tonight — perf-gate PASSed (vm_speedup 2016 vs floor 10.8).
 - **SWEEP BATCH 1 (spine 7, code+repo hygiene)** — findings from the full review sweep:
   (1) FIXED: the mail commit swept `outbox/phorj-mail-0.eml` INTO the repo (`git add -A` after a
   featured test run — the file-transport example writes cwd-relative). Removed; `outbox/`
