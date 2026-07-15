@@ -175,7 +175,21 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 (`catch (Db.Timeout e)`; `as`-alias shorthand confirmed) · DEC-235 pipe `|>` = first-arg insertion ·
 DEC-236 ctor default params IN · DEC-237 overnight batch RATIFIED (run-end full-reopen stands).**
 
-**RUN CURSOR: ▶ RESUMED (2026-07-16, developer at office). Pack 3 ✅ DEC-233 Core.Session
+**RUN CURSOR: ⏹ SUPERSEDED by the FULL REOPEN AUDIT (below) — the NEXT-slice queue (pipe |>,
+DEC-234, M-Decomp, JIT levers) resumes AFTER audit triage rules on the flags.**
+
+**FULL REOPEN AUDIT (2026-07-16, developer at desk — ACTIVE). Mandate: everything reopened
+(all 149 DEC rows + all KNOWN_ISSUES), bar = phorj better/faster/safer/more-secure/more-intuitive
+than PHP, every deviation justified-or-flagged, non-generic/opinionated flagged, architecture
+clean/decoupled/no-fat-files, stay AHEAD of PHP (8.6 in scope). Protocol (developer-ruled via
+AskUserQuestion 2026-07-16): audit-first ZERO source changes (doc-only consolidation commits
+allowed) · FULL external PHP re-sweep incl. 8.6 RFCs · FULL depth on every row, written verdict
+each · checkpoint triage per dimension, flags one-by-one · everything unified into the two SSOTs.
+Dimensions D0 (PHP surface+8.6) → D1 (register) → D2 (KNOWN_ISSUES) → D3 (architecture) →
+D4 (security) → D5 (perf) → D6 (docs, continuous). Live report + dimension cursor =
+`docs/research/2026-07-16-full-reopen-audit.md`. Baseline `6b9256ba` (pushed).**
+
+**Pre-audit run state (2026-07-16 office arc, for the record): Pack 3 ✅ DEC-233 Core.Session
 (TOP-20 #3 — secure-by-default cookies, fixation defense, worker-shared store; TOP-20 blockers #1
 #2 #3 #5 now ALL closed this run). Sugar-wave item 1 ✅ DEC-236 ctor defaults BUILT (SmtpConfig spec-form restored; conformance
 golden). Sugar/DX item 2 ✅ DEC-238 Core.Debug dump/dd + Runtime.exit BUILT (Dumped<T> ruling; totality
