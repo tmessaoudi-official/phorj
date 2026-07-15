@@ -171,9 +171,15 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
-**RUN CURSOR: → Value-ordered packs, continuing (packs 1+2 DONE: Core.HttpClient DEC-231 = TOP-20
-#2 · Core.Fs DEC-232 = TOP-20 #5; next by value: sessions #3 (needs web-pillar server work) →
-sugar wave → Data-pillar Iterator protocol). Spine complete 1–9 ✅. Spine 9 ✅ §4.8 recompute: parity
+**RUN CURSOR: ⏸ ON HOLD (developer commuting, 2026-07-16 morning — "put everything on hold till I
+get there"). STATE: spine 1–9 ✅ + packs 1+2 ✅ (Core.HttpClient DEC-231 = TOP-20 #2 · Core.Fs
+DEC-232 = TOP-20 #5), tree CLEAN, all gates green (2138 default incl. PHP oracle; featured suites
+2147+; clippy 4 configs; 21-micro ratchet PASS; release binary fresh). RESUME AT: sessions (#3,
+needs web-pillar server work) → sugar wave → Data-pillar Iterator protocol → the M-Decomp backlog →
+JIT structural levers (FRESH context). FIRST 5 MIN BACK: read KNOWN_ISSUES §"Fable overnight run —
+morning triage" (DEC-227…232 auto-rulings + queued adjudications: error-namespace design,
+Core.File deprecation, ctor default params, jsonround/dbwork perf flags) and optionally run the two
+live legs vs the stack (Mailpit + MySQL DSNs are in the triage entries). Spine 9 ✅ §4.8 recompute: parity
 61→**62%**, vision 63→**64%**, floor 41→42% (FN-DB 10-row blocker fell; mail()/syslog covered;
 M-perf held at 70 honestly — 2 new macro losses flagged, not hidden). DONE ALSO: Spine 6 ✅
 (ratchet deferred under load-guard, then RUN on the quiet box: 21/21 micros HOLD, no flips,
