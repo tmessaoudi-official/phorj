@@ -266,6 +266,68 @@ HOPES to do · green-thread concurrency ⊃ True Async (draft) · Debug.dump enu
 - DEC-103 **JUSTIFIED** — both entry-point forms (developer overrule recorded with reasons).
 - DEC-104 **JUSTIFIED** — checked `as` casts beat PHP's silent coercions.
 - DEC-105 **JUSTIFIED** — B1 iteration protocol (but see F-009 for the surface duality).
+- DEC-106 **JUSTIFIED** — dogfood fixes.
+- DEC-107 **JUSTIFIED**, register STALE — the ADD half (method references as typed closures) is SHIPPED [Verified probe: `5 |> a.plus` → 15 works], the REJECT half (string-instantiate) stands justified (un-typeable). 📐 → ✅ noted (D6).
+
+### §5 Naming (DEC-110…114)
+
+- DEC-110 / DEC-111 / DEC-112 **JUSTIFIED** — camelCase stdlib; PHP-reserved variant mangling transpiler-side; forced Channel.create rename.
+- DEC-113 **JUSTIFIED** — the naming overhaul (clarity/no-shortcut) is a systematic better-than-PHP readability position; "unpushed" note stale (pushed long since) → D6.
+- DEC-114 **SUPERSEDED**→✅ chain already correct.
+
+### §6 Runtime / VM / perf (DEC-120…129)
+
+- DEC-120 / DEC-121 / DEC-122 **JUSTIFIED** — bench-gated evolution recorded honestly (slot-indexed shipped only when evidence arrived — the discipline working).
+- DEC-123 **JUSTIFIED**, superseded-in-part by DEC-205 (cycle collector phased in — the "acyclic" premise fell to closures/self-reference; chain noted).
+- DEC-124 **JUSTIFIED** — the 3-match Op discipline (= Invariant 3).
+- DEC-125 / DEC-126 / DEC-127 **JUSTIFIED** — higher-order natives; insertion-ordered maps (PHP-faithful, and PHP's own model); COW O(1) index-assign.
+- DEC-128 **JUSTIFIED** — W2 deferral was evidence-based; the perf-gate shipped instead. Still 📐, tracked.
+- DEC-129 **JUSTIFIED** — profiles as side-channels; the byte-identity keystone held.
+
+### §7 Concurrency (DEC-130…135)
+
+- DEC-130 **JUSTIFIED**, conflict C-6 **RESOLVED** — [Verified: `src/serve/handlers.rs` builds one program *per worker thread*, values never cross threads] the OS-thread serve pool does NOT violate the !Send single-heap doctrine; each worker owns its heap. Conflict row closable (D6).
+- DEC-131 **JUSTIFIED** — admission lattice; shared-state threads remain HARD NO; parallel/reactive 📐 tracked (DEC-135).
+- DEC-132 **JUSTIFIED** — uniform stackful coroutines both backends; corosensei admission recorded.
+- DEC-133 **JUSTIFIED**, refined by DEC-225 (PHP 8.1 Fibers ruled a faithful transpile candidate — spike queued; quarantine stands until proven).
+- DEC-134 **OBSOLETE** (interim step) → superseded by the A1 cutover, chain correct.
+- DEC-135 **JUSTIFIED** — parallelism on hold with the models table recorded; actor-model lean noted, no silent commitment.
+
+### §8 Web / stdlib / natives (DEC-140…156)
+
+- DEC-140 / DEC-141 / DEC-142 **JUSTIFIED** — value-level `handle(Request)→Response` (the PSR-7 insight, minus PHP's mutable-stream warts); one public API; bytes primitive.
+- DEC-143 **JUSTIFIED** — the URL/network deferral resolved correctly over time: HttpClient (DEC-231) + Core.Uri (DEC-240) now close it with determinism preserved.
+- DEC-144 **OBSOLETE** (interim subset; both deferred modules long since shipped).
+- DEC-145 **JUSTIFIED** — Json Int/Float split is PHP-faithful AND type-honest.
+- DEC-146 **JUSTIFIED** — strcmp sort, never numeric-string juggling: a recorded divergence that is precisely a PHP-wart removal.
+- DEC-147 / DEC-148 **JUSTIFIED** — decimal primitive with exact-or-fault division and always-fault div-by-zero (IEEE inf/NaN removed): categorically safer than PHP floats + BCMath strings.
+- DEC-149 **JUSTIFIED** — NaN/Inf as functions; `toInt → int?` fixes the `(int)` quirk.
+- DEC-150 **JUSTIFIED** — pure PRNG with hand-rolled PHP twin (byte-identity over convenience — the doctrine at its best).
+- DEC-151 **JUSTIFIED** — Argon2id via vetted dep; note phorj's default (Argon2id) is stronger than PHP's password_hash default (bcrypt) — AHEAD ledger.
+- DEC-152 / DEC-153 / DEC-154 **JUSTIFIED** — Http API shape; charter-first ordering; Router+attributes.
+- DEC-155 **JUSTIFIED** — identical traces, prod-bare-500 (leak-safe by default; PHP needs display_errors discipline).
+- DEC-156 **JUSTIFIED** — manual timing quarantined.
+
+### §9 Tooling / build / interop (DEC-160…176)
+
+- DEC-160 / DEC-161 / DEC-162 **JUSTIFIED** — source-embedding build; one timing surface; helper-based transpile.
+- DEC-163 **JUSTIFIED** — 8.5 floor (now also the enabler of DEC-240's native-Uri twin and DEC-239's native pipe emission).
+- DEC-164 / DEC-165 **JUSTIFIED**.
+- DEC-166 / DEC-167 **JUSTIFIED** — staged lift with loud Tier-3 disclosure; "silent wrong guess worse than loud rejection" is the audit's own creed.
+- DEC-168 / DEC-169 / DEC-170 / DEC-171 / DEC-172 **JUSTIFIED** (3b signing parked, tracked).
+- DEC-173 **JUSTIFIED** — M-Decomp hybrid model; note D3 will re-measure fat files against it.
+- DEC-174 **JUSTIFIED** standing — never-push held all run.
+- DEC-175 **OBSOLETE** — that ordering completed/was overtaken; roadmap authority = MASTER-PLAN (already the SSOT).
+- DEC-176 **FLAGGED(F-011)** — developer ruled "blanket `clippy::pedantic`, fix ALL" (overriding selective-lints); Cargo.toml today says `[lints.clippy] all = "deny"` — pedantic was never turned on [Verified: Cargo.toml:182-183]. Ruled-but-unbuilt quality gate, register row still says "in progress". ALSO found: the Cargo.toml comment block repeats the stale "four vetted crates + forbid(unsafe_code)" claims (F-003's source-side twin) — queued with the build slices since comments live in source files (zero-source-change discipline).
+
+### §10 Parity SSOT summary row
+
+- **JUSTIFIED** — the 290/187/81 adopt/defer/reject triage stands; spot-checked reject bucket (single-quotes, `<=>`, `.` concat, `switch`, superglobals, `eval`, variable-variables, runtime magic, `@`, loose `==`) — every rejection is a wart-removal with a recorded reason, none regressed by later work. The philosophy-recalibration correction (DEC-004) remains the governing lens.
+
+### §11 Fork-backlog pass (DEC-177…181)
+
+- DEC-177 **JUSTIFIED** — trait+MI duality (mirrors PHP's own trait duality, statically checked).
+- DEC-178 / DEC-179 **JUSTIFIED**, register STALE — Waves A/C shipped (memory + MASTER-PLAN record Waves A/B/C DONE); 📐 → ✅ (D6).
 
 ## D2 — KNOWN_ISSUES reopen
 
