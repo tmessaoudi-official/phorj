@@ -26,7 +26,7 @@
 | D3 | Architecture / clean code / folder structure | ✅ DONE — DEC-260 folder moves, DEC-261 L1/L2 advanced, DEC-262 NEW cap soft-300/hard-500 + decomp order |
 | D4 | Security (every native surface vs PHP's equivalent) | ✅ DONE — 3 findings ruled (DEC-263 Secret redaction, DEC-264 redirect strip, DEC-265 SMTP-TLS); 8 surfaces confirmed sound |
 | D5 | Perf-claim re-verification (WIN/HOLD/LOSS ledger) | ✅ DONE — micros HOLD-stale (re-ratchet owed); DEC-266 losses→build items; DEC-267 suite expands |
-| D6 | Docs drift + SSOT unification (runs throughout) | ▶ FINALIZING |
+| D6 | Docs drift + SSOT unification (runs throughout) | ✅ DONE — MASTER-PLAN AUDIT BUILD QUEUE (25 slices); KNOWN_ISSUES authoritative-pointer; C-7 CLI-verb drift confirmed already-resolved |
 
 ## Flag ledger (grows monotonically; triage rulings recorded in C-decisions.md)
 
@@ -624,3 +624,42 @@ F-020→DEC-258 (opt-in column naming) · perf doctrine→DEC-259 (bench everyth
 equivalent + real-app macros; var/phorj-app is the instrument) · cargo-fuzz admitted (dev-only) ·
 prelude-parse loud-assert queued (no-design P1). Standing rules recorded: META-7 (cross-language
 scan; byte-identity-is-a-tool, always asked) · check≡LSP · transpile/lift always-current.
+
+
+---
+
+## AUDIT COMPLETE — synthesis (2026-07-16)
+
+**Scope executed:** all 6 dimensions, every register row (149 DEC + conflicts + autonomous lists),
+every KNOWN_ISSUES section, full external PHP 8.4/8.5/8.6 sweep, architecture, security, perf, docs.
+
+**Outcome:** 29 new rulings **DEC-239…267** + **META-7** (all developer-adjudicated via
+AskUserQuestion, alternatives recorded). Flags F-001…F-027: all triaged, none left open.
+
+**Verdict distribution:** the overwhelming majority of past decisions came back **JUSTIFIED** —
+phorj's divergences from PHP are, almost without exception, deliberate wart-removals with recorded
+reasons (checked exceptions, no superglobals, no truthiness, value semantics, compile-time nulls,
+enforced visibility, no shell-exec). The audit's real yield was in four buckets:
+
+1. **3 security findings** (all HIGH-ish, all ruled): Debug.dump leaked Secrets (DEC-263);
+   HttpClient leaked credentials across redirects (DEC-264); SMTP auth over downgradeable TLS
+   (DEC-265). These are the most important results — each defeated a phorj safety promise.
+2. **PHP-is-ahead gaps** (ruled to close): typed URI (DEC-240), DateTime (DEC-247), nullable
+   unions (DEC-253), string similarity (DEC-243), partitioned cookies (DEC-242), extension methods
+   ahead-of-8.6 (DEC-244), asymmetric visibility (DEC-241).
+3. **latent-correctness / self-consistency** (ruled): the pipe triple-conflict (DEC-239, DEC-235
+   revoked — it would have diverged from PHP 8.5 on identical syntax), for-in/foreach duality
+   (DEC-248), PHP-enforcement-ahead transpile-fatals (DEC-251), LSP lying about injected types
+   (DEC-252), intersection-overload revisit (DEC-245).
+4. **new language capabilities the developer ruled IN**: `ref`/copy-out params + mutability triad
+   (DEC-254), method defaults (DEC-249), Iterator protocol (DEC-257), Optional<enum> match (DEC-250),
+   full W4-4 Unicode (DEC-256).
+
+**Standing-rule upgrades:** file cap → soft-300/hard-500 (DEC-262); META-7 cross-language-scan +
+byte-identity-is-a-tool; check≡LSP + transpile/lift always-current; bench-everything-with-a-PHP-
+equivalent + real-app macros (DEC-259/267).
+
+**Deliverables:** this report (dimension-by-dimension) · C-decisions.md (29 rulings, alternatives) ·
+MASTER-PLAN §0.2 AUDIT BUILD QUEUE (25 ordered fresh-context slices) · CLAUDE.md invariants 13/16/17/18 ·
+KNOWN_ISSUES authoritative-pointer note. **23 doc-only commits; zero source changes; tree clean;
+binary sanity-checked.** No code was written — the audit-first protocol held throughout.
