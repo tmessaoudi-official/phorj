@@ -270,7 +270,7 @@ impl Checker {
                             // Scoped to the simple case: single (non-overloaded), non-generic
                             // signatures on both sides. Parameter contravariance and overloaded/
                             // generic overrides remain documented deferrals (KNOWN_ISSUES).
-                            let rets = {
+                            let sigs = {
                                 let child = self
                                     .classes
                                     .get(&c.name)
@@ -284,13 +284,14 @@ impl Checker {
                                             && cs[0].type_params.is_empty()
                                             && ps[0].type_params.is_empty() =>
                                     {
-                                        Some((cs[0].ret.clone(), ps[0].ret.clone()))
+                                        Some((cs[0].clone(), ps[0].clone()))
                                     }
                                     _ => None,
                                 }
                             };
-                            if let Some((child_ret, parent_ret)) = rets {
-                                if !self.ty_assignable(&child_ret, &parent_ret) {
+                            if let Some((child_sig, parent_sig)) = sigs {
+                                let (child_ret, parent_ret) = (&child_sig.ret, &parent_sig.ret);
+                                if !self.ty_assignable(child_ret, parent_ret) {
                                     self.err_coded(
                                         f.span,
                                         format!(
@@ -305,6 +306,42 @@ impl Checker {
                                             f.name
                                         )),
                                     );
+                                }
+                                // DEC-251(a): parameter types are CONTRAVARIANT — an override may WIDEN
+                                // a parameter (accept a supertype) but NARROWING it is unsound and
+                                // *transpile-fatal* (PHP "Declaration must be compatible"). The sound,
+                                // PHP-compatible rule (META-7: Kotlin/C# invariant, PHP contravariant):
+                                // the parent's param type must be assignable TO the child's at each
+                                // position. Same-arity simple case only (mirrors the return check's
+                                // scope; overloaded/generic/default-arity-diff overrides stay deferred).
+                                if child_sig.params.len() == parent_sig.params.len() {
+                                    for (i, (cp, pp)) in child_sig
+                                        .params
+                                        .iter()
+                                        .zip(parent_sig.params.iter())
+                                        .enumerate()
+                                    {
+                                        if !self.ty_assignable(pp, cp) {
+                                            self.err_coded(
+                                                f.span,
+                                                format!(
+                                                    "method `{}` overrides `{anc}`'s `{}` but narrows \
+                                                     parameter {} to `{cp}`, which the overridden \
+                                                     parameter type `{pp}` is not assignable to \
+                                                     (parameters are contravariant — a narrower \
+                                                     parameter is unsound and fatal in transpiled PHP)",
+                                                    f.name,
+                                                    f.name,
+                                                    i + 1
+                                                ),
+                                                "E-OVERRIDE-SIG",
+                                                Some(format!(
+                                                    "make parameter {}'s type `{pp}` or a supertype of it",
+                                                    i + 1
+                                                )),
+                                            );
+                                        }
+                                    }
                                 }
                             }
                             break; // the nearest declaration decides

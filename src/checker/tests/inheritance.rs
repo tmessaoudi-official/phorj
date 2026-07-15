@@ -59,6 +59,46 @@ fn override_covariant_return_type_is_ok() {
     assert!(errs.is_empty(), "expected clean, got {errs:?}");
 }
 
+// ── DEC-251(a): override parameter contravariance (the transpile-fatal twin of return covariance) ──
+// Narrowing a parameter type-checks clean today but stores a wrong-typed value on the Rust backends
+// and *fatals* in transpiled PHP ("Declaration must be compatible"). Parameters are contravariant.
+
+#[test]
+fn override_narrowing_a_parameter_errors() {
+    let errs = errors_of(
+        "open class Animal {} class Dog extends Animal {} \
+             open class Base { open function k(Animal a) -> int { return 1; } } \
+             class Sub extends Base { function k(Dog a) -> int { return 2; } }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-OVERRIDE-SIG")),
+        "narrowing a parameter (Animal->Dog) must be rejected, got {errs:?}"
+    );
+}
+
+#[test]
+fn override_widening_a_parameter_is_ok() {
+    // Contravariance: accepting a SUPERtype (Dog -> Animal) is sound and PHP-legal.
+    let errs = errors_of(
+        "open class Animal {} class Dog extends Animal {} \
+             open class Base { open function k(Dog a) -> int { return 1; } } \
+             class Sub extends Base { function k(Animal a) -> int { return 2; } }",
+    );
+    assert!(
+        errs.is_empty(),
+        "widening a parameter is sound, got {errs:?}"
+    );
+}
+
+#[test]
+fn override_same_parameter_type_is_ok() {
+    let errs = errors_of(
+        "open class Base { open function k(int a) -> int { return a; } } \
+             class Sub extends Base { function k(int a) -> int { return a + 1; } }",
+    );
+    assert!(errs.is_empty(), "expected clean, got {errs:?}");
+}
+
 #[test]
 fn extending_an_unknown_name_errors() {
     let errs = errors_of("class Dog extends Bogus {}");

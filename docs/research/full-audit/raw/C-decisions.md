@@ -1694,3 +1694,21 @@ literal constants (an enum value isn't one; `E-DEFAULT-PARAM-EXPR`), and Optiona
 land — tracked. Gate: 2206 tests --all-features + oracle, clippy (all-features + no-default), fmt.
 DEC-268 panel (2 lenses, R1 both CLEAN — no findings): security (invariant + lettre source-level) +
 completeness/regression/API. This completes the DEC-272 socket/transport secure-default riders.
+
+## DEC-251 — SLICE (a) SHIPPED (2026-07-16, Tier-1 build): override parameter contravariance
+
+Check (a) of the three PHP-enforcement-ahead checks. `src/checker/collect/interfaces.rs` — extends the
+existing `E-OVERRIDE-SIG` return-covariance block (the exact structural twin) with a PARAMETER check:
+an override's parameter types are CONTRAVARIANT — widening (accepting a supertype) is sound + PHP-legal,
+but NARROWING a parameter type-checked clean before and was **transpile-fatal** in PHP ("Declaration must
+be compatible") + unsound on the Rust backends. Rule per META-7 survey (Kotlin/C# invariant params, PHP
+contravariant): the parent's param type must be `ty_assignable` TO the child's at each position; scoped
+to the same-arity, single (non-overloaded), non-generic case (mirrors the return check's scope;
+overloaded/generic/default-arity-diff overrides stay documented deferrals). Checker-only, byte-identity
+strictly improves. Tests: `override_narrowing_a_parameter_errors` / `_widening_a_parameter_is_ok` /
+`_same_parameter_type_is_ok` (src/checker/tests/inheritance.rs). Gate: 2209 tests --all-features + oracle
+(full corpus accepts it — no valid override wrongly rejected), clippy (all-features + no-default), fmt.
+Certification: self-review + full-corpus gate + it is the exact structural twin of the already-shipped,
+panel-clean return-covariance check (lighter than a 2-lens panel — disclosed; the DEC-268 panel runs on
+the DEC-251 whole when slices (b) private/protected-static external-read + (c) intersection-receiver
+visibility land). **REMAINING: DEC-251 (b) + (c)** — see the register row.
