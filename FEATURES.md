@@ -81,6 +81,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | `Core.Mail`: native mailer — injection-safe `Address`, chainable builder with auto-plaintext HTML alternative, CID inlines + attachments, SMTP (`Secret` auth, STARTTLS) / sendmail / file / null transports, DKIM, typed `MailError` taxonomy | ✅ | `--features mail`; native-only (`E-TRANSPILE-MAIL`); gated by `tests/mail.rs` |
 | `Core.HttpClient`: sync HTTP/1.1 client — typed responses + failures, chunked bodies, redirects (303→GET), https (rustls + bundled roots), explicit timeouts, 64 MB cap, header-injection gate, URL-userinfo rejection | ✅ | `--features http-client`; native-only (`E-TRANSPILE-HTTPCLIENT`); gated by `tests/http_client.rs` fixture server |
 | `Core.Fs`: typed filesystem — files + directories (recursive create, sorted `listDir`/`walk`, loud `removeDirAll`), catchable `FsError` taxonomy (`FsNotFound`/`FsPermissionDenied`/`FsDirNotEmpty`/…) | ✅ | std-only, always compiled; native-only for now (`E-TRANSPILE-FS`); gated by `tests/fs.rs` |
+| `Core.Session`: HTTP sessions — cookie wiring on Core.Http, HttpOnly+SameSite defaults, 128-bit entropy ids, idle TTL, `regenerate()` fixation defense, worker-shared store | ✅ | std-only, always compiled; native-only for now (`E-TRANSPILE-SESSION`); gated by `tests/session.rs` |
 | Standalone executable (host) | ✅ | `phg build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |
 | Standalone executable (macOS) | 🔲 | reader ships; signed stub deferred to M2.5 Phase 3 |

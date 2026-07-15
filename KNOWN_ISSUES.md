@@ -34,6 +34,14 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **DEC-233 · Core.Session SHIPPED** (TOP-20 #3; secure-by-default cookies; fixation defense;
+  worker-shared store). QUEUED: (a) SessionStore contract + swappable backends (file/external —
+  layered-openness v2); (b) cookie-attribute config (incl. `; Secure` auto-when-TLS); (c) the
+  session_start() transpile lift; (d) SESS parity rows flip at the NEXT §4 recompute (not re-run
+  tonight — recompute-at-milestone-close protocol). DEBUG TRAP found: prelude parse failures are
+  SILENT (inject_core_modules skips them → "unknown type" at use sites; a keyword-collision like
+  the `open` native cost a debugging round) — consider a debug_assert/loud log on prelude parse
+  failure.
 - **DEC-232 · Core.Fs SHIPPED** (typed filesystem; sorted listings; loud removeDirAll). QUEUED
   ADJUDICATIONS for you: (a) `Core.File` deprecation/migration (its write/delete failures are
   UNCATCHABLE faults — the pre-taxonomy era; Core.Fs is the typed successor, additive for now);

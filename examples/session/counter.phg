@@ -1,0 +1,55 @@
+// `Core.Session` (W3) — HTTP sessions with security defaults ON, over the Core.Http value types.
+//
+//   Session s = Session.start(req);         // resume from the phorjsid cookie, or a fresh session
+//   s.set("user", "ada"); s.get("user");     // string values (structured data via Core.Json)
+//   discard s.regenerate();                  // session-fixation defense — call on login/logout
+//   return s.apply(Response.html(...));      // Set-Cookie: HttpOnly; SameSite=Lax; Path=/
+//
+// Better than PHP by default: HttpOnly+SameSite need no ini opt-in, ids are 128-bit OS entropy,
+// an expired/unknown cookie id silently gets a FRESH session (never resurrected), and Response is
+// a VALUE — "headers already sent" is structurally impossible. Impure (in-process store) →
+// quarantined; gated by tests/session.rs on both backends. Native-only (E-TRANSPILE-SESSION).
+//
+// This example simulates two requests of a visit counter (no server needed — Request.parse builds
+// the requests); drop the same handler into `phg serve` unchanged.
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.Bytes;
+import Core.Session;
+import Core.Session.Session;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+
+function handle(Request req): Response {
+    Session s = Session.start(req);
+    int visits = (String.parseInt(s.get("visits") ?? "0") ?? 0) + 1;
+    s.set("visits", "{visits}");
+    return s.apply(Response.html("<p>visit #{visits}</p>"));
+}
+
+function main(): void {
+    // Request #1: no cookie → fresh session.
+    Request? r1 = Request.parse(Bytes.fromString("GET / HTTP/1.1\r\nHost: x\r\n\r\n"));
+    if (var req1 = r1) {
+        Response resp1 = handle(req1);
+        Output.printLine("first: {Bytes.toString(resp1.body) ?? \"\"}");
+        // Pull the sid back out of the Set-Cookie header, like a browser would.
+        mutable string sid = "";
+        for (string h in resp1.headerLines) {
+            if (String.startsWith(h, "Set-Cookie: phorjsid=")) {
+                string tail = String.removePrefix(h, "Set-Cookie: phorjsid=");
+                sid = String.splitOnce(tail, ";")[0];
+            }
+        }
+        // Request #2: the browser sends the cookie back → the SAME session continues.
+        string raw2 = "GET / HTTP/1.1\r\nHost: x\r\nCookie: phorjsid={sid}\r\n\r\n";
+        Request? r2 = Request.parse(Bytes.fromString(raw2));
+        if (var req2 = r2) {
+            Response resp2 = handle(req2);
+            Output.printLine("second: {Bytes.toString(resp2.body) ?? \"\"}");
+        }
+    }
+}

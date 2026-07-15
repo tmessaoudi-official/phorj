@@ -55,6 +55,65 @@ pub(super) const RESULT_PRELUDE: &str = "enum Result<T, E> { Success(T value), F
 /// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.String` (so the prelude also
 /// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
 /// stdlib behind the static-method API (slice B0). Flows through every backend as ordinary classes.
+/// `Core.Session` (W3, TOP-20 #3 blocker) — HTTP sessions for `phg serve`, on top of the
+/// `Core.Http` `Request`/`Response` value types. THROW-FREE surface (in-memory store ops are
+/// total). Security defaults ON — better than PHP's opt-in ini flags: the cookie is
+/// `HttpOnly; SameSite=Lax; Path=/`; ids are 128-bit OS-entropy hex; an expired/unknown cookie id
+/// silently gets a FRESH empty session (never resurrected); `regenerate()` (session-fixation
+/// defense) is first-class. Values are strings (structured data goes through `Core.Json` — PHP's
+/// serialized `$_SESSION` does the same under the hood). Native-only (`E-TRANSPILE-SESSION`).
+pub(super) const SESSION_PRELUDE: &str = r#"
+import Core.SessionSys;
+import Core.Http;
+import Core.Http.Request;
+import Core.Http.Response;
+import Core.String;
+import Core.List;
+
+class Session {
+  private mutable string sid;
+  private constructor(string s) { this.sid = s; }
+  // Start (or resume) the session named by the request's `phorjsid` cookie — 30-minute idle TTL,
+  // touched on every access (the gc_maxlifetime shape).
+  static function start(Request req): Session {
+    return Session.startWithTtl(req, 1800);
+  }
+  static function startWithTtl(Request req, int ttlSeconds): Session {
+    string cand = Session.cookieSid(req);
+    return new Session(SessionSys.acquire(cand, ttlSeconds));
+  }
+  private static function cookieSid(Request req): string {
+    string? cookies = req.header("Cookie");
+    if (var c = cookies) {
+      List<string> parts = String.split(c, ";");
+      for (string part in parts) {
+        string p = String.trim(part);
+        if (String.startsWith(p, "phorjsid=")) { return String.removePrefix(p, "phorjsid="); }
+      }
+    }
+    return "";
+  }
+  function id(): string { return this.sid; }
+  function get(string key): string? { return SessionSys.get(this.sid, key); }
+  function set(string key, string value): void { discard SessionSys.set(this.sid, key, value); }
+  function remove(string key): void { discard SessionSys.remove(this.sid, key); }
+  // Sorted (deterministic) key listing.
+  function keys(): List<string> { return SessionSys.keys(this.sid); }
+  function destroy(): void { discard SessionSys.destroy(this.sid); }
+  // The session-fixation defense: a FRESH id carrying the same data; the old id is dead
+  // immediately. Call it on every privilege change (login/logout).
+  function regenerate(): Session {
+    this.sid = SessionSys.regenerate(this.sid);
+    return this;
+  }
+  // Attach the session cookie to a response — HttpOnly + SameSite=Lax + Path=/ (secure defaults;
+  // add `; Secure` yourself when serving over TLS).
+  function apply(Response r): Response {
+    return r.withHeader("Set-Cookie", "phorjsid={this.sid}; HttpOnly; SameSite=Lax; Path=/");
+  }
+}
+"#;
+
 pub(super) const HTTP_PRELUDE: &str = r#"
 import Core.Bytes;
 import Core.String;
@@ -1239,6 +1298,25 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         src: Some(RESULT_PRELUDE),
         respond_bridge: None,
         member_gated: true,
+        bare_types: &[],
+    },
+    // `Core.Session` (W3, TOP-20 #3) — HTTP sessions over the Core.Http value types. MUST precede
+    // `Core.Http` (its `import Core.Http` transitively injects it — the forward-fold rule).
+    VirtualModule {
+        module: &["Core", "Session"],
+        qualifier: "Session",
+        src: Some(SESSION_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Session"],
+    },
+    // `Core.SessionSys` — the INTERNAL session-store natives (std-only, always compiled).
+    VirtualModule {
+        module: &["Core", "SessionSys"],
+        qualifier: "SessionSys",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
         bare_types: &[],
     },
     VirtualModule {

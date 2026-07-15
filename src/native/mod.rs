@@ -55,6 +55,7 @@ mod fs;
 mod http_client;
 #[cfg(feature = "mail")]
 mod mail;
+mod session;
 // `Core.Regex` is crate-backed (`regex`) — gated so the WASM playground builds without the
 // dependency (see docs/specs/2026-06-27-dependency-policy.md).
 #[cfg(feature = "regex")]
@@ -432,6 +433,7 @@ fn build() -> Vec<NativeFn> {
     #[cfg(feature = "http-client")]
     registry.extend(http_client::http_client_natives());
     registry.extend(fs::fs_natives());
+    registry.extend(session::session_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(

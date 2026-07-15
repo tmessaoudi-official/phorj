@@ -1077,3 +1077,22 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   *Alternatives:* enrich Core.File in place (rejected: changes its shipped error contract);
   instance-based `new Fs(root)` sandbox (deferred: a chroot-style scoped-FS instance is a genuinely
   good SECURITY idea — queued as a v2 adjudication); feature-gating (rejected: std-only, no dep).
+
+- **DEC-233 — AUTO-RULED (REOPENABLE): `Core.Session` shipped (W3, TOP-20 #3 blocker) — HTTP
+  sessions over the Core.Http value types, std-only (no dep, no feature gate).** In-process
+  `Mutex<HashMap>` store (String values → Send+Sync across `--workers` threads; structured data via
+  Core.Json — PHP's serialized $_SESSION does the same), 128-bit /dev/urandom ids, idle-TTL expiry
+  (default 1800 s, touch-on-access, lazy+opportunistic sweep — the gc_maxlifetime shape without a
+  GC thread), `regenerate()` fixation defense, cookie defaults `HttpOnly; SameSite=Lax; Path=/`
+  (PHP needs ini opt-ins), expired/unknown ids silently replaced with FRESH EMPTY sessions (never
+  resurrected, never an error). THROW-FREE surface (store ops are total — no taxonomy needed).
+  Native-only for now (`E-TRANSPILE-SESSION`; a session_start() mapping is the recorded lift).
+  Risk example: attacker plants `phorjsid=X` pre-login (fixation); after `s.regenerate()` on login
+  X is dead — with PHP the developer must know to call session_regenerate_id(true).
+  *Alternatives:* store as prelude-visible SessionStore contract with swappable backends (QUEUED
+  layered-openness v2 — file/redis-style backends; v1 in-memory matches phg serve's single-process
+  model); Value-typed session data (rejected v1: Rc values cannot cross worker threads); cookie
+  attributes configurable (queued with the v2 config surface — `; Secure` documented as manual).
+  GOTCHA recorded: `open` is a phorj KEYWORD (open classes) — a native named `open` is unparseable
+  at the call site (SessionSys.open → renamed `acquire`); prelude parse failures are SILENT
+  (inject_core_modules skips unparseable preludes — a debug trap worth a loud assert someday).

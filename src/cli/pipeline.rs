@@ -475,6 +475,11 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
             "`Core.Fs` is native-only for now: its typed FsError protocol has no PHP emitter yet (PHP has faithful filesystem functions, so a real mapping is a recorded future lift — refusing beats emitting a silently-diverging program, THE LADDER RULE). Run this program with `phg run`, or use the transpilable `Core.File` subset.",
         ),
         (
+            &["Core", "Session"],
+            "E-TRANSPILE-SESSION",
+            "`Core.Session` is native-only for now: its in-process session store matches phg serve's process model; PHP's per-request model needs a session_start() mapping — a recorded future lift (THE LADDER RULE: refusing beats silent divergence). Run session programs with `phg run` / `phg serve`.",
+        ),
+        (
             &["Core", "HttpClient"],
             "E-TRANSPILE-HTTPCLIENT",
             "`Core.HttpClient` is native-only: live network I/O cannot be byte-identical across the phorj client and a PHP mapping, so transpiling it is refused rather than silently diverging (THE LADDER RULE). A faithful curl-mapping is a recorded future lift. Run this program with `phg run`.",

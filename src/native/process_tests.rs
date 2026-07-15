@@ -54,6 +54,8 @@ fn every_other_native_is_pure() {
         "Core.HttpClientSys",
         // `Core.FsSys` is whole-module impure (W3): ambient filesystem state.
         "Core.FsSys",
+        // `Core.SessionSys` is whole-module impure (W3): process-wide session store + OS entropy.
+        "Core.SessionSys",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the
