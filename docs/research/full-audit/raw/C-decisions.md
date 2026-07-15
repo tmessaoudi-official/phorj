@@ -1279,3 +1279,29 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   (developer): `phg check` and the LSP must never diverge — same pipeline, kept in sync as part
   of every diagnostics change** (extends the both-editors-same-change DoD). *Alternative (offered):
   normal queue — rejected.*
+
+- **DEC-253 — RULED (audit flag F-013): nullable unions BUILD, BOTH spellings** — `(A | B)?`
+  canonical + `A | B | null` accepted (formatter canonicalizes). Optional machinery (`??`/`?.`/`!`/
+  if-let) gains union inners; match extends the DEC-183 model (member arms + `null` arm). No new
+  runtime representation (Null exists; union values are values); transpiles to native PHP
+  `A|B|null` (free byte-identity). Closes a PHP-expressible-but-not-phorj type shape.
+  *Alternatives (offered): canonical-only (rejected — PHP-reader familiarity worth +10%);
+  reject-with-reason (rejected — PHP stays ahead).* Medium checker slice, queued.
+- **DEC-254 — RULED (audit flag F-016, four AskUserQuestion rounds with full before/after +
+  why-1-vs-2 analysis): in-place mutation = THE FULL PACKAGE.** (1) **Slice 1b builds** —
+  field-base indexed assignment `obj.f[i] = v` / `this.f[i] = v` (completes the class-handle
+  idiom for in-place algorithms). (2) **`ref` parameters build** — Swift-model **copy-in/copy-out**
+  (NEVER aliasing: callee owns its value during the call, COW invariants intact; final value
+  written back on return), keyword `ref` at BOTH declaration (`function f(ref List<int> xs)`) and
+  call site (`f(ref data)`; must be a `mutable` binding), exclusivity-lite checks (no two `ref`
+  args from one binding), transpiles to PHP `&$arr` (identical except exotic reentrant shapes —
+  disclosed per META-7), lifter maps `&$arr` → `ref` 1:1. Developer ruling: "it's safe and it's
+  not the default behavior; a must-have feature." (3) **Parameter-mutability TRIAD ratified**:
+  plain param = immutable (default) · `mutable` param = callee-local mutability, MY copy, caller
+  never affected, call site unmarked (sugar for the first-line mutable copy) · `ref` param =
+  write-back, call-site-marked. Keyword `ref` chosen over `inout` (dev disliked), `mutable`-only
+  (two meanings), and `&` (sigil-removal principle + intersection-type collision — challenged and
+  agreed). *Cross-language scan (META-7): C# ref/both-sites; Swift inout=copy-out+exclusivity
+  (the sound precedent); Java/JS/Kotlin handle-idiom-only; PHP's own 8.5 pipe bans by-ref.*
+  Multi-slice build (parser small / checker moderate / VM write-back medium / JIT medium),
+  queued after the HIGH audit builds.
