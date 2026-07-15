@@ -254,6 +254,41 @@ impl DbObject for DbStmt {
     }
 }
 
+/// A streaming result cursor (DEC-208 item H): `stmt.stream()` → one of these; `streamNext` pulls one
+/// row at a time (`null` when exhausted). The SURFACE contract is row-at-a-time delivery + lazy
+/// per-row hydration (a `streamInto<T>` stream hydrates only the rows actually pulled — early exit
+/// skips the rest). DISCLOSED LIMIT (KNOWN_ISSUES): today both drivers MATERIALIZE the result set at
+/// `stream()` — rusqlite's and postgres's incremental row iterators borrow their statement/connection,
+/// a self-referential lifetime a `#![deny(unsafe_code)]` handle cannot hold — so the cursor walks an
+/// owned buffer. A driver that gains true incremental stepping (e.g. Postgres portals via a dedicated
+/// `DriverConn` method) upgrades underneath this same surface with no user-visible change.
+#[derive(Debug)]
+struct DbCursor {
+    rows: RefCell<std::vec::IntoIter<Value>>,
+}
+
+impl DbObject for DbCursor {
+    fn kind(&self) -> &'static str {
+        "db-cursor"
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+fn as_cursor(v: &Value) -> Result<&DbCursor, String> {
+    match v {
+        Value::Db(h) => h
+            .as_any()
+            .downcast_ref::<DbCursor>()
+            .ok_or_else(|| "Core.Db: expected a stream cursor".to_string()),
+        other => Err(format!(
+            "Core.Db: expected a stream cursor, got {}",
+            other.type_name()
+        )),
+    }
+}
+
 /// Downcast a `Value::Db` handle to a concrete resource, or a clean fault (checker-unreachable once the
 /// surface enforces the receiver types, but the natives stay total).
 fn as_conn(v: &Value) -> Result<&DbConn, String> {
@@ -422,6 +457,42 @@ fn query_inner(args: &[Value]) -> Result<Value, String> {
     let driver = guard.as_ref().expect("driver liveness checked");
     let binds = stmt.binds.borrow();
     driver.query(&stmt.sql, &binds)
+}
+
+/// `stmt.stream()` → run the prepared+bound statement and wrap the result set in a [`DbCursor`]
+/// (DEC-208 item H). Runs the SAME driver query as `stmt.query()` (so the `onQuery` hook + timeout
+/// classification apply identically); the difference is delivery — rows are pulled one at a time via
+/// `streamNext`, and a typed `streamInto<T>` stream hydrates each row only when pulled.
+fn stream_inner(args: &[Value]) -> Result<Value, String> {
+    let stmt = match args {
+        [s] => as_stmt(s)?,
+        _ => return Err("Core.Db.__stream expects (Statement)".into()),
+    };
+    let guard = stmt_driver(stmt)?;
+    let driver = guard.as_ref().expect("driver liveness checked");
+    let binds = stmt.binds.borrow();
+    let rows = match driver.query(&stmt.sql, &binds)? {
+        Value::List(rc) => Rc::try_unwrap(rc).unwrap_or_else(|rc| (*rc).clone()),
+        other => {
+            return Err(format!(
+                "Core.Db.__stream: driver returned {}, not a row list",
+                other.type_name()
+            ))
+        }
+    };
+    Ok(Value::Db(Rc::new(DbCursor {
+        rows: RefCell::new(rows.into_iter()),
+    })))
+}
+
+/// `cursor.streamNext()` → the next row handle, or `null` when the result set is exhausted.
+fn stream_next_inner(args: &[Value]) -> Result<Value, String> {
+    let cursor = match args {
+        [c] => as_cursor(c)?,
+        _ => return Err("Core.Db.__streamNext expects (cursor)".into()),
+    };
+    let next = cursor.rows.borrow_mut().next();
+    Ok(next.unwrap_or(Value::Null))
 }
 
 /// `stmt.exec()` → run a write (INSERT/UPDATE/DELETE/DDL) and return the affected-row count.
@@ -903,6 +974,7 @@ fn db_dsn_with_password(args: &[Value], _out: &mut String) -> Result<Value, Stri
     dsn_with_password_inner(args)
 }
 db_native!(db_prepare, prepare_inner);
+db_native!(db_stream_next, stream_next_inner);
 db_native!(db_bind, bind_inner);
 db_native!(db_bind_named, bind_named_inner);
 db_native!(db_bind_list, bind_list_inner);
@@ -935,6 +1007,9 @@ fn db_query(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String
 }
 fn db_exec(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
     with_hook(args, invoke, exec_inner)
+}
+fn db_stream(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
+    with_hook(args, invoke, stream_inner)
 }
 fn db_execute_many(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
     with_hook(args, invoke, execute_many_inner)
@@ -1080,6 +1155,28 @@ pub fn db_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::HigherOrder(db_exec),
             php: |a| format!("{}->execute()", a[0]),
+        },
+        // Streaming (DEC-208 item H): `stream` runs the query (HigherOrder — fires `onQuery` exactly
+        // like `query`) and returns a cursor handle; `streamNext` pulls one row handle at a time
+        // (`null` = exhausted). PHP emitters are placeholders like the rest of DbSys (Core.Db is
+        // E-TRANSPILE-DB native-only — pipeline ladder gate).
+        NativeFn {
+            module: "Core.DbSys",
+            name: "stream",
+            params: vec![handle()],
+            ret: res(handle()),
+            pure: false,
+            eval: NativeEval::HigherOrder(db_stream),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "streamNext",
+            params: vec![handle()],
+            ret: res(Ty::Optional(Box::new(handle()))),
+            pure: false,
+            eval: NativeEval::Pure(db_stream_next),
+            php: |a| a[0].clone(),
         },
         // --- Writes & robustness (DEC-208 slice D, spec §4/§7). `bindList` (IN-list) is Pure (records
         // a bind); `executeMany`/`execReturningId` are HigherOrder (they run SQL → fire `onQuery`);

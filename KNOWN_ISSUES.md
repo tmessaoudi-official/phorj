@@ -14,6 +14,16 @@ parse error, non-zero exit) — never a crash.
   + `E-TRANSPILE-DB` ladder gate). Was: stock binary couldn't run any `Core.Db` program (unknown-ident
   wall); transpile of Db programs emitted the same wall instead of a ladder error. Severity: P0 UX.
   Repro (pre-fix): `cargo build && ./target/debug/phg run examples/db/basic.phg`.
+- **DEC-228 · Db streaming (item H) shipped as `RowStream` + `DbStream<T>`** (hydrate-on-pull closure;
+  turbofish + contextual sinks). Disclosed limit: both drivers MATERIALIZE the result set at
+  `stream()` (self-referential-lifetime constraint under `#![deny(unsafe_code)]`) — the surface is
+  row-at-a-time delivery + lazy hydration; true incremental stepping is a driver-internal upgrade
+  (Postgres portals first). QUEUED REAL ADJUDICATION: `for (x in stream)` — the general Iterator
+  protocol (Data-pillar lazy-streams) — needs your ruling on the protocol shape.
+- **FIXED en route · `rewrite_html` walker missed `Expr::New`** — any throws-`?` / `html"…"` / tagged
+  template nested in `new C(args)` was silently left un-rewritten (VM compile error / interpreter
+  runtime fault). Severity: P0 correctness (pre-existing, latent). Pinned by
+  `conformance/errors/lambda-in-ctor.phg` (interpreter + VM + PHP). Sibling walkers audited clean.
 
 ## Design forks — ADJUDICATED 2026-07-12 (developer via AskUserQuestion; full rulings + alternatives in `docs/research/full-audit/raw/C-decisions.md` §"2026-07-12 adjudication batch")
 

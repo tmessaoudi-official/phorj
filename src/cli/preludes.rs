@@ -630,6 +630,13 @@ class Statement {
   function query(): List<Row> throws DbError {
     return match (DbSys.query(this.raw)) { DbResult.Ok(rows) => Statement.wrapRows(rows), DbResult.Err(e) => DbError.fail(e)? };
   }
+  // Streaming (DEC-208 item H): run the query and deliver rows ONE AT A TIME via `RowStream.next()`
+  // (`null` = exhausted) instead of materializing a `List<Row>` in user code. The typed form
+  // `stmt.streamInto<T>()` (desugar_db) wraps this in a `DbStream<T>` that hydrates each row only
+  // when pulled — early exit skips the remaining rows' hydration entirely.
+  function stream(): RowStream throws DbError {
+    return match (DbSys.stream(this.raw)) { DbResult.Ok(h) => new RowStream(h), DbResult.Err(e) => DbError.fail(e)? };
+  }
   private static function wrapRows(List<DbHandle> rows): List<Row> {
     mutable List<Row> out = new List<Row>();
     mutable int i = 0;
@@ -639,6 +646,35 @@ class Statement {
       i = i + 1;
     }
     return out;
+  }
+}
+
+// A row-at-a-time result cursor (DEC-208 item H) — the untyped streaming surface. `next()` yields the
+// next `Row`, or `null` when the result set is exhausted; iterate with
+// `while (var r = s.next()?) { … }` (a null-condition binding ends the loop).
+class RowStream {
+  constructor(private DbHandle raw) {}
+  function next(): Row? throws DbError {
+    DbHandle? h = match (DbSys.streamNext(this.raw)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+    if (var handle = h) { return new Row(handle); }
+    return null;
+  }
+}
+
+// The TYPED streaming surface (DEC-208 item H): a lazy, hydrate-on-pull stream of `T` built by the
+// `stmt.streamInto<T>()` desugar (which supplies the per-class hydration closure). `next()` pulls one
+// row and hydrates it into `T` (same strict by-name mapping as `queryInto`), or `null` at the end —
+// rows never pulled are never hydrated.
+class DbStream<T> {
+  constructor(private RowStream rows, private (Row) => T throws DbError hydrate) {}
+  function next(): T? throws DbError {
+    Row? r = this.rows.next()?;
+    if (var row = r) {
+      (Row) => T throws DbError f = this.hydrate;
+      T v = f(row)?;
+      return v;
+    }
+    return null;
   }
 }
 
@@ -831,6 +867,9 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "Row",
             "DbError",
             "DbHandle",
+            // DEC-208 item H — the streaming surfaces (untyped row cursor + typed lazy stream).
+            "RowStream",
+            "DbStream",
             // DEC-208 slice B2 — the column naming strategy enum, member-gated so
             // `new Naming.SnakeToCamel()` resolves after `import Core.Db.Naming;` (nothing in the wind).
             "Naming",

@@ -195,6 +195,11 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 call: Box::new(rexpr(*call, h)),
                 span,
             },
+            // `new C(args)` wraps its construction call — the ARGS may carry anything this pass
+            // rewrites (first live trigger: a lambda whose body has a throws-mode `?`, DEC-208 item H's
+            // hydration closure — an un-walked `New` left the `?` as a Result-mode `Propagate` the VM
+            // rejects and the interpreter faults on). Walker-totality: `New` is NOT a leaf.
+            Expr::New(inner, span) => Expr::New(Box::new(rexpr(*inner, h)), span),
             // leaves carry no nested expression: Int / Float / Bool / Null / Bytes / Ident / This
             leaf => leaf,
         }

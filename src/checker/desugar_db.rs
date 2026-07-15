@@ -87,6 +87,9 @@ enum Call {
     Scalar,
     /// `Map<K, V> = stmt.queryMap()` — rows keyed by the first column (K), V from the rest.
     Map,
+    /// `DbStream<T> = stmt.streamInto()` (DEC-208 item H) — a lazy typed stream: one hydrated `T`
+    /// per PULLED row (`next(): T?`); rows never pulled are never hydrated.
+    Stream,
 }
 
 /// Whether a class-hydration helper produces a `List<T>` (`queryInto`) or a `T?` (`queryOneInto`).
@@ -196,6 +199,10 @@ enum HelperSpec {
         val_ty: Type,
         naming: Naming,
     },
+    /// `phorjStreamInto<Class>[<Naming>]` (DEC-208 item H) — a `DbStream<Class>` whose per-row
+    /// hydration closure reuses the SAME `build_class` machinery as `queryInto`, but runs it lazily
+    /// per pulled row.
+    Stream { class: String, naming: Naming },
 }
 
 /// A camelCase synthetic free-function name (free functions are `E-NAME-CASE`-checked; `Class`/type
@@ -454,6 +461,7 @@ impl Db<'_> {
                 "queryOneInto" => Some(Call::IntoOne),
                 "queryScalar" => Some(Call::Scalar),
                 "queryMap" => Some(Call::Map),
+                "streamInto" => Some(Call::Stream),
                 _ => None,
             },
             _ => None,
@@ -571,6 +579,7 @@ impl Db<'_> {
                 "`queryScalar<int>()` (a scalar, or a `?` form)",
             ),
             Call::Map => ("queryMap", 2, "`queryMap<KeyType, ValueType>()`"),
+            Call::Stream => ("streamInto", 1, "`streamInto<RowClass>()`"),
         };
         if type_args.len() != want {
             self.diag(
@@ -598,6 +607,11 @@ impl Db<'_> {
             Call::Map => Type::Named {
                 name: "Map".into(),
                 args: type_args,
+                span,
+            },
+            Call::Stream => Type::Named {
+                name: "DbStream".into(),
+                args: vec![type_args.remove(0)],
                 span,
             },
         })
@@ -645,6 +659,7 @@ impl Db<'_> {
             Call::IntoOne => self.resolve_class(ClassKind::One, expected.as_ref(), span, naming),
             Call::Scalar => self.resolve_scalar(expected.as_ref(), span),
             Call::Map => self.resolve_map(expected.as_ref(), span, naming),
+            Call::Stream => self.resolve_stream(expected.as_ref(), span, naming),
         };
         let Some(name) = name else {
             return self.placeholder();
@@ -912,6 +927,68 @@ impl Db<'_> {
                     span,
                     format!(
                         "`{method}()` must map into a user class; `{}` is not one",
+                        type_label(inner)
+                    ),
+                    "E-DB-INTO-BAD-SINK",
+                    "name a class with a promoted-field constructor as the row type".into(),
+                );
+                None
+            }
+        }
+    }
+
+    /// Resolve `streamInto<T>()` (DEC-208 item H): the sink type must be `DbStream<Class>`; validates
+    /// the class exactly like `queryInto` and registers a per-class stream helper.
+    fn resolve_stream(
+        &mut self,
+        expected: Option<&Type>,
+        span: Span,
+        naming: Naming,
+    ) -> Option<String> {
+        let Some(expected) = expected else {
+            self.diag(
+                span,
+                "`streamInto()` has no type to infer its row class from".into(),
+                "E-DB-INTO-NO-TYPE",
+                "bind it to a `DbStream<YourClass>` declaration, or write the class explicitly — `stmt.streamInto<YourClass>()`".into(),
+            );
+            return None;
+        };
+        let inner: &Type = match expected {
+            Type::Named { name, args, .. } if name == "DbStream" && args.len() == 1 => &args[0],
+            _ => {
+                self.diag(
+                    span,
+                    format!(
+                        "`streamInto()` produces a `DbStream<Row-class>`, but the binding's type is `{}`",
+                        type_label(expected)
+                    ),
+                    "E-DB-INTO-BAD-SINK",
+                    "declare the binding `DbStream<YourClass>` (or use the turbofish form)".into(),
+                );
+                return None;
+            }
+        };
+        match inner {
+            Type::Named { name, args, .. }
+                if args.is_empty() && self.ctor_params.contains_key(name) =>
+            {
+                let class = name.clone();
+                let helper = format!("phorjStreamInto{class}{}", naming_suffix(naming));
+                if !self.helpers.contains_key(&helper) {
+                    if !self.validate_class(&class, span, &mut Vec::new()) {
+                        return None;
+                    }
+                    self.helpers
+                        .insert(helper.clone(), HelperSpec::Stream { class, naming });
+                }
+                Some(helper)
+            }
+            _ => {
+                self.diag(
+                    span,
+                    format!(
+                        "`streamInto()` must map into a user class; `{}` is not one",
                         type_label(inner)
                     ),
                     "E-DB-INTO-BAD-SINK",
@@ -1640,7 +1717,9 @@ impl Db<'_> {
         // built (the recursive `build_class`/`collect_leaves`/`all_null` all read `current_naming` via
         // `col`/`seg`). Must be the first line: synthesis is one-helper-at-a-time.
         self.current_naming = match spec {
-            HelperSpec::Class { naming, .. } | HelperSpec::Map { naming, .. } => *naming,
+            HelperSpec::Class { naming, .. }
+            | HelperSpec::Map { naming, .. }
+            | HelperSpec::Stream { naming, .. } => *naming,
             HelperSpec::Scalar { .. } => Naming::Exact,
         };
         let stmt_ty = self.named("Statement");
@@ -1686,6 +1765,18 @@ impl Db<'_> {
                 let v = val_ty.clone();
                 // `val` (MapVal) is a struct ref; extract its data before the mutable-self body call.
                 let body = self.map_body(key_acc, &k, val, &v);
+                (ret, body)
+            }
+            HelperSpec::Stream { class, .. } => {
+                let c = class.clone();
+                let ct = self.named(&c);
+                let sp = self.sp();
+                let ret = Type::Named {
+                    name: "DbStream".into(),
+                    args: vec![ct],
+                    span: sp,
+                };
+                let body = self.stream_body(&c);
                 (ret, body)
             }
         };
@@ -1772,6 +1863,67 @@ impl Db<'_> {
         body.push(Stmt::Return {
             value: Some(ret_val),
             span: ret_span,
+        });
+        body
+    }
+
+    /// The `phorjStreamInto<Class>` body (DEC-208 item H):
+    /// ```text
+    /// RowStream phorjRows = phorjStmt.stream()?;
+    /// return new DbStream(phorjRows, function(Row phorjRow): Class throws DbError {
+    ///     <build_class locals>; return new Class(...);
+    /// });
+    /// ```
+    /// `T` of the generic `DbStream<T>` is inferred at construction from the closure's declared return
+    /// type; the per-row hydration is the SAME `build_class` output `queryInto` inlines into its loop,
+    /// here wrapped in a throwing lambda (DEC-222) so hydration runs lazily per pulled row.
+    fn stream_body(&mut self, class: &str) -> Vec<Stmt> {
+        let mut body = Vec::new();
+        // RowStream phorjRows = phorjStmt.stream()?;
+        let s = self.ident("phorjStmt");
+        let call = self.member_call(s, "stream", vec![]);
+        let init = self.propagate(call);
+        let rs_ty = self.named("RowStream");
+        let span = self.sp();
+        body.push(Stmt::VarDecl {
+            ty: rs_ty,
+            name: "phorjRows".into(),
+            init,
+            mutable: false,
+            span,
+        });
+        // The hydration lambda: function(Row phorjRow): Class throws DbError { …; return new Class(..); }
+        let mut lam_body = Vec::new();
+        let newc = self.build_class(class, "", "phorjRow", &mut lam_body);
+        let ret_span = self.sp();
+        lam_body.push(Stmt::Return {
+            value: Some(newc),
+            span: ret_span,
+        });
+        let row_ty = self.named("Row");
+        let psp = self.sp();
+        let lam_span = self.sp();
+        let ret_ty = self.named(class);
+        let err_ty = self.named("DbError");
+        let lambda = Expr::Lambda {
+            params: vec![Param {
+                ty: row_ty,
+                name: "phorjRow".into(),
+                default: None,
+                span: psp,
+            }],
+            ret: Some(ret_ty),
+            throws: vec![err_ty],
+            body: LambdaBody::Block(lam_body),
+            span: lam_span,
+        };
+        // return new DbStream(phorjRows, <lambda>);
+        let rows_ref = self.ident("phorjRows");
+        let stream = self.new_obj("DbStream", vec![rows_ref, lambda]);
+        let rsp = self.sp();
+        body.push(Stmt::Return {
+            value: Some(stream),
+            span: rsp,
         });
         body
     }

@@ -941,3 +941,26 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   *Alternatives:* keep `db` opt-in with only the clean errors (rejected: parity mandate — PHP's PDO
   is default); silently strip Db calls on transpile (FORBIDDEN, rule 14 leg 3). Build-time cost of
   bundled SQLite accepted (one-time, cached). `db-postgres` stays opt-in (network dep).
+
+- **DEC-228 — AUTO-RULED (REOPENABLE): Db streaming surface (item H) = `RowStream` + generic
+  `DbStream<T>` with hydrate-on-pull closure; cursor materializes today (disclosed).** Surface:
+  `stmt.stream(): RowStream` (`next(): Row?`, null = end) and `stmt.streamInto<T>(): DbStream<T>`
+  (`next(): T?`, LAZY — hydration runs per pulled row via a DEC-222 throwing closure synthesized by
+  `desugar_db` from the same `build_class` machinery as `queryInto`; turbofish + contextual sinks;
+  naming strategies apply). Risk example: `var s = stmt.streamInto<User>(); User? first = s.next();`
+  — only the first row is ever hydrated (a later broken row throws NOTHING unless pulled; proven by
+  `db_stream_into_hydrates_lazily_early_exit_skips_bad_rows`). *Disclosed limit:* both drivers
+  materialize the result set at `stream()` (rusqlite/postgres iterators borrow their statement —
+  self-referential lifetime, unavailable under `#![deny(unsafe_code)]`); the surface contract is
+  delivery + lazy hydration, drivers upgrade underneath. *Alternatives:* self_cell/ouroboros dep for
+  true incremental stepping (rejected: new unvetted dep for an internal perf property); thread+channel
+  per cursor (rejected: heavyweight, Connection not Sync); defer streaming entirely (rejected: queue
+  item H, unblocks the one-Iterator-protocol seed). NOT ruled: for-in over streams (the Data-pillar
+  Iterator-protocol slice — a REAL adjudication for the developer, queued).
+- **BUG FIX (en route, rule 14): `rewrite_html` walker-totality — `Expr::New` was un-walked.** Every
+  span-keyed checker rewrite (throws-`?` erasure, `html"…"` holes, tagged templates) SKIPPED anything
+  nested in `new C(args)`: first live trigger = a throwing lambda with `?` in ctor args (the DbStream
+  hydration closure) — checker accepted it, VM rejected it as Result-mode `?`, interpreter faulted at
+  runtime ("`?` requires a Result value"). Sibling walkers audited (rewrite_ufcs / desugar_router /
+  resolve_variant_imports / intrinsic_imports all have New arms — rewrite_html was the sole hole).
+  Pinned by `conformance/errors/lambda-in-ctor.phg` on all three backends.

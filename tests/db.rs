@@ -1413,3 +1413,103 @@ fn db_program_transpile_is_a_clean_ladder_error() {
         }
     }
 }
+
+// ── DEC-208 item H: streaming (`stream()` / `streamInto<T>()`) ───────────────────────────────────────
+
+/// Untyped streaming: `stmt.stream()` → `RowStream`, `next(): Row?` row-at-a-time, `null` at the end.
+#[test]
+fn db_stream_delivers_rows_one_at_a_time() {
+    let src = typed_program(
+        r#"var s = db.prepare("SELECT name, age FROM users ORDER BY age").stream();
+       mutable bool more = true;
+       while (more) {
+         Row? r = s.next();
+         if (var row = r) { Output.printLine("{row.getString("name")}/{row.getInt("age")}"); }
+         else { more = false; }
+       }"#,
+    );
+    // typed_program does not import Row — extend the scaffold inline instead.
+    let src = src.replace(
+        "import Core.Db.DbError;",
+        "import Core.Db.DbError;\nimport Core.Db.Row;",
+    );
+    both(&src, "Ada/36\nGrace/45\n");
+}
+
+/// Typed lazy streaming with a turbofish: `var s = stmt.streamInto<User>();` + `next(): User?`.
+#[test]
+fn db_stream_into_turbofish_hydrates_per_row() {
+    let src = typed_program(
+        r#"var s = db.prepare("SELECT name, age FROM users ORDER BY age").streamInto<User>();
+       mutable bool more = true;
+       while (more) {
+         User? u = s.next();
+         if (var user = u) { Output.printLine("{user.name}/{user.age}"); }
+         else { more = false; }
+       }"#,
+    );
+    both(&src, "Ada/36\nGrace/45\n");
+}
+
+/// Contextual sink form: `DbStream<User> s = stmt.streamInto();`.
+#[test]
+fn db_stream_into_contextual_sink() {
+    let src = typed_program(
+        r#"DbStream<User> s = db.prepare("SELECT name, age FROM users ORDER BY age").streamInto();
+       User? first = s.next();
+       Output.printLine("{first?.name ?? "<none>"}");"#,
+    );
+    let src = src.replace(
+        "import Core.Db.DbError;",
+        "import Core.Db.DbError;\nimport Core.Db.DbStream;",
+    );
+    both(&src, "Ada\n");
+}
+
+/// LAZINESS PROOF: hydration runs per PULLED row. The second row would throw on hydration (NULL age
+/// into a non-optional `int`), but pulling only the first row never hydrates it — no error. The same
+/// query through `queryInto()` (eager) throws.
+#[test]
+fn db_stream_into_hydrates_lazily_early_exit_skips_bad_rows() {
+    let src = typed_program(
+        r#"discard db.prepare("INSERT INTO users(name, age) VALUES('Broken', NULL)").exec();
+       var s = db.prepare("SELECT name, age FROM users ORDER BY age NULLS LAST").streamInto<User>();
+       User? first = s.next();
+       Output.printLine("pulled: {first?.name ?? "<none>"}");"#,
+    );
+    both(&src, "pulled: Ada\n");
+}
+
+/// The same bad row through the EAGER `queryInto()` throws — the contrast half of the laziness proof.
+#[test]
+fn db_query_into_eager_hydration_hits_the_bad_row() {
+    let src = typed_program(
+        r#"discard db.prepare("INSERT INTO users(name, age) VALUES('Broken', NULL)").exec();
+       List<User> all = db.prepare("SELECT name, age FROM users ORDER BY age NULLS LAST").queryInto();
+       Output.printLine("{List.length(all)}");"#,
+    );
+    both(
+        &src,
+        "caught: Core.Db.getInt: column `age` is NULL (use int?)\n",
+    );
+}
+
+/// `streamInto` wrong turbofish arity → the same `E-TYPE-ARG-COUNT` as the other query calls.
+#[test]
+fn db_stream_into_wrong_arity_is_rejected() {
+    let src = typed_program(
+        r#"var s = db.prepare("SELECT name, age FROM users").streamInto<string, int>();
+       Output.printLine("x");"#,
+    );
+    fails_with(&src, "E-TYPE-ARG-COUNT");
+}
+
+/// A non-`DbStream` sink for `streamInto()` is a clean bad-sink error.
+#[test]
+fn db_stream_into_bad_sink_is_rejected() {
+    let src = typed_program(
+        r#"List<User> s = db.prepare("SELECT name, age FROM users").streamInto();
+       Output.printLine("x");"#,
+    );
+    fails_with(&src, "E-DB-INTO-BAD-SINK");
+}

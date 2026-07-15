@@ -1,0 +1,40 @@
+// Conformance: a throwing lambda (DEC-222) passed as a CONSTRUCTOR argument, with a throws-mode `?`
+// inside its body. Regression net for the `rewrite_html` walker-totality fix (2026-07-15): `Expr::New`
+// was missing from the span-keyed rewrite walker, so a `?` nested under `new C(args)` was never erased
+// into its bare call — the VM rejected it as a Result-mode `?` and the interpreter faulted at runtime.
+package Main;
+
+import Core.Output;
+
+class BadInput implements Error {
+    constructor(public string message) {}
+}
+
+function parsePositive(int n): int throws BadInput {
+    if (n < 0) {
+        throw new BadInput("negative: {n}");
+    }
+    return n * 2;
+}
+
+// A generic holder whose constructor takes a throwing closure — the trigger shape.
+class Mapper<T> {
+    constructor(private (int) => T throws BadInput f) {}
+    function apply(int n): T throws BadInput {
+        (int) => T throws BadInput g = this.f;
+        T v = g(n)?;
+        return v;
+    }
+}
+
+function main(): void {
+    Mapper<int> m = new Mapper(
+        function(int n): int throws BadInput { int doubled = parsePositive(n)?; return doubled + 1; }
+    );
+    try {
+        Output.printLine("ok {m.apply(20)}");
+        Output.printLine("ok {m.apply(-3)}");
+    } catch (BadInput e) {
+        Output.printLine("caught {e.message}");
+    }
+}
