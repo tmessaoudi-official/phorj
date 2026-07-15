@@ -1106,10 +1106,14 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   deprecated aliases during the transition. *Alternatives (offered): bless the prefix convention
   (rejected — ergonomics); collision = compile error (rejected — fixes the bug, not the design).*
   Implementation = a checker/parser slice (qualified names in catch/throw/extends positions), queued.
-- **DEC-235 — RULED: pipe `|>` = FIRST-ARG INSERTION** (`x |> f(a)` ≡ `f(x, a)`; `x |> f` ≡ `f(x)`;
-  left-assoc, lowest precedence) — matches the subject-first stdlib (`List.map(xs, f)`), so
-  pipelines compose over the existing API with no currying. *Alternative (offered): callable
-  application (F#-curried) — rejected: every step would need a lambda wrapper.*
+- **DEC-235 — REVOKED by DEC-239 (2026-07-16 full-reopen audit, flag F-001).** Original ruling:
+  pipe `|>` = first-arg insertion (`x |> f(a)` ≡ `f(x, a)`), *alternative "callable application —
+  rejected: every step would need a lambda wrapper"*. The audit established two facts the ruling
+  was made without: (1) the pipe was ALREADY SHIPPED with callable-application semantics (probed:
+  `5 |> mk(2)` → applies `mk(2)`'s closure → 7), so DEC-235 would have silently changed working
+  programs; (2) **PHP 8.5 shipped `|>` with exactly those callable-application semantics**, so
+  first-arg insertion would make identical syntax mean different programs in phorj vs PHP —
+  poisoning transpile AND `phg lift`. Superseded by DEC-239.
 - **DEC-236 — RULED: constructor DEFAULT PARAMS land in the sugar wave** (reuse the function
   default-param call-fill machinery; fixes the SmtpConfig.withAuth / SendmailTransport.at warts and
   a PHP-8 promoted-ctor parity gap). *Alternative (offered): keep the factory convention — rejected.*
@@ -1148,3 +1152,34 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   exit codes via cmd_*_exit). QUEUED: the PHP twin (`__phorj_debug_render`, common domain first —
   enums/sets erase to indistinguishable PHP shapes, so the twin FAULTS on those rather than lying);
   TTY-colorized rendering (byte-identity keeps v1 plain).
+
+## 2026-07-16 — FULL REOPEN AUDIT rulings (developer at desk, via AskUserQuestion; audit report = docs/research/2026-07-16-full-reopen-audit.md)
+
+- **DEC-239 — RULED (audit flag F-001): pipe `|>` = PHP-ALIGNED CALLABLE APPLICATION, ratified as
+  a 4-part package.** (1) DEC-235 first-arg insertion REVOKED (see its entry — ruled without
+  knowing the pipe had already shipped PHP-aligned, and before PHP 8.5's own `|>` semantics were
+  on the table). (2) Base semantics = the shipped ones ≡ PHP 8.5 (php.watch/versions/8.5/
+  pipe-operator verified exhaustively): RHS is any function-valued expression, piped value applied
+  as the single argument; left-assoc. (3) PRECEDENCE FIX queued: phorj parses `x |> f == 6` as
+  `x |> (f == 6)` (comparison tighter — today a loud cross-type error, never silent) while PHP
+  parses `(x |> f) == 6`; phorj moves to PHP's exact slot (tighter than comparison, looser than
+  arithmetic — `10 + 6 |> inc` → 17 already matches). (4) TWO strictly-additive ergonomics sugars
+  that beat PHP (php.watch: "not possible to change the position of the parameter" in PHP):
+  **bare-`%` placeholder**, whole-argument slots of the TOP-LEVEL RHS call only (`x |> f(%, 2)` ≡
+  `f(x, 2)`; multiple `%` slots legal — value already evaluated once; `f(%)` legal-redundant; each
+  `|>` in a chain binds its own `%`; `f(% + 1)` / nested `g(%)` rejected `E-PIPE-PLACEHOLDER` —
+  nesting is the lambda's job), and **contextually-typed pipe lambda**: expression-body lambda in
+  pipe position may omit the param type (`x |> (v => v * 2 + 1)` — type flows from the pipe, the
+  DEC-201 contextual-typing precedent; naming beats PHP's `fn($v)=>` on readability).
+  Divergences RECORDED AS JUSTIFIED (phorj-better): void mid-chain = compile error (PHP coerces
+  void→null and pipes garbage); no string-callables `'strtoupper'` (static typing); single-arg
+  arity enforced at COMPILE time (PHP: runtime TypeError). Token `%` chosen over `<%>` (generics
+  visual collision, template-tag smell, 3× ceremony) and `%%` — a lone `%` in an argument slot
+  cannot parse as modulo (needs a left operand), so bare `%` is unambiguous under whole-arg
+  scoping. *Alternatives (offered, rejected): keep DEC-235 (breaks shipped curried pipes + PHP
+  divergence on identical syntax); Hack-style %-anywhere (PHP RFC threads flagged $$-anywhere as
+  the confusing part; %-soup, unnameable); lambda-with-%-binder (developer's sketch — challenged:
+  all the syntax of a lambda, none of the naming; developer accepted); defer placeholder (leaves
+  phorj wordier than PHP at the multi-arg point).* Build = parser/checker slice, queued
+  fresh-context; conformance goldens must pin: probes A–E + P1–P3 from the audit (bare 2-param
+  loud error, closure/method-value/callable-returning RHS, chain, precedence, void rejection).
