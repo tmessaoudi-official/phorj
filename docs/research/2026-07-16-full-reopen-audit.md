@@ -47,6 +47,9 @@
 | F-025 | D4 | HIGH | Debug.dump leaks Secret<T> plaintext (direct + transitive, probed) | **RULED DEC-263**: universal Secret redaction on all render surfaces |
 | F-026 | D4 | HIGH | HttpClient resends Authorization/Cookie to cross-host redirects (no strip) | **RULED DEC-264**: strip {Authorization,Cookie,Proxy-Authorization,WWW-Authenticate} cross-origin + on downgrade |
 | F-027 | D4 | MED-HIGH | SMTP AUTH creds over downgradeable Tls::Opportunistic | **RULED DEC-265**: require TLS when credentials set; explicit knob |
+| F-022 | D5 | MED | jsonround 0.25× / dbwork 0.63× losses — levers are build items not notes | pending |
+| F-023 | D5 | MED | perf suite must expand (I/O benches + real-app macros) per DEC-259 | pending |
+| F-024 | D5 | LOW | JIT-coverage-of-real-programs metric unmeasured | pending |
 
 ---
 
@@ -573,6 +576,40 @@ isolation in serve · the *_tests.rs sibling convention.
 - **Sessions**: 128-bit `/dev/urandom` ids, HttpOnly+SameSite=Lax+
 
 ## D5 — Perf ledger
+
+> Audit-first: grading recorded CLAIMS for freshness/honesty, not re-running the suite (a full
+> pinned+interleaved-vs-docker-php run is hours and belongs in the build wave). 23 paired
+> benches present (21 micro + jsonround/dbwork macros).
+
+### D5 claim grades
+
+- **21 micros ≥ 1.0×** [recorded 2026-07-12 session 5, 3×-best-of-7 medians, pinned+interleaved
+  vs docker php:8.5+JIT]: **HOLD-as-recorded but STALE-DATED** — the last ratchet ran 2026-07-12;
+  the fable spine (Db/Mail/HttpClient/Fs/Session) + office arc (Debug/ctor-defaults) landed AFTER
+  with no re-ratchet ("microbench-gate ratchet SKIPPED at load 4.2" — its own guard). The claim is
+  honest for what it measured; it is not re-verified against current HEAD. **Re-ratchet owed** in
+  the build wave (a `Verified` re-stamp, not a new claim).
+- **stringconcat 1.74× / mapget wins** [gate-2 ceiling spike, 2026-07-11]: HOLD, evidence-solid
+  (interleaved, checksum-identical, artifacts recorded). Verified-grade as recorded.
+- **jsonround 0.25× LOSS** + **dbwork 0.63× LOSS** [spine 8, 2026-07-16]: **HONEST-LOSS, confirmed**
+  — flagged with anatomy + levers, loss baselines recorded (not hidden). These are the "perf losses"
+  the developer asked about; they are the two NEW macros, correctly WIN-OR-FLAGGED. **F-022**: the
+  levers (Json node arena / scalar-by-path native / enum-match JIT for jsonround; statement cache /
+  native bind→exec fast-path for dbwork) are ruled-worthy build items, not just notes.
+- **F-008 (from D0)**: HttpClient per-request connect vs PHP persistent share handles — a real
+  perf gap, folds into the perf build queue (connection pool/keep-alive; serve is also
+  `Connection: close` today, a related lever).
+
+### D5 structural finding
+
+- **F-023**: the perf SUITE must EXPAND per DEC-259 — (a) I/O-native benches (Db against
+  PDO-SQLite, Mail against a local fixture, HttpClient against a local server) since the blanket
+  I/O carve-out was rejected; (b) real-application MACRO benches (whole request/response cycles,
+  a router+db+template pipeline) benched against a PHP twin — `var/phorj-app` is the instrument.
+  This is a build-wave program, not a single slice.
+- **F-024**: the JIT-coverage-of-real-programs metric is still unmeasured (parked in KNOWN_ISSUES) —
+  without it, "the JIT wins" is unquantified for real code (only micros). A coverage counter
+  (JIT-eligible fn-calls / total) would make the claim measurable.
 
 ## D6 — Docs unification log
 
