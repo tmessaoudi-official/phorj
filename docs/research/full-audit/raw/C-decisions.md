@@ -1637,3 +1637,18 @@ jit-off/minimal end). Live DB/mail/http round-trips self-skip without their `PHO
 env (skip-loud), so the gate needs no live servers. Recorded in `CLAUDE.md` (Toolchain & quality gate)
 + `scripts/git-hooks/pre-push`. *Alternatives (offered, rejected): per-slice features (leaves the hole);
 separate gate-infra slice later (the hole keeps hiding lints meanwhile).*
+
+## DEC-270 — REFINED (2026-07-16, developer via AskUserQuestion, at implementation time)
+
+The audit-desk DEC-270 ruling (SSRF deny-by-default for loopback + private + link-local + metadata) is
+REFINED now that it meets real usage: **default-BLOCK RFC1918 (10/8, 172.16/12, 192.168/16) +
+link-local/metadata (169.254/16, incl. the cloud-credential endpoint 169.254.169.254) + IPv6 ULA
+(fc00::/7) + IPv6 link-local (fe80::/10) + 0.0.0.0/unspecified; default-ALLOW loopback (127.0.0.0/8, ::1).**
+Rationale: loopback is overwhelmingly INTENTIONAL (local services, sidecars, dev servers), whereas
+metadata + internal-LAN are the actual SSRF-exfiltration targets DEC-270 exists to stop. Opt-in
+`allowPrivateHosts(true)` reaches the blocked ranges deliberately. Bonus: the existing http_client tests
+(all on 127.0.0.1) stay valid. IPv4-mapped-IPv6 addresses are unwrapped and re-checked (no bypass).
+DNS-PIN unchanged (resolve once, connect to the resolved IP, re-check across redirect hops — anti-rebind).
+*Alternatives (offered, rejected): block-all-incl-loopback (literal ruling — high friction, breaks
+localhost + all tests); block-metadata-only (leaves internal-LAN SSRF open). This is the DEC-272 socket
+secure-default rider; the future Core.Net inherits it via the shared Transport seam.*
