@@ -1409,3 +1409,34 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   workloads" MEASURED, not asserted. *Alternative (offered): I/O micros only, defer real-app —
   rejected; dev wants both.* Also queued: F-024 JIT-coverage-of-real-programs metric (a coverage
   counter making "the JIT wins" quantifiable for real code).
+
+## 2026-07-16 evening gap-session rulings (developer via AskUserQuestion, post-audit)
+
+- **DEC-268 — RULED: THE CERTIFICATION LADDER, MAXIMAL tier** (replaces the unexecutable
+  "advisor = Opus for the build phase" ruling — an advisor below the main model does not
+  activate, and a same-model Fable advisor errored `unavailable`). Every 3C pre-work AND every
+  6C pre-completion gate, ALL task sizes: a **3-lens fresh-context reviewer PANEL**
+  (correctness+regression / security+safety-promises / completeness+blast-radius), each lens
+  adversarial and EVIDENCE-BASED (reads the actual diff/tests/specs itself — never the author's
+  narrative); **TWO consecutive fully-clean rounds** required (a finding → fix → the clean
+  counter resets); cap 5 rounds → ask-human with the open findings, never silently proceed.
+  Availability chain: advisor() if it activates → reviewer subagents → 3 distinct-lens
+  self-passes + MANDATORY disclosure. The mechanical quality gate (oracle + byte-identity +
+  clippy + fmt) is always the floor, never the certification. Cost accepted: ~6–10 reviewer
+  agents per slice. Recorded in project CLAUDE.md + global CLAUDE.md 3C/6C. *Alternatives
+  (offered, rejected): risk-tiered ladder (panel only for spine/security; single reviewer
+  elsewhere — dev chose uniform maximum); double-clean-Tier-S-only; restoring the old
+  30-cycle/8-clean self-convergence gate (structurally weaker: self-grading blind spot is
+  exactly what certification exists to remove).*
+- **DEC-269 — RULED: per-feature perf gate = WIN-OR-FLAG precedence.** The PER-FEATURE PERF GATE
+  ("every new feature ships its micro and must score ≥1.0×") is AMENDED: ≥1.0× is the target;
+  after ALL levers are exhausted on a shape, a **LOSS-FLAGGED entry with anatomy + queued
+  levers** is an acceptable definition-of-done — ratifying existing practice (jsonround 0.25× /
+  dbwork 0.63× shipped flagged). Rider (developer, verbatim intent): **perf work is continuous
+  as features ship** — never batched away to a distant hold. *Alternatives (offered, rejected):
+  hard-blocking gate (retroactively invalidates shipped flagged work; blocks progress on
+  structurally hard shapes); split micro-hard/macro-flag bar (two bars = ambiguity).*
+- **Scheduling (not DEC rows):** next session (home) = extension-policy adjudication (§10
+  Bucket 2 — the 100%-parity blocker) → docs/ cleanup slice (4-living shape: MASTER-PLAN,
+  UNIFIED-SPEC, C-decisions, M-gap-matrix; rest folded/archived, full reference sweep) →
+  Tier 1 DEC-263. Gap ledger = MASTER-PLAN §0.3.

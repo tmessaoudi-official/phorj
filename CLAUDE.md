@@ -46,6 +46,17 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
 - **After each shipped feature:** `cargo build --release` and report the binary path
   (`target/release/phg`) — standing developer rule.
 
+## Certification ladder (DEC-268, 2026-07-16 — governs every 3C/6C gate in this project)
+
+**MAXIMAL tier, all task sizes.** Every 3C pre-work and every 6C pre-completion gate = a
+**3-lens fresh-context reviewer PANEL** (correctness+regression / security+safety-promises /
+completeness+blast-radius), each lens adversarial and **evidence-based** (the reviewer reads the
+actual diff/tests/specs itself — never certify from the author's narrative). **TWO consecutive
+fully-clean rounds** required; any finding → fix → the clean counter resets; cap 5 rounds →
+ask-human, never silently proceed. Availability chain: `advisor()` if it activates → read-only
+reviewer subagents → 3 distinct-lens self-passes + mandatory disclosure. The quality gate above
+is always the floor, never the certification.
+
 ## Git autonomy (overrides global Rule 10 — authorized by the developer, 2026-06-16)
 
 Autonomous `git add` + `git commit` are **authorized**: stage and commit ready work without
