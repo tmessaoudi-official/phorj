@@ -23,8 +23,8 @@
 | D0 | PHP 8.4/8.5 surface re-sweep + 8.6 RFC ahead-watch vs the 824-row matrix | ✅ DONE — 8 flags, all triaged (DEC-239…244; F-003 fixed; F-008→D5) |
 | D1 | Decision register full reopen (155+ rows incl. conflicts/autonomous lists) | ✅ DONE — 5 flags triaged (DEC-245…250); 7 conflicts closed; 12 register-stale rows queued for D6 |
 | D2 | KNOWN_ISSUES full reopen (every row) | ✅ DONE — 17 stale rows→D6; 8 flags ruled (DEC-251…258) + DEC-259 perf doctrine + standing rules (META-7, check≡LSP, transpile/lift-always-current) |
-| D3 | Architecture / clean code / folder structure | ▶ IN PROGRESS |
-| D4 | Security (every native surface vs PHP's equivalent) | pending |
+| D3 | Architecture / clean code / folder structure | ✅ DONE — DEC-260 folder moves, DEC-261 L1/L2 advanced, DEC-262 NEW cap soft-300/hard-500 + decomp order |
+| D4 | Security (every native surface vs PHP's equivalent) | ▶ IN PROGRESS |
 | D5 | Perf-claim re-verification (WIN/HOLD/LOSS ledger) | pending |
 | D6 | Docs drift + SSOT unification (runs throughout) | continuous |
 

@@ -99,9 +99,13 @@ asking, when the quality gate above is green. Limits:
     `Core.` reserved); functions/natives camelCase (`Output.printLine`); keyword `function`
     (never `fn`), return types `: T`, mandatory `new` for construction, explicit `this.field`.
     The naming SSOT is `docs/specs/UNIFIED-SPEC.md` §"Naming overhaul".
-13. **File-size anti-regrowth** (ratified 2026-07-02): soft cap 800 lines / hard cap 1000 per
-    source file; past the cap, split by cohesion into `foo/mod.rs` + sub-files (M-Decomp
-    pattern, `pub(super)` for moved methods) — never by line count alone.
+13. **File-size anti-regrowth** (ratified 2026-07-02; AMENDED 2026-07-16, DEC-262): **soft cap
+    300 lines / hard cap 500** per source file — "everything organized/structured/decoupled into
+    clear many files". Split-as-you-go is the DEFAULT: a feature that would push a file past the
+    soft cap STARTS by splitting it. Split by cohesion into `foo/mod.rs` + sub-files (M-Decomp
+    pattern, `pub(super)` for moved methods) — never by line count alone; genuinely-cohesive
+    exhaustive-match units comply via index/dispatcher patterns. Applies to new code immediately,
+    to existing files as M-Decomp reaches them.
 14. **THE LADDER RULE** (ratified 2026-07-02 — governs every feature with no PHP analog).
     When a feature has no faithful idiomatic PHP mapping, SURFACE it to the developer with a
     ladder analysis — never decide alone. Ladder: (1) faithful idiomatic PHP exists → transpile;
@@ -116,6 +120,21 @@ asking, when the quality gate above is green. Limits:
     minimal current-syntax failing program embedded IN the question text and the after-state in
     per-option previews (prose outside the question dialog is invisible to the developer while
     answering). Recommended option first, with the why.
+
+16. **CROSS-LANGUAGE SCAN + BYTE-IDENTITY-IS-A-TOOL** (META-7, ratified 2026-07-16). Before
+    designing anything meant to beat PHP, survey how other languages (Rust/Kotlin/Swift/TS/Go/C#…)
+    solved it. Byte-identity is NOT the priority ordering: emitting a `__phorj_*` helper to keep
+    the PHP leg identical is always an acceptable tool — but the trade is ALWAYS surfaced with an
+    explanation and ruled by the developer, never self-decided.
+17. **Always-current surfaces** (ratified 2026-07-16): `phg check` ≡ LSP diagnostics (same
+    pipeline, never diverge — DEC-252); **transpile AND lift updated in the same change** as every
+    language/stdlib feature (a feature that runs but doesn't transpile/lift, or vice versa, is not
+    done); editors both-same-change (DEC-181) unchanged.
+18. **Perf-bench doctrine** (DEC-259, ratified 2026-07-16): everything with a PHP equivalent is
+    benched against it (I/O modules via fixtures — no blanket carve-out); real-application MACRO
+    benches (whole programs/pipelines) join the suite; `var/phorj-app` (gitignored) is the
+    developer's live real-world comparison app — never propose deleting it. WIN-OR-FLAG applies
+    to all of it.
 
 ## Where things live (pointers — read these instead of duplicating them here)
 
