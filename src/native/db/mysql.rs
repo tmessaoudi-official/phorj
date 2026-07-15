@@ -215,31 +215,33 @@ fn translate_named(
             i += 1;
             continue;
         }
-        if !in_s && !in_d && c == ':' {
-            if matches!(chars.get(i + 1), Some(&n) if n.is_ascii_alphabetic() || n == '_') {
-                let mut j = i + 1;
-                let mut name = String::new();
-                while let Some(&n) = chars.get(j) {
-                    if n.is_ascii_alphanumeric() || n == '_' {
-                        name.push(n);
-                        j += 1;
-                    } else {
-                        break;
-                    }
+        if !in_s
+            && !in_d
+            && c == ':'
+            && matches!(chars.get(i + 1), Some(&n) if n.is_ascii_alphabetic() || n == '_')
+        {
+            let mut j = i + 1;
+            let mut name = String::new();
+            while let Some(&n) = chars.get(j) {
+                if n.is_ascii_alphanumeric() || n == '_' {
+                    name.push(n);
+                    j += 1;
+                } else {
+                    break;
                 }
-                let v = pairs
-                    .iter()
-                    .find(|(n, _)| *n == name)
-                    .map(|(_, v)| v.clone())
-                    .ok_or_else(|| format!("Core.Db: named parameter `:{name}` was not bound"))?;
-                params.push(my_param(&v)?);
-                if !used.contains(&name) {
-                    used.push(name);
-                }
-                out.push('?');
-                i = j;
-                continue;
             }
+            let v = pairs
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, v)| v.clone())
+                .ok_or_else(|| format!("Core.Db: named parameter `:{name}` was not bound"))?;
+            params.push(my_param(&v)?);
+            if !used.contains(&name) {
+                used.push(name);
+            }
+            out.push('?');
+            i = j;
+            continue;
         }
         out.push(c);
         i += 1;

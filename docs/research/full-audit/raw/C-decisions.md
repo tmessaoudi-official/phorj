@@ -1625,3 +1625,15 @@ clippy::collapsible_if at http_client.rs:328 (the http-client feature is non-def
 panel (2 lenses): security CLEAN; correctness CLEAN-on-code + one P2 test-coverage gap (scheme term
 masked by default-port asymmetry) fixed with a test-only assertion. Composes with DEC-270 (SSRF, next):
 the strip is header-scoped, SSRF is destination-scoped; both ride the future Transport seam.
+
+## Gate policy — ALL-FEATURES standing gate (developer-ruled 2026-07-16, during DEC-264 build)
+
+The full correctness gate + pre-push hook now run `--all-features` (clippy + tests) instead of
+`--features jit`. Rationale: the non-default features (`http-client`, `mail`, `db-postgres`, `db-mysql`)
+were NEVER compiled/linted/tested by the standing gate — a real coverage hole that hid pre-existing
+clippy lints (`http_client.rs`, `db/mysql.rs` collapsible-ifs, both fixed this build). `--all-features`
+subsumes the old separate `--features db` pre-push step. clippy also runs `--no-default-features` (the
+jit-off/minimal end). Live DB/mail/http round-trips self-skip without their `PHORJ_*_TEST_DSN`/server
+env (skip-loud), so the gate needs no live servers. Recorded in `CLAUDE.md` (Toolchain & quality gate)
++ `scripts/git-hooks/pre-push`. *Alternatives (offered, rejected): per-slice features (leaves the hole);
+separate gate-infra slice later (the hole keeps hiding lints meanwhile).*

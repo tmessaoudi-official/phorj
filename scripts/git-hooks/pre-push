@@ -41,33 +41,28 @@ export PHORJ_REQUIRE_PHP=1
 echo "[pre-push] cargo fmt --check"
 cargo fmt --check
 
-# Lint both feature configs (default + jit) — the JIT code is only compiled under `--features jit`,
-# and pre-commit no longer runs clippy, so this is the sole clippy gate.
-echo "[pre-push] cargo clippy --all-targets -- -D warnings"
-cargo clippy --all-targets -- -D warnings
-echo "[pre-push] cargo clippy --all-targets --features jit -- -D warnings"
-cargo clippy --all-targets --features jit -- -D warnings
+# Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
+# ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, db, db-postgres,
+# db-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding
+# real clippy lints (caught: http_client.rs, db/mysql.rs collapsible-ifs). `--no-default-features`
+# lints the minimal/jit-off path. Together they bound every config a change can land in.
+echo "[pre-push] cargo clippy --all-targets --no-default-features -- -D warnings"
+cargo clippy --all-targets --no-default-features -- -D warnings
+echo "[pre-push] cargo clippy --all-targets --all-features -- -D warnings"
+cargo clippy --all-targets --all-features -- -D warnings
 
+# FULL suite under --all-features + the PHP oracle. `--all-features` SUBSUMES the old separate
+# `--features db` step (db is now in the set) and adds the previously-ungated http-client/mail/postgres/
+# mysql surfaces. The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN` / server env
+# is absent (skip-loud, never silently green), so the gate needs no live servers.
 if cargo nextest --version >/dev/null 2>&1; then
-  echo "[pre-push] cargo nextest run --features jit (FULL suite + PHP oracle, 8.5 floor)"
-  cargo nextest run --features jit --status-level fail
-  echo "[pre-push] cargo test --doc --features jit"
-  cargo test --doc --features jit --quiet
+  echo "[pre-push] cargo nextest run --all-features (FULL suite + PHP oracle, 8.5 floor)"
+  cargo nextest run --all-features --status-level fail
+  echo "[pre-push] cargo test --doc --all-features"
+  cargo test --doc --all-features --quiet
 else
-  echo "[pre-push] cargo test --features jit (nextest absent — fallback, FULL suite + PHP oracle)"
-  cargo test --features jit --quiet
-fi
-
-# `Core.Db` (DEC-208) is a Tier-3, non-default, native-only feature (`db` → rusqlite bundled SQLite).
-# The default/jit gates above compile it OUT, so its tests never run there; this step is the sole gate
-# that exercises the `db` surface. Targeted (the `db` module + the `tests/db.rs` fixture) so a push
-# pays the one-time rusqlite C compile but not a whole second full-suite run. Skipped only if the crate
-# fails to build the feature (never silently green — a build error blocks the push).
-echo "[pre-push] cargo test --features db (Core.Db — Tier-3 gated, native-only)"
-if cargo nextest --version >/dev/null 2>&1; then
-  cargo nextest run --features db -E 'test(/db/)' --status-level fail
-else
-  cargo test --features db db --quiet
+  echo "[pre-push] cargo test --all-features (nextest absent — fallback, FULL suite + PHP oracle)"
+  cargo test --all-features --quiet
 fi
 
 echo "[pre-push] microbench-gate (G-8 mandate ratchet — no WIN->LOSS flip, output-identity holds)"
