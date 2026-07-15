@@ -1,0 +1,47 @@
+// `Core.Fs` (W3) — the TYPED filesystem module: every failure is a catchable `FsError` subtype
+// (NotFound / PermissionDenied / AlreadyExists / DirNotEmpty / …), listings are SORTED
+// (deterministic — never OS directory order), and the recursive delete is a separate, loudly-named
+// `removeDirAll` that refuses "/", "." and "..".
+//
+// Contrast PHP: file_get_contents returns false + a warning, unlink warns, scandir leaks OS order.
+// Contrast the older `Core.File` (kept, transpilable): null-on-missing reads, faulting writes.
+//
+// Impure (ambient filesystem) → quarantined from the byte-identity differential; gated by
+// `tests/fs.rs` on both backends. NATIVE-ONLY for now (`E-TRANSPILE-FS` — a PHP mapping is a
+// recorded future lift).
+package Main;
+
+import Core.Output;
+import Core.Fs;
+import Core.Fs.Fs;
+import Core.Fs.FsNotFound;
+import Core.Fs.FsError;
+
+function main(): void {
+    try {
+        string root = "{Fs.tempDir()}/phorj-fs-demo";
+        Fs.createDir("{root}/src/nested");
+        Fs.writeText("{root}/src/main.phg", "package Main;");
+        Fs.writeText("{root}/src/nested/util.phg", "// util");
+        Fs.appendText("{root}/src/main.phg", "\n// appended");
+        Output.printLine("main.phg is {Fs.size(\"{root\}/src/main.phg\")} bytes");
+        // Sorted, deterministic listings.
+        for (string name in Fs.listDir("{root}/src")) {
+            Output.printLine("entry: {name}");
+        }
+        // walk: every FILE under the root, as sorted relative paths.
+        for (string f in Fs.walk(root)) {
+            Output.printLine("walk: {f}");
+        }
+        // Typed failures: a missing file is a catchable NotFound, not a null or a warning.
+        try {
+            discard Fs.readText("{root}/absent.txt");
+        } catch (FsNotFound e) {
+            Output.printLine("caught FsNotFound (typed!)");
+        }
+        Fs.removeDirAll(root);
+        Output.printLine("cleaned up: {Fs.exists(root)} remains");
+    } catch (FsError e) {
+        Output.printLine("fs error: {e.message}");
+    }
+}

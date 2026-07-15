@@ -1280,6 +1280,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              a forbidden semantic downgrade (§14 LADDER). Run mail programs with `phg run`, or keep\n\
              the mail-sending part native and transpile only the rest of your program.\n"
         }
+        "E-TRANSPILE-FS" => {
+            "E-TRANSPILE-FS — a program importing `Core.Fs` cannot be transpiled to PHP yet.\n\n\
+             `Core.Fs`'s typed error protocol (catchable FsError subtypes classified from OS error\n\
+             kinds) has no PHP emitter yet. PHP HAS faithful filesystem functions, so a real mapping\n\
+             is a recorded future lift — until it lands, transpile refuses rather than emitting a\n\
+             silently-diverging program (§14 LADDER). Run filesystem programs with `phg run`, or use\n\
+             the older transpilable `Core.File` subset (null-on-missing reads, faulting writes).\n"
+        }
         "E-TRANSPILE-HTTPCLIENT" => {
             "E-TRANSPILE-HTTPCLIENT — a program importing `Core.HttpClient` cannot be transpiled to PHP.\n\n\
              `Core.HttpClient` is native-only: live network I/O cannot be byte-identical between the\n\

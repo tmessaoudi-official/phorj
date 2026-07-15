@@ -34,6 +34,11 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **DEC-232 · Core.Fs SHIPPED** (typed filesystem; sorted listings; loud removeDirAll). QUEUED
+  ADJUDICATIONS for you: (a) `Core.File` deprecation/migration (its write/delete failures are
+  UNCATCHABLE faults — the pre-taxonomy era; Core.Fs is the typed successor, additive for now);
+  (b) a sandboxed `new Fs(root)` scoped-filesystem instance (security v2); (c) the E-TRANSPILE-FS
+  lift (PHP mapping exists in principle — emitter work).
 - **DEC-231 · Core.HttpClient SHIPPED** (sync HTTP/1.1 + rustls; security defaults beyond PHP curl;
   native-only ladder). QUEUED ADJUDICATION for you: the cross-prelude ERROR-CLASS NAMESPACE smell —
   injected-class dedup means two preludes declaring the same error name silently share one class

@@ -1056,3 +1056,24 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   the HTTP client caught by `catch (TlsError e)` would land in a MAIL-taxonomy class. En route: the
   sweep-batch-1 quarantine substring hole FIXED generically (`Core.XSys` impure natives now
   quarantine programs importing the `Core.X` prelude twin).
+
+- **DEC-232 — AUTO-RULED (REOPENABLE): `Core.Fs` shipped (W3, TOP-20 #5 blocker) — the TYPED
+  filesystem module (std-only, always compiled, no feature gate).** Files + directories + sorted
+  listings + recursive walk + tempDir; every failure a catchable `FsError` subtype classified from
+  the OS error kind (FsNotFound/FsPermissionDenied/FsAlreadyExists/FsNotADirectory/FsIsADirectory/FsDirNotEmpty/
+  FsIo); `removeDirAll` is the separate LOUD recursive delete refusing `/`, `.`, `..`. Determinism:
+  `listDir`/`walk` are SORTED (Invariant 10 — OS directory order never leaks). Purely ADDITIVE next
+  to the older `Core.File` (whose write/delete failures are uncatchable hard faults and whose read
+  maps all failures to null — found by the spine-7 sweep); Core.File's deprecation/migration is a
+  QUEUED developer adjudication (changing its error contract is user-visible — never self-ruled).
+  Transpile = `E-TRANSPILE-FS` FOR NOW (PHP has faithful filesystem functions; the typed-error PHP
+  emitter is a recorded future lift — refusing beats silent divergence). Risk example:
+  `Fs.writeText("/etc/hosts", …)` under a normal user → catchable `PermissionDenied` with the path
+  in the message; the same through `Core.File.write` → an UNCATCHABLE fault killing the program.
+  LIVE LESSON folded in: the taxonomy is Fs-PREFIXED (`FsNotFound`, …) — the first draft claimed the
+  bare name `NotFound` as an injected type and instantly CAPTURED `examples/web/server.phg`'s own
+  `NotFound` class (E-INJECTED-TYPE-BARE on the user's own type) — the strongest evidence yet for the
+  queued cross-prelude/user-space error-namespace adjudication (DEC-231 note).
+  *Alternatives:* enrich Core.File in place (rejected: changes its shipped error contract);
+  instance-based `new Fs(root)` sandbox (deferred: a chroot-style scoped-FS instance is a genuinely
+  good SECURITY idea — queued as a v2 adjudication); feature-gating (rejected: std-only, no dep).

@@ -470,6 +470,11 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
             "`Core.Db` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
         ),
         (
+            &["Core", "Fs"],
+            "E-TRANSPILE-FS",
+            "`Core.Fs` is native-only for now: its typed FsError protocol has no PHP emitter yet (PHP has faithful filesystem functions, so a real mapping is a recorded future lift — refusing beats emitting a silently-diverging program, THE LADDER RULE). Run this program with `phg run`, or use the transpilable `Core.File` subset.",
+        ),
+        (
             &["Core", "HttpClient"],
             "E-TRANSPILE-HTTPCLIENT",
             "`Core.HttpClient` is native-only: live network I/O cannot be byte-identical across the phorj client and a PHP mapping, so transpiling it is refused rather than silently diverging (THE LADDER RULE). A faithful curl-mapping is a recorded future lift. Run this program with `phg run`.",

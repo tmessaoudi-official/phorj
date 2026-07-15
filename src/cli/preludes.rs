@@ -480,6 +480,107 @@ class Mailer {
 }
 "#;
 
+/// `Core.Fs` (W3, TOP-20 #5 blocker) — the TYPED filesystem prelude: every failure is a catchable
+/// `FsError` subtype (contrast the older `Core.File`, whose write/delete failures are uncatchable
+/// hard faults — its deprecation is a queued adjudication; this module is purely additive).
+/// Listings are SORTED (determinism). Std-only, always compiled (no feature gate). The taxonomy is
+/// Fs-PREFIXED throughout (`FsNotFound`, not `NotFound` — a bare generic name would CAPTURE
+/// user-space classes via the injected-type discipline; caught live when `examples/web/server.phg`'s
+/// own `NotFound` class collided).
+pub(super) const FS_PRELUDE: &str = r#"
+import Core.FsSys;
+import Core.String;
+import Core.List;
+
+// Prelude-local result carrier (NOT Core.Result — the Core.Db injection-order rationale).
+enum FsResult<T> { Ok(T value), Err(string message) }
+
+open class FsError implements Error {
+  constructor(public string message) {}
+  static function fail(string message): never throws FsError {
+    if (String.startsWith(message, "<<NotFound>>")) { throw new FsNotFound(String.removePrefix(message, "<<NotFound>>")); }
+    if (String.startsWith(message, "<<PermissionDenied>>")) { throw new FsPermissionDenied(String.removePrefix(message, "<<PermissionDenied>>")); }
+    if (String.startsWith(message, "<<AlreadyExists>>")) { throw new FsAlreadyExists(String.removePrefix(message, "<<AlreadyExists>>")); }
+    if (String.startsWith(message, "<<NotADirectory>>")) { throw new FsNotADirectory(String.removePrefix(message, "<<NotADirectory>>")); }
+    if (String.startsWith(message, "<<IsADirectory>>")) { throw new FsIsADirectory(String.removePrefix(message, "<<IsADirectory>>")); }
+    if (String.startsWith(message, "<<DirNotEmpty>>")) { throw new FsDirNotEmpty(String.removePrefix(message, "<<DirNotEmpty>>")); }
+    if (String.startsWith(message, "<<FsIo>>")) { throw new FsIo(String.removePrefix(message, "<<FsIo>>")); }
+    throw new FsError(message);
+  }
+}
+
+class FsNotFound extends FsError { constructor(string message) { parent.constructor(message); } }
+class FsPermissionDenied extends FsError { constructor(string message) { parent.constructor(message); } }
+class FsAlreadyExists extends FsError { constructor(string message) { parent.constructor(message); } }
+class FsNotADirectory extends FsError { constructor(string message) { parent.constructor(message); } }
+class FsIsADirectory extends FsError { constructor(string message) { parent.constructor(message); } }
+class FsDirNotEmpty extends FsError { constructor(string message) { parent.constructor(message); } }
+class FsIo extends FsError { constructor(string message) { parent.constructor(message); } }
+
+// The typed filesystem surface (static module functions — filesystem state is ambient, so an
+// instance would carry nothing; the SORTED listings + typed errors are the value).
+class Fs {
+  static function readText(string path): string throws FsError {
+    return match (FsSys.readText(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function readBytes(string path): bytes throws FsError {
+    return match (FsSys.readBytes(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function writeText(string path, string contents): void throws FsError {
+    match (FsSys.writeText(path, contents)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function writeBytes(string path, bytes contents): void throws FsError {
+    match (FsSys.writeBytes(path, contents)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function appendText(string path, string contents): void throws FsError {
+    match (FsSys.appendText(path, contents)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function copy(string from, string to): void throws FsError {
+    match (FsSys.copy(from, to)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function move(string from, string to): void throws FsError {
+    match (FsSys.move(from, to)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function delete(string path): void throws FsError {
+    match (FsSys.delete(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function size(string path): int throws FsError {
+    return match (FsSys.size(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function exists(string path): bool throws FsError {
+    return match (FsSys.exists(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function isFile(string path): bool throws FsError {
+    return match (FsSys.isFile(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function isDir(string path): bool throws FsError {
+    return match (FsSys.isDir(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  // Recursive create (mkdir -p semantics); removeDir removes ONE EMPTY dir; removeDirAll is the
+  // loud recursive delete (refuses "/", "." and "..").
+  static function createDir(string path): void throws FsError {
+    match (FsSys.createDir(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function removeDir(string path): void throws FsError {
+    match (FsSys.removeDir(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function removeDirAll(string path): void throws FsError {
+    match (FsSys.removeDirAll(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  }
+  // Entry NAMES of one directory, sorted; walk = every FILE under a root as sorted relative paths.
+  static function listDir(string path): List<string> throws FsError {
+    return match (FsSys.listDir(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function walk(string root): List<string> throws FsError {
+    return match (FsSys.walk(root)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  static function tempDir(): string throws FsError {
+    return match (FsSys.tempDir()) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  }
+  private static function ok(): void {}
+}
+"#;
+
 /// `Core.HttpClient` (W3-2, TOP-20 #2 blocker) — the sync HTTP client prelude (the Core.Db/Mail
 /// architecture). Taxonomy names are prefixed where a bare name is already taken by another injected
 /// taxonomy (`HttpTimeout`/`HttpTlsError`/`HttpConnectionFailed` — `Timeout`/`TlsError`/
@@ -1225,6 +1326,35 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "MailTimeout",
             "MailIo",
         ],
+    },
+    // `Core.Fs` (W3) — the typed filesystem prelude (std-only, always compiled). Taxonomy names are
+    // Fs-PREFIXED (a bare `NotFound` bare_type captured a user-space class — caught live).
+    VirtualModule {
+        module: &["Core", "Fs"],
+        qualifier: "Fs",
+        src: Some(FS_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &[
+            "Fs",
+            "FsError",
+            "FsNotFound",
+            "FsPermissionDenied",
+            "FsAlreadyExists",
+            "FsNotADirectory",
+            "FsIsADirectory",
+            "FsDirNotEmpty",
+            "FsIo",
+        ],
+    },
+    // `Core.FsSys` — the INTERNAL filesystem natives.
+    VirtualModule {
+        module: &["Core", "FsSys"],
+        qualifier: "FsSys",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
     },
     // `Core.HttpClient` (W3-2) — the sync HTTP client prelude (native-only, `http-client` feature).
     VirtualModule {

@@ -52,6 +52,8 @@ fn every_other_native_is_pure() {
         "Core.MailSys",
         // `Core.HttpClientSys` is whole-module impure (W3-2): live network I/O. `--features http-client`.
         "Core.HttpClientSys",
+        // `Core.FsSys` is whole-module impure (W3): ambient filesystem state.
+        "Core.FsSys",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the
