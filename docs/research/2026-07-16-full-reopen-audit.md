@@ -334,6 +334,62 @@ HOPES to do · green-thread concurrency ⊃ True Async (draft) · Debug.dump enu
 - DEC-184 **JUSTIFIED**, register STALE — is/instanceof full symmetry SHIPPED [Verified probe: both `v is int` and `v instanceof int` narrow and run]; 📐 → ✅ (D6). The TIMTOWTDI challenge was heard and overruled with reasons — properly recorded.
 - DEC-183 **JUSTIFIED** — flat `T?` match exhaustiveness shipped; the recorded caveat is CONFIRMED STILL OPEN [Verified probe: `match c { Red() => … }` over `Color?` → "variant pattern requires an enum scrutinee"] — Optional<enum> still needs smart-cast/`_`; follow-up queued (checkpoint list).
 
+### §2026-07-12 batch (DEC-201…206 + META-1…3)
+
+- DEC-201 **SUPERSEDED** (DEC-214) — chain recorded inline; correct.
+- DEC-202 **JUSTIFIED**, shipped — `E-RESERVED-NAME` over invisible mangling: loud beats silent, and PHP interop names stay honest.
+- DEC-203 **JUSTIFIED**, ruled-UNBUILT [Verified probe: `using (var x = …)` = parse error] — tracked; `Closable` + PHP try/finally twin keeps byte-identity. Queue standing.
+- DEC-204 **JUSTIFIED**, ruled-UNBUILT [Verified: no `onShutdown` native] — rides with Ω-2 Core.Process work; tracked.
+- DEC-205 **JUSTIFIED**, ruled-UNBUILT (phased collector + `Weak<T>`) — serve-can-never-leak is a safety commitment; queue standing. Amends DEC-065/123 as noted.
+- DEC-206 **JUSTIFIED** ruling, but the probe found the REAL state: `DateTime` does not exist AT ALL (no type, member-import or not) — the gate ruling was about a hypothetical. **FLAGGED(F-012)**: Core.Time has no DateTime/Duration/timezone surface while PHP's is among its most mature APIs (8.4 added microsecond/timestamp ctors; 8.6 discusses Duration). Biggest remaining stdlib gap vs PHP.
+- META-1 **OBSOLETE-COMPLETED** — sqlbuild went all the way; the run-end full reopen = THIS audit (executing now).
+- META-2 / META-3 **JUSTIFIED** — executed as ruled.
+
+### §2026-07-13 batch (DEC-207…219, META-4…6)
+
+- DEC-207 **JUSTIFIED** — `::` static-access separator; part-1 shipped, **part-2 (E-SEP-MISMATCH enforcement + codemod) still pending** — tracked. ⚠ interaction noted for the DEC-234 build: qualified member-errors (`catch (Db.Timeout e)`) must pick `.` vs `::` consistently with part-2's rule.
+- DEC-208 **JUSTIFIED** — the enhanced-PDO primitive over a baked-in builder; the whole Db execution stack shipped this run (drivers, hydration, streaming, transactions). Sub-rulings (error-mechanism prelude-wrapper, strict name-mapping, both bind styles) all JUSTIFIED and shipped. **PENDING retained: the retry SURFACE (`db.transactionRetry(fn, retries)`) awaits the developer's name/shape confirmation** → checkpoint.
+- DEC-209 **JUSTIFIED**, shipped — bare-PascalCase rejection verified live this audit (closed C-10 and the #1 autonomous footgun).
+- DEC-210 **JUSTIFIED** — statement-only `++`/`--` ratified; register corrected.
+- DEC-211 **JUSTIFIED**, shipped — generic bounds, both halves sound.
+- DEC-212 **JUSTIFIED** — tagged templates part-1 shipped; part-2 (html → first-party library on the primitive) pends DEC-218 execution; tracked.
+- DEC-213 **JUSTIFIED**, shipped — single-sourced builtin-class list fixed a real spine break.
+- DEC-214 **JUSTIFIED**, shipped (both parts) — `E-EMPTY-LITERAL` + `new List<T>()`; supersedes DEC-201 cleanly. Note: `new Set<T>()` still deferred (needs an Op) — tracked residue.
+- DEC-215 **JUSTIFIED** — DI stays compile-time, L1/L2 refactor scheduled Ω-4/Ω-7; the DEC-208-consistency argument holds.
+- DEC-216 **JUSTIFIED**, ruled-UNEXECUTED — vendor/manifest split to a companion tool not yet extracted [Verified: `phg vendor` still in FEATURES]; tracked build item.
+- DEC-217 **JUSTIFIED** — `phg test` stays built-in (Rust/Go precedent; byte-identity culture).
+- DEC-218 **JUSTIFIED**, ruled-UNEXECUTED — web-spine externalization to userland libs awaits the DEC-216 vendor path; tracked. The Http-primitive OOP note stands.
+- DEC-219 **JUSTIFIED**, deferred — static overload resolution with the soundness carve-out recorded; a META-6 zero-cost item awaiting its slot.
+- META-4 **JUSTIFIED** — two-SSOT consolidation (this audit lives by it).
+- META-5 **OBSOLETE** (advisor situation changed with Fable; certification still disclosed per-session).
+- META-6 **JUSTIFIED** — rich-core / zero-cost-sugar / no-bloat: the externalize audit and every ruling since applies it.
+
+### §2026-07-13/14 follow-through (DEC-220…222)
+
+- DEC-220 (+S3) **JUSTIFIED**, fully shipped — named sinks killed the context-magical Output redirect; `Output.capture` as an import-gated primitive (option d) over the leaking prelude wrapper honored nothing-in-the-wind (the reverted-then-reshipped record is exemplary). The ob_start-dangling PHP edge is disclosed in KNOWN_ISSUES.
+- DEC-221 **JUSTIFIED**, shipped — throwing constructors (`new Db(dsn)` fail-fast ≡ PHP `new PDO`).
+- DEC-222 **JUSTIFIED**, shipped — throwing-closure function types with the sound fewer-throws-substitutable variance; unblocked the transaction closure form.
+
+### §2026-07-15/16 batches (DEC-223…238) — ratified this run, re-verdicted per DEC-237's reopen clause
+
+- DEC-223 **JUSTIFIED** — Core.Mail per locked spec, shipped + tested (6 tests, injection-safe Address, DKIM).
+- DEC-224 **JUSTIFIED** — Mongo shape ruled (sync driver, postgres precedent), build deferred; tracked.
+- DEC-225 **JUSTIFIED** — concurrency PHP-leg hard error stands; Fibers spike queued (the one 3-leg exception remains loud + disclosed).
+- DEC-226 **JUSTIFIED** — unchecked-overflow transpile exclusion stands; pack/unpack emulation rejected-with-reason.
+- DEC-227 **JUSTIFIED** — `db` default feature + E-MODULE-UNAVAILABLE + E-TRANSPILE-DB (100-line error wall → one actionable code).
+- DEC-228 **JUSTIFIED** — streaming (laziness proven by test); the rewrite_html/Expr::New P0 found during it is pinned by conformance.
+- DEC-229 **JUSTIFIED** — MySQL driver + PG arrays; killed two silent-failure paths (withPassword no-op; mysql:// falling to SQLite).
+- DEC-230 **JUSTIFIED** — mail deviations recorded honestly (ctor-default gap since CLOSED by DEC-236; the withAuth/at factories now thin aliases).
+- DEC-231 **JUSTIFIED** — HttpClient with security gates (CR/LF, userinfo, 64MB cap); F-008 (connection reuse) tracked to D5.
+- DEC-232 **JUSTIFIED** — Core.Fs typed taxonomy; Fs-prefixing lesson recorded; Core.File deprecation question queued (D2).
+- DEC-233 **JUSTIFIED** — Core.Session secure-by-default; F-005 (partitioned) now ruled DEC-242.
+- DEC-234 **JUSTIFIED** ruling, build queued — with the DEC-207-part-2 separator interaction noted above.
+- DEC-235 **REVOKED** → DEC-239 (this audit).
+- DEC-236 **JUSTIFIED**, shipped — ctor defaults with conformance golden.
+- DEC-237 **OBSOLETE-EXECUTED** — the wholesale ratification's reopen clause is THIS audit.
+- DEC-238 **JUSTIFIED**, shipped — Dumped<T> one-function dump; three-backend byte-identity pinned; erased-shape disclosure stands.
+- DEC-239…244 — born of this audit, not re-reopened (they ARE the reopen).
+
 ### CONFLICTS table re-verdicts (C-1…C-10)
 
 - C-1 (D-L3 vs MI) **OBSOLETE** — the contradicting spec files no longer exist (docs/specs = 4 files post-consolidation; D-L3 survives only in audit raws as history). Close.
