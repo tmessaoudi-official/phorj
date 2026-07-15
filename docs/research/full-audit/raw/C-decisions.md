@@ -1673,3 +1673,24 @@ proceeds). Gate: 2205 tests --all-features + oracle, clippy (all-features + no-d
 panel (2 rounds): R1 correctness clean-on-code + security P1 CGNAT + P2s (all fixed by widening +
 error-hardening); R2 CLEAN (no over-block of public IPs; bit-extraction verified). This IS the DEC-272
 socket secure-default rider; the future Core.Net inherits it via the shared Transport seam.
+
+## DEC-265 — SHIPPED (2026-07-16, Tier-1 build): SMTP require-TLS when credentials are set
+
+`smtp_inner` used `builder_dangerous` + `Tls::Opportunistic` even WITH credentials (F-027) — a MITM
+stripping the STARTTLS advertisement forced plaintext and the AUTH password rode in cleartext. Fix:
+`smtp_tls_choice(has_creds, allow_insecure, mode, port)` (pure, unit-tested) — no-auth fakers stay
+Opportunistic (nothing to protect), but AUTHENTICATED connections REQUIRE TLS by default: implicit
+(`Tls::Wrapper`) on port 465, STARTTLS-required (`Tls::Required` — fails closed if the server won't
+upgrade) otherwise. The mode is chosen by `SmtpConfig.tls` = "auto"|"starttls"|"implicit" (an
+unrecognized value fails SAFE to required-TLS — a typo can never downgrade to plaintext). The ONLY way
+to permit authenticated plaintext is the explicit, loud `SmtpConfig.allowInsecureAuth = true` opt-out
+(DEC-272 misuse-resistant surface). Invariant (unit-tested exhaustively): authenticated + not-opted-out
+is NEVER Opportunistic. Verified against lettre 0.11.22 (Required→starttls() unconditional, errs on
+no-STARTTLS; auth() only after TLS; peer certs validated — no fake-cert downgrade). Native sig
+`smtp` 4→6 args (tlsMode String + allowInsecureAuth Bool); prelude connectSmtp threads them.
+**DEVIATION (disclosed):** `tls` is a STRING not a typed `SmtpTls` enum — ctor default params must be
+literal constants (an enum value isn't one; `E-DEFAULT-PARAM-EXPR`), and Optional<enum> matching
+(DEC-250) is unbuilt. Fail-safe-secure; a typed enum replaces it once DEC-250 or const-enum-defaults
+land — tracked. Gate: 2206 tests --all-features + oracle, clippy (all-features + no-default), fmt.
+DEC-268 panel (2 lenses, R1 both CLEAN — no findings): security (invariant + lettre source-level) +
+completeness/regression/API. This completes the DEC-272 socket/transport secure-default riders.

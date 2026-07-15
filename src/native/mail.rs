@@ -18,8 +18,10 @@
 //! `.html(body)` → `multipart/alternative` with an AUTO-DERIVED plaintext part ([`html_to_text`],
 //! overridable via `.text`); inline CID attachments nest under `multipart/related`; file attachments
 //! under `multipart/mixed`. The SMTP transport is lettre's BLOCKING `SmtpTransport` (no tokio at the
-//! phorj-facing API), STARTTLS-opportunistic by default (Mailpit-style no-TLS fakers still work),
-//! credentials via `Core.Secret` (never retained; only a redacted description is stored).
+//! phorj-facing API); credentials via `Core.Secret` (never retained; only a redacted description is
+//! stored). TLS posture (DEC-265, [`smtp_tls_choice`]): no-auth fakers stay STARTTLS-opportunistic, but
+//! an AUTHENTICATED connection REQUIRES TLS by default (implicit on 465, STARTTLS-required otherwise) so
+//! a MITM strip can't leak the password — the loud `allowInsecureAuth` opt-out is the only exception.
 
 use super::{NativeEval, NativeFn};
 use crate::types::Ty;
@@ -411,24 +413,76 @@ fn mailer(transport: TransportKind) -> Value {
     }))
 }
 
-/// `MailSys.smtp(host, port, user, pw)` — `user == ""` → unauthenticated (Mailpit-style fakers).
-/// STARTTLS-opportunistic: TLS is used when the server offers it, plaintext otherwise; credentials
-/// ride only after the handshake lettre negotiates. The password arrives via `Secret.expose()` in the
-/// prelude and is NEVER retained here — only `host:port` is stored for diagnostics.
-fn smtp_inner(args: &[Value]) -> Result<Value, String> {
-    let (host, port, user, pw) = match args {
-        [Value::Str(h), Value::Int(p), Value::Str(u), Value::Str(w)] => {
-            (h.as_str(), *p, u.as_str(), w.as_str())
+/// `MailSys.smtp(host, port, user, pw, tlsMode, allowInsecureAuth)` — `user == ""` → unauthenticated
+/// (Mailpit-style fakers), which stay STARTTLS-opportunistic (fakers rarely offer TLS).
+///
+/// SECURITY (DEC-265): when credentials ARE set, TLS is REQUIRED by default so a MITM that strips the
+/// STARTTLS advertisement can't force the password onto a plaintext channel (the pre-fix
+/// `Tls::Opportunistic` did exactly that). `tlsMode` selects HOW: `auto` = implicit TLS on 465 else
+/// STARTTLS-required; `starttls` = force STARTTLS-required; `implicit` = force TLS-from-connect.
+/// `allowInsecureAuth = true` is the explicit, loud opt-out (trusted-LAN authed SMTP without TLS) —
+/// it drops back to opportunistic; nothing else can express authenticated-plaintext. The password
+/// arrives via `Secret.expose()` in the prelude and is NEVER retained here — only `host:port` is stored.
+/// The TLS posture for an SMTP connection (DEC-265) — the security-critical decision, factored out
+/// PURE so it is unit-tested without a live server. `Wrapper` = implicit TLS from connect; `Required`
+/// = STARTTLS mandatory (a strip/downgrade fails the connect); `Opportunistic` = TLS if offered else
+/// plaintext. The invariant: **authenticated (`has_creds`) is NEVER `Opportunistic` unless the caller
+/// set the explicit, loud `allow_insecure` opt-out** — so a credential can never ride a channel that a
+/// MITM could have quietly downgraded to plaintext.
+#[derive(Debug, PartialEq, Eq)]
+enum SmtpTlsChoice {
+    Wrapper,
+    Required,
+    Opportunistic,
+}
+
+fn smtp_tls_choice(has_creds: bool, allow_insecure: bool, mode: &str, port: u16) -> SmtpTlsChoice {
+    if has_creds && !allow_insecure {
+        match mode {
+            "implicit" => SmtpTlsChoice::Wrapper,
+            "starttls" => SmtpTlsChoice::Required,
+            // "auto": implicit TLS on the submissions port 465, STARTTLS-required elsewhere.
+            _ if port == 465 => SmtpTlsChoice::Wrapper,
+            _ => SmtpTlsChoice::Required,
         }
-        _ => return Err("Core.Mail.__smtp expects (string, int, string, string)".into()),
+    } else {
+        // No credentials (fakers), or the explicit insecure opt-out — nothing to protect / opted out.
+        SmtpTlsChoice::Opportunistic
+    }
+}
+
+fn smtp_inner(args: &[Value]) -> Result<Value, String> {
+    let (host, port, user, pw, tls_mode, allow_insecure) = match args {
+        [Value::Str(h), Value::Int(p), Value::Str(u), Value::Str(w), Value::Str(m), Value::Bool(ai)] => {
+            (h.as_str(), *p, u.as_str(), w.as_str(), m.as_str(), *ai)
+        }
+        _ => {
+            return Err(
+                "Core.Mail.__smtp expects (string, int, string, string, string, bool)".into(),
+            )
+        }
     };
     let port = u16::try_from(port)
         .map_err(|_| format!("<<ConnectionFailed>>Core.Mail: invalid SMTP port {port}"))?;
     let mut builder = SmtpTransport::builder_dangerous(host).port(port);
-    if let Ok(params) = TlsParameters::new(host.to_string()) {
-        builder = builder.tls(Tls::Opportunistic(params));
+    let has_creds = !user.is_empty();
+    let tls_params = || {
+        TlsParameters::new(host.to_string()).map_err(|e| {
+            format!("<<TlsError>>Core.Mail: cannot build TLS params for `{host}`: {e}")
+        })
+    };
+    match smtp_tls_choice(has_creds, allow_insecure, tls_mode, port) {
+        // Require TLS — a downgrade/strip makes the connection FAIL rather than leak the password.
+        SmtpTlsChoice::Wrapper => builder = builder.tls(Tls::Wrapper(tls_params()?)),
+        SmtpTlsChoice::Required => builder = builder.tls(Tls::Required(tls_params()?)),
+        // No credentials, OR the explicit allowInsecureAuth opt-out: opportunistic (TLS if offered).
+        SmtpTlsChoice::Opportunistic => {
+            if let Ok(params) = TlsParameters::new(host.to_string()) {
+                builder = builder.tls(Tls::Opportunistic(params));
+            }
+        }
     }
-    if !user.is_empty() {
+    if has_creds {
         builder = builder.credentials(Credentials::new(user.to_string(), pw.to_string()));
     }
     Ok(mailer(TransportKind::Smtp {
@@ -822,7 +876,15 @@ pub fn mail_natives() -> Vec<NativeFn> {
     vec![
         entry(
             "smtp",
-            vec![Ty::String, Ty::Int, Ty::String, Ty::String],
+            // host, port, user, pw, tlsMode ("auto"|"starttls"|"implicit"), allowInsecureAuth (DEC-265)
+            vec![
+                Ty::String,
+                Ty::Int,
+                Ty::String,
+                Ty::String,
+                Ty::String,
+                Ty::Bool,
+            ],
             res(handle()),
             mail_smtp,
         ),

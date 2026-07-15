@@ -459,8 +459,14 @@ class Attachment {
 class SmtpConfig {
   // DEC-236 ctor defaults realize the spec's 4-arg form directly: `new SmtpConfig(host, port)` is
   // unauthenticated; `new SmtpConfig(host, port, user, secret)` authenticates. `withAuth` stays as
-  // a thin compatibility alias.
-  constructor(public string host, public int port, public string user = "", public Secret<string>? password = null) {}
+  // a thin compatibility alias. DEC-265: `tls` selects the TLS mode when authenticated — `"auto"`
+  // (default: implicit TLS on port 465, STARTTLS-required otherwise), `"starttls"` (force STARTTLS-
+  // required), or `"implicit"` (force TLS-from-connect). Any unrecognized value fails SAFE to the
+  // required-TLS path — a typo can never downgrade to plaintext. `allowInsecureAuth = true` is the
+  // explicit, loud opt-out permitting authenticated plaintext on a trusted network — the ONLY way to
+  // express credentials-without-guaranteed-TLS (misuse-resistant surface, DEC-272). (A typed `SmtpTls`
+  // enum is deferred: ctor default params must be literal constants, which an enum value is not.)
+  constructor(public string host, public int port, public string user = "", public Secret<string>? password = null, public string tls = "auto", public bool allowInsecureAuth = false) {}
   static function withAuth(string host, int port, string user, Secret<string> password): SmtpConfig {
     return new SmtpConfig(host, port, user, password);
   }
@@ -548,7 +554,7 @@ class Mailer {
   private static function connectSmtp(SmtpConfig cfg): MailHandle throws MailError {
     mutable string pw = "";
     if (var s = cfg.password) { pw = s.expose(); }
-    return match (MailSys.smtp(cfg.host, cfg.port, cfg.user, pw)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return match (MailSys.smtp(cfg.host, cfg.port, cfg.user, pw, cfg.tls, cfg.allowInsecureAuth)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
   }
   // Arm DKIM signing (RSA key PEM as a `Secret`) for every subsequent send on this mailer.
   function dkim(string domain, string selector, Secret<string> privateKeyPem): Mailer throws MailError {

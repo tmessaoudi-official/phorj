@@ -9,8 +9,8 @@ to it would silently downgrade — THE LADDER RULE forbids that). Build with `--
 
 | Transport | Construction | Use |
 |---|---|---|
-| SMTP | `new Mailer(new SmtpConfig("localhost", 1025))` | Real delivery; Mailpit/MailHog fakers work unauthenticated. STARTTLS-opportunistic. |
-| SMTP + auth | `new Mailer(SmtpConfig.withAuth(host, 587, user, new Secret(pw)))` | The password is a `Core.Secret` — never retained, never printed (a connect error shows `smtp://host:port`, no credential). |
+| SMTP (no auth) | `new Mailer(new SmtpConfig("localhost", 1025))` | Real delivery; Mailpit/MailHog fakers work unauthenticated. STARTTLS-opportunistic (no credentials at risk). |
+| SMTP + auth | `new Mailer(SmtpConfig.withAuth(host, 587, user, new Secret(pw)))` | The password is a `Core.Secret` — never retained, never printed. **TLS is REQUIRED when credentials are set (DEC-265)**: implicit TLS on port 465, STARTTLS-required otherwise — a MITM that strips STARTTLS makes the connection fail rather than leak the password (PHP `mail()` has no auth/TLS at all). Choose the mode with `new SmtpConfig(host, port, user, secret, "starttls")` / `"implicit"` (default `"auto"`); the explicit, loud sixth arg `true` (`allowInsecureAuth`) is the only way to permit authenticated plaintext (trusted LAN). |
 | sendmail | `new Mailer(new SendmailTransport())` / `SendmailTransport.at("/usr/sbin/sendmail")` | Local MTA pipe. |
 | file | `new Mailer(new FileTransport("outbox"))` | Writes `phorj-mail-<n>.eml` — the deterministic offline test transport. |
 | null | `new Mailer(new NullTransport())` | Discards (dry-run). |

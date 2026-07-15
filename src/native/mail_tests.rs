@@ -10,6 +10,34 @@ fn draft_with(f: impl FnOnce(&mut Draft)) -> Draft {
     d
 }
 
+#[test]
+fn smtp_tls_requires_tls_when_authenticated_unless_explicit_opt_out() {
+    use SmtpTlsChoice::*;
+    // No credentials (Mailpit/MailHog fakers) → opportunistic, any port/mode — nothing to protect.
+    assert_eq!(smtp_tls_choice(false, false, "auto", 1025), Opportunistic);
+    assert_eq!(smtp_tls_choice(false, false, "auto", 587), Opportunistic);
+    // Authenticated + default (auto): implicit TLS on 465, STARTTLS-required elsewhere.
+    assert_eq!(smtp_tls_choice(true, false, "auto", 465), Wrapper);
+    assert_eq!(smtp_tls_choice(true, false, "auto", 587), Required);
+    assert_eq!(smtp_tls_choice(true, false, "auto", 25), Required);
+    // Authenticated + explicit modes override the port heuristic.
+    assert_eq!(smtp_tls_choice(true, false, "starttls", 465), Required);
+    assert_eq!(smtp_tls_choice(true, false, "implicit", 587), Wrapper);
+    // The explicit, loud opt-out is the ONLY way authenticated plaintext can happen.
+    assert_eq!(smtp_tls_choice(true, true, "auto", 587), Opportunistic);
+    assert_eq!(smtp_tls_choice(true, true, "starttls", 587), Opportunistic);
+    // THE DEC-265 INVARIANT: authenticated + not-opted-out is NEVER opportunistic (the pre-fix vuln).
+    for port in [25u16, 465, 587, 2525] {
+        for mode in ["auto", "starttls", "implicit"] {
+            assert_ne!(
+                smtp_tls_choice(true, false, mode, port),
+                Opportunistic,
+                "authenticated must never be downgradeable (port {port}, mode {mode})"
+            );
+        }
+    }
+}
+
 fn mb(e: &str) -> Mailbox {
     parse_mailbox(e, "").unwrap()
 }
