@@ -1498,3 +1498,90 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   round-2 lens-1 clean, lenses 2+3 surfaced developer-decisions (SSRF, Turkish-i, pack boundaries) →
   escalated to ask-human rather than looped to the 5-round cap. Certification: self-graded fallback
   disclosed (advisor unavailable — no peer above Fable-main).*
+
+## DEC-273 — RULED (2026-07-16 evening): THE MINIMAL-CORE / EXTENSION ARCHITECTURE (supersedes the IN-PROGRESS stub above)
+
+**The single largest architectural ruling since DEC-208.** Developer-adjudicated over ~6 AskUserQuestion
+rounds (each with challenge/criticism as requested). Governing rationale (developer, verbatim intent):
+a general-purpose MINIMAL core with everything else as extensions buys **maintainability, scalability,
+readability, and parallel extension development** — plus a future mandatory-vs-opt-in extension tiering.
+
+### The criterion (final)
+- **CORE** = what phorj-the-language **cannot function or do real work without** — the irreducible Rust
+  that phorj cannot express in itself. "Written in Rust (the compiler/interpreter) and can't be done in
+  the phorj language without the Rust part."
+- **EXTENSION** = anything **expressible in phorj itself** (a `.phg` library could provide it) — phorj
+  functions without it; it's an add-on capability / format / framework. The classification TEST is
+  "could this be a `.phg` library on top of the kernel?" → yes = extension.
+- **CRITICAL — the test is NOT an implementation mandate.** `.phg`-expressibility only CLASSIFIES a
+  module as an extension. **Every module, core AND extension, is written in RUST + JIT-optimized**
+  (or any other optimization) — self-hosting is NOT a goal. `Core.Db` is the proof: a Rust extension,
+  flag-gated AND fast. An extension's build flag gates BUILD-INCLUSION, never implementation language
+  or speed. (The perf mandate — 21 micros ≥1.0×, beat PHP — is fully preserved: nothing moves to
+  interpreted `.phg`.) Third-party plugins MAY be `.phg` or Rust.
+
+### The CORE list (minimal, irreducible, always-on, Rust+JIT, never toggleable)
+1. **Language kernel** — lexer/parser/checker/backends (interpreter/VM/transpiler)/JIT.
+2. **Primitive value types + their VM-primitive Ops** — int/float/bool/string(bytes)/List/Map/Set +
+   arithmetic/comparison/index/concat/etc. (you can't build these in phorj without themselves).
+3. **Raw OS/runtime seams** — thinnest I/O under File/Fs/Process/Environment; entropy (Random);
+   raw Output/Log WRITE primitive (stdout/stderr); Runtime (exit/onShutdown).
+4. **Reflection primitive** — runtime type info the language provides (rich reflection libs = extension).
+5. **Secret type + universal redaction** (DEC-263) — checker/backend-enforced safety primitive.
+6. **Option/Result + the error-model machinery** — the `?` operator, null-safety `T?`, checked-exception
+   throw/catch are LANGUAGE features that require these built-in types to exist.
+7. **Conversion + Bytes primitive coercions** — welded to the value kernel.
+8. **Math over primitives** — arithmetic/float ops mapping to VM ops (Decimal/BigInt are NOT here — extensions).
+9. **User-attribute (`#[Attr]`) + generics machinery** — language syntax/semantics the checker needs
+   (attribute-macro LIBRARIES + the DI container that use them = extensions).
+
+### EXTENSIONS (everything else — Rust+JIT, flag-gated, plugin-registerable via public trait seams)
+- **Rich methods on the primitive types** — String.replace/split/trim/pad/format/levenshtein/Unicode-case,
+  List.map/filter/reduce/sort, rich Map/Set ops. (Structurally extensions → become a MANDATORY/default
+  extension so `List.map` needs no import in practice — see tiering below.)
+- **Formats/data** — Json, Csv, Ini, Encoding, Decimal, BigInt, Uri, Path.
+- **Text/i18n** — Regex, Intl (icu4x, DEC-271), I18n (catalogs).
+- **Crypto** — Hash + basic password crypto (argon2), advanced sodium-class AEAD/sign (DEC-272 riders).
+- **Dev tooling** — Debug (dump/dd — introspection SEAM stays core, module is extension), Test, Bench.
+- **Web/data frameworks** — Db(+drivers), ORM, migrations, Http(server), HttpClient (DEC-270 SSRF rider),
+  WebSocket/SSE, Template (Html TYPE + auto-escape SEAM stays core; engine/components = extension),
+  Form, Session, CSRF, Serialize.
+- **Comms/media/net** — Mail (lettre), Image (decode-limits rider), Net (sockets, TLS-or-refuse + SSRF rider).
+- **Architecture** — DI container, Cache, observability, Signals/Scheduler, concurrency FRAMEWORK
+  (green-thread spawn SEAM stays core), parallel workers.
+- **Meta** — attribute-macro libraries, user-lint packs, FFI, embeddable phorj.
+- **DateTime** (DEC-247) — extension (tz-data dep).
+
+**The SEAM/module split pattern (recurring):** where a capability needs an irreducible primitive, the
+primitive SEAM stays core and the module built on it is an extension — Html (interpolation auto-escape
+hook = core; engine = extension) · Debug (walk-any-value introspection primitive = core; dump/formatting
+= extension) · concurrency (spawn seam = core; structured-concurrency framework = extension) ·
+Output/Log (raw write = core; leveled/formatted logging = extension).
+
+### Extension mechanism + tiering
+- **Mechanism:** first-party extensions = separate in-repo modules behind Cargo features, each
+  registering via a PUBLIC trait seam (DriverConn/Transport/MailTransport already prove it); a
+  manifest/registry so `phg` + third-party rust-phorj plugins discover them. Flags:
+  `cargo build --release --di --http …` (activate/deactivate per extension).
+- **Default build:** batteries-included (curated default set compiled in). Importing a disabled
+  extension = a clean compile error `E-EXTENSION-DISABLED` naming the flag to add (mirrors the existing
+  `E-MODULE-UNAVAILABLE`) — never a runtime surprise.
+- **FUTURE tiering (developer, deferred):** extensions split into MANDATORY/default-installed (e.g. rich
+  collections/string methods — ergonomics preserved) vs OPT-IN; which are default-installed vs opt-in is
+  a later ruling. Recorded as a follow-up, not decided tonight.
+- **Namespace:** extensions KEEP the `Core.` import root (Core.Json stays Core.Json) — only BUILD
+  membership + the flag change, so the reclassification is source-churn-free on imports.
+
+### Migration
+- **Model RULED now; physical migration = its own dedicated fresh-context slice**, sequenced
+  **after Tier-1 security + the docs-cleanup slice** ("as soon as we can" — developer). Large blast
+  radius (every import stays valid via the kept `Core.` root, but CORE_MODULES registry + preludes +
+  Cargo features + docs all move). The migration slice gets the FULL DEC-268 panel.
+
+*Alternatives rejected across the rounds: two-tier literal native-vs-framework (breaks String/Regex);
+N/S/X three-tier with a named "standard library" middle tier (developer chose to collapse S into
+extensions for maintainability); keeping rich methods in core (developer chose minimal core + a future
+mandatory-extension tier instead); rewriting extensions in .phg (kills perf); re-rooting to Ext.
+namespace (unnecessary churn). Certification: DEC-268 panel hardened the extension-POLICY brief (2 rounds,
+3 lenses); this architecture ruling is the developer's own via AskUserQuestion — recorded verbatim,
+self-graded 6C disclosed (advisor unavailable; the migration BUILD gets the full panel).*
