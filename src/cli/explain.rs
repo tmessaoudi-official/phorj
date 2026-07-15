@@ -1263,6 +1263,23 @@ pub fn explain_text(code: &str) -> Option<String> {
              PHP. If you want PHP-transpilable code, drop `#[UncheckedOverflow]` (the default faults on overflow),\n\
              or handle overflow explicitly with `Math.tryAdd/trySub/tryMul(a, b): int?`.\n"
         }
+        "E-TRANSPILE-DB" => {
+            "E-TRANSPILE-DB — a program importing `Core.Db` cannot be transpiled to PHP.\n\n\
+             `Core.Db` is native-only: it runs live database I/O through the phorj drivers (bundled\n\
+             SQLite, Postgres), and live I/O cannot be byte-identical across those drivers and PHP\n\
+             PDO — connection behaviour, error text, and type coercions all differ. Rather than emit\n\
+             a PHP program that silently diverges from what `phg run` does, `phg transpile` refuses\n\
+             (§14 LADDER: no silent semantic downgrade). Run database programs with `phg run` /\n\
+             `phg runvm`, or serve them with `phg serve`.\n"
+        }
+        "E-MODULE-UNAVAILABLE" => {
+            "E-MODULE-UNAVAILABLE — this `phg` binary was built without the imported module's feature.\n\n\
+             Some Core modules carry native code behind a cargo feature (e.g. `Core.Db` behind `db`,\n\
+             which bundles SQLite). Those features are in the DEFAULT build, so a stock `phg` has\n\
+             them; this binary was built with `--no-default-features` (or an explicit reduced set),\n\
+             so the module's natives do not exist in it. Rebuild with the default feature set\n\
+             (`cargo build --release`) or add the named feature (`--features db`).\n"
+        }
         "E-UNCHECKED-ARGS" => {
             "E-UNCHECKED-ARGS — `#[UncheckedOverflow]` was given arguments.\n\n\
              `#[UncheckedOverflow]` is a bare marker attribute — it takes no arguments. Write it as `#[UncheckedOverflow]`\n\

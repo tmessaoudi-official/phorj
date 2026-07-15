@@ -171,10 +171,14 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
-**RUN CURSOR: → Spine 2 (Db streaming/streamInto + lazy Iterator seed). DONE: Spine 1 ✅
-(queryInto/queryOneInto/queryScalar/queryMap accept call-site turbofish; wins over annotation;
-E-TYPE-ARG-COUNT in desugar_db; 7 tests + typed.phg extension; full gate green). —
-update this line after EVERY slice.**
+**RUN CURSOR: → Spine 2 (Db streaming/streamInto + lazy Iterator seed — gating pre-slice DONE,
+streaming feature next). DONE: Spine 1 ✅ (query…() turbofish; E-TYPE-ARG-COUNT; 7 tests) ·
+Spine 2a ✅ AUTO-RULED-1: `db` is now a DEFAULT cargo feature (PHP ships PDO by default; a
+batteries-DBAL absent from the stock binary contradicted the vision — alternatives: keep opt-in
+with clean error only; REOPENABLE) + `E-MODULE-UNAVAILABLE` (one clean error on feature-less
+builds instead of a 100-line E-UNKNOWN-IDENT wall) + `E-TRANSPILE-DB` ladder gate on both
+transpile entries (was: unknown-ident spam — ladder rule violation found by the run's first
+review probe). — update this line after EVERY slice.**
 
 ### Rulings (developer, 2026-07-15 pre-sleep)
 

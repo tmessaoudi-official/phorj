@@ -924,3 +924,20 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   reopen whether unchecked wrapping arithmetic should try a PHP map. Current status: hard error
   `E-TRANSPILE-UNCHECKED` (PHP overflows int→float — no faithful wrapping-int mapping exists). NOT
   re-ruled this session.
+
+## 2026-07-15 fable overnight run — AUTO-RULED batch (bounded autonomy, developer-approved protocol; every entry REOPENABLE, mirrored in KNOWN_ISSUES §"Fable overnight run — morning triage")
+
+- **DEC-227 — AUTO-RULED (REOPENABLE): `db` becomes a DEFAULT cargo feature + clean feature-gating
+  errors.** Found by the run's first review probe: the stock binary (default features) could not run
+  ANY `Core.Db` program — `import Core.Db` produced a ~100-line wall of prelude-internal
+  `E-UNKNOWN-IDENT` errors (the prelude classes reference `DbSys` natives that don't exist in a
+  db-less build). Risk example: `phg run app.phg` on the shipped binary, where `app.phg` is the
+  documented `examples/db/basic.phg` — unusable with an incomprehensible error. RULED: (1) `db` joins
+  the default feature set (PHP ships PDO by default; a batteries-included DBAL absent from the stock
+  binary contradicts the 2026-07-11 vision ruling); (2) importing a feature-gated Core module on a
+  build without that feature = ONE clean `E-MODULE-UNAVAILABLE` diagnostic (registry
+  `GATED_CORE_MODULES`, preludes.rs); (3) transpiling a `Core.Db` program = clean `E-TRANSPILE-DB`
+  ladder error on BOTH transpile entries (rule-14 leg 2 — was the same unknown-ident wall).
+  *Alternatives:* keep `db` opt-in with only the clean errors (rejected: parity mandate — PHP's PDO
+  is default); silently strip Db calls on transpile (FORBIDDEN, rule 14 leg 3). Build-time cost of
+  bundled SQLite accepted (one-time, cached). `db-postgres` stays opt-in (network dep).

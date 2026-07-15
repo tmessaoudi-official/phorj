@@ -47,7 +47,7 @@ path = "src/main.rs"
 # playground, which builds with `default-features = false` (see playground/Cargo.toml) and whose
 # Cranelift deps are non-wasm target-gated anyway. Build without native codegen via
 # `--no-default-features` (re-add crypto/regex/signals/green as needed).
-default = ["crypto", "regex", "signals", "green", "jit"]
+default = ["crypto", "regex", "signals", "green", "jit", "db"]
 crypto = ["dep:argon2"]
 regex = ["dep:regex"]
 # `phg serve` graceful shutdown (M6 W4 / S4.2): SIGINT/SIGTERM → drain in-flight → exit 0. Off for the

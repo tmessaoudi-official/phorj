@@ -77,6 +77,12 @@ pub fn check_and_expand_reified(
         }
     };
     let prog = &intrinsic_rewritten;
+    // Feature-availability gate: an import of a Core module whose natives are compiled out of THIS
+    // build (e.g. `Core.Db` under `--no-default-features`) is ONE clean `E-MODULE-UNAVAILABLE` — never
+    // the wall of prelude-internal `E-UNKNOWN-IDENT`s the injection below would otherwise produce.
+    if let Some(d) = super::preludes::unavailable_core_module(prog) {
+        return Err(d.render(diag_src));
+    }
     // UA-L2 (registry-unification): one fold over `CORE_MODULES` replaces the former eight chained
     // `inject_*_prelude` calls — a no-op for programs that import no injected Core module. Byte-identical
     // to the old chain (proven over the whole corpus at cutover); adding a Core module is now one row.
@@ -451,8 +457,38 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
 
 /// `transpile` on an already-loaded program (emit PHP). Multi-namespace emission for a multi-package
 /// project is S2c; S2b emits the existing flat form (correct for `package Main` / single-package).
+/// THE LADDER RULE (MASTER-PLAN G-rules; first applications: concurrency, `Core.Db`, `Core.Mail`):
+/// a native-only Core module — one whose semantics have no faithful PHP byte-identity mapping (live
+/// DB I/O, SMTP delivery) — HARD-ERRORS on transpile with a module-specific `E-TRANSPILE-<FEATURE>`
+/// code. Never a silent degrade, and never the wall of prelude-internal errors the check would
+/// otherwise produce. New native-only module = one row here.
+fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
+    const NATIVE_ONLY: &[(&[&str], &str, &str)] = &[(
+        &["Core", "Db"],
+        "E-TRANSPILE-DB",
+        "`Core.Db` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
+    )];
+    use crate::ast::Item;
+    for it in &prog.items {
+        let Item::Import { path, span, .. } = it else {
+            continue;
+        };
+        for (module, code, why) in NATIVE_ONLY {
+            if path.len() >= module.len() && path.iter().zip(module.iter()).all(|(a, b)| a == b) {
+                let m = module.join(".");
+                return Err(format!(
+                    "transpile error at {}:{}: cannot transpile a program importing `{m}`\n  [{code}]\n  hint: {why}",
+                    span.line, span.col
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, String> {
     on_deep_stack(|| {
+        reject_native_only_transpile(prog)?;
         let checked = check_and_expand(prog, diag_src)?;
         crate::transpile::emit(&checked)
     })
@@ -546,9 +582,11 @@ pub fn cmd_lift(src: &str) -> Result<String, String> {
     ))
 }
 
-/// `transpile`: lex -> parse -> check (gate) -> emit PHP source.
+/// `transpile`: lex -> parse -> native-only ladder gate -> check (gate) -> emit PHP source.
 pub fn cmd_transpile(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
+        let raw = lex_parse(src)?;
+        reject_native_only_transpile(&raw)?;
         let prog = parse_checked(src)?;
         crate::transpile::emit(&prog)
     })

@@ -1392,3 +1392,24 @@ fn db_query_into_turbofish_disagreeing_annotation_is_a_type_error() {
     );
     fails_with(&src, "List<User>");
 }
+
+/// THE LADDER RULE: `Core.Db` is native-only — transpiling a program that imports it is a clean,
+/// module-specific hard error (`E-TRANSPILE-DB`), never a wall of prelude-internal unknown-ident
+/// errors and never a silently-diverging PHP program.
+#[test]
+fn db_program_transpile_is_a_clean_ladder_error() {
+    let src = typed_program(r#"Output.printLine("unreachable");"#);
+    match phorj::cli::cmd_transpile(&src) {
+        Ok(php) => panic!("expected E-TRANSPILE-DB, but transpile succeeded: {php:?}"),
+        Err(e) => {
+            assert!(
+                e.contains("E-TRANSPILE-DB"),
+                "error {e:?} lacks E-TRANSPILE-DB"
+            );
+            assert!(
+                !e.contains("E-UNKNOWN-IDENT"),
+                "ladder error must not be the unknown-ident wall: {e:?}"
+            );
+        }
+    }
+}

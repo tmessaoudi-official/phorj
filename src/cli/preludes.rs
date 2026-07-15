@@ -908,6 +908,48 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     },
 ];
 
+/// Feature-gated Core modules: `(module path, compiled-in?, cargo feature name)`. When such a module
+/// is imported on a build WITHOUT its feature, [`unavailable_core_module`] produces ONE clean
+/// `E-MODULE-UNAVAILABLE` diagnostic — replacing the otherwise-inevitable wall of prelude-internal
+/// `E-UNKNOWN-IDENT`s (the prelude classes reference natives that do not exist in that build).
+/// New gated module (e.g. `Core.Mail`) = one row here.
+const GATED_CORE_MODULES: &[(&[&str], bool, &str)] = &[
+    (&["Core", "Db"], cfg!(feature = "db"), "db"),
+    (&["Core", "DbSys"], cfg!(feature = "db"), "db"),
+];
+
+/// If the program imports a feature-gated Core module whose feature is compiled out, the diagnostic
+/// to abort with (checked on the RAW program, before any prelude injection).
+pub(super) fn unavailable_core_module(prog: &Program) -> Option<crate::diagnostic::Diagnostic> {
+    use crate::ast::Item;
+    for it in &prog.items {
+        let Item::Import { path, span, .. } = it else {
+            continue;
+        };
+        for (module, available, feature) in GATED_CORE_MODULES {
+            if *available || path.len() < module.len() {
+                continue;
+            }
+            if path.iter().zip(module.iter()).all(|(a, b)| a == b) {
+                let m = module.join(".");
+                return Some(
+                    crate::diagnostic::Diagnostic::new(
+                        crate::diagnostic::Stage::Type,
+                        format!("`{m}` is not available in this `phg` build"),
+                        span.line,
+                        span.col,
+                    )
+                    .with_code("E-MODULE-UNAVAILABLE")
+                    .with_hint(format!(
+                        "rebuild with `cargo build --features {feature}` (the `{feature}` feature is part of the default set — this binary was built with `--no-default-features`)"
+                    )),
+                );
+            }
+        }
+    }
+    None
+}
+
 /// The injected member type → owning module qualifier (UA-L2: the registry-derived replacement for
 /// the hand-synced `module_of` match). Reused by the injected-type discipline
 /// (`checker::enforce_injected`) and the qualified-construction dispatch (`checker::calls`/`expr`).

@@ -5,6 +5,16 @@ Phorj is pre-1.0. This page lists current limitations and known rough edges. Mos
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
 parse error, non-zero exit) — never a crash.
 
+## Fable overnight run — morning triage (2026-07-15/16, AUTO-RULED under bounded autonomy; every entry REOPENABLE — full rulings + alternatives in `C-decisions.md` §"2026-07-15 fable overnight run")
+
+> The developer ruled (pre-sleep, 2026-07-15) that mid-run design questions are implemented on the
+> recommended option and queued HERE for morning review. Reversing any entry = reopen the DEC row.
+
+- **DEC-227 · `db` is now a DEFAULT cargo feature** (+ `E-MODULE-UNAVAILABLE` on feature-less builds,
+  + `E-TRANSPILE-DB` ladder gate). Was: stock binary couldn't run any `Core.Db` program (unknown-ident
+  wall); transpile of Db programs emitted the same wall instead of a ladder error. Severity: P0 UX.
+  Repro (pre-fix): `cargo build && ./target/debug/phg run examples/db/basic.phg`.
+
 ## Design forks — ADJUDICATED 2026-07-12 (developer via AskUserQuestion; full rulings + alternatives in `docs/research/full-audit/raw/C-decisions.md` §"2026-07-12 adjudication batch")
 
 > Every fork below is now RULED and queued for its wave slot; the original analyses are kept
