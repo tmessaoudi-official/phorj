@@ -461,7 +461,7 @@ not a panic:
     `query()` calls, so a terminal-walker risks misreading generated chains. The runtime ALREADY throws a
     clean, catchable `DbError` on any `?`/bind mismatch (`expand_placeholders` and rusqlite both error),
     so this is a convenience lint, not a correctness gap — deferred until a schema-aware or turbofish
-    (slice A) foundation makes a sound check cheap. See `docs/specs/2026-07-14-core-db.md` slice F.
+    (slice A) foundation makes a sound check cheap. See `docs/specs/archive/2026-07-14-core-db.md` slice F.
 
 - **`Core.Db` multi-driver + Postgres (DEC-208 slice I) + credential Secret (slice G) — shipped subset +
   disclosures.** `new Db(dsn)` dispatches on the DSN scheme behind a `DriverConn` trait
@@ -491,7 +491,7 @@ not a panic:
     blocking runtime); this is the crate's impl detail (feature-gated behind `db-postgres`, non-default,
     non-wasm) — the phorj-facing driver API is fully synchronous, consistent with the dependency policy's
     SQL-domain admission. (f) **MySQL/MariaDB (slice J)** is not built; the `DriverConn` seam is ready for
-    it (one impl + one dep admission). See `docs/specs/2026-07-14-core-db.md` slices G/I/J/K.
+    it (one impl + one dep admission). See `docs/specs/archive/2026-07-14-core-db.md` slices G/I/J/K.
 
 - **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
   literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before

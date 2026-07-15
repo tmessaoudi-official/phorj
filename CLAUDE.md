@@ -145,8 +145,9 @@ asking, when the quality gate above is green. Limits:
 - **Architecture / module map:** `docs/ARCHITECTURE.md`.
 - **Language surface:** `FEATURES.md` + `examples/README.md` (living showcase);
   frozen designs in `docs/specs/`.
-- **Decisions:** the decision register `docs/research/full-audit/raw/C-decisions.md` (canonical,
-  141 rows + supersession chains) + `## Decisions Log` sections in living `docs/plans/*.plan.md`.
+- **Decisions:** the decision register `docs/research/full-audit/raw/C-decisions.md` (canonical —
+  all DEC rows + supersession chains, DEC-267/META-7 as of the 2026-07-16 audit) + `## Decisions
+  Log` sections in living `docs/plans/*.plan.md`.
 - **Completion status:** `docs/MILESTONES.md`; per-change detail in `CHANGELOG.md`; the parity %
   model in `docs/research/full-audit/raw/M-gap-matrix.md` §4 (recompute at every milestone close).
 - **History (chronological narrative):** `docs/HISTORY.md`.

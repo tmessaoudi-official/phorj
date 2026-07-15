@@ -186,3 +186,23 @@ comparison is rejected unless ≥1 operand is a KNOWN `Int`/`Bool` (else `icmp` 
 byte-identity bug). Both limits lift once param types are threaded into the bytecode. `Return` accepts
 `Float` and records `Compiled.ret_kind` (asserted consistent across all reachable entry Returns) — the
 sole signal telling `run_unboxed` to decode the i64 return as `Value::Float(from_bits)` vs `Value::Int`.
+
+## 14. Standing rules from the 2026-07-16 full-reopen audit (delivery invariants 13/16/17/18 in CLAUDE.md)
+
+Recorded here so this file stays the one-stop invariant read; the normative text lives in
+`CLAUDE.md` (invariants 13, 16–18) and the rulings in `C-decisions.md` §2026-07-16.
+
+- **File-size cap: soft 300 / hard 500 lines** per source file (DEC-262 — amends the old 800/1000).
+  Split-as-you-go is the default; split by cohesion (M-Decomp), never by line count alone.
+- **META-7 — cross-language scan + byte-identity-is-a-tool.** Before designing anything meant to
+  beat PHP, survey how other languages solved it. Emitting a `__phorj_*` helper to keep the PHP leg
+  identical is always an acceptable tool — but the trade is ALWAYS surfaced to the developer, never
+  self-decided.
+- **`phg check` ≡ LSP diagnostics** (DEC-252): same pipeline, never diverge. The LSP must see the
+  same injected-prelude world `check` sees.
+- **Transpile AND lift updated in the same change** as every language/stdlib feature — a feature
+  that runs but doesn't transpile/lift (or vice versa) is not done. Editors both-same-change
+  (DEC-181) unchanged.
+- **Perf-bench doctrine** (DEC-259/267): everything with a PHP equivalent is benched against it
+  (I/O via fixtures); real-application MACRO benches join the suite; WIN-OR-FLAG applies to all
+  of it.

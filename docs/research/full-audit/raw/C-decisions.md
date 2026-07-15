@@ -882,11 +882,11 @@ certification ran **self-graded** (advisor inactive: advisor==main==Opus 4.8). A
 
 Developer idea: "we need a native mailer too." Full research/brainstorm ran (twin-of-Core.Db
 architecture). Self-graded certification (advisor==main==Opus). The mailer is RULED and locked to a
-spec (`docs/specs/2026-07-15-core-mail.md`); build handed to Fable. Alongside it, the developer asked
+spec (`docs/specs/archive/2026-07-15-core-mail.md`); build handed to Fable. Alongside it, the developer asked
 for the full non-transpilable inventory and chose to REOPEN three native-only rulings — recorded here
 as PENDING (NOT re-ruled this session, per the developer's "just note all of this and hand to Fable").
 
-- **DEC-223 — native mailer `Core.Mail` (RULED, build-pending; full spec `docs/specs/2026-07-15-core-mail.md`).**
+- **DEC-223 — native mailer `Core.Mail` (RULED, build-pending; full spec `docs/specs/archive/2026-07-15-core-mail.md`).**
   A native email primitive, architecturally a **twin of Core.Db** (DEC-208): native-only, spine-quarantined
   (`pure:false` natives → `uses_impure_native` excludes it from `differential.rs`), tested against the
   stack's **Mailpit** faker + deterministic `file`/`null` transports. **LADDER (invariant 14) = case 2,

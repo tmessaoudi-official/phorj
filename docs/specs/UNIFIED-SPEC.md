@@ -1,8 +1,10 @@
 # Phorj — Unified Design Specification
 
-> **One document, eighteen frozen designs.** Consolidated 2026-07-03 (unification-audit Stage D,
+> **One document, twenty frozen designs.** Consolidated 2026-07-03 (unification-audit Stage D,
 > HEAD `0691228`) from every spec under `docs/specs/2026-*.md`, per the developer's ruling to fold
-> all of them into a single navigable SSOT. The original files now live in
+> all of them into a single navigable SSOT (+ the Core.Db and Core.Mail locked specs, folded
+> 2026-07-16 post-audit — dated specs are folded at ship-time, never left as parallel SSOTs).
+> The original files now live in
 > [`archive/`](archive/README.md) (2026-07-04) — each section's bare "Source: …md" citation names a
 > file under `archive/`; **this document is the reference from now on** — external pointers target
 > section anchors here.
@@ -42,6 +44,30 @@
 >   one shared builtin-class list feeds both the reject and the variant-mangle (closes a live byte-identity
 >   bug); reject/mangle axis kept. **DEC-215** — DI stays compile-time, L1/L2 refactor scheduled Ω-4/Ω-7.
 
+> **⚠ PENDING SURFACE CHANGES — 2026-07-16 full-reopen-audit batch (DEC-239…267 + META-7, RULED,
+> build-pending).** Same convention as the batch above: each ruling SUPERSEDES the current text of any
+> affected section; the prose is rewritten in the same change that implements it. Canonical rulings +
+> alternatives: `C-decisions.md` §"2026-07-16"; ordered build queue: MASTER-PLAN §0.2 AUDIT BUILD QUEUE.
+> - **Security (Tier 1):** DEC-263 universal `Secret` redaction on ALL render surfaces (supersedes the
+>   Secret-type section's dump behavior) · DEC-264 HttpClient cross-origin redirect credential-strip ·
+>   DEC-265 SMTP require-TLS when credentials set (amends the Core.Mail transport table's TLS row).
+> - **Language surface:** DEC-239 pipe `|>` PHP-aligned + `%` placeholder + contextual pipe lambda
+>   (DEC-235 REVOKED) · DEC-248 loop alignment (typed `foreach` + `k=>v`; `for-in` retires) ·
+>   DEC-253 nullable unions `(A|B)?` · DEC-254 `ref` copy-out params + mutability triad + slice-1b ·
+>   DEC-249 method default params · DEC-245 intersection overload-set resolution · DEC-250
+>   `Optional<enum>` variant match · DEC-257 Iterator interface · DEC-244 extension methods ·
+>   DEC-241 asymmetric visibility (already spec'd, now build-committed) · DEC-234 member-error namespacing.
+> - **Stdlib:** DEC-240 `Core.Uri` (RFC 3986, typed errors) · DEC-247 `Core.DateTime` (immutable +
+>   Duration + tz) · DEC-256 Unicode FULL (codepoint `length` + case + graphemes) · DEC-243
+>   `String.levenshtein`/`similarText` · DEC-242 partitioned cookies · DEC-258 Db column-naming opt-in.
+> - **Architecture / process:** DEC-262 file cap soft-300/hard-500 · DEC-260 folder moves · DEC-261
+>   DI/router L1/L2 advanced · DEC-246 clippy::pedantic · DEC-251 three PHP-enforcement-ahead checks ·
+>   DEC-252 check≡LSP · DEC-259/266/267 perf doctrine + loss levers + suite expansion · DEC-216 RULED
+>   (SPLIT: vendor/manifest → companion tool; language keeps import resolution + offline `vendor/`).
+> - **META-7 (standing):** before designing anything meant to beat PHP, scan how other languages solved
+>   it; byte-identity is a TOOL (a `__phorj_*` helper is acceptable) — the trade is always surfaced to
+>   the developer, never self-decided.
+
 ## Table of contents
 
 - **Part I — Foundations**
@@ -64,8 +90,10 @@
   - [External dependency policy](#external-dependency-policy) *(2026-06-27, amended 2026-07-03)*
   - [PHP extension tiers](#php-extension-tiers) *(2026-06-19 — rule in force)*
   - [PHP parity and beyond gap audit](#php-parity-and-beyond-gap-audit) *(2026-06-21 — HISTORICAL)*
-  - [Core.Sql — SQL DBAL (instance model)](#coresql--sql-dbal-instance-model) *(2026-07-11 — DESIGN, build in Ω-1)*
-  - [Dependency injection & attribute reflection (DI v2 / L1–L2)](#dependency-injection--attribute-reflection-di-v2--l1l2) *(2026-07-11 — DESIGN; DI v1 SHIPPED)*
+  - [Core.Sql — SQL DBAL (instance model)](#coresql--sql-dbal-instance-model) *(2026-07-11 — SUPERSEDED by DEC-208)*
+  - [Core.Db — the enhanced-PDO database primitive (DEC-208)](#coredb--the-enhanced-pdo-database-primitive-dec-208) *(2026-07-14 — SHIPPED, slices A–K)*
+  - [Core.Mail — native mailer (DEC-223)](#coremail--native-mailer-dec-223) *(2026-07-15 — SHIPPED)*
+  - [Dependency injection & attribute reflection (DI v2 / L1–L2)](#dependency-injection--attribute-reflection-di-v2--l1l2) *(2026-07-11 — DESIGN; DI v1 SHIPPED; L1/L2 advanced by DEC-261)*
 - **Part V — Build & distribution (M2.5)**
   - [phg build master design](#phg-build-master-design) *(2026-06-16)*
   - [Phase 2 cross-OS builds](#phase-2-cross-os-builds) *(2026-06-16 — SHIPPED v0.4.0)*
@@ -1097,11 +1125,14 @@ answer); versioned/i18n/video docs.
 
 ## Core.Sql — SQL DBAL (instance model)
 
-**Status: DESIGN — to build in the finishing wave (Ω-1).** The database-access layer, top parity gap
-(#1). Design ruled interactively by the developer (2026-07-10 Q1–Q7 adjudication + 2026-07-11 instance
-rework). The 2026-07-10 shipped slices 1+2 (a static-factory surface `Sql.query` / `Sql.select` + the
-`SelectQuery` fluent builder, prelude-only `Core.Sql`, zero natives, first `cli::CORE_MODULES` registry
-consumer) are **SUPERSEDED** by the instance model below and reworked in Ω-1. Source: the retired
+**Status: SUPERSEDED by DEC-208 (2026-07-13) — kept for rationale.** The in-language SQL query
+builder (both the 2026-07-10 static-factory slices AND the instance model below) **left the language
+entirely**: DEC-208 ruled a query builder is 100% userland; Core gained the enhanced-PDO
+[`Core.Db` primitive](#coredb--the-enhanced-pdo-database-primitive-dec-208) instead (SHIPPED — see
+that section). The shipped `Core.Sql` prelude was REMOVED in the DEC-208 supersession commit. What
+survives from this design: always-alias + `E-SQL-AMBIGUOUS-COLUMN` thinking informed the
+`W-SQL-INJECTION` lint; the decoupled-dialect principle became `DriverConn` dispatch-at-execute;
+the `throws DbError` Q6 ruling carried over verbatim. Historical text follows. Source: the retired
 `docs/plans/web-spine.plan.md` + `finishing-wave.plan.md` Decisions Log; drafts under
 `docs/research/wave3-4-drafts/w3-1-db-access.md`.
 
@@ -1146,6 +1177,87 @@ consumer) are **SUPERSEDED** by the instance model below and reworked in Ω-1. S
 - **P2 (Tier-B):** `Core.Db` execution over `rusqlite` (`db` feature; Tier-3 fixture-tested, NOT in the
   byte-identity differential), then Postgres + MySQL/MariaDB (all sync; Oracle deferred; MongoDB = a
   separate LADDER item).
+
+## Core.Db — the enhanced-PDO database primitive (DEC-208)
+
+**Status: SHIPPED (slices A–K, 2026-07-13…15).** Locked with the developer over ~10 AskUserQuestion
+rounds; per-round rulings + alternatives in `C-decisions.md` (DEC-208, DEC-220-S3, DEC-221, DEC-227,
+DEC-229). Governing philosophy: `Core.Db` is a **primitive**, not an ORM — richer + faster + safer +
+more correct than PHP's PDO; ORMs/builders/migrations stay **userland** (DEC-208, META-6).
+Source: `archive/2026-07-14-core-db.md` (the full locked build spec, all 11 slices with
+per-slice realization notes — the authoritative slice-level record).
+
+- **Connection & drivers**: `new Db(dsn) throws DbError` (throwing ctor, DEC-221 — fail-fast,
+  `new PDO`-faithful) dispatches on the DSN scheme behind a `DriverConn` trait
+  (`src/native/db/{mod,sqlite,postgres,mysql}.rs`): bundled rusqlite SQLite (`db` — a DEFAULT feature
+  since DEC-227) · sync `postgres` (`db-postgres`) · sync `mysql` v28 minimal-rust (`db-mysql`,
+  DEC-229; `mariadb://` normalized). All sync (no tokio at the phorj-facing API), spine-quarantined,
+  fixture-tested. A new backend = one `DriverConn` impl + one dep admission. Credentials:
+  `Db.withPassword(dsn, Secret<string>)` — plaintext never retained on the handle; every error path
+  prints a redacted DSN (PDO leaks the DSN in exceptions).
+- **Statements & binding**: prepared-first `db.prepare(sql)` → `Statement`; positional `.bind(v)` (`?`)
+  and named `.bindNamed("n", v)` (`:name`); typed `IN`-list `.bindList([1,2,3])` auto-expands `IN (?)`
+  (PDO can't bind arrays). Compile-time `W-SQL-INJECTION` lint on interpolated SQL (import-gated,
+  type-directed; steers to a bind). Placeholder/bind arity check DEFERRED (runtime `DbError` covers it).
+- **Results — hydration**: dynamic `query()` → `List<Row>` with strict typed getters (incl. Postgres
+  array accessors `get*List[OrNull]`, slice K); typed-generic `queryInto<T>()`/`queryOneInto<T>()`
+  (contextual OR turbofish, strict by-field-NAME; flat-or-nested chosen by T's shape — dotted
+  `"order.total"` aliases, EAGER-only, zero N+1; lazy relations REJECTED as ORM territory) +
+  `queryScalar<T>()` + `queryMap<K,V>()`; lazy `stream()`/`streamInto<T>()` (`RowStream`/`DbStream<T>`,
+  hydrate-on-pull; drivers currently materialize at `stream()` — disclosed, surface-stable); column
+  naming strategy = compile-time per-query `stmt.namingStrategy(new Naming.SnakeToCamel())` (zero
+  runtime cost; strict-exact default; opt-in extension = DEC-258); value mapping enum/decimal/Json
+  at compile time (timestamp→DateTime gated on DEC-247's build).
+- **Writes**: `exec()` → affected count · `lastInsertId()`/`execReturningId()` · bulk
+  `executeMany(rows)` (prepare-once, savepoint-atomic).
+- **Transactions**: BOTH the closure form `db.transaction(fn)` (commit-on-return, auto-rollback +
+  re-throw the ORIGINAL typed error; nested = SAVEPOINT; via DEC-222 throwing closures) AND manual
+  `begin`/`commit`/`rollback`; `db.transactionRetry(fn, retries)` retries `SerializationFailure` only
+  (→ collapses into `transaction(fn, retries=0)` when DEC-249 method defaults land — queue item 13).
+  Isolation levels deferred until multi-driver semantics matter.
+- **Errors**: catchable `throws DbError`, subtyped (UniqueViolation / ConstraintViolation /
+  ConnectionError / Timeout / Deadlock / SerializationFailure / SyntaxError) — never PDO's silent
+  false/null. Observability: `db.onQuery((sql, ms) => …)` + `db.timeout(ms)`.
+- **Spine/LADDER**: case-1 (faithful → PHP PDO transpile). Natives `pure:false` → auto-quarantined
+  from the byte-identity differential; `run ≡ runvm` holds; correctness via `tests/db.rs` (+
+  live round-trips gated on `PHORJ_PG_TEST_DSN`/`PHORJ_MYSQL_TEST_DSN`, skip-loud).
+- **Out of scope (userland or later)**: ORM/relations/migrations/query-builder DSL · pooling/replica
+  routing/caching · compile-time SQL-vs-schema checking (needs a schema source) · Postgres
+  COPY/LISTEN/NOTIFY.
+
+## Core.Mail — native mailer (DEC-223)
+
+**Status: SHIPPED (2026-07-15, fable run spine 4).** Design locked with the developer via
+AskUserQuestion; twin-of-Core.Db architecture (where a decision matches Core.Db, the implementation
+follows it verbatim). Deviations under bounded autonomy recorded as DEC-230 (REOPENABLE; re-verdicted
+by the 2026-07-16 audit): `SmtpConfig.withAuth(...)` factory + `SendmailTransport.at(path)` (no ctor
+default params at build time — DEC-249 now queued), `MailTimeout`/`MailIo` subtype names,
+`Address.of(email)`. Source: `archive/2026-07-15-core-mail.md` (the full locked spec).
+**Pending amendment: DEC-265** (audit Tier 1) — SMTP will REQUIRE TLS when credentials are set
+(+ an explicit opt-out knob); the transport table's "TLS-by-default (STARTTLS)" row hardens from
+downgradeable-opportunistic to required-with-credentials.
+
+- **LADDER case-2, native-only**: transpile is a hard `E-TRANSPILE-MAIL` (PHP `mail()` has no
+  auth/TLS and is header-injection-prone — no faithful map; a text-only downgrade is rule-14
+  forbidden). Natives `pure:false` → differential-quarantined; validated by `tests/mail.rs`
+  (MIME goldens via the `file` transport; Mailpit round-trip opt-in via `PHORJ_MAILPIT_SMTP`).
+- **Module split (nothing in the wind)**: `Core.Mail` prelude (`Mailer`/`Email`/`Address`/
+  `Attachment`/`MailError`/`SmtpConfig` + transport constructors + prelude-local `MailResult<T>`) ·
+  `Core.MailSys` natives + reserved `MailHandle`. Error mechanism = the prelude-wrapper exactly as
+  Core.Db (natives return a result-value; the prelude throws catchable `MailError`).
+- **Four transports** behind a `MailTransport` trait: SMTP (optional auth; TLS — see the DEC-265
+  amendment above) · sendmail · `file` (deterministic `.eml` — the offline test transport) · `null`.
+  SMTP passwords are `Secret` (redacted everywhere, the Db slice-G discipline).
+- **Composition**: instance-based builder — `.from/.to/.cc/.bcc/.replyTo` (typed injection-safe
+  `Address` — the #1 PHP `mail()` footgun is unrepresentable) · `.subject` · `.html(body)`
+  auto-derives a plaintext alternative (`.text` overrides) · `.attachInline(cid, …)` CID images ·
+  `.attach(…)` (`Attachment.fromFile`/`fromBytes`) · `m.send(e)` / batch `m.sendAll(List<Email>)`
+  over a reused connection (a primitive, NOT a queue — queuing/templating is userland).
+- **Typed taxonomy** `MailError`: ConnectionFailed / AuthFailed / RecipientRejected / TlsError /
+  InvalidAddress / MessageBuildFailed / MailTimeout / MailIo / Other.
+- **Dependency**: `lettre` 0.11 ADMITTED (feature `mail`, non-default, non-wasm; blocking
+  `SmtpTransport` — no-tokio; rustls TLS; optional DKIM). Rejected: Stalwart `mail-send` (tokio),
+  hand-rolled SMTP+MIME (RFC/MIME bug surface).
 
 ## Dependency injection & attribute reflection (DI v2 / L1–L2)
 

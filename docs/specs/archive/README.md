@@ -29,3 +29,5 @@ Live docs cite the corresponding **section of `UNIFIED-SPEC.md`**, not these fil
 | `2026-06-16-m2.5-phorj-build-design.md` | [phg build master design](../UNIFIED-SPEC.md#phg-build-master-design) |
 | `2026-06-16-m2.5-phase2-cross-os-design.md` | [Phase 2 cross-OS builds](../UNIFIED-SPEC.md#phase-2-cross-os-builds) |
 | `2026-06-17-m2.5-phase3a-stub-registry-design.md` | [Phase 3a stub registry](../UNIFIED-SPEC.md#phase-3a-stub-registry) |
+| `2026-07-14-core-db.md` *(folded 2026-07-16)* | [Core.Db — the enhanced-PDO database primitive](../UNIFIED-SPEC.md#coredb--the-enhanced-pdo-database-primitive-dec-208) — the original keeps the full per-slice (A–K) realization notes |
+| `2026-07-15-core-mail.md` *(folded 2026-07-16)* | [Core.Mail — native mailer](../UNIFIED-SPEC.md#coremail--native-mailer-dec-223) |
