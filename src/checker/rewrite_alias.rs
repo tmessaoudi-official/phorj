@@ -248,6 +248,8 @@ pub fn expand_aliases(program: &Program) -> Program {
                         modifiers: p.modifiers.clone(),
                         ty: rt(&p.ty, a, 0),
                         name: p.name.clone(),
+                        // A default is a literal (no alias can appear inside) — carry it verbatim.
+                        default: p.default.clone(),
                         span: p.span,
                     })
                     .collect(),

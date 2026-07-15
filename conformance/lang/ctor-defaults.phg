@@ -1,0 +1,31 @@
+// Conformance: constructor default parameters (DEC-236) — trailing defaulted params make the
+// shorter construction arities legal; the omitted defaults are filled at the call site by the
+// checker, so the interpreter, the VM, and the transpiled PHP all construct identically. Defaults
+// are also inherited with the signature by a subclass with no own constructor.
+package Main;
+
+import Core.Output;
+
+class Server {
+    constructor(public string host, public int port = 8080, public bool tls = false) {}
+}
+
+open class Base {
+    constructor(public string name, public int level = 1) {}
+}
+
+class Derived extends Base {
+}
+
+function describe(Server s): string {
+    return "{s.host}:{s.port} tls={s.tls}";
+}
+
+function main(): void {
+    Output.printLine(describe(new Server("a.example")));
+    Output.printLine(describe(new Server("b.example", 9090)));
+    Output.printLine(describe(new Server("c.example", 443, true)));
+    Derived d1 = new Derived("inherited");
+    Derived d2 = new Derived("explicit", 5);
+    Output.printLine("{d1.name}/{d1.level} {d2.name}/{d2.level}");
+}

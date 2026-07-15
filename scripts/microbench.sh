@@ -23,7 +23,8 @@
 #
 # Env: PHG_BIN (default target/release/phg), MICROBENCH_RUNS (K, default 3),
 #      MICROBENCH_PHP_IMAGE (default php:8.5-cli),
-#      MICROBENCH_CPU (pin core, default: last core). Flags: --json.
+#      MICROBENCH_CPU (pin core, default: last core). Flags: --json. Positional args run
+#      ONLY those micros (one-by-one measurement): `microbench.sh jsonround dbwork`.
 set -eEuo pipefail
 export LC_ALL=C
 
@@ -34,7 +35,15 @@ K="${MICROBENCH_RUNS:-3}"
 PHP_IMAGE="${MICROBENCH_PHP_IMAGE:-php:8.5-cli}"
 JIT_FLAGS="-dopcache.enable_cli=1 -dopcache.jit_buffer_size=128M -dopcache.jit=tracing"
 JSON=0
-[[ "${1:-}" == "--json" ]] && JSON=1
+# Positional args = run ONLY these micros (e.g. `microbench.sh jsonround dbwork`); --json composes.
+ONLY=()
+for arg in "$@"; do
+  case "$arg" in
+    --json) JSON=1 ;;
+    -*) echo "microbench: unknown flag $arg" >&2; exit 2 ;;
+    *) ONLY+=("$arg") ;;
+  esac
+done
 
 command -v docker >/dev/null 2>&1 || {
   echo "microbench: docker required (real release-php baseline)" >&2
@@ -54,6 +63,22 @@ done
   echo "microbench: no paired *.phg/*.php micros in $MICRO" >&2
   exit 2
 }
+
+# One-by-one runs: keep only the requested micros (exact names), loudly rejecting typos.
+if [[ ${#ONLY[@]} -gt 0 ]]; then
+  filtered=()
+  for want in "${ONLY[@]}"; do
+    found=0
+    for name in "${features[@]}"; do
+      [[ "$name" == "$want" ]] && { filtered+=("$name"); found=1; }
+    done
+    [[ $found -eq 1 ]] || {
+      echo "microbench: no micro named \`$want\` (have: ${features[*]})" >&2
+      exit 2
+    }
+  done
+  features=("${filtered[@]}")
+fi
 
 # Phases 1+2 — INTERLEAVED, PINNED sampling (see the header): one long-lived pinned php
 # container; per feature, K rounds of (pinned phg sample, pinned php sample), best-of-K each.

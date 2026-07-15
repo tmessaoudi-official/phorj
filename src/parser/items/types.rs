@@ -465,10 +465,18 @@ impl Parser {
             let modifiers = self.parse_modifiers();
             let ty = self.parse_type()?;
             let name = self.expect_ident("a parameter name")?;
+            // Optional default value (DEC-236 ctor default params): `public string user = ""` —
+            // the checker enforces literal-only + trailing-only, and fills call sites (M4 fill).
+            let default = if self.eat(&TokenKind::Eq) {
+                Some(Box::new(self.parse_expr()?))
+            } else {
+                None
+            };
             params.push(CtorParam {
                 modifiers,
                 ty,
                 name,
+                default,
                 span: sp,
             });
             if !self.eat(&TokenKind::Comma) {

@@ -242,6 +242,8 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                         modifiers: p.modifiers.clone(),
                         ty: rt(&p.ty),
                         name: p.name.clone(),
+                        // A default is a literal (no injected types inside) — carry it verbatim.
+                        default: p.default.clone(),
                         span: p.span,
                     })
                     .collect(),

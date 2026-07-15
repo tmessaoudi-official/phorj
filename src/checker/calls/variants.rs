@@ -49,6 +49,7 @@ impl Checker {
         // class constructor: `ClassName(args)`
         if let Some(info) = self.classes.get(name) {
             let ctor = info.ctor.clone();
+            let ctor_defaults = info.ctor_defaults.clone();
             let ctor_throws = info.ctor_throws.clone();
             let type_params = info.type_params.clone();
             let is_abstract = info.is_abstract;
@@ -72,7 +73,14 @@ impl Checker {
                 );
             }
             if type_params.is_empty() {
-                self.check_args(name, &ctor, args, span);
+                // DEC-236: a ctor with defaulted trailing params accepts the shorter arities; the
+                // omitted defaults are recorded via `pending_fill` (consumed by the generic
+                // `record_pending_fill` in `check_call`), so every backend sees a full-arity `new`.
+                if ctor_defaults.iter().any(Option::is_some) {
+                    self.check_args_defaulted(name, &ctor, &ctor_defaults, args, span);
+                } else {
+                    self.check_args(name, &ctor, args, span);
+                }
                 return Some(Ty::Named(name.to_string(), Vec::new()));
             }
             // A generic class: infer its type arguments from the constructor call (M-RT generics-all),

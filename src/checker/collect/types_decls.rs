@@ -94,6 +94,7 @@ impl Checker {
                 methods: HashMap::new(),
                 hooks: HashMap::new(),
                 ctor: Vec::new(),
+                ctor_defaults: Vec::new(),
                 ctor_throws: Vec::new(),
                 has_ctor: false,
                 is_user_attribute: c.attrs.iter().any(|a| a.is_attribute_marker()),
@@ -176,6 +177,7 @@ impl Checker {
             std::collections::HashSet::new();
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
+        let mut ctor_defaults: Vec<Option<crate::ast::Expr>> = Vec::new();
         let mut ctor_throws = Vec::new();
         let mut ctor_vis = MemberVis::Public;
         // The class's type parameters are in scope while resolving every member signature (fields,
@@ -339,6 +341,33 @@ impl Checker {
                             ty
                         })
                         .collect();
+                    // DEC-236 ctor default params: validate (trailing-only, literal-only,
+                    // type-assignable) with the SAME machinery as free-function defaults, via a
+                    // borrowed Param view. Generic classes are deferred (the fill runs before
+                    // unification) — a default there is a clean E-CTOR-DEFAULT-GENERIC.
+                    let as_params: Vec<crate::ast::Param> = params
+                        .iter()
+                        .map(|p| crate::ast::Param {
+                            ty: p.ty.clone(),
+                            name: p.name.clone(),
+                            default: p.default.clone(),
+                            span: p.span,
+                        })
+                        .collect();
+                    ctor_defaults = self.collect_param_defaults(&as_params, &ctor);
+                    if !class_tp.is_empty() && ctor_defaults.iter().any(Option::is_some) {
+                        self.err_coded(
+                            *span,
+                            "default constructor parameters are not yet supported on a generic class"
+                                .to_string(),
+                            "E-CTOR-DEFAULT-GENERIC",
+                            Some(
+                                "the call-site fill runs before type-argument inference; drop the default or use a static factory (a documented deferral)"
+                                    .into(),
+                            ),
+                        );
+                        ctor_defaults = vec![None; ctor.len()];
+                    }
                     // DEC-221: resolve + flatten the ctor's declared throws with the class type
                     // params still in scope (a bare `T` in a `throws` position resolves like a param
                     // type). Semantic validation (E-THROW-TYPE / E-THROWS-TOO-BROAD) runs later at
@@ -498,6 +527,7 @@ impl Checker {
             .iter()
             .any(|m| matches!(m, ClassMember::Constructor { .. }));
         info.ctor = ctor;
+        info.ctor_defaults = ctor_defaults;
         info.ctor_throws = ctor_throws;
         info.ctor_vis = ctor_vis;
         // `ctor_owner` was initialized to the class's own name; an own ctor keeps it. An inherited

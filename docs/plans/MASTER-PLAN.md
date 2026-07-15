@@ -171,9 +171,15 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
+**OFFICE RULINGS (2026-07-16, developer via AskUserQuestion): DEC-234 member-error namespacing
+(`catch (Db.Timeout e)`; `as`-alias shorthand confirmed) · DEC-235 pipe `|>` = first-arg insertion ·
+DEC-236 ctor default params IN · DEC-237 overnight batch RATIFIED (run-end full-reopen stands).**
+
 **RUN CURSOR: ▶ RESUMED (2026-07-16, developer at office). Pack 3 ✅ DEC-233 Core.Session
 (TOP-20 #3 — secure-by-default cookies, fixation defense, worker-shared store; TOP-20 blockers #1
-#2 #3 #5 now ALL closed this run). NEXT by value: sugar wave (pipe |> first) → Data-pillar
+#2 #3 #5 now ALL closed this run). Sugar-wave item 1 ✅ DEC-236 ctor defaults BUILT (SmtpConfig spec-form restored; conformance
+golden). NEXT by value: Core.Debug dump/dd + Runtime.exit (developer-requested, VarDumper-style) →
+pipe |> (DEC-235, first-arg insertion) → Data-pillar
 Iterator protocol (for-in over DbStream) → M-Decomp backlog → JIT structural levers (FRESH
 context). SESS parity rows flip at the next §4 recompute. Morning triage list still pending
 developer review: KNOWN_ISSUES §"Fable overnight run — morning triage" (DEC-227…233). Spine 9 ✅ §4.8 recompute: parity

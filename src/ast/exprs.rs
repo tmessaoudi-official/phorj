@@ -358,5 +358,9 @@ pub struct CtorParam {
     pub modifiers: Vec<Modifier>,
     pub ty: Type,
     pub name: String,
+    /// DEC-236 — an optional default literal (`public string user = ""`): trailing-only,
+    /// literal-only, filled at each `new` site by the checker (the M4 call-fill technique), so
+    /// every backend sees a full-arity construction (byte-identity-safe).
+    pub default: Option<Box<Expr>>,
     pub span: Span,
 }

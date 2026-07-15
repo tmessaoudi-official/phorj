@@ -135,7 +135,7 @@ impl Checker {
                 self.err_coded(
                     Self::expr_span(e),
                     format!(
-                        "default parameter values are not yet supported on a {context} (only on free functions)"
+                        "default parameter values are not yet supported on a {context} (only on free functions and constructors — DEC-236)"
                     ),
                     "E-DEFAULT-PARAM-CONTEXT",
                     Some("drop the default, or call the function explicitly with all arguments".into()),

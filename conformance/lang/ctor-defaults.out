@@ -1,0 +1,4 @@
+a.example:8080 tls=false
+b.example:9090 tls=false
+c.example:443 tls=true
+inherited/1 explicit/5

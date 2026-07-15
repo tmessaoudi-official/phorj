@@ -400,6 +400,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              The default literal must be assignable to the parameter's declared type (`int x = 3` ok;\n\
              `int x = \"no\"` is not). `null` is allowed only for an optional parameter (`int? x = null`).\n"
         }
+        "E-CTOR-DEFAULT-GENERIC" => {
+            "E-CTOR-DEFAULT-GENERIC — a generic class constructor cannot take default parameters yet.\n\n\
+             Construction of a generic class infers its type arguments FROM the constructor call's\n\
+             arguments, and the default fill runs before that inference — a defaulted (omittable)\n\
+             argument could leave a type parameter unconstrained. Drop the default or use a static\n\
+             factory on the generic class. (A documented deferral — DEC-236 covers non-generic\n\
+             classes; the generic case needs fill-aware inference.)\n"
+        }
         "E-DEFAULT-PARAM-CONTEXT" => {
             "E-DEFAULT-PARAM-CONTEXT — a default value on a method/constructor parameter.\n\n\
              Default parameter values are supported on **free functions** in v1; methods and\n\

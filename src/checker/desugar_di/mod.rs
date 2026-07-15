@@ -332,6 +332,7 @@ fn fold_injected_fields(
                                 modifiers: mods,
                                 ty: ty.clone(),
                                 name: name.clone(),
+                                default: None,
                                 span: *span,
                             });
                             continue;

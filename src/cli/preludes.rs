@@ -423,22 +423,18 @@ class Attachment {
 
 // Transport configs — plain data carriers `new Mailer(...)` dispatches on (match-over-union).
 class SmtpConfig {
-  public mutable string user;
-  public mutable Secret<string>? password;
-  constructor(public string host, public int port) { this.user = ""; this.password = null; }
-  // The authenticated form (spec's 4-arg constructor; realized as a factory — no ctor overloading).
+  // DEC-236 ctor defaults realize the spec's 4-arg form directly: `new SmtpConfig(host, port)` is
+  // unauthenticated; `new SmtpConfig(host, port, user, secret)` authenticates. `withAuth` stays as
+  // a thin compatibility alias.
+  constructor(public string host, public int port, public string user = "", public Secret<string>? password = null) {}
   static function withAuth(string host, int port, string user, Secret<string> password): SmtpConfig {
-    SmtpConfig c = new SmtpConfig(host, port);
-    c.user = user;
-    c.password = password;
-    return c;
+    return new SmtpConfig(host, port, user, password);
   }
 }
 class SendmailTransport {
-  public mutable string path;
-  constructor() { this.path = ""; }
-  // Override the sendmail binary path (default: /usr/sbin/sendmail).
-  static function at(string path): SendmailTransport { SendmailTransport t = new SendmailTransport(); t.path = path; return t; }
+  // `new SendmailTransport()` = the platform default (/usr/sbin/sendmail); pass a path to override.
+  constructor(public string path = "") {}
+  static function at(string path): SendmailTransport { return new SendmailTransport(path); }
 }
 class FileTransport { constructor(public string dir) {} }
 class NullTransport { constructor() {} }

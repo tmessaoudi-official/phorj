@@ -73,3 +73,49 @@ fn default_on_method_is_rejected_v1() {
         "got {e:?}"
     );
 }
+
+// ── DEC-236: constructor default parameters ──────────────────────────────────────────────────────────
+
+#[test]
+fn ctor_default_makes_construction_arity_optional() {
+    let src = "class C { constructor(public int x, public int y = 10) {} } \
+               function main() -> void { C a = new C(1); C b = new C(1, 2); }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn ctor_default_must_be_trailing_literal_and_typed() {
+    let e = errors_of("class C { constructor(public int x = 1, public int y) {} }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-ORDER")),
+        "got {e:?}"
+    );
+    let e = errors_of("class C { constructor(public int x = 1 + 2) {} }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-EXPR")),
+        "got {e:?}"
+    );
+    let e = errors_of("class C { constructor(public int x = \"nope\") {} }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-TYPE")),
+        "got {e:?}"
+    );
+}
+
+#[test]
+fn ctor_default_on_generic_class_is_a_clean_deferral() {
+    let e = errors_of("class Box<T> { constructor(private T v, public int n = 0) {} }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-CTOR-DEFAULT-GENERIC")),
+        "got {e:?}"
+    );
+}
+
+#[test]
+fn ctor_defaults_are_inherited_with_the_signature() {
+    // A subclass with no own ctor inherits the parent's signature INCLUDING its defaults.
+    let src = "open class P { constructor(public int x, public int y = 7) {} } \
+               class C extends P {} \
+               function main() -> void { C a = new C(1); C b = new C(1, 2); }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}

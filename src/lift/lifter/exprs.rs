@@ -278,6 +278,8 @@ pub(super) fn lift_ctor_params(params: &[php::PhpParam]) -> Result<Vec<CtorParam
             modifiers,
             ty,
             name: p.name.clone(),
+            // The lift draft never synthesizes defaults (PHP promoted defaults are a lift TODO).
+            default: None,
             span: SP,
         });
     }

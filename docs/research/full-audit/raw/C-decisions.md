@@ -1096,3 +1096,35 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   GOTCHA recorded: `open` is a phorj KEYWORD (open classes) — a native named `open` is unparseable
   at the call site (SessionSys.open → renamed `acquire`); prelude parse failures are SILENT
   (inject_core_modules skips unparseable preludes — a debug trap worth a loud assert someday).
+
+## 2026-07-16 office batch (developer via AskUserQuestion — the run's queued adjudications RULED)
+
+- **DEC-234 — RULED: error-class namespacing = MEMBER-ERROR SYNTAX** (`catch (Db.Timeout e)` /
+  `throw new Mail.TlsError(...)` — qualified error types per module, no global bare-name claims).
+  Developer note: `import Core.Db.Timeout as DbTimeout;` remains the local-shorthand escape hatch
+  (the DEC-186 alias machinery) — confirmed as part of the design. Migration: current names stay as
+  deprecated aliases during the transition. *Alternatives (offered): bless the prefix convention
+  (rejected — ergonomics); collision = compile error (rejected — fixes the bug, not the design).*
+  Implementation = a checker/parser slice (qualified names in catch/throw/extends positions), queued.
+- **DEC-235 — RULED: pipe `|>` = FIRST-ARG INSERTION** (`x |> f(a)` ≡ `f(x, a)`; `x |> f` ≡ `f(x)`;
+  left-assoc, lowest precedence) — matches the subject-first stdlib (`List.map(xs, f)`), so
+  pipelines compose over the existing API with no currying. *Alternative (offered): callable
+  application (F#-curried) — rejected: every step would need a lambda wrapper.*
+- **DEC-236 — RULED: constructor DEFAULT PARAMS land in the sugar wave** (reuse the function
+  default-param call-fill machinery; fixes the SmtpConfig.withAuth / SendmailTransport.at warts and
+  a PHP-8 promoted-ctor parity gap). *Alternative (offered): keep the factory convention — rejected.*
+- **DEC-237 — RULED: the overnight AUTO-RULED batch DEC-227…233 is RATIFIED WHOLESALE** — with the
+  developer's standing note: everything stays register-recorded and the WHOLE set is revisited in
+  the run-end full-reopen pass ("we will go back to everything once we finish everything" — the
+  META-1 run-end reopen protocol applies).
+
+- **DEC-236 BUILT (same session as ruled):** ctor default params — parser (`= literal` on ctor
+  params), CtorParam.default threaded through ALL five rebuild passes (collapse_injected /
+  rewrite_alias / rewrite_generics preserve verbatim; desugar_di/lift inject None), collection
+  validates via the SAME collect_param_defaults machinery (order/literal/type codes reused),
+  construction check via check_args_defaulted + the existing generic record_pending_fill (backends
+  see full-arity `new` — byte-identity by construction), defaults INHERITED with the signature
+  (both inherit paths in lockstep), formatter round-trips `= default`, E-CTOR-DEFAULT-GENERIC
+  clean deferral (fill runs before type-arg inference). SmtpConfig/SendmailTransport rewritten to
+  the spec's direct forms (withAuth/at stay as thin aliases). Conformance golden (3 backends) +
+  4 checker tests. ALSO: microbench.sh gained positional per-micro filtering (developer request).

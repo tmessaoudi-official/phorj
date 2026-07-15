@@ -137,6 +137,11 @@ struct ClassInfo {
     /// constructor parameter types, for `ClassName(args)` calls. For a class with no own constructor
     /// under single inheritance (M-RT S6c.2a), this is the *inherited* parent constructor's signature.
     ctor: Vec<Ty>,
+    /// DEC-236 — the constructor's default literals, parallel to [`Self::ctor`] (`None` = required).
+    /// Validated (literal-only, trailing-only, type-assignable) at collection; consumed by the
+    /// construction check via the M4 fill (every backend sees a full-arity `new`). Inherited
+    /// alongside `ctor`.
+    ctor_defaults: Vec<Option<crate::ast::Expr>>,
     /// DEC-221: the constructor's declared checked-exception set (resolved + flattened), read at the
     /// construction site (`new X(args)` routes each through `route_call_throw`, so the caller must
     /// `try`/`catch` or `?`-propagate) and to seed `cur_throws` while checking the ctor body. Inherited
@@ -251,6 +256,7 @@ impl ClassInfo {
             methods: HashMap::new(),
             hooks: HashMap::new(),
             ctor: Vec::new(),
+            ctor_defaults: Vec::new(),
             ctor_throws: Vec::new(),
             has_ctor: false,
             is_user_attribute: false, // placeholder; overwritten by `collect_class`

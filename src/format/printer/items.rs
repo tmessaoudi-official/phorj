@@ -392,7 +392,13 @@ impl Printer<'_> {
         let mut out = Vec::new();
         for p in params {
             let mods = modifiers_str(&p.modifiers);
-            out.push(format!("{mods}{} {}", ty(&p.ty)?, p.name));
+            // A defaulted ctor param (DEC-236) prints its `= <expr>` so a format round-trip
+            // preserves it (the same M4 rule as `params`).
+            let default = match &p.default {
+                Some(e) => format!(" = {}", self.expr(e)?),
+                None => String::new(),
+            };
+            out.push(format!("{mods}{} {}{default}", ty(&p.ty)?, p.name));
         }
         Ok(out.join(", "))
     }
