@@ -1347,3 +1347,21 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   a feature that runs but doesn't transpile/lift (or vice versa) is not done. (b) `cargo-fuzz`
   ADMITTED as a dev-only dependency (runtime dep policy untouched); the parser/lift unwrap audit
   + fuzz pass execute the EV-7 never-panic invariant.
+
+- **DEC-260 — RULED (audit flag F-021): folder restructure ratified, all three moves** —
+  `manifest/lock/vendor → src/package/` (pre-stages DEC-216) · `dap/debug/dump/inspect/profile/mem
+  → src/devtools/` · `token.rs → src/tokenizer/token.rs`. Mechanical git-mv slices, one commit each.
+- **DEC-261 — RULED: the DEC-215 L1/L2 refactor ADVANCES** — from Ω-4/Ω-7 to right after the
+  audit's HIGH builds: the checker stops accumulating domain code sooner; future modules consume
+  L1 attribute-reflection instead of growing desugar_db. *Alternative (offered): keep the Ω slot —
+  rejected by the developer.*
+- **DEC-262 — RULED: M-Decomp ordering + THE NEW FILE-SIZE RULE (Invariant 13 AMENDED).**
+  Ordering: growth-coupled three FIRST (preludes → per-module files; explain → per-code-family;
+  runtime_php → per-helper-domain — future features then add FILES not LINES), then remaining
+  non-JIT by size (desugar_db, native/db, vm/exec, mail), JIT five LAST each in a fresh context.
+  **NEW CAP (developer): soft 300 / hard 500 lines per source file** — "everything must be
+  organized/structured/decoupled into clear many files"; split-as-you-go is the DEFAULT behavior
+  (a feature that would push a file past the soft cap STARTS by splitting it); genuinely-cohesive
+  exhaustive-match units use index/dispatcher patterns to comply; enforcement = a pre-commit
+  line-count warning (queued with the rule). Applies to new code immediately, to existing files as
+  M-Decomp reaches them. *Alternatives (offered): 400/600 (recommended, declined); 500/800.*
