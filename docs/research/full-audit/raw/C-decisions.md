@@ -1754,3 +1754,39 @@ the REAL guard; the earlier comment overstated a nonexistent shared corpus — c
 `open_injected_type_program_publishes_no_spurious_diagnostics` (lsp/tests.rs). Gate: 2217 tests
 --all-features + oracle, clippy (all-features + no-default), fmt. DEC-268 panel: R1 core CLEAN + one
 P2 (overstated drift protection) → fixed with the equivalence test + corrected comment.
+
+## DEC-255 — SWEEP RUN (2026-07-16, Tier-1): fault-parity exit-status catalog + findings (PENDING 2 rulings)
+
+Swept every fault-triggering op: phorj VM/interp exit vs transpiled-PHP-8.5.8 exit (catalog:
+`scratchpad/DEC-255-catalog.md`, mirrored below). **7 SILENT-DIVERGENCES** (phorj faults exit 1; PHP
+silently succeeds exit 0) — all INTENTIONAL-STRICTER (phorj deliberately checked/safe) but UNENFORCED
+on the PHP leg, breaking Invariant-1 byte-identity in the FAULT direction:
+- **Checked-arithmetic overflow family:** int `+`/`-`/`*`, unary neg, `Math.abs`(i64::MIN), `Math.pow`,
+  `List.sum` — transpiled PHP wraps to float (exit 0) where phorj faults "integer overflow".
+- **Index/key family:** list index OOB (`xs[10]`), Map key-not-found — PHP returns null+Warning (exit 0).
+13 MATCH (div0/mod0/float-div0 → PHP DivisionByZeroError; decimal-inexact/truncate/force-unwrap/assert/
+panic/todo/unreachable/range → PHP throws via `__phorj_*` helpers/real throw; sqrt(-1)/log(0) → both
+NaN/-inf; parseInt/as-int → both Option/null). 0 reverse-direction (no PHP-faults-phorj-succeeds).
+**STRUCTURAL:** the differential harness (`tests/differential.rs`) never runs FAULT programs through PHP
+(`run_php` asserts success; `agree_err` compares only run≡runvm by FaultKind) — so these were uncovered.
+**CONTRADICTS DEC-226** ("checked default transpiles faithfully") — the checked default silently wraps.
+Discriminator = each native's `php:` emitter (helper-vs-lenient-builtin). PENDING developer rulings (2,
+per META-7 helper-vs-accept — asked, not self-decided).
+
+## DEC-255 — RULED (2026-07-16, developer via AskUserQuestion): emit throwing helpers for BOTH families + close the harness gap
+
+Both silent-divergence families get throwing `__phorj_*` PHP helpers so transpiled PHP faults
+identically (byte-identity restored, per META-7 — helper is the accepted tool):
+1. **Checked-arithmetic overflow:** int `+`/`-`/`*`/unary-neg + `Math.abs`/`Math.pow`/`List.sum` emit
+   `__phorj_checked_add/sub/mul/neg/abs/pow/sum(...)` that throw an overflow error (PHP `intdiv`-style
+   fault) instead of the bare lenient operator/builtin that wraps to float. Corrects DEC-226's
+   "checked default transpiles faithfully" (now actually true). Cost accepted: PHP-leg-only (phorj's
+   interp/VM/JIT untouched); noisier PHP + small PHP-leg perf.
+2. **Index/key:** list index + Map key reads emit `__phorj_index($xs,$i)` / `__phorj_map_get($m,$k)`
+   that throw on OOB/missing instead of PHP's silent null+Warning.
+Plus: **extend `tests/differential.rs` to run FAULT programs through PHP** (currently `run_php` asserts
+success + `agree_err` compares only run≡runvm) — so fault-parity is gated and can't regress. Build NOW
+(finishing Tier-1); each = emitter change + a fault-parity test (transpile the fault program, assert PHP
+exits non-zero with the matching semantic) + example. *Alternatives (offered, rejected): accept+document
+(gives up Invariant-1 fault-parity); helpers-only-where-cheap (partial).* Sub-slices: index/map helpers
+(smaller) → checked-arith family → harness fault-leg extension. Each its own green + panel + commit.
