@@ -1440,3 +1440,61 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   Bucket 2 — the 100%-parity blocker) → docs/ cleanup slice (4-living shape: MASTER-PLAN,
   UNIFIED-SPEC, C-decisions, M-gap-matrix; rest folded/archived, full reference sweep) →
   Tier 1 DEC-263. Gap ledger = MASTER-PLAN §0.3.
+
+## 2026-07-16 evening extension-policy adjudication (developer via AskUserQuestion; panel-certified brief, DEC-268 ladder — round 2 escalated to ask-human per findings)
+
+- **DEC-270 — RULED (new flag F-028, SECURITY, Tier 1): Core.HttpClient has no SSRF guard.**
+  `src/native/http_client.rs:352-359` resolves via `ToSocketAddrs` and connects to `.next()` with
+  ZERO filtering — `HttpClient.get("http://169.254.169.254/…")` reaches cloud-metadata credentials;
+  internal-host fetches (`http://10.0.0.5/admin`) are open; the DEC-264 redirect follower can be
+  pointed at a private IP after a public first hop. The 2026-07-16 D4 audit caught the redirect
+  HEADER leak (DEC-264) but MISSED the SSRF surface. FIX (Tier 1, alongside 263/264/265):
+  SSRF deny-by-default — block loopback / RFC1918 / link-local / `0.0.0.0` / metadata-IP
+  (`169.254.169.254`); DNS-PIN (resolve once, connect to the resolved IP, RE-CHECK the pinned IP
+  after every redirect hop); explicit opt-in to reach private ranges. Implemented as a SHARED
+  Transport-seam policy so the future Core.Net inherits it. *Alternatives (offered): record+rule-later;
+  investigate-first — dev chose rule-now into Tier 1.*
+- **DEC-271 — RULED: icu4x admitted (dependency-policy AMENDMENT) for the joint intl/Unicode-data
+  question; Core.Intl formatter module, quarantined, native-only.** icu4x = pure-Rust, feature-gated
+  NON-DEFAULT, FEATURE-excluded from the playground wasm (not target-gated — it compiles to wasm, so
+  target-gating would NOT keep it out). Powers BOTH DEC-256's grapheme feature AND a new Core.Intl
+  (NumberFormatter/DateFormatter/Collator/Transliterator). Core.Intl is differential-QUARANTINED
+  (`pure:false` seam — locale output can't be byte-identity-gated against `php -n`'s SYSTEM ICU;
+  quarantine removes that oracle constraint, so the Collator/Transliterator GAP-by-design rejections
+  REOPEN — their sole recorded reason was the oracle). PHP leg = `E-TRANSPILE-INTL` (LADDER case-2,
+  native-only) initially. **DEC-256 JOINT STAMP (required):** the segmentation-table dependency
+  question DEC-256 deferred is RESOLVED HERE = icu4x, feature-gated, non-default; the default string
+  measure STAYS codepoints (DEC-256's graphemes-as-default rejection is NOT reopened — admitting a
+  table for the grapheme FEATURE ≠ making it the default). Parity: ~5 net-new FN-INTL flips (3
+  formatter GP + 2 reopened GD); the 3 grapheme rows stay credited to DEC-256 (no double-count); the
+  10 GU rows stay GAP pending their own rulings. This is a dep-DOMAIN EXPANSION (i18n is not an
+  enumerated admitted domain) → recorded as a policy amendment, not a mechanical row-add. icu4x's
+  baked locale-data blob enters the cargo-audit/deny update cadence (supply-chain ownership).
+  *Alternatives (offered, rejected): codepoint-only-defer-all-formatters (leaves intl GAP); rule-
+  direction-defer-data-source.*
+- **DEC-272 — RULED: four MANDATORY security riders (all ratified), written into the relevant pack
+  specs as binding rules, not brief prose.** (1) **Locale-independent security comparisons** —
+  `equalsIgnoreCase`/`containsIgnoreCase`/any equality-normalization pinned to Unicode SIMPLE
+  (locale-independent) fold, stay `pure:true` + byte-gated, FORBIDDEN from routing through icu4x
+  locale-tailored casemap or the quarantined seam (kills the Turkish-i auth-bypass class:
+  `"ADMIN".equalsIgnoreCase("admın")` must never be true; locale-full-fold only in explicitly
+  locale-parameterized formatters). (2) **Misuse-resistant crypto surface** — no user-supplied raw
+  nonces (auto-nonce / XChaCha20 default); keys are `Secret<T>` by construction, `.expose()` only at
+  the RustCrypto boundary; AEAD decrypt = authenticated-or-fault; reject non-canonical/low-order curve
+  points. (3) **Socket/image secure-defaults** — Core.Net TLS-or-refuse (not opportunistic) + the
+  DEC-270 SSRF rider + rides the existing Transport seam; image decode = mandatory dimension/alloc
+  Limits + panic-catch boundary (decompression bombs survive memory-safety). (4) **Advisory-naming +
+  guard-hardening** — finfo named advisory (`sniff*`/hint, never `validate*`/`mimeType`, doc "not a
+  security control"); readline history opt-in + Secret-prompt reads never persisted; the tier-3
+  emitted PHP guard validates the ext token (`^ext-[a-z0-9_]+$`) + emits only escaped literals.
+- **DEC-273 — IN PROGRESS (developer wants a brainstorm + list-lock before ruling): the CORE vs
+  EXTENSION architecture.** Developer ruling direction (Q2): strategy = a COMBINATION of per-family
+  native (option 1) + a plugin/extension architecture (option 2) — everything that is "a framework,
+  not the language itself" (DI cited as the example) ships as a build-flag activatable/deactivatable
+  EXTENSION, structured so external rust-phorj plugins can register through the same seam. Crypto is
+  an already-admitted dep-domain (no amendment); icu4x + image are domain expansions. The concrete
+  CORE/EXTENSION partition + the governing criterion are being brainstormed and will be locked next
+  (see the session brief). *Panel note: DEC-268 round-1 hardened this brief through 3 lenses;
+  round-2 lens-1 clean, lenses 2+3 surfaced developer-decisions (SSRF, Turkish-i, pack boundaries) →
+  escalated to ask-human rather than looped to the 5-round cap. Certification: self-graded fallback
+  disclosed (advisor unavailable — no peer above Fable-main).*
