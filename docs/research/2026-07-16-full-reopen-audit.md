@@ -20,8 +20,8 @@
 
 | Dim | Scope | Status |
 |-----|-------|--------|
-| D0 | PHP 8.4/8.5 surface re-sweep + 8.6 RFC ahead-watch vs the 824-row matrix | ▶ IN PROGRESS |
-| D1 | Decision register full reopen (149 DEC rows) | pending |
+| D0 | PHP 8.4/8.5 surface re-sweep + 8.6 RFC ahead-watch vs the 824-row matrix | ✅ DONE — 8 flags, all triaged (DEC-239…244; F-003 fixed; F-008→D5) |
+| D1 | Decision register full reopen (149 DEC rows) | ▶ IN PROGRESS |
 | D2 | KNOWN_ISSUES full reopen (every row) | pending |
 | D3 | Architecture / clean code / folder structure | pending |
 | D4 | Security (every native surface vs PHP's equivalent) | pending |
@@ -35,10 +35,10 @@
 | F-001 | D0 | HIGH | pipe `\|>` triple conflict: shipped-plain vs DEC-235-first-arg vs PHP-8.5-callable-application | **RULED DEC-239**: PHP-aligned base ratified, DEC-235 revoked, precedence fix + `%` placeholder + contextual pipe lambda queued |
 | F-002 | D0 | HIGH | Core.Url = 4 helpers vs PHP 8.5 typed always-on URI parser | **RULED DEC-240**: Core.Uri (RFC 3986, typed errors, PHP-8.5 twin — transpilable) queued |
 | F-003 | D0 | MED | FEATURES.md stale: "four deps" + "forbid(unsafe_code)" | **FIXED** (D6 doc commit, this session) |
-| F-004 | D0 | MED | asymmetric visibility spec'd in UNIFIED-SPEC, absent in code | pending |
-| F-005 | D0 | LOW | partitioned-cookie (CHIPS) absent in Core.Session | pending |
-| F-006 | D0 | LOW | Core.String lacks similarity family (levenshtein/similar/soundex) | pending |
-| F-007 | D0 | MED | extension methods: PHP 8.6 drafts it — phorj should ship first | pending |
+| F-004 | D0 | MED | asymmetric visibility spec'd in UNIFIED-SPEC, absent in code | **RULED DEC-241**: build (sugar wave) |
+| F-005 | D0 | LOW | partitioned-cookie (CHIPS) absent in Core.Session | **RULED DEC-242**: queue cookie-attr knob |
+| F-006 | D0 | LOW | Core.String lacks similarity family (levenshtein/similar/soundex) | **RULED DEC-243**: levenshtein+similarText grapheme-aware; phonetics rejected |
+| F-007 | D0 | MED | extension methods: PHP 8.6 drafts it — phorj should ship first | **RULED DEC-244**: early sugar-wave slot |
 | F-008 | D0 | LOW | HttpClient per-request connects vs PHP persistent share handles | pending (D5) |
 
 ---

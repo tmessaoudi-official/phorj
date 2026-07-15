@@ -1197,3 +1197,26 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   *Alternatives (offered): mirror both PHP classes incl. WHATWG (deferred until a real need —
   browser-grade normalization is marginal for a backend language; recorded); defer entirely
   (rejected — PHP measurably ahead of phorj TODAY, against the mandate).* Build queued.
+
+- **DEC-241 — RULED (audit flag F-004): asymmetric visibility BUILDS** — `public private(set)`
+  (+ `protected(set)`) on fields, promoted ctor params, and statics; queued in the sugar wave.
+  Audit finding: it sat in UNIFIED-SPEC's founding v0.1 surface yet was never implemented AND
+  never tracked — a silently dropped founding promise. Transpiles 1:1 to PHP 8.4+ syntax (8.5
+  floor → free byte-identity); PHP already validated the semantics. *Alternatives (offered):
+  reject + remove from spec (immutable-by-default + `with {}` + hooks cover part of the niche —
+  rejected: PHP is ahead here today); tracked-deferred (rejected — build it).*
+- **DEC-242 — RULED (audit flag F-005): partitioned-cookie (CHIPS) knob queues** — additive
+  `partitioned` option on the Session/Http cookie config emitting the `Partitioned` attribute;
+  parity with PHP 8.5's setcookie/session surface. Tiny slice. *Alternative (offered): reject as
+  iframe-niche — rejected: cheap parity.*
+- **DEC-243 — RULED (audit flag F-006): `String.levenshtein` + `String.similarText` queue,
+  GRAPHEME-AWARE** (the W4-4 codepoints-default stance) — phorj's levenshtein thereby equals PHP
+  8.5's `grapheme_levenshtein` while plain PHP `levenshtein()` stays byte-blind (recorded
+  phorj-better). `soundex`/`metaphone` REJECTED-WITH-REASON: English-phonetic relics.
+  *Alternatives (offered): full family incl. phonetics (rejected); reject all (rejected — the
+  twins are trivial and the mandate says everything PHP does).*
+- **DEC-244 — RULED (audit flag F-007): extension methods get an EARLY sugar-wave slot** —
+  right after the audit-queued builds (DEC-239 pipe fixes, DEC-240 Core.Uri). PHP 8.6 has a
+  draft RFC (incl. scalar extensions); phorj ships its statically-checked, import-gated version
+  (nothing-in-the-wind: extensions visible only where imported) FIRST — the stay-ahead mandate.
+  *Alternative (offered): keep queue position (drafts often slip) — rejected.*
