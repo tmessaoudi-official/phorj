@@ -1305,3 +1305,30 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   (the sound precedent); Java/JS/Kotlin handle-idiom-only; PHP's own 8.5 pipe bans by-ref.*
   Multi-slice build (parser small / checker moderate / VM write-back medium / JIT medium),
   queued after the HIGH audit builds.
+
+- **DEC-255 — RULED (audit flag F-017): the fault-parity EXIT-STATUS sweep RUNS, HIGH priority** —
+  transpile every fault-trigger native, check PHP's exit status; any zero-exit (PHP silently
+  succeeds where phorj faults) comes back as an asked helper-vs-accept ruling per META-7.
+- **DEC-256 — RULED (audit flag F-018, three clarification rounds): W4-4 Unicode — THE FULL
+  PACKAGE, ALL SLICES NOW ("i want all slices now").** Three measuring layers, honest names:
+  bytes = `Bytes.fromString(s).length` (exists, unchanged) · codepoints = `String.length`
+  (FLIPPED from bytes: "café"=4 — the dev's remembered "3" was arithmetic slip, challenged with
+  the byte table; PHP twin = tiny PCRE-/u helper, hermetic) · graphemes = `String.graphemeLength`
+  + `String.graphemes` (human-visible count: 👍🏽=1, family-emoji=1; the Unicode-segmentation-table
+  dependency + PHP-twin (ext/intl vs helper) questions get ASKED in the build's design round per
+  META-7). PLUS Unicode case ops (upper/lower/IgnoreCase beyond ASCII; divergent-fold edges like
+  ß asked, never silent). *Alternatives (offered): graphemes-default (Swift model — rejected:
+  table dependency for the DEFAULT); keep bytes (rejected — the exact PHP wart W4-4 exists to
+  fix); graphemes-later/never (rejected — dev wants all now).*
+- **DEC-257 — RULED (audit flag F-019): Iterator protocol = INTERFACE-BASED** — a Core
+  `Iterator<T>` interface; any implementor is foreach-able (post-DEC-248 world); DbStream/RowStream
+  implement it; List/Map/Set/range keep built-in fast paths; PHP twin = Iterator/IteratorAggregate.
+  Design round runs the META-7 cross-language scan (Rust Iterator / Kotlin Sequence / JS protocol /
+  PHP Traversable) before the exact shape (`next(): T?` vs `hasNext/next`) is asked.
+  *Alternative (offered): built-ins-only + manual pull loops (rejected — PHP stays ahead:
+  any PHP class can be Traversable).*
+- **DEC-258 — RULED (audit flag F-020): Db column naming = OPT-IN snake↔camel mapping** —
+  default stays STRICT exact-name; an explicit opt-in (surface asked in its design round:
+  `db.withNaming(Naming.SnakeToCamel)` shape) applies the deterministic mapping.
+  *Alternatives (offered): strict-only (SQL aliases forever); auto-map default (silent name
+  transformation — the magic phorj rejects) — both rejected.*
