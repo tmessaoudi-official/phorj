@@ -52,7 +52,10 @@ fn db_typed_example_runs_on_both_backends() {
                     Grace (45) aka -\n\
                     one: Ada\n\
                     none: <none>\n\
-                    too many: Core.Db.queryOneInto: expected at most one row for `User`\n";
+                    too many: Core.Db.queryOneInto: expected at most one row for `User`\n\
+                    turbofish: Ada\n\
+                    turbofish: Grace\n\
+                    turbofish one: Grace\n";
     both(&src, expected);
 }
 
@@ -1296,4 +1299,96 @@ function main(): void {
 }
 "#;
     fails_with(src, "E-DB-HYDRATE-ENUM-PAYLOAD");
+}
+
+// ── DEC-208 slice A wiring — explicit turbofish on the query…() family ───────────────────────────────
+
+/// `var users = stmt.queryInto<User>();` — the turbofish IS the sink type; no annotation needed.
+#[test]
+fn db_query_into_turbofish_with_var_binding() {
+    let src = typed_program(
+        r#"var users = db.prepare("SELECT name, age FROM users ORDER BY age").queryInto<User>();
+       for (User u in users) { Output.printLine("{u.name}/{u.age}"); }"#,
+    );
+    both(&src, "Ada/36\nGrace/45\n");
+}
+
+/// `var one = stmt.queryOneInto<User>();` — turbofish makes the sink `User?`.
+#[test]
+fn db_query_one_into_turbofish_with_var_binding() {
+    let src = typed_program(
+        r#"var one = db.prepare("SELECT name, age FROM users WHERE name = ?").bind("Ada").queryOneInto<User>();
+       Output.printLine("{one?.name ?? "<none>"}");"#,
+    );
+    both(&src, "Ada\n");
+}
+
+/// `var n = stmt.queryScalar<int>();` — the turbofish is the scalar type itself.
+#[test]
+fn db_query_scalar_turbofish_with_var_binding() {
+    let src = typed_program(
+        r#"var n = db.prepare("SELECT COUNT(*) FROM users").queryScalar<int>();
+       Output.printLine("{n}");"#,
+    );
+    both(&src, "2\n");
+}
+
+/// `var byName = stmt.queryMap<string, User>();` — two explicit type arguments.
+#[test]
+fn db_query_map_turbofish_with_var_binding() {
+    let src = typed_program(
+        r#"var byName = db.prepare("SELECT name, name, age FROM users ORDER BY age").queryMap<string, User>();
+       Output.printLine("{Map.get(byName, "Grace")?.age ?? -1}");"#,
+    );
+    both(&src, "45\n");
+}
+
+/// The turbofish threads through `?`-propagation exactly like the contextual form.
+#[test]
+fn db_query_into_turbofish_propagates_with_question_mark() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Statement;
+import Core.Db.DbError;
+class User { constructor(public string name, public int age) {} }
+function loadAll(Statement s): List<User> throws DbError {
+  var u = s.queryInto<User>()?;
+  return u;
+}
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
+    discard db.prepare("INSERT INTO users(name, age) VALUES('Ada', 36)").exec();
+    for (User u in loadAll(db.prepare("SELECT name, age FROM users"))) {
+      Output.printLine("{u.name}/{u.age}");
+    }
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(src, "Ada/36\n");
+}
+
+/// Wrong turbofish arity is a compile-time reject (`E-TYPE-ARG-COUNT`), diagnosed by the desugar pass
+/// (it consumes the call pre-check, so the generic checker never sees these type arguments).
+#[test]
+fn db_query_map_turbofish_wrong_arity_is_rejected() {
+    let src = typed_program(
+        r#"var m = db.prepare("SELECT name, age FROM users").queryMap<int>();
+       Output.printLine("x");"#,
+    );
+    fails_with(&src, "E-TYPE-ARG-COUNT");
+}
+
+/// An explicit turbofish WINS over a disagreeing annotation — the helper's typed return then fails the
+/// binding like any ordinary assignment type error (explicit > contextual, never a silent pick).
+#[test]
+fn db_query_into_turbofish_disagreeing_annotation_is_a_type_error() {
+    let src = typed_program(
+        r#"List<int> users = db.prepare("SELECT name, age FROM users").queryInto<User>();
+       Output.printLine("{List.length(users)}");"#,
+    );
+    fails_with(&src, "List<User>");
 }

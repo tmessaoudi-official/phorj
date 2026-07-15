@@ -112,7 +112,8 @@ pub fn check_and_expand_reified(
     };
     // DEC-208 S2: lower the type-directed `Core.Db` hydration calls `stmt.queryInto()` /
     // `stmt.queryOneInto()` into plain construction via synthesized per-class helpers, drawing the row
-    // class from the binding's declared type (contextual, no turbofish). Pre-check, so the generated
+    // class from the binding's declared type OR an explicit call-site turbofish (slice A wired —
+    // turbofish wins; arity checked in the pass, `E-TYPE-ARG-COUNT`). Pre-check, so the generated
     // `new T(row.getX(..)?)` graph type-checks like hand-written code and both backends run the one
     // desugared AST (Inv-5; `run ≡ runvm` automatic). A no-op unless `Core.Db` is imported.
     let routed = match crate::checker::desugar_db(routed) {

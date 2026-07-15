@@ -1,7 +1,9 @@
 // Typed-generic result hydration with `Core.Db` (DEC-208 S2) — map result rows straight into a class.
 //
-//   * `List<User> = stmt.queryInto()`     — one `User` per row (contextual `T`, no turbofish).
-//   * `User?      = stmt.queryOneInto()`   — 0 rows → `null`, 1 → the object, >1 → `DbError`.
+//   * `List<User> = stmt.queryInto()`      — one `User` per row (contextual `T` from the sink type).
+//   * `User?      = stmt.queryOneInto()`    — 0 rows → `null`, 1 → the object, >1 → `DbError`.
+//   * `var users  = stmt.queryInto<User>()` — explicit turbofish `T`; wins over any annotation and
+//                                             lets the binding be `var` (DEC-208 slice A wired).
 //
 // Mapping is BY FIELD NAME, STRICT: every promoted constructor field of `T` must have a same-named
 // result column of the right type; a type mismatch or a SQL NULL into a NON-optional field throws a
@@ -65,6 +67,17 @@ function main(): void {
         } catch (DbError e) {
             Output.printLine("too many: {e.message}");
         }
+        // Turbofish — `T` written explicitly at the call site, so the binding can be `var`.
+        var everyone = db
+            .prepare("SELECT name, age, nickname FROM users ORDER BY age")
+            .queryInto<User>();
+        for (User u in everyone) {
+            Output.printLine("turbofish: {u.name}");
+        }
+        var eldest = db
+            .prepare("SELECT name, age, nickname FROM users ORDER BY age DESC LIMIT 1")
+            .queryOneInto<User>();
+        Output.printLine("turbofish one: {eldest?.name ?? \"<none>\"}");
     } catch (DbError e) {
         Output.printLine("DB error: {e.message}");
     }

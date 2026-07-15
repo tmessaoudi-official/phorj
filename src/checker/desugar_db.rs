@@ -24,15 +24,19 @@
 //! nested entity — cycles are rejected `E-DB-HYDRATE-CYCLE`, since eager whole-graph loading is
 //! unbounded on a self-reference).
 //!
-//! SURFACE (contextual, no turbofish — DEC-208's `<T>` notation is inferred from the sink type, exactly
-//! like DEC-201 empty collections):
+//! SURFACE (contextual OR explicit turbofish — DEC-208 slice A wired):
 //! ```text
-//!   List<User> users = stmt.queryInto();      // one User per row
-//!   User? one       = stmt.queryOneInto();     // 0 rows → null, 1 → the object, >1 → DbError
+//!   List<User> users = stmt.queryInto();           // T inferred from the sink type
+//!   User? one       = stmt.queryOneInto();          // 0 rows → null, 1 → the object, >1 → DbError
+//!   var users       = stmt.queryInto<User>();       // T explicit at the call site (turbofish)
+//!   var byId        = stmt.queryMap<int, User>();   // K, V explicit
 //! ```
 //! `T` is drawn from the binding's declared type (a typed `var` decl, a `return`, or a lambda expr-body
-//! return) — the same three annotation sources `desugar_di` threads. A `queryInto()` with no inferable
-//! sink type is `E-DB-INTO-NO-TYPE`; a sink that is not `List<Class>` / `Class?` is `E-DB-INTO-BAD-SINK`.
+//! return) — the same three annotation sources `desugar_di` threads — OR written explicitly as a
+//! turbofish, which WINS over any annotation (explicit > contextual; a disagreement surfaces as the
+//! ordinary assignment type error on the helper's typed return). Turbofish arity is checked here
+//! (`E-TYPE-ARG-COUNT`) because this pass consumes the call pre-check. A `queryInto()` with neither
+//! source is `E-DB-INTO-NO-TYPE`; a sink that is not `List<Class>` / `Class?` is `E-DB-INTO-BAD-SINK`.
 //!
 //! MAPPING (by field NAME, STRICT — DEC-208): `T` is hydrated by calling its constructor, passing every
 //! **promoted** constructor parameter extracted from the row by its name via the typed S1 `Row` accessor
@@ -552,7 +556,61 @@ impl Db<'_> {
     /// Rewrite a recognized `recv.query…()` into a call to its synthesized helper (`helper(recv)`),
     /// drawing the target type(s) from `expected`. On any resolution failure a diagnostic is recorded
     /// and a placeholder is returned (the pipeline aborts on the non-empty `diags`).
-    fn rewrite(&mut self, callee: Expr, call: Call, expected: Option<&Type>, span: Span) -> Expr {
+    /// DEC-208 slice A wiring — an explicit turbofish (`stmt.queryInto<User>()`) IS the sink type,
+    /// synthesized per method shape. It beats any annotation (explicit > contextual; a disagreement
+    /// then surfaces as the ordinary assignment type error on the helper's typed return). Arity is
+    /// validated HERE because this pass runs pre-check and consumes the call — the generic checker
+    /// never sees these type arguments.
+    fn turbofish_sink(&mut self, call: Call, mut type_args: Vec<Type>, span: Span) -> Option<Type> {
+        let (method, want, shape) = match call {
+            Call::IntoList => ("queryInto", 1, "`queryInto<RowClass>()`"),
+            Call::IntoOne => ("queryOneInto", 1, "`queryOneInto<RowClass>()`"),
+            Call::Scalar => (
+                "queryScalar",
+                1,
+                "`queryScalar<int>()` (a scalar, or a `?` form)",
+            ),
+            Call::Map => ("queryMap", 2, "`queryMap<KeyType, ValueType>()`"),
+        };
+        if type_args.len() != want {
+            self.diag(
+                span,
+                format!(
+                    "`{method}` takes {want} type argument(s), found {}",
+                    type_args.len()
+                ),
+                "E-TYPE-ARG-COUNT",
+                format!("write {shape}, or no type arguments to infer from the binding's type"),
+            );
+            return None;
+        }
+        Some(match call {
+            Call::IntoList => Type::Named {
+                name: "List".into(),
+                args: vec![type_args.remove(0)],
+                span,
+            },
+            Call::IntoOne => Type::Optional {
+                inner: Box::new(type_args.remove(0)),
+                span,
+            },
+            Call::Scalar => type_args.remove(0),
+            Call::Map => Type::Named {
+                name: "Map".into(),
+                args: type_args,
+                span,
+            },
+        })
+    }
+
+    fn rewrite(
+        &mut self,
+        callee: Expr,
+        call: Call,
+        expected: Option<&Type>,
+        type_args: Vec<Type>,
+        span: Span,
+    ) -> Expr {
         let Expr::Member { object, .. } = callee else {
             unreachable!("query_call_kind guarantees a Member callee");
         };
@@ -572,7 +630,16 @@ impl Db<'_> {
             }
         };
         let recv = self.rexpr(*object);
-        let expected = expected.cloned();
+        let expected = if type_args.is_empty() {
+            expected.cloned()
+        } else {
+            // Turbofish present: it wins over any annotation. A `None` here means the turbofish
+            // itself was malformed (arity) — already diagnosed, so bail to the placeholder.
+            match self.turbofish_sink(call, type_args, span) {
+                Some(t) => Some(t),
+                None => return self.placeholder(),
+            }
+        };
         let name = match call {
             Call::IntoList => self.resolve_class(ClassKind::List, expected.as_ref(), span, naming),
             Call::IntoOne => self.resolve_class(ClassKind::One, expected.as_ref(), span, naming),
@@ -2021,7 +2088,7 @@ impl Db<'_> {
                 span,
                 type_args,
             } if args.is_empty() => match Self::query_call_kind(&callee) {
-                Some(kind) => self.rewrite(*callee, kind, expected, span),
+                Some(kind) => self.rewrite(*callee, kind, expected, type_args, span),
                 None => {
                     let callee = Box::new(self.rexpr(*callee));
                     Expr::Call {
@@ -2040,10 +2107,10 @@ impl Db<'_> {
                     callee,
                     args,
                     span: cspan,
-                    type_args: _,
+                    type_args,
                 } if args.is_empty() && Self::query_call_kind(&callee).is_some() => {
                     let kind = Self::query_call_kind(&callee).expect("guarded above");
-                    let rewritten = self.rewrite(*callee, kind, expected, cspan);
+                    let rewritten = self.rewrite(*callee, kind, expected, type_args, cspan);
                     Expr::Propagate {
                         inner: Box::new(rewritten),
                         span,
@@ -2060,15 +2127,16 @@ impl Db<'_> {
 
     fn rexpr(&mut self, e: Expr) -> Expr {
         match e {
-            // A nullary call may be a `recv.queryInto()` — but here there is no annotation, so it is
-            // `E-DB-INTO-NO-TYPE` (via `rewrite` with `expected = None`).
+            // A nullary call may be a `recv.queryInto()` — here there is no annotation, so an explicit
+            // turbofish is the ONLY sink source (`var users = stmt.queryInto<User>();` now works);
+            // without one it is `E-DB-INTO-NO-TYPE` (via `rewrite` with `expected = None`).
             Expr::Call {
                 callee,
                 args,
                 span,
                 type_args,
             } if args.is_empty() => match Self::query_call_kind(&callee) {
-                Some(kind) => self.rewrite(*callee, kind, None, span),
+                Some(kind) => self.rewrite(*callee, kind, None, type_args, span),
                 None => {
                     let callee = Box::new(self.rexpr(*callee));
                     Expr::Call {

@@ -165,6 +165,78 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 
 ---
 
+## 0.2 FABLE OVERNIGHT RUN (2026-07-15, developer via AskUserQuestion — 4 brainstorm rounds before sleep)
+
+> Mission: finish vision / perf / PHP parity / beyond-PHP. 100% autonomous, INLINE ONLY (no
+> workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
+> developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
+
+**RUN CURSOR: → Spine 2 (Db streaming/streamInto + lazy Iterator seed). DONE: Spine 1 ✅
+(queryInto/queryOneInto/queryScalar/queryMap accept call-site turbofish; wins over annotation;
+E-TYPE-ARG-COUNT in desugar_db; 7 tests + typed.phg extension; full gate green). —
+update this line after EVERY slice.**
+
+### Rulings (developer, 2026-07-15 pre-sleep)
+
+1. **Adjudication = BOUNDED AUTONOMY**: mid-run design questions → implement recommended option,
+   record `AUTO-RULED (REOPENABLE)` + alternatives + risk example in C-decisions.md, add a
+   KNOWN_ISSUES morning-triage entry. (Alternatives: hybrid syntax-PENDING; strict Rule-15.)
+2. **Perf = STRETCH**: META-1 sqlbuild-surface ladder to ≥1.0× stands; hold all 21 micros ≥1.0×;
+   ADD 2–3 macro benches (webish request loop, JSON round-trip, DB workload) with beat-php
+   targets. Perf-claim protocol unchanged (fresh docker php:8.5-cli+JIT, pinned, interleaved).
+3. **Review = FULL SWEEP**: flag every undocumented PHP divergence, every slower-than-PHP path,
+   every decision-less design, security/SOLID smells → KNOWN_ISSUES (repro + severity + fix).
+4. **Web framework identity = Symfony architecture, compiler DX**: decoupled components,
+   DI-first, explicit contracts; ceremony deleted by the compiler (compile-time routes/DI/config);
+   zero facades/globals — Laravel-style facades DISQUALIFIED (nothing-in-the-wind).
+5. **Layered-openness invariant** (new delivery invariant): every battery builds ONLY on public
+   user-implementable contracts — DbDriver, LogSink, HttpTransport, SerializeCodec, CacheBackend,
+   MailTransport; Query/Schema AST public; Core.Event bus; deep Core.Collections. *No Core module
+   may call a private seam a user couldn't reimplement.*
+6. **Ordering = value-ordered, Claude sequences** (spine fixed below); unfinished packs land as
+   specs + KNOWN_ISSUES queue entries, never half-built.
+7. **DEFERRED to next brainstorm**: package-ecosystem integrity slice (lockfile + checksum for
+   `phg vendor` only — recommendation recorded; prior abandonment stands otherwise). DEC-216 stays
+   PENDING.
+
+### Spine (fixed order)
+
+1. `queryInto<T>` turbofish wiring (deferred at turbofish merge `69a9151e`).
+2. Db streaming/`streamInto` (item H) — seeds the ONE lazy Iterator protocol (collections/files/rows).
+3. MySQL driver (item J) + DEC-208 slice K.
+4. Core.Mail build per locked spec `docs/specs/2026-07-15-core-mail.md` (DEC-223).
+5. DEC-224/225/226 rulings under bounded autonomy (225 folds into concurrency v2; 226 into Decimal/BigInt).
+6. Perf ladder L3 (in-island refcounted handles, src/jit/handles.rs) → ≥1.0×; re-ratchet 21 micros.
+7. FULL review sweep → KNOWN_ISSUES.
+8. Macro benches + perf-gate wiring.
+9. §4.1/§11 parity recompute + §0 cursor refresh.
+
+### Locked feature packs (ALL selected by the developer — sequence recorded here as started)
+
+- **New modules**: Core.Http(client)+Core.Fs · Core.DateTime(DEC-206)+Random/Uuid ·
+  Core.Crypto/Hash+Core.Validate · Core.Test+Core.Bench.
+- **Web**: Http server framework (router/middleware/typed Req-Res/sessions/CSRF, secure defaults) ·
+  Template v2 (escape-by-default, components, compile-checked vars) · WebSocket+SSE ·
+  typed Form+Validate binding.
+- **Data**: migrations+schema builder (`phg migrate`) · ORM-lite typed repositories+relations ·
+  lazy streams everywhere · Core.Serialize (CSV/TOML/YAML + XML fork).
+- **Runtime**: structured concurrency v2 (corosensei; rules DEC-225) · Core.Cache+rate limiter ·
+  Core.Cli+Core.Process (first process/shell capability) · observability (Metrics/Log-v2/spans) ·
+  Core.Env/Config compile-time typed · Core.Net sockets · Signals+Scheduler (pairs DEC-204) ·
+  Core.I18n (compile-checked keys) · first-class Decimal+BigInt (feeds DEC-226) ·
+  Core.Compress+Encoding · parallel workers · `phg serve --watch`.
+- **Openness**: user lints + attribute macros (extends DEC-194) · FFI spec+slice-1 only
+  (ladder: E-TRANSPILE-FFI) · embeddable phorj (lib API + WASM hardening).
+- **Sugar**: pipe `|>` · destructuring+named args · match upgrades (guards/or/range) · error
+  ergonomics (try-expr + `.context`) · comprehensions+ranges · spread+variadics · extension
+  methods (import-gated) · defer+guard · typed literals (5s/2mb) · operator interfaces
+  (Addable/Comparable/Equatable) · let-else+labeled loops+slices · enum impl blocks.
+
+**Advisor note**: recommendation to developer = re-enable advisor as **Opus** (model diversity vs
+Fable main); until then 3C/6C run self-graded with explicit disclosure.
+
+---
+
 ## 1. GOVERNANCE & STANDING RULES
 
 **G-1 · Byte-identity spine.** `phg run` ≡ `phg runvm` ≡ transpiled PHP under a real `php` (floor
