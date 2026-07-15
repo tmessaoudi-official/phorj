@@ -238,7 +238,7 @@ function renderDiagnostics(check) {
 
 // Append a backend (interpreter/VM) rejection to the diagnostics pane when the checker was clean —
 // otherwise a lowering rejection (not a checker diagnostic) leaves the tab empty under a "does not
-// compile" badge. A VM-only rejection is additionally flagged as a likely run≠runvm Phorj bug.
+// compile" badge. A VM-only rejection is additionally flagged as a likely interpreter≠VM Phorj bug.
 function surfaceBackendRejection(check, run, vm) {
   const checkClean = !(check && check.parseError) && !((check && check.diagnostics) || []).length;
   if (!checkClean) return;
@@ -250,7 +250,7 @@ function surfaceBackendRejection(check, run, vm) {
   d.className = "diag";
   const sev = document.createElement("span");
   sev.className = "sev-error";
-  sev.textContent = vm.error && !run.error ? "backend rejection (run≠runvm — likely a Phorj bug)" : "backend rejection";
+  sev.textContent = vm.error && !run.error ? "backend rejection (interpreter≠VM — likely a Phorj bug)" : "backend rejection";
   const loc = document.createElement("span");
   loc.className = "loc";
   loc.textContent = " " + msg;
@@ -300,24 +300,24 @@ function flashBadge(kind, text) {
 
 function renderBadge(run, vm, phpOut, phpErr, phpEnabled) {
   // A backend that REJECTS (front-end / lowering error) while the other does not — or both rejecting
-  // with different messages — is a run≠runvm divergence, a real Phorj bug. Checked BEFORE the
+  // with different messages — is an interpreter≠VM divergence, a real Phorj bug. Checked BEFORE the
   // generic "does not compile" so a VM-only lowering rejection isn't mislabelled. The error text is
-  // in the run / runvm panes (a VM-only rejection is NOT a checker diagnostic, so it won't be in the
+  // in the interpreter / VM panes (a VM-only rejection is NOT a checker diagnostic, so it won't be in the
   // diagnostics tab — that mismatch was the reported bug).
   const runRej = !!run.error;
   const vmRej = !!vm.error;
   if (runRej !== vmRej || (runRej && vmRej && run.error !== vm.error)) {
-    flashBadge("err", "❌ run ≠ runvm — one backend rejects, the other doesn't (a Phorj bug!) — see the run/runvm panes");
+    flashBadge("err", "❌ interpreter ≠ VM — one backend rejects, the other doesn't (a Phorj bug!) — see the interpreter/VM panes");
     return;
   }
   // Both backends reject identically — a genuine front-end / lowering rejection.
   if (runRej && vmRej) {
-    flashBadge("err", "✗ Does not compile — see the run / runvm panes (and diagnostics)");
+    flashBadge("err", "✗ Does not compile — see the interpreter / VM panes (and diagnostics)");
     return;
   }
   const rustAgree = run.ok && vm.ok && run.stdout === vm.stdout;
   if (run.ok !== vm.ok || (run.ok && vm.ok && run.stdout !== vm.stdout)) {
-    flashBadge("err", "❌ run ≠ runvm — interpreter/VM divergence (a Phorj bug!)");
+    flashBadge("err", "❌ interpreter ≠ VM — backend divergence (a Phorj bug!)");
     return;
   }
   if (run.fault && vm.fault) {
@@ -326,18 +326,18 @@ function renderBadge(run, vm, phpOut, phpErr, phpEnabled) {
     return;
   }
   if (!phpEnabled) {
-    flashBadge("ok", rustAgree ? "✓ run ≡ runvm (PHP execution off)." : "✓ ran.");
+    flashBadge("ok", rustAgree ? "✓ interpreter ≡ VM (PHP execution off)." : "✓ ran.");
     return;
   }
   if (phpErr) {
-    flashBadge("warn", "✓ run ≡ runvm — PHP could not be executed: " + phpErr);
+    flashBadge("warn", "✓ interpreter ≡ VM — PHP could not be executed: " + phpErr);
     return;
   }
   if (phpOut === null) {
-    flashBadge("ok", "✓ run ≡ runvm.");
+    flashBadge("ok", "✓ interpreter ≡ VM ≡ PHP.");
     return;
   }
-  if (phpOut === run.stdout) flashBadge("ok", "✅ All 3 backends agree (run ≡ runvm ≡ PHP).");
+  if (phpOut === run.stdout) flashBadge("ok", "✅ All 3 backends agree (interpreter ≡ VM ≡ PHP).");
   else flashBadge("warn", "⚠ Rust backends agree, but transpiled PHP differs.");
 }
 
