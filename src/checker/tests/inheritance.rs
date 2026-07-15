@@ -99,6 +99,107 @@ fn override_same_parameter_type_is_ok() {
     assert!(errs.is_empty(), "expected clean, got {errs:?}");
 }
 
+// ── DEC-251(c): visibility through intersection-typed receivers ──
+// A private field/method resolved through an `I & C` receiver bypassed visibility (the intersection
+// member-access arms returned the member without enforcing it — unsound + PHP-divergent).
+
+#[test]
+fn intersection_receiver_does_not_bypass_private_field() {
+    let errs = errors_of(
+        "interface Labeled { function label() -> string; } \
+             open class Widget implements Labeled { \
+                 constructor(private int secret) {} \
+                 function label() -> string { return \"w\"; } } \
+             function peek(Labeled & Widget x) -> int { return x.secret; }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-FIELD-VISIBILITY")),
+        "private field through an intersection receiver must be rejected, got {errs:?}"
+    );
+}
+
+#[test]
+fn intersection_receiver_does_not_bypass_private_method() {
+    let errs = errors_of(
+        "interface Labeled { function label() -> string; } \
+             open class Widget implements Labeled { \
+                 private function hidden() -> int { return 7; } \
+                 function label() -> string { return \"w\"; } } \
+             function peek(Labeled & Widget x) -> int { return x.hidden(); }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-METHOD-VISIBILITY")),
+        "private method through an intersection receiver must be rejected, got {errs:?}"
+    );
+}
+
+#[test]
+fn implementing_a_public_interface_method_as_private_errors() {
+    // DEC-251(c) root cause: reducing an interface method's (public) visibility is a PHP-fatal and
+    // was the enabler for the intersection-receiver bypass — reject it at conformance.
+    let errs = errors_of(
+        "interface Aa { function m() -> int; } \
+             open class Zz implements Aa { private function m() -> int { return 7; } }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-IFACE-VIS")),
+        "a private implementation of a public interface method must be rejected, got {errs:?}"
+    );
+}
+
+#[test]
+fn intersection_receiver_enforces_private_class_method_even_when_an_interface_shadows_the_name() {
+    // Sort-order robustness (round-2): `intersection_of` sorts members by name, so the interface
+    // `Aa` (< `Zz`) is resolved first. The class `Zz` does NOT implement `Aa` (so no E-IFACE-VIS at
+    // declaration), yet both declare `m` — the access must enforce the CLASS member's private
+    // visibility regardless of resolution order (the first-found-only bug would let this through).
+    let errs = errors_of(
+        "interface Aa { function m() -> int; } \
+             open class Zz { private function m() -> int { return 7; } \
+                 function other() -> int { return 1; } } \
+             function peek(Aa & Zz x) -> int { return x.m(); }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-METHOD-VISIBILITY")),
+        "a private class method must be enforced through an intersection even when an interface \
+         shadows the name, got {errs:?}"
+    );
+}
+
+#[test]
+fn implementing_interface_via_a_public_overload_beside_a_private_one_is_ok() {
+    // Round-2 over-rejection guard: E-IFACE-VIS must key on the overload that CONFORMS, not the
+    // first-declared. A private no-arg `m()` beside the public `m(int)` that satisfies `I.m(int)`
+    // must NOT be rejected (the interface is satisfied by the public overload).
+    let errs = errors_of(
+        "interface I { function m(int x) -> int; } \
+             class C implements I { \
+                 private function m() -> int { return 0; } \
+                 function m(int x) -> int { return x; } }",
+    );
+    assert!(
+        !errs.iter().any(|e| e.code == Some("E-IFACE-VIS")),
+        "a conforming public overload beside a private one must not trip E-IFACE-VIS, got {errs:?}"
+    );
+}
+
+#[test]
+fn intersection_receiver_allows_public_members() {
+    // The fix must not over-reject: public members through an intersection stay accessible.
+    let errs = errors_of(
+        "interface Labeled { function label() -> string; } \
+             open class Widget implements Labeled { \
+                 constructor(public int shown) {} \
+                 function label() -> string { return \"w\"; } } \
+             function peek(Labeled & Widget x) -> int { return x.shown; } \
+             function name(Labeled & Widget x) -> string { return x.label(); }",
+    );
+    assert!(
+        errs.is_empty(),
+        "public members must stay accessible, got {errs:?}"
+    );
+}
+
 #[test]
 fn extending_an_unknown_name_errors() {
     let errs = errors_of("class Dog extends Bogus {}");

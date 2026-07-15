@@ -13,6 +13,21 @@ Phorj is pre-1.0. This page lists current limitations and known rough edges. Mos
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
 parse error, non-zero exit) — never a crash.
 
+## F-032 — overloaded interface-method visibility not checked at declaration (FLAGGED 2026-07-16, DEC-251(c) build)
+
+`E-IFACE-VIS` (DEC-251(c) — a class implementing a public interface method as private/protected is
+rejected) fires only when the class provides a **single overload** of the method. `method_vis` records
+only the first-declared overload's modifiers, so on an overload SET the checker cannot identify *which*
+overload satisfies the interface; checking the first would false-reject valid code (a `private m()`
+beside a conforming `public m(int)`). The overloaded case is therefore deferred at DECLARATION time.
+**Residual divergence (rare):** a class implementing a public interface method via a private-conforming
+overload, accessed through a plain `I`-typed receiver (`I x = new C(); x.m(...)`), is accepted and
+dispatches to the private method on run/runvm, whereas transpiled PHP fatals at the class declaration —
+a run≡runvm-vs-PHP break in this narrow shape. NOT a soundness/security hole (the single-overload common
+case — the actual intersection-bypass enabler — is fully closed; intersection access-site enforcement
+covers the `I & C` path). Full fix = track per-overload visibility so the conforming overload's
+visibility is the one enforced. Low priority (overloaded + interface + reduced-visibility is rare).
+
 ## F-029 — namespaced (multi-package) transpile byte-identity gaps (FLAGGED 2026-07-16, DEC-263 build; PRE-EXISTING, not introduced by DEC-263)
 
 Surfaced while building DEC-263: two distinct **transpile-leg-only** divergences that break the

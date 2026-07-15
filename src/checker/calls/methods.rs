@@ -253,6 +253,29 @@ impl Checker {
                 }
                 match found {
                     Some(applied) => {
+                        // DEC-251(c): an intersection receiver must NOT bypass method visibility.
+                        // Enforce on the lone CLASS member that declares `name` (≤1 by
+                        // E-INTERSECT-MULTI-CLASS), INDEPENDENT of which member the signature resolved
+                        // from — members are sorted by name (`intersection_of`), so an interface
+                        // declaring the same name could otherwise be found first and skip enforcement
+                        // (interfaces have no `method_vis` ⇒ public). This closes that name-order bypass:
+                        // `x.privateMethod()` on an `I & C`-typed `x` is rejected as the `Ty::Named` path would.
+                        for m in &members {
+                            if let Ty::Named(mn, _) = m {
+                                if self
+                                    .classes
+                                    .get(mn)
+                                    .is_some_and(|i| i.methods.contains_key(name))
+                                {
+                                    let v = self
+                                        .classes
+                                        .get(mn)
+                                        .and_then(|i| i.method_vis.get(name).cloned());
+                                    self.enforce_member_vis(v, name, span, false);
+                                    break;
+                                }
+                            }
+                        }
                         self.check_method_sigs(name, &applied, &found_tps, args, tf, span)
                     }
                     None => {
@@ -522,7 +545,7 @@ impl Checker {
             Ty::Intersection(members) => {
                 // Only the lone class member can carry fields (interfaces have none, M-RT S5). Search
                 // for the field on the class member; none → E-INTERSECT-NO-MEMBER.
-                let mut found: Option<Ty> = None;
+                let mut found: Option<(Ty, String)> = None;
                 for m in &members {
                     if let Ty::Named(mn, margs) = m {
                         if let Some(t) = self
@@ -530,13 +553,24 @@ impl Checker {
                             .get(mn)
                             .and_then(|info| info.fields.get(name).cloned())
                         {
-                            found = Some(apply_subst(&t, &self.class_subst(mn, margs)));
+                            found =
+                                Some((apply_subst(&t, &self.class_subst(mn, margs)), mn.clone()));
                             break;
                         }
                     }
                 }
                 match found {
-                    Some(t) => t,
+                    Some((t, owner)) => {
+                        // DEC-251(c): an intersection receiver must NOT bypass field visibility —
+                        // enforce private/protected on the owning class, exactly as the `Ty::Named`
+                        // path above (else `x.privateField` on an `I & C`-typed `x` slips through).
+                        let v = self
+                            .classes
+                            .get(&owner)
+                            .and_then(|i| i.field_vis.get(name).cloned());
+                        self.enforce_member_vis(v, name, span, true);
+                        t
+                    }
                     None => self.err_coded(
                         span,
                         format!(

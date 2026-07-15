@@ -432,6 +432,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              exactly (no variance this slice). Align the class method's signature with the interface\n\
              declaration.\n"
         }
+        "E-IFACE-VIS" => {
+            "E-IFACE-VIS — a class implements an interface method with reduced visibility.\n\n\
+             Interface methods are public, so an implementing method must be public too — declaring it\n\
+             `private` or `protected` REDUCES the method's visibility, which PHP fatals on at class\n\
+             declaration and which would otherwise let the method be reached (and its visibility\n\
+             bypassed) through an intersection-typed receiver (DEC-251). Make the implementing method\n\
+             public.\n"
+        }
         "E-IFACE-CYCLE" => {
             "E-IFACE-CYCLE — interfaces form an `extends` cycle.\n\n\
              `interface A extends B` while `B extends A` (directly or transitively) has no well-founded\n\

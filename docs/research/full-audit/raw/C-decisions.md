@@ -1712,3 +1712,25 @@ Certification: self-review + full-corpus gate + it is the exact structural twin 
 panel-clean return-covariance check (lighter than a 2-lens panel — disclosed; the DEC-268 panel runs on
 the DEC-251 whole when slices (b) private/protected-static external-read + (c) intersection-receiver
 visibility land). **REMAINING: DEC-251 (b) + (c)** — see the register row.
+
+## DEC-251 — COMPLETE (2026-07-16, Tier-1): all three PHP-enforcement-ahead checks
+
+- (a) SHIPPED `66594aba` — override parameter contravariance (E-OVERRIDE-SIG param twin).
+- (b) ALREADY-DONE — private/protected STATIC external-read is enforced by the shipped W0-2 slice
+  (`src/checker/calls/methods.rs` static-read → `enforce_member_vis`; probed: `C.secret` on a private
+  static → E-FIELD-VISIBILITY). The audit flag was stale. No code needed.
+- (c) SHIPPED (this commit) — visibility through INTERSECTION-typed receivers. Two `Ty::Intersection`
+  member-access arms (`src/checker/calls/methods.rs`) returned the member without `enforce_member_vis`,
+  so a private field/method on the class component of an `I & C` receiver was readable/callable from
+  outside `C` (unsound + PHP-divergent). Fix: field arm enforces `field_vis` on the owning class; method
+  arm enforces `method_vis` on the lone CLASS member (E-INTERSECT-MULTI-CLASS ⇒ ≤1), independent of the
+  alphabetical member sort (`intersection_of`) — so an interface shadowing the name can't skip it.
+  ROOT CAUSE also fixed: interface conformance now rejects a class implementing a public interface
+  method as private/protected (`E-IFACE-VIS`, single-overload — see F-032 for the overloaded deferral),
+  the PHP-fatal that enabled the bypass. `phg explain E-IFACE-VIS` added. Tests: intersection field/
+  method/public + sort-order-shadow + overload-not-false-rejected + private-impl-rejected
+  (src/checker/tests/inheritance.rs). Gate: 2215 tests --all-features + oracle, clippy (both), fmt.
+  DEC-268 panel: R1 found the sort-order first-found bug + the conformance root cause (both P1) → fixed;
+  R2 found two over-rejection P2s (overload false-positive + a test gap) → fixed; R3 CLEAN (residual
+  overloaded-declaration-time deferral flagged F-032, panel-rated non-blocking). Byte-identity strictly
+  improves. **DEC-251 whole is now COMPLETE.**

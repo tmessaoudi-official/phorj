@@ -623,6 +623,49 @@ impl Checker {
                                         Some("the parameter types and return type must match the interface".into()),
                                     );
                                 }
+                                // DEC-251(c) root cause: an interface method is public, so implementing
+                                // it as `private`/`protected` REDUCES visibility — PHP fatals on this,
+                                // and it is what let a private method slip through an intersection-typed
+                                // receiver (the resolver could find the public interface member first).
+                                // Rejecting it here closes the hole at its source.
+                                //
+                                // SCOPE: only when the class provides a SINGLE overload of `mname`.
+                                // `method_vis` records just the first-declared overload's modifiers, so
+                                // on an overload SET (e.g. a `private m()` beside a `public m(int)` that
+                                // is the one satisfying the interface) it can't tell which overload
+                                // conforms — checking the first would false-reject valid code. The
+                                // overloaded case is a documented deferral; the intersection access-site
+                                // enforcement (methods.rs) remains the backstop against an actual bypass.
+                                let overloads = self
+                                    .classes
+                                    .get(&c.name)
+                                    .and_then(|ci| ci.methods.get(mname))
+                                    .map_or(0, Vec::len);
+                                let impl_vis = self
+                                    .classes
+                                    .get(&c.name)
+                                    .and_then(|ci| ci.method_vis.get(mname).map(|(v, _)| *v));
+                                if overloads == 1
+                                    && matches!(
+                                        impl_vis,
+                                        Some(MemberVis::Private) | Some(MemberVis::Protected)
+                                    )
+                                {
+                                    let kind = if impl_vis == Some(MemberVis::Private) {
+                                        "private"
+                                    } else {
+                                        "protected"
+                                    };
+                                    self.err_coded(
+                                        c.span,
+                                        format!(
+                                            "class `{}` implements interface `{iface}`'s method `{mname}` as {kind}, but an interface method is public — reducing its visibility is not allowed",
+                                            c.name
+                                        ),
+                                        "E-IFACE-VIS",
+                                        Some(format!("make `{mname}` public on `{}`", c.name)),
+                                    );
+                                }
                             }
                         }
                     }
