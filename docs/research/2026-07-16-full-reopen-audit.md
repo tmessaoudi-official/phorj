@@ -421,7 +421,54 @@ statement-only correction removes the hazard the lint targeted.
 
 ## D2 — KNOWN_ISSUES reopen
 
-<!-- one verdict line per issue row -->
+> Every section re-verdicted. The file's discipline is exemplary — everything disclosed with
+> reasons — but it carries HEAVY staleness: 17 entries superseded by later shipped work. Verdicts:
+> the overwhelming majority of deferrals are **JUSTIFIED** (clean rejection + recorded reason +
+> tracked follow-up — the exact pattern the mandate demands); listed below are only the STALE rows,
+> the new FLAGS, and notable justified-divergence confirmations.
+
+### Stale rows (all → D6 doc-fix batch)
+
+1. Db hydration "contextual inference, NOT turbofish" → turbofish shipped (fable spine 1) and WINS over annotation.
+2. transaction-retry "PENDING… developer to confirm" → ruled DEC-249 (method defaults; `transactionRetry` retires).
+3. Reserved top-level names "OPEN, deferred (DEC-200)" → DEC-202 shipped the builtin-class guard.
+4. `Output.capture` "a lambda cannot declare throws" (twice) → DEC-222 shipped throwing lambdas — the disclosure's premise changed; the ob_start-dangling divergence is now reachable via lambdas too (quarantine stance unchanged, text must update).
+5. "MySQL/MariaDB (slice J) is not built" → DEC-229 shipped it.
+6. Default params "free functions only; ctor = E-DEFAULT-PARAM-CONTEXT" → DEC-236 (ctors) + DEC-249 (methods ruled).
+7. "No cycle collector… lands only if a need appears" → DEC-205 ruled the phased collector.
+8. "No empty Map/Set literal" (dogfood + Maps sections) + "safe has/get awaits generics" + "Set itself still pending" → DEC-214 `new Map<K,V>()`; Map.get/getOrDefault/has and Core.Set shipped.
+9. Error model 2b "a lambda cannot declare throws yet" + "method `throws` not discharged at call site" → DEC-222 + method-throws discharge shipped (the whole Db surface runs on it).
+10. "core.list map/filter/reduce not yet available" + "Still pending on this path: the higher-order …" → shipped (S7b-3).
+11. "No bounds" (generics ×2) → DEC-211 shipped `<T: Interface>`.
+12. Interop internal contradiction: §M8.5-deferrals says ".d.phg + foreign-exception catch NOT yet implemented" while §Interop-header says "S3 ships" — the older text is the stale one.
+13. Router contradiction: "Attributes are free-function-only" vs the adjacent "#[Route] on static methods works".
+14. Intersection corners "no overloading YET… revisited after" → overloading shipped; revisit ruled DEC-245.
+15. Bare-`DateTime`-not-gated entry "adjudicate before the DB/HTTP waves" → ruled DEC-206; and DEC-247 now builds the real DateTime.
+16. Core.Time "UTC-only, no timezones (would break byte-identity)" → superseded-in-part by DEC-247 (timezones ruled IN); **build-note: the DateTime spec must pin a bundled tzdb version** (webpki-roots precedent) so the PHP twin and natives agree deterministically.
+17. Fable-triage section: DEC-231's queued error-namespace ruling → ruled DEC-234 at the desk (entry can note it).
+
+### New flags (checkpoint triage)
+
+- **F-013 (MED)** — nullable unions inexpressible: `(A|B)?` and `A | B | null` are both rejected while **PHP expresses `A|B|null` natively**. A PHP-can/phorj-can't type shape.
+- **F-014 (HIGH)** — the PHP-enforcement-ahead class (latent transpile-fatal, same shape the return-covariance fix killed): (a) override **parameter** compatibility unchecked; (b) `private`/`protected` **static field** external read unenforced; (c) member access through an **intersection-typed** receiver unenforced. In each, phorj compiles what PHP fatals on → the PHP leg can fatal where run/runvm succeed.
+- **F-015 (HIGH UX)** — LSP diagnostics run the RAW checker (no prelude injection, no intrinsic-import resolution): every injected-type program shows spurious squiggles in editors while the CLI is clean. The editor lies about the flagship types (Option/Result/Json/Router/Db…).
+- **F-016 (MED, design)** — no by-ref/`inout` params: PHP's `quicksort(array &$arr)` class of in-place cross-call mutation is inexpressible (the one benchforge port blocker). Needs an explicit ruling: reject-with-reason (functional idiom + shared-mutable instances cover it) or build `inout`.
+- **F-017 (MED, correctness-audit)** — the fault-parity **exit-status sweep was never executed**: the recorded "REAL hazard" (a phorj-faulting native lowering to a PHP builtin that RETURNS instead of throwing → PHP silently succeeds) has an audit recipe written down and not run.
+- **F-018 (MED)** — W4-4 Unicode: `String.length` is BYTE length (= PHP `strlen`, not the ruled codepoints-default), `upper/lowerCase` + `equalsIgnoreCase` are ASCII-fold only; ruled direction exists, unbuilt, unscheduled.
+- **F-019 (MED, design)** — Iterator protocol: `DbStream`/`RowStream` cannot be looped (`foreach` over a stream needs the protocol DEC-228 queued); shape adjudication owed (now in DEC-248's foreach world).
+- **F-020 (LOW, design)** — Db column-naming strategy (snake_case DB ↔ camelCase phorj) slice B2 awaits its surface ruling.
+- Plus carried process items: I/O-native perf-gate carve-out confirmation · cargo-fuzz dep admission (parser/lift unwrap audit) · `var/phorj-app/` keep-or-delete · prelude-parse-failure loud assert (queued as a no-design P1 build item) · live legs (Mailpit/MySQL round-trips, developer-run) · serve keep-alive absence → D5 lever list.
+
+### Notable JUSTIFIED confirmations (spot record)
+
+`finally` cannot return a value (PHP allows it — known footgun, removed with reason) · panics
+uncatchable (bugs ≠ recoverable) · strict `string as bool` (never PHP truthiness) · `List.sum`
+faults on overflow (PHP silently widens to float) · no LSB `static::` (explicit override pattern,
+recorded) · sealed whole-program model · regex non-regular subset rejected (ReDoS immunity) ·
+Secret non-printable by type (stronger than PHP's `#[\SensitiveParameter]`) · float div-by-zero
+faults (no IEEE inf leak) · `new` on package-Main fns colliding with PHP builtins documented ·
+fmt guarantees meaning-preservation with tracked cosmetic gaps · parked-perf section is honest
+(ceiling spike refuted its own red flag; loss baselines recorded, not hidden).
 
 ## D3 — Architecture
 
