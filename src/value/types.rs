@@ -213,7 +213,28 @@ pub struct Instance {
     pub fields: RefCell<Vec<Option<Value>>>,
 }
 
+/// The class name of the injected `Core.Secret` opaque wrapper (`docs/specs` Fork B). Single-sourced
+/// here so every value-render surface (`Debug.dump`, the fault-frame `inspect` dump, the debugger REPL,
+/// the transpiled PHP twin) recognizes a secret identically — DEC-263. The DRY divergence that let
+/// `Debug.dump` leak a secret's plaintext (`src/native/debug.rs` had a *separate* renderer that missed
+/// the redaction `src/inspect.rs` already had) is closed by routing all of them through [`Instance::is_secret`].
+pub const SECRET_CLASS: &str = "Secret";
+
+/// The universal redaction sentinel a `Secret<T>` renders as on EVERY surface (DEC-263). Never the
+/// wrapped value — `.expose()` is the sole read path. Byte-identical to the string the transpiled PHP
+/// twin emits, so a dumped secret agrees across `run`/`runvm`/PHP.
+pub const SECRET_REDACTED: &str = "Secret(<redacted>)";
+
 impl Instance {
+    /// True when this instance is the injected `Core.Secret` wrapper — the single redaction predicate
+    /// shared by every render surface (DEC-263). Over-redaction is security-safe: a user's own class
+    /// named `Secret` would also redact (never leak), whereas a missed real secret is the vulnerability.
+    /// A future `#[Redacted]` attribute could generalize this to any opt-in type (recorded REOPENABLE
+    /// in DEC-263); today the security primitive is the sole redacted type.
+    pub fn is_secret(&self) -> bool {
+        self.class.as_ref() == SECRET_CLASS
+    }
+
     /// Allocate an instance of `class` with every slot unset (`None`).
     pub fn new(class: Rc<str>, layout: Rc<ClassLayout>) -> Self {
         let n = layout.len();

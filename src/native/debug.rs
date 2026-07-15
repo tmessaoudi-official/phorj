@@ -74,6 +74,12 @@ fn render(v: &Value, indent: usize, seen: &mut Vec<usize>) -> String {
             wrap_container("Set {", "}", &parts, indent)
         }
         Value::Instance(inst) => {
+            // DEC-263: a `Secret<T>` NEVER reveals its wrapped value on any render surface — redact
+            // before descending into fields (the leak this fixes: this renderer used to walk the
+            // `value` field like any other instance). Shared predicate with `inspect`/the PHP twin.
+            if inst.is_secret() {
+                return crate::value::SECRET_REDACTED.into();
+            }
             let addr = std::rc::Rc::as_ptr(inst) as usize;
             if seen.contains(&addr) {
                 return "*RECURSION*".into();

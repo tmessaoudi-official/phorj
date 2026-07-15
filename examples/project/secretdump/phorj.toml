@@ -1,0 +1,2 @@
+module = "acme/secretdump"
+source = "src"

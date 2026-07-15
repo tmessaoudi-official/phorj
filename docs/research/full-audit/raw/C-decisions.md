@@ -1585,3 +1585,23 @@ mandatory-extension tier instead); rewriting extensions in .phg (kills perf); re
 namespace (unnecessary churn). Certification: DEC-268 panel hardened the extension-POLICY brief (2 rounds,
 3 lenses); this architecture ruling is the developer's own via AskUserQuestion — recorded verbatim,
 self-graded 6C disclosed (advisor unavailable; the migration BUILD gets the full panel).*
+
+## DEC-263 — SHIPPED (2026-07-16, Tier-1 build): universal Secret redaction
+
+Root cause of the F-025 leak: `src/native/debug.rs` had a SEPARATE value renderer that diverged from
+`src/inspect.rs` (which already redacted) — a DRY violation. Fix single-sources the predicate:
+`Instance::is_secret()` + `SECRET_CLASS`/`SECRET_REDACTED` consts in `src/value/types.rs`, shared by
+`debug.rs` (Debug.dump/dd — the leak), `inspect.rs` (faults/REPL/DAP — already safe, now routed through
+it), and the transpiled-PHP twin `__phorj_debug_render`. A Secret renders `Secret(<redacted>)` on ALL
+surfaces, directly AND transitively, byte-identical across run/runvm/PHP. `as_display` returns None for
+instances so interpolation/print/toString already refuse them (no change). `.expose()` + W-SECRET intact.
+Coverage: unit test `secret_is_redacted_never_walks_its_value_field` (direct + transitive) + example
+`examples/guide/secret.phg` (single-package) + `examples/project/secretdump/` (multi-package/namespaced
+regression, gated on all 3 backends). Gate green: 2159 tests w/ PHORJ_REQUIRE_PHP=1, clippy both configs,
+fmt. Certified by the DEC-268 panel (2 rounds, 3 lenses): round 1 found the namespaced-PHP miss (`get_class`
+= `Main\Secret`, fixed by trailing-`\Secret` match) + literal-duplication (fixed) + the pre-existing
+F-029 family (flagged, scoped out); round 2 security-CLEAN, its lone code finding (gate-ineffective) was
+empirically disproven (revert test: reverted twin prints `Main\Secret {}` → differential fails as intended).
+**Spawned F-029** (KNOWN_ISSUES): two PRE-EXISTING namespaced-transpile byte-identity bugs (injected types
+mis-namespaced as cross-package field types → PHP TypeError; Debug.dump bare-name divergence for
+Main-package classes/enums) — each its own future slice.

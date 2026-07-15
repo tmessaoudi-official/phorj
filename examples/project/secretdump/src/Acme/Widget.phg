@@ -1,0 +1,11 @@
+package Acme;
+
+// A plain cross-package type (no injected-type fields). Its mangled name `Acme\Widget` flips the
+// transpiler into namespaced emission — the mode where the injected `Secret` lands under
+// `namespace Main` so `get_class` returns `Main\Secret`. Used (not dumped) purely to force that mode.
+class Widget {
+    constructor(public int size) {}
+    function bumped(): int {
+        return this.size + 1;
+    }
+}

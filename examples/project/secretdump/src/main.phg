@@ -1,0 +1,25 @@
+package Main;
+
+// DEC-263 multi-package regression: in namespaced emission a dumped Secret must render
+// `Secret(<redacted>)` byte-identically across run / runvm / transpiled-PHP. `get_class` returns
+// `Main\Secret` here, so the PHP debug twin must match the trailing `\Secret` segment, not a bare
+// `Secret`. The `Acme.Widget` import forces namespaced mode; the Secret is built + dumped in Main
+// (a Secret-typed field in a NON-Main package hits a separate, pre-existing injected-type
+// namespacing bug — tracked in KNOWN_ISSUES F-029 — so it is deliberately kept out of this regression).
+import Core.Output;
+import Core.Secret;
+import Core.Debug;
+import Core.Debug.Debug;
+import Acme.Widget;
+
+function main(): void {
+    Widget w = new Widget(41);
+    Output.printLine("widget: {w.bumped()}");
+    // Direct Secret dump under namespaced emission — the DEC-263 path this project gates.
+    // `Debug.dump` PRINTS the rendering to stdout as its side effect (DEC-238) — `discard` drops only
+    // the returned `Dumped<T>` — so the redacted `Secret(<redacted>)` lands on stdout and the
+    // differential/conformance harness compares it across all three backends. (Reverting the twin's
+    // namespaced-match fix makes the PHP leg print `Main\Secret {}` here → the gate fails, as intended.)
+    discard Debug.dump(new Secret("api-token-xyz"));
+    Output.printLine("done");
+}

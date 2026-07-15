@@ -19,9 +19,6 @@
 
 use crate::value::{fmt_decimal, HKey, Value};
 
-/// The injected opaque-wrapper class whose contents are redacted (see `cli::SECRET_PRELUDE`).
-const SECRET_CLASS: &str = "Secret";
-
 /// Truncation bounds for [`render`]. Defaults are generous enough for a readable post-mortem yet
 /// bounded so no single value floods the terminal.
 #[derive(Debug, Clone, Copy)]
@@ -83,9 +80,9 @@ fn render_into(value: &Value, caps: &RenderCaps, depth: usize, out: &mut String)
             });
         }
         Value::Instance(inst) => {
-            // Secret redaction — never descend into a secret's fields.
-            if inst.class.as_ref() == SECRET_CLASS {
-                out.push_str("Secret(<redacted>)");
+            // Secret redaction — never descend into a secret's fields (DEC-263, shared predicate).
+            if inst.is_secret() {
+                out.push_str(crate::value::SECRET_REDACTED);
                 return;
             }
             out.push_str(&inst.class);

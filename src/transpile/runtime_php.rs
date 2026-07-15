@@ -611,6 +611,16 @@ impl Transpiler {
             self.line("if (in_array($v, $seen, true)) { return '*RECURSION*'; }");
             self.line("$seen[] = $v;");
             self.line("$cls = get_class($v);");
+            // DEC-263: redact a `Secret<T>` before descending — byte-identical to the Rust surfaces'
+            // `Secret(<redacted>)`. The Rust side keys on the (always-bare) Phorj class name "Secret";
+            // on the PHP leg `get_class` returns the FQN, which is global `Secret` in single-package mode
+            // but `Main\Secret` under multi-package (namespaced) emission — so match the TRAILING segment
+            // (`\Secret`), like the `#[\SensitiveParameter]` attribute keys on the Phorj name. Over-redaction
+            // (any `Ns\Secret`) is security-safe; `MySecret` etc. do not match.
+            self.line(&format!(
+                "if ($cls === 'Secret' || substr($cls, -7) === '\\\\Secret') {{ return '{}'; }}",
+                crate::value::SECRET_REDACTED
+            ));
             self.line("$enums = __phorj_debug_enums();");
             self.line("if (isset($enums[$cls])) {");
             self.indent += 1;

@@ -48,6 +48,31 @@ fn instances_render_class_and_sorted_fields() {
 }
 
 #[test]
+fn secret_is_redacted_never_walks_its_value_field() {
+    // DEC-263: a `Secret<T>` NEVER reveals its wrapped value through `Debug.dump` — the leak this
+    // pins was that this renderer walked the private `value` field like any other instance.
+    let layout = ClassLayout::new(vec!["value".into()]);
+    let secret = Instance::new("Secret".into(), layout);
+    secret.set_field("value", Value::Str("s3cr3t-token".into()));
+    let out = r(&Value::Instance(Rc::new(secret)));
+    assert_eq!(out, "Secret(<redacted>)");
+    assert!(!out.contains("s3cr3t"), "plaintext leaked: {out}");
+
+    // Transitive: a secret nested inside another instance is redacted in place, host fields intact.
+    let host_layout = ClassLayout::new(vec!["apiKey".into(), "host".into()]);
+    let host = Instance::new("Config".into(), host_layout);
+    let inner_layout = ClassLayout::new(vec!["value".into()]);
+    let inner = Instance::new("Secret".into(), inner_layout);
+    inner.set_field("value", Value::Str("nested-secret".into()));
+    host.set_field("apiKey", Value::Instance(Rc::new(inner)));
+    host.set_field("host", Value::Str("api.example.com".into()));
+    let out = r(&Value::Instance(Rc::new(host)));
+    assert!(out.contains("apiKey: Secret(<redacted>)"), "{out}");
+    assert!(out.contains("host: \"api.example.com\""), "{out}");
+    assert!(!out.contains("nested-secret"), "transitive leak: {out}");
+}
+
+#[test]
 fn enums_render_qualified_with_payload() {
     let bare = Value::Enum(Rc::new(EnumVal {
         ty: "Color".into(),

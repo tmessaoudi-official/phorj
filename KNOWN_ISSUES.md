@@ -13,6 +13,43 @@ Phorj is pre-1.0. This page lists current limitations and known rough edges. Mos
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
 parse error, non-zero exit) — never a crash.
 
+## F-029 — namespaced (multi-package) transpile byte-identity gaps (FLAGGED 2026-07-16, DEC-263 build; PRE-EXISTING, not introduced by DEC-263)
+
+Surfaced while building DEC-263: two distinct **transpile-leg-only** divergences that break the
+`run ≡ runvm ≡ PHP` spine (Invariant 1) for **multi-package** programs (any file in a non-`Main`
+package — even a single-segment one like `Acme` — produces a `\`-bearing mangled name that flips
+`self.namespaced` on: `src/transpile/program_emit.rs:214`). Both are
+**latent/untested** — no multi-package example exercised an injected type or a `Debug.dump` until now
+(the new `examples/project/secretdump/` gates only the DEC-263 Secret path, which IS fixed). Neither
+is a plaintext/secret leak. Each deserves its own fresh-context slice.
+
+1. **Injected types mis-namespaced as field/param types in a non-`Main` package (correctness — PHP
+   TypeError).** An injected type (`Secret`, `Json`, `Option`, `Result`, …) referenced as a type
+   annotation inside package `Acme` transpiles to `Acme\<Type>` (namespace-relative), but the value is
+   the injected `Main\<Type>` — so PHP fatals: *"Argument must be of type `Acme\Vault\Secret`,
+   `Main\Secret` given."* The Rust legs are unaffected (injected types stay bare — `resolve_type_ref`
+   returns `None`, so `inst.class == "Secret"` everywhere). Root: injected types are emitted under
+   `namespace Main` and cross-package references aren't fully-qualified to it. Fix direction: emit
+   injected types in the GLOBAL namespace (leading `\`, like `foreign` items) and qualify all references
+   to them as `\<Type>`. Repro: a `Secret<string>` field on a class in a non-`Main` package + a
+   multi-package build.
+
+2. **`__phorj_debug_render` diverges for `Main`-package bare classes/enums in namespaced mode
+   (byte-identity).** The PHP twin uses `get_class($v)` (FQN) while the Rust renderer uses the bare
+   Phorj class name. In namespaced mode a `Main`-package class dumps as `Foo {}` (Rust) vs `Main\Foo {}`
+   (PHP); the twin's enum table `__phorj_debug_enums()` is keyed by BARE variant names, so a `Main`
+   enum's variant is missed on the PHP leg too. (Cross-package non-bare classes DO match — both carry
+   the FQN. DEC-263 fixed the `Secret` case specifically by matching the trailing `\Secret` segment.)
+   Fix direction: render the trailing segment of `get_class` (strip the namespace) uniformly in the
+   twin, and/or key the debug tables by FQN. Repro: `Debug.dump` a `Main`-package class or enum in any
+   multi-package program.
+
+   Sub-note (same family, from the DEC-263 fix): the DEC-263 twin now matches the trailing `\Secret`
+   segment, so a *user* class literally named `Secret` in a non-`Main` package (`Acme\Secret`) would be
+   redacted on the PHP leg but NOT on the Rust legs (bare-name mismatch) — a latent byte-identity
+   divergence. NOT a plaintext leak (a user `Secret` carries no `.expose()`-protected value); it dissolves
+   when bug #2's general fix (trailing-segment rendering) lands. Over-redaction stays the safe direction.
+
 ## Fable overnight run — morning triage (2026-07-15/16, AUTO-RULED under bounded autonomy; every entry REOPENABLE — full rulings + alternatives in `C-decisions.md` §"2026-07-15 fable overnight run")
 
 > The developer ruled (pre-sleep, 2026-07-15) that mid-run design questions are implemented on the
