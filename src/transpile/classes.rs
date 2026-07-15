@@ -17,6 +17,13 @@ impl Transpiler {
             // A variant whose name is a PHP-reserved class word (`Int`/`Bool`/`Null`/…) is mangled
             // (`Int_`); the construction + `instanceof` sites mangle identically via `variant_ref`.
             let vname = super::php_variant_name(&v.name);
+            // DEC-238: record `php-class → (enum, variant)` so `__phorj_debug_render` can render a
+            // transpiled enum value as `Ty.Variant(...)` (never the mangled class shape).
+            self.debug_enum_rows.push((
+                vname.clone(),
+                last_segment(&e.name).to_string(),
+                v.name.clone(),
+            ));
             self.line(&format!("final class {} extends {} {{", vname, base));
             self.indent += 1;
             if !v.fields.is_empty() {

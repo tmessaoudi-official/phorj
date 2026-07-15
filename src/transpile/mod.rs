@@ -365,6 +365,12 @@ struct Transpiler {
     /// fault, `%%`→`%`, any other directive / count mismatch → a fault, byte-for-byte the same as the
     /// interpreter and VM.
     uses_string_format: bool,
+    /// DEC-238: a `Core.DebugSys.render` call was emitted → emit the `__phorj_debug_render` twin
+    /// (+ the enum-variant table it needs to render transpiled enums as `Ty.Variant(...)`).
+    uses_debug_render: bool,
+    /// `(php variant class, phorj enum name, phorj variant name)` rows collected by `emit_enum`,
+    /// consumed by the `__PHORJ_DEBUG_ENUMS` table when `uses_debug_render`.
+    debug_enum_rows: Vec<(String, String, String)>,
     /// Set when `Math.lcm(int, int)` is emitted (M4) — defines `__phorj_lcm` (`x/gcd*y` over the
     /// magnitudes, inlining Euclid so it needs no `__phorj_gcd`). Mirrors the Rust `math_lcm` native.
     uses_math_lcm: bool,
@@ -522,6 +528,8 @@ impl Transpiler {
             uses_math_gcd: false,
             uses_math_clamp: false,
             uses_string_format: false,
+            uses_debug_render: false,
+            debug_enum_rows: Vec::new(),
             uses_math_lcm: false,
             uses_math_number_format: false,
             uses_rng: false,

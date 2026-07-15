@@ -133,6 +133,11 @@ impl Transpiler {
                         if nat.module == "Core.Output" && nat.name == "capture" {
                             self.uses_capture = true;
                         }
+                        if nat.module == "Core.DebugSys" && nat.name == "render" {
+                            self.uses_debug_render = true;
+                            // Scalars render through the interpolation kernel twin.
+                            self.uses_str = true;
+                        }
                         if nat.module == "Core.String" && nat.name == "format" {
                             self.uses_string_format = true;
                             // `__phorj_format`'s `%s` stringifies via `__phorj_str` (the same kernel

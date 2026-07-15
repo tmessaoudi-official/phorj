@@ -1,8 +1,8 @@
 //! `Core.Debug` (DEC-238) end-to-end fixture: dump's pass-through + capture + printing, dd's
 //! dump-and-exit, and `Runtime.exit`'s clean-termination semantics — on BOTH backends, including
 //! the exit CODE via the Batch-1-B channel (`cmd_treewalk_exit` / `cmd_run_exit`). The rendering
-//! format itself is pinned by the `src/native/debug.rs` unit tests; transpile is ladder-gated
-//! until the PHP twin renderer lands (next slice).
+//! format itself is pinned by the `src/native/debug.rs` unit tests AND, across all THREE backends,
+//! by `conformance/lang/dump.phg` (the PHP twin `__phorj_debug_render` renders byte-identically).
 
 use phorj::cli::{cmd_run, cmd_run_exit, cmd_transpile, cmd_treewalk, cmd_treewalk_exit};
 
@@ -93,20 +93,21 @@ function main(): void {
     both_exit(src, "done early\n", 0);
 }
 
-/// THE LADDER RULE (temporary form): `Core.Debug` transpile refuses until the PHP twin renderer
-/// lands (`E-TRANSPILE-DEBUG`).
+/// The gate is LIFTED: `Core.Debug` transpiles, emitting the `__phorj_debug_render` twin (+ the
+/// enum table). The three-backend BYTE-IDENTITY of the format is pinned by
+/// `conformance/lang/dump.phg` (interpreter + VM + real PHP against one golden).
 #[test]
-fn debug_transpile_is_gated_until_the_php_twin() {
+fn debug_transpiles_with_the_twin_renderer() {
     let src = r#"package Main;
 import Core.Output;
 import Core.Debug;
-function main(): void { Output.printLine("x"); }
+import Core.Debug.Debug;
+function main(): void { discard Debug.dump([1, 2]); }
 "#;
-    match cmd_transpile(src) {
-        Ok(php) => panic!("expected E-TRANSPILE-DEBUG, got PHP: {php:?}"),
-        Err(e) => {
-            assert!(e.contains("E-TRANSPILE-DEBUG"), "{e}");
-            assert!(!e.contains("E-UNKNOWN-IDENT"), "{e}");
-        }
-    }
+    let php = cmd_transpile(src).expect("Core.Debug transpiles now");
+    assert!(php.contains("__phorj_debug_render"), "twin missing:\n{php}");
+    assert!(
+        php.contains("__phorj_debug_enums"),
+        "enum table missing:\n{php}"
+    );
 }

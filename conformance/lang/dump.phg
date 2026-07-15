@@ -1,0 +1,31 @@
+// Conformance: `Core.Debug` dump (DEC-238) — the v1 rendering format is a THREE-BACKEND contract:
+// the interpreter, the VM, and the transpiled PHP (`__phorj_debug_render` + the enum-variant
+// table) must produce this golden byte-for-byte. Covers: scalar pass-through, deep instances
+// (sorted fields), nested containers (inline vs wrapped), qualified enum variants with payloads,
+// and the captured .text() round-trip.
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.Debug;
+import Core.Debug.Debug;
+
+enum Status { Active(int level), Dormant }
+
+class Wallet {
+    constructor(public string tier, public int cents) {}
+}
+
+class User {
+    constructor(public string name, public Status status, public List<string> tags, public Wallet wallet) {}
+}
+
+function main(): void {
+    int doubled = Debug.dump(21).value() * 2;
+    Output.printLine("doubled {doubled}");
+    User u = new User("Ada", new Status.Active(3), ["math", "engines"], new Wallet("gold", 1250));
+    string snap = Debug.dump(u).text();
+    Output.printLine("snap-len {String.length(snap)}");
+    discard Debug.dump(new Status.Dormant());
+    discard Debug.dump(["k" => [1, 2, 3]]);
+}

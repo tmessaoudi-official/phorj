@@ -2396,6 +2396,8 @@ fn all_example_projects_transpile_and_match_php() {
 const TIER1_PHP: &[&str] = &[
     // arrays / iterables
     "array_chunk",
+    // core since 8.1 (transpile floor is 8.5); used by the DEC-238 __phorj_debug_render twin.
+    "array_is_list",
     "array_column",
     "array_diff",
     "array_fill",
@@ -2478,6 +2480,8 @@ const TIER1_PHP: &[&str] = &[
     "strpos",
     "strrpos",
     "strtolower",
+    // core standard; the DEC-238 debug-quote escape table.
+    "strtr",
     "strtoupper",
     "substr",
     "substr_count",

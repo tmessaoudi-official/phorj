@@ -16,7 +16,7 @@ import Core.Debug;
 import Core.Debug.Debug;
 
 class Wallet {
-    constructor(public string tier, public decimal balance) {}
+    constructor(public string tier, public int cents) {}
 }
 
 class User {
@@ -24,7 +24,7 @@ class User {
 }
 
 function main(): void {
-    User u = new User("Ada", 36, ["math", "engines"], new Wallet("gold", 12.50d));
+    User u = new User("Ada", 36, ["math", "engines"], new Wallet("gold", 1250));
     // Pass-through: inspect a value MID-EXPRESSION without restructuring the code.
     int doubled = Debug.dump(u.age).value() * 2;
     Output.printLine("doubled: {doubled}");

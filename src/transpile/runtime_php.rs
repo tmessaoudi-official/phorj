@@ -543,6 +543,94 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_debug_render {
+            // DEC-238: the PHP TWIN of `native/debug.rs::render` — must mirror the pinned v1 format
+            // byte-for-byte on the DETECTABLE domain (null/bool/int/float/string/list/map/instance/
+            // enum/closure). ERASED-SHAPE DISCLOSURE (KNOWN_ISSUES): phorj Set/decimal/bytes erase to
+            // PHP array/string/string, so their dumps render as the erased shape on this leg — the
+            // differential catches any example that hits this (loudly), so no divergence can ship
+            // silently. Instance fields are ksort'ed (the ClassLayout sorted order); enum payload
+            // props keep declaration order (positional payloads).
+            // A FUNCTION (not a `const`): helpers are emitted after the `main();` call, and PHP
+            // hoists functions but executes `const` statements positionally — a const here would be
+            // undefined while `main` runs.
+            let rows: Vec<String> = self
+                .debug_enum_rows
+                .iter()
+                .map(|(cls, en, var)| format!("'{cls}' => ['{en}', '{var}']"))
+                .collect();
+            self.line(&format!(
+                "function __phorj_debug_enums() {{ return [{}]; }}",
+                rows.join(", ")
+            ));
+            self.line("function __phorj_debug_quote($s) {");
+            self.indent += 1;
+            self.line("return '\"' . strtr($s, [\"\\\\\" => '\\\\\\\\', '\"' => '\\\\\"', \"\\n\" => '\\\\n', \"\\r\" => '\\\\r', \"\\t\" => '\\\\t']) . '\"';");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorj_debug_wrap($open, $close, $parts, $indent) {");
+            self.indent += 1;
+            self.line("if (count($parts) === 0) { return $open . $close; }");
+            self.line("$spacey = substr($open, -1) === '{';");
+            self.line("$inline = $open . ($spacey ? ' ' : '') . implode(', ', $parts) . ($spacey ? ' ' : '') . $close;");
+            self.line("if (strlen($inline) <= 60 && strpos($inline, \"\\n\") === false) { return $inline; }");
+            self.line(
+                "$pad = str_repeat('    ', $indent + 1); $end = str_repeat('    ', $indent);",
+            );
+            self.line("$body = array_map(function ($p) use ($pad) { return $pad . $p; }, $parts);");
+            self.line(
+                "return $open . \"\\n\" . implode(\"\\n\", $body) . \"\\n\" . $end . $close;",
+            );
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorj_debug_render($v, $indent = 0, $seen = []) {");
+            self.indent += 1;
+            self.line("if ($v === null) { return 'null'; }");
+            self.line("if (is_bool($v)) { return $v ? 'true' : 'false'; }");
+            self.line("if (is_int($v) || is_float($v)) { return __phorj_str($v); }");
+            self.line("if (is_string($v)) { return __phorj_debug_quote($v); }");
+            self.line("if (is_array($v)) {");
+            self.indent += 1;
+            self.line("$parts = [];");
+            self.line("if (array_is_list($v)) {");
+            self.indent += 1;
+            self.line(
+                "foreach ($v as $e) { $parts[] = __phorj_debug_render($e, $indent + 1, $seen); }",
+            );
+            self.line("return __phorj_debug_wrap('[', ']', $parts, $indent);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("foreach ($v as $k => $e) { $parts[] = (is_string($k) ? __phorj_debug_quote($k) : (string) $k) . ' => ' . __phorj_debug_render($e, $indent + 1, $seen); }");
+            self.line("return __phorj_debug_wrap('{', '}', $parts, $indent);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("if ($v instanceof \\Closure) { return '<function>'; }");
+            self.line("if (is_object($v)) {");
+            self.indent += 1;
+
+            self.line("if (in_array($v, $seen, true)) { return '*RECURSION*'; }");
+            self.line("$seen[] = $v;");
+            self.line("$cls = get_class($v);");
+            self.line("$enums = __phorj_debug_enums();");
+            self.line("if (isset($enums[$cls])) {");
+            self.indent += 1;
+            self.line("[$en, $var] = $enums[$cls];");
+            self.line("$parts = [];");
+            self.line("foreach (get_object_vars($v) as $p) { $parts[] = __phorj_debug_render($p, $indent + 1, $seen); }");
+            self.line("return count($parts) === 0 ? ($en . '.' . $var) : ($en . '.' . $var . '(' . implode(', ', $parts) . ')');");
+            self.indent -= 1;
+            self.line("}");
+            self.line("$vars = get_object_vars($v); ksort($vars);");
+            self.line("$parts = [];");
+            self.line("foreach ($vars as $k => $p) { $parts[] = $k . ': ' . __phorj_debug_render($p, $indent + 1, $seen); }");
+            self.line("if (count($parts) === 0) { return $cls . ' {}'; }");
+            self.line("return __phorj_debug_wrap($cls . ' {', '}', $parts, $indent);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return '<' . gettype($v) . '>';");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_string_format {
             // `String.format` (W3-5/DEC-199) — PHP mirror of the strict `%`-sprintf renderer
             // `text_format`. Each directive's raw text is captured and DELEGATED to PHP's own `sprintf`

@@ -179,9 +179,10 @@ DEC-236 ctor default params IN · DEC-237 overnight batch RATIFIED (run-end full
 (TOP-20 #3 — secure-by-default cookies, fixation defense, worker-shared store; TOP-20 blockers #1
 #2 #3 #5 now ALL closed this run). Sugar-wave item 1 ✅ DEC-236 ctor defaults BUILT (SmtpConfig spec-form restored; conformance
 golden). Sugar/DX item 2 ✅ DEC-238 Core.Debug dump/dd + Runtime.exit BUILT (Dumped<T> ruling; totality
-knows qualified never-calls; PHP twin queued = the gate lift). NEXT: playground truth pass
-(developer request, task #10) → PHP twin __phorj_debug_render → pipe |> (DEC-235) →
-member-error namespacing (DEC-234) → Data-pillar
+knows qualified never-calls; PHP twin queued = the gate lift). Playground truth pass ✅ (interpreter/VM labels + JIT reality). PHP twin ✅ (__phorj_debug_render +
+enum table; gate LIFTED; conformance lang/dump.phg pins 3-backend byte-identity; erased-shape
+disclosure recorded). NEXT: pipe |> (DEC-235) → member-error namespacing (DEC-234) → M-Decomp
+backlog → JIT levers (fresh context) → Data-pillar
 Iterator protocol (for-in over DbStream) → M-Decomp backlog → JIT structural levers (FRESH
 context). SESS parity rows flip at the next §4 recompute. Morning triage list still pending
 developer review: KNOWN_ISSUES §"Fable overnight run — morning triage" (DEC-227…233). Spine 9 ✅ §4.8 recompute: parity

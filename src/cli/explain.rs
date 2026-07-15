@@ -1288,13 +1288,6 @@ pub fn explain_text(code: &str) -> Option<String> {
              a forbidden semantic downgrade (§14 LADDER). Run mail programs with `phg run`, or keep\n\
              the mail-sending part native and transpile only the rest of your program.\n"
         }
-        "E-TRANSPILE-DEBUG" => {
-            "E-TRANSPILE-DEBUG — a program importing `Core.Debug` cannot be transpiled to PHP yet.\n\n\
-             `Debug.dump`'s output is part of the byte-identity contract, so the transpiler needs the\n\
-             PHP twin renderer (`__phorj_debug_render`) that prints EXACTLY the phorj format — it\n\
-             lands in the next slice. Until then transpile refuses rather than emitting a program\n\
-             with an undefined helper (§14 LADDER). Run dump programs with `phg run`.\n"
-        }
         "E-TRANSPILE-SESSION" => {
             "E-TRANSPILE-SESSION — a program importing `Core.Session` cannot be transpiled to PHP yet.\n\n\
              `Core.Session`'s in-process store matches `phg serve`'s long-lived process model; PHP's\n\

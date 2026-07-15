@@ -1,0 +1,11 @@
+21
+doubled 42
+User {
+    name: "Ada"
+    status: Status.Active(3)
+    tags: ["math", "engines"]
+    wallet: Wallet { cents: 1250, tier: "gold" }
+}
+snap-len 132
+Status.Dormant
+{ "k" => [1, 2, 3] }

@@ -34,6 +34,14 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **DEC-238 · Core.Debug PHP twin SHIPPED — gate lifted, with the ERASED-SHAPE disclosure:** dump
+  output is three-backend byte-identical on the detectable domain (scalars/strings/lists/maps/
+  instances/enums/closures — conformance-pinned). DISCLOSED divergences on the PHP leg (types that
+  ERASE to indistinguishable PHP shapes): a dumped `Set` renders as its list shape; a dumped
+  `decimal`/`bytes` as its string shape; an int-like STRING map key (`"1"`) as an int key (PHP
+  array-key coercion). Any example hitting these fails the differential loudly — nothing ships
+  silently. Queued niceties: TTY-colorized rendering; `dd`/`exit` PHP semantics note (exit maps to
+  PHP exit($code) — finally blocks skipped on both, matching).
 - **DEC-233 · Core.Session SHIPPED** (TOP-20 #3; secure-by-default cookies; fixation defense;
   worker-shared store). QUEUED: (a) SessionStore contract + swappable backends (file/external —
   layered-openness v2); (b) cookie-attribute config (incl. `; Secure` auto-when-TLS); (c) the
