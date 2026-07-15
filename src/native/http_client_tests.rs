@@ -188,6 +188,144 @@ fn timeout_is_typed() {
     assert!(e.contains("<<Timeout>>"), "{e}");
 }
 
+// ── DEC-264: credential stripping on cross-origin redirects ────────────────────────────────────────
+
+#[test]
+fn same_origin_compares_scheme_host_port() {
+    let a = parse_url("http://h:80/a").unwrap();
+    assert!(same_origin(&a, &parse_url("http://h/b?q").unwrap())); // default port 80, path differs
+    assert!(same_origin(&a, &parse_url("http://H:80/x").unwrap())); // host case-insensitive
+    assert!(!same_origin(&a, &parse_url("http://h:81/a").unwrap())); // port differs
+    assert!(!same_origin(&a, &parse_url("http://other/a").unwrap())); // host differs
+    assert!(!same_origin(&a, &parse_url("https://h/a").unwrap())); // scheme differs (downgrade/upgrade)
+                                                                   // Scheme term isolated from the port term: SAME host AND SAME explicit port, only scheme differs
+                                                                   // (a plaintext https→http downgrade to the identical host:port) — must still be cross-origin so the
+                                                                   // credential strip fires. Without this, the default-port asymmetry (80 vs 443) would mask the bug.
+    assert!(!same_origin(
+        &parse_url("https://h:443/a").unwrap(),
+        &parse_url("http://h:443/a").unwrap()
+    ));
+}
+
+#[test]
+fn credential_headers_stripped_cross_origin_kept_same_origin() {
+    let hdrs = vec![
+        ("Authorization".to_string(), "Bearer sekret".to_string()),
+        ("Cookie".to_string(), "sid=abc".to_string()),
+        ("Proxy-Authorization".to_string(), "Basic zzz".to_string()),
+        ("WWW-Authenticate".to_string(), "Bearer".to_string()),
+        ("X-Trace".to_string(), "keep-me".to_string()),
+        ("Accept".to_string(), "application/json".to_string()),
+    ];
+    let a = parse_url("https://api.example.com/v1").unwrap();
+
+    // Same origin (only the path changes) — every header survives.
+    let same = headers_for_hop(&a, &parse_url("https://api.example.com/v2").unwrap(), &hdrs);
+    assert_eq!(same.len(), hdrs.len());
+
+    // Cross origin — the four credential headers drop, the non-sensitive ones stay.
+    let cross = headers_for_hop(&a, &parse_url("https://evil.example.net/x").unwrap(), &hdrs);
+    let names: Vec<&str> = cross.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["X-Trace", "Accept"],
+        "only non-credential headers survive"
+    );
+
+    // https→http downgrade (same host/port-family) also strips (scheme change = cross origin).
+    let down = headers_for_hop(&a, &parse_url("http://api.example.com/v1").unwrap(), &hdrs);
+    assert!(!down
+        .iter()
+        .any(|(n, _)| n.eq_ignore_ascii_case("authorization")));
+}
+
+#[test]
+fn run_request_strips_credentials_on_cross_origin_redirect_e2e() {
+    use std::sync::{Arc, Mutex};
+    // A fixture that RECORDS the request head it received (so we can assert which headers arrived).
+    fn recording_fixture(resp: Vec<u8>) -> (u16, Arc<Mutex<String>>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = Arc::new(Mutex::new(String::new()));
+        let seen2 = seen.clone();
+        std::thread::spawn(move || {
+            if let Ok((mut sock, _)) = listener.accept() {
+                // Read until the full request HEAD arrives (a single `read` can return a partial head
+                // under TCP segmentation — reading once made this test flaky).
+                let mut acc = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    match sock.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            acc.extend_from_slice(&buf[..n]);
+                            if acc.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                *seen2.lock().unwrap() = String::from_utf8_lossy(&acc).to_string();
+                let _ = sock.write_all(&resp);
+            }
+        });
+        (port, seen)
+    }
+
+    // Destination on a DIFFERENT origin (different port) answers 200.
+    let (dest_port, dest_seen) =
+        recording_fixture(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec());
+    // Source 302-redirects cross-origin to the destination.
+    let (src_port, src_seen) = recording_fixture(
+        format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{dest_port}/final\r\nContent-Length: 0\r\n\r\n"
+        )
+        .into_bytes(),
+    );
+
+    let r = run_request(
+        "GET",
+        &format!("http://127.0.0.1:{src_port}/start"),
+        &[
+            (
+                "Authorization".to_string(),
+                "Bearer sekret-token".to_string(),
+            ),
+            ("X-Trace".to_string(), "keep-me".to_string()),
+        ],
+        &[],
+        5000,
+        5,
+    )
+    .unwrap();
+    assert_eq!((r.status, r.body.as_slice()), (200, b"ok".as_slice()));
+
+    let src_head = src_seen.lock().unwrap().clone();
+    let dest_head = dest_seen.lock().unwrap().clone();
+    // First hop (same origin as the request) carried the Authorization (header name case is preserved
+    // as written, so compare case-insensitively).
+    assert!(
+        src_head
+            .to_ascii_lowercase()
+            .contains("authorization: bearer sekret-token"),
+        "src: {src_head}"
+    );
+    // Cross-origin hop: Authorization STRIPPED, no plaintext token leaked, X-Trace preserved.
+    assert!(
+        !dest_head.to_ascii_lowercase().contains("authorization"),
+        "dest leaked auth: {dest_head}"
+    );
+    assert!(
+        !dest_head.contains("sekret-token"),
+        "dest leaked token: {dest_head}"
+    );
+    assert!(
+        dest_head.to_ascii_lowercase().contains("x-trace: keep-me"),
+        "dest dropped non-credential header: {dest_head}"
+    );
+}
+
 #[test]
 fn header_injection_is_rejected_at_the_gate() {
     let mut out = String::new();

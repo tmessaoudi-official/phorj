@@ -325,10 +325,8 @@ fn write_request(
         }
     }
     req.push_str("Connection: close\r\nAccept-Encoding: identity\r\n");
-    if !body.is_empty() || matches!(method, "POST" | "PUT" | "PATCH") {
-        if !has("content-length") {
-            req.push_str(&format!("Content-Length: {}\r\n", body.len()));
-        }
+    if (!body.is_empty() || matches!(method, "POST" | "PUT" | "PATCH")) && !has("content-length") {
+        req.push_str(&format!("Content-Length: {}\r\n", body.len()));
     }
     for (n, v) in headers {
         req.push_str(&format!("{n}: {v}\r\n"));
@@ -396,8 +394,43 @@ fn exchange(
     }
 }
 
+/// Two http(s) URLs share an ORIGIN iff scheme, host (ASCII-case-insensitive), and port all match.
+/// A redirect that crosses origins — INCLUDING an https→http downgrade (a scheme change) — must not
+/// carry credentials forward (DEC-264).
+pub(crate) fn same_origin(a: &Url, b: &Url) -> bool {
+    a.https == b.https && a.port == b.port && a.host.eq_ignore_ascii_case(&b.host)
+}
+
+/// Headers that must be STRIPPED before following a cross-origin redirect (DEC-264): sending them to a
+/// different origin leaks credentials to a host the caller never authorized (the curl CVE-2022-27774
+/// class). `Cookie` and `Authorization` are the obvious ones; `Proxy-Authorization` (proxy creds) and
+/// `WWW-Authenticate` (a challenge echoed back) round out the set. Same-origin hops keep every header.
+fn is_credential_header(name: &str) -> bool {
+    const SENSITIVE: [&str; 4] = [
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "www-authenticate",
+    ];
+    SENSITIVE.iter().any(|s| name.eq_ignore_ascii_case(s))
+}
+
+/// The header set to send to `to`, given the headers sent to `from`: identical on a same-origin hop,
+/// credential-stripped on a cross-origin (or downgrading) one (DEC-264). Pure + unit-tested.
+fn headers_for_hop(from: &Url, to: &Url, headers: &[(String, String)]) -> Vec<(String, String)> {
+    if same_origin(from, to) {
+        return headers.to_vec();
+    }
+    headers
+        .iter()
+        .filter(|(n, _)| !is_credential_header(n))
+        .cloned()
+        .collect()
+}
+
 /// The full request: redirects (301/302/303/307/308) followed up to `max_redirects`; a 303 (and,
 /// per the historical browser contract, 301/302 on POST) downgrades to GET with an empty body.
+/// Credentials are stripped on any cross-origin / downgrading hop (DEC-264).
 pub(crate) fn run_request(
     method: &str,
     url_str: &str,
@@ -409,9 +442,12 @@ pub(crate) fn run_request(
     let mut url = parse_url(url_str)?;
     let mut method = method.to_string();
     let mut body = body.to_vec();
+    // Working header set — narrowed (never widened) as redirects cross origins. Once a credential is
+    // dropped at a cross-origin hop it stays dropped, even if a later hop returns to the first origin.
+    let mut headers = headers.to_vec();
     let mut hops = 0u32;
     loop {
-        let resp = exchange(&url, &method, headers, &body, timeout_ms)?;
+        let resp = exchange(&url, &method, &headers, &body, timeout_ms)?;
         let redirect = matches!(resp.status, 301 | 302 | 303 | 307 | 308);
         if !redirect {
             return Ok(resp);
@@ -432,7 +468,9 @@ pub(crate) fn run_request(
                     resp.status
                 )
             })?;
-        url = resolve_location(&url, &location)?;
+        let next = resolve_location(&url, &location)?;
+        headers = headers_for_hop(&url, &next, &headers);
+        url = next;
         if resp.status == 303 || (matches!(resp.status, 301 | 302) && method == "POST") {
             method = "GET".into();
             body.clear();

@@ -1605,3 +1605,23 @@ empirically disproven (revert test: reverted twin prints `Main\Secret {}` → di
 **Spawned F-029** (KNOWN_ISSUES): two PRE-EXISTING namespaced-transpile byte-identity bugs (injected types
 mis-namespaced as cross-package field types → PHP TypeError; Debug.dump bare-name divergence for
 Main-package classes/enums) — each its own future slice.
+
+## DEC-264 — SHIPPED (2026-07-16, Tier-1 build): HttpClient cross-origin redirect credential strip
+
+`src/native/http_client.rs` `run_request` re-sent the SAME headers to every redirect hop with no
+origin check (F-026 / curl CVE-2022-27774 class). Fix: three pure helpers — `same_origin` (scheme
+bool + host ASCII-ci + port, default-port-normalized), `is_credential_header` ({authorization, cookie,
+proxy-authorization, www-authenticate}, ci), `headers_for_hop` (same-origin keeps all; cross-origin —
+incl. https→http downgrade — filters the credential set). The loop narrows the working header set at
+each hop BEFORE the exchange to the new origin (no off-by-one) and never re-widens (a dropped credential
+stays dropped even on return to the origin). Coverage: 3 tests (same_origin incl. same-port/differing-
+scheme isolation; headers_for_hop keep/strip/downgrade; e2e with a head-capturing fixture asserting the
+cross-origin hop dropped Authorization + kept X-Trace + leaked no token) + the existing redirect tests.
+Invariant-9: impure/quarantined → documented in `examples/http-client/fetch.phg` + examples/README (can't
+be a deterministic runnable example — needs two live origins). En-route: fixed a pre-existing
+clippy::collapsible_if at http_client.rs:328 (the http-client feature is non-default, so the standard
+`--features jit` gate never compiled/linted this file — a gate-coverage gap worth noting). Gate green:
+2174 tests PHORJ_REQUIRE_PHP=1 --features jit,http-client, clippy (jit,http-client) clean, fmt. DEC-268
+panel (2 lenses): security CLEAN; correctness CLEAN-on-code + one P2 test-coverage gap (scheme term
+masked by default-port asymmetry) fixed with a test-only assertion. Composes with DEC-270 (SSRF, next):
+the strip is header-scoped, SSRF is destination-scoped; both ride the future Transport seam.

@@ -2,6 +2,13 @@
 // defaults PHP's curl does not have (response size cap, header-injection gate, URL-userinfo
 // rejection, explicit timeouts, bundled TLS roots).
 //
+// SECURITY — cross-origin redirect credential strip (DEC-264): when a redirect crosses origins
+// (scheme, host, or port differs — INCLUDING an https→http downgrade), the client DROPS the
+// credential headers {Authorization, Cookie, Proxy-Authorization, WWW-Authenticate} before
+// following it, so a `Location:` to an attacker host can never harvest them (the curl
+// CVE-2022-27774 class). Same-origin hops keep every header. Verified by the unit + e2e tests in
+// `src/native/http_client.rs`; can't be a deterministic runnable example (needs two live origins).
+//
 // ── RUNNING THIS EXAMPLE ─────────────────────────────────────────────────────────────────────────
 // Needs `--features http-client` and LIVE network, so it is a hand-runnable reference (quarantined
 // from every automatic gate — live I/O is never byte-identity-gated):
