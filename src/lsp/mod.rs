@@ -447,10 +447,11 @@ fn diagnostics_for(text: &str) -> Vec<Diagnostic> {
         Ok(p) => p,
         Err(d) => return vec![d],
     };
-    match crate::checker::check(&program) {
-        Ok(warnings) => warnings,
-        Err(errors) => errors,
-    }
+    // DEC-252 (check ≡ LSP): route through the SAME front-end pipeline `phg check` uses — prelude
+    // injection (`Core.Secret`/`Core.Db`/…), intrinsic/variant-import resolution, DI/Db desugar — so an
+    // injected-type program is diagnosed against the injected world, not the raw one (the old direct
+    // `checker::check` call produced a wall of spurious `E-UNKNOWN-IDENT`s on injected types).
+    crate::cli::front_end_diagnostics(&program)
 }
 
 /// Map a Phorj `Diagnostic` to an LSP `Diagnostic` JSON object. Phorj `line`/`col` are 1-based; LSP

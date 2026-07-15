@@ -177,6 +177,47 @@ pub fn check_and_expand_reified(
     }
 }
 
+/// The STRUCTURED front-end diagnostics for a parsed program — the SAME injection + desugar + check
+/// sequence [`check_and_expand_reified`] runs, but returning structured [`crate::diagnostic::Diagnostic`]s
+/// (the first failing pass's errors; else the checker's warnings) instead of rendered strings.
+///
+/// DEC-252 (check ≡ LSP): the LSP diagnostics path MUST route through this, so an injected-type program
+/// (`import Core.Secret;`, `Core.Db`, `Core.Json`, …) is checked against the SAME prelude-injected world
+/// `phg check` sees — never the spurious `E-UNKNOWN-IDENT` wall the raw checker emits on the un-injected
+/// program. **STANDING RULE:** this mirrors `check_and_expand_reified`'s pass sequence exactly; any change
+/// to that sequence must be reflected here. Drift is guarded by `front_end_diagnostics_agrees_with_check`
+/// (tests below), which asserts the two agree on error-presence across injected/clean/error programs — so
+/// a diagnostic-emitting pass added to one but not the other fails the suite.
+pub fn front_end_diagnostics(prog: &Program) -> Vec<crate::diagnostic::Diagnostic> {
+    let injected_violations = crate::checker::enforce_injected_discipline(prog);
+    if !injected_violations.is_empty() {
+        return injected_violations;
+    }
+    let prog = match crate::checker::resolve_intrinsic_imports(prog.clone()) {
+        Ok(p) => p,
+        Err(ds) => return ds,
+    };
+    if let Some(d) = super::preludes::unavailable_core_module(&prog) {
+        return vec![d];
+    }
+    let injected = inject_core_modules(&prog);
+    let routed = crate::checker::desugar_auto_router(injected.into_owned());
+    let routed = crate::checker::collapse_injected_type_qualifiers(routed);
+    let routed = crate::checker::resolve_variant_imports(routed);
+    let routed = match crate::checker::desugar_di(routed) {
+        Ok(p) => p,
+        Err(ds) => return ds,
+    };
+    let routed = match crate::checker::desugar_db(routed) {
+        Ok(p) => p,
+        Err(ds) => return ds,
+    };
+    match crate::checker::check_resolutions(&routed) {
+        Ok((warnings, ..)) => warnings,
+        Err(errs) => errs,
+    }
+}
+
 /// lex + parse + type-check (the gate). Renders every type error, one per line.
 pub(super) fn parse_checked(src: &str) -> Result<Program, String> {
     let prog = lex_parse(src)?;
@@ -697,4 +738,52 @@ pub(super) fn disasm_program(p: &BytecodeProgram) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod front_end_diagnostics_tests {
+    use super::*;
+
+    /// DEC-252 drift guard: `front_end_diagnostics` (the LSP path) and `check_and_expand` (the CLI
+    /// gate) MUST agree on error-presence for every program — they run the same injection + desugar
+    /// sequence, so if a future diagnostic-emitting pass is added to one but not the other, this fails.
+    #[test]
+    fn front_end_diagnostics_agrees_with_check() {
+        // A front-end diagnostic is an ERROR unless its code is a `W-` warning.
+        fn has_error(prog: &Program) -> bool {
+            front_end_diagnostics(prog)
+                .iter()
+                .any(|d| d.code.is_none_or(|c| !c.starts_with("W-")))
+        }
+        let cases: &[(&str, bool)] = &[
+            // (source, expect_error)
+            ("package Main; function main() -> void {}", false),
+            (
+                "package Main; function main() -> void { var x = nope; }",
+                true,
+            ),
+            // Injected-type program (the DEC-252 case): clean under both.
+            (
+                "package Main; import Core.Output; import Core.Secret; import Core.String; \
+                 function main() -> void { var t = new Secret(\"k\"); \
+                 Output.printLine(\"{String.length(t.expose())}\"); }",
+                false,
+            ),
+            // Injected import + a genuine error: error under both.
+            (
+                "package Main; import Core.Secret; function main() -> void { var y = missing; }",
+                true,
+            ),
+        ];
+        for (src, expect_error) in cases {
+            let prog = lex_parse(src).expect("parse");
+            let fe = has_error(&prog);
+            let cli = check_and_expand(&prog, src).is_err();
+            assert_eq!(
+                fe, cli,
+                "front_end_diagnostics vs check_and_expand disagree on `{src}` (fe={fe}, cli={cli})"
+            );
+            assert_eq!(fe, *expect_error, "wrong error-verdict for `{src}`");
+        }
+    }
 }

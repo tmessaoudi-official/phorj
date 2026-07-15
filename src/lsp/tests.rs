@@ -90,6 +90,27 @@ fn open_clean_program_publishes_empty_diagnostics() {
 }
 
 #[test]
+fn open_injected_type_program_publishes_no_spurious_diagnostics() {
+    // DEC-252 (check ≡ LSP): a program using an injected Core type (`Secret`) must diagnose CLEAN in
+    // the LSP, exactly as `phg check` does — the LSP now routes through the same prelude-injection
+    // pipeline. Before the fix it emitted a wall of spurious `E-UNKNOWN-IDENT`s (the injected `Secret`
+    // class was never loaded), diverging from `phg check`.
+    let mut s = Server::default();
+    let out = s.handle(&did_open(
+        "file:///inj.phg",
+        "package Main; import Core.Output; import Core.Secret; import Core.String; \
+         function main() -> void { var t = new Secret(\"k\"); Output.printLine(\"len {String.length(t.expose())}\"); }",
+    ));
+    let body = &out[0];
+    assert!(body.contains("publishDiagnostics"), "{body}");
+    // No error diagnostics — the only acceptable content is warnings (none here) or an empty list.
+    assert!(
+        !body.contains("E-UNKNOWN-IDENT") && !body.contains("\"severity\":1"),
+        "injected-type program must be LSP-clean (check ≡ LSP), got {body}"
+    );
+}
+
+#[test]
 fn open_program_with_error_publishes_a_diagnostic_with_code_and_range() {
     let mut s = Server::default();
     let out = s.handle(&did_open(

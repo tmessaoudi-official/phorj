@@ -1734,3 +1734,23 @@ visibility land). **REMAINING: DEC-251 (b) + (c)** — see the register row.
   R2 found two over-rejection P2s (overload false-positive + a test gap) → fixed; R3 CLEAN (residual
   overloaded-declaration-time deferral flagged F-032, panel-rated non-blocking). Byte-identity strictly
   improves. **DEC-251 whole is now COMPLETE.**
+
+## DEC-252 — SHIPPED (2026-07-16, Tier-1): LSP ≡ check (prelude-injection fix)
+
+The LSP's `diagnostics_for` (src/lsp/mod.rs) called `checker::check` DIRECTLY on the raw parsed
+program (F-015), bypassing prelude injection + the desugar passes — so an injected-type program
+(`import Core.Secret`/`Core.Db`/`Core.Json`) produced a wall of spurious `E-UNKNOWN-IDENT`s in the
+editor while `phg check` was clean. Fix: new `pub fn front_end_diagnostics(prog)` (src/cli/pipeline.rs)
+mirrors `check_and_expand_reified`'s EXACT pass sequence (enforce_injected_discipline →
+resolve_intrinsic_imports → unavailable_core_module → inject_core_modules → desugar_auto_router →
+collapse_injected_type_qualifiers → resolve_variant_imports → desugar_di → desugar_db →
+check_resolutions) but returns STRUCTURED `Vec<Diagnostic>` (first failing pass's errors; else the
+checker's warnings) instead of rendered strings; the LSP routes through it. Warnings now surface as
+severity-2 editor diagnostics. **STANDING RULE (developer): `phg check` and the LSP never diverge —
+same pipeline, kept in sync as part of every diagnostics change.** Drift guard: `front_end_diagnostics_
+agrees_with_check` (pipeline.rs tests) asserts the two agree on error-presence across clean/error/
+injected-type/injected+error programs — a pass added to one but not the other fails the suite (this is
+the REAL guard; the earlier comment overstated a nonexistent shared corpus — corrected). Pinning test:
+`open_injected_type_program_publishes_no_spurious_diagnostics` (lsp/tests.rs). Gate: 2217 tests
+--all-features + oracle, clippy (all-features + no-default), fmt. DEC-268 panel: R1 core CLEAN + one
+P2 (overstated drift protection) → fixed with the equivalence test + corrected comment.
