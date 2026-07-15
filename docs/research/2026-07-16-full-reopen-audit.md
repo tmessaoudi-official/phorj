@@ -21,8 +21,8 @@
 | Dim | Scope | Status |
 |-----|-------|--------|
 | D0 | PHP 8.4/8.5 surface re-sweep + 8.6 RFC ahead-watch vs the 824-row matrix | ✅ DONE — 8 flags, all triaged (DEC-239…244; F-003 fixed; F-008→D5) |
-| D1 | Decision register full reopen (149 DEC rows) | ▶ IN PROGRESS |
-| D2 | KNOWN_ISSUES full reopen (every row) | pending |
+| D1 | Decision register full reopen (155+ rows incl. conflicts/autonomous lists) | ✅ DONE — 5 flags triaged (DEC-245…250); 7 conflicts closed; 12 register-stale rows queued for D6 |
+| D2 | KNOWN_ISSUES full reopen (every row) | ▶ IN PROGRESS |
 | D3 | Architecture / clean code / folder structure | pending |
 | D4 | Security (every native surface vs PHP's equivalent) | pending |
 | D5 | Perf-claim re-verification (WIN/HOLD/LOSS ledger) | pending |
@@ -36,6 +36,10 @@
 | F-002 | D0 | HIGH | Core.Url = 4 helpers vs PHP 8.5 typed always-on URI parser | **RULED DEC-240**: Core.Uri (RFC 3986, typed errors, PHP-8.5 twin — transpilable) queued |
 | F-003 | D0 | MED | FEATURES.md stale: "four deps" + "forbid(unsafe_code)" | **FIXED** (D6 doc commit, this session) |
 | F-004 | D0 | MED | asymmetric visibility spec'd in UNIFIED-SPEC, absent in code | **RULED DEC-241**: build (sugar wave) |
+| F-009 | D1 | HIGH | for-in/foreach duality + binding inconsistency (conflict C-2) | **RULED DEC-248**: full PHP loop alignment — typed foreach + k=>v; for-in retires; codemod |
+| F-010 | D1 | MED | E-INTERSECT-SIG overloading revisit 3 weeks overdue | **RULED DEC-245**: overload-set resolution on intersections |
+| F-011 | D1 | MED | clippy::pedantic ruled (DEC-176) but never enabled | **RULED DEC-246**: build pedantic slice |
+| F-012 | D1 | HIGH | Core.Time has NO DateTime/Duration/tz — biggest stdlib gap vs PHP | **RULED DEC-247**: Core.DateTime now, high priority |
 | F-005 | D0 | LOW | partitioned-cookie (CHIPS) absent in Core.Session | **RULED DEC-242**: queue cookie-attr knob |
 | F-006 | D0 | LOW | Core.String lacks similarity family (levenshtein/similar/soundex) | **RULED DEC-243**: levenshtein+similarText grapheme-aware; phonetics rejected |
 | F-007 | D0 | MED | extension methods: PHP 8.6 drafts it — phorj should ship first | **RULED DEC-244**: early sugar-wave slot |

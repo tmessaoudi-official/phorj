@@ -1220,3 +1220,43 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   draft RFC (incl. scalar extensions); phorj ships its statically-checked, import-gated version
   (nothing-in-the-wind: extensions visible only where imported) FIRST — the stay-ahead mandate.
   *Alternative (offered): keep queue position (drafts often slip) — rejected.*
+
+- **DEC-245 — RULED (audit flag F-010): intersections resolve shared methods as an OVERLOAD SET.**
+  Executes the E-INTERSECT-SIG revisit clause DEC-057 scheduled for "when overloading lands"
+  (3 weeks overdue, caught by the reopen): member access on `A & B` merges identical signatures
+  and lets DIFFERENT signatures coexist as overloads (the DEC-058 machinery); only genuinely
+  ambiguous combos (same params, different returns, no selector) stay `E-INTERSECT-SIG`.
+  *Alternative (offered): keep require-agreement (rejected — a class can legally implement both
+  interfaces while the intersection type can't express it).* Build queued.
+- **DEC-246 — RULED (audit flag F-011): `clippy::pedantic = deny` BUILDS** — honoring DEC-176
+  (ruled 07-01, never enabled; Cargo.toml stopped at `all`). Own slice in the build queue.
+  *Alternative (offered): revoke to clippy::all — rejected.*
+- **DEC-247 — RULED (audit flag F-012): `Core.DateTime` NOW, HIGH priority** — immutable DateTime +
+  Duration + timezone handling in Core, twinned to PHP DateTimeImmutable/DateInterval (8.5 floor →
+  byte-identity except `now()`); beats PHP (immutable-only, typed errors, no parse-to-false);
+  ships before PHP 8.6's Duration RFC = ahead-watch win. Supersedes the 07-13 externalize-audit
+  "calendar→lib" lean (mooted by DEC-216 being unexecuted). DEC-206's bare-name gate applies when
+  it lands. *Alternatives (offered): wait for the vendor path (gap stays open indefinitely);
+  minimal Instant+Duration only (defers the tz question but keeps the gap).*
+- **DEC-248 — RULED (audit flag F-009): FULL PHP ALIGNMENT of the loop surface; supersedes A-6/
+  DEC-094's execution drift AND retires for-in.** Package: (1) `foreach` gains TYPED bindings
+  (`foreach (xs as int x)`) + the PHP-shaped key/value form (`foreach (m as string k => int v)`);
+  (2) `for (T x in xs)` RETIRES (`E-RETIRED-FORIN` + rewrite hint) — it was the non-PHP divergence
+  with no justification ("no reason to diverge here" — dev); (3) C-style `for (;;)` stays (verified
+  already working, PHP-aligned); (4) ranges iterate via `foreach (0..n as int i)`; (5) repo-wide
+  codemod (~69 example sites + conformance + preludes + docs), fresh-context slice, conformance
+  goldens for all forms. Typed bindings = the sole phorj addition (the explicitness rule).
+  *Alternatives (offered): untyped-like-PHP bindings (the only type-less declaration in the
+  language — rejected); `var`-form bindings (rejected); retire foreach instead (rejected — keeps
+  the divergence); keep both (TIMTOWTDI — rejected).* Closes conflict C-2 / flag F-009.
+- **DEC-249 — RULED: METHOD default parameters BUILD (extending DEC-236's ctor machinery to
+  methods); then the retry surface becomes `db.transaction(fn, int retries = 0)` and
+  `transactionRetry` retires.** Resolves DEC-208's retained PENDING the ambitious way: the
+  language wall falls instead of the API bending around it. *Alternative (offered): confirm
+  shipped `transactionRetry(fn, retries)` (rejected — dev chose the language fix).* Two-part
+  build: method defaults slice → Db surface rename.
+- **DEC-250 — RULED (DEC-183 caveat): Optional<enum> variant patterns = HIGH priority** — thread
+  enum-variant coverage through `T?` so `match c { Red() => …, Blue() => …, null => … }` is legal
+  and exhaustive over `Color?` ("exhaustive matching is a flagship; an Optional-of-enum failing it
+  undermines the story" — ruled soundness-adjacent). *Alternatives (offered): normal queue slot;
+  leave recorded.* 
