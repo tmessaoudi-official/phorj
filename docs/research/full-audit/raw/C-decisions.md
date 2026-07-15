@@ -1000,3 +1000,39 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   (rejected — a Secret-bearing variant reads worse). En route: `all_examples_transpile_and_match_php`
   gained the generic `E-TRANSPILE-*` ladder-skip arm; the differential run≡runvm glob gained the
   feature-gated-module skip via the new `phorj::cli::unavailable_gated_modules()` seam.
+
+- **DEC-224 — AUTO-RULED (REOPENABLE): MongoDB = admission SHAPE ruled, build DEFERRED behind the
+  value-ordered packs.** Ruled shape (so the reopen is a decision, not a re-deferral): the official
+  `mongodb` crate's SYNC API is the admissible candidate — its blocking wrapper over an internal
+  tokio runtime is EXACTLY the postgres-crate precedent the dependency policy already admits ("the
+  crate's async usage is its internal impl detail; the phorj-facing API stays sync"); surface =
+  twin-of-Db document store (`Core.Mongo`: typed `MongoError` taxonomy, Secret credentials,
+  `findInto<T>` hydration reusing the desugar machinery); LADDER case 2 native-only
+  (`E-TRANSPILE-MONGO` — no PDO analog). Build deferred tonight because: heavyweight dep tree (full
+  tokio) for a niche driver, no in-tree faker to gate against (Mailpit/SQLite-style), and the
+  value-ordered mandate puts web/data-pillar packs ahead. Risk example: none live — no program can
+  reach Mongo today; the DEFER costs only absence, never wrongness. *Alternatives:* build tonight
+  (rejected: value order); reject permanently (rejected: developer explicitly reopened toward
+  having it); hand-rolled wire protocol (rejected: enormous, the lettre-hand-roll argument).
+- **DEC-225 — AUTO-RULED (REOPENABLE): concurrency PHP leg stays E-CONCURRENCY-NO-PHP; PHP FIBERS
+  recorded as the ruled faithful-candidate upgrade path.** Any eager serialization mapping silently
+  reorders interleaved effects (rule-14 downgrade — confirmed FORBIDDEN). NEW in this ruling: PHP
+  8.1 Fibers are cooperative single-threaded coroutines — the SAME concurrency model as phorj's
+  corosensei green threads — so a transpile emitting a deterministic round-robin Fiber scheduler
+  (mirroring `green::sched`'s order exactly) is a PLAUSIBLE byte-identical mapping, the first
+  candidate that does not downgrade semantics. Queued as its own future slice: spike = 3 programs
+  (spawn/join, channel ping-pong, select) hand-mapped to Fibers, byte-compared before any emitter
+  work. Until that spike proves order-identity, the hard error stands (never silently). Risk
+  example: `spawn a(); spawn b();` with interleaved prints — eager mapping prints a-then-b where
+  the VM prints the interleaving; Fibers with a mirrored scheduler print the interleaving.
+- **DEC-226 — AUTO-RULED (REOPENABLE): `#[UncheckedOverflow]` transpile stays E-TRANSPILE-UNCHECKED;
+  the pack/unpack emulation is REJECTED-WITH-REASON.** PHP can emulate 64-bit wrapping arithmetic
+  (`unpack('q', pack('q', ...))` pairs, or GMP mod-2^64), but every emulation is SLOWER than PHP's
+  native checked-ish arithmetic — and `#[UncheckedOverflow]`'s ONLY purpose is speed (the 2× intadd
+  win). A transpile that silently turns a perf opt-in into a perf LOSS is a semantic-adjacent
+  downgrade of intent; the honest artifact is the existing hard error steering to the checked
+  default (which transpiles faithfully) or `Math.tryAdd/trySub/tryMul`. Risk example: a hot loop
+  annotated for the VM's 2× win transpiles to PHP running ~5× SLOWER than un-annotated — the user
+  reads "it transpiled" as "it's fine". *Alternatives:* GMP emulation (correct, slowest, adds a PHP
+  extension requirement — violates transpile-no-ini-extensions); 32-bit-halves manual wrap (subtle,
+  still slow); silently emit checked semantics (rule-14 leg 3, FORBIDDEN).

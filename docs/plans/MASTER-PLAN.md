@@ -171,7 +171,12 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
-**RUN CURSOR: → Spine 5 (DEC-224/225/226 rulings under bounded autonomy). DONE ALSO: Spine 4 ✅
+**RUN CURSOR: → Spine 6 (perf: sqlbuild-surface ladder L3 + re-ratchet; then review sweep). DONE
+ALSO: Spine 5 ✅ DEC-224 (Mongo: shape ruled — mongodb sync crate per postgres precedent,
+E-TRANSPILE-MONGO, twin-of-Db; build deferred by value order) · DEC-225 (concurrency PHP leg: hard
+error stands; PHP 8.1 FIBERS ruled the first faithful candidate — deterministic mirrored-scheduler
+spike queued) · DEC-226 (unchecked transpile: hard error stands; pack/unpack emulation
+rejected-with-reason — slower than checked, defeats the perf attribute). DONE ALSO: Spine 4 ✅
 DEC-223 built + DEC-230 realizations (Core.Mail: 4 transports, injection-safe Address, html
 auto-plaintext, CID/byte attachments, MailError taxonomy, Secret creds, DKIM, sendAll,
 E-TRANSPILE-MAIL; 2147 green with mail, 2135 default; ctor-default-params language gap flagged). DONE ALSO: Spine 3 ✅ DEC-229

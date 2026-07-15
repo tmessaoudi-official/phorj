@@ -34,6 +34,12 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **DEC-224/225/226 · the three reopened items RULED** (all: keep shipped state + upgrade path now
+  on record): Mongo = admission shape ruled (mongodb sync crate, postgres precedent), build deferred
+  behind value-ordered packs; concurrency PHP leg = PHP-8.1-FIBERS identified as the first faithful
+  byte-identity candidate (spike queued: 3 hand-mapped programs byte-compared before any emitter);
+  unchecked-overflow transpile = hard error stands, pack/unpack emulation rejected-with-reason
+  (slower than checked — defeats the attribute). Full rulings + alternatives in C-decisions.md.
 - **FIXED en route · `rewrite_html` walker missed `Expr::New`** — any throws-`?` / `html"…"` / tagged
   template nested in `new C(args)` was silently left un-rewritten (VM compile error / interpreter
   runtime fault). Severity: P0 correctness (pre-existing, latent). Pinned by
