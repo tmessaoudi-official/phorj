@@ -1332,3 +1332,18 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   `db.withNaming(Naming.SnakeToCamel)` shape) applies the deterministic mapping.
   *Alternatives (offered): strict-only (SQL aliases forever); auto-map default (silent name
   transformation — the magic phorj rejects) — both rejected.*
+
+- **DEC-259 — RULED (audit, process): the perf-bench doctrine WIDENS** — (1) EVERYTHING that has
+  a PHP equivalent gets benched against it, including I/O-bound native modules (via fixtures:
+  in-memory SQLite, local SMTP, …) — the I/O carve-out is REJECTED-then-refined; (2) MACRO benches
+  of whole programs/pipelines/workflows join the suite — REAL APPLICATIONS benched against their
+  PHP twins (the developer's `var/phorj-app` is exactly this instrument: an app grown alongside
+  the language to compare with real-world PHP apps — KEEP, gitignored by design, never propose
+  deleting it). WIN-OR-FLAG applies to all of it. *Alternative (offered): confirm the macro-only
+  carve-out — rejected.*
+- **STANDING RULES batch 2 (developer, 2026-07-16 audit):** (a) **transpile + lift are
+  always-current surfaces** — every language/stdlib change updates the PHP emitter AND the lifter
+  in the same change, exactly like the check≡LSP rule (DEC-252) and the editors-same-change DoD;
+  a feature that runs but doesn't transpile/lift (or vice versa) is not done. (b) `cargo-fuzz`
+  ADMITTED as a dev-only dependency (runtime dep policy untouched); the parser/lift unwrap audit
+  + fuzz pass execute the EV-7 never-panic invariant.

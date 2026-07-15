@@ -22,8 +22,8 @@
 |-----|-------|--------|
 | D0 | PHP 8.4/8.5 surface re-sweep + 8.6 RFC ahead-watch vs the 824-row matrix | ✅ DONE — 8 flags, all triaged (DEC-239…244; F-003 fixed; F-008→D5) |
 | D1 | Decision register full reopen (155+ rows incl. conflicts/autonomous lists) | ✅ DONE — 5 flags triaged (DEC-245…250); 7 conflicts closed; 12 register-stale rows queued for D6 |
-| D2 | KNOWN_ISSUES full reopen (every row) | ▶ IN PROGRESS |
-| D3 | Architecture / clean code / folder structure | pending |
+| D2 | KNOWN_ISSUES full reopen (every row) | ✅ DONE — 17 stale rows→D6; 8 flags ruled (DEC-251…258) + DEC-259 perf doctrine + standing rules (META-7, check≡LSP, transpile/lift-always-current) |
+| D3 | Architecture / clean code / folder structure | ▶ IN PROGRESS |
 | D4 | Security (every native surface vs PHP's equivalent) | pending |
 | D5 | Perf-claim re-verification (WIN/HOLD/LOSS ledger) | pending |
 | D6 | Docs drift + SSOT unification (runs throughout) | continuous |
@@ -477,3 +477,15 @@ fmt guarantees meaning-preservation with tracked cosmetic gaps · parked-perf se
 ## D5 — Perf ledger
 
 ## D6 — Docs unification log
+
+### D2 checkpoint outcome
+
+All 8 flags + 3 process items RULED: F-013→DEC-253 (nullable unions, both spellings) ·
+F-014→DEC-251 (3 PHP-enforcement-ahead checks, HIGH) · F-015→DEC-252 (LSP injection fix, HIGH +
+check≡LSP standing rule) · F-016→DEC-254 (slice 1b + `ref` copy-out params + mutability triad) ·
+F-017→DEC-255 (fault-parity exit-status sweep, HIGH) · F-018→DEC-256 (W4-4 Unicode FULL package
+now: codepoint length + Unicode case + grapheme family) · F-019→DEC-257 (Iterator interface) ·
+F-020→DEC-258 (opt-in column naming) · perf doctrine→DEC-259 (bench everything with a PHP
+equivalent + real-app macros; var/phorj-app is the instrument) · cargo-fuzz admitted (dev-only) ·
+prelude-parse loud-assert queued (no-design P1). Standing rules recorded: META-7 (cross-language
+scan; byte-identity-is-a-tool, always asked) · check≡LSP · transpile/lift always-current.
