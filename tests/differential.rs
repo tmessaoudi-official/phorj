@@ -1105,6 +1105,12 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.file_name().and_then(|n| n.to_str()) == Some("db") {
         return;
     }
+    // DEC-223: `examples/mail/` needs `--features mail`, and its file-transport example writes an
+    // `outbox/` into the sweep's cwd (side effects have no place in the byte-identity glob). Impure
+    // mail I/O is quarantined and validated by `tests/mail.rs` on both backends, like `tests/db.rs`.
+    if dir.file_name().and_then(|n| n.to_str()) == Some("mail") {
+        return;
+    }
     for entry in std::fs::read_dir(dir).expect("read_dir examples/") {
         let path = entry.expect("examples dir entry").path();
         if path.is_dir() {

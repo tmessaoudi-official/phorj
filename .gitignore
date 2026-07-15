@@ -6,4 +6,4 @@
 # Machine-local cargo config (mold linker) — CI has no mold, so this must stay local (UA-0.2)
 /.cargo/config.toml
 
-/var
+/varoutbox/

@@ -77,6 +77,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Test runner: `test "name" {}` blocks + `Core.Test` assertions (incl. `assertFaults`) | ✅ | `phg test [path…]` |
 | Formatter: canonical-form, comment-preserving, meaning-preserving, **width-canonical wrapping** (100-col; wraps call/`new` args, collection & map literals, `match` arms, `.`-chains; DEC-187) | ✅ | `phg format [--check] [path… \| -]` |
 | HTTP server: `handle(Request): Response` (pure Phorj) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |
+| `Core.Db`: multi-driver SQL (bundled SQLite default; Postgres `db-postgres`; MySQL/MariaDB `db-mysql`) — prepared statements, typed rows, `queryInto<T>`/`queryScalar`/`queryMap` hydration, lazy `streamInto<T>`, transactions + savepoints + retry, typed `DbError` taxonomy, `Secret` credentials, `W-SQL-INJECTION` lint | ✅ | native-only (`E-TRANSPILE-DB`, §14 LADDER); gated by `tests/db.rs` on both backends |
+| `Core.Mail`: native mailer — injection-safe `Address`, chainable builder with auto-plaintext HTML alternative, CID inlines + attachments, SMTP (`Secret` auth, STARTTLS) / sendmail / file / null transports, DKIM, typed `MailError` taxonomy | ✅ | `--features mail`; native-only (`E-TRANSPILE-MAIL`); gated by `tests/mail.rs` |
 | Standalone executable (host) | ✅ | `phg build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |
 | Standalone executable (macOS) | 🔲 | reader ships; signed stub deferred to M2.5 Phase 3 |

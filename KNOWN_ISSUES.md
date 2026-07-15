@@ -34,6 +34,24 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **SWEEP BATCH 1 (spine 7, code+repo hygiene)** — findings from the full review sweep:
+  (1) FIXED: the mail commit swept `outbox/phorj-mail-0.eml` INTO the repo (`git add -A` after a
+  featured test run — the file-transport example writes cwd-relative). Removed; `outbox/`
+  gitignored; `examples/mail/` excluded from the sweep glob like `examples/db/`.
+  (2) P2 LATENT: `uses_impure_native` (tests/differential.rs) substring-matches `import <module>`
+  against NATIVE module names — an example importing only `Core.Db` (natives live in `Core.DbSys`)
+  or `Core.Mail` (`Core.MailSys`) is INVISIBLE to the impure check; today only the directory
+  exclusions mask this. Proposed fix: also map prelude modules → their Sys twins (or prefix-match).
+  (3) P2: parser (~61) + lift (~42) `unwrap()`s on user-input paths — a malformed source could
+  panic instead of erroring. Queued: targeted audit + a fuzz pass (`cargo-fuzz` is a new dep —
+  adjudicate before adding).
+  (4) P3: `var/phorj-app/` sits untracked in the repo (benchforge dogfood leftovers from a prior
+  session) — developer to keep/relocate/delete.
+  (5) FIXED: FEATURES.md had NO Core.Db/Core.Mail rows (the flagship batteries absent from the
+  surface SSOT); examples/README said "needs --features db" post-DEC-227. Both updated.
+  (6) NOTE: with `db` default, `examples/db/` could enroll in the run≡runvm glob (deterministic
+  in-memory SQLite) for extra coverage — blocked only by postgres/mysql server examples in the same
+  dir; consider a per-file quarantine marker instead of the dir exclusion.
 - **DEC-224/225/226 · the three reopened items RULED** (all: keep shipped state + upgrade path now
   on record): Mongo = admission shape ruled (mongodb sync crate, postgres precedent), build deferred
   behind value-ordered packs; concurrency PHP leg = PHP-8.1-FIBERS identified as the first faithful
