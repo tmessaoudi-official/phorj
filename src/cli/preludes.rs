@@ -480,6 +480,100 @@ class Mailer {
 }
 "#;
 
+/// `Core.HttpClient` (W3-2, TOP-20 #2 blocker) — the sync HTTP client prelude (the Core.Db/Mail
+/// architecture). Taxonomy names are prefixed where a bare name is already taken by another injected
+/// taxonomy (`HttpTimeout`/`HttpTlsError`/`HttpConnectionFailed` — `Timeout`/`TlsError`/
+/// `ConnectionFailed`/`ConnectionError` belong to Core.Db / Core.Mail; injected-class dedup would
+/// silently CAPTURE the other module's class — the cross-prelude collision smell recorded in
+/// KNOWN_ISSUES). Native-only (`E-TRANSPILE-HTTPCLIENT`).
+pub(super) const HTTP_CLIENT_PRELUDE: &str = r#"
+import Core.HttpClientSys;
+import Core.String;
+import Core.List;
+import Core.Bytes;
+
+// Prelude-local result carrier (NOT Core.Result — the Core.Db injection-order rationale).
+enum HcResult<T> { Ok(T value), Err(string message) }
+
+open class HttpClientError implements Error {
+  constructor(public string message) {}
+  // The single classification point (the DbError.fail mechanism): `<<Kind>>` marker → typed subtype.
+  static function fail(string message): never throws HttpClientError {
+    if (String.startsWith(message, "<<InvalidUrl>>")) { throw new InvalidUrl(String.removePrefix(message, "<<InvalidUrl>>")); }
+    if (String.startsWith(message, "<<ConnectionFailed>>")) { throw new HttpConnectionFailed(String.removePrefix(message, "<<ConnectionFailed>>")); }
+    if (String.startsWith(message, "<<Timeout>>")) { throw new HttpTimeout(String.removePrefix(message, "<<Timeout>>")); }
+    if (String.startsWith(message, "<<TlsError>>")) { throw new HttpTlsError(String.removePrefix(message, "<<TlsError>>")); }
+    if (String.startsWith(message, "<<ProtocolError>>")) { throw new ProtocolError(String.removePrefix(message, "<<ProtocolError>>")); }
+    if (String.startsWith(message, "<<TooManyRedirects>>")) { throw new TooManyRedirects(String.removePrefix(message, "<<TooManyRedirects>>")); }
+    if (String.startsWith(message, "<<TooLarge>>")) { throw new TooLarge(String.removePrefix(message, "<<TooLarge>>")); }
+    throw new HttpClientError(message);
+  }
+}
+
+class InvalidUrl extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class HttpConnectionFailed extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class HttpTimeout extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class HttpTlsError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class ProtocolError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class TooManyRedirects extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class TooLarge extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+
+// A completed response: status, headers (names lowercased), body as text or bytes. Inert data
+// behind an opaque handle — reading it never re-touches the network.
+class HttpResponse {
+  constructor(private HcHandle raw) {}
+  function status(): int throws HttpClientError {
+    return match (HttpClientSys.status(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+  }
+  // The named header's value, or null when absent (names are case-insensitive).
+  function header(string name): string? throws HttpClientError {
+    return match (HttpClientSys.header(this.raw, name)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+  }
+  function headerNames(): List<string> throws HttpClientError {
+    return match (HttpClientSys.headerNames(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+  }
+  // The body as UTF-8 text (a non-UTF-8 body is a clean ProtocolError steering to bodyBytes()).
+  function body(): string throws HttpClientError {
+    return match (HttpClientSys.bodyText(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+  }
+  function bodyBytes(): bytes throws HttpClientError {
+    return match (HttpClientSys.bodyBytes(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+  }
+}
+
+// The client (instance-based, chainable config): 30 s timeout + 5 redirects by default; TLS via
+// bundled Mozilla roots; response size capped (64 MB); header CR/LF injection rejected at the gate;
+// URL userinfo rejected (send credentials in a header). NOT in v1 (documented): HTTP/2, keep-alive
+// pooling, proxies, cookies.
+class HttpClient {
+  public mutable int timeoutMs;
+  public mutable int maxRedirects;
+  constructor() {
+    this.timeoutMs = 30000;
+    this.maxRedirects = 5;
+  }
+  function timeout(int ms): HttpClient { this.timeoutMs = ms; return this; }
+  function redirects(int n): HttpClient { this.maxRedirects = n; return this; }
+  function get(string url): HttpResponse throws HttpClientError {
+    return this.send("GET", url, new List<string>(), new List<string>(), Bytes.fromString(""))?;
+  }
+  function post(string url, string contentType, string body): HttpResponse throws HttpClientError {
+    return this.send("POST", url, ["Content-Type"], [contentType], Bytes.fromString(body))?;
+  }
+  function put(string url, string contentType, string body): HttpResponse throws HttpClientError {
+    return this.send("PUT", url, ["Content-Type"], [contentType], Bytes.fromString(body))?;
+  }
+  function delete(string url): HttpResponse throws HttpClientError {
+    return this.send("DELETE", url, new List<string>(), new List<string>(), Bytes.fromString(""))?;
+  }
+  // The general form: any method, parallel header name/value lists, a bytes body.
+  function send(string method, string url, List<string> headerNames, List<string> headerValues, bytes body): HttpResponse throws HttpClientError {
+    HcHandle h = match (HttpClientSys.request(method, url, headerNames, headerValues, body, this.timeoutMs, this.maxRedirects)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    return new HttpResponse(h);
+  }
+}
+"#;
+
 /// and read only through `expose()` — the `value` field is private, and a `Secret` instance is not a
 /// `string`, so printing/interpolating it is a clean type error (the primary, loud guarantee; no
 /// runtime `***`). Reuses the generic-class machinery (`Box<T>`) wholesale — no new `Op`/`Value`/`Ty`.
@@ -1132,6 +1226,27 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "MailIo",
         ],
     },
+    // `Core.HttpClient` (W3-2) — the sync HTTP client prelude (native-only, `http-client` feature).
+    VirtualModule {
+        module: &["Core", "HttpClient"],
+        qualifier: "HttpClient",
+        src: Some(HTTP_CLIENT_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &[
+            "HttpClient",
+            "HttpResponse",
+            "HttpClientError",
+            "HcHandle",
+            "InvalidUrl",
+            "HttpConnectionFailed",
+            "HttpTimeout",
+            "HttpTlsError",
+            "ProtocolError",
+            "TooManyRedirects",
+            "TooLarge",
+        ],
+    },
     // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.Db` because
     // `Core.Db`'s `import Core.Secret` (for the `Db.withPassword(dsn, Secret<string>)` factory, DEC-208
     // slice G) transitively injects it, and transitive injection only reaches modules that appear LATER
@@ -1153,6 +1268,15 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "DbSys"],
         qualifier: "DbSys",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    // `Core.HttpClientSys` — the INTERNAL HTTP-client natives (`http-client` feature).
+    VirtualModule {
+        module: &["Core", "HttpClientSys"],
+        qualifier: "HttpClientSys",
         src: None,
         respond_bridge: None,
         member_gated: false,
@@ -1216,6 +1340,16 @@ const GATED_CORE_MODULES: &[(&[&str], bool, &str)] = &[
     (&["Core", "DbSys"], cfg!(feature = "db"), "db"),
     (&["Core", "Mail"], cfg!(feature = "mail"), "mail"),
     (&["Core", "MailSys"], cfg!(feature = "mail"), "mail"),
+    (
+        &["Core", "HttpClient"],
+        cfg!(feature = "http-client"),
+        "http-client",
+    ),
+    (
+        &["Core", "HttpClientSys"],
+        cfg!(feature = "http-client"),
+        "http-client",
+    ),
 ];
 
 /// The dotted names of feature-gated Core modules NOT compiled into THIS build. Test harnesses

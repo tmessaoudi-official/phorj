@@ -92,6 +92,12 @@ db-mysql = ["db", "dep:mysql"]
 # (`E-TRANSPILE-MAIL` — PHP mail() has no auth/TLS and is header-injection-prone; no faithful map).
 # Non-default, non-wasm; spine-quarantined (pure:false natives).
 mail = ["dep:lettre"]
+# `Core.HttpClient` (W3-2, the TOP-20 #2 parity blocker) — a SYNC HTTP/1.1 client over std
+# TcpStream with `rustls` for https (the TLS domain admitted 2026-07-03 EXPLICITLY to gate this
+# client) + `webpki-roots` (Mozilla trust anchors, no OS cert dependency). Native-only
+# (`E-TRANSPILE-HTTPCLIENT` — live network I/O has no byte-identity mapping; a curl-mapping may
+# lift this later, recorded). Non-default, non-wasm, spine-quarantined.
+http-client = ["dep:rustls", "dep:webpki-roots"]
 # Convenience: every admitted SQL driver at once.
 db-all = ["db", "db-postgres", "db-mysql"]
 
@@ -100,6 +106,8 @@ db-all = ["db", "db-postgres", "db-mysql"]
 # a domain where rolling your own is the security anti-pattern and std has no equivalent. `std` enables
 # the OS RNG (`OsRng`) for salt generation; feature-gated off for the playground.
 argon2 = { version = "0.5", optional = true, features = ["std"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
+webpki-roots = { version = "1.0.8", optional = true }
 # FOURTH external dependency (Amanieu d'Antras — author of hashbrown/parking_lot, in the Rust nursery;
 # stackful coroutines with miri-tested context switching). Powers green-thread task suspension (M6 W4):
 # each `spawn`ned task runs on its own stack and yields at `recv`/`join`/`yield`. std has no

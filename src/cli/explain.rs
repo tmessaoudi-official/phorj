@@ -1280,6 +1280,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              a forbidden semantic downgrade (§14 LADDER). Run mail programs with `phg run`, or keep\n\
              the mail-sending part native and transpile only the rest of your program.\n"
         }
+        "E-TRANSPILE-HTTPCLIENT" => {
+            "E-TRANSPILE-HTTPCLIENT — a program importing `Core.HttpClient` cannot be transpiled to PHP.\n\n\
+             `Core.HttpClient` is native-only: live network I/O cannot be byte-identical between the\n\
+             phorj client and any PHP mapping (curl/file_get_contents differ in redirects, TLS stacks,\n\
+             timeout semantics and error text), so `phg transpile` refuses rather than emitting a\n\
+             silently-diverging program (§14 LADDER). A faithful curl-mapping is a recorded future\n\
+             lift. Run HTTP-client programs with `phg run`.\n"
+        }
         "E-MODULE-UNAVAILABLE" => {
             "E-MODULE-UNAVAILABLE — this `phg` binary was built without the imported module's feature.\n\n\
              Some Core modules carry native code behind a cargo feature (e.g. `Core.Db` behind `db`,\n\

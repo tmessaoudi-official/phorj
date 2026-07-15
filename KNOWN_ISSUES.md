@@ -34,6 +34,15 @@ parse error, non-zero exit) — never a crash.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
+- **DEC-231 · Core.HttpClient SHIPPED** (sync HTTP/1.1 + rustls; security defaults beyond PHP curl;
+  native-only ladder). QUEUED ADJUDICATION for you: the cross-prelude ERROR-CLASS NAMESPACE smell —
+  injected-class dedup means two preludes declaring the same error name silently share one class
+  (wrong catch semantics); tonight's convention is name-prefixing (HttpTimeout/MailTimeout vs Db's
+  bare Timeout). Options to rule on: (a) per-module member-error syntax (`catch (Db.Timeout e)`),
+  (b) bless the prefix convention as the standing rule, (c) prelude-injection collision = compile
+  error. Also queued: curl-mapping transpile lift; HTTP/2/pooling/cookies as future slices.
+  FIXED en route: the quarantine substring hole (sweep batch 1 item 2) — Core.XSys impure modules
+  now quarantine `import Core.X` programs generically.
 - **PERF FLAGS (spine 8, WIN-OR-FLAG — measured pinned+interleaved vs fresh docker php:8.5-cli+JIT,
   quiet box, 2026-07-16):** the two NEW macro benches ship as honest LOSSES with anatomy:
   (1) `jsonround` **0.25×** — per-iteration Json parse→match→build→stringify. Anatomy: phorj's Json

@@ -171,7 +171,9 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
-**RUN CURSOR: → Value-ordered packs (spine complete 1–9 ✅). Spine 9 ✅ §4.8 recompute: parity
+**RUN CURSOR: → Value-ordered packs, continuing (pack 1 DONE: Core.HttpClient DEC-231 — the
+TOP-20 #2 blocker; next by value: Core.Fs enrichment (#5) → sessions (#3, needs web pillar) →
+sugar wave). Spine complete 1–9 ✅. Spine 9 ✅ §4.8 recompute: parity
 61→**62%**, vision 63→**64%**, floor 41→42% (FN-DB 10-row blocker fell; mail()/syslog covered;
 M-perf held at 70 honestly — 2 new macro losses flagged, not hidden). DONE ALSO: Spine 6 ✅
 (ratchet deferred under load-guard, then RUN on the quiet box: 21/21 micros HOLD, no flips,

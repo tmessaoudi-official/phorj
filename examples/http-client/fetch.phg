@@ -1,0 +1,45 @@
+// `Core.HttpClient` (W3-2) — the sync HTTP client: typed responses, typed failures, security
+// defaults PHP's curl does not have (response size cap, header-injection gate, URL-userinfo
+// rejection, explicit timeouts, bundled TLS roots).
+//
+// ── RUNNING THIS EXAMPLE ─────────────────────────────────────────────────────────────────────────
+// Needs `--features http-client` and LIVE network, so it is a hand-runnable reference (quarantined
+// from every automatic gate — live I/O is never byte-identity-gated):
+//
+//     cargo build --release --features http-client
+//     target/release/phg run examples/http-client/fetch.phg
+//
+// The deterministic coverage lives in `src/native/http_client.rs` (URL/chunked/redirect/timeout
+// units) and `tests/http_client.rs` (both-backend round-trips against an in-process fixture
+// server). `Core.HttpClient` is NATIVE-ONLY: `phg transpile` → `E-TRANSPILE-HTTPCLIENT`.
+package Main;
+
+import Core.Output;
+import Core.HttpClient;
+import Core.HttpClient.HttpClient;
+import Core.HttpClient.HttpResponse;
+import Core.HttpClient.HttpClientError;
+import Core.HttpClient.InvalidUrl;
+
+function main(): void {
+    try {
+        // Chainable config; 30 s timeout + 5 redirects are the defaults.
+        HttpClient c = new HttpClient();
+        discard c.timeout(10000).redirects(3);
+        // GET over https (rustls + bundled Mozilla roots — no OS cert store dependency).
+        HttpResponse r = c.get("https://example.com/");
+        Output.printLine("status: {r.status()}");
+        Output.printLine("content-type: {r.header(\"content-type\") ?? \"<none>\"}");
+        // POST with a typed body; PUT/DELETE and the general `send(...)` form exist too.
+        // HttpResponse p = c.post("https://httpbin.org/post", "application/json", "\{\"a\": 1\}");
+        // Security: URL credentials are rejected (send them in a header instead) — the
+        // credential-smuggling footgun PHP's file_get_contents/curl accept silently.
+        try {
+            discard c.get("https://user:pw@example.com/");
+        } catch (InvalidUrl e) {
+            Output.printLine("userinfo rejected: by design");
+        }
+    } catch (HttpClientError e) {
+        Output.printLine("http error: {e.message}");
+    }
+}

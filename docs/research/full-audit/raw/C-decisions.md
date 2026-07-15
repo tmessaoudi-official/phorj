@@ -1036,3 +1036,23 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   reads "it transpiled" as "it's fine". *Alternatives:* GMP emulation (correct, slowest, adds a PHP
   extension requirement — violates transpile-no-ini-extensions); 32-bit-halves manual wrap (subtle,
   still slow); silently emit checked semantics (rule-14 leg 3, FORBIDDEN).
+
+- **DEC-231 — AUTO-RULED (REOPENABLE): `Core.HttpClient` shipped (W3-2, TOP-20 #2 blocker) — sync
+  HTTP/1.1 over std TcpStream + rustls (the TLS domain admitted 2026-07-03 EXPLICITLY for this),
+  webpki-roots trust anchors; feature `http-client`, non-default, native-only
+  (`E-TRANSPILE-HTTPCLIENT` — curl-mapping recorded as a possible future lift).** Surface: separate
+  `Core.HttpClient` module (Symfony-component decomposition — the server-side `Core.Http` keeps
+  Request/Response/Router; alternatives: nest under Core.Http (no nested-module precedent), one
+  merged module (couples client to server)). Instance `HttpClient` with chainable timeout/redirects;
+  get/post/put/delete + general send; typed `HttpResponse`; v1 scope excludes HTTP/2, pooling,
+  proxies, cookies (documented). SECURITY beyond PHP curl: 64 MB response cap, CR/LF
+  header-injection gate, URL-userinfo rejection (credential smuggling), explicit timeouts always
+  on. Taxonomy names prefixed (`HttpTimeout`/`HttpTlsError`/`HttpConnectionFailed`) because bare
+  names are TAKEN by Core.Db/Core.Mail — which surfaced a real design smell: INJECTED-CLASS DEDUP
+  ACROSS PRELUDES = cross-module name capture (if two preludes declare `TlsError`, the second
+  silently reuses the first's class, breaking catch semantics). Recorded in KNOWN_ISSUES as a
+  QUEUED ADJUDICATION: per-module error namespacing (e.g. `Db.Timeout` member-error syntax) vs the
+  prefix convention. Risk example: `import Core.Mail; import Core.HttpClient;` — a TLS failure in
+  the HTTP client caught by `catch (TlsError e)` would land in a MAIL-taxonomy class. En route: the
+  sweep-batch-1 quarantine substring hole FIXED generically (`Core.XSys` impure natives now
+  quarantine programs importing the `Core.X` prelude twin).

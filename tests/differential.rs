@@ -1080,7 +1080,17 @@ fn uses_impure_native(src: &str) -> bool {
         .filter(|n| !n.pure)
         .map(|n| n.module)
         .collect();
-    impure.iter().any(|m| src.contains(&format!("import {m}")))
+    impure.iter().any(|m| {
+        if src.contains(&format!("import {m}")) {
+            return true;
+        }
+        // The `Core.XSys` convention (Db/Mail/HttpClient): the IMPURE natives live under the
+        // `…Sys` module, but user programs import the PRELUDE twin (`Core.Db`, not `Core.DbSys`) —
+        // without this mapping such programs were invisible to the quarantine (the sweep-batch-1
+        // substring hole; previously masked only by directory exclusions).
+        m.strip_suffix("Sys")
+            .is_some_and(|prelude| src.contains(&format!("import {prelude}")))
+    })
 }
 
 /// Recursively collect every single-file `*.phg` under `dir`, **skipping project roots**. A

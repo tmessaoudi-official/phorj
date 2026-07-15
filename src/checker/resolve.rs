@@ -253,6 +253,10 @@ impl Checker {
                 "MailHandle" if self.imports.values().any(|m| m == "Core.MailSys") => {
                     Ty::Named("MailHandle".into(), vec![])
                 }
+                // `HcHandle` (W3-2) — the `Core.HttpClient` opaque handle, gated on `Core.HttpClientSys`.
+                "HcHandle" if self.imports.values().any(|m| m == "Core.HttpClientSys") => {
+                    Ty::Named("HcHandle".into(), vec![])
+                }
                 "double" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => self.err(
                     *span,
                     format!("the numeric type `{name}` is not yet supported in M1"),

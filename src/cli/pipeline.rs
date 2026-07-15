@@ -470,6 +470,11 @@ fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
             "`Core.Db` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
         ),
         (
+            &["Core", "HttpClient"],
+            "E-TRANSPILE-HTTPCLIENT",
+            "`Core.HttpClient` is native-only: live network I/O cannot be byte-identical across the phorj client and a PHP mapping, so transpiling it is refused rather than silently diverging (THE LADDER RULE). A faithful curl-mapping is a recorded future lift. Run this program with `phg run`.",
+        ),
+        (
             &["Core", "Mail"],
             "E-TRANSPILE-MAIL",
             "`Core.Mail` is native-only (DEC-223): PHP's mail() has no SMTP auth, no TLS, and is header-injection-prone — any mapping would silently drop auth/TLS/attachments (THE LADDER RULE forbids the downgrade). Run this program with `phg run`.",

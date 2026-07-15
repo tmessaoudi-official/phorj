@@ -1686,6 +1686,8 @@ dependencies = [
  "postgres",
  "regex",
  "rusqlite",
+ "rustls",
+ "webpki-roots",
 ]
 
 [[package]]

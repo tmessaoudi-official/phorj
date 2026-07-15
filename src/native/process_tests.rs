@@ -50,6 +50,8 @@ fn every_other_native_is_pure() {
         // `Core.MailSys` is whole-module impure (DEC-223): network/filesystem mail delivery — any
         // importing program is quarantined. Only compiled under `--features mail`.
         "Core.MailSys",
+        // `Core.HttpClientSys` is whole-module impure (W3-2): live network I/O. `--features http-client`.
+        "Core.HttpClientSys",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the
