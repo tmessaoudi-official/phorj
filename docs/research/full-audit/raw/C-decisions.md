@@ -964,3 +964,23 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   runtime ("`?` requires a Result value"). Sibling walkers audited (rewrite_ufcs / desugar_router /
   resolve_variant_imports / intrinsic_imports all have New arms — rewrite_html was the sole hole).
   Pinned by `conformance/errors/lambda-in-ctor.phg` on all three backends.
+
+- **DEC-229 — AUTO-RULED (REOPENABLE): `mysql` crate admission (10th external-dependency domain) +
+  the slice-J MySQL/MariaDB driver + slice-K Postgres array mapping.** The 2026-07-03 amendment
+  already RULED the three-driver SQL DBAL (SQLite + Postgres + MySQL sync) — this realizes the
+  remaining admission: `mysql` v28 under `minimal-rust` (pure-Rust wire protocol, no libmysqlclient,
+  no TLS/compression/chrono extras; `unsafe` internal to the dep — the rusqlite/postgres criterion),
+  feature `db-mysql` (non-default, non-wasm, implies `db`; `db-all` extended). Driver divergences
+  handled explicitly (Invariant 14): no RETURNING (id via `last_insert_id`, SQLite-shaped) ·
+  standalone SAVEPOINT rejected under autocommit (BEGIN at depth 0, Postgres-shaped) ·
+  `max_execution_time` ms with MariaDB `max_statement_time` seconds fallback · DECIMAL→exact-text ·
+  TEXT-vs-BINARY blob split on BINARY_FLAG · temporal steering to CAST(col AS CHAR). En route:
+  `redact_dsn_password` hoisted to db/mod.rs (shared) and `Db.withPassword` now injects into
+  mysql/mariadb DSNs (was a SILENT NO-OP on non-postgres URL DSNs — a slice-G footgun killed).
+  Slice K: Postgres bool/int/float/text ARRAY columns → `Value::List` + STRICT typed accessors
+  `Row.get{Int,String,Float,Bool}List[OrNull]` + `List<scalar>` hydration fields/queryScalar sinks
+  route there via accessor_for. *Alternatives:* `mysql_async` (rejected: tokio at the API);
+  `diesel`/`sqlx` (rejected: whole-framework deps vs a driver); defer J (rejected: ruled driver set,
+  README already promises it). Risk example: `new Db("mysql://app@db:3306/prod")` previously fell
+  through to the SQLITE FILE PATH driver (opening a local file literally named the DSN!) — now a
+  clean feature-gated ConnectionError or the real driver.

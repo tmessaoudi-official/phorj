@@ -22,7 +22,7 @@
 //! outside a transaction block (bulk insert opens its own `BEGIN` at depth 0); and rows are read by
 //! declared column type, not by a dynamic storage class.
 
-use super::{Binds, DriverConn, PosBind};
+use super::{redact_dsn_password, Binds, DriverConn, PosBind};
 use crate::value::{HKey, Value};
 use postgres::types::{ToSql, Type};
 use postgres::{Config, NoTls, Row};
@@ -59,50 +59,6 @@ fn pg_sql_err(e: postgres::Error) -> String {
         Some(tag) => format!("<<{tag}>>{base}"),
         None => base,
     }
-}
-
-/// Replace the password component of a DSN with `***`, for use in connect diagnostics. Handles both the
-/// URL form (`postgres://user:PASS@host/db`) and the keyword form (`host=… password=PASS …`,
-/// space-delimited or single-quoted). Defense-in-depth: the password is also never RETAINED on the
-/// handle (it lives only transiently in the [`Config`] during connect), so this scrubs the one place a
-/// raw DSN could still surface — the connect-time error path.
-pub(super) fn redact_dsn_password(dsn: &str) -> String {
-    // URL form: userinfo password is between the first ':' after "://" and the '@' terminating the
-    // authority (which ends at '@', or at '/'/'?' if there is no '@').
-    if let Some(scheme_end) = dsn.find("://") {
-        let after = &dsn[scheme_end + 3..];
-        let authority_end = after.find(['/', '?']).map_or(after.len(), |i| {
-            i.min(after.find('@').map_or(after.len(), |a| a + 1))
-        });
-        let authority = &after[..after.find('@').map_or(authority_end, |a| a)];
-        if let Some(colon) = authority.find(':') {
-            let mut out = String::with_capacity(dsn.len());
-            out.push_str(&dsn[..scheme_end + 3]);
-            out.push_str(&authority[..colon]);
-            out.push_str(":***");
-            out.push_str(&after[authority.len()..]);
-            return out;
-        }
-        return dsn.to_string();
-    }
-    // Keyword form: `password=VALUE` up to the next whitespace, or `password='…'` (single-quoted).
-    if let Some(pos) = dsn.find("password=") {
-        let start = pos + "password=".len();
-        let rest = &dsn[start..];
-        let end = if let Some(quoted) = rest.strip_prefix('\'') {
-            // Closing quote at index `i` in `quoted` → past-the-closing-quote index in `rest` is `i + 2`
-            // (the opening quote + the closing quote).
-            quoted.find('\'').map_or(rest.len(), |i| i + 2)
-        } else {
-            rest.find(char::is_whitespace).unwrap_or(rest.len())
-        };
-        let mut out = String::with_capacity(dsn.len());
-        out.push_str(&dsn[..start]);
-        out.push_str("***");
-        out.push_str(&rest[end..]);
-        return out;
-    }
-    dsn.to_string()
 }
 
 /// A live Postgres connection, wrapped as the `postgres://` [`DriverConn`]. The `postgres::Client`
@@ -234,6 +190,25 @@ fn pg_cell(row: &Row, i: usize, ty: &Type, name: &str) -> Result<Value, String> 
             }
         }};
     }
+    // An array cell: `Option<Vec<Option<T>>>` — outer None = whole-array SQL NULL, inner None = a
+    // NULL element (surfaced as `Value::Null` for the accessor layer to police).
+    macro_rules! read_array {
+        ($rust:ty, $wrap:expr) => {{
+            let v: Option<Vec<Option<$rust>>> = row.try_get(i).map_err(pg_sql_err)?;
+            match v {
+                Some(items) => Value::List(Rc::new(
+                    items
+                        .into_iter()
+                        .map(|e| match e {
+                            Some(x) => $wrap(x),
+                            None => Value::Null,
+                        })
+                        .collect(),
+                )),
+                None => Value::Null,
+            }
+        }};
+    }
     Ok(match *ty {
         Type::BOOL => read!(bool, Value::Bool),
         Type::INT2 => read!(i16, |x| Value::Int(i64::from(x))),
@@ -245,6 +220,20 @@ fn pg_cell(row: &Row, i: usize, ty: &Type, name: &str) -> Result<Value, String> 
             read!(String, |x: String| Value::Str(x.into()))
         }
         Type::BYTEA => read!(Vec<u8>, |x| Value::Bytes(Rc::new(x))),
+        // ARRAY columns (DEC-208 slice K): the common scalar arrays map to a `Value::List` (a NULL
+        // ELEMENT maps to `Value::Null` here; the typed `getXList` accessors then reject or steer —
+        // strictness lives in ONE place, the accessor layer, like scalar NULLs). A whole-array SQL
+        // NULL is `Value::Null`. `numeric[]`/`json[]`/timestamp arrays stay unsupported — select
+        // them with a `::text[]` cast and read `getStringList` (the slice-E text discipline).
+        Type::BOOL_ARRAY => read_array!(bool, Value::Bool),
+        Type::INT2_ARRAY => read_array!(i16, |x| Value::Int(i64::from(x))),
+        Type::INT4_ARRAY => read_array!(i32, |x| Value::Int(i64::from(x))),
+        Type::INT8_ARRAY => read_array!(i64, Value::Int),
+        Type::FLOAT4_ARRAY => read_array!(f32, |x| Value::Float(f64::from(x))),
+        Type::FLOAT8_ARRAY => read_array!(f64, Value::Float),
+        Type::TEXT_ARRAY | Type::VARCHAR_ARRAY | Type::BPCHAR_ARRAY | Type::NAME_ARRAY => {
+            read_array!(String, |x: String| Value::Str(x.into()))
+        }
         _ => {
             return Err(format!(
                 "Core.Db: column `{name}` has unsupported postgres type `{ty}` — select it with a \

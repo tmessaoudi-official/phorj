@@ -897,7 +897,11 @@ SQLite (P1) + Postgres (`postgres` sync) + MySQL/MariaDB (`mysql` sync) — ALL 
 phorj-facing API (the `postgres` crate wraps `tokio-postgres` in a single internal blocking runtime —
 its own impl detail, feature-gated, non-default, non-wasm). **Realized 2026-07-14 (DEC-208 slice I):
 `rusqlite` (`db`) + `postgres` (`db-postgres`) are now in the tree behind a `DriverConn` seam** (SQLite
-shipped earlier); `mysql` (`db-mysql`, slice J) is the remaining admission.
+shipped earlier). **Realized 2026-07-15 (DEC-208 slice J, fable run — DEC-229): `mysql` (`db-mysql`,
+`minimal-rust`: pure-Rust wire protocol, no TLS/compression extras) completes the ruled three-driver set**
+— the same `DriverConn` seam, `?` native + `:name`→`?` translation, MySQL-error→taxonomy mapping,
+DECIMAL-as-exact-text cells, `BEGIN`-at-depth-0 bulk path, credential redaction. `db` itself became a
+DEFAULT feature 2026-07-15 (DEC-227).
 **Oracle deferred** (closed Instant Client → clause 2 fails); **MongoDB is a separate LADDER item**
 (non-SQL, no PDO analog → native-only `E-TRANSPILE-MONGO`; async-driver problem) requiring its own
 future design. Both W3-1/W3-2 ship a pure zero-dep P0 first (`Core.Sql` Tier-A value; `Core.Url`).

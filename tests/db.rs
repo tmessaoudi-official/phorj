@@ -1513,3 +1513,53 @@ fn db_stream_into_bad_sink_is_rejected() {
     );
     fails_with(&src, "E-DB-INTO-BAD-SINK");
 }
+
+// ── DEC-208 slice K: typed array-column accessors + `List<scalar>` hydration fields ─────────────────
+
+/// The array accessors are wired end-to-end: on SQLite (no array columns) a `getStringList` on a text
+/// column is the clean cross-driver "not an array" DbError — proving the prelude method, native, and
+/// error path; the POSITIVE mapping (a real `text[]` → `List<string>`) is exercised by the live
+/// Postgres round-trip (`tests/db_postgres.rs`) where arrays exist.
+#[test]
+fn db_get_string_list_on_non_array_column_is_clean_error() {
+    let src = typed_program(
+        r#"List<Row> rows = db.prepare("SELECT name FROM users WHERE name = 'Ada'").query();
+       for (Row r in rows) { discard r.getStringList("name"); }
+       Output.printLine("unreachable");"#,
+    );
+    let src = src.replace(
+        "import Core.Db.DbError;",
+        "import Core.Db.DbError;\nimport Core.Db.Row;",
+    );
+    both(
+        &src,
+        "caught: Core.Db.getStringList: column `name` is string, not an array\n",
+    );
+}
+
+/// A `List<string>` hydration FIELD routes through `getStringList` (slice K wiring through
+/// `accessor_for`): on SQLite this surfaces as the same clean "not an array" error, proving the
+/// desugar generated the array accessor for the list-typed field.
+#[test]
+fn db_query_into_list_field_routes_to_array_accessor() {
+    let src = r#"package Main;
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.DbError;
+class Tagged { constructor(public string name, public List<string> tags) {} }
+function main(): void {
+  try {
+    Db db = new Db("sqlite::memory:");
+    discard db.prepare("CREATE TABLE t(name TEXT, tags TEXT)").exec();
+    discard db.prepare("INSERT INTO t VALUES('Ada', 'x,y')").exec();
+    List<Tagged> rows = db.prepare("SELECT name, tags FROM t").queryInto();
+    Output.printLine("{List.length(rows)}");
+  } catch (DbError e) { Output.printLine("caught: {e.message}"); }
+}
+"#;
+    both(
+        src,
+        "caught: Core.Db.getStringList: column `tags` is string, not an array\n",
+    );
+}

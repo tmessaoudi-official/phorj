@@ -29,6 +29,8 @@
 //! `run ≡ runvm` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
 
+#[cfg(feature = "db-mysql")]
+mod mysql;
 #[cfg(feature = "db-postgres")]
 mod postgres;
 mod sqlite;
@@ -74,7 +76,24 @@ fn open_driver(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     if dsn.starts_with("postgres://") || dsn.starts_with("postgresql://") {
         return open_postgres(dsn);
     }
+    if dsn.starts_with("mysql://") || dsn.starts_with("mariadb://") {
+        return open_mysql(dsn);
+    }
     sqlite::open(dsn)
+}
+
+#[cfg(feature = "db-mysql")]
+fn open_mysql(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
+    mysql::open(dsn)
+}
+
+#[cfg(not(feature = "db-mysql"))]
+fn open_mysql(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
+    Err(
+        "<<ConnectionError>>Core.Db: the mysql driver is not compiled in \
+         (build with --features db-mysql)"
+            .to_string(),
+    )
 }
 
 #[cfg(feature = "db-postgres")]
@@ -99,7 +118,13 @@ fn open_postgres(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
 /// code), and the driver parses the password back OUT into its config and stores only a redacted DSN, so
 /// nothing retains the plaintext. A non-postgres DSN is returned unchanged (SQLite has no password).
 fn inject_pg_password(dsn: &str, pw: &str) -> String {
-    if !(dsn.starts_with("postgres://") || dsn.starts_with("postgresql://")) {
+    // Every URL-authority DSN takes the injected credential: postgres AND mysql/mariadb (slice J) —
+    // a `Db.withPassword` on a mysql DSN must never silently no-op. SQLite has no password; a bare
+    // path / `sqlite:` DSN is returned unchanged.
+    let url_scheme = ["postgres://", "postgresql://", "mysql://", "mariadb://"]
+        .iter()
+        .any(|s| dsn.starts_with(s));
+    if !url_scheme {
         return dsn.to_string();
     }
     let Some(idx) = dsn.find("://") else {
@@ -118,6 +143,54 @@ fn inject_pg_password(dsn: &str, pw: &str) -> String {
         }
         None => format!("{scheme}:{enc}@{authority}{tail}"),
     }
+}
+
+/// Replace the password component of a DSN with `***`, for use in connect diagnostics. Handles both the
+/// URL form (`postgres://user:PASS@host/db`) and the keyword form (`host=… password=PASS …`,
+/// space-delimited or single-quoted). Defense-in-depth: the password is also never RETAINED on the
+/// handle (it lives only transiently in the [`Config`] during connect), so this scrubs the one place a
+/// raw DSN could still surface — the connect-time error path.
+#[cfg_attr(
+    not(any(feature = "db-postgres", feature = "db-mysql")),
+    allow(dead_code)
+)]
+fn redact_dsn_password(dsn: &str) -> String {
+    // URL form: userinfo password is between the first ':' after "://" and the '@' terminating the
+    // authority (which ends at '@', or at '/'/'?' if there is no '@').
+    if let Some(scheme_end) = dsn.find("://") {
+        let after = &dsn[scheme_end + 3..];
+        let authority_end = after.find(['/', '?']).map_or(after.len(), |i| {
+            i.min(after.find('@').map_or(after.len(), |a| a + 1))
+        });
+        let authority = &after[..after.find('@').map_or(authority_end, |a| a)];
+        if let Some(colon) = authority.find(':') {
+            let mut out = String::with_capacity(dsn.len());
+            out.push_str(&dsn[..scheme_end + 3]);
+            out.push_str(&authority[..colon]);
+            out.push_str(":***");
+            out.push_str(&after[authority.len()..]);
+            return out;
+        }
+        return dsn.to_string();
+    }
+    // Keyword form: `password=VALUE` up to the next whitespace, or `password='…'` (single-quoted).
+    if let Some(pos) = dsn.find("password=") {
+        let start = pos + "password=".len();
+        let rest = &dsn[start..];
+        let end = if let Some(quoted) = rest.strip_prefix('\'') {
+            // Closing quote at index `i` in `quoted` → past-the-closing-quote index in `rest` is `i + 2`
+            // (the opening quote + the closing quote).
+            quoted.find('\'').map_or(rest.len(), |i| i + 2)
+        } else {
+            rest.find(char::is_whitespace).unwrap_or(rest.len())
+        };
+        let mut out = String::with_capacity(dsn.len());
+        out.push_str(&dsn[..start]);
+        out.push_str("***");
+        out.push_str(&rest[end..]);
+        return out;
+    }
+    dsn.to_string()
 }
 
 /// Percent-encode a string for a DSN userinfo component (RFC 3986 unreserved set kept verbatim).
@@ -920,6 +993,118 @@ fn get_decimal_or_null_inner(args: &[Value]) -> Result<Value, String> {
     decimal_from_cell(v, k, "getDecimalOrNull", true)
 }
 
+// --- Typed ARRAY-column accessors (DEC-208 slice K): a Postgres `int[]`/`text[]`/`float8[]`/`bool[]`
+// cell arrives as a `Value::List` (see `postgres::pg_cell`); these read it as a typed `List<scalar>`.
+// STRICT like the scalar accessors: a non-array column, a wrong element type, or a NULL ELEMENT is a
+// clean catchable DbError (Postgres arrays are nullable per element; phorj `List<int>` elements are
+// not — the error steers to filtering NULLs in SQL, e.g. `array_remove(col, NULL)`). The `OrNull`
+// variants admit a whole-array SQL NULL (→ `null`), never NULL elements. SQLite/MySQL never produce
+// a list cell, so on those drivers the error reads "not an array" — the honest cross-driver story
+// (arrays are a Postgres capability; the SAME class hydrates everywhere else via scalar columns).
+
+/// Validate every element of an array cell with `check`, or explain which element broke.
+fn list_from_cell(
+    v: &Value,
+    k: &str,
+    who: &str,
+    elem: &str,
+    or_null: bool,
+    check: impl Fn(&Value) -> bool,
+) -> Result<Value, String> {
+    match v {
+        Value::List(items) => {
+            for (i, it) in items.iter().enumerate() {
+                if matches!(it, Value::Null) {
+                    return Err(format!(
+                        "Core.Db.{who}: column `{k}` has a NULL element at [{i}] — filter them in \
+                         SQL (e.g. array_remove({k}, NULL)) or select a non-null projection"
+                    ));
+                }
+                if !check(it) {
+                    return Err(format!(
+                        "Core.Db.{who}: column `{k}` element [{i}] is {}, not {elem}",
+                        it.type_name()
+                    ));
+                }
+            }
+            Ok(v.clone())
+        }
+        Value::Null if or_null => Ok(Value::Null),
+        Value::Null => Err(format!(
+            "Core.Db.{who}: column `{k}` is NULL (use List<{elem}>? / the OrNull accessor)"
+        )),
+        other => Err(format!(
+            "Core.Db.{who}: column `{k}` is {}, not an array",
+            other.type_name()
+        )),
+    }
+}
+
+macro_rules! list_accessor_inner {
+    ($fn_name:ident, $who:literal, $elem:literal, $or_null:literal, $pat:pat) => {
+        fn $fn_name(args: &[Value]) -> Result<Value, String> {
+            let (v, k) = row_cell(args, $who)?;
+            list_from_cell(v, k, $who, $elem, $or_null, |it| matches!(it, $pat))
+        }
+    };
+}
+list_accessor_inner!(
+    get_int_list_inner,
+    "getIntList",
+    "int",
+    false,
+    Value::Int(_)
+);
+list_accessor_inner!(
+    get_string_list_inner,
+    "getStringList",
+    "string",
+    false,
+    Value::Str(_)
+);
+list_accessor_inner!(
+    get_float_list_inner,
+    "getFloatList",
+    "float",
+    false,
+    Value::Float(_)
+);
+list_accessor_inner!(
+    get_bool_list_inner,
+    "getBoolList",
+    "bool",
+    false,
+    Value::Bool(_)
+);
+list_accessor_inner!(
+    get_int_list_or_null_inner,
+    "getIntListOrNull",
+    "int",
+    true,
+    Value::Int(_)
+);
+list_accessor_inner!(
+    get_string_list_or_null_inner,
+    "getStringListOrNull",
+    "string",
+    true,
+    Value::Str(_)
+);
+list_accessor_inner!(
+    get_float_list_or_null_inner,
+    "getFloatListOrNull",
+    "float",
+    true,
+    Value::Float(_)
+);
+list_accessor_inner!(
+    get_bool_list_or_null_inner,
+    "getBoolListOrNull",
+    "bool",
+    true,
+    Value::Bool(_)
+);
+
 // --- Column introspection (DEC-208 slice B): two capabilities the desugared `queryScalar` /
 // `queryMap` / nested-hydration helpers need, routed through the SAME `DbResult`/`wrap` protocol as
 // the accessors (NOT a duplication of `getX` — genuinely new operations). `columnNames` gives the
@@ -995,6 +1180,14 @@ db_native!(row_get_float_or_null, get_float_or_null_inner);
 db_native!(row_get_bool_or_null, get_bool_or_null_inner);
 db_native!(row_get_decimal, get_decimal_inner);
 db_native!(row_get_decimal_or_null, get_decimal_or_null_inner);
+db_native!(row_get_int_list, get_int_list_inner);
+db_native!(row_get_string_list, get_string_list_inner);
+db_native!(row_get_float_list, get_float_list_inner);
+db_native!(row_get_bool_list, get_bool_list_inner);
+db_native!(row_get_int_list_or_null, get_int_list_or_null_inner);
+db_native!(row_get_string_list_or_null, get_string_list_or_null_inner);
+db_native!(row_get_float_list_or_null, get_float_list_or_null_inner);
+db_native!(row_get_bool_list_or_null, get_bool_list_or_null_inner);
 db_native!(row_column_names, column_names_inner);
 db_native!(row_is_null, is_null_inner);
 
@@ -1324,6 +1517,81 @@ pub fn db_natives() -> Vec<NativeFn> {
             pure: false,
             eval: NativeEval::Pure(row_get_int),
             php: |a| format!("(int) {}[{}]", a[0], a[1]),
+        },
+        // Typed ARRAY-column accessors (DEC-208 slice K): Postgres `int[]`/`text[]`/`float8[]`/
+        // `bool[]` cells → typed `List<scalar>` (strict; NULL elements rejected; `OrNull` admits a
+        // whole-array NULL). PHP emitters are placeholders (Core.Db is E-TRANSPILE-DB native-only).
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getIntList",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::List(Box::new(Ty::Int))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_int_list),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getStringList",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::List(Box::new(Ty::String))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_string_list),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getFloatList",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::List(Box::new(Ty::Float))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_float_list),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getBoolList",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::List(Box::new(Ty::Bool))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_bool_list),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getIntListOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::Int))))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_int_list_or_null),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getStringListOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::String))))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_string_list_or_null),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getFloatListOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::Float))))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_float_list_or_null),
+            php: |a| a[0].clone(),
+        },
+        NativeFn {
+            module: "Core.DbSys",
+            name: "getBoolListOrNull",
+            params: vec![handle(), Ty::String],
+            ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::Bool))))),
+            pure: false,
+            eval: NativeEval::Pure(row_get_bool_list_or_null),
+            php: |a| a[0].clone(),
         },
         NativeFn {
             module: "Core.DbSys",
@@ -1948,5 +2216,52 @@ mod tests {
             inject_pg_password("sqlite::memory:", "x"),
             "sqlite::memory:"
         );
+        // Slice J: mysql/mariadb URL DSNs take the injected credential too (withPassword must never
+        // silently no-op on a MySQL DSN).
+        assert_eq!(
+            inject_pg_password("mysql://user@host:3306/db", "pw"),
+            "mysql://user:pw@host:3306/db"
+        );
+        assert_eq!(
+            inject_pg_password("mariadb://u:old@h/db", "new"),
+            "mariadb://u:new@h/db"
+        );
+    }
+
+    // ── Typed array-accessor validation (DEC-208 slice K, server-free) ──────────────────────────
+
+    #[test]
+    fn list_from_cell_validates_elements_strictly() {
+        let ok = Value::List(Rc::new(vec![Value::Int(1), Value::Int(2)]));
+        assert!(matches!(
+            list_from_cell(&ok, "c", "getIntList", "int", false, |v| matches!(
+                v,
+                Value::Int(_)
+            )),
+            Ok(Value::List(_))
+        ));
+        // A NULL element is rejected with the array_remove steering.
+        let holed = Value::List(Rc::new(vec![Value::Int(1), Value::Null]));
+        let err = list_from_cell(&holed, "c", "getIntList", "int", false, |v| {
+            matches!(v, Value::Int(_))
+        })
+        .unwrap_err();
+        assert!(err.contains("NULL element at [1]"), "{err}");
+        // A wrong element type names the offender.
+        let mixed = Value::List(Rc::new(vec![Value::Str("x".into())]));
+        let err = list_from_cell(&mixed, "c", "getIntList", "int", false, |v| {
+            matches!(v, Value::Int(_))
+        })
+        .unwrap_err();
+        assert!(err.contains("element [0] is string, not int"), "{err}");
+        // Whole-array NULL: OrNull admits, strict rejects; a scalar cell is "not an array".
+        assert!(matches!(
+            list_from_cell(&Value::Null, "c", "getIntListOrNull", "int", true, |_| true),
+            Ok(Value::Null)
+        ));
+        assert!(list_from_cell(&Value::Null, "c", "getIntList", "int", false, |_| true).is_err());
+        let err =
+            list_from_cell(&Value::Int(3), "c", "getIntList", "int", false, |_| true).unwrap_err();
+        assert!(err.contains("not an array"), "{err}");
     }
 }

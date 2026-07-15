@@ -1,0 +1,93 @@
+// `Core.Db` — the MySQL/MariaDB driver (DEC-208 slice J) + credential Secret (slice G).
+//
+// `Core.Db` is a MULTI-DRIVER primitive: `new Db(dsn)` dispatches on the DSN scheme behind a driver
+// trait — `sqlite:…` (bundled SQLite, the default `db` feature), `postgres://…` (`db-postgres`), and
+// `mysql://…` / `mariadb://…` (the sync `mysql` crate, the `db-mysql` feature). The whole surface is
+// identical across drivers — the SAME `prepare`/`bind`/`bindNamed`/`query`/`exec`/`execReturningId`/
+// `transaction`/typed-`DbError` API — so porting between backends is a one-line DSN change.
+//
+// ── RUNNING THIS EXAMPLE ─────────────────────────────────────────────────────────────────────────
+// Unlike the other `examples/db/*.phg` (which use in-memory SQLite and run headless), this one needs a
+// LIVE MySQL/MariaDB, so it is NOT part of the automatic gate — it is a hand-runnable reference. Build
+// with the driver and point it at your server:
+//
+//     cargo build --release --features db-mysql
+//     # edit the DSN below to your server, then:
+//     target/release/phg run examples/db/mysql.phg
+//
+// The automatic, server-free driver coverage (placeholder handling, `:name`→`?` translation, error-
+// code→typed-error mapping, DECIMAL-as-text cells, TEXT-vs-BINARY blobs, credential redaction) lives
+// in `src/native/db/mysql.rs`; the live round-trip is `tests/db_mysql.rs` (opt in via
+// `PHORJ_MYSQL_TEST_DSN`).
+package Main;
+
+import Core.Output;
+import Core.Db;
+import Core.Db.Db;
+import Core.Db.Row;
+import Core.Db.DbError;
+import Core.Db.UniqueViolation;
+import Core.Secret;
+
+function main(): void {
+    // MySQL takes `?` natively; `:name` binds are translated for you. The dispatch is purely on the
+    // scheme: `mysql://` or `mariadb://` → the MySQL driver.
+    string dsn = "mysql://developer@localhost:42708/testx";
+    // ── Credential safety (slice G) ──────────────────────────────────────────────────────────────
+    // Same discipline as the Postgres driver: the `Core.Secret` password is injected at the connect
+    // boundary, parsed into the driver's config, and only a REDACTED DSN is retained — a connect
+    // error prints the host, never the password.
+    Secret<string> password = new Secret("developer");
+    try {
+        Db db = Db.withPassword(dsn, password);
+        discard db.prepare("DROP TABLE IF EXISTS phorj_my_demo").exec();
+        discard db
+            .prepare(
+                "CREATE TABLE phorj_my_demo(id INT AUTO_INCREMENT PRIMARY KEY, name TEXT, amount DECIMAL(10,2))"
+            )
+            .exec();
+        // Positional `?` binds (native to the MySQL wire protocol).
+        discard db
+            .prepare("INSERT INTO phorj_my_demo(id, name, amount) VALUES(?, ?, ?)")
+            .bind(1)
+            .bind("Ada")
+            .bind("12.50")
+            .exec();
+        // Named `:name` binds (translated to `?` in appearance order).
+        discard db
+            .prepare("INSERT INTO phorj_my_demo(id, name, amount) VALUES(:id, :name, NULL)")
+            .bindNamed("id", 2)
+            .bindNamed("name", "Grace")
+            .exec();
+        // Query back — a DECIMAL column arrives as its EXACT decimal text, so `getDecimal` parses it
+        // losslessly (never through a float).
+        List<Row> rows = db
+            .prepare("SELECT id, name, amount FROM phorj_my_demo WHERE id > ? ORDER BY id")
+            .bind(0)
+            .query();
+        for (Row r in rows) {
+            int id = r.getInt("id");
+            string name = r.getString("name");
+            decimal? amount = r.getDecimalOrNull("amount");
+            Output.printLine("{id}: {name} ({amount ?? 0.00d})");
+        }
+        // AUTO_INCREMENT id — `execReturningId` reads the connection's last_insert_id (MySQL has no
+        // RETURNING; the driver handles the divergence, your code does not change).
+        int newId = db
+            .prepare("INSERT INTO phorj_my_demo(name, amount) VALUES('Lin', NULL)")
+            .execReturningId();
+        Output.printLine("new id: {newId}");
+        // A duplicate PK → MySQL error 1062 → the typed `UniqueViolation` subtype.
+        try {
+            discard db
+                .prepare("INSERT INTO phorj_my_demo(id, name, amount) VALUES(1, 'dup', NULL)")
+                .exec();
+        } catch (UniqueViolation e) {
+            Output.printLine("caught duplicate: {e.message}");
+        }
+        discard db.prepare("DROP TABLE phorj_my_demo").exec();
+        db.close();
+    } catch (DbError e) {
+        Output.printLine("DB error: {e.message}");
+    }
+}

@@ -20,6 +20,14 @@ parse error, non-zero exit) — never a crash.
   row-at-a-time delivery + lazy hydration; true incremental stepping is a driver-internal upgrade
   (Postgres portals first). QUEUED REAL ADJUDICATION: `for (x in stream)` — the general Iterator
   protocol (Data-pillar lazy-streams) — needs your ruling on the protocol shape.
+- **DEC-229 · MySQL/MariaDB driver shipped (`db-mysql`, `mysql` crate v28 `minimal-rust`) + slice-K
+  Postgres array mapping** (`int[]`→`List<int>` etc. via strict `getXList[OrNull]` accessors +
+  `List<scalar>` hydration fields). Footgun killed en route: `Db.withPassword` was a SILENT NO-OP on
+  mysql DSNs, and a `mysql://` DSN previously fell through to the SQLite bare-path driver (creating a
+  local FILE named like the DSN). Live round-trip is opt-in: run
+  `PHORJ_MYSQL_TEST_DSN='mysql://developer:developer@localhost:42708/<db>' cargo test --features
+  db-mysql --test db_mysql` against the stack MySQL in the morning. Temporal columns + `numeric[]`
+  read via CAST/`::text[]` (documented steering, not silent).
 - **FIXED en route · `rewrite_html` walker missed `Expr::New`** — any throws-`?` / `html"…"` / tagged
   template nested in `new C(args)` was silently left un-rewritten (VM compile error / interpreter
   runtime fault). Severity: P0 correctness (pre-existing, latent). Pinned by

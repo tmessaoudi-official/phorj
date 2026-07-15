@@ -573,6 +573,35 @@ class Row {
   function getDecimalOrNull(string column): decimal? throws DbError {
     return match (DbSys.getDecimalOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
   }
+  // Typed ARRAY-column accessors (DEC-208 slice K) — a Postgres `int[]`/`text[]`/`float8[]`/`bool[]`
+  // column reads as a typed `List<scalar>`. STRICT: a non-array column, a wrong element type, or a
+  // NULL element throws a catchable DbError (filter NULL elements in SQL: `array_remove(col, NULL)`);
+  // the `OrNull` forms admit a whole-array SQL NULL. Numeric/decimal arrays: select `col::text[]` and
+  // read `getStringList` (the slice-E decimal-as-text discipline, element form).
+  function getIntList(string column): List<int> throws DbError {
+    return match (DbSys.getIntList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getStringList(string column): List<string> throws DbError {
+    return match (DbSys.getStringList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getFloatList(string column): List<float> throws DbError {
+    return match (DbSys.getFloatList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getBoolList(string column): List<bool> throws DbError {
+    return match (DbSys.getBoolList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getIntListOrNull(string column): List<int>? throws DbError {
+    return match (DbSys.getIntListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getStringListOrNull(string column): List<string>? throws DbError {
+    return match (DbSys.getStringListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getFloatListOrNull(string column): List<float>? throws DbError {
+    return match (DbSys.getFloatListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
+  function getBoolListOrNull(string column): List<bool>? throws DbError {
+    return match (DbSys.getBoolListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  }
   // Column introspection (DEC-208 slice B) — the desugared `queryScalar`/`queryMap`/nested-hydration
   // helpers use these. `columnNames` is selection-ordered; `isNull` tests a column for SQL NULL.
   function columnNames(): List<string> throws DbError {

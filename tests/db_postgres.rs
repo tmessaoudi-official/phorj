@@ -88,6 +88,18 @@ function main(): void {{
             .executeMany([[20], [21]]);
         Output.printLine("bulk={{bulk}}");
 
+        // Array mapping (slice K): int[]/text[] columns read as typed lists via the array accessors;
+        // a List<string> hydration field routes there too.
+        discard db.prepare("CREATE TABLE phorj_pg_arr(id INT, nums INT[], tags TEXT[])").exec();
+        discard db.prepare("INSERT INTO phorj_pg_arr VALUES(1, ARRAY[1,2,3], ARRAY['a','b'])").exec();
+        List<Row> arows = db.prepare("SELECT nums, tags FROM phorj_pg_arr").query();
+        for (Row ar in arows) {{
+            List<int> nums = ar.getIntList("nums");
+            List<string> tags = ar.getStringList("tags");
+            Output.printLine("nums={{List.length(nums)}} first={{nums[0]}} tags={{List.length(tags)}}");
+        }}
+        discard db.prepare("DROP TABLE phorj_pg_arr").exec();
+
         // A closure transaction — BEGIN/COMMIT through the portable control SQL, returning a value.
         int tx = db.transaction(function(): int throws DbError {{
             Statement s = db.prepare("UPDATE phorj_pg_it SET name = 'upd' WHERE id = 1")?;
@@ -117,7 +129,8 @@ fn postgres_round_trip_on_both_backends() {
         return;
     };
     let src = program(&dsn);
-    let expected = "1=Ada\n2=Grace\nreturning=3\nunique-violation\nbulk=2\ntx=7\n";
+    let expected =
+        "1=Ada\n2=Grace\nreturning=3\nunique-violation\nbulk=2\nnums=3 first=1 tags=2\ntx=7\n";
     let tree = cmd_treewalk(&src).expect("postgres round-trip runs on the interpreter");
     assert_eq!(tree, expected, "interpreter output");
     // run ≡ runvm: the VM must produce byte-identical stdout.

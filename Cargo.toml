@@ -82,15 +82,18 @@ db = ["dep:rusqlite"]
 # impl detail (feature-gated, non-default, non-wasm) — the phorj-facing API stays sync, per the
 # dependency policy (SQL domain: SQLite+Postgres+MySQL sync). Off by default and off for wasm.
 db-postgres = ["db", "dep:postgres"]
+# MySQL/MariaDB driver for `Core.Db` (DEC-208 slice J). Admits the SYNC `mysql` crate
+# (`minimal-rust`: pure-Rust wire protocol, no compression/TLS/chrono extras — the smallest surface).
+# `db-mysql` implies `db` (same multi-driver seam as `db-postgres`). Off by default and off for wasm.
+db-mysql = ["db", "dep:mysql"]
 # Convenience: every admitted SQL driver at once.
-db-all = ["db", "db-postgres"]
+db-all = ["db", "db-postgres", "db-mysql"]
 
 [dependencies]
 # FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
 # a domain where rolling your own is the security anti-pattern and std has no equivalent. `std` enables
 # the OS RNG (`OsRng`) for salt generation; feature-gated off for the playground.
 argon2 = { version = "0.5", optional = true, features = ["std"] }
-
 # FOURTH external dependency (Amanieu d'Antras — author of hashbrown/parking_lot, in the Rust nursery;
 # stackful coroutines with miri-tested context switching). Powers green-thread task suspension (M6 W4):
 # each `spawn`ned task runs on its own stack and yields at `recv`/`join`/`yield`. std has no
@@ -115,6 +118,13 @@ rusqlite = { version = "0.40", optional = true, features = ["bundled"] }
 # non-wasm); the phorj-facing driver API is fully sync. Its `unsafe` is confined to the dependency, like
 # rusqlite — phorj's own crate stays unsafe-free. See UNIFIED-SPEC #external-dependency-policy (SQL domain).
 postgres = { version = "0.19", optional = true }
+
+# TENTH external-dependency domain (MySQL/MariaDB driver, DEC-229 AUTO-RULED 2026-07-15 — the slice-J
+# twin of the postgres admission). The SYNC `mysql` crate under `minimal-rust`: pure-Rust native wire
+# protocol, no system libmysqlclient, no TLS/compression/chrono extras pulled. Its `unsafe` stays
+# internal to the dependency (the rusqlite/postgres criterion) — phorj's own crate stays unsafe-free.
+# Feature-gated (`db-mysql`), non-default, non-wasm, spine-quarantined like every DB driver.
+mysql = { version = "28.0.0", default-features = false, features = ["minimal-rust"], optional = true }
 
 # SEVENTH external-dependency domain (native codegen, developer-authorized 2026-07-06). Cranelift
 # (Bytecode Alliance — the wasmtime code generator, fuzzed + production-hardened) is the JIT backend

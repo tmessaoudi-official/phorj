@@ -229,10 +229,24 @@ fn scalar_label(ty: &Type) -> Option<String> {
             _ => None,
         }
     }
+    // DEC-208 slice K: `List<scalar>` sinks label as `IntList`/`StringList`/… (array-column reads).
+    fn list_label(inner: &Type) -> Option<String> {
+        match inner {
+            Type::Named { name, args, .. } if name == "List" && args.len() == 1 => match &args[0] {
+                Type::Named { name: e, args, .. } if args.is_empty() && e != "decimal" => {
+                    Some(format!("{}List", cap(e)?))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
     match ty {
         Type::Named { name, args, .. } if args.is_empty() => cap(name),
+        Type::Named { .. } => list_label(ty),
         Type::Optional { inner, .. } => match &**inner {
             Type::Named { name, args, .. } if args.is_empty() => Some(format!("{}Opt", cap(name)?)),
+            t @ Type::Named { .. } => Some(format!("{}Opt", list_label(t)?)),
             _ => None,
         },
         _ => None,
@@ -278,6 +292,29 @@ fn is_promoted(p: &CtorParam) -> bool {
 /// `getInt`, …) — which throws on a SQL NULL — or the nullable accessor for a `T?` scalar (`int?`→
 /// `getIntOrNull`, …) — which admits NULL. Any other type has no column accessor (`None`).
 fn accessor_for(ty: &Type) -> Option<&'static str> {
+    // DEC-208 slice K: a `List<scalar>` field maps an ARRAY column (Postgres `int[]` → `List<int>`,
+    // `text[]` → `List<string>`, …) via the typed list accessors. `decimal` arrays are excluded
+    // (Postgres `numeric[]` is read via a `::text[]` cast into `List<string>` — the slice-E
+    // store-decimal-as-TEXT discipline, element form).
+    fn list_accessor(elem: &Type, or_null: bool) -> Option<&'static str> {
+        let Type::Named { name, args, .. } = elem else {
+            return None;
+        };
+        if !args.is_empty() {
+            return None;
+        }
+        Some(match (name.as_str(), or_null) {
+            ("int", false) => "getIntList",
+            ("string", false) => "getStringList",
+            ("float", false) => "getFloatList",
+            ("bool", false) => "getBoolList",
+            ("int", true) => "getIntListOrNull",
+            ("string", true) => "getStringListOrNull",
+            ("float", true) => "getFloatListOrNull",
+            ("bool", true) => "getBoolListOrNull",
+            _ => return None,
+        })
+    }
     match ty {
         Type::Named { name, args, .. } if args.is_empty() => match name.as_str() {
             "int" => Some("getInt"),
@@ -288,6 +325,9 @@ fn accessor_for(ty: &Type) -> Option<&'static str> {
             "decimal" => Some("getDecimal"),
             _ => None,
         },
+        Type::Named { name, args, .. } if name == "List" && args.len() == 1 => {
+            list_accessor(&args[0], false)
+        }
         Type::Optional { inner, .. } => match &**inner {
             Type::Named { name, args, .. } if args.is_empty() => match name.as_str() {
                 "int" => Some("getIntOrNull"),
@@ -297,6 +337,9 @@ fn accessor_for(ty: &Type) -> Option<&'static str> {
                 "decimal" => Some("getDecimalOrNull"),
                 _ => None,
             },
+            Type::Named { name, args, .. } if name == "List" && args.len() == 1 => {
+                list_accessor(&args[0], true)
+            }
             _ => None,
         },
         _ => None,

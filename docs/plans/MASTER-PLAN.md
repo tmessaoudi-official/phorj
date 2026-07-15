@@ -171,7 +171,10 @@ codemod. `git stash pop` to resume in a fresh context. **DEC-216 PENDING** (pack
 > workflows, no agent teams). Full review sweep of everything shipped. All rulings below are
 > developer-adjudicated 2026-07-15; alternatives recorded in C-decisions.md §2026-07-15.
 
-**RUN CURSOR: → Spine 3 (MySQL driver, item J + slice K). DONE: Spine 1 ✅ (query…() turbofish,
+**RUN CURSOR: → Spine 4 (Core.Mail build per DEC-223 locked spec). DONE ALSO: Spine 3 ✅ DEC-229
+(MySQL/MariaDB driver `db-mysql` + slice-K Postgres arrays→List<T> + withPassword mysql-DSN fix +
+bare-path fallthrough killed; 79 db tests + 21 lib tests; live round-trip opt-in vs stack MySQL
+42708). DONE: Spine 1 ✅ (query…() turbofish,
 `4a90e60e`) · Spine 2a ✅ DEC-227 (`db` DEFAULT feature + E-MODULE-UNAVAILABLE + E-TRANSPILE-DB,
 `a9e35ac3`) · Spine 2 ✅ DEC-228 (streaming: `stream()`→RowStream + `streamInto<T>()`→DbStream<T>
 lazy hydrate-on-pull; laziness proven by early-exit-skips-bad-rows test; cursor materialization
