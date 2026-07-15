@@ -1183,3 +1183,17 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   phorj wordier than PHP at the multi-arg point).* Build = parser/checker slice, queued
   fresh-context; conformance goldens must pin: probes A–E + P1–P3 from the audit (bare 2-param
   loud error, closure/method-value/callable-returning RHS, chain, precedence, void rejection).
+
+- **DEC-240 — RULED (audit flag F-002): `Core.Uri` — one immutable RFC 3986 class with typed
+  errors.** PHP 8.5 ships an always-on URI extension (`Uri\Rfc3986\Uri` raw+normalized getters,
+  `Uri\WhatWg\Url` browser normalization, withers, `resolve()`, comparison) replacing the
+  20-years-lying `parse_url()`; phorj had only 4 percent-encoding helpers (`Core.Url`) + an
+  http(s)-only INTERNAL parser in HttpClient. Ruled shape: single immutable `Uri` — `Uri.parse(s)`
+  throwing a typed `UriError` taxonomy (beats PHP's generic exceptions), full accessors
+  (scheme/userInfo/host/port/path/query/fragment + raw variants), withers, RFC 3986 §5.2
+  `resolve(ref)`, `normalize()`, `equals`, `toString`, all schemes. **PHP twin =
+  `Uri\Rfc3986\Uri` (the 8.5 floor makes it always available) → byte-identity, NO native-only
+  ladder quarantine.** HttpClient's internal parser retires onto it (architecture win, D3).
+  *Alternatives (offered): mirror both PHP classes incl. WHATWG (deferred until a real need —
+  browser-grade normalization is marginal for a backend language; recorded); defer entirely
+  (rejected — PHP measurably ahead of phorj TODAY, against the mandate).* Build queued.

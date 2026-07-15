@@ -93,10 +93,13 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 
 ## Project qualities
 
-- **Std-first with exactly four vetted, feature-gated dependencies** — `argon2` (Argon2id),
-  `regex` (`Core.Regex`), `ctrlc` (signals), `corosensei` (green threads); nothing else (see
-  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and `docs/specs/UNIFIED-SPEC.md#external-dependency-policy`).
-- **No `unsafe`** — `#![forbid(unsafe_code)]` crate-wide.
+- **Std-first with a short, vetted, feature-gated dependency list** — `argon2` (Argon2id),
+  `regex` (`Core.Regex`), `ctrlc` (signals), `corosensei` (green threads), `rusqlite`/`postgres`/
+  `mysql` (Core.Db drivers), `lettre` (Core.Mail SMTP), `rustls`+`webpki-roots` (TLS for
+  HttpClient/Mail); nothing else (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
+  `docs/specs/UNIFIED-SPEC.md#external-dependency-policy` — every admission is register-recorded).
+- **No `unsafe` outside one audited island** — `#![deny(unsafe_code)]` on both crate roots; the
+  JIT's audited `unsafe` (confined to `src/jit/`) is the sole exception.
 - **Never panics on input** — adversarial source *and* adversarial binaries are handled cleanly
   (invariant EV-7).
 - **Differential-tested** — every example runs on both backends and must match byte-for-byte.

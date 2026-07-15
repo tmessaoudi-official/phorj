@@ -32,9 +32,9 @@
 
 | Flag | Dim | Severity | One-liner | Ruling |
 |------|-----|----------|-----------|--------|
-| F-001 | D0 | HIGH | pipe `\|>` triple conflict: shipped-plain vs DEC-235-first-arg vs PHP-8.5-callable-application | pending |
-| F-002 | D0 | HIGH | Core.Url = 4 helpers vs PHP 8.5 typed always-on URI parser | pending |
-| F-003 | D0 | MED | FEATURES.md stale: "four deps" + "forbid(unsafe_code)" | pending (D6 doc fix) |
+| F-001 | D0 | HIGH | pipe `\|>` triple conflict: shipped-plain vs DEC-235-first-arg vs PHP-8.5-callable-application | **RULED DEC-239**: PHP-aligned base ratified, DEC-235 revoked, precedence fix + `%` placeholder + contextual pipe lambda queued |
+| F-002 | D0 | HIGH | Core.Url = 4 helpers vs PHP 8.5 typed always-on URI parser | **RULED DEC-240**: Core.Uri (RFC 3986, typed errors, PHP-8.5 twin — transpilable) queued |
+| F-003 | D0 | MED | FEATURES.md stale: "four deps" + "forbid(unsafe_code)" | **FIXED** (D6 doc commit, this session) |
 | F-004 | D0 | MED | asymmetric visibility spec'd in UNIFIED-SPEC, absent in code | pending |
 | F-005 | D0 | LOW | partitioned-cookie (CHIPS) absent in Core.Session | pending |
 | F-006 | D0 | LOW | Core.String lacks similarity family (levenshtein/similar/soundex) | pending |
