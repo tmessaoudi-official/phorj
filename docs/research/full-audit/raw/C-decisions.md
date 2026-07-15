@@ -1652,3 +1652,24 @@ DNS-PIN unchanged (resolve once, connect to the resolved IP, re-check across red
 *Alternatives (offered, rejected): block-all-incl-loopback (literal ruling — high friction, breaks
 localhost + all tests); block-metadata-only (leaves internal-LAN SSRF open). This is the DEC-272 socket
 secure-default rider; the future Core.Net inherits it via the shared Transport seam.*
+
+## DEC-270 — SHIPPED (2026-07-16, Tier-1 build): HttpClient SSRF guard
+
+`exchange` connected to the resolved addr with NO filtering (F-028). Fix: `is_blocked_ip` (pure,
+unit-tested) refuses by default — RFC1918 + CGNAT 100.64/10 (RFC 6598, holds Alibaba metadata
+100.100.100.200) + 192.0.0.0/24 (IETF assignments incl. 192.0.0.192) + link-local 169.254/16 (incl.
+the 169.254.169.254 cloud-metadata endpoint) + 0.0.0.0/:: + IPv4 broadcast + IPv6 ULA fc00::/7 +
+IPv6 link-local fe80::/10; ALLOWS loopback (127/8, ::1 — the refined DEC-270 ruling). `embedded_v4`
+decodes every IPv6→IPv4 embedding (mapped ::ffff, compatible ::a.b.c.d, 6to4 2002::/16, NAT64
+64:ff9b::/96) and re-checks the embedded v4 — closes the NAT64/DNS64 bypass. DNS-PIN: resolve once,
+check the resolved IP, connect to THAT SocketAddr (no re-resolve → no rebind window); each redirect
+hop re-resolves+re-checks its own host (composes with DEC-264). Opt-in `HttpClient.allowPrivateHosts(true)`
+threads `allow_private` through the prelude → `HttpClientSys.request` (8th arg, native sig `Ty::Bool`)
+→ run_request → exchange. Blocked → typed `BlockedAddress extends HttpClientError` (`<<BlockedAddress>>`
+marker; the error names the REQUESTED host, not the resolved IP — no DNS oracle). Coverage: is_blocked_ip
+unit test (every blocked range + IPv6 embeddings + over-block guards pinning public 100.x/6to4/TEST-NET)
++ run_request default-block/opt-in-bypass e2e + a live `phg run` smoke (metadata blocked, opt-in
+proceeds). Gate: 2205 tests --all-features + oracle, clippy (all-features + no-default), fmt. DEC-268
+panel (2 rounds): R1 correctness clean-on-code + security P1 CGNAT + P2s (all fixed by widening +
+error-hardening); R2 CLEAN (no over-block of public IPs; bit-extraction verified). This IS the DEC-272
+socket secure-default rider; the future Core.Net inherits it via the shared Transport seam.

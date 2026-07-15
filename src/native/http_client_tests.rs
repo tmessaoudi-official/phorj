@@ -86,6 +86,7 @@ fn get_with_content_length_round_trips() {
         &[],
         5000,
         5,
+        false,
     )
     .unwrap();
     assert_eq!(r.status, 200);
@@ -112,6 +113,7 @@ fn chunked_response_round_trips() {
         &[],
         5000,
         5,
+        false,
     )
     .unwrap();
     assert_eq!(r.body, b"Wikipedia");
@@ -133,6 +135,7 @@ fn redirect_is_followed_and_capped() {
         &[],
         5000,
         5,
+        false,
     )
     .unwrap();
     assert_eq!((r.status, r.body.as_slice()), (200, b"dest".as_slice()));
@@ -147,6 +150,7 @@ fn redirect_is_followed_and_capped() {
         &[],
         5000,
         0,
+        false,
     )
     .unwrap_err();
     assert!(e.contains("<<TooManyRedirects>>"), "{e}");
@@ -170,6 +174,7 @@ fn post_body_and_303_downgrade_to_get() {
         b"{\"a\":1}",
         5000,
         5,
+        false,
     )
     .unwrap();
     assert_eq!(r.status, 200);
@@ -184,7 +189,16 @@ fn timeout_is_typed() {
         let (_sock, _) = listener.accept().unwrap();
         std::thread::sleep(std::time::Duration::from_millis(500));
     });
-    let e = run_request("GET", &format!("http://127.0.0.1:{port}/"), &[], &[], 60, 0).unwrap_err();
+    let e = run_request(
+        "GET",
+        &format!("http://127.0.0.1:{port}/"),
+        &[],
+        &[],
+        60,
+        0,
+        false,
+    )
+    .unwrap_err();
     assert!(e.contains("<<Timeout>>"), "{e}");
 }
 
@@ -297,6 +311,7 @@ fn run_request_strips_credentials_on_cross_origin_redirect_e2e() {
         &[],
         5000,
         5,
+        false,
     )
     .unwrap();
     assert_eq!((r.status, r.body.as_slice()), (200, b"ok".as_slice()));
@@ -326,6 +341,106 @@ fn run_request_strips_credentials_on_cross_origin_redirect_e2e() {
     );
 }
 
+// ── DEC-270: SSRF guard (block private/link-local/metadata, allow loopback) ─────────────────────────
+
+#[test]
+fn is_blocked_ip_blocks_private_link_local_metadata_allows_loopback_and_public() {
+    use std::net::IpAddr;
+    let b = |s: &str| is_blocked_ip(s.parse::<IpAddr>().unwrap());
+    // BLOCKED — the SSRF-exfiltration targets:
+    assert!(b("169.254.169.254"), "cloud metadata endpoint"); // the headline threat
+    assert!(b("169.254.1.1"), "link-local");
+    assert!(b("10.0.0.5"), "RFC1918 10/8");
+    assert!(b("172.16.5.4"), "RFC1918 172.16/12");
+    assert!(b("192.168.1.1"), "RFC1918 192.168/16");
+    assert!(b("0.0.0.0"), "unspecified");
+    assert!(b("255.255.255.255"), "broadcast");
+    assert!(b("fc00::1"), "IPv6 ULA");
+    assert!(b("fe80::1"), "IPv6 link-local");
+    assert!(b("::"), "IPv6 unspecified");
+    assert!(
+        b("::ffff:169.254.169.254"),
+        "IPv4-mapped metadata must not slip through"
+    );
+    assert!(b("::ffff:10.0.0.1"), "IPv4-mapped private");
+    assert!(b("100.64.0.1"), "CGNAT/shared 100.64/10");
+    assert!(b("100.100.100.200"), "Alibaba metadata (in 100.64/10)");
+    assert!(
+        b("192.0.0.192"),
+        "IETF-assignments 192.0.0.0/24 metadata target"
+    );
+    assert!(b("2002:a9fe:a9fe::"), "6to4 embedding 169.254.169.254");
+    assert!(b("2002:0a00:0005::"), "6to4 embedding 10.0.0.5");
+    assert!(
+        b("64:ff9b::a9fe:a9fe"),
+        "NAT64 embedding 169.254.169.254 (DNS64 bypass)"
+    );
+    assert!(b("64:ff9b::0a00:0001"), "NAT64 embedding 10.0.0.1");
+    assert!(
+        b("::a9fe:a9fe"),
+        "IPv4-compatible embedding 169.254.169.254"
+    );
+    // ALLOWED — loopback (legitimate: sidecars, dev) and genuine public addresses:
+    assert!(!b("127.0.0.1"), "loopback allowed");
+    assert!(!b("127.5.5.5"), "loopback /8 allowed");
+    assert!(!b("::1"), "IPv6 loopback allowed");
+    assert!(!b("::ffff:127.0.0.1"), "IPv4-mapped loopback allowed");
+    assert!(!b("93.184.216.34"), "public (example.com) allowed");
+    assert!(!b("8.8.8.8"), "public allowed");
+    assert!(
+        !b("2606:2800:220:1:248:1893:25c8:1946"),
+        "public IPv6 allowed"
+    );
+    // OVER-BLOCK guards (pin the widened bounds so a future "simplify to a blanket block" regresses):
+    assert!(!b("100.0.0.1"), "100.0/… is public, below CGNAT 100.64/10");
+    assert!(
+        !b("100.128.0.1"),
+        "100.128/… is public, above CGNAT 100.64/10"
+    );
+    assert!(
+        !b("192.0.2.1"),
+        "192.0.2/24 TEST-NET is not the blocked 192.0.0/24"
+    );
+    assert!(
+        !b("2002:5db8:d822::"),
+        "6to4 embedding PUBLIC 93.184.216.34 must stay allowed (not a blanket 2002::/16 block)"
+    );
+}
+
+#[test]
+fn run_request_blocks_metadata_ip_by_default_and_opt_in_bypasses() {
+    // Default (allow_private=false): a metadata/link-local host is refused BEFORE any connect — instant
+    // typed <<BlockedAddress>>, no hang. (Port 1 would never accept; we never reach it.)
+    let e = run_request(
+        "GET",
+        "http://169.254.169.254:1/latest/meta-data/",
+        &[],
+        &[],
+        200,
+        0,
+        false,
+    )
+    .unwrap_err();
+    assert!(
+        e.contains("<<BlockedAddress>>"),
+        "expected BlockedAddress, got: {e}"
+    );
+    assert!(
+        e.contains("169.254.169.254"),
+        "error names the refused address: {e}"
+    );
+    // A private LAN host is likewise blocked by default.
+    let e2 = run_request("GET", "http://10.0.0.5:1/", &[], &[], 200, 0, false).unwrap_err();
+    assert!(e2.contains("<<BlockedAddress>>"), "{e2}");
+    // Opt-in (allow_private=true) bypasses the guard: it PROCEEDS to connect (and fails with a
+    // connection/timeout error against the dead port) — the point is it is NOT <<BlockedAddress>>.
+    let e3 = run_request("GET", "http://10.0.0.5:1/", &[], &[], 200, 0, true).unwrap_err();
+    assert!(
+        !e3.contains("<<BlockedAddress>>"),
+        "opt-in must bypass the SSRF guard: {e3}"
+    );
+}
+
 #[test]
 fn header_injection_is_rejected_at_the_gate() {
     let mut out = String::new();
@@ -338,6 +453,7 @@ fn header_injection_is_rejected_at_the_gate() {
             Value::Null,
             Value::Int(100),
             Value::Int(0),
+            Value::Bool(false),
         ],
         &mut out,
     )

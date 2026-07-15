@@ -696,6 +696,7 @@ open class HttpClientError implements Error {
     if (String.startsWith(message, "<<ProtocolError>>")) { throw new ProtocolError(String.removePrefix(message, "<<ProtocolError>>")); }
     if (String.startsWith(message, "<<TooManyRedirects>>")) { throw new TooManyRedirects(String.removePrefix(message, "<<TooManyRedirects>>")); }
     if (String.startsWith(message, "<<TooLarge>>")) { throw new TooLarge(String.removePrefix(message, "<<TooLarge>>")); }
+    if (String.startsWith(message, "<<BlockedAddress>>")) { throw new BlockedAddress(String.removePrefix(message, "<<BlockedAddress>>")); }
     throw new HttpClientError(message);
   }
 }
@@ -707,6 +708,9 @@ class HttpTlsError extends HttpClientError { constructor(string message) { paren
 class ProtocolError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
 class TooManyRedirects extends HttpClientError { constructor(string message) { parent.constructor(message); } }
 class TooLarge extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+// DEC-270 SSRF guard: the URL resolved to a private/link-local/metadata address the client refuses by
+// default. Pass `.allowPrivateHosts(true)` to permit private ranges deliberately (loopback is allowed).
+class BlockedAddress extends HttpClientError { constructor(string message) { parent.constructor(message); } }
 
 // A completed response: status, headers (names lowercased), body as text or bytes. Inert data
 // behind an opaque handle — reading it never re-touches the network.
@@ -738,12 +742,18 @@ class HttpResponse {
 class HttpClient {
   public mutable int timeoutMs;
   public mutable int maxRedirects;
+  // DEC-270: SSRF guard defaults to ON (false = private/link-local/metadata destinations refused;
+  // loopback is always allowed). Opt in to reach private ranges deliberately (internal APIs, sidecars
+  // beyond loopback) with `.allowPrivateHosts(true)`.
+  public mutable bool allowPrivate;
   constructor() {
     this.timeoutMs = 30000;
     this.maxRedirects = 5;
+    this.allowPrivate = false;
   }
   function timeout(int ms): HttpClient { this.timeoutMs = ms; return this; }
   function redirects(int n): HttpClient { this.maxRedirects = n; return this; }
+  function allowPrivateHosts(bool v): HttpClient { this.allowPrivate = v; return this; }
   function get(string url): HttpResponse throws HttpClientError {
     return this.send("GET", url, new List<string>(), new List<string>(), Bytes.fromString(""))?;
   }
@@ -758,7 +768,7 @@ class HttpClient {
   }
   // The general form: any method, parallel header name/value lists, a bytes body.
   function send(string method, string url, List<string> headerNames, List<string> headerValues, bytes body): HttpResponse throws HttpClientError {
-    HcHandle h = match (HttpClientSys.request(method, url, headerNames, headerValues, body, this.timeoutMs, this.maxRedirects)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    HcHandle h = match (HttpClientSys.request(method, url, headerNames, headerValues, body, this.timeoutMs, this.maxRedirects, this.allowPrivate)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
     return new HttpResponse(h);
   }
 }

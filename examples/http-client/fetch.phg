@@ -2,6 +2,14 @@
 // defaults PHP's curl does not have (response size cap, header-injection gate, URL-userinfo
 // rejection, explicit timeouts, bundled TLS roots).
 //
+// SECURITY — SSRF guard (DEC-270): by default the client REFUSES to connect to a private/link-local/
+// metadata address — RFC1918 (10/172.16/192.168), link-local incl. the cloud-credential endpoint
+// 169.254.169.254, IPv6 ULA/link-local, 0.0.0.0 — so a user-supplied URL can't be turned into a
+// server-side request against internal infrastructure (the SSRF class). LOOPBACK (127.0.0.1/::1) is
+// allowed (local services/sidecars/dev). DNS is pinned (resolved once, connect to that IP, re-checked
+// across redirects — no rebinding). Opt in with `.allowPrivateHosts(true)` to reach private ranges
+// deliberately; a blocked address is a typed `BlockedAddress` (a `HttpClientError` subtype).
+//
 // SECURITY — cross-origin redirect credential strip (DEC-264): when a redirect crosses origins
 // (scheme, host, or port differs — INCLUDING an https→http downgrade), the client DROPS the
 // credential headers {Authorization, Cookie, Proxy-Authorization, WWW-Authenticate} before

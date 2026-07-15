@@ -338,22 +338,36 @@ fn write_request(
         .map_err(|e| classify_io(&e))
 }
 
-/// One HTTP exchange (no redirect logic here). https rides rustls with webpki roots.
+/// One HTTP exchange (no redirect logic here). https rides rustls with webpki roots. `allow_private`
+/// opts out of the DEC-270 SSRF guard for this connection.
 fn exchange(
     url: &Url,
     method: &str,
     headers: &[(String, String)],
     body: &[u8],
     timeout_ms: u64,
+    allow_private: bool,
 ) -> Result<RawResponse, String> {
     let timeout = Duration::from_millis(timeout_ms.max(1));
     let addr = format!("{}:{}", url.host, url.port);
+    // DNS-PIN + SSRF guard (DEC-270): resolve ONCE, and connect to THAT resolved IP — never re-resolve
+    // (defeats DNS-rebinding, where a second lookup swaps in a private address). The chosen address is
+    // checked against `is_blocked_ip` unless `allow_private`; blocking here (before connect) covers
+    // every redirect hop too, since each hop re-enters `exchange` with its own freshly-resolved host.
     let sock_addrs = std::net::ToSocketAddrs::to_socket_addrs(&addr)
         .map_err(|e| format!("<<ConnectionFailed>>Core.HttpClient: resolve `{addr}`: {e}"))?
         .next()
         .ok_or_else(|| {
             format!("<<ConnectionFailed>>Core.HttpClient: `{addr}` resolved to no address")
         })?;
+    if !allow_private && is_blocked_ip(sock_addrs.ip()) {
+        // Name the REQUESTED host, not the resolved IP — echoing the specific private address it
+        // resolved to would be a minor internal-DNS resolution oracle for an attacker-supplied URL.
+        return Err(format!(
+            "<<BlockedAddress>>Core.HttpClient: refusing to connect to `{addr}` — it resolves to a \
+             private, link-local, or metadata address (SSRF guard); pass `.allowPrivateHosts(true)` to permit it"
+        ));
+    }
     let stream = TcpStream::connect_timeout(&sock_addrs, timeout).map_err(|e| classify_io(&e))?;
     stream
         .set_read_timeout(Some(timeout))
@@ -392,6 +406,95 @@ fn exchange(
         write_request(&mut stream, method, url, headers, body)?;
         read_response(&mut stream)
     }
+}
+
+/// SSRF guard (DEC-270, refined): is this resolved address one the client must REFUSE by default?
+/// Blocked: RFC1918 private (10/8, 172.16/12, 192.168/16), CGNAT/shared 100.64/10 (RFC 6598 — holds
+/// e.g. Alibaba metadata 100.100.100.200), IETF-assignments 192.0.0.0/24 (a documented metadata/SSRF
+/// range), link-local 169.254/16 (INCLUDING the cloud-metadata endpoint 169.254.169.254), the
+/// unspecified `0.0.0.0`/`::`, IPv4 broadcast, IPv6 ULA (fc00::/7) and IPv6 link-local (fe80::/10).
+/// ALLOWED: loopback (127.0.0.0/8, `::1`) — overwhelmingly a legitimate target (local services,
+/// sidecars, dev), unlike the metadata / internal-LAN destinations that are the real SSRF-exfiltration
+/// targets. Every IPv6 form that EMBEDS an IPv4 address — IPv4-mapped `::ffff:a.b.c.d`, IPv4-compatible
+/// `::a.b.c.d`, 6to4 `2002:AABB:CCDD::`, NAT64 `64:ff9b::a.b.c.d` — is decoded and re-checked as its
+/// embedded v4, so a private target can't be smuggled through an IPv6 literal (the NAT64/DNS64 bypass).
+/// The opt-in `HttpClient.allowPrivateHosts(true)` bypasses this deliberately.
+pub(crate) fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => is_blocked_v4(v4),
+        std::net::IpAddr::V6(v6) => match embedded_v4(v6) {
+            Some(v4) => is_blocked_v4(v4),
+            None => is_blocked_v6(v6),
+        },
+    }
+}
+
+/// The IPv4 address embedded in an IPv6 address, for every well-known embedding an SSRF check must see
+/// through: IPv4-mapped (`::ffff:0:0/96`), IPv4-compatible (`::/96`, deprecated but cheap to cover),
+/// 6to4 (`2002::/16` — bytes 2-3-4-5 are the v4), and NAT64 (`64:ff9b::/96`). `None` = not an
+/// IPv4-embedding form (a genuine IPv6 address → `is_blocked_v6`).
+fn embedded_v4(a: std::net::Ipv6Addr) -> Option<std::net::Ipv4Addr> {
+    if let Some(m) = a.to_ipv4_mapped() {
+        return Some(m); // ::ffff:a.b.c.d
+    }
+    let seg = a.segments();
+    // 6to4 2002:AABB:CCDD::/48 — the v4 is segments 1..3.
+    if seg[0] == 0x2002 {
+        return Some(std::net::Ipv4Addr::new(
+            (seg[1] >> 8) as u8,
+            seg[1] as u8,
+            (seg[2] >> 8) as u8,
+            seg[2] as u8,
+        ));
+    }
+    // NAT64 64:ff9b::/96 — the v4 is the low 32 bits (segments 6..8).
+    if seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2..6].iter().all(|&s| s == 0) {
+        return Some(std::net::Ipv4Addr::new(
+            (seg[6] >> 8) as u8,
+            seg[6] as u8,
+            (seg[7] >> 8) as u8,
+            seg[7] as u8,
+        ));
+    }
+    // IPv4-compatible ::a.b.c.d — high 96 bits zero, low 32 nonzero (`::` and `::1` are handled as
+    // unspecified/loopback elsewhere; exclude them so they aren't re-read as 0.0.0.x).
+    if seg[0..6].iter().all(|&s| s == 0) && (seg[6] != 0 || seg[7] > 1) {
+        return Some(std::net::Ipv4Addr::new(
+            (seg[6] >> 8) as u8,
+            seg[6] as u8,
+            (seg[7] >> 8) as u8,
+            seg[7] as u8,
+        ));
+    }
+    None
+}
+
+fn is_blocked_v4(a: std::net::Ipv4Addr) -> bool {
+    if a.is_loopback() {
+        return false; // 127.0.0.0/8 — allowed
+    }
+    let o = a.octets();
+    let cgnat = o[0] == 100 && (64..=127).contains(&o[1]); // 100.64.0.0/10 (RFC 6598)
+    let ietf_assign = o[0] == 192 && o[1] == 0 && o[2] == 0; // 192.0.0.0/24 (incl. 192.0.0.192)
+    a.is_private()
+        || a.is_link_local()
+        || a.is_unspecified()
+        || a.is_broadcast()
+        || cgnat
+        || ietf_assign
+}
+
+fn is_blocked_v6(a: std::net::Ipv6Addr) -> bool {
+    if a.is_loopback() {
+        return false; // ::1 — allowed
+    }
+    if a.is_unspecified() {
+        return true; // ::
+    }
+    let seg = a.segments();
+    let ula = (seg[0] >> 8) as u8 & 0xfe == 0xfc; // fc00::/7
+    let link_local = seg[0] & 0xffc0 == 0xfe80; // fe80::/10
+    ula || link_local
 }
 
 /// Two http(s) URLs share an ORIGIN iff scheme, host (ASCII-case-insensitive), and port all match.
@@ -438,6 +541,7 @@ pub(crate) fn run_request(
     body: &[u8],
     timeout_ms: u64,
     max_redirects: u32,
+    allow_private: bool,
 ) -> Result<RawResponse, String> {
     let mut url = parse_url(url_str)?;
     let mut method = method.to_string();
@@ -447,7 +551,7 @@ pub(crate) fn run_request(
     let mut headers = headers.to_vec();
     let mut hops = 0u32;
     loop {
-        let resp = exchange(&url, &method, &headers, &body, timeout_ms)?;
+        let resp = exchange(&url, &method, &headers, &body, timeout_ms, allow_private)?;
         let redirect = matches!(resp.status, 301 | 302 | 303 | 307 | 308);
         if !redirect {
             return Ok(resp);
@@ -510,16 +614,16 @@ fn as_resp(v: &Value) -> Result<&HttpRespObj, String> {
     }
 }
 
-/// `HttpClientSys.request(method, url, headerNames, headerValues, body, timeoutMs, maxRedirects)`
-/// → an opaque response handle the typed accessors below read.
+/// `HttpClientSys.request(method, url, headerNames, headerValues, body, timeoutMs, maxRedirects,
+/// allowPrivateHosts)` → an opaque response handle the typed accessors below read.
 fn request_inner(args: &[Value]) -> Result<Value, String> {
-    let (method, url, hn, hv, body, timeout_ms, max_redirects) = match args {
-        [Value::Str(m), Value::Str(u), Value::List(hn), Value::List(hv), body, Value::Int(t), Value::Int(r)] => {
-            (m.as_str(), u.as_str(), hn, hv, body, *t, *r)
+    let (method, url, hn, hv, body, timeout_ms, max_redirects, allow_private) = match args {
+        [Value::Str(m), Value::Str(u), Value::List(hn), Value::List(hv), body, Value::Int(t), Value::Int(r), Value::Bool(ap)] => {
+            (m.as_str(), u.as_str(), hn, hv, body, *t, *r, *ap)
         }
         _ => {
             return Err(
-                "Core.HttpClient.__request expects (string, string, List, List, bytes|string, int, int)"
+                "Core.HttpClient.__request expects (string, string, List, List, bytes|string, int, int, bool)"
                     .into(),
             )
         }
@@ -574,6 +678,7 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
         &body_bytes,
         timeout_ms,
         max_redirects,
+        allow_private,
     )?;
     Ok(Value::Db(Rc::new(HttpRespObj { resp })))
 }
@@ -676,6 +781,7 @@ pub fn http_client_natives() -> Vec<NativeFn> {
                 Ty::Bytes,
                 Ty::Int,
                 Ty::Int,
+                Ty::Bool, // DEC-270: allowPrivateHosts — bypass the SSRF guard when true
             ],
             res(handle()),
             hc_request,
