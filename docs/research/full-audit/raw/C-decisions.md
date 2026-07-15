@@ -1393,3 +1393,19 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   with the security lens. Cross-language: Symfony Mailer / nodemailer default to this.
   *Alternatives (offered): knob-only keep-opportunistic-default (unsafe default); implicit-TLS
   on 465 (more spec-accurate, more logic — fold in later if wanted).*
+
+- **DEC-266 — RULED (audit flags F-022/F-008): the three perf LOSSES become BUILD ITEMS** (queued
+  after the HIGH correctness/security builds; WIN-OR-FLAG, measured before/after per slice):
+  jsonround 0.25× → Json node arena + scalar-by-path native + enum-match JIT coverage; dbwork
+  0.63× → statement-handle cache + native bind→exec fast-path (skip DbResult boxing on the hot
+  path); HttpClient → connection keep-alive/pool (serve's `Connection: close` is the related
+  lever). Losing to PHP on a shipped macro violates the mandate → real work, not notes.
+  *Alternative (offered): notes-only until a perf wave — rejected.*
+- **DEC-267 — RULED (audit flag F-023): the perf SUITE EXPANDS, both tiers** (DEC-259 doctrine
+  → concrete build): (1) I/O-native fixture benches — Db vs PDO-SQLite in-memory, Mail vs a local
+  SMTP fixture, HttpClient vs a local server; (2) real-application MACRO benches — whole
+  request/response cycles (router+db+template pipeline) via `var/phorj-app` vs an equivalent PHP
+  app. Each joins `bench/micro-baseline.json` under WIN-OR-FLAG. Makes "beats PHP on real
+  workloads" MEASURED, not asserted. *Alternative (offered): I/O micros only, defer real-app —
+  rejected; dev wants both.* Also queued: F-024 JIT-coverage-of-real-programs metric (a coverage
+  counter making "the JIT wins" quantifiable for real code).

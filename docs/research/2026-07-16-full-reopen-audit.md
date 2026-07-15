@@ -25,8 +25,8 @@
 | D2 | KNOWN_ISSUES full reopen (every row) | ✅ DONE — 17 stale rows→D6; 8 flags ruled (DEC-251…258) + DEC-259 perf doctrine + standing rules (META-7, check≡LSP, transpile/lift-always-current) |
 | D3 | Architecture / clean code / folder structure | ✅ DONE — DEC-260 folder moves, DEC-261 L1/L2 advanced, DEC-262 NEW cap soft-300/hard-500 + decomp order |
 | D4 | Security (every native surface vs PHP's equivalent) | ✅ DONE — 3 findings ruled (DEC-263 Secret redaction, DEC-264 redirect strip, DEC-265 SMTP-TLS); 8 surfaces confirmed sound |
-| D5 | Perf-claim re-verification (WIN/HOLD/LOSS ledger) | ▶ IN PROGRESS |
-| D6 | Docs drift + SSOT unification (runs throughout) | continuous |
+| D5 | Perf-claim re-verification (WIN/HOLD/LOSS ledger) | ✅ DONE — micros HOLD-stale (re-ratchet owed); DEC-266 losses→build items; DEC-267 suite expands |
+| D6 | Docs drift + SSOT unification (runs throughout) | ▶ FINALIZING |
 
 ## Flag ledger (grows monotonically; triage rulings recorded in C-decisions.md)
 
@@ -43,13 +43,13 @@
 | F-005 | D0 | LOW | partitioned-cookie (CHIPS) absent in Core.Session | **RULED DEC-242**: queue cookie-attr knob |
 | F-006 | D0 | LOW | Core.String lacks similarity family (levenshtein/similar/soundex) | **RULED DEC-243**: levenshtein+similarText grapheme-aware; phonetics rejected |
 | F-007 | D0 | MED | extension methods: PHP 8.6 drafts it — phorj should ship first | **RULED DEC-244**: early sugar-wave slot |
-| F-008 | D0 | LOW | HttpClient per-request connects vs PHP persistent share handles | pending (D5) |
+| F-008 | D0 | LOW | HttpClient per-request connects vs PHP persistent share handles | **RULED DEC-266**: keep-alive/pool build item |
 | F-025 | D4 | HIGH | Debug.dump leaks Secret<T> plaintext (direct + transitive, probed) | **RULED DEC-263**: universal Secret redaction on all render surfaces |
 | F-026 | D4 | HIGH | HttpClient resends Authorization/Cookie to cross-host redirects (no strip) | **RULED DEC-264**: strip {Authorization,Cookie,Proxy-Authorization,WWW-Authenticate} cross-origin + on downgrade |
 | F-027 | D4 | MED-HIGH | SMTP AUTH creds over downgradeable Tls::Opportunistic | **RULED DEC-265**: require TLS when credentials set; explicit knob |
-| F-022 | D5 | MED | jsonround 0.25× / dbwork 0.63× losses — levers are build items not notes | pending |
-| F-023 | D5 | MED | perf suite must expand (I/O benches + real-app macros) per DEC-259 | pending |
-| F-024 | D5 | LOW | JIT-coverage-of-real-programs metric unmeasured | pending |
+| F-022 | D5 | MED | jsonround 0.25× / dbwork 0.63× losses — levers are build items not notes | **RULED DEC-266**: build items, queued after correctness |
+| F-023 | D5 | MED | perf suite must expand (I/O benches + real-app macros) per DEC-259 | **RULED DEC-267**: build both tiers |
+| F-024 | D5 | LOW | JIT-coverage-of-real-programs metric unmeasured | **queued** (DEC-267 tail: coverage counter) |
 
 ---
 
