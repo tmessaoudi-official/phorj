@@ -68,6 +68,14 @@
 >   it; byte-identity is a TOOL (a `__phorj_*` helper is acceptable) — the trade is always surfaced to
 >   the developer, never self-decided.
 
+> **⚠ ARCHITECTURE RULING — 2026-07-16 eve, DEC-273 (the biggest structural decision since DEC-208).**
+> Phorj adopts a **minimal-core / extension architecture**: an irreducible Rust CORE + everything else
+> as flag-gated, plugin-registerable EXTENSIONS (all Rust+JIT). See the new
+> [Core vs Extension architecture](#core-vs-extension-architecture) section. This supersedes the
+> "PHP extension tiers" framing (which governed only the transpile leg) as the primary
+> core-membership model. Also this batch: DEC-270 (HttpClient SSRF, security), DEC-271 (icu4x/Core.Intl
+> admitted via policy amendment), DEC-272 (four mandatory security riders). Build order: MASTER-PLAN §0.2.
+
 ## Table of contents
 
 - **Part I — Foundations**
@@ -87,8 +95,9 @@
 - **Part IV — Standard library & policy**
   - [Standard library charter](#standard-library-charter) *(2026-06-29 — ADOPTED, governing)*
   - [Typed auto-escaping HTML](#typed-auto-escaping-html) *(2026-06-19 — SHIPPED)*
-  - [External dependency policy](#external-dependency-policy) *(2026-06-27, amended 2026-07-03)*
-  - [PHP extension tiers](#php-extension-tiers) *(2026-06-19 — rule in force)*
+  - [External dependency policy](#external-dependency-policy) *(2026-06-27, amended 2026-07-03, icu4x DEC-271)*
+  - [Core vs Extension architecture](#core-vs-extension-architecture) *(2026-07-16 — RULED DEC-273; migration pending)*
+  - [PHP extension tiers](#php-extension-tiers) *(2026-06-19 — scope narrowed to transpile-leg by DEC-273)*
   - [PHP parity and beyond gap audit](#php-parity-and-beyond-gap-audit) *(2026-06-21 — HISTORICAL)*
   - [Core.Sql — SQL DBAL (instance model)](#coresql--sql-dbal-instance-model) *(2026-07-11 — SUPERSEDED by DEC-208)*
   - [Core.Db — the enhanced-PDO database primitive (DEC-208)](#coredb--the-enhanced-pdo-database-primitive-dec-208) *(2026-07-14 — SHIPPED, slices A–K)*
@@ -977,11 +986,44 @@ third-party crate. Ruled mechanism:
 (1) a table entry above with clause-by-clause justification; (2) a `CHANGELOG.md` note;
 (3) feature-gating verified against the playground build.
 
+## Core vs Extension architecture
+
+**Status: RULED 2026-07-16 (DEC-273); physical migration PENDING (own slice, after Tier-1 security +
+docs-cleanup).** The governing structural model — an irreducible Rust **core** + everything else as
+**extensions**. Full ruling + the complete core list + per-module classification: `C-decisions.md`
+DEC-273. Summary:
+
+- **CORE** = what phorj-the-language cannot function/do-real-work without (can't be a `.phg` lib):
+  the language kernel (lexer/parser/checker/backends/JIT), primitive value types + their VM Ops,
+  raw OS/runtime seams (thin I/O, entropy, exit, raw Output/Log write), Reflection primitive, the
+  Secret type + redaction, Option/Result + the `?`/error-model, Conversion/Bytes coercions,
+  Math-over-primitives, and the attribute/generics machinery. Minimal by design.
+- **EXTENSION** = anything expressible as a `.phg` library on the kernel — every distinct capability,
+  format, or framework: rich String/List/Map methods, Json/Csv/Ini/Encoding/Decimal/BigInt/Uri/Path,
+  Regex/Intl/I18n, Hash/crypto, Debug/Test/Bench, Db/Http/HttpClient/Mail/Session/Serialize/Template,
+  Image/Net, DI/Cache/observability/Signals/concurrency-framework, FFI/embeddable.
+- **Classification ≠ implementation.** `.phg`-expressibility only CLASSIFIES a module as an extension;
+  **every module (core and extension) is written in Rust + JIT-optimized** — the flag gates
+  build-inclusion, never language or speed (Core.Db = a fast Rust extension). The perf mandate is
+  untouched. Third-party plugins may be `.phg` or Rust.
+- **Seam/module split:** where a capability needs an irreducible primitive, the SEAM stays core and the
+  module is an extension — Html (interpolation auto-escape hook core; engine extension), Debug
+  (introspection primitive core; formatting extension), concurrency (spawn seam core; framework
+  extension), Output/Log (raw write core; leveled logging extension).
+- **Mechanism:** in-repo modules behind Cargo features, each registering via a public trait seam
+  (DriverConn/Transport/MailTransport already prove it) + a manifest so `phg` and third-party rust-phorj
+  plugins discover them. `cargo build --release --di --http …`. Default = batteries-included; importing a
+  disabled extension = `E-EXTENSION-DISABLED` (compile-time, names the flag). Extensions keep the
+  `Core.` namespace root. **Future:** mandatory-vs-opt-in extension tiering (which are default-installed)
+  — deferred.
+
 ## PHP extension tiers
 
-**Status: the core rule is IN FORCE (since `0bb620b`); the tier-3 declaration/guard mechanism is
-DESIGNED, NOT IMPLEMENTED (lands with the first tier-3 module).** Source:
-`2026-06-19-extension-policy-design.md`.
+**Status: SCOPE NARROWED by DEC-273 — this section now governs only the TRANSPILE-LEG question**
+(which PHP functions emitted code may use); core-membership is governed by
+[Core vs Extension architecture](#core-vs-extension-architecture) above. The core rule is IN FORCE
+(since `0bb620b`); the tier-3 declaration/guard mechanism is DESIGNED, NOT IMPLEMENTED (lands with the
+first tier-3 module). Source: `2026-06-19-extension-policy-design.md`.
 
 ### Problem
 

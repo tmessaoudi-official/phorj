@@ -194,6 +194,9 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
 1. **DEC-263** universal `Secret` redaction on all render surfaces (dump/dd leak — SECURITY).
 2. **DEC-264** HttpClient strip {Authorization,Cookie,Proxy-Authorization,WWW-Authenticate} on
    cross-origin redirect + TLS downgrade (credential-leak — SECURITY).
+2b. **DEC-270** HttpClient SSRF deny-by-default (block loopback/RFC1918/link-local/0.0.0.0/metadata-IP
+   + DNS-pin resolve-once re-checked across redirect hops; explicit opt-in for private ranges) — a
+   SHARED Transport-seam policy Core.Net inherits (F-028, SECURITY — panel-found this session).
 3. **DEC-265** SMTP require TLS when credentials set + explicit knob (auth-downgrade — SECURITY).
 4. **DEC-251** three PHP-enforcement-ahead checks (override-param variance / private-static /
    intersection-receiver visibility — latent transpile-fatal).
@@ -259,10 +262,16 @@ always-current · perf-bench-everything doctrine.
 4. **Perf debt**: DEC-266 (jsonround 0.25× / dbwork 0.63× / HttpClient keep-alive) → ≥1.0 ·
    full re-ratchet at current HEAD (owed) · DEC-267 suite expansion + the JIT-coverage metric
    (the withheld M-perf points 90→100) · per-feature micros for every pack feature.
-5. **⛔ OPEN ADJUDICATION — the extension-policy ruling (§10 Bucket 2, ≈75 rows: intl/ICU full,
-   gd/image, raw sockets, streams zoo, SPL decorators, finfo, readline).** Until ruled these rows
-   count against parity honestly — this is the single largest UNRULED block between W6's ≈75% and
-   100% parity. Options: vetted-dep forks vs plugin seam vs `.d.phg`-PHP-leg-only.
+5. **✅ RULED (2026-07-16 eve) — DEC-273 the MINIMAL-CORE / EXTENSION ARCHITECTURE + DEC-270/271/272.**
+   The extension-policy question became a whole-architecture ruling: an irreducible Rust CORE (language
+   kernel + primitive value types & Ops + OS/runtime seams + Secret + Option/Result/error-model +
+   Conversion/Bytes + Math-primitives + attributes/generics + Reflection/Runtime) and EVERYTHING ELSE
+   as flag-gated, plugin-registerable EXTENSIONS (all Rust+JIT, batteries-included default, `Core.`
+   namespace kept). Bucket-2 families land: intl→Core.Intl (icu4x, DEC-271) · gd→Image (decode-limits) ·
+   sockets→Core.Net (TLS-or-refuse + SSRF) · SPL→collections/FS · finfo→advisory · readline→Cli;
+   crypto (sodium/openssl) = FN-CRYPT extension cleanup (admitted domain). Full ruling: DEC-273.
+   NOTE: this makes Bucket-2 "necessary-not-sufficient" moot as a *blocker* — the residual to 100% is
+   now the ORDERED EXECUTION of the extension surface + Bucket-1 specs + XML fork + programme tail.
 6. **⛔ OPEN FORK — W4-10 XML** (the one Wave-4 fork still open).
 7. **Programme tail to 100**: Ω-7 beyond-PHP completion + Ω-9 GA (spec freeze, reference/tour/
    migration docs, fuzzing, release engineering W6-7/8) — the 0.30×programme leg.
@@ -301,12 +310,16 @@ always-current · perf-bench-everything doctrine.
   (developer chose maximum uniform paranoia; ~6–10 agents/slice accepted).
 
 **SESSION SCHEDULING RULINGS (2026-07-16 evening, developer):**
-- **NEXT SESSION (from home, tonight):** (1) the **extension-policy adjudication** (§10 Bucket 2,
-  the 100%-blocker — fresh context, per-option risk examples, META-7 cross-language scan);
-  (2) the **docs/ cleanup slice** — ruled shape = **4 living docs** (MASTER-PLAN, UNIFIED-SPEC,
-  C-decisions, M-gap-matrix) at stable paths; INVARIANTS/ARCHITECTURE/MILESTONES/HISTORY folded
-  into the two SSOTs; everything else → `docs/archive/` verbatim + full reference sweep —
-  dedicated fresh-context slice, NOT rushed; (3) then **Tier 1, DEC-263**.
+- **✅ DONE (2026-07-16 eve): the extension-policy adjudication** — became DEC-273 (minimal-core /
+  extension architecture) + DEC-270 (HttpClient SSRF) + DEC-271 (icu4x/Core.Intl) + DEC-272 (4 security
+  riders). Panel-certified brief (DEC-268, 2 rounds/3 lenses).
+- **REVISED EXECUTION ORDER (post-adjudication):** (1) **Tier 1 security** — DEC-263 → 264 → **270
+  (new)** → 265 → 251 → 252 → 255; (2) **docs/ cleanup slice** — 4 living docs (MASTER-PLAN,
+  UNIFIED-SPEC, C-decisions, M-gap-matrix); INVARIANTS/ARCHITECTURE/MILESTONES/HISTORY folded into the
+  SSOTs; rest → `docs/archive/` verbatim + full reference sweep; (3) **DEC-273 EXTENSION MIGRATION**
+  (developer: "as soon as we can") — the physical minimal-core split; large blast radius; own
+  fresh-context slice, FULL DEC-268 panel; (4) then the rest of the build queue (Tier 2 language
+  surface onward) recast onto the extension architecture.
 
 ---
 
