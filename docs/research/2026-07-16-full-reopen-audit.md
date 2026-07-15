@@ -328,6 +328,36 @@ HOPES to do · green-thread concurrency ⊃ True Async (draft) · Debug.dump enu
 
 - DEC-177 **JUSTIFIED** — trait+MI duality (mirrors PHP's own trait duality, statically checked).
 - DEC-178 / DEC-179 **JUSTIFIED**, register STALE — Waves A/C shipped (memory + MASTER-PLAN record Waves A/B/C DONE); 📐 → ✅ (D6).
+- DEC-180 **JUSTIFIED**, register STALE — Wave B (error-model ergonomics + native fault reclassification) shipped; 📐 → ✅ (D6). No-catchable-faults stands: bugs stay bugs.
+- DEC-181 **JUSTIFIED** — LSP-first symmetric; full-native phase still 📐, tracked; both-editors-same-change DoD standing.
+- DEC-182 **JUSTIFIED**, register STALE — Core.Result/Core.Option ARE in CORE_MODULES today [Verified: registry grep]; 📐 → ✅ (D6). The T?-vs-Option distinct-roles ruling ages well (no implicit coercion = no Scala-style ambiguity).
+- DEC-184 **JUSTIFIED**, register STALE — is/instanceof full symmetry SHIPPED [Verified probe: both `v is int` and `v instanceof int` narrow and run]; 📐 → ✅ (D6). The TIMTOWTDI challenge was heard and overruled with reasons — properly recorded.
+- DEC-183 **JUSTIFIED** — flat `T?` match exhaustiveness shipped; the recorded caveat is CONFIRMED STILL OPEN [Verified probe: `match c { Red() => … }` over `Color?` → "variant pattern requires an enum scrutinee"] — Optional<enum> still needs smart-cast/`_`; follow-up queued (checkpoint list).
+
+### CONFLICTS table re-verdicts (C-1…C-10)
+
+- C-1 (D-L3 vs MI) **OBSOLETE** — the contradicting spec files no longer exist (docs/specs = 4 files post-consolidation; D-L3 survives only in audit raws as history). Close.
+- C-2 (foreach vs for-in) **→ F-009**, being triaged this checkpoint.
+- C-3 (zero-dep locked framing) **OBSOLETE** — framing doc consolidated away; DEC-009 chain is the record. Close.
+- C-4 (Text→String shadowing rationale) **RESOLVED-JUSTIFIED** — PascalCase `String` cannot shadow primitive `string` (case-distinct, checker-enforced); the original concern is structurally moot. Close with this note as the missing "conscious dismissal".
+- C-5 (ternary same-day records) **OBSOLETE** — perimeter spec deleted in consolidation; DEFERRED verdict verified live (parse error). Close.
+- C-6 (serve OS-thread pool) **RESOLVED** — per-worker heap isolation verified (src/serve/handlers.rs); superseded by green threads anyway. Close.
+- C-7 (CLI verb doc drift) **RESOLVED** — CLAUDE.md/docs use `phg benchmark`/`format` today. Close.
+- C-8 (E-INTERSECT-SIG revisit) **→ F-010**, being triaged this checkpoint.
+- C-9 (intrinsics in the wind) **RESOLVED** — [Verified probe: bare `panic`/`assert` → import-required error]. Close.
+- C-10 (bare `V =>` catch-all footgun) **RESOLVED** — [Verified probe: `Circle =>` in a union match → parse error "`Circle` is a PascalCase name used as a bare pattern binding — it would silently catch every value"] — the #1 AUTONOMOUS-HIGH-IMPACT item is CLOSED by the DEC-209 guard, which covers class patterns too. Close.
+
+### AUTONOMOUS-HIGH-IMPACT list re-verdicts
+
+1 (catch-all footgun) **RESOLVED** — see C-10 probe. 2 (foreach drift) **→ F-009**. 3 (totality
+contours) **JUSTIFIED-BY-USE** — shipped, differential-pinned, no complaints in 3 weeks of dogfood.
+4 (pattern-cluster syntax sweep) **JUSTIFIED-BY-USE**, formally ratifiable at run-end reopen.
+5 (no-turbofish) **SUPERSEDED** — DEC-208-A shipped turbofish. 6 (UFCS breadth) **JUSTIFIED-BY-USE**
+— `E-UFCS-AMBIGUOUS` guard held (forced exactly one rename). 7–8 (debugger UX, dogfood grammar)
+**JUSTIFIED-BY-USE**. 9 (invariance retrofit) **JUSTIFIED** — a soundness fix; breaking-toward-correct
+is the right direction. 10 (COW SetIndexLocal) **JUSTIFIED** — aliasing contract documented in
+INVARIANTS. Footer note on DEC-096's unbuilt `W-SEQUENCE-MUTATION`: **OBSOLETE** — DEC-210's
+statement-only correction removes the hazard the lint targeted.
 
 ## D2 — KNOWN_ISSUES reopen
 
