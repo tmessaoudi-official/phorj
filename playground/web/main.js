@@ -2,8 +2,10 @@
 //
 // Responsibilities: CodeMirror editor, a Web Worker running the Phorj WASM pipeline (with a
 // per-call timeout that terminates a runaway program), lazy php-wasm to *execute* the transpiled
-// PHP, the examples picker, the URL-hash permalink, diagnostics + `explain`, and the 3-way
-// agreement badge. Everything is client-side; nothing is sent to a server.
+// PHP, the examples picker, the URL-hash permalink, diagnostics + `explain`, and the 2-way
+// (Phorj VM vs transpiled PHP) agreement badge. Everything is client-side; nothing is sent to a
+// server. NOTE: this is a WASM build — no native JIT tier exists in-browser on either leg; the
+// "Phorj" pane is plain VM execution (what `phg run` does on the CLI, minus the JIT).
 
 // CodeMirror is VENDORED (a single esbuild bundle in ./vendor/) rather than loaded from a CDN at
 // runtime. esm.sh (the previous source) builds transitive deps on demand and was returning sustained
@@ -162,7 +164,7 @@ async function share() {
 
 // --- lift (PHP -> Phorj draft) ----------------------------------------------------------------
 // Treat the editor contents as PHP and run the `lift` engine (the inverse of transpile). On success
-// the lifted Phorj draft REPLACES the editor (then runs through the 3-way pipeline). On failure the
+// the lifted Phorj draft REPLACES the editor (then runs through the VM/PHP pipeline). On failure the
 // editor is left untouched and the badge carries the lift error — never a guess, never a silent blank.
 // The lift carries no byte-identity guarantee (it's a best-effort scaffold), so — exactly like the
 // `phg lift` CLI — we prepend a `// lifted (verify)` banner here at the entrypoint (the engine's
@@ -236,13 +238,13 @@ function renderDiagnostics(check) {
   $("diag-count").textContent = errs ? `(${errs})` : "";
 }
 
-// Append a backend (interpreter/VM) rejection to the diagnostics pane when the checker was clean —
-// otherwise a lowering rejection (not a checker diagnostic) leaves the tab empty under a "does not
-// compile" badge. A VM-only rejection is additionally flagged as a likely interpreter≠VM Phorj bug.
-function surfaceBackendRejection(check, run, vm) {
+// Append a backend (VM) rejection to the diagnostics pane when the checker was clean — otherwise a
+// lowering rejection (not a checker diagnostic) leaves the tab empty under a "does not compile"
+// badge.
+function surfaceBackendRejection(check, vm) {
   const checkClean = !(check && check.parseError) && !((check && check.diagnostics) || []).length;
   if (!checkClean) return;
-  const msg = vm.error || run.error;
+  const msg = vm.error;
   if (!msg) return;
   const host = $("pane-diag");
   host.querySelectorAll(".diag-empty").forEach((n) => n.remove());
@@ -250,7 +252,7 @@ function surfaceBackendRejection(check, run, vm) {
   d.className = "diag";
   const sev = document.createElement("span");
   sev.className = "sev-error";
-  sev.textContent = vm.error && !run.error ? "backend rejection (interpreter≠VM — likely a Phorj bug)" : "backend rejection";
+  sev.textContent = "backend rejection";
   const loc = document.createElement("span");
   loc.className = "loc";
   loc.textContent = " " + msg;
@@ -278,7 +280,7 @@ function paneText(result) {
   if (result.fault) return "⚠ runtime fault:\n" + result.fault;
   if (result.error) {
     // A JS "Maximum call stack size exceeded" isn't a Phorj error — it's the browser's small stack
-    // hitting deep recursion (the playground runs the interpreter directly, without the native
+    // hitting deep recursion (the playground runs the VM directly in-browser, without the native
     // 256MB deep-stack worker). Surface it honestly instead of as a scary "✗ rejected".
     if (/Maximum call stack size exceeded/i.test(result.error)) {
       return (
@@ -298,47 +300,33 @@ function flashBadge(kind, text) {
   b.textContent = text;
 }
 
-function renderBadge(run, vm, phpOut, phpErr, phpEnabled) {
-  // A backend that REJECTS (front-end / lowering error) while the other does not — or both rejecting
-  // with different messages — is an interpreter≠VM divergence, a real Phorj bug. Checked BEFORE the
-  // generic "does not compile" so a VM-only lowering rejection isn't mislabelled. The error text is
-  // in the interpreter / VM panes (a VM-only rejection is NOT a checker diagnostic, so it won't be in the
-  // diagnostics tab — that mismatch was the reported bug).
-  const runRej = !!run.error;
-  const vmRej = !!vm.error;
-  if (runRej !== vmRej || (runRej && vmRej && run.error !== vm.error)) {
-    flashBadge("err", "❌ interpreter ≠ VM — one backend rejects, the other doesn't (a Phorj bug!) — see the interpreter/VM panes");
+function renderBadge(vm, phpOut, phpErr, phpEnabled) {
+  // Front-end / lowering rejection — the error text is in the Phorj pane (a VM-only rejection is
+  // NOT a checker diagnostic, so surfaceBackendRejection mirrors it into the diagnostics tab too).
+  if (vm.error) {
+    flashBadge("err", "✗ Does not compile — see the Phorj pane (and diagnostics)");
     return;
   }
-  // Both backends reject identically — a genuine front-end / lowering rejection.
-  if (runRej && vmRej) {
-    flashBadge("err", "✗ Does not compile — see the interpreter / VM panes (and diagnostics)");
-    return;
-  }
-  const rustAgree = run.ok && vm.ok && run.stdout === vm.stdout;
-  if (run.ok !== vm.ok || (run.ok && vm.ok && run.stdout !== vm.stdout)) {
-    flashBadge("err", "❌ interpreter ≠ VM — backend divergence (a Phorj bug!)");
-    return;
-  }
-  if (run.fault && vm.fault) {
-    flashBadge(run.fault === vm.fault ? "ok" : "err",
-      run.fault === vm.fault ? "✓ both backends fault identically." : "❌ backends fault differently.");
+  if (vm.fault) {
+    // A runtime fault is a Phorj-defined outcome (not a bug by itself); there's nothing else to
+    // cross-check it against in-browser, so just report it.
+    flashBadge("ok", "✓ ran — runtime fault (see the Phorj pane).");
     return;
   }
   if (!phpEnabled) {
-    flashBadge("ok", rustAgree ? "✓ interpreter ≡ VM (PHP execution off)." : "✓ ran.");
+    flashBadge("ok", "✓ ran (PHP execution off).");
     return;
   }
   if (phpErr) {
-    flashBadge("warn", "✓ interpreter ≡ VM — PHP could not be executed: " + phpErr);
+    flashBadge("warn", "✓ ran — PHP could not be executed: " + phpErr);
     return;
   }
   if (phpOut === null) {
-    flashBadge("ok", "✓ interpreter ≡ VM ≡ PHP.");
+    flashBadge("ok", "✓ ran — PHP output unavailable (program did not transpile).");
     return;
   }
-  if (phpOut === run.stdout) flashBadge("ok", "✅ All 3 backends agree (interpreter ≡ VM ≡ PHP).");
-  else flashBadge("warn", "⚠ Rust backends agree, but transpiled PHP differs.");
+  if (phpOut === vm.stdout) flashBadge("ok", "✅ Phorj ≡ PHP — both backends agree.");
+  else flashBadge("warn", "⚠ Phorj ran, but the transpiled PHP output differs.");
 }
 
 let running = false;
@@ -353,21 +341,19 @@ async function runAll() {
     const check = await callJson("check", src);
     renderDiagnostics(check);
 
-    const [run, vm, tr] = await Promise.all([
-      callJson("run", src),
+    const [vm, tr] = await Promise.all([
       callJson("runvm", src),
       callJson("transpile", src),
     ]);
 
-    $("pane-run").textContent = paneText(run);
-    $("pane-runvm").textContent = paneText(vm);
+    $("pane-run").textContent = paneText(vm);
     $("pane-phpsrc").textContent = tr.ok ? tr.php : paneText(tr);
 
-    // If the program type-checks clean but a backend still REJECTS it (a compiler/VM lowering
+    // If the program type-checks clean but the VM still REJECTS it (a compiler/VM lowering
     // rejection, which is not a checker diagnostic), the diagnostics tab would otherwise look empty
     // while the badge says "does not compile". Surface the backend rejection there so the tab the
     // badge points at is never misleadingly blank.
-    surfaceBackendRejection(check, run, vm);
+    surfaceBackendRejection(check, vm);
 
     let phpOut = null;
     let phpErr = null;
@@ -384,7 +370,7 @@ async function runAll() {
       $("pane-php").textContent = phpEnabled ? "(no PHP — program did not transpile)" : "(PHP execution disabled)";
     }
 
-    renderBadge(run, vm, phpOut, phpErr, phpEnabled);
+    renderBadge(vm, phpOut, phpErr, phpEnabled);
   } catch (e) {
     flashBadge("err", String(e.message || e));
   } finally {

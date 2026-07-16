@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Phorj Playground</title>
-  <meta name="description" content="Run Phorj in your browser — the reference interpreter, the bytecode VM (no JIT on wasm; the CLI adds it), and transpiled PHP, all live and byte-identical." />
+  <meta name="description" content="Run Phorj in your browser — the bytecode VM (no JIT on wasm; the CLI adds it natively) and the transpiled PHP (php-wasm), live and byte-identical." />
   <link rel="stylesheet" href="./style.css" />
   <!-- Example programs (generated from the single-file WASM-runnable examples/ by gen_examples.py). -->
   <script src="./examples.js" defer></script>
@@ -34,14 +34,13 @@
     <section id="output-pane">
       <div id="badge" class="badge neutral">Ready — press Run.</div>
       <nav class="tabs" role="tablist">
-        <button class="tab active" data-pane="run" role="tab" title="The tree-walking reference interpreter (the oracle). CLI equivalent: phg run --tree-walker">interpreter</button>
-        <button class="tab" data-pane="runvm" role="tab" title="The bytecode VM — what plain `phg run` executes on the CLI. NOTE: the CLI additionally JIT-compiles hot functions to native code; the JIT tier does not exist on wasm, so this pane is the pure VM.">VM</button>
-        <button class="tab" data-pane="php" role="tab">PHP output</button>
+        <button class="tab active" data-pane="run" role="tab" title="The Phorj bytecode VM — what `phg run` executes on the CLI. In-browser this is plain VM execution; the CLI additionally JIT-compiles hot functions to native code (no JIT tier exists on wasm).">Phorj</button>
+        <button class="tab" data-pane="php" role="tab">PHP</button>
         <button class="tab" data-pane="phpsrc" role="tab">PHP source</button>
         <button class="tab" data-pane="diag" role="tab">diagnostics <span id="diag-count"></span></button>
       </nav>
+      <p class="honesty-note">JIT executes natively in the CLI — in-browser runs use the VM / php-wasm; published benchmark numbers come from native runs.</p>
       <pre class="pane active" id="pane-run" role="tabpanel"></pre>
-      <pre class="pane" id="pane-runvm" role="tabpanel"></pre>
       <pre class="pane" id="pane-php" role="tabpanel"></pre>
       <pre class="pane" id="pane-phpsrc" role="tabpanel"></pre>
       <div class="pane" id="pane-diag" role="tabpanel"></div>
@@ -54,7 +53,7 @@
   </div>
 
   <footer>
-    <span>Phorj runs entirely in your browser — interpreter + bytecode VM (Rust → WASM) and the
+    <span>Phorj runs entirely in your browser — the bytecode VM (Rust → WASM) and the
       transpiled PHP (php-wasm). Nothing is sent to a server.</span>
     <a href="https://github.com/tmessaoudi-official/phorj" target="_blank" rel="noopener">GitHub</a>
   </footer>

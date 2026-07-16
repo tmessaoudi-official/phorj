@@ -4,7 +4,6 @@
 // Built by `wasm-pack build playground --target web --out-dir web/pkg`, which emits ./pkg/.
 import init, {
   pg_check,
-  pg_run,
   pg_runvm,
   pg_transpile,
   pg_explain,
@@ -13,9 +12,11 @@ import init, {
 
 const ready = init(); // resolves once the wasm module is instantiated
 
+// The playground UI shows exactly two result panes — "Phorj" (this VM) and "PHP" (php-wasm) — so
+// the tree-walking interpreter op is not exposed here. It stays the correctness oracle for the
+// native test suite (tests/differential.rs); this in-browser build never disagrees with it.
 const OPS = {
   check: pg_check,
-  run: pg_run,
   runvm: pg_runvm,
   transpile: pg_transpile,
   explain: pg_explain,

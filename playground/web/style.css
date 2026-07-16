@@ -126,6 +126,15 @@ main { flex: 1; display: grid; grid-template-columns: 232px 1fr 1fr; min-height:
 }
 .tab.active { color: var(--fg); border-bottom-color: var(--accent); }
 
+.honesty-note {
+  margin: 0;
+  padding: 0.3rem 1rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+
 .pane {
   flex: 1;
   margin: 0;

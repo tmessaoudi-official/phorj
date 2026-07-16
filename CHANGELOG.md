@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — playground: two-pane presentation (Phorj vs PHP), honest JIT labeling
+
+The playground's result tabs collapse from interpreter/VM/PHP to exactly two: **Phorj** (the
+bytecode VM — what `phg run` executes) and **PHP** (php-wasm). The separate interpreter pane is
+gone from the UI (it remains the correctness oracle in `tests/differential.rs`); the badge is now
+a two-way Phorj ≡ PHP comparison. Honest labeling (developer-ruled): no "(jit)" claim in-browser —
+native code generation cannot execute on wasm on either leg — with a visible note: "JIT executes
+natively in the CLI — in-browser runs use the VM / php-wasm; published benchmark numbers come from
+native runs." (`playground/web/{index.html,main.js,worker.js,style.css}` + README.)
+
 ### Added — DEC-250: Optional<enum> variant patterns (the DEC-183 caveat, closed)
 
 A `match` over an optional enum (`Status?`) now accepts the enum's variant patterns directly —

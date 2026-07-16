@@ -1,10 +1,11 @@
 # Phorj Playground
 
-A free, zero-backend, browser playground for Phorj. Edit code on the left; on the right you get the
-**interpreter**, the **bytecode VM**, the **transpiled PHP source**, and that PHP
-**executed in-browser** (php-wasm, PHP 8.4) — with a badge confirming all three backends produced
-byte-identical output (and a diff banner if they ever don't). Everything runs client-side; nothing is
-sent to a server.
+A free, zero-backend, browser playground for Phorj. Edit code on the left; on the right you get
+**Phorj** (the bytecode VM — what `phg run` executes; no JIT tier exists on wasm, the CLI adds it
+natively), the **transpiled PHP source**, and that PHP **executed in-browser** (php-wasm, PHP 8.4) —
+with a badge confirming both legs produced byte-identical output (and a diff banner if they ever
+don't). Everything runs client-side; nothing is sent to a server. (The tree-walking interpreter
+remains the correctness oracle in `tests/differential.rs`; the UI no longer shows it separately.)
 
 The **⬆ Lift PHP** button runs the inverse direction: it treats the editor contents as PHP and lifts
 them to a Phorj draft (the same engine as `phg lift`), opening the result with a `// lifted (verify)`
@@ -21,7 +22,8 @@ It is auto-deployed to GitHub Pages on every push to `master`, so the live site 
 - The wasm runs in a **Web Worker** with a per-call timeout — a runaway program terminates the worker
   instead of freezing the tab (wasm is single-threaded and non-interruptible).
 - The wrapper functions bypass the CLI's 256 MB `std::thread` worker (`on_deep_stack`, unavailable on
-  wasm) and call the public pipeline directly: `parse → check → interpret / compile+VM / transpile`.
+  wasm) and call the public pipeline directly: `parse → check → compile+VM / transpile` (the
+  interpreter export still exists for the oracle, the UI just doesn't call it).
 - The transpiled PHP is executed by [`php-wasm`](https://github.com/seanmorris/php-wasm) (defaults to
   PHP 8.4 — matching Phorj's transpile floor), loaded lazily from a CDN on first run.
 
