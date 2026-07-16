@@ -218,6 +218,10 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
    HttpClient's internal parser retirement onto Uri (the D3 architecture win) — a follow-up
    refactor slice; PHP→phorj lift mapping for `Uri\Rfc3986\Uri` usage (lift Tier-2 tier).
 9. **DEC-247** `Core.DateTime` (immutable + Duration + tz; twin to DateTimeImmutable).
+   **UNBLOCKED (2026-07-16 desk ruling): tz-crate admission APPROVED** (`chrono-tz`/`tzdb`,
+   vendored-IANA, feature-gated; pick on audit) — full named-zone + DST from day one. Build =
+   fresh-context slice: crate vetting → live DateTimeImmutable/DateInterval probe rounds (the
+   DEC-240 Uri methodology) → kernel → prelude twin. Register entry has the full ruling.
 10. **DEC-248** loop alignment: typed `foreach` + `k=>v` + retire `for-in` (codemod).
 11. **DEC-253** nullable unions `(A|B)?` / `A|B|null`.
 12. **DEC-254** in-place mutation: slice 1b (`obj.f[i]=v`) + `ref` params (copy-out) + mutability triad.

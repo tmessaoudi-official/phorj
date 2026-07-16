@@ -1264,6 +1264,29 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   "calendar→lib" lean (mooted by DEC-216 being unexecuted). DEC-206's bare-name gate applies when
   it lands. *Alternatives (offered): wait for the vendor path (gap stays open indefinitely);
   minimal Instant+Duration only (defers the tz question but keeps the gap).*
+  **PENDING-BLOCKED (2026-07-16 fable build phase — dependency admission, developer-tier):**
+  DEC-273 itself classifies DateTime as an EXTENSION with a **tz-data dep**, and no timezone
+  dependency is in the vetted list (`argon2`/`regex`/`ctrlc`/`corosensei` + the ruled
+  rustls/lettre/rusqlite/mysql/postgres domains) — every prior admission was an explicit
+  developer approval, so this one is not self-ruled (Invariant 15 + the dependency policy).
+  Options to rule: (a) admit a tz crate (`chrono-tz`/`tzdb` — vendored-IANA style, no runtime
+  file reads, deterministic); (b) vendor raw IANA tzdata + hand-roll the TZif reader (std-only
+  discipline kept, largest build effort); (c) read the HOST system tzdata at runtime (rejected
+  by determinism Invariant 10 unless quarantined); (d) phase 1 = fixed-offset zones only
+  (`+02:00`, `UTC`) with named-zone support deferred behind the admission (smallest slice,
+  ships the DateTime/Duration surface now — RECOMMENDED as the unblock). Risk example: PHP
+  `new DateTimeImmutable('2026-03-29 02:30', new DateTimeZone('Europe/Paris'))` lands INSIDE
+  the DST gap — matching PHP's normalization byte-for-byte requires the full IANA rules, which
+  is exactly what the admission decides. The fable run SKIPPED item 9 and continued the queue.
+  **UNBLOCKED — RULED (2026-07-16, developer at desk via AskUserQuestion): ADMIT A TZ CRATE**
+  (vendored-IANA style — `chrono-tz` or `tzdb`, pick at build time on audit: no runtime file
+  reads, deterministic, feature-gated per the dependency policy; the crate's tzdata snapshot
+  must be checked against the oracle PHP's zone behavior in the twin probes). Full named-zone +
+  DST support from day one. *Alternatives (offered): phase-1 fixed-offset only (recommended by
+  the session, declined — dev chose full support); vendor IANA + hand-rolled TZif reader
+  (declined — largest effort); keep blocked (declined).* Build = fresh-context slice: crate
+  vetting → live DateTimeImmutable/DateInterval probe rounds (the Uri methodology) → kernel →
+  prelude twin.
 - **DEC-248 — RULED (audit flag F-009): FULL PHP ALIGNMENT of the loop surface; supersedes A-6/
   DEC-094's execution drift AND retires for-in.** Package: (1) `foreach` gains TYPED bindings
   (`foreach (xs as int x)`) + the PHP-shaped key/value form (`foreach (m as string k => int v)`);
@@ -1595,6 +1618,14 @@ Output/Log (raw write = core; leveled/formatted logging = extension).
 - **FUTURE tiering (developer, deferred):** extensions split into MANDATORY/default-installed (e.g. rich
   collections/string methods — ergonomics preserved) vs OPT-IN; which are default-installed vs opt-in is
   a later ruling. Recorded as a follow-up, not decided tonight.
+- **AMENDMENT — RULED (2026-07-16, developer at desk via AskUserQuestion): `phg transpile` and
+  `phg lift` become EXTENSIONS in the MANDATORY tier** ("they should be extensions but
+  mandatory"). Structurally behind the extension seam like Debug/Test/Bench (neither is a
+  runtime component), but ALWAYS compiled into the default build — which by construction keeps
+  the byte-identity spine's PHP leg in every gate/CI build (the jit-default precedent). A build
+  that explicitly compiles them out gets the clean `E-EXTENSION-DISABLED` on `phg transpile` /
+  `phg lift`; the playground's PHP-output pane keeps the flag in its wasm build. First two
+  entries of the MANDATORY tier list. Builds with the DEC-273 migration wave.
 - **Namespace:** extensions KEEP the `Core.` import root (Core.Json stays Core.Json) — only BUILD
   membership + the flag change, so the reclassification is source-churn-free on imports.
 
