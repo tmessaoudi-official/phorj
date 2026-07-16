@@ -1254,6 +1254,15 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   draft RFC (incl. scalar extensions); phorj ships its statically-checked, import-gated version
   (nothing-in-the-wind: extensions visible only where imported) FIRST — the stay-ahead mandate.
   *Alternative (offered): keep queue position (drafts often slip) — rejected.*
+  **RESOLVED — RULED (2026-07-16, developer at desk via AskUserQuestion): UFCS IS the
+  extension-method story, ratified as-is.** The build session verified the surface already
+  works end-to-end (scalar receivers `5.doubled()`, string/class receivers, extra args, chains —
+  statically checked, rewritten pre-backends by the Slice-6 UFCS machinery, import-gated =
+  nothing-in-the-wind). No new declaration syntax; PHP 8.6's draft (incl. scalar extensions) is
+  thereby already beaten. *Alternatives (offered): Kotlin-style receiver declaration sugar over
+  the same machinery (declined — cosmetic-only); opt-in `extension` marker (declined — breaking
+  for every UFCS site); defer to sugar wave (declined).* Shipped as a docs+goldens slice:
+  FEATURES row, `examples/guide/extension-methods.phg` (3-leg gated), spec note.
 
 - **DEC-245 — RULED (audit flag F-010): intersections resolve shared methods as an OVERLOAD SET.**
   Executes the E-INTERSECT-SIG revisit clause DEC-057 scheduled for "when overloading lands"

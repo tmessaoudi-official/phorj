@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Ratified — DEC-244: UFCS is the extension-method story
+
+Developer ruling (no new syntax): phorj's existing UFCS — any in-scope free function whose first
+parameter matches the receiver's type is callable in method position — IS the extension-method
+feature. It already covers what PHP 8.6 still only drafts: scalar receivers (`5.doubled()`),
+user-class receivers, extra arguments, and chains, all statically checked, rewritten to plain
+calls before every backend, and import-gated (nothing-in-the-wind). Shipped as documentation +
+goldens: `examples/guide/extension-methods.phg` (three-leg gated) + FEATURES/spec rows.
+
 ### Added — DEC-241: asymmetric visibility (`public private(set)` / `protected(set)`)
 
 A founding-spec v0.1 promise recovered by the reopen audit: a `mutable` field, promoted

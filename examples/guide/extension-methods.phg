@@ -1,0 +1,46 @@
+// Extension methods (DEC-244) — phorj's answer is UFCS, ratified as THE extension-method story:
+// any in-scope free function whose first parameter matches the receiver's type is callable in
+// method position. Statically checked and rewritten to the plain call before every backend;
+// import-gated like any function (nothing-in-the-wind: no import, no extension); works on
+// scalars (what PHP 8.6 still only DRAFTS as "scalar extension methods"), classes, and chains.
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.List;
+
+// "Extend" string — the receiver is just the first parameter.
+function shout(string s): string {
+    return String.upperCase(s) + "!";
+}
+
+// "Extend" int — scalar receivers included.
+function doubled(int n): int {
+    return n * 2;
+}
+
+// Extra parameters follow the receiver.
+function clampTo(int n, int hi): int {
+    return if (n > hi) { hi } else { n };
+}
+
+class Basket {
+    constructor(public List<int> items) {}
+}
+
+// "Extend" a user class you don't own the body of.
+function total(Basket b): int {
+    return List.sum(b.items);
+}
+
+function main(): void {
+    Output.printLine("abc".shout());
+    Output.printLine("{5.doubled()}");
+    // Chains compose left-to-right, exactly like methods.
+    Output.printLine("{5.doubled().doubled().clampTo(15)}");
+    Basket b = new Basket([3, 4, 5]);
+    Output.printLine("{b.total()}");
+    // A real method always wins over an extension of the same name (no shadowing surprises),
+    // and the call form is interchangeable with the plain one:
+    Output.printLine(shout("same"));
+}
