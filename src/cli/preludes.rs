@@ -789,6 +789,86 @@ class HttpClient {
 pub(super) const SECRET_PRELUDE: &str =
     "class Secret<T> { constructor(private T value) {} function expose(): T { return this.value; } }";
 
+/// `Core.Uri` (DEC-240) — one immutable RFC 3986 `Uri` class with the typed `UriError` taxonomy.
+/// The instance state is a single validated RAW string; every accessor/wither/operation calls a
+/// `Core.UriSys` native over it (`src/native/uri/`), whose Rust kernel is pinned byte-for-byte to
+/// the transpile twin — PHP 8.5's always-on `Uri\Rfc3986\Uri` (probe record:
+/// `docs/research/2026-07-16-uri-twin-probes.md`) — so byte-identity holds with NO ladder
+/// quarantine. Fallible natives return the new raw form or a `<<E>>`-sentinel message (`<` is
+/// malformed anywhere in a URI, so the sentinel is collision-free); `UriError.fail` classifies
+/// the message into the per-component taxonomy (richer than PHP's single `InvalidUriException`,
+/// while the MESSAGES stay twin-identical). Getters are the NORMALIZED view (lowercased
+/// scheme/host, dot-segments removed, unreserved percent-escapes decoded); the `raw*` family
+/// returns the form as written.
+pub(super) const URI_PRELUDE: &str = r#"
+import Core.UriSys;
+import Core.String;
+
+open class UriError implements Error {
+  constructor(public string message) {}
+  static function fail(string message): never throws UriError {
+    if (message == "The port is out of range") { throw new UriPortOutOfRange(message); }
+    if (message == "The specified base URI must be absolute") { throw new UriBaseNotAbsolute(message); }
+    if (message == "The specified scheme is malformed") { throw new UriBadScheme(message); }
+    if (message == "The specified userinfo is malformed") { throw new UriBadUserInfo(message); }
+    if (message == "The specified host is malformed") { throw new UriBadHost(message); }
+    if (message == "The specified port is malformed") { throw new UriBadPort(message); }
+    if (message == "The specified path is malformed") { throw new UriBadPath(message); }
+    if (message == "The specified query is malformed") { throw new UriBadQuery(message); }
+    if (message == "The specified fragment is malformed") { throw new UriBadFragment(message); }
+    throw new UriMalformed(message);
+  }
+}
+class UriMalformed extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadScheme extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadUserInfo extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadHost extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadPort extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriPortOutOfRange extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadPath extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadQuery extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadFragment extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBaseNotAbsolute extends UriError { constructor(string message) { parent.constructor(message); } }
+
+class Uri {
+  private constructor(public string raw) {}
+  static function parse(string s): Uri throws UriError { return Uri.wrap(UriSys.parse(s))?; }
+  static function wrap(string r): Uri throws UriError {
+    if (String.startsWith(r, "<<E>>")) { return UriError.fail(String.removePrefix(r, "<<E>>"))?; }
+    return new Uri(r);
+  }
+  function scheme(): string? { return UriSys.scheme(this.raw); }
+  function rawScheme(): string? { return UriSys.rawScheme(this.raw); }
+  function userInfo(): string? { return UriSys.userInfo(this.raw); }
+  function rawUserInfo(): string? { return UriSys.rawUserInfo(this.raw); }
+  function username(): string? { return UriSys.username(this.raw); }
+  function rawUsername(): string? { return UriSys.rawUsername(this.raw); }
+  function password(): string? { return UriSys.password(this.raw); }
+  function rawPassword(): string? { return UriSys.rawPassword(this.raw); }
+  function host(): string? { return UriSys.host(this.raw); }
+  function rawHost(): string? { return UriSys.rawHost(this.raw); }
+  function port(): int? { return UriSys.port(this.raw); }
+  function path(): string { return UriSys.path(this.raw); }
+  function rawPath(): string { return UriSys.rawPath(this.raw); }
+  function query(): string? { return UriSys.query(this.raw); }
+  function rawQuery(): string? { return UriSys.rawQuery(this.raw); }
+  function fragment(): string? { return UriSys.fragment(this.raw); }
+  function rawFragment(): string? { return UriSys.rawFragment(this.raw); }
+  function withScheme(string? scheme): Uri throws UriError { return Uri.wrap(UriSys.withScheme(this.raw, scheme))?; }
+  function withUserInfo(string? userInfo): Uri throws UriError { return Uri.wrap(UriSys.withUserInfo(this.raw, userInfo))?; }
+  function withHost(string? host): Uri throws UriError { return Uri.wrap(UriSys.withHost(this.raw, host))?; }
+  function withPort(int? port): Uri throws UriError { return Uri.wrap(UriSys.withPort(this.raw, port))?; }
+  function withPath(string path): Uri throws UriError { return Uri.wrap(UriSys.withPath(this.raw, path))?; }
+  function withQuery(string? query): Uri throws UriError { return Uri.wrap(UriSys.withQuery(this.raw, query))?; }
+  function withFragment(string? fragment): Uri throws UriError { return Uri.wrap(UriSys.withFragment(this.raw, fragment))?; }
+  function resolve(string reference): Uri throws UriError { return Uri.wrap(UriSys.resolve(this.raw, reference))?; }
+  function equals(Uri other): bool { return UriSys.equals(this.raw, other.raw, false); }
+  function equalsIncludingFragment(Uri other): bool { return UriSys.equals(this.raw, other.raw, true); }
+  function toString(): string { return UriSys.toText(this.raw); }
+  function toRawString(): string { return this.raw; }
+}
+"#;
+
 /// The `Core.Time` value model (M-TIME, `docs/specs/2026-06-28-m-time-design.md`): the pure-Phorj
 /// `Instant`, `Duration`, `Date`, and `DateTime` classes. Because the prelude is run through the same
 /// backends and transpiler as user code, all calendar and formatting math is byte-identical by
@@ -1406,6 +1486,28 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
+    },
+    // `Core.Uri` (DEC-240) — the RFC 3986 `Uri` class + `UriError` taxonomy over `Core.UriSys`.
+    VirtualModule {
+        module: &["Core", "Uri"],
+        qualifier: "Uri",
+        src: Some(URI_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &[
+            "Uri",
+            "UriError",
+            "UriMalformed",
+            "UriBadScheme",
+            "UriBadUserInfo",
+            "UriBadHost",
+            "UriBadPort",
+            "UriPortOutOfRange",
+            "UriBadPath",
+            "UriBadQuery",
+            "UriBadFragment",
+            "UriBaseNotAbsolute",
+        ],
     },
     // `Core.Db` (DEC-208) — the enhanced-PDO surface classes. MUST precede `Core.DbSys` (its natives)
     // so its `import Core.DbSys` triggers the natives being in scope (the Http→Regex ordering rule).

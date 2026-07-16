@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-240: `Core.Uri` — RFC 3986, typed errors, PHP-8.5 native twin
+
+One immutable `Uri` class (`import Core.Uri.Uri;`) whose transpile twin is PHP 8.5's always-on
+`Uri\Rfc3986\Uri` — full byte-identity with NO ladder quarantine:
+
+- **Kernel** (std-only Rust, `src/native/uri/`): strict RFC 3986 parse, per-component validation
+  (IPv6 + IPvFuture literals included), twin-faithful normalization (ASCII-unreserved-only
+  percent-decoding with hex uppercasing; dot-segment removal that keeps an unmatched leading `..`
+  only on scheme-less relative paths; `getHost` lowercases IPv6 as written while `toString`
+  expands to eight 4-digit hextets; i64 port limit, zero-strip, empty-port round-trip), §5.2
+  reference resolution. Every behavior probed live against php-8.5.8 and pinned by 12 kernel
+  tests over the captured corpus (`docs/research/2026-07-16-uri-twin-probes.md`).
+- **Surface**: `Uri.parse(s)` throws the typed `UriError` taxonomy — per-component subclasses
+  (`UriBadScheme`/`UriBadHost`/`UriBadPort`/`UriPortOutOfRange`/`UriBaseNotAbsolute`/…) that beat
+  PHP's single `InvalidUriException` while keeping the MESSAGES twin-identical. Normalized
+  getters + the `raw*` family (as-written), `username`/`password` split, `int?` port, strict
+  (non-encoding) withers returning fresh `Uri`s, `resolve(ref)`,
+  `equals`/`equalsIncludingFragment` (fragment-excluded default, like the twin), `toString`
+  (normalized) vs `toRawString`.
+- **PHP leg**: the emitted program wraps the real extension via tiny `__phorj_uri*` helpers
+  (exception → the same `<<E>>`-sentinel messages the Rust natives produce), so on PHP the
+  extension IS the implementation. Three-leg byte-identity verified end-to-end;
+  `examples/guide/uri.phg` is differential-gated.
+
 ### Added — DEC-239: the pipe `|>` package (PHP-8.5-aligned + phorj-only ergonomics)
 
 The full ruled pipe package, in five slices:

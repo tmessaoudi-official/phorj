@@ -210,7 +210,13 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
    contextual lambda (Invariant-7-safe materialization), `examples/guide/pipe.phg`, lift Tier-2
    message. One PENDING fork recorded in the register (trailing tight-ops after a contextual
    lambda: uniform-grammar loud error now; pipe-result binding = additive future ruling).
-8. **DEC-240** `Core.Uri` (RFC 3986, typed errors, PHP-8.5 twin).
+8. ✅ **DEC-240** `Core.Uri` (RFC 3986, typed errors, PHP-8.5 twin). **SHIPPED 2026-07-16 fable**
+   (`c0ce2b7` probes + `a88efb5` kernel/natives + prelude/twin/docs commit): std-only kernel
+   pinned live to `Uri\Rfc3986\Uri` (probe record in docs/research), injected `Uri` class +
+   per-component `UriError` taxonomy (twin-identical messages), strict withers, resolve/equals,
+   `__phorj_uri*` PHP-leg wrappers, `examples/guide/uri.phg` 3-leg gated. REMAINING (recorded):
+   HttpClient's internal parser retirement onto Uri (the D3 architecture win) — a follow-up
+   refactor slice; PHP→phorj lift mapping for `Uri\Rfc3986\Uri` usage (lift Tier-2 tier).
 9. **DEC-247** `Core.DateTime` (immutable + Duration + tz; twin to DateTimeImmutable).
 10. **DEC-248** loop alignment: typed `foreach` + `k=>v` + retire `for-in` (codemod).
 11. **DEC-253** nullable unions `(A|B)?` / `A|B|null`.

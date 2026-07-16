@@ -395,6 +395,11 @@ struct Transpiler {
     /// (so a seeded sequence matches `run`/`runvm`). `>>` is masked for logical shift; `GOLDEN` is the
     /// signed-i64 reinterpretation of the unsigned constant.
     uses_rng: bool,
+    /// Set when any `Core.UriSys` native is emitted (DEC-240) — defines the `__phorj_uri*`
+    /// helpers: thin wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri` (the transpile twin),
+    /// catching `Uri\InvalidUriException` into the `<<E>>`-sentinel messages the injected `Uri`
+    /// prelude classifies into the typed `UriError` taxonomy.
+    uses_uri: bool,
     /// Set when any `Core.Regex` native is emitted (Fork A, 2026-06-28) — defines the
     /// `__phorj_regex_*` helpers + the `__phorj_regex_delim` delimiter picker. The injected `Regex`
     /// class holds the bare pattern; each helper builds a collision-free `~…~u` PCRE form and calls the
@@ -548,6 +553,7 @@ impl Transpiler {
             uses_math_lcm: false,
             uses_math_number_format: false,
             uses_rng: false,
+            uses_uri: false,
             uses_regex: false,
             uses_clock: false,
             decomposed: BTreeSet::new(),

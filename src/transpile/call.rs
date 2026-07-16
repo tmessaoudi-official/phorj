@@ -275,6 +275,12 @@ impl Transpiler {
                         if nat.module == "Core.Random" {
                             self.uses_rng = true;
                         }
+                        // `Core.UriSys` erases to the gated `__phorj_uri*` helpers (DEC-240): thin
+                        // wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri` — the extension IS
+                        // the implementation on this leg; the Rust kernel is pinned to it.
+                        if nat.module == "Core.UriSys" {
+                            self.uses_uri = true;
+                        }
                         // `Core.Regex` erases to gated `__phorj_regex_*` helpers (Fork A, 2026-06-28):
                         // the injected `Regex` holds the bare pattern; the helpers build a
                         // collision-free `~…~u` PCRE form and delegate to `preg_*`.

@@ -1,0 +1,39 @@
+// Core.Uri (DEC-240) — one immutable RFC 3986 `Uri` with a typed `UriError` taxonomy.
+// Transpile twin = PHP 8.5's always-on `Uri\Rfc3986\Uri`, so this runs byte-identically on the
+// interpreter, the VM, and real PHP. Getters are the NORMALIZED view (lowercased scheme/host,
+// dot-segments removed, unreserved percent-escapes decoded); the raw* family keeps the input as
+// written; withers validate strictly and return a fresh Uri.
+package Main;
+
+import Core.Output;
+import Core.Uri.Uri;
+import Core.Uri.UriError;
+import Core.Uri.UriMalformed;
+import Core.Uri.UriBadScheme;
+
+function main(): void {
+    try {
+        Uri u = Uri.parse("https://user:pw@Example.COM:8080/a/../b/./c?x=1&y=2#frag");
+        Output.printLine(u.toString());
+        Output.printLine(u.toRawString());
+        Output.printLine(u.host() ?? "-");
+        Output.printLine("{u.port() ?? -1}");
+        Output.printLine(u.path());
+        Uri g = u.resolve("../z");
+        Output.printLine(g.toString());
+        Uri w = u.withPort(9);
+        Output.printLine(w.toRawString());
+        Uri a = Uri.parse("http://h/a/../b#f");
+        Uri b = Uri.parse("HTTP://h/b");
+        Output.printLine("{a.equals(b)}");
+        Output.printLine("{a.equalsIncludingFragment(b)}");
+        Uri bad = Uri.parse("http://exa mple.com/");
+        Output.printLine(bad.toString());
+    } catch (UriBadScheme e) {
+        Output.printLine("scheme: {e.message}");
+    } catch (UriMalformed e) {
+        Output.printLine("malformed: {e.message}");
+    } catch (UriError e) {
+        Output.printLine("other: {e.message}");
+    }
+}

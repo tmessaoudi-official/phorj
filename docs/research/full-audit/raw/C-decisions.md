@@ -1213,6 +1213,16 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   *Alternatives (offered): mirror both PHP classes incl. WHATWG (deferred until a real need —
   browser-grade normalization is marginal for a backend language; recorded); defer entirely
   (rejected — PHP measurably ahead of phorj TODAY, against the mandate).* Build queued.
+  **BUILT (2026-07-16 fable):** four live probe rounds pinned the twin contract
+  (`docs/research/2026-07-16-uri-twin-probes.md` — incl. the uriparser quirks: getHost
+  lowercases IPv6 as written vs toString 8×4-digit expansion; unmatched leading `..` kept only
+  scheme-less-relative; i64 port limit; ASCII-unreserved-only pct decoding); std-only Rust
+  kernel + `Core.UriSys` natives (`a88efb5`, 12 corpus tests); injected `Uri` prelude class with
+  the per-component `UriError` taxonomy (messages twin-identical, so byte-identity holds while
+  the TYPES beat PHP); `__phorj_uri*` PHP-leg wrappers over the extension; 3-leg byte-identity
+  verified + `examples/guide/uri.phg` differential-gated. REMAINING: HttpClient internal-parser
+  retirement onto Uri (the ruled D3 architecture win) as a follow-up refactor slice; lift
+  mapping for PHP `Uri\Rfc3986\Uri` usage sits in the lift Tier-2 tier with closures/FCC.
 
 - **DEC-241 — RULED (audit flag F-004): asymmetric visibility BUILDS** — `public private(set)`
   (+ `protected(set)`) on fields, promoted ctor params, and statics; queued in the sugar wave.

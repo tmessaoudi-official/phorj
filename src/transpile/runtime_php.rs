@@ -869,6 +869,43 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_uri {
+            // `Core.Uri` (DEC-240) — thin wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri`
+            // (the transpile twin; the Rust kernel is pinned to it byte-for-byte). Fallible
+            // operations catch `Uri\InvalidUriException` into the same `<<E>>`-sentinel messages
+            // the Rust natives produce; the injected `Uri` prelude classifies them into the typed
+            // `UriError` taxonomy. `__phorj_uri` rebuilds the twin object from a stored raw form,
+            // which is valid by construction (only parse/withers mint one) — it never throws.
+            self.line("function __phorj_uri($raw) {");
+            self.indent += 1;
+            self.line("return new \\Uri\\Rfc3986\\Uri($raw);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorj_uri_parse($s) {");
+            self.indent += 1;
+            self.line("try { new \\Uri\\Rfc3986\\Uri($s); return $s; }");
+            self.line(
+                "catch (\\Uri\\InvalidUriException $e) { return '<<E>>' . $e->getMessage(); }",
+            );
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorj_uri_with($raw, $method, $v) {");
+            self.indent += 1;
+            self.line("try { return __phorj_uri($raw)->$method($v)->toRawString(); }");
+            self.line(
+                "catch (\\Uri\\InvalidUriException $e) { return '<<E>>' . $e->getMessage(); }",
+            );
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorj_uri_resolve($raw, $r) {");
+            self.indent += 1;
+            self.line("try { return __phorj_uri($raw)->resolve($r)->toRawString(); }");
+            self.line(
+                "catch (\\Uri\\InvalidUriException $e) { return '<<E>>' . $e->getMessage(); }",
+            );
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_rng {
             // `Core.Random` — the SAME xorshift64 as the Rust kernel (`src/native/random.rs`), so a
             // seeded sequence is byte-identical across all backends. State persists in a by-reference
