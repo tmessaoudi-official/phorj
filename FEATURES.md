@@ -23,6 +23,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | String interpolation | ✅ | `"area = {area(s)}"` |
 | `for … in` over lists | ✅ | `for (int s in [80, 30, 55]) { … }` |
 | `Core.Iterator<T>` — user-defined iteration | ✅ | implement `hasNext(): bool` + `next(): T` and the type is foreach-able (lowered to a while-pull pre-backend, byte-identical everywhere); interface-typed values iterate; nullable element types sound; throwing iterators need try-catch or a `throws` declaration; exhausted `next()` = fault contract (DEC-257) |
+| PHP-familiar `foreach` (typed, inferred, key/value) | ✅ | `foreach (xs as x)` / `foreach (xs as int x)` (A-6/DEC-248); key/value `foreach (m as k => v)` with EVERY binding typed or inferred — mixed too (`foreach (m as string k => v)`, DEC-280); inferred bindings are first-class operands (types materialized post-check); optional `with int i` counter |
 | `if` / `else`, blocks, comparison, equality, `&&`/`||`, unary | ✅ | short-circuit logical ops |
 | Checked arithmetic | ✅ | int overflow & div-by-zero → clean runtime error, never a panic |
 | Local type inference: `var x = …;` | ✅ | inferred from the initializer; still fully static + immutable |

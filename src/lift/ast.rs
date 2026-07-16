@@ -51,6 +51,10 @@ pub struct PhpClass {
 pub enum PhpMember {
     Prop {
         vis: PhpVisibility,
+        /// PHP 8.4 asymmetric visibility (`public private(set) int $x` / bare `private(set)` —
+        /// read defaults to public). Lifts 1:1 onto Phorj's DEC-241 `private(set)`/`protected(set)`
+        /// modifiers. `None` = symmetric (the common case).
+        set_vis: Option<PhpVisibility>,
         is_static: bool,
         is_readonly: bool,
         ty: Option<PhpType>,

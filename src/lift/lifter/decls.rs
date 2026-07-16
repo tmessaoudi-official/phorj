@@ -140,6 +140,7 @@ impl Lifter {
         match m {
             php::PhpMember::Prop {
                 vis,
+                set_vis,
                 is_static,
                 is_readonly,
                 ty,
@@ -156,6 +157,15 @@ impl Lifter {
                         .ok_or_else(|| format!("lift: field `{name}` has no type (Tier-2)"))?,
                 )?;
                 let mut modifiers = vec![vis_modifier(*vis)];
+                // PHP 8.4 asymmetric visibility lifts 1:1 onto DEC-241 (`public(set)` is
+                // redundant in both languages — dropped). Invalid combinations (e.g. with
+                // `readonly`) are lifted faithfully and rejected by the Phorj checker's own
+                // DEC-241 diagnostics, not silently repaired here.
+                match set_vis {
+                    Some(php::PhpVisibility::Private) => modifiers.push(Modifier::PrivateSet),
+                    Some(php::PhpVisibility::Protected) => modifiers.push(Modifier::ProtectedSet),
+                    Some(php::PhpVisibility::Public) | None => {}
+                }
                 if *is_static {
                     modifiers.push(Modifier::Static);
                 }
@@ -353,16 +363,14 @@ impl Lifter {
                 body,
             } => {
                 // A-6 gave Phorj's for-in element-type inference, so a keyless PHP `foreach
-                // ($xs as $v)` now lifts to the idiomatic `foreach (xs as v)` (printed from a
-                // `Type::Infer` for-in). The `$k => $v` key form stays Tier-2 (Phorj's foreach has
-                // no key/value binding yet — same boundary as A-6).
-                if key.is_some() {
-                    return Err("lift: foreach with a key (`$k => $v`) is Tier-2".into());
-                }
+                // ($xs as $v)` lifts to the idiomatic `foreach (xs as v)` (printed from a
+                // `Type::Infer` for-in). DEC-248 gave Phorj the two-binding key form, so
+                // `foreach ($m as $k => $v)` now lifts Tier-1 too (`foreach (m as k => v)`) —
+                // the old Tier-2 rejection is retired.
                 vec![Stmt::For {
                     ty: Type::Infer(SP),
-                    name: value.clone(),
-                    val: None,
+                    name: key.clone().unwrap_or_else(|| value.clone()),
+                    val: key.as_ref().map(|_| (Type::Infer(SP), value.clone())),
                     iter: lift_expr(array)?,
                     body: self.lift_block(body, declared)?,
                     span: SP,

@@ -261,9 +261,32 @@ fn refuses_tier2_constructs() {
 }
 
 #[test]
-fn refuses_key_foreach() {
-    let e = lift_err("<?php function f(): void { foreach ([1] as $k => $v) {} }");
-    assert!(e.contains("foreach with a key"), "{e}");
+fn lifts_key_foreach_with_inferred_marker() {
+    // DEC-280: the `$k => $v` form lifts Tier-1 (Phorj's key/value foreach accepts inferred
+    // bindings), with the developer-ruled inline review marker after the opening brace.
+    let out = lift(
+        "<?php function f(): void { $m = [\"a\" => 1]; foreach ($m as $k => $v) { echo $k; } }",
+    );
+    assert!(
+        out.contains("foreach (m as k => v) { // lift: key/value types inferred"),
+        "{out}"
+    );
+    assert_reparses(&out);
+}
+
+#[test]
+fn lifts_asymmetric_visibility_properties() {
+    // DEC-241 lift leg: PHP 8.4 `private(set)`/`protected(set)` map 1:1 onto the Phorj modifiers;
+    // a bare set-visibility reads as public (PHP semantics).
+    let out = lift(
+        "<?php class A { public private(set) int $x; protected(set) static string $y = \"\"; }",
+    );
+    assert!(out.contains("public private(set) mutable int x"), "{out}");
+    assert!(
+        out.contains("public protected(set) mutable static string y"),
+        "{out}"
+    );
+    assert_reparses(&out);
 }
 
 #[test]

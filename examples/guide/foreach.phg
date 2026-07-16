@@ -31,4 +31,16 @@ function main(): void {
     for (string lang in langs) {
         Output.printLine("typed: {lang}");
     }
+    // DEC-280 — the key/value form accepts inferred bindings too, like its single-binding
+    // sibling (`string k`, `int v` inferred from the Map). Typed and mixed spellings stay legal.
+    var scores = ["ada" => 3, "bob" => 5];
+    mutable int total = 0;
+    foreach (scores as k => v) {
+        total = total + v * 2;
+        Output.printLine("{k} scored {v}");
+    }
+    Output.printLine("total(doubled) = {total}");
+    foreach (scores as string who => pts) {
+        Output.printLine("mixed: {who}/{pts + 1}");
+    }
 }

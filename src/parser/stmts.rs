@@ -434,11 +434,12 @@ impl Parser {
         }
         // DEC-248: typed bindings — `foreach (xs as int x)` / key-value
         // `foreach (m as string k => int v)`. A type is present when a full type parse is followed
-        // by an identifier (backtracked cleanly otherwise, so the legacy untyped `as x` still
-        // parses — its retirement rides the DEC-248 codemod slice). The key/value form REQUIRES
-        // types on both bindings (it is new surface — the explicitness rule from day one) and
-        // lowers onto the existing two-binding `Stmt::For` map iteration, so the checker and every
-        // backend are untouched.
+        // by an identifier (backtracked cleanly otherwise, so the untyped `as x` still parses).
+        // DEC-280: EVERY foreach binding may be untyped-inferred or typed — the key/value form
+        // accepts bare bindings too (`foreach (m as k => v)`, types inferred from the Map, exactly
+        // like the single-binding form; mixed typed/untyped is legal). Lowers onto the existing
+        // two-binding `Stmt::For` map iteration, so the checker and every backend are untouched
+        // (`bind_loop_var` already handles `Type::Infer` per binding).
         let (ty, name) = match self.try_typed_binding() {
             Some((t, n)) => (t, n),
             None => (
@@ -450,21 +451,14 @@ impl Parser {
             self.advance(); // `=>`
             match self.try_typed_binding() {
                 Some((vt, vn)) => Some((vt, vn)),
-                None => return Err(self.error(
-                    "a typed value binding after '=>' — foreach key/value declares both types: \
-                         `foreach (m as string k => int v)`",
+                None => Some((
+                    Type::Infer(self.peek_span()),
+                    self.expect_ident("a value binding name after '=>'")?,
                 )),
             }
         } else {
             None
         };
-        // Key/value iteration requires the key's declared type too (`string k`, never bare `k`).
-        if val.is_some() && matches!(ty, Type::Infer(_)) {
-            return Err(self.error(
-                "a typed key binding — foreach key/value declares both types: \
-                 `foreach (m as string k => int v)`",
-            ));
-        }
         // Optional `with int COUNTER` — a 0-based auto-incrementing position counter.
         let counter = if matches!(self.peek(), TokenKind::With) {
             self.advance(); // `with`

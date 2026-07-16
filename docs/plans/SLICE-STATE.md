@@ -77,8 +77,25 @@ Updated: 2026-07-16 (evening)
     (80/80 db tests pass); examples/db/streaming.phg → foreach (both backends identical);
     docs (CHANGELOG slice-3, examples/README row, UNIFIED-SPEC stream line, MASTER-PLAN
     "DEC-257 COMPLETE").
-  - NOW: full gate in bg → on green COMMIT slice 3 + rebuild release (owed: slices 2+3) →
-    then the DEC-275…279 NAMING MEGA-SLICE (worktree-able now — nothing else in flight).
+  - ✅ SLICE 3 COMMITTED `05f224a7` — **DEC-257 COMPLETE**; release binary rebuilt.
+- **NAMING MEGA-SLICE (DEC-276…279 renames)** — WORKTREE AGENT running (E-ERROR-NAME/DEC-275
+  excluded, later slice). On completion: review diff, gate, commit.
+- **LIFT CATCH-UP + DEC-280 (inline, uncommitted, gate running):** DEC-280 RULED+BUILT
+  (untyped/mixed foreach k=>v; developer challenged→confirmed; lift marker inline comment form).
+  Landed: parser bare/mixed bindings (parse_foreach — dropped both mandatory-type errors);
+  **materialize_for_binds** (rewrite_foreach.rs; Invariant-7: inferred foreach binding types →
+  AST post-check, BOTH forms — single-binding had the same latent CTy gap; wired BEFORE
+  lower_foreach_iter; check_resolutions tuple 8→9, pipeline+throws.rs updated;
+  rewrite_pipe::materialize now pub(in checker) for ty_to_ast_type); format printer two-binding
+  arm (foreach spelling when any binding Infer; fully-typed keeps `for (K k, V v in m)`); lift:
+  PhpMember::Prop.set_vis + (set)-group parsing + DEC-241 modifier mapping + lift printer
+  PrivateSet/ProtectedSet ORDER entries (was silently dropping!) + k=>v Tier-1 with inline
+  marker + two-binding print arm (was silently dropping val!). Tests: foreach_untyped_* cli
+  test (v+0 arithmetic proves materialization), lifts_key_foreach_with_inferred_marker,
+  lifts_asymmetric_visibility_properties (flipped refuses_key_foreach). Example:
+  examples/guide/foreach.phg extended (v*2 differential pin, format-fixpoint, 3-leg identical).
+  Docs: CHANGELOG (DEC-280+lift), FEATURES foreach row (new), C-decisions DEC-280 ruled+BUILT.
+  NOW: full gate in bg → on green commit → review naming agent when it returns.
     ORIGINAL slice-2 analysis below kept for reference:
     (a) Checker field `for_iter_lowerings: HashMap<usize, ()>` (keyed Stmt::For span.start) +
         thread through check_resolutions return tuple (grows 7→8: update BOTH pipeline.rs

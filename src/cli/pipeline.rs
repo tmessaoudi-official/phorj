@@ -135,7 +135,17 @@ pub fn check_and_expand_reified(
     };
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
-        Ok((warnings, html, ufcs, overload_renames, reified, pipe_params, fills, for_iters)) => {
+        Ok((
+            warnings,
+            html,
+            ufcs,
+            overload_renames,
+            reified,
+            pipe_params,
+            fills,
+            for_iters,
+            for_binds,
+        )) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
@@ -169,27 +179,34 @@ pub fn check_and_expand_reified(
             // are plain method calls needing no further pass on any backend.
             Ok((
                 crate::checker::lower_foreach_iter(
-                    crate::checker::materialize_pipe_params(
-                        crate::checker::inline_parent_ctors(crate::checker::rename_overload_defs(
-                            crate::checker::rewrite_ufcs(
-                                crate::checker::unwrap_new(crate::checker::erase_generics(
-                                    crate::checker::resolve_html(
-                                        crate::checker::inject_optional_field_defaults(
-                                            crate::checker::expand_aliases(
-                                                &crate::checker::apply_default_fills(
-                                                    prog.clone(),
-                                                    &fills,
+                    // DEC-280 / Invariant 7: inferred foreach-binding types written into the AST
+                    // (after erasure, before the Iterator lowering consumes the For's `ty`).
+                    crate::checker::materialize_for_binds(
+                        crate::checker::materialize_pipe_params(
+                            crate::checker::inline_parent_ctors(
+                                crate::checker::rename_overload_defs(
+                                    crate::checker::rewrite_ufcs(
+                                        crate::checker::unwrap_new(crate::checker::erase_generics(
+                                            crate::checker::resolve_html(
+                                                crate::checker::inject_optional_field_defaults(
+                                                    crate::checker::expand_aliases(
+                                                        &crate::checker::apply_default_fills(
+                                                            prog.clone(),
+                                                            &fills,
+                                                        ),
+                                                    ),
                                                 ),
+                                                &html,
                                             ),
-                                        ),
-                                        &html,
+                                        )),
+                                        &ufcs,
                                     ),
-                                )),
-                                &ufcs,
+                                    &overload_renames,
+                                ),
                             ),
-                            &overload_renames,
-                        )),
-                        &pipe_params,
+                            &pipe_params,
+                        ),
+                        &for_binds,
                     ),
                     &for_iters,
                 ),
@@ -520,7 +537,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
     // (or already-lowered) programs.
     let prog = &crate::checker::lower_pipes(prog.clone());
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes, _fills, _for_iters)) => {
+        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes, _fills, _for_iters, _for_binds)) => {
             (crate::diagnostic::diagnostics_json(&[], &warnings), false)
         }
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),

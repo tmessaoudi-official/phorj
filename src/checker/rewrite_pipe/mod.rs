@@ -30,7 +30,7 @@ use super::*;
 use crate::ast::{Expr, LambdaBody, Param};
 use crate::token::Span;
 
-mod materialize;
+pub(in crate::checker) mod materialize;
 pub(in crate::checker) mod walk;
 
 pub use materialize::materialize_pipe_params;

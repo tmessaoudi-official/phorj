@@ -94,14 +94,30 @@ impl Printer<'_> {
             } => {
                 // An inferred-element for-in prints as the idiomatic `foreach (iter as name)`
                 // (A-6); an explicit element type keeps the typed `for (T name in iter)` form; a
-                // two-binding Map form prints `for (K k, V v in iter)` (B1).
+                // fully-typed two-binding Map form prints `for (K k, V v in iter)` (B1).
+                // DEC-280: a two-binding form with ANY inferred binding has no `for` spelling —
+                // it prints the foreach form, each binding bare-or-typed as declared.
                 let head = if let Some((vt, vname)) = val {
-                    format!(
-                        "for ({} {name}, {} {vname} in {})",
-                        ty(t)?,
-                        ty(vt)?,
-                        self.expr(iter)?
-                    )
+                    if matches!(t, Type::Infer(_)) || matches!(vt, Type::Infer(_)) {
+                        let k = if matches!(t, Type::Infer(_)) {
+                            name.clone()
+                        } else {
+                            format!("{} {name}", ty(t)?)
+                        };
+                        let v = if matches!(vt, Type::Infer(_)) {
+                            vname.clone()
+                        } else {
+                            format!("{} {vname}", ty(vt)?)
+                        };
+                        format!("foreach ({} as {k} => {v})", self.expr(iter)?)
+                    } else {
+                        format!(
+                            "for ({} {name}, {} {vname} in {})",
+                            ty(t)?,
+                            ty(vt)?,
+                            self.expr(iter)?
+                        )
+                    }
                 } else if matches!(t, Type::Infer(_)) {
                     format!("foreach ({} as {name})", self.expr(iter)?)
                 } else {

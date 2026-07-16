@@ -38,7 +38,7 @@ pub fn materialize_pipe_params(mut program: Program, pipes: &HashMap<usize, Ty>)
 /// `kind_of_type` key on these exact names). This runs AFTER `erase_generics`, so a generic type
 /// parameter maps straight to [`Type::Erased`] (what erasure would have produced); `Null`/`Error`
 /// have no annotation form and map to `Erased` too (boxed, never a specialized operand — safe).
-fn ty_to_ast_type(t: &Ty, sp: Span) -> Type {
+pub(in crate::checker) fn ty_to_ast_type(t: &Ty, sp: Span) -> Type {
     let named = |name: &str, args: Vec<Type>| Type::Named {
         name: name.to_string(),
         args,

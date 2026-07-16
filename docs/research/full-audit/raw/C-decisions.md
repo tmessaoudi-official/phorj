@@ -2012,3 +2012,23 @@ SEQUENCED IMMEDIATELY AFTER DEC-257 completes — the sweep touches preludes/che
 streams, the exact files DEC-257 slices 2–3 are mid-flight on, so the truly-independent
 precondition for a parallel worktree agent fails (Claude scheduling call, 2026-07-16); running
 it after also avoids renaming RowStream/DbStream twice (slice 3 reshapes them).
+
+## DEC-280 — RULED (2026-07-16, developer, challenged + confirmed): untyped foreach key–value bindings
+
+`foreach (m as k => v)` becomes legal — both bindings inferred from the Map, exactly like the
+single-binding form infers its element (removes the DEC-248 asymmetry: EVERY foreach binding may
+now be untyped-inferred or typed; typed spellings stay legal; mixed forms too). Costs accepted on
+the record: 1-token parser lookahead after `as` (pinned by a differential case), inferred loop
+headers, use-site type errors (the `var` trade). LIFT: PHP's `foreach ($m as $k => $v)` upgrades
+from Tier-2-reject to Tier-1, and the lift printer marks each such loop with an inline greppable
+comment (`// lift: key/value types inferred — spell them out for an explicit header`) — the
+developer's manual-types warning, challenged down from a blanket warning (legal idiomatic code
+is not called wrong; the marker is local and actionable). *Alternatives (offered, 4-option
+board): `var`-marker form; keep mandatory types (lift stays Tier-2); lifter-side partial
+inference — all rejected.* **BUILT 2026-07-16 fable** — parser accepts bare/mixed bindings;
+Invariant-7 hardening: `materialize_for_binds` writes checker-resolved types of inferred foreach
+bindings (BOTH forms — the single-binding form had the same latent CTy gap, `v + 0` was rejected
+on the VM) into the AST post-check; formatter round-trips the new spelling (fully-typed
+two-binding keeps the `for (K k, V v in m)` canonical); lift emits the form Tier-1 + the ruled
+inline marker; `private(set)`/`protected(set)` lift landed in the same slice (Invariant-17 debt);
+differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred binding).

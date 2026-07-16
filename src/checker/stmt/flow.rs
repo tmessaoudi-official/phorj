@@ -356,9 +356,16 @@ impl Checker {
                     }
                 };
                 let kd = self.bind_loop_var(ty, name, &kt, *span);
-                self.declare(name, kd, *span);
+                self.declare(name, kd.clone(), *span);
                 let vd = self.bind_loop_var(vty, vname, &vt, *span);
-                self.declare(vname, vd, *span);
+                self.declare(vname, vd.clone(), *span);
+                // DEC-280: record inferred bindings for post-check AST materialization
+                // (Invariant 7 — the VM compiler must see the concrete operand types).
+                let rk = matches!(ty, crate::ast::Type::Infer(_)).then_some(kd);
+                let rv = matches!(vty, crate::ast::Type::Infer(_)).then_some(vd);
+                if rk.is_some() || rv.is_some() {
+                    self.for_bind_resolutions.insert(span.start, (rk, rv));
+                }
             } else {
                 let elem = match iter_ty {
                     // B1 iteration protocol: a `List<T>` or `Set<T>` iterates its elements (`T`).
@@ -426,7 +433,11 @@ impl Checker {
                     }
                 };
                 let declared = self.bind_loop_var(ty, name, &elem, *span);
-                self.declare(name, declared, *span);
+                self.declare(name, declared.clone(), *span);
+                if matches!(ty, crate::ast::Type::Infer(_)) {
+                    self.for_bind_resolutions
+                        .insert(span.start, (Some(declared), None));
+                }
             }
             self.loop_depth += 1;
             for s in body {

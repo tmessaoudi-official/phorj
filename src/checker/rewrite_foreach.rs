@@ -17,7 +17,119 @@ use crate::ast::{
     CatchClause, ClassMember, Expr, Item, LambdaBody, MemberSep, Program, Stmt, Type,
 };
 use crate::token::Span;
-use std::collections::HashSet;
+use crate::types::Ty;
+use std::collections::{HashMap, HashSet};
+
+/// DEC-280 / Invariant 7: write the checker-resolved types of INFERRED foreach bindings into the
+/// AST (`Type::Infer` → the concrete annotation), so the VM compiler's `resolve_cty` and the
+/// transpiler's kind analysis treat an inferred `k`/`v` exactly like a hand-annotated one. Runs
+/// after `erase_generics` (a `Ty::Param` maps to `Type::Erased`, matching what erasure would have
+/// produced) and BEFORE `lower_foreach_iter` (so a lowered Iterator loop's generated binding
+/// carries the concrete type too). In-place `Stmt::For` field writes only — no cloned subtrees.
+pub fn materialize_for_binds(
+    mut program: Program,
+    binds: &HashMap<usize, (Option<Ty>, Option<Ty>)>,
+) -> Program {
+    if binds.is_empty() {
+        return program;
+    }
+    let write = &mut |s: &mut Stmt| {
+        if let Stmt::For { ty, val, span, .. } = s {
+            if let Some((rk, rv)) = binds.get(&span.start) {
+                if let Some(kt) = rk {
+                    *ty = super::rewrite_pipe::materialize::ty_to_ast_type(kt, *span);
+                }
+                if let (Some(vt), Some((vty, _))) = (rv, val.as_mut()) {
+                    *vty = super::rewrite_pipe::materialize::ty_to_ast_type(vt, *span);
+                }
+            }
+        }
+    };
+    for item in &mut program.items {
+        match item {
+            Item::Function(f) => walk_stmts(&mut f.body, write),
+            Item::Class(c) => walk_member_stmts(&mut c.members, write),
+            Item::Trait(t) => walk_member_stmts(&mut t.members, write),
+            Item::Test { body, .. } => walk_stmts(body, write),
+            _ => {}
+        }
+    }
+    super::rewrite_pipe::walk::visit_exprs_mut(&mut program, &mut |e| {
+        if let Expr::Lambda {
+            body: LambdaBody::Block(stmts),
+            ..
+        } = e
+        {
+            walk_stmts(stmts, write);
+        }
+    });
+    program
+}
+
+fn walk_member_stmts(members: &mut [ClassMember], f: &mut impl FnMut(&mut Stmt)) {
+    for m in members {
+        match m {
+            ClassMember::Method(func) => walk_stmts(&mut func.body, f),
+            ClassMember::Constructor { body, .. } => walk_stmts(body, f),
+            ClassMember::Hook {
+                set: Some((_, body)),
+                ..
+            } => walk_stmts(body, f),
+            _ => {}
+        }
+    }
+}
+
+/// Apply `f` to every statement (pre-order), recursing into all nested statement lists.
+fn walk_stmts(stmts: &mut [Stmt], f: &mut impl FnMut(&mut Stmt)) {
+    for s in stmts.iter_mut() {
+        f(s);
+        match s {
+            Stmt::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                walk_stmts(then_block, f);
+                if let Some(b) = else_block {
+                    walk_stmts(b, f);
+                }
+            }
+            Stmt::For { body, .. } | Stmt::While { body, .. } => walk_stmts(body, f),
+            Stmt::CFor {
+                init, step, body, ..
+            } => {
+                if let Some(i) = init {
+                    f(i);
+                }
+                if let Some(st) = step {
+                    f(st);
+                }
+                walk_stmts(body, f);
+            }
+            Stmt::Block(b, _) => walk_stmts(b, f),
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                walk_stmts(body, f);
+                for CatchClause { body, .. } in catches {
+                    walk_stmts(body, f);
+                }
+                if let Some(fb) = finally_block {
+                    walk_stmts(fb, f);
+                }
+            }
+            Stmt::Destructure {
+                else_block: Some(eb),
+                ..
+            } => walk_stmts(eb, f),
+            _ => {}
+        }
+    }
+}
 
 /// Lower every recorded foreach-over-Iterator in the program. A no-op (identity) when the checker
 /// recorded none — the common case.

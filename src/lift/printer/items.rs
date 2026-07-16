@@ -283,13 +283,46 @@ impl Printer {
             Stmt::For {
                 ty: t,
                 name,
+                val,
                 iter,
                 body,
                 ..
             } => {
                 // An inferred-element for-in prints as the idiomatic `foreach (iter as name)`
                 // (A-6); an explicit element type keeps the typed `for (T name in iter)` form.
-                let head = if matches!(t, Type::Infer(_)) {
+                // The DEC-248 two-binding map form (`val` present — `name` is the KEY) prints
+                // `foreach (iter as k => v)`, with a type prefix per binding when not inferred.
+                let head = if let Some((vt, vname)) = val {
+                    let k = if matches!(t, Type::Infer(_)) {
+                        name.clone()
+                    } else {
+                        format!("{} {name}", ty(t)?)
+                    };
+                    let v = if matches!(vt, Type::Infer(_)) {
+                        vname.clone()
+                    } else {
+                        format!("{} {vname}", ty(vt)?)
+                    };
+                    // DEC-280 lift marker (developer-ruled): every lifted inferred key/value loop
+                    // carries a local, greppable review pointer AFTER the opening brace — the code
+                    // is legal Phorj, the marker is a draft-review aid, not a correctness warning.
+                    // Emitted by opening the block manually (`block_stmt` can't carry a trailing
+                    // comment) with the identical brace/indent discipline.
+                    let head = format!("foreach ({} as {k} => {v})", self.expr(iter)?);
+                    if matches!(t, Type::Infer(_)) && matches!(vt, Type::Infer(_)) {
+                        self.line(&format!(
+                            "{head} {{ // lift: key/value types inferred — spell them out for an explicit header"
+                        ));
+                        self.indent += 1;
+                        for s in body {
+                            self.stmt(s)?;
+                        }
+                        self.indent -= 1;
+                        self.line("}");
+                        return Ok(());
+                    }
+                    return self.block_stmt(&head, body);
+                } else if matches!(t, Type::Infer(_)) {
                     format!("foreach ({} as {name})", self.expr(iter)?)
                 } else {
                     format!("for ({} {name} in {})", ty(t)?, self.expr(iter)?)

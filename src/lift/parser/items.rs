@@ -205,14 +205,27 @@ impl PParser {
     /// One class member: `const`, a method, or a property — preceded by any modifier order.
     pub(super) fn parse_member(&mut self) -> Result<PhpMember, String> {
         let mut vis = PhpVisibility::Public;
+        // PHP 8.4 asymmetric visibility: `private(set)` / `protected(set)` — a visibility keyword
+        // immediately followed by `(set)`. May stand alone (read defaults public) or follow a read
+        // visibility (`public private(set)`).
+        let mut set_vis: Option<PhpVisibility> = None;
         let mut is_static = false;
         let mut is_abstract = false;
         let mut is_final = false;
         let mut is_readonly = false;
         loop {
             if let Some(v) = self.visibility_kw() {
-                vis = v;
                 self.advance();
+                if self.eat(&PTok::LParen) {
+                    if !self.is_kw("set") {
+                        return Err("expected `set` in `(set)` visibility group".into());
+                    }
+                    self.advance();
+                    self.expect(&PTok::RParen, "`)` closing `(set)`")?;
+                    set_vis = Some(v);
+                } else {
+                    vis = v;
+                }
             } else if self.is_kw("static") {
                 is_static = true;
                 self.advance();
@@ -260,6 +273,7 @@ impl PParser {
         self.expect(&PTok::Semi, "`;`")?;
         Ok(PhpMember::Prop {
             vis,
+            set_vis,
             is_static,
             is_readonly,
             ty,

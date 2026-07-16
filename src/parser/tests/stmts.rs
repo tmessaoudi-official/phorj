@@ -590,14 +590,33 @@ fn foreach_counter_must_be_int() {
 }
 
 #[test]
-fn foreach_keyvalue_form_is_rejected_for_now() {
-    // `as k => v` is a documented follow-up (needs iteration-model changes); reject with guidance.
-    let e = parser("foreach (m as k => v) { f(); }")
+fn foreach_keyvalue_untyped_bindings_parse() {
+    // DEC-280 (flips the old rejection pin): `as k => v` parses with BOTH bindings inferred —
+    // the two-binding `Stmt::For` with `Type::Infer` on each side; mixed typed/untyped too.
+    let s = parser("foreach (m as k => v) { f(); }")
         .parse_stmt()
-        .unwrap_err()
-        .render("");
-    assert!(
-        e.contains("key/value") || e.contains("not supported yet"),
-        "{e}"
-    );
+        .expect("untyped key/value foreach parses");
+    match &s {
+        crate::ast::Stmt::For { ty, name, val, .. } => {
+            assert!(matches!(ty, crate::ast::Type::Infer(_)), "{ty:?}");
+            assert_eq!(name, "k");
+            let (vt, vn) = val.as_ref().expect("value binding present");
+            assert!(matches!(vt, crate::ast::Type::Infer(_)), "{vt:?}");
+            assert_eq!(vn, "v");
+        }
+        other => panic!("expected Stmt::For, got {other:?}"),
+    }
+    let mixed = parser("foreach (m as string k => v) { f(); }")
+        .parse_stmt()
+        .expect("mixed typed/untyped foreach parses");
+    match &mixed {
+        crate::ast::Stmt::For { ty, val, .. } => {
+            assert!(!matches!(ty, crate::ast::Type::Infer(_)), "{ty:?}");
+            assert!(
+                matches!(val, Some((crate::ast::Type::Infer(_), _))),
+                "{val:?}"
+            );
+        }
+        other => panic!("expected Stmt::For, got {other:?}"),
+    }
 }

@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-280: untyped foreach key/value bindings + the lift catch-up
+
+`foreach (m as k => v)` is now legal — both bindings inferred from the Map, exactly like the
+single-binding form infers its element (typed and MIXED spellings stay legal:
+`foreach (m as string k => v)`). Invariant-7 hardening rode along: inferred foreach bindings
+(BOTH forms — the single-binding form had the same latent gap) are now materialized into the
+AST post-check (`materialize_for_binds`), so the VM compiler and the transpiler's kind analysis
+see the concrete types the checker proved — an inferred `v` is a first-class arithmetic operand
+(`v * 2` differential-pinned in `examples/guide/foreach.phg`).
+
+**Lift catch-up (Invariant 17 debt):** (1) PHP 8.4 `private(set)`/`protected(set)` properties
+now lift 1:1 onto the DEC-241 modifiers (bare set-visibility reads as public, PHP semantics);
+the lift printer learned the modifiers too (it silently dropped them before). (2) PHP's
+`foreach ($m as $k => $v)` upgrades from Tier-2-reject to Tier-1 — lifted as the new inferred
+form, each such loop carrying a greppable inline review marker (developer-ruled):
+`// lift: key/value types inferred — spell them out for an explicit header`. (3) The lift
+printer's two-binding `For` arm no longer silently drops the value binding.
+
 ### Changed — DEC-257 slice 3: Db streams implement `Core.Iterator` (breaking reshape)
 
 `RowStream` and `DbStream<T>` drop the nullable-pull `next(): T?` and implement the ruled

@@ -800,6 +800,22 @@ class Feed implements Iterator<int> {
 }
 
 #[test]
+fn foreach_untyped_key_value_bindings_infer_from_the_map() {
+    // DEC-280: `foreach (m as k => v)` — both bindings inferred, exactly like the single-binding
+    // form; mixed typed/untyped is legal too. The values are usable at their inferred types
+    // (`v + 0` proves int).
+    let src = wp(r#"import Core.Output;
+function main(): void {
+    var m = ["a" => 1, "b" => 2];
+    foreach (m as k => v) { Output.printLine("{k}={v + 0}"); }
+    foreach (m as string k2 => v2) { Output.printLine("{k2}:{v2}"); }
+}"#);
+    let expected = "a=1\nb=2\na:1\nb:2\n";
+    assert_eq!(cmd_run(&src).unwrap(), expected);
+    assert_eq!(cmd_treewalk(&src).unwrap(), expected);
+}
+
+#[test]
 fn foreach_over_non_iterator_class_still_errors() {
     let src = wp(r#"import Core.Output;
 class Plain {}
