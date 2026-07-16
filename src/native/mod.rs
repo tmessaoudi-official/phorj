@@ -68,6 +68,7 @@ mod text_format;
 mod text_registry;
 pub(crate) use text_format::parse_format_directive;
 mod time;
+mod uri;
 mod url;
 mod validate;
 
@@ -409,6 +410,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(encoding::encoding_natives());
     registry.extend(hash::hash_natives());
     registry.extend(ini::ini_natives());
+    registry.extend(uri::uri_natives());
     registry.extend(url::url_natives());
     registry.extend(path::path_natives());
     registry.extend(validate::validate_natives());
