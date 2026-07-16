@@ -70,8 +70,10 @@ impl Transpiler {
                     Expr::Ident(n, _) => format!("${n}"),
                     // Element set `$xs[$i]` (M-mut.5) and instance-field set `$o->f` (M-mut.6) both
                     // render the target as a PHP lvalue expression. PHP objects are mutable handles,
-                    // so `$o->f = $e` is byte-identical to the backends' `Op::SetField`.
-                    Expr::Index { .. } | Expr::Member { .. } => self.emit_expr(target)?,
+                    // so `$o->f = $e` is byte-identical to the backends' `Op::SetField`. DEC-255:
+                    // `emit_lvalue` keeps an index target BARE (`$xs[$i]`) — the read path's
+                    // `__phorj_index(...)` wrapper is not a valid assignment target.
+                    Expr::Index { .. } | Expr::Member { .. } => self.emit_lvalue(target)?,
                     _ => unreachable!("checker rejects other assignment targets"),
                 };
                 let e = self.emit_expr(value)?;
@@ -357,7 +359,8 @@ impl Transpiler {
             Stmt::Assign { target, value, .. } => {
                 let lhs = match target {
                     Expr::Ident(n, _) => format!("${n}"),
-                    Expr::Index { .. } | Expr::Member { .. } => self.emit_expr(target)?,
+                    // DEC-255: `emit_lvalue` keeps an index target bare (see the sibling Assign arm).
+                    Expr::Index { .. } | Expr::Member { .. } => self.emit_lvalue(target)?,
                     _ => unreachable!("checker rejects other assignment targets"),
                 };
                 let e = self.emit_expr(value)?;

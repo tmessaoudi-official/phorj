@@ -3,6 +3,22 @@
 use super::*;
 
 impl Transpiler {
+    /// Emit an ASSIGNMENT TARGET as a bare PHP lvalue (DEC-255). Unlike the READ path (`emit_expr`),
+    /// an index target must stay `$o[$i]` — never `__phorj_index(...)`, which is a function call and
+    /// cannot be assigned to. An index chain (`xs[i][j] = v`) recurses bare all the way down; the index
+    /// *expressions* are ordinary rvalues. Any non-index target (`$o->f`, `$x`) is already a valid
+    /// lvalue as its normal expression form, so it delegates to `emit_expr`.
+    pub(super) fn emit_lvalue(&mut self, target: &Expr) -> Result<String, String> {
+        match target {
+            Expr::Index { object, index, .. } => {
+                let o = self.emit_lvalue(object)?;
+                let i = self.emit_expr(index)?;
+                Ok(format!("{o}[{i}]"))
+            }
+            _ => self.emit_expr(target),
+        }
+    }
+
     pub(super) fn emit_expr(&mut self, e: &Expr) -> Result<String, String> {
         match e {
             Expr::Int(n, _) => Ok(n.to_string()),
@@ -223,9 +239,15 @@ impl Transpiler {
             }
             Expr::Null(_) => Ok("null".into()),
             Expr::Index { object, index, .. } => {
+                // DEC-255: a READ through `[]` faults in phorj on an out-of-range index / missing key,
+                // but bare PHP `$o[$i]` silently yields null+Warning (exit 0) — a fault-direction
+                // byte-identity break. Route reads through `__phorj_index`, which throws to match.
+                // Assignment TARGETS do NOT come here — they go through `emit_lvalue` (bare `$o[$i]`),
+                // so `$xs[$i] = $v` stays a valid lvalue.
                 let o = self.emit_expr(object)?;
                 let i = self.emit_expr(index)?;
-                Ok(format!("{o}[{i}]"))
+                self.uses_index = true;
+                Ok(format!("__phorj_index({o}, {i})"))
             }
             Expr::Str(parts, _) => self.emit_string(parts),
             Expr::Bytes(b, _) => Ok(format!("\"{}\"", php_escape_bytes(b))),

@@ -543,6 +543,25 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_index {
+            // DEC-255: a READ `xs[i]` / `m[k]` faults in phorj on an out-of-range index / missing key.
+            // Bare PHP `$o[$k]` silently returns null + a Warning (exit 0) — this helper THROWS instead,
+            // so the transpiled program faults identically (non-zero exit). One helper covers List and
+            // Map: PHP represents both as arrays, so `array_key_exists` catches an OOB int index AND a
+            // missing string key. In-bounds/present reads return the same value → stdout unchanged.
+            self.line("function __phorj_index($o, $k) {");
+            self.indent += 1;
+            self.line("if (!is_array($o) || !array_key_exists($k, $o)) {");
+            self.indent += 1;
+            self.line(
+                "throw new \\OutOfRangeException('index or key not found: ' . (is_int($k) ? (string) $k : \"'\" . $k . \"'\"));",
+            );
+            self.indent -= 1;
+            self.line("}");
+            self.line("return $o[$k];");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_debug_render {
             // DEC-238: the PHP TWIN of `native/debug.rs::render` — must mirror the pinned v1 format
             // byte-for-byte on the DETECTABLE domain (null/bool/int/float/string/list/map/instance/

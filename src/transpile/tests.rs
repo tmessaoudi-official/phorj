@@ -39,9 +39,10 @@ fn free_function_with_params_and_arithmetic() {
 
 #[test]
 fn t6d_index_native_call_and_const_reads_specialize() {
-    // T6d: a list-index result is an `int` operand → native `intdiv`, no `__phorj_div`.
+    // T6d: a list-index result is an `int` operand → native `intdiv`, no `__phorj_div`. (DEC-255: the
+    // read is wrapped in `__phorj_index` — still an int operand, so the `intdiv` specialization holds.)
     let idx = php("function f(List<int> xs, int i) -> int { return xs[i] / 2; }");
-    assert!(idx.contains("intdiv($xs[$i], 2)"), "{idx}");
+    assert!(idx.contains("intdiv(__phorj_index($xs, $i), 2)"), "{idx}");
     assert!(!idx.contains("__phorj_div"), "{idx}");
 
     // T6d: a native-call result carries its declared return type — `String.upper` → string, so the
@@ -160,8 +161,17 @@ fn if_and_for_and_unary() {
 
 #[test]
 fn indexing_emits_php_subscript() {
-    let out = php("function at(List<int> xs, int i) -> int { return xs[i]; }");
-    assert!(out.contains("$xs[$i]"), "{out}");
+    // DEC-255: a READ index routes through `__phorj_index` (throws on OOB/missing, matching phorj's
+    // fault — bare `$xs[$i]` would silently return null). An ASSIGNMENT target stays a bare `$xs[$i]`
+    // lvalue (a function call can't be assigned to).
+    let read = php("function at(List<int> xs, int i) -> int { return xs[i]; }");
+    assert!(read.contains("__phorj_index($xs, $i)"), "{read}");
+    assert!(read.contains("function __phorj_index"), "{read}");
+    let write = php("function set() -> void { mutable List<int> xs = [1, 2, 3]; xs[1] = 9; }");
+    assert!(
+        write.contains("$xs[1] = 9"),
+        "assignment target stays bare: {write}"
+    );
 }
 
 #[test]
