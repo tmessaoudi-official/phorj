@@ -2,7 +2,7 @@
   "name": "phorj",
   "displayName": "Phorj",
   "description": "Phorj language support — syntax highlighting plus diagnostics, hover, go-to-definition, completion, document symbols, references, rename, and formatting via the `phg lsp` language server.",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "phorj",
   "license": "MIT OR Apache-2.0",
   "repository": { "type": "git", "url": "https://github.com/tmessaoudi-official/phorj" },

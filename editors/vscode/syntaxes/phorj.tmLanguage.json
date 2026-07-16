@@ -70,7 +70,8 @@
     },
     "keywords": {
       "patterns": [
-        { "name": "keyword.control.phorj", "match": "\\b(return|if|else|for|while|do|match|when|throw|throws|try|catch|finally|break|continue|in|spawn|receive)\\b" },
+        { "name": "keyword.control.phorj", "match": "\\b(return|if|else|for|foreach|while|do|match|when|default|throw|throws|try|catch|finally|break|continue|in|spawn|receive)\\b" },
+        { "name": "storage.modifier.phorj", "match": "\\b(private|protected)\\(set\\)" },
         { "name": "storage.modifier.phorj", "match": "\\b(var|mutable|static|const|open|abstract|sealed|public|private|protected|internal|use|with|extends|implements)\\b" },
         { "name": "keyword.operator.word.phorj", "match": "\\b(new|instanceof|is|as)\\b" },
         { "name": "keyword.other.phorj", "match": "\\b(test|panic|assert|discard)\\b" }
