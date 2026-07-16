@@ -123,6 +123,7 @@ impl Checker {
             c.name.clone(),
             ClassInfo {
                 fields: HashMap::new(),
+                iface_args: HashMap::new(),
                 set_vis: HashMap::new(),
                 static_set_vis: HashMap::new(),
                 mutable_fields: std::collections::HashSet::new(),

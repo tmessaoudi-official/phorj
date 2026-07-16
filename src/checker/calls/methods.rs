@@ -671,7 +671,20 @@ impl Checker {
                 .cloned()
                 .zip(cargs.iter().cloned())
                 .collect(),
-            None => HashMap::new(),
+            // DEC-257 generic interfaces: an interface-typed receiver (`Producer<int> p`)
+            // substitutes the INTERFACE's type parameters, so `p.produce()` types as `int`,
+            // not the raw `T` from the flattened signature.
+            None => self
+                .interfaces
+                .get(cls)
+                .map(|i| {
+                    i.type_params
+                        .iter()
+                        .cloned()
+                        .zip(cargs.iter().cloned())
+                        .collect()
+                })
+                .unwrap_or_default(),
         }
     }
 

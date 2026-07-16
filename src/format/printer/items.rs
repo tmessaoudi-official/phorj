@@ -3,6 +3,23 @@
 
 use super::*;
 
+/// Render a class's `implements` list with per-name type arguments (DEC-257 generic
+/// interfaces) — `Producer<int>, Named`. `args` is parallel to `names`; an absent/empty
+/// entry renders the bare name (the common non-generic case).
+fn implements_body(names: &[String], args: &[Vec<crate::ast::Type>]) -> Result<String, String> {
+    let mut parts = Vec::with_capacity(names.len());
+    for (i, n) in names.iter().enumerate() {
+        match args.get(i).filter(|a| !a.is_empty()) {
+            None => parts.push(n.clone()),
+            Some(a) => {
+                let rendered = a.iter().map(ty).collect::<Result<Vec<_>, _>>()?;
+                parts.push(format!("{n}<{}>", rendered.join(", ")));
+            }
+        }
+    }
+    Ok(parts.join(", "))
+}
+
 /// Render a generic parameter list body `T, U: Bound, …` (DEC-207/DEC-211) — each param with its
 /// optional `: Interface` bound. Shared by the function/class/enum headers so bounds round-trip.
 fn type_params_body(params: &[String], bounds: &[(String, String)]) -> String {
@@ -77,7 +94,13 @@ impl Printer<'_> {
 
     pub(super) fn interface(&mut self, i: &crate::ast::InterfaceDecl) -> Result<(), String> {
         let sealed = if i.sealed { "sealed " } else { "" };
-        let mut header = format!("{}{sealed}interface {}", vis_str(i.vis), i.name);
+        // DEC-257 generic interfaces: `<T, U>` (bounds are parser-rejected on interfaces).
+        let generics = if i.type_params.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", i.type_params.join(", "))
+        };
+        let mut header = format!("{}{sealed}interface {}{generics}", vis_str(i.vis), i.name);
         if !i.extends.is_empty() {
             header.push_str(&format!(" extends {}", i.extends.join(", ")));
         }
@@ -217,7 +240,10 @@ impl Printer<'_> {
             header.push_str(&format!(" extends {}", c.extends.join(", ")));
         }
         if !c.implements.is_empty() {
-            header.push_str(&format!(" implements {}", c.implements.join(", ")));
+            header.push_str(&format!(
+                " implements {}",
+                implements_body(&c.implements, &c.implements_args)?
+            ));
         }
         header.push_str(" {");
         self.line(&header);
@@ -245,7 +271,10 @@ impl Printer<'_> {
             header.push_str(&format!(" extends {}", c.extends.join(", ")));
         }
         if !c.implements.is_empty() {
-            header.push_str(&format!(" implements {}", c.implements.join(", ")));
+            header.push_str(&format!(
+                " implements {}",
+                implements_body(&c.implements, &c.implements_args)?
+            ));
         }
         header.push_str(" {");
         self.line(&header);

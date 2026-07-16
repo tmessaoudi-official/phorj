@@ -44,7 +44,7 @@ impl Checker {
             let (name, type_params, span): (&str, &[String], crate::token::Span) = match item {
                 Item::Class(c) => (&c.name, &c.type_params, c.span),
                 Item::Enum(e) => (&e.name, &e.type_params, e.span),
-                Item::Interface(i) => (&i.name, &[][..], i.span),
+                Item::Interface(i) => (&i.name, &i.type_params[..], i.span),
                 Item::Trait(t) => (&t.name, &[][..], t.span),
                 _ => continue,
             };
@@ -68,8 +68,10 @@ impl Checker {
                     );
                 }
                 Item::Interface(_) => {
-                    self.interfaces
-                        .insert(name.to_string(), InterfaceInfo::placeholder());
+                    self.interfaces.insert(
+                        name.to_string(),
+                        InterfaceInfo::placeholder(type_params.to_vec()),
+                    );
                 }
                 // A class or a trait (a trait reuses the class machinery, keyed by its name).
                 _ => {

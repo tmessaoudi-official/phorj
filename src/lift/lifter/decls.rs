@@ -120,6 +120,7 @@ impl Lifter {
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),
             extends: c.extends.clone().into_iter().collect(),
+            implements_args: vec![Vec::new(); c.implements.len()],
             implements: c.implements.clone(),
             // PHP is extensible-by-default (only `final` seals it); Phorj is final-by-default, so a
             // non-final PHP class lifts to `open` to preserve extensibility. `abstract` implies open.

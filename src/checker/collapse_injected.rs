@@ -299,6 +299,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 type_param_bounds: c.type_param_bounds.clone(),
                 extends: c.extends.clone(),
                 implements: c.implements.clone(),
+                implements_args: c.implements_args.clone(),
                 open: c.open,
                 is_abstract: c.is_abstract,
                 sealed: c.sealed,
@@ -316,6 +317,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
             Item::Interface(i) => Item::Interface(InterfaceDecl {
                 vis: i.vis,
                 name: i.name.clone(),
+                type_params: i.type_params.clone(),
                 extends: i.extends.clone(),
                 methods: i.methods.iter().map(rfunc).collect(),
                 sealed: i.sealed,

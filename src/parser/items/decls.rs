@@ -502,6 +502,7 @@ impl Parser {
             type_params: Vec::new(),
             type_param_bounds: Vec::new(),
             extends,
+            implements_args: vec![Vec::new(); implements.len()],
             implements,
             open: false,
             is_abstract: false,

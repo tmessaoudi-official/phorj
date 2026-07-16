@@ -338,10 +338,27 @@ impl Checker {
                         let ty = self.resolve_type(&aliased);
                         self.alias_stack.pop();
                         ty
-                    } else if self.interfaces.contains_key(other) {
-                        // Interfaces take no type arguments this slice (generic interfaces deferred —
-                        // M-RT generics-all).
-                        self.no_args(other, args, *span, Ty::Named(other.to_string(), Vec::new()))
+                    } else if let Some(info) = self.interfaces.get(other) {
+                        // DEC-257 generic interfaces: `Iterator<int>` resolves with arity-checked
+                        // arguments; a non-generic interface still takes none.
+                        let arity = info.type_params.len();
+                        if args.len() != arity {
+                            let name = other.to_string();
+                            self.err_coded(
+                                *span,
+                                format!(
+                                    "interface `{name}` takes {arity} type argument{}, found {}",
+                                    if arity == 1 { "" } else { "s" },
+                                    args.len()
+                                ),
+                                "E-TYPE-ARG-COUNT",
+                                None,
+                            )
+                        } else {
+                            let resolved: Vec<Ty> =
+                                args.iter().map(|a| self.resolve_type(a)).collect();
+                            Ty::Named(other.to_string(), resolved)
+                        }
                     } else if self.traits.contains(other) {
                         // M-RT S8: a trait is collected into `classes` for member lookup, but it is
                         // **not a type** — a value can never be typed as a trait. Reject it here before

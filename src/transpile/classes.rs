@@ -166,6 +166,7 @@ impl Transpiler {
             type_param_bounds: Vec::new(),
             extends: Vec::new(),
             implements: Vec::new(),
+            implements_args: Vec::new(),
             open: true,
             is_abstract: false,
             sealed: false,

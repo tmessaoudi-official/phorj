@@ -256,6 +256,13 @@ pub struct ClassDecl {
     /// checker (`E-IFACE-IMPL`/`E-IFACE-UNIMPL`/`E-IFACE-SIG`) validates each name resolves to an
     /// interface and the class provides every method of it and its `extends` chain (M-RT S2).
     pub implements: Vec<String>,
+    /// Type arguments per `implements` entry (DEC-257 generic interfaces) — parallel to
+    /// [`Self::implements`], one (possibly empty) argument list per name:
+    /// `implements Iterator<int>` ⇒ `implements[i] == "Iterator"`, `implements_args[i] == [int]`.
+    /// Empty for the common non-generic case. Checker-only (conformance substitution); **erased**
+    /// with the rest of the generic machinery before any backend — the transpiler and both engines
+    /// only ever read the names.
+    pub implements_args: Vec<Vec<Type>>,
     /// `open class` — whether this class may be `extend`ed (M-RT S6). **Final-by-default**: a
     /// non-`open` class is a leaf (`E-EXTEND-FINAL` if a subclass names it). The transpiler emits a
     /// PHP `final class` for a non-`open` class. The extensibility opt-in, orthogonal to `vis`.
@@ -353,6 +360,11 @@ pub struct InterfaceDecl {
     /// Declaration-level visibility (default `Public`). Loader-enforced; see [`Visibility`].
     pub vis: Visibility,
     pub name: String,
+    /// Generic type parameters (`interface Iterator<T>`, DEC-257) — same compile-time-only
+    /// discipline as generic classes: a bare name in this set resolves to `Ty::Param` in method
+    /// signatures; a class's `implements Iterator<int>` substitutes them for conformance; **erased**
+    /// before any backend. Empty for the common non-generic case.
+    pub type_params: Vec<String>,
     /// Parent interfaces (`interface Animal extends Speaker, Named`) — flattened transitively.
     pub extends: Vec<String>,
     /// Method signatures (each a `FunctionDecl` with an empty body).

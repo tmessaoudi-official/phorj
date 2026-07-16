@@ -1,0 +1,47 @@
+// Generic interfaces (DEC-257 slice 1): an interface may declare type parameters; a class
+// implements it AT a type (`implements Producer<int>`), and conformance checks the substituted
+// signatures. Interface-typed values carry the arguments (`Producer<int> p`), so calls through
+// them are fully typed — and the arguments are invariant (an `Ints` never flows into a
+// `Producer<string>`). All compile-time-only: everything erases before the backends, and the
+// PHP output is a plain interface.
+package Main;
+
+import Core.Output;
+
+interface Producer<T> {
+    function produce(): T;
+    function label(): string;
+}
+
+class Ints implements Producer<int> {
+    function produce(): int {
+        return 7;
+    }
+    function label(): string {
+        return "ints";
+    }
+}
+
+// A generic class may implement a generic interface through its OWN parameter — the instance's
+// argument flows through (a `Boxed("hi")` is a `Producer<string>`).
+class Boxed<T> implements Producer<T> {
+    constructor(private T v) {}
+    function produce(): T {
+        return this.v;
+    }
+    function label(): string {
+        return "boxed";
+    }
+}
+
+function describe(Producer<int> p): string {
+    // Through the interface type, `produce()` is typed at the argument: an int, usable as one.
+    return "{p.label()}: {p.produce() + 1}";
+}
+
+function main(): void {
+    Output.printLine(describe(new Ints()));
+    Output.printLine(describe(new Boxed(41)));
+    Producer<string> s = new Boxed("hello");
+    Output.printLine("{s.label()}: {s.produce()}");
+}

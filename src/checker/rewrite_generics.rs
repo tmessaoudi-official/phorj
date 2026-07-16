@@ -571,6 +571,9 @@ pub fn erase_generics(program: Program) -> Program {
                     type_params: Vec::new(), // erased
                     type_param_bounds: Vec::new(),
                     extends: c.extends,
+                    // Interface type ARGUMENTS are erased with the rest of the generic machinery
+                    // (DEC-257) — the backends only ever read the interface names.
+                    implements_args: vec![Vec::new(); c.implements.len()],
                     implements: c.implements,
                     open: c.open,
                     is_abstract: c.is_abstract,
@@ -604,6 +607,31 @@ pub fn erase_generics(program: Program) -> Program {
                         .collect(),
                     injected: e.injected,
                     span: e.span,
+                })
+            }
+            // A generic interface (`Iterator<T>`, DEC-257): erase the interface's type parameters
+            // across every method signature (a `T` return/param becomes `Type::Erased`) and clear
+            // the parameter list — same discipline as classes/enums; the transpiler emits an
+            // ordinary PHP interface from the result.
+            Item::Interface(i) if !i.type_params.is_empty() => {
+                let params: Params = i.type_params.iter().map(String::as_str).collect();
+                Item::Interface(crate::ast::InterfaceDecl {
+                    vis: i.vis,
+                    name: i.name,
+                    type_params: Vec::new(), // erased
+                    extends: i.extends,
+                    methods: i
+                        .methods
+                        .into_iter()
+                        .map(|m| crate::ast::FunctionDecl {
+                            params: m.params.iter().map(|p| rparam(p, &params)).collect(),
+                            ret: m.ret.as_ref().map(|t| rty(t, &params)),
+                            throws: m.throws.iter().map(|t| rty(t, &params)).collect(),
+                            ..m
+                        })
+                        .collect(),
+                    sealed: i.sealed,
+                    span: i.span,
                 })
             }
             other => other,

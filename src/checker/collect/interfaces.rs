@@ -18,6 +18,7 @@ impl Checker {
             type_param_bounds: Vec::new(),
             extends: Vec::new(),
             implements: Vec::new(),
+            implements_args: Vec::new(),
             open: false,
             is_abstract: true,
             sealed: false,
@@ -63,8 +64,12 @@ impl Checker {
             InterfaceInfo {
                 methods: HashMap::new(),
                 extends: i.extends.clone(),
+                type_params: i.type_params.clone(),
             },
         );
+        // DEC-257 generic interfaces: while resolving the signatures below, the interface's own
+        // type parameters are in scope — `T` in `function next(): T;` resolves to `Ty::Param`.
+        self.active_type_params = i.type_params.clone();
         let mut methods = HashMap::new();
         for m in &i.methods {
             if methods.contains_key(&m.name) {
@@ -109,6 +114,7 @@ impl Checker {
             );
         }
         self.interfaces.get_mut(&i.name).unwrap().methods = methods;
+        self.active_type_params.clear();
     }
 
     /// Validate the interface graph and class conformance, then build [`Self::class_implements`].
@@ -580,7 +586,7 @@ impl Checker {
         // Class conformance: every interface method (own + inherited) must be provided.
         for item in &program.items {
             if let Item::Class(c) = item {
-                for iface in &c.implements {
+                for (iface_idx, iface) in c.implements.iter().enumerate() {
                     if !self.interfaces.contains_key(iface) {
                         self.err_coded(
                             c.span,
@@ -593,7 +599,58 @@ impl Checker {
                         );
                         continue;
                     }
-                    let required = self.iface_flat_methods(iface);
+                    // DEC-257 generic interfaces: `implements Iterator<int>` must supply exactly the
+                    // interface's declared arity; the arguments (resolved with the class's own type
+                    // parameters in scope, so `DbStream<T> implements Iterator<T>` works) substitute
+                    // into the interface's method signatures before conformance is compared.
+                    let iface_tps = self.interfaces[iface].type_params.clone();
+                    let arg_asts = c
+                        .implements_args
+                        .get(iface_idx)
+                        .cloned()
+                        .unwrap_or_default();
+                    if arg_asts.len() != iface_tps.len() {
+                        self.err_coded(
+                            c.span,
+                            format!(
+                                "interface `{iface}` takes {} type argument{}, but `{}` implements it with {}",
+                                iface_tps.len(),
+                                if iface_tps.len() == 1 { "" } else { "s" },
+                                c.name,
+                                arg_asts.len()
+                            ),
+                            "E-TYPE-ARG-COUNT",
+                            Some(format!(
+                                "write `implements {iface}<…>` with exactly {} argument{}",
+                                iface_tps.len(),
+                                if iface_tps.len() == 1 { "" } else { "s" }
+                            )),
+                        );
+                        continue;
+                    }
+                    let theta: HashMap<String, Ty> = if iface_tps.is_empty() {
+                        HashMap::new()
+                    } else {
+                        self.active_type_params = c.type_params.clone();
+                        let arg_tys: Vec<Ty> =
+                            arg_asts.iter().map(|t| self.resolve_type(t)).collect();
+                        self.active_type_params.clear();
+                        // Record the class's instantiation of the generic interface for later
+                        // assignability / foreach-element lookups (`Ints` → `Producer<int>`).
+                        if let Some(ci) = self.classes.get_mut(&c.name) {
+                            ci.iface_args.insert(iface.clone(), arg_tys.clone());
+                        }
+                        iface_tps.into_iter().zip(arg_tys).collect()
+                    };
+                    let mut required = self.iface_flat_methods(iface);
+                    if !theta.is_empty() {
+                        for (_, (params, ret)) in &mut required {
+                            for p in params.iter_mut() {
+                                *p = crate::checker::common::apply_subst(p, &theta);
+                            }
+                            *ret = crate::checker::common::apply_subst(ret, &theta);
+                        }
+                    }
                     for (mname, sig) in &required {
                         match self
                             .classes

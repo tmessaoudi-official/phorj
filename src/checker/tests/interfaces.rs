@@ -60,6 +60,62 @@ fn interface_is_not_assignable_to_unrelated_class() {
 }
 
 #[test]
+fn generic_interface_conformance_ok_and_runs_through_receiver() {
+    // DEC-257 slice 1: `implements Producer<int>` substitutes T=int into the interface's
+    // signatures for conformance, and an interface-typed receiver substitutes its arguments
+    // (`p.produce()` types as `int`, not the raw `T`).
+    let src = "interface Producer<T> { function produce() -> T; } \
+                   class Ints implements Producer<int> { function produce() -> int { return 7; } } \
+                   function consume(Producer<int> p) -> int { return p.produce() + 1; } \
+                   function main() -> void { Producer<int> p = new Ints(); discard consume(p); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn generic_interface_wrong_impl_type_is_sig() {
+    // T=int is substituted before comparison, so a `string` return is a signature mismatch.
+    let src = "interface Producer<T> { function produce() -> T; } \
+                   class Wrong implements Producer<int> { function produce() -> string { return \"x\"; } } \
+                   function main() -> void {}";
+    let e = errors_of(src);
+    assert!(e.iter().any(|d| d.code == Some("E-IFACE-SIG")), "{e:?}");
+}
+
+#[test]
+fn generic_interface_missing_args_is_arity_error() {
+    let src = "interface Producer<T> { function produce() -> T; } \
+                   class NoArgs implements Producer { function produce() -> int { return 1; } } \
+                   function main() -> void {}";
+    let e = errors_of(src);
+    assert!(
+        e.iter().any(|d| d.code == Some("E-TYPE-ARG-COUNT")),
+        "{e:?}"
+    );
+}
+
+#[test]
+fn generic_interface_assignability_is_argument_invariant() {
+    // `Ints implements Producer<int>` — its instance must NOT flow into `Producer<string>`.
+    let src = "interface Producer<T> { function produce() -> T; } \
+                   class Ints implements Producer<int> { function produce() -> int { return 7; } } \
+                   function main() -> void { Producer<string> p = new Ints(); }";
+    let e = errors_of(src);
+    assert!(!e.is_empty(), "expected an assignability error, got none");
+}
+
+#[test]
+fn generic_class_implements_generic_interface_through_own_param() {
+    // `Boxed<T> implements Producer<T>`: the recorded interface arguments mention the class's
+    // own parameter, substituted from the instance (`Boxed(42)` ⇒ `Producer<int>`).
+    let src = "interface Producer<T> { function produce() -> T; } \
+                   class Boxed<T> implements Producer<T> { \
+                     constructor(private T v) {} \
+                     function produce() -> T { return this.v; } } \
+                   function main() -> void { Producer<int> p = new Boxed(42); discard p.produce(); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
 fn instanceof_against_interface_narrows() {
     // `instanceof` accepts an interface RHS, and inside the then-block the operand is
     // smart-cast to the interface so its methods resolve.

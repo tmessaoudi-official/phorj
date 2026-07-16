@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-257 slice 1: generic interfaces
+
+`interface Producer<T> { function produce(): T; }` — interfaces may declare type parameters
+(bounds stay parser-rejected for now). A class implements at a type (`implements Producer<int>`,
+`E-TYPE-ARG-COUNT` on wrong arity) and conformance (`E-IFACE-SIG`) compares the SUBSTITUTED
+signatures; a generic class implements through its own parameter (`Boxed<T> implements
+Producer<T>` — the instance's argument flows through). Interface-typed values carry their
+arguments: calls through `Producer<int> p` type at `int` (not the raw `T`), and assignability is
+argument-invariant (`Ints implements Producer<int>` never flows into `Producer<string>`;
+inherited-only generic implements falls back to the name path — documented deferral). Everything
+erases before the backends, exactly like class/enum/function generics; `phg format` round-trips
+the new syntax (`interface I<T>`, `implements I<int>`) idempotently. This is the prerequisite
+spine for the ruled `Core.Iterator<T>` protocol (slices 2–3: foreach over iterators + Db stream
+reshape). Five new checker tests + a three-leg-verified guide example.
+
 ### Changed — playground: two-pane presentation (Phorj vs PHP), honest JIT labeling
 
 The playground's result tabs collapse from interpreter/VM/PHP to exactly two: **Phorj** (the

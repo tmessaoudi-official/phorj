@@ -1454,6 +1454,19 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   PHP Traversable) before the exact shape (`next(): T?` vs `hasNext/next`) is asked.
   *Alternative (offered): built-ins-only + manual pull loops (rejected — PHP stays ahead:
   any PHP class can be Traversable).*
+  **SHAPE RULED 2026-07-16 (developer, AskUserQuestion, post-META-7 scan):** (1) **shape =
+  `hasNext(): bool` / `next(): T`** (Kotlin/C# family) — chosen over the recommended Rust/Swift
+  `next(): T?` and over a JS-style `IterStep<T>` enum, BECAUSE it makes nullable element types
+  sound for free: null is never a termination signal, so `Iterator<string?>` needs zero
+  restriction (the very hazard that prompted the re-ask). (2) **exhausted `next()` = FAULT** —
+  documented contract "iterator exhausted", stdlib implementors fault deterministically like
+  index-OOB (alternative implementor-defined-behavior rejected: silent-footgun class).
+  (3) **throwing iterators auto-propagate in foreach** — each desugared pull carries `?`; the
+  enclosing function must declare/catch (alternative hand-loop-only rejected: re-opens the PHP
+  Traversable gap). (4) **Db streams = FULL reshape** — RowStream/DbStream become
+  `hasNext()/next()` implementing `Iterator<Row>`/`Iterator<T>` (internal one-row lookahead
+  buffer; pre-1.0 unpushed = cheapest breaking moment; alternative keep-both-protocols rejected:
+  dual API forever on the flagship streaming type).
 - **DEC-258 — RULED (audit flag F-020): Db column naming = OPT-IN snake↔camel mapping** —
   default stays STRICT exact-name; an explicit opt-in (surface asked in its design round:
   `db.withNaming(Naming.SnakeToCamel)` shape) applies the deterministic mapping.

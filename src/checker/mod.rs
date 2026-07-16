@@ -114,6 +114,12 @@ struct EnumInfo {
 #[derive(Clone)]
 struct ClassInfo {
     fields: HashMap<String, Ty>,
+    /// DEC-257 generic interfaces: interface name → the type arguments this class implements it
+    /// with (`class Ints implements Producer<int>` ⇒ `{"Producer": [int]}`). Arguments may mention
+    /// the class's OWN type parameters as `Ty::Param` (`Boxed<T> implements Producer<T>`) — the
+    /// use site substitutes the instance's arguments through them. Absent/empty for non-generic
+    /// interfaces. Feeds interface-typed assignability and the foreach element lookup.
+    iface_args: HashMap<String, Vec<Ty>>,
     /// DEC-241 asymmetric visibility: instance-field name → its SET visibility + declaring owner
     /// (`private(set)` ⇒ `Private`, `protected(set)` ⇒ `Protected`). Absent = assignable wherever
     /// the field is visible. Only `mutable` fields may carry one (an immutable field has no set
@@ -263,6 +269,10 @@ struct ConstEntry {
 struct InterfaceInfo {
     methods: HashMap<String, FnSig>,
     extends: Vec<String>,
+    /// Generic type parameters (`interface Iterator<T>`, DEC-257) — declaration order. Method
+    /// signatures mention them as `Ty::Param`; a class's `implements Iterator<int>` substitutes
+    /// them positionally for conformance. Empty for the common non-generic interface.
+    type_params: Vec<String>,
 }
 
 impl ClassInfo {
@@ -273,6 +283,7 @@ impl ClassInfo {
     fn placeholder(type_params: Vec<String>) -> Self {
         ClassInfo {
             fields: HashMap::new(),
+            iface_args: HashMap::new(),
             mutable_fields: std::collections::HashSet::new(),
             statics: HashMap::new(),
             consts: HashMap::new(),
@@ -311,10 +322,11 @@ impl EnumInfo {
 
 impl InterfaceInfo {
     /// See [`ClassInfo::placeholder`] — name-binding placeholder for an interface.
-    fn placeholder() -> Self {
+    fn placeholder(type_params: Vec<String>) -> Self {
         InterfaceInfo {
             methods: HashMap::new(),
             extends: Vec::new(),
+            type_params,
         }
     }
 }

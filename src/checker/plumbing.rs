@@ -15,6 +15,7 @@ impl Checker {
             InterfaceInfo {
                 methods: HashMap::new(),
                 extends: Vec::new(),
+                type_params: Vec::new(),
             },
         );
         Checker {

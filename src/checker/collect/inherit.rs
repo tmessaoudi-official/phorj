@@ -394,6 +394,33 @@ impl Checker {
                 }
             }
         }
+        // DEC-257 generic interfaces: a class instance flowing into a PARAMETERIZED interface type
+        // (`Ints` → `Producer<int>`) must match the arguments it implements the interface with —
+        // the name-only `subtype` closure below can't see them, and would wrongly accept
+        // `Ints` → `Producer<string>`. Invariant per argument (`Ty::Error` is the wildcard, same
+        // rule as same-head generics); the class's own type parameters in the recorded arguments
+        // are substituted from the instance (`Boxed<int>` → `Producer<int>`). A class whose
+        // generic-implements is only INHERITED from a parent has no recorded entry and falls
+        // through to the name-based path (documented deferral — direct implementors only).
+        if let (Ty::Named(fc, fargs), Ty::Named(tn, targs)) = (from, to) {
+            if !targs.is_empty() && fc != tn && self.interfaces.contains_key(tn) {
+                if let Some(ci) = self.classes.get(fc) {
+                    if let Some(decl_args) = ci.iface_args.get(tn) {
+                        let theta: HashMap<String, Ty> = ci
+                            .type_params
+                            .iter()
+                            .cloned()
+                            .zip(fargs.iter().cloned())
+                            .collect();
+                        return decl_args.len() == targs.len()
+                            && decl_args.iter().zip(targs).all(|(da, ta)| {
+                                let da = crate::checker::common::apply_subst(da, &theta);
+                                da == *ta || da == Ty::Error || *ta == Ty::Error
+                            });
+                    }
+                }
+            }
+        }
         Ty::assignable_with(from, to, &|a, b| self.is_subtype(a, b))
     }
 }

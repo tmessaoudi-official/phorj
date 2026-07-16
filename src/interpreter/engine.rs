@@ -62,6 +62,7 @@ impl<'c> Interp<'c> {
                             type_param_bounds: Vec::new(),
                             extends: Vec::new(),
                             implements: Vec::new(),
+                            implements_args: Vec::new(),
                             open: false,
                             is_abstract: true,
                             sealed: false,

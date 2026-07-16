@@ -244,7 +244,12 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
     member-imports stay the alias).
 16. ✅ **DEC-250** Optional<enum> variant-pattern match **SHIPPED 2026-07-16 fable** (checker-only:
     variant patterns unwrap `T?`, exhaustiveness = all variants + `null`; caveat tests flipped;
-    guide example gated) · **DEC-257** Iterator interface (foreach-able).
+    guide example gated) · **DEC-257** Iterator interface (foreach-able) — **shape RULED
+    2026-07-16** (hasNext/next; exhausted=fault; foreach auto-propagates throws; Db streams full
+    reshape — see C-decisions). **Slice 1 (generic interfaces) SHIPPED 2026-07-16 fable**:
+    `interface I<T>` + `implements I<int>` substituted conformance + interface-typed receivers +
+    invariant assignability + erasure + format round-trip. Slices 2–3 (Core.Iterator + foreach
+    desugar; Db stream reshape) NEXT.
 17. **DEC-256** W4-4 Unicode FULL: codepoint `length` + Unicode case + grapheme family.
 18. **DEC-243** String.levenshtein+similarText · **DEC-242** partitioned cookies · **DEC-258** Db column naming.
 
@@ -1952,6 +1957,17 @@ SURFACE changes; several are BREAKING (migrate all examples + Core), so each is 
   (CLI) / `handle` (web) names: `#[Entry]` on any function; `(): void` (or `(List<string>): void`) ⇒ CLI
   entry (`phg run`), `(Request): Response` ⇒ web handler (`phg serve`). >1 of a role ⇒ E-MULTIPLE-ENTRY.
   BREAKING: migrate every example's `main`/`handle` + the `entry_point` resolver (`ast/classes.rs`).
+  **GAPS RULED + BROUGHT FORWARD 2026-07-16 (developer, AskUserQuestion):** (1) `#[Entry]` is valid on
+  top-level functions AND class STATIC methods (`class App { #[Entry] static function run(…) }`);
+  E-MULTIPLE-ENTRY counts both kinds together per role. (2) **FULLY BREAKING** — no magic-`main`
+  fallback; every example/test/doc migrates in the same change (codemod-driven, differential-harness
+  verified — per the authorized codemod lever). (3) CLI entries also admit `(): int` /
+  `(List<string>): int` — the returned int IS the process exit status (0–255; void keeps 0-on-clean;
+  PHP twin exits with the code). (4) Web role stays exactly `(Request): Response` (status lives in the
+  Response; static-method form included); ONE program may declare BOTH one CLI and one web entry
+  (roles independent — `phg run` vs `phg serve`); throwing entries legal (`throws X`, escaped fault =
+  exit 1 / HTTP 500, today's behavior). **QUEUE POSITION: immediately after DEC-257** (developer:
+  "bring it forward"), before DEC-256/243/242/258.
 - **DEC-192 — mandatory `override function` keyword (the override enforcer).** Overriding a parent method
   REQUIRES `override function foo()` (E-MISSING-OVERRIDE if absent); marking a non-override is
   E-NOT-AN-OVERRIDE (typo/signature-drift guard). Keyword form (consistent with `open function`), the

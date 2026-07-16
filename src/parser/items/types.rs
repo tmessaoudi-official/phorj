@@ -64,10 +64,10 @@ impl Parser {
         } else {
             Vec::new()
         };
-        let implements = if self.eat(&TokenKind::Implements) {
-            self.parse_name_list("an interface name after 'implements'")?
+        let (implements, implements_args) = if self.eat(&TokenKind::Implements) {
+            self.parse_implements_list()?
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
         self.expect(&TokenKind::LBrace, "'{' to open class body")?;
         let mut members = Vec::new();
@@ -115,6 +115,7 @@ impl Parser {
             type_param_bounds,
             extends,
             implements,
+            implements_args,
             open,
             is_abstract,
             sealed,
@@ -222,6 +223,19 @@ impl Parser {
     ) -> Result<crate::ast::InterfaceDecl, Diagnostic> {
         self.expect(&TokenKind::Interface, "'interface'")?;
         let name = self.expect_ident("an interface name")?;
+        // Optional `<T, U>` (DEC-257 generic interfaces). Bounds are class/function-only for now —
+        // rejected below so `interface I<T: X>` fails loudly instead of silently dropping the bound.
+        let (type_params, type_param_bounds) = self.parse_type_params()?;
+        if let Some((p, b)) = type_param_bounds.first() {
+            return Err(Diagnostic::new(
+                Stage::Parse,
+                format!(
+                    "interface type parameters cannot carry bounds yet — remove `: {b}` from `{p}`"
+                ),
+                sp.line,
+                sp.col,
+            ));
+        }
         let extends = if self.eat(&TokenKind::Extends) {
             self.parse_name_list("an interface name after 'extends'")?
         } else {
@@ -274,11 +288,42 @@ impl Parser {
         Ok(crate::ast::InterfaceDecl {
             vis: Visibility::Public,
             name,
+            type_params,
             extends,
             methods,
             sealed,
             span: sp,
         })
+    }
+
+    /// A comma-separated `implements` list where each name may carry type arguments
+    /// (`implements Iterator<int>, Named` — DEC-257 generic interfaces). Returns the names plus a
+    /// parallel per-name argument list (empty for an unparameterized name).
+    pub(in crate::parser) fn parse_implements_list(
+        &mut self,
+    ) -> Result<(Vec<String>, Vec<Vec<crate::ast::Type>>), Diagnostic> {
+        let mut names = Vec::new();
+        let mut args: Vec<Vec<crate::ast::Type>> = Vec::new();
+        loop {
+            names.push(self.expect_ident("an interface name after 'implements'")?);
+            // A `<` here is unambiguous (no expression context in an implements clause): parse
+            // `< Type[, Type]* >` directly. `>>` tokenizes as two `Gt`, so nested generics close
+            // correctly (`Iterator<List<int>>`).
+            if self.eat(&TokenKind::Lt) {
+                let mut targs = vec![self.parse_type()?];
+                while self.eat(&TokenKind::Comma) {
+                    targs.push(self.parse_type()?);
+                }
+                self.expect(&TokenKind::Gt, "'>' to close the interface type arguments")?;
+                args.push(targs);
+            } else {
+                args.push(Vec::new());
+            }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        Ok((names, args))
     }
 
     /// A comma-separated list of one-or-more identifiers (no trailing comma), used for a class's
