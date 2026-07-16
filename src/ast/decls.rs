@@ -373,6 +373,12 @@ pub struct InterfaceDecl {
     /// declared in the whole program, so a `match` over this interface type is exhaustive with no `_`
     /// (DEC-179). Compile-time-only — PHP emits a plain `interface` (no sealed concept).
     pub sealed: bool,
+    /// True for a compiler-INJECTED interface (`Iterator` — added by the `Core.Iterator` prelude
+    /// when imported), false for a user declaration. Injected interfaces are exempt from the
+    /// DEC-202 PHP-builtin-name rejection: the transpiled output is namespaced (`namespace Main;
+    /// interface Iterator` never redeclares the root `\Iterator` — verified vs PHP 8.5), and the
+    /// name is compiler-owned, not user-chosen.
+    pub injected: bool,
     pub span: Span,
 }
 

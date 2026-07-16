@@ -135,7 +135,7 @@ pub fn check_and_expand_reified(
     };
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
-        Ok((warnings, html, ufcs, overload_renames, reified, pipe_params, fills)) => {
+        Ok((warnings, html, ufcs, overload_renames, reified, pipe_params, fills, for_iters)) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
@@ -164,28 +164,34 @@ pub fn check_and_expand_reified(
             // M4/DEC-249: default fills splice FIRST — they are check-time clones of still-sugared
             // source, so every later pass (aliases/html/generics/new/UFCS) must process the spliced
             // subtrees exactly like hand-written code (see `rewrite_fills`).
+            // DEC-257: foreach-over-Iterator lowers LAST of all — a statement-level rewrite,
+            // independent of every expression rewrite above; its generated hasNext/next pulls
+            // are plain method calls needing no further pass on any backend.
             Ok((
-                crate::checker::materialize_pipe_params(
-                    crate::checker::inline_parent_ctors(crate::checker::rename_overload_defs(
-                        crate::checker::rewrite_ufcs(
-                            crate::checker::unwrap_new(crate::checker::erase_generics(
-                                crate::checker::resolve_html(
-                                    crate::checker::inject_optional_field_defaults(
-                                        crate::checker::expand_aliases(
-                                            &crate::checker::apply_default_fills(
-                                                prog.clone(),
-                                                &fills,
+                crate::checker::lower_foreach_iter(
+                    crate::checker::materialize_pipe_params(
+                        crate::checker::inline_parent_ctors(crate::checker::rename_overload_defs(
+                            crate::checker::rewrite_ufcs(
+                                crate::checker::unwrap_new(crate::checker::erase_generics(
+                                    crate::checker::resolve_html(
+                                        crate::checker::inject_optional_field_defaults(
+                                            crate::checker::expand_aliases(
+                                                &crate::checker::apply_default_fills(
+                                                    prog.clone(),
+                                                    &fills,
+                                                ),
                                             ),
                                         ),
+                                        &html,
                                     ),
-                                    &html,
-                                ),
-                            )),
-                            &ufcs,
-                        ),
-                        &overload_renames,
-                    )),
-                    &pipe_params,
+                                )),
+                                &ufcs,
+                            ),
+                            &overload_renames,
+                        )),
+                        &pipe_params,
+                    ),
+                    &for_iters,
                 ),
                 reified,
             ))
@@ -514,7 +520,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
     // (or already-lowered) programs.
     let prog = &crate::checker::lower_pipes(prog.clone());
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes, _fills)) => {
+        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes, _fills, _for_iters)) => {
             (crate::diagnostic::diagnostics_json(&[], &warnings), false)
         }
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),

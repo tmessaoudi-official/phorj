@@ -56,7 +56,12 @@
 >   (typed `foreach` + `k=>v`; `for-in` retires) ·
 >   DEC-253 nullable unions `(A|B)?` · DEC-254 `ref` copy-out params + mutability triad + slice-1b ·
 >   DEC-249 method default params · DEC-245 intersection overload-set resolution · DEC-250
->   `Optional<enum>` variant match · DEC-257 Iterator interface · DEC-244 extension methods (✅ RESOLVED 2026-07-16: UFCS ratified AS the story, no new syntax) ·
+>   `Optional<enum>` variant match · DEC-257 Iterator interface — **slices 1–2 SHIPPED 2026-07-16**
+>   (generic interfaces `interface I<T>`/`implements I<int>`; injected `Core.Iterator<T>` with the
+>   dev-ruled `hasNext(): bool`/`next(): T` shape — nullable elements sound; foreach lowers to a
+>   while-pull pre-backend; throwing iterators legal under try-or-declares; exhausted `next()` =
+>   fault contract; PHP leg emits `Iterator_`, RoundingMode-mangle precedent; slice 3 = Db stream
+>   reshape) · DEC-244 extension methods (✅ RESOLVED 2026-07-16: UFCS ratified AS the story, no new syntax) ·
 >   DEC-241 asymmetric visibility (already spec'd, now build-committed) · DEC-234 member-error namespacing.
 > - **Stdlib:** DEC-240 `Core.Uri` (RFC 3986, typed errors) · DEC-247 `Core.DateTime` (immutable +
 >   Duration + tz) · DEC-256 Unicode FULL (codepoint `length` + case + graphemes) · DEC-243

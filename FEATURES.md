@@ -22,6 +22,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | `match` (exhaustiveness-checked) | ✅ | over enum variants — incl. an **optional enum** `E?` scrutinee: variant patterns match directly, exhaustive = all variants + `null` (DEC-250) |
 | String interpolation | ✅ | `"area = {area(s)}"` |
 | `for … in` over lists | ✅ | `for (int s in [80, 30, 55]) { … }` |
+| `Core.Iterator<T>` — user-defined iteration | ✅ | implement `hasNext(): bool` + `next(): T` and the type is foreach-able (lowered to a while-pull pre-backend, byte-identical everywhere); interface-typed values iterate; nullable element types sound; throwing iterators need try-catch or a `throws` declaration; exhausted `next()` = fault contract (DEC-257) |
 | `if` / `else`, blocks, comparison, equality, `&&`/`||`, unary | ✅ | short-circuit logical ops |
 | Checked arithmetic | ✅ | int overflow & div-by-zero → clean runtime error, never a panic |
 | Local type inference: `var x = …;` | ✅ | inferred from the initializer; still fully static + immutable |

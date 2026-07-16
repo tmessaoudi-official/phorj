@@ -292,6 +292,7 @@ impl Parser {
             extends,
             methods,
             sealed,
+            injected: false,
             span: sp,
         })
     }

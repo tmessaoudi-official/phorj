@@ -800,6 +800,16 @@ pub(super) const SECRET_PRELUDE: &str =
 /// while the MESSAGES stay twin-identical). Getters are the NORMALIZED view (lowercased
 /// scheme/host, dot-segments removed, unreserved percent-escapes decoded); the `raw*` family
 /// returns the form as written.
+/// `Core.Iterator` (DEC-257) — the pull-iteration protocol interface. Implementors become
+/// foreach-able (the checker desugars `for … in it` to a hasNext/next while-pull); the contract
+/// for `next()` past exhaustion is a fault ("iterator exhausted") — foreach never triggers it.
+pub(super) const ITERATOR_PRELUDE: &str = r#"
+interface Iterator<T> {
+    function hasNext(): bool;
+    function next(): T;
+}
+"#;
+
 pub(super) const URI_PRELUDE: &str = r#"
 import Core.UriSys;
 import Core.String;
@@ -1483,6 +1493,18 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
     },
+    // `Core.Iterator` (DEC-257) — THE pull-iteration protocol: any implementor is foreach-able.
+    // Shape developer-ruled 2026-07-16: `hasNext()/next()` (nullable element types are sound —
+    // null is never a termination signal); calling `next()` past exhaustion is a documented
+    // FAULT contract ("iterator exhausted") for stdlib implementors.
+    VirtualModule {
+        module: &["Core", "Iterator"],
+        qualifier: "Iterator",
+        src: Some(ITERATOR_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Iterator"],
+    },
     // `Core.Uri` (DEC-240) — the RFC 3986 `Uri` class + `UriError` taxonomy over `Core.UriSys`.
     VirtualModule {
         module: &["Core", "Uri"],
@@ -1820,12 +1842,21 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
                     .items
                     .iter()
                     .any(|x| matches!(x, Item::Function(y) if y.name == f.name)),
+                // DEC-257: `Core.Iterator` injects an INTERFACE — same same-name-shadowing
+                // discipline as classes/enums (a user declaration wins over the injection).
+                Item::Interface(i) => !p
+                    .items
+                    .iter()
+                    .any(|x| matches!(x, Item::Interface(y) if y.name == i.name)),
                 _ => false,
             };
             if absent {
                 let mut it = it;
                 if let Item::Enum(e) = &mut it {
                     e.injected = true;
+                }
+                if let Item::Interface(i) = &mut it {
+                    i.injected = true;
                 }
                 prepend.push(it);
             }

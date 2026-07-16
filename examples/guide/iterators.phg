@@ -1,0 +1,60 @@
+// Core.Iterator (DEC-257): THE pull-iteration protocol. Implement `hasNext()/next()` and your
+// type is foreach-able — the compiler lowers `for … in it` to a while-pull before any backend,
+// so all three legs run the identical loop. Nullable element types are fully sound (null is a
+// value, never a termination signal). Contract: calling `next()` past exhaustion is a fault
+// ("iterator exhausted") — foreach never does (it always asks hasNext first).
+package Main;
+
+import Core.Iterator;
+import Core.Iterator.Iterator;
+import Core.Output;
+
+class Countdown implements Iterator<int> {
+    constructor(private mutable int n) {}
+    function hasNext(): bool {
+        return this.n > 0;
+    }
+    function next(): int {
+        this.n = this.n - 1;
+        return this.n + 1;
+    }
+}
+
+// An iterator of nullable strings — a null ELEMENT is just a value; iteration continues.
+class Sparse implements Iterator<string?> {
+    constructor(private mutable int i) {}
+    function hasNext(): bool {
+        return this.i < 4;
+    }
+    function next(): string? {
+        this.i = this.i + 1;
+        if (this.i == 2) {
+            return null;
+        }
+        return "item{this.i}";
+    }
+}
+
+// Interface-typed values work too — any implementor flows in.
+function total(Iterator<int> it): int {
+    mutable int sum = 0;
+    for (int x in it) {
+        sum = sum + x;
+    }
+    return sum;
+}
+
+function main(): void {
+    for (int x in new Countdown(3)) {
+        Output.printLine("{x}");
+    }
+    Output.printLine("sum={total(new Countdown(4))}");
+    for (string? s in new Sparse(0)) {
+        Output.printLine(s ?? "(hole)");
+    }
+    // Manual pulls work as always — foreach is just the sugar over them.
+    var it = new Countdown(2);
+    while (it.hasNext()) {
+        Output.printLine("manual {it.next()}");
+    }
+}

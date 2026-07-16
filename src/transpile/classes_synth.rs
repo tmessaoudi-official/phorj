@@ -457,11 +457,11 @@ impl Transpiler {
             let parents: Vec<String> = i.extends.iter().map(|e| php_type_ref(e)).collect();
             format!(" extends {}", parents.join(", "))
         };
-        let disp = if self.namespaced {
+        let disp = php_class_name(if self.namespaced {
             last_segment(&i.name)
         } else {
             &i.name
-        };
+        });
         self.line(&format!("interface {}{} {{", disp, extends));
         self.indent += 1;
         for m in &i.methods {

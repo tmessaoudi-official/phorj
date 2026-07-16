@@ -248,8 +248,11 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
     2026-07-16** (hasNext/next; exhausted=fault; foreach auto-propagates throws; Db streams full
     reshape — see C-decisions). **Slice 1 (generic interfaces) SHIPPED 2026-07-16 fable**:
     `interface I<T>` + `implements I<int>` substituted conformance + interface-typed receivers +
-    invariant assignability + erasure + format round-trip. Slices 2–3 (Core.Iterator + foreach
-    desugar; Db stream reshape) NEXT.
+    invariant assignability + erasure + format round-trip. **Slice 2 (Core.Iterator + foreach
+    lowering) SHIPPED 2026-07-16 fable**: injected `Iterator<T>` (hasNext/next), foreach lowers
+    to a while-pull pre-backend, throws auto-propagate (try OR declares), PHP `Iterator_` mangle,
+    nullable elements proven. Slice 3 (Db stream reshape onto the protocol) NEXT — sequenced
+    BEFORE the DEC-275…279 naming mega-slice (which renames the stream classes it reshapes).
 17. **DEC-256** W4-4 Unicode FULL: codepoint `length` + Unicode case + grapheme family.
 18. **DEC-243** String.levenshtein+similarText · **DEC-242** partitioned cookies · **DEC-258** Db column naming.
 

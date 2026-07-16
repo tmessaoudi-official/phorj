@@ -326,6 +326,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                 extends: i.extends.clone(),
                 methods: i.methods.iter().map(|m| rfunc(m, &aliases)).collect(),
                 sealed: i.sealed,
+                injected: i.injected,
                 span: i.span,
             })),
             Item::Enum(e) => Some(Item::Enum(EnumDecl {

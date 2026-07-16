@@ -24,6 +24,7 @@ mod overloads;
 mod resolve_variant_imports;
 mod rewrite_alias;
 mod rewrite_fills;
+mod rewrite_foreach;
 mod rewrite_generics;
 mod rewrite_html;
 mod rewrite_new;
@@ -40,6 +41,7 @@ pub use overloads::rename_overload_defs;
 pub use resolve_variant_imports::resolve_variant_imports;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_fills::apply_default_fills;
+pub use rewrite_foreach::lower_foreach_iter;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
@@ -491,6 +493,13 @@ pub struct Checker {
     /// see full-arity calls (the "expand before backends" discipline; byte-identical by construction
     /// since the default literal is the same everywhere). No new pass, no new walker.
     default_fills: HashMap<usize, crate::ast::Expr>,
+    /// DEC-257: `for … in` loops whose iterable is an `Iterator<T>` implementor (or an
+    /// `Iterator<T>`-typed value), keyed by the `Stmt::For` node's `Span.start`. The pipeline's
+    /// `lower_foreach_iter` stmt-rewrite lowers each into a `hasNext()/next()` while-pull BLOCK
+    /// before any backend runs (invariant 5 discipline — backends never see foreach-over-Iterator).
+    /// The generated pulls are BARE calls: `?` is a checker-only marker (the runtime unwind is a
+    /// plain throw either way), and `check_for` already discharged the concrete methods' throws.
+    for_iter_lowerings: std::collections::HashSet<usize>,
     /// Span-keyed substitutions for a primitive `as`-cast that is a value CONVERSION (M4 as-matrix),
     /// keyed by the `Cast` node's `Span.start` (the `as` token offset — distinct from any wrapped
     /// call's span). The replacement is a leaf-qualified native call (`Convert.toFloat(v)` etc.) the
@@ -645,6 +654,7 @@ pub fn check_resolutions(
         HashMap<usize, Ty>,
         HashMap<usize, Ty>,
         HashMap<usize, crate::ast::Expr>,
+        std::collections::HashSet<usize>,
     ),
     Vec<Diagnostic>,
 > {
@@ -682,6 +692,8 @@ pub fn check_resolutions(
             // `materialize_pipe_params` (LAST in the pipeline's rewrite chain).
             c.pipe_param_resolutions,
             c.default_fills,
+            // DEC-257: foreach-over-Iterator spans, lowered to while-pulls by `lower_foreach_iter`.
+            c.for_iter_lowerings,
         ))
     } else {
         Err(c.errors)

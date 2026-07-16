@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-257 slice 2: `Core.Iterator<T>` — the pull-iteration protocol
+
+`import Core.Iterator;` injects `interface Iterator<T> { function hasNext(): bool; function
+next(): T; }` (shape developer-ruled: the two-method form makes nullable ELEMENT types fully
+sound — null is a value, never a termination signal — proven live by an `Iterator<string?>`
+in the guide example). Any implementor is foreach-able: the checker lowers `for (T x in it)`
+into a `hasNext()/next()` while-pull BLOCK before any backend (`rewrite_foreach`), so the
+interpreter, VM, and transpiled PHP run the identical loop — byte-identity by construction.
+Interface-typed values iterate too (`function total(Iterator<int> it)`). Throwing iterators
+auto-propagate (ruled): the loop is legal when each `hasNext`/`next` fault is caught by an
+enclosing `try` OR declared by the enclosing function; otherwise a targeted `E-CALL-UNHANDLED`
+at the loop site. Contract: `next()` past exhaustion is a fault ("iterator exhausted") —
+foreach never triggers it. PHP leg: the injected interface emits as `Iterator_` (PHP preloads
+root `Iterator`; the RoundingMode mangle precedent — PHP-only rename, stdout byte-identical,
+Phorj code always says `Iterator`). The injection fold now merges `Item::Interface` (it
+silently dropped interfaces before) and injected interfaces are exempt from the DEC-202
+builtin-name rejection (`InterfaceDecl.injected`, mirroring enums). Db streams reshape onto
+the protocol in slice 3.
+
 ### Added — DEC-257 slice 1: generic interfaces
 
 `interface Producer<T> { function produce(): T; }` — interfaces may declare type parameters

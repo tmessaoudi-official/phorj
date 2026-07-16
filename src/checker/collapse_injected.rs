@@ -321,6 +321,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 extends: i.extends.clone(),
                 methods: i.methods.iter().map(rfunc).collect(),
                 sealed: i.sealed,
+                injected: i.injected,
                 span: i.span,
             }),
             Item::Enum(e) => Item::Enum(EnumDecl {

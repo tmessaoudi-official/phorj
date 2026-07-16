@@ -375,11 +375,51 @@ impl Checker {
                         Ty::Error
                     }
                     Ty::Error => Ty::Error,
+                    // DEC-257: an `Iterator<E>` implementor (or an `Iterator<E>`-typed value)
+                    // iterates its element type via the hasNext/next pull protocol. The loop is
+                    // lowered to a while-pull BLOCK before any backend (`lower_foreach_iter`);
+                    // the concrete methods' throws are discharged HERE (the ruled
+                    // auto-propagation: caught by an enclosing try, or the enclosing function
+                    // declares them — same rule as any bare throwing call).
+                    Ty::Named(ref n, ref cargs) if self.iterator_elem(n, cargs).is_some() => {
+                        let (elem, throws) = self.iterator_elem(n, cargs).expect("guard checked");
+                        self.for_iter_lowerings.insert(span.start);
+                        // The ruled auto-propagation: a throwing iterator's foreach is legal when
+                        // each fault is caught by an enclosing `try` OR declared by the enclosing
+                        // function (the union a `?` pull would give — the lowered pulls unwind
+                        // identically at runtime either way).
+                        for e in &throws {
+                            if !self.covered_by_try(e) && !self.throws_declared(e) {
+                                self.err_coded(
+                                    *span,
+                                    format!(
+                                        "iterating this value can throw `{e}` (its `hasNext`/`next` declare it), which is not handled here"
+                                    ),
+                                    "E-CALL-UNHANDLED",
+                                    Some(format!(
+                                        "wrap the loop in `try {{ … }} catch ({e} e) {{ … }}`, or declare `throws {e}` on the enclosing function"
+                                    )),
+                                );
+                            }
+                        }
+                        elem
+                    }
                     other => {
+                        let hint = if matches!(&other, Ty::Named(n, _)
+                            if self.class_implements.get(n.as_str())
+                                .is_some_and(|is| is.iter().any(|i| i == "Iterator")))
+                        {
+                            // Implements Iterator only via a parent — the generic arguments are
+                            // not recorded for inherited implements (documented deferral).
+                            " (it implements `Iterator` only through a parent — declare \
+                             `implements Iterator<…>` on the class itself to make it foreach-able)"
+                        } else {
+                            ""
+                        };
                         self.err(
                             *span,
                             format!(
-                                "`for`-`in` requires a List, Set, string, or Map, found `{other}`"
+                                "`for`-`in` requires a List, Set, string, Map, or an `Iterator<T>` implementor, found `{other}`{hint}"
                             ),
                         );
                         Ty::Error
@@ -395,6 +435,35 @@ impl Checker {
             self.loop_depth -= 1;
             self.pop_scope();
         }
+    }
+
+    /// DEC-257: is `name<cargs>` iterable via the `Core.Iterator` pull protocol? Returns the
+    /// element type plus the union of the CONCRETE `hasNext`/`next` throws (to discharge at the
+    /// loop site). Two shapes hit: the injected `Iterator<E>` interface itself (throws empty —
+    /// interface-method throws are an existing documented deferral), and a class DIRECTLY
+    /// implementing it (`ClassInfo::iface_args`; the class's own type parameters substitute from
+    /// the instance arguments). Inherited-only implements has no recorded arguments — the caller
+    /// falls to the error arm with a targeted hint.
+    fn iterator_elem(&self, name: &str, cargs: &[Ty]) -> Option<(Ty, Vec<Ty>)> {
+        if name == "Iterator" && self.interfaces.contains_key("Iterator") {
+            return cargs.first().cloned().map(|e| (e, Vec::new()));
+        }
+        let ci = self.classes.get(name)?;
+        let args = ci.iface_args.get("Iterator")?;
+        let theta = self.class_subst(name, cargs);
+        let elem = crate::checker::common::apply_subst(args.first()?, &theta);
+        let mut throws: Vec<Ty> = Vec::new();
+        for m in ["hasNext", "next"] {
+            if let Some(sig) = ci.methods.get(m).and_then(|s| s.first()) {
+                for t in &sig.throws {
+                    let t = crate::checker::common::apply_subst(t, &theta);
+                    if !throws.contains(&t) {
+                        throws.push(t);
+                    }
+                }
+            }
+        }
+        Some((elem, throws))
     }
 
     /// Resolve a loop-variable annotation against the element type it iterates. An inferred binding
