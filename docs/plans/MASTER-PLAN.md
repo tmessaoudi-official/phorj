@@ -204,7 +204,12 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
 6. **DEC-255** fault-parity exit-status sweep (find silent PHP-succeeds-where-phorj-faults).
 
 **Tier 2 — language-surface (the ruled features):**
-7. **DEC-239** pipe `|>`: precedence fix + `%` placeholder + contextual pipe lambda (DEC-235 revoked).
+7. ✅ **DEC-239** pipe `|>`: precedence fix + `%` placeholder + contextual pipe lambda (DEC-235
+   revoked). **SHIPPED 2026-07-16 fable** (`0c41f49`…`94c9a4f` + docs): Expr::Pipe node (fmt
+   fidelity fixed), PHP-8.5 slot probed live, `%` placeholder (multi-slot single-eval IIFE),
+   contextual lambda (Invariant-7-safe materialization), `examples/guide/pipe.phg`, lift Tier-2
+   message. One PENDING fork recorded in the register (trailing tight-ops after a contextual
+   lambda: uniform-grammar loud error now; pipe-result binding = additive future ruling).
 8. **DEC-240** `Core.Uri` (RFC 3986, typed errors, PHP-8.5 twin).
 9. **DEC-247** `Core.DateTime` (immutable + Duration + tz; twin to DateTimeImmutable).
 10. **DEC-248** loop alignment: typed `foreach` + `k=>v` + retire `for-in` (codemod).

@@ -51,8 +51,9 @@
 > - **Security (Tier 1):** DEC-263 universal `Secret` redaction on ALL render surfaces (supersedes the
 >   Secret-type section's dump behavior) · DEC-264 HttpClient cross-origin redirect credential-strip ·
 >   DEC-265 SMTP require-TLS when credentials set (amends the Core.Mail transport table's TLS row).
-> - **Language surface:** DEC-239 pipe `|>` PHP-aligned + `%` placeholder + contextual pipe lambda
->   (DEC-235 REVOKED) · DEC-248 loop alignment (typed `foreach` + `k=>v`; `for-in` retires) ·
+> - **Language surface:** ✅ DEC-239 pipe `|>` PHP-aligned + `%` placeholder + contextual pipe lambda
+>   (DEC-235 REVOKED) — **SHIPPED 2026-07-16** (see the Pipe row below) · DEC-248 loop alignment
+>   (typed `foreach` + `k=>v`; `for-in` retires) ·
 >   DEC-253 nullable unions `(A|B)?` · DEC-254 `ref` copy-out params + mutability triad + slice-1b ·
 >   DEC-249 method default params · DEC-245 intersection overload-set resolution · DEC-250
 >   `Optional<enum>` variant match · DEC-257 Iterator interface · DEC-244 extension methods ·
@@ -150,7 +151,7 @@ strategy. Phorj removes surprises, never capability.*
 | Terminator | semicolons required | stands |
 | Modules | `import a.b.c` dotted paths | stands; model refined by [unified import](#unified-import-and-injected-type-discipline) |
 | Concat | interpolation `"Hello {name}"` | stands |
-| Pipe | `\|>` (from PHP 8.5) | stands |
+| Pipe | `\|>` (from PHP 8.5) | stands — **DEC-239 package SHIPPED (2026-07-16)**: PHP-8.5-aligned callable application at PHP's exact precedence slot (tighter than comparison, looser than arithmetic; probed live on php-8.5.8) + bare-`%` placeholder (`x \|> f(%, 2)` ≡ `f(x, 2)`, whole top-level-argument slots only, several `%` single-eval; `E-PIPE-PLACEHOLDER` otherwise) + contextually-typed pipe lambda (`x \|> (v => v * 2 + 1)`, param type flows from the piped value). AST node kept for formatter fidelity, expanded pre-backends (`lower_pipes`). Recorded phorj-better divergences: compile-time single-arg arity, void-mid-chain rejection, no string-callables |
 | Local declaration | type-first `int n = 5;` | stands |
 | Mutability | mutable by default, `const`/`final` | **superseded**: Phorj is immutable-by-default with `mutable` (GA-direction ruling) |
 | Return annotation | `-> float` in samples | **superseded**: canonical `: T`; `->` retired (W2-4, parser-reject pending) |

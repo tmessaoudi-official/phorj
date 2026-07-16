@@ -1183,6 +1183,22 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   phorj wordier than PHP at the multi-arg point).* Build = parser/checker slice, queued
   fresh-context; conformance goldens must pin: probes A–E + P1–P3 from the audit (bare 2-param
   loud error, closure/method-value/callable-returning RHS, chain, precedence, void rejection).
+  **BUILT (2026-07-16 fable, 5 slices `0c41f49` `c706076` `f51e1b0c` `94c9a4f` + docs):**
+  `Expr::Pipe` AST node — also fixes a fidelity defect found during the build (`phg format` used
+  to rewrite `x |> f` into `f(x)`: the parser lowered pipes before the printer saw them) — with
+  `checker::lower_pipes` first-pass expansion; the precedence slot (each relation probed live on
+  php-8.5.8: tighter than `== < & ?? &&`, looser than `+ <<`); `%` placeholder (single-slot
+  substitution, multi-slot single-evaluation IIFE with a collision-scanned `phorjPipe<n>` param;
+  parse-time `E-PIPE-PLACEHOLDER` shape validation); contextual pipe lambda (checker-inferred
+  param type materialized into the AST post-check — Invariant-7 safe, `run≡runvm` pinned by
+  test); probe goldens in `parser/tests` + `checker/tests/pipes.rs`; `examples/guide/pipe.phg`
+  (3-leg byte-identical); `phg lift` now names `|>` in its Tier-2 rejection. **PENDING fork
+  (developer adjudication, deliberately not self-ruled):** after a contextual lambda the RHS
+  grammar stays uniform, so `x |> (v => v) + 1` binds the `+` to the LAMBDA → loud
+  `E-PIPE-LAMBDA-CONTEXT` with a parenthesize hint (exactly like `x |> f + 1`); the ergonomic
+  alternative — binding trailing tight-ops to the pipe result — is strictly additive and awaits a
+  ruling. Also not built (not in the ruled package): PHP 8.6's draft `|>=` pipe-assignment;
+  native `|>` EMISSION in transpiled PHP (output uses the lowered plain call — byte-identical).
 
 - **DEC-240 — RULED (audit flag F-002): `Core.Uri` — one immutable RFC 3986 class with typed
   errors.** PHP 8.5 ships an always-on URI extension (`Uri\Rfc3986\Uri` raw+normalized getters,

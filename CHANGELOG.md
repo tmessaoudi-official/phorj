@@ -6,6 +6,39 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-239: the pipe `|>` package (PHP-8.5-aligned + phorj-only ergonomics)
+
+The full ruled pipe package, in five slices:
+
+- **`Expr::Pipe` is a real AST node** expanded out by `checker::lower_pipes` (the FIRST front-end
+  pass — Invariant-5 discipline, like `new`/`html`/aliases; no desugar pass, checker, or backend
+  ever sees it). This also fixed a formatter fidelity defect: `phg format` used to rewrite
+  `x |> f` into `f(x)` because the parser lowered pipes before the printer ever saw them; pipes,
+  placeholders, and pipe lambdas now round-trip verbatim.
+- **Precedence fix**: `|>` moved from loosest to PHP 8.5's exact slot — tighter than comparison
+  (`x |> f == 6` is now `(x |> f) == 6`), looser than shifts/arithmetic (`10 + 6 |> inc` → 17).
+  Every relation was probed live against php-8.5.8 (tighter than `== < & ?? &&`, looser than
+  `+ <<`); parser tests pin all seven.
+- **Bare-`%` placeholder** (phorj-only — PHP cannot reposition the piped parameter):
+  `x |> f(%, 2)` ≡ `f(x, 2)`, whole-argument slots of the pipe's top-level call only; several
+  `%` slots evaluate the piped value ONCE (a synthesized single-evaluation IIFE with a
+  collision-scanned `phorjPipe<n>` param). `f(% + 1)` / nested `g(%)` / bare `x |> %` are
+  parse-time `E-PIPE-PLACEHOLDER` (span-exact, with a use-a-lambda hint + `phg explain` entry).
+  Modulo is untouched — `%` is a placeholder only in operand position inside a pipe RHS.
+- **Contextually-typed pipe lambda**: `x |> (v => v * 2 + 1)` — the param type flows from the
+  piped value (DEC-201 contextual-typing precedent). The checker infers it at the IIFE call
+  site, rejects piping `void` (`E-VOID-CAPTURE` — PHP silently coerces void→null), and the
+  inferred type is materialized into the AST after checking so the VM compiler and transpiler
+  specialize exactly as proved (Invariant 7; `run≡runvm` pinned by test). A pipe lambda stranded
+  outside pipe application (`x |> (v => v) + 1` — the `+` binds to the lambda, uniform RHS
+  grammar) is a targeted `E-PIPE-LAMBDA-CONTEXT` with a parenthesize hint. The ergonomic
+  alternative (trailing tight-ops binding to the pipe result) is a recorded PENDING developer
+  fork — erroring now is the additive-relaxable choice.
+- **Surfaces**: `examples/guide/pipe.phg` (three-leg byte-identical, differential-gated);
+  FEATURES.md row rewritten; `phg lift` now names `|>` in a clear Tier-2 rejection (it lexed
+  `|` + `>` and reported "found Gt"). Compile-time single-arg arity and void-mid-chain rejection
+  are pinned as recorded phorj-better divergences (PHP defers both to runtime).
+
 ### Added — DEC-222: throwing-closure function types
 
 The closure parallel of DEC-221 (throwing constructors). A function TYPE and a lambda can now

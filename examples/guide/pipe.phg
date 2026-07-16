@@ -1,0 +1,65 @@
+// The pipe operator `|>` (DEC-239) — PHP-8.5-aligned callable application, plus the two
+// phorj-only ergonomics PHP can't express: the bare-`%` placeholder and the contextually-typed
+// pipe lambda. Byte-identical across the interpreter, the VM, and the transpiled PHP.
+package Main;
+
+import Core.Output;
+import Core.Math;
+
+function inc(int x): int {
+    return x + 1;
+}
+
+function pad(int value, int width): int {
+    return value * width;
+}
+
+function three(int a, int b, int c): int {
+    return a * 100 + b * 10 + c;
+}
+
+// A callable-returning function: `5 |> mk(2)` first evaluates `mk(2)`, then applies its result —
+// the piped value is always the ONE argument of whatever the RHS evaluates to (PHP 8.5 semantics).
+function mk(int delta): (int) => int {
+    return function(int x): int => x + delta;
+}
+
+class Adder {
+    constructor(public int amount) {}
+    function plus(int x): int {
+        return x + this.amount;
+    }
+}
+
+function loud(): int {
+    Output.printLine("evaluated once");
+    return 4;
+}
+
+function main(): void {
+    // Plain application and chains: `x |> f` is `f(x)`, left-associative.
+    Output.printLine("{5 |> inc}");
+    Output.printLine("{5 |> inc |> inc}");
+    // The RHS is any function-valued expression: a lambda-typed local, a method value, or a
+    // callable-returning call.
+    var dbl = function(int x): int => x * 2;
+    Output.printLine("{21 |> dbl}");
+    Adder a = new Adder(10);
+    Output.printLine("{5 |> a.plus}");
+    Output.printLine("{5 |> mk(2)}");
+    // Precedence — PHP 8.5's exact slot: tighter than comparison, looser than arithmetic.
+    Output.printLine("{10 + 6 |> inc}");
+    bool matches = 5 |> inc == 6;
+    Output.printLine("{matches}");
+    // The `%` placeholder (phorj-only — php.watch: PHP "cannot change the position of the
+    // parameter"): the piped value fills whole-argument slots of the pipe's own call.
+    Output.printLine("{5 |> pad(%, 3)}");
+    Output.printLine("{7 |> pad(2, %)}");
+    Output.printLine("{5 |> Math.abs(%)}");
+    // Several `%` slots are legal — the piped value still evaluates ONCE.
+    Output.printLine("{loud() |> three(%, %, %)}");
+    // The contextually-typed pipe lambda (phorj-only): the param type flows from the piped value.
+    Output.printLine("{5 |> (v => v * 2 + 1)}");
+    int staged = 2 |> pad(%, 10) |> (v => v + 5) |> inc;
+    Output.printLine("{staged}");
+}

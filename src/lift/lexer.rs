@@ -306,6 +306,16 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
             i += 3;
             continue;
         }
+        // PHP 8.5's pipe operator — recognized so the rejection names the construct (the pre-check
+        // fallthrough lexed `|` then `>` and reported a baffling "found Gt"). Lifting it is Tier-2:
+        // a faithful lift needs closures / first-class callables on the RHS, themselves Tier-2.
+        if two.as_str() == "|>" {
+            return Err(format!(
+                "lift parse error: the pipe operator `|>` is Tier-2 (its right-hand side is a \
+                 closure or first-class callable, both Tier-2); rewrite as a direct call for now \
+                 (line {line})"
+            ));
+        }
         let two_tok = match two.as_str() {
             "==" => Some(PTok::EqEq),
             "!=" => Some(PTok::NotEq),
