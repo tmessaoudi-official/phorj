@@ -161,6 +161,60 @@ fn agree_err(src: &str) {
     );
 }
 
+/// `php_bin`, resolved once per process (the raw fn probes `php --version` on every call; the
+/// fault-parity leg below runs it for many programs, so cache it). `None` ⇒ php unavailable /
+/// `PHORJ_SKIP_PHP=1`.
+fn php_bin_cached() -> Option<&'static str> {
+    static PHP: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    PHP.get_or_init(php_bin).as_deref()
+}
+
+/// DEC-255 fault-parity leg. `agree_err` proves `run ≡ runvm` fault on a program; this ALSO drives
+/// the transpiled PHP and asserts it faults too (non-zero exit) — closing the byte-identity break
+/// where phorj faults at RUNTIME but the naive PHP erasure silently succeeds (exit 0).
+///
+/// Scope is deliberately the RUNTIME-fault classes DEC-255 closed with throwing helpers (index/key
+/// OOB, checked-int overflow incl. the native + gcd/lcm cases). A program that faults at COMPILE
+/// time won't transpile (nothing for PHP to run); a quarantined/native-only/concurrency program has
+/// no PHP leg — both are skipped, matching the success oracle's gates. Stdout is NOT compared: a
+/// fault's partial stdout can legitimately differ; the parity contract here is fault-vs-no-fault.
+///
+/// NOT yet gated (surfaced by this leg, tracked as PENDING fault-parity decisions — see
+/// C-decisions.md / KNOWN_ISSUES): `NoField` (PHP returns null+Warning, exit 0), `DecimalInexact`
+/// (BCMath may round silently), and the heavy `StackOverflow`/`RangeTooLarge` classes (running them
+/// through PHP would exhaust memory). Those need their own rulings before enrolling here.
+fn agree_err_php(src: &str) {
+    agree_err(src);
+    let src = with_pkg(src);
+    if uses_impure_native(&src) {
+        return;
+    }
+    let Some(php) = php_bin_cached() else {
+        return; // pre-commit / no php — the run≡runvm leg above still gates
+    };
+    let Ok(php_src) = cli::cmd_transpile(&src) else {
+        return; // compile-time fault or native-only ladder module → no runnable PHP leg
+    };
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, Ordering::Relaxed);
+    let path =
+        std::env::temp_dir().join(format!("phorj_faultoracle_{}_{n}.php", std::process::id()));
+    std::fs::write(&path, &php_src).expect("write temp php");
+    let out = Command::new(php)
+        .args(php_n_args(php))
+        .arg(&path)
+        .output()
+        .expect("spawn php");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        !out.status.success(),
+        "fault-parity break: phorj faults but PHP exited 0 (silent success) for:\n{src}\n\
+         --- transpiled php ---\n{php_src}\n--- php stderr ---\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 /// The line `N` from a rendered `… error at N[:col]:` fault header, or `None` if absent. Used by the
 /// W0-5 fault-line skew gate below.
 fn fault_line(err: &str) -> Option<usize> {
@@ -1355,6 +1409,46 @@ fn error_parity_between_backends() {
     for src in ERR_PROGRAMS {
         agree_err(src);
     }
+}
+
+/// DEC-255 (fault-parity, Tier-1): every runtime fault class closed with a throwing PHP helper must
+/// ALSO fault on the transpiled PHP leg (non-zero exit). Before the helpers PHP silently succeeded
+/// (index → null+Warning; int arithmetic / int-returning natives → float promotion), exiting 0 where
+/// phorj faults — a byte-identity break in the fault direction (Invariant 1). `agree_err_php` drives
+/// all three legs; a regression in any helper turns one of these red.
+#[test]
+fn dec255_runtime_faults_also_fault_on_php() {
+    // slice A — list index out of range → `__phorj_index` throws (was: null + Warning, exit 0).
+    agree_err_php(
+        r#"import Core.Output; function main() -> void { var xs = [1, 2, 3]; Output.printLine("{xs[5]}"); }"#,
+    );
+    // slice B-operators — int `+`/`*`/unary-neg overflow → `__phorj_checked_add/mul/neg` throw.
+    agree_err_php(
+        r#"import Core.Output; function main() -> void { Output.printLine("{9223372036854775807 + 1}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; function main() -> void { Output.printLine("{9223372036854775807 * 2}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{-min}"); }"#,
+    );
+    // slice B-natives — int-returning natives whose PHP builtin promotes on overflow → `__phorj_checked_int`.
+    agree_err_php(
+        r#"import Core.Output; import Core.Math; function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.abs(min)}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; import Core.Math; function main() -> void { Output.printLine("{Math.integerPower(10, 100)}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; import Core.List; function main() -> void { Output.printLine("{List.sum([9223372036854775807, 1])}"); }"#,
+    );
+    // slice B-natives — gcd/lcm overflow → `is_float` guards inside `__phorj_gcd`/`__phorj_lcm`.
+    agree_err_php(
+        r#"import Core.Output; import Core.Math; function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.gcd(min, 0)}"); }"#,
+    );
+    agree_err_php(
+        r#"import Core.Output; import Core.Math; function main() -> void { var min = -9223372036854775807 - 1; Output.printLine("{Math.lcm(min, 1)}"); }"#,
+    );
 }
 
 /// Pathological nesting must fault *identically* on both backends (M2 P3.5 Wave 0, Task 0.4).
