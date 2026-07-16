@@ -434,6 +434,13 @@ type Origin = (String, String);
 enum MatchTarget {
     Return,
     Assign(String),
+    /// A statement-position `match` (`match (x) { … };` — arms run for effect, no value captured).
+    /// Always lowered to the `instanceof`/`===` if-chain, NEVER a native `match (true)` expression:
+    /// a void arm body like `Output.printLine(…)` emits PHP `echo`, which is a STATEMENT — legal
+    /// inside an if-chain block, a parse error inside a `match` expression arm. (Pre-DEC-253 this
+    /// position fell through to the expression emitter and produced unparseable PHP — caught while
+    /// building the nullable-union example.)
+    Discard,
 }
 
 /// The PHP namespace of a (possibly mangled) function name: the prefix before the last `\`

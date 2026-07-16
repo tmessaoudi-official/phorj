@@ -173,18 +173,25 @@ impl Transpiler {
         // T1: a literal value `match` becomes a native PHP `match` expression in `return`/assign
         // position. Falls through to the `instanceof` if-chain below for variant/type/struct/guarded
         // matches (`try_native_match` returns `None` without emitting the scrutinee in that case).
-        if let Some(m) = self.try_native_match(scrutinee, arms)? {
-            let stmt = match &target {
-                MatchTarget::Return => format!("return {m};"),
-                MatchTarget::Assign(v) => format!("${v} = {m};"),
-            };
-            self.line(&stmt);
-            return Ok(());
+        // A statement-position match (`Discard`) NEVER takes the native form — its arm bodies emit
+        // as statements (`echo …;`), which only the if-chain can host.
+        if !matches!(target, MatchTarget::Discard) {
+            if let Some(m) = self.try_native_match(scrutinee, arms)? {
+                let stmt = match &target {
+                    MatchTarget::Return => format!("return {m};"),
+                    MatchTarget::Assign(v) => format!("${v} = {m};"),
+                    MatchTarget::Discard => unreachable!("guarded above"),
+                };
+                self.line(&stmt);
+                return Ok(());
+            }
         }
         let subj = self.emit_expr(scrutinee)?;
         let yield_stmt = |t: &MatchTarget, body: &str| match t {
             MatchTarget::Return => format!("return {body};"),
             MatchTarget::Assign(v) => format!("${v} = {body};"),
+            // Statement position: the arm body runs for effect (`echo …;` / a void call).
+            MatchTarget::Discard => format!("{body};"),
         };
         // Emit one `if (…) {…} elseif (…) {…} … else {…}` chain so exactly one arm runs. Earlier
         // this was a sequence of independent `if`s, which only short-circuited in `Return` position

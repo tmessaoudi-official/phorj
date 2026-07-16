@@ -239,6 +239,24 @@ impl Transpiler {
                 self.indent -= 1;
                 self.line("}");
             }
+            // A statement-position `match` (arms run for effect) routes through `emit_match`'s
+            // if-chain (`MatchTarget::Discard`) — the expression emitter's `match (true)` form
+            // cannot host statement arm bodies (`echo …` — the printLine emission — is a PHP
+            // statement; inside a match-expression arm it is a parse error).
+            Stmt::Expr(
+                Expr::Match {
+                    scrutinee, arms, ..
+                },
+                _,
+            )
+            | Stmt::Discard(
+                Expr::Match {
+                    scrutinee, arms, ..
+                },
+                _,
+            ) => {
+                self.emit_match(scrutinee, arms, MatchTarget::Discard)?;
+            }
             Stmt::Expr(e, _) | Stmt::Discard(e, _) => {
                 let s = self.emit_expr(e)?;
                 self.line(&format!("{s};"));

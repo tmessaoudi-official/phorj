@@ -650,3 +650,22 @@ fn truncate_round_out_of_range_php_helper_throws() {
         "round helper must throw on out-of-range: {r}"
     );
 }
+
+#[test]
+fn statement_position_match_lowers_to_an_if_chain() {
+    // A statement-position `match` whose arms print (void bodies) must NOT emit a native
+    // `match (true) { … => echo …, }` — `echo` is a PHP STATEMENT and that form is a parse error
+    // (a real transpile-fatal caught while building the DEC-253 example). The if-chain hosts the
+    // statement bodies; exactly one arm runs.
+    let src = "package Main; import Core.Output;\n\
+         function main(): void { int e = 1; match (e) { 1 => Output.printLine(\"x\"), default => Output.printLine(\"y\") }; }";
+    let out = php(src);
+    assert!(
+        !out.contains("=> echo"),
+        "statement match must not put echo in a match-expression arm:\n{out}"
+    );
+    assert!(
+        out.contains("if (") && out.contains("else {"),
+        "expected an if-chain lowering:\n{out}"
+    );
+}
