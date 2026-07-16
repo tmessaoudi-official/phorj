@@ -78,6 +78,18 @@ fn precedence_and_associativity() {
     assert_eq!(sexpr(&expr("x |> f")), "(|> x f)");
     // arithmetic binds tighter than pipe: `a + b |> f` == `(a + b) |> f`
     assert_eq!(sexpr(&expr("a + b |> f")), "(|> (+ a b) f)");
+    // DEC-239 precedence fix — PHP 8.5's exact slot (each verified against php-8.5.8):
+    // pipe binds tighter than `==`/comparison: `x |> f == 6` is `(x |> f) == 6` …
+    assert_eq!(sexpr(&expr("x |> f == 6")), "(== (|> x f) 6)");
+    assert_eq!(sexpr(&expr("x |> f < 7")), "(< (|> x f) 7)");
+    // … tighter than `&`/`??`/`&&` too …
+    assert_eq!(sexpr(&expr("a & b |> f")), "(& a (|> b f))");
+    assert_eq!(sexpr(&expr("a ?? b |> f")), "(?? a (|> b f))");
+    assert_eq!(sexpr(&expr("a && b |> f")), "(&& a (|> b f))");
+    // … and looser than shifts: `a << 2 |> f` is `(a << 2) |> f`.
+    assert_eq!(sexpr(&expr("a << 2 |> f")), "(|> (<< a 2) f)");
+    // pipe chains stay left-associative: `x |> f |> g` is `(x |> f) |> g`.
+    assert_eq!(sexpr(&expr("x |> f |> g")), "(|> (|> x f) g)");
     // `**` binds tighter than `*` and is right-associative (PHP-identical).
     assert_eq!(sexpr(&expr("2 ** 3 ** 2")), "(** 2 (** 3 2))"); // right-assoc
     assert_eq!(sexpr(&expr("2 * 3 ** 2")), "(* 2 (** 3 2))"); // ** tighter than *

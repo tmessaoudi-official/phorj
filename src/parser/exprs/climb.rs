@@ -52,11 +52,14 @@ impl Parser {
     /// Returns None if the token is not an infix operator. Higher binds tighter.
     pub(in crate::parser) fn infix_op(kind: &TokenKind) -> Option<(u8, BinaryOp)> {
         use TokenKind as T;
-        // Precedence follows PHP (higher binds tighter): `|>` `??` `||` `&&` then bitwise
-        // `|` `^` `&`, then `==`/`!=`, comparison, shifts, `+ -`, `* / %`. Shift-right `>>` is not a
-        // token (two `Gt`); it is handled at level 10 directly in `parse_binary`.
+        // Precedence follows PHP (higher binds tighter): `??` `||` `&&` then bitwise
+        // `|` `^` `&`, then `==`/`!=`, comparison, `|>`, shifts, `+ -`, `* / %`. Shift-right `>>`
+        // is not a token (two `Gt`); it is handled at level 11 directly in `parse_binary`.
+        // DEC-239 precedence fix: `|>` sits in PHP 8.5's exact slot — tighter than comparison
+        // (`x |> f == 6` is `(x |> f) == 6`), looser than shifts/arithmetic (`10 + 6 |> inc` is
+        // `(10 + 6) |> inc` → 17). Verified against php-8.5.8: pipe binds tighter than
+        // `== < & ?? &&` and looser than `+ <<`.
         Some(match kind {
-            T::Pipe => (1, BinaryOp::Pipe),
             T::QuestionQuestion => (2, BinaryOp::Coalesce),
             T::OrOr => (3, BinaryOp::Or),
             T::AndAnd => (4, BinaryOp::And),
@@ -69,15 +72,16 @@ impl Parser {
             T::Gt => (9, BinaryOp::Gt),
             T::Le => (9, BinaryOp::Le),
             T::Ge => (9, BinaryOp::Ge),
-            T::Shl => (10, BinaryOp::Shl),
-            T::Plus => (11, BinaryOp::Add),
-            T::Minus => (11, BinaryOp::Sub),
-            T::Star => (12, BinaryOp::Mul),
-            T::Slash => (12, BinaryOp::Div),
-            T::Percent => (12, BinaryOp::Rem),
+            T::Pipe => (10, BinaryOp::Pipe),
+            T::Shl => (11, BinaryOp::Shl),
+            T::Plus => (12, BinaryOp::Add),
+            T::Minus => (12, BinaryOp::Sub),
+            T::Star => (13, BinaryOp::Mul),
+            T::Slash => (13, BinaryOp::Div),
+            T::Percent => (13, BinaryOp::Rem),
             // `**` power binds tighter than `* / %` and is **right-associative** (PHP-identical):
             // `2 ** 3 ** 2` is `2 ** (3 ** 2)`. Right-assoc is applied in `parse_binary`.
-            T::StarStar => (13, BinaryOp::Pow),
+            T::StarStar => (14, BinaryOp::Pow),
             _ => return None,
         })
     }
@@ -171,15 +175,15 @@ impl Parser {
             }
             // Shift-right `>>` is two adjacent `Gt` tokens (never a single token — that protects
             // nested generics `List<List<int>>`). In expression position two consecutive `Gt` can
-            // only be `>>`; a single `>` falls through to `infix_op` as comparison. Level 10.
+            // only be `>>`; a single `>` falls through to `infix_op` as comparison. Level 11.
             if matches!(self.peek(), TokenKind::Gt)
                 && matches!(self.peek2(), TokenKind::Gt)
-                && 10 >= min_bp
+                && 11 >= min_bp
             {
                 let sp = self.peek_span();
                 self.advance(); // first `>`
                 self.advance(); // second `>`
-                let rhs = self.parse_binary(10 + 1)?;
+                let rhs = self.parse_binary(11 + 1)?;
                 lhs = Expr::Binary {
                     op: BinaryOp::Shr,
                     lhs: Box::new(lhs),

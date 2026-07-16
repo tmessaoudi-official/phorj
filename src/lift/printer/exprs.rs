@@ -342,7 +342,6 @@ const PREC_RANGE: u8 = 0;
 /// (`src/parser/exprs.rs`); higher binds tighter. The shared source of truth for re-parse fidelity.
 pub(super) fn bin_prec(op: BinaryOp) -> u8 {
     match op {
-        BinaryOp::Pipe => 1,
         BinaryOp::Coalesce => 2,
         BinaryOp::Or => 3,
         BinaryOp::And => 4,
@@ -351,10 +350,13 @@ pub(super) fn bin_prec(op: BinaryOp) -> u8 {
         BinaryOp::BitAnd => 7,
         BinaryOp::Eq | BinaryOp::NotEq => 8,
         BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => 9,
-        BinaryOp::Shl | BinaryOp::Shr => 10,
-        BinaryOp::Add | BinaryOp::Sub => 11,
-        BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => 12,
-        BinaryOp::Pow => 13,
+        // DEC-239 precedence fix: `|>` sits in PHP 8.5's slot — tighter than comparison, looser
+        // than shifts/arithmetic (verified against php-8.5.8).
+        BinaryOp::Pipe => 10,
+        BinaryOp::Shl | BinaryOp::Shr => 11,
+        BinaryOp::Add | BinaryOp::Sub => 12,
+        BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => 13,
+        BinaryOp::Pow => 14,
     }
 }
 
