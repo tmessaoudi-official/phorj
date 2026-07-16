@@ -337,6 +337,14 @@ pub enum Modifier {
     Public,
     Private,
     Protected,
+    /// `private(set)` — asymmetric visibility (DEC-241): the field/static reads at its declared
+    /// (read) visibility but may be ASSIGNED only inside the owning class. Only meaningful on a
+    /// `mutable` member (an immutable one can't be assigned anywhere); transpiles 1:1 to PHP
+    /// 8.4's `private(set)`.
+    PrivateSet,
+    /// `protected(set)` — as [`Modifier::PrivateSet`], but the owning class AND its subclasses
+    /// may assign. Transpiles 1:1 to PHP 8.4's `protected(set)`.
+    ProtectedSet,
     Const,
     /// `open` on a class or method (M-RT S6) — opts into extensibility/overridability. Phorj is
     /// **final-by-default** (a non-`open` class can't be `extend`ed; a non-`open` method can't be

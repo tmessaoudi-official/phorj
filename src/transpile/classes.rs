@@ -246,7 +246,11 @@ impl Transpiler {
                     // at runtime by the backends, so a field with no explicit visibility (e.g.
                     // `mutable int x;`) emits as `public` — the spine-safe choice (M-mut.6).
                     let v = vis(modifiers);
-                    let v = if v.is_empty() { "public" } else { v };
+                    let v = if v.is_empty() {
+                        "public".to_string()
+                    } else {
+                        v
+                    };
                     if modifiers.contains(&Modifier::Const) {
                         // A `const` class constant (Feature A) → a PHP **typed class constant**
                         // `[vis] const TYPE NAME = <literal>;` (PHP 8.3+; floor 8.5 ✓). Accessed
@@ -297,7 +301,7 @@ impl Transpiler {
                     // Batch A: a `private`/`protected constructor` emits the PHP visibility keyword on
                     // `__construct` (so PHP enforces it natively, matching the checker). A public/default
                     // ctor stays bare (`function __construct`) for byte-identity with prior output.
-                    let cvis = match vis(modifiers) {
+                    let cvis = match vis(modifiers).as_str() {
                         "private" => "private ",
                         "protected" => "protected ",
                         _ => "",

@@ -146,6 +146,26 @@ pub fn explain_text(code: &str) -> Option<String> {
              discard it explicitly with `discard f();`. Only `void` and `empty` results (and a\n\
              diverging `never` call like `panic(…)`) may be dropped silently.\n"
         }
+        "E-ASSIGN-SET-VISIBILITY" => {
+            "E-ASSIGN-SET-VISIBILITY — a field with asymmetric visibility was assigned outside its\n\
+             set scope.\n\n\
+             `public private(set) mutable int x;` (DEC-241) reads everywhere but may be ASSIGNED\n\
+             only inside the owning class (`protected(set)`: the owner and its subclasses). Move\n\
+             the write into the owning scope — usually behind a method — or widen the `(set)`\n\
+             modifier. Transpiles 1:1 to PHP 8.4 asymmetric visibility.\n"
+        }
+        "E-SET-VIS-IMMUTABLE" => {
+            "E-SET-VIS-IMMUTABLE — `private(set)`/`protected(set)` on an immutable member.\n\n\
+             Phorj fields are immutable by default; a set-visibility modifier gates assignments,\n\
+             and an immutable member has none to gate. Add `mutable`, or drop the `(set)` modifier\n\
+             (DEC-241).\n"
+        }
+        "E-SET-VIS-WIDER" => {
+            "E-SET-VIS-WIDER — a member's set visibility is wider than its read visibility.\n\n\
+             Writes cannot be more visible than reads (`private protected(set)` would let a\n\
+             subclass assign a field it cannot read) — PHP rejects the same shape. Narrow the\n\
+             `(set)` modifier or widen the read visibility (DEC-241).\n"
+        }
         "E-NULL-TYPE" => {
             "E-NULL-TYPE — `null` was written by itself in type position.\n\n\
              `null` is only a nullable-union member (DEC-253): `A | B | null` — which is the same\n\

@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-241: asymmetric visibility (`public private(set)` / `protected(set)`)
+
+A founding-spec v0.1 promise recovered by the reopen audit: a `mutable` field, promoted
+constructor parameter, or static may declare a SET visibility narrower than its read visibility —
+public reads, writes only inside the owning class (`private(set)`) or the owner + subclasses
+(`protected(set)`). Enforced at every write site (instance/static assignment and `with { … }`
+overrides — `E-ASSIGN-SET-VISIBILITY`), validated at declaration (`mutable` required —
+`E-SET-VIS-IMMUTABLE`; writes never more visible than reads — `E-SET-VIS-WIDER`), inherited with
+the declaring owner preserved, and transpiled 1:1 to PHP 8.4's own asymmetric-visibility syntax
+(compile-time enforcement here, PHP re-enforces at runtime for free).
+`examples/guide/asymmetric-visibility.phg` gates it three-leg.
+
 ### Added — DEC-245: intersections resolve shared methods as an overload set
 
 Member access on `A & B` now merges each method name's signatures across the members: identical

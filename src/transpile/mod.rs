@@ -692,9 +692,11 @@ fn is_promoted(mods: &[Modifier]) -> bool {
     })
 }
 
-/// PHP visibility keyword for a member's modifiers (empty string = no keyword).
-fn vis(mods: &[Modifier]) -> &'static str {
-    if mods.iter().any(|m| matches!(m, Modifier::Private)) {
+/// PHP visibility keyword for a member's modifiers (empty string = no keyword). DEC-241: an
+/// asymmetric `private(set)`/`protected(set)` rides along 1:1 (PHP 8.4 syntax; the 8.5 floor makes
+/// it always legal) — phorj enforces at compile time, PHP re-enforces at runtime for free.
+fn vis(mods: &[Modifier]) -> String {
+    let read = if mods.iter().any(|m| matches!(m, Modifier::Private)) {
         "private"
     } else if mods.iter().any(|m| matches!(m, Modifier::Protected)) {
         "protected"
@@ -702,6 +704,22 @@ fn vis(mods: &[Modifier]) -> &'static str {
         "public"
     } else {
         ""
+    };
+    let set = if mods.iter().any(|m| matches!(m, Modifier::PrivateSet)) {
+        " private(set)"
+    } else if mods.iter().any(|m| matches!(m, Modifier::ProtectedSet)) {
+        " protected(set)"
+    } else {
+        ""
+    };
+    if set.is_empty() {
+        read.to_string()
+    } else if read.is_empty() {
+        // A bare `private(set) mutable int x;` — public read is the default; PHP needs an
+        // explicit read keyword before the set one.
+        format!("public{set}")
+    } else {
+        format!("{read}{set}")
     }
 }
 

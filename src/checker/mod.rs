@@ -114,6 +114,13 @@ struct EnumInfo {
 #[derive(Clone)]
 struct ClassInfo {
     fields: HashMap<String, Ty>,
+    /// DEC-241 asymmetric visibility: instance-field name → its SET visibility + declaring owner
+    /// (`private(set)` ⇒ `Private`, `protected(set)` ⇒ `Protected`). Absent = assignable wherever
+    /// the field is visible. Only `mutable` fields may carry one (an immutable field has no set
+    /// path to gate — `E-SET-VIS-IMMUTABLE`); enforced at every assignment/`with` site.
+    set_vis: HashMap<String, (MemberVis, String)>,
+    /// DEC-241: as [`Self::set_vis`], for `static` fields (their own namespace).
+    static_set_vis: HashMap<String, (MemberVis, String)>,
     /// Names of the `mutable` fields (M-mut.6) — explicit `mutable Type f;` decls and promoted ctor
     /// params carrying `mutable`. Only these may be the target of `o.f = e` (`E-ASSIGN-IMMUTABLE`);
     /// every other field is immutable by default. A subset of `fields`' keys.
@@ -216,6 +223,19 @@ pub(super) enum MemberVis {
 
 impl MemberVis {
     /// The member visibility carried by a modifier set: `private` > `protected` > `public` (default).
+    /// DEC-241: the SET visibility carried by a modifier set — `Some(Private)` for
+    /// `private(set)`, `Some(Protected)` for `protected(set)`, `None` when symmetric.
+    pub(super) fn set_of(mods: &[crate::ast::Modifier]) -> Option<MemberVis> {
+        use crate::ast::Modifier as M;
+        if mods.contains(&M::PrivateSet) {
+            Some(MemberVis::Private)
+        } else if mods.contains(&M::ProtectedSet) {
+            Some(MemberVis::Protected)
+        } else {
+            None
+        }
+    }
+
     pub(super) fn of(mods: &[crate::ast::Modifier]) -> MemberVis {
         use crate::ast::Modifier;
         if mods.contains(&Modifier::Private) {
@@ -258,6 +278,8 @@ impl ClassInfo {
             consts: HashMap::new(),
             static_mut: std::collections::HashSet::new(),
             methods: HashMap::new(),
+            set_vis: HashMap::new(),
+            static_set_vis: HashMap::new(),
             hooks: HashMap::new(),
             ctor: Vec::new(),
             ctor_defaults: Vec::new(),

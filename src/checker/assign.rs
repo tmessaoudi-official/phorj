@@ -212,6 +212,7 @@ impl Checker {
                 let static_ty = info.statics.get(name).cloned();
                 let is_mut = info.static_mut.contains(name);
                 let svis = info.static_vis.get(name).cloned();
+                let s_set_vis = info.static_set_vis.get(name).cloned();
                 match static_ty {
                     None => {
                         self.err_coded(
@@ -226,6 +227,8 @@ impl Checker {
                         // rejected here (E-FIELD-VISIBILITY) — closing the run≡runvm≡PHP hole (PHP
                         // fatals writing a `private static` from outside).
                         self.enforce_member_vis(svis, name, span, true);
+                        // DEC-241: static writes honor `(set)` visibility too.
+                        self.enforce_set_vis(s_set_vis, name, span);
                         if !is_mut {
                             self.err_coded(
                                 span,
@@ -293,6 +296,9 @@ impl Checker {
                 // here too (PHP enforces visibility on writes — keep the backends in agreement).
                 let v = self.classes[&class].field_vis.get(name).cloned();
                 self.enforce_member_vis(v, name, span, true);
+                // DEC-241: the WRITE additionally honors an asymmetric `(set)` visibility.
+                let sv = self.classes[&class].set_vis.get(name).cloned();
+                self.enforce_set_vis(sv, name, span);
                 apply_subst(&t, &self.class_subst(&class, &cargs))
             }
             None => {
@@ -371,6 +377,10 @@ impl Checker {
                     // field is rejected here too (sibling of the field-write hole).
                     let v = self.classes[&class].field_vis.get(name).cloned();
                     self.enforce_member_vis(v, name, span, true);
+                    // DEC-241: a `with { f = … }` override is a WRITE — PHP 8.4's clone-with
+                    // enforces `(set)` visibility on overridden properties; mirror it.
+                    let sv = self.classes[&class].set_vis.get(name).cloned();
+                    self.enforce_set_vis(sv, name, span);
                     if !self.ty_assignable(vty, fty) {
                         self.err_coded(
                             span,

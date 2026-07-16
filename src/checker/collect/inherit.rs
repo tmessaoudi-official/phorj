@@ -71,6 +71,10 @@ impl Checker {
                         .entry(k.clone())
                         .or_insert((v.0, cls.clone()));
                 }
+                // DEC-241: a trait's asymmetric SET visibility flattens + re-owns identically.
+                for (k, v) in &tinfo.set_vis {
+                    child.set_vis.entry(k.clone()).or_insert((v.0, cls.clone()));
+                }
                 for (k, v) in &tinfo.method_vis {
                     child
                         .method_vis
@@ -92,6 +96,12 @@ impl Checker {
                         if let Some(sv) = tinfo.static_vis.get(k) {
                             child
                                 .static_vis
+                                .entry(k.clone())
+                                .or_insert((sv.0, cls.clone()));
+                        }
+                        if let Some(sv) = tinfo.static_set_vis.get(k) {
+                            child
+                                .static_set_vis
                                 .entry(k.clone())
                                 .or_insert((sv.0, cls.clone()));
                         }
@@ -149,6 +159,12 @@ impl Checker {
                     if parent_info.mutable_fields.contains(k) {
                         child.mutable_fields.insert(k.clone());
                     }
+                    // DEC-241: inherit the SET visibility, preserving the declaring owner (like
+                    // `field_vis` — an inherited `private(set)` stays assignable only in the
+                    // parent; a `protected(set)` one is assignable in subclasses of the owner).
+                    if let Some(sv) = parent_info.set_vis.get(k) {
+                        child.set_vis.entry(k.clone()).or_insert_with(|| sv.clone());
+                    }
                 }
             }
             for (k, v) in &parent_info.statics {
@@ -160,6 +176,12 @@ impl Checker {
                     // W0-2: inherit static visibility, **preserving the declaring owner** (like
                     // `field_vis`/consts) — an inherited `private` static is checked against the
                     // parent (not visible from the child), a `protected` one is (child <: owner).
+                    if let Some(sv) = parent_info.static_set_vis.get(k) {
+                        child
+                            .static_set_vis
+                            .entry(k.clone())
+                            .or_insert_with(|| sv.clone());
+                    }
                     if let Some(sv) = parent_info.static_vis.get(k) {
                         child
                             .static_vis

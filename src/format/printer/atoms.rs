@@ -110,6 +110,9 @@ pub(super) fn modifiers_str(mods: &[Modifier]) -> String {
         (Modifier::Public, "public"),
         (Modifier::Private, "private"),
         (Modifier::Protected, "protected"),
+        // DEC-241 asymmetric visibility — printed after the read visibility (PHP 8.4 order).
+        (Modifier::PrivateSet, "private(set)"),
+        (Modifier::ProtectedSet, "protected(set)"),
         (Modifier::Open, "open"),
         (Modifier::Abstract, "abstract"),
         (Modifier::Mutable, "mutable"),

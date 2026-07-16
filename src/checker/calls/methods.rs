@@ -682,6 +682,41 @@ impl Checker {
     /// and its subclasses (`cur_class` is the enclosing class, `None` in a free function). Mirrors the
     /// `const` check (`E-CONST-VISIBILITY`) so `run ≡ runvm ≡ transpiled PHP` all reject the same
     /// out-of-scope access — closing the documented byte-identity hole. `is_field` picks the code.
+    /// DEC-241: enforce a member's asymmetric SET visibility at a WRITE site (`o.f = e`,
+    /// `C.f = e`, a `with { f = … }` override). `entry` is the `set_vis`/`static_set_vis` row —
+    /// absent means writes follow the ordinary read visibility (already enforced by the caller).
+    pub(in crate::checker) fn enforce_set_vis(
+        &mut self,
+        entry: Option<(MemberVis, String)>,
+        name: &str,
+        span: Span,
+    ) {
+        let Some((vis, owner)) = entry else { return };
+        let cur = self.cur_class.clone();
+        let allowed = match vis {
+            MemberVis::Public => true,
+            MemberVis::Private => cur.as_deref() == Some(owner.as_str()),
+            MemberVis::Protected => cur.as_deref().is_some_and(|c| self.is_subtype(c, &owner)),
+        };
+        if allowed {
+            return;
+        }
+        let (visword, scope) = if vis == MemberVis::Private {
+            ("private(set)", format!("inside `{owner}`"))
+        } else {
+            (
+                "protected(set)",
+                format!("inside `{owner}` and its subclasses"),
+            )
+        };
+        self.err_coded(
+            span,
+            format!("field `{name}` is {visword} — assignable only {scope}"),
+            "E-ASSIGN-SET-VISIBILITY",
+            Some("read access is unaffected; assign it from within the owning scope, or widen the `(set)` modifier".into()),
+        );
+    }
+
     pub(in crate::checker) fn enforce_member_vis(
         &mut self,
         entry: Option<(MemberVis, String)>,

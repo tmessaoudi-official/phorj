@@ -199,3 +199,82 @@ fn external_private_static_compound_write_is_error() {
                function main() -> void { A.s += 1; }";
     assert!(has(src, "E-FIELD-VISIBILITY"), "{:?}", errors_of(src));
 }
+
+// ── DEC-241: asymmetric visibility ───────────────────────────────────────────────────────────────
+
+#[test]
+fn private_set_field_assignable_only_inside_owner() {
+    let ok = "class C { public private(set) mutable int x = 0; constructor() {} \
+                  function bump(): void { this.x = this.x + 1; } } \
+              function main() -> void { C c = new C(); c.bump(); discard c.x; }";
+    assert!(errors_of(ok).is_empty(), "got {:?}", errors_of(ok));
+    let bad = "class C { public private(set) mutable int x = 0; constructor() {} } \
+               function main() -> void { C c = new C(); c.x = 5; }";
+    let e = errors_of(bad);
+    assert!(
+        e.iter().any(|d| d.code == Some("E-ASSIGN-SET-VISIBILITY")),
+        "got {e:?}"
+    );
+}
+
+#[test]
+fn protected_set_allows_subclass_writes_only() {
+    let ok = "open class P { public protected(set) mutable int x = 0; constructor() {} } \
+              class D extends P { constructor() {} function set(int v): void { this.x = v; } } \
+              function main() -> void { D d = new D(); d.set(3); discard d.x; }";
+    assert!(errors_of(ok).is_empty(), "got {:?}", errors_of(ok));
+    let bad = "open class P { public protected(set) mutable int x = 0; constructor() {} } \
+               function main() -> void { P p = new P(); p.x = 5; }";
+    let e = errors_of(bad);
+    assert!(
+        e.iter().any(|d| d.code == Some("E-ASSIGN-SET-VISIBILITY")),
+        "got {e:?}"
+    );
+}
+
+#[test]
+fn set_vis_on_promoted_param_and_static_enforced() {
+    let bad = "class C { constructor(public private(set) mutable int n) {} } \
+               function main() -> void { C c = new C(1); c.n = 2; }";
+    let e = errors_of(bad);
+    assert!(
+        e.iter().any(|d| d.code == Some("E-ASSIGN-SET-VISIBILITY")),
+        "got {e:?}"
+    );
+    let bad2 = "class C { public private(set) static mutable int total = 0; constructor() {} } \
+                function main() -> void { C.total = 9; }";
+    let e2 = errors_of(bad2);
+    assert!(
+        e2.iter().any(|d| d.code == Some("E-ASSIGN-SET-VISIBILITY")),
+        "got {e2:?}"
+    );
+}
+
+#[test]
+fn with_override_honors_set_visibility() {
+    let bad = "class C { public private(set) mutable int x = 0; constructor() {} } \
+               function main() -> void { C c = new C(); C d = c with { x = 9 }; discard d; }";
+    let e = errors_of(bad);
+    assert!(
+        e.iter().any(|d| d.code == Some("E-ASSIGN-SET-VISIBILITY")),
+        "got {e:?}"
+    );
+}
+
+#[test]
+fn set_vis_declaration_rules() {
+    let e = errors_of(
+        "class C { public private(set) int x = 0; constructor() {} } function main() -> void {}",
+    );
+    assert!(
+        e.iter().any(|d| d.code == Some("E-SET-VIS-IMMUTABLE")),
+        "got {e:?}"
+    );
+    let e2 = errors_of(
+        "class C { private protected(set) mutable int x = 0; constructor() {} } function main() -> void {}",
+    );
+    assert!(
+        e2.iter().any(|d| d.code == Some("E-SET-VIS-WIDER")),
+        "got {e2:?}"
+    );
+}

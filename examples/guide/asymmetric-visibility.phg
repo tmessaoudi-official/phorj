@@ -1,0 +1,45 @@
+// Asymmetric visibility (DEC-241) — `public private(set)` / `protected(set)`: a member reads at
+// its declared visibility but may be ASSIGNED only inside the owning scope. A founding-spec
+// promise, now real; transpiles 1:1 to PHP 8.4's asymmetric visibility (compile-time enforced
+// here, re-enforced by PHP at runtime for free). Works on fields, promoted constructor
+// parameters, and statics; `with { … }` overrides honor it too.
+package Main;
+
+import Core.Output;
+
+open class Counter {
+    public private(set) mutable int count = 0;
+    public protected(set) mutable string label = "counter";
+    constructor() {}
+    function bump(): void {
+        this.count = this.count + 1;
+    }
+}
+
+class NamedCounter extends Counter {
+    constructor(string name) {
+        // `protected(set)`: the owner AND its subclasses may assign.
+        this.label = name;
+    }
+}
+
+class Wallet {
+    constructor(public private(set) mutable int cents) {}
+    function deposit(int amount): void {
+        // Promoted constructor parameters carry it too.
+        this.cents = this.cents + amount;
+    }
+}
+
+function main(): void {
+    Counter c = new Counter();
+    c.bump();
+    c.bump();
+    // Reads are public everywhere; only writes are gated.
+    Output.printLine("count={c.count}");
+    NamedCounter n = new NamedCounter("steps");
+    Output.printLine("label={n.label}");
+    Wallet w = new Wallet(100);
+    w.deposit(50);
+    Output.printLine("cents={w.cents}");
+}

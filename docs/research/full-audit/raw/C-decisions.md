@@ -1231,6 +1231,14 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   floor → free byte-identity); PHP already validated the semantics. *Alternatives (offered):
   reject + remove from spec (immutable-by-default + `with {}` + hooks cover part of the niche —
   rejected: PHP is ahead here today); tracked-deferred (rejected — build it).*
+  **BUILT (2026-07-16 fable):** `Modifier::PrivateSet/ProtectedSet` (parser munches the `(set)`
+  group; `set` stays contextual), ClassInfo `set_vis`/`static_set_vis` collected from fields +
+  promoted ctor params + statics (validation: `mutable` required = E-SET-VIS-IMMUTABLE; set never
+  wider than read = E-SET-VIS-WIDER), inherited with owner preserved (traits re-own, parents
+  keep the declarer), enforced at ALL write sites (instance assign, static assign, `with {}`
+  override) via `enforce_set_vis` (E-ASSIGN-SET-VISIBILITY); transpile emits PHP 8.4's
+  `private(set)`/`protected(set)` 1:1 (compile-time enforced + runtime re-enforced free);
+  formatter round-trips. Five checker tests + `examples/guide/asymmetric-visibility.phg` 3-leg.
 - **DEC-242 — RULED (audit flag F-005): partitioned-cookie (CHIPS) knob queues** — additive
   `partitioned` option on the Session/Http cookie config emitting the `Partitioned` attribute;
   parity with PHP 8.5's setcookie/session surface. Tiny slice. *Alternative (offered): reject as

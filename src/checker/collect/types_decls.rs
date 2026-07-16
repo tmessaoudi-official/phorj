@@ -3,6 +3,42 @@
 use super::*;
 
 impl Checker {
+    /// DEC-241: validate an asymmetric-visibility declaration. The set path must EXIST (`mutable`
+    /// required — an immutable member can never be assigned, so `private(set)` would gate
+    /// nothing), and the set visibility may not be WIDER than the read visibility (no class could
+    /// honor `private protected(set)` reads-narrower-than-writes; PHP rejects it too).
+    fn validate_set_vis(
+        &mut self,
+        modifiers: &[crate::ast::Modifier],
+        sv: MemberVis,
+        name: &str,
+        span: Span,
+    ) {
+        use crate::ast::Modifier;
+        if !modifiers.contains(&Modifier::Mutable) {
+            self.err_coded(
+                span,
+                format!(
+                    "`{name}` declares a set visibility but is immutable — there is no assignment to gate"
+                ),
+                "E-SET-VIS-IMMUTABLE",
+                Some("add `mutable`, or drop the `(set)` modifier".into()),
+            );
+        }
+        let read = MemberVis::of(modifiers);
+        let wider = matches!((read, sv), (MemberVis::Private, MemberVis::Protected));
+        if wider {
+            self.err_coded(
+                span,
+                format!(
+                    "`{name}`'s set visibility is wider than its read visibility — writes cannot be more visible than reads"
+                ),
+                "E-SET-VIS-WIDER",
+                Some("narrow the `(set)` modifier, or widen the read visibility".into()),
+            );
+        }
+    }
+
     pub(in crate::checker) fn collect_enum(&mut self, e: &crate::ast::EnumDecl) {
         if is_builtin_type_name(&e.name) {
             self.err(
@@ -87,6 +123,8 @@ impl Checker {
             c.name.clone(),
             ClassInfo {
                 fields: HashMap::new(),
+                set_vis: HashMap::new(),
+                static_set_vis: HashMap::new(),
                 mutable_fields: std::collections::HashSet::new(),
                 statics: HashMap::new(),
                 consts: HashMap::new(),
@@ -168,6 +206,8 @@ impl Checker {
         let mut field_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut method_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut mutable_fields = std::collections::HashSet::new();
+        let mut set_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
+        let mut static_set_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut statics: HashMap<String, Ty> = HashMap::new();
         let mut static_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut consts: HashMap<String, ConstEntry> = HashMap::new();
@@ -278,6 +318,12 @@ impl Checker {
                         if modifiers.contains(&Modifier::Mutable) {
                             static_mut.insert(name.clone());
                         }
+                        // DEC-241: `private(set)`/`protected(set)` — record the set visibility;
+                        // meaningful only on a mutable static (nothing else has a set path).
+                        if let Some(sv) = MemberVis::set_of(modifiers) {
+                            self.validate_set_vis(modifiers, sv, name, *span);
+                            static_set_vis.insert(name.clone(), (sv, c.name.clone()));
+                        }
                     } else {
                         // A plain instance field. An optional expression initializer (Feature B) is
                         // evaluated per-instance at construction (declaration order, after promotion);
@@ -287,6 +333,11 @@ impl Checker {
                         field_vis.insert(name.clone(), (MemberVis::of(modifiers), c.name.clone()));
                         if modifiers.contains(&Modifier::Mutable) {
                             mutable_fields.insert(name.clone());
+                        }
+                        // DEC-241 asymmetric visibility (see the static twin above).
+                        if let Some(sv) = MemberVis::set_of(modifiers) {
+                            self.validate_set_vis(modifiers, sv, name, *span);
+                            set_vis.insert(name.clone(), (sv, c.name.clone()));
                         }
                     }
                 }
@@ -336,6 +387,12 @@ impl Checker {
                                 // A `public mutable int x` promoted param yields a mutable field.
                                 if p.modifiers.contains(&Modifier::Mutable) {
                                     mutable_fields.insert(p.name.clone());
+                                }
+                                // DEC-241: promoted params carry asymmetric visibility too
+                                // (`public private(set) mutable int x`).
+                                if let Some(sv) = MemberVis::set_of(&p.modifiers) {
+                                    self.validate_set_vis(&p.modifiers, sv, &p.name, p.span);
+                                    set_vis.insert(p.name.clone(), (sv, c.name.clone()));
                                 }
                             }
                             ty
@@ -543,6 +600,8 @@ impl Checker {
         info.method_vis = method_vis;
         info.static_methods = static_methods;
         info.mutable_fields = mutable_fields;
+        info.set_vis = set_vis;
+        info.static_set_vis = static_set_vis;
         info.statics = statics;
         info.consts = consts;
         info.static_mut = static_mut;

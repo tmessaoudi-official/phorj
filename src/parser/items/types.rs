@@ -428,12 +428,43 @@ impl Parser {
         })
     }
 
+    /// DEC-241: true when the three tokens AFTER the current one are exactly `( set )` — the
+    /// asymmetric-visibility suffix of `private(set)` / `protected(set)`. Checked whole (all
+    /// three) so `parse_modifiers` can consume unconditionally without a fallible expect.
+    fn peek_is_set_group_after(&self) -> bool {
+        matches!(self.peek2(), TokenKind::LParen)
+            && matches!(self.peek3(), TokenKind::Ident(s) if s == "set")
+            && matches!(
+                &self.tokens[(self.pos + 3).min(self.tokens.len() - 1)].kind,
+                TokenKind::RParen
+            )
+    }
+
     /// Consume any run of visibility/binding modifiers.
     pub(in crate::parser) fn parse_modifiers(&mut self) -> Vec<Modifier> {
         let mut mods = Vec::new();
         loop {
             let m = match self.peek() {
                 TokenKind::Public => Modifier::Public,
+                // DEC-241 asymmetric visibility: `private(set)` / `protected(set)` — the `(set)`
+                // suffix is munched here (three tokens), so `private (set)` and plain `private`
+                // both keep working. `set` is contextual (an ordinary Ident elsewhere).
+                TokenKind::Private if self.peek_is_set_group_after() => {
+                    self.advance(); // `private`
+                    self.advance(); // `(`
+                    self.advance(); // `set`
+                    self.advance(); // `)`
+                    mods.push(Modifier::PrivateSet);
+                    continue;
+                }
+                TokenKind::Protected if self.peek_is_set_group_after() => {
+                    self.advance(); // `protected`
+                    self.advance(); // `(`
+                    self.advance(); // `set`
+                    self.advance(); // `)`
+                    mods.push(Modifier::ProtectedSet);
+                    continue;
+                }
                 TokenKind::Private => Modifier::Private,
                 TokenKind::Protected => Modifier::Protected,
                 TokenKind::Const => Modifier::Const,

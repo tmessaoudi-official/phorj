@@ -2666,6 +2666,10 @@ const TIER1_PHP: &[&str] = &[
 const PHP_CONSTRUCTS: &[&str] = &[
     "if",
     "elseif",
+    // DEC-241 asymmetric visibility: `public private(set) int $x;` — the `(set)` group makes the
+    // visibility keyword LOOK like a bareword call to this scanner; they are declaration syntax.
+    "private",
+    "protected",
     "while",
     "for",
     "foreach",
