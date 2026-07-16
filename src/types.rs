@@ -312,6 +312,9 @@ impl fmt::Display for Ty {
             Ty::FixedList(e, n) => write!(f, "[{e}; {n}]"),
             Ty::Map(k, v) => write!(f, "Map<{k}, {v}>"),
             Ty::Set(e) => write!(f, "Set<{e}>"),
+            // A union inner needs parens — `(A | B)?` — or the rendered form re-reads as
+            // `A | (B?)` (`?` binds to its immediate member in the grammar). DEC-253.
+            Ty::Optional(e) if matches!(**e, Ty::Union(_)) => write!(f, "({e})?"),
             Ty::Optional(e) => write!(f, "{e}?"),
             Ty::Null => write!(f, "null"),
             Ty::Param(n) => write!(f, "{n}"),

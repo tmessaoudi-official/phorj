@@ -158,6 +158,14 @@ impl Parser {
                 self.advance();
                 n
             }
+            // DEC-253: `null` as a UNION member — the PHP-familiar spelling `A | B | null`
+            // (canonical form `(A | B)?`; the formatter canonicalizes). `null` lexes as a keyword,
+            // so no user type can collide with the marker name; the checker's union resolver
+            // strips it into the `Optional` wrapper and rejects a standalone `null` type.
+            TokenKind::Null => {
+                self.advance();
+                "null".to_string()
+            }
             _ => return Err(self.error("a type name")),
         };
         // Import-redesign S1: a **dotted** type name (`Http.Router`, `Time.Duration`) is a qualifier-

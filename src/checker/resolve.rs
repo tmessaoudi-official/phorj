@@ -10,6 +10,34 @@ impl Checker {
         match ty {
             Type::Optional { inner, .. } => Ty::Optional(Box::new(self.resolve_type(inner))),
             Type::Union(members, span) => {
+                // DEC-253: `A | B | null` — the PHP-familiar nullable-union spelling. Strip the
+                // `null` member(s) and wrap the remaining union in `Optional`, so both spellings
+                // resolve to the same `Ty::Optional(Ty::Union(..))` as the canonical `(A | B)?`
+                // (assignability, narrowing, match — all inherited for free). A single non-null
+                // remainder is just `A?`.
+                let (nulls, members): (Vec<&Type>, Vec<&Type>) = members
+                    .iter()
+                    .partition(|m| matches!(m, Type::Named { name, args, .. } if name == "null" && args.is_empty()));
+                if !nulls.is_empty() {
+                    if members.is_empty() {
+                        return self.err_coded(
+                            *span,
+                            "a union needs at least one non-`null` member".to_string(),
+                            "E-UNION-ARITY",
+                            Some(
+                                "`null` alone is not a type — write `T?` around a real type".into(),
+                            ),
+                        );
+                    }
+                    let inner = if members.len() == 1 {
+                        self.resolve_type(members[0])
+                    } else {
+                        let rebuilt = Type::Union(members.into_iter().cloned().collect(), *span);
+                        self.resolve_type(&rebuilt)
+                    };
+                    return Ty::Optional(Box::new(inner));
+                }
+                let members: Vec<Type> = members.into_iter().cloned().collect();
                 // M-RT S4: resolve each member, validate its kind (classes/interfaces/primitives
                 // only — enums/optionals/functions are rejected so the PHP `A|B` emission and the
                 // instanceof-based match stay sound), then normalize. A degenerate union that
@@ -198,6 +226,17 @@ impl Checker {
             // already-erased program can't cascade (M-RT S7).
             Type::Erased(_) => Ty::Error,
             Type::Named { name, args, span } => match name.as_str() {
+                // DEC-253: `null` is a union-member marker only (`A | B | null` — the parser mints
+                // it; `null` is a keyword so no user type collides). Standalone it is not a type.
+                "null" => self.err_coded(
+                    *span,
+                    "`null` by itself is not a type".to_string(),
+                    "E-NULL-TYPE",
+                    Some(
+                        "write an optional `T?`, or a nullable union `A | B | null` / `(A | B)?`"
+                            .into(),
+                    ),
+                ),
                 "int" => self.no_args(name, args, *span, Ty::Int),
                 "float" => self.no_args(name, args, *span, Ty::Float),
                 "decimal" => self.no_args(name, args, *span, Ty::Decimal),

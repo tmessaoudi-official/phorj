@@ -1,0 +1,55 @@
+// Nullable unions (DEC-253): `(A | B)?` — a value that is an A, a B, or null. The PHP-familiar
+// spelling `A | B | null` is the same type (`phg format` canonicalizes it). All the optional
+// machinery works over the union inner (`??`, `?.`, if-var, match with member + null arms), and
+// the type transpiles to PHP's own native `A|B|null`.
+package Main;
+
+import Core.Output;
+
+class Circle {
+    constructor(public int r) {}
+}
+
+class Square {
+    constructor(public int side) {}
+}
+
+function lookup(int n): (Circle | Square)? {
+    if (n == 1) {
+        return new Circle(3);
+    }
+    if (n == 2) {
+        return new Square(4);
+    }
+    return null;
+}
+
+function describe((Circle | Square)? shape): string {
+    return match (shape) {
+        Circle c => "circle r={c.r}",
+        Square s => "square side={s.side}",
+        null => "nothing"
+    };
+}
+
+function main(): void {
+    Output.printLine(describe(lookup(0)));
+    Output.printLine(describe(lookup(1)));
+    Output.printLine(describe(lookup(2)));
+    // The PHP-familiar spelling is the same type — assignable in both directions.
+    (Circle | Square)? s = lookup(2);
+    if (var found = s) {
+        if (found instanceof Square) {
+            Output.printLine("found a square");
+        }
+    }
+    Circle fallback = new Circle(1);
+    var sure = lookup(0) ?? fallback;
+    Output.printLine("fell back");
+    // A statement-position match runs its arms for effect (and locks the if-chain PHP lowering).
+    match (lookup(1)) {
+        Circle c => Output.printLine("statement: circle {c.r}"),
+        Square q => Output.printLine("statement: square {q.side}"),
+        null => Output.printLine("statement: none")
+    };
+}

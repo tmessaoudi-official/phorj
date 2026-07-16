@@ -255,3 +255,19 @@ fn pipe_operator_survives_formatting() {
     assert_meaning_preserved(src);
     assert_idempotent(src);
 }
+
+/// DEC-253: the `A | B | null` nullable-union spelling canonicalizes to `(A | B)?` on format
+/// (both spellings are the same type); a lone non-null remainder is just `T?`. Idempotent.
+#[test]
+fn nullable_union_spelling_canonicalizes() {
+    let src = "package Main;\n\
+         class A { constructor(public int x) {} }\n\
+         class B { constructor(public string s) {} }\n\
+         function f(): A | B | null { return null; }\n\
+         function g(): A | null { return null; }\n\
+         function main(): void {}";
+    let out = fmt(src);
+    assert!(out.contains("function f(): (A | B)?"), "{out}");
+    assert!(out.contains("function g(): A?"), "{out}");
+    assert_idempotent(src);
+}

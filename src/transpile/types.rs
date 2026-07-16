@@ -73,15 +73,32 @@ impl Transpiler {
             // A union → PHP 8.0 native `A|B` (M-RT S4). Members emit via the same `emit_type`, so a
             // cross-package member would carry its FQN; dedup defensively (the checker already
             // guarantees ≥2 distinct members). `int|int` can't occur in a well-typed program.
+            // DEC-253: a `null` member (the `A | B | null` spelling) emits as PHP's own `null`
+            // member — placed LAST, PHP's conventional order.
             Type::Union(members, _) => {
                 let mut parts: Vec<String> = Vec::new();
+                let mut has_null = false;
                 for m in members {
+                    if matches!(m, Type::Named { name, args, .. } if name == "null" && args.is_empty())
+                    {
+                        has_null = true;
+                        continue;
+                    }
                     let p = self.emit_type(m);
                     if !parts.contains(&p) {
                         parts.push(p);
                     }
                 }
+                if has_null {
+                    parts.push("null".into());
+                }
                 parts.join("|")
+            }
+            // DEC-253: a nullable union `(A | B)?` → native PHP `A|B|null` (free byte-identity —
+            // the twin type PHP itself uses). Other optionals keep the historical `mixed` fallback
+            // below (upgrading them to `?T` is a recorded transpile-modernization follow-up).
+            Type::Optional { inner, .. } if matches!(**inner, Type::Union(..)) => {
+                format!("{}|null", self.emit_type(inner))
             }
             // An intersection → PHP 8.1 native `A&B` (M-RT S5). Members emit via `emit_type` (a
             // cross-package member carries its FQN); dedup defensively. The checker guarantees ≥2

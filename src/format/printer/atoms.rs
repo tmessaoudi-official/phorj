@@ -40,9 +40,28 @@ pub(super) fn ty(t: &Type) -> Result<String, String> {
                 Ok(format!("{name}<{}>", a?.join(", ")))
             }
         }
+        // DEC-253: a union inner is parenthesized — `(A | B)?` — so the printed form re-parses to
+        // the same type (`?` binds to its immediate member in the grammar).
+        Type::Optional { inner, .. } if matches!(**inner, Type::Union(..)) => {
+            Ok(format!("({})?", ty(inner)?))
+        }
         Type::Optional { inner, .. } => Ok(format!("{}?", ty(inner)?)),
         Type::Infer(_) => Ok("var".to_string()),
         Type::Union(members, _) => {
+            // DEC-253: the `A | B | null` spelling canonicalizes to `(A | B)?` on format (a lone
+            // non-null remainder is just `A?`) — the two spellings are the same type.
+            let (nulls, rest): (Vec<&Type>, Vec<&Type>) = members
+                .iter()
+                .partition(|m| matches!(m, Type::Named { name, args, .. } if name == "null" && args.is_empty()));
+            if !nulls.is_empty() && !rest.is_empty() {
+                let m: Result<Vec<_>, _> = rest.iter().copied().map(ty).collect();
+                let m = m?;
+                return if m.len() == 1 {
+                    Ok(format!("{}?", m[0]))
+                } else {
+                    Ok(format!("({})?", m.join(" | ")))
+                };
+            }
             let m: Result<Vec<_>, _> = members.iter().map(ty).collect();
             Ok(m?.join(" | "))
         }

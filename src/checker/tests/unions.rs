@@ -621,3 +621,62 @@ fn call_arg_generic_callee_heterogeneous_literal_still_deferred() {
             .is_empty()
     );
 }
+
+// ── DEC-253: nullable unions ─────────────────────────────────────────────────────────────────────
+
+#[test]
+fn nullable_union_both_spellings_are_the_same_type() {
+    // `A | B | null` (PHP-familiar) and `(A | B)?` (canonical) resolve identically — a value of
+    // one flows into the other in both directions, and null inhabits both.
+    let errs = errors_of(
+        "class A { constructor(public int x) {} } class B { constructor(public string s) {} } \
+         function f(): A | B | null { return null; } \
+         function g((A | B)? v): (A | B)? { return v; } \
+         function main(): void { (A | B)? a = f(); A | B | null b = g(a); discard b; }",
+    );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn nullable_union_matches_with_member_and_null_arms() {
+    let errs = errors_of(
+        "class A { constructor(public int x) {} } class B { constructor(public string s) {} } \
+         function f(int n): A | B | null { if (n == 1) { return new A(1); } return null; } \
+         function main(): void { \
+             string s = match (f(1)) { A a => \"a\", B b => \"b\", null => \"n\" }; discard s; }",
+    );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn standalone_null_type_is_rejected() {
+    let errs = errors_of("function main(): void { null x = null; discard x; }");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-NULL-TYPE")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn null_only_union_is_an_arity_error() {
+    let errs = errors_of("function f(): null | null { return null; } function main(): void {}");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-UNION-ARITY")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn optional_union_displays_parenthesized() {
+    // The rendered type must be `(A | B)?` — `A | B?` re-reads as `A | (B?)`.
+    let errs = errors_of(
+        "class A { constructor(public int x) {} } class B { constructor(public string s) {} } \
+         function main(): void { (A | B)? v = null; int n = v; discard n; }",
+    );
+    let msg = errs
+        .iter()
+        .map(|e| e.message.clone())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(msg.contains("(A | B)?"), "{msg}");
+}

@@ -146,6 +146,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              discard it explicitly with `discard f();`. Only `void` and `empty` results (and a\n\
              diverging `never` call like `panic(…)`) may be dropped silently.\n"
         }
+        "E-NULL-TYPE" => {
+            "E-NULL-TYPE — `null` was written by itself in type position.\n\n\
+             `null` is only a nullable-union member (DEC-253): `A | B | null` — which is the same\n\
+             type as the canonical `(A | B)?` (the formatter canonicalizes). For a single type,\n\
+             write the optional `T?`. There is no standalone `null` type: a binding that could\n\
+             only ever hold null holds no information.\n"
+        }
         "E-PIPE-PLACEHOLDER" => {
             "E-PIPE-PLACEHOLDER — a pipe placeholder `%` appeared somewhere other than a whole\n\
              argument of the pipe's top-level call.\n\n\
