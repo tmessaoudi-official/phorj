@@ -110,7 +110,8 @@ impl Checker {
                 if !*safe {
                     if let Expr::Ident(cls, _) = &**object {
                         if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
-                            return self.check_static_method_call(cls, name, args, &tf, span);
+                            return self
+                                .check_static_method_call(callee, cls, name, args, &tf, span);
                         }
                         // Built-in concurrency static — `Channel.new()` (M6 W4). `Channel`/`Task` are
                         // reserved built-in type names (not user classes), so route them before the
@@ -159,7 +160,7 @@ impl Checker {
                         }
                     }
                 }
-                self.check_method_call(object, name, args, &tf, *safe, span)
+                self.check_method_call(callee, object, name, args, &tf, *safe, span)
             }
             other => {
                 // A callee expression that is itself a call (`f()()`, `getFn()?()`) may carry a

@@ -23,6 +23,7 @@ mod intrinsic_imports;
 mod overloads;
 mod resolve_variant_imports;
 mod rewrite_alias;
+mod rewrite_fills;
 mod rewrite_generics;
 mod rewrite_html;
 mod rewrite_new;
@@ -38,6 +39,7 @@ pub use intrinsic_imports::resolve_intrinsic_imports;
 pub use overloads::rename_overload_defs;
 pub use resolve_variant_imports::resolve_variant_imports;
 pub use rewrite_alias::expand_aliases;
+pub use rewrite_fills::apply_default_fills;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
@@ -608,6 +610,7 @@ pub fn check_resolutions(
         HashMap<usize, String>,
         HashMap<usize, Ty>,
         HashMap<usize, Ty>,
+        HashMap<usize, crate::ast::Expr>,
     ),
     Vec<Diagnostic>,
 > {
@@ -621,11 +624,12 @@ pub fn check_resolutions(
         // embedded original subtrees regardless of nesting direction.
         let mut calls = c.ufcs_resolutions;
         calls.extend(c.reflect_resolutions);
-        // M4 default-parameter fills are recorded as full replacement `Call` exprs (provided args +
-        // appended defaults), keyed by the call's span — just another entry in the call-rewrite map
-        // `rewrite_ufcs` applies. Keys are disjoint from UFCS/reflect (a fill is a direct free/native
-        // call, never a UFCS member call), so the merge is collision-free.
-        calls.extend(c.default_fills);
+        // M4/DEC-249 default-parameter fills are returned SEPARATELY (not merged into the
+        // rewrite_ufcs map): a fill is a CHECK-TIME clone, so it must be spliced back FIRST —
+        // before resolve_html erases throws-`?` / unwrap_new strips `new` — or a lambda argument's
+        // already-erased nodes get restored stale (the db.transaction(fn) regression). The
+        // pipeline applies them via `apply_default_fills` ahead of every other rewrite, so the
+        // spliced subtrees flow through the whole chain like hand-written code.
         // M4 as-matrix: primitive-cast → native-conversion-call substitutions, keyed by the `Cast`
         // node's span (the `as` token — disjoint from every call/UFCS/fill/reflect span). Applied by
         // the same `rewrite_ufcs` walker (its `Cast` arm now consults this map).
@@ -643,6 +647,7 @@ pub fn check_resolutions(
             // DEC-239: contextual pipe-lambda param resolutions, materialized into the AST by
             // `materialize_pipe_params` (LAST in the pipeline's rewrite chain).
             c.pipe_param_resolutions,
+            c.default_fills,
         ))
     } else {
         Err(c.errors)

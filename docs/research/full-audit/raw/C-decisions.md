@@ -1304,6 +1304,15 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   language wall falls instead of the API bending around it. *Alternative (offered): confirm
   shipped `transactionRetry(fn, retries)` (rejected — dev chose the language fix).* Two-part
   build: method defaults slice → Db surface rename.
+  **BUILT (2026-07-16 fable):** collection validates method defaults via `collect_param_defaults`
+  (generic-TYPED defaulted params stay the DEC-236 deferral; non-generic defaults on generic
+  methods fill before inference — the `transaction<T>(fn, int retries = 0)` shape); MethodSig
+  carries defaults (inheritance free via FnSig); single-signature calls fill via
+  `check_args_defaulted` + `record_pending_fill`; `?.` calls omitting defaults = clean deferral
+  error. Db surface: ONE `transaction(fn, int retries = 0)` method, `transactionRetry` RETIRED
+  (all call/doc sites migrated). The build root-caused two latent clone-staleness bugs (fills
+  restored pre-erasure arg subtrees; the throws-`?` eraser restored pre-fill calls) — fills now
+  splice FIRST (`apply_default_fills`) and the eraser unwraps the LIVE inner.
 - **DEC-250 — RULED (DEC-183 caveat): Optional<enum> variant patterns = HIGH priority** — thread
   enum-variant coverage through `T?` so `match c { Red() => …, Blue() => …, null => … }` is legal
   and exhaustive over `Color?` ("exhaustive matching is a flagship; an Optional-of-enum failing it

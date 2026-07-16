@@ -705,10 +705,10 @@ fn db_close_then_use_is_connection_error() {
     both(&src, "caught: Core.Db: the connection is closed\n");
 }
 
-// ── DEC-208 slice C: the CLOSURE form of transactions (`db.transaction(fn)` / `db.transactionRetry`) ──
+// ── DEC-208 slice C: the CLOSURE form of transactions (`db.transaction(fn[, retries])`) ──
 // Unblocked by DEC-222 (throwing-closure function types). BEGIN → run closure → COMMIT on normal return
 // (returning its value) / auto-ROLLBACK + re-throw the ORIGINAL typed error on a throw; a nested call is
-// a SAVEPOINT; `transactionRetry` re-runs on the transient `SerializationFailure` only.
+// a SAVEPOINT; `transaction(fn, retries)` re-runs on the transient `SerializationFailure` only (DEC-249 default param; the former `transactionRetry` is retired).
 
 /// The shipped `examples/db/transaction-closure.phg` — the SOLE gate that runs the closure-form
 /// transaction surface (commit / value-return / auto-rollback-and-rethrow / nested savepoint / retry)
@@ -822,7 +822,7 @@ fn db_transaction_retry_succeeds_after_a_transient_failure() {
     // The closure throws a transient `SerializationFailure` on the first attempt, then succeeds; with
     // retries=2 the transaction is re-run and the write lands (on the 2nd attempt).
     let src = retry_program(
-        r#"db.transactionRetry(function(): void throws DbError {
+        r#"db.transaction(function(): void throws DbError {
              int k = tries.bump();
              if (k <= 1) { throw new SerializationFailure("busy"); }
              run(db, "UPDATE acct SET bal = 42 WHERE id = 1")?;
@@ -838,7 +838,7 @@ fn db_transaction_retry_gives_up_after_the_budget_and_propagates() {
     // exhausted and the LAST transient error propagates (still a catchable `SerializationFailure`).
     let src = retry_program(
         r#"try {
-         db.transactionRetry(function(): void throws DbError {
+         db.transaction(function(): void throws DbError {
            discard tries.bump();
            throw new SerializationFailure("always busy");
          }, 1)?;
@@ -856,7 +856,7 @@ fn db_transaction_retry_does_not_retry_a_non_transient_error() {
     // the FIRST attempt, even with a generous retry budget. `tries.n` proves exactly one attempt ran.
     let src = retry_program(
         r#"try {
-         db.transactionRetry(function(): void throws DbError {
+         db.transaction(function(): void throws DbError {
            discard tries.bump();
            run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // duplicate PK -> UniqueViolation
          }, 5)?;

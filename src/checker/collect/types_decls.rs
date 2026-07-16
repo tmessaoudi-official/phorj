@@ -401,7 +401,7 @@ impl Checker {
                     let mut active = class_tp.clone();
                     active.extend(f.type_params.iter().cloned());
                     self.active_type_params = active;
-                    let p = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+                    let p: Vec<Ty> = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
                     let ret = match &f.ret {
                         Some(t) => self.resolve_type(t),
                         None => Ty::Void,
@@ -410,14 +410,40 @@ impl Checker {
                         f.throws.iter().map(|t| self.resolve_type(t)).collect(),
                     );
                     self.active_type_params.clear();
-                    // M4 default parameters are free-function-only in v1; a default on a method param
-                    // is rejected (the fill pass resolves free/native calls, not method dispatch).
-                    self.reject_member_defaults(&f.params, "method");
+                    // DEC-249: method default parameters — validated by the same
+                    // `collect_param_defaults` machinery as free functions and constructors
+                    // (trailing-only order, literal-only values, type-assignable), carried on the
+                    // `FnSig` so inherited methods get them for free, and applied at the call
+                    // sites via the same `pending_fill` → `rewrite_ufcs` full-arity rewrite.
+                    // Generics are the same clean deferral as ctors (E-CTOR-DEFAULT-GENERIC — the
+                    // fill runs before type-argument inference/substitution).
+                    let mut defaults = self.collect_param_defaults(&f.params, &p);
+                    // A default on a GENERIC-TYPED param is the DEC-236 deferral (the fill literal
+                    // cannot be validated against an uninferred `T`); a non-generic defaulted param
+                    // on a generic method/class is fine — the fill appends a concrete literal
+                    // before inference (the `db.transaction(fn, int retries = 0)` shape, DEC-249).
+                    if defaults
+                        .iter()
+                        .zip(&p)
+                        .any(|(d, pt)| d.is_some() && ty_has_param(pt))
+                    {
+                        self.err_coded(
+                            f.span,
+                            "a default is not yet supported on a generic-typed parameter"
+                                .to_string(),
+                            "E-CTOR-DEFAULT-GENERIC",
+                            Some(
+                                "the call-site fill runs before type-argument inference; drop the default or make the parameter's type concrete (a documented deferral)"
+                                    .into(),
+                            ),
+                        );
+                        defaults = vec![None; f.params.len()];
+                    }
                     // M-RT overloading: a same-named method joins an overload set (same rules as free
                     // functions — same return, no identical signatures, no generic member).
                     let sig = FnSig {
                         params: p,
-                        defaults: vec![None; f.params.len()],
+                        defaults,
                         ret,
                         type_params: f.type_params.clone(),
                         type_param_bounds: f.type_param_bounds.clone(),

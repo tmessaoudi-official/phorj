@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-249: method default parameters (+ the Db `transaction(fn, retries = 0)` surface)
+
+Instance and static methods now take default parameter values — the DEC-236 machinery (trailing-
+only, literal-only, type-assignable; the call-site fill makes every backend see full arity)
+extended to method dispatch, with defaults riding the method signature so inherited methods get
+them for free. A generic method may default its NON-generic params (`pick<T>(T v, int n = 2)` —
+the fill appends concrete literals before inference); a default on a generic-TYPED param stays
+the DEC-236 clean deferral, as does omitting defaulted args on a null-safe `?.` call. With the
+language wall down, `Core.Db`'s recorded surface PENDING resolved the ambitious way:
+`db.transaction(fn, int retries = 0)` is the single transaction method (run-once by default,
+retry-on-`SerializationFailure` when `retries > 0`) and the stopgap `transactionRetry` is retired.
+
+### Fixed — default-parameter fills restored stale (pre-erasure) argument subtrees
+
+A recorded fill is a CHECK-TIME clone of the call (provided args + appended defaults). It was
+applied by the LAST rewrite pass, so a lambda argument whose throws-`?` had already been erased
+(or whose `new` had been unwrapped) was restored stale — `db.transaction(fn)` with a `?`-using
+closure faulted at runtime. Two root fixes: fills now splice FIRST (`apply_default_fills`, a new
+fixpoint pass ahead of every other rewrite, so spliced subtrees flow through the whole chain like
+hand-written code), and the throws-`?` eraser now unwraps to its LIVE inner call (the recorded
+entry is a marker only — splicing its stale clone was the same defect mirrored). Both directions
+are locked by the db closure-transaction tests.
+
 ### Added — DEC-253: nullable unions `(A | B)?` / `A | B | null`
 
 Both spellings are the same type (the formatter canonicalizes to `(A | B)?`; a lone non-null

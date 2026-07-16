@@ -61,12 +61,75 @@ fn default_type_must_match() {
     );
 }
 
+// ── DEC-249: method default parameters ───────────────────────────────────────────────────────────
+
 #[test]
-fn default_on_method_is_rejected_v1() {
-    // Methods are a documented v1 deferral.
+fn method_default_makes_call_arity_optional() {
+    // Instance + static methods accept omitted trailing defaulted args (the DEC-236 machinery,
+    // extended to method dispatch); explicit args still check normally.
+    let src = "class C { constructor() {} \
+                   function m(int x = 1): int { return x; } \
+                   static function s(string t = \"d\"): string { return t; } } \
+               function main() -> void { C c = new C(); int a = c.m(); int b = c.m(7); \
+                   string d = C.s(); string e = C.s(\"x\"); \
+                   discard a; discard b; discard d; discard e; }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn method_default_is_inherited_with_the_signature() {
+    let src = "open class P { constructor() {} function m(int x = 3): int { return x; } } \
+               class D extends P { constructor() {} } \
+               function main() -> void { D d = new D(); int a = d.m(); discard a; }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn method_default_on_generic_typed_param_is_a_clean_deferral() {
+    // A default on a GENERIC-TYPED param defers (the literal can't check against uninferred T)…
     let e = errors_of(
-        "class C { constructor() {} function m(int x = 1) -> int { return x; } } \
-         function main() -> void { C c = new C(); }",
+        "class Box<T> { constructor() {} function m(T x = 1) -> int { return 0; } } \
+         function main() -> void {}",
+    );
+    assert!(
+        e.iter().any(|d| d.code == Some("E-CTOR-DEFAULT-GENERIC")),
+        "got {e:?}"
+    );
+    // …but a NON-generic defaulted param on a generic method fills before inference
+    // (the `db.transaction(fn, int retries = 0)` shape).
+    let src = "class C { constructor() {} \
+                   function pick<T>(T v, int n = 2) -> T { discard n; return v; } } \
+               function main() -> void { C c = new C(); int a = c.pick(5); int b = c.pick(6, 3); \
+                   discard a; discard b; }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn method_default_rules_still_enforced() {
+    // Order + literal-only + type checks apply to methods exactly as to free functions.
+    let e = errors_of(
+        "class C { constructor() {} function m(int x = 1, int y) -> int { return x + y; } } \
+         function main() -> void {}",
+    );
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-ORDER")),
+        "got {e:?}"
+    );
+    let e2 = errors_of(
+        "class C { constructor() {} function m(int x = \"s\") -> int { return x; } } \
+         function main() -> void {}",
+    );
+    assert!(
+        e2.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-TYPE")),
+        "got {e2:?}"
+    );
+}
+
+#[test]
+fn omitting_defaults_on_null_safe_call_is_deferred() {
+    let e = errors_of(
+        "class C { constructor() {} function m(int x = 1): int { return x; } } \
+         function main() -> void { C? c = new C(); int? a = c?.m(); discard a; }",
     );
     assert!(
         e.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-CONTEXT")),

@@ -122,28 +122,6 @@ impl Checker {
         out
     }
 
-    /// M4 default parameters are free-function-only in v1. Reject a default on any method / constructor
-    /// parameter (`E-DEFAULT-PARAM-CONTEXT`) — the `fill_defaults` pass resolves free/native calls, not
-    /// method dispatch, so a method default would silently never apply. (A documented deferral.)
-    pub(in crate::checker) fn reject_member_defaults(
-        &mut self,
-        params: &[crate::ast::Param],
-        context: &str,
-    ) {
-        for p in params {
-            if let Some(e) = &p.default {
-                self.err_coded(
-                    Self::expr_span(e),
-                    format!(
-                        "default parameter values are not yet supported on a {context} (only on free functions and constructors — DEC-236)"
-                    ),
-                    "E-DEFAULT-PARAM-CONTEXT",
-                    Some("drop the default, or call the function explicitly with all arguments".into()),
-                );
-            }
-        }
-    }
-
     /// Reject duplicate parameter names (Soundness Batch G, finding #7) on a function/method/ctor
     /// signature — previously the last declaration silently won (`E-DUP-PARAM`). Takes `(name, span)`
     /// pairs so it serves both `Param` and `CtorParam` sites.

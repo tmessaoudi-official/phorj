@@ -1353,21 +1353,17 @@ class Db {
   // DbError { … })` — since DB work raises a checked `DbError` (a non-throwing closure is also accepted:
   // fewer-throws variance). BOTH this closure form AND the manual begin()/commit()/rollback() above are
   // supported (developer ruled BOTH).
-  function transaction<T>(() => T throws DbError fn): T throws DbError {
-    return match (DbSys.transaction(this.raw, fn)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
-  }
-  // Retrying transaction (DEC-208 slice C, spec §5 retry). Re-runs the WHOLE transaction up to `retries`
-  // times on the transient `SerializationFailure` ONLY (SQLite SQLITE_BUSY/LOCKED — the class Serializable
-  // isolation needs); any OTHER `DbError` (and an exhausted retry budget) rolls back and propagates
-  // immediately. The retry loop lives HERE, not in the native, because only phorj source can `catch` the
-  // TYPED error (the thrown value is backend-side `pending_throw`, invisible to a native).
-  // SURFACE (PENDING adjudication): the spec illustrates one method `db.transaction(retries: N, fn)`, but
-  // the language has NO named args, NO method default params, and NO generic-method overloading — so a
-  // single generic `transaction` cannot carry an optional `retries`. Realized as this distinct
-  // `db.transactionRetry(fn, retries)`; developer to confirm the name/shape.
+  // DEC-249 resolved the recorded SURFACE PENDING the ambitious way: method default parameters
+  // landed, so the spec's single-method shape is real — `db.transaction(fn)` runs once;
+  // `db.transaction(fn, retries)` re-runs the WHOLE transaction up to `retries` extra times on the
+  // transient `SerializationFailure` ONLY (SQLite SQLITE_BUSY/LOCKED — the class Serializable
+  // isolation needs); any OTHER `DbError` (and an exhausted retry budget) rolls back and
+  // propagates immediately. The retry loop lives HERE, not in the native, because only phorj
+  // source can `catch` the TYPED error (the thrown value is backend-side `pending_throw`,
+  // invisible to a native). The former distinct `transactionRetry(fn, retries)` is RETIRED.
   // NOTE (timeout): with `db.timeout(ms)` armed a transient busy is reclassified `Timeout`, not
   // `SerializationFailure` (slice D) — so it is NOT retried; leave the timeout unset when relying on retry.
-  function transactionRetry<T>(() => T throws DbError fn, int retries): T throws DbError {
+  function transaction<T>(() => T throws DbError fn, int retries = 0): T throws DbError {
     mutable int attempt = 0;
     while (true) {
       try {

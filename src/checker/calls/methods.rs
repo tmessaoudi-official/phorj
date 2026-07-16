@@ -3,8 +3,10 @@
 use super::*;
 
 impl Checker {
+    #[allow(clippy::too_many_arguments)]
     pub(in crate::checker) fn check_method_call(
         &mut self,
+        callee: &crate::ast::Expr,
         object: &crate::ast::Expr,
         name: &str,
         args: &[crate::ast::Expr],
@@ -12,6 +14,10 @@ impl Checker {
         safe: bool,
         span: Span,
     ) -> Ty {
+        // DEC-249: a `?.` call cannot take the default-fill rewrite — its own null-safe desugar is
+        // keyed by this same call span, and two rewrites on one key would silently collide. Omitted
+        // defaulted args on `?.` become a clean deferral error inside `check_method_sigs`.
+        let fill_callee = if safe { None } else { Some(callee) };
         let obj = self.check_expr(object);
         // Peel an optional/null receiver, enforcing the non-null discipline: a plain `.m()` on a
         // `T?` is `E-OPT-USE`; `?.m()` unwraps and re-wraps the result as optional (M3 S2.3).
@@ -86,7 +92,14 @@ impl Checker {
                     .and_then(|info| info.methods.get(name))
                     .map(|v| {
                         v.iter()
-                            .map(|s| (s.params.clone(), s.ret.clone(), s.throws.clone()))
+                            .map(|s| {
+                                (
+                                    s.params.clone(),
+                                    s.ret.clone(),
+                                    s.throws.clone(),
+                                    s.defaults.clone(),
+                                )
+                            })
                             .collect::<Vec<_>>()
                     })
                     .or_else(|| {
@@ -97,7 +110,10 @@ impl Checker {
                             self.iface_flat_methods(&cls)
                                 .into_iter()
                                 .find(|(m, _)| m == name)
-                                .map(|(_, sig)| vec![(sig.0, sig.1, Vec::new())])
+                                .map(|(_, sig)| {
+                                    let arity = sig.0.len();
+                                    vec![(sig.0, sig.1, Vec::new(), vec![None; arity])]
+                                })
                         } else {
                             None
                         }
@@ -164,15 +180,24 @@ impl Checker {
                             .unwrap_or_default();
                         let applied: Vec<MethodSig> = sigs
                             .iter()
-                            .map(|(ps, r, th)| {
+                            .map(|(ps, r, th, ds)| {
                                 (
                                     ps.iter().map(|p| apply_subst(p, &theta)).collect(),
                                     apply_subst(r, &theta),
                                     th.iter().map(|t| apply_subst(t, &theta)).collect(),
+                                    ds.clone(),
                                 )
                             })
                             .collect();
-                        self.check_method_sigs(name, &applied, &method_tps, args, tf, span)
+                        self.check_method_sigs(
+                            name,
+                            &applied,
+                            &method_tps,
+                            fill_callee,
+                            args,
+                            tf,
+                            span,
+                        )
                     }
                     None => {
                         // UFCS fallback (Slice 6): `inst.f(args)` with no method `f` may be the free
@@ -214,7 +239,14 @@ impl Checker {
                             .and_then(|info| info.methods.get(name))
                             .map(|v| {
                                 v.iter()
-                                    .map(|s| (s.params.clone(), s.ret.clone(), s.throws.clone()))
+                                    .map(|s| {
+                                        (
+                                            s.params.clone(),
+                                            s.ret.clone(),
+                                            s.throws.clone(),
+                                            s.defaults.clone(),
+                                        )
+                                    })
                                     .collect::<Vec<_>>()
                             })
                             .or_else(|| {
@@ -222,7 +254,10 @@ impl Checker {
                                     self.iface_flat_methods(mn)
                                         .into_iter()
                                         .find(|(mm, _)| mm == name)
-                                        .map(|(_, sig)| vec![(sig.0, sig.1, Vec::new())])
+                                        .map(|(_, sig)| {
+                                            let arity = sig.0.len();
+                                            vec![(sig.0, sig.1, Vec::new(), vec![None; arity])]
+                                        })
                                 } else {
                                     None
                                 }
@@ -238,11 +273,12 @@ impl Checker {
                             let theta = self.class_subst(mn, margs);
                             found = Some(
                                 sigs.iter()
-                                    .map(|(ps, r, th)| {
+                                    .map(|(ps, r, th, ds)| {
                                         (
                                             ps.iter().map(|p| apply_subst(p, &theta)).collect(),
                                             apply_subst(r, &theta),
                                             th.iter().map(|t| apply_subst(t, &theta)).collect(),
+                                            ds.clone(),
                                         )
                                     })
                                     .collect(),
@@ -276,7 +312,15 @@ impl Checker {
                                 }
                             }
                         }
-                        self.check_method_sigs(name, &applied, &found_tps, args, tf, span)
+                        self.check_method_sigs(
+                            name,
+                            &applied,
+                            &found_tps,
+                            fill_callee,
+                            args,
+                            tf,
+                            span,
+                        )
                     }
                     None => {
                         self.reject_turbofish(tf, name, span);
@@ -335,6 +379,7 @@ impl Checker {
     /// uses the class's own type parameter is out of scope this slice).
     pub(in crate::checker) fn check_static_method_call(
         &mut self,
+        callee: &crate::ast::Expr,
         cls: &str,
         name: &str,
         args: &[crate::ast::Expr],
@@ -347,7 +392,14 @@ impl Checker {
             .and_then(|i| i.methods.get(name))
             .map(|v| {
                 v.iter()
-                    .map(|s| (s.params.clone(), s.ret.clone(), s.throws.clone()))
+                    .map(|s| {
+                        (
+                            s.params.clone(),
+                            s.ret.clone(),
+                            s.throws.clone(),
+                            s.defaults.clone(),
+                        )
+                    })
                     .collect()
             });
         // DEC-208 slice A: ordered type-parameter names of a lone static method signature (for
@@ -389,7 +441,7 @@ impl Checker {
             .get(cls)
             .and_then(|i| i.method_vis.get(name).cloned());
         self.enforce_member_vis(v, name, span, false);
-        self.check_method_sigs(name, &sigs, &method_tps, args, tf, span)
+        self.check_method_sigs(name, &sigs, &method_tps, Some(callee), args, tf, span)
     }
 
     pub(in crate::checker) fn check_member(

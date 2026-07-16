@@ -1255,7 +1255,7 @@ per-slice realization notes — the authoritative slice-level record).
   `executeMany(rows)` (prepare-once, savepoint-atomic).
 - **Transactions**: BOTH the closure form `db.transaction(fn)` (commit-on-return, auto-rollback +
   re-throw the ORIGINAL typed error; nested = SAVEPOINT; via DEC-222 throwing closures) AND manual
-  `begin`/`commit`/`rollback`; `db.transactionRetry(fn, retries)` retries `SerializationFailure` only
+  `begin`/`commit`/`rollback`; `db.transaction(fn, retries)` retries `SerializationFailure` only
   (→ collapses into `transaction(fn, retries=0)` when DEC-249 method defaults land — queue item 13).
   Isolation levels deferred until multi-driver semantics matter.
 - **Errors**: catchable `throws DbError`, subtyped (UniqueViolation / ConstraintViolation /

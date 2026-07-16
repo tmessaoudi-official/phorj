@@ -115,16 +115,23 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 inner: Box::new(rexpr(*inner, h)),
                 span,
             },
-            // A throws-mode `?` was recorded for erasure (its `Span.start` is in `h`, mapping to the
-            // inner call): unwrap it to the bare call — the call's own throw unwinds, so no backend
-            // ever sees a throws-mode `Propagate`. A Result-mode `?` is absent from `h` and kept.
-            Expr::Propagate { inner, span } => match h.get(&span.start) {
-                Some(r) => rexpr(r.clone(), h),
-                None => Expr::Propagate {
-                    inner: Box::new(rexpr(*inner, h)),
-                    span,
-                },
-            },
+            // A throws-mode `?` was recorded for erasure (its `Span.start` is in `h`): unwrap it to
+            // its LIVE inner call — the call's own throw unwinds, so no backend ever sees a
+            // throws-mode `Propagate`. The recorded map entry is used as a MARKER only, never
+            // spliced: it is a check-time clone, and an earlier pass may already have transformed
+            // the live inner (the DEC-249 default fill splices full-arity args before this pass —
+            // restoring the stale unfilled clone under-fed the VM frame). A Result-mode `?` is
+            // absent from `h` and kept.
+            Expr::Propagate { inner, span } => {
+                if h.contains_key(&span.start) {
+                    rexpr(*inner, h)
+                } else {
+                    Expr::Propagate {
+                        inner: Box::new(rexpr(*inner, h)),
+                        span,
+                    }
+                }
+            }
             Expr::Match {
                 scrutinee,
                 arms,

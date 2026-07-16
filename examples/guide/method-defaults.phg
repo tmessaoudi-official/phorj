@@ -1,0 +1,49 @@
+// Method default parameters (DEC-249) — the DEC-236 constructor machinery extended to methods.
+// A trailing parameter with a literal default may be omitted at the call site; the fill happens
+// at compile time, so every backend (interpreter, VM, transpiled PHP) sees the full-arity call.
+// Works on instance methods, static methods, inherited methods, and the non-generic parameters
+// of a generic method.
+package Main;
+
+import Core.Output;
+import Core.List;
+
+open class Greeter {
+    constructor(public string name) {}
+    function greet(string who = "world", string punct = "!"): string {
+        return "{this.name}: hi {who}{punct}";
+    }
+    static function make(string n = "anon"): Greeter {
+        return new Greeter(n);
+    }
+    function echoTimes<T>(T v, int times = 1): List<T> {
+        // A generic method may default its NON-generic trailing params — the fill appends the
+        // concrete literal before type-argument inference.
+        mutable List<T> out = new List<T>();
+        for (int i in 0..times) {
+            out = List.append(out, v);
+        }
+        return out;
+    }
+}
+
+class LoudGreeter extends Greeter {
+    constructor(string name) {
+        parent.constructor(name);
+    }
+}
+
+function main(): void {
+    Greeter g = new Greeter("g1");
+    Output.printLine(g.greet());
+    Output.printLine(g.greet("you"));
+    Output.printLine(g.greet("crew", "?"));
+    Output.printLine(Greeter.make().name);
+    Output.printLine(Greeter.make("named").name);
+    // Inherited methods carry their defaults with the signature.
+    LoudGreeter loud = new LoudGreeter("LOUD");
+    Output.printLine(loud.greet());
+    // Generic method, defaulted non-generic param.
+    Output.printLine("{List.length(g.echoTimes(\"x\"))}");
+    Output.printLine("{List.length(g.echoTimes(7, 3))}");
+}

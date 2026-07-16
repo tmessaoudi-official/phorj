@@ -9,7 +9,7 @@
 //     `DbError`. The manual `begin()/commit()/rollback()` (see `transactions.phg`) still exist too.
 //   * A NESTED `db.transaction(fn)` opens a SAVEPOINT — an inner rollback leaves the outer transaction's
 //     work intact (composable partial rollback).
-//   * `db.transactionRetry(fn, retries)` auto-retries ONLY the transient `SerializationFailure` (SQLite
+//   * `db.transaction(fn, retries)` auto-retries ONLY the transient `SerializationFailure` (SQLite
 //     busy/locked); any other `DbError` propagates immediately.
 package Main;
 
@@ -88,7 +88,7 @@ function main(): void {
         // 5) RETRY: the closure throws a transient SerializationFailure on the first attempt, then
         //    succeeds. With retries=2 the transaction is re-run and the write lands.
         var tries = new Attempts();
-        db.transactionRetry(
+        db.transaction(
             function(): void throws DbError { int n = tries.bump(); if (n <= 1) { throw new SerializationFailure("simulated transient busy"); } run(db, "UPDATE acct SET bal = 42 WHERE id = 2")?; },
             2
         );

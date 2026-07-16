@@ -5,7 +5,7 @@ use super::*;
 /// A resolved method-overload signature for call checking (Batch C): `(params, ret, throws)`, with
 /// the class type-argument substitution already applied. The `throws` set is discharged at the call
 /// site exactly like a free-function call.
-pub(in crate::checker) type MethodSig = (Vec<Ty>, Ty, Vec<Ty>);
+pub(in crate::checker) type MethodSig = (Vec<Ty>, Ty, Vec<Ty>, Vec<Option<crate::ast::Expr>>);
 
 impl Checker {
     /// Check a `parent`/super dispatch call (M-RT super/parent). Validates the context (an instance
@@ -287,11 +287,13 @@ impl Checker {
     /// substituted in each `(params, ret)`). One overload → the pre-overloading path, including a
     /// method-level generic (`check_generic_call`). Multiple → a static match by arity +
     /// assignability, returning the shared return type (`E-OVERLOAD-RETURN`); none → `E-OVERLOAD-NO-MATCH`.
+    #[allow(clippy::too_many_arguments)]
     pub(in crate::checker) fn check_method_sigs(
         &mut self,
         name: &str,
         applied: &[MethodSig],
         type_params: &[String],
+        callee: Option<&crate::ast::Expr>,
         args: &[crate::ast::Expr],
         tf: &[Ty],
         span: Span,
@@ -302,7 +304,7 @@ impl Checker {
         // documented `free_call_throws` deferral (a method throw must be caught in a `try`).
         let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
         if applied.len() == 1 {
-            let (params, ret, throws) = &applied[0];
+            let (params, ret, throws, defaults) = &applied[0];
             for e in throws.clone() {
                 self.route_call_throw(skip_throws, name, &e, span);
             }
@@ -311,10 +313,75 @@ impl Checker {
                 // tuples don't carry them); the common non-overloaded path (core.rs) enforces them.
                 // DEC-208 slice A: a generic method accepts turbofish (`obj.queryInto<User>()`),
                 // consumed by `check_generic_call` to pre-seed the substitution.
+                // DEC-249: a generic method may still have NON-generic defaulted trailing params
+                // (`db.transaction(fn, int retries = 0)` — generic-typed defaults are rejected at
+                // collection). Fill them BEFORE inference: append the default literals to the arg
+                // list and record the full-arity rewrite so every backend sees full arity.
+                let omitted = params.len().saturating_sub(args.len());
+                let fillable = omitted > 0
+                    && args.len() >= defaults.iter().take_while(|d| d.is_none()).count()
+                    && defaults[args.len()..].iter().all(Option::is_some);
+                if fillable {
+                    let mut full: Vec<crate::ast::Expr> = args.to_vec();
+                    full.extend(
+                        defaults[args.len()..]
+                            .iter()
+                            .map(|d| d.clone().expect("all Some")),
+                    );
+                    let ret_ty = self.check_generic_call(
+                        name,
+                        type_params,
+                        params,
+                        ret,
+                        &[],
+                        tf,
+                        &full,
+                        span,
+                    );
+                    match callee {
+                        Some(c) => {
+                            self.pending_fill = Some(
+                                defaults[args.len()..]
+                                    .iter()
+                                    .map(|d| d.clone().expect("all Some"))
+                                    .collect(),
+                            );
+                            self.record_pending_fill(c, args, span);
+                        }
+                        None => {
+                            self.err_coded(
+                                span,
+                                format!("omitting defaulted arguments on a null-safe `?.{name}(…)` call is not supported yet"),
+                                "E-DEFAULT-PARAM-CONTEXT",
+                                Some("pass every argument explicitly on `?.` calls (a documented deferral)".into()),
+                            );
+                        }
+                    }
+                    return ret_ty;
+                }
                 self.check_generic_call(name, type_params, params, ret, &[], tf, args, span)
             } else {
                 self.reject_turbofish(tf, name, span);
-                self.check_args(name, params, args, span);
+                // DEC-249: a single-signature method call may omit trailing defaulted arguments —
+                // the same `check_args_defaulted` + `pending_fill` machinery as free functions;
+                // `record_pending_fill` rebuilds the full-arity call (applied by `rewrite_ufcs`),
+                // so every backend sees full arity (byte-identity by construction).
+                self.check_args_defaulted(name, params, defaults, args, span);
+                match callee {
+                    Some(c) => self.record_pending_fill(c, args, span),
+                    None => {
+                        // `?.` (no fill target): omitting defaulted args is a clean deferral —
+                        // never leave a dangling `pending_fill` to leak into the next call.
+                        if self.pending_fill.take().is_some() {
+                            self.err_coded(
+                                span,
+                                format!("omitting defaulted arguments on a null-safe `?.{name}(…)` call is not supported yet"),
+                                "E-DEFAULT-PARAM-CONTEXT",
+                                Some("pass every argument explicitly on `?.` calls (a documented deferral)".into()),
+                            );
+                        }
+                    }
+                }
                 ret.clone()
             };
         }
@@ -326,7 +393,7 @@ impl Checker {
         // pick any of them (mirrors `check_overload_call`).
         {
             let mut discharged: Vec<Ty> = Vec::new();
-            for (params, _, throws) in applied {
+            for (params, _, throws, _) in applied {
                 let matches = params.len() == arg_tys.len()
                     && params
                         .iter()
@@ -342,7 +409,7 @@ impl Checker {
                 }
             }
         }
-        let matched = applied.iter().find(|(params, _, _)| {
+        let matched = applied.iter().find(|(params, _, _, _)| {
             params.len() == arg_tys.len()
                 && params
                     .iter()
@@ -350,7 +417,7 @@ impl Checker {
                     .all(|(p, a)| self.ty_assignable(a, p))
         });
         match matched {
-            Some((_, ret, _)) => ret.clone(),
+            Some((_, ret, _, _)) => ret.clone(),
             None => {
                 let got = arg_tys
                     .iter()

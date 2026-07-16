@@ -135,7 +135,7 @@ pub fn check_and_expand_reified(
     };
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
-        Ok((warnings, html, ufcs, overload_renames, reified, pipe_params)) => {
+        Ok((warnings, html, ufcs, overload_renames, reified, pipe_params, fills)) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
@@ -161,6 +161,9 @@ pub fn check_and_expand_reified(
             // pipe-lambda param type into the AST (`Type::Infer` → concrete), so the VM compiler's
             // `resolve_cty` and the transpiler's kind analysis specialize exactly as the checker
             // proved (Invariant 7). In-place `Param.ty` mutation only — no cloned-subtree staleness.
+            // M4/DEC-249: default fills splice FIRST — they are check-time clones of still-sugared
+            // source, so every later pass (aliases/html/generics/new/UFCS) must process the spliced
+            // subtrees exactly like hand-written code (see `rewrite_fills`).
             Ok((
                 crate::checker::materialize_pipe_params(
                     crate::checker::inline_parent_ctors(crate::checker::rename_overload_defs(
@@ -168,7 +171,12 @@ pub fn check_and_expand_reified(
                             crate::checker::unwrap_new(crate::checker::erase_generics(
                                 crate::checker::resolve_html(
                                     crate::checker::inject_optional_field_defaults(
-                                        crate::checker::expand_aliases(prog),
+                                        crate::checker::expand_aliases(
+                                            &crate::checker::apply_default_fills(
+                                                prog.clone(),
+                                                &fills,
+                                            ),
+                                        ),
                                     ),
                                     &html,
                                 ),
@@ -506,7 +514,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
     // (or already-lowered) programs.
     let prog = &crate::checker::lower_pipes(prog.clone());
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes)) => {
+        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes, _fills)) => {
             (crate::diagnostic::diagnostics_json(&[], &warnings), false)
         }
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),

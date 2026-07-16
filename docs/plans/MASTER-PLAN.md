@@ -228,7 +228,11 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
     found + fixed + example-locked). Both spellings ≡; native PHP `A|B|null` emission;
     fmt canonicalizes; `examples/guide/nullable-unions.phg` gated.
 12. **DEC-254** in-place mutation: slice 1b (`obj.f[i]=v`) + `ref` params (copy-out) + mutability triad.
-13. **DEC-249** method default params → Db `transaction(fn, retries=0)`.
+13. ✅ **DEC-249** method default params → Db `transaction(fn, retries=0)`. **SHIPPED 2026-07-16
+    fable** — FnSig defaults + call-site fill on instance/static/inherited methods (generic
+    methods: non-generic params only, DEC-236 deferral otherwise); `transactionRetry` retired.
+    Root-caused two latent clone-staleness bugs in the fill/?-erasure rewrites (fills now splice
+    FIRST; the ?-eraser unwraps the live inner).
 14. **DEC-245** intersection overload-set resolution.
 15. **DEC-241** asymmetric visibility · **DEC-244** extension methods · **DEC-234** member-error namespacing.
 16. **DEC-250** Optional<enum> variant-pattern match · **DEC-257** Iterator interface (foreach-able).
