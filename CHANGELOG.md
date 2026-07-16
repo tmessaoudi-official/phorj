@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-274: the sugar-gate discipline (settled everywhere)
+
+Desk ruling unifying how method-position sugar is enabled, for natives and user libraries alike:
+a MODULE import (`import Core.String;`) enables both `String.upperCase(s)` and `s.upperCase()`
+for every function of the module (ratifying today's behavior); a FUNCTION import
+(`import Core.List.reverse [as rev];`) now enables the method form too — `xs.reverse()` /
+`xs.rev()` — alongside DEC-197's bare call (aliased imports match on the alias and rewrite to
+the native's real name); no import compiles none of it (nothing-in-the-wind). Also confirmed:
+the subject binds the FIRST parameter (extra args follow in order; chains compose), and plain
+free functions remain the declaration form. cli tests pin the positive matrix and the
+no-import rejection on both backends.
+
 ### Added — DEC-234: member-error namespacing (`catch (Db.Timeout e)`, `throw new Mail.TlsError(…)`)
 
 Every injected Core module's member types are now writable module-qualified in every type

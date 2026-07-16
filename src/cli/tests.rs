@@ -720,3 +720,33 @@ function main(): void {
     assert_eq!(cmd_run(&src).unwrap(), expected);
     assert_eq!(cmd_treewalk(&src).unwrap(), expected);
 }
+
+#[test]
+fn function_import_enables_method_position_sugar() {
+    // DEC-274 sugar gate, function level: `import Core.String.upperCase;` enables BOTH the bare
+    // call (DEC-197) and the method form; an ALIASED import matches on the alias and rewrites to
+    // the native's real name (`List.rev` exists on no backend).
+    let src = wp(r#"import Core.Output;
+import Core.String.upperCase;
+import Core.List.reverse as rev;
+function main(): void {
+    Output.printLine("abc".upperCase());
+    Output.printLine(upperCase("xyz"));
+    List<int> xs = [3, 1, 2];
+    List<int> r = xs.rev();
+    Output.printLine("{r[0]}");
+}"#);
+    let expected = "ABC\nXYZ\n2\n";
+    assert_eq!(cmd_run(&src).unwrap(), expected);
+    assert_eq!(cmd_treewalk(&src).unwrap(), expected);
+}
+
+#[test]
+fn no_import_means_no_method_position_sugar() {
+    // DEC-274 rule (3): nothing in the wind — without the module OR function import, the method
+    // form does not compile.
+    let src = wp(r#"import Core.Output;
+function main(): void { Output.printLine("abc".upperCase()); }"#);
+    let err = cmd_run(&src).unwrap_err();
+    assert!(err.contains("no method `upperCase`"), "{err}");
+}

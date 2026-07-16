@@ -1277,9 +1277,9 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   + DEC-197 into one uniform rule for method-position sugar on ALL functions (natives and user
   libraries alike):
   (1) **Module import = full sugar for the module**: `import Core.String;` enables BOTH
-      `String.upperCase(s)` AND `s.upperCase()` for every function of the module (fixes the
-      probed inconsistency where `xs.reverse()` worked via `import Core.List;` but
-      `"abc".upperCase()` did not; ratifies the List behavior).
+      `String.upperCase(s)` AND `s.upperCase()` for every function of the module (probe
+      CORRECTION recorded honestly: this half was already today's behavior for ALL modules —
+      the session's first probe misread an unrelated failure; the ruling RATIFIES it).
   (2) **Function import = full sugar for that one function**: `import Core.List.reverse;`
       enables bare `reverse(xs)` (DEC-197, today) AND method-position `xs.reverse()` (new);
       the qualified form stays available when the module is also imported.
@@ -1691,6 +1691,16 @@ Output/Log (raw write = core; leveled/formatted logging = extension).
 - **FUTURE tiering (developer, deferred):** extensions split into MANDATORY/default-installed (e.g. rich
   collections/string methods — ergonomics preserved) vs OPT-IN; which are default-installed vs opt-in is
   a later ruling. Recorded as a follow-up, not decided tonight.
+- **AMENDMENT 2 — RULED (2026-07-16, developer at desk via AskUserQuestion, with previews):
+  the extension PHYSICAL LAYOUT + DISCOVERABILITY surfaces.** (a) Layout = `src/ext/<name>/`
+  self-contained folders (natives + the extension's prelude source + PHP-twin helper emission +
+  tests colocated; `src/ext/registry.rs` = THE one-row-per-extension list; the `cli/preludes.rs`
+  monolith dissolves as each extension migrates); core stays put. *(Workspace-crates and
+  flat+manifest-only declined.)* (b) Discoverability = BOTH a `phg extensions` CLI listing
+  (name/state/enable-flag/provided modules, read from the same registry the compiler uses) AND a
+  `docs/EXTENSIONS.md` manifest regenerated from it. (c) TIMING = original sequencing confirmed
+  ("finish everything as fast as we can respecting all the rules! then we migrate!") — the
+  migration keeps its dedicated DEC-273 slot after the build queue.
 - **AMENDMENT — RULED (2026-07-16, developer at desk via AskUserQuestion): `phg transpile` and
   `phg lift` become EXTENSIONS in the MANDATORY tier** ("they should be extensions but
   mandatory"). Structurally behind the extension seam like Debug/Test/Bench (neither is a

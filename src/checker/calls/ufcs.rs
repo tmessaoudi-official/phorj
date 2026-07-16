@@ -66,7 +66,13 @@ impl Checker {
         let mut matched: Option<(usize, &'static str)> = None;
         let mut ambiguous = false;
         for (i, n) in crate::native::registry().iter().enumerate() {
-            if n.name != name || n.params.len() != args.len() + 1 {
+            // A native matches by its own name, or (DEC-274) by a function-import alias mapping
+            // this call-site name onto it (`import Core.List.reverse as rev;` ⇒ `xs.rev()`).
+            let alias_hit = self
+                .fn_imports
+                .get(name)
+                .is_some_and(|(m, real)| m == n.module && real == n.name);
+            if (n.name != name && !alias_hit) || n.params.len() != args.len() + 1 {
                 continue;
             }
             // `Reflect.typeName` is resolved from its argument's static type and erased before any
@@ -77,7 +83,13 @@ impl Checker {
                 continue;
             }
             let leaf = n.module.rsplit('.').next().unwrap_or(n.module);
-            if self.imports.get(leaf).map(String::as_str) == Some(n.module)
+            // DEC-274 sugar gate: a native is method-position eligible when its MODULE is imported
+            // (`import Core.List;` — today's rule, ratified) OR when the FUNCTION ITSELF is
+            // member-imported under this call-site name (`import Core.List.reverse;` ⇒
+            // `xs.reverse()` — the ruled function-level gate; aliased imports match on the alias).
+            let module_imported = self.imports.get(leaf).map(String::as_str) == Some(n.module);
+            let function_imported = alias_hit;
+            if (module_imported || function_imported)
                 && self.ufcs_first_accepts(&n.params[0], recv_ty)
             {
                 if matched.is_some() {
@@ -103,13 +115,17 @@ impl Checker {
         if let Some((idx, leaf)) = matched {
             let n = &crate::native::registry()[idx];
             self.require_option_for_result_bridge(n.module, n.name, call_span);
+            // The rewrite must carry the native's REAL name — an aliased function import
+            // (`import Core.List.reverse as rev;`, DEC-274) matched under the alias, but
+            // `List.rev` resolves on no backend. The label keeps the call-site spelling for
+            // diagnostics.
             let label = format!("{leaf}.{name}");
             let ret = self.check_ufcs_call(&label, &n.params, &n.ret, recv_ty, args, call_span);
             return Some(self.finish_ufcs(
                 UfcsSite {
                     span: call_span,
                     leaf: Some(leaf),
-                    name,
+                    name: n.name,
                     object,
                     args,
                     nav,

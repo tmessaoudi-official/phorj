@@ -3,6 +3,10 @@
 // method position. Statically checked and rewritten to the plain call before every backend;
 // import-gated like any function (nothing-in-the-wind: no import, no extension); works on
 // scalars (what PHP 8.6 still only DRAFTS as "scalar extension methods"), classes, and chains.
+//
+// THE GATE (DEC-274, ruled): `import Core.X;` enables BOTH `X.f(subject)` and `subject.f()` for
+// every function of the module; `import Core.X.f;` enables bare `f(subject)` AND `subject.f()`
+// for just that function (aliases match on the alias); no import compiles none of it.
 package Main;
 
 import Core.Output;
