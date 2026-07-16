@@ -388,6 +388,29 @@ impl Parser {
     /// becomes a 0-based induction variable in an enclosing block, incremented at the end of each
     /// iteration. (Key/value `as k => v` and destructure bindings are a documented follow-up — they
     /// need iteration-model changes the value form does not.)
+    /// DEC-248: try to parse a `Type NAME` binding pair at the cursor (`int x`,
+    /// `Map<string, int> m`). Returns `None` with the cursor FULLY RESTORED when the shape is not
+    /// `type-then-identifier` — so a bare untyped name (`as x`) falls through untouched.
+    /// Backtracking is clean because the parser records errors only through `Result` (the
+    /// `try_turbofish` precedent).
+    fn try_typed_binding(&mut self) -> Option<(Type, String)> {
+        let start = self.pos;
+        let Ok(ty) = self.parse_type() else {
+            self.pos = start;
+            return None;
+        };
+        match self.peek().clone() {
+            TokenKind::Ident(n) => {
+                self.advance();
+                Some((ty, n))
+            }
+            _ => {
+                self.pos = start;
+                None
+            }
+        }
+    }
+
     pub(super) fn parse_foreach(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.advance(); // `foreach` (contextual)
@@ -403,13 +426,45 @@ impl Parser {
             return Err(self.error("'as' after the foreach iterable (e.g. `foreach (xs as x)`)"));
         }
         self.advance(); // `as`
-        if matches!(self.peek(), TokenKind::LBracket) || self.peek2_is_fat_arrow_binding() {
+        if matches!(self.peek(), TokenKind::LBracket) {
             return Err(self.error(
-                "foreach key/value (`as k => v`) and destructure bindings are not supported yet — \
-                 use `foreach (xs as x)` (value form) or the typed `for (T x in xs)`",
+                "foreach destructure bindings are not supported yet — bind the element \
+                 (`foreach (xs as Point p)`) and destructure inside the body",
             ));
         }
-        let name = self.expect_ident("a binding name after 'as'")?;
+        // DEC-248: typed bindings — `foreach (xs as int x)` / key-value
+        // `foreach (m as string k => int v)`. A type is present when a full type parse is followed
+        // by an identifier (backtracked cleanly otherwise, so the legacy untyped `as x` still
+        // parses — its retirement rides the DEC-248 codemod slice). The key/value form REQUIRES
+        // types on both bindings (it is new surface — the explicitness rule from day one) and
+        // lowers onto the existing two-binding `Stmt::For` map iteration, so the checker and every
+        // backend are untouched.
+        let (ty, name) = match self.try_typed_binding() {
+            Some((t, n)) => (t, n),
+            None => (
+                Type::Infer(self.peek_span()),
+                self.expect_ident("a binding name after 'as'")?,
+            ),
+        };
+        let val = if matches!(self.peek(), TokenKind::FatArrow) {
+            self.advance(); // `=>`
+            match self.try_typed_binding() {
+                Some((vt, vn)) => Some((vt, vn)),
+                None => return Err(self.error(
+                    "a typed value binding after '=>' — foreach key/value declares both types: \
+                         `foreach (m as string k => int v)`",
+                )),
+            }
+        } else {
+            None
+        };
+        // Key/value iteration requires the key's declared type too (`string k`, never bare `k`).
+        if val.is_some() && matches!(ty, Type::Infer(_)) {
+            return Err(self.error(
+                "a typed key binding — foreach key/value declares both types: \
+                 `foreach (m as string k => int v)`",
+            ));
+        }
         // Optional `with int COUNTER` — a 0-based auto-incrementing position counter.
         let counter = if matches!(self.peek(), TokenKind::With) {
             self.advance(); // `with`
@@ -439,9 +494,9 @@ impl Parser {
             });
         }
         let loop_stmt = Stmt::For {
-            ty: Type::Infer(sp),
+            ty,
             name,
-            val: None,
+            val,
             iter,
             body,
             span: sp,
@@ -466,12 +521,6 @@ impl Parser {
                 sp,
             )),
         }
-    }
-
-    /// True if the tokens just after `as` look like a key/value binding `NAME =>` (so we can reject
-    /// it with a helpful message rather than misparsing). Peeks `Ident` then `=>`.
-    fn peek2_is_fat_arrow_binding(&self) -> bool {
-        matches!(self.peek(), TokenKind::Ident(_)) && matches!(self.peek2(), TokenKind::FatArrow)
     }
 
     /// Scan the for-header tokens (from just after the opening `(`) at paren/bracket depth 0: a
