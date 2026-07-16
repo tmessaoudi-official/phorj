@@ -90,7 +90,14 @@ impl Parser {
     /// binding power is >= `min_bp`. All our binary operators are left-associative,
     /// so the right operand is parsed with `bp + 1`.
     pub(in crate::parser) fn parse_binary(&mut self, min_bp: u8) -> Result<Expr, Diagnostic> {
-        let mut lhs = self.parse_unary()?;
+        let lhs = self.parse_unary()?;
+        self.parse_binary_from(lhs, min_bp)
+    }
+
+    /// The fold half of [`Self::parse_binary`], entered with a pre-parsed left operand — used by the
+    /// contextual-pipe-lambda RHS (DEC-239), which parses `(v => expr)` itself but must then climb
+    /// exactly like any other operand so the pipe's RHS grammar stays uniform.
+    fn parse_binary_from(&mut self, mut lhs: Expr, min_bp: u8) -> Result<Expr, Diagnostic> {
         loop {
             // `instanceof` is a type test at precedence 8 (like `==`), but its right operand is a
             // *type name*, not an expression — so it is parsed here rather than via `infix_op`. The
@@ -207,7 +214,26 @@ impl Parser {
             } else {
                 bp + 1
             };
-            let rhs = self.parse_binary(right_bp)?;
+            // DEC-239: a pipe RHS starting `( ident =>` is the contextually-typed pipe lambda
+            // `x |> (v => v * 2 + 1)` — an expression-body lambda whose single param omits its type
+            // (it flows from the piped value; the checker resolves the `Type::Infer` marker). Legal
+            // ONLY here: everywhere else `( ident =>` stays a parse error, so no valid program
+            // changes meaning. After the lambda the climb continues at `right_bp` — the RHS grammar
+            // stays uniform, so `x |> (v => v) + 1` binds the `+` to the LAMBDA (a loud type error,
+            // exactly like `x |> f + 1`), never silently to the pipe result. (PENDING fork: an
+            // ergonomic carve-out binding trailing tight-ops to the pipe result instead — a
+            // developer adjudication, deliberately not self-ruled; erroring now is the additive-
+            // relaxable choice.)
+            let rhs = if matches!(op, BinaryOp::Pipe)
+                && matches!(self.peek(), TokenKind::LParen)
+                && matches!(self.peek2(), TokenKind::Ident(_))
+                && matches!(self.peek3(), TokenKind::FatArrow)
+            {
+                let lam = self.parse_contextual_pipe_lambda()?;
+                self.parse_binary_from(lam, right_bp)?
+            } else {
+                self.parse_binary(right_bp)?
+            };
             lhs = if matches!(op, BinaryOp::Pipe) {
                 // `lhs |> rhs` — kept as a real `Expr::Pipe` node so the formatter round-trips
                 // the surface syntax; `checker::lower_pipes` expands it to `rhs(lhs)` before the
@@ -229,6 +255,33 @@ impl Parser {
             };
         }
         Ok(lhs)
+    }
+
+    /// `( ident => expr )` — the contextually-typed pipe lambda (DEC-239): an expression-body
+    /// lambda in pipe-RHS position whose single parameter omits its type. The param carries
+    /// [`Type::Infer`] (the `var` marker), which the checker resolves from the piped value's type —
+    /// the DEC-201 contextual-typing precedent. The caller has already confirmed the
+    /// `( ident =>` head, so this cannot backtrack.
+    fn parse_contextual_pipe_lambda(&mut self) -> Result<Expr, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::LParen, "'(' to open a pipe lambda `(v => …)`")?;
+        let psp = self.peek_span();
+        let name = self.expect_ident("a parameter name in a pipe lambda `(v => …)`")?;
+        self.expect(&TokenKind::FatArrow, "'=>' in a pipe lambda `(v => …)`")?;
+        let body = self.parse_expr()?;
+        self.expect(&TokenKind::RParen, "')' to close a pipe lambda `(v => …)`")?;
+        Ok(Expr::Lambda {
+            params: vec![crate::ast::Param {
+                ty: Type::Infer(psp),
+                name,
+                default: None,
+                span: psp,
+            }],
+            ret: None,
+            throws: Vec::new(),
+            body: crate::ast::LambdaBody::Expr(Box::new(body)),
+            span: sp,
+        })
     }
 
     /// Prefix unary operators: `-expr`, `!expr`. Right-associative by recursion.

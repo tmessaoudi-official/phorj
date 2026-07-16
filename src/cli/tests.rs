@@ -226,6 +226,17 @@ fn cmd_lift_refuses_outside_tier1_loudly() {
 }
 
 #[test]
+fn pipe_lambda_result_is_a_vm_operand() {
+    // DEC-239 / Invariant 7 (CTy-operand trap): the contextual pipe lambda's param type is
+    // materialized into the AST after checking, so the VM specializes `v * 2` exactly like the
+    // interpreter — and the pipe RESULT is usable as an arithmetic operand on both backends.
+    let src = wp(r#"import Core.Output;
+function main(): void { int r = (5 |> (v => v * 2)) + 1; Output.printLine("{r}"); }"#);
+    assert_eq!(cmd_run(&src).unwrap(), cmd_treewalk(&src).unwrap());
+    assert_eq!(cmd_run(&src).unwrap(), "11\n");
+}
+
+#[test]
 fn runvm_matches_run_on_simple_program() {
     let src = wp(r#"import Core.Output;
 function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);

@@ -30,6 +30,7 @@ mod optionals;
 mod output_capture;
 mod overloading;
 mod parent_dispatch;
+mod pipes;
 mod reflect;
 mod secret;
 mod static_methods;

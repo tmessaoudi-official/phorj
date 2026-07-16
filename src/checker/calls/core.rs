@@ -166,6 +166,56 @@ impl Checker {
                 // `?`-suppression flag meant for THIS outer call — take it before evaluating the callee
                 // so `check_expr(other)` doesn't consume it, then apply it to the outer call's throws.
                 let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
+                // DEC-239 contextual pipe lambda: `x |> (v => …)` (and the multi-`%` IIFE) lowers to
+                // an immediately-invoked lambda whose single param is `Type::Infer`. Check the piped
+                // argument FIRST, flow its type into the param (recorded for AST materialization),
+                // and type the call as the lambda body's type. Only the pipe parser/lowering can
+                // produce an `Infer` lambda param, so this cannot fire on user-written IIFEs.
+                if let Expr::Lambda {
+                    params,
+                    ret,
+                    throws,
+                    body,
+                    span: lspan,
+                } = other
+                {
+                    if params.len() == 1
+                        && matches!(params[0].ty, crate::ast::Type::Infer(_))
+                        && args.len() == 1
+                    {
+                        let arg_ty = self.check_expr(&args[0]);
+                        // Piping `void` would bind "no value" into the lambda param — the same
+                        // footgun E-VOID-CAPTURE blocks for `var x = noop()`. PHP silently coerces
+                        // void→null here; phorj rejects (DEC-239 recorded divergence, phorj-better).
+                        let arg_ty = if matches!(arg_ty, Ty::Void) {
+                            self.err_coded(
+                                span,
+                                "a `void` value cannot be piped into a lambda — it produces no value",
+                                "E-VOID-CAPTURE",
+                                Some("pipe a value-producing expression, or drop the pipe".into()),
+                            );
+                            Ty::Error
+                        } else {
+                            arg_ty
+                        };
+                        self.reject_turbofish(&tf, "call", span);
+                        let lam_ty = self.check_lambda_with(
+                            params,
+                            ret,
+                            throws,
+                            body,
+                            *lspan,
+                            Some(&arg_ty),
+                        );
+                        if let Ty::Function(_, ret_ty, lthrows) = lam_ty {
+                            for e in &lthrows {
+                                self.route_call_throw(skip_throws, "<lambda>", e, span);
+                            }
+                            return *ret_ty;
+                        }
+                        return Ty::Error;
+                    }
+                }
                 // Evaluate the callee to see if it is a function value (closure or named-fn ref).
                 let callee_ty = self.check_expr(other);
                 match callee_ty {

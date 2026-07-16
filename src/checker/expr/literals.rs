@@ -488,6 +488,22 @@ impl Checker {
         body: &crate::ast::LambdaBody,
         span: Span,
     ) -> Ty {
+        self.check_lambda_with(params, ret, throws, body, span, None)
+    }
+
+    /// [`Self::check_lambda`] with an optional **contextual parameter type** (DEC-239): a pipe
+    /// lambda `x |> (v => …)` (and the multi-`%` IIFE) has one param written as `Type::Infer`; the
+    /// call site (`check_call`'s IIFE intercept) checks the piped argument first and passes its
+    /// type here, which both types the param and records the resolution for AST materialization.
+    pub(in crate::checker) fn check_lambda_with(
+        &mut self,
+        params: &[crate::ast::Param],
+        ret: &Option<crate::ast::Type>,
+        throws: &[crate::ast::Type],
+        body: &crate::ast::LambdaBody,
+        span: Span,
+        ctx_param: Option<&Ty>,
+    ) -> Ty {
         use crate::ast::LambdaBody;
         // A field-default lambda may not capture `this` (partially-built instance, F8).
         if self.in_field_init && crate::ast::lambda_uses_this(body) {
@@ -498,7 +514,10 @@ impl Checker {
                 Some("move the closure into the constructor body, or capture a specific value (`var v = this.x;`) instead".into()),
             );
         }
-        let param_tys: Vec<Ty> = params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+        let param_tys: Vec<Ty> = params
+            .iter()
+            .map(|p| self.resolve_lambda_param_ty(p, ctx_param))
+            .collect();
         // DEC-222: resolve + normalize the lambda's DECLARED throws (flatten unions, canonical-sort,
         // dedupe — like `resolve_type`'s function-type path), validate each is an `Error` subtype
         // (`E-THROW-TYPE`/`E-THROWS-TOO-BROAD`, shared with fn/ctor decls), and check the body with
@@ -523,7 +542,7 @@ impl Checker {
         let saved_main = std::mem::replace(&mut self.cur_is_main, false);
         self.push_scope();
         for p in params {
-            let pty = self.resolve_type(&p.ty);
+            let pty = self.resolve_lambda_param_ty(p, ctx_param);
             self.declare(&p.name, pty, p.span);
         }
         let ret_ty = match body {
@@ -566,5 +585,35 @@ impl Checker {
         self.try_catch_stack = saved_try;
         self.cur_is_main = saved_main;
         Ty::Function(param_tys, Box::new(ret_ty), lambda_throws)
+    }
+
+    /// Resolve one lambda parameter's type. A `Type::Infer` param (only a pipe lambda / multi-`%`
+    /// IIFE can produce one — DEC-239) takes the contextual type when the call site supplied it,
+    /// recording the resolution (keyed by the param's `span.start`) so `materialize_pipe_params`
+    /// can write it into the AST for the backends. Without a contextual type the lambda escaped
+    /// pipe application (e.g. `x |> (v => v) + 1` binds the `+` to the lambda, per the uniform RHS
+    /// grammar) — error loudly with the pipe-specific message, never silent.
+    fn resolve_lambda_param_ty(&mut self, p: &crate::ast::Param, ctx: Option<&Ty>) -> Ty {
+        if matches!(p.ty, crate::ast::Type::Infer(_)) {
+            if let Some(t) = ctx {
+                self.pipe_param_resolutions.insert(p.span.start, t.clone());
+                return t.clone();
+            }
+            return self.err_coded(
+                p.span,
+                format!(
+                    "a pipe lambda `({0} => …)` has no parameter type of its own — it must be \
+                     applied directly by `|>`, but here it is used as a plain value",
+                    p.name
+                ),
+                "E-PIPE-LAMBDA-CONTEXT",
+                Some(
+                    "parenthesize the pipe if an operator follows — `(x |> (v => …)) + 1` — or \
+                     write a full lambda `function(T v) => …` to use it as a value"
+                        .into(),
+                ),
+            );
+        }
+        self.resolve_type(&p.ty)
     }
 }

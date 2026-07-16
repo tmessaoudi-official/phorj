@@ -250,6 +250,19 @@ impl Printer<'_> {
                 body,
                 ..
             } => {
+                // DEC-239: a contextually-typed pipe lambda — the single param carries `Type::Infer`
+                // (only the pipe parser produces one) — round-trips in its short surface form
+                // `v => expr`; the enclosing pipe's precedence wrap restores the `( … )`.
+                if let [p] = params.as_slice() {
+                    if matches!(p.ty, crate::ast::Type::Infer(_)) {
+                        if let LambdaBody::Expr(e) = body {
+                            return Ok(doc::concat(vec![
+                                doc::text(format!("{} => ", p.name)),
+                                self.expr_doc(e)?,
+                            ]));
+                        }
+                    }
+                }
                 let ps = self.params(params)?;
                 // DEC-222: render the lambda's `throws` clause (after the return annotation, before the
                 // body) so a throwing lambda round-trips through `phg format`. Empty ⇒ nothing.

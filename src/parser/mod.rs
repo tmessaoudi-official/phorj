@@ -87,6 +87,12 @@ impl Parser {
         &self.tokens[(self.pos + 1).min(self.tokens.len() - 1)].kind
     }
 
+    /// The kind of the token two beyond `peek`. `Eof` at/after the end. Used to recognize the
+    /// contextually-typed pipe lambda head `( ident =>` in pipe-RHS position (DEC-239).
+    fn peek3(&self) -> &TokenKind {
+        &self.tokens[(self.pos + 2).min(self.tokens.len() - 1)].kind
+    }
+
     /// Span of the current token (or the final Eof's span at the end).
     fn peek_span(&self) -> Span {
         self.tokens[self.pos.min(self.tokens.len() - 1)].span

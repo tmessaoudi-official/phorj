@@ -68,6 +68,7 @@ impl Checker {
             return_overload_methods: HashMap::new(),
             method_fn_decls: Vec::new(),
             reified_operands: HashMap::new(),
+            pipe_param_resolutions: HashMap::new(),
             parent_parents: std::collections::BTreeMap::new(),
             parent_mro: std::collections::BTreeMap::new(),
             parent_origins: std::collections::BTreeMap::new(),

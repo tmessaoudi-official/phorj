@@ -41,7 +41,7 @@ pub use rewrite_alias::expand_aliases;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
-pub use rewrite_pipe::lower_pipes;
+pub use rewrite_pipe::{lower_pipes, materialize_pipe_params};
 pub use rewrite_ufcs::rewrite_ufcs;
 
 // impl-cluster cohesion split (M-Decomp W2): one `impl Checker` block per cluster
@@ -523,6 +523,13 @@ pub struct Checker {
     /// overriding `ctype` with it is sound; entries that map to `CTy::Other` are dropped at the compile
     /// boundary, so non-operand results never override `ctype`'s normal (fn-value/class) resolution.
     reified_operands: HashMap<usize, Ty>,
+    /// DEC-239: contextual pipe-lambda parameter resolutions — the checker-inferred `Ty` of each
+    /// lambda parameter written as `Type::Infer` (the pipe lambda `x |> (v => …)` and the multi-`%`
+    /// IIFE), keyed by the parameter's `span.start`. `cli::check_and_expand_reified` materializes
+    /// each into the AST param (`checker::materialize_pipe_params`, LAST in the rewrite chain) so
+    /// the VM compiler's `resolve_cty` and the transpiler's kind analysis see a concrete type —
+    /// leaving `Infer` in a backend-bound param is exactly the run≠runvm CTy-operand trap.
+    pipe_param_resolutions: HashMap<usize, Ty>,
     /// Method declaration sites accumulated during collection — `(class, method, decl span, resolved
     /// params, resolved ret)` — so [`Self::finalize_method_overloads`] can emit a span-keyed rename for
     /// each member of a return-overload method set (reusing [`Self::overload_def_renames`], the same map
@@ -600,6 +607,7 @@ pub fn check_resolutions(
         HashMap<usize, crate::ast::Expr>,
         HashMap<usize, String>,
         HashMap<usize, Ty>,
+        HashMap<usize, Ty>,
     ),
     Vec<Diagnostic>,
 > {
@@ -632,6 +640,9 @@ pub fn check_resolutions(
             calls,
             c.overload_def_renames,
             c.reified_operands,
+            // DEC-239: contextual pipe-lambda param resolutions, materialized into the AST by
+            // `materialize_pipe_params` (LAST in the pipeline's rewrite chain).
+            c.pipe_param_resolutions,
         ))
     } else {
         Err(c.errors)

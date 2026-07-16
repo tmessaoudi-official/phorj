@@ -135,7 +135,7 @@ pub fn check_and_expand_reified(
     };
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
-        Ok((warnings, html, ufcs, overload_renames, reified)) => {
+        Ok((warnings, html, ufcs, overload_renames, reified, pipe_params)) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
@@ -156,21 +156,29 @@ pub fn check_and_expand_reified(
             // B1b: inline `parent.constructor(…)` LAST, so the cloned parent body is already fully
             // de-sugared (aliases/html/generics/new/UFCS/overload-renames all applied). A no-op unless
             // a constructor forwards to its parent — programs without it stay byte-identical.
+            // DEC-239: `materialize_pipe_params` runs LAST — after `rewrite_ufcs` has spliced any
+            // recorded replacement subtrees back in — writing each checker-inferred contextual
+            // pipe-lambda param type into the AST (`Type::Infer` → concrete), so the VM compiler's
+            // `resolve_cty` and the transpiler's kind analysis specialize exactly as the checker
+            // proved (Invariant 7). In-place `Param.ty` mutation only — no cloned-subtree staleness.
             Ok((
-                crate::checker::inline_parent_ctors(crate::checker::rename_overload_defs(
-                    crate::checker::rewrite_ufcs(
-                        crate::checker::unwrap_new(crate::checker::erase_generics(
-                            crate::checker::resolve_html(
-                                crate::checker::inject_optional_field_defaults(
-                                    crate::checker::expand_aliases(prog),
+                crate::checker::materialize_pipe_params(
+                    crate::checker::inline_parent_ctors(crate::checker::rename_overload_defs(
+                        crate::checker::rewrite_ufcs(
+                            crate::checker::unwrap_new(crate::checker::erase_generics(
+                                crate::checker::resolve_html(
+                                    crate::checker::inject_optional_field_defaults(
+                                        crate::checker::expand_aliases(prog),
+                                    ),
+                                    &html,
                                 ),
-                                &html,
-                            ),
-                        )),
-                        &ufcs,
-                    ),
-                    &overload_renames,
-                )),
+                            )),
+                            &ufcs,
+                        ),
+                        &overload_renames,
+                    )),
+                    &pipe_params,
+                ),
                 reified,
             ))
         }
@@ -494,8 +502,11 @@ pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
 /// semantics, but the array is always the output and nothing goes to stderr. Positions ride on each
 /// diagnostic, so no `diag_src` is needed.
 pub fn check_json_program(prog: &Program) -> (String, bool) {
+    // DEC-239: lower pipes first, mirroring `check_and_expand_reified` — a no-op on pipe-free
+    // (or already-lowered) programs.
+    let prog = &crate::checker::lower_pipes(prog.clone());
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html, _ufcs, _ovl, _reified)) => {
+        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes)) => {
             (crate::diagnostic::diagnostics_json(&[], &warnings), false)
         }
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),

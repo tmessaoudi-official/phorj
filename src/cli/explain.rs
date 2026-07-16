@@ -146,6 +146,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              discard it explicitly with `discard f();`. Only `void` and `empty` results (and a\n\
              diverging `never` call like `panic(…)`) may be dropped silently.\n"
         }
+        "E-PIPE-LAMBDA-CONTEXT" => {
+            "E-PIPE-LAMBDA-CONTEXT — a pipe lambda `(v => …)` was used as a plain value.\n\n\
+             A contextually-typed pipe lambda omits its parameter type, which flows from the piped\n\
+             value — so it only means something as the direct right-hand side of `|>` (DEC-239).\n\
+             Because `|>` binds looser than arithmetic, `x |> (v => …) + 1` applies the `+ 1` to\n\
+             the lambda itself, stranding it without a pipe. Parenthesize the pipe —\n\
+             `(x |> (v => …)) + 1` — or write a fully-typed lambda `function(T v) => …` if you\n\
+             really mean to operate on the function value.\n"
+        }
         "E-ASSIGN-TARGET" => {
             "E-ASSIGN-TARGET — an assignment target is not a simple variable.\n\n\
              Only `name = expr;` (reassigning a local) is supported in this slice. Field assignment\n\

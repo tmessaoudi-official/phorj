@@ -90,6 +90,18 @@ fn precedence_and_associativity() {
     assert_eq!(sexpr(&expr("a << 2 |> f")), "(|> (<< a 2) f)");
     // pipe chains stay left-associative: `x |> f |> g` is `(x |> f) |> g`.
     assert_eq!(sexpr(&expr("x |> f |> g")), "(|> (|> x f) g)");
+    // DEC-239 contextual pipe lambda: `( ident => expr )` in pipe-RHS position parses as a
+    // one-param lambda (the param type is `Type::Infer`, resolved by the checker).
+    assert_eq!(
+        sexpr(&expr("x |> (v => v * 2)")),
+        "(|> x (lambda (v) (* v 2)))"
+    );
+    // The RHS grammar stays uniform after the lambda: `+ 1` binds to the LAMBDA (a checker
+    // error), exactly like `x |> f + 1` — never silently to the pipe result.
+    assert_eq!(
+        sexpr(&expr("x |> (v => v) + 1")),
+        "(|> x (+ (lambda (v) v) 1))"
+    );
     // `**` binds tighter than `*` and is right-associative (PHP-identical).
     assert_eq!(sexpr(&expr("2 ** 3 ** 2")), "(** 2 (** 3 2))"); // right-assoc
     assert_eq!(sexpr(&expr("2 * 3 ** 2")), "(* 2 (** 3 2))"); // ** tighter than *
