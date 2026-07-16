@@ -101,3 +101,56 @@ fn intersection_member_access_unknown_is_error() {
         "{bad:?}"
     );
 }
+
+// ── DEC-245: intersections resolve shared methods as an OVERLOAD SET ─────────────────────────────
+
+#[test]
+fn intersection_members_with_distinct_param_lists_form_an_overload_set() {
+    // DEC-245 (the DEC-057 revisit): different parameter lists coexist — a class can legally
+    // implement both interfaces; the call site dispatches through the overload machinery.
+    let src = "interface R { function render(int n): string; } \
+               interface P { function render(string s): string; } \
+               class Both implements R, P { constructor() {} \
+                   function render(int n): string { return \"i\"; } \
+                   function render(string s): string { return \"s\"; } } \
+               function show(R & P v): void { discard v.render(7); discard v.render(\"x\"); } \
+               function main(): void { show(new Both()); }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn intersection_same_params_different_return_stays_rejected() {
+    // The one genuinely uninhabitable combo: no class can implement both, no selector can pick.
+    let e = errors_of(
+        "interface A2 { function f(int n): string; } \
+         interface B2 { function f(int n): int; } \
+         function g(A2 & B2 v): void {} function main(): void {}",
+    );
+    assert!(
+        e.iter().any(|d| d.code == Some("E-INTERSECT-SIG")),
+        "got {e:?}"
+    );
+}
+
+#[test]
+fn intersection_identical_signatures_still_merge() {
+    let src = "interface A3 { function f(int n): int; } \
+               interface B3 { function f(int n): int; } \
+               class C3 implements A3, B3 { constructor() {} function f(int n): int { return n; } } \
+               function g(A3 & B3 v): int { return v.f(4); } \
+               function main(): void { discard g(new C3()); }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn intersection_overload_no_match_is_loud() {
+    let e = errors_of(
+        "interface R4 { function render(int n): string; } \
+         interface P4 { function render(string s): string; } \
+         function show(R4 & P4 v): void { discard v.render(true); } function main(): void {}",
+    );
+    assert!(
+        e.iter().any(|d| d.code == Some("E-OVERLOAD-NO-MATCH")),
+        "got {e:?}"
+    );
+}

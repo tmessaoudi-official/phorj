@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-245: intersections resolve shared methods as an overload set
+
+Member access on `A & B` now merges each method name's signatures across the members: identical
+signatures dedupe, DISTINCT parameter lists coexist and dispatch through the existing overload
+machinery by argument types (a class can legally implement both interfaces — the old
+require-agreement rule couldn't express it). The one genuinely uninhabitable combination — same
+parameters with different returns, which no class can implement and no call-site selector can
+disambiguate — keeps the (narrowed) `E-INTERSECT-SIG`. Runtime dispatch is unchanged (the value
+is a concrete instance). `examples/guide/intersection-overloads.phg` gates it three-leg.
+
 ### Added — DEC-249: method default parameters (+ the Db `transaction(fn, retries = 0)` surface)
 
 Instance and static methods now take default parameter values — the DEC-236 machinery (trailing-

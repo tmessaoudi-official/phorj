@@ -1254,6 +1254,12 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   ambiguous combos (same params, different returns, no selector) stay `E-INTERSECT-SIG`.
   *Alternative (offered): keep require-agreement (rejected — a class can legally implement both
   interfaces while the intersection type can't express it).* Build queued.
+  **BUILT (2026-07-16 fable):** the type-site check merges per-name signatures across members and
+  rejects ONLY same-params/different-return (`E-INTERSECT-SIG`, narrowed message); the call site
+  collects `name`'s signatures from EVERY member (θ-substituted, identical sigs deduped) into one
+  set that `check_method_sigs`' existing multi-arm dispatches. Runtime untouched (dispatch is by
+  the concrete instance's class). Tests: overload-set accept / same-params-diff-ret reject /
+  identical-merge / no-match loud; `examples/guide/intersection-overloads.phg` 3-leg gated.
 - **DEC-246 — RULED (audit flag F-011): `clippy::pedantic = deny` BUILDS** — honoring DEC-176
   (ruled 07-01, never enabled; Cargo.toml stopped at `all`). Own slice in the build queue.
   *Alternative (offered): revoke to clippy::all — rejected.*

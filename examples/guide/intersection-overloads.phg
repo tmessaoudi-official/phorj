@@ -1,0 +1,34 @@
+// Intersection overload sets (DEC-245): a method declared by several intersection members with
+// DISTINCT parameter lists forms an overload set at the access site — a class can legally
+// implement both interfaces, and the call dispatches by argument types. (Only the uninhabitable
+// same-parameters/different-return combination stays rejected: E-INTERSECT-SIG.)
+package Main;
+
+import Core.Output;
+
+interface Renderer {
+    function render(int n): string;
+}
+
+interface Printer {
+    function render(string s): string;
+}
+
+class Both implements Renderer, Printer {
+    constructor() {}
+    function render(int n): string {
+        return "int:{n}";
+    }
+    function render(string s): string {
+        return "str:{s}";
+    }
+}
+
+function show(Renderer & Printer rp): void {
+    Output.printLine(rp.render(7));
+    Output.printLine(rp.render("hey"));
+}
+
+function main(): void {
+    show(new Both());
+}

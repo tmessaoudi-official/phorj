@@ -233,7 +233,9 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
     methods: non-generic params only, DEC-236 deferral otherwise); `transactionRetry` retired.
     Root-caused two latent clone-staleness bugs in the fill/?-erasure rewrites (fills now splice
     FIRST; the ?-eraser unwraps the live inner).
-14. **DEC-245** intersection overload-set resolution.
+14. ✅ **DEC-245** intersection overload-set resolution. **SHIPPED 2026-07-16 fable** — merged
+    per-member overload sets at type + call sites; E-INTERSECT-SIG narrowed to
+    same-params/different-return; example gated.
 15. **DEC-241** asymmetric visibility · **DEC-244** extension methods · **DEC-234** member-error namespacing.
 16. **DEC-250** Optional<enum> variant-pattern match · **DEC-257** Iterator interface (foreach-able).
 17. **DEC-256** W4-4 Unicode FULL: codepoint `length` + Unicode case + grapheme family.

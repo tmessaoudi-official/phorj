@@ -129,10 +129,14 @@ impl Checker {
                         Some("compose with interfaces instead; a second class becomes possible only when class `extends` lands (S6)".into()),
                     );
                 }
-                // D2: a method declared by two members with differing signatures can be satisfied by no
-                // class (Phorj has no overloading — a class has exactly one `foo`), so the intersection
-                // is uninhabited. Reject it here, where it is honest about *why*.
-                let mut method_sigs: HashMap<String, (Vec<Ty>, Ty)> = HashMap::new();
+                // DEC-245 (executes DEC-057's revisit clause): a method declared by several
+                // members forms an OVERLOAD SET at the access site — identical signatures merge,
+                // different parameter lists coexist (a class can legally implement both
+                // interfaces; the DEC-058 overload machinery dispatches). The ONE genuinely
+                // uninhabitable combo stays rejected: SAME parameters with DIFFERENT returns — no
+                // class can implement both, and no call-site selector could pick
+                // (`E-INTERSECT-SIG`, narrowed).
+                let mut method_sigs: HashMap<String, Vec<(Vec<Ty>, Ty)>> = HashMap::new();
                 let mut sig_conflict: Option<String> = None;
                 for ty in &resolved {
                     if let Ty::Named(n, _) = ty {
@@ -140,29 +144,25 @@ impl Checker {
                             if self.interfaces.contains_key(n) {
                                 self.iface_flat_methods(n)
                             } else if let Some(info) = self.classes.get(n) {
-                                // Overloaded methods (M-RT): the intersection signature-agreement check
-                                // uses the first overload as the representative — a full overload-aware
-                                // intersection check is a documented follow-up.
+                                // Every overload of a member class participates in the merged set.
                                 info.methods
                                     .iter()
-                                    .filter_map(|(m, s)| {
-                                        s.first().map(|s0| {
-                                            (m.clone(), (s0.params.clone(), s0.ret.clone()))
-                                        })
+                                    .flat_map(|(m, sigs)| {
+                                        sigs.iter()
+                                            .map(|s| (m.clone(), (s.params.clone(), s.ret.clone())))
                                     })
                                     .collect()
                             } else {
                                 Vec::new()
                             };
                         for (m, sig) in methods {
-                            match method_sigs.get(&m) {
-                                Some(existing) if *existing != sig && sig_conflict.is_none() => {
-                                    sig_conflict = Some(m.clone());
-                                }
-                                Some(_) => {}
-                                None => {
-                                    method_sigs.insert(m, sig);
-                                }
+                            let set = method_sigs.entry(m.clone()).or_default();
+                            let same_params_diff_ret =
+                                set.iter().any(|(ps, r)| *ps == sig.0 && *r != sig.1);
+                            if same_params_diff_ret && sig_conflict.is_none() {
+                                sig_conflict = Some(m);
+                            } else if !set.contains(&sig) {
+                                set.push(sig);
                             }
                         }
                     }
@@ -171,10 +171,10 @@ impl Checker {
                     self.err_coded(
                         *span,
                         format!(
-                            "intersection members declare method `{m}` with conflicting signatures — no class could implement both"
+                            "intersection members declare method `{m}` with the same parameters but different return types — no class could implement both"
                         ),
                         "E-INTERSECT-SIG",
-                        Some("a method shared across intersection members must have identical parameter and return types (Phorj has no overloading)".into()),
+                        Some("distinct PARAMETER lists coexist as an overload set (DEC-245); only a same-params/different-return clash is uninhabitable".into()),
                     );
                 }
                 let norm = Ty::intersection_of(resolved);
