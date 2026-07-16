@@ -205,14 +205,14 @@ impl Parser {
             };
             let rhs = self.parse_binary(right_bp)?;
             lhs = if matches!(op, BinaryOp::Pipe) {
-                // `lhs |> rhs` is syntactic sugar for `rhs(lhs)` — lower to a Call in the
-                // parser so all four backends see an ordinary function call. `BinaryOp::Pipe`
-                // is never placed in an `Expr::Binary` node; the precedence-table entry at
-                // `infix_op` is kept to drive the precedence-climbing loop.
-                Expr::Call {
-                    callee: Box::new(rhs),
-                    args: vec![lhs],
-                    type_args: Vec::new(),
+                // `lhs |> rhs` — kept as a real `Expr::Pipe` node so the formatter round-trips
+                // the surface syntax; `checker::lower_pipes` expands it to `rhs(lhs)` before the
+                // checker and every backend (DEC-239). `BinaryOp::Pipe` is never placed in an
+                // `Expr::Binary` node; the precedence-table entry at `infix_op` is kept to drive
+                // the precedence-climbing loop.
+                Expr::Pipe {
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
                     span: sp,
                 }
             } else {

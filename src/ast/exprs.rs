@@ -286,6 +286,26 @@ pub enum Expr {
         qualified: bool,
         span: Span,
     },
+    /// `lhs |> rhs` — the pipe operator (DEC-239: PHP-8.5-aligned callable application). Kept as a
+    /// real AST node so the FORMATTER round-trips the surface syntax faithfully (`x |> f` must not
+    /// reformat to `f(x)`), then expanded out by [`crate::checker::lower_pipes`] **before** the
+    /// checker and every backend — the same "compile-time sugar, expanded out" discipline as
+    /// [`Expr::New`]/[`Expr::Html`]. Plain form lowers to `rhs(lhs)`; a `%`-placeholder form
+    /// (`x |> f(%, 2)`, see [`Expr::PipePlaceholder`]) lowers by whole-argument substitution
+    /// (single `%`) or a single-evaluation IIFE (multiple `%`); a contextually-typed pipe lambda
+    /// (`x |> (v => v * 2)`) is an `rhs` [`Expr::Lambda`] whose one param has [`Type::Infer`],
+    /// resolved by the checker from the piped value's type.
+    Pipe {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
+    /// A bare `%` in a whole-argument slot of a pipe's top-level RHS call (DEC-239 placeholder
+    /// sugar): `x |> f(%, 2)` ≡ `f(x, 2)`. The PARSER produces it only while parsing a pipe RHS and
+    /// validates the shape there (`E-PIPE-PLACEHOLDER` anywhere but a whole top-level argument), so
+    /// downstream this node exists only as a direct argument of a [`Expr::Pipe`]'s RHS call, and
+    /// [`crate::checker::lower_pipes`] substitutes it away before the checker/backends.
+    PipePlaceholder(Span),
 }
 
 /// The body of a lambda: either a single expression (`=> expr`) or a block of statements

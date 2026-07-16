@@ -44,7 +44,12 @@ fn collect_free_expr(
         | Expr::Null(..)
         | Expr::Inject { .. }
         | Expr::NewColl { .. }
+        | Expr::PipePlaceholder(_)
         | Expr::Bytes(..) => {}
+        Expr::Pipe { lhs, rhs, .. } => {
+            collect_free_expr(lhs, bound, found);
+            collect_free_expr(rhs, bound, found);
+        }
         Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
             for part in parts {
                 if let StrPart::Expr(inner) = part {
@@ -291,7 +296,9 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             | Expr::Bytes(..)
             | Expr::Inject { .. }
             | Expr::NewColl { .. }
+            | Expr::PipePlaceholder(_)
             | Expr::Ident(..) => false,
+            Expr::Pipe { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
             Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 parts.iter().any(|p| match p {
                     StrPart::Expr(inner) => in_expr(inner),
@@ -420,7 +427,9 @@ pub fn uses_concurrency(program: &Program) -> bool {
             | Expr::Ident(..)
             | Expr::Inject { .. }
             | Expr::NewColl { .. }
+            | Expr::PipePlaceholder(_)
             | Expr::This(_) => false,
+            Expr::Pipe { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
             Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 parts.iter().any(|p| match p {
                     StrPart::Expr(inner) => in_expr(inner),

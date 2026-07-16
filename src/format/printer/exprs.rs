@@ -81,6 +81,16 @@ impl Printer<'_> {
                     r,
                 ]))
             }
+            // `lhs |> rhs` (DEC-239) — round-tripped faithfully; left-associative at the pipe's
+            // precedence, exactly like a `Binary` with `BinaryOp::Pipe`.
+            Expr::Pipe { lhs, rhs, .. } => {
+                let p = bin_prec(BinaryOp::Pipe);
+                let l = self.operand_doc(lhs, p, false, false)?;
+                let r = self.operand_doc(rhs, p, true, false)?;
+                Ok(doc::concat(vec![l, doc::text(" |> ".to_string()), r]))
+            }
+            // A bare `%` placeholder argument (DEC-239) — a whole-argument slot of a pipe's RHS call.
+            Expr::PipePlaceholder(_) => Ok(doc::text("%".to_string())),
             Expr::InstanceOf {
                 value, type_name, ..
             } => {

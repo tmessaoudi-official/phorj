@@ -74,9 +74,10 @@ fn precedence_and_associativity() {
     assert_eq!(sexpr(&expr("a && b || c")), "(|| (&& a b) c)");
     assert_eq!(sexpr(&expr("-a + b")), "(+ (- a) b)");
     assert_eq!(sexpr(&expr("!a && b")), "(&& (! a) b)");
-    assert_eq!(sexpr(&expr("x |> f")), "f(x)");
-    // pipe is the lowest: `a + b |> f` == `(a + b) |> f`
-    assert_eq!(sexpr(&expr("a + b |> f")), "f((+ a b))");
+    // DEC-239: `|>` parses to a real Pipe node (lowered by `checker::lower_pipes`, not the parser).
+    assert_eq!(sexpr(&expr("x |> f")), "(|> x f)");
+    // arithmetic binds tighter than pipe: `a + b |> f` == `(a + b) |> f`
+    assert_eq!(sexpr(&expr("a + b |> f")), "(|> (+ a b) f)");
     // `**` binds tighter than `*` and is right-associative (PHP-identical).
     assert_eq!(sexpr(&expr("2 ** 3 ** 2")), "(** 2 (** 3 2))"); // right-assoc
     assert_eq!(sexpr(&expr("2 * 3 ** 2")), "(* 2 (** 3 2))"); // ** tighter than *

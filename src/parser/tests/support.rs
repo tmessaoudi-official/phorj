@@ -88,6 +88,10 @@ pub(super) fn sexpr(e: &Expr) -> String {
             };
             format!("({o} {} {})", sexpr(lhs), sexpr(rhs))
         }
+        // DEC-239: `|>` parses to a real Pipe node (lowered to a call by `checker::lower_pipes`,
+        // not the parser), so it prints as its own s-expr head.
+        Expr::Pipe { lhs, rhs, .. } => format!("(|> {} {})", sexpr(lhs), sexpr(rhs)),
+        Expr::PipePlaceholder(_) => "%".to_string(),
         Expr::Member {
             object, name, safe, ..
         } => format!(

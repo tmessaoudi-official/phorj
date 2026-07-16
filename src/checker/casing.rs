@@ -267,7 +267,12 @@ impl Checker {
             | Expr::Bytes(..)
             | Expr::Ident(..)
             | Expr::Inject { .. }
+            | Expr::PipePlaceholder(..)
             | Expr::This(..) => {}
+            Expr::Pipe { lhs, rhs, .. } => {
+                self.check_expr_casing(lhs);
+                self.check_expr_casing(rhs);
+            }
             Expr::Str(parts, _) | Expr::Html(parts, _) | Expr::TaggedTemplate { parts, .. } => {
                 for p in parts {
                     if let StrPart::Expr(inner) = p {

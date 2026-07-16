@@ -238,3 +238,20 @@ fn declaration_visibility_survives_formatting() {
     );
     assert_idempotent(src);
 }
+
+/// DEC-239 fidelity: the pipe operator survives formatting as `|>` — it must NOT reformat into the
+/// lowered call form (`x |> f` → `f(x)` was the pre-DEC-239 defect: the parser lowered pipes before
+/// the printer ever saw them). Chains and precedence-parenthesized operands round-trip too.
+#[test]
+fn pipe_operator_survives_formatting() {
+    let src = "package Main; import Core.Output;\n\
+         function inc(int x): int { return x + 1; }\n\
+         function main(): void { Output.printLine(\"{5 |> inc |> inc}\"); }";
+    let out = fmt(src);
+    assert!(
+        out.contains("5 |> inc |> inc"),
+        "pipe rewritten out by fmt:\n{out}"
+    );
+    assert_meaning_preserved(src);
+    assert_idempotent(src);
+}

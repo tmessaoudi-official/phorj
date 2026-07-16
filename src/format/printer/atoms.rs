@@ -139,6 +139,8 @@ pub(super) fn bin_prec(op: BinaryOp) -> u8 {
 pub(super) fn prec_of(e: &Expr) -> u8 {
     match e {
         Expr::Binary { op, .. } => bin_prec(*op),
+        // `lhs |> rhs` (DEC-239) — parenthesized as a child exactly like a Pipe binary would be.
+        Expr::Pipe { .. } => bin_prec(BinaryOp::Pipe),
         Expr::InstanceOf { .. } | Expr::Cast { .. } => 8,
         Expr::Unary { .. } => PREC_UNARY,
         Expr::Range { .. } => PREC_RANGE,

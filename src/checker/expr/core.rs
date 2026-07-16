@@ -252,6 +252,18 @@ impl Checker {
                 Some(t) => self.resolve_type(t),
                 None => Ty::Error,
             },
+            // DEC-239: `lower_pipes` expands these away before the checker on the normal path.
+            // These arms are only reached by a raw-AST caller (LSP feature walks, no desugar) —
+            // type the pipe as its lowered application would (best-effort, no extra errors) and a
+            // stray placeholder as `Error` (suppresses cascades), rather than panicking.
+            Expr::Pipe { lhs, rhs, .. } => {
+                self.check_expr(lhs);
+                match self.check_expr(rhs) {
+                    Ty::Function(_, ret, _) => *ret,
+                    _ => Ty::Error,
+                }
+            }
+            Expr::PipePlaceholder(_) => Ty::Error,
         }
     }
 

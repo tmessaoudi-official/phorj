@@ -52,6 +52,10 @@ pub fn check_and_expand_reified(
     prog: &Program,
     diag_src: &str,
 ) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+    // DEC-239: expand the pipe operator out of the AST FIRST — before any other pass walks
+    // expressions — so `Expr::Pipe`/`Expr::PipePlaceholder` exist only for the formatter and no
+    // desugar/checker/backend ever sees them. Infallible (placeholder shape is parse-validated).
+    let prog = &crate::checker::lower_pipes(prog.clone());
     // Import-redesign S2 stage C: enforce injected-type import discipline on the RAW user program,
     // BEFORE any prelude injection or the S1 qualifier collapse — so the preludes' own bare internals
     // are never scanned and bare-vs-qualified is still distinguishable. A bare injected member type
@@ -189,6 +193,8 @@ pub fn check_and_expand_reified(
 /// (tests below), which asserts the two agree on error-presence across injected/clean/error programs — so
 /// a diagnostic-emitting pass added to one but not the other fails the suite.
 pub fn front_end_diagnostics(prog: &Program) -> Vec<crate::diagnostic::Diagnostic> {
+    // DEC-239: mirror of `check_and_expand_reified` — pipes lower FIRST here too.
+    let prog = &crate::checker::lower_pipes(prog.clone());
     let injected_violations = crate::checker::enforce_injected_discipline(prog);
     if !injected_violations.is_empty() {
         return injected_violations;

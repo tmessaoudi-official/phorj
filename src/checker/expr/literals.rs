@@ -249,7 +249,9 @@ impl Checker {
             | Expr::Inject { span, .. }
             | Expr::NewColl { span, .. }
             | Expr::TaggedTemplate { span, .. }
+            | Expr::Pipe { span, .. }
             | Expr::Html(_, span) => *span,
+            Expr::PipePlaceholder(s) => *s,
         }
     }
 

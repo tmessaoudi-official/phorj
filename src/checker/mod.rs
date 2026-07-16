@@ -26,6 +26,7 @@ mod rewrite_alias;
 mod rewrite_generics;
 mod rewrite_html;
 mod rewrite_new;
+mod rewrite_pipe;
 mod rewrite_ufcs;
 pub use collapse_injected::collapse_injected_type_qualifiers;
 pub use desugar_db::desugar_db;
@@ -40,6 +41,7 @@ pub use rewrite_alias::expand_aliases;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
+pub use rewrite_pipe::lower_pipes;
 pub use rewrite_ufcs::rewrite_ufcs;
 
 // impl-cluster cohesion split (M-Decomp W2): one `impl Checker` block per cluster

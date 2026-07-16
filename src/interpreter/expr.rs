@@ -350,6 +350,14 @@ impl<'c> Interp<'c> {
             Expr::New(..) => {
                 unreachable!("Expr::New is unwrapped before interpretation (checker::unwrap_new)")
             }
+            // DEC-239: pipes are expanded to plain calls by `checker::lower_pipes` — the FIRST
+            // front-end pass — so no backend ever sees them.
+            Expr::Pipe { .. } => {
+                unreachable!("`|>` is lowered before interpretation (checker::lower_pipes)")
+            }
+            Expr::PipePlaceholder(_) => {
+                unreachable!("pipe `%` is substituted before interpretation (checker::lower_pipes)")
+            }
         }
     }
 

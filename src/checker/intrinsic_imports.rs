@@ -364,10 +364,11 @@ fn walk_children(e: &mut Expr, en: &Enabled, errs: &mut Vec<Diagnostic>) {
         | Expr::Force { inner, .. }
         | Expr::Propagate { inner, .. } => walk_expr(inner, en, errs),
         Expr::OverloadSelect { call, .. } => walk_expr(call, en, errs),
-        Expr::Binary { lhs, rhs, .. } => {
+        Expr::Binary { lhs, rhs, .. } | Expr::Pipe { lhs, rhs, .. } => {
             walk_expr(lhs, en, errs);
             walk_expr(rhs, en, errs);
         }
+        Expr::PipePlaceholder(_) => {}
         Expr::Member { object, .. } => walk_expr(object, en, errs),
         Expr::Index { object, index, .. } => {
             walk_expr(object, en, errs);

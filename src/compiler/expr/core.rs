@@ -352,6 +352,14 @@ impl Compiler<'_> {
             Expr::OverloadSelect { .. } => {
                 unreachable!("overload selector resolved + rewritten before compilation (Slice C1)")
             }
+            // DEC-239: pipes are expanded to plain calls by `checker::lower_pipes` — the FIRST
+            // front-end pass — so no backend ever sees them.
+            Expr::Pipe { .. } => {
+                unreachable!("`|>` is lowered before compilation (checker::lower_pipes)")
+            }
+            Expr::PipePlaceholder(_) => {
+                unreachable!("pipe `%` is substituted before compilation (checker::lower_pipes)")
+            }
             // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).
             Expr::ParentCall {
                 ancestor,

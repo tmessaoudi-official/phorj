@@ -347,10 +347,11 @@ impl Ctx {
             Expr::Unary { expr, .. }
             | Expr::Force { inner: expr, .. }
             | Expr::Propagate { inner: expr, .. } => self.walk_expr(expr, errs),
-            Expr::Binary { lhs, rhs, .. } => {
+            Expr::Binary { lhs, rhs, .. } | Expr::Pipe { lhs, rhs, .. } => {
                 self.walk_expr(lhs, errs);
                 self.walk_expr(rhs, errs);
             }
+            Expr::PipePlaceholder(_) => {}
             Expr::Call { callee, args, .. } => {
                 self.walk_expr(callee, errs);
                 for a in args {

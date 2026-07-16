@@ -528,6 +528,10 @@ impl Transpiler {
                 unreachable!("overload selector resolved + rewritten before transpilation (Slice C1)")
             }
             Expr::New(..) => unreachable!("Expr::New is unwrapped before transpilation (checker::unwrap_new)"),
+            // DEC-239: pipes are expanded to plain calls by `checker::lower_pipes` — the FIRST
+            // front-end pass — so no backend ever sees them.
+            Expr::Pipe { .. } => unreachable!("`|>` is lowered before transpilation (checker::lower_pipes)"),
+            Expr::PipePlaceholder(_) => unreachable!("pipe `%` is substituted before transpilation (checker::lower_pipes)"),
             // Green-thread concurrency (M6 W4) has NO PHP target — PHP has no green threads, and a
             // synchronous lowering would make a concurrent program behave differently under PHP than on
             // the VM, breaking the byte-identical spine. So `spawn` is a hard transpile error (never a

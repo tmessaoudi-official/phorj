@@ -72,6 +72,15 @@ impl Printer {
                 let r = self.operand(rhs, p, true, right_assoc)?;
                 Ok(format!("{l} {} {r}", binary_op(*op)))
             }
+            // `lhs |> rhs` (DEC-239) — printed faithfully should a future lift of PHP 8.5's `|>`
+            // build one; left-associative at the pipe's precedence, like a Pipe binary.
+            Expr::Pipe { lhs, rhs, .. } => {
+                let p = bin_prec(BinaryOp::Pipe);
+                let l = self.operand(lhs, p, false, false)?;
+                let r = self.operand(rhs, p, true, false)?;
+                Ok(format!("{l} |> {r}"))
+            }
+            Expr::PipePlaceholder(_) => Ok("%".to_string()),
             Expr::InstanceOf {
                 value, type_name, ..
             } => {
@@ -353,6 +362,8 @@ pub(super) fn bin_prec(op: BinaryOp) -> u8 {
 pub(super) fn prec_of(e: &Expr) -> u8 {
     match e {
         Expr::Binary { op, .. } => bin_prec(*op),
+        // `lhs |> rhs` (DEC-239) — parenthesized as a child exactly like a Pipe binary would be.
+        Expr::Pipe { .. } => bin_prec(BinaryOp::Pipe),
         Expr::InstanceOf { .. } | Expr::Cast { .. } => 8,
         Expr::Unary { .. } => PREC_UNARY,
         Expr::Range { .. } => PREC_RANGE,
