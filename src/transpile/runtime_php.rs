@@ -525,6 +525,12 @@ impl Transpiler {
             self.indent += 1;
             self.line("if ($a < 0) { $a = -$a; }");
             self.line("if ($b < 0) { $b = -$b; }");
+            // DEC-255: negating `PHP_INT_MIN` promotes to float — the sole input that overflows the
+            // native's `u64`→`i64` result (`gcd(i64::MIN, …) = 2^63`), which faults in phorj. Throw to
+            // match; every in-range input stays int and is unaffected.
+            self.line(
+                "if (is_float($a) || is_float($b)) { throw new \\OverflowException('integer overflow'); }",
+            );
             self.line("while ($b != 0) { $t = $b; $b = $a % $b; $a = $t; }");
             self.line("return $a;");
             self.indent -= 1;
@@ -583,6 +589,19 @@ impl Transpiler {
                 self.indent -= 1;
                 self.line("}");
             }
+        }
+        if self.uses_checked_int {
+            // DEC-255: `Math.abs`/`Math.integerPower`/`List.sum` return an int in phorj and FAULT on
+            // overflow; the equivalent PHP builtins (`abs`/`pow`/`array_sum`) silently PROMOTE to float
+            // instead of erroring. This helper receives the builtin's result and THROWS on the promotion
+            // (`is_float` of a would-be-int result ⇒ overflow), matching phorj. In-range results are int
+            // and pass through unchanged → stdout byte-identical.
+            self.line("function __phorj_checked_int($r) {");
+            self.indent += 1;
+            self.line("if (is_float($r)) { throw new \\OverflowException('integer overflow'); }");
+            self.line("return $r;");
+            self.indent -= 1;
+            self.line("}");
         }
         if self.uses_debug_render {
             // DEC-238: the PHP TWIN of `native/debug.rs::render` — must mirror the pinned v1 format
@@ -782,9 +801,17 @@ impl Transpiler {
             self.line("if ($a === 0 || $b === 0) { return 0; }");
             self.line("if ($a < 0) { $a = -$a; }");
             self.line("if ($b < 0) { $b = -$b; }");
+            // DEC-255: negating `PHP_INT_MIN` promotes to float; so does the final product when the lcm
+            // exceeds `i64::MAX`. Both fault in the native (`checked_mul` + `i64::try_from`). Throw on the
+            // promotion; in-range inputs stay int → byte-identical.
+            self.line(
+                "if (is_float($a) || is_float($b)) { throw new \\OverflowException('integer overflow'); }",
+            );
             self.line("$x = $a; $y = $b;");
             self.line("while ($y != 0) { $t = $y; $y = $x % $y; $x = $t; }");
-            self.line("return intdiv($a, $x) * $b;");
+            self.line("$r = intdiv($a, $x) * $b;");
+            self.line("if (is_float($r)) { throw new \\OverflowException('integer overflow'); }");
+            self.line("return $r;");
             self.indent -= 1;
             self.line("}");
         }

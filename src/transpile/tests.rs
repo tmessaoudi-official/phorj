@@ -163,6 +163,28 @@ fn if_and_for_and_unary() {
 }
 
 #[test]
+fn checked_int_natives_wrap_overflow_promoting_builtins() {
+    // DEC-255: `Math.abs`/`Math.integerPower`/`List.sum` fault on int overflow in phorj, but the
+    // underlying PHP builtins (`abs`/`pow`/`array_sum`) silently promote to float. Each emit is
+    // wrapped in `__phorj_checked_int`, which throws on the promotion — matching phorj's fault.
+    let a = php("import Core.Math; function f(int n) -> int { return Math.abs(n); }");
+    assert!(a.contains("__phorj_checked_int(abs($n))"), "{a}");
+
+    let p = php(
+        "import Core.Math; function f(int b, int e) -> int { return Math.integerPower(b, e); }",
+    );
+    assert!(p.contains("__phorj_checked_int(pow($b, $e))"), "{p}");
+
+    let s = php("import Core.List; function f(List<int> xs) -> int { return List.sum(xs); }");
+    assert!(s.contains("__phorj_checked_int(array_sum($xs))"), "{s}");
+
+    // The helper is emitted exactly once when used, and absent when no such native appears.
+    assert_eq!(a.matches("function __phorj_checked_int(").count(), 1, "{a}");
+    let none = php("import Core.Output; function main() -> void { Output.printLine(\"hi\"); }");
+    assert!(!none.contains("__phorj_checked_int"), "{none}");
+}
+
+#[test]
 fn indexing_emits_php_subscript() {
     // DEC-255: a READ index routes through `__phorj_index` (throws on OOB/missing, matching phorj's
     // fault — bare `$xs[$i]` would silently return null). An ASSIGNMENT target stays a bare `$xs[$i]`

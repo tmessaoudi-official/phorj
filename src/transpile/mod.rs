@@ -376,6 +376,10 @@ struct Transpiler {
     /// THROW on integer overflow (bare PHP int arithmetic silently promotes to float, where phorj
     /// faults). Only int-int arithmetic wraps; a float operand yields a legitimate float (no fault).
     uses_checked_arith: bool,
+    /// DEC-255: a native whose int result PHP silently promotes to float on overflow was emitted
+    /// (`Math.abs` at `i64::MIN`, `Math.integerPower` overflow/neg-exp, `List.sum` overflow) → emit
+    /// `__phorj_checked_int($r)` which THROWS when the wrapped result promoted, matching phorj's fault.
+    uses_checked_int: bool,
     /// `(php variant class, phorj enum name, phorj variant name)` rows collected by `emit_enum`,
     /// consumed by the `__PHORJ_DEBUG_ENUMS` table when `uses_debug_render`.
     debug_enum_rows: Vec<(String, String, String)>,
@@ -539,6 +543,7 @@ impl Transpiler {
             uses_debug_render: false,
             uses_index: false,
             uses_checked_arith: false,
+            uses_checked_int: false,
             debug_enum_rows: Vec::new(),
             uses_math_lcm: false,
             uses_math_number_format: false,

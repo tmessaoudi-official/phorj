@@ -299,11 +299,30 @@ impl Transpiler {
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).
-                        return Ok(if self.namespaced && looks_like_global_call(&php) {
+                        let php = if self.namespaced && looks_like_global_call(&php) {
                             format!("\\{php}")
                         } else {
                             php
-                        });
+                        };
+                        // DEC-255: three natives return an int the underlying PHP builtin SILENTLY
+                        // promotes to float on overflow (`Math.abs` at `i64::MIN`, `Math.integerPower`
+                        // on overflow/negative-exponent, `List.sum` on overflow) — exactly where phorj
+                        // faults. Wrap the (already namespace-resolved) builtin in `__phorj_checked_int`,
+                        // which throws on the promotion (`is_float`), so the PHP leg faults in lockstep.
+                        return Ok(
+                            if matches!(
+                                (nat.module, nat.name),
+                                ("Core.Math", "abs")
+                                    | ("Core.Math", "integerPower")
+                                    | ("Core.List", "sum")
+                            ) {
+                                self.uses_checked_int = true;
+                                let bs = if self.namespaced { "\\" } else { "" };
+                                format!("{bs}__phorj_checked_int({php})")
+                            } else {
+                                php
+                            },
+                        );
                     }
                 }
             }
