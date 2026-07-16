@@ -62,12 +62,24 @@ Updated: 2026-07-16 (evening)
     8-tuple fixed; guide example examples/guide/iterators.phg THREE-LEG-IDENTICAL (incl. the
     Iterator<string?> nullable-element proof + manual pulls); docs done (CHANGELOG slice-2,
     FEATURES row, examples/README row, MASTER-PLAN 16b, UNIFIED-SPEC stdlib block).
-  - NOW: FULL GATE in bg → on green COMMIT slice 2, then SLICE 3 (Db stream reshape:
-    RowStream/DbStream → hasNext/next implements Iterator<Row>/<T>, one-row lookahead buffer —
-    hasNext pulls+caches (it now carries the throws), next returns cache or FAULTS "iterator
-    exhausted" per contract; update DB_PRELUDE at src/cli/preludes.rs:1252 area + desugar_db
-    streamInto sites + examples/db/* + tests/db.rs; migrate `while (var row = stream.next()?)`
-    loops to foreach). ORIGINAL slice-2 analysis below kept for reference:
+  - ✅ SLICE 2 COMMITTED `a9e9f693` (+ naming rulings docs `59ce8bb3`).
+  - ✅ SLICE 3 BUILT (uncommitted, gate running): RowStream/DbStream implement Iterator —
+    lookahead `mutable Row? ahead` in RowStream.hasNext (pull+cache, carries throws), next =
+    cache or `panic("iterator exhausted")` (needs `import Core.Abort.panic;` in DB_PRELUDE);
+    DbStream.hasNext delegates (NO hydration — laziness exact), next = rows.next()? + hydrate.
+    ⚠ GOTCHAS hit: (a) REGISTRY ROW ORDER — Core.Iterator's row must sit AFTER Core.Db's (the
+    injection fold resolves transitive prelude imports in row order; comment at the row);
+    (b) `x != null` is NOT phorj (cross-type comparison error) — use `if (var v = opt)`;
+    (c) bare throwing calls inside throwing prelude methods need `?` AS WHOLE BINDING INIT
+    (`bool has = this.hasNext()?;` — never in if-condition position);
+    (d) `panic` diverges for totality ✓ but needs `import Core.Abort.panic;`.
+    MIGRATED: 4 tests/db.rs bodies → foreach/direct-next + NEW exhausted-fault pin test
+    (80/80 db tests pass); examples/db/streaming.phg → foreach (both backends identical);
+    docs (CHANGELOG slice-3, examples/README row, UNIFIED-SPEC stream line, MASTER-PLAN
+    "DEC-257 COMPLETE").
+  - NOW: full gate in bg → on green COMMIT slice 3 + rebuild release (owed: slices 2+3) →
+    then the DEC-275…279 NAMING MEGA-SLICE (worktree-able now — nothing else in flight).
+    ORIGINAL slice-2 analysis below kept for reference:
     (a) Checker field `for_iter_lowerings: HashMap<usize, ()>` (keyed Stmt::For span.start) +
         thread through check_resolutions return tuple (grows 7→8: update BOTH pipeline.rs
         destructures + checker/tests/throws.rs).

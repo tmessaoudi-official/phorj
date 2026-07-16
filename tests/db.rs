@@ -1416,16 +1416,13 @@ fn db_program_transpile_is_a_clean_ladder_error() {
 
 // ── DEC-208 item H: streaming (`stream()` / `streamInto<T>()`) ───────────────────────────────────────
 
-/// Untyped streaming: `stmt.stream()` → `RowStream`, `next(): Row?` row-at-a-time, `null` at the end.
+/// Untyped streaming (DEC-257 reshape): `stmt.stream()` → `RowStream`, an `Iterator<Row>` —
+/// foreach pulls row-at-a-time via the lowered hasNext/next while-pull.
 #[test]
 fn db_stream_delivers_rows_one_at_a_time() {
     let src = typed_program(
-        r#"var s = db.prepare("SELECT name, age FROM users ORDER BY age").stream();
-       mutable bool more = true;
-       while (more) {
-         Row? r = s.next();
-         if (var row = r) { Output.printLine("{row.getString("name")}/{row.getInt("age")}"); }
-         else { more = false; }
+        r#"for (Row row in db.prepare("SELECT name, age FROM users ORDER BY age").stream()) {
+         Output.printLine("{row.getString("name")}/{row.getInt("age")}");
        }"#,
     );
     // typed_program does not import Row — extend the scaffold inline instead.
@@ -1436,16 +1433,13 @@ fn db_stream_delivers_rows_one_at_a_time() {
     both(&src, "Ada/36\nGrace/45\n");
 }
 
-/// Typed lazy streaming with a turbofish: `var s = stmt.streamInto<User>();` + `next(): User?`.
+/// Typed lazy streaming with a turbofish (DEC-257 reshape): `stmt.streamInto<User>()` is an
+/// `Iterator<User>` — foreach hydrates one row per pull.
 #[test]
 fn db_stream_into_turbofish_hydrates_per_row() {
     let src = typed_program(
-        r#"var s = db.prepare("SELECT name, age FROM users ORDER BY age").streamInto<User>();
-       mutable bool more = true;
-       while (more) {
-         User? u = s.next();
-         if (var user = u) { Output.printLine("{user.name}/{user.age}"); }
-         else { more = false; }
+        r#"for (User user in db.prepare("SELECT name, age FROM users ORDER BY age").streamInto<User>()) {
+         Output.printLine("{user.name}/{user.age}");
        }"#,
     );
     both(&src, "Ada/36\nGrace/45\n");
@@ -1456,8 +1450,8 @@ fn db_stream_into_turbofish_hydrates_per_row() {
 fn db_stream_into_contextual_sink() {
     let src = typed_program(
         r#"DbStream<User> s = db.prepare("SELECT name, age FROM users ORDER BY age").streamInto();
-       User? first = s.next();
-       Output.printLine("{first?.name ?? "<none>"}");"#,
+       User first = s.next();
+       Output.printLine("{first.name}");"#,
     );
     let src = src.replace(
         "import Core.Db.DbError;",
@@ -1474,10 +1468,29 @@ fn db_stream_into_hydrates_lazily_early_exit_skips_bad_rows() {
     let src = typed_program(
         r#"discard db.prepare("INSERT INTO users(name, age) VALUES('Broken', NULL)").exec();
        var s = db.prepare("SELECT name, age FROM users ORDER BY age NULLS LAST").streamInto<User>();
-       User? first = s.next();
-       Output.printLine("pulled: {first?.name ?? "<none>"}");"#,
+       User first = s.next();
+       Output.printLine("pulled: {first.name}");"#,
     );
     both(&src, "pulled: Ada\n");
+}
+
+/// DEC-257 misuse contract: pulling `next()` past exhaustion FAULTS ("iterator exhausted"),
+/// identically on both backends. foreach never triggers this (the lowering always asks hasNext).
+#[test]
+fn db_stream_next_past_end_faults_iterator_exhausted() {
+    let src = typed_program(
+        r#"var s = db.prepare("SELECT name, age FROM users WHERE age < 0").stream();
+       Row r = s.next();
+       Output.printLine("unreachable");"#,
+    );
+    let src = src.replace(
+        "import Core.Db.DbError;",
+        "import Core.Db.DbError;\nimport Core.Db.Row;",
+    );
+    let tree = cmd_treewalk(&src).expect_err("interpreter faults past the end");
+    assert!(tree.contains("iterator exhausted"), "{tree}");
+    let vm = cmd_run(&src).expect_err("vm faults past the end");
+    assert!(vm.contains("iterator exhausted"), "{vm}");
 }
 
 /// The same bad row through the EAGER `queryInto()` throws — the contrast half of the laziness proof.

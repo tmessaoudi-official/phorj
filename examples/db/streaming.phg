@@ -1,12 +1,14 @@
-// Streaming query results with `Core.Db` (DEC-208 item H) — rows delivered ONE AT A TIME.
+// Streaming query results with `Core.Db` (DEC-208 item H, DEC-257 reshape) — rows delivered ONE
+// AT A TIME through the `Core.Iterator` pull protocol, so streams are foreach-able:
 //
-//   * `stmt.stream()`            → `RowStream`, `next(): Row?` — the untyped cursor (`null` = end).
-//   * `stmt.streamInto<User>()`  → `DbStream<User>`, `next(): User?` — typed + LAZY: each row is
-//                                   hydrated only when pulled, so an early exit skips the hydration
-//                                   (and the hydration errors!) of every row never pulled.
+//   * `stmt.stream()`            → `RowStream` — an `Iterator<Row>`: `for (Row r in …)` just works.
+//   * `stmt.streamInto<User>()`  → `DbStream<User>` — an `Iterator<User>`, typed + LAZY: each row
+//                                   is hydrated only when pulled, so an early exit skips the
+//                                   hydration (and the hydration errors!) of rows never pulled.
 //
-// `streamInto` supports both the turbofish form shown here and the contextual sink form
-// (`DbStream<User> s = stmt.streamInto();`), exactly like `queryInto`.
+// Manual pulls stay available (`hasNext()`/`next()`); `next()` past the end is a FAULT
+// ("iterator exhausted") — foreach never triggers it. `streamInto` supports both the turbofish
+// form shown here and the contextual sink form (`DbStream<User> s = stmt.streamInto();`).
 //
 // Like every `Core.Db` program this opens a real database, so it is quarantined from the
 // byte-identity differential; `tests/db.rs` validates it on BOTH backends (`run ≡ runvm`).
@@ -29,22 +31,16 @@ function main(): void {
         discard db.prepare("INSERT INTO users VALUES('Ada', 36)").exec();
         discard db.prepare("INSERT INTO users VALUES('Grace', 45)").exec();
         discard db.prepare("INSERT INTO users VALUES('Linus', 55)").exec();
-        // Untyped: pull raw rows one at a time.
-        var rows = db.prepare("SELECT name, age FROM users ORDER BY age").stream();
-        mutable bool more = true;
-        while (more) {
-            Row? r = rows.next();
-            if (var row = r) {
-                Output.printLine("row: {row.getString(\"name\")}");
-            } else {
-                more = false;
-            }
+        // Untyped: foreach pulls raw rows one at a time (the checker lowers this to a
+        // hasNext/next while-pull — all backends run the identical loop).
+        for (Row row in db.prepare("SELECT name, age FROM users ORDER BY age").stream()) {
+            Output.printLine("row: {row.getString(\"name\")}");
         }
         // Typed + lazy: hydrate each pulled row into a `User`; stop after the first one —
-        // the remaining rows are never hydrated at all.
+        // the remaining rows are never hydrated at all (manual pull shown for the early exit).
         var users = db.prepare("SELECT name, age FROM users ORDER BY age").streamInto<User>();
-        User? first = users.next();
-        Output.printLine("first: {first?.name ?? \"<none>\"} ({first?.age ?? 0})");
+        User first = users.next();
+        Output.printLine("first: {first.name} ({first.age})");
     } catch (DbError e) {
         Output.printLine("DB error: {e.message}");
     }

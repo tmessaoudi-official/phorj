@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — DEC-257 slice 3: Db streams implement `Core.Iterator` (breaking reshape)
+
+`RowStream` and `DbStream<T>` drop the nullable-pull `next(): T?` and implement the ruled
+protocol: `hasNext(): bool throws DbError` (pulls one raw row ahead and caches it — the pull is
+where the driver can fail) and `next(): T throws DbError` (hands over the row / hydrates it;
+past the end it FAULTS "iterator exhausted" — the DEC-257 misuse contract, pinned on both
+backends). Streams are now **foreach-able**: `for (Row r in stmt.stream())` and
+`for (User u in stmt.streamInto<User>())` just work. Laziness is exact: hydration happens only
+in `next()` — the laziness-proof test still passes unchanged. Migration:
+`while (var r = s.next()?)` loops become foreach (or manual `hasNext()/next()`). Breaking,
+pre-1.0, developer-ruled ("full reshape — one blessed pull protocol"). The `Core.Iterator`
+registry row sits AFTER `Core.Db`'s (the injection fold resolves dependencies in row order —
+documented at the row).
+
 ### Added — DEC-257 slice 2: `Core.Iterator<T>` — the pull-iteration protocol
 
 `import Core.Iterator;` injects `interface Iterator<T> { function hasNext(): bool; function

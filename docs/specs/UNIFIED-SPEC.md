@@ -1251,8 +1251,10 @@ per-slice realization notes — the authoritative slice-level record).
   array accessors `get*List[OrNull]`, slice K); typed-generic `queryInto<T>()`/`queryOneInto<T>()`
   (contextual OR turbofish, strict by-field-NAME; flat-or-nested chosen by T's shape — dotted
   `"order.total"` aliases, EAGER-only, zero N+1; lazy relations REJECTED as ORM territory) +
-  `queryScalar<T>()` + `queryMap<K,V>()`; lazy `stream()`/`streamInto<T>()` (`RowStream`/`DbStream<T>`,
-  hydrate-on-pull; drivers currently materialize at `stream()` — disclosed, surface-stable); column
+  `queryScalar<T>()` + `queryMap<K,V>()`; lazy `stream()`/`streamInto<T>()` (`RowStream`/`DbStream<T>` —
+  since DEC-257 both implement `Core.Iterator` (`hasNext()/next()`, foreach-able; exhausted `next()`
+  faults); hydrate-on-pull, hydration only in `next()`; drivers currently materialize at `stream()` —
+  disclosed, surface-stable); column
   naming strategy = compile-time per-query `stmt.namingStrategy(new Naming.SnakeToCamel())` (zero
   runtime cost; strict-exact default; opt-in extension = DEC-258); value mapping enum/decimal/Json
   at compile time (timestamp→DateTime gated on DEC-247's build).

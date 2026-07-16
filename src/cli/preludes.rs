@@ -1055,6 +1055,8 @@ pub(super) const DB_PRELUDE: &str = r#"
 import Core.DbSys;
 import Core.List;
 import Core.String;
+import Core.Iterator;
+import Core.Abort.panic;
 // `Core.Map` is imported for the `queryMap<K,V>` hydration helpers the `desugar_db` pass generates
 // into a `Core.Db` program (they build the result `Map` via `Map.set`); like the `Core.List` import
 // above it makes the module's ops available to the generated helpers (and, as with `List`, to user
@@ -1237,10 +1239,11 @@ class Statement {
   function query(): List<Row> throws DbError {
     return match (DbSys.query(this.raw)) { DbResult.Ok(rows) => Statement.wrapRows(rows), DbResult.Err(e) => DbError.fail(e)? };
   }
-  // Streaming (DEC-208 item H): run the query and deliver rows ONE AT A TIME via `RowStream.next()`
-  // (`null` = exhausted) instead of materializing a `List<Row>` in user code. The typed form
-  // `stmt.streamInto<T>()` (desugar_db) wraps this in a `DbStream<T>` that hydrates each row only
-  // when pulled — early exit skips the remaining rows' hydration entirely.
+  // Streaming (DEC-208 item H, DEC-257 reshape): run the query and deliver rows ONE AT A TIME via
+  // the `Iterator<Row>` pull protocol (`hasNext()`/`next()` — foreach-able) instead of
+  // materializing a `List<Row>` in user code. The typed form `stmt.streamInto<T>()` (desugar_db)
+  // wraps this in a `DbStream<T>` (an `Iterator<T>`) that hydrates each row only when pulled —
+  // early exit skips the remaining rows' hydration entirely.
   function stream(): RowStream throws DbError {
     return match (DbSys.stream(this.raw)) { DbResult.Ok(h) => new RowStream(h), DbResult.Err(e) => DbError.fail(e)? };
   }
@@ -1256,32 +1259,52 @@ class Statement {
   }
 }
 
-// A row-at-a-time result cursor (DEC-208 item H) — the untyped streaming surface. `next()` yields the
-// next `Row`, or `null` when the result set is exhausted; iterate with
-// `while (var r = s.next()?) { … }` (a null-condition binding ends the loop).
-class RowStream {
+// A row-at-a-time result cursor (DEC-208 item H, RESHAPED by DEC-257) — the untyped streaming
+// surface, an `Iterator<Row>`: `for (Row r in stmt.stream()) { … }` just works. `hasNext()` pulls
+// one row ahead and caches it (so it carries the `throws` — the pull is where the driver can
+// fail); `next()` hands over the cached row, or FAULTS "iterator exhausted" past the end (the
+// DEC-257 misuse contract — foreach never triggers it).
+class RowStream implements Iterator<Row> {
   constructor(private DbHandle raw) {}
-  function next(): Row? throws DbError {
+  private mutable Row? ahead;
+  function hasNext(): bool throws DbError {
+    if (var cached = this.ahead) { return true; }
     DbHandle? h = match (DbSys.streamNext(this.raw)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
-    if (var handle = h) { return new Row(handle); }
-    return null;
+    if (var handle = h) {
+      this.ahead = new Row(handle);
+      return true;
+    }
+    return false;
+  }
+  function next(): Row throws DbError {
+    bool has = this.hasNext()?;
+    if (has) {
+      if (var r = this.ahead) {
+        this.ahead = null;
+        return r;
+      }
+    }
+    panic("iterator exhausted");
   }
 }
 
-// The TYPED streaming surface (DEC-208 item H): a lazy, hydrate-on-pull stream of `T` built by the
-// `stmt.streamInto<T>()` desugar (which supplies the per-class hydration closure). `next()` pulls one
-// row and hydrates it into `T` (same strict by-name mapping as `queryInto`), or `null` at the end —
-// rows never pulled are never hydrated.
-class DbStream<T> {
+// The TYPED streaming surface (DEC-208 item H, RESHAPED by DEC-257): a lazy, hydrate-on-pull
+// stream of `T` built by the `stmt.streamInto<T>()` desugar (which supplies the per-class
+// hydration closure) — an `Iterator<T>`: `for (User u in stmt.streamInto<User>()) { … }` just
+// works. Laziness is EXACT: `hasNext()` only asks the underlying cursor to pull a raw row ahead;
+// hydration happens solely in `next()` — rows never pulled via `next()` are never hydrated.
+// Past the end, `next()` FAULTS "iterator exhausted" (the DEC-257 misuse contract).
+class DbStream<T> implements Iterator<T> {
   constructor(private RowStream rows, private (Row) => T throws DbError hydrate) {}
-  function next(): T? throws DbError {
-    Row? r = this.rows.next()?;
-    if (var row = r) {
-      (Row) => T throws DbError f = this.hydrate;
-      T v = f(row)?;
-      return v;
-    }
-    return null;
+  function hasNext(): bool throws DbError {
+    bool has = this.rows.hasNext()?;
+    return has;
+  }
+  function next(): T throws DbError {
+    Row row = this.rows.next()?;
+    (Row) => T throws DbError f = this.hydrate;
+    T v = f(row)?;
+    return v;
   }
 }
 
@@ -1493,18 +1516,6 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
     },
-    // `Core.Iterator` (DEC-257) — THE pull-iteration protocol: any implementor is foreach-able.
-    // Shape developer-ruled 2026-07-16: `hasNext()/next()` (nullable element types are sound —
-    // null is never a termination signal); calling `next()` past exhaustion is a documented
-    // FAULT contract ("iterator exhausted") for stdlib implementors.
-    VirtualModule {
-        module: &["Core", "Iterator"],
-        qualifier: "Iterator",
-        src: Some(ITERATOR_PRELUDE),
-        respond_bridge: None,
-        member_gated: true,
-        bare_types: &["Iterator"],
-    },
     // `Core.Uri` (DEC-240) — the RFC 3986 `Uri` class + `UriError` taxonomy over `Core.UriSys`.
     VirtualModule {
         module: &["Core", "Uri"],
@@ -1556,6 +1567,21 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "Timeout",
             "SyntaxError",
         ],
+    },
+    // `Core.Iterator` (DEC-257) — THE pull-iteration protocol: any implementor is foreach-able.
+    // Shape developer-ruled 2026-07-16: `hasNext()/next()` (nullable element types are sound —
+    // null is never a termination signal); calling `next()` past exhaustion is a documented
+    // FAULT contract ("iterator exhausted") for stdlib implementors. ROW ORDER MATTERS: this
+    // row sits AFTER every prelude that itself imports Core.Iterator (Db's streams implement
+    // it) — the injection fold walks the registry once, so a dependency row must come LATER
+    // than its dependents (same rule as DbSys/Result after Db).
+    VirtualModule {
+        module: &["Core", "Iterator"],
+        qualifier: "Iterator",
+        src: Some(ITERATOR_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Iterator"],
     },
     // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.Db`). MUST precede `Core.Secret`
     // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Db→Secret) and
