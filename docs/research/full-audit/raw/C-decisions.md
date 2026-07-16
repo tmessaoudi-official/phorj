@@ -1948,3 +1948,67 @@ success + `agree_err` compares only run≡runvm) — so fault-parity is gated an
 exits non-zero with the matching semantic) + example. *Alternatives (offered, rejected): accept+document
 (gives up Invariant-1 fault-parity); helpers-only-where-cheap (partial).* Sub-slices: index/map helpers
 (smaller) → checked-arith family → harness fault-leg extension. Each its own green + panel + commit.
+
+## DEC-275 — RULED (2026-07-16, developer via AskUserQuestion): throwable-type naming = mandatory Error/Exception suffix, checker-enforced
+
+Any class/enum that extends/implements `Error` MUST be named `*Error` OR `*Exception` — enforced
+at declaration for stdlib AND user code (`E-ERROR-NAME`, clean message + rename hint). Motivating
+case: `catch (InvalidUrl e)` reads ambiguous at every site (import, catch, throws). META-7 scan:
+PHP/Java/C#/Kotlin = Exception suffix; Rust/Swift/TS = Error; Phorj's root marker interface is
+already `Error` and every taxonomy base already ends in it — the developer ruled EITHER suffix
+acceptable. Stdlib sweep = mechanical stem-keeping (`InvalidUrl→InvalidUrlError`,
+`Timeout→TimeoutError`, `FsNotFound→FileSystemNotFoundError` post-DEC-276, `AuthFailed→
+AuthFailedError`, `MailIo→MailIoError`, …). *Alternatives (offered): single-suffix-only
+(rejected: dev wants either); Errors sub-package (rejected: fixes only the import line, catch
+site stays ambiguous); stdlib-only/warning enforcement (rejected: "normal behavior" must hold
+everywhere).*
+
+## DEC-276 — RULED (2026-07-16, developer, multi-round): the EARNED-SHORTCUT rule + rename sweep
+
+**Rule:** a shortcut is legitimate ONLY when it is the industry-standard NAME of the thing
+(acronyms of standards: Json, Csv, Ini, Html, Http, Uri, Smtp, Tls, Sql; also ruled-earned:
+`Math`, `Debug.dd` (the PHP-world's own name for dump-and-die), `lsp`/`--dap`/`--eval`/
+`--no-jit`/`--bin`/`--dev`/`--vs-php`, `phg`/`.phg` brand). Word-truncations are NOT earned.
+**Renames ruled:** `Fs→FileSystem` · `Db→Database` (module, class, DbError→DatabaseError,
+DbStream→DatabaseStream, DbHandle→DatabaseHandle) · `Reflect→Reflection` (unify with the
+already-internal Core.Reflection) · `DI→DependencyInjection` (dev overrode the acronym carve-out)
+· `HcHandle→HttpClientHandle` · CLI flags `--addr→--address`, `--proto→--protocol` (old spellings
+= hidden aliases for one version). Function-name sweep clean (abs/sqrt/gcd/lcm/pow/min/max =
+universal math names). `Core.File` vs `Core.FileSystem` coexist BY DESIGN (older transpilable
+single-file ops vs typed native module — renames clarify the split). *Alternatives: keep-DI
+(offered as earned, overridden); spell-out-everything (offered, narrowed to the ruled list).*
+
+## DEC-277 — RULED (2026-07-16, developer): raw-native modules nest under `Core.Native.*`
+
+The seven `*Sys` modules (raw Rust-implemented natives under the friendly preludes) become
+`Core.Native.Database`, `Core.Native.FileSystem`, `Core.Native.Uri`, `Core.Native.Mail`,
+`Core.Native.Session`, `Core.Native.Debug`, `Core.Native.HttpClient` — visible, explicit opt-in,
+a hierarchy instead of a suffix ("Core. is enough — no suffix"). *Alternatives (offered):
+hide-as-internal-only (E-INTERNAL-MODULE; recommended, not chosen); visible `*Native` suffix;
+keep `Sys` (Rust *-sys precedent).*
+
+## DEC-278 — RULED (2026-07-16, developer, challenged + confirmed): namesake modules take the `Module` suffix
+
+The SEVEN modules whose headline type shares the module leaf (Fs, Db, Uri, Session, Debug,
+HttpClient, Iterator) rename to `Core.FileSystemModule`, `Core.DatabaseModule`, `Core.UriModule`,
+`Core.SessionModule`, `Core.DebugModule`, `Core.HttpClientModule`, `Core.IteratorModule` — so
+`import Core.FileSystemModule.FileSystem;` is fully explicit; non-namesake modules stay bare.
+Parent-qualified access works DAY ONE via the existing DEC-234 machinery under the new qualifier
+(`UriModule.UriMalformedError` in catch/type position, `new UriModule.Uri(…)`); DOUBLE-chained
+statics (`UriModule.Uri.parse(…)`) = recorded follow-up slice. *Challenged (Claude): "Module" is
+a zero-information suffix + mixed suffixed/bare surface; alternative namesake-auto-bind offered
+twice — developer heard the challenge and confirmed the suffix as final.*
+
+## DEC-279 — RULED (2026-07-16, developer): `Core.Url` merges into `Core.Uri`
+
+Core.Url (older Tier-A percent-encoding helpers — encodeUriComponent, encodeForm, decode*) folds
+into Core.Uri (→ UriModule per DEC-278); old paths go through the deprecation registry with a
+"moved to Core.UriModule.…" message. *Alternative (offered): keep both with a documented split —
+rejected (near-synonym module names are the ambiguity class being eliminated).*
+
+**EXECUTION (all five):** ONE codemod-driven naming mega-slice (renames + E-ERROR-NAME checker
+rule + deprecation-registry rows + docs/examples/editors), differential-harness verified.
+SEQUENCED IMMEDIATELY AFTER DEC-257 completes — the sweep touches preludes/checker-registry/Db
+streams, the exact files DEC-257 slices 2–3 are mid-flight on, so the truly-independent
+precondition for a parallel worktree agent fails (Claude scheduling call, 2026-07-16); running
+it after also avoids renaming RowStream/DbStream twice (slice 3 reshapes them).
