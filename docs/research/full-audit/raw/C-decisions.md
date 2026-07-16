@@ -1272,6 +1272,30 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   for every UFCS site); defer to sugar wave (declined).* Shipped as a docs+goldens slice:
   FEATURES row, `examples/guide/extension-methods.phg` (3-leg gated), spec note.
 
+- **DEC-274 — RULED (2026-07-16, developer at desk via AskUserQuestion, three-part with inline
+  example previews): THE SUGAR-GATE DISCIPLINE — settled "everywhere".** Amends/extends DEC-244
+  + DEC-197 into one uniform rule for method-position sugar on ALL functions (natives and user
+  libraries alike):
+  (1) **Module import = full sugar for the module**: `import Core.String;` enables BOTH
+      `String.upperCase(s)` AND `s.upperCase()` for every function of the module (fixes the
+      probed inconsistency where `xs.reverse()` worked via `import Core.List;` but
+      `"abc".upperCase()` did not; ratifies the List behavior).
+  (2) **Function import = full sugar for that one function**: `import Core.List.reverse;`
+      enables bare `reverse(xs)` (DEC-197, today) AND method-position `xs.reverse()` (new);
+      the qualified form stays available when the module is also imported.
+  (3) **No import → none of it** (nothing-in-the-wind, the #1 standing rule).
+  (4) **First-param-is-the-subject CONFIRMED** as the settled receiver semantics: the subject
+      binds the first parameter, extra args follow in order, chains compose (each result is the
+      next subject) — `"ha".shout(3)` ≡ `shout("ha", 3)`.
+  (5) **Plain functions remain the declaration form** (re-confirmed DEC-244: no marker syntax;
+      the `extension function …(this T x)` alternative was offered again with a preview and
+      declined again).
+  *Alternatives (offered, declined): function-import-only gating (breaking — retracts
+  xs.reverse-via-module-import); module=sugar but function-import=bare-only; no native sugar at
+  all; tighten user-fn scope-gating to explicit imports (scope IS the gate — kept).* Build =
+  generalize the existing List-receiver native method path to every receiver type + wire the
+  function-import surface into method resolution, per-module × per-import-level goldens.
+
 - **DEC-245 — RULED (audit flag F-010): intersections resolve shared methods as an OVERLOAD SET.**
   Executes the E-INTERSECT-SIG revisit clause DEC-057 scheduled for "when overloading lands"
   (3 weeks overdue, caught by the reopen): member access on `A & B` merges identical signatures
