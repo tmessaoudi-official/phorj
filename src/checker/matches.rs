@@ -200,26 +200,38 @@ impl Checker {
                 // backend. Caveat (ruled): an `Optional<enum>` (`Color?`) still needs a `_` — enum
                 // variant coverage isn't threaded through `?` yet (separate follow-up).
                 Ty::Optional(inner) => {
+                    // DEC-250: `Optional<enum>` (`Color?`) threads VARIANT coverage through the
+                    // `?` — every variant of the inner enum plus a `null` arm discharge it, no `_`
+                    // needed (the DEC-183 caveat closed: "exhaustive matching is a flagship").
+                    if let Ty::Named(enum_name, _) = &**inner {
+                        if self.enums.contains_key(enum_name) {
+                            let all: Vec<String> =
+                                self.enums[enum_name].variants.keys().cloned().collect();
+                            let mut missing: Vec<String> =
+                                all.into_iter().filter(|v| !covered.contains(v)).collect();
+                            if !null_seen {
+                                missing.push("`null`".to_string());
+                            }
+                            missing.sort();
+                            if !missing.is_empty() {
+                                self.err(
+                                    span,
+                                    format!("non-exhaustive match: missing {}", missing.join(", ")),
+                                );
+                            }
+                            return result.unwrap_or(Ty::Error);
+                        }
+                    }
                     let mut members: Vec<Ty> = match &**inner {
                         Ty::Union(ms) => ms.clone(),
                         other => vec![other.clone()],
                     };
-                    let has_enum = members
-                        .iter()
-                        .any(|m| matches!(m, Ty::Named(n, _) if self.enums.contains_key(n)));
-                    if has_enum {
-                        self.err(
-                            span,
-                            "non-exhaustive match: add a `default` catch-all arm for non-enum scrutinees",
-                        );
-                    } else {
-                        members.push(Ty::Null);
-                        let mut ct = covered_types.clone();
-                        if null_seen {
-                            ct.push("null".to_string());
-                        }
-                        self.report_union_nonexhaustive(&members, &ct, &guarded_shapes, span);
+                    members.push(Ty::Null);
+                    let mut ct = covered_types.clone();
+                    if null_seen {
+                        ct.push("null".to_string());
                     }
+                    self.report_union_nonexhaustive(&members, &ct, &guarded_shapes, span);
                 }
                 Ty::Error => {}
                 _ => {
@@ -336,6 +348,19 @@ impl Checker {
             } => {
                 let (enum_name, eargs) = match scrut {
                     Ty::Named(n, eargs) if self.enums.contains_key(n) => (n.clone(), eargs.clone()),
+                    // DEC-250: an `Optional<enum>` scrutinee admits variant patterns — the pattern
+                    // checks against the INNER enum (a null value matches no variant and falls to
+                    // the required `null`/catch-all arm; the exhaustiveness pass enforces it).
+                    Ty::Optional(inner) => match &**inner {
+                        Ty::Named(n, eargs) if self.enums.contains_key(n) => {
+                            (n.clone(), eargs.clone())
+                        }
+                        Ty::Error => return,
+                        other => {
+                            self.err(*span, format!("variant pattern `{name}` requires an enum scrutinee, found `{other}?`"));
+                            return;
+                        }
+                    },
                     Ty::Error => return,
                     other => {
                         self.err(*span, format!("variant pattern `{name}` requires an enum scrutinee, found `{other}`"));

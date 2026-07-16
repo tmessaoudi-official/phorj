@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-250: Optional<enum> variant patterns (the DEC-183 caveat, closed)
+
+A `match` over an optional enum (`Status?`) now accepts the enum's variant patterns directly —
+no unwrap step — and is **exhaustive** once every variant AND `null` are covered (arm order is
+free; `default` still covers whatever remains). Previously the checker rejected variant patterns
+on a `T?` scrutinee outright and always demanded a wildcard, undermining the exhaustive-matching
+flagship for the extremely common optional-enum shape (`find(id): Status?`). Checker-only change
+(`src/checker/matches.rs`): the `Pattern::Variant` arm unwraps `Optional(Named(enum))`, and the
+exhaustiveness pass gains an enum-optional case requiring variants + `null`. All three backends
+already executed the shape correctly once admitted — byte-identical `run ≡ runvm ≡ real PHP 8.5`.
+Two caveat-pinning tests flipped to capability tests; three new checker tests; guide example
+`examples/guide/optional-enum-match.phg`.
+
+### Changed — editors: grammar catch-up + vsix 0.3.3 (DEC-181 same-change rule, resynced)
+
+The shared TextMate grammar (`editors/vscode/syntaxes/phorj.tmLanguage.json`, consumed by both
+VSCode and PhpStorm) caught up with this run's syntax additions: `private(set)`/`protected(set)`
+asymmetric-visibility modifiers (dedicated rule), and `foreach`/`default` keywords. Extension
+version 0.3.2 → 0.3.3, vsix rebuilt. Going forward the DEC-181 editors-both-same-change rule is
+a per-slice checklist item again (this batch repaid the 4-slice drift).
+
 ### Added — DEC-274: the sugar-gate discipline (settled everywhere)
 
 Desk ruling unifying how method-position sugar is enabled, for natives and user libraries alike:

@@ -1372,7 +1372,12 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   enum-variant coverage through `T?` so `match c { Red() => …, Blue() => …, null => … }` is legal
   and exhaustive over `Color?` ("exhaustive matching is a flagship; an Optional-of-enum failing it
   undermines the story" — ruled soundness-adjacent). *Alternatives (offered): normal queue slot;
-  leave recorded.* 
+  leave recorded.* **BUILT 2026-07-16 fable** — `checker/matches.rs`: the `Pattern::Variant` arm
+  unwraps an `Optional(Named(enum))` scrutinee, and exhaustiveness over an enum-optional requires
+  every variant + `null` (arm order free; `default` still covers). Two caveat-pinning tests
+  flipped to capability tests; three new tests; three-leg-identical guide example
+  `examples/guide/optional-enum-match.phg`. No backend work needed — the interpreter/VM/PHP
+  match lowering already handled unwrapped variants; only the checker refused.
 
 - **META-7 — STANDING RULES (developer, 2026-07-16 audit, verbatim intent):** (1) **cross-language
   scan mandatory** — whenever phorj sets out to do something better than PHP, survey how OTHER

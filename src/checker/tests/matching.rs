@@ -443,3 +443,42 @@ fn qualified_pattern_wrong_enum_errors() {
                function f(Shape s) -> float { return match s { Color.Red(c) => 0.0, s2 => 1.0 }; }";
     assert!(!errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
+
+// ── DEC-250: Optional<enum> variant patterns ─────────────────────────────────────────────────────
+
+#[test]
+fn optional_enum_matches_variants_plus_null_exhaustively() {
+    let src = "enum Color { Red(), Blue(int shade) } \
+               function main() -> void { Color? c = new Red(); \
+                   string s = match (c) { Red() => \"r\", Blue(sh) => \"b{sh}\", null => \"n\" }; \
+                   discard s; }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn optional_enum_missing_null_or_variant_is_non_exhaustive() {
+    let no_null = "enum Color { Red(), Blue(int shade) } \
+                   function main() -> void { Color? c = new Red(); \
+                       string s = match (c) { Red() => \"r\", Blue(sh) => \"b{sh}\" }; discard s; }";
+    let e = errors_of(no_null);
+    assert!(
+        e.iter().any(|d| d.message.contains("missing `null`")),
+        "got {e:?}"
+    );
+    let no_variant = "enum Color { Red(), Blue(int shade) } \
+                      function main() -> void { Color? c = new Red(); \
+                          string s = match (c) { Red() => \"r\", null => \"n\" }; discard s; }";
+    let e2 = errors_of(no_variant);
+    assert!(
+        e2.iter().any(|d| d.message.contains("missing Blue")),
+        "got {e2:?}"
+    );
+}
+
+#[test]
+fn optional_enum_default_arm_still_covers() {
+    let src = "enum Color { Red(), Blue(int shade) } \
+               function main() -> void { Color? c = null; \
+                   string s = match (c) { Red() => \"r\", default => \"other\" }; discard s; }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}

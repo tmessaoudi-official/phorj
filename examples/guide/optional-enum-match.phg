@@ -1,0 +1,50 @@
+// Optional<enum> variant patterns (DEC-250): a `Status?` scrutinee matches its enum's
+// variant patterns directly — no unwrap step — and is exhaustive once every variant
+// AND `null` are covered. This closes the old caveat where an optional enum always
+// demanded a wildcard arm even when all variants were listed.
+package Main;
+
+import Core.Output;
+
+enum Status { Active, Suspended(string reason), Deleted(int daysAgo) }
+
+function find(int id): Status? {
+    if (id == 1) {
+        return new Active();
+    }
+    if (id == 2) {
+        return new Suspended("payment overdue");
+    }
+    if (id == 3) {
+        return new Deleted(14);
+    }
+    return null;
+}
+
+// Exhaustive without a wildcard: three variants + null = the whole `Status?` space.
+function describe(Status? s): string {
+    return match (s) {
+        Active() => "active",
+        Suspended(reason) => "suspended: {reason}",
+        Deleted(days) => "deleted {days} days ago",
+        null => "no such user"
+    };
+}
+
+// `null` may come first — arm order does not affect exhaustiveness.
+function isGone(Status? s): bool {
+    return match (s) { null => true, Deleted(d) => true, Active() => false, Suspended(r) => false };
+}
+
+// A `default` arm still covers whatever remains, as everywhere else.
+function label(Status? s): string {
+    return match (s) { Active() => "OK", default => "attention" };
+}
+
+function main(): void {
+    for (int id in [0, 1, 2, 3]) {
+        Output.printLine(
+            "{id}: {describe(find(id))} / gone={isGone(find(id))} / {label(find(id))}"
+        );
+    }
+}

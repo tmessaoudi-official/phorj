@@ -19,7 +19,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Classes + fields + methods (`this`) | ✅ | |
 | Constructor promotion | ✅ | `constructor(private int total) {}` |
 | Enums with payloads | ✅ | `enum Shape { Circle(float r), Rect(float w, float h) }` |
-| `match` (exhaustiveness-checked) | ✅ | over enum variants |
+| `match` (exhaustiveness-checked) | ✅ | over enum variants — incl. an **optional enum** `E?` scrutinee: variant patterns match directly, exhaustive = all variants + `null` (DEC-250) |
 | String interpolation | ✅ | `"area = {area(s)}"` |
 | `for … in` over lists | ✅ | `for (int s in [80, 30, 55]) { … }` |
 | `if` / `else`, blocks, comparison, equality, `&&`/`||`, unary | ✅ | short-circuit logical ops |

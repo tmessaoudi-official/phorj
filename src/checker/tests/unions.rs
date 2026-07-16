@@ -267,31 +267,29 @@ fn optional_union_missing_member_lists_it() {
 }
 
 #[test]
-fn optional_enum_flat_still_needs_wildcard() {
-    // Ruled caveat (DEC-183): enum-variant coverage is NOT threaded through `?`, so an
-    // `Optional<enum>` matched by variant arms is still rejected (the flat form is primitives +
-    // classes/interfaces only).
-    let bad = errors_of(
+fn optional_enum_flat_matches_variants_plus_null() {
+    // DEC-250 closed the DEC-183 caveat: enum-variant coverage threads through `?` — the variant
+    // arms plus a `null` arm are exhaustive over `Color?` (no `_` needed).
+    let ok = errors_of(
         "enum Color { Red, Green } \
              function f(Color? c) -> string { \
                return match c { Red() => \"r\", Green() => \"g\", null => \"z\" }; } \
              function main() -> void {}",
     );
-    assert!(!bad.is_empty(), "expected rejection, got clean");
+    assert!(ok.is_empty(), "got {ok:?}");
 }
 
 #[test]
-fn optional_enum_null_first_still_rejected() {
-    // Pins the caveat under a `null`-first arm order: after the `null` arm the variant arms narrow to
-    // the bare enum and type-check, but the `Optional<enum>` scrutinee still isn't exhaustive-matchable
-    // (`has_enum` requires a `_`). Intentional — enum coverage through `?` is the separate follow-up.
-    let bad = errors_of(
+fn optional_enum_null_first_also_exhaustive() {
+    // DEC-250: arm order is free — a `null`-first `Optional<enum>` match is exhaustive with the
+    // variant arms following (the old caveat pinned rejection here; the capability replaced it).
+    let ok = errors_of(
         "enum Color { Red, Green } \
              function f(Color? c) -> string { \
                return match c { null => \"z\", Red() => \"r\", Green() => \"g\" }; } \
              function main() -> void {}",
     );
-    assert!(!bad.is_empty(), "expected rejection, got clean");
+    assert!(ok.is_empty(), "got {ok:?}");
 }
 
 #[test]
