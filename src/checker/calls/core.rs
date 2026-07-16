@@ -109,6 +109,23 @@ impl Checker {
                 // static-field read in `check_member`.
                 if !*safe {
                     if let Expr::Ident(cls, _) = &**object {
+                        // DEC-234: a `new`-wrapped qualified injected construction wins over the
+                        // static-method route when the qualifier is ALSO an injected class
+                        // (`new Uri.UriMalformed(…)`, `new Db.Timeout(…)` — `Uri`/`Db` name both
+                        // the module qualifier and its main class). Only `new` heads divert:
+                        // `Uri.parse(…)` still resolves as the static call below.
+                        if self.under_new
+                            && self.lookup_binding(cls).is_none()
+                            && super::enforce_injected::module_of(name) == Some(cls.as_str())
+                            && self.classes.contains_key(name)
+                        {
+                            self.under_new = false;
+                            if let Some(t) = self.try_variant_or_class_call(name, args, span, false)
+                            {
+                                self.reject_turbofish(&tf, name, span);
+                                return t;
+                            }
+                        }
                         if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
                             return self
                                 .check_static_method_call(callee, cls, name, args, &tf, span);

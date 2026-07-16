@@ -1106,6 +1106,14 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   deprecated aliases during the transition. *Alternatives (offered): bless the prefix convention
   (rejected — ergonomics); collision = compile error (rejected — fixes the bug, not the design).*
   Implementation = a checker/parser slice (qualified names in catch/throw/extends positions), queued.
+  **BUILT (2026-07-16 fable):** the qualified-member collapse now routes through the UA-L2
+  `module_of` registry (the old hardcoded table predating UA-L2 knew only Http/Time/Decimal), so
+  EVERY injected module's member types are qualifiable in every TYPE position — `catch
+  (Uri.UriMalformed e)`, `catch (Db.Timeout e)`, `throws Mail.TlsError`, annotations — and
+  `new Qual.Member(…)` construction works even when the qualifier is ALSO a class (`new
+  Uri.UriMalformed(…)` — a `new`-gated route ahead of the static-method branch, so `Uri.parse(…)`
+  statics are untouched). Bare member-imported names remain the working alias (the ruled
+  transition stance). cli test pins catch/throws/throw-new on run+treewalk.
 - **DEC-235 — REVOKED by DEC-239 (2026-07-16 full-reopen audit, flag F-001).** Original ruling:
   pipe `|>` = first-arg insertion (`x |> f(a)` ≡ `f(x, a)`), *alternative "callable application —
   rejected: every step would need a lambda wrapper"*. The audit established two facts the ruling

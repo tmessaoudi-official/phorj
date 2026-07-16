@@ -28,12 +28,11 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
     /// `src/cli/mod.rs`: `Http` → {Request, Response, Route, Router}; `Time` → {Duration, Date,
     /// Instant}; `Decimal` → {RoundingMode}.
     fn is_injected_member(qual: &str, member: &str) -> bool {
-        matches!(
-            (qual, member),
-            ("Http", "Request" | "Response" | "Route" | "Router")
-                | ("Time", "Duration" | "Date" | "Instant")
-                | ("Decimal", "RoundingMode")
-        )
+        // DEC-234 member-error namespacing: resolve through the UA-L2 `module_of` registry (one
+        // row per Core module), so EVERY injected member type is qualifiable in EVERY type
+        // position — `catch (Db.Timeout e)`, `Uri.UriError` annotations, `throws Mail.TlsError` —
+        // not just the three modules the old hardcoded table predating UA-L2 knew about.
+        super::enforce_injected::module_of(member) == Some(qual)
     }
 
     fn rt(ty: &Type) -> Type {

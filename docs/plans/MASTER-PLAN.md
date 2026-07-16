@@ -239,7 +239,9 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
 15. **DEC-241** asymmetric visibility ✅ **SHIPPED 2026-07-16 fable** (fields+promoted+statics,
     all write sites incl. `with`, PHP 8.4 1:1 emission) · **DEC-244** extension methods ✅ **RESOLVED 2026-07-16**
     (desk ruling: UFCS ratified AS the story — no new syntax; docs+goldens shipped) ·
-    **DEC-234** member-error namespacing.
+    **DEC-234** member-error namespacing ✅ **SHIPPED 2026-07-16 fable** (module_of-routed
+    qualified collapse in all type positions + new-gated qualified construction; bare
+    member-imports stay the alias).
 16. **DEC-250** Optional<enum> variant-pattern match · **DEC-257** Iterator interface (foreach-able).
 17. **DEC-256** W4-4 Unicode FULL: codepoint `length` + Unicode case + grapheme family.
 18. **DEC-243** String.levenshtein+similarText · **DEC-242** partitioned cookies · **DEC-258** Db column naming.

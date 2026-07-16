@@ -695,3 +695,28 @@ fn every_emitted_diagnostic_code_has_an_explanation() {
          (add an arm to `explain_text`): {undocumented:?}"
     );
 }
+
+#[test]
+fn qualified_injected_error_types_resolve_everywhere() {
+    // DEC-234 member-error namespacing: `catch (Uri.UriMalformed e)`, `throws Uri.UriError`, and
+    // `throw new Uri.UriMalformed(…)` — the module-qualified spelling for EVERY injected module's
+    // members (routed through the UA-L2 module_of registry; the old hardcoded collapse table knew
+    // only Http/Time/Decimal). Bare member-imported names stay the alias.
+    let src = wp(r#"import Core.Output;
+import Core.Uri.Uri;
+function boom(): never throws Uri.UriError { throw new Uri.UriMalformed("m"); }
+function main(): void {
+    try {
+        Uri u = Uri.parse("http://exa mple/");
+        Output.printLine(u.toString());
+    } catch (Uri.UriMalformed e) {
+        Output.printLine("caught: {e.message}");
+    } catch (Uri.UriError e) {
+        Output.printLine("base: {e.message}");
+    }
+    try { boom(); } catch (Uri.UriError e) { Output.printLine("boom: {e.message}"); }
+}"#);
+    let expected = "caught: The specified URI is malformed\nboom: m\n";
+    assert_eq!(cmd_run(&src).unwrap(), expected);
+    assert_eq!(cmd_treewalk(&src).unwrap(), expected);
+}

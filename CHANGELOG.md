@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-234: member-error namespacing (`catch (Db.Timeout e)`, `throw new Mail.TlsError(…)`)
+
+Every injected Core module's member types are now writable module-qualified in every type
+position — catch clauses, `throws` clauses, annotations — and in `new Qual.Member(…)`
+construction (including when the qualifier names both the module and its main class:
+`new Uri.UriMalformed(…)` routes ahead of the static-method branch only under `new`, so
+`Uri.parse(…)` statics are untouched). Root cause was a hardcoded qualifier table predating the
+UA-L2 registry (it knew only Http/Time/Decimal); the collapse now consults `module_of`, so new
+modules get the qualified spelling for free. Bare member-imported names (`import
+Core.Db.Timeout;` → `catch (Timeout e)`) remain the working alias per the ruled transition.
+
 ### Ratified — DEC-244: UFCS is the extension-method story
 
 Developer ruling (no new syntax): phorj's existing UFCS — any in-scope free function whose first
