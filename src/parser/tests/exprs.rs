@@ -517,3 +517,43 @@ fn parses_lambda_throws_clause() {
         other => panic!("expected lambda, got {other:?}"),
     }
 }
+
+#[test]
+fn pipe_placeholder_parses_as_a_whole_argument() {
+    // DEC-239 `%` placeholder: whole-argument slots of the pipe's top-level RHS call.
+    assert_eq!(sexpr(&expr("x |> f(%, 2)")), "(|> x f(%, 2))");
+    assert_eq!(sexpr(&expr("x |> f(%, %)")), "(|> x f(%, %))");
+    // Each `|>` in a chain binds its own `%`.
+    assert_eq!(
+        sexpr(&expr("x |> f(%, 2) |> g(3, %)")),
+        "(|> (|> x f(%, 2)) g(3, %))"
+    );
+    // A nested pipe inside an argument owns ITS placeholder; the outer pipe owns the sibling one.
+    assert_eq!(
+        sexpr(&expr("x |> f(y |> g(%), %)")),
+        "(|> x f((|> y g(%)), %))"
+    );
+}
+
+#[test]
+fn pipe_placeholder_shape_violations_are_parse_errors() {
+    // `% + 1` — not a whole argument.
+    let err = parser("function f(): void { var r = x |> g(% + 1); }")
+        .parse_program()
+        .unwrap_err();
+    assert_eq!(err.code, Some("E-PIPE-PLACEHOLDER"), "{err:?}");
+    // nested `g(%)` — nesting is the lambda's job.
+    let err = parser("function f(): void { var r = x |> g(h(%)); }")
+        .parse_program()
+        .unwrap_err();
+    assert_eq!(err.code, Some("E-PIPE-PLACEHOLDER"), "{err:?}");
+    // bare `x |> %` — the RHS is not even a call.
+    let err = parser("function f(): void { var r = x |> %; }")
+        .parse_program()
+        .unwrap_err();
+    assert_eq!(err.code, Some("E-PIPE-PLACEHOLDER"), "{err:?}");
+    // outside any pipe, `%` stays infix-only — a bare operand `%` is a plain parse error.
+    assert!(parser("function f(): void { var r = g(%); }")
+        .parse_program()
+        .is_err());
+}

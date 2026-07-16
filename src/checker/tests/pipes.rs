@@ -76,3 +76,25 @@ fn piping_into_a_two_param_function_is_a_loud_arity_error() {
         "2-param callee must not accept one piped arg"
     );
 }
+
+#[test]
+fn placeholder_slots_type_check_against_the_callee() {
+    // Single `%` — substitution; several `%` — the single-evaluation IIFE. Both must check.
+    let errs = pipe_errors_of(
+        "function pad(int value, int width): int { return value * width; } \
+         function main(): void { int r = 5 |> pad(%, 3); int s = 4 |> pad(%, %); discard r; discard s; }",
+    );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn placeholder_slot_type_mismatch_is_a_loud_error() {
+    let errs = pipe_errors_of(
+        "function pad(int value, int width): int { return value * width; } \
+         function main(): void { int r = \"s\" |> pad(%, 3); discard r; }",
+    );
+    assert!(
+        !errs.is_empty(),
+        "a string piped into an int slot must not check"
+    );
+}

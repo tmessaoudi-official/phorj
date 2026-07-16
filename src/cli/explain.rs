@@ -146,6 +146,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              discard it explicitly with `discard f();`. Only `void` and `empty` results (and a\n\
              diverging `never` call like `panic(…)`) may be dropped silently.\n"
         }
+        "E-PIPE-PLACEHOLDER" => {
+            "E-PIPE-PLACEHOLDER — a pipe placeholder `%` appeared somewhere other than a whole\n\
+             argument of the pipe's top-level call.\n\n\
+             `%` stands for the piped value in whole-argument slots of the pipe's own call —\n\
+             `x |> f(%, 2)` means `f(x, 2)`, and several slots are fine (`x |> f(%, %)` evaluates\n\
+             `x` once). It cannot sit inside a larger expression (`f(% + 1)`) or a nested call\n\
+             (`f(g(%))`) — nesting is the lambda's job: `x |> (v => f(g(v), v + 1))` (DEC-239).\n"
+        }
         "E-PIPE-LAMBDA-CONTEXT" => {
             "E-PIPE-LAMBDA-CONTEXT — a pipe lambda `(v => …)` was used as a plain value.\n\n\
              A contextually-typed pipe lambda omits its parameter type, which flows from the piped\n\

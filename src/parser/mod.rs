@@ -55,6 +55,11 @@ pub struct Parser {
     /// drains this after each `parse_item`, preserving source order. `parse_item` is called only from
     /// `parse_program`, so the buffer never leaks across parsing contexts.
     pending_items: Vec<crate::ast::Item>,
+    /// DEC-239: true while parsing a pipe's right-hand side, where a bare `%` in operand position
+    /// parses as [`crate::ast::Expr::PipePlaceholder`] (`x |> f(%, 2)`). Everywhere else `%` stays
+    /// infix-only (modulo), so a stray placeholder is a plain parse error. Saved/restored around
+    /// each RHS parse, so nesting (a pipe inside a pipe's argument) binds each `%` to its own pipe.
+    pipe_rhs: bool,
 }
 
 // impl-cluster cohesion split (M-Decomp W3.1): one `impl Parser` block per cluster file.
@@ -73,6 +78,7 @@ impl Parser {
             depth: 0,
             no_as_cast: false,
             pending_items: Vec::new(),
+            pipe_rhs: false,
         }
     }
 

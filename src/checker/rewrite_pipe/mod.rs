@@ -145,7 +145,9 @@ fn apply(lhs: Expr, rhs: Expr, sp: Span) -> Expr {
 /// A fresh IIFE parameter name that no FREE variable of the RHS call references — the exact
 /// shadowing set: substituting the fresh param into whole-argument slots can only capture a name
 /// that reaches the call from the enclosing scope (a nested lambda's own params rebind inside it
-/// and are correctly excluded by [`crate::ast::free_vars`]).
+/// and are correctly excluded by [`crate::ast::free_vars`]). camelCase because lambda params are
+/// `E-NAME-CASE`-checked (the `phorjInject<T>` DI-factory precedent) — and unlike DI's disclosed
+/// collision risk, the free-var scan makes a user `phorjPipe0` collision impossible (it bumps).
 fn fresh_pipe_name(rhs_call: &Expr) -> String {
     let used: std::collections::HashSet<String> =
         crate::ast::free_vars(&[], &LambdaBody::Expr(Box::new(rhs_call.clone())))
@@ -153,7 +155,7 @@ fn fresh_pipe_name(rhs_call: &Expr) -> String {
             .collect();
     let mut n = 0usize;
     loop {
-        let cand = format!("__pipe{n}");
+        let cand = format!("phorjPipe{n}");
         if !used.contains(&cand) {
             return cand;
         }

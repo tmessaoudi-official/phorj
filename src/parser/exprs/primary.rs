@@ -35,6 +35,14 @@ impl Parser {
                 self.advance();
                 Ok(Expr::Null(sp))
             }
+            // DEC-239: a bare `%` in operand position inside a pipe RHS is the placeholder
+            // (`x |> f(%, 2)`). Outside a pipe RHS, `%` stays infix-only (modulo) and falls through
+            // to the generic parse error below. Infix `a % b` never reaches here — `parse_binary`
+            // consumes it as `Rem` after an operand.
+            TokenKind::Percent if self.pipe_rhs => {
+                self.advance();
+                Ok(Expr::PipePlaceholder(sp))
+            }
             TokenKind::This => {
                 self.advance();
                 Ok(Expr::This(sp))
