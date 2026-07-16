@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-253: nullable unions `(A | B)?` / `A | B | null`
+
+Both spellings are the same type (the formatter canonicalizes to `(A | B)?`; a lone non-null
+remainder prints `T?`): `null` parses as a union-member marker, the checker resolves either form
+to optional-of-union, and the whole optional toolkit — `??`, `?.`, if-var narrowing, `match`
+with member + `null` arms — is inherited unchanged. Standalone `null` in type position is a
+clean `E-NULL-TYPE` (with `phg explain` entry). The PHP emission is the native `A|B|null` union
+PHP itself uses (other optionals keep their historical `mixed` fallback — a recorded
+transpile-modernization follow-up). `examples/guide/nullable-unions.phg` gates all of it
+three-leg.
+
+### Fixed — statement-position `match` transpiled to unparseable PHP
+
+A `match` used as a statement (arms run for effect: `match (e) { X() => Output.printLine(…) };`)
+emitted a native `match (true) { cond => echo …, }` — but `echo` is a PHP *statement*, so the
+whole emitted file was a parse error. Never caught: every differential-gated example used match
+as an expression, so the PHP leg never exercised the statement form. Statement-position matches
+now lower through the `instanceof`/`===` if-chain (`MatchTarget::Discard`), where statement arm
+bodies are legal; pinned by a transpile regression test and the nullable-unions example.
+
 ### Added — DEC-240: `Core.Uri` — RFC 3986, typed errors, PHP-8.5 native twin
 
 One immutable `Uri` class (`import Core.Uri.Uri;`) whose transpile twin is PHP 8.5's always-on

@@ -223,7 +223,10 @@ the queue; the packs then run minus what the queue delivered); (3) audit + conso
    fresh-context slice: crate vetting → live DateTimeImmutable/DateInterval probe rounds (the
    DEC-240 Uri methodology) → kernel → prelude twin. Register entry has the full ruling.
 10. **DEC-248** loop alignment: typed `foreach` + `k=>v` + retire `for-in` (codemod).
-11. **DEC-253** nullable unions `(A|B)?` / `A|B|null`.
+11. ✅ **DEC-253** nullable unions `(A|B)?` / `A|B|null`. **SHIPPED 2026-07-16 fable**
+    (`b7553ed` + spine fix `2ef2aaf0`: statement-position match emitted unparseable PHP —
+    found + fixed + example-locked). Both spellings ≡; native PHP `A|B|null` emission;
+    fmt canonicalizes; `examples/guide/nullable-unions.phg` gated.
 12. **DEC-254** in-place mutation: slice 1b (`obj.f[i]=v`) + `ref` params (copy-out) + mutability triad.
 13. **DEC-249** method default params → Db `transaction(fn, retries=0)`.
 14. **DEC-245** intersection overload-set resolution.

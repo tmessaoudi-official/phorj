@@ -1336,6 +1336,15 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   `A|B|null` (free byte-identity). Closes a PHP-expressible-but-not-phorj type shape.
   *Alternatives (offered): canonical-only (rejected — PHP-reader familiarity worth +10%);
   reject-with-reason (rejected — PHP stays ahead).* Medium checker slice, queued.
+  **BUILT (2026-07-16 fable, `b7553ed`):** both spellings resolve to one
+  `Ty::Optional(Ty::Union(..))` — optional machinery + DEC-183 match inherited for free; `null`
+  parses as a union-member marker (keyword — collision-free); standalone `null` type =
+  `E-NULL-TYPE`; formatter canonicalizes `A|B|null` → `(A | B)?`; transpile emits native PHP
+  `A|B|null` for both spellings; display parenthesizes. Probing the example also surfaced and
+  fixed a pre-existing SPINE BUG (`2ef2aaf0`): statement-position `match` with printing arms
+  emitted unparseable PHP (`echo` inside a `match(true)` expression arm) — never caught because
+  every gated example used match in expression position; now lowered to the instanceof if-chain
+  (`MatchTarget::Discard`) and locked by the nullable-unions example + a transpile test.
 - **DEC-254 — RULED (audit flag F-016, four AskUserQuestion rounds with full before/after +
   why-1-vs-2 analysis): in-place mutation = THE FULL PACKAGE.** (1) **Slice 1b builds** —
   field-base indexed assignment `obj.f[i] = v` / `this.f[i] = v` (completes the class-handle
