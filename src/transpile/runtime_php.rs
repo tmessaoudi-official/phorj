@@ -562,6 +562,28 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_checked_arith {
+            // DEC-255: phorj int arithmetic is checked (overflow faults). Bare PHP int `+`/`-`/`*`/neg
+            // silently PROMOTES to float on overflow (exit 0), so these helpers detect that promotion
+            // (`is_float` of an int-int result ⇒ overflow) and THROW, matching phorj's fault. In-range
+            // results stay int and pass through unchanged → stdout byte-identical.
+            for (name, expr) in [
+                ("__phorj_checked_add($a, $b)", "$a + $b"),
+                ("__phorj_checked_sub($a, $b)", "$a - $b"),
+                ("__phorj_checked_mul($a, $b)", "$a * $b"),
+                ("__phorj_checked_neg($a)", "-$a"),
+            ] {
+                self.line(&format!("function {name} {{"));
+                self.indent += 1;
+                self.line(&format!("$r = {expr};"));
+                self.line(
+                    "if (is_float($r)) { throw new \\OverflowException('integer overflow'); }",
+                );
+                self.line("return $r;");
+                self.indent -= 1;
+                self.line("}");
+            }
+        }
         if self.uses_debug_render {
             // DEC-238: the PHP TWIN of `native/debug.rs::render` — must mirror the pinned v1 format
             // byte-for-byte on the DETECTABLE domain (null/bool/int/float/string/list/map/instance/

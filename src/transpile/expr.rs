@@ -34,6 +34,13 @@ impl Transpiler {
             Expr::This(_) => Ok("$this".into()),
             Expr::Unary { op, expr, .. } => {
                 let inner = self.emit_expr(expr)?;
+                // DEC-255: negating an `int` overflows only at `i64::MIN` — phorj faults, bare PHP `-$x`
+                // silently promotes to float. Route an int negation through `__phorj_checked_neg`.
+                if matches!(op, UnaryOp::Neg) && self.expr_kind(expr) == OpKind::Int {
+                    self.uses_checked_arith = true;
+                    let bs = if self.namespaced { "\\" } else { "" };
+                    return Ok(format!("{bs}__phorj_checked_neg({inner})"));
+                }
                 let sym = match op {
                     UnaryOp::Neg => "-",
                     UnaryOp::Not => "!",
@@ -142,26 +149,41 @@ impl Transpiler {
                 }
                 if matches!(op, BinaryOp::Add) {
                     let (lk, rk) = (self.expr_kind(lhs), self.expr_kind(rhs));
-                    // `string + string` → `.`; numeric → `+`; unknown → the `is_string`-branching helper.
-                    let native = if lk == OpKind::Str || rk == OpKind::Str {
-                        Some(".")
-                    } else if matches!(lk, OpKind::Int | OpKind::Float)
+                    // `string + string` → `.`. INT+INT → `__phorj_checked_add` (DEC-255: phorj faults on
+                    // overflow; bare `$a+$b` silently promotes to float). Any OTHER numeric (a float is
+                    // involved → the result is legitimately float, no fault) → bare `+`. Unknown kind →
+                    // the `is_string`-branching runtime helper.
+                    if lk == OpKind::Str || rk == OpKind::Str {
+                        let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
+                        return Ok(format!("{l} . {r}"));
+                    }
+                    if lk == OpKind::Int && rk == OpKind::Int {
+                        self.uses_checked_arith = true;
+                        return Ok(format!("{bs}__phorj_checked_add({l}, {r})"));
+                    }
+                    if matches!(lk, OpKind::Int | OpKind::Float)
                         || matches!(rk, OpKind::Int | OpKind::Float)
                     {
-                        Some("+")
+                        let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
+                        return Ok(format!("{l} + {r}"));
+                    }
+                    self.uses_add = true;
+                    return Ok(format!("{bs}__phorj_add({l}, {r})"));
+                }
+                // DEC-255: INT `-`/`*` overflow — phorj faults, bare PHP silently promotes to float.
+                // Route int-int subtraction/multiplication through the checked helpers (a float operand
+                // means a legitimate float result → falls through to the native `binop()` operator).
+                if matches!(op, BinaryOp::Sub | BinaryOp::Mul)
+                    && self.expr_kind(lhs) == OpKind::Int
+                    && self.expr_kind(rhs) == OpKind::Int
+                {
+                    self.uses_checked_arith = true;
+                    let helper = if matches!(op, BinaryOp::Sub) {
+                        "__phorj_checked_sub"
                     } else {
-                        None
+                        "__phorj_checked_mul"
                     };
-                    return Ok(match native {
-                        Some(sym) => {
-                            let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
-                            format!("{l} {sym} {r}")
-                        }
-                        None => {
-                            self.uses_add = true;
-                            format!("{bs}__phorj_add({l}, {r})")
-                        }
-                    });
+                    return Ok(format!("{bs}{helper}({l}, {r})"));
                 }
                 if matches!(op, BinaryOp::Coalesce) {
                     // `??` binds loosely in PHP; parenthesize to preserve grouping.

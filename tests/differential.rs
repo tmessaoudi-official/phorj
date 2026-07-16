@@ -1559,9 +1559,10 @@ fn statement_body_lambda_needs_return_type() {
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
     let php = transpile_ok("package Main; import Core.Output; function main()-> void { var base=100; var f = function(int x) -> int { return x + base; }; Output.printLine(\"{f(3)}\"); }");
-    // T6: `x` (int param) + `base` (int local) → native `+`, no `__phorj_add` helper.
+    // DEC-255: `x` (int param) + `base` (int local) → `__phorj_checked_add` (overflow faults).
     assert!(
-        php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
+        php.contains("function($x) use ($base)")
+            && php.contains("return __phorj_checked_add($x, $base)"),
         "{php}"
     );
 }
@@ -1760,8 +1761,11 @@ fn named_fn_ref_as_value_agrees() {
 #[test]
 fn transpiles_lambda_literal_call_target() {
     let php = transpile_ok("package Main; import Core.Output; function main()-> void { Output.printLine(\"{3 |> function(int v) => v + 100}\"); }");
-    // T6: `v` (int param) + `100` (int literal) → native `+`.
-    assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
+    // DEC-255: `v` (int param) + `100` (int literal) → `__phorj_checked_add` (overflow faults).
+    assert!(
+        php.contains("(fn($v) => __phorj_checked_add($v, 100))(3)"),
+        "{php}"
+    );
 }
 
 #[test]
@@ -1805,7 +1809,11 @@ fn higher_order_native_closure_fault_agrees() {
 #[test]
 fn transpiles_higher_order_natives() {
     let php = transpile_ok("package Main; import Core.Output; import Core.List; function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); var e=List.filter(d, function(int x)=>x>2); Output.printLine(\"{List.reduce(e, 0, function(int a,int x)=>a+x)}\"); }");
-    assert!(php.contains("array_map(fn($x) => $x * 2,"), "{php}");
+    // DEC-255: `x*2` (int) → `__phorj_checked_mul`; `a+x` in reduce → `__phorj_checked_add`.
+    assert!(
+        php.contains("array_map(fn($x) => __phorj_checked_mul($x, 2),"),
+        "{php}"
+    );
     assert!(php.contains("array_values(array_filter("), "{php}");
     assert!(php.contains("array_reduce("), "{php}");
 }
@@ -2806,11 +2814,16 @@ fn m7_emitter_uses_correctness_helpers() {
         "package Main; import Core.Output; function main()-> void { Output.printLine(\"{1 < 2}\"); }",
     );
     assert!(b.contains("\"true\" : \"false\""), "{b}");
-    // P0-2: a compound operand keeps its grouping parens (no PHP re-association).
+    // P0-2: a compound operand keeps its grouping (no PHP re-association). DEC-255: int `-` is
+    // `__phorj_checked_sub`, so `a - (b - c)` nests the calls — the nesting preserves grouping
+    // inherently (no operator precedence to re-associate). The boolean `!(a < b)` is unchanged.
     let p = transpile_ok(
         "package Main; import Core.Output; function main()-> void { int a=1; int b=2; int c=3; Output.printLine(\"{a - (b - c)}\"); Output.printLine(\"{!(a < b)}\"); }",
     );
-    assert!(p.contains("$a - ($b - $c)"), "{p}");
+    assert!(
+        p.contains("__phorj_checked_sub($a, __phorj_checked_sub($b, $c))"),
+        "{p}"
+    );
     assert!(p.contains("!($a < $b)"), "{p}");
     // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorj ⇒ []).
     let r = transpile_ok(

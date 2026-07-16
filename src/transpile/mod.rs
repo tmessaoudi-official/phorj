@@ -372,6 +372,10 @@ struct Transpiler {
     /// that THROWS on an out-of-range / missing key (PHP's bare `$o[$k]` silently returns null+Warning,
     /// where phorj faults — a byte-identity break in the fault direction the helper closes).
     uses_index: bool,
+    /// DEC-255: an int `+`/`-`/`*`/unary-neg was emitted → emit the `__phorj_checked_*` helpers that
+    /// THROW on integer overflow (bare PHP int arithmetic silently promotes to float, where phorj
+    /// faults). Only int-int arithmetic wraps; a float operand yields a legitimate float (no fault).
+    uses_checked_arith: bool,
     /// `(php variant class, phorj enum name, phorj variant name)` rows collected by `emit_enum`,
     /// consumed by the `__PHORJ_DEBUG_ENUMS` table when `uses_debug_render`.
     debug_enum_rows: Vec<(String, String, String)>,
@@ -534,6 +538,7 @@ impl Transpiler {
             uses_string_format: false,
             uses_debug_render: false,
             uses_index: false,
+            uses_checked_arith: false,
             debug_enum_rows: Vec::new(),
             uses_math_lcm: false,
             uses_math_number_format: false,

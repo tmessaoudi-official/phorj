@@ -30,10 +30,11 @@ fn empty_program_emits_php_open_tag() {
 fn free_function_with_params_and_arithmetic() {
     let out = php("function add(int a, int b) -> int { int c = a + b; return c; }");
     assert!(out.contains("function add(int $a, int $b): int {"), "{out}");
-    // T6: both operands are statically `int`, so `+` emits the native PHP operator — no
-    // `__phorj_add` helper (which remains only as a fallback for operands of unknown kind).
-    assert!(out.contains("$c = $a + $b;"), "{out}");
-    assert!(!out.contains("__phorj_add"), "{out}");
+    // DEC-255: both operands are statically `int`, so `+` emits `__phorj_checked_add` (throws on
+    // overflow, matching phorj — bare `$a + $b` would silently promote to float). The unknown-kind
+    // `__phorj_add` fallback is a distinct helper and is NOT used here.
+    assert!(out.contains("$c = __phorj_checked_add($a, $b);"), "{out}");
+    assert!(!out.contains("__phorj_add("), "{out}");
     assert!(out.contains("return $c;"), "{out}");
 }
 
@@ -152,8 +153,10 @@ fn if_and_for_and_unary() {
     assert!(out.contains("foreach ($xs as $x) {"), "{out}");
     assert!(out.contains("if ($x > 0) {"), "{out}");
     assert!(out.contains("} else {"), "{out}");
+    // DEC-255: negating an `int` routes through `__phorj_checked_neg` (i64::MIN overflow faults);
+    // the boolean `!` is unchanged.
     assert!(
-        out.contains("$a = -$x;") && out.contains("$b = !true;"),
+        out.contains("$a = __phorj_checked_neg($x);") && out.contains("$b = !true;"),
         "{out}"
     );
     assert!(out.contains("[1, 2]"), "{out}");
@@ -231,8 +234,9 @@ fn interpolation_member_and_method_embed() {
 fn interpolation_operator_hole_falls_back_to_concat() {
     // B-1: a top-level operator hole is NOT PHP-interpolatable (`{$a + $b}` is a parse error) → concat.
     let out = php("function f(int a, int b) -> string { return \"sum={a + b}\"; }");
+    // DEC-255: the int `+` in the hole is `__phorj_checked_add`, concatenated (not PHP-embedded).
     assert!(
-        out.contains("($a + $b)"),
+        out.contains("__phorj_checked_add($a, $b)"),
         "operator hole concatenates: {out}"
     );
     assert!(!out.contains("{$"), "operator hole is NOT embedded: {out}");
@@ -583,7 +587,11 @@ fn match_as_call_argument_emits_match_true() {
 #[test]
 fn transpiles_expression_lambda_to_arrow_fn() {
     let php_out = php("package Main; import Core.Output; function main()-> void { var d = function(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
-    assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
+    // DEC-255: `x*2` (both int) is `__phorj_checked_mul` inside the arrow fn.
+    assert!(
+        php_out.contains("fn($x) => __phorj_checked_mul($x, 2)"),
+        "{php_out}"
+    );
 }
 
 #[test]
