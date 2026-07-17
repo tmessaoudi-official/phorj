@@ -1,6 +1,27 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## CURRENT (2026-07-17, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
+## CURRENT (2026-07-17→18, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
+
+### ✅ DEC-284 EXTENSION/FEATURE RENAME COMMITTED `e1eb3781` (2026-07-18) — UNPUSHED
+Cargo features + registry names now track their real Core module (dev-directed "names reflect module"):
+`crypto`→`cryptography` (Core.Cryptography), `db`→`database` (Core.DatabaseModule),
+`db-postgres`→`database-postgres`, `db-mysql`→`database-mysql`, `db-all`→`database-all`. 36 files,
++127/−126. Atomic cfg flip (MSRV-1.82 `unexpected_cfgs` deny-lint = no silent compile-out backstop).
+Also fixed: 2 BLOCKING runtime driver-not-compiled error strings (src/ext/db/natives.rs:97/111 named a
+dead flag — the panel completeness lens caught it, compiler can't), generated EXTENSIONS.md + examples.js,
+all source doc-comments, example/test headers, SSOT docs, CLAUDE.md. Dated history left as-is.
+Gate GREEN (nextest --all-features + PHP oracle 2276 pass; clippy both legs; fmt; release). DEC-268:
+panel round-1 (r3 completeness found the error strings) → fixed + comprehensive grep sweep → rounds
+A+B BOTH fully clean (2 consecutive) → certified. ⚠ DEFERRED FOLDER-RENAME BACKLOG (both mismatched pairs): `database`→folder `src/ext/db/` AND
+`cryptography`→folder `src/ext/crypto/` (also `examples/db/`, `tests/db*.rs`). NOT a pure rename —
+`tests/differential.rs:1190` gates the byte-identity quarantine on the LITERAL dir name `Some("db")`;
+renaming the folder without updating that gate would un-quarantine `examples/db/*` into the differential
+(fails by design — DB I/O is impure). Own careful spine-aware slice; extension NAMES are correct today.
+Register: C-decisions.md DEC-284.
+
+### CURSOR — cargo cleaned this session (quota hit; dev "cargo clean regularly!!" reinforced in memory);
+### next queue item = PERF (jsonround/dbwork flips, below) then core parity push (MASTER-PLAN §0 QUEUE).
+
 
 ## PERF CENSUS (2026-07-17, full microbench WIN-OR-FLAG, quiet-box NOT pinned — indicative):
 - **LOSSES (4)**: jsonround **0.26×** (797ms/209ms — DOMINANT, the Json parse+match+build+stringify
