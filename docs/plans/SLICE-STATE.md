@@ -7,6 +7,15 @@
   → KNOWN_ISSUES: `phg test` raw-checker gap (injected-type files fail under phg test);
   Process.args() doc drift. ⚠ LESSON (recurred): UNASSERTED python replaces silently no-op —
   round 3 caught a "fixed" comment that never landed; ALWAYS assert anchors.
+- **DEC-273 WAVE 2 COMMITTED `e2090945`** (7 migrations + prelude dissolution + playground fix;
+  panel 4 rounds, r3+r4 consecutively clean; gate 2276/2276). 12/22 registry rows migrated.
+  Session commits: 17c79ad6 · ebb7a123 · 996b2fee · 0b203827 · d42a2107 · 5670250e · 861cf0ab ·
+  90aa34a1 · 7c840086 · 9aed1ce7 · e2090945 — ALL UNPUSHED.
+- **NEXT: WAVE 3** — the woven ones: db/mail/http-client (prelude twins + drivers), session,
+  html (kernel seam stays core), di (desugar-coupled), + log?/time?/runtime? classification
+  check against the CORE list. Also queued: DEC-271 icu4x · DEC-247 DateTime · DEC-283 template
+  build · benches/lift-Uri/golden-corpus · quiet-box microbench rerun (pre-push) · playground
+  wasm rebuild (needs wasm-pack box).
 - **DEC-283 RULED (register — the Template extension, .phgml): minimal phorj-in-HTML core;
   generalized views law (lowercase `views` ⇒ `Views` segment at any depth; views/ = 4th root +
   walk-up marker, searched entry-dir → views/ → src/ → vendor/); explicit {% import %}; templates
