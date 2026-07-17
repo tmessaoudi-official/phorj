@@ -259,27 +259,35 @@ fn json_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `.`/`e` are `Int` (overflow falls back to `Float`), duplicate object keys keep first position /
 /// last value (via `build_map`).
 pub(super) fn parse_json(s: &str) -> Option<Value> {
-    let chars: Vec<char> = s.chars().collect();
-    let mut p = JParser { c: &chars, i: 0 };
+    let mut p = JParser {
+        src: s,
+        b: s.as_bytes(),
+        i: 0,
+    };
     p.ws();
     let v = p.value()?;
     p.ws();
-    if p.i != p.c.len() {
+    if p.i != p.b.len() {
         return None; // trailing junk
     }
     Some(v)
 }
 
+/// Byte-cursor parser. JSON structure is ASCII, so we scan `&[u8]` and slice-borrow directly from
+/// the source `&str` for number tokens and unescaped string runs; only `\`-escapes and `\u` build
+/// owned text. This avoids the per-parse `Vec<char>` materialization (heap alloc + 4×-mem) the
+/// prior char-slice version paid on every `Json.parse`. The parse RESULT is unchanged.
 struct JParser<'a> {
-    c: &'a [char],
+    src: &'a str,
+    b: &'a [u8],
     i: usize,
 }
 
 impl JParser<'_> {
-    fn peek(&self) -> Option<char> {
-        self.c.get(self.i).copied()
+    fn peek(&self) -> Option<u8> {
+        self.b.get(self.i).copied()
     }
-    fn bump(&mut self) -> Option<char> {
+    fn bump(&mut self) -> Option<u8> {
         let c = self.peek();
         if c.is_some() {
             self.i += 1;
@@ -287,7 +295,7 @@ impl JParser<'_> {
         c
     }
     fn ws(&mut self) {
-        while matches!(self.peek(), Some(' ' | '\t' | '\n' | '\r')) {
+        while matches!(self.peek(), Some(b' ' | b'\t' | b'\n' | b'\r')) {
             self.i += 1;
         }
     }
@@ -295,22 +303,22 @@ impl JParser<'_> {
     fn value(&mut self) -> Option<Value> {
         self.ws();
         match self.peek()? {
-            'n' => self.lit("null", jnode("Null", vec![])),
-            't' => self.lit("true", jnode("Bool", vec![Value::Bool(true)])),
-            'f' => self.lit("false", jnode("Bool", vec![Value::Bool(false)])),
-            '"' => {
+            b'n' => self.lit(b"null", jnode("Null", vec![])),
+            b't' => self.lit(b"true", jnode("Bool", vec![Value::Bool(true)])),
+            b'f' => self.lit(b"false", jnode("Bool", vec![Value::Bool(false)])),
+            b'"' => {
                 let s = self.string()?;
                 Some(jnode("String", vec![Value::Str(s.into())]))
             }
-            '[' => self.array(),
-            '{' => self.object(),
-            '-' | '0'..='9' => self.number(),
+            b'[' => self.array(),
+            b'{' => self.object(),
+            b'-' | b'0'..=b'9' => self.number(),
             _ => None,
         }
     }
 
-    fn lit(&mut self, kw: &str, v: Value) -> Option<Value> {
-        for ch in kw.chars() {
+    fn lit(&mut self, kw: &[u8], v: Value) -> Option<Value> {
+        for &ch in kw {
             if self.bump()? != ch {
                 return None;
             }
@@ -320,43 +328,44 @@ impl JParser<'_> {
 
     fn number(&mut self) -> Option<Value> {
         let start = self.i;
-        if self.peek() == Some('-') {
+        if self.peek() == Some(b'-') {
             self.i += 1;
         }
         match self.peek()? {
-            '0' => self.i += 1, // a leading 0 must stand alone (no `01`)
-            '1'..='9' => {
-                while matches!(self.peek(), Some('0'..='9')) {
+            b'0' => self.i += 1, // a leading 0 must stand alone (no `01`)
+            b'1'..=b'9' => {
+                while matches!(self.peek(), Some(b'0'..=b'9')) {
                     self.i += 1;
                 }
             }
             _ => return None,
         }
         let mut is_float = false;
-        if self.peek() == Some('.') {
+        if self.peek() == Some(b'.') {
             is_float = true;
             self.i += 1;
-            if !matches!(self.peek(), Some('0'..='9')) {
+            if !matches!(self.peek(), Some(b'0'..=b'9')) {
                 return None;
             }
-            while matches!(self.peek(), Some('0'..='9')) {
+            while matches!(self.peek(), Some(b'0'..=b'9')) {
                 self.i += 1;
             }
         }
-        if matches!(self.peek(), Some('e' | 'E')) {
+        if matches!(self.peek(), Some(b'e' | b'E')) {
             is_float = true;
             self.i += 1;
-            if matches!(self.peek(), Some('+' | '-')) {
+            if matches!(self.peek(), Some(b'+' | b'-')) {
                 self.i += 1;
             }
-            if !matches!(self.peek(), Some('0'..='9')) {
+            if !matches!(self.peek(), Some(b'0'..=b'9')) {
                 return None;
             }
-            while matches!(self.peek(), Some('0'..='9')) {
+            while matches!(self.peek(), Some(b'0'..=b'9')) {
                 self.i += 1;
             }
         }
-        let tok: String = self.c[start..self.i].iter().collect();
+        // The number token is pure ASCII, so the byte range is a valid str slice (no alloc).
+        let tok = &self.src[start..self.i];
         if is_float {
             Some(jnode("Float", vec![Value::Float(tok.parse::<f64>().ok()?)]))
         } else {
@@ -369,36 +378,52 @@ impl JParser<'_> {
     }
 
     fn string(&mut self) -> Option<String> {
-        if self.bump() != Some('"') {
+        if self.bump() != Some(b'"') {
             return None;
         }
         let mut s = String::new();
+        let mut run = self.i; // start of the current unescaped byte run
         loop {
-            match self.bump()? {
-                '"' => return Some(s),
-                '\\' => match self.bump()? {
-                    '"' => s.push('"'),
-                    '\\' => s.push('\\'),
-                    '/' => s.push('/'),
-                    'b' => s.push('\u{08}'),
-                    'f' => s.push('\u{0c}'),
-                    'n' => s.push('\n'),
-                    'r' => s.push('\r'),
-                    't' => s.push('\t'),
-                    'u' => s.push(self.unicode_escape()?),
-                    _ => return None,
-                },
-                c if (c as u32) < 0x20 => return None, // a raw control char is invalid in a JSON string
-                c => s.push(c),
+            match self.peek()? {
+                b'"' => {
+                    s.push_str(&self.src[run..self.i]);
+                    self.i += 1;
+                    return Some(s);
+                }
+                b'\\' => {
+                    s.push_str(&self.src[run..self.i]); // flush the run before the escape
+                    self.i += 1; // consume '\'
+                    match self.bump()? {
+                        b'"' => s.push('"'),
+                        b'\\' => s.push('\\'),
+                        b'/' => s.push('/'),
+                        b'b' => s.push('\u{08}'),
+                        b'f' => s.push('\u{0c}'),
+                        b'n' => s.push('\n'),
+                        b'r' => s.push('\r'),
+                        b't' => s.push('\t'),
+                        b'u' => s.push(self.unicode_escape()?),
+                        _ => return None,
+                    }
+                    run = self.i;
+                }
+                b if b < 0x20 => return None, // a raw control char is invalid in a JSON string
+                _ => self.i += 1,             // ordinary byte (ASCII or UTF-8 lead/continuation)
             }
         }
     }
 
-    /// Read 4 hex digits.
+    /// Read 4 hex digits (ASCII).
     fn hex4(&mut self) -> Option<u32> {
         let mut v = 0u32;
         for _ in 0..4 {
-            v = v * 16 + self.bump()?.to_digit(16)?;
+            let d = match self.bump()? {
+                b @ b'0'..=b'9' => u32::from(b - b'0'),
+                b @ b'a'..=b'f' => u32::from(b - b'a' + 10),
+                b @ b'A'..=b'F' => u32::from(b - b'A' + 10),
+                _ => return None,
+            };
+            v = v * 16 + d;
         }
         Some(v)
     }
@@ -408,7 +433,7 @@ impl JParser<'_> {
     fn unicode_escape(&mut self) -> Option<char> {
         let u = self.hex4()?;
         if (0xD800..=0xDBFF).contains(&u) {
-            if self.bump()? != '\\' || self.bump()? != 'u' {
+            if self.bump()? != b'\\' || self.bump()? != b'u' {
                 return None;
             }
             let lo = self.hex4()?;
@@ -428,7 +453,7 @@ impl JParser<'_> {
         self.bump(); // '['
         self.ws();
         let mut xs = Vec::new();
-        if self.peek() == Some(']') {
+        if self.peek() == Some(b']') {
             self.bump();
             return Some(jnode("Array", vec![Value::List(Rc::new(xs))]));
         }
@@ -436,8 +461,8 @@ impl JParser<'_> {
             xs.push(self.value()?);
             self.ws();
             match self.bump()? {
-                ',' => self.ws(),
-                ']' => return Some(jnode("Array", vec![Value::List(Rc::new(xs))])),
+                b',' => self.ws(),
+                b']' => return Some(jnode("Array", vec![Value::List(Rc::new(xs))])),
                 _ => return None,
             }
         }
@@ -447,26 +472,26 @@ impl JParser<'_> {
         self.bump(); // '{'
         self.ws();
         let mut pairs: Vec<(Value, Value)> = Vec::new();
-        if self.peek() == Some('}') {
+        if self.peek() == Some(b'}') {
             self.bump();
             return self.make_obj(pairs);
         }
         loop {
             self.ws();
-            if self.peek() != Some('"') {
+            if self.peek() != Some(b'"') {
                 return None;
             }
             let key = self.string()?;
             self.ws();
-            if self.bump()? != ':' {
+            if self.bump()? != b':' {
                 return None;
             }
             let val = self.value()?;
             pairs.push((Value::Str(key.into()), val));
             self.ws();
             match self.bump()? {
-                ',' => {}
-                '}' => return self.make_obj(pairs),
+                b',' => {}
+                b'}' => return self.make_obj(pairs),
                 _ => return None,
             }
         }
