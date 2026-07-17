@@ -51,6 +51,6 @@ int n = m.sendAll([e1, e2, e3]);             // batch, one reused connection, fa
 
 ## Testing
 
-Unit (MIME nesting, injection gate, derivation): `src/native/mail.rs`. Integration on both backends:
+Unit (MIME nesting, injection gate, derivation): `src/ext/mail/natives.rs`. Integration on both backends:
 `cargo test --features mail --test mail`. Live SMTP round-trip (optional):
 `PHORJ_MAILPIT_SMTP=localhost:1025 cargo test --features mail --test mail` against a running Mailpit.

@@ -375,7 +375,7 @@ not a panic:
   Shipped (`examples/db/transactions.phg`, `tests/db.rs`): manual PDO-faithful transaction control
   `db.begin()` / `db.commit()` / `db.rollback()` — **savepoint-aware** (a nested `begin()` opens
   `SAVEPOINT phorj_sp_<depth>`, so an inner rollback leaves the outer transaction intact), depth tracked
-  in the native (`src/native/db.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
+  in the native (`src/ext/db/natives.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
   throws — the auto-rollback idiom `try { …; commit(); ok = true; } finally { if (!ok) rollbackQuiet(); }`
   in a **named** function); a **typed error taxonomy** — `open class DatabaseError` subtyped `UniqueViolationError` /
   `ConstraintViolationError` / `ConnectionError` / `SerializationFailureError` / `TimeoutError` / `SyntaxError`, each
@@ -389,7 +389,7 @@ not a panic:
     `() => T throws E`) lifted the block: `db.transaction(function(): T throws DatabaseError { … })` runs the
     closure inside a transaction — COMMIT on a normal return (returning the closure's VALUE),
     auto-ROLLBACK + **re-throw the ORIGINAL typed error** on a throw. Mechanism: a `HigherOrder` native
-    (`NativeDatabase.transaction`, `src/native/db.rs`) begins, invokes the closure re-entrantly on the calling
+    (`NativeDatabase.transaction`, `src/ext/db/natives.rs`) begins, invokes the closure re-entrantly on the calling
     backend, commits on `Ok`, and on the invoker's `Err` rolls back and re-propagates the *unchanged*
     error — `rollback_inner` is pure `rusqlite` and never re-enters the backend, so the thrown value in
     `pending_throw` survives and the caller catches the exact `DatabaseError` (not a generic one). A nested
@@ -517,12 +517,12 @@ not a panic:
 
 - **`Core.DatabaseModule` multi-driver + Postgres (DEC-208 slice I) + credential Secret (slice G) — shipped subset +
   disclosures.** `new Database(dsn)` dispatches on the DSN scheme behind a `DriverConn` trait
-  (`src/native/db/{mod,sqlite,postgres}.rs`): `sqlite:` → the unchanged rusqlite driver (byte-identical,
+  (`src/ext/db/{mod,sqlite,postgres}.rs`): `sqlite:` → the unchanged rusqlite driver (byte-identical,
   all shipped `db` tests green); `postgres://`/`postgresql://` → the sync `postgres` crate under the new
   non-default `db-postgres` feature (`db-all` = both). `Database.withPassword(dsn, Secret<string>)` (slice G)
   keeps the password out of plaintext user code and out of every error/log (the driver retains only a
   redacted DSN). Deterministic driver coverage (dispatch, `?`/`:name`→`$n` translation, SQLSTATE→taxonomy,
-  redaction) is in `src/native/db/postgres.rs`; the LIVE round-trip is `tests/db_postgres.rs`, opt-in via
+  redaction) is in `src/ext/db/postgres.rs`; the LIVE round-trip is `tests/db_postgres.rs`, opt-in via
   `PHORJ_PG_TEST_DSN` (skip-loudly if unset — the standard gate never requires a server).
   - **Disclosures / boundaries:** (a) **No oracle.** There is no clean pure-Rust *synchronous* Postgres
     driver to differential the PHP-PDO leg against, so Postgres (like all of `Core.DatabaseModule`) is

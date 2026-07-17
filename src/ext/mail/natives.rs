@@ -7,7 +7,7 @@
 //! correctness is `tests/mail.rs` (deterministic `file`/`null` transports; SMTP round-trip gated on a
 //! reachable Mailpit) — the `tests/db.rs` pattern.
 //!
-//! Shape (mirrors `src/native/db/`): opaque handles ride [`Value::Db`] via the [`DbObject`]
+//! Shape (mirrors `src/ext/db/`): opaque handles ride [`Value::Db`] via the [`DbObject`]
 //! erase-then-downcast pattern ([`MailerObj`] — a transport; [`EmailObj`] — a message draft the
 //! prelude's `Email` builder mutates). Natives return the prelude-local `MailResult<T>` (Ok|Err) —
 //! never a hard fault on a mail error — and the prelude throws the typed [`MailError`] taxonomy off

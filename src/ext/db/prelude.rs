@@ -50,7 +50,7 @@ open class DatabaseError implements Error {
   // unifying with the success arm's value type.
   //
   // It is ALSO the single classification point (DEC-208 slice C, spec §6): the native tags a driver
-  // error with a `<<Kind>>` marker prefix (`src/native/db.rs` `err_kind`), and `fail` strips the marker
+  // error with a `<<Kind>>` marker prefix (`src/ext/db/natives.rs` `err_kind`), and `fail` strips the marker
   // and throws the matching TYPED subtype. Because every Row/Statement/Database method — including the S2
   // `queryInto` hydration helpers — funnels its `DatabaseResult.Err` through here, they all yield the precise
   // `catch (UniqueViolationError e)` type with zero change at the call sites. An untagged message (a logic /

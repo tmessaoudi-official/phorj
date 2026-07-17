@@ -17,7 +17,7 @@
 //
 // The automatic, server-free driver coverage (placeholder handling, `:name`→`?` translation, error-
 // code→typed-error mapping, DECIMAL-as-text cells, TEXT-vs-BINARY blobs, credential redaction) lives
-// in `src/native/db/mysql.rs`; the live round-trip is `tests/db_mysql.rs` (opt in via
+// in `src/ext/db/mysql.rs`; the live round-trip is `tests/db_mysql.rs` (opt in via
 // `PHORJ_MYSQL_TEST_DSN`).
 package Main;
 

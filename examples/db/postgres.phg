@@ -16,7 +16,7 @@
 //     target/release/phg run examples/db/postgres.phg
 //
 // The automatic, server-free driver coverage (DSN dispatch, `?`/`:name`→`$1,$2` translation,
-// SQLSTATE→typed-error mapping, credential redaction) lives in `src/native/db/postgres.rs`; the live
+// SQLSTATE→typed-error mapping, credential redaction) lives in `src/ext/db/postgres.rs`; the live
 // round-trip is `tests/db_postgres.rs` (opt in via `PHORJ_PG_TEST_DSN`).
 package Main;
 

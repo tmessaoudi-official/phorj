@@ -15,7 +15,7 @@
 //! The deterministic, server-free coverage of the driver — placeholder handling (`?` pass-through +
 //! `IN (?)` expansion, `:name`→`?` translation), error-code→taxonomy mapping, cell mapping (ints,
 //! floats, DECIMAL-as-text, TEXT vs BINARY blobs, temporal steering), and credential redaction —
-//! lives in the `src/native/db/mysql.rs` unit tests, which DO run in every `--features db-mysql`
+//! lives in the `src/ext/db/mysql.rs` unit tests, which DO run in every `--features db-mysql`
 //! gate. This file proves the wire path end-to-end when a server exists.
 //!
 //! The test uses only its own throwaway table (`phorj_my_it`, dropped at start and end) with
@@ -118,7 +118,7 @@ fn mysql_round_trip_on_both_backends() {
         eprintln!(
             "db_mysql: SKIP — set PHORJ_MYSQL_TEST_DSN to a live MySQL/MariaDB DSN to run the \
              round-trip (e.g. mysql://user:pw@host:3306/db). The deterministic driver coverage runs \
-             in the src/native/db/mysql.rs unit tests regardless."
+             in the src/ext/db/mysql.rs unit tests regardless."
         );
         return;
     };

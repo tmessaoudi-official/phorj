@@ -5,7 +5,7 @@
 //! byte-identity differential; THIS file gates the surface on BOTH backends (`run ≡ runvm`)
 //! against an in-process `std::net::TcpListener` fixture server (deterministic, loopback-only —
 //! no external network). Wire-level details (URL parsing, chunked decoding, redirects, timeouts,
-//! header-injection gate) are unit-tested server-free in `src/native/http_client.rs`.
+//! header-injection gate) are unit-tested server-free in `src/ext/http_client/natives.rs`.
 
 use phorj::cli::{cmd_run, cmd_transpile, cmd_treewalk};
 use std::io::{Read, Write};

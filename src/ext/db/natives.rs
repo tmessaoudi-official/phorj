@@ -10,7 +10,7 @@
 //! `ROLLBACK TO`, which SQLite and Postgres both accept). Each concrete backend implements only its
 //! genuinely dialect-specific pieces (value mapping, placeholder syntax, error-code taxonomy) in its own
 //! submodule. The public `Core.DatabaseModule` SURFACE (`Database`/`Statement`/`Row` + `new Database(dsn)`) is the phorj-source
-//! `DB_PRELUDE` (`src/cli/preludes.rs`) on top of these — the natives live under the `DbSys` qualifier so
+//! `DB_PRELUDE` (`src/ext/db/prelude.rs`) on top of these — the natives live under the `DbSys` qualifier so
 //! a prelude `class Database` never collides with them.
 //!
 //! **Error mechanism (DEC-208 = prelude-wrapper).** phorj's native ABI has no throws channel: a native's

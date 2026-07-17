@@ -23,7 +23,9 @@ use std::sync::OnceLock;
 mod bytes;
 mod convert;
 mod file;
+mod fs;
 mod html;
+mod input;
 mod list;
 mod list_registry;
 mod log;
@@ -35,10 +37,6 @@ mod random;
 mod reflect;
 mod result;
 mod runtime;
-// `Core.DatabaseModule` is crate-backed (`rusqlite`, bundled SQLite) — gated off by default and off for the WASM
-// playground (no native SQLite). See docs/specs/UNIFIED-SPEC.md#external-dependency-policy + DEC-208.
-mod fs;
-mod input;
 mod set;
 mod text;
 mod text_format;

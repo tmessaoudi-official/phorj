@@ -13,7 +13,7 @@
 //! ```
 //!
 //! The deterministic, server-free coverage of the driver — DSN dispatch, `?`/`:name`→`$n` translation,
-//! SQLSTATE→taxonomy mapping, and credential redaction — lives in the `src/native/db/postgres.rs` unit
+//! SQLSTATE→taxonomy mapping, and credential redaction — lives in the `src/ext/db/postgres.rs` unit
 //! tests, which DO run in every gate. This file proves the wire path end-to-end when a server exists.
 //!
 //! The test uses only its own throwaway table (`phorj_pg_it`, dropped at start and end) with synthetic
@@ -125,7 +125,7 @@ fn postgres_round_trip_on_both_backends() {
         eprintln!(
             "db_postgres: SKIP — set PHORJ_PG_TEST_DSN to a live Postgres DSN to run the round-trip \
              (e.g. postgres://user:pw@host:5432/db). The deterministic driver coverage runs in the \
-             src/native/db/postgres.rs unit tests regardless."
+             src/ext/db/postgres.rs unit tests regardless."
         );
         return;
     };

@@ -1244,7 +1244,7 @@ per-slice realization notes — the authoritative slice-level record).
 
 - **Connection & drivers**: `new Db(dsn) throws DatabaseError` (throwing ctor, DEC-221 — fail-fast,
   `new PDO`-faithful) dispatches on the DSN scheme behind a `DriverConn` trait
-  (`src/native/db/{mod,sqlite,postgres,mysql}.rs`): bundled rusqlite SQLite (`db` — a DEFAULT feature
+  (`src/ext/db/{natives,sqlite,postgres,mysql}.rs`): bundled rusqlite SQLite (`db` — a DEFAULT feature
   since DEC-227) · sync `postgres` (`db-postgres`) · sync `mysql` v28 minimal-rust (`db-mysql`,
   DEC-229; `mariadb://` normalized). All sync (no tokio at the phorj-facing API), spine-quarantined,
   fixture-tested. A new backend = one `DriverConn` impl + one dep admission. Credentials:

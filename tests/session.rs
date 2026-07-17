@@ -2,7 +2,7 @@
 //! requests on BOTH backends (the `tests/db.rs` pattern; `Core.Native.Session` is impure →
 //! quarantined from the byte-identity differential). The store internals (open/reuse, idle
 //! expiry never resurrecting ids, regenerate moving data) are unit-tested in
-//! `src/native/session.rs`; THIS file proves the phorj-visible story: cookie round-trip,
+//! `src/ext/session/natives.rs`; THIS file proves the phorj-visible story: cookie round-trip,
 //! persistence across requests, fixation defense, secure cookie attributes.
 
 use phorj::cli::{cmd_run, cmd_transpile, cmd_treewalk};

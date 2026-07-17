@@ -5,7 +5,7 @@
 //! program is auto-quarantined from the byte-identity differential; THIS file is the gate that runs
 //! the surface on BOTH backends (`run ≡ runvm`) using the deterministic `file`/`null` transports.
 //! The MIME internals (multipart nesting, auto-plaintext, CID inlines, address-injection rejection)
-//! are unit-tested server-free in `src/native/mail.rs`. The LIVE SMTP round-trip is opt-in via
+//! are unit-tested server-free in `src/ext/mail/natives.rs`. The LIVE SMTP round-trip is opt-in via
 //! `PHORJ_MAILPIT_SMTP` (e.g. `localhost:1025` for a stack Mailpit) — skip-loudly when unset, so the
 //! standard gate never needs a live server.
 

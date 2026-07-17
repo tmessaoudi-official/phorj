@@ -15,7 +15,7 @@
 // credential headers {Authorization, Cookie, Proxy-Authorization, WWW-Authenticate} before
 // following it, so a `Location:` to an attacker host can never harvest them (the curl
 // CVE-2022-27774 class). Same-origin hops keep every header. Verified by the unit + e2e tests in
-// `src/native/http_client.rs`; can't be a deterministic runnable example (needs two live origins).
+// `src/ext/http_client/natives.rs`; can't be a deterministic runnable example (needs two live origins).
 //
 // ── RUNNING THIS EXAMPLE ─────────────────────────────────────────────────────────────────────────
 // Needs `--features http-client` and LIVE network, so it is a hand-runnable reference (quarantined
@@ -24,7 +24,7 @@
 //     cargo build --release --features http-client
 //     target/release/phg run examples/http-client/fetch.phg
 //
-// The deterministic coverage lives in `src/native/http_client.rs` (URL/chunked/redirect/timeout
+// The deterministic coverage lives in `src/ext/http_client/natives.rs` (URL/chunked/redirect/timeout
 // units) and `tests/http_client.rs` (both-backend round-trips against an in-process fixture
 // server). `Core.HttpClientModule` is NATIVE-ONLY: `phg transpile` → `E-TRANSPILE-HTTPCLIENT`.
 package Main;
