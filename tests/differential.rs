@@ -1184,8 +1184,8 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
         return;
     }
-    // DEC-208: `examples/db/` needs `--features db` (Core.DatabaseModule → bundled SQLite), which the default
-    // differential gate does not build — with `db` off, `import Core.DatabaseModule` is an unknown module. These
+    // DEC-208: `examples/db/` needs `--features database` (Core.DatabaseModule → bundled SQLite), which the default
+    // differential gate does not build — with `database` off, `import Core.DatabaseModule` is an unknown module. These
     // Core.DatabaseModule examples are quarantined (impure DB I/O) and validated by `tests/db.rs` on both backends.
     if dir.file_name().and_then(|n| n.to_str()) == Some("db") {
         return;

@@ -1,4 +1,4 @@
-#![cfg(feature = "db")]
+#![cfg(feature = "database")]
 //! `Core.DatabaseModule` (DEC-208) end-to-end fixture.
 //!
 //! The enhanced-PDO surface opens a real bundled-SQLite database (`rusqlite`), so its example is
@@ -7,7 +7,7 @@
 //! `examples/db/basic.phg` through the real language surface — `new Database(dsn)` → `prepare` → `bind`/
 //! `bindNamed` → `exec`/`query` → typed `Row` accessors, with a catchable `DatabaseError` — on BOTH backends.
 //! The PHP leg is excluded; `run ≡ runvm` must hold (both call the one shared native bodies). Compiled
-//! only under `--features db` (see the pre-push gate's `--features db` step).
+//! only under `--features database` (a DEFAULT feature; the pre-push gate covers it via `--all-features`).
 
 use phorj::cli::{cmd_run, cmd_treewalk};
 

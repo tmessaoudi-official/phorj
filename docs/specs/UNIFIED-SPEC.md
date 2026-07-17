@@ -917,11 +917,11 @@ Phorj's core (lexer, parser, checker, interpreter, VM, transpiler, loader, bundl
 If a candidate fails any clause, the feature is deferred — it does not justify a dependency.
 Anything outside the admitted domains requires revisiting this policy itself, not just adding a row.
 
-### Admitted dependencies (default features `crypto`,`regex`,`signals`,`green`)
+### Admitted dependencies (default features `cryptography`,`regex`,`signals`,`green`)
 
 | Crate | Domain | Used by | Gate | Key justification |
 |---|---|---|---|---|
-| `argon2` (RustCrypto) 0.5.x | Argon2id password hashing | `Core.Cryptography` | `crypto` | OWASP #1 KDF; audited; emits standard PHC strings → interoperates with PHP `password_verify` |
+| `argon2` (RustCrypto) 0.5.x | Argon2id password hashing | `Core.Cryptography` | `cryptography` | OWASP #1 KDF; audited; emits standard PHC strings → interoperates with PHP `password_verify` |
 | `regex` (BurntSushi) 1.x | ReDoS-safe regex | `Core.Regex` | `regex` | RE2-style finite automaton, guaranteed linear-time, exhaustively fuzzed; its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; unsupported patterns rejected at `Regex.compile` |
 | `ctrlc` 3.x | OS signals (SIGINT/SIGTERM) | `phg serve` graceful shutdown | `signals` | Confines the unavoidable `unsafe`; serve is outside the byte-identity spine (quarantined), so this never touches `interpreter ≡ VM ≡ PHP` |
 | `corosensei` 0.3.x | Stackful coroutines | `spawn`/channels (green threads) | `green` (non-wasm) | Miri-tested, by the hashbrown/parking_lot author; wasm32 has no native stack to switch (verified) — on wasm the interpreter delegates to the VM's frame-swap; green threads are quarantined from the PHP oracle |
@@ -945,12 +945,12 @@ at HEAD). Companion rulings: the DB layer is a multi-driver **SQL DBAL** (PDO/Do
 SQLite (P1) + Postgres (`postgres` sync) + MySQL/MariaDB (`mysql` sync) — ALL sync, no tokio at the
 phorj-facing API (the `postgres` crate wraps `tokio-postgres` in a single internal blocking runtime —
 its own impl detail, feature-gated, non-default, non-wasm). **Realized 2026-07-14 (DEC-208 slice I):
-`rusqlite` (`db`) + `postgres` (`db-postgres`) are now in the tree behind a `DriverConn` seam** (SQLite
-shipped earlier). **Realized 2026-07-15 (DEC-208 slice J, fable run — DEC-229): `mysql` (`db-mysql`,
+`rusqlite` (`database`) + `postgres` (`database-postgres`) are now in the tree behind a `DriverConn` seam** (SQLite
+shipped earlier). **Realized 2026-07-15 (DEC-208 slice J, fable run — DEC-229): `mysql` (`database-mysql`,
 `minimal-rust`: pure-Rust wire protocol, no TLS/compression extras) completes the ruled three-driver set**
 — the same `DriverConn` seam, `?` native + `:name`→`?` translation, MySQL-error→taxonomy mapping,
-DECIMAL-as-exact-text cells, `BEGIN`-at-depth-0 bulk path, credential redaction. `db` itself became a
-DEFAULT feature 2026-07-15 (DEC-227).
+DECIMAL-as-exact-text cells, `BEGIN`-at-depth-0 bulk path, credential redaction. `database` itself became a
+DEFAULT feature 2026-07-15 (DEC-227; flag renamed `db`→`database` 2026-07-17).
 **Oracle deferred** (closed Instant Client → clause 2 fails); **MongoDB is a separate LADDER item**
 (non-SQL, no PDO analog → native-only `E-TRANSPILE-MONGO`; async-driver problem) requiring its own
 future design. Both W3-1/W3-2 ship a pure zero-dep P0 first (`Core.Sql` Tier-A value; `Core.Url`).
@@ -1229,7 +1229,7 @@ the `throws DatabaseError` Q6 ruling carried over verbatim. Historical text foll
 
 - **P1 (Tier-A, shipped-partial):** the pure builder + raw `Query` — prelude-only `Core.Sql`, zero natives,
   byte-identity-clean. Remaining P1 = `bindNamed`, joins, `groupBy`/`having`/aggregates.
-- **P2 (Tier-B):** `Core.DatabaseModule` execution over `rusqlite` (`db` feature; Tier-3 fixture-tested, NOT in the
+- **P2 (Tier-B):** `Core.DatabaseModule` execution over `rusqlite` (`database` feature; Tier-3 fixture-tested, NOT in the
   byte-identity differential), then Postgres + MySQL/MariaDB (all sync; Oracle deferred; MongoDB = a
   separate LADDER item).
 
@@ -1244,8 +1244,8 @@ per-slice realization notes — the authoritative slice-level record).
 
 - **Connection & drivers**: `new Db(dsn) throws DatabaseError` (throwing ctor, DEC-221 — fail-fast,
   `new PDO`-faithful) dispatches on the DSN scheme behind a `DriverConn` trait
-  (`src/ext/db/{natives,sqlite,postgres,mysql}.rs`): bundled rusqlite SQLite (`db` — a DEFAULT feature
-  since DEC-227) · sync `postgres` (`db-postgres`) · sync `mysql` v28 minimal-rust (`db-mysql`,
+  (`src/ext/db/{natives,sqlite,postgres,mysql}.rs`): bundled rusqlite SQLite (`database` — a DEFAULT feature
+  since DEC-227; flag renamed `db`→`database` 2026-07-17) · sync `postgres` (`database-postgres`) · sync `mysql` v28 minimal-rust (`database-mysql`,
   DEC-229; `mariadb://` normalized). All sync (no tokio at the phorj-facing API), spine-quarantined,
   fixture-tested. A new backend = one `DriverConn` impl + one dep admission. Credentials:
   `Database.withPassword(dsn, Secret<string>)` — plaintext never retained on the handle; every error path

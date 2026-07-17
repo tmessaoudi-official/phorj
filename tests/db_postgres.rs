@@ -1,4 +1,4 @@
-#![cfg(feature = "db-postgres")]
+#![cfg(feature = "database-postgres")]
 //! `Core.DatabaseModule` Postgres driver (DEC-208 slice I) — LIVE round-trip, gated on a reachable server.
 //!
 //! A real Postgres round-trip needs a live server, which the build environment does not always have. So
@@ -9,7 +9,7 @@
 //!
 //! ```text
 //! PHORJ_PG_TEST_DSN='postgres://developer:developer@localhost:42710/testx' \
-//!   cargo test --features db-postgres --test db_postgres
+//!   cargo test --features database-postgres --test db_postgres
 //! ```
 //!
 //! The deterministic, server-free coverage of the driver — DSN dispatch, `?`/`:name`→`$n` translation,

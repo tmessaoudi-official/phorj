@@ -1,9 +1,9 @@
 //! Opaque native database resource handles (DEC-208 `Core.DatabaseModule`, the enhanced-PDO primitive).
 //!
 //! The rusqlite-backed concrete handles (a connection; a lazily-executed prepared statement) live
-//! behind `#[cfg(feature = "db")]` in `src/ext/db/natives.rs`. Only this trait and the [`Value::Db`]
+//! behind `#[cfg(feature = "database")]` in `src/ext/db/natives.rs`. Only this trait and the [`Value::Db`]
 //! variant are compiled unconditionally, so the value-model match arms (`type_name`, `eq_val`, the
-//! backends' exhaustive `Value` dispatches) never `cfg`-split. With the `db` feature off there are no
+//! backends' exhaustive `Value` dispatches) never `cfg`-split. With the `database` feature off there are no
 //! implementors and the `Core.DatabaseModule` module is not registered, so the variant is unconstructable.
 //!
 //! A DB handle is a **shared-mutable opaque resource** like [`crate::value::Value::Channel`]: cloning

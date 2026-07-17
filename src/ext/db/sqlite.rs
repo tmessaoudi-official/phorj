@@ -3,7 +3,7 @@
 //! This is the driver behind a `sqlite:…` / `:memory:` DSN — the ORIGINAL, shipped `Core.DatabaseModule` runtime,
 //! moved BEHIND the [`DriverConn`] trait unchanged (DEC-208 slice I, multi-driver refactor). Every value
 //! mapping, placeholder-expansion, error-classification and transaction rule here is byte-identical to
-//! the pre-refactor single-file implementation, so all shipped `db` tests pass unchanged — the refactor
+//! the pre-refactor single-file implementation, so all shipped `database` tests pass unchanged — the refactor
 //! is a pure extraction. Postgres ([`super::postgres`]) plugs into the same trait.
 //!
 //! The generic layer ([`super`]) owns the opaque handles, the bind accumulator ([`Binds`]), the natives,

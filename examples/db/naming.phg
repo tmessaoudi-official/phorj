@@ -19,7 +19,7 @@
 //
 // Like every Core.DatabaseModule program this opens real bundled SQLite (rusqlite) → quarantined from the byte-
 // identity differential; `run ≡ runvm` holds (a compile-time desugar produces ONE AST for both
-// backends). Built only under `--features db`; validated by tests/db.rs on both backends.
+// backends). Built only under `--features database`; validated by tests/db.rs on both backends.
 package Main;
 
 import Core.Output;

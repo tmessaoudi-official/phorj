@@ -41,7 +41,7 @@ NOT `/stack` infrastructure — never route work here to `global-stack-lead-dev`
   `source scripts/toolchain.env && PHORJ_REQUIRE_PHP=1 cargo nextest run --workspace --all-features`
   + `cargo clippy --all-targets --all-features` + `cargo clippy --all-targets --no-default-features`
   + `cargo fmt --check` + `cargo build --release`. **`--all-features` is mandatory**: the non-default
-  features (`http-client`, `mail`, `db-postgres`, `db-mysql`) are otherwise NEVER compiled/linted/tested
+  features (`http-client`, `mail`, `database-postgres`, `database-mysql`) are otherwise NEVER compiled/linted/tested
   by the gate — the `--features jit`-only gate hid real clippy lints in those files (DEC-264 build).
   The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN`/server env is absent
   (skip-loud). The oracle php path lives in `scripts/toolchain.env` (the single editable knob; bump it

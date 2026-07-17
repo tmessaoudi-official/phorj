@@ -1,8 +1,8 @@
 // `Core.DatabaseModule` — the Postgres driver (DEC-208 slice I) + credential Secret (slice G).
 //
 // `Core.DatabaseModule` is a MULTI-DRIVER primitive: `new Database(dsn)` dispatches on the DSN scheme behind a driver
-// trait — `sqlite:…` (bundled SQLite, the default `db` feature) and `postgres://…` (the sync `postgres`
-// crate, the `db-postgres` feature). The whole surface is identical across drivers — the SAME
+// trait — `sqlite:…` (bundled SQLite, the default `database` feature) and `postgres://…` (the sync `postgres`
+// crate, the `database-postgres` feature). The whole surface is identical across drivers — the SAME
 // `prepare`/`bind`/`bindNamed`/`query`/`exec`/`execReturningId`/`transaction`/typed-`DatabaseError` API — so
 // porting between SQLite and Postgres is a one-line DSN change.
 //
@@ -11,7 +11,7 @@
 // LIVE Postgres, so it is NOT part of the automatic gate — it is a hand-runnable reference. Build with
 // the driver and point it at your server:
 //
-//     cargo build --release --features db-postgres
+//     cargo build --release --features database-postgres
 //     # edit the DSN below to your server, then:
 //     target/release/phg run examples/db/postgres.phg
 //

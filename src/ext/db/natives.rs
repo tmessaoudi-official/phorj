@@ -1,8 +1,8 @@
 //! `Core.DatabaseModule` — the enhanced-PDO database primitive (DEC-208), a MULTI-DRIVER runtime behind a scheme-
 //! dispatched [`DriverConn`] trait (DEC-208 slice I): `sqlite:…` → [`sqlite`] (bundled `rusqlite`),
-//! `postgres://…` → [`postgres`] (the sync `postgres` crate, `db-postgres` feature).
+//! `postgres://…` → [`postgres`] (the sync `postgres` crate, `database-postgres` feature).
 //!
-//! Feature-gated (`db`) and native-only. This module owns the BACKEND-AGNOSTIC layer: the opaque
+//! Feature-gated (`database`) and native-only. This module owns the BACKEND-AGNOSTIC layer: the opaque
 //! connection / statement handles ([`DbConn`] / [`DbStmt`], carried by [`Value::Db`] via the
 //! [`DbObject`] trait, each holding a `Box<dyn DriverConn>`); the bind accumulator ([`Binds`]); the
 //! internal `Core.Native.Database` native bodies for connect / prepare / bind / bindNamed / query / exec; the Row
@@ -29,10 +29,10 @@
 //! `run ≡ runvm` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
 
-#[cfg(feature = "db-mysql")]
+#[cfg(feature = "database-mysql")]
 #[path = "mysql.rs"]
 mod mysql;
-#[cfg(feature = "db-postgres")]
+#[cfg(feature = "database-postgres")]
 #[path = "postgres.rs"]
 mod postgres;
 #[path = "sqlite.rs"]
@@ -72,7 +72,7 @@ trait DriverConn: std::fmt::Debug {
 }
 
 /// Dispatch a DSN onto its backend driver (DEC-208 slice I). `postgres://` / `postgresql://` →
-/// [`postgres`] (feature `db-postgres`; a clear feature-gated `ConnectionError` when it is off — never a
+/// [`postgres`] (feature `database-postgres`; a clear feature-gated `ConnectionError` when it is off — never a
 /// fall-through to the SQLite file path); everything else (`sqlite:`, `:memory:`, `sqlite::memory:`, or a
 /// bare path) → [`sqlite`], unchanged from the shipped runtime.
 fn open_driver(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
@@ -85,30 +85,30 @@ fn open_driver(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     sqlite::open(dsn)
 }
 
-#[cfg(feature = "db-mysql")]
+#[cfg(feature = "database-mysql")]
 fn open_mysql(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     mysql::open(dsn)
 }
 
-#[cfg(not(feature = "db-mysql"))]
+#[cfg(not(feature = "database-mysql"))]
 fn open_mysql(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     Err(
         "<<ConnectionError>>Core.DatabaseModule: the mysql driver is not compiled in \
-         (build with --features db-mysql)"
+         (build with --features database-mysql)"
             .to_string(),
     )
 }
 
-#[cfg(feature = "db-postgres")]
+#[cfg(feature = "database-postgres")]
 fn open_postgres(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     postgres::open(dsn)
 }
 
-#[cfg(not(feature = "db-postgres"))]
+#[cfg(not(feature = "database-postgres"))]
 fn open_postgres(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     Err(
         "<<ConnectionError>>Core.DatabaseModule: the postgres driver is not compiled in \
-         (build with --features db-postgres)"
+         (build with --features database-postgres)"
             .to_string(),
     )
 }
@@ -116,7 +116,7 @@ fn open_postgres(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
 /// Inject a password into a `postgres://` DSN's authority (DEC-208 slice G — the `Database.withPassword`
 /// factory). The password is percent-encoded and placed as the userinfo password
 /// (`postgres://user:PW@host/…`); an existing DSN password is replaced. This is a PURE string transform
-/// (no `postgres` dep), so the `Database.withPassword` surface type-checks under the plain `db` feature; the
+/// (no `postgres` dep), so the `Database.withPassword` surface type-checks under the plain `database` feature; the
 /// resulting DSN is consumed IMMEDIATELY by `new Database(...)` inside the factory (never surfaced to user
 /// code), and the driver parses the password back OUT into its config and stores only a redacted DSN, so
 /// nothing retains the plaintext. A non-postgres DSN is returned unchanged (SQLite has no password).
@@ -154,7 +154,7 @@ fn inject_pg_password(dsn: &str, pw: &str) -> String {
 /// handle (it lives only transiently in the [`Config`] during connect), so this scrubs the one place a
 /// raw DSN could still surface — the connect-time error path.
 #[cfg_attr(
-    not(any(feature = "db-postgres", feature = "db-mysql")),
+    not(any(feature = "database-postgres", feature = "database-mysql")),
     allow(dead_code)
 )]
 fn redact_dsn_password(dsn: &str) -> String {
@@ -2217,10 +2217,10 @@ mod tests {
         assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 0);
     }
 
-    /// A `postgres://` DSN dispatches to the postgres driver — which, when `db-postgres` is OFF, is a
+    /// A `postgres://` DSN dispatches to the postgres driver — which, when `database-postgres` is OFF, is a
     /// clean feature-gated `ConnectionError`, NEVER a fall-through to the SQLite file path (which would
     /// silently create a file literally named `postgres://…`).
-    #[cfg(not(feature = "db-postgres"))]
+    #[cfg(not(feature = "database-postgres"))]
     #[test]
     fn postgres_dsn_without_feature_is_a_clean_error() {
         let mut out = String::new();

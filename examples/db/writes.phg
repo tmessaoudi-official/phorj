@@ -10,7 +10,7 @@
 // `Core.DatabaseModule` opens a real SQLite database (bundled `rusqlite`), so an importing program is quarantined
 // from the byte-identity differential; it is validated by `tests/db.rs` on both backends (`run ≡ runvm`).
 // The hook's `ms` is wall-clock (non-deterministic), so it is NEVER printed here — only the SQL text is
-// logged, keeping the example byte-identical across backends. Built only under `--features db`.
+// logged, keeping the example byte-identical across backends. Built only under `--features database`.
 package Main;
 
 import Core.Output;

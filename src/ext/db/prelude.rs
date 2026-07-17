@@ -5,7 +5,7 @@
 //! is a real `Op::Throw`, byte-identical across both backends). `import Core.DatabaseModule` transitively imports
 //! `Core.Native.Database` (the natives) + `Core.Result` (the carrier), so this module runs BEFORE them.
 //!
-//! DEC-273 wave 3: colocated with the `db` extension. Compiled UNCONDITIONALLY (the
+//! DEC-273 wave 3: colocated with the `database` extension. Compiled UNCONDITIONALLY (the
 //! `CORE_MODULES` const array references it on every build; the disabled-import gate rejects the
 //! import on gated builds before the prelude matters).
 

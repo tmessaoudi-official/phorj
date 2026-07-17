@@ -24,7 +24,7 @@ fn every_other_native_is_pure() {
     // The quarantine seam relies on exactly the impure natives being marked impure. Whole-module
     // impure: the ambient-environment natives (`Core.Process`/`Core.Environment`). `Core.Random` is PURE
     // (2026-06-27): the transpiler hand-rolls the same xorshift64, so a seeded sequence is
-    // byte-identical and Random rejoins the oracle. `Core.Crypto` is the one **mixed** module —
+    // byte-identical and Random rejoins the oracle. `Core.Cryptography` is the one **mixed** module —
     // `hashPassword` is impure (random salt → quarantined) but `verifyPassword` is pure
     // (deterministic for a fixed `(password, hash)` → gateable). `Core.Time` is impure (M-TIME): an
     // unfrozen `nowMillis()` reads the wall clock; a program freezes the clock to become gateable.
@@ -39,7 +39,7 @@ fn every_other_native_is_pure() {
     // are out-of-band from the compared stdout).
     // `Core.Native.Database` is whole-module impure (DEC-208): the internal natives behind the `Core.DatabaseModule` prelude
     // open/read/write a real SQLite database, so any importing program is quarantined (live DB I/O
-    // can't be byte-identical across rusqlite and PHP PDO). Only compiled under `--features db`.
+    // can't be byte-identical across rusqlite and PHP PDO). Only compiled under `--features database`.
     let impure_modules = [
         "Core.Process",
         "Core.Environment",

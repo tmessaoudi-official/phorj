@@ -8,7 +8,7 @@ build logs everything dropped and why):
     projects; the playground editor holds one source and has no multi-file loader, so they cannot
     be entries.
   * WASM-RUNNABLE only. The browser has no filesystem / sockets / process / OS-RNG, and the playground
-    crate builds phorj with `default-features = false` (so the `crypto` (argon2) and `regex` features
+    crate builds phorj with `default-features = false` (so the `cryptography` (argon2) and `regex` features
     are OFF). An example importing `Core.File`, `Core.Http`, `Core.Process`, `Core.Random`,
     `Core.Cryptography`, or `Core.Regex` would fault (unknown module / missing capability) and is skipped.
     (Every kept example is already proven to run on the interp + VM by the differential gate; those are

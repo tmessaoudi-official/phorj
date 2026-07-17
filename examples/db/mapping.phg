@@ -17,7 +17,7 @@
 // entirely at compile time from each class's field layout (no runtime reflection), so `run ≡ runvm`
 // holds by construction. Like every `Core.DatabaseModule` program it opens real bundled SQLite → quarantined from
 // the byte-identity differential; validated by `tests/db.rs` on both backends. Built only under
-// `--features db`.
+// `--features database`.
 package Main;
 
 import Core.Output;

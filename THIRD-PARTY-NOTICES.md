@@ -12,7 +12,7 @@ switched off at build time.
 
 | Crate | Feature (default-on) | Domain | License |
 |---|---|---|---|
-| [`argon2`](https://github.com/RustCrypto/password-hashes) (RustCrypto) | `crypto` | Argon2id password hashing | MIT OR Apache-2.0 |
+| [`argon2`](https://github.com/RustCrypto/password-hashes) (RustCrypto) | `cryptography` | Argon2id password hashing | MIT OR Apache-2.0 |
 | [`regex`](https://github.com/rust-lang/regex) (rust-lang) | `regex` | ReDoS-safe regex engine | MIT OR Apache-2.0 |
 | [`ctrlc`](https://github.com/Detegr/rust-ctrlc) | `signals` | SIGINT/SIGTERM for `phg serve` | MIT OR Apache-2.0 |
 | [`corosensei`](https://github.com/Amanieu/corosensei) | `green` (non-wasm only) | stackful coroutines for green threads | MIT OR Apache-2.0 |

@@ -20,11 +20,11 @@
 
 pub mod registry;
 
-#[cfg(feature = "crypto")]
+#[cfg(feature = "cryptography")]
 pub mod crypto;
 #[cfg(feature = "csv")]
 pub mod csv;
-#[cfg(feature = "db")]
+#[cfg(feature = "database")]
 pub mod db;
 /// The db extension's prelude source — unconditional (see [`regex_prelude`]), colocated via `#[path]`.
 #[path = "db/prelude.rs"]

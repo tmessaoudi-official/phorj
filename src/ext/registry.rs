@@ -55,7 +55,7 @@ pub struct Extension {
 /// migration wave reaches them — absence here means "not yet migrated", never "core".
 /// Deliberately NOT rows: `green` (the green-thread SPAWN SEAM is ruled CORE — the ruling keeps
 /// the seam in the kernel; only a structured-concurrency FRAMEWORK on top would be an extension)
-/// and the `db-all` convenience alias (it is a feature GROUP, not a capability).
+/// and the `database-all` convenience alias (it is a feature GROUP, not a capability).
 pub const EXTENSIONS: &[Extension] = &[
     Extension {
         name: "transpile",
@@ -77,9 +77,9 @@ pub const EXTENSIONS: &[Extension] = &[
         migrated: false,
     },
     Extension {
-        name: "crypto",
-        feature: "crypto",
-        enabled: cfg!(feature = "crypto"),
+        name: "cryptography",
+        feature: "cryptography",
+        enabled: cfg!(feature = "cryptography"),
         tier: Tier::Default,
         modules: &["Core.Cryptography"],
         summary: "password hashing (Argon2id) — the one crate-backed crypto primitive",
@@ -95,9 +95,9 @@ pub const EXTENSIONS: &[Extension] = &[
         migrated: true,
     },
     Extension {
-        name: "db",
-        feature: "db",
-        enabled: cfg!(feature = "db"),
+        name: "database",
+        feature: "database",
+        enabled: cfg!(feature = "database"),
         tier: Tier::Default,
         modules: &["Core.DatabaseModule", "Core.Native.Database"],
         summary: "multi-driver SQL (bundled SQLite; Postgres/MySQL via their own flags), typed \
@@ -235,21 +235,21 @@ pub const EXTENSIONS: &[Extension] = &[
         migrated: true,
     },
     Extension {
-        name: "db-mysql",
-        feature: "db-mysql",
-        enabled: cfg!(feature = "db-mysql"),
+        name: "database-mysql",
+        feature: "database-mysql",
+        enabled: cfg!(feature = "database-mysql"),
         tier: Tier::OptIn,
         modules: &[],
-        summary: "MySQL/MariaDB driver for the db extension",
+        summary: "MySQL/MariaDB driver for the database extension",
         migrated: false,
     },
     Extension {
-        name: "db-postgres",
-        feature: "db-postgres",
-        enabled: cfg!(feature = "db-postgres"),
+        name: "database-postgres",
+        feature: "database-postgres",
+        enabled: cfg!(feature = "database-postgres"),
         tier: Tier::OptIn,
         modules: &[],
-        summary: "PostgreSQL driver for the db extension",
+        summary: "PostgreSQL driver for the database extension",
         migrated: false,
     },
     Extension {

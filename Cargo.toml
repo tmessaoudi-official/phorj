@@ -46,9 +46,9 @@ path = "src/main.rs"
 # code so `phg run` is fast out of the box (opt out with `phg run --no-jit`). Safe for the WASM
 # playground, which builds with `default-features = false` (see playground/Cargo.toml) and whose
 # Cranelift deps are non-wasm target-gated anyway. Build without native codegen via
-# `--no-default-features` (re-add crypto/regex/signals/green as needed).
+# `--no-default-features` (re-add cryptography/regex/signals/green as needed).
 default = [
-  "crypto", "regex", "signals", "green", "jit", "db", "unicode",
+  "cryptography", "regex", "signals", "green", "jit", "database", "unicode",
   "ini", "csv", "encoding",
   "json", "uri", "path", "hash", "decimal", "test", "debug", "session",
 ]
@@ -68,7 +68,7 @@ test = []
 debug = []
 # DEC-273 wave 3: the in-process HTTP session store (std-only).
 session = []
-crypto = ["dep:argon2"]
+cryptography = ["dep:argon2"]
 # DEC-256 Unicode tier: grapheme segmentation (UAX #29) only — codepoints/case are std `char`.
 unicode = ["dep:unicode-segmentation"]
 regex = ["dep:regex"]
@@ -91,23 +91,23 @@ green = ["dep:corosensei"]
 # roots relax from `forbid(unsafe_code)` to `deny(unsafe_code)` so that one module can carry a scoped
 # `#![allow]`. 7th external-dependency domain — see docs/specs/UNIFIED-SPEC.md#external-dependency-policy.
 jit = ["dep:cranelift", "dep:cranelift-jit", "dep:cranelift-module"]
-# Embedded SQL database primitive `Core.Db` (DEC-208, enhanced-PDO). Off by default and off for wasm
+# Embedded SQL database primitive `Core.DatabaseModule` (DEC-208, enhanced-PDO). Off by default and off for wasm
 # (no native SQLite). rusqlite (8th external-dependency domain, admitted 2026-07-03 — UNIFIED-SPEC
 # #external-dependency-policy Q1/Q2) links SQLite via its `bundled` feature (no system libsqlite3
 # dependency). Its `unsafe` is SQLite C-FFI internal to the crate — phorj's own code stays unsafe-free.
-# SPINE-QUARANTINED: Core.Db natives are `pure:false`, so `uses_impure_native` auto-excludes every
-# `import Core.Db` example from the byte-identity differential (tested via the tests/db.rs fixture).
-db = ["dep:rusqlite"]
-# Postgres driver for `Core.Db` (DEC-208 slice I). Admits the SYNC `postgres` crate (native-protocol,
-# no libpq/system dependency; TLS left off → no OpenSSL). `db-postgres` implies `db` (it plugs a driver
+# SPINE-QUARANTINED: Core.DatabaseModule natives are `pure:false`, so `uses_impure_native` auto-excludes every
+# `import Core.DatabaseModule` example from the byte-identity differential (tested via the tests/db.rs fixture).
+database = ["dep:rusqlite"]
+# Postgres driver for `Core.DatabaseModule` (DEC-208 slice I). Admits the SYNC `postgres` crate (native-protocol,
+# no libpq/system dependency; TLS left off → no OpenSSL). `database-postgres` implies `database` (it plugs a driver
 # into the shared multi-driver seam). The crate's async/tokio usage is its INTERNAL blocking-wrapper
 # impl detail (feature-gated, non-default, non-wasm) — the phorj-facing API stays sync, per the
 # dependency policy (SQL domain: SQLite+Postgres+MySQL sync). Off by default and off for wasm.
-db-postgres = ["db", "dep:postgres"]
-# MySQL/MariaDB driver for `Core.Db` (DEC-208 slice J). Admits the SYNC `mysql` crate
+database-postgres = ["database", "dep:postgres"]
+# MySQL/MariaDB driver for `Core.DatabaseModule` (DEC-208 slice J). Admits the SYNC `mysql` crate
 # (`minimal-rust`: pure-Rust wire protocol, no compression/TLS/chrono extras — the smallest surface).
-# `db-mysql` implies `db` (same multi-driver seam as `db-postgres`). Off by default and off for wasm.
-db-mysql = ["db", "dep:mysql"]
+# `database-mysql` implies `database` (same multi-driver seam as `database-postgres`). Off by default and off for wasm.
+database-mysql = ["database", "dep:mysql"]
 # Native mailer `Core.Mail` (DEC-223, twin-of-Db). Admits `lettre` (11th external-dependency domain):
 # RFC-correct MIME/multipart, SMTP with optional auth, STARTTLS/implicit TLS via the already-admitted
 # rustls, optional DKIM, and a BLOCKING SmtpTransport (no tokio at the phorj-facing API). Native-only
@@ -121,10 +121,10 @@ mail = ["dep:lettre"]
 # lift this later, recorded). Non-default, non-wasm, spine-quarantined.
 http-client = ["dep:rustls", "dep:webpki-roots"]
 # Convenience: every admitted SQL driver at once.
-db-all = ["db", "db-postgres", "db-mysql"]
+database-all = ["database", "database-postgres", "database-mysql"]
 
 [dependencies]
-# FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
+# FIRST external dependency (RustCrypto, audited). Powers `Core.Cryptography` (Argon2id password hashing) —
 # a domain where rolling your own is the security anti-pattern and std has no equivalent. `std` enables
 # the OS RNG (`OsRng`) for salt generation; feature-gated off for the playground.
 argon2 = { version = "0.5", optional = true, features = ["std"] }
@@ -149,17 +149,17 @@ corosensei = { version = "0.3", optional = true }
 # rusqlite/postgres criterion). Feature-gated (`mail`), non-default, non-wasm, spine-quarantined.
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "rustls-tls", "builder", "dkim", "sendmail-transport"], optional = true }
 
-# EIGHTH external-dependency domain (embedded SQL, admitted 2026-07-03). Powers the `Core.Db`
+# EIGHTH external-dependency domain (embedded SQL, admitted 2026-07-03). Powers the `Core.DatabaseModule`
 # enhanced-PDO primitive (DEC-208) over SQLite. `bundled` compiles SQLite from vendored C source, so
 # there is no system-libsqlite3 build dependency. rusqlite's `unsafe` is the SQLite C-FFI boundary,
 # internal to the crate (like argon2/corosensei/cranelift) — phorj's own crate stays unsafe-free.
-# Native-only: no SQLite on wasm32. Feature-gated (`db`), spine-quarantined (Tier-3 fixture-tested).
+# Native-only: no SQLite on wasm32. Feature-gated (`database`), spine-quarantined (Tier-3 fixture-tested).
 rusqlite = { version = "0.40", optional = true, features = ["bundled"] }
 
 # EIGHTH domain, second driver (Postgres, DEC-208 slice I). The SYNC `postgres` crate (sfackler) speaks
 # the native Postgres wire protocol in pure Rust — NO libpq / system dependency, and with TLS left off
 # it needs no OpenSSL. It is a thin BLOCKING wrapper over `tokio-postgres`, so tokio is pulled
-# transitively as the crate's internal impl detail (feature-gated behind `db-postgres`, non-default,
+# transitively as the crate's internal impl detail (feature-gated behind `database-postgres`, non-default,
 # non-wasm); the phorj-facing driver API is fully sync. Its `unsafe` is confined to the dependency, like
 # rusqlite — phorj's own crate stays unsafe-free. See UNIFIED-SPEC #external-dependency-policy (SQL domain).
 postgres = { version = "0.19", optional = true }
@@ -168,7 +168,7 @@ postgres = { version = "0.19", optional = true }
 # twin of the postgres admission). The SYNC `mysql` crate under `minimal-rust`: pure-Rust native wire
 # protocol, no system libmysqlclient, no TLS/compression/chrono extras pulled. Its `unsafe` stays
 # internal to the dependency (the rusqlite/postgres criterion) — phorj's own crate stays unsafe-free.
-# Feature-gated (`db-mysql`), non-default, non-wasm, spine-quarantined like every DB driver.
+# Feature-gated (`database-mysql`), non-default, non-wasm, spine-quarantined like every DB driver.
 mysql = { version = "28.0.0", default-features = false, features = ["minimal-rust"], optional = true }
 
 # SEVENTH external-dependency domain (native codegen, developer-authorized 2026-07-06). Cranelift

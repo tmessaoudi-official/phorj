@@ -1,4 +1,4 @@
-#![cfg(feature = "db-mysql")]
+#![cfg(feature = "database-mysql")]
 //! `Core.DatabaseModule` MySQL/MariaDB driver (DEC-208 slice J) — LIVE round-trip, gated on a reachable server.
 //!
 //! A real MySQL round-trip needs a live server, which the build environment does not always have. So
@@ -9,13 +9,13 @@
 //!
 //! ```text
 //! PHORJ_MYSQL_TEST_DSN='mysql://developer:developer@localhost:42708/testx' \
-//!   cargo test --features db-mysql --test db_mysql
+//!   cargo test --features database-mysql --test db_mysql
 //! ```
 //!
 //! The deterministic, server-free coverage of the driver — placeholder handling (`?` pass-through +
 //! `IN (?)` expansion, `:name`→`?` translation), error-code→taxonomy mapping, cell mapping (ints,
 //! floats, DECIMAL-as-text, TEXT vs BINARY blobs, temporal steering), and credential redaction —
-//! lives in the `src/ext/db/mysql.rs` unit tests, which DO run in every `--features db-mysql`
+//! lives in the `src/ext/db/mysql.rs` unit tests, which DO run in every `--features database-mysql`
 //! gate. This file proves the wire path end-to-end when a server exists.
 //!
 //! The test uses only its own throwaway table (`phorj_my_it`, dropped at start and end) with

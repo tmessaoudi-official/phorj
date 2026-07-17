@@ -42,8 +42,8 @@ echo "[pre-push] cargo fmt --check"
 cargo fmt --check
 
 # Lint the two ends of the feature spectrum (developer-ruled 2026-07-16 — the standing gate is
-# ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, db, db-postgres,
-# db-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding
+# ALL-FEATURES). `--all-features` compiles + lints EVERY shipped surface (jit, database, database-postgres,
+# database-mysql, mail, http-client) — the old `--features jit`-only gate never touched those files, hiding
 # real clippy lints (caught: http_client.rs, db/mysql.rs collapsible-ifs). `--no-default-features`
 # lints the minimal/jit-off path. Together they bound every config a change can land in.
 echo "[pre-push] cargo clippy --all-targets --no-default-features -- -D warnings"
@@ -52,7 +52,7 @@ echo "[pre-push] cargo clippy --all-targets --all-features -- -D warnings"
 cargo clippy --all-targets --all-features -- -D warnings
 
 # FULL suite under --all-features + the PHP oracle. `--all-features` SUBSUMES the old separate
-# `--features db` step (db is now in the set) and adds the previously-ungated http-client/mail/postgres/
+# `--features database` step (database is now in the set) and adds the previously-ungated http-client/mail/postgres/
 # mysql surfaces. The live DB/mail/http round-trips self-skip when their `PHORJ_*_TEST_DSN` / server env
 # is absent (skip-loud, never silently green), so the gate needs no live servers.
 if cargo nextest --version >/dev/null 2>&1; then

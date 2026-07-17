@@ -13,8 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # `default-features = false` keeps the audited-crypto crate (argon2) out of the WASM build — the
-# playground stays tiny + browser-safe. This turns OFF `crypto` (argon2), `regex`, `signals`, and
-# `green`, so `Core.Crypto` AND `Core.Regex` are absent here (a program importing either gets an
+# playground stays tiny + browser-safe. This turns OFF `cryptography` (argon2), `regex`, `signals`, and
+# `green`, so `Core.Cryptography` AND `Core.Regex` are absent here (a program importing either gets an
 # unknown-module error) — `gen_examples.py` excludes both so no such example reaches the playground.
 # To bring `guide/regex.phg` back, add `features = ["regex"]` below (regex compiles to wasm32) and
 # rebuild the WASM. Every OTHER native is unaffected.

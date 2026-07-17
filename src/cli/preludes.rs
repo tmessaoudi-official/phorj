@@ -995,7 +995,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     },
     // `Core.Native.Database` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.DatabaseModule` prelude
     // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Database` never collides with
-    // the native leaf. Feature-gated (`db`): the natives only exist under `--features db`.
+    // the native leaf. Feature-gated (`database`): the natives only exist under `--features database`.
     VirtualModule {
         module: &["Core", "Native", "Database"],
         qualifier: "Native.Database",
