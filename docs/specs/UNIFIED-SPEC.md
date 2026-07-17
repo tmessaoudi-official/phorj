@@ -495,9 +495,15 @@ Source: `2026-07-01-import-roots-psr4-design.md`.
 Origin is conveyed **by the namespace root + a `vendor:` marker**, not by a per-import prefix on
 everything. By eye: `Core.` = stdlib · `vendor:` = dependency · everything else = first-party.
 
-### The designed model (subject to re-adjudication)
+### The designed model (SUPERSEDED by DEC-282 — kept for the record)
 
-Optional `[packages]` map in `phorj.toml`:
+> **DEC-282 (2026-07-17)** shipped the real model: NO manifest at all. App root = walk-up to the
+> nearest `src/`-bearing directory; three ordered search roots (entry dir → `src/` → `vendor/`);
+> import-driven lazy loading; folder = package. The `[packages]` map below was never built —
+> `phorj.toml` is retired entirely (the developer's standing ruling: no toml anywhere, including
+> the future package-manager extension, which gets a full re-adjudication).
+
+Optional `[packages]` map in `phorj.toml` (HISTORICAL):
 
 ```toml
 [packages]
@@ -1058,8 +1064,9 @@ LADDER-quarantine candidate).
 
 ### The tier-3 mechanism (proposed; for `Core.Image`/intl-class modules later)
 
-Three coordinated pieces make a genuine extension need honest: (1) **declare** in `phorj.toml`
-`[require]` using Composer's own vocabulary (`ext-gd = "*"`); (2) **preflight guard** in emitted
+Three coordinated pieces make a genuine extension need honest: (1) **declare** the requirement
+(surface OPEN — `phorj.toml` is retired per DEC-282 and the developer ruled no toml anywhere;
+the declaration format is part of the package-manager-extension re-adjudication); (2) **preflight guard** in emitted
 PHP — `if (!extension_loaded('gd')) { fwrite(STDERR, …); exit(1); }` — a clean diagnosable exit,
 never an undefined-function fatal mid-run; (3) **transpile-time gate** — a `// requires: ext-gd`
 header + `--php-target=baseline|full` where `baseline` (default/CI) rejects tier-3 use at transpile

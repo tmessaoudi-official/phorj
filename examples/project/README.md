@@ -1,19 +1,24 @@
 # Multi-file projects (M5)
 
 Single `.phg` files are great for scripts, but real programs span many files and packages. Phorj's
-**project model** (milestone M5) is Go-shaped: every file declares a `package`, the folder layout
-*is* the package path, and cross-package functions are imported and called leaf-qualified — and it
-all transpiles to idiomatic namespaced PHP.
+loading model (DEC-282, unified and **manifest-less**) is Go-shaped: every file declares a
+`package`, the folder layout *is* the package path, and cross-package functions are imported and
+called leaf-qualified — and it all transpiles to idiomatic namespaced PHP.
 
-Each subdirectory here is a self-contained project, discovered by its `phorj.toml`. Like every
-other example, each one runs byte-identically on both backends — `tests/differential.rs` finds every
-project root and asserts both backends agree (and that it runs at all).
+There is NO config file. The app root is found by walking up from the entry to the nearest
+directory containing `src/` (or `vendor/`); imports then resolve against three ordered search
+roots — the entry's own directory, `src/` (package names strip `src/`), and `vendor/` (offline
+dependencies, `vendor/<Publisher>/<Name>/`, folder = package; `phg` never downloads code).
+Loading is import-driven: only packages your imports reach are ever read.
+
+Each subdirectory here is a self-contained app root (its `src/` is the marker). Like every other
+example, each one runs byte-identically on both backends — `tests/differential.rs` finds every
+app root and asserts both backends agree (and that it runs at all).
 
 ## `tempconv/` — a two-package Celsius→Fahrenheit converter
 
 ```
 tempconv/
-├── phorj.toml                     # module = "acme/tempconv", source = "src"
 └── src/
     ├── main.phg                    # package Main   — the runnable entry
     └── Acme/
@@ -24,7 +29,7 @@ tempconv/
             └── label.phg           #   tag(name, v) -> "{name} = {v}F"
 ```
 
-Run it (the CLI walks up to `phorj.toml`, loads the whole project, and runs `package Main`):
+Run it (the CLI walks up to the `src/`-bearing app root, loads what the imports reach, and runs the `#[Entry]`):
 
 ```console
 $ phg run examples/project/tempconv/src/main.phg
@@ -86,13 +91,13 @@ can't autoload free functions, and Phorj is function-heavy).
 
 Library packages export **functions and types** — a `class`/`enum`/`interface` in a library package
 is consumed cross-package via `import Pkg.Path.TypeName;` (see `shapes/`). Git-based
-dependencies (`[require]` in `phorj.toml`), `phorj.lock`, and vendoring ship in M5 S3 (see
+dependencies resolve offline from `vendor/<Publisher>/<Name>/` — a future package-manager extension writes that tree (see
 `withdeps/`). Casing is enforced: package/folder segments are PascalCase (`E-PKG-CASE`), types are
 PascalCase, functions/variables are camelCase.
 
 ## The other projects here
 
-`tempconv/` is the walkthrough above; each sibling project is self-contained, `phorj.toml`-discovered,
+`tempconv/` is the walkthrough above; each sibling project is self-contained, discovered by its `src/`,
 and byte-identity-gated the same way:
 
 | Project | What it demonstrates |

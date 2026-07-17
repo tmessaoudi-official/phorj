@@ -1,7 +1,7 @@
 package Main;
 
-// A project that depends on a vendored git library, `acme/strutil` (declared in phorj.toml's
-// [require], fetched by `phg vendor` into vendor/, pinned by phorj.lock). The dependency is
+// An app that depends on a vendored library, `Acme.Strutil` (consumed offline from the
+// committed vendor/ tree — phg never downloads code; DEC-282). The dependency is
 // consumed exactly like a first-party package: import it, then call through its leaf qualifier.
 import Core.Output;
 import Acme.Strutil;
