@@ -6,7 +6,7 @@
 //! `bytes?` (`null` on malformed input — the optional absent case, never a fault). Single-sourced
 //! kernels here are mirrored by the `php` emission; the differential's PHP oracle pins the parity.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 use std::rc::Rc;
@@ -117,13 +117,13 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn base64_encode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn base64_encode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bytes(b)] => Ok(Value::Str(b64_encode(b).into())),
         _ => Err("Encoding.base64Encode expects (bytes)".into()),
     }
 }
-fn base64_decode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn base64_decode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(match b64_decode_strict(s) {
             Some(bytes) => Value::Bytes(Rc::new(bytes)),
@@ -132,13 +132,13 @@ fn base64_decode_native(args: &[Value], _: &mut String) -> Result<Value, String>
         _ => Err("Encoding.base64Decode expects (string)".into()),
     }
 }
-fn hex_encode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn hex_encode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bytes(b)] => Ok(Value::Str(hex_encode(b).into())),
         _ => Err("Encoding.hexEncode expects (bytes)".into()),
     }
 }
-fn hex_decode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn hex_decode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(match hex_decode(s) {
             Some(bytes) => Value::Bytes(Rc::new(bytes)),
@@ -149,7 +149,7 @@ fn hex_decode_native(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// The `Core.Encoding` registry entries.
-pub(crate) fn encoding_natives() -> Vec<NativeFn> {
+pub fn encoding_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Encoding",
@@ -202,7 +202,3 @@ pub(crate) fn encoding_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "encoding_tests.rs"]
-mod tests;

@@ -13,7 +13,7 @@
 //! Multi-row parsing (a `List<List<string>>`) is deferred (embedded newlines make line-splitting its
 //! own problem). Every quoting edge is pinned to real `php -n` output in the unit tests.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 
@@ -102,7 +102,7 @@ fn format_field(out: &mut String, f: &str) {
     }
 }
 
-fn csv_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn csv_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => {
             let fields = parse_row(s)
@@ -115,7 +115,7 @@ fn csv_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn csv_format(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn csv_format(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(items)] => {
             let mut out = String::new();
@@ -140,7 +140,7 @@ fn csv_format(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// The `Core.Csv` registry entries. The PHP emission leans on `str_getcsv` (escape disabled) for
 /// `parse` and a hand-written `array_map`/`implode` for `format` — both pinned byte-identical to the
 /// Rust kernels in the unit tests.
-pub(crate) fn csv_natives() -> Vec<NativeFn> {
+pub fn csv_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Csv",
@@ -174,7 +174,3 @@ pub(crate) fn csv_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "csv_tests.rs"]
-mod tests;

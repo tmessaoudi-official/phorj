@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-273 wave 1: the extension architecture lands (registry + 5 migrations)
+
+The minimal-core/extension model gets its physical seam. `src/ext/registry.rs` is THE
+one-row-per-extension list — the compiler's disabled-import gate, the new `phg extensions
+[--docs]` listing, and the generated `docs/EXTENSIONS.md` (sync-tested, build-independent) all
+read it. Importing a module whose extension is compiled out is now `E-EXTENSION-DISABLED`,
+naming the extension AND the cargo flag to add (supersedes `E-MODULE-UNAVAILABLE`; the old
+gated-module table is retired — a new gated module is just its extension row, and the previously
+UN-gated `Core.Regex`/`Core.Cryptography`/`Core.Ini`/`Core.Csv`/`Core.Encoding` imports now fail
+cleanly on reduced builds instead of cascading). FIVE extensions physically migrated to the
+AMENDMENT-2 `src/ext/<name>/` layout (natives + tests colocated; regex's prelude source
+colocates too): `ini` (the pilot), `crypto`, `regex`, `csv`, `encoding` — `ini`/`csv`/`encoding`
+gained new default-tier cargo features; `signals` got its registry row; `green` and `db-all`
+are documented non-rows (core seam / feature group). Tier heads recorded per the ruling:
+`transpile`/`lift` open the MANDATORY tier (their structural move ships with a later wave).
+Extensions keep the `Core.` import root — zero source churn. Also ruled in-wave: the `jit`
+registry row stays (jit remains CORE-classified; the row documents its build flag for
+discoverability), and `phg build` standalone artifacts — which carry and use the building phg's
+JIT (measured ~110× on hot pure loops) — now honor `PHG_NO_JIT=1` as the byte-identical pure-VM
+escape hatch (env, not argv: the artifact's argv belongs to the embedded program). Certified by
+the full DEC-268 panel (3 evidence-based lenses; security lens closed the feature-gate-bypass question by tracing
+every pipeline entry point; all correctness/completeness findings fixed in-wave).
+
+
 ### Changed — DEC-282: the unified, manifest-less loader ("autoload"), CLI + web (BREAKING)
 
 `phorj.toml`, `manifest.rs`, and the network-touching `phg vendor` subcommand are RETIRED — one

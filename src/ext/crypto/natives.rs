@@ -11,7 +11,7 @@
 //! deterministic for a fixed `(password, hash)` pair, so it CAN appear in a byte-identity-gated
 //! example (against a committed PHC hash).
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 use argon2::password_hash::{
@@ -21,7 +21,7 @@ use argon2::Argon2;
 
 /// `Crypto.hashPassword(string) -> string` — Argon2id over a fresh random salt; returns the standard
 /// PHC string. Non-deterministic (`pure: false`). PHP: `password_hash($pw, PASSWORD_ARGON2ID)`.
-fn crypto_hash_password(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn crypto_hash_password(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(pw)] => {
             let salt = SaltString::generate(&mut OsRng);
@@ -38,7 +38,7 @@ fn crypto_hash_password(args: &[Value], _: &mut String) -> Result<Value, String>
 /// `Crypto.verifyPassword(string password, string hash) -> bool` — constant-time verify against a PHC
 /// hash. A malformed hash string is `false` (mirrors PHP `password_verify`), never a fault.
 /// Deterministic. PHP: `password_verify($pw, $hash)`.
-fn crypto_verify_password(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn crypto_verify_password(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(pw), Value::Str(hash)] => {
             let parsed = match PasswordHash::new(hash) {
@@ -55,7 +55,7 @@ fn crypto_verify_password(args: &[Value], _: &mut String) -> Result<Value, Strin
     }
 }
 
-pub(crate) fn crypto_natives() -> Vec<NativeFn> {
+pub fn crypto_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Cryptography",
@@ -77,7 +77,3 @@ pub(crate) fn crypto_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "crypto_tests.rs"]
-mod tests;

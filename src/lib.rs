@@ -20,6 +20,7 @@ pub mod debug;
 pub mod diagnostic;
 pub mod dispatch;
 pub mod dump;
+pub mod ext;
 pub mod format;
 pub mod green;
 pub mod inspect;

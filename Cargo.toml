@@ -47,7 +47,13 @@ path = "src/main.rs"
 # playground, which builds with `default-features = false` (see playground/Cargo.toml) and whose
 # Cranelift deps are non-wasm target-gated anyway. Build without native codegen via
 # `--no-default-features` (re-add crypto/regex/signals/green as needed).
-default = ["crypto", "regex", "signals", "green", "jit", "db", "unicode"]
+default = ["crypto", "regex", "signals", "green", "jit", "db", "unicode", "ini", "csv", "encoding"]
+# DEC-273 pilot extension (`src/ext/ini/`): Core.Ini config parsing. No deps — the flag gates
+# build inclusion only (Default tier, batteries-included).
+ini = []
+# DEC-273 migration wave: Core.Csv / Core.Encoding as flag-gated extensions (no deps).
+csv = []
+encoding = []
 crypto = ["dep:argon2"]
 # DEC-256 Unicode tier: grapheme segmentation (UAX #29) only — codepoints/case are std `char`.
 unicode = ["dep:unicode-segmentation"]

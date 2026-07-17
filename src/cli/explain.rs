@@ -1449,12 +1449,21 @@ pub fn explain_text(code: &str) -> Option<String> {
              lift. Run HTTP-client programs with `phg run`.\n"
         }
         "E-MODULE-UNAVAILABLE" => {
-            "E-MODULE-UNAVAILABLE — this `phg` binary was built without the imported module's feature.\n\n\
-             Some Core modules carry native code behind a cargo feature (e.g. `Core.DatabaseModule` behind `db`,\n\
-             which bundles SQLite). Those features are in the DEFAULT build, so a stock `phg` has\n\
-             them; this binary was built with `--no-default-features` (or an explicit reduced set),\n\
-             so the module's natives do not exist in it. Rebuild with the default feature set\n\
-             (`cargo build --release`) or add the named feature (`--features db`).\n"
+            "E-MODULE-UNAVAILABLE — RETIRED (DEC-273; superseded by E-EXTENSION-DISABLED).\n\n\
+             Feature-gated modules are EXTENSIONS now: importing one on a build that compiled it\n\
+             out reports `E-EXTENSION-DISABLED`, naming the extension and the cargo flag to add.\n\
+             See `phg explain E-EXTENSION-DISABLED` and `phg extensions`.\n"
+        }
+        "E-EXTENSION-DISABLED" => {
+            "E-EXTENSION-DISABLED — the imported module belongs to an extension this `phg` build\n\
+             compiled out.\n\n\
+             DEC-273: the minimal CORE is what the language cannot function without; everything\n\
+             else — Db, Mail, HttpClient, Regex, Ini, … — is an EXTENSION: Rust + JIT exactly like\n\
+             the core (never slower; the flag gates BUILD INCLUSION only). The default build is\n\
+             batteries-included, so a stock `phg` has every Default-tier extension; this binary\n\
+             was built with `--no-default-features` or a reduced set. The error names the cargo\n\
+             flag to add (`cargo build --features <name>`); `phg extensions` lists every\n\
+             extension, its tier, its flag, and whether THIS build carries it.\n"
         }
         "E-UNCHECKED-ARGS" => {
             "E-UNCHECKED-ARGS — `#[UncheckedOverflow]` was given arguments.\n\n\

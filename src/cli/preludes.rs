@@ -470,13 +470,12 @@ function respond(bytes raw): bytes {
 }
 "#;
 
-/// The opaque compiled-`Regex` value model, injected when a program imports `Core.Regex` (Fork A,
-/// `docs/specs/2026-06-28-core-regex-design.md`). A `Regex` value is built only by `Regex.compile`
-/// (which validates via the `regex` crate); the `pattern` field is the **bare** pattern. It is public
-/// so the transpiled `__phorj_regex_*` global helpers can read `$re->pattern` to build the
-/// `/u`-delimited PHP `preg_*` form. Injected by [`inject_core_modules`] via the `Core.Regex`
-/// registry row — a no-op unless `Core.Regex` is imported and no `Regex` class is already declared.
-pub(super) const REGEX_PRELUDE: &str = "class Regex { constructor(public string pattern) {} }";
+// The opaque compiled-`Regex` value model, injected when a program imports `Core.Regex` (Fork A,
+// `docs/specs/2026-06-28-core-regex-design.md`). A `Regex` value is built only by `Regex.compile`
+// (which validates via the `regex` crate); the `pattern` field is the **bare** pattern.
+// The Regex prelude doc + source moved to `crate::ext::regex_prelude` (DEC-273 colocation): the
+// class carries `pattern` so the transpiled `__phorj_regex_*` helpers can read `$re->pattern`;
+// injected via the `Core.Regex` registry row, a no-op unless `Core.Regex` is imported.
 
 /// The `Secret<T>` opaque-wrapper type, injected when a program imports `Core.Secret` (Fork B,
 /// `docs/specs/2026-06-28-secret-type-design.md`). A `Secret<T>` value is constructed `new Secret(x)`
@@ -1655,7 +1654,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Regex"],
         qualifier: "Regex",
-        src: Some(REGEX_PRELUDE),
+        src: Some(crate::ext::regex_prelude::PRELUDE),
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
@@ -1904,63 +1903,64 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
 
 /// Feature-gated Core modules: `(module path, compiled-in?, cargo feature name)`. When such a module
 /// is imported on a build WITHOUT its feature, [`unavailable_core_module`] produces ONE clean
-/// `E-MODULE-UNAVAILABLE` diagnostic — replacing the otherwise-inevitable wall of prelude-internal
+/// `E-EXTENSION-DISABLED` diagnostic — replacing the otherwise-inevitable wall of prelude-internal
 /// `E-UNKNOWN-IDENT`s (the prelude classes reference natives that do not exist in that build).
 /// New gated module (e.g. `Core.Mail`) = one row here.
-const GATED_CORE_MODULES: &[(&[&str], bool, &str)] = &[
-    (&["Core", "DatabaseModule"], cfg!(feature = "db"), "db"),
-    (&["Core", "Native", "Database"], cfg!(feature = "db"), "db"),
-    (&["Core", "Mail"], cfg!(feature = "mail"), "mail"),
-    (&["Core", "Native", "Mail"], cfg!(feature = "mail"), "mail"),
-    (
-        &["Core", "HttpClientModule"],
-        cfg!(feature = "http-client"),
-        "http-client",
-    ),
-    (
-        &["Core", "Native", "HttpClient"],
-        cfg!(feature = "http-client"),
-        "http-client",
-    ),
-];
-
-/// The dotted names of feature-gated Core modules NOT compiled into THIS build. Test harnesses
-/// (the differential/example sweeps) use it to skip gated examples loudly on reduced builds instead
-/// of failing on `E-MODULE-UNAVAILABLE` (e.g. `examples/mail/` on a build without `--features mail`).
+/// DEC-273: the gated-module table is now DERIVED from the extension registry
+/// (`crate::ext::registry::EXTENSIONS` — one row per extension, each listing the Core modules it
+/// provides). A new gated module = its extension row; nothing to edit here.
+///
+/// The dotted names of extension-provided Core modules NOT compiled into THIS build. Test
+/// harnesses (the differential/example sweeps) use it to skip gated examples loudly on reduced
+/// builds instead of failing on `E-EXTENSION-DISABLED` (e.g. `examples/mail/` on a build without
+/// `--features mail`).
 pub fn unavailable_gated_modules() -> Vec<String> {
-    GATED_CORE_MODULES
-        .iter()
-        .filter(|(_, available, _)| !available)
-        .map(|(m, _, _)| m.join("."))
+    crate::ext::registry::disabled()
+        .flat_map(|e| e.modules.iter().map(|m| (*m).to_string()))
         .collect()
 }
 
 /// If the program imports a feature-gated Core module whose feature is compiled out, the diagnostic
 /// to abort with (checked on the RAW program, before any prelude injection).
+/// True when the dotted import path targets `module` — the module itself or one of its members
+/// (`Core.Mail` and `Core.Mail.SmtpConfig` both target `Core.Mail`; `Core.Mailer` does NOT —
+/// the `.` boundary is what separates a member from an unrelated longer name). Extracted so the
+/// disabled-import matching has feature-independent unit coverage (the gate body itself only
+/// runs on reduced builds, which the all-features CI gate never is).
+fn import_targets_module(dotted: &str, module: &str) -> bool {
+    dotted == module
+        || (dotted.len() > module.len()
+            && dotted.starts_with(module)
+            && dotted.as_bytes()[module.len()] == b'.')
+}
+
 pub(super) fn unavailable_core_module(prog: &Program) -> Option<crate::diagnostic::Diagnostic> {
     use crate::ast::Item;
     for it in &prog.items {
         let Item::Import { path, span, .. } = it else {
             continue;
         };
-        for (module, available, feature) in GATED_CORE_MODULES {
-            if *available || path.len() < module.len() {
-                continue;
-            }
-            if path.iter().zip(module.iter()).all(|(a, b)| a == b) {
-                let m = module.join(".");
-                return Some(
-                    crate::diagnostic::Diagnostic::new(
-                        crate::diagnostic::Stage::Type,
-                        format!("`{m}` is not available in this `phg` build"),
-                        span.line,
-                        span.col,
-                    )
-                    .with_code("E-MODULE-UNAVAILABLE")
-                    .with_hint(format!(
-                        "rebuild this `phg` with the `{feature}` cargo feature — `cargo build --features {feature}` (default-set features are absent only under `--no-default-features`)"
-                    )),
-                );
+        let dotted = path.join(".");
+        for ext in crate::ext::registry::disabled() {
+            for m in ext.modules {
+                if import_targets_module(&dotted, m) {
+                    return Some(
+                        crate::diagnostic::Diagnostic::new(
+                            crate::diagnostic::Stage::Type,
+                            format!(
+                                "`{m}` is provided by the `{}` extension, which is not compiled into this `phg` build",
+                                ext.name
+                            ),
+                            span.line,
+                            span.col,
+                        )
+                        .with_code("E-EXTENSION-DISABLED")
+                        .with_hint(format!(
+                            "rebuild with the `{}` cargo feature — `cargo build --features {}` (default-set extensions are absent only under `--no-default-features`); `phg extensions` lists every extension and its state",
+                            ext.feature, ext.feature
+                        )),
+                    );
+                }
             }
         }
     }
@@ -2080,4 +2080,25 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
         });
     }
     cur
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::import_targets_module;
+
+    #[test]
+    fn import_matching_covers_module_member_and_lookalike() {
+        assert!(import_targets_module("Core.Mail", "Core.Mail"));
+        assert!(import_targets_module("Core.Mail.SmtpConfig", "Core.Mail"));
+        assert!(import_targets_module(
+            "Core.DatabaseModule.Database",
+            "Core.DatabaseModule"
+        ));
+        // A LONGER unrelated name must not match (the `.` boundary).
+        assert!(!import_targets_module("Core.Mailer", "Core.Mail"));
+        // A shorter prefix of the module is not the module.
+        assert!(!import_targets_module("Core", "Core.Mail"));
+        // Unrelated entirely.
+        assert!(!import_targets_module("Core.Output", "Core.Mail"));
+    }
 }

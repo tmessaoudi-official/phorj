@@ -70,7 +70,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 > The developer ruled (pre-sleep, 2026-07-15) that mid-run design questions are implemented on the
 > recommended option and queued HERE for morning review. Reversing any entry = reopen the DEC row.
 
-- **DEC-227 · `db` is now a DEFAULT cargo feature** (+ `E-MODULE-UNAVAILABLE` on feature-less builds,
+- **DEC-227 · `db` is now a DEFAULT cargo feature** (+ `E-EXTENSION-DISABLED` on feature-less builds (DEC-273; formerly `E-MODULE-UNAVAILABLE`),
   + `E-TRANSPILE-DB` ladder gate). Was: stock binary couldn't run any `Core.DatabaseModule` program (unknown-ident
   wall); transpile of Db programs emitted the same wall instead of a ladder error. Severity: P0 UX.
   Repro (pre-fix): `cargo build && ./target/debug/phg run examples/db/basic.phg`.
@@ -1914,3 +1914,18 @@ it latent-and-random rather than deterministic. REAL FIX (owed, its own slice): 
 injected module's `Span.start` into a per-module high offset window at injection time (line/col
 stay original for diagnostics), so prelude and user span keys can never meet. Until then the
 one known-colliding file carries a deliberate padding line + pointer here.
+
+## Doc drift: `Process.args()` vs the live `Process.arguments()` (panel-found backlog, 2026-07-18)
+
+`examples/process/README.md` and the `E-UNKNOWN-IDENT`-adjacent explain text still say
+`Process.args()`, but the shipped native is `Core.Process.arguments()` (the runnable example uses
+the correct name; `args()` fails `E-UNKNOWN-IDENT`). Pre-existing drift found by the DEC-273
+wave-1 panel (correctness lens) — docs-only fix, its own small slice.
+
+## `phg test <dir>` whole-file validation runs the RAW checker (panel-found, pre-existing)
+
+`test_runner.rs`'s per-file validation calls `checker::check_tests` without the CLI prelude
+expansion, so injected-type files (e.g. anything using `Option`) fail `<check>` under `phg test`
+while `phg check` on the same file is clean — the same family as the LSP raw-checker gotcha
+(since fixed for the LSP by DEC-282's same-loader rule). Found by the DEC-273 wave-1 panel
+(round 5); predates the wave. Fix = route the test runner through the same front-end pipeline.

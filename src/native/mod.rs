@@ -22,18 +22,11 @@ use std::sync::OnceLock;
 // ordering coordinator (the pinned-slot invariant). `Core.Console` stays here (slot 0, inlined).
 mod bytes;
 mod convert;
-// `Core.Crypto` (Argon2id) is the one crate-backed module — gated so the WASM playground builds
-// without the dependency (see docs/specs/2026-06-27-dependency-policy.md).
-#[cfg(feature = "crypto")]
-mod crypto;
-mod csv;
 mod debug;
 mod decimal;
-mod encoding;
 mod file;
 mod hash;
 mod html;
-mod ini;
 mod json;
 mod list;
 mod list_registry;
@@ -58,10 +51,6 @@ mod input;
 #[cfg(feature = "mail")]
 mod mail;
 mod session;
-// `Core.Regex` is crate-backed (`regex`) — gated so the WASM playground builds without the
-// dependency (see docs/specs/2026-06-27-dependency-policy.md).
-#[cfg(feature = "regex")]
-mod regex;
 mod set;
 mod test;
 mod text;
@@ -357,7 +346,7 @@ fn output_capture(args: &[Value], capture: &mut CapturingInvoker) -> Result<Valu
 
 /// Index helper for a native's PHP emission: the already-emitted PHP for argument `i`, or `""` if
 /// absent (the checker guarantees arity before `php` is ever called). Keeps the `php` closures terse.
-fn parg(args: &[String], i: usize) -> &str {
+pub(crate) fn parg(args: &[String], i: usize) -> &str {
     args.get(i).map_or("", String::as_str)
 }
 
@@ -422,14 +411,17 @@ fn build() -> Vec<NativeFn> {
     registry.extend(set::set_natives());
     registry.extend(convert::convert_natives());
     registry.extend(decimal::decimal_natives());
-    registry.extend(encoding::encoding_natives());
+    #[cfg(feature = "encoding")]
+    registry.extend(crate::ext::encoding::encoding_natives());
     registry.extend(hash::hash_natives());
-    registry.extend(ini::ini_natives());
+    #[cfg(feature = "ini")]
+    registry.extend(crate::ext::ini::ini_natives());
     registry.extend(uri::uri_natives());
     registry.extend(url::url_natives());
     registry.extend(path::path_natives());
     registry.extend(validate::validate_natives());
-    registry.extend(csv::csv_natives());
+    #[cfg(feature = "csv")]
+    registry.extend(crate::ext::csv::csv_natives());
     registry.extend(random::random_natives());
     registry.extend(json::json_natives());
     registry.extend(option::option_natives());
@@ -441,9 +433,9 @@ fn build() -> Vec<NativeFn> {
     registry.extend(test::test_natives());
     registry.extend(time::time_natives());
     #[cfg(feature = "crypto")]
-    registry.extend(crypto::crypto_natives());
+    registry.extend(crate::ext::crypto::crypto_natives());
     #[cfg(feature = "regex")]
-    registry.extend(regex::regex_natives());
+    registry.extend(crate::ext::regex::regex_natives());
     #[cfg(feature = "db")]
     registry.extend(db::db_natives());
     #[cfg(feature = "mail")]

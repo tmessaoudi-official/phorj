@@ -13,12 +13,12 @@
 //! `__phorj_ini_parse` (never `parse_ini_string`); per-line trim uses PHP `trim()`'s exact default
 //! set on both legs.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::{build_map, Value};
 use std::rc::Rc;
 
-fn ini_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn ini_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => {
             let mut pairs: Vec<(Value, Value)> = Vec::new();
@@ -53,7 +53,7 @@ fn ini_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-pub(crate) fn ini_natives() -> Vec<NativeFn> {
+pub fn ini_natives() -> Vec<NativeFn> {
     vec![NativeFn {
         module: "Core.Ini",
         name: "parse",
@@ -64,7 +64,3 @@ pub(crate) fn ini_natives() -> Vec<NativeFn> {
         php: |a| format!("__phorj_ini_parse({})", parg(a, 0)),
     }]
 }
-
-#[cfg(test)]
-#[path = "ini_tests.rs"]
-mod tests;

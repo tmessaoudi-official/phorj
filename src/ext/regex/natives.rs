@@ -13,7 +13,7 @@
 //! reuse" with no new `Value` variant. The PHP transpile is a peer emission target only — the
 //! engine runs natively on both Rust backends (the dependency-policy native-runtime rule).
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::{build_map, Instance, Value};
 use std::cell::RefCell;
@@ -31,7 +31,7 @@ thread_local! {
 /// Compile `pattern` (bare, Unicode), memoizing the engine. Returns a clean fault on an invalid or
 /// unsupported (backref/lookaround) pattern — the `regex` crate's own compile error, surfaced
 /// uniformly so the failure is identical on both backends.
-fn compiled(pattern: &str) -> Result<Rc<::regex::Regex>, String> {
+pub(super) fn compiled(pattern: &str) -> Result<Rc<::regex::Regex>, String> {
     if let Some(re) = CACHE.with(|c| c.borrow().get(pattern).cloned()) {
         return Ok(re);
     }
@@ -74,7 +74,7 @@ fn as_pattern(v: &Value) -> Result<String, String> {
 // ---- natives ------------------------------------------------------------------------------------
 
 /// `Regex.compile(string) -> Regex` — validate + memoize; faults on an invalid/unsupported pattern.
-fn regex_compile(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn regex_compile(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => {
             compiled(p)?; // validate now (and cache); the value carries only the bare pattern.
@@ -85,7 +85,7 @@ fn regex_compile(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// `Regex.matches(Regex, string) -> bool` — is there a match anywhere in the subject?
-fn regex_matches(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn regex_matches(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
             let pat = as_pattern(re)?;
@@ -96,7 +96,7 @@ fn regex_matches(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// `Regex.find(Regex, string) -> string?` — the first whole match, else `null`.
-fn regex_find(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn regex_find(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
             let pat = as_pattern(re)?;
@@ -109,7 +109,7 @@ fn regex_find(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// `Regex.findAll(Regex, string) -> List<string>` — every whole match (empty list if none).
-fn regex_find_all(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn regex_find_all(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
             let pat = as_pattern(re)?;
@@ -125,7 +125,7 @@ fn regex_find_all(args: &[Value], _: &mut String) -> Result<Value, String> {
 
 /// `Regex.findGroups(Regex, string) -> Map<string, string>?` — the **named** captures of the first
 /// match, keyed by group name, else `null`. Numbered-only captures are omitted (named is the API).
-fn regex_find_groups(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn regex_find_groups(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
             let pat = as_pattern(re)?;
@@ -149,7 +149,7 @@ fn regex_find_groups(args: &[Value], _: &mut String) -> Result<Value, String> {
 
 /// `Regex.replace(Regex, string, string) -> string` — replace every match. The replacement uses the
 /// `$1` / `${name}` capture syntax shared by the `regex` crate and PHP `preg_replace`.
-fn regex_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn regex_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s), Value::Str(repl)] => {
             let pat = as_pattern(re)?;
@@ -165,7 +165,7 @@ fn regex_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// `Regex.split(Regex, string) -> List<string>` — split the subject on matches.
-fn regex_split(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn regex_split(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [re, Value::Str(s)] => {
             let pat = as_pattern(re)?;
@@ -187,7 +187,7 @@ fn regex_split(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// checker runs. The `php` emitters reference the `__phorj_regex_*` runtime helpers
 /// (`transpile/program.rs`); the injected `Regex` class transpiles to a PHP class with a public
 /// `$pattern` (the bare pattern), so a global helper can build the `/u`-delimited form.
-pub(crate) fn regex_natives() -> Vec<NativeFn> {
+pub fn regex_natives() -> Vec<NativeFn> {
     let regex_ty = || Ty::Named("Regex".to_string(), vec![]);
     let list_str = || Ty::List(Box::new(Ty::String));
     let opt_str = || Ty::Optional(Box::new(Ty::String));
@@ -270,7 +270,3 @@ pub(crate) fn regex_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "regex_tests.rs"]
-mod tests;

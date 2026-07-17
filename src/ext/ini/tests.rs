@@ -1,4 +1,4 @@
-use super::*;
+use super::natives::ini_parse;
 use crate::value::{HKey, Value};
 
 /// Parse INI text and return the ordered (key, value) string pairs, or panic if the shape is wrong.

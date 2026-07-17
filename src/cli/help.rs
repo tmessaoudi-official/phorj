@@ -26,6 +26,7 @@ pub fn help_text() -> String {
          debug      run the program under the interactive debugger (dev; --dap for DAP)\n  \
          test       discover and run `test` blocks (under tests/, or a given file/dir)\n  \
          format     format source to canonical form (--check for CI; - for stdin)\n  \
+         extensions list every extension: tier, cargo flag, and whether THIS build has it\n  \
          explain    explain a diagnostic code (e.g. phg explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
@@ -112,6 +113,9 @@ pub fn help_for(cmd: &str) -> String {
         }
         "build" => {
             "build — compile to a standalone executable (embeds the program source).\n\n\
+                    The artifact runs on the same VM+JIT as `phg run` (it inherits the building\n\
+                    phg's extensions/features). `PHG_NO_JIT=1 ./app` is the byte-identical pure-VM\n\
+                    escape hatch — an env var, since the artifact's argv belongs to your program.\n\n\
                     usage:\n  phg build <file> [-o out] [--target triple | --all]\n\n\
                     examples:\n  \
                     phg build app.phg\n  \

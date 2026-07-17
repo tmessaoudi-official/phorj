@@ -1,4 +1,5 @@
-use super::*;
+use super::natives::*;
+use crate::value::Value;
 
 /// Build a compiled `Regex` value for a pattern (the helper the natives consume).
 fn re(pattern: &str) -> Value {

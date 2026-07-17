@@ -1,4 +1,4 @@
-//! Phorj CLI: `phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|explain>
+//! Phorj CLI: `phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|serve|extensions|explain>
 //! <file>`. Thin dispatcher over the testable `phorj::cli` module. `run` executes on the bytecode VM
 //! (the runtime); `run --tree-walker` selects the interpreter oracle.
 // `deny`, not `forbid`: first-party `unsafe` is confined to the JIT island (`src/jit/`); see the
@@ -10,7 +10,7 @@ use std::process::exit;
 use phorj::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|vendor|serve|lsp|debug|test|format|explain> \
+    "usage: phg <run|check|parse|tokenize|transpile|lift|disassemble|benchmark|build|serve|lsp|debug|test|format|extensions|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -19,11 +19,19 @@ fn main() {
     if let Some((src, profile)) = phorj::bundle::embedded_program() {
         // M-DX S0: a shipped artifact runs at the profile baked into its container (Release by
         // default, Dev only if built with `--dev`). Set it before running so profile-gated machinery
-        // reads it — secure by construction: no environment variable can flip a Release artifact.
+        // reads it — secure by construction: no environment variable can flip a Release artifact's
+        // PROFILE (PHG_NO_JIT below flips only the execution ENGINE — byte-identical + de-escalating).
         phorj::profile::set_active(profile);
         // A standalone built binary runs as a normal executable, so `Core.Process.args()` reads the
         // real process arguments (everything after the program name).
         phorj::native::set_process_args(std::env::args().skip(1).collect());
+        // DEC-273 build+JIT ruling: artifacts JIT by default (measured ~110× on hot pure loops)
+        // and honor `PHG_NO_JIT=1` as the byte-identical pure-VM escape hatch — env, not argv,
+        // because the artifact's argv belongs to the embedded program's `#[Entry]`.
+        #[cfg(feature = "jit")]
+        if std::env::var("PHG_NO_JIT").is_ok_and(|v| !v.is_empty() && v != "0") {
+            phorj::vm::set_jit_enabled(false);
+        }
         // Batch-1 B: a built binary honors `main`'s `int` return as its process exit status.
         match cli::cmd_run_exit(&src) {
             Ok((text, code)) => {
@@ -49,6 +57,23 @@ fn main() {
             return;
         }
         _ => {}
+    }
+    // DEC-273: `phg extensions` lists every extension (name/tier/flag/state/modules) from the
+    // same registry the compiler's disabled-import gate reads — the discoverability surface.
+    if args.get(1).map(String::as_str) == Some("extensions") {
+        // `--docs` renders the build-independent form committed as docs/EXTENSIONS.md. Any other
+        // trailing argument is a usage error (the repo convention: loud rejection, never a
+        // silently-ignored typo — `--doc` must not regenerate the wrong form).
+        let docs = match args.get(2).map(String::as_str) {
+            None => false,
+            Some("--docs") if args.len() == 3 => true,
+            _ => {
+                eprintln!("usage: phg extensions [--docs]");
+                exit(2);
+            }
+        };
+        print!("{}", phorj::ext::registry::render_listing(!docs));
+        return;
     }
     // Feature C migration tool (internal, not in USAGE): `phg rewrite-new <file>` rewrites every
     // class/enum-variant construction to `new …` in place. Handled before the run-family dispatch.

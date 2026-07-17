@@ -1276,7 +1276,7 @@ fn all_examples_match_between_backends() {
             continue;
         }
         // Feature-gated examples (e.g. examples/mail/ without `--features mail`): the module's
-        // natives are absent in THIS build, so running would fail E-MODULE-UNAVAILABLE — skip
+        // natives are absent in THIS build, so running would fail E-EXTENSION-DISABLED — skip
         // loudly; the feature's own gate (`cargo test --features mail --test mail`) covers them.
         if uses_unavailable_gated_module(&src) {
             eprintln!(

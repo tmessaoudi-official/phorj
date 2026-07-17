@@ -153,7 +153,7 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        // Core.Ini — a hand-rolled simple INI parser matching `native::ini::ini_parse` line-for-line
+        // Core.Ini — a hand-rolled simple INI parser matching `ext::ini::natives::ini_parse` line-for-line
         // (NOT PHP `parse_ini_string`, whose type-coercion Phorj deliberately rejects). PHP `trim()`'s
         // default set matches the Rust `trim_matches`; overwriting an existing key keeps its position
         // (PHP array semantics == `build_map`). Returns a PHP array = the `Map<string,string>` value.

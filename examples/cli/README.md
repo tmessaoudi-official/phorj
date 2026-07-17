@@ -81,6 +81,22 @@ and `for` loop variables), parameters, top-level functions, and — inside a met
 the current class's fields. ...
 ```
 
+## What's in this build? — `phg extensions`
+
+DEC-273: the minimal core plus flag-gated extensions. List every extension, its tier, its cargo
+flag, and whether YOUR binary carries it:
+
+```
+$ phg extensions
+| extension | tier | flag | in this build | provides | summary |
+| ini | default | `ini` | yes | Core.Ini | INI config parsing (`Ini.parse`) — the DEC-273 pilot extension |
+...
+```
+
+Importing a module whose extension was compiled out is a clean compile error naming the flag
+(`E-EXTENSION-DISABLED`) — never a runtime surprise. `phg extensions --docs` renders the
+build-independent form committed as `docs/EXTENSIONS.md`.
+
 ## Faults never panic
 
 Phorj never panics on input — runtime faults are clean, one-line errors with exit code 1:

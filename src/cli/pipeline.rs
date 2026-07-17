@@ -82,7 +82,7 @@ pub fn check_and_expand_reified(
     };
     let prog = &intrinsic_rewritten;
     // Feature-availability gate: an import of a Core module whose natives are compiled out of THIS
-    // build (e.g. `Core.DatabaseModule` under `--no-default-features`) is ONE clean `E-MODULE-UNAVAILABLE` — never
+    // build (e.g. `Core.DatabaseModule` under `--no-default-features`) is ONE clean `E-EXTENSION-DISABLED` — never
     // the wall of prelude-internal `E-UNKNOWN-IDENT`s the injection below would otherwise produce.
     if let Some(d) = super::preludes::unavailable_core_module(prog) {
         return Err(d.render(diag_src));

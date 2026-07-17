@@ -1,5 +1,34 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## CURRENT (2026-07-18 — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
+- **DEC-273 WAVE 1 (expanded per directive) — gate green 2276/2276+clippy×2+fmt+release,
+  PANEL ROUND 2 RUNNING (round 1: lens2 CLEAN incl. bypass-question CLOSED; lens1 2P2+3P3,
+  lens3 1P1+6P2+2P3 — ALL FIXED in-wave; DEC-268 needs 2 consecutive clean rounds).**
+  Wave contents beyond slice 1: crypto/regex/csv/encoding migrated to src/ext/<name>/ (regex
+  prelude → ext::regex_prelude::PRELUDE unconditional; csv+encoding = new default features);
+  registry rows csv/encoding/signals + migrated=true ×5 + row-scope/green/db-all docs;
+  import_targets_module extracted + gate_tests (end of preludes.rs — clippy items-after-test-
+  module); `phg extensions [--docs]` rejects unknown args; **dev rulings in-wave: jit row STAYS
+  (core-classified, row = flag discoverability) + PHG_NO_JIT=1 env for `phg build` artifacts
+  (measured: artifact JIT 0.14s vs no-jit 8.9s on 10M-iter probe; artifacts inherit builder's
+  features)**. After 2 clean panel rounds → ONE commit. Next wave: uri/path/json/debug/test/…
+  migrations + preludes-monolith dissolution for db/mail/http-client twins.
+
+## PREV (2026-07-18, early — CONTINUOUS MODE)
+- **DEC-273 SLICE 1 BUILT, gate green 2275/2275 + clippy×2 + fmt + release, UNCOMMITTED —
+  DEC-268 PANEL RUNNING (3 lenses on the live diff; commit blocked on 2 consecutive clean
+  rounds).** Built: src/ext/registry.rs (Extension rows: name/feature/enabled/tier/modules/
+  summary/migrated; render_listing(with_state) — CLI form vs build-independent docs form) ·
+  src/ext/ini/{mod,natives,tests}.rs = PILOT (git-mv'd from src/native/ini*.rs; new default-tier
+  `ini` cargo feature; parg widened pub(crate)) · GATED_CORE_MODULES const RETIRED → registry-
+  driven unavailable_core_module → **E-EXTENSION-DISABLED** (E-MODULE-UNAVAILABLE = retirement
+  pointer in explain) · `phg extensions [--docs]` subcommand (before the file-dispatch arm) ·
+  docs/EXTENSIONS.md generated + sync test (build-independent docs form → test unconditional) ·
+  registry hygiene test (tier order, transpile/lift MANDATORY heads) · live-verified: no-default
+  build rejects `import Core.Ini;` cleanly. Docs: CHANGELOG/FEATURES/register BUILT note.
+  NEXT after panel+commit: batch-migrate remaining extensions (crypto→regex→unicode→db→mail→
+  http-client each to src/ext/<name>/), then transpile/lift structural seam (their wave).
+
 ## CURRENT (2026-07-17, night — CONTINUOUS MODE, dev-mandated: stop only for questions)
 - **DEC-282 COMMITTED `d42a2107` (unified manifest-less loader — the biggest slice of the queue,
   38 files, +1158/−1749; full gate 2270/2270 + clippy×2 + fmt + release).** Everything ruled is

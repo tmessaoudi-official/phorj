@@ -2263,3 +2263,53 @@ differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred bindi
   Nothing about the retired manifest carries over by default; the only settled seam is the one
   DEC-282 shipped: the extension WRITES `vendor/<Publisher>/<Name>/` (folder = package) and the
   compiler only ever reads disk.
+
+- **DEC-273 SLICE 1 BUILT (2026-07-17): the extension seam + pilot.** `src/ext/registry.rs` =
+  the one-row list (name/feature/enabled/tier/modules/summary/migrated) — drives the
+  disabled-import gate (preludes' GATED_CORE_MODULES const RETIRED, derived from the registry),
+  the new `phg extensions` subcommand, and the generated `docs/EXTENSIONS.md` (sync test, the
+  explain-coverage pattern; guarded to the default build). `E-MODULE-UNAVAILABLE` SUPERSEDED by
+  `E-EXTENSION-DISABLED` (names extension + flag + points at `phg extensions`; old explain entry
+  = retirement pointer). PILOT: `Core.Ini` → `src/ext/ini/{mod,natives,tests}.rs` behind a new
+  default-tier `ini` feature — the AMENDMENT-2 folder shape proven end-to-end (live-verified:
+  no-default build rejects `import Core.Ini;` with the clean diagnostic). Tier heads recorded:
+  transpile/lift open MANDATORY (feature "-" until their structural wave). Remaining extensions
+  keep their pre-DEC-273 homes, listed with `migrated: false` for discovery.
+
+- **DEC-273 slice-1 PANEL round 1 (2026-07-17, DEC-268 3-lens, evidence-based):** lens-1
+  correctness 2×P2+3×P3 · lens-2 security CLEAN (feature-gate bypass question CLOSED — every
+  entry point traced to the two pipeline chokepoints; layer-2 structural impossibility of
+  `__phorj_ini_parse` emission on gated builds; noted PRE-EXISTING `check --json` gate-quality
+  gap + E-INJECTED-TYPE-BARE two-step trail, both inherited) · lens-3 completeness 1×P1+6×P2+2×P3.
+  ALL findings fixed same-wave (extensions-arg rejection; matcher predicate extraction+tests;
+  signals row + green/db-all absence documented; twin-colocation wording honest; ARCHITECTURE
+  ext/ row; KNOWN_ISSUES retirement pointer; examples/README rows; register-note corrections:
+  the docs sync test is BUILD-INDEPENDENT not default-guarded, and row scope = feature-gated
+  capabilities only). One item escalated to the developer (ADJUDICATION rule): the `jit` row
+  classifies JIT as a Default-tier extension while the ruling's CORE list bundles JIT into the
+  language kernel — developer to rule row-stays vs row-drops.
+
+- **DEC-273 WAVE 1 expanded (2026-07-17, developer directive "bigger slices/waves"):** the panel
+  fixes and FOUR more physical migrations folded into the same wave — `crypto`, `regex` (its
+  prelude source colocated via `ext::regex_prelude::PRELUDE`, referenced unconditionally by the
+  CORE_MODULES const; the gate rejects the import on reduced builds before the prelude matters),
+  `csv`, `encoding` (both gained new default-tier features). Live-verified: no-default build
+  rejects `import Core.Csv;`/`Core.Regex;` with clean E-EXTENSION-DISABLED. Rows: +signals
+  (Default), +csv, +encoding; migrated=true ×5; green/db-all documented non-rows.
+
+- **DEC-273 addenda (2026-07-17, developer via AskUserQuestion):** (a) the `jit` registry row
+  STAYS — jit remains CORE by classification (the ruling's kernel list); the row documents its
+  BUILD FLAG for discoverability, not an extension status. (b) `phg build` artifacts CARRY AND
+  USE the JIT (measured: hot pure 10M-iter loop — phg run JIT 0.08s / --no-jit 8.9s / the
+  standalone artifact 0.14s), inheriting the building phg's feature set; NEW: artifacts honor
+  `PHG_NO_JIT=1` (env — argv belongs to the embedded program) as the byte-identical pure-VM
+  escape hatch, mirroring `phg run --no-jit`.
+
+- **DEC-273 WAVE 1 CERTIFIED + panel record (2026-07-18):** DEC-268 MAXIMAL ladder satisfied —
+  round 2 (3 lenses: security CLEAN incl. PHG_NO_JIT de-escalation verdict + env-read enumeration;
+  correctness 1×P2; completeness 3×P2+1×P3 — all fixed), round 3 (1 residual: a fix reported
+  landed but NOT in tree — unasserted replace; fixed with grep-verified anchor), rounds 4 AND 5
+  fully CLEAN (consecutive). Round-5 fresh probes: all 5 migrated-extension examples 3-leg
+  byte-identical under the php-8.5.8 oracle. Panel by-catch (pre-existing, KNOWN_ISSUES'd):
+  `phg test` whole-file validation uses the raw checker (injected-type files fail `<check>`);
+  `Process.args()` doc drift.
