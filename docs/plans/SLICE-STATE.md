@@ -1,6 +1,19 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
 ## CURRENT (2026-07-17, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
+
+## PERF CENSUS (2026-07-17, full microbench WIN-OR-FLAG, quiet-box NOT pinned — indicative):
+- **LOSSES (4)**: jsonround **0.26×** (797ms/209ms — DOMINANT, the Json parse+match+build+stringify
+  pipeline vs PHP's C json_*) · dbwork **0.63×** (Db binding/dispatch vs PDO sqlite) · closurecall
+  **0.91×** · floatmul **1.00×** (dead-even, rounds to LOSS). WINS (19) incl. trycatch 32× ·
+  objalloc 9× · match 8× · hofpipe 6× · floatarith 4×.
+- **NEXT PERF SLICE (user-directed 2026-07-17 "optimize the losses to beat php, natural in
+  parallel"): jsonround FIRST** — needs a fresh-context profiling slice (split parse vs stringify
+  vs match/build; the encoder likely churns Value allocs per node). SPINE-SENSITIVE (Json enum
+  tree threads all 3 backends) — measure-before/after per Invariant 11, do NOT rush. dbwork second
+  (Db native-only, PDO baseline). closurecall/floatmul marginal — likely quiet-box-pinned reruns
+  land them ≥1.0. ⚠ the census above is UNPINNED (this box swings 3-4×) — RE-RUN CORE-PINNED
+  (taskset -c 7 + docker php --cpuset-cpus=7) before trusting any single number or claiming a fix.
 - **DEC-273 WAVE 1 COMMITTED `9aed1ce7`** — registry + 5 migrations + phg extensions +
   E-EXTENSION-DISABLED + PHG_NO_JIT; DEC-268 panel: 5 rounds, rounds 4+5 consecutively CLEAN
   (round-5 probes: all 5 migrated extensions 3-leg byte-identical vs php-8.5.8). Panel by-catch
