@@ -87,7 +87,16 @@ Updated: 2026-07-16 (evening)
   docs/snippets unchecked · UriModule.Uri.parse double-chain (already ruled follow-up).
   ⚠ agent snapshot commit `1234bdac` lives on branch worktree-agent-a3b9403d94752528a (worktree
   removal is permission-blocked — clean up manually later; second stale worktree
-  agent-af41f1445fc1c9498 likewise). NOW: full gate on MASTER (post-merge state) → commit.
+  agent-af41f1445fc1c9498 likewise). ✅ COMMITTED `8bae400f` (117 files, gate 2286/2286).
+- **DEC-275 E-ERROR-NAME (inline, uncommitted, gate running):** rule at collect (transitive
+  class_implements ⇒ name must end Error|Exception), explain entry, 2 checker tests (incl.
+  subclass-of-error-base), stdlib sweep codemod = 25 renames (Mail: AuthFailed/ConnectionFailed/
+  InvalidAddress/MailIo/MailTimeout/MessageBuildFailed/RecipientRejected; Http: BlockedAddress/
+  HttpConnectionFailed/HttpTimeout/InvalidUrl; Db: ConstraintViolation/SerializationFailure/
+  Timeout/UniqueViolation; Uri: UriMalformed + UriBad* family + UriBaseNotAbsolute/
+  UriPortOutOfRange — all stem+Error; sentinels <<X>> renamed in lockstep, 30 files). The rule
+  self-verifies the corpus on every suite run. On green: commit + release rebuild → NEXT = DEC-191
+  #[Entry] (gaps ruled; codemod-driven breaking migration).
 - **LIFT CATCH-UP + DEC-280 (inline, uncommitted, gate running):** DEC-280 RULED+BUILT
   (untyped/mixed foreach k=>v; developer challenged→confirmed; lift marker inline comment form).
   Landed: parser bare/mixed bindings (parse_foreach — dropped both mandatory-type errors);

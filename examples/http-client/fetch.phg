@@ -8,7 +8,7 @@
 // server-side request against internal infrastructure (the SSRF class). LOOPBACK (127.0.0.1/::1) is
 // allowed (local services/sidecars/dev). DNS is pinned (resolved once, connect to that IP, re-checked
 // across redirects — no rebinding). Opt in with `.allowPrivateHosts(true)` to reach private ranges
-// deliberately; a blocked address is a typed `BlockedAddress` (a `HttpClientError` subtype).
+// deliberately; a blocked address is a typed `BlockedAddressError` (a `HttpClientError` subtype).
 //
 // SECURITY — cross-origin redirect credential strip (DEC-264): when a redirect crosses origins
 // (scheme, host, or port differs — INCLUDING an https→http downgrade), the client DROPS the
@@ -34,7 +34,7 @@ import Core.HttpClientModule;
 import Core.HttpClientModule.HttpClient;
 import Core.HttpClientModule.HttpResponse;
 import Core.HttpClientModule.HttpClientError;
-import Core.HttpClientModule.InvalidUrl;
+import Core.HttpClientModule.InvalidUrlError;
 
 function main(): void {
     try {
@@ -51,7 +51,7 @@ function main(): void {
         // credential-smuggling footgun PHP's file_get_contents/curl accept silently.
         try {
             discard c.get("https://user:pw@example.com/");
-        } catch (InvalidUrl e) {
+        } catch (InvalidUrlError e) {
             Output.printLine("userinfo rejected: by design");
         }
     } catch (HttpClientError e) {

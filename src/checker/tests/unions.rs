@@ -4,10 +4,10 @@ use super::support::*;
 
 #[test]
 fn union_catch_covers_each_member() {
-    // `catch (BadInput | NotFound e)` discharges a call that throws `BadInput` (a member).
+    // `catch (BadInputError | NotFoundError e)` discharges a call that throws `BadInputError` (a member).
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
-             function main() -> void {{ try {{ f(); }} catch (BadInput | NotFound e) {{}} }}"
+        "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInputError | NotFoundError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }

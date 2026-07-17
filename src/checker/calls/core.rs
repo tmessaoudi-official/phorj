@@ -111,7 +111,7 @@ impl Checker {
                     if let Expr::Ident(cls, _) = &**object {
                         // DEC-234: a `new`-wrapped qualified injected construction wins over the
                         // static-method route when the qualifier is ALSO an injected class
-                        // (`new Uri.UriMalformed(…)`, `new Db.Timeout(…)` — `Uri`/`Db` name both
+                        // (`new Uri.UriMalformedError(…)`, `new Db.TimeoutError(…)` — `Uri`/`Db` name both
                         // the module qualifier and its main class). Only `new` heads divert:
                         // `Uri.parse(…)` still resolves as the static call below.
                         if self.under_new

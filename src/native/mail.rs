@@ -11,8 +11,8 @@
 //! erase-then-downcast pattern ([`MailerObj`] — a transport; [`EmailObj`] — a message draft the
 //! prelude's `Email` builder mutates). Natives return the prelude-local `MailResult<T>` (Ok|Err) —
 //! never a hard fault on a mail error — and the prelude throws the typed [`MailError`] taxonomy off
-//! the `<<Kind>>` marker prefix, exactly like `DatabaseError` (kinds: ConnectionFailed / AuthFailed /
-//! RecipientRejected / TlsError / InvalidAddress / MessageBuildFailed / Timeout / Io).
+//! the `<<Kind>>` marker prefix, exactly like `DatabaseError` (kinds: ConnectionFailedError / AuthFailedError /
+//! RecipientRejectedError / TlsError / InvalidAddressError / MessageBuildFailedError / TimeoutError / Io).
 //!
 //! MIME is composed by `lettre`'s builder (RFC-correct multipart): text-only → a plain body;
 //! `.html(body)` → `multipart/alternative` with an AUTO-DERIVED plaintext part ([`html_to_text`],
@@ -180,7 +180,7 @@ fn as_email(v: &Value) -> Result<&EmailObj, String> {
 fn parse_mailbox(email: &str, name: &str) -> Result<Mailbox, String> {
     let addr: lettre::Address = email
         .parse()
-        .map_err(|e| format!("<<InvalidAddress>>Core.Mail: invalid address `{email}`: {e}"))?;
+        .map_err(|e| format!("<<InvalidAddressError>>Core.Mail: invalid address `{email}`: {e}"))?;
     let display = if name.is_empty() {
         None
     } else {
@@ -292,7 +292,7 @@ fn html_to_text(html: &str) -> String {
 /// `mixed( related( alternative(text, html) | text, inline* ) | body, attachment* )` — each level
 /// added only when needed, so a plain-text no-attachment mail is a plain singlepart.
 fn build_message(draft: &Draft) -> Result<Message, String> {
-    let err = |m: String| format!("<<MessageBuildFailed>>Core.Mail: {m}");
+    let err = |m: String| format!("<<MessageBuildFailedError>>Core.Mail: {m}");
     let from = draft
         .from
         .clone()
@@ -389,18 +389,18 @@ fn smtp_err_kind(e: &lettre::transport::smtp::Error) -> &'static str {
             + u16::from(code.category as u8) * 10
             + u16::from(code.detail as u8);
         return match n {
-            535 | 534 | 530 => "AuthFailed",
-            550..=554 => "RecipientRejected",
-            _ => "ConnectionFailed",
+            535 | 534 | 530 => "AuthFailedError",
+            550..=554 => "RecipientRejectedError",
+            _ => "ConnectionFailedError",
         };
     }
     let text = e.to_string();
     if text.contains("tls") || text.contains("TLS") {
         "TlsError"
     } else if text.contains("timed out") || text.contains("timeout") {
-        "Timeout"
+        "TimeoutError"
     } else {
-        "ConnectionFailed"
+        "ConnectionFailedError"
     }
 }
 
@@ -463,7 +463,7 @@ fn smtp_inner(args: &[Value]) -> Result<Value, String> {
         }
     };
     let port = u16::try_from(port)
-        .map_err(|_| format!("<<ConnectionFailed>>Core.Mail: invalid SMTP port {port}"))?;
+        .map_err(|_| format!("<<ConnectionFailedError>>Core.Mail: invalid SMTP port {port}"))?;
     let mut builder = SmtpTransport::builder_dangerous(host).port(port);
     let has_creds = !user.is_empty();
     let tls_params = || {
@@ -538,7 +538,7 @@ fn dkim_inner(args: &[Value]) -> Result<Value, String> {
     };
     let mailer = as_mailer(m)?;
     let key = DkimSigningKey::new(pem, DkimSigningAlgorithm::Rsa)
-        .map_err(|e| format!("<<MessageBuildFailed>>Core.Mail: invalid DKIM key: {e}"))?;
+        .map_err(|e| format!("<<MessageBuildFailedError>>Core.Mail: invalid DKIM key: {e}"))?;
     *mailer.dkim.borrow_mut() = Some(DkimConfig::default_config(
         selector.to_string(),
         domain.to_string(),
@@ -557,7 +557,7 @@ fn email_new_inner(args: &[Value]) -> Result<Value, String> {
 }
 
 /// `MailSys.addressCheck(email)` — the `new Address(...)` validation gate (throwing ctor, DEC-221
-/// pattern): an invalid address is a catchable `InvalidAddress` at CONSTRUCTION, so an `Address`
+/// pattern): an invalid address is a catchable `InvalidAddressError` at CONSTRUCTION, so an `Address`
 /// value is valid by construction everywhere downstream.
 fn address_check_inner(args: &[Value]) -> Result<Value, String> {
     let (email, name) = match args {

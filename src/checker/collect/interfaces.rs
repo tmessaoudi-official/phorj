@@ -583,6 +583,31 @@ impl Checker {
             }
         }
 
+        // DEC-275: a throwable type must READ as one — any class that implements `Error`
+        // (directly, via a parent class, or via interface extends — `class_implements` is fully
+        // transitive) must be named `*Error` or `*Exception`. Enforced for stdlib and user code
+        // alike ("the normal behavior", developer-ruled 2026-07-16); the motivating ambiguity was
+        // `catch (InvalidUrl e)` reading like a value type at every site.
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                let throwable = self
+                    .class_implements
+                    .get(&c.name)
+                    .is_some_and(|is| is.iter().any(|i| i == "Error"));
+                if throwable && !(c.name.ends_with("Error") || c.name.ends_with("Exception")) {
+                    self.err_coded(
+                        c.span,
+                        format!(
+                            "`{}` implements `Error` but its name does not say so — a throwable type must end in `Error` or `Exception`",
+                            c.name
+                        ),
+                        "E-ERROR-NAME",
+                        Some(format!("rename it, e.g. `{}Error`", c.name)),
+                    );
+                }
+            }
+        }
+
         // Class conformance: every interface method (own + inherited) must be provided.
         for item in &program.items {
             if let Item::Class(c) = item {

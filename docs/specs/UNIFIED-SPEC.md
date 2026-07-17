@@ -1262,11 +1262,11 @@ per-slice realization notes — the authoritative slice-level record).
   `executeMany(rows)` (prepare-once, savepoint-atomic).
 - **Transactions**: BOTH the closure form `db.transaction(fn)` (commit-on-return, auto-rollback +
   re-throw the ORIGINAL typed error; nested = SAVEPOINT; via DEC-222 throwing closures) AND manual
-  `begin`/`commit`/`rollback`; `db.transaction(fn, retries)` retries `SerializationFailure` only
+  `begin`/`commit`/`rollback`; `db.transaction(fn, retries)` retries `SerializationFailureError` only
   (→ collapses into `transaction(fn, retries=0)` when DEC-249 method defaults land — queue item 13).
   Isolation levels deferred until multi-driver semantics matter.
-- **Errors**: catchable `throws DatabaseError`, subtyped (UniqueViolation / ConstraintViolation /
-  ConnectionError / Timeout / Deadlock / SerializationFailure / SyntaxError) — never PDO's silent
+- **Errors**: catchable `throws DatabaseError`, subtyped (UniqueViolationError / ConstraintViolationError /
+  ConnectionError / TimeoutError / Deadlock / SerializationFailureError / SyntaxError) — never PDO's silent
   false/null. Observability: `db.onQuery((sql, ms) => …)` + `db.timeout(ms)`.
 - **Spine/LADDER**: case-1 (faithful → PHP PDO transpile). Natives `pure:false` → auto-quarantined
   from the byte-identity differential; `run ≡ runvm` holds; correctness via `tests/db.rs` (+
@@ -1281,7 +1281,7 @@ per-slice realization notes — the authoritative slice-level record).
 AskUserQuestion; twin-of-Core.DatabaseModule architecture (where a decision matches Core.DatabaseModule, the implementation
 follows it verbatim). Deviations under bounded autonomy recorded as DEC-230 (REOPENABLE; re-verdicted
 by the 2026-07-16 audit): `SmtpConfig.withAuth(...)` factory + `SendmailTransport.at(path)` (no ctor
-default params at build time — DEC-249 now queued), `MailTimeout`/`MailIo` subtype names,
+default params at build time — DEC-249 now queued), `MailTimeoutError`/`MailIoError` subtype names,
 `Address.of(email)`. Source: `archive/2026-07-15-core-mail.md` (the full locked spec).
 **Pending amendment: DEC-265** (audit Tier 1) — SMTP will REQUIRE TLS when credentials are set
 (+ an explicit opt-out knob); the transport table's "TLS-by-default (STARTTLS)" row hardens from
@@ -1303,8 +1303,8 @@ downgradeable-opportunistic to required-with-credentials.
   auto-derives a plaintext alternative (`.text` overrides) · `.attachInline(cid, …)` CID images ·
   `.attach(…)` (`Attachment.fromFile`/`fromBytes`) · `m.send(e)` / batch `m.sendAll(List<Email>)`
   over a reused connection (a primitive, NOT a queue — queuing/templating is userland).
-- **Typed taxonomy** `MailError`: ConnectionFailed / AuthFailed / RecipientRejected / TlsError /
-  InvalidAddress / MessageBuildFailed / MailTimeout / MailIo / Other.
+- **Typed taxonomy** `MailError`: ConnectionFailedError / AuthFailedError / RecipientRejectedError / TlsError /
+  InvalidAddressError / MessageBuildFailedError / MailTimeoutError / MailIoError / Other.
 - **Dependency**: `lettre` 0.11 ADMITTED (feature `mail`, non-default, non-wasm; blocking
   `SmtpTransport` — no-tokio; rustls TLS; optional DKIM). Rejected: Stalwart `mail-send` (tokio),
   hand-rolled SMTP+MIME (RFC/MIME bug surface).

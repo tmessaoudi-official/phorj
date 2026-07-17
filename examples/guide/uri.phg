@@ -8,8 +8,8 @@ package Main;
 import Core.Output;
 import Core.UriModule.Uri;
 import Core.UriModule.UriError;
-import Core.UriModule.UriMalformed;
-import Core.UriModule.UriBadScheme;
+import Core.UriModule.UriMalformedError;
+import Core.UriModule.UriBadSchemeError;
 
 function main(): void {
     try {
@@ -29,9 +29,9 @@ function main(): void {
         Output.printLine("{a.equalsIncludingFragment(b)}");
         Uri bad = Uri.parse("http://exa mple.com/");
         Output.printLine(bad.toString());
-    } catch (UriBadScheme e) {
+    } catch (UriBadSchemeError e) {
         Output.printLine("scheme: {e.message}");
-    } catch (UriMalformed e) {
+    } catch (UriMalformedError e) {
         Output.printLine("malformed: {e.message}");
     } catch (UriError e) {
         Output.printLine("other: {e.message}");

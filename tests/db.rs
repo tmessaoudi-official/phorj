@@ -587,7 +587,7 @@ fn db_transactions_example_runs_on_both_backends() {
     let src = std::fs::read_to_string("examples/db/transactions.phg")
         .expect("read examples/db/transactions.phg");
     let expected = "after commit: acct1=70 acct2=30\n\
-                    caught UniqueViolation; transaction rolled back\n\
+                    caught UniqueViolationError; transaction rolled back\n\
                     after rollback: acct1=70 acct2=30\n\
                     after nested: acct1=500 acct2=30\n\
                     after close: Core.DatabaseModule: the connection is closed\n";
@@ -606,7 +606,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
+import Core.DatabaseModule.UniqueViolationError;
 function bal(Database db): int throws DatabaseError {{
   Statement s = db.prepare("SELECT bal FROM acct WHERE id = 1")?;
   List<Row> rows = s.query()?;
@@ -654,7 +654,7 @@ fn db_rollback_on_throw_via_finally_idiom() {
          run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?;
          db.commit()?;
          ok = true;
-       } catch (UniqueViolation e) {
+       } catch (UniqueViolationError e) {
          Output.printLine("rolled back on: {e.message}");
        } finally {
          if (!ok) { db.rollbackQuiet(); }
@@ -685,11 +685,11 @@ fn db_savepoint_partial_rollback() {
 
 #[test]
 fn db_unique_violation_caught_specifically() {
-    // `catch (UniqueViolation e)` catches the precise subtype; the base `catch (DatabaseError)` never runs.
+    // `catch (UniqueViolationError e)` catches the precise subtype; the base `catch (DatabaseError)` never runs.
     let src = tx_program(
         r#"try {
          run(db, "INSERT INTO acct(id, bal) VALUES(1, 5)")?;
-       } catch (UniqueViolation e) {
+       } catch (UniqueViolationError e) {
          Output.printLine("unique");
        }"#,
     );
@@ -711,7 +711,7 @@ fn db_close_then_use_is_connection_error() {
 // ── DEC-208 slice C: the CLOSURE form of transactions (`db.transaction(fn[, retries])`) ──
 // Unblocked by DEC-222 (throwing-closure function types). BEGIN → run closure → COMMIT on normal return
 // (returning its value) / auto-ROLLBACK + re-throw the ORIGINAL typed error on a throw; a nested call is
-// a SAVEPOINT; `transaction(fn, retries)` re-runs on the transient `SerializationFailure` only (DEC-249 default param; the former `transactionRetry` is retired).
+// a SAVEPOINT; `transaction(fn, retries)` re-runs on the transient `SerializationFailureError` only (DEC-249 default param; the former `transactionRetry` is retired).
 
 /// The shipped `examples/db/transaction-closure.phg` — the SOLE gate that runs the closure-form
 /// transaction surface (commit / value-return / auto-rollback-and-rethrow / nested savepoint / retry)
@@ -722,7 +722,7 @@ fn db_transaction_closure_example_runs_on_both_backends() {
         .expect("read examples/db/transaction-closure.phg");
     let expected = "after commit: acct1=70 acct2=30\n\
                     total in tx: 100\n\
-                    caught UniqueViolation; transaction rolled back\n\
+                    caught UniqueViolationError; transaction rolled back\n\
                     after rollback: acct1=70 acct2=30\n\
                     inner savepoint rolled back: outer continues\n\
                     after nested: acct1=500 acct2=30\n\
@@ -746,15 +746,15 @@ fn db_transaction_closure_commits_on_normal_return() {
 #[test]
 fn db_transaction_closure_auto_rolls_back_and_rethrows_the_typed_error() {
     // A throw inside the closure auto-rolls-back AND re-propagates the ORIGINAL typed error — caught as
-    // the precise `UniqueViolation` subtype outside the transaction; the balance change is discarded.
+    // the precise `UniqueViolationError` subtype outside the transaction; the balance change is discarded.
     let src = tx_program(
         r#"try {
          discard db.transaction(function(): int throws DatabaseError {
            run(db, "UPDATE acct SET bal = 999 WHERE id = 1")?;
-           run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // duplicate PK -> UniqueViolation
+           run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // duplicate PK -> UniqueViolationError
            return 0;
          })?;
-       } catch (UniqueViolation e) {
+       } catch (UniqueViolationError e) {
          Output.printLine("rolled back on: {e.message}");
        }
        Output.printLine("bal={bal(db)?}");"#,
@@ -785,7 +785,7 @@ fn db_transaction_closure_nested_is_a_savepoint() {
     both(&src, "inner rolled back\nbal=200\n");
 }
 
-/// A scaffold with a captured mutable counter and the `SerializationFailure` import, for the retry
+/// A scaffold with a captured mutable counter and the `SerializationFailureError` import, for the retry
 /// tests: `body` runs inside `act(db): void throws DatabaseError`, `tries` is a shared counter object.
 fn retry_program(body: &str) -> String {
     format!(
@@ -796,8 +796,8 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
-import Core.DatabaseModule.SerializationFailure;
+import Core.DatabaseModule.UniqueViolationError;
+import Core.DatabaseModule.SerializationFailureError;
 class Tries {{ mutable int n; constructor() {{ this.n = 0; }} function bump(): int {{ this.n = this.n + 1; return this.n; }} }}
 function bal(Database db): int throws DatabaseError {{
   Statement s = db.prepare("SELECT bal FROM acct WHERE id = 1")?;
@@ -822,12 +822,12 @@ function main(): void {{
 
 #[test]
 fn db_transaction_retry_succeeds_after_a_transient_failure() {
-    // The closure throws a transient `SerializationFailure` on the first attempt, then succeeds; with
+    // The closure throws a transient `SerializationFailureError` on the first attempt, then succeeds; with
     // retries=2 the transaction is re-run and the write lands (on the 2nd attempt).
     let src = retry_program(
         r#"db.transaction(function(): void throws DatabaseError {
              int k = tries.bump();
-             if (k <= 1) { throw new SerializationFailure("busy"); }
+             if (k <= 1) { throw new SerializationFailureError("busy"); }
              run(db, "UPDATE acct SET bal = 42 WHERE id = 1")?;
            }, 2)?;
        Output.printLine("bal={bal(db)?} attempts={tries.n}");"#,
@@ -837,19 +837,19 @@ fn db_transaction_retry_succeeds_after_a_transient_failure() {
 
 #[test]
 fn db_transaction_retry_gives_up_after_the_budget_and_propagates() {
-    // The closure always throws `SerializationFailure`; with retries=1 (2 attempts) the budget is
-    // exhausted and the LAST transient error propagates (still a catchable `SerializationFailure`).
+    // The closure always throws `SerializationFailureError`; with retries=1 (2 attempts) the budget is
+    // exhausted and the LAST transient error propagates (still a catchable `SerializationFailureError`).
     let src = retry_program(
         r#"try {
          db.transaction(function(): void throws DatabaseError {
            discard tries.bump();
-           throw new SerializationFailure("always busy");
+           throw new SerializationFailureError("always busy");
          }, 1)?;
-       } catch (SerializationFailure e) {
+       } catch (SerializationFailureError e) {
          Output.printLine("gave up after {tries.n} attempts: {e.message}");
        }"#,
     );
-    // A user-thrown SerializationFailure carries its message verbatim (no `Core.DatabaseModule:` native prefix).
+    // A user-thrown SerializationFailureError carries its message verbatim (no `Core.DatabaseModule:` native prefix).
     both(&src, "gave up after 2 attempts: always busy\n");
 }
 
@@ -861,9 +861,9 @@ fn db_transaction_retry_does_not_retry_a_non_transient_error() {
         r#"try {
          db.transaction(function(): void throws DatabaseError {
            discard tries.bump();
-           run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // duplicate PK -> UniqueViolation
+           run(db, "INSERT INTO acct(id, bal) VALUES(1, 0)")?; // duplicate PK -> UniqueViolationError
          }, 5)?;
-       } catch (UniqueViolation e) {
+       } catch (UniqueViolationError e) {
          Output.printLine("not retried; attempts={tries.n}");
        }
        Output.printLine("bal={bal(db)?}");"#,

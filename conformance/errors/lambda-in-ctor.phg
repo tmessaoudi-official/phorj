@@ -6,22 +6,22 @@ package Main;
 
 import Core.Output;
 
-class BadInput implements Error {
+class BadInputError implements Error {
     constructor(public string message) {}
 }
 
-function parsePositive(int n): int throws BadInput {
+function parsePositive(int n): int throws BadInputError {
     if (n < 0) {
-        throw new BadInput("negative: {n}");
+        throw new BadInputError("negative: {n}");
     }
     return n * 2;
 }
 
 // A generic holder whose constructor takes a throwing closure — the trigger shape.
 class Mapper<T> {
-    constructor(private (int) => T throws BadInput f) {}
-    function apply(int n): T throws BadInput {
-        (int) => T throws BadInput g = this.f;
+    constructor(private (int) => T throws BadInputError f) {}
+    function apply(int n): T throws BadInputError {
+        (int) => T throws BadInputError g = this.f;
         T v = g(n)?;
         return v;
     }
@@ -29,12 +29,12 @@ class Mapper<T> {
 
 function main(): void {
     Mapper<int> m = new Mapper(
-        function(int n): int throws BadInput { int doubled = parsePositive(n)?; return doubled + 1; }
+        function(int n): int throws BadInputError { int doubled = parsePositive(n)?; return doubled + 1; }
     );
     try {
         Output.printLine("ok {m.apply(20)}");
         Output.printLine("ok {m.apply(-3)}");
-    } catch (BadInput e) {
+    } catch (BadInputError e) {
         Output.printLine("caught {e.message}");
     }
 }

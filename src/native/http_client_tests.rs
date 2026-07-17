@@ -139,7 +139,7 @@ fn redirect_is_followed_and_capped() {
     )
     .unwrap();
     assert_eq!((r.status, r.body.as_slice()), (200, b"dest".as_slice()));
-    // Cap: a 0-redirect budget on a redirecting URL is the typed TooManyRedirects error.
+    // Cap: a 0-redirect budget on a redirecting URL is the typed TooManyRedirectsError error.
     let port3 = fixture(vec![
         b"HTTP/1.1 302 Found\r\nLocation: /loop\r\nContent-Length: 0\r\n\r\n".to_vec(),
     ]);
@@ -153,7 +153,7 @@ fn redirect_is_followed_and_capped() {
         false,
     )
     .unwrap_err();
-    assert!(e.contains("<<TooManyRedirects>>"), "{e}");
+    assert!(e.contains("<<TooManyRedirectsError>>"), "{e}");
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn post_body_and_303_downgrade_to_get() {
 
 #[test]
 fn timeout_is_typed() {
-    // A listener that accepts but never responds → read timeout → <<Timeout>>.
+    // A listener that accepts but never responds → read timeout → <<TimeoutError>>.
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     std::thread::spawn(move || {
@@ -199,7 +199,7 @@ fn timeout_is_typed() {
         false,
     )
     .unwrap_err();
-    assert!(e.contains("<<Timeout>>"), "{e}");
+    assert!(e.contains("<<TimeoutError>>"), "{e}");
 }
 
 // ── DEC-264: credential stripping on cross-origin redirects ────────────────────────────────────────
@@ -410,7 +410,7 @@ fn is_blocked_ip_blocks_private_link_local_metadata_allows_loopback_and_public()
 #[test]
 fn run_request_blocks_metadata_ip_by_default_and_opt_in_bypasses() {
     // Default (allow_private=false): a metadata/link-local host is refused BEFORE any connect — instant
-    // typed <<BlockedAddress>>, no hang. (Port 1 would never accept; we never reach it.)
+    // typed <<BlockedAddressError>>, no hang. (Port 1 would never accept; we never reach it.)
     let e = run_request(
         "GET",
         "http://169.254.169.254:1/latest/meta-data/",
@@ -422,8 +422,8 @@ fn run_request_blocks_metadata_ip_by_default_and_opt_in_bypasses() {
     )
     .unwrap_err();
     assert!(
-        e.contains("<<BlockedAddress>>"),
-        "expected BlockedAddress, got: {e}"
+        e.contains("<<BlockedAddressError>>"),
+        "expected BlockedAddressError, got: {e}"
     );
     assert!(
         e.contains("169.254.169.254"),
@@ -431,12 +431,12 @@ fn run_request_blocks_metadata_ip_by_default_and_opt_in_bypasses() {
     );
     // A private LAN host is likewise blocked by default.
     let e2 = run_request("GET", "http://10.0.0.5:1/", &[], &[], 200, 0, false).unwrap_err();
-    assert!(e2.contains("<<BlockedAddress>>"), "{e2}");
+    assert!(e2.contains("<<BlockedAddressError>>"), "{e2}");
     // Opt-in (allow_private=true) bypasses the guard: it PROCEEDS to connect (and fails with a
-    // connection/timeout error against the dead port) — the point is it is NOT <<BlockedAddress>>.
+    // connection/timeout error against the dead port) — the point is it is NOT <<BlockedAddressError>>.
     let e3 = run_request("GET", "http://10.0.0.5:1/", &[], &[], 200, 0, true).unwrap_err();
     assert!(
-        !e3.contains("<<BlockedAddress>>"),
+        !e3.contains("<<BlockedAddressError>>"),
         "opt-in must bypass the SSRF guard: {e3}"
     );
 }

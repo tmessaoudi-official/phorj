@@ -93,7 +93,7 @@ import Core.Output;
 import Core.HttpClientModule;
 import Core.HttpClientModule.HttpClient;
 import Core.HttpClientModule.HttpResponse;
-import Core.HttpClientModule.HttpTimeout;
+import Core.HttpClientModule.HttpTimeoutError;
 import Core.HttpClientModule.HttpClientError;
 function main(): void {{
   try {{
@@ -104,7 +104,7 @@ function main(): void {{
     try {{
       HttpResponse t = c.get("http://127.0.0.1:{sport}/slow");
       Output.printLine("unreachable {{t.status()}}");
-    }} catch (HttpTimeout te) {{
+    }} catch (HttpTimeoutError te) {{
       Output.printLine("timed out");
     }}
   }} catch (HttpClientError e) {{ Output.printLine("unexpected: {{e.message}}"); }}

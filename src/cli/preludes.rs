@@ -409,30 +409,30 @@ open class MailError implements Error {
   constructor(public string message) {}
   // The single classification point (the `DatabaseError.fail` mechanism): natives tag failures with a
   // `<<Kind>>` marker; this strips it and throws the matching TYPED subtype, so
-  // `catch (AuthFailed e)` is precise while `catch (MailError e)` still catches everything.
+  // `catch (AuthFailedError e)` is precise while `catch (MailError e)` still catches everything.
   static function fail(string message): never throws MailError {
-    if (String.startsWith(message, "<<ConnectionFailed>>")) { throw new ConnectionFailed(String.removePrefix(message, "<<ConnectionFailed>>")); }
-    if (String.startsWith(message, "<<AuthFailed>>")) { throw new AuthFailed(String.removePrefix(message, "<<AuthFailed>>")); }
-    if (String.startsWith(message, "<<RecipientRejected>>")) { throw new RecipientRejected(String.removePrefix(message, "<<RecipientRejected>>")); }
+    if (String.startsWith(message, "<<ConnectionFailedError>>")) { throw new ConnectionFailedError(String.removePrefix(message, "<<ConnectionFailedError>>")); }
+    if (String.startsWith(message, "<<AuthFailedError>>")) { throw new AuthFailedError(String.removePrefix(message, "<<AuthFailedError>>")); }
+    if (String.startsWith(message, "<<RecipientRejectedError>>")) { throw new RecipientRejectedError(String.removePrefix(message, "<<RecipientRejectedError>>")); }
     if (String.startsWith(message, "<<TlsError>>")) { throw new TlsError(String.removePrefix(message, "<<TlsError>>")); }
-    if (String.startsWith(message, "<<InvalidAddress>>")) { throw new InvalidAddress(String.removePrefix(message, "<<InvalidAddress>>")); }
-    if (String.startsWith(message, "<<MessageBuildFailed>>")) { throw new MessageBuildFailed(String.removePrefix(message, "<<MessageBuildFailed>>")); }
-    if (String.startsWith(message, "<<Timeout>>")) { throw new MailTimeout(String.removePrefix(message, "<<Timeout>>")); }
-    if (String.startsWith(message, "<<Io>>")) { throw new MailIo(String.removePrefix(message, "<<Io>>")); }
+    if (String.startsWith(message, "<<InvalidAddressError>>")) { throw new InvalidAddressError(String.removePrefix(message, "<<InvalidAddressError>>")); }
+    if (String.startsWith(message, "<<MessageBuildFailedError>>")) { throw new MessageBuildFailedError(String.removePrefix(message, "<<MessageBuildFailedError>>")); }
+    if (String.startsWith(message, "<<TimeoutError>>")) { throw new MailTimeoutError(String.removePrefix(message, "<<TimeoutError>>")); }
+    if (String.startsWith(message, "<<Io>>")) { throw new MailIoError(String.removePrefix(message, "<<Io>>")); }
     throw new MailError(message);
   }
 }
 
-// Typed error taxonomy (spec §5, shaped like DatabaseError's). `MailTimeout`/`MailIo` carry the Mail prefix
-// because bare `Timeout` already belongs to Core.DatabaseModule's taxonomy (two injected classes may not collide).
-class ConnectionFailed extends MailError { constructor(string message) { parent.constructor(message); } }
-class AuthFailed extends MailError { constructor(string message) { parent.constructor(message); } }
-class RecipientRejected extends MailError { constructor(string message) { parent.constructor(message); } }
+// Typed error taxonomy (spec §5, shaped like DatabaseError's). `MailTimeoutError`/`MailIoError` carry the Mail prefix
+// because bare `TimeoutError` already belongs to Core.DatabaseModule's taxonomy (two injected classes may not collide).
+class ConnectionFailedError extends MailError { constructor(string message) { parent.constructor(message); } }
+class AuthFailedError extends MailError { constructor(string message) { parent.constructor(message); } }
+class RecipientRejectedError extends MailError { constructor(string message) { parent.constructor(message); } }
 class TlsError extends MailError { constructor(string message) { parent.constructor(message); } }
-class InvalidAddress extends MailError { constructor(string message) { parent.constructor(message); } }
-class MessageBuildFailed extends MailError { constructor(string message) { parent.constructor(message); } }
-class MailTimeout extends MailError { constructor(string message) { parent.constructor(message); } }
-class MailIo extends MailError { constructor(string message) { parent.constructor(message); } }
+class InvalidAddressError extends MailError { constructor(string message) { parent.constructor(message); } }
+class MessageBuildFailedError extends MailError { constructor(string message) { parent.constructor(message); } }
+class MailTimeoutError extends MailError { constructor(string message) { parent.constructor(message); } }
+class MailIoError extends MailError { constructor(string message) { parent.constructor(message); } }
 
 // A typed, injection-safe address (spec §4): validated AT CONSTRUCTION (DEC-221 throwing ctor), so an
 // `Address` value is valid-by-construction everywhere downstream — raw-header injection (the #1 PHP
@@ -678,8 +678,8 @@ class FileSystem {
 
 /// `Core.HttpClientModule` (W3-2, TOP-20 #2 blocker) — the sync HTTP client prelude (the Core.DatabaseModule/Mail
 /// architecture). Taxonomy names are prefixed where a bare name is already taken by another injected
-/// taxonomy (`HttpTimeout`/`HttpTlsError`/`HttpConnectionFailed` — `Timeout`/`TlsError`/
-/// `ConnectionFailed`/`ConnectionError` belong to Core.DatabaseModule / Core.Mail; injected-class dedup would
+/// taxonomy (`HttpTimeoutError`/`HttpTlsError`/`HttpConnectionFailedError` — `TimeoutError`/`TlsError`/
+/// `ConnectionFailedError`/`ConnectionError` belong to Core.DatabaseModule / Core.Mail; injected-class dedup would
 /// silently CAPTURE the other module's class — the cross-prelude collision smell recorded in
 /// KNOWN_ISSUES). Native-only (`E-TRANSPILE-HTTPCLIENT`).
 pub(super) const HTTP_CLIENT_PRELUDE: &str = r#"
@@ -695,28 +695,28 @@ open class HttpClientError implements Error {
   constructor(public string message) {}
   // The single classification point (the DatabaseError.fail mechanism): `<<Kind>>` marker → typed subtype.
   static function fail(string message): never throws HttpClientError {
-    if (String.startsWith(message, "<<InvalidUrl>>")) { throw new InvalidUrl(String.removePrefix(message, "<<InvalidUrl>>")); }
-    if (String.startsWith(message, "<<ConnectionFailed>>")) { throw new HttpConnectionFailed(String.removePrefix(message, "<<ConnectionFailed>>")); }
-    if (String.startsWith(message, "<<Timeout>>")) { throw new HttpTimeout(String.removePrefix(message, "<<Timeout>>")); }
+    if (String.startsWith(message, "<<InvalidUrlError>>")) { throw new InvalidUrlError(String.removePrefix(message, "<<InvalidUrlError>>")); }
+    if (String.startsWith(message, "<<ConnectionFailedError>>")) { throw new HttpConnectionFailedError(String.removePrefix(message, "<<ConnectionFailedError>>")); }
+    if (String.startsWith(message, "<<TimeoutError>>")) { throw new HttpTimeoutError(String.removePrefix(message, "<<TimeoutError>>")); }
     if (String.startsWith(message, "<<TlsError>>")) { throw new HttpTlsError(String.removePrefix(message, "<<TlsError>>")); }
     if (String.startsWith(message, "<<ProtocolError>>")) { throw new ProtocolError(String.removePrefix(message, "<<ProtocolError>>")); }
-    if (String.startsWith(message, "<<TooManyRedirects>>")) { throw new TooManyRedirects(String.removePrefix(message, "<<TooManyRedirects>>")); }
-    if (String.startsWith(message, "<<TooLarge>>")) { throw new TooLarge(String.removePrefix(message, "<<TooLarge>>")); }
-    if (String.startsWith(message, "<<BlockedAddress>>")) { throw new BlockedAddress(String.removePrefix(message, "<<BlockedAddress>>")); }
+    if (String.startsWith(message, "<<TooManyRedirectsError>>")) { throw new TooManyRedirectsError(String.removePrefix(message, "<<TooManyRedirectsError>>")); }
+    if (String.startsWith(message, "<<TooLargeError>>")) { throw new TooLargeError(String.removePrefix(message, "<<TooLargeError>>")); }
+    if (String.startsWith(message, "<<BlockedAddressError>>")) { throw new BlockedAddressError(String.removePrefix(message, "<<BlockedAddressError>>")); }
     throw new HttpClientError(message);
   }
 }
 
-class InvalidUrl extends HttpClientError { constructor(string message) { parent.constructor(message); } }
-class HttpConnectionFailed extends HttpClientError { constructor(string message) { parent.constructor(message); } }
-class HttpTimeout extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class InvalidUrlError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class HttpConnectionFailedError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class HttpTimeoutError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
 class HttpTlsError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
 class ProtocolError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
-class TooManyRedirects extends HttpClientError { constructor(string message) { parent.constructor(message); } }
-class TooLarge extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class TooManyRedirectsError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class TooLargeError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
 // DEC-270 SSRF guard: the URL resolved to a private/link-local/metadata address the client refuses by
 // default. Pass `.allowPrivateHosts(true)` to permit private ranges deliberately (loopback is allowed).
-class BlockedAddress extends HttpClientError { constructor(string message) { parent.constructor(message); } }
+class BlockedAddressError extends HttpClientError { constructor(string message) { parent.constructor(message); } }
 
 // A completed response: status, headers (names lowercased), body as text or bytes. Inert data
 // behind an opaque handle — reading it never re-touches the network.
@@ -817,28 +817,28 @@ import Core.String;
 open class UriError implements Error {
   constructor(public string message) {}
   static function fail(string message): never throws UriError {
-    if (message == "The port is out of range") { throw new UriPortOutOfRange(message); }
-    if (message == "The specified base URI must be absolute") { throw new UriBaseNotAbsolute(message); }
-    if (message == "The specified scheme is malformed") { throw new UriBadScheme(message); }
-    if (message == "The specified userinfo is malformed") { throw new UriBadUserInfo(message); }
-    if (message == "The specified host is malformed") { throw new UriBadHost(message); }
-    if (message == "The specified port is malformed") { throw new UriBadPort(message); }
-    if (message == "The specified path is malformed") { throw new UriBadPath(message); }
-    if (message == "The specified query is malformed") { throw new UriBadQuery(message); }
-    if (message == "The specified fragment is malformed") { throw new UriBadFragment(message); }
-    throw new UriMalformed(message);
+    if (message == "The port is out of range") { throw new UriPortOutOfRangeError(message); }
+    if (message == "The specified base URI must be absolute") { throw new UriBaseNotAbsoluteError(message); }
+    if (message == "The specified scheme is malformed") { throw new UriBadSchemeError(message); }
+    if (message == "The specified userinfo is malformed") { throw new UriBadUserInfoError(message); }
+    if (message == "The specified host is malformed") { throw new UriBadHostError(message); }
+    if (message == "The specified port is malformed") { throw new UriBadPortError(message); }
+    if (message == "The specified path is malformed") { throw new UriBadPathError(message); }
+    if (message == "The specified query is malformed") { throw new UriBadQueryError(message); }
+    if (message == "The specified fragment is malformed") { throw new UriBadFragmentError(message); }
+    throw new UriMalformedError(message);
   }
 }
-class UriMalformed extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadScheme extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadUserInfo extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadHost extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadPort extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriPortOutOfRange extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadPath extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadQuery extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadFragment extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBaseNotAbsolute extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriMalformedError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadSchemeError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadUserInfoError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadHostError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadPortError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriPortOutOfRangeError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadPathError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadQueryError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBadFragmentError extends UriError { constructor(string message) { parent.constructor(message); } }
+class UriBaseNotAbsoluteError extends UriError { constructor(string message) { parent.constructor(message); } }
 
 class Uri {
   private constructor(public string raw) {}
@@ -1099,30 +1099,30 @@ open class DatabaseError implements Error {
   // error with a `<<Kind>>` marker prefix (`src/native/db.rs` `err_kind`), and `fail` strips the marker
   // and throws the matching TYPED subtype. Because every Row/Statement/Database method — including the S2
   // `queryInto` hydration helpers — funnels its `DatabaseResult.Err` through here, they all yield the precise
-  // `catch (UniqueViolation e)` type with zero change at the call sites. An untagged message (a logic /
+  // `catch (UniqueViolationError e)` type with zero change at the call sites. An untagged message (a logic /
   // usage error, e.g. mixed bind styles, or a plain SQLite failure) throws the base `DatabaseError`.
   static function fail(string message): never throws DatabaseError {
-    if (String.startsWith(message, "<<UniqueViolation>>")) { throw new UniqueViolation(String.removePrefix(message, "<<UniqueViolation>>")); }
-    if (String.startsWith(message, "<<ConstraintViolation>>")) { throw new ConstraintViolation(String.removePrefix(message, "<<ConstraintViolation>>")); }
+    if (String.startsWith(message, "<<UniqueViolationError>>")) { throw new UniqueViolationError(String.removePrefix(message, "<<UniqueViolationError>>")); }
+    if (String.startsWith(message, "<<ConstraintViolationError>>")) { throw new ConstraintViolationError(String.removePrefix(message, "<<ConstraintViolationError>>")); }
     if (String.startsWith(message, "<<ConnectionError>>")) { throw new ConnectionError(String.removePrefix(message, "<<ConnectionError>>")); }
-    if (String.startsWith(message, "<<SerializationFailure>>")) { throw new SerializationFailure(String.removePrefix(message, "<<SerializationFailure>>")); }
-    if (String.startsWith(message, "<<Timeout>>")) { throw new Timeout(String.removePrefix(message, "<<Timeout>>")); }
+    if (String.startsWith(message, "<<SerializationFailureError>>")) { throw new SerializationFailureError(String.removePrefix(message, "<<SerializationFailureError>>")); }
+    if (String.startsWith(message, "<<TimeoutError>>")) { throw new TimeoutError(String.removePrefix(message, "<<TimeoutError>>")); }
     if (String.startsWith(message, "<<SyntaxError>>")) { throw new SyntaxError(String.removePrefix(message, "<<SyntaxError>>")); }
     throw new DatabaseError(message);
   }
 }
 
 // Typed error taxonomy (DEC-208 slice C, spec §6). Each `extends DatabaseError`, so `catch (DatabaseError e)`
-// still catches EVERY DB error while `catch (UniqueViolation e)` catches exactly one kind. The native
-// maps rusqlite (extended) result codes to the marker `DatabaseError.fail` reads. `SerializationFailure` is
+// still catches EVERY DB error while `catch (UniqueViolationError e)` catches exactly one kind. The native
+// maps rusqlite (extended) result codes to the marker `DatabaseError.fail` reads. `SerializationFailureError` is
 // the transient class `retry` targets (SQLite `SQLITE_BUSY`/`SQLITE_LOCKED`) — it is the spec's
-// `Deadlock` under a single name. `Timeout` is part of the taxonomy contract; SQLite has no source for
+// `Deadlock` under a single name. `TimeoutError` is part of the taxonomy contract; SQLite has no source for
 // it yet (it arrives with query `.timeout(ms)`, slice D), so it is currently only ever caught, not thrown.
-class UniqueViolation extends DatabaseError { constructor(string message) { parent.constructor(message); } }
-class ConstraintViolation extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class UniqueViolationError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class ConstraintViolationError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
 class ConnectionError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
-class SerializationFailure extends DatabaseError { constructor(string message) { parent.constructor(message); } }
-class Timeout extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class SerializationFailureError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class TimeoutError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
 class SyntaxError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
 
 class Row {
@@ -1345,7 +1345,7 @@ class Database {
     return match (NativeDatabase.lastInsertId(this.raw)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Arm a query timeout (ms): a bounded lock-wait (SQLite busy_timeout). Once set, a busy/locked
-  // failure surfaces as `Timeout` rather than `SerializationFailure`. Chainable (returns this).
+  // failure surfaces as `TimeoutError` rather than `SerializationFailureError`. Chainable (returns this).
   function timeout(int ms): Database throws DatabaseError {
     match (NativeDatabase.timeout(this.raw, ms)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
     return this;
@@ -1398,19 +1398,19 @@ class Database {
   // DEC-249 resolved the recorded SURFACE PENDING the ambitious way: method default parameters
   // landed, so the spec's single-method shape is real — `db.transaction(fn)` runs once;
   // `db.transaction(fn, retries)` re-runs the WHOLE transaction up to `retries` extra times on the
-  // transient `SerializationFailure` ONLY (SQLite SQLITE_BUSY/LOCKED — the class Serializable
+  // transient `SerializationFailureError` ONLY (SQLite SQLITE_BUSY/LOCKED — the class Serializable
   // isolation needs); any OTHER `DatabaseError` (and an exhausted retry budget) rolls back and
   // propagates immediately. The retry loop lives HERE, not in the native, because only phorj
   // source can `catch` the TYPED error (the thrown value is backend-side `pending_throw`,
   // invisible to a native). The former distinct `transactionRetry(fn, retries)` is RETIRED.
-  // NOTE (timeout): with `db.timeout(ms)` armed a transient busy is reclassified `Timeout`, not
-  // `SerializationFailure` (slice D) — so it is NOT retried; leave the timeout unset when relying on retry.
+  // NOTE (timeout): with `db.timeout(ms)` armed a transient busy is reclassified `TimeoutError`, not
+  // `SerializationFailureError` (slice D) — so it is NOT retried; leave the timeout unset when relying on retry.
   function transaction<T>(() => T throws DatabaseError fn, int retries = 0): T throws DatabaseError {
     mutable int attempt = 0;
     while (true) {
       try {
         return match (NativeDatabase.transaction(this.raw, fn)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
-      } catch (SerializationFailure e) {
+      } catch (SerializationFailureError e) {
         if (attempt >= retries) { throw e; }
         attempt = attempt + 1;
       }
@@ -1535,16 +1535,16 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         bare_types: &[
             "Uri",
             "UriError",
-            "UriMalformed",
-            "UriBadScheme",
-            "UriBadUserInfo",
-            "UriBadHost",
-            "UriBadPort",
-            "UriPortOutOfRange",
-            "UriBadPath",
-            "UriBadQuery",
-            "UriBadFragment",
-            "UriBaseNotAbsolute",
+            "UriMalformedError",
+            "UriBadSchemeError",
+            "UriBadUserInfoError",
+            "UriBadHostError",
+            "UriBadPortError",
+            "UriPortOutOfRangeError",
+            "UriBadPathError",
+            "UriBadQueryError",
+            "UriBadFragmentError",
+            "UriBaseNotAbsoluteError",
         ],
     },
     // `Core.DatabaseModule` (DEC-208) — the enhanced-PDO surface classes. MUST precede `Core.Native.Database` (its natives)
@@ -1567,13 +1567,13 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             // DEC-208 slice B2 — the column naming strategy enum, member-gated so
             // `new Naming.SnakeToCamel()` resolves after `import Core.DatabaseModule.Naming;` (nothing in the wind).
             "Naming",
-            // DEC-208 slice C typed taxonomy — member-gated so `catch (UniqueViolation e)` resolves
-            // in user code after `import Core.DatabaseModule.UniqueViolation;` (nothing in the wind).
-            "UniqueViolation",
-            "ConstraintViolation",
+            // DEC-208 slice C typed taxonomy — member-gated so `catch (UniqueViolationError e)` resolves
+            // in user code after `import Core.DatabaseModule.UniqueViolationError;` (nothing in the wind).
+            "UniqueViolationError",
+            "ConstraintViolationError",
             "ConnectionError",
-            "SerializationFailure",
-            "Timeout",
+            "SerializationFailureError",
+            "TimeoutError",
             "SyntaxError",
         ],
     },
@@ -1612,16 +1612,16 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "SendmailTransport",
             "FileTransport",
             "NullTransport",
-            // The typed taxonomy — member-gated so `catch (AuthFailed e)` resolves after
-            // `import Core.Mail.AuthFailed;` (nothing in the wind).
-            "ConnectionFailed",
-            "AuthFailed",
-            "RecipientRejected",
+            // The typed taxonomy — member-gated so `catch (AuthFailedError e)` resolves after
+            // `import Core.Mail.AuthFailedError;` (nothing in the wind).
+            "ConnectionFailedError",
+            "AuthFailedError",
+            "RecipientRejectedError",
             "TlsError",
-            "InvalidAddress",
-            "MessageBuildFailed",
-            "MailTimeout",
-            "MailIo",
+            "InvalidAddressError",
+            "MessageBuildFailedError",
+            "MailTimeoutError",
+            "MailIoError",
         ],
     },
     // `Core.FileSystemModule` (W3) — the typed filesystem prelude (std-only, always compiled). Taxonomy names are
@@ -1665,13 +1665,13 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "HttpResponse",
             "HttpClientError",
             "HttpClientHandle",
-            "InvalidUrl",
-            "HttpConnectionFailed",
-            "HttpTimeout",
+            "InvalidUrlError",
+            "HttpConnectionFailedError",
+            "HttpTimeoutError",
             "HttpTlsError",
             "ProtocolError",
-            "TooManyRedirects",
-            "TooLarge",
+            "TooManyRedirectsError",
+            "TooLargeError",
         ],
     },
     // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.DatabaseModule` because

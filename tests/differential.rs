@@ -3015,13 +3015,14 @@ fn error_base_type_reserved_and_implementable() {
         "`type Error` must be rejected (reserved)"
     );
     assert!(
-        check_errs("class P implements Error { constructor(public string message) {} }").is_empty(),
+        check_errs("class PError implements Error { constructor(public string message) {} }")
+            .is_empty(),
         "a class may implement Error"
     );
     assert!(
         check_errs(
-            r#"class P implements Error { constructor(public string message) {} }
-function main() -> void { P p = new P("x"); if (p instanceof Error) { } }"#
+            r#"class PError implements Error { constructor(public string message) {} }
+function main() -> void { PError p = new PError("x"); if (p instanceof Error) { } }"#
         )
         .is_empty(),
         "instanceof Error must type-check"
@@ -3036,11 +3037,11 @@ function main() -> void { P p = new P("x"); if (p instanceof Error) { } }"#
 #[test]
 fn error_subtype_value_is_byte_identical() {
     // NB: avoid PHP built-in error names (`Error`/`TypeError`/`ParseError`/…) — they collide with
-    // PHP's reserved classes on transpile. `BadInput` is safe.
+    // PHP's reserved classes on transpile. `BadInputError` is safe.
     let src = with_pkg(
         r#"import Core.Output;
-class BadInput implements Error { constructor(public string message) {} }
-function main() -> void { BadInput e = new BadInput("bad input"); Output.printLine(e.message); }"#,
+class BadInputError implements Error { constructor(public string message) {} }
+function main() -> void { BadInputError e = new BadInputError("bad input"); Output.printLine(e.message); }"#,
     );
     let tree = cmd_treewalk(&src);
     let vm = cmd_run(&src);

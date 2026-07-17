@@ -264,7 +264,7 @@ struct DbConn {
     hook: Rc<RefCell<Option<Value>>>,
     /// The connection's query timeout in ms (DEC-208 slice D, spec §7), `0` = unset. Shared with
     /// derived statements (same rationale as `hook`). Setting it also arms SQLite's `busy_timeout`; when
-    /// `> 0`, a transient `busy`/`locked` failure is reclassified `SerializationFailure` → `Timeout`
+    /// `> 0`, a transient `busy`/`locked` failure is reclassified `SerializationFailureError` → `TimeoutError`
     /// (the bounded lock-wait was exceeded). See [`remap_timeout`].
     timeout_ms: Rc<Cell<i64>>,
 }
@@ -658,7 +658,7 @@ fn last_insert_id_inner(args: &[Value]) -> Result<Value, String> {
 /// `busy_timeout(ms)` bounds how long a statement waits on a held lock before failing — a genuine
 /// statement-runtime cap needs a progress-handler/interrupt (not wired here; the busy-wait cap is what
 /// SQLite supports cleanly). Storing `timeout_ms > 0` makes a subsequent `busy`/`locked` failure
-/// reclassify to `Timeout` ([`remap_timeout`]). A negative `ms` clamps to 0 (unset). Idempotent.
+/// reclassify to `TimeoutError` ([`remap_timeout`]). A negative `ms` clamps to 0 (unset). Idempotent.
 fn timeout_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, ms) = match args {
         [c, Value::Int(ms)] => (as_conn(c)?, *ms),
@@ -687,23 +687,23 @@ fn on_query_inner(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Int(0))
 }
 
-/// When a query timeout is active (`db.timeout(ms)`), reclassify a transient `SerializationFailure`
-/// (SQLite `busy`/`locked`) as `Timeout`: `busy_timeout` bounded the lock-wait, so reaching it means
-/// the wait was exceeded. CONSEQUENCE: with a timeout set you no longer observe `SerializationFailure`
+/// When a query timeout is active (`db.timeout(ms)`), reclassify a transient `SerializationFailureError`
+/// (SQLite `busy`/`locked`) as `TimeoutError`: `busy_timeout` bounded the lock-wait, so reaching it means
+/// the wait was exceeded. CONSEQUENCE: with a timeout set you no longer observe `SerializationFailureError`
 /// (the class a future closure-`retry` would target) — acceptable while retry is deferred, documented
 /// in `KNOWN_ISSUES.md` + the spec.
 fn remap_timeout(res: Result<Value, String>, active: bool) -> Result<Value, String> {
     if active {
         if let Err(msg) = &res {
-            if let Some(rest) = msg.strip_prefix("<<SerializationFailure>>") {
-                return Err(format!("<<Timeout>>{rest}"));
+            if let Some(rest) = msg.strip_prefix("<<SerializationFailureError>>") {
+                return Err(format!("<<TimeoutError>>{rest}"));
             }
         }
     }
     res
 }
 
-/// Run a statement-executing inner body, then (a) reclassify a busy failure as `Timeout` when a
+/// Run a statement-executing inner body, then (a) reclassify a busy failure as `TimeoutError` when a
 /// timeout is active and (b) fire the connection's `onQuery` hook with `(sql, elapsed_ms)`. This is why
 /// `query`/`exec`/`executeMany`/`execReturningId` are `HigherOrder` natives: they must call BACK into
 /// the calling backend to invoke the stored `Value::Closure` (the same re-entrant `invoke` the
@@ -1242,8 +1242,8 @@ fn db_exec_returning_id(args: &[Value], invoke: &mut ClosureInvoker) -> Result<V
 /// closure's value), and auto-`ROLLBACK` + **re-propagate the ORIGINAL thrown value** on a throw. A
 /// NESTED call opens a `SAVEPOINT` (via the shared `tx_depth`), so it composes into partial rollback.
 /// The RETRY loop lives in the prelude, not here: retry must inspect the TYPED error to decide whether
-/// it is transient (`SerializationFailure`), and that thrown value sits in the backend's `pending_throw`
-/// — invisible to a native. So this native is a single attempt; the prelude's `catch (SerializationFailure)`
+/// it is transient (`SerializationFailureError`), and that thrown value sits in the backend's `pending_throw`
+/// — invisible to a native. So this native is a single attempt; the prelude's `catch (SerializationFailureError)`
 /// loop drives the retries.
 ///
 /// **Throw preservation** (the load-bearing part): a closure `throw` reaches the invoker as
@@ -1918,7 +1918,7 @@ mod tests {
         }
     }
 
-    /// A UNIQUE / PRIMARY KEY collision maps (via the extended result code) to the `UniqueViolation`
+    /// A UNIQUE / PRIMARY KEY collision maps (via the extended result code) to the `UniqueViolationError`
     /// marker the prelude classifier reads.
     #[test]
     fn unique_violation_is_tagged() {
@@ -1934,7 +1934,7 @@ mod tests {
             .unwrap(),
         );
         let msg = err_of(x(&[s], &mut out).unwrap());
-        assert!(msg.starts_with("<<UniqueViolation>>"), "got: {msg}");
+        assert!(msg.starts_with("<<UniqueViolationError>>"), "got: {msg}");
     }
 
     /// A malformed statement maps to the `SyntaxError` marker.
@@ -2100,7 +2100,7 @@ mod tests {
             Value::List(Rc::new(vec![Value::Int(1), Value::Str("dup".into())])),
         ]));
         let msg = execute_many_inner(&[s2, bad]).unwrap_err();
-        assert!(msg.starts_with("<<UniqueViolation>>"), "got: {msg}");
+        assert!(msg.starts_with("<<UniqueViolationError>>"), "got: {msg}");
         assert_eq!(scalar(&db, "SELECT count(*) AS c FROM t", "c", &mut out), 2);
     }
 
@@ -2131,27 +2131,27 @@ mod tests {
         assert!(last.eq_val(&Value::Int(2)));
     }
 
-    /// `remap_timeout` reclassifies a transient `SerializationFailure` as `Timeout` only when a timeout
+    /// `remap_timeout` reclassifies a transient `SerializationFailureError` as `TimeoutError` only when a timeout
     /// is armed (mapping unit — deterministic, no lock races).
     #[test]
     fn remap_timeout_only_when_armed() {
         let armed = remap_timeout(
-            Err("<<SerializationFailure>>Core.DatabaseModule: database is locked".into()),
+            Err("<<SerializationFailureError>>Core.DatabaseModule: database is locked".into()),
             true,
         );
         assert!(
-            matches!(&armed, Err(m) if m.starts_with("<<Timeout>>")),
+            matches!(&armed, Err(m) if m.starts_with("<<TimeoutError>>")),
             "got: {armed:?}"
         );
-        let unarmed = remap_timeout(Err("<<SerializationFailure>>x".into()), false);
-        assert!(matches!(&unarmed, Err(m) if m.starts_with("<<SerializationFailure>>")));
+        let unarmed = remap_timeout(Err("<<SerializationFailureError>>x".into()), false);
+        assert!(matches!(&unarmed, Err(m) if m.starts_with("<<SerializationFailureError>>")));
         // A non-busy error is never touched, armed or not.
         let other = remap_timeout(Err("<<SyntaxError>>x".into()), true);
         assert!(matches!(&other, Err(m) if m.starts_with("<<SyntaxError>>")));
     }
 
     /// End-to-end: with `db.timeout(ms)` armed, a genuine lock contention (a second connection blocked
-    /// by a held write lock) surfaces as `Timeout` (not `SerializationFailure`). Deterministic: the
+    /// by a held write lock) surfaces as `TimeoutError` (not `SerializationFailureError`). Deterministic: the
     /// first connection holds the lock for the whole test, so the second always exhausts its busy wait.
     #[test]
     fn armed_timeout_maps_busy_to_timeout_end_to_end() {
@@ -2170,7 +2170,7 @@ mod tests {
         // c1 opens a transaction and takes a write lock, holding it for the rest of the test.
         ok_of(db_begin(std::slice::from_ref(&c1), &mut out).unwrap());
         exec1(&c1, "INSERT INTO t(x) VALUES(1)", &mut out);
-        // c2 arms a short busy timeout, then its write waits for and fails to get the lock → Timeout.
+        // c2 arms a short busy timeout, then its write waits for and fails to get the lock → TimeoutError.
         let c2 = ok_of(db_open(&[Value::Str(dsn.as_str().into())], &mut out).unwrap());
         ok_of(db_timeout(&[c2.clone(), Value::Int(30)], &mut out).unwrap());
         let s = ok_of(
@@ -2182,7 +2182,7 @@ mod tests {
         );
         let msg = err_of(x(&[s], &mut out).unwrap());
         let _ = std::fs::remove_file(&path);
-        assert!(msg.starts_with("<<Timeout>>"), "got: {msg}");
+        assert!(msg.starts_with("<<TimeoutError>>"), "got: {msg}");
     }
 
     /// A hook registered via `onQuery` is stored and returned by the shared cell; a Pure store never

@@ -31,7 +31,7 @@ int n = m.sendAll([e1, e2, e3]);             // batch, one reused connection, fa
 ```
 
 - **`Address` is validated at construction** (`new Address(email, name)` / `Address.of(email)`
-  throws `InvalidAddress`) — a `\r\n` smuggled into an address NEVER reaches a header, killing PHP
+  throws `InvalidAddressError`) — a `\r\n` smuggled into an address NEVER reaches a header, killing PHP
   `mail()`'s #1 footgun.
 - **`.html(body)`** builds `multipart/alternative` with an auto-derived plaintext part; supply
   `.text(body)` to override the derivation.
@@ -39,15 +39,15 @@ int n = m.sendAll([e1, e2, e3]);             // batch, one reused connection, fa
 
 ## Typed failures (all `extends MailError`)
 
-`ConnectionFailed` · `AuthFailed` · `RecipientRejected` · `TlsError` · `InvalidAddress` ·
-`MessageBuildFailed` (no `from`, no recipients, bad MIME) · `MailTimeout` · `MailIo`.
+`ConnectionFailedError` · `AuthFailedError` · `RecipientRejectedError` · `TlsError` · `InvalidAddressError` ·
+`MessageBuildFailedError` (no `from`, no recipients, bad MIME) · `MailTimeoutError` · `MailIoError`.
 `catch (MailError e)` catches them all; the subtype names the precise cause.
 
 ## Faults that cannot be runnable examples (Invariant 9)
 
 - `phg transpile examples/mail/send.phg` → `E-TRANSPILE-MAIL` (native-only, no PHP mapping).
-- `new Address("evil@x.y\r\nBcc: victim@z.w", "")` → `InvalidAddress` at construction.
-- `m.send(...)` on an Email with no `.from(...)` → `MessageBuildFailed`.
+- `new Address("evil@x.y\r\nBcc: victim@z.w", "")` → `InvalidAddressError` at construction.
+- `m.send(...)` on an Email with no `.from(...)` → `MessageBuildFailedError`.
 
 ## Testing
 

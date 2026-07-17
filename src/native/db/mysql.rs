@@ -36,18 +36,18 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 /// Classify a `mysql` error into the DEC-208 taxonomy marker (spec §6), keyed off the server error
-/// code: `1062`/`1586` duplicate entry → `UniqueViolation`; `1213` deadlock → `SerializationFailure`
+/// code: `1062`/`1586` duplicate entry → `UniqueViolationError`; `1213` deadlock → `SerializationFailureError`
 /// (the transient class retry targets); `1205` lock-wait timeout / `3024` max_execution_time exceeded
-/// / `1969` MariaDB max_statement_time → `Timeout`; FK/NOT-NULL/CHECK violations →
-/// `ConstraintViolation`; `1064` parse error → `SyntaxError`; access/handshake failures →
+/// / `1969` MariaDB max_statement_time → `TimeoutError`; FK/NOT-NULL/CHECK violations →
+/// `ConstraintViolationError`; `1064` parse error → `SyntaxError`; access/handshake failures →
 /// `ConnectionError`. Client-side transport errors (Io/Driver/Url) are `ConnectionError`.
 fn my_err_kind(e: &mysql::Error) -> Option<&'static str> {
     match e {
         mysql::Error::MySqlError(se) => Some(match se.code {
-            1062 | 1586 => "UniqueViolation",
-            1213 => "SerializationFailure",
-            1205 | 3024 | 1969 => "Timeout",
-            1048 | 1216 | 1217 | 1364 | 1451 | 1452 | 3819 => "ConstraintViolation",
+            1062 | 1586 => "UniqueViolationError",
+            1213 => "SerializationFailureError",
+            1205 | 3024 | 1969 => "TimeoutError",
+            1048 | 1216 | 1217 | 1364 | 1451 | 1452 | 3819 => "ConstraintViolationError",
             1064 => "SyntaxError",
             1044 | 1045 | 1049 | 1130 => "ConnectionError",
             _ => return None,
@@ -431,8 +431,8 @@ impl DriverConn for MyConn {
 
     fn set_timeout(&self, ms: i64) -> Result<(), String> {
         // MySQL 5.7.8+: `max_execution_time` in ms (SELECT-only; exceeding it → error 3024 → the
-        // `Timeout` taxonomy). MariaDB has no such variable — fall back to its `max_statement_time`
-        // (SECONDS, fractional allowed; exceeding it → 1969 → `Timeout`). `0` disables either.
+        // `TimeoutError` taxonomy). MariaDB has no such variable — fall back to its `max_statement_time`
+        // (SECONDS, fractional allowed; exceeding it → 1969 → `TimeoutError`). `0` disables either.
         let ms = ms.max(0);
         let mysql_form = format!("SET SESSION max_execution_time = {ms}");
         if self.control(&mysql_form).is_ok() {
@@ -509,11 +509,11 @@ mod tests {
                 code,
             })
         };
-        assert_eq!(my_err_kind(&mk(1062)), Some("UniqueViolation"));
-        assert_eq!(my_err_kind(&mk(1213)), Some("SerializationFailure"));
-        assert_eq!(my_err_kind(&mk(1205)), Some("Timeout"));
-        assert_eq!(my_err_kind(&mk(3024)), Some("Timeout"));
-        assert_eq!(my_err_kind(&mk(1452)), Some("ConstraintViolation"));
+        assert_eq!(my_err_kind(&mk(1062)), Some("UniqueViolationError"));
+        assert_eq!(my_err_kind(&mk(1213)), Some("SerializationFailureError"));
+        assert_eq!(my_err_kind(&mk(1205)), Some("TimeoutError"));
+        assert_eq!(my_err_kind(&mk(3024)), Some("TimeoutError"));
+        assert_eq!(my_err_kind(&mk(1452)), Some("ConstraintViolationError"));
         assert_eq!(my_err_kind(&mk(1064)), Some("SyntaxError"));
         assert_eq!(my_err_kind(&mk(1045)), Some("ConnectionError"));
         assert_eq!(my_err_kind(&mk(9999)), None);

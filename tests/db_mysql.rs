@@ -26,7 +26,7 @@ use phorj::cli::{cmd_run, cmd_treewalk};
 /// Build the round-trip program with `dsn` spliced in. Exercises: throwing connect; DDL via `exec`;
 /// positional (`?`) + named (`:n`) binds; `query` with value mapping (int/text/DECIMAL-as-text);
 /// `execReturningId` via the connection's `last_insert_id` (MySQL has no RETURNING — the SQLite-shaped
-/// path); the typed `UniqueViolation` taxonomy from MySQL error 1062; and `executeMany`'s
+/// path); the typed `UniqueViolationError` taxonomy from MySQL error 1062; and `executeMany`'s
 /// MySQL-divergent depth-0 `BEGIN` path.
 fn program(dsn: &str) -> String {
     format!(
@@ -38,7 +38,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
+import Core.DatabaseModule.UniqueViolationError;
 
 function main(): void {{
     try {{
@@ -78,11 +78,11 @@ function main(): void {{
             .execReturningId();
         Output.printLine("returning={{newId}}");
 
-        // A duplicate PK -> MySQL 1062 -> the typed UniqueViolation subtype.
+        // A duplicate PK -> MySQL 1062 -> the typed UniqueViolationError subtype.
         try {{
             discard db.prepare("INSERT INTO phorj_my_it(id, name, amount) VALUES(1, 'dup', NULL)").exec();
             Output.printLine("no-dup-error");
-        }} catch (UniqueViolation e) {{
+        }} catch (UniqueViolationError e) {{
             Output.printLine("unique-violation");
         }}
 

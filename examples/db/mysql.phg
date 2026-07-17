@@ -26,7 +26,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
+import Core.DatabaseModule.UniqueViolationError;
 import Core.Secret;
 
 function main(): void {
@@ -77,12 +77,12 @@ function main(): void {
             .prepare("INSERT INTO phorj_my_demo(name, amount) VALUES('Lin', NULL)")
             .execReturningId();
         Output.printLine("new id: {newId}");
-        // A duplicate PK → MySQL error 1062 → the typed `UniqueViolation` subtype.
+        // A duplicate PK → MySQL error 1062 → the typed `UniqueViolationError` subtype.
         try {
             discard db
                 .prepare("INSERT INTO phorj_my_demo(id, name, amount) VALUES(1, 'dup', NULL)")
                 .exec();
-        } catch (UniqueViolation e) {
+        } catch (UniqueViolationError e) {
             Output.printLine("caught duplicate: {e.message}");
         }
         discard db.prepare("DROP TABLE phorj_my_demo").exec();

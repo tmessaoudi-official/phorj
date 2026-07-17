@@ -48,7 +48,7 @@ fn address_gate_rejects_injection_and_junk() {
     assert!(parse_mailbox("a@b.c\r\nBcc: evil@x.y", "").is_err());
     assert!(parse_mailbox("not-an-address", "").is_err());
     let err = parse_mailbox("", "").unwrap_err();
-    assert!(err.contains("<<InvalidAddress>>"), "{err}");
+    assert!(err.contains("<<InvalidAddressError>>"), "{err}");
     // A display name with tricky characters is FOLDED by the MIME layer, never spliced raw.
     assert!(parse_mailbox("a@b.c", "Weird\r\nName").is_ok());
 }
@@ -57,7 +57,7 @@ fn address_gate_rejects_injection_and_junk() {
 fn build_requires_from_and_a_recipient() {
     let e = build_message(&Draft::default()).unwrap_err();
     assert!(
-        e.contains("<<MessageBuildFailed>>") && e.contains("no `from`"),
+        e.contains("<<MessageBuildFailedError>>") && e.contains("no `from`"),
         "{e}"
     );
     let d = draft_with(|d| d.from = Some(mb("a@b.c")));

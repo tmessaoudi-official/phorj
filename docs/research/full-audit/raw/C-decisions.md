@@ -1961,7 +1961,12 @@ acceptable. Stdlib sweep = mechanical stem-keeping (`InvalidUrl→InvalidUrlErro
 AuthFailedError`, `MailIo→MailIoError`, …). *Alternatives (offered): single-suffix-only
 (rejected: dev wants either); Errors sub-package (rejected: fixes only the import line, catch
 site stays ambiguous); stdlib-only/warning enforcement (rejected: "normal behavior" must hold
-everywhere).*
+everywhere).* **BUILT 2026-07-17 fable** — `E-ERROR-NAME` at collect (keyed on the transitive
+`class_implements` table, so subclasses of an error base are covered), explain entry, 2 checker
+tests; stdlib sweep = 27 renames (Mail/HttpClient/Database condition types + the full UriBad*
+family + TooManyRedirects/TooLarge, caught by the rule itself on the first gate run), sentinels renamed in lockstep on the native side; the rule now self-verifies the whole
+corpus on every suite run. (The FileSystem family got its suffixes earlier, in the DEC-276
+sweep.)
 
 ## DEC-276 — RULED (2026-07-16, developer, multi-round): the EARNED-SHORTCUT rule + rename sweep
 

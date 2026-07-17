@@ -4,7 +4,7 @@
 //   * `db.lastInsertId()`   — the PK of the most recent INSERT on the connection.
 //   * `.executeMany(rows)`  — one prepared statement, many bind-sets, atomic (one savepoint) + fast.
 //   * `.bindList(values)`   — a typed `IN (?)` list: the `?` expands to `(?,?,…)`; empty → `IN (NULL)`.
-//   * `db.timeout(ms)`      — bound the per-query lock-wait (a runaway lock fails with `Timeout`).
+//   * `db.timeout(ms)`      — bound the per-query lock-wait (a runaway lock fails with `TimeoutError`).
 //   * `db.onQuery(hook)`    — a per-query observability hook `(string sql, int ms) => void`.
 //
 // `Core.DatabaseModule` opens a real SQLite database (bundled `rusqlite`), so an importing program is quarantined
@@ -46,7 +46,7 @@ function main(): void {
             .prepare("INSERT INTO people(name, city) VALUES(?, ?)")
             .executeMany([["Bob", "Paris"], ["Carol", "Tokyo"], ["Dan", "Paris"]]);
         Output.printLine("bulk inserted {bulk}");
-        // timeout: bound the per-query lock-wait (here just armed; a held lock would fail with Timeout).
+        // timeout: bound the per-query lock-wait (here just armed; a held lock would fail with TimeoutError).
         discard db.timeout(1000);
         // onQuery: a per-query hook. It logs the SQL text; `ms` is wall-clock so it is not printed.
         discard db.onQuery(function(string sql, int ms) => Output.printLine("  [query] {sql}"));

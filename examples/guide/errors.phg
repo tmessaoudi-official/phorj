@@ -7,27 +7,27 @@ import Core.Output;
 // extending `\Exception`); the compiler forces every checked exception to be caught or declared, so
 // nothing escapes silently. Faults/panics (e.g. `panic`, division by zero) are a separate, uncatchable
 // tier — see `result.phg` — and cannot appear in a runnable example (they would abort it).
-class NegativeInput implements Error {
+class NegativeInputError implements Error {
     constructor(public string message) {}
 }
 
-class TooLarge implements Error {
+class TooLargeError implements Error {
     constructor(public string message) {}
 }
 
 // `throws A | B` declares the checked exceptions this function may raise (the union is a set).
-function validate(int n): int throws NegativeInput | TooLarge {
+function validate(int n): int throws NegativeInputError | TooLargeError {
     if (n < 0) {
-        throw new NegativeInput("must not be negative");
+        throw new NegativeInputError("must not be negative");
     }
     if (n > 100) {
-        throw new TooLarge("must be at most 100");
+        throw new TooLargeError("must be at most 100");
     }
     return n;
 }
 
 // `?` propagates a throwing call's exceptions to this function's own `throws` — no boilerplate.
-function doubled(int n): int throws NegativeInput | TooLarge {
+function doubled(int n): int throws NegativeInputError | TooLargeError {
     var v = validate(n)?;
     return v * 2;
 }
@@ -35,7 +35,7 @@ function doubled(int n): int throws NegativeInput | TooLarge {
 // The declared set may also be written **comma-separated** (M-DOGFOOD W0) and **wrapped across
 // lines** — this is exactly equivalent to the `|` union form above (the checker flattens both to the
 // same set). `implements`, `extends`, and `throws` all accept line breaks freely.
-function tripled(int n): int throws NegativeInput | TooLarge {
+function tripled(int n): int throws NegativeInputError | TooLargeError {
     var v = validate(n)?;
     return v * 3;
 }
@@ -45,9 +45,9 @@ function tripled(int n): int throws NegativeInput | TooLarge {
 // declared is a compile error (`E-CALL-UNHANDLED`), so a checked exception can never escape silently
 // through the OO surface (previously it did — finding #3).
 class Validator {
-    function check(int n): int throws TooLarge {
+    function check(int n): int throws TooLargeError {
         if (n > 100) {
-            throw new TooLarge("method: must be at most 100");
+            throw new TooLargeError("method: must be at most 100");
         }
         return n;
     }
@@ -60,9 +60,9 @@ function main(): void {
         try {
             var r = doubled(n);
             Output.printLine("ok({n}) = {r}");
-        } catch (NegativeInput e) {
+        } catch (NegativeInputError e) {
             Output.printLine("rejected({n}): {e.message}");
-        } catch (TooLarge e) {
+        } catch (TooLargeError e) {
             Output.printLine("rejected({n}): {e.message}");
         } finally {
             Output.printLine("  (checked {n})");
@@ -71,14 +71,14 @@ function main(): void {
     // The comma-form declaration is enforced identically to the union form.
     try {
         Output.printLine("tripled(4) = {tripled(4)}");
-    } catch (NegativeInput | TooLarge e) {
+    } catch (NegativeInputError | TooLargeError e) {
         Output.printLine("unreached");
     }
     // A single union clause `catch (A | B e)` handles either checked error.
     try {
         var bad = validate(0 - 9);
         Output.printLine("unreached");
-    } catch (NegativeInput | TooLarge e) {
+    } catch (NegativeInputError | TooLargeError e) {
         Output.printLine("union catch handled a checked error");
     }
     // A throwing **method** call is enforced just like a free call — wrap it in `try`/`catch`.
@@ -86,7 +86,7 @@ function main(): void {
     try {
         var c = validator.check(150);
         Output.printLine("unreached");
-    } catch (TooLarge e) {
+    } catch (TooLargeError e) {
         Output.printLine("method throw handled: {e.message}");
     }
 }

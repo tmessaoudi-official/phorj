@@ -9,7 +9,7 @@
 //     `DatabaseError`. The manual `begin()/commit()/rollback()` (see `transactions.phg`) still exist too.
 //   * A NESTED `db.transaction(fn)` opens a SAVEPOINT — an inner rollback leaves the outer transaction's
 //     work intact (composable partial rollback).
-//   * `db.transaction(fn, retries)` auto-retries ONLY the transient `SerializationFailure` (SQLite
+//   * `db.transaction(fn, retries)` auto-retries ONLY the transient `SerializationFailureError` (SQLite
 //     busy/locked); any other `DatabaseError` propagates immediately.
 package Main;
 
@@ -19,8 +19,8 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
-import Core.DatabaseModule.SerializationFailure;
+import Core.DatabaseModule.UniqueViolationError;
+import Core.DatabaseModule.SerializationFailureError;
 
 // prepare + exec one write; both can throw, so each is `?`-propagated.
 function run(Database db, string sql): void throws DatabaseError {
@@ -73,9 +73,9 @@ function main(): void {
             db.transaction(
                 function(): void throws DatabaseError { run(db, "UPDATE acct SET bal = bal - 50 WHERE id = 1")?; run(db, "INSERT INTO acct(id, bal) VALUES(1, 999)")?; }
             );
-        } catch (UniqueViolation e) {
-            // duplicate PK -> UniqueViolation
-            Output.printLine("caught UniqueViolation; transaction rolled back");
+        } catch (UniqueViolationError e) {
+            // duplicate PK -> UniqueViolationError
+            Output.printLine("caught UniqueViolationError; transaction rolled back");
         }
         Output.printLine("after rollback: acct1={balOf(db, 1)} acct2={balOf(db, 2)}");
         // 4) NESTED transaction = SAVEPOINT: the outer change (acct 1) commits; the inner transaction
@@ -85,11 +85,11 @@ function main(): void {
         );
         // duplicate PK -> throws
         Output.printLine("after nested: acct1={balOf(db, 1)} acct2={balOf(db, 2)}");
-        // 5) RETRY: the closure throws a transient SerializationFailure on the first attempt, then
+        // 5) RETRY: the closure throws a transient SerializationFailureError on the first attempt, then
         //    succeeds. With retries=2 the transaction is re-run and the write lands.
         var tries = new Attempts();
         db.transaction(
-            function(): void throws DatabaseError { int n = tries.bump(); if (n <= 1) { throw new SerializationFailure("simulated transient busy"); } run(db, "UPDATE acct SET bal = 42 WHERE id = 2")?; },
+            function(): void throws DatabaseError { int n = tries.bump(); if (n <= 1) { throw new SerializationFailureError("simulated transient busy"); } run(db, "UPDATE acct SET bal = 42 WHERE id = 2")?; },
             2
         );
         Output.printLine("after retry: acct2={balOf(db, 2)} (succeeded on attempt {tries.n})");

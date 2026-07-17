@@ -698,18 +698,18 @@ fn every_emitted_diagnostic_code_has_an_explanation() {
 
 #[test]
 fn qualified_injected_error_types_resolve_everywhere() {
-    // DEC-234 member-error namespacing: `catch (UriModule.UriMalformed e)`, `throws UriModule.UriError`, and
-    // `throw new UriModule.UriMalformed(…)` — the module-qualified spelling for EVERY injected module's
+    // DEC-234 member-error namespacing: `catch (UriModule.UriMalformedError e)`, `throws UriModule.UriError`, and
+    // `throw new UriModule.UriMalformedError(…)` — the module-qualified spelling for EVERY injected module's
     // members (routed through the UA-L2 module_of registry; the old hardcoded collapse table knew
     // only Http/Time/Decimal). Bare member-imported names stay the alias.
     let src = wp(r#"import Core.Output;
 import Core.UriModule.Uri;
-function boom(): never throws UriModule.UriError { throw new UriModule.UriMalformed("m"); }
+function boom(): never throws UriModule.UriError { throw new UriModule.UriMalformedError("m"); }
 function main(): void {
     try {
         Uri u = Uri.parse("http://exa mple/");
         Output.printLine(u.toString());
-    } catch (UriModule.UriMalformed e) {
+    } catch (UriModule.UriMalformedError e) {
         Output.printLine("caught: {e.message}");
     } catch (UriModule.UriError e) {
         Output.printLine("base: {e.message}");

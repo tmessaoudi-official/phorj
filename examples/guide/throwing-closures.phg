@@ -3,9 +3,9 @@
 // `throw` / `?`-propagate and a call of such a closure discharges the exception at the call site,
 // exactly like a named `function … throws E`.
 //
-//   * a lambda declares its throws:   `function(int n): int throws NegativeInput => …`
+//   * a lambda declares its throws:   `function(int n): int throws NegativeInputError => …`
 //     — `throw` inside the body discharges against that clause (no `E-THROW-UNDECLARED`).
-//   * a higher-order param is a THROWING function type: `(int) => int throws NegativeInput op`
+//   * a higher-order param is a THROWING function type: `(int) => int throws NegativeInputError op`
 //     — calling `op(x)` may throw, so the caller must handle it (`try`/`catch`) or `?`-propagate.
 //   * VARIANCE: a NON-throwing lambda (`function(int n): int => …`) is accepted where a throwing
 //     type is expected — a function that throws fewer/no exceptions is substitutable for one that
@@ -15,32 +15,32 @@ package Main;
 import Core.Output;
 
 // A checked exception (implements the built-in `Error` marker so it is throwable/catchable).
-class NegativeInput implements Error {
+class NegativeInputError implements Error {
     constructor(public string message) {}
 }
 
 // A higher-order function whose parameter is a THROWING function type. It PROPAGATES the closure's
 // exception with `?` and declares the same `throws`, so the caller decides how to handle it.
-function applyTo(int x, (int) => int throws NegativeInput op): int throws NegativeInput {
+function applyTo(int x, (int) => int throws NegativeInputError op): int throws NegativeInputError {
     return op(x)?;
 }
 
 // A higher-order function that instead CATCHES the closure's exception at the call site and returns
 // a fallback — so it declares no `throws` of its own. A non-throwing closure passed here simply
 // never triggers the `catch` (variance: fewer throws is always safe).
-function applyOr(int x, int fallback, (int) => int throws NegativeInput op): int {
+function applyOr(int x, int fallback, (int) => int throws NegativeInputError op): int {
     try {
         return op(x);
-    } catch (NegativeInput e) {
+    } catch (NegativeInputError e) {
         Output.printLine("caught at call: {e.message}");
         return fallback;
     }
 }
 
 function main(): void {
-    // A THROWING lambda: it declares `throws NegativeInput`, so the `throw` in its body discharges
-    // against that clause. Its inferred type is `(int) => int throws NegativeInput`.
-    var squareNonNeg = function(int n): int throws NegativeInput { if (n < 0) { throw new NegativeInput("negative input {n} not allowed"); } return n * n; };
+    // A THROWING lambda: it declares `throws NegativeInputError`, so the `throw` in its body discharges
+    // against that clause. Its inferred type is `(int) => int throws NegativeInputError`.
+    var squareNonNeg = function(int n): int throws NegativeInputError { if (n < 0) { throw new NegativeInputError("negative input {n} not allowed"); } return n * n; };
     // A NON-throwing lambda — type `(int) => int` — passed below where a throwing type is expected.
     var triple = function(int n): int => n * 3;
     try {
@@ -57,7 +57,7 @@ function main(): void {
         // the next line never runs.
         int d = applyTo(-1, squareNonNeg);
         Output.printLine("unreachable {d}");
-    } catch (NegativeInput e) {
+    } catch (NegativeInputError e) {
         Output.printLine("main caught: {e.message}");
     }
 }

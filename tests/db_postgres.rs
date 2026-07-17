@@ -23,7 +23,7 @@ use phorj::cli::{cmd_run, cmd_treewalk};
 
 /// Build the round-trip program with `dsn` spliced in. Exercises: throwing connect; DDL via `exec`;
 /// positional (`?`) + named (`:n`) binds; `query` with value mapping (int4/text/bool); `execReturningId`
-/// via a `RETURNING` clause; and the typed `UniqueViolation` taxonomy from a PG `23505` SQLSTATE.
+/// via a `RETURNING` clause; and the typed `UniqueViolationError` taxonomy from a PG `23505` SQLSTATE.
 fn program(dsn: &str) -> String {
     format!(
         r#"
@@ -34,7 +34,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
+import Core.DatabaseModule.UniqueViolationError;
 
 function main(): void {{
     try {{
@@ -73,11 +73,11 @@ function main(): void {{
             .execReturningId();
         Output.printLine("returning={{newId}}");
 
-        // A duplicate PK -> PG 23505 -> the typed UniqueViolation subtype.
+        // A duplicate PK -> PG 23505 -> the typed UniqueViolationError subtype.
         try {{
             discard db.prepare("INSERT INTO phorj_pg_it(id, name, active) VALUES(1, 'dup', true)").exec();
             Output.printLine("no-dup-error");
-        }} catch (UniqueViolation e) {{
+        }} catch (UniqueViolationError e) {{
             Output.printLine("unique-violation");
         }}
 

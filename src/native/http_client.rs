@@ -61,9 +61,9 @@ pub(crate) struct Url {
 
 /// Parse an absolute `http://`/`https://` URL. Rejects other schemes, userinfo (credential
 /// smuggling — pass credentials via headers, never the URL), and empty hosts — each a clean
-/// `<<InvalidUrl>>`. IPv6 literals in brackets are supported.
+/// `<<InvalidUrlError>>`. IPv6 literals in brackets are supported.
 pub(crate) fn parse_url(url: &str) -> Result<Url, String> {
-    let bad = |m: &str| format!("<<InvalidUrl>>Core.HttpClientModule: {m}: `{url}`");
+    let bad = |m: &str| format!("<<InvalidUrlError>>Core.HttpClientModule: {m}: `{url}`");
     let (https, rest) = if let Some(r) = url.strip_prefix("https://") {
         (true, r)
     } else if let Some(r) = url.strip_prefix("http://") {
@@ -152,7 +152,7 @@ pub(crate) struct RawResponse {
 }
 
 /// Read one HTTP/1.1 response from `r` (headers, then a `Content-Length`, chunked, or
-/// read-to-close body). Timeout/size violations are clean errors.
+/// read-to-close body). TimeoutError/size violations are clean errors.
 pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
     let io = |e: std::io::Error| classify_io(&e);
     // Read until the header terminator.
@@ -170,7 +170,7 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
         let n = r.read(&mut chunk).map_err(io)?;
         if n == 0 {
             return Err(
-                "<<ConnectionFailed>>Core.HttpClientModule: connection closed before headers completed"
+                "<<ConnectionFailedError>>Core.HttpClientModule: connection closed before headers completed"
                     .into(),
             );
         }
@@ -260,7 +260,7 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
 }
 
 fn size_err() -> String {
-    "<<TooLarge>>Core.HttpClientModule: response exceeds the 64 MB cap".into()
+    "<<TooLargeError>>Core.HttpClientModule: response exceeds the 64 MB cap".into()
 }
 
 fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
@@ -304,8 +304,8 @@ pub(crate) fn decode_chunked(mut buf: &[u8]) -> Result<Vec<u8>, String> {
 fn classify_io(e: &std::io::Error) -> String {
     use std::io::ErrorKind as K;
     let kind = match e.kind() {
-        K::TimedOut | K::WouldBlock => "Timeout",
-        _ => "ConnectionFailed",
+        K::TimedOut | K::WouldBlock => "TimeoutError",
+        _ => "ConnectionFailedError",
     };
     format!("<<{kind}>>Core.HttpClientModule: {e}")
 }
@@ -360,16 +360,20 @@ fn exchange(
     // checked against `is_blocked_ip` unless `allow_private`; blocking here (before connect) covers
     // every redirect hop too, since each hop re-enters `exchange` with its own freshly-resolved host.
     let sock_addrs = std::net::ToSocketAddrs::to_socket_addrs(&addr)
-        .map_err(|e| format!("<<ConnectionFailed>>Core.HttpClientModule: resolve `{addr}`: {e}"))?
+        .map_err(|e| {
+            format!("<<ConnectionFailedError>>Core.HttpClientModule: resolve `{addr}`: {e}")
+        })?
         .next()
         .ok_or_else(|| {
-            format!("<<ConnectionFailed>>Core.HttpClientModule: `{addr}` resolved to no address")
+            format!(
+                "<<ConnectionFailedError>>Core.HttpClientModule: `{addr}` resolved to no address"
+            )
         })?;
     if !allow_private && is_blocked_ip(sock_addrs.ip()) {
         // Name the REQUESTED host, not the resolved IP — echoing the specific private address it
         // resolved to would be a minor internal-DNS resolution oracle for an attacker-supplied URL.
         return Err(format!(
-            "<<BlockedAddress>>Core.HttpClientModule: refusing to connect to `{addr}` — it resolves to a \
+            "<<BlockedAddressError>>Core.HttpClientModule: refusing to connect to `{addr}` — it resolves to a \
              private, link-local, or metadata address (SSRF guard); pass `.allowPrivateHosts(true)` to permit it"
         ));
     }
@@ -401,7 +405,7 @@ fn exchange(
         read_response(&mut tls).map_err(|e| {
             // rustls surfaces handshake failures on first I/O — retag them as TLS.
             if e.contains("Connection") && e.contains("Alert") {
-                e.replace("<<ConnectionFailed>>", "<<TlsError>>")
+                e.replace("<<ConnectionFailedError>>", "<<TlsError>>")
             } else {
                 e
             }
@@ -563,7 +567,7 @@ pub(crate) fn run_request(
         }
         if hops >= max_redirects {
             return Err(format!(
-                "<<TooManyRedirects>>Core.HttpClientModule: exceeded {max_redirects} redirects"
+                "<<TooManyRedirectsError>>Core.HttpClientModule: exceeded {max_redirects} redirects"
             ));
         }
         let location = resp
@@ -639,7 +643,7 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
         "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS"
     ) {
         return Err(format!(
-            "<<InvalidUrl>>Core.HttpClientModule: unsupported method `{method}`"
+            "<<InvalidUrlError>>Core.HttpClientModule: unsupported method `{method}`"
         ));
     }
     if hn.len() != hv.len() {
@@ -655,7 +659,7 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
                     || v.chars().any(|c| c == '\r' || c == '\n')
                 {
                     return Err(format!(
-                        "<<InvalidUrl>>Core.HttpClientModule: header `{n}` contains a forbidden character"
+                        "<<InvalidUrlError>>Core.HttpClientModule: header `{n}` contains a forbidden character"
                     ));
                 }
                 headers.push((n.to_string(), v.to_string()));

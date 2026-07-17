@@ -51,11 +51,11 @@ fn from_sql(v: rusqlite::types::Value) -> Value {
 
 /// Classify a `rusqlite` error into the taxonomy marker the prelude's `DatabaseError.fail` reads (DEC-208
 /// slice C, spec §6). The mapping keys off SQLite's (extended) result codes: `SQLITE_CONSTRAINT_UNIQUE`
-/// / `_PRIMARYKEY` → `UniqueViolation`, generic `SQLITE_CONSTRAINT` → `ConstraintViolation`,
-/// `SQLITE_BUSY`/`SQLITE_LOCKED` → `SerializationFailure` (the transient class retry targets — the
+/// / `_PRIMARYKEY` → `UniqueViolationError`, generic `SQLITE_CONSTRAINT` → `ConstraintViolationError`,
+/// `SQLITE_BUSY`/`SQLITE_LOCKED` → `SerializationFailureError` (the transient class retry targets — the
 /// spec's `Deadlock` under one name), `SQLITE_CANTOPEN`/`SQLITE_NOTADB` → `ConnectionError`, generic
 /// `SQLITE_ERROR` (a mis-typed statement at prepare time) → `SyntaxError`. Anything else stays generic
-/// (no marker → the base `DatabaseError`). `Timeout` has no SQLite source yet (it arrives with query
+/// (no marker → the base `DatabaseError`). `TimeoutError` has no SQLite source yet (it arrives with query
 /// `.timeout(ms)`, slice D); the subtype exists in the taxonomy and the classifier already reads its
 /// marker, so wiring it later is emit-only.
 fn err_kind(e: &rusqlite::Error) -> Option<&'static str> {
@@ -70,12 +70,14 @@ fn err_kind(e: &rusqlite::Error) -> Option<&'static str> {
     if ext == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
         || ext == rusqlite::ffi::SQLITE_CONSTRAINT_PRIMARYKEY
     {
-        return Some("UniqueViolation");
+        return Some("UniqueViolationError");
     }
     // The primary result code is the low byte of the extended code.
     match ext & 0xff {
-        rusqlite::ffi::SQLITE_CONSTRAINT => Some("ConstraintViolation"),
-        rusqlite::ffi::SQLITE_BUSY | rusqlite::ffi::SQLITE_LOCKED => Some("SerializationFailure"),
+        rusqlite::ffi::SQLITE_CONSTRAINT => Some("ConstraintViolationError"),
+        rusqlite::ffi::SQLITE_BUSY | rusqlite::ffi::SQLITE_LOCKED => {
+            Some("SerializationFailureError")
+        }
         rusqlite::ffi::SQLITE_CANTOPEN | rusqlite::ffi::SQLITE_NOTADB => Some("ConnectionError"),
         rusqlite::ffi::SQLITE_ERROR => Some("SyntaxError"),
         _ => None,
@@ -379,7 +381,7 @@ mod tests {
         assert!(expand_placeholders("a = ?", &[]).is_err());
     }
 
-    /// A concurrent write lock (`SQLITE_BUSY`) maps to `SerializationFailure` — the transient class
+    /// A concurrent write lock (`SQLITE_BUSY`) maps to `SerializationFailureError` — the transient class
     /// `retry` would target. Provoked deterministically with two file connections and no busy handler.
     #[test]
     fn busy_maps_to_serialization_failure() {
@@ -400,6 +402,9 @@ mod tests {
         let err = c2.execute_batch("BEGIN IMMEDIATE").unwrap_err();
         let msg = sql_err(err);
         let _ = std::fs::remove_file(&path);
-        assert!(msg.starts_with("<<SerializationFailure>>"), "got: {msg}");
+        assert!(
+            msg.starts_with("<<SerializationFailureError>>"),
+            "got: {msg}"
+        );
     }
 }

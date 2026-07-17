@@ -3,13 +3,13 @@ package Main;
 
 import Core.Output;
 
-class BadInput implements Error {
+class BadInputError implements Error {
     constructor(public string message) {}
 }
 
-function checked(int n): int throws BadInput {
+function checked(int n): int throws BadInputError {
     if (n < 0) {
-        throw new BadInput("negative: {n}");
+        throw new BadInputError("negative: {n}");
     }
     return n * 2;
 }
@@ -18,7 +18,7 @@ function main(): void {
     try {
         Output.printLine("ok {checked(5)}");
         Output.printLine("ok {checked(-1)}");
-    } catch (BadInput e) {
+    } catch (BadInputError e) {
         Output.printLine("caught {e.message}");
     } finally {
         Output.printLine("done");

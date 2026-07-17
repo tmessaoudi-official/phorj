@@ -108,14 +108,14 @@ fn mail_invalid_address_is_typed_and_catchable_at_construction() {
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Address;
-import Core.Mail.InvalidAddress;
+import Core.Mail.InvalidAddressError;
 import Core.Mail.MailError;
 function main(): void {
   try {
     Address bad = new Address("evil@x.y
 Bcc: victim@z.w", "");
     Output.printLine("unreachable {bad.email}");
-  } catch (InvalidAddress e) {
+  } catch (InvalidAddressError e) {
     Output.printLine("invalid-address");
   } catch (MailError e) {
     Output.printLine("wrong-subtype: {e.message}");
@@ -134,7 +134,7 @@ import Core.Mail.Mailer;
 import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.NullTransport;
-import Core.Mail.MessageBuildFailed;
+import Core.Mail.MessageBuildFailedError;
 import Core.Mail.MailError;
 function main(): void {
   try {
@@ -142,7 +142,7 @@ function main(): void {
     Email e = new Email().to(Address.of("u@y.io")).subject("s").text("b");
     m.send(e);
     Output.printLine("unreachable");
-  } catch (MessageBuildFailed e) {
+  } catch (MessageBuildFailedError e) {
     Output.printLine("build-failed");
   } catch (MailError e) {
     Output.printLine("wrong-subtype: {e.message}");

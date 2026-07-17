@@ -166,6 +166,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              subclass assign a field it cannot read) — PHP rejects the same shape. Narrow the\n\
              `(set)` modifier or widen the read visibility (DEC-241).\n"
         }
+        "E-ERROR-NAME" => {
+            "E-ERROR-NAME — a throwable type whose name does not say it is one.\n\n\
+             Any class that implements `Error` (directly, via a parent class, or via interface\n\
+             extends) must be named `*Error` or `*Exception` (DEC-275): a `catch (InvalidUrl e)`\n\
+             reads like a value type at every site — import, catch, throws clause — while\n\
+             `catch (InvalidUrlError e)` is unambiguous everywhere. Rename the type; both\n\
+             suffixes are accepted (`Error` matches the stdlib, `Exception` the PHP habit).\n"
+        }
         "E-NULL-TYPE" => {
             "E-NULL-TYPE — `null` was written by itself in type position.\n\n\
              `null` is only a nullable-union member (DEC-253): `A | B | null` — which is the same\n\

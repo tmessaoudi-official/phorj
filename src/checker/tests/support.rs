@@ -117,8 +117,8 @@ pub(super) const OPTION: &str = "enum Option<T> { None, Some(T value) }";
 pub(super) const RESULT: &str = "enum Result<T, E> { Success(T value), Failure(E error) }";
 pub(super) const RESULT_DEF: &str = "enum Result<T, E> { Success(T value), Failure(E error) }";
 pub(super) const ERRDEF: &str =
-    "class BadInput implements Error { constructor(public string message) {} } \
-         class NotFound implements Error { constructor(public string message) {} }";
+    "class BadInputError implements Error { constructor(public string message) {} } \
+         class NotFoundError implements Error { constructor(public string message) {} }";
 pub(super) const SHAPES: &str = "class Circle { constructor(public int radius) {} } \
         class Square { constructor(public int side) {} } \
         class Triangle { constructor(public int base) {} }";

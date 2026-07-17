@@ -8,8 +8,8 @@
 //     intact (composable partial rollback).
 //   * `db.rollbackQuiet()` — a rollback that never throws; safe inside a `finally` (the auto-rollback
 //     idiom below). A throwing rollback there could mask the original exception.
-//   * Typed errors: every failure is a catchable `DatabaseError`, subtyped `UniqueViolation` /
-//     `ConstraintViolation` / `ConnectionError` / `SerializationFailure` / `Timeout` / `SyntaxError`.
+//   * Typed errors: every failure is a catchable `DatabaseError`, subtyped `UniqueViolationError` /
+//     `ConstraintViolationError` / `ConnectionError` / `SerializationFailureError` / `TimeoutError` / `SyntaxError`.
 //     `catch (DatabaseError e)` still catches them all.
 //   * `db.close()` — deterministic teardown; further use faults with `ConnectionError`.
 //
@@ -26,7 +26,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
+import Core.DatabaseModule.UniqueViolationError;
 
 // A tiny helper: prepare + exec one write. Both `prepare` and `exec` can throw `DatabaseError`, so each is
 // propagated with `?` (and the function declares `throws DatabaseError`).
@@ -62,7 +62,7 @@ function transfer(Database db, int from, int to, int amt, bool boom): void throw
         run(db, "UPDATE acct SET bal = bal - {amt} WHERE id = {from}")?;
         run(db, "UPDATE acct SET bal = bal + {amt} WHERE id = {to}")?;
         if (boom) {
-            // duplicate PK -> UniqueViolation
+            // duplicate PK -> UniqueViolationError
             run(db, "INSERT INTO acct(id, bal) VALUES(1, 999)")?;
         }
         db.commit()?;
@@ -98,8 +98,8 @@ function main(): void {
         // A transaction that throws -> auto-rollback; the typed error is caught specifically.
         try {
             transfer(db, 1, 2, 10, true);
-        } catch (UniqueViolation e) {
-            Output.printLine("caught UniqueViolation; transaction rolled back");
+        } catch (UniqueViolationError e) {
+            Output.printLine("caught UniqueViolationError; transaction rolled back");
         }
         Output.printLine("after rollback: acct1={balOf(db, 1)} acct2={balOf(db, 2)}");
         // Nested savepoint: partial rollback keeps the outer change.

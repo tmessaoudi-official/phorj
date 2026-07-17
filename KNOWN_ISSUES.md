@@ -118,8 +118,8 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 - **DEC-231 · Core.HttpClientModule SHIPPED** (sync HTTP/1.1 + rustls; security defaults beyond PHP curl;
   native-only ladder). QUEUED ADJUDICATION for you: the cross-prelude ERROR-CLASS NAMESPACE smell —
   injected-class dedup means two preludes declaring the same error name silently share one class
-  (wrong catch semantics); tonight's convention is name-prefixing (HttpTimeout/MailTimeout vs Db's
-  bare Timeout). Options to rule on: (a) per-module member-error syntax (`catch (Db.Timeout e)`),
+  (wrong catch semantics); tonight's convention is name-prefixing (HttpTimeoutError/MailTimeoutError vs Db's
+  bare TimeoutError). Options to rule on: (a) per-module member-error syntax (`catch (Db.TimeoutError e)`),
   (b) bless the prefix convention as the standing rule, (c) prelude-injection collision = compile
   error. Also queued: curl-mapping transpile lift; HTTP/2/pooling/cookies as future slices.
   FIXED en route: the quarantine substring hole (sweep batch 1 item 2) — Core.XSys impure modules
@@ -377,8 +377,8 @@ not a panic:
   `SAVEPOINT phorj_sp_<depth>`, so an inner rollback leaves the outer transaction intact), depth tracked
   in the native (`src/native/db.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
   throws — the auto-rollback idiom `try { …; commit(); ok = true; } finally { if (!ok) rollbackQuiet(); }`
-  in a **named** function); a **typed error taxonomy** — `open class DatabaseError` subtyped `UniqueViolation` /
-  `ConstraintViolation` / `ConnectionError` / `SerializationFailure` / `Timeout` / `SyntaxError`, each
+  in a **named** function); a **typed error taxonomy** — `open class DatabaseError` subtyped `UniqueViolationError` /
+  `ConstraintViolationError` / `ConnectionError` / `SerializationFailureError` / `TimeoutError` / `SyntaxError`, each
   `extends DatabaseError` so `catch (DatabaseError e)` still catches all, mapped from SQLite (extended) result codes
   at the native boundary and classified at the single `DatabaseError.fail` throw-helper (every existing method —
   incl. the S2 `queryInto` helpers — auto-upgrades to the precise type with no call-site change); and
@@ -396,7 +396,7 @@ not a panic:
     `db.transaction` is a SAVEPOINT (composable partial rollback, reusing the slice-C depth). The manual
     `begin`/`commit`/`rollback`/`rollbackQuiet` stay (developer ruled BOTH). **Retry:**
     `db.transactionRetry(fn, retries)` re-runs the whole transaction on the transient
-    `SerializationFailure` only; the retry loop lives in the prelude (only phorj source can `catch` the
+    `SerializationFailureError` only; the retry loop lives in the prelude (only phorj source can `catch` the
     TYPED error — `pending_throw` is invisible to a native).
     - **PENDING adjudication (Invariant 15) — retry SURFACE.** The spec (§5) illustrates one method
       `db.transaction(retries: N, fn)`, but the language has NO named args, NO method default params, and
@@ -428,8 +428,8 @@ not a panic:
     with a per-row typed binding (`List<string | int> r = [1, "x"]; …executeMany([r, …]);`) rather than a
     bare mixed literal `[1, "x"]`. (3) **`db.timeout(ms)` bounds LOCK-WAIT only** (SQLite `busy_timeout`),
     not a CPU-bound runaway query (a statement-runtime cap needs a progress-handler/interrupt, not wired).
-    While a timeout is armed, a transient `busy`/`locked` is reclassified `SerializationFailure` →
-    `Timeout`, so `SerializationFailure` (the class a future closure-`retry` would target) is not observed
+    While a timeout is armed, a transient `busy`/`locked` is reclassified `SerializationFailureError` →
+    `TimeoutError`, so `SerializationFailureError` (the class a future closure-`retry` would target) is not observed
     with a timeout set — acceptable while retry stays deferred (slice C PENDING). (4) The hook's `ms` is
     wall-clock and NON-deterministic across the two backends, so no byte-identity example/test prints it
     raw (only the SQL text, or `ms >= 0`).

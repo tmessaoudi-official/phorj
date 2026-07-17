@@ -31,18 +31,18 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 /// Classify a `postgres` error into the DEC-208 taxonomy marker (spec §6), keyed off the SQLSTATE code:
-/// `23505` unique_violation → `UniqueViolation`; other `23xxx` integrity → `ConstraintViolation`;
-/// `40001` serialization_failure / `40P01` deadlock_detected → `SerializationFailure` (the transient
-/// class retry targets); `57014` query_canceled (a fired `statement_timeout`) → `Timeout`; `08xxx`
+/// `23505` unique_violation → `UniqueViolationError`; other `23xxx` integrity → `ConstraintViolationError`;
+/// `40001` serialization_failure / `40P01` deadlock_detected → `SerializationFailureError` (the transient
+/// class retry targets); `57014` query_canceled (a fired `statement_timeout`) → `TimeoutError`; `08xxx`
 /// connection exceptions → `ConnectionError`; `42xxx` syntax/access → `SyntaxError`. Anything else stays
 /// generic (no marker → the base `DatabaseError`). Mirrors [`super::sqlite`]'s extended-result-code mapping.
 fn pg_err_kind(e: &postgres::Error) -> Option<&'static str> {
     let code = e.code()?.code();
     Some(match code {
-        "23505" => "UniqueViolation",
-        "40001" | "40P01" => "SerializationFailure",
-        "57014" => "Timeout",
-        _ if code.starts_with("23") => "ConstraintViolation",
+        "23505" => "UniqueViolationError",
+        "40001" | "40P01" => "SerializationFailureError",
+        "57014" => "TimeoutError",
+        _ if code.starts_with("23") => "ConstraintViolationError",
         _ if code.starts_with("08") => "ConnectionError",
         _ if code.starts_with("42") => "SyntaxError",
         _ => return None,
@@ -503,7 +503,8 @@ impl DriverConn for PgConn {
             let refs = param_refs(&boxes);
             let rows = client.query(&stmt, &refs).map_err(pg_sql_err)?;
             let row = rows.first().ok_or_else(|| {
-                "<<ConstraintViolation>>Core.DatabaseModule: RETURNING produced no row".to_string()
+                "<<ConstraintViolationError>>Core.DatabaseModule: RETURNING produced no row"
+                    .to_string()
             })?;
             if row.is_empty() {
                 return Err("Core.DatabaseModule: RETURNING produced no column".to_string());
@@ -607,7 +608,7 @@ impl DriverConn for PgConn {
     fn set_timeout(&self, ms: i64) -> Result<(), String> {
         // Postgres `statement_timeout` is a genuine per-statement runtime cap (unlike SQLite's
         // lock-only busy_timeout): a query exceeding it is cancelled with SQLSTATE 57014, which
-        // `pg_err_kind` maps straight to `Timeout`. `0` disables it.
+        // `pg_err_kind` maps straight to `TimeoutError`. `0` disables it.
         let ms = ms.max(0);
         self.control(&format!("SET statement_timeout = {ms}"))
     }
@@ -752,10 +753,10 @@ mod tests {
 
     fn kind_of(code: &str) -> Option<&'static str> {
         Some(match code {
-            "23505" => "UniqueViolation",
-            "40001" | "40P01" => "SerializationFailure",
-            "57014" => "Timeout",
-            _ if code.starts_with("23") => "ConstraintViolation",
+            "23505" => "UniqueViolationError",
+            "40001" | "40P01" => "SerializationFailureError",
+            "57014" => "TimeoutError",
+            _ if code.starts_with("23") => "ConstraintViolationError",
             _ if code.starts_with("08") => "ConnectionError",
             _ if code.starts_with("42") => "SyntaxError",
             _ => return None,
@@ -764,12 +765,12 @@ mod tests {
 
     #[test]
     fn sqlstate_taxonomy_mapping() {
-        assert_eq!(kind_of("23505"), Some("UniqueViolation"));
-        assert_eq!(kind_of("23503"), Some("ConstraintViolation")); // foreign_key
-        assert_eq!(kind_of("23502"), Some("ConstraintViolation")); // not_null
-        assert_eq!(kind_of("40001"), Some("SerializationFailure"));
-        assert_eq!(kind_of("40P01"), Some("SerializationFailure")); // deadlock
-        assert_eq!(kind_of("57014"), Some("Timeout"));
+        assert_eq!(kind_of("23505"), Some("UniqueViolationError"));
+        assert_eq!(kind_of("23503"), Some("ConstraintViolationError")); // foreign_key
+        assert_eq!(kind_of("23502"), Some("ConstraintViolationError")); // not_null
+        assert_eq!(kind_of("40001"), Some("SerializationFailureError"));
+        assert_eq!(kind_of("40P01"), Some("SerializationFailureError")); // deadlock
+        assert_eq!(kind_of("57014"), Some("TimeoutError"));
         assert_eq!(kind_of("08006"), Some("ConnectionError"));
         assert_eq!(kind_of("42601"), Some("SyntaxError")); // syntax_error
         assert_eq!(kind_of("42P01"), Some("SyntaxError")); // undefined_table

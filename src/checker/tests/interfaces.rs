@@ -116,6 +116,29 @@ fn generic_class_implements_generic_interface_through_own_param() {
 }
 
 #[test]
+fn error_implementor_must_carry_the_suffix() {
+    // DEC-275: a throwable type must read as one — direct implementors, and subclasses of an
+    // error base (transitive), need the Error|Exception suffix.
+    let bad = "class Oops implements Error { constructor(public string message) {} } \
+                   function main() -> void {}";
+    let e = errors_of(bad);
+    assert!(e.iter().any(|d| d.code == Some("E-ERROR-NAME")), "{e:?}");
+    let bad_sub = "open class BaseError implements Error { constructor(public string message) {} } \
+                   class Timeout extends BaseError { constructor(string m) { parent.constructor(m); } } \
+                   function main() -> void {}";
+    let e2 = errors_of(bad_sub);
+    assert!(e2.iter().any(|d| d.code == Some("E-ERROR-NAME")), "{e2:?}");
+}
+
+#[test]
+fn error_and_exception_suffixes_both_pass() {
+    let ok = "class OopsError implements Error { constructor(public string message) {} } \
+                  class OopsException implements Error { constructor(public string message) {} } \
+                  function main() -> void {}";
+    assert!(errors_of(ok).is_empty(), "{:?}", errors_of(ok));
+}
+
+#[test]
 fn instanceof_against_interface_narrows() {
     // `instanceof` accepts an interface RHS, and inside the then-block the operand is
     // smart-cast to the interface so its methods resolve.

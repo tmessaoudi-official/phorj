@@ -86,7 +86,7 @@ fn propagate_in_non_result_fn_is_context_error() {
 fn throw_undeclared_and_uncaught_is_error() {
     // A helper that throws but neither declares `throws` nor wraps it in a `try`.
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void {{ throw new BadInput(\"x\"); }} function main() -> void {{}}"
+        "{ERRDEF} function f() -> void {{ throw new BadInputError(\"x\"); }} function main() -> void {{}}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-THROW-UNDECLARED")),
@@ -96,11 +96,11 @@ fn throw_undeclared_and_uncaught_is_error() {
 
 #[test]
 fn throw_declared_then_caught_at_call_is_clean() {
-    // `f` declares `throws BadInput` (discharges its own throw); `main` calls it inside a `try`
-    // catching `BadInput` (discharges the call). Both sides handled — clean.
+    // `f` declares `throws BadInputError` (discharges its own throw); `main` calls it inside a `try`
+    // catching `BadInputError` (discharges the call). Both sides handled — clean.
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
-             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} }}"
+        "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -108,7 +108,7 @@ fn throw_declared_then_caught_at_call_is_clean() {
 #[test]
 fn throw_in_main_is_uncaught() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function main() -> void {{ throw new BadInput(\"x\"); }}"
+        "{ERRDEF} function main() -> void {{ throw new BadInputError(\"x\"); }}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-UNCAUGHT-THROW")),
@@ -119,7 +119,7 @@ fn throw_in_main_is_uncaught() {
 #[test]
 fn main_may_not_declare_throws() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function main() -> void throws BadInput {{ throw new BadInput(\"x\"); }}"
+        "{ERRDEF} function main() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-UNCAUGHT-THROW")),
@@ -130,7 +130,7 @@ fn main_may_not_declare_throws() {
 #[test]
 fn throws_error_root_is_too_broad() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws Error {{ throw new BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws Error {{ throw new BadInputError(\"x\"); }} \
              function main() -> void {{ try {{ f(); }} catch (Error e) {{}} }}"
     ));
     assert!(
@@ -151,7 +151,7 @@ fn throw_non_error_value_is_type_error() {
 #[test]
 fn bare_call_to_throwing_fn_is_unhandled() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
              function main() -> void {{ f(); }}"
     ));
     assert!(
@@ -162,20 +162,20 @@ fn bare_call_to_throwing_fn_is_unhandled() {
 
 #[test]
 fn propagate_throws_to_declared_is_clean() {
-    // `g` propagates `f`'s `BadInput` with `?` and declares it — clean; `main` catches the call.
+    // `g` propagates `f`'s `BadInputError` with `?` and declares it — clean; `main` catches the call.
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
-             function g() -> void throws BadInput {{ f()?; }} \
-             function main() -> void {{ try {{ g(); }} catch (BadInput e) {{}} }}"
+        "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
+             function g() -> void throws BadInputError {{ f()?; }} \
+             function main() -> void {{ try {{ g(); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
 
 #[test]
 fn propagate_throws_without_declaration_is_unhandled() {
-    // `g` uses `?` but does not declare `throws BadInput` — the propagation is unhandled.
+    // `g` uses `?` but does not declare `throws BadInputError` — the propagation is unhandled.
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
              function g() -> void {{ f()?; }} function main() -> void {{}}"
     ));
     assert!(
@@ -197,10 +197,10 @@ fn catch_non_error_type_is_error() {
 
 #[test]
 fn shadowed_catch_clause_warns() {
-    // A second `catch (BadInput …)` after the first can never run — a non-fatal lint.
+    // A second `catch (BadInputError …)` after the first can never run — a non-fatal lint.
     let warns = warnings_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
-             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} catch (BadInput e2) {{}} }}"
+        "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInputError e) {{}} catch (BadInputError e2) {{}} }}"
     ));
     assert!(
         warns.iter().any(|d| d.code == Some("W-CATCH-UNREACHABLE")),
@@ -212,7 +212,7 @@ fn shadowed_catch_clause_warns() {
 fn try_with_returning_arms_satisfies_totality() {
     // A `-> int` fn whose `try` body and `catch` both return diverges on every path — total.
     let ok = errors_of(&format!(
-            "{ERRDEF} function g() -> int {{ try {{ return 1; }} catch (BadInput e) {{ return 0; }} }} \
+            "{ERRDEF} function g() -> int {{ try {{ return 1; }} catch (BadInputError e) {{ return 0; }} }} \
              function main() -> void {{}}"
         ));
     assert!(ok.is_empty(), "expected clean (try totality), got {ok:?}");
@@ -222,7 +222,7 @@ fn try_with_returning_arms_satisfies_totality() {
 fn try_falling_through_misses_return() {
     // Both arms fall through, so the `-> int` fn does not return on all paths.
     let bad = errors_of(&format!(
-        "{ERRDEF} function g() -> int {{ try {{}} catch (BadInput e) {{}} }} function main() -> void {{}}"
+        "{ERRDEF} function g() -> int {{ try {{}} catch (BadInputError e) {{}} }} function main() -> void {{}}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-MISSING-RETURN")),
@@ -234,8 +234,8 @@ fn try_falling_through_misses_return() {
 fn throw_tail_satisfies_totality() {
     // A `throw` diverges, so a `-> int` fn whose only statement is a `throw` is total.
     let ok = errors_of(&format!(
-        "{ERRDEF} function g() -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
-             function main() -> void {{ try {{ var n = g(); }} catch (BadInput e) {{}} }}"
+        "{ERRDEF} function g() -> int throws BadInputError {{ throw new BadInputError(\"x\"); }} \
+             function main() -> void {{ try {{ var n = g(); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean (throw diverges), got {ok:?}");
 }
@@ -245,8 +245,8 @@ fn throws_mode_propagate_is_recorded_for_erasure() {
     // A throws-mode `?` is a checker-only marker: it must be recorded (mapped to the bare call)
     // so `resolve_html` erases the `Propagate` node before any backend sees it.
     let p = prog(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
-             function g() -> void throws BadInput {{ f()?; }} function main() -> void {{}}"
+        "{ERRDEF} function f() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }} \
+             function g() -> void throws BadInputError {{ f()?; }} function main() -> void {{}}"
     ));
     let (_warns, subst, _ufcs, _ovl, _reified, _pipes, _fills, _for_iters, _for_binds) =
         check_resolutions(&p).expect("checks clean");
@@ -271,10 +271,10 @@ fn throws_mode_propagate_is_recorded_for_erasure() {
 
 #[test]
 fn method_throws_unhandled_at_bare_call_is_error() {
-    // A method declaring `throws BadInput`, called bare (no `try`), must be rejected at the call
+    // A method declaring `throws BadInputError`, called bare (no `try`), must be rejected at the call
     // site — the same `E-CALL-UNHANDLED` as a free function (previously silently accepted).
     let bad = errors_of(&format!(
-        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }} }} \
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInputError {{ throw new BadInputError(\"x\"); }} }} \
              function main() -> void {{ var s = new Svc(); var n = s.risky(); }}"
     ));
     assert!(
@@ -288,7 +288,7 @@ fn method_propagate_with_declared_throws_is_clean() {
     // `?`-throws on a METHOD call (the old `free_call_throws` deferral, closed in Ω-1): a
     // method call under `?` propagates to the enclosing `throws` exactly like a free function.
     let ok = errors_of(&format!(
-        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }}              function wrap() -> int throws BadInput {{ var n = this.risky()?; return n; }} }}              function main() -> void {{ var s = new Svc(); try {{ var n = s.wrap(); }} catch (BadInput e) {{}} }}"
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInputError {{ throw new BadInputError(\"x\"); }}              function wrap() -> int throws BadInputError {{ var n = this.risky()?; return n; }} }}              function main() -> void {{ var s = new Svc(); try {{ var n = s.wrap(); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(
         ok.is_empty(),
@@ -301,7 +301,7 @@ fn method_propagate_without_declared_throws_is_error() {
     // The same propagation WITHOUT the enclosing declaration is E-CALL-UNHANDLED (not the
     // Result-mode E-PROPAGATE-CONTEXT confusion the deferral used to produce).
     let bad = errors_of(&format!(
-        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }}              function wrap() -> int {{ var n = this.risky()?; return n; }} }}              function main() -> void {{ var s = new Svc(); var n = s.wrap(); }}"
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInputError {{ throw new BadInputError(\"x\"); }}              function wrap() -> int {{ var n = this.risky()?; return n; }} }}              function main() -> void {{ var s = new Svc(); var n = s.wrap(); }}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
@@ -317,8 +317,8 @@ fn method_propagate_without_declared_throws_is_error() {
 fn method_throws_wrapped_in_try_is_clean() {
     // The same method call inside a `try` catching the declared type discharges cleanly.
     let ok = errors_of(&format!(
-        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }} }} \
-             function main() -> void {{ var s = new Svc(); try {{ var n = s.risky(); }} catch (BadInput e) {{}} }}"
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInputError {{ throw new BadInputError(\"x\"); }} }} \
+             function main() -> void {{ var s = new Svc(); try {{ var n = s.risky(); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -338,8 +338,8 @@ fn throws_comma_separated_multiple_is_clean() {
     // `throws A, B` (comma form, M-DOGFOOD W0) declares the same set as `throws A | B`. A caller
     // must discharge every declared throw — catching both is clean.
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput, NotFound {{ throw new BadInput(\"x\"); }} \
-             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} catch (NotFound e) {{}} }}"
+        "{ERRDEF} function f() -> void throws BadInputError, NotFoundError {{ throw new BadInputError(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInputError e) {{}} catch (NotFoundError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -348,31 +348,34 @@ fn throws_comma_separated_multiple_is_clean() {
 fn throws_comma_partial_catch_is_unhandled() {
     // Catching only one of two comma-declared throws leaves the other undischarged.
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput, NotFound {{ throw new BadInput(\"x\"); }} \
-             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} }}"
+        "{ERRDEF} function f() -> void throws BadInputError, NotFoundError {{ throw new BadInputError(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInputError e) {{}} }}"
     ));
-    assert!(!bad.is_empty(), "expected undischarged NotFound, got clean");
+    assert!(
+        !bad.is_empty(),
+        "expected undischarged NotFoundError, got clean"
+    );
 }
 
 #[test]
 fn throws_comma_and_union_mix() {
     // `throws A | B, C` mixes a union and a comma entry; the checker flattens to {A, B, C}.
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput | NotFound {{ throw new BadInput(\"x\"); }} \
-             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} catch (NotFound e) {{}} }}"
+        "{ERRDEF} function f() -> void throws BadInputError | NotFoundError {{ throw new BadInputError(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInputError e) {{}} catch (NotFoundError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
 
 // ── DEC-221: throwing constructors ──
 
-/// A class whose constructor declares `throws BadInput` and throws inside its body.
+/// A class whose constructor declares `throws BadInputError` and throws inside its body.
 const THROWING_CTOR: &str =
-    "class Res { constructor(int x) throws BadInput { if (x < 0) { throw new BadInput(\"neg\"); } } }";
+    "class Res { constructor(int x) throws BadInputError { if (x < 0) { throw new BadInputError(\"neg\"); } } }";
 
 #[test]
 fn throwing_ctor_bare_construction_is_unhandled() {
-    // DEC-221: `new Res(...)` where the ctor `throws BadInput` and the caller neither catches nor
+    // DEC-221: `new Res(...)` where the ctor `throws BadInputError` and the caller neither catches nor
     // propagates is `E-CALL-UNHANDLED` — construction is a throwing expression.
     let bad = errors_of(&format!(
         "{ERRDEF} {THROWING_CTOR} function main() -> void {{ var r = new Res(-1); }}"
@@ -388,7 +391,7 @@ fn throwing_ctor_construction_in_try_is_clean() {
     // The same construction wrapped in a `try` catching the declared type discharges cleanly.
     let ok = errors_of(&format!(
         "{ERRDEF} {THROWING_CTOR} \
-             function main() -> void {{ try {{ var r = new Res(-1); }} catch (BadInput e) {{}} }}"
+             function main() -> void {{ try {{ var r = new Res(-1); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -399,8 +402,8 @@ fn throwing_ctor_construction_propagated_with_question_is_clean() {
     // now accepts a construction operand, `Expr::New(box Call)`, not just a bare call).
     let ok = errors_of(&format!(
         "{ERRDEF} {THROWING_CTOR} \
-             function make() -> void throws BadInput {{ var r = new Res(-1)?; }} \
-             function main() -> void {{ try {{ make(); }} catch (BadInput e) {{}} }}"
+             function make() -> void throws BadInputError {{ var r = new Res(-1)?; }} \
+             function main() -> void {{ try {{ make(); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -429,9 +432,9 @@ fn ctor_body_discharges_against_declared_throws() {
     // throwing helper called under `?` propagates against the ctor's own `throws` — the DB_PRELUDE
     // pattern (`DatabaseError.fail(e)?` inside `constructor(...) throws DatabaseError`). Clean.
     let ok = errors_of(&format!(
-        "{ERRDEF} function boom() -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
-             class Res {{ constructor() throws BadInput {{ var n = boom()?; }} }} \
-             function main() -> void {{ try {{ var r = new Res(); }} catch (BadInput e) {{}} }}"
+        "{ERRDEF} function boom() -> int throws BadInputError {{ throw new BadInputError(\"x\"); }} \
+             class Res {{ constructor() throws BadInputError {{ var n = boom()?; }} }} \
+             function main() -> void {{ try {{ var r = new Res(); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -441,7 +444,7 @@ fn ctor_body_undeclared_throw_is_unhandled() {
     // A throwing call inside a ctor that does NOT declare the throw is `E-CALL-UNHANDLED` (the body
     // discharges against the ctor's own throws set, which is empty here).
     let bad = errors_of(&format!(
-        "{ERRDEF} function boom() -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
+        "{ERRDEF} function boom() -> int throws BadInputError {{ throw new BadInputError(\"x\"); }} \
              class Res {{ constructor() {{ var n = boom(); }} }} \
              function main() -> void {{ var r = new Res(); }}"
     ));
@@ -477,8 +480,8 @@ fn inherited_throwing_ctor_propagates_to_subclass_construction() {
     // handled too (the throws set is inherited alongside the param signature).
     let bad = errors_of(&format!(
         "{ERRDEF} \
-             class Base {{ constructor(int x) throws BadInput {{ if (x < 0) {{ throw new BadInput(\"neg\"); }} }} }} \
-             class Child extends Base {{}} \
+             class BaseError {{ constructor(int x) throws BadInputError {{ if (x < 0) {{ throw new BadInputError(\"neg\"); }} }} }} \
+             class Child extends BaseError {{}} \
              function main() -> void {{ var c = new Child(-1); }}"
     ));
     assert!(
@@ -491,12 +494,12 @@ fn inherited_throwing_ctor_propagates_to_subclass_construction() {
 
 #[test]
 fn throwing_lambda_declared_throw_is_clean() {
-    // A lambda that DECLARES `throws BadInput` discharges its own `throw` against that clause — no
+    // A lambda that DECLARES `throws BadInputError` discharges its own `throw` against that clause — no
     // `E-THROW-UNDECLARED`. The call is handled with `try`/`catch`, so the whole program is clean.
     let ok = errors_of(&format!(
         "{ERRDEF} function main() -> void {{ \
-             var f = function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}; \
-             try {{ var y = f(1); }} catch (BadInput e) {{}} }}"
+             var f = function(int n): int throws BadInputError {{ if (n < 0) {{ throw new BadInputError(\"x\"); }} return n; }}; \
+             try {{ var y = f(1); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(
         !ok.iter().any(|d| d.code == Some("E-THROW-UNDECLARED")),
@@ -511,7 +514,7 @@ fn throwing_lambda_without_clause_is_undeclared() {
     // `E-THROW-UNDECLARED`, exactly like a named function with no `throws` (DEC-222 does NOT infer).
     let bad = errors_of(&format!(
         "{ERRDEF} function main() -> void {{ \
-             var f = function(int n): int {{ throw new BadInput(\"x\"); }}; }}"
+             var f = function(int n): int {{ throw new BadInputError(\"x\"); }}; }}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-THROW-UNDECLARED")),
@@ -525,7 +528,7 @@ fn call_of_throwing_fn_value_is_unhandled() {
     // `E-CALL-UNHANDLED` — the call discharges the closure's declared throw at the call site.
     let bad = errors_of(&format!(
         "{ERRDEF} function main() -> void {{ \
-             var f = function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}; \
+             var f = function(int n): int throws BadInputError {{ if (n < 0) {{ throw new BadInputError(\"x\"); }} return n; }}; \
              var y = f(-1); }}"
     ));
     assert!(
@@ -539,18 +542,18 @@ fn call_of_throwing_fn_value_caught_is_clean() {
     // The same call wrapped in a `try`/`catch` of the declared type discharges cleanly.
     let ok = errors_of(&format!(
         "{ERRDEF} function main() -> void {{ \
-             var f = function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}; \
-             try {{ var y = f(-1); }} catch (BadInput e) {{}} }}"
+             var f = function(int n): int throws BadInputError {{ if (n < 0) {{ throw new BadInputError(\"x\"); }} return n; }}; \
+             try {{ var y = f(-1); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
 
 #[test]
 fn higher_order_throwing_param_call_unhandled_then_propagated() {
-    // A param typed `(int) => int throws BadInput`: calling it may throw. A HOF that neither catches
+    // A param typed `(int) => int throws BadInputError`: calling it may throw. A HOF that neither catches
     // nor declares the throw is `E-CALL-UNHANDLED`; one that `?`-propagates AND declares it is clean.
     let bad = errors_of(&format!(
-        "{ERRDEF} function apply((int) => int throws BadInput op) -> int {{ return op(1); }} \
+        "{ERRDEF} function apply((int) => int throws BadInputError op) -> int {{ return op(1); }} \
              function main() -> void {{}}"
     ));
     assert!(
@@ -559,9 +562,9 @@ fn higher_order_throwing_param_call_unhandled_then_propagated() {
     );
 
     let ok = errors_of(&format!(
-        "{ERRDEF} function apply((int) => int throws BadInput op) -> int throws BadInput {{ return op(1)?; }} \
+        "{ERRDEF} function apply((int) => int throws BadInputError op) -> int throws BadInputError {{ return op(1)?; }} \
              function main() -> void {{ \
-                 try {{ var y = apply(function(int n): int throws BadInput {{ return n; }}); }} catch (BadInput e) {{}} }}"
+                 try {{ var y = apply(function(int n): int throws BadInputError {{ return n; }}); }} catch (BadInputError e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -569,11 +572,11 @@ fn higher_order_throwing_param_call_unhandled_then_propagated() {
 #[test]
 fn non_throwing_lambda_passes_where_throwing_expected() {
     // VARIANCE (the sound rule): a non-throwing lambda `(int) => int` is accepted where a
-    // `(int) => int throws BadInput` type is expected — a function throwing fewer exceptions is
+    // `(int) => int throws BadInputError` type is expected — a function throwing fewer exceptions is
     // substitutable for one throwing more.
     let ok = errors_of(&format!(
-        "{ERRDEF} function apply((int) => int throws BadInput op) -> int {{ \
-                 try {{ return op(1); }} catch (BadInput e) {{ return 0; }} }} \
+        "{ERRDEF} function apply((int) => int throws BadInputError op) -> int {{ \
+                 try {{ return op(1); }} catch (BadInputError e) {{ return 0; }} }} \
              function main() -> void {{ var y = apply(function(int n): int => n + 1); }}"
     ));
     assert!(
@@ -584,12 +587,12 @@ fn non_throwing_lambda_passes_where_throwing_expected() {
 
 #[test]
 fn throwing_lambda_where_nonthrowing_expected_is_rejected() {
-    // The reverse of variance: a `throws BadInput` lambda is NOT assignable where a non-throwing
+    // The reverse of variance: a `throws BadInputError` lambda is NOT assignable where a non-throwing
     // `(int) => int` is expected (the caller is not prepared to handle the exception).
     let bad = errors_of(&format!(
         "{ERRDEF} function apply((int) => int op) -> int {{ return op(1); }} \
              function main() -> void {{ \
-                 var y = apply(function(int n): int throws BadInput {{ if (n < 0) {{ throw new BadInput(\"x\"); }} return n; }}); }}"
+                 var y = apply(function(int n): int throws BadInputError {{ if (n < 0) {{ throw new BadInputError(\"x\"); }} return n; }}); }}"
     ));
     assert!(
         !bad.is_empty(),
@@ -611,10 +614,10 @@ fn throwing_lambda_non_error_type_is_rejected() {
 
 #[test]
 fn named_throwing_fn_as_value_carries_throws() {
-    // A named `throws BadInput` function used as a first-class VALUE keeps its throws obligation —
+    // A named `throws BadInputError` function used as a first-class VALUE keeps its throws obligation —
     // calling the value is `E-CALL-UNHANDLED` unless handled (FnSig.throws wired into the fn-value type).
     let bad = errors_of(&format!(
-        "{ERRDEF} function boom(int n) -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
+        "{ERRDEF} function boom(int n) -> int throws BadInputError {{ throw new BadInputError(\"x\"); }} \
              function main() -> void {{ var f = boom; var y = f(1); }}"
     ));
     assert!(
@@ -625,31 +628,31 @@ fn named_throwing_fn_as_value_carries_throws() {
 
 #[test]
 fn throws_variance_uses_subtype_oracle() {
-    // The SUBTYPE leg of variance (uses the nominal subtype oracle, not `==`): a lambda `throws Sub`
-    // (Sub <: Base) flows into a `throws Base` slot — its exceptions are covered. The reverse
-    // (`throws Base` into a `throws Sub` slot) is rejected — Base is not covered by Sub.
+    // The SUBTYPE leg of variance (uses the nominal subtype oracle, not `==`): a lambda `throws SubError`
+    // (SubError <: BaseError) flows into a `throws BaseError` slot — its exceptions are covered. The reverse
+    // (`throws BaseError` into a `throws SubError` slot) is rejected — BaseError is not covered by SubError.
     const HIER: &str =
-        "open class Base implements Error { constructor(public string message) {} } \
-                        class Sub extends Base {}";
+        "open class BaseError implements Error { constructor(public string message) {} } \
+                        class SubError extends BaseError {}";
     let ok = errors_of(&format!(
-        "{HIER} function apply((int) => int throws Base op) -> int {{ \
-                 try {{ return op(1); }} catch (Base e) {{ return 0; }} }} \
+        "{HIER} function apply((int) => int throws BaseError op) -> int {{ \
+                 try {{ return op(1); }} catch (BaseError e) {{ return 0; }} }} \
              function main() -> void {{ \
-                 var y = apply(function(int n): int throws Sub {{ if (n < 0) {{ throw new Sub(\"x\"); }} return n; }}); }}"
+                 var y = apply(function(int n): int throws SubError {{ if (n < 0) {{ throw new SubError(\"x\"); }} return n; }}); }}"
     ));
     assert!(
         ok.is_empty(),
-        "a `throws Sub` lambda must pass where `throws Base` is expected (Sub <: Base), got {ok:?}"
+        "a `throws SubError` lambda must pass where `throws BaseError` is expected (SubError <: BaseError), got {ok:?}"
     );
 
     let bad = errors_of(&format!(
-        "{HIER} function apply((int) => int throws Sub op) -> int {{ \
-                 try {{ return op(1); }} catch (Sub e) {{ return 0; }} }} \
+        "{HIER} function apply((int) => int throws SubError op) -> int {{ \
+                 try {{ return op(1); }} catch (SubError e) {{ return 0; }} }} \
              function main() -> void {{ \
-                 var y = apply(function(int n): int throws Base {{ if (n < 0) {{ throw new Base(\"x\"); }} return n; }}); }}"
+                 var y = apply(function(int n): int throws BaseError {{ if (n < 0) {{ throw new BaseError(\"x\"); }} return n; }}); }}"
     ));
     assert!(
         !bad.is_empty(),
-        "a `throws Base` lambda must NOT pass where `throws Sub` is expected (Base ⊄ Sub), got clean"
+        "a `throws BaseError` lambda must NOT pass where `throws SubError` is expected (BaseError ⊄ SubError), got clean"
     );
 }

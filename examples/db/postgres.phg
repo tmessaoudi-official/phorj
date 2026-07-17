@@ -25,7 +25,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-import Core.DatabaseModule.UniqueViolation;
+import Core.DatabaseModule.UniqueViolationError;
 import Core.Secret;
 
 function main(): void {
@@ -74,12 +74,12 @@ function main(): void {
             )
             .execReturningId();
         Output.printLine("inserted id {newId}");
-        // A duplicate PK surfaces as the typed `UniqueViolation` (PG SQLSTATE 23505), not a silent error.
+        // A duplicate PK surfaces as the typed `UniqueViolationError` (PG SQLSTATE 23505), not a silent error.
         try {
             discard db
                 .prepare("INSERT INTO phorj_pg_demo(id, name, active) VALUES(1, 'dup', true)")
                 .exec();
-        } catch (UniqueViolation e) {
+        } catch (UniqueViolationError e) {
             Output.printLine("caught a unique violation");
         }
         discard db.prepare("DROP TABLE phorj_pg_demo").exec();

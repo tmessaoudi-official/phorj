@@ -14,7 +14,7 @@ import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.FileTransport;
 import Core.Mail.NullTransport;
-import Core.Mail.InvalidAddress;
+import Core.Mail.InvalidAddressError;
 import Core.Mail.MailError;
 
 function main(): void {
@@ -33,7 +33,7 @@ function main(): void {
         try {
             Address bad = new Address("not-an-address", "");
             Output.printLine("unreachable {bad.email}");
-        } catch (InvalidAddress ie) {
+        } catch (InvalidAddressError ie) {
             Output.printLine("rejected an invalid address at construction");
         }
         // Batch over one transport; returns the sent count.

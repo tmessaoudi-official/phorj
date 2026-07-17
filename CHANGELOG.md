@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-275: `E-ERROR-NAME` — throwable types must read as throwable
+
+Any class that implements `Error` — directly, via a parent class, or via interface extends —
+must be named `*Error` or `*Exception` (both accepted: `Error` matches the stdlib's own bases,
+`Exception` the PHP habit). Enforced at compile time for stdlib and user code alike; the
+motivating ambiguity was `catch (InvalidUrl e)` reading like a value type at every site. The
+stdlib sweep renamed the 27 remaining unsuffixed condition types (mechanical stem-keeping):
+`InvalidUrlError`, `HttpTimeoutError`, `TimeoutError`, `UniqueViolationError`,
+`AuthFailedError`, `MailIoError`, `UriMalformedError`, the full `UriBad*Error` family, … —
+native error sentinels renamed in lockstep. Self-documented via `phg explain E-ERROR-NAME`.
+
 ### Changed — DEC-276/277/278/279: the naming mega-slice (breaking renames)
 
 Earned shortcuts expanded, everywhere: `Core.Db` → `Core.DatabaseModule` (class `Database`,
