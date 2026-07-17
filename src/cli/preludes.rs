@@ -1536,6 +1536,24 @@ class Database {
 /// that transitive import is what triggers `Regex`-class injection for `Router.constraintOk`. A
 /// reorder that broke this would still pass most tests; `examples/web/route-constraints.phg` (a
 /// regex-constrained route with no explicit `import Core.Regex`) is the regression guard.
+/// DEC-282 (unused-import analysis) — the names an `import Core.…;` WHOLE-MODULE row binds into a
+/// file: the qualifier's leaf plus every injected bare type (`Core.IteratorModule` binds
+/// `Iterator`; `Core.Runtime` binds `Entry`; …). `None` for a path that is not a whole-module row
+/// (member imports bind their own leaf and are scanned by it).
+pub(crate) fn core_module_bound_names(path: &[String]) -> Option<Vec<String>> {
+    let vm = CORE_MODULES.iter().find(|vm| {
+        vm.module.len() == path.len() && vm.module.iter().zip(path).all(|(a, b)| a == b)
+    })?;
+    let mut names: Vec<String> = vec![vm
+        .qualifier
+        .rsplit('.')
+        .next()
+        .unwrap_or(vm.qualifier)
+        .to_string()];
+    names.extend(vm.bare_types.iter().map(|s| (*s).to_string()));
+    Some(names)
+}
+
 pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Json"],

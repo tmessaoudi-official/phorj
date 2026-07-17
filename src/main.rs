@@ -37,7 +37,7 @@ fn main() {
         }
     }
 
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
     // Global flags (before subcommand dispatch): -h/--help and -v/--version print and exit 0.
     match args.get(1).map(String::as_str) {
         Some("-h" | "--help") => {
@@ -77,6 +77,22 @@ fn main() {
             | "benchmark" | "build" | "vendor" | "serve" | "lsp" | "test" | "format"
             | "explain" | "debug"),
         ) => c,
+        // DEC-282: bare `phg <existing-file>` dispatches to RUN — the shebang/executable-entry
+        // form (`#!/usr/bin/env phg` hands the script path as the first argument; `./bin/console
+        // migrate` reaches here as `phg /path/bin/console migrate`). Subcommand names keep
+        // priority (matched above — a file literally named `check` needs `phg run check`), and a
+        // non-existing first argument still prints usage. The args after the path become the
+        // entry's argv, exactly as `phg run <file> -- args` would pass them.
+        Some(path) if std::path::Path::new(path).is_file() => {
+            let mut rewritten: Vec<String> =
+                vec![args[0].clone(), "run".to_string(), path.to_string()];
+            if args.len() > 2 {
+                rewritten.push("--".to_string());
+                rewritten.extend(args[2..].iter().cloned());
+            }
+            args = rewritten;
+            "run"
+        }
         _ => {
             eprintln!("{USAGE}");
             exit(2);
@@ -145,25 +161,15 @@ fn main() {
         print!("{report}");
         exit(code as i32);
     }
-    // `vendor [project-dir | phorj.toml]` resolves a project (not a program source) and fetches its
-    // git dependencies — the only network-touching command. Defaults to the current directory; any
-    // extra argument is a usage error.
+    // DEC-282: `phg vendor` retired — the compiler never touches the network; dependency
+    // fetching ships as a package-manager extension that writes `vendor/` (the loader only reads).
     if cmd == "vendor" {
-        let arg = args.get(2).map(String::as_str).unwrap_or(".");
-        if args.len() > 3 {
-            eprintln!("{USAGE}");
-            exit(2);
-        }
-        match cli::cmd_vendor(arg) {
-            Ok(text) => {
-                print!("{text}");
-                return;
-            }
-            Err(err) => {
-                eprintln!("{err}");
-                exit(1);
-            }
-        }
+        eprintln!(
+            "phg vendor is retired (DEC-282): phg never downloads code. Place dependencies under \
+             `vendor/<Publisher>/<Name>/` (folder = package) — a package-manager extension will \
+             manage that tree."
+        );
+        exit(2);
     }
     // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C). It
     // consumes an optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra
@@ -372,10 +378,27 @@ fn main() {
         }
         let file = file.unwrap_or_else(|| {
             eprintln!(
-                "usage: phg serve <file> [--address 127.0.0.1:8080] [--timeout 30] [--workers N] [--tree-walker]"
+                "usage: phg serve <file | site-dir> [--address 127.0.0.1:8080] [--timeout 30] [--workers N] [--tree-walker]"
             );
             exit(2);
         });
+        // DEC-282 site mode: `phg serve <DIR>` — DIR is the explicit app root; docroot = DIR/public
+        // (the ONLY web surface; static assets served with guards, .phg source never), entry =
+        // DIR/public/index.phg. A file argument keeps today's handler-only mode (no docroot).
+        let mut entry_path = std::path::PathBuf::from(file);
+        if entry_path.is_dir() {
+            match phorj::serve::resolve_site_dir(&entry_path) {
+                Ok((docroot, entry)) => {
+                    phorj::serve::set_docroot(docroot);
+                    entry_path = entry;
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    exit(2);
+                }
+            }
+        }
+        let file: &str = entry_path.to_string_lossy().into_owned().leak();
         let timeout = (timeout_secs > 0).then(|| std::time::Duration::from_secs(timeout_secs));
         // DEC-281: web input is the `Request` — a worker blocking on the terminal's stdin would
         // hang the server, so `Core.Input` reads behave as an exhausted pipe under serve.

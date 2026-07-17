@@ -321,6 +321,54 @@ pub fn explain_text(code: &str) -> Option<String> {
              fields. Move the closure into the constructor body, or capture a specific value\n\
              (`var v = this.x;`) before building the closure.\n"
         }
+        "W-SHADOWED" => {
+            "W-SHADOWED — the same package exists under more than one search root.\n\n\
+             Imports resolve against three ordered roots (entry directory → `src/` → `vendor/`);\n\
+             the MOST SPECIFIC root wins. That win is deliberate (local override of a vendored\n\
+             package is the standard escape hatch) but never silent — this warning names both\n\
+             locations so an accidental shadow is visible. Remove or rename one of the two to\n\
+             silence it.\n"
+        }
+        "E-MODULE-NOT-FOUND" => {
+            "E-MODULE-NOT-FOUND — an import does not resolve to any package on disk.\n\n\
+             DEC-282 unified loading: imports resolve against THREE ordered search roots — the\n\
+             entry file's own directory, then the app root's `src/`, then its `vendor/` (the app\n\
+             root is the nearest ancestor directory containing `src/` or `vendor/`; with neither,\n\
+             the entry's directory is the only root). Packages live in folders matching their name\n\
+             (folder = package): `import Model;` needs `Model/*.phg` declaring `package Model;`\n\
+             under one of those roots. The error lists exactly what was searched. Dependencies must\n\
+             already be on disk under `vendor/` — phg never downloads code (a package-manager\n\
+             extension writes `vendor/`; the compiler only reads it).\n"
+        }
+        "E-IMPORT-MAIN" => {
+            "E-IMPORT-MAIN — `import Main;` (or `Main.…`) is never legal.\n\n\
+             `Main` is the ENTRY package: location-free, name-free, and unimportable — every file's\n\
+             own package is already in scope, and no other file can depend on an entry. Shared code\n\
+             belongs in a folder-named package (`src/Model/…` ⇒ `package Model;`) and is imported\n\
+             by that name. (DEC-282 — previously this import was silently accepted as a no-op.)\n"
+        }
+        "E-UNUSED-IMPORT" => {
+            "E-UNUSED-IMPORT — an import that nothing in the file references.\n\n\
+             Go-style import hygiene (DEC-282, developer-ruled HARD): an unused import is dead\n\
+             text — remove it, or use it. The bound names checked are the import's leaf (or its\n\
+             `as` alias) plus, for a whole-module `import Core.X;`, every type that module\n\
+             injects (`Core.IteratorModule` binds `Iterator`; `Core.Runtime` binds `Entry`; …).\n\
+             The check is a whole-word source scan and deliberately over-approximates — a mention\n\
+             anywhere (even a comment) counts as a use — so it never mis-flags a real use.\n"
+        }
+        "W-PHG-IN-DOCROOT" => {
+            "W-PHG-IN-DOCROOT — a `.phg` file (other than `index.phg`) sits inside `public/`.\n\n\
+             The docroot is the ONLY web-exposed surface (`phg serve <dir>`); source under it is\n\
+             never served (the static layer guards `.phg` bytes with a 404), but code does not\n\
+             belong there either — move it outside `public/` (e.g. into `src/`), keeping\n\
+             `public/` to the front controller + static assets.\n"
+        }
+        "E-DUP-IMPORT" => {
+            "E-DUP-IMPORT — the same import is written twice in one file.\n\n\
+             A repeated import is dead text with no legitimate reading (it binds nothing new), so\n\
+             it is a hard error rather than a warning (DEC-282, Go-style import hygiene). Remove\n\
+             the repeated line.\n"
+        }
         "E-VENDOR-MISSING" => {
             "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\
              Dependencies resolve offline from the committed `vendor/` tree — Phorj never fetches on\n\

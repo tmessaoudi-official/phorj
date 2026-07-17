@@ -2216,3 +2216,40 @@ differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred bindi
   verified on a CR/LF-tricky corpus). Quarantine map: `Core.Native.Input` → `Core.Input` twin row
   in `uses_impure_native`. 7 tests (`tests/stdin.rs`) incl. import-gating; example
   `cli/stdin-filter.phg` (3-leg identical).
+
+- **DEC-282 ADDENDA (2026-07-17, developer — the multi-entry round):**
+  (i) **APP-ROOT DISCOVERY**: `src/` IS the root marker — walk UP from the entry file to the
+  nearest directory containing `src/` (or `vendor/`), git-style, nearest wins; that directory is
+  the app root. No marker file, no config. No `src/` above → root = the entry's own dir (lone
+  scripts unchanged). Supersedes the plain entry-dir rule; `phg serve DIR` stays explicit.
+  Package names resolve UNDER `src/` (stripped — `src/Model/Article.phg` ⇒ `package Model;`).
+  Entries live ANYWHERE under the app root (bin/, xyz/, public/, root).
+  (ii) **THREE SEARCH ROOTS, first match wins (developer-confirmed order)**: (1) the entry's own
+  folder (entry-local packages, e.g. `bin/Commands/`), (2) `<approot>/src/`, (3)
+  `<approot>/vendor/`; same package in a later root too → loud W-SHADOWED naming both paths;
+  `Core.*` reserved ahead of all three (step 0, never disk).
+  (iii) **SHEBANG + IMPLICIT RUN (both verified broken today: `#!` = lex error; bare `phg <file>`
+  = usage)**: the lexer/loader skips a byte-0 `#!...` line; `phg <existing-file>` with no
+  subcommand DISPATCHES TO RUN (subcommand names keep priority), trailing args become the
+  entry's `List<string>` argv; extensionless entries (e.g. `bin/console`) accepted when named
+  explicitly — package scanning still reads only `*.phg`. Enables Symfony-style
+  `chmod +x bin/console && ./bin/console migrate --dry`.
+
+- **DEC-282 BUILT (2026-07-17):** the unified manifest-less loader shipped, one slice. Loader:
+  `discover_roots` (src/-marker walk-up) + `peek_package` declaration index + `load_unified`
+  (3-root import-driven lazy; W-SHADOWED) + `assemble` factored from the retired project mode;
+  `load_with_buffer` LSP seam. Hygiene: E-MODULE-NOT-FOUND (searched roots listed), E-IMPORT-MAIN,
+  E-DUP-IMPORT, E-UNUSED-IMPORT (whole-word source scan, import statements blanked by byte-range —
+  a statement-position guard keeps the word "import" in comments from tripping it; interpolation
+  holes are parser-side, which is WHY it's a source scan not a token scan). Shebang byte-0 skip +
+  bare `phg <file>` → run (argv threads). Serve site mode: static_files.rs (MIME ~20, ETag +
+  Last-Modified + 304, canonicalize/prefix guards, .phg-never-served, W-PHG-IN-DOCROOT) +
+  docroot OnceLock + resolve_site_dir; verified live via curl incl. traversal attempts. LSP
+  diagnostics_for_uri → same loader (DEC-252 restored for multi-file). RETIRED: manifest.rs,
+  lock.rs, vendor.rs, `phg vendor` (stub error points at the extension path), tests/vendor.rs,
+  loose Main-only rule (file loads; stdin/-e keep it); 11 example tomls dropped; withdeps vendor
+  migrated to vendor/Acme/Strutil (folder=package). **DEVIATION disclosed**: vendor layout is
+  PascalCase `vendor/<Publisher>/<Name>` (folder=package uniformity), not the lowercase
+  publisher/name shown in the ruled preview. Eager-validation semantics change: files no import
+  reaches are INERT (the old whole-tree Core-hijack/lowercase-package rejections became
+  unreachable-by-construction — tests flipped to assert inertness).

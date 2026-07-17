@@ -1,4 +1,4 @@
-//! CLI surface text + argument shaping: version/help, `phg vendor`, source resolution.
+//! CLI surface text + argument shaping: version/help, source resolution.
 
 /// The `--version` line: `phg <version>` (from `CARGO_PKG_VERSION`).
 pub fn version_line() -> String {
@@ -21,7 +21,6 @@ pub fn help_text() -> String {
          disassemble print the compiled bytecode\n  \
          benchmark  benchmark the interpreter vs the VM (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
-         vendor     fetch [require] git deps into an offline vendor/ (writes phorj.lock)\n  \
          serve      serve the program over HTTP (calls respond(bytes): bytes per request)\n  \
          lsp        run the language server over stdio (LSP; for editors)\n  \
          debug      run the program under the interactive debugger (dev; --dap for DAP)\n  \
@@ -121,9 +120,8 @@ pub fn help_for(cmd: &str) -> String {
         }
         "test" => {
             "test — discover and run `test \"name\" { … }` blocks on the interpreter.\n\n\
-                   With no path, runs every `*.phg` under the project's `tests/` directory (the\n\
-                   project root is the nearest ancestor holding a `phorj.toml`, else the current\n\
-                   directory). With a path, runs that file, or every `*.phg` under that directory.\n\
+                   With no path, runs every `*.phg` under the current directory's `tests/`\n\
+                   directory. With a path, runs that file, or every `*.phg` under that directory.\n\
                    Each test runs independently; a failing assertion (or any fault) is reported with\n\
                    its message and the test keeps going. Exit 0 iff every test passed, else 1.\n\n\
                    usage:\n  phg test [path…]\n\n\
@@ -159,18 +157,19 @@ pub fn help_for(cmd: &str) -> String {
                       phg explain E-UNKNOWN-IDENT\n"
         }
         "vendor" => {
-            "vendor — fetch the project's `[require]` git dependencies into an offline `vendor/`.\n\n\
-                     Clones each dependency at its pinned tag/rev, copies its source into\n\
-                     `vendor/<vendor>/<package>/`, and writes `phorj.lock` (resolved SHA + content\n\
-                     hash). This is the only command that touches the network; commit `vendor/` +\n\
-                     `phorj.lock` so `run`/`check`/`transpile` resolve fully offline.\n\n\
-                     usage:\n  phg vendor [project-dir | phorj.toml]   (defaults to .)\n\n\
-                     examples:\n  \
-                     phg vendor\n  \
-                     phg vendor path/to/project\n"
+            "vendor — RETIRED (DEC-282): phg never downloads code.\n\n\
+                     Dependencies resolve OFFLINE from the `vendor/` tree next to your app root:\n\
+                     `import Acme.Strutil;` reads `vendor/Acme/Strutil/…` (folder = package).\n\
+                     A package-manager extension manages that tree; the compiler only reads it.\n"
         }
         "serve" => {
-            "serve — serve the program over HTTP/1.1.\n\n\
+            "serve — serve a program (or a site directory) over HTTP/1.1.\n\n\
+                    SITE MODE (DEC-282): `phg serve <dir>` — <dir> is the app root; the docroot is\n\
+                    <dir>/public (the ONLY web surface: static assets served with MIME + ETag/\n\
+                    Last-Modified + traversal guards; `.phg` source is NEVER served) and the one\n\
+                    web entry is <dir>/public/index.phg. Code lives OUTSIDE public/ (src/,\n\
+                    vendor/) — structurally unreachable from the web.\n\n\
+                    HANDLER MODE: `phg serve <file>` — no docroot, no statics (dev/demos).\n\n\
                     The program must define `respond(bytes): bytes`: the runtime frames each\n\
                     incoming request, calls `respond` (where the program's own `parse_request` /\n\
                     router / `serialize_response` live — all pure Phorj), and writes the bytes back\n\
@@ -209,7 +208,7 @@ pub fn help_for(cmd: &str) -> String {
             "debug — run the program under the interactive debugger (dev-only, interpreter).\n\n\
                      Reads debugger commands on stdin and writes the UI to stderr; `--dap` speaks the\n\
                      Debug Adapter Protocol instead (for editor debug integration). Source load is\n\
-                     project-aware (nearest ancestor with a phorj.toml, else the current directory).\n\n\
+                     project-aware (nearest ancestor with a src/ directory, else the current directory).\n\n\
                      usage:\n  phg debug [--dap] <file>\n\n\
                      examples:\n  \
                      phg debug app.phg\n"
@@ -217,21 +216,6 @@ pub fn help_for(cmd: &str) -> String {
         _ => return help_text(),
     };
     format!("{}\n{body}", version_line())
-}
-
-/// `vendor [project-dir | phorj.toml]`: fetch the project's `[require]` git dependencies into an
-/// offline `vendor/` tree and (re)write `phorj.lock`. `arg` is a directory or a manifest path
-/// (default `.`); the project root is found by walking up to a `phorj.toml`. The only network-
-/// touching command — see [`crate::vendor`].
-pub fn cmd_vendor(arg: &str) -> Result<String, String> {
-    let start = std::path::Path::new(arg);
-    match crate::manifest::Project::detect(start)? {
-        Some(project) => crate::vendor::vendor(&project),
-        None => Err(format!(
-            "no phorj.toml found at or above `{arg}` — `phg vendor` requires a project \
-             (add a phorj.toml with a [require] section)"
-        )),
-    }
 }
 
 /// Where a command reads its program from, resolved from the args after the subcommand.

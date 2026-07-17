@@ -35,6 +35,22 @@ use std::time::Duration;
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 mod handlers;
+mod static_files;
 mod transport;
 pub use handlers::*;
+pub use static_files::resolve_site_dir;
 pub use transport::*;
+
+/// DEC-282 site mode — the process-global docroot (`phg serve <DIR>` sets it once before any
+/// worker runs; one serve per process, the same justification as `Core.Process`'s argv global).
+/// `None` = handler-only mode (today's `phg serve file.phg`) — the static layer never runs.
+static DOCROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Enable site mode: serve static files from `root` ahead of the program entry. First call wins.
+pub fn set_docroot(root: std::path::PathBuf) {
+    let _ = DOCROOT.set(root);
+}
+
+pub(crate) fn docroot() -> Option<&'static std::path::Path> {
+    DOCROOT.get().map(std::path::PathBuf::as_path)
+}

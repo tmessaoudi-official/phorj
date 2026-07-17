@@ -1169,14 +1169,14 @@ fn uses_impure_native(src: &str) -> bool {
 }
 
 /// Recursively collect every single-file `*.phg` under `dir`, **skipping project roots**. A
-/// directory containing a `phorj.toml` is a multi-file project (M5): its files import each other
-/// and only run when assembled through `loader::load`, so running them standalone here would fail.
-/// `all_example_projects_match_between_backends` gates those instead. The exclusion is structural
-/// (keyed on the manifest's presence), not name-based, so any project added under `examples/` later
-/// is auto-excluded with no test edit.
+/// directory containing a `src/` subdirectory is a multi-file app root (DEC-282 — `src/` IS the
+/// marker): its files import each other and only run when assembled through `loader::load`, so
+/// running them standalone here would fail. `all_example_projects_match_between_backends` gates
+/// those instead. The exclusion is structural, so any project added under `examples/` later is
+/// auto-excluded with no test edit.
 fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
-    if dir.join("phorj.toml").is_file() {
-        return; // a project root — handled by the project-aware harness below
+    if dir.join("src").is_dir() {
+        return; // an app root — handled by the project-aware harness below
     }
     // M8.5: `examples/interop/` holds foreign-PHP (`declare`) walkthroughs that are PHP-target-only —
     // they cannot run on the Rust backends (`E-FOREIGN-RUNTIME`), so they are not byte-identity-gated
@@ -1206,7 +1206,8 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-/// Recursively collect every project root (a directory holding a `phorj.toml`) under `dir`.
+/// Recursively collect every app root (a directory holding a `src/` subdirectory — the DEC-282
+/// manifest-less marker) under `dir`.
 fn collect_projects(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     // M8.5: `examples/interop/` holds foreign-PHP (`declare`) walkthroughs — including `.d.phg`
     // declaration-file projects — that are PHP-target-only (`E-FOREIGN-RUNTIME`), so they cannot be
@@ -1214,7 +1215,7 @@ fn collect_projects(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
         return;
     }
-    if dir.join("phorj.toml").is_file() {
+    if dir.join("src").is_dir() {
         out.push(dir.to_path_buf());
         return; // projects don't nest in the example set — don't descend further
     }

@@ -86,7 +86,11 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Diagnostic dictionary (look up a code) | ✅ | `phg explain <CODE>` |
 | Program from stdin / inline / `--` | ✅ | `run -`, `run -e '…'`, `run -- <file>` |
 | `Core.Input`: piped/redirected DATA on stdin — `readAll`/`readAllBytes`/`readLine` (`null` at EOF) + `lines()` `Iterator<string>` (foreach-able) + `isInteractive()` | ✅ | DEC-281; impure (quarantined, `tests/stdin.rs` gates both backends), fully transpilable (PHP `STDIN`); disabled under `phg serve` |
-| Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phg vendor` |
+| Unified manifest-less loading (DEC-282): app root = walk-up to `src/`; 3 search roots (entry-dir → `src/` → `vendor/`, first wins + `W-SHADOWED`); import-driven lazy (unreached files inert); folder = package | ✅ | zero config; `E-MODULE-NOT-FOUND` lists searched roots |
+| Go-maximal import hygiene: `E-IMPORT-MAIN`, `E-DUP-IMPORT`, `E-UNUSED-IMPORT` — all hard errors | ✅ | DEC-282 (all three were silently accepted before) |
+| Executable entries: `#!/usr/bin/env phg` shebang + bare `phg <file> [args…]` = run | ✅ | `chmod +x bin/console && ./bin/console migrate` |
+| Web site mode: `phg serve <dir>` — `public/` docroot (static MIME + ETag/Last-Modified/304 + traversal guards; `.phg` never served), `public/index.phg` front controller | ✅ | code outside the docroot is structurally unreachable |
+| Offline `vendor/<Publisher>/<Name>/` dependency resolution (folder = package); compiler never touches the network | ✅ | DEC-282; fetching = a future package-manager extension (`phg vendor` retired) |
 | Test runner: `test "name" {}` blocks + `Core.Test` assertions (incl. `assertFaults`) | ✅ | `phg test [path…]` |
 | Formatter: canonical-form, comment-preserving, meaning-preserving, **width-canonical wrapping** (100-col; wraps call/`new` args, collection & map literals, `match` arms, `.`-chains; DEC-187) | ✅ | `phg format [--check] [path… \| -]` |
 | HTTP server: `handle(Request): Response` (pure Phorj) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |

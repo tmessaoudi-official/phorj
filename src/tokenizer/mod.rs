@@ -149,6 +149,18 @@ fn at_line_start(src: &[u8], start: usize) -> bool {
 
 fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagnostic> {
     let mut lx = Lexer::new(src);
+    // DEC-282: a shebang line (`#!/usr/bin/env phg`) is skipped at BYTE 0 only — the executable
+    // Symfony-style `./bin/console` entry form. Elsewhere `#` stays a lex error (attributes are
+    // `#[...]`, matched by the attribute path); the line itself is not a comment (not captured),
+    // and skipping runs to (not past) the newline so line numbering stays natural.
+    if lx.pos == 0 && src.starts_with("#!") {
+        while let Some(b) = lx.peek() {
+            if b == b'\n' {
+                break;
+            }
+            lx.bump();
+        }
+    }
     let mut out = Vec::new();
     loop {
         lx.skip_whitespace();

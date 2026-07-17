@@ -1,6 +1,60 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
 ## CURRENT (2026-07-17, late — CONTINUOUS MODE, dev-mandated: stop only for questions)
+- **DEC-281 Core.Input COMMITTED `0b203827`** (gate 2304/2304; 3-leg verified; serve-disabled;
+  quarantine-twin mapped; tier1 +5 builtins).
+- **DEC-282 BUILD PROGRESS (loader CORE + shebang DONE, census 2/2304→green):**
+  ✅ shebang byte-0 skip (tokenizer lex_inner) + implicit `phg <file>` = run (main.rs dispatch,
+  argv threads) + extensionless entries — VERIFIED live incl. real `./bin/console` exec.
+  ✅ loader/mod.rs: `discover_roots` (src/-marker walk-up), `peek_package`, `index_packages`,
+  `load_unified` (3-root import-driven lazy; W-SHADOWED eprintln), `user_imports`
+  (E-DUP-IMPORT + E-IMPORT-MAIN), E-MODULE-NOT-FOUND w/ searched-paths; `assemble()` factored
+  from load_project (decl_roots/decl_skip params); phorj.toml still wins when present (retirement
+  pending). 6 new tests in tests/project.rs (manifestless_*); explain entries for the 4 new codes
+  + W-SHADOWED. Symfony shape VERIFIED (bin/console → Commands + Model(src) + Acme.Strutil(vendor)).
+  ✅ serve SITE MODE (src/serve/static_files.rs + docroot OnceLock in serve/mod.rs + respond_once
+  intercept + main.rs DIR arm): `phg serve <DIR>` → public/ docroot, index.phg entry (front
+  controller gets ALL non-static paths), static MIME(~20)+ETag+Last-Modified+304, guards VERIFIED
+  live (curl: dynamic ✓, css 200+headers ✓, secret.phg 404 ✓, --path-as-is traversal → program
+  not disk ✓, If-None-Match 304 ✓, W-PHG-IN-DOCROOT warning ✓). resolve_site_dir errors clearly
+  when public/ or index.phg missing.
+  ✅ E-UNUSED-IMPORT (loader check_unused_imports): whole-WORD source scan (import statements
+  BLANKED by byte-range, not by line — one-liner programs!), bound names = leaf/alias ∪ Core
+  whole-module bare_types via cli::preludes::core_module_bound_names (pub(crate); cli mod
+  preludes now pub(crate)); over-approximates (comment mention = use) — never mis-flags.
+  Interpolation-hole gotcha: holes are NOT lexer tokens (parser-side) — that's WHY it's a source
+  scan not a token scan. Explain entries: E-UNUSED-IMPORT + W-PHG-IN-DOCROOT added.
+  ✅ LSP parity (DEC-252): lsp publish → diagnostics_for_uri — buffer w/ user imports + real
+  file → loader::load_with_buffer (new seam; assemble takes buffer override param) → same loader
+  as phg check; Core-only buffers keep the fast text path. NOT yet integration-tested.
+  ✅ RETIREMENT DONE: load() → always unified; load_project DELETED; manifest.rs/lock.rs/
+  vendor.rs/tests/vendor.rs git-rm'd; `phg vendor` = retirement-stub error; help/test_runner
+  root = src/-walk-up; 11 example tomls dropped + withdeps vendor → vendor/Acme/Strutil;
+  tests/project.rs fully flipped (25/25 — incl. inert-by-construction flips for Core-hijack +
+  lowercase-package; comment-mention trick satisfies the unused-scan in fixtures); unused-scan
+  blanker got a STATEMENT-POSITION guard (the word "import" in comments tripped blank-to-";").
+  Docs: CHANGELOG DEC-282 entry + FEATURES 5 rows + register BUILT note (w/ PascalCase-vendor
+  deviation disclosure) + loader header rewrite. Register DEC-282 BUILT note appended.
+  ⏳ FINAL-GATE RESIDUE (19 fails, gate log $SC/g282final.log): (a) src/loader/tests.rs unit
+  suite — 16 tests still write phorj.toml TempDir projects; flip like tests/project.rs (drop
+  toml; bad files need an IMPORT to be reached — or flip to inert assertions; decl-file (*.d.phg)
+  tests: decl sweep now keyed on search roots not source_root); (b) 3 differential sweeps
+  (all_example_projects_match_between_backends / _transpile_and_match_php / all_examples_match…)
+  — the harness discovers projects BY phorj.toml (now absent): update discovery to
+  examples/project/*/src/main.phg convention; (c) clippy printed 2×"3" counts in the gate log —
+  verify clippy both legs actually clean (may be miscount of 'error' word). THEN full gate →
+  ONE commit (message drafted around the CHANGELOG text).
+- **PREV: DEC-282 unified loader ruling (register: main ruling + ADDENDA — read BOTH).**
+  Sub-slices: (1) loader rewrite — app-root walk-up (src/ marker), 3-root search
+  (entry-dir > src/ > vendor/, W-SHADOWED), import-driven declaration-indexed lazy load,
+  E-MODULE-NOT-FOUND/E-IMPORT-MAIN/E-DUP-IMPORT/E-UNUSED-IMPORT (all HARD), merge-package +
+  E-DUP-CROSS-FILE; (2) manifest retirement — phorj.toml/manifest.rs/`phg vendor` OUT
+  (extension later); (3) layout laws unified (E-PKG-PATH rel. to search root, E-FILE-NAME);
+  (4) shebang byte-0 skip + implicit `phg <file>` = run + extensionless explicit entries;
+  (5) serve DIR mode: docroot=DIR/public, entry index.phg, static (MIME ~20 + ETag/Last-Modified
+  + guards: canonicalize/no-.phg-bytes/no-dotfiles/no-listing); (6) LSP: diagnostics_for gains
+  URI → same loader (DEC-252); (7) migrate examples/project/* (tomls out) + tests/project.rs +
+  loose Main-only lift. ONE slice, full gate, then commit.
 - **DEC-282 RULED (register — READ IT FIRST, full 3-round adjudication): unified manifest-less
   loader.** phorj.toml/manifest.rs/`phg vendor` RETIRE; root = entry dir (CLI) / serve DIR (web:
   public/ docroot + index.phg + static w/ MIME+ETag+guards); import-driven declaration-indexed

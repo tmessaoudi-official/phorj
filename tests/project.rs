@@ -42,7 +42,6 @@ fn run_both(entry: &Path) -> (String, String) {
 #[test]
 fn multi_file_project_qualified_call_runs_byte_identically() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     // S2c: cross-package calls are *qualified* via an import leaf (`Util.compute`), no longer the
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
@@ -63,7 +62,6 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
 #[test]
 fn import_alias_resolves_qualified_call() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     // `import Acme.Util as U;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
@@ -85,7 +83,6 @@ fn same_package_cross_file_bare_call_resolves() {
     // Two files in the *same* library package: one calls the other by its bare (same-package) name;
     // the loader mangles both consistently so the intra-package call still resolves.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
@@ -109,10 +106,10 @@ fn same_package_cross_file_bare_call_resolves() {
 fn unqualified_cross_package_call_is_rejected() {
     // The S2b interim (bare cross-package call) is gone: a library function must be qualified.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
+         // Util referenced for the unused-import scan\n\
          #[Entry] function main() -> void {\n    Output.printLine(\"{compute(20)}\");\n}",
     );
     tmp.write(
@@ -135,7 +132,6 @@ fn library_package_type_is_usable_cross_package() {
     // The E-PKG-TYPE gate is retired (M-RT cross-package types): a library package may declare a
     // type, and `package Main` consumes it via `import type`, instantiating + reading a field.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util.Shape;\n\
@@ -157,10 +153,9 @@ fn library_package_type_is_usable_cross_package() {
 #[test]
 fn import_type_unknown_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.Nope;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.Nope;\n// Nope referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/Shape.phg",
@@ -174,10 +169,9 @@ fn import_type_unknown_is_rejected() {
 #[test]
 fn import_type_conflict_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.A.Shape;\nimport Acme.B.Shape;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.A.Shape;\nimport Acme.B.Shape;\n// Shape referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/A/Shape.phg",
@@ -195,10 +189,9 @@ fn import_type_conflict_is_rejected() {
 #[test]
 fn import_type_builtin_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.List;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.List;\n// List referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
@@ -212,12 +205,11 @@ fn import_type_builtin_is_rejected() {
 #[test]
 fn import_type_shadow_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     // A type named `Util` (bound bare by `import Acme.Types.Util`) clashing with the
     // `Acme.Util` module-import leaf `Util`. The shadow guard keeps the two import kinds disjoint.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util;\nimport Acme.Types.Util;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util;\nimport Acme.Types.Util;\n// Util referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
@@ -234,7 +226,6 @@ fn import_type_shadow_is_rejected() {
 #[test]
 fn multi_package_transpiles_to_brace_namespaces() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
@@ -258,10 +249,12 @@ fn multi_package_transpiles_to_brace_namespaces() {
 #[test]
 fn folder_path_violation_is_reported() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
+    // Import-driven: the misplaced file is reached via its DECLARED package (the index is
+    // declaration-keyed), and loading it then trips the folder = package validation.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Bad;\n\
+         // Bad referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/x.phg",
@@ -272,12 +265,103 @@ fn folder_path_violation_is_reported() {
 }
 
 #[test]
-fn loose_non_main_file_is_rejected() {
+fn manifestless_non_main_file_loads_as_a_library() {
+    // DEC-282: the old loose-mode "dotted package needs a project" rejection is retired — the
+    // unified loader accepts any file as an entry; a dotted-package library file simply loads
+    // (running it would then fail on the missing #[Entry], not on the package).
     let tmp = TempDir::new();
-    // No phorj.toml anywhere above → loose mode; a dotted package is illegal.
     let entry = tmp.write("script.phg", "package App.Util;\nfunction f() -> void {}");
+    let unit = loader::load(&entry).expect("a library file loads under the unified rule");
+    assert_eq!(unit.program.package, ["App", "Util"]);
+}
+
+#[test]
+fn manifestless_sibling_package_resolves_by_folder() {
+    // DEC-282 unified loading, lone-script shape: a package folder NEXT TO the entry resolves
+    // (entry-dir is the only search root; folder = package).
+    let tmp = TempDir::new();
+    tmp.write(
+        "Util/helpers.phg",
+        "package Util;\npublic function double(int n) -> int { return n * 2; }",
+    );
+    let entry = tmp.write(
+        "x.phg",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Util;\n\
+         #[Entry] function main() -> void { Output.printLine(\"{Util.double(21)}\"); }",
+    );
+    let unit = loader::load(&entry).expect("sibling package resolves");
+    let out = phorj::cli::treewalk_program(&unit).expect("runs");
+    assert_eq!(out, "42\n");
+}
+
+#[test]
+fn manifestless_unresolved_import_is_module_not_found() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "x.phg",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Bogus;\n\
+         #[Entry] function main() -> void { Bogus.f(); }",
+    );
     let err = loader::load(&entry).unwrap_err();
-    assert!(err.contains("requires a phorj.toml project"), "got: {err}");
+    assert!(err.contains("E-MODULE-NOT-FOUND"), "got: {err}");
+    assert!(err.contains("Bogus"), "names the module: {err}");
+}
+
+#[test]
+fn manifestless_bin_console_reaches_src_and_vendor_and_local() {
+    // DEC-282 the Symfony shape: bin/console imports its own folder's package, src/ (stripped),
+    // and vendor/ — the app root found by walking up to the dir containing src/.
+    let tmp = TempDir::new();
+    tmp.write(
+        "src/Model/Article.phg",
+        "package Model;\nclass Article { constructor(public string title) {} }",
+    );
+    tmp.write(
+        "vendor/Acme/Strutil/StrUtil.phg",
+        "package Acme.Strutil;\npublic function shout(string s) -> string { return \"{s}!\"; }",
+    );
+    tmp.write(
+        "bin/Commands/Migrate.phg",
+        "package Commands;\npublic function banner() -> string { return \"migrating\"; }",
+    );
+    let entry = tmp.write(
+        "bin/console.phg",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Commands;\n\
+         import Model.Article;\nimport Acme.Strutil;\n\
+         #[Entry] function main() -> void {\n\
+           Output.printLine(Commands.banner());\n\
+           Article a = new Article(\"hello\");\n\
+           Output.printLine(a.title);\n\
+           Output.printLine(Strutil.shout(\"dep\"));\n\
+         }",
+    );
+    let unit = loader::load(&entry).expect("three-root resolution");
+    let out = phorj::cli::treewalk_program(&unit).expect("runs");
+    assert_eq!(out, "migrating\nhello\ndep!\n");
+}
+
+#[test]
+fn manifestless_import_main_is_rejected() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "x.phg",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Main;\n\
+         #[Entry] function main() -> void {}",
+    );
+    let err = loader::load(&entry).unwrap_err();
+    assert!(err.contains("E-IMPORT-MAIN"), "got: {err}");
+}
+
+#[test]
+fn manifestless_duplicate_import_is_rejected() {
+    let tmp = TempDir::new();
+    let entry = tmp.write(
+        "x.phg",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Core.Output;\n\
+         #[Entry] function main() -> void { Output.printLine(\"x\"); }",
+    );
+    let err = loader::load(&entry).unwrap_err();
+    assert!(err.contains("E-DUP-IMPORT"), "got: {err}");
 }
 
 // --- Cross-package traits (M-RT S8, cross-package) ---
@@ -288,7 +372,6 @@ fn loose_non_main_file_is_rejected() {
 #[test]
 fn cross_package_trait_composition_runs_byte_identically() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
@@ -309,7 +392,6 @@ fn cross_package_trait_composition_runs_byte_identically() {
 #[test]
 fn cross_package_trait_transpiles_to_namespaced_trait() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
@@ -332,7 +414,6 @@ fn cross_package_trait_transpiles_to_namespaced_trait() {
 #[test]
 fn cross_package_trait_used_as_type_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
@@ -354,7 +435,6 @@ fn cross_package_trait_used_as_type_is_rejected() {
 #[test]
 fn cross_package_call_inside_map_literal_resolves() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
@@ -375,7 +455,6 @@ fn cross_package_call_inside_map_literal_resolves() {
 #[test]
 fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
@@ -396,7 +475,6 @@ fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
 #[test]
 fn cross_package_inheritance_transpiles_to_qualified_extends() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
@@ -422,7 +500,6 @@ fn cross_package_inheritance_transpiles_to_qualified_extends() {
 #[test]
 fn project_reserved_core_package_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry] function main() -> void { Output.printLine(\"hi\"); }",
@@ -433,14 +510,16 @@ fn project_reserved_core_package_is_rejected() {
         "src/Core/Output/sneak.phg",
         "package Core.Output;\nfunction sneak() -> void {}",
     );
-    let err = loader::load(&entry).expect_err("a `package Core.*` file must be rejected");
-    assert!(err.contains("E-RESERVED-PACKAGE"), "got: {err}");
+    // DEC-282: `Core.*` imports NEVER consult disk (step 0, reserved), so the sneak file is
+    // unreachable by construction — the entry loads and the hijack file is simply never read.
+    let unit = loader::load(&entry).expect("Core-package file on disk is inert");
+    let out = cli::treewalk_program(&unit).expect("runs");
+    assert_eq!(out, "hi\n");
 }
 
 #[test]
 fn project_lowercase_package_decl_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
@@ -450,6 +529,7 @@ fn project_lowercase_package_decl_is_rejected() {
         "src/acme/util.phg",
         "package acme;\nfunction u() -> void {}",
     );
-    let err = loader::load(&entry).expect_err("a lowercase package decl must be rejected");
-    assert!(err.contains("E-PKG-CASE"), "got: {err}");
+    // DEC-282 import-driven loading: a lowercase package cannot even be IMPORTED (import
+    // segments are PascalCase), so the offending file is unreachable — the entry loads fine.
+    loader::load(&entry).expect("lowercase-package file on disk is inert (unimportable)");
 }

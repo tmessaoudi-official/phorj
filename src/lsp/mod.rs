@@ -420,7 +420,7 @@ impl Server {
     /// Build a `textDocument/publishDiagnostics` notification for `uri` from the current buffer.
     fn publish(&self, uri: &str) -> Out {
         let text = self.docs.get(uri).map(String::as_str).unwrap_or("");
-        let diags = diagnostics_for(text);
+        let diags = diagnostics_for_uri(uri, text);
         let items: Vec<String> = diags.iter().map(|d| lsp_diagnostic_json(d, text)).collect();
         format!(
             "{{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{{\"uri\":\"{}\",\"diagnostics\":[{}]}}}}",
@@ -438,6 +438,35 @@ const INITIALIZE_RESULT: &str =
 /// Compute the diagnostics for a document buffer — the **same** pipeline `phg check` runs (lex →
 /// parse → `check`), so editor diagnostics equal the CLI's. A lex or parse error is a single
 /// diagnostic at its span; otherwise the checker's errors (or, when clean, its non-fatal warnings).
+/// DEC-282/DEC-252 — the URI-aware wrapper: when the document is a real on-disk file WITH user
+/// imports, diagnostics run the SAME unified loader `phg check` uses (buffer text for this file,
+/// sibling packages from disk) — so cross-file imports never squiggle in the editor. A buffer with
+/// only `Core.*` imports (the common case) keeps the fast text-only path, byte-identical to before.
+fn diagnostics_for_uri(uri: &str, text: &str) -> Vec<Diagnostic> {
+    let has_user_imports = {
+        let Ok(tokens) = lex(text) else {
+            return diagnostics_for(text); // lex error → the plain path reports it
+        };
+        let Ok(program) = Parser::new(tokens).parse_program() else {
+            return diagnostics_for(text);
+        };
+        program.items.iter().any(|it| {
+            matches!(it, crate::ast::Item::Import { path, .. }
+                if path.first().map(String::as_str) != Some("Core"))
+        })
+    };
+    let path = uri.strip_prefix("file://").unwrap_or(uri);
+    if !has_user_imports || !std::path::Path::new(path).is_file() {
+        return diagnostics_for(text);
+    }
+    match crate::loader::load_with_buffer(std::path::Path::new(path), text) {
+        Ok(unit) => crate::cli::front_end_diagnostics(&unit.program),
+        // Loader-level errors (module-not-found, import hygiene, folder=package) surface as one
+        // position-less diagnostic — same message text the CLI prints.
+        Err(msg) => vec![Diagnostic::new(crate::diagnostic::Stage::Type, msg, 1, 1)],
+    }
+}
+
 fn diagnostics_for(text: &str) -> Vec<Diagnostic> {
     let tokens = match lex(text) {
         Ok(t) => t,

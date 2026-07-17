@@ -45,7 +45,7 @@ fn loose_main_is_accepted() {
 #[test]
 fn loose_non_main_is_rejected() {
     let err = load_loose_src("package app.util;\nfunction f() -> void {}").unwrap_err();
-    assert!(err.contains("requires a phorj.toml project"), "got: {err}");
+    assert!(err.contains("cannot run from stdin/-e"), "got: {err}");
 }
 
 #[test]
@@ -60,10 +60,9 @@ fn loose_empty_package_defers_to_checker() {
 #[test]
 fn project_merges_files_flat() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}\nfunction local() -> void {}",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Util;\n// Util referenced for the unused-import scan\n#[Entry] function main() -> void {}\nfunction local() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/parse.phg",
@@ -83,10 +82,9 @@ fn project_merges_files_flat() {
 #[test]
 fn project_load_reports_stats() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}\nclass C {}",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Util;\n// Util referenced for the unused-import scan\n#[Entry] function main() -> void {}\nclass C {}",
     );
     tmp.write(
         "src/Acme/Util/parse.phg",
@@ -115,7 +113,6 @@ fn loose_load_has_no_stats() {
 #[test]
 fn project_main_is_folder_exempt_at_root() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     // main lives at the project root, outside src/ — allowed.
     let entry = tmp.write(
         "main.phg",
@@ -128,15 +125,15 @@ fn project_main_is_folder_exempt_at_root() {
 #[test]
 fn folder_path_mismatch_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Wrong;\n\
+         // Wrong referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
-    // File sits in src/acme/util but declares the wrong package.
+    // File sits in src/Acme/Util but declares the wrong package — reached via its DECLARED name.
     tmp.write(
         "src/Acme/Util/parse.phg",
-        "package acme.wrong;\nfunction parse() -> void {}",
+        "package Acme.Wrong;\nfunction parse() -> void {}",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-PKG-PATH"), "got: {err}");
@@ -146,12 +143,12 @@ fn folder_path_mismatch_is_rejected() {
 #[test]
 fn non_main_directly_in_source_root_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
+        "package Main; import Core.Runtime.Entry;\nimport App;\n\
+         // App referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
-    tmp.write("src/loose.phg", "package app;\nfunction f() -> void {}");
+    tmp.write("src/loose.phg", "package App;\nfunction f() -> void {}");
     let err = load(&entry).unwrap_err();
     assert!(
         err.contains("cannot sit directly in the source root"),
@@ -162,19 +159,18 @@ fn non_main_directly_in_source_root_is_rejected() {
 #[test]
 fn library_package_outside_source_root_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
     );
-    // A dotted package living outside the source root entirely.
+    // A dotted package outside src/ run AS THE ENTRY — legal under DEC-282 (any file may be an
+    // entry; the old outside-the-source-root rejection retired with the manifest).
     tmp.write(
         "lib/parse.phg",
         "package Acme.Util;\nfunction parse() -> void {}",
     );
-    // Run it as the entry so it is loaded even though it is not under src/.
-    let err = load(&tmp.path().join("lib/parse.phg")).unwrap_err();
-    assert!(err.contains("lives outside the source root"), "got: {err}");
+    let u = load(&tmp.path().join("lib/parse.phg")).expect("a library entry loads");
+    assert_eq!(u.program.package, ["Acme", "Util"]);
 }
 
 #[test]
@@ -187,10 +183,10 @@ fn missing_entry_file_errors() {
 #[test]
 fn duplicate_function_in_package_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Util;\n\
+         // Util referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
     // Two files in the same package each define `f` — collides after the flat merge.
     tmp.write(
@@ -207,23 +203,25 @@ fn duplicate_function_in_package_is_rejected() {
 }
 
 #[test]
-fn vendored_package_main_is_rejected() {
+fn vendored_package_main_is_inert() {
+    // DEC-282: a `package Main` file inside vendor/ is UNREACHABLE (Main is never indexed, never
+    // importable) — the old E-VENDOR-MAIN collision cannot occur; the stray file is simply inert.
     let tmp = TempDir::new();
-    tmp.write(
-            "phorj.toml",
-            "module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/lib\" = { git = \"u\", tag = \"v1\" }",
-        );
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
+        "package Main; import Core.Runtime.Entry;\nimport Acme.Lib;\n\
+         // Lib referenced for the unused-import scan\n#[Entry] function main() -> void {}",
     );
-    // A vendored library must not declare `package Main` (it would collide with the entry).
     tmp.write(
-        "vendor/acme/lib/oops.phg",
+        "vendor/Acme/Lib/Real.phg",
+        "package Acme.Lib;\npublic function real() -> int { return 1; }",
+    );
+    tmp.write(
+        "vendor/Acme/Lib/oops.phg",
         "package Main;\nfunction stray() -> void {}",
     );
-    let err = load(&entry).unwrap_err();
-    assert!(err.contains("E-VENDOR-MAIN"), "got: {err}");
+    let u = load(&entry).expect("the stray vendored Main file is inert");
+    assert_eq!(u.program.package, ["Main"]);
 }
 
 // --- declaration visibility (visibility modifiers) ---------------------
@@ -231,7 +229,6 @@ fn vendored_package_main_is_rejected() {
 #[test]
 fn import_type_of_internal_library_type_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo.Hidden;\n#[Entry] function main() -> void { Hidden h = Hidden(); }",
@@ -247,7 +244,6 @@ fn import_type_of_internal_library_type_is_rejected() {
 #[test]
 fn import_type_of_public_library_type_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo.Shown;\n#[Entry] function main() -> void { Shown s = Shown(); }",
@@ -263,15 +259,16 @@ fn import_type_of_public_library_type_is_allowed() {
 #[test]
 fn private_type_referenced_from_sibling_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
+    // DEC-282: sibling `package Main` files are unreachable (Main = the entry file only), so the
+    // cross-FILE private check now lives on package files — same lattice, package-shaped fixture.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { Helper h = Helper(); }",
+        "package Main; import Core.Runtime.Entry;\nimport Lib.Helper;\n\
+         #[Entry] function main() -> void { Helper h = Helper(); }",
     );
-    // A second `package Main` file (folder-exempt at root) declaring a file-private type.
     tmp.write(
-        "src/helper.phg",
-        "package Main;\nprivate class Helper { constructor() {} }",
+        "src/Lib/Helper.phg",
+        "package Lib;\nprivate class Helper { constructor() {} }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
@@ -280,7 +277,6 @@ fn private_type_referenced_from_sibling_file_is_rejected() {
 #[test]
 fn internal_type_referenced_from_sibling_file_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { Helper h = Helper(); }",
@@ -295,14 +291,14 @@ fn internal_type_referenced_from_sibling_file_is_allowed() {
 #[test]
 fn private_function_called_from_sibling_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> int { return helper(); }",
+        "package Main; import Core.Runtime.Entry;\nimport Lib;\n\
+         #[Entry] function main() -> int { return Lib.helper(); }",
     );
     tmp.write(
-        "src/helper.phg",
-        "package Main;\nprivate function helper() -> int { return 1; }",
+        "src/Lib/util.phg",
+        "package Lib;\nprivate function helper() -> int { return 1; }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
@@ -311,7 +307,6 @@ fn private_function_called_from_sibling_file_is_rejected() {
 #[test]
 fn internal_function_called_cross_package_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Util;\n#[Entry] function main() -> int { return Util.secret(); }",
@@ -327,7 +322,6 @@ fn internal_function_called_cross_package_is_rejected() {
 #[test]
 fn public_function_called_cross_package_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Util;\n#[Entry] function main() -> int { return Util.shown(); }",
@@ -345,14 +339,14 @@ fn type_alias_does_not_launder_private_type() {
     // file-scoped `private` check on `Helper()` fires regardless of the alias (aliases are
     // file-local + erased, so they cannot re-export across files).
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\ntype H = Helper;\n#[Entry] function main() -> void { H h = Helper(); }",
+        "package Main; import Core.Runtime.Entry;\nimport Lib.Helper;\ntype H = Helper;\n\
+         #[Entry] function main() -> void { H h = Helper(); }",
     );
     tmp.write(
-        "src/helper.phg",
-        "package Main;\nprivate class Helper { constructor() {} }",
+        "src/Lib/Helper.phg",
+        "package Lib;\nprivate class Helper { constructor() {} }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
@@ -363,15 +357,15 @@ fn type_alias_does_not_launder_private_type() {
 #[test]
 fn public_type_in_mismatched_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { Widget w = Widget(); }",
+        "package Main; import Core.Runtime.Entry;\nimport Ui.Widget;\n\
+         #[Entry] function main() -> void { Widget w = Widget(); }",
     );
-    // A non-`main` file declaring one public type must be named after it; `widget.phg` ≠ `Widget`.
+    // A file declaring one public type must be named after it; `widget.phg` ≠ `Widget`.
     tmp.write(
-        "src/widget.phg",
-        "package Main;\npublic class Widget { constructor() {} }",
+        "src/Ui/widget.phg",
+        "package Ui;\npublic class Widget { constructor() {} }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-FILE-NAME"), "got: {err}");
@@ -380,7 +374,6 @@ fn public_type_in_mismatched_file_is_rejected() {
 #[test]
 fn public_type_in_matching_file_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { Widget w = Widget(); }",
@@ -395,14 +388,14 @@ fn public_type_in_matching_file_is_allowed() {
 #[test]
 fn two_public_types_in_one_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { A a = A(); }",
+        "package Main; import Core.Runtime.Entry;\nimport Lib.A;\n\
+         #[Entry] function main() -> void { A a = A(); }",
     );
     tmp.write(
-        "src/A.phg",
-        "package Main;\npublic class A { constructor() {} }\npublic class B { constructor() {} }",
+        "src/Lib/A.phg",
+        "package Lib;\npublic class A { constructor() {} }\npublic class B { constructor() {} }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-FILE-MULTI-PUBLIC"), "got: {err}");
@@ -411,14 +404,14 @@ fn two_public_types_in_one_file_is_rejected() {
 #[test]
 fn public_type_plus_public_fn_in_one_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { Box b = Box(); }",
+        "package Main; import Core.Runtime.Entry;\nimport Lib.Box;\n\
+         #[Entry] function main() -> void { Box b = Box(); }",
     );
     tmp.write(
-        "src/Box.phg",
-        "package Main;\npublic class Box { constructor() {} }\npublic function helper() -> int { return 1; }",
+        "src/Lib/Box.phg",
+        "package Lib;\npublic class Box { constructor() {} }\npublic function helper() -> int { return 1; }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-FILE-MIXED-PUBLIC"), "got: {err}");
@@ -428,7 +421,6 @@ fn public_type_plus_public_fn_in_one_file_is_rejected() {
 fn private_helper_type_rides_along_in_a_type_module() {
     // A type module may carry private/internal helper types + functions — they ride along free.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { Widget w = Widget(); }",
@@ -443,7 +435,6 @@ fn private_helper_type_rides_along_in_a_type_module() {
 #[test]
 fn main_file_with_multiple_public_types_is_exempt() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     // The entry file declares `main` → exempt: multiple public types + functions are fine, any name.
     let entry = tmp.write(
         "src/main.phg",
@@ -460,7 +451,6 @@ fn forward_and_cross_file_type_references_resolve() {
     // Order-independence (the prebind pre-pass): `Order` references `OrderLine`, which sorts/merges
     // AFTER it — and a forward reference within the entry file — both resolve.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void { B b = makeB(); }\nfunction makeB() -> B { return B(7); }",
@@ -489,7 +479,6 @@ fn forward_and_cross_file_type_references_resolve() {
 #[test]
 fn decl_file_is_loaded_ambiently_and_not_mangled() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
@@ -521,7 +510,6 @@ fn decl_file_is_loaded_ambiently_and_not_mangled() {
 #[test]
 fn decl_file_with_package_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
@@ -537,7 +525,6 @@ fn decl_file_with_package_is_rejected() {
 #[test]
 fn decl_file_with_nonforeign_item_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
@@ -557,7 +544,6 @@ fn decl_file_is_not_counted_as_a_package_source() {
     // directly in the source root (where a real non-`main` `.phg` would be rejected) and confirm load
     // succeeds: only its ambient-merge path ran, not the package-source path.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
@@ -577,7 +563,6 @@ fn decl_file_is_not_counted_as_a_package_source() {
 #[test]
 fn import_function_bare_from_library_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo.area;\n#[Entry] function main() -> void { int a = area(3); }",
@@ -595,7 +580,6 @@ fn import_function_bare_from_library_is_allowed() {
 #[test]
 fn import_function_aliased_from_library_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo.area as size;\n#[Entry] function main() -> void { int a = size(3); }",
@@ -613,7 +597,6 @@ fn import_function_aliased_from_library_is_allowed() {
 #[test]
 fn import_private_function_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo.area;\n#[Entry] function main() -> void { int a = area(3); }",
@@ -630,7 +613,6 @@ fn import_private_function_is_rejected() {
 #[test]
 fn duplicate_function_import_conflicts() {
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo.area;\nimport Acme.Alt.area;\n#[Entry] function main() -> void { int a = area(3); }",
@@ -651,7 +633,6 @@ fn duplicate_function_import_conflicts() {
 fn qualified_call_still_works_alongside_function_imports() {
     // A whole-module import keeps the qualified form; regression that slice 2 does not break it.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo;\n#[Entry] function main() -> void { int a = Geo.area(3); }",
@@ -671,7 +652,6 @@ fn import_function_used_as_value_resolves() {
     // DEC-197: a bare member-imported function referenced as a first-class VALUE (not just called
     // directly) resolves in value position too (`resolve_expr`'s Ident arm), not only at a call site.
     let tmp = TempDir::new();
-    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main; import Core.Runtime.Entry;\nimport Acme.Geo.area;\n#[Entry] function main() -> void { var f = area; int a = f(3); }",

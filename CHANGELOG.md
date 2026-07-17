@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — DEC-282: the unified, manifest-less loader ("autoload"), CLI + web (BREAKING)
+
+`phorj.toml`, `manifest.rs`, and the network-touching `phg vendor` subcommand are RETIRED — one
+loading rule everywhere, zero config. **App root** = the nearest ancestor of the entry containing
+`src/` (or `vendor/`), found git-style by walking up; with neither, the entry's own directory.
+**Three ordered search roots**: the entry's directory (entry-local packages, `bin/Commands/…`) →
+`src/` (shared code; package names strip `src/` — `src/Model/Article.phg` ⇒ `package Model;`) →
+`vendor/` (offline deps, `vendor/<Publisher>/<Name>/` folder = package; the compiler NEVER
+touches the network — a package-manager extension writes the tree). First match wins;
+`W-SHADOWED` names both paths when a later root also holds the package. Loading is
+**import-driven and declaration-indexed** (lazy): only packages the entry's import graph reaches
+are ever read — unreached or broken files are inert. Import hygiene is Go-maximal (all HARD):
+`E-MODULE-NOT-FOUND` (lists the searched roots), `E-IMPORT-MAIN` (`import Main;` was silently
+accepted!), `E-DUP-IMPORT`, `E-UNUSED-IMPORT` (whole-word scan; a comment mention counts — never
+mis-flags). **Executable entries**: a byte-0 `#!/usr/bin/env phg` shebang is skipped and bare
+`phg <existing-file> [args…]` dispatches to run — `chmod +x bin/console && ./bin/console migrate`
+works, argv reaching the `#[Entry]`. **Web site mode**: `phg serve <dir>` — docroot =
+`dir/public` (the ONLY web surface; static assets with a ~20-type MIME table, `ETag`/
+`Last-Modified`/304, canonicalize+prefix traversal guards, `.phg` bytes never served, no
+dot-files/listings; `W-PHG-IN-DOCROOT` flags stray source), entry = `dir/public/index.phg`;
+`phg serve <file>` stays the handler-only dev mode. **LSP (DEC-252)**: editor diagnostics now run
+the SAME loader (buffer text for the open file, sibling packages from disk) — cross-file imports
+no longer squiggle. Old loose-mode's "only `package Main`" restriction is lifted; the 11
+`examples/project/*` trees dropped their tomls (withdeps' vendor tree moved to the folder=package
+layout).
+
 ### Added — DEC-281: `Core.Input` — the stdin module (Output's twin)
 
 Piped/redirected data is finally readable: `cat file | phg run s.phg` / `phg run s.phg < file`.

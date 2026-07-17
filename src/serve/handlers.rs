@@ -187,6 +187,15 @@ pub fn serve<T: Transport>(
 /// `send failed` path above uses; mirrors `Core.Log`'s swallowed stderr write). A non-`bytes` return
 /// or a runtime fault degrades to a 500 — never a panic (EV-7).
 pub(super) fn respond_once(handler: &mut Handler, raw: &[u8], dev: bool) -> Vec<u8> {
+    // DEC-282 site mode: an exact static-file match under the docroot short-circuits the program
+    // (one intercept point covers the single-thread, pool, and keep-alive paths alike). Unset
+    // outside `phg serve <DIR>` — zero cost for handler-mode serves and the in-memory test
+    // transport.
+    if let Some(root) = super::docroot() {
+        if let Some(resp) = super::static_files::try_static(root, raw) {
+            return resp;
+        }
+    }
     match handler(raw) {
         Ok((Value::Bytes(b), out)) => {
             if !out.is_empty() {

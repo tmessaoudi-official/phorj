@@ -30,7 +30,7 @@ pub use test_runner::cmd_test;
 
 mod help;
 mod pipeline;
-mod preludes;
+pub(crate) mod preludes;
 
 pub use self::help::*;
 pub use self::pipeline::*;

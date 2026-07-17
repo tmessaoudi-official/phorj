@@ -17,15 +17,16 @@ pub(super) fn parse_at(path: &Path, src: &str) -> Result<Program, String> {
     parse_one(src).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// In loose mode, only the reserved `package Main;` runs. An empty package is left to the checker
-/// (`E-NO-PACKAGE`) so the error is not double-reported.
+/// For a DIRECTORY-LESS source (stdin / `-e`), only the reserved `package Main;` runs — a dotted
+/// library package needs files on disk for imports to resolve against (DEC-282). An empty package
+/// is left to the checker (`E-NO-PACKAGE`) so the error is not double-reported.
 pub(super) fn enforce_loose_main(prog: &Program) -> Result<(), String> {
     if prog.package.is_empty() || prog.package == ["Main"] {
         return Ok(());
     }
     Err(format!(
-        "package `{}` requires a phorj.toml project; only `package Main` runs as a loose script \
-         (add a phorj.toml above the source root, or declare `package Main`)",
+        "package `{}` cannot run from stdin/-e; only `package Main` runs there \
+         (save it as a file — packages resolve against the entry file's directory)",
         prog.package.join(".")
     ))
 }
