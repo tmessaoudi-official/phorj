@@ -431,7 +431,11 @@ fn db_naming_example_runs_on_both_backends() {
     let src =
         std::fs::read_to_string("examples/db/naming.phg").expect("read examples/db/naming.phg");
     let expected = "1: Ada (@ada) lives on Rue de Rivoli, 75001\n\
-                    2: Grace (@grace) lives on Baker Street, NW16XE\n";
+                    2: Grace (@grace) lives on Baker Street, NW16XE\n\
+                    baked:      @hopper\n\
+                    baked:      @lovelace\n\
+                    dispatched: @hopper\n\
+                    dispatched: @lovelace\n";
     both(&src, expected);
 }
 
@@ -546,9 +550,10 @@ class Member { constructor(public string userName, public string firstName) {} }
 }
 
 #[test]
-fn db_naming_non_literal_argument_is_rejected() {
-    // The strategy must be a compile-time `new Naming.X()` literal — a variable cannot drive a
-    // compile-time column rewrite, and silently falling back to `Exact` would be a forbidden downgrade.
+fn db_naming_runtime_argument_dispatches_on_the_field() {
+    // DEC-258 combined model: a runtime `Naming` value is LEGAL — `namingStrategy` is a real
+    // copy-builder storing it in the statement's `naming` field, and the desugar emits both baked
+    // helper variants plus a field dispatcher (the old E-DB-NAMING-NOT-CONST rejection is retired).
     let src = r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
@@ -561,17 +566,103 @@ class U { constructor(public string userName) {} }
   try {
     Database db = new Database("sqlite::memory:");
     Naming n = new Naming.SnakeToCamel();
-    List<U> us = db.prepare("SELECT 1 AS user_name").namingStrategy(n).queryInto();
+    List<U> us = db.prepare("SELECT 'grace' AS user_name").namingStrategy(n).queryInto();
     for (U u in us) { Output.printLine(u.userName); }
-  } catch (DatabaseError e) { Output.printLine("x"); }
+  } catch (DatabaseError e) { Output.printLine("x {e.message}"); }
 }
 "#;
-    fails_with(src, "E-DB-NAMING-NOT-CONST");
+    both(src, "grace\n");
 }
 
 #[test]
-fn db_naming_unknown_variant_is_rejected() {
-    // An unrecognized `Naming` variant is not a valid compile-time strategy literal either.
+fn db_naming_stored_statement_split_keeps_the_strategy() {
+    // The retired footgun: `Statement s = stmt.namingStrategy(...); s.queryInto();` used to
+    // silently revert to `Exact`. DEC-258: the strategy rides the Statement VALUE, so the split
+    // form dispatches correctly at run time.
+    let src = r#"package Main;
+import Core.Runtime.Entry;
+import Core.Output;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Statement;
+import Core.DatabaseModule.Naming;
+import Core.DatabaseModule.DatabaseError;
+class U { constructor(public string userName) {} }
+#[Entry] function main(): void {
+  try {
+    Database db = new Database("sqlite::memory:");
+    Statement s = db.prepare("SELECT 'ada' AS user_name").namingStrategy(new Naming.SnakeToCamel());
+    List<U> us = s.queryInto();
+    for (U u in us) { Output.printLine(u.userName); }
+  } catch (DatabaseError e) { Output.printLine("x {e.message}"); }
+}
+"#;
+    both(src, "ada\n");
+}
+
+#[test]
+fn db_naming_connection_level_strategy_is_baked_when_traceable() {
+    // DEC-258 tier 1: `new Database(dsn, new Naming.SnakeToCamel())` visible in the same function
+    // → every hydration through it maps snake columns with zero runtime dispatch.
+    let src = r#"package Main;
+import Core.Runtime.Entry;
+import Core.Output;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Naming;
+import Core.DatabaseModule.DatabaseError;
+class U { constructor(public string userName) {} }
+#[Entry] function main(): void {
+  try {
+    Database db = new Database("sqlite::memory:", new Naming.SnakeToCamel());
+    List<U> us = db.prepare("SELECT 'lin' AS user_name").queryInto();
+    for (U u in us) { Output.printLine(u.userName); }
+  } catch (DatabaseError e) { Output.printLine("x {e.message}"); }
+}
+"#;
+    both(src, "lin\n");
+}
+
+#[test]
+fn db_naming_connection_through_parameter_dispatches_on_the_field() {
+    // DEC-258 tier 2: the connection arrives through a parameter — statically untraceable, so the
+    // hydration dispatches on the field the Database value carries. Both strategies through the
+    // SAME helper site prove the dispatch is real.
+    let src = r#"package Main;
+import Core.Runtime.Entry;
+import Core.Output;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Statement;
+import Core.DatabaseModule.Naming;
+import Core.DatabaseModule.DatabaseError;
+class U { constructor(public string userName) {} }
+function load(Database db): List<U> throws DatabaseError {
+  Statement s = db.prepare("SELECT 'kay' AS user_name")?;
+  List<U> us = s.queryInto()?;
+  return us;
+}
+function loadExact(Database db): List<U> throws DatabaseError {
+  Statement s = db.prepare("SELECT 'mo' AS userName")?;
+  List<U> us = s.queryInto()?;
+  return us;
+}
+#[Entry] function main(): void {
+  try {
+    Database snake = new Database("sqlite::memory:", new Naming.SnakeToCamel());
+    Database exact = new Database("sqlite::memory:");
+    for (U u in load(snake)) { Output.printLine(u.userName); }
+    for (U u in loadExact(exact)) { Output.printLine(u.userName); }
+  } catch (DatabaseError e) { Output.printLine("x {e.message}"); }
+}
+"#;
+    both(src, "kay\nmo\n");
+}
+
+#[test]
+fn db_naming_unknown_variant_is_still_a_type_error() {
+    // `new Naming.Bogus()` never becomes a silent runtime fallback — the construction itself is
+    // rejected by the checker (no such variant on the injected enum).
     let src = r#"package Main;
 import Core.Runtime.Entry;
 import Core.Output;
@@ -588,7 +679,11 @@ class U { constructor(public string userName) {} }
   } catch (DatabaseError e) { Output.printLine("x"); }
 }
 "#;
-    fails_with(src, "E-DB-NAMING-NOT-CONST");
+    let err = phorj::cli::cmd_treewalk(src).unwrap_err();
+    assert!(
+        err.contains("Bogus"),
+        "unknown variant should be named: {err}"
+    );
 }
 
 // ── DEC-208 slice C: transactions, savepoints, taxonomy, close ───────────────────────────────────

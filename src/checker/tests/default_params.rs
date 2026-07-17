@@ -182,3 +182,38 @@ fn ctor_defaults_are_inherited_with_the_signature() {
                function main() -> void { C a = new C(1); C b = new C(1, 2); }";
     assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
 }
+
+#[test]
+fn zero_payload_variant_default_is_a_constant() {
+    // DEC-258: `new Enum.Variant()` (zero-payload) qualifies as a default — on a free function
+    // and on a promoted ctor param; both call forms fill correctly.
+    let src = "enum Mode { Fast(), Safe() } \
+               function f(int x, Mode m = new Mode.Safe()) -> int { return x; } \
+               class Cfg { constructor(public string dsn, public Mode mode = new Mode.Fast()) {} } \
+               function main() -> void { int a = f(1); int b = f(1, new Mode.Fast()); \
+                 Cfg c = new Cfg(\"d\"); Cfg d = new Cfg(\"d\", new Mode.Safe()); }";
+    assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+}
+
+#[test]
+fn payload_variant_default_stays_rejected() {
+    // A payload-carrying variant is not a constant (its argument is an expression).
+    let e =
+        errors_of("enum Mode { Level(int n) } function f(Mode m = new Mode.Level(1)) -> void {}");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-EXPR")),
+        "got {e:?}"
+    );
+}
+
+#[test]
+fn variant_default_type_must_match() {
+    let e = errors_of(
+        "enum Mode { Fast() } enum Other { Slow() } \
+         function f(Other o = new Mode.Fast()) -> void {}",
+    );
+    assert!(
+        e.iter().any(|d| d.code == Some("E-DEFAULT-PARAM-TYPE")),
+        "got {e:?}"
+    );
+}

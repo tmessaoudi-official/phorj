@@ -87,7 +87,7 @@ impl Checker {
                 }
                 Some(e) => {
                     seen_default = true;
-                    match literal_ty(e) {
+                    match literal_ty(e).or_else(|| self.variant_default_ty(e)) {
                         None => {
                             self.err_coded(
                                 Self::expr_span(e),
@@ -97,7 +97,7 @@ impl Checker {
                                 ),
                                 "E-DEFAULT-PARAM-EXPR",
                                 Some(
-                                    "use a literal — a number, string, bool, bytes, or null".into(),
+                                    "use a literal — a number, string, bool, bytes, null, or a zero-payload enum variant (`new Enum.Variant()`)".into(),
                                 ),
                             );
                         }
@@ -120,6 +120,34 @@ impl Checker {
             }
         }
         out
+    }
+
+    /// DEC-258: a qualified ZERO-payload enum-variant construction — `new Naming.Exact()` — also
+    /// qualifies as a default-parameter constant: it is compile-time-known like any literal (the
+    /// fill splices the construction expression itself, and the later `unwrap_new`/backend passes
+    /// treat the spliced copy exactly like a hand-written one). Payload-carrying variants and
+    /// generic enums stay rejected (their arguments/inference are not "a constant"). Returns the
+    /// enum's nominal type when recognized.
+    fn variant_default_ty(&self, e: &crate::ast::Expr) -> Option<Ty> {
+        use crate::ast::Expr;
+        let Expr::New(inner, _) = e else { return None };
+        let Expr::Call { callee, args, .. } = &**inner else {
+            return None;
+        };
+        if !args.is_empty() {
+            return None;
+        }
+        let Expr::Member { object, name, .. } = &**callee else {
+            return None;
+        };
+        let Expr::Ident(enum_name, _) = &**object else {
+            return None;
+        };
+        let info = self.enums.get(enum_name)?;
+        if !info.type_params.is_empty() || !info.variants.get(name)?.is_empty() {
+            return None;
+        }
+        Some(Ty::Named(enum_name.clone(), Vec::new()))
     }
 
     /// Reject duplicate parameter names (Soundness Batch G, finding #7) on a function/method/ctor

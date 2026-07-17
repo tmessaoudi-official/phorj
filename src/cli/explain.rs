@@ -460,10 +460,12 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-DEFAULT-PARAM-EXPR" => {
             "E-DEFAULT-PARAM-EXPR — a default value is not a literal constant.\n\n\
-             A default parameter value must be a literal — a number, string, bool, bytes, or `null`.\n\
-             Arbitrary or side-effecting expressions (a function call, a field read) are not allowed in\n\
-             v1: the default is inlined at each call site, so a literal keeps it predictable and\n\
-             byte-identical across the backends. Use a literal, or compute the value inside the body.\n"
+             A default parameter value must be a literal — a number, string, bool, bytes, `null` — or\n\
+             a ZERO-payload enum variant construction (`new Mode.Fast()`, DEC-258): both are\n\
+             compile-time-known. Arbitrary or side-effecting expressions (a function call, a field\n\
+             read, a payload-carrying variant) are not allowed: the default is inlined at each call\n\
+             site, so a constant keeps it predictable and byte-identical across the backends. Use a\n\
+             literal/variant, or compute the value inside the body.\n"
         }
         "E-DEFAULT-PARAM-TYPE" => {
             "E-DEFAULT-PARAM-TYPE — a default value's type does not match the parameter.\n\n\
@@ -1599,13 +1601,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              not supported.\n"
         }
         "E-DB-NAMING-NOT-CONST" => {
-            "E-DB-NAMING-NOT-CONST — `namingStrategy()` was given a non-literal argument.\n\n\
-             The column naming strategy (DEC-208 slice B2) is resolved at COMPILE TIME: the `desugar_db`\n\
-             pass reads it from the call chain and bakes the transformed column names straight into the\n\
-             generated accessors. It therefore must be a `Naming` LITERAL — `new Naming.SnakeToCamel()`\n\
-             or `new Naming.Exact()` — not a variable, field, or computed value (which could only be\n\
-             known at run time). Inline the literal at the call site:\n\
-             `stmt.namingStrategy(new Naming.SnakeToCamel()).queryInto()`.\n"
+            "E-DB-NAMING-NOT-CONST — RETIRED (DEC-258; no longer emitted).\n\n\
+             A runtime `Naming` value is now legal everywhere: the strategy is a real field riding\n\
+             the `Database`/`Statement` values, so a statically-untraceable strategy dispatches on\n\
+             that field at run time instead of being rejected. A literal at the call site (or on the\n\
+             connection constructor) still bakes the column names at compile time — zero-cost when\n\
+             traceable, one branch per hydration call when not.\n"
         }
         "E-STATIC-NO-INIT" => {
             "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\

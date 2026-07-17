@@ -4,12 +4,18 @@
 //   * `stmt.namingStrategy(new Naming.SnakeToCamel()).queryInto()` makes the desugar generate
 //     `getString("user_name")` for a `userName` field and `getString("first_name")` for `firstName` —
 //     the column literal is the `snake_case` of the field name, computed AT COMPILE TIME (zero runtime
-//     cost: `namingStrategy` is a no-op returning `this`; the transformed name is baked into the
-//     generated accessor).
+//     cost: the transformed name is baked into the generated accessor; the method itself is a real
+//     copy-builder storing the strategy on the Statement, which the dynamic tier below reads).
 //   * The transform applies PER dotted segment, so a NESTED entity field `homeAddress` with a subfield
 //     `streetName` reads the alias `"home_address.street_name"` — the SELECT below names it exactly so.
-//   * The strategy MUST be a `new Naming.X()` literal (a runtime value → `E-DB-NAMING-NOT-CONST`); the
-//     strict-exact default (no `namingStrategy`) is unchanged — the column name must equal the field.
+//
+// DEC-258 — the COMBINED model. `naming` is a real promoted field: `new Database(dsn,
+// new Naming.SnakeToCamel())` sets the strategy for the WHOLE connection, `prepare` copies it onto
+// every Statement, and per-statement `namingStrategy(...)` overrides it. Statically-traceable
+// strategies are still baked at compile time (zero runtime cost); an untraceable one — a connection
+// arriving through a parameter, a stored Statement, a runtime `Naming` value — dispatches on the
+// field the value carries (one branch per hydration call). Nothing is ever rejected or silently
+// downgraded; the strict-exact default (no strategy anywhere) is unchanged.
 //
 // Like every Core.DatabaseModule program this opens real bundled SQLite (rusqlite) → quarantined from the byte-
 // identity differential; `run ≡ runvm` holds (a compile-time desugar produces ONE AST for both
@@ -19,6 +25,7 @@ package Main;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 import Core.Runtime.Entry;
@@ -62,7 +69,35 @@ function main(): void {
                 "{m.id}: {m.firstName} (@{m.userName}) lives on {m.homeAddress.streetName}, {m.homeAddress.postalCode}"
             );
         }
+        // DEC-258 — connection-level strategy: the whole connection maps snake_case. Visible in this
+        // scope, so the desugar BAKES it (zero runtime cost), and `loadHandles` below receives it as
+        // a PARAMETER — untraceable there, so that hydration dispatches on the field the value
+        // carries. Same rows, same mapping, two tiers.
+        Database snakeDb = new Database("sqlite::memory:", new Naming.SnakeToCamel());
+        discard snakeDb.prepare("CREATE TABLE users(user_name TEXT)").exec();
+        discard snakeDb.prepare("INSERT INTO users VALUES('lovelace'), ('hopper')").exec();
+        List<Handle> baked = snakeDb
+            .prepare("SELECT user_name FROM users ORDER BY user_name")
+            .queryInto();
+        for (Handle h in baked) {
+            Output.printLine("baked:      @{h.userName}");
+        }
+        for (Handle h in loadHandles(snakeDb)) {
+            Output.printLine("dispatched: @{h.userName}");
+        }
     } catch (DatabaseError e) {
         Output.printLine("DB error: {e.message}");
     }
+}
+
+class Handle {
+    constructor(public string userName) {}
+}
+
+// The connection arrives as a parameter — statically untraceable, so this query dispatches on
+// `db.naming` at run time (which the SnakeToCamel connection above set).
+function loadHandles(Database db): List<Handle> throws DatabaseError {
+    Statement s = db.prepare("SELECT user_name FROM users ORDER BY user_name")?;
+    List<Handle> hs = s.queryInto()?;
+    return hs;
 }

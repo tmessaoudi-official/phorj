@@ -1,6 +1,18 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
 ## CURRENT (2026-07-17, late — CONTINUOUS MODE, dev-mandated: stop only for questions)
+- **DEC-258 BUILT (gate pending → commit next)**: combined model per the register REFINEMENT +
+  BUILT notes — variant-literal defaults (checker `variant_default_ty`, 3 tests + 3-leg probe),
+  prelude naming field threading (Database→Statement, withPassword param, real copy-builder
+  namingStrategy), desugar `scan_naming_facts` + `NamingMode` + `Dyn` dispatchers
+  (Class/Stream/entity-Map). E-DB-NAMING-NOT-CONST RETIRED. 10/10 naming tests; db/naming.phg
+  extended (baked + dispatched twins, both backends). Docs: CHANGELOG/FEATURES/README/spec §Db.
+- **Committed this stretch**: `17c79ad6` (DEC-256+242+191-addendum batch, census 271→0, full
+  gate green) · `ebb7a123` (bench/micro Entry catch-up — the microbench gate was DEAD since
+  7ffd550e; dbwork Db→Database + trycatch OddError also fixed; 23/23 run again).
+- **DEC-281 RULED (register): Core.Input full module** (readAll/readAllBytes/readLine/lines
+  Iterator/isInteractive; impure natives, quarantined; php://stdin legs; serve = instant EOF).
+  BUILD SLOT: immediately after DEC-258 commits (dev-ruled).
 - **CENSUS CONVERGED 271→109→2→0**: the 191-addendum residue is FIXED — root causes were
   (a) the four inline helpers (cli::wp + 3× with_pkg) prepending the Entry import BEFORE the
   package check → `import; package X;` double-package parse error — fix = wrap package FIRST,

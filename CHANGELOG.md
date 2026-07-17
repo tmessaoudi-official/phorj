@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-258: the Db column-naming COMBINED model + variant default parameters
+
+The naming strategy is now a real VALUE fact. `naming` is a promoted field on `Database`
+(`new Database(dsn, new Naming.SnakeToCamel())` sets the whole connection; the constructor
+default is `new Naming.Exact()` — enabled by defaults now accepting ZERO-payload enum-variant
+constructions as compile-time constants, a general DEC-249/236 extension); `prepare` copies it
+onto every `Statement`, and `namingStrategy(...)` became a real copy-builder (the documented
+stored-statement-reverts-to-Exact footgun is gone). Three cooperating tiers: statically-traceable
+strategies (chain literal, or a connection proven immutable + literal-constructed in the same
+function) are BAKED at compile time — zero runtime cost, byte-for-byte the old behavior;
+untraceable ones (connection through a parameter/field/call, stored `Statement`, runtime `Naming`
+value) emit BOTH baked helper variants plus a dispatcher branching on `stmt.naming` — one branch
+per hydration call, never per-row string work. `E-DB-NAMING-NOT-CONST` is RETIRED — nothing is
+rejected, nothing silently downgrades. Example: `db/naming.phg` (extended); tests: 4 new tiers
+in `tests/db.rs` + variant-default cases in `checker/tests/default_params.rs`.
+
 ### Added — DEC-256: the Unicode string tier on `Core.String`
 
 Two tiers, one module (developer override of the initial `Core.Unicode` split — everything

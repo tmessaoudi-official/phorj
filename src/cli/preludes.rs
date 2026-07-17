@@ -1128,11 +1128,16 @@ import Core.Secret;
 // Prelude-local result carrier (NOT Core.Result — see the native docs on injection order).
 enum DatabaseResult<T> { Ok(T value), Err(string message) }
 
-// Column NAMING STRATEGY (DEC-208 slice B2): the per-query mapping between DB column names and phorj
-// field names, passed to `Statement.namingStrategy(...)`. Zero-payload variants (construct with
-// `new Naming.SnakeToCamel()`, like `RoundingMode`). Member-gated (`import Core.DatabaseModule.Naming;`) — nothing
-// in the wind. The strategy is resolved AT COMPILE TIME by the `desugar_db` pass, so this type is only
-// ever an argument literal; it carries no runtime state.
+// Column NAMING STRATEGY (DEC-208 slice B2; DEC-258 combined model): the mapping between DB column
+// names and phorj field names. Zero-payload variants (construct with `new Naming.SnakeToCamel()`,
+// like `RoundingMode`). Member-gated (`import Core.DatabaseModule.Naming;`) — nothing in the wind.
+// DEC-258: no longer compile-time-only — `naming` is a REAL promoted field on `Database` (ctor
+// default `new Naming.Exact()`) that `prepare` copies onto each `Statement`, so the strategy
+// follows the VALUE across any scope. The `desugar_db` pass still BAKES column literals when the
+// strategy is statically visible (zero runtime cost); when the connection is not traceable it
+// emits both baked variants and dispatches on the statement's `naming` field at run time (one
+// branch per hydration call — never per-row string work). Per-statement `namingStrategy(...)`
+// overrides either way.
 enum Naming { Exact(), SnakeToCamel() }
 
 open class DatabaseError implements Error {
@@ -1249,12 +1254,15 @@ class Row {
 }
 
 class Statement {
-  constructor(private DatabaseHandle raw) {}
+  // DEC-258: `naming` rides the statement (copied from the connection by `Database.prepare`, or
+  // replaced by `namingStrategy`) so an untraceable-connection hydration can dispatch on it at
+  // run time. Public — the desugar's dynamic dispatcher reads it.
+  constructor(private DatabaseHandle raw, public Naming naming = new Naming.Exact()) {}
   function bind(string | int | float | bool value): Statement throws DatabaseError {
-    return match (NativeDatabase.bind(this.raw, value)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    return match (NativeDatabase.bind(this.raw, value)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   function bindNamed(string name, string | int | float | bool value): Statement throws DatabaseError {
-    return match (NativeDatabase.bindNamed(this.raw, name, value)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    return match (NativeDatabase.bindNamed(this.raw, name, value)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Typed IN-list bind (DEC-208 slice D, spec §2): occupies one positional `?` slot (left-to-right
   // with bind()) that expands to `(?,?,…)` — one placeholder per value — at execute time; an empty list
@@ -1262,7 +1270,7 @@ class Statement {
   // Generic over the element type (a `List<int>`/`List<string>`/… all bind); a non-scalar element is a
   // runtime DatabaseError (an invariant `List<bindable>` union cannot accept a homogeneous list argument).
   function bindList<T>(List<T> values): Statement throws DatabaseError {
-    return match (NativeDatabase.bindList(this.raw, values)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    return match (NativeDatabase.bindList(this.raw, values)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   function exec(): int throws DatabaseError {
     return match (NativeDatabase.exec(this.raw)) { DatabaseResult.Ok(n) => n, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
@@ -1279,19 +1287,18 @@ class Statement {
   function execReturningId(): int throws DatabaseError {
     return match (NativeDatabase.execReturningId(this.raw)) { DatabaseResult.Ok(id) => id, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  // Column naming strategy (DEC-208 slice B2, spec §3) — chainable, per query:
+  // Column naming strategy (DEC-208 slice B2; DEC-258 combined model) — chainable, per query:
   // `stmt.namingStrategy(new Naming.SnakeToCamel()).queryInto()` maps a `userName` field from a
-  // `user_name` column. This method is a compile-time marker realized as a runtime NO-OP (returns
-  // `this` unchanged): the `desugar_db` pass reads the strategy from the call chain at COMPILE TIME and
-  // bakes the transformed column-name literals straight into the generated `getX("user_name")` calls
-  // (zero runtime cost). It exists so the chain type-checks; the argument must be a `new Naming.X()`
-  // literal (a runtime value is rejected, `E-DB-NAMING-NOT-CONST` — the strategy cannot vary at run
-  // time). Applies only to by-field-name hydration (`queryInto`/`queryOneInto`, and a `queryMap` entity
-  // value); `queryScalar`/scalar map values read by column position and ignore it. NOTE: the strategy is
-  // read from the query call's OWN chain, so keep it in one expression — break it into a stored
-  // `Statement s = stmt.namingStrategy(...); s.queryInto();` and the query reverts to `Exact` (a missing
-  // column then faults loudly at run time, never silently wrong).
-  function namingStrategy(Naming strategy): Statement { return this; }
+  // `user_name` column. A REAL copy-builder since DEC-258 (formerly a compile-time-only no-op):
+  // the returned Statement carries the strategy in its `naming` field. The `desugar_db` pass still
+  // BAKES the transformed column-name literals when the argument is a `new Naming.X()` literal in
+  // the query's own chain (zero runtime cost, unchanged); a runtime `Naming` value — or a stored
+  // `Statement s = stmt.namingStrategy(...); s.queryInto();` split — now dispatches on the field at
+  // run time instead of being rejected/reverting (the old `E-DB-NAMING-NOT-CONST` and the
+  // stored-statement-reverts-to-Exact footgun are both retired). Applies only to by-field-name
+  // hydration (`queryInto`/`queryOneInto`, a `queryMap` entity value, `streamInto`);
+  // `queryScalar`/scalar map values read by column position and ignore it.
+  function namingStrategy(Naming strategy): Statement { return new Statement(this.raw, strategy); }
   function query(): List<Row> throws DatabaseError {
     return match (NativeDatabase.query(this.raw)) { DatabaseResult.Ok(rows) => Statement.wrapRows(rows), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
@@ -1368,8 +1375,11 @@ class Database {
   // DEC-221: opening a connection can fail, so the constructor itself declares `throws DatabaseError` and
   // opens directly — `new Database(dsn)` (fail-fast, exactly like PHP's `new PDO`). No static factory. The
   // handle is COMPUTED in the body (not a promoted param), so the field is `mutable` (set once here).
+  // DEC-258: `naming` is a promoted field with a variant default — the connection-level column
+  // naming strategy. `prepare` copies it onto every Statement, so it follows the value into any
+  // scope; per-statement `namingStrategy(...)` overrides it.
   private mutable DatabaseHandle raw;
-  constructor(string dsn) throws DatabaseError {
+  constructor(string dsn, public Naming naming = new Naming.Exact()) throws DatabaseError {
     this.raw = match (NativeDatabase.connect(dsn)) { DatabaseResult.Ok(h) => h, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Credential-safe connect (DEC-208 slice G, spec §1). The password is supplied as a `Core.Secret` —
@@ -1379,11 +1389,11 @@ class Database {
   // exceptions). Use for a `postgres://user@host/db` DSN (no inline password); SQLite has no password,
   // so the DSN is passed through unchanged. Example:
   //   `Database db = Database.withPassword("postgres://app@db.host:5432/prod", new Secret(env));`
-  static function withPassword(string dsn, Secret<string> password): Database throws DatabaseError {
-    return new Database(NativeDatabase.dsnWithPassword(dsn, password.expose()))?;
+  static function withPassword(string dsn, Secret<string> password, Naming naming = new Naming.Exact()): Database throws DatabaseError {
+    return new Database(NativeDatabase.dsnWithPassword(dsn, password.expose()), naming)?;
   }
   function prepare(string sql): Statement throws DatabaseError {
-    return match (NativeDatabase.prepare(this.raw, sql)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    return match (NativeDatabase.prepare(this.raw, sql)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
 
   // --- Writes & robustness (DEC-208 slice D, spec §4/§7). ---

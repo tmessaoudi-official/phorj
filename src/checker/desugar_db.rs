@@ -7,13 +7,20 @@
 //! with nested hydration and admits NULL in its `?` form (timestamp→`DateTime` is deferred on DEC-206).
 //! Slice B2 adds the COLUMN NAMING STRATEGY: a `.namingStrategy(new Naming.SnakeToCamel())` call in the
 //! query chain makes the desugar emit the `snake_case` of each field name as its column literal
-//! (`userName` → `getString("user_name")`), applied per dotted segment for a nested alias. It is read
-//! at COMPILE TIME from the chain (the prelude method is a no-op returning `this`); the strict-exact
-//! default (`Naming::Exact`) is unchanged, so a query with no `namingStrategy` is byte-for-byte as
-//! before. A non-literal strategy argument is rejected (`E-DB-NAMING-NOT-CONST`) — never silently
-//! downgraded. The transform touches only by-field-name hydration (`queryInto`/`queryOneInto`, and a
-//! `queryMap` entity value); a scalar column (`queryScalar`, a scalar map value/key) is read by
-//! position and ignores it.
+//! (`userName` → `getString("user_name")`), applied per dotted segment for a nested alias.
+//! DEC-258 (the COMBINED model) makes the strategy a real VALUE fact: `naming` is a promoted field on
+//! `Database` (ctor default `new Naming.Exact()`), copied onto every `Statement` by `prepare`, and
+//! `namingStrategy` is a real copy-builder. Three cooperating tiers: (1) a strategy that is statically
+//! traceable — a literal `namingStrategy(...)` in the chain, or a connection proven by
+//! [`scan_naming_facts`]/[`Database::inline_ctor_naming`] — is BAKED into the helper's column literals
+//! (zero runtime cost, the pre-DEC-258 behavior; the strict-exact default with no strategy anywhere is
+//! byte-for-byte as before); (2) an untraceable strategy (runtime argument, stored `Statement`,
+//! connection through a parameter/field/call) emits BOTH baked helper variants plus a dispatcher that
+//! branches on `stmt.naming` at run time — one branch per hydration call, never per-row string work,
+//! never a rejection (`E-DB-NAMING-NOT-CONST` is retired) and never a silent downgrade; (3) the
+//! per-statement literal overrides the connection either way. The transform touches only by-field-name
+//! hydration (`queryInto`/`queryOneInto`/`streamInto`, and a `queryMap` entity value); a scalar column
+//! (`queryScalar`, a scalar map value/key) is read by position and ignores it.
 //!
 //! A PRE-CHECK desugar (mirrors [`crate::checker::desugar_di`]): it lowers the four type-directed
 //! result calls into plain, already-working S1 primitives BEFORE the type-checker, so the generated
@@ -114,17 +121,30 @@ enum Naming {
     SnakeToCamel,
 }
 
-/// The result of scanning a `query…()` receiver chain for a `.namingStrategy(...)` call.
+/// The result of scanning a `query…()` receiver chain for the effective naming strategy
+/// (DEC-258 combined model). Closest-to-the-query `namingStrategy(...)` wins; otherwise the
+/// connection the chain's `prepare` was called on decides.
 enum NamingFind {
-    /// No `namingStrategy` in the chain — the default `Exact`.
-    None,
-    /// A `namingStrategy(new Naming.X())` with a recognized compile-time literal.
+    /// The strategy is a compile-time fact: a literal `namingStrategy(new Naming.X())` in the
+    /// chain, or a connection whose construction (with a literal/default strategy) is statically
+    /// traceable. Baked helpers — zero runtime cost (the pre-DEC-258 behavior).
     Found(Naming),
-    /// A `namingStrategy(...)` whose argument is NOT a `new Naming.{Exact,SnakeToCamel}()` literal:
-    /// rejected (`E-DB-NAMING-NOT-CONST`). The strategy MUST be a compile-time literal — a runtime
-    /// value would silently fall through to `Exact` (a forbidden silent downgrade). Carries the call
-    /// span for the diagnostic.
-    Bad(Span),
+    /// The strategy is NOT statically known (a runtime `namingStrategy` argument, a stored
+    /// `Statement`, or a connection that arrived through a parameter/field/call). The `naming`
+    /// FIELD riding the `Statement` value (copied from the `Database` by `prepare`) carries the
+    /// truth, so the rewrite emits BOTH baked helper variants plus a dispatcher that branches on
+    /// `stmt.naming` at run time — one branch per hydration call, never per-row string work, and
+    /// never a silent downgrade (the pre-DEC-258 `E-DB-NAMING-NOT-CONST` rejection is retired).
+    Runtime,
+}
+
+/// How the resolved helper handles the naming strategy: baked (`Static`) or field-dispatched
+/// (`Dynamic`). The rewrite maps [`NamingFind`] onto this and the `resolve_*` family keys helper
+/// registration on it.
+#[derive(Clone, Copy)]
+enum NamingMode {
+    Static(Naming),
+    Dynamic,
 }
 
 /// The synthetic-helper-name suffix distinguishing the naming strategies, so two calls that hydrate
@@ -188,7 +208,10 @@ enum HelperSpec {
     },
     /// `phorjQueryScalar<Label>` — a single typed value; `ret` is the scalar (or `T?` scalar) type.
     /// (No `naming`: a scalar is read by column POSITION, not by field name.)
-    Scalar { accessor: &'static str, ret: Type },
+    Scalar {
+        accessor: &'static str,
+        ret: Type,
+    },
     /// `phorjQueryMap<KLabel><VLabel>[<Naming>]` — a `Map<key_ty, val_ty>` keyed by the first column.
     /// `naming` applies only to an ENTITY value (hydrated by field name); a scalar value is by
     /// position, so a scalar-value map always carries `Naming::Exact`.
@@ -202,7 +225,28 @@ enum HelperSpec {
     /// `phorjStreamInto<Class>[<Naming>]` (DEC-208 item H) — a `DatabaseStream<Class>` whose per-row
     /// hydration closure reuses the SAME `build_class` machinery as `queryInto`, but runs it lazily
     /// per pulled row.
-    Stream { class: String, naming: Naming },
+    Stream {
+        class: String,
+        naming: Naming,
+    },
+    /// DEC-258 dynamic dispatchers — `phorj…<Class>Dyn(stmt)`: `match (stmt.naming)` → the Exact or
+    /// SnakeToCamel baked twin (both registered alongside). One per (shape, class) that is hydrated
+    /// through a statically-untraceable connection.
+    ClassDyn {
+        kind: ClassKind,
+        class: String,
+    },
+    StreamDyn {
+        class: String,
+    },
+    /// The entity-valued `queryMap` dispatcher (a scalar-valued map ignores naming and never needs
+    /// one). Carries the key/value data so the signature matches the baked twins.
+    MapDyn {
+        key_ty: Type,
+        val_class: String,
+        val_ty: Type,
+        k_label: String,
+    },
 }
 
 /// A camelCase synthetic free-function name (free functions are `E-NAME-CASE`-checked; `Class`/type
@@ -425,6 +469,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
         next_span: SYNTH_BASE,
         next_local: 0,
         current_naming: Naming::Exact,
+        naming_facts: BTreeMap::new(),
     };
     let mut items: Vec<Item> = items.into_iter().map(|it| db.ritem(it)).collect();
     if !db.diags.is_empty() {
@@ -464,6 +509,181 @@ struct Database<'a> {
     /// while building that one helper's body. Synthesis is strictly sequential (one helper fully built
     /// before the next), so a transient field is sound — no interleaving.
     current_naming: Naming,
+    /// DEC-258 — the enclosing function's PROVEN connection facts: var name → the literal `Naming`
+    /// its `Database` construction carries, for IMMUTABLE, never-shadowed, never-reassigned locals
+    /// only (see [`scan_naming_facts`] — anything less certain is simply absent, which soundly
+    /// falls back to runtime dispatch). Rebuilt at every `rfn` entry.
+    naming_facts: BTreeMap<String, Naming>,
+}
+
+/// DEC-258 — scan one function body (recursively: nested blocks, loops, try/catch, lambda bodies)
+/// and return the names PROVEN to hold a `Database` with a compile-time-known naming strategy.
+/// The proof standard is deliberately brutal — a name qualifies only when EVERY binding of it in
+/// the whole function is the same immutable literal-strategy construction, and it is never
+/// reassigned, never a loop/catch/if-let/destructure binder, and never any function/lambda
+/// parameter. Anything else ⇒ absent ⇒ the (always-correct) runtime dispatch tier.
+fn scan_naming_facts(params: &[Param], body: &[Stmt]) -> BTreeMap<String, Naming> {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Fact {
+        Lit(Naming),
+        Poison,
+    }
+    fn merge(map: &mut BTreeMap<String, Fact>, name: &str, f: Fact) {
+        let v = match (map.get(name), f) {
+            (None, f) => f,
+            (Some(Fact::Lit(a)), Fact::Lit(b)) if *a == b => Fact::Lit(b),
+            _ => Fact::Poison,
+        };
+        map.insert(name.to_string(), v);
+    }
+    /// The naming carried by a `Database` construction expr — shared with the receiver-side walk.
+    fn ctor_fact(e: &Expr) -> Option<Naming> {
+        Database::inline_ctor_naming(e)
+    }
+    fn scan_expr(e: &Expr, map: &mut BTreeMap<String, Fact>) {
+        if let Expr::Lambda { params, body, .. } = e {
+            for p in params {
+                merge(map, &p.name, Fact::Poison);
+            }
+            match body {
+                LambdaBody::Expr(inner) => scan_expr(inner, map),
+                LambdaBody::Block(stmts) => scan_block(stmts, map),
+            }
+            return;
+        }
+        let mut work = Vec::new();
+        crate::ast::push_subexprs(e, &mut work);
+        for sub in work {
+            scan_expr(sub, map);
+        }
+    }
+    fn scan_block(stmts: &[Stmt], map: &mut BTreeMap<String, Fact>) {
+        for s in stmts {
+            match s {
+                Stmt::VarDecl {
+                    name,
+                    init,
+                    mutable,
+                    ..
+                } => {
+                    let fact = match (mutable, ctor_fact(init)) {
+                        (false, Some(n)) => Fact::Lit(n),
+                        _ => Fact::Poison,
+                    };
+                    merge(map, name, fact);
+                    scan_expr(init, map);
+                }
+                Stmt::Assign { target, value, .. } => {
+                    if let Expr::Ident(n, _) = target {
+                        merge(map, n, Fact::Poison);
+                    }
+                    scan_expr(target, map);
+                    scan_expr(value, map);
+                }
+                Stmt::Return { value, .. } => {
+                    if let Some(v) = value {
+                        scan_expr(v, map);
+                    }
+                }
+                Stmt::If {
+                    cond,
+                    bind,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if let Some(b) = bind {
+                        merge(map, b, Fact::Poison);
+                    }
+                    scan_expr(cond, map);
+                    scan_block(then_block, map);
+                    if let Some(eb) = else_block {
+                        scan_block(eb, map);
+                    }
+                }
+                Stmt::For {
+                    name,
+                    val,
+                    iter,
+                    body,
+                    ..
+                } => {
+                    merge(map, name, Fact::Poison);
+                    if let Some((_, v)) = val {
+                        merge(map, v, Fact::Poison);
+                    }
+                    scan_expr(iter, map);
+                    scan_block(body, map);
+                }
+                Stmt::While { cond, body, .. } => {
+                    scan_expr(cond, map);
+                    scan_block(body, map);
+                }
+                Stmt::CFor {
+                    init,
+                    cond,
+                    step,
+                    body,
+                    ..
+                } => {
+                    if let Some(i) = init {
+                        scan_block(std::slice::from_ref(i), map);
+                    }
+                    if let Some(c) = cond {
+                        scan_expr(c, map);
+                    }
+                    if let Some(st) = step {
+                        scan_block(std::slice::from_ref(st), map);
+                    }
+                    scan_block(body, map);
+                }
+                Stmt::Break(_) | Stmt::Continue(_) => {}
+                Stmt::Block(inner, _) => scan_block(inner, map),
+                Stmt::Expr(e, _) | Stmt::Discard(e, _) => scan_expr(e, map),
+                Stmt::Throw { value, .. } => scan_expr(value, map),
+                Stmt::Try {
+                    body,
+                    catches,
+                    finally_block,
+                    ..
+                } => {
+                    scan_block(body, map);
+                    for c in catches {
+                        merge(map, &c.name, Fact::Poison);
+                        scan_block(&c.body, map);
+                    }
+                    if let Some(fb) = finally_block {
+                        scan_block(fb, map);
+                    }
+                }
+                Stmt::Destructure {
+                    pat,
+                    init,
+                    else_block,
+                    ..
+                } => {
+                    for (b, _) in pat.binders() {
+                        merge(map, &b, Fact::Poison);
+                    }
+                    scan_expr(init, map);
+                    if let Some(eb) = else_block {
+                        scan_block(eb, map);
+                    }
+                }
+            }
+        }
+    }
+    let mut map = BTreeMap::new();
+    for p in params {
+        merge(&mut map, &p.name, Fact::Poison);
+    }
+    scan_block(body, &mut map);
+    map.into_iter()
+        .filter_map(|(k, v)| match v {
+            Fact::Lit(n) => Some((k, n)),
+            Fact::Poison => None,
+        })
+        .collect()
 }
 
 impl Database<'_> {
@@ -513,18 +733,22 @@ impl Database<'_> {
 
     /// DEC-208 slice B2 — scan a `query…()` receiver chain (down the `.object` spine) for a
     /// `.namingStrategy(arg)` call and read its compile-time strategy. The FIRST one found (the call
-    /// closest to the `query…()`) wins; a chain with no `namingStrategy` is `Exact`. The strategy MUST
-    /// be a `new Naming.{Exact,SnakeToCamel}()` literal — anything else is `Bad` (`E-DB-NAMING-NOT-
-    /// CONST`) rather than a silent downgrade. The `namingStrategy` call itself is a no-op left intact
-    /// in the receiver (a real chainable prelude method), so `recv` still type-checks as a `Statement`.
-    fn naming_of_recv(recv: &Expr) -> NamingFind {
+    /// closest to the `query…()`) wins. DEC-258 combined model: with no literal `namingStrategy` in
+    /// the chain, the CONNECTION decides — a chain bottoming at `<conn>.prepare(...)` where `<conn>`
+    /// is a proven immutable literal-strategy local (see [`scan_naming_facts`]) or an inline
+    /// `new Database(...)` construction is still a compile-time [`NamingFind::Found`] (baked, zero
+    /// cost); everything else — runtime `namingStrategy` argument, stored `Statement`, connection
+    /// from a parameter/field/call — is [`NamingFind::Runtime`] (field dispatch, always correct).
+    /// The `namingStrategy` call itself is left intact in the receiver (a real copy-builder prelude
+    /// method since DEC-258), so `recv` still type-checks AND carries the right field at run time.
+    fn naming_of_recv(&self, recv: &Expr) -> NamingFind {
         let mut cur = recv;
         loop {
             match cur {
                 Expr::Call {
                     callee,
                     args,
-                    span,
+                    span: _,
                     type_args: _,
                 } => {
                     if let Expr::Member {
@@ -537,17 +761,63 @@ impl Database<'_> {
                         if name == "namingStrategy" {
                             return match args.first().and_then(Self::naming_from_arg) {
                                 Some(n) => NamingFind::Found(n),
-                                None => NamingFind::Bad(*span),
+                                None => NamingFind::Runtime,
+                            };
+                        }
+                        if name == "prepare" {
+                            return match &**object {
+                                Expr::Ident(conn, _) => match self.naming_facts.get(conn) {
+                                    Some(n) => NamingFind::Found(*n),
+                                    None => NamingFind::Runtime,
+                                },
+                                // An inline `new Database(dsn[, new Naming.X()])?.prepare(...)`.
+                                other => match Self::inline_ctor_naming(other) {
+                                    Some(n) => NamingFind::Found(n),
+                                    None => NamingFind::Runtime,
+                                },
                             };
                         }
                         cur = object;
                     } else {
-                        return NamingFind::None;
+                        return NamingFind::Runtime;
                     }
                 }
                 Expr::Member { object, .. } => cur = object,
-                _ => return NamingFind::None,
+                _ => return NamingFind::Runtime,
             }
+        }
+    }
+
+    /// The literal naming of an inline `Database` construction expression (through `?` and the
+    /// `this`-returning `timeout`/`onQuery` chain), or `None` when untraceable. The receiver-side
+    /// twin of [`scan_naming_facts`]'s `ctor_fact`.
+    fn inline_ctor_naming(e: &Expr) -> Option<Naming> {
+        match e {
+            Expr::Propagate { inner, .. } => Self::inline_ctor_naming(inner),
+            Expr::New(inner, _) => match &**inner {
+                Expr::Call { callee, args, .. } => match &**callee {
+                    Expr::Ident(n, _) if n == "Database" => match args.len() {
+                        0 | 1 => Some(Naming::Exact),
+                        2 => Self::naming_from_arg(&args[1]),
+                        _ => None,
+                    },
+                    _ => None,
+                },
+                _ => None,
+            },
+            Expr::Call { callee, args, .. } => match &**callee {
+                Expr::Member { object, name, .. } => match (&**object, name.as_str()) {
+                    (Expr::Ident(q, _), "withPassword") if q == "Database" => match args.len() {
+                        2 => Some(Naming::Exact),
+                        3 => Self::naming_from_arg(&args[2]),
+                        _ => None,
+                    },
+                    (_, "timeout" | "onQuery") => Self::inline_ctor_naming(object),
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
         }
     }
 
@@ -671,20 +941,12 @@ impl Database<'_> {
         let Expr::Member { object, .. } = callee else {
             unreachable!("query_call_kind guarantees a Member callee");
         };
-        // DEC-208 slice B2: read the per-query column naming strategy from the chain BEFORE the recv is
-        // consumed. A non-literal `namingStrategy` argument is rejected here (no silent downgrade).
-        let naming = match Self::naming_of_recv(&object) {
-            NamingFind::None => Naming::Exact,
-            NamingFind::Found(n) => n,
-            NamingFind::Bad(bad) => {
-                self.diag(
-                    bad,
-                    "`namingStrategy` needs a compile-time `Naming` literal argument".into(),
-                    "E-DB-NAMING-NOT-CONST",
-                    "pass a literal `new Naming.SnakeToCamel()` or `new Naming.Exact()` — the column naming strategy is resolved at compile time, so a variable or computed value cannot drive it".into(),
-                );
-                return self.placeholder();
-            }
+        // DEC-208 slice B2 / DEC-258: resolve the naming strategy from the chain BEFORE the recv is
+        // consumed — a compile-time fact bakes; anything untraceable dispatches on the statement's
+        // `naming` field at run time (never a rejection, never a silent downgrade).
+        let naming = match self.naming_of_recv(&object) {
+            NamingFind::Found(n) => NamingMode::Static(n),
+            NamingFind::Runtime => NamingMode::Dynamic,
         };
         let recv = self.rexpr(*object);
         let expected = if type_args.is_empty() {
@@ -918,7 +1180,7 @@ impl Database<'_> {
         kind: ClassKind,
         expected: Option<&Type>,
         span: Span,
-        naming: Naming,
+        naming: NamingMode,
     ) -> Option<String> {
         let (method, want) = match kind {
             ClassKind::List => ("queryInto", "List<Row>"),
@@ -963,7 +1225,19 @@ impl Database<'_> {
                 if args.is_empty() && self.ctor_params.contains_key(name) =>
             {
                 let class = name.clone();
-                self.ensure_class_helper(kind, &class, span, naming)
+                match naming {
+                    NamingMode::Static(n) => self.ensure_class_helper(kind, &class, span, n),
+                    // DEC-258 dynamic tier: register BOTH baked variants + the field dispatcher.
+                    NamingMode::Dynamic => {
+                        self.ensure_class_helper(kind, &class, span, Naming::Exact)?;
+                        self.ensure_class_helper(kind, &class, span, Naming::SnakeToCamel)?;
+                        let name = format!("{}Dyn", class_helper_name(kind, &class, Naming::Exact));
+                        self.helpers
+                            .entry(name.clone())
+                            .or_insert(HelperSpec::ClassDyn { kind, class });
+                        Some(name)
+                    }
+                }
             }
             _ => {
                 self.diag(
@@ -982,11 +1256,30 @@ impl Database<'_> {
 
     /// Resolve `streamInto<T>()` (DEC-208 item H): the sink type must be `DatabaseStream<Class>`; validates
     /// the class exactly like `queryInto` and registers a per-class stream helper.
+    /// Register (and name) one baked stream helper. The [`Database::ensure_class_helper`] twin for
+    /// `streamInto` (DEC-258 factored it out so the dynamic tier can register both variants).
+    fn ensure_stream_helper(&mut self, class: &str, span: Span, naming: Naming) -> Option<String> {
+        let helper = format!("phorjStreamInto{class}{}", naming_suffix(naming));
+        if !self.helpers.contains_key(&helper) {
+            if !self.validate_class(class, span, &mut Vec::new()) {
+                return None;
+            }
+            self.helpers.insert(
+                helper.clone(),
+                HelperSpec::Stream {
+                    class: class.to_string(),
+                    naming,
+                },
+            );
+        }
+        Some(helper)
+    }
+
     fn resolve_stream(
         &mut self,
         expected: Option<&Type>,
         span: Span,
-        naming: Naming,
+        naming: NamingMode,
     ) -> Option<String> {
         let Some(expected) = expected else {
             self.diag(
@@ -1019,15 +1312,18 @@ impl Database<'_> {
                 if args.is_empty() && self.ctor_params.contains_key(name) =>
             {
                 let class = name.clone();
-                let helper = format!("phorjStreamInto{class}{}", naming_suffix(naming));
-                if !self.helpers.contains_key(&helper) {
-                    if !self.validate_class(&class, span, &mut Vec::new()) {
-                        return None;
+                match naming {
+                    NamingMode::Static(n) => self.ensure_stream_helper(&class, span, n),
+                    NamingMode::Dynamic => {
+                        self.ensure_stream_helper(&class, span, Naming::Exact)?;
+                        self.ensure_stream_helper(&class, span, Naming::SnakeToCamel)?;
+                        let name = format!("phorjStreamInto{class}Dyn");
+                        self.helpers
+                            .entry(name.clone())
+                            .or_insert(HelperSpec::StreamDyn { class });
+                        Some(name)
                     }
-                    self.helpers
-                        .insert(helper.clone(), HelperSpec::Stream { class, naming });
                 }
-                Some(helper)
             }
             _ => {
                 self.diag(
@@ -1089,7 +1385,7 @@ impl Database<'_> {
         &mut self,
         expected: Option<&Type>,
         span: Span,
-        naming: Naming,
+        naming: NamingMode,
     ) -> Option<String> {
         let Some(expected) = expected else {
             self.diag(
@@ -1160,28 +1456,53 @@ impl Database<'_> {
         };
         // The naming strategy only affects an ENTITY value (hydrated by field name); a scalar value is
         // read by column POSITION, so a scalar-value map is `Exact` regardless of any `namingStrategy`
-        // prefix — the same helper is reused (no meaningless suffix proliferation).
-        let eff_naming = match &val {
-            MapVal::Entity { .. } => naming,
-            MapVal::Scalar { .. } => Naming::Exact,
+        // prefix — the same helper is reused (no meaningless suffix proliferation). Same collapse for
+        // the DEC-258 dynamic tier: a scalar-value map never needs a dispatcher.
+        let eff_naming = match (&val, naming) {
+            (MapVal::Scalar { .. }, _) => NamingMode::Static(Naming::Exact),
+            (MapVal::Entity { .. }, m) => m,
         };
-        let name = format!(
-            "phorjQueryMap{k_label}{v_label}{}",
-            naming_suffix(eff_naming)
-        );
-        if !self.helpers.contains_key(&name) {
-            self.helpers.insert(
-                name.clone(),
-                HelperSpec::Map {
-                    key_acc,
-                    key_ty: k_ty,
-                    val,
-                    val_ty: v_ty,
-                    naming: eff_naming,
-                },
-            );
+        let ensure_map = |db: &mut Self, n: Naming| {
+            let name = format!("phorjQueryMap{k_label}{v_label}{}", naming_suffix(n));
+            if !db.helpers.contains_key(&name) {
+                db.helpers.insert(
+                    name.clone(),
+                    HelperSpec::Map {
+                        key_acc,
+                        key_ty: k_ty.clone(),
+                        val: match &val {
+                            MapVal::Scalar { accessor } => MapVal::Scalar { accessor },
+                            MapVal::Entity { class } => MapVal::Entity {
+                                class: class.clone(),
+                            },
+                        },
+                        val_ty: v_ty.clone(),
+                        naming: n,
+                    },
+                );
+            }
+            name
+        };
+        match eff_naming {
+            NamingMode::Static(n) => Some(ensure_map(self, n)),
+            NamingMode::Dynamic => {
+                ensure_map(self, Naming::Exact);
+                ensure_map(self, Naming::SnakeToCamel);
+                let MapVal::Entity { class } = &val else {
+                    unreachable!("Dynamic map naming implies an entity value");
+                };
+                let name = format!("phorjQueryMap{k_label}{v_label}Dyn");
+                self.helpers
+                    .entry(name.clone())
+                    .or_insert(HelperSpec::MapDyn {
+                        key_ty: k_ty,
+                        val_class: class.clone(),
+                        val_ty: v_ty,
+                        k_label,
+                    });
+                Some(name)
+            }
         }
-        Some(name)
     }
 
     fn map_value_error(&mut self, v_ty: &Type, span: Span) {
@@ -1767,7 +2088,11 @@ impl Database<'_> {
             HelperSpec::Class { naming, .. }
             | HelperSpec::Map { naming, .. }
             | HelperSpec::Stream { naming, .. } => *naming,
-            HelperSpec::Scalar { .. } => Naming::Exact,
+            // Dispatchers build no column literals; the two baked twins they branch to do.
+            HelperSpec::Scalar { .. }
+            | HelperSpec::ClassDyn { .. }
+            | HelperSpec::StreamDyn { .. }
+            | HelperSpec::MapDyn { .. } => Naming::Exact,
         };
         let stmt_ty = self.named("Statement");
         let psp = self.sp();
@@ -1826,6 +2151,40 @@ impl Database<'_> {
                 let body = self.stream_body(&c);
                 (ret, body)
             }
+            // DEC-258 dynamic dispatchers: `return match (phorjStmt.naming) { Naming.Exact() =>
+            // <exact twin>(phorjStmt)?, Naming.SnakeToCamel() => <snake twin>(phorjStmt)? };`
+            HelperSpec::ClassDyn { kind, class } => {
+                let ret = match kind {
+                    ClassKind::List => self.list_ty(class),
+                    ClassKind::One => self.opt_ty(class),
+                };
+                let exact = class_helper_name(*kind, class, Naming::Exact);
+                let snake = class_helper_name(*kind, class, Naming::SnakeToCamel);
+                (ret, self.dyn_dispatch_body(&exact, &snake))
+            }
+            HelperSpec::StreamDyn { class } => {
+                let ct = self.named(class);
+                let sp = self.sp();
+                let ret = Type::Named {
+                    name: "DatabaseStream".into(),
+                    args: vec![ct],
+                    span: sp,
+                };
+                let exact = format!("phorjStreamInto{class}");
+                let snake = format!("phorjStreamInto{class}SnakeToCamel");
+                (ret, self.dyn_dispatch_body(&exact, &snake))
+            }
+            HelperSpec::MapDyn {
+                key_ty,
+                val_class,
+                val_ty,
+                k_label,
+            } => {
+                let ret = self.map_ty(key_ty, val_ty);
+                let exact = format!("phorjQueryMap{k_label}{val_class}");
+                let snake = format!("phorjQueryMap{k_label}{val_class}SnakeToCamel");
+                (ret, self.dyn_dispatch_body(&exact, &snake))
+            }
         };
         let throws = vec![self.named("DatabaseError")];
         let span = self.sp();
@@ -1844,6 +2203,60 @@ impl Database<'_> {
             generic_ret_from_param: None,
             span,
         })
+    }
+
+    /// DEC-258 — the one-statement body of a dynamic dispatcher: branch on the statement's
+    /// `naming` field to the matching baked twin. The `match` is exhaustive over `Naming`'s two
+    /// variants (no wildcard — a third strategy extends this in the same change), and each arm
+    /// `?`-propagates the twin's `DatabaseError`.
+    fn dyn_dispatch_body(&mut self, exact_helper: &str, snake_helper: &str) -> Vec<Stmt> {
+        let mut arms = Vec::new();
+        for (variant, helper) in [("Exact", exact_helper), ("SnakeToCamel", snake_helper)] {
+            let psp = self.sp();
+            let pattern = Pattern::Variant {
+                name: variant.into(),
+                fields: Vec::new(),
+                enum_qualifier: Some("Naming".into()),
+                span: psp,
+            };
+            let callee = self.ident(helper);
+            let arg = self.ident("phorjStmt");
+            let csp = self.sp();
+            let call = Expr::Call {
+                callee: Box::new(callee),
+                args: vec![arg],
+                span: csp,
+                type_args: Vec::new(),
+            };
+            let body = self.propagate(call);
+            let asp = self.sp();
+            arms.push(MatchArm {
+                pattern,
+                guard: None,
+                body,
+                span: asp,
+            });
+        }
+        let stmt = self.ident("phorjStmt");
+        let msp = self.sp();
+        let scrutinee = Expr::Member {
+            object: Box::new(stmt),
+            name: "naming".into(),
+            safe: false,
+            sep: MemberSep::Dot,
+            span: msp,
+        };
+        let xsp = self.sp();
+        let m = Expr::Match {
+            scrutinee: Box::new(scrutinee),
+            arms,
+            span: xsp,
+        };
+        let rsp = self.sp();
+        vec![Stmt::Return {
+            value: Some(m),
+            span: rsp,
+        }]
     }
 
     /// `List<Row> phorjRows = phorjStmt.query()?;` — the shared first statement of every helper.
@@ -2237,6 +2650,12 @@ impl Database<'_> {
 
     fn rfn(&mut self, f: &mut FunctionDecl) {
         let prev_ret = std::mem::replace(&mut self.current_ret, f.ret.clone());
+        // DEC-258: the connection facts are per-function (a lambda inside shares them — its
+        // captures refer to these same immutable locals; its params are poisoned by the scan).
+        let prev_facts = std::mem::replace(
+            &mut self.naming_facts,
+            scan_naming_facts(&f.params, &f.body),
+        );
         let body = std::mem::take(&mut f.body);
         f.body = self.rblock(body);
         for p in &mut f.params {
@@ -2244,6 +2663,7 @@ impl Database<'_> {
                 p.default = Some(Box::new(self.rexpr(*d)));
             }
         }
+        self.naming_facts = prev_facts;
         self.current_ret = prev_ret;
     }
 
@@ -2255,9 +2675,23 @@ impl Database<'_> {
                     *init = Some(self.rexpr(e));
                 }
             }
-            ClassMember::Constructor { body, .. } => {
+            ClassMember::Constructor { body, params, .. } => {
+                // DEC-258: ctor bodies get their own facts scan too (promoted params are poisoned
+                // via the name list — a param-held connection is never statically traceable).
+                let poison: Vec<Param> = params
+                    .iter()
+                    .map(|p| Param {
+                        ty: Type::Erased(p.span),
+                        name: p.name.clone(),
+                        default: None,
+                        span: p.span,
+                    })
+                    .collect();
+                let prev_facts =
+                    std::mem::replace(&mut self.naming_facts, scan_naming_facts(&poison, body));
                 let b = std::mem::take(body);
                 *body = self.rblock(b);
+                self.naming_facts = prev_facts;
             }
             ClassMember::Hook { get, set, .. } => {
                 if let Some(e) = get.take() {

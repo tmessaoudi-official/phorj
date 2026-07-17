@@ -1255,8 +1255,12 @@ per-slice realization notes — the authoritative slice-level record).
   since DEC-257 both implement `Core.IteratorModule` (`hasNext()/next()`, foreach-able; exhausted `next()`
   faults); hydrate-on-pull, hydration only in `next()`; drivers currently materialize at `stream()` —
   disclosed, surface-stable); column
-  naming strategy = compile-time per-query `stmt.namingStrategy(new Naming.SnakeToCamel())` (zero
-  runtime cost; strict-exact default; opt-in extension = DEC-258); value mapping enum/decimal/Json
+  naming strategy = the DEC-258 COMBINED model: `naming` is a real promoted field
+  (`new Database(dsn, new Naming.SnakeToCamel())` = whole-connection; `prepare` copies it onto each
+  Statement; per-statement `namingStrategy(...)` overrides) — statically-traceable strategies BAKE
+  at compile time (zero runtime cost; strict-exact default unchanged), untraceable ones dispatch on
+  the statement's `naming` field at run time (dual baked helpers + one branch per hydration call;
+  `E-DB-NAMING-NOT-CONST` retired, never a silent downgrade); value mapping enum/decimal/Json
   at compile time (timestamp→DateTime gated on DEC-247's build).
 - **Writes**: `exec()` → affected count · `lastInsertId()`/`execReturningId()` · bulk
   `executeMany(rows)` (prepare-once, savepoint-atomic).

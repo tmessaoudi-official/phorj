@@ -2135,3 +2135,30 @@ differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred bindi
   test helpers (`cli::wp`, compiler/interpreter/differential `with_pkg`) inject the import AFTER
   the package segment (import-before-package was a parse error). DAP test breakpoint re-lined
   (+1 from the injected import line).
+
+- **DEC-281 — RULED (2026-07-17, developer): `Core.Input` — the stdin module (Output's twin).**
+  Piped/redirected data (`cat file | phg run s.phg`, `phg run s.phg < file`) is unreadable today
+  (no stdin API — verified; `echo name |` pipes the filename STRING, challenged and confirmed).
+  FULL surface ruled ("Okay for option 1"): `Input.readAll(): string`, `readAllBytes(): bytes`,
+  `readLine(): string?` (null at EOF), `lines(): Iterator<string>` (DEC-257 foreach-able),
+  `isInteractive(): bool` (TTY-vs-pipe, PHP `stream_isatty` parity). Impure natives
+  (differential-quarantined like Core.Process); fully transpilable (`php://stdin` faithful);
+  under `phg serve` stdin is immediately-EOF (web input = the Request). META-7 scan: PHP/Go/
+  Rust/Node all expose a module/stream API — none inject into main; the entry-signature-injection
+  alternative was offered and recommended against (eager read, magic role). *Alternatives
+  (offered): minimal readAll+readLine — declined for the full module; signature injection —
+  declined.* Queue: build AFTER DEC-258 lands (developer-ruled slot).
+
+- **DEC-258 BUILT (2026-07-17):** the combined naming model shipped. Language enabler: DEC-249/236
+  defaults now accept ZERO-payload enum-variant constructions (`Mode m = new Mode.Fast()`) as
+  compile-time constants (checker `variant_default_ty`; payload variants + generic enums stay
+  rejected; 3-leg verified). Prelude: `Database.naming` promoted field (default
+  `new Naming.Exact()`; `withPassword` gains the same param); `prepare`/`bind*` thread it onto
+  `Statement.naming` (public); `namingStrategy` = real copy-builder (stored-statement footgun
+  retired). Desugar (`desugar_db`): per-function `scan_naming_facts` proves immutable
+  never-shadowed literal-ctor locals (brutal standard — anything less → runtime tier);
+  `naming_of_recv` walks to the chain's `prepare` and consults facts / inline ctors; untraceable →
+  dual baked helpers + a `Dyn` dispatcher matching on `stmt.naming` (Class/Stream/entity-Map
+  shapes; scalar shapes ignore naming). `E-DB-NAMING-NOT-CONST` RETIRED (explain entry rewritten
+  as a retirement notice). 10 naming tests incl. the four new tiers; example `db/naming.phg`
+  extended with the baked-vs-dispatched twin demo.
