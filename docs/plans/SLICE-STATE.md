@@ -1,6 +1,25 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## CURRENT (2026-07-17, late — CONTINUOUS MODE, dev-mandated: stop only for questions)
+## CURRENT (2026-07-17, night — CONTINUOUS MODE, dev-mandated: stop only for questions)
+- **DEC-282 COMMITTED `d42a2107` (unified manifest-less loader — the biggest slice of the queue,
+  38 files, +1158/−1749; full gate 2270/2270 + clippy×2 + fmt + release).** Everything ruled is
+  BUILT: walk-up app root (src/ marker) · 3-root import-driven lazy loading · Go-max hygiene
+  (E-MODULE-NOT-FOUND/E-IMPORT-MAIN/E-DUP-IMPORT/E-UNUSED-IMPORT all hard) · shebang + implicit
+  `phg <file>` run · serve site mode (public/ docroot, static+ETag+guards) · LSP same-loader
+  (DEC-252) · manifest/vendor retirement + migrations. Register has BUILT note + the PascalCase-
+  vendor deviation disclosure (surface to dev at next question). Session commits so far:
+  17c79ad6 (256+242+191-addendum) · ebb7a123 (bench Entry catch-up) · 996b2fee (DEC-258) ·
+  0b203827 (DEC-281 Core.Input) · d42a2107 (DEC-282). ALL UNPUSHED (never push).
+- **NEXT QUEUE**: DEC-273 extensions migration (fresh-context recommended) → DEC-271 icu4x
+  (brought forward) → DEC-247 DateTime + DEC-248-codemod (fresh-context) → MACRO/real-world
+  benches (DEC-259; var/phorj-app) + lift Uri Tier-2 + golden corpus + span-collision re-basing.
+  ⚠ OWED before any push: quiet-box CORE-PINNED microbench rerun. ⚠ OWED: playground wasm pkg
+  rebuild (wasm-pack absent on this box). ⚠ Follow-ups from DEC-282 worth a look next session:
+  UNIFIED-SPEC §imports/§serve prose not yet rewritten (code/docs shipped, spec section pending);
+  examples/project/README.md still describes tomls; site-mode integration tests in tests/serve.rs
+  (manual curl-verified only); shebang/implicit-run tests in tests/cli.rs (manual-verified only).
+
+## PREVIOUS-CURRENT (2026-07-17, late)
 - **DEC-281 Core.Input COMMITTED `0b203827`** (gate 2304/2304; 3-leg verified; serve-disabled;
   quarantine-twin mapped; tier1 +5 builtins).
 - **DEC-282 BUILD PROGRESS (loader CORE + shebang DONE, census 2/2304→green):**
