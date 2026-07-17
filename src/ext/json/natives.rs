@@ -15,13 +15,40 @@ use crate::types::Ty;
 use crate::value::{build_map, EnumVal, HKey, Value};
 use std::rc::Rc;
 
+thread_local! {
+    /// Perf (jsonround alloc-bound, DEC-266): the `Json` type name and the fixed variant names,
+    /// each interned as ONE `Rc<str>` per thread. `jnode` clones these (a refcount bump) instead of
+    /// `"Json".into()` / `variant.into()` — which allocated a FRESH `Rc<str>` per node (~2 heap
+    /// allocs × ~9 nodes per parsed doc). The produced `EnumVal` is byte-identical (same ty/variant
+    /// content); this only removes the redundant allocation the VM's own enum path already avoids
+    /// via its cached `EnumDesc`. Natives run one-thread-per-VM, so thread_local is sound.
+    static JSON_TY: Rc<str> = Rc::from("Json");
+    static JSON_VARIANTS: [(&'static str, Rc<str>); 7] = [
+        ("Null", Rc::from("Null")),
+        ("Bool", Rc::from("Bool")),
+        ("Int", Rc::from("Int")),
+        ("Float", Rc::from("Float")),
+        ("String", Rc::from("String")),
+        ("Array", Rc::from("Array")),
+        ("Object", Rc::from("Object")),
+    ];
+}
+
 /// Build a `Json` enum node. `variant` is the Phorj variant name (`Null`/`Bool`/`Int`/`Float`/
-/// `Str`/`Arr`/`Obj`); the transpiler mangles reserved ones to PHP class names, the backends use this
-/// string directly.
+/// `String`/`Array`/`Object`); the transpiler mangles reserved ones to PHP class names, the
+/// backends use this string directly. Interned `Rc<str>` (see [`JSON_VARIANTS`]) — a refcount
+/// clone, not a fresh allocation.
 pub(super) fn jnode(variant: &str, payload: Vec<Value>) -> Value {
+    let ty = JSON_TY.with(Rc::clone);
+    let variant = JSON_VARIANTS.with(|vs| {
+        vs.iter()
+            .find(|(name, _)| *name == variant)
+            .map(|(_, rc)| Rc::clone(rc))
+            .unwrap_or_else(|| Rc::from(variant))
+    });
     Value::Enum(Rc::new(EnumVal {
-        ty: "Json".into(),
-        variant: variant.into(),
+        ty,
+        variant,
         payload,
     }))
 }
