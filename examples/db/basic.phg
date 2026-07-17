@@ -1,26 +1,26 @@
-// Enhanced-PDO database access with `Core.Db` (DEC-208) — a strongly-typed PDO.
+// Enhanced-PDO database access with `Core.DatabaseModule` (DEC-208) — a strongly-typed PDO.
 //
-//   * `new Db(dsn)`            — open a connection (throws `DbError`).
+//   * `new Database(dsn)`            — open a connection (throws `DatabaseError`).
 //   * `db.prepare(sql)`        — a prepared `Statement`.
 //   * `.bind(v)` / `.bindNamed(name, v)` — positional `?` / named `:name` binds (chainable).
 //   * `.exec()`                — run a write, returns the affected-row count.
 //   * `.query()`               — run a SELECT, returns `List<Row>`; `r.getInt`/`getString`/… are typed.
-//   * every failure is a CATCHABLE `throws DbError` (unlike PDO's silent false/null).
+//   * every failure is a CATCHABLE `throws DatabaseError` (unlike PDO's silent false/null).
 //
-// `Core.Db` opens a real SQLite database (via the bundled `rusqlite`), so an importing program is
+// `Core.DatabaseModule` opens a real SQLite database (via the bundled `rusqlite`), so an importing program is
 // quarantined from the byte-identity differential (like `Core.Log`/`Core.Process`); it is validated by
 // the `tests/db.rs` fixture on both backends (`run ≡ runvm`). Built only under `--features db`.
 package Main;
 
 import Core.Output;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Row;
-import Core.Db.DbError;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
 
 function main(): void {
     try {
-        Db db = new Db("sqlite::memory:");
+        Database db = new Database("sqlite::memory:");
         discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
         // Positional `?` binds.
         discard db.prepare("INSERT INTO users(name, age) VALUES(?, ?)").bind("Ada").bind(36).exec();
@@ -39,7 +39,7 @@ function main(): void {
             int age = r.getInt("age");
             Output.printLine("{name} is {age}");
         }
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("DB error: {e.message}");
     }
 }

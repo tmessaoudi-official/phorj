@@ -1,4 +1,4 @@
-//! `Core.Debug` (DEC-238) — the beautiful value dumper (the Symfony-VarDumper niche, shipped in
+//! `Core.DebugModule` (DEC-238) — the beautiful value dumper (the Symfony-VarDumper niche, shipped in
 //! core): `Debug.dump(x)` renders ANY value deeply, prints it, and returns a `Dumped<T>` carrying
 //! BOTH the pass-through value (`.value()`) and the rendering (`.text()`); `Debug.dd(x)` dumps and
 //! exits 1 (slice 2); `Runtime.exit(code)` is the clean-termination sibling (slice 2).
@@ -18,7 +18,7 @@
 //!
 //! No colors in v1 (byte-identity everywhere; a TTY-colorized mode is a recorded nicety). The
 //! renderer is PURE (same value → same string), but `dump` PRINTS, so the natives are registered
-//! under the import-gated `Core.DebugSys` and the prelude does the printing via `Core.Output`.
+//! under the import-gated `Core.Native.Debug` and the prelude does the printing via `Core.Output`.
 
 use super::{NativeEval, NativeFn};
 use crate::types::Ty;
@@ -183,13 +183,13 @@ fn wrap_container(open: &str, close: &str, parts: &[String], indent: usize) -> S
 fn debug_render(args: &[Value], _out: &mut String) -> Result<Value, String> {
     match args {
         [v] => Ok(Value::Str(render(v, 0, &mut Vec::new()).into())),
-        _ => Err("Core.Debug.__render expects (value)".into()),
+        _ => Err("Core.DebugModule.__render expects (value)".into()),
     }
 }
 
 pub fn debug_natives() -> Vec<NativeFn> {
     vec![NativeFn {
-        module: "Core.DebugSys",
+        module: "Core.Native.Debug",
         name: "render",
         params: vec![Ty::Param("T".into())],
         ret: Ty::String,

@@ -1138,12 +1138,23 @@ fn uses_impure_native(src: &str) -> bool {
         if src.contains(&format!("import {m}")) {
             return true;
         }
-        // The `Core.XSys` convention (Db/Mail/HttpClient): the IMPURE natives live under the
-        // `…Sys` module, but user programs import the PRELUDE twin (`Core.Db`, not `Core.DbSys`) —
-        // without this mapping such programs were invisible to the quarantine (the sweep-batch-1
-        // substring hole; previously masked only by directory exclusions).
-        m.strip_suffix("Sys")
-            .is_some_and(|prelude| src.contains(&format!("import {prelude}")))
+        // The `Core.Native.*` convention (DEC-277; formerly `Core.XSys`): the IMPURE natives live
+        // under a `Core.Native.<X>` module, but user programs import the PRELUDE twin
+        // (`Core.DatabaseModule`, not `Core.Native.Database`) — without this mapping such programs
+        // were invisible to the quarantine (the sweep-batch-1 substring hole; previously masked
+        // only by directory exclusions). The twin names diverge from the native leaf (DEC-278
+        // namesake `Module` suffix; `Core.Mail` is not a namesake), so the map is explicit.
+        let prelude_twin = match *m {
+            "Core.Native.Database" => Some("Core.DatabaseModule"),
+            "Core.Native.FileSystem" => Some("Core.FileSystemModule"),
+            "Core.Native.Session" => Some("Core.SessionModule"),
+            "Core.Native.HttpClient" => Some("Core.HttpClientModule"),
+            "Core.Native.Uri" => Some("Core.UriModule"),
+            "Core.Native.Debug" => Some("Core.DebugModule"),
+            "Core.Native.Mail" => Some("Core.Mail"),
+            _ => None,
+        };
+        prelude_twin.is_some_and(|prelude| src.contains(&format!("import {prelude}")))
     })
 }
 
@@ -1163,9 +1174,9 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
         return;
     }
-    // DEC-208: `examples/db/` needs `--features db` (Core.Db → bundled SQLite), which the default
-    // differential gate does not build — with `db` off, `import Core.Db` is an unknown module. These
-    // Core.Db examples are quarantined (impure DB I/O) and validated by `tests/db.rs` on both backends.
+    // DEC-208: `examples/db/` needs `--features db` (Core.DatabaseModule → bundled SQLite), which the default
+    // differential gate does not build — with `db` off, `import Core.DatabaseModule` is an unknown module. These
+    // Core.DatabaseModule examples are quarantined (impure DB I/O) and validated by `tests/db.rs` on both backends.
     if dir.file_name().and_then(|n| n.to_str()) == Some("db") {
         return;
     }

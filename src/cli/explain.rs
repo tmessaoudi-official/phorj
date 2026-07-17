@@ -263,10 +263,10 @@ pub fn explain_text(code: &str) -> Option<String> {
              a local is not flagged — the type-system non-printability is the real guarantee.)\n"
         }
         "W-SQL-INJECTION" => {
-            "W-SQL-INJECTION — a value is string-interpolated into `Core.Db` SQL (lint, DEC-208).\n\n\
+            "W-SQL-INJECTION — a value is string-interpolated into `Core.DatabaseModule` SQL (lint, DEC-208).\n\n\
              `db.prepare(\"SELECT * FROM users WHERE id = {userId}\")` splices `userId` straight into the\n\
              SQL text: if it carries user input, an attacker can inject arbitrary SQL. This lint is\n\
-             type-directed — it fires only on `Core.Db`'s `Db.prepare(...)` when the SQL is an interpolated\n\
+             type-directed — it fires only on `Core.DatabaseModule`'s `Database.prepare(...)` when the SQL is an interpolated\n\
              literal whose hole is a NON-constant value (a variable, field, or call). A fully-constant\n\
              interpolation (every hole a literal) and a plain non-interpolated literal never warn.\n\n\
              The fix is a bound placeholder — the value is sent to the database SEPARATELY from the SQL\n\
@@ -1324,8 +1324,8 @@ pub fn explain_text(code: &str) -> Option<String> {
              or handle overflow explicitly with `Math.tryAdd/trySub/tryMul(a, b): int?`.\n"
         }
         "E-TRANSPILE-DB" => {
-            "E-TRANSPILE-DB — a program importing `Core.Db` cannot be transpiled to PHP.\n\n\
-             `Core.Db` is native-only: it runs live database I/O through the phorj drivers (bundled\n\
+            "E-TRANSPILE-DB — a program importing `Core.DatabaseModule` cannot be transpiled to PHP.\n\n\
+             `Core.DatabaseModule` is native-only: it runs live database I/O through the phorj drivers (bundled\n\
              SQLite, Postgres), and live I/O cannot be byte-identical across those drivers and PHP\n\
              PDO — connection behaviour, error text, and type coercions all differ. Rather than emit\n\
              a PHP program that silently diverges from what `phg run` does, `phg transpile` refuses\n\
@@ -1341,23 +1341,23 @@ pub fn explain_text(code: &str) -> Option<String> {
              the mail-sending part native and transpile only the rest of your program.\n"
         }
         "E-TRANSPILE-SESSION" => {
-            "E-TRANSPILE-SESSION — a program importing `Core.Session` cannot be transpiled to PHP yet.\n\n\
-             `Core.Session`'s in-process store matches `phg serve`'s long-lived process model; PHP's\n\
+            "E-TRANSPILE-SESSION — a program importing `Core.SessionModule` cannot be transpiled to PHP yet.\n\n\
+             `Core.SessionModule`'s in-process store matches `phg serve`'s long-lived process model; PHP's\n\
              per-request model needs a `session_start()`/`$_SESSION` mapping — a recorded future\n\
              lift. Until it lands, transpile refuses rather than emitting a silently-diverging\n\
              program (§14 LADDER). Run session programs with `phg run` / `phg serve`.\n"
         }
         "E-TRANSPILE-FS" => {
-            "E-TRANSPILE-FS — a program importing `Core.Fs` cannot be transpiled to PHP yet.\n\n\
-             `Core.Fs`'s typed error protocol (catchable FsError subtypes classified from OS error\n\
+            "E-TRANSPILE-FS — a program importing `Core.FileSystemModule` cannot be transpiled to PHP yet.\n\n\
+             `Core.FileSystemModule`'s typed error protocol (catchable FileSystemError subtypes classified from OS error\n\
              kinds) has no PHP emitter yet. PHP HAS faithful filesystem functions, so a real mapping\n\
              is a recorded future lift — until it lands, transpile refuses rather than emitting a\n\
              silently-diverging program (§14 LADDER). Run filesystem programs with `phg run`, or use\n\
              the older transpilable `Core.File` subset (null-on-missing reads, faulting writes).\n"
         }
         "E-TRANSPILE-HTTPCLIENT" => {
-            "E-TRANSPILE-HTTPCLIENT — a program importing `Core.HttpClient` cannot be transpiled to PHP.\n\n\
-             `Core.HttpClient` is native-only: live network I/O cannot be byte-identical between the\n\
+            "E-TRANSPILE-HTTPCLIENT — a program importing `Core.HttpClientModule` cannot be transpiled to PHP.\n\n\
+             `Core.HttpClientModule` is native-only: live network I/O cannot be byte-identical between the\n\
              phorj client and any PHP mapping (curl/file_get_contents differ in redirects, TLS stacks,\n\
              timeout semantics and error text), so `phg transpile` refuses rather than emitting a\n\
              silently-diverging program (§14 LADDER). A faithful curl-mapping is a recorded future\n\
@@ -1365,7 +1365,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-MODULE-UNAVAILABLE" => {
             "E-MODULE-UNAVAILABLE — this `phg` binary was built without the imported module's feature.\n\n\
-             Some Core modules carry native code behind a cargo feature (e.g. `Core.Db` behind `db`,\n\
+             Some Core modules carry native code behind a cargo feature (e.g. `Core.DatabaseModule` behind `db`,\n\
              which bundles SQLite). Those features are in the DEFAULT build, so a stock `phg` has\n\
              them; this binary was built with `--no-default-features` (or an explicit reduced set),\n\
              so the module's natives do not exist in it. Rebuild with the default feature set\n\
@@ -1470,7 +1470,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-PROVIDES-TARGET — `#[Provides]` is not on a valid target.\n\n\
              A `#[Provides]` factory must be a `static` method with a declared return type — the return\n\
              type names the type it provides, and it is resolved without an instance. Make the method\n\
-             `static` and annotate its return type: `static function make(): Db { … }`.\n"
+             `static` and annotate its return type: `static function make(): Database { … }`.\n"
         }
         "E-PROVIDES-ARGS" => {
             "E-PROVIDES-ARGS — `#[Provides]` was given arguments.\n\n\
@@ -1478,19 +1478,19 @@ pub fn explain_text(code: &str) -> Option<String> {
              The provided type is the method's return type; its own parameters are autowired.\n"
         }
         "E-DI-NO-IMPORT" => {
-            "E-DI-NO-IMPORT — the `inject` composition root was used without importing `Core.DI`.\n\n\
-             `inject` is a `Core.DI` member, not a keyword — nothing is available in the wind. Import it\n\
-             to use the bare form (`import Core.DI.inject;` → `inject<App>()` / `inject()`), or write it\n\
-             qualified with the module import (`import Core.DI;` → `DI.inject<App>()` / `DI.inject()`).\n\
-             The DI attributes follow the same rule: `#[DI.Injectable]` with `import Core.DI;`, or bare\n\
-             `#[Injectable]` with `import Core.DI.Injectable;`.\n"
+            "E-DI-NO-IMPORT — the `inject` composition root was used without importing `Core.DependencyInjection`.\n\n\
+             `inject` is a `Core.DependencyInjection` member, not a keyword — nothing is available in the wind. Import it\n\
+             to use the bare form (`import Core.DependencyInjection.inject;` → `inject<App>()` / `inject()`), or write it\n\
+             qualified with the module import (`import Core.DependencyInjection;` → `DependencyInjection.inject<App>()` / `DependencyInjection.inject()`).\n\
+             The DI attributes follow the same rule: `#[DependencyInjection.Injectable]` with `import Core.DependencyInjection;`, or bare\n\
+             `#[Injectable]` with `import Core.DependencyInjection.Injectable;`.\n"
         }
         "E-DB-INTO-NO-TYPE" => {
             "E-DB-INTO-NO-TYPE — `queryInto()` / `queryOneInto()` had no type to infer its row class from.\n\n\
              The typed-generic hydration (DEC-208 S2) draws its row class `T` from the binding's declared\n\
              type — there is no turbofish. Bind the result to a typed declaration: `List<User> rows =\n\
              stmt.queryInto();` (one `User` per row) or `User? one = stmt.queryOneInto();` (0 → null,\n\
-             1 → the object, >1 → `DbError`). A `var` binding or a call argument gives it no target type.\n"
+             1 → the object, >1 → `DatabaseError`). A `var` binding or a call argument gives it no target type.\n"
         }
         "E-DB-INTO-BAD-SINK" => {
             "E-DB-INTO-BAD-SINK — the binding type is not a valid hydration sink.\n\n\
@@ -1542,7 +1542,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              `queryScalar()` reads ONE typed value from a single-row, single-column result (`SELECT\n\
              COUNT(*)`, `SELECT MAX(price)`, …). Its type comes from the binding, which must be a scalar —\n\
              `int`, `string`, `float`, `bool`, or a `?` form: `int total = stmt.queryScalar();`. More than\n\
-             one row, or more than one column, throws a catchable `DbError` at runtime.\n"
+             one row, or more than one column, throws a catchable `DatabaseError` at runtime.\n"
         }
         "E-DB-MAP-BAD-SINK" => {
             "E-DB-MAP-BAD-SINK — `queryMap()`'s binding is not a `Map<K, V>`.\n\n\
@@ -1716,6 +1716,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              The bare name a type import introduces must not shadow a type declared in this file or an\n\
              imported module qualifier. Alias the import with `as` to give it a distinct name, or\n\
              rename the local declaration.\n"
+        }
+        "E-IMPORT-NATIVE-MEMBER" => {
+            "E-IMPORT-NATIVE-MEMBER — a member function was imported from a raw `Core.Native.*` module.\n\n\
+             The raw-native modules (`Core.Native.Uri`, `Core.Native.Database`, … — DEC-277) support\n\
+             the whole-module import form only: `import Core.Native.Uri;` then the qualified call\n\
+             `Uri.encodeForm(...)`. Member fn-imports (`import Core.Native.Uri.encodeForm;`) are not\n\
+             bindable — prefer the friendly prelude module (`import Core.UriModule;` →\n\
+             `Uri.encodeForm(...)`), which wraps the same natives with typed errors.\n"
         }
         "E-FORMAT-ARGS" => {
             "E-FORMAT-ARGS — `String.format` was not called with exactly two arguments (W3-5).\n\n\

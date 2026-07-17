@@ -1,4 +1,4 @@
-//! `Core.Mail` — the native mailer (DEC-223), architecturally a TWIN of `Core.Db` (DEC-208).
+//! `Core.Mail` — the native mailer (DEC-223), architecturally a TWIN of `Core.DatabaseModule` (DEC-208).
 //!
 //! LADDER (invariant 14, case 2 — native-only): PHP's `mail()` has no SMTP auth, no TLS, and is
 //! header-injection-prone — there is no faithful safe PHP map, so `phg transpile` hard-errors with
@@ -11,7 +11,7 @@
 //! erase-then-downcast pattern ([`MailerObj`] — a transport; [`EmailObj`] — a message draft the
 //! prelude's `Email` builder mutates). Natives return the prelude-local `MailResult<T>` (Ok|Err) —
 //! never a hard fault on a mail error — and the prelude throws the typed [`MailError`] taxonomy off
-//! the `<<Kind>>` marker prefix, exactly like `DbError` (kinds: ConnectionFailed / AuthFailed /
+//! the `<<Kind>>` marker prefix, exactly like `DatabaseError` (kinds: ConnectionFailed / AuthFailed /
 //! RecipientRejected / TlsError / InvalidAddress / MessageBuildFailed / Timeout / Io).
 //!
 //! MIME is composed by `lettre`'s builder (RFC-correct multipart): text-only → a plain body;
@@ -36,7 +36,7 @@ use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-// ── MailResult wrappers (the DbResult mechanism, verbatim) ───────────────────────────────────────────
+// ── MailResult wrappers (the DatabaseResult mechanism, verbatim) ───────────────────────────────────────────
 
 fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
@@ -851,8 +851,8 @@ mail_native!(
 mail_native!(mail_send, send_inner);
 mail_native!(mail_send_all, send_all_inner);
 
-/// The `Core.MailSys` registry entries — the INTERNAL natives the `Core.Mail` prelude wraps (the
-/// `Core.DbSys` twin). Every handle is the reserved opaque `MailHandle`; every native is `pure:false`
+/// The `Core.Native.Mail` registry entries — the INTERNAL natives the `Core.Mail` prelude wraps (the
+/// `Core.Native.Database` twin). Every handle is the reserved opaque `MailHandle`; every native is `pure:false`
 /// (network / filesystem side effects → byte-identity quarantine) and returns `MailResult<T>`. The
 /// `php` emitters are unreachable placeholders — `Core.Mail` is `E-TRANSPILE-MAIL` native-only
 /// (pipeline ladder gate rejects the program before any emitter runs).
@@ -865,7 +865,7 @@ pub fn mail_natives() -> Vec<NativeFn> {
          params: Vec<Ty>,
          ret: Ty,
          eval: fn(&[Value], &mut String) -> Result<Value, String>| NativeFn {
-            module: "Core.MailSys",
+            module: "Core.Native.Mail",
             name,
             params,
             ret,

@@ -1,4 +1,4 @@
-// Transactions, savepoints, the typed error taxonomy, and deterministic close with `Core.Db`
+// Transactions, savepoints, the typed error taxonomy, and deterministic close with `Core.DatabaseModule`
 // (DEC-208 slice C — transactions & correctness). Like `examples/db/basic.phg`, this opens a real
 // bundled-SQLite database, so it is quarantined from the byte-identity differential (live DB I/O is
 // not byte-identical rusqlite-vs-PDO) and is instead run on BOTH Rust backends by `tests/db.rs`.
@@ -8,12 +8,12 @@
 //     intact (composable partial rollback).
 //   * `db.rollbackQuiet()` — a rollback that never throws; safe inside a `finally` (the auto-rollback
 //     idiom below). A throwing rollback there could mask the original exception.
-//   * Typed errors: every failure is a catchable `DbError`, subtyped `UniqueViolation` /
+//   * Typed errors: every failure is a catchable `DatabaseError`, subtyped `UniqueViolation` /
 //     `ConstraintViolation` / `ConnectionError` / `SerializationFailure` / `Timeout` / `SyntaxError`.
-//     `catch (DbError e)` still catches them all.
+//     `catch (DatabaseError e)` still catches them all.
 //   * `db.close()` — deterministic teardown; further use faults with `ConnectionError`.
 //
-// NOTE (DEC-208 slice C): the closure form `db.transaction(function(): T throws DbError { … })` with
+// NOTE (DEC-208 slice C): the closure form `db.transaction(function(): T throws DatabaseError { … })` with
 // auto-rollback is now SHIPPED (unblocked by DEC-222 throwing closures) — see
 // `examples/db/transaction-closure.phg`. This file keeps the MANUAL, PDO-faithful control
 // (`begin`/`commit`/`rollback`/`rollbackQuiet`); BOTH APIs are supported (developer ruled BOTH). The
@@ -21,27 +21,27 @@
 package Main;
 
 import Core.Output;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Statement;
-import Core.Db.Row;
-import Core.Db.DbError;
-import Core.Db.UniqueViolation;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Statement;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
+import Core.DatabaseModule.UniqueViolation;
 
-// A tiny helper: prepare + exec one write. Both `prepare` and `exec` can throw `DbError`, so each is
-// propagated with `?` (and the function declares `throws DbError`).
-function run(Db db, string sql): void throws DbError {
+// A tiny helper: prepare + exec one write. Both `prepare` and `exec` can throw `DatabaseError`, so each is
+// propagated with `?` (and the function declares `throws DatabaseError`).
+function run(Database db, string sql): void throws DatabaseError {
     Statement s = db.prepare(sql)?;
     discard s.exec()?;
 }
 
-function setup(Db db): void throws DbError {
+function setup(Database db): void throws DatabaseError {
     run(db, "CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)")?;
     run(db, "INSERT INTO acct(id, bal) VALUES(1, 100)")?;
     run(db, "INSERT INTO acct(id, bal) VALUES(2, 0)")?;
 }
 
-function balOf(Db db, int id): int throws DbError {
+function balOf(Database db, int id): int throws DatabaseError {
     // A `?` placeholder + `.bind(id)` — never interpolate a value into SQL (that would trip the
     // W-SQL-INJECTION lint and, with real user input, allow SQL injection). The bound value is sent
     // to the database separately from the SQL text. (Each throwing call is propagated with `?`; the
@@ -53,9 +53,9 @@ function balOf(Db db, int id): int throws DbError {
 }
 
 // The auto-rollback idiom: begin, do the work, commit; a `finally` rolls back on ANY unwinding exit
-// (a thrown DbError, or an early return) because `ok` was never set. Committing sets `ok`, so the
+// (a thrown DatabaseError, or an early return) because `ok` was never set. Committing sets `ok`, so the
 // happy path does not roll back. `boom` forces a UNIQUE violation to exercise the rollback path.
-function transfer(Db db, int from, int to, int amt, bool boom): void throws DbError {
+function transfer(Database db, int from, int to, int amt, bool boom): void throws DatabaseError {
     db.begin()?;
     mutable bool ok = false;
     try {
@@ -76,7 +76,7 @@ function transfer(Db db, int from, int to, int amt, bool boom): void throws DbEr
 
 // Nested transaction = savepoint: the outer change (acct 1) commits; the inner change (acct 2) is
 // rolled back to the savepoint, so it does NOT abort the outer transaction.
-function nested(Db db): void throws DbError {
+function nested(Database db): void throws DatabaseError {
     // outer transaction
     db.begin()?;
     run(db, "UPDATE acct SET bal = 500 WHERE id = 1")?;
@@ -90,7 +90,7 @@ function nested(Db db): void throws DbError {
 
 function main(): void {
     try {
-        Db db = new Db("sqlite::memory:");
+        Database db = new Database("sqlite::memory:");
         setup(db);
         // A transaction that commits.
         transfer(db, 1, 2, 30, false);
@@ -109,10 +109,10 @@ function main(): void {
         db.close();
         try {
             discard balOf(db, 1);
-        } catch (DbError e) {
+        } catch (DatabaseError e) {
             Output.printLine("after close: {e.message}");
         }
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("unexpected: {e.message}");
     }
 }

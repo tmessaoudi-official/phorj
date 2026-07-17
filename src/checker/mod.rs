@@ -477,10 +477,10 @@ pub struct Checker {
     /// adds no new `Op`/`Value` and is byte-identical by construction (the "erase front-end sugar
     /// before any backend" discipline shared with `type` aliases / generics / `html"…"`).
     ufcs_resolutions: HashMap<usize, crate::ast::Expr>,
-    /// Span-keyed `Call`-node substitutions for `Reflect.typeName(x)` (Core.Reflect, the precise
+    /// Span-keyed `Call`-node substitutions for `Reflection.typeName(x)` (Core.Reflection, the precise
     /// static-type pass). Built by [`reflect::check_reflect_type_name`] from `x`'s static type — a
-    /// value type → a string-literal `Expr`, an object → a `Reflect.className(x)` call, an optional →
-    /// a single-eval `match` null-branch, an erased generic → `Reflect.kind(x)`. Merged into the
+    /// value type → a string-literal `Expr`, an object → a `Reflection.className(x)` call, an optional →
+    /// a single-eval `match` null-branch, an erased generic → `Reflection.kind(x)`. Merged into the
     /// combined call-rewrite map alongside [`ufcs_resolutions`] (keys are disjoint — a `typeName`
     /// call site is a native member call, never a UFCS site) and applied by [`rewrite_ufcs`], so the
     /// backends see only ordinary calls/literals — the same "erase front-end sugar before any backend"

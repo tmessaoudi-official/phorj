@@ -78,8 +78,16 @@ Updated: 2026-07-16 (evening)
     docs (CHANGELOG slice-3, examples/README row, UNIFIED-SPEC stream line, MASTER-PLAN
     "DEC-257 COMPLETE").
   - ✅ SLICE 3 COMMITTED `05f224a7` — **DEC-257 COMPLETE**; release binary rebuilt.
-- **NAMING MEGA-SLICE (DEC-276…279 renames)** — WORKTREE AGENT running (E-ERROR-NAME/DEC-275
-  excluded, later slice). On completion: review diff, gate, commit.
+- **NAMING MEGA-SLICE (DEC-276…279 renames)** — ✅ agent done (112 files; its gate 2284/2284 +
+  clippys + fmt + release in the worktree), diff cherry-picked onto master (1 conflict:
+  FEATURES.md, resolved — kept DEC-280 foreach row + renamed Iterator row). Dev RATIFIED
+  E-IMPORT-NATIVE-MEMBER (whole-module-only raw natives) + REJECTED old→new hint table
+  ("do nothing — all migrated"); register amended, CHANGELOG entries written. Agent follow-ups
+  recorded: HcResult/MailResult renames · enforce_injected 3-segment-import edge · editors
+  docs/snippets unchecked · UriModule.Uri.parse double-chain (already ruled follow-up).
+  ⚠ agent snapshot commit `1234bdac` lives on branch worktree-agent-a3b9403d94752528a (worktree
+  removal is permission-blocked — clean up manually later; second stale worktree
+  agent-af41f1445fc1c9498 likewise). NOW: full gate on MASTER (post-merge state) → commit.
 - **LIFT CATCH-UP + DEC-280 (inline, uncommitted, gate running):** DEC-280 RULED+BUILT
   (untyped/mixed foreach k=>v; developer challenged→confirmed; lift marker inline comment form).
   Landed: parser bare/mixed bindings (parse_foreach — dropped both mandatory-type errors);

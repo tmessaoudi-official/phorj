@@ -61,8 +61,9 @@ impl Checker {
         // (2) An imported native `name` whose first parameter accepts the receiver. A native is
         // eligible only when its module's *leaf* is the imported qualifier (`import Core.List` ⇒
         // `imports["List"] == "Core.List"`), so the leaf we emit resolves identically on every backend
-        // (`index_of_by_leaf` on the interpreter/compiler, the import map on the transpiler). An
-        // aliased-only core import is skipped (call it explicitly). Two distinct matches ⇒ ambiguous.
+        // (`index_of_qualified` — import-map-first with a Native-excluded leaf fallback — on the
+        // interpreter/compiler, the import map on the transpiler). An aliased-only core import is
+        // skipped (call it explicitly). Two distinct matches ⇒ ambiguous.
         let mut matched: Option<(usize, &'static str)> = None;
         let mut ambiguous = false;
         for (i, n) in crate::native::registry().iter().enumerate() {
@@ -75,7 +76,7 @@ impl Checker {
             if (n.name != name && !alias_hit) || n.params.len() != args.len() + 1 {
                 continue;
             }
-            // `Reflect.typeName` is resolved from its argument's static type and erased before any
+            // `Reflection.typeName` is resolved from its argument's static type and erased before any
             // backend; a UFCS-produced raw `typeName(x)` call would instead reach the backend (where
             // its PHP erasure is only coarse) and diverge. Exclude it — call it qualified. `kind` /
             // `className` are plain natives (byte-identical), so they stay UFCS-eligible.

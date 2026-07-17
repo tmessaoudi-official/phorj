@@ -64,7 +64,7 @@ impl Checker {
             _ => base,
         };
         // DEC-208 slice F — SQL-injection compile-time lint (`W-SQL-INJECTION`). Type-directed: fires
-        // only on `Core.Db`'s `Db.prepare(<interpolated SQL>)` when a hole splices a non-constant value
+        // only on `Core.DatabaseModule`'s `Database.prepare(<interpolated SQL>)` when a hole splices a non-constant value
         // (a variable / field / call) into the SQL text — steering to a `?` placeholder + `.bind(...)`.
         // A non-fatal lint (the program still compiles — the interpolation escape hatch is preserved).
         self.lint_sql_injection(&base, name, args, span);
@@ -867,28 +867,28 @@ impl Checker {
         }
     }
 
-    /// DEC-208 slice F — the SQL-injection lint. Fires `W-SQL-INJECTION` when a `Core.Db` `Db.prepare`
+    /// DEC-208 slice F — the SQL-injection lint. Fires `W-SQL-INJECTION` when a `Core.DatabaseModule` `Database.prepare`
     /// receives a string-INTERPOLATED literal whose hole splices a NON-constant value into the SQL text.
     ///
-    /// Type-directed and import-gated ("nothing in the wind"): the receiver must type to the `Db` class
-    /// AND the program must import `Core.Db` (module or member form), so a user class happening to be
-    /// named `Db` with a `prepare` method is never hijacked. A fully-constant interpolation (every hole a
+    /// Type-directed and import-gated ("nothing in the wind"): the receiver must type to the `Database` class
+    /// AND the program must import `Core.DatabaseModule` (module or member form), so a user class happening to be
+    /// named `Database` with a `prepare` method is never hijacked. A fully-constant interpolation (every hole a
     /// literal) does NOT warn; a plain non-interpolated literal has no hole so never warns. This is a
     /// non-fatal lint — the program still compiles (the deliberately-built-query escape hatch stays open).
     fn lint_sql_injection(&mut self, base: &Ty, name: &str, args: &[crate::ast::Expr], span: Span) {
         if name != "prepare" {
             return;
         }
-        // Receiver must be the `Db` class …
-        if !matches!(base, Ty::Named(cls, _) if cls == "Db") {
+        // Receiver must be the `Database` class …
+        if !matches!(base, Ty::Named(cls, _) if cls == "Database") {
             return;
         }
-        // … and it must be Core.Db's `Db` (imported — module `Core.Db` or a member `Core.Db.X`), never a
-        // coincidental user class named `Db`.
+        // … and it must be Core.DatabaseModule's `Database` (imported — module `Core.DatabaseModule` or a member `Core.DatabaseModule.X`), never a
+        // coincidental user class named `Database`.
         if !self
             .imports
             .values()
-            .any(|m| m == "Core.Db" || m.starts_with("Core.Db."))
+            .any(|m| m == "Core.DatabaseModule" || m.starts_with("Core.DatabaseModule."))
         {
             return;
         }

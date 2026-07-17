@@ -1,4 +1,4 @@
-//! `Core.UriSys` natives — the raw seam under the injected `Uri` class (DEC-240). All operate on
+//! `Core.Native.Uri` natives — the raw seam under the injected `Uri` class (DEC-240). All operate on
 //! the Uri's stored RAW string (validated once at `parse`); fallible operations return either the
 //! new raw string or a `<<E>>`-prefixed twin-exact error message (a raw URI can never start with
 //! `<` — it is malformed everywhere — so the sentinel is collision-free). The prelude's
@@ -37,8 +37,9 @@ fn arg_str<'a>(a: &'a [Value], what: &str) -> Result<&'a str, String> {
 /// Parse a STORED raw form — always valid by construction (only `parse`/withers mint them), so a
 /// failure here is a phorj bug, surfaced loudly rather than masked.
 fn stored(raw: &str) -> Result<Parts, String> {
-    kernel::parse(raw)
-        .map_err(|e| format!("Core.Uri internal: stored raw re-parse failed ({e:?}) for {raw:?}"))
+    kernel::parse(raw).map_err(|e| {
+        format!("Core.UriModule internal: stored raw re-parse failed ({e:?}) for {raw:?}")
+    })
 }
 
 fn opt_str(v: Option<String>) -> Value {
@@ -177,7 +178,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
     let str_ty = || Ty::String;
     let mut v = vec![
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "parse",
             params: vec![str_ty()],
             ret: str_ty(),
@@ -186,7 +187,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_uri_parse({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "toText",
             params: vec![str_ty()],
             ret: str_ty(),
@@ -195,7 +196,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
             php: |a| format!("{}->toString()", php_obj(parg(a, 0))),
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "resolve",
             params: vec![str_ty(), str_ty()],
             ret: str_ty(),
@@ -204,7 +205,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_uri_resolve({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "equals",
             params: vec![str_ty(), str_ty(), Ty::Bool],
             ret: Ty::Bool,
@@ -220,7 +221,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "port",
             params: vec![str_ty()],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -249,7 +250,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
                 format!(concat!("__phorj_uri({})->", $php_getter, "()"), parg(a, 0))
             }
             NativeFn {
-                module: "Core.UriSys",
+                module: "Core.Native.Uri",
                 name: $name,
                 params: vec![Ty::String],
                 ret: Ty::Optional(Box::new(Ty::String)),
@@ -311,7 +312,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
     )));
     // `path` is always present (possibly empty) — a plain string getter.
     v.push(NativeFn {
-        module: "Core.UriSys",
+        module: "Core.Native.Uri",
         name: "path",
         params: vec![str_ty()],
         ret: str_ty(),
@@ -324,7 +325,7 @@ pub(crate) fn uri_natives() -> Vec<NativeFn> {
         php: |a| format!("{}->getPath()", php_obj(parg(a, 0))),
     });
     v.push(NativeFn {
-        module: "Core.UriSys",
+        module: "Core.Native.Uri",
         name: "rawPath",
         params: vec![str_ty()],
         ret: str_ty(),
@@ -346,7 +347,7 @@ fn wither_rows() -> Vec<NativeFn> {
     let opt_str_ty = || Ty::Optional(Box::new(Ty::String));
     vec![
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "withScheme",
             params: vec![str_ty(), opt_str_ty()],
             ret: str_ty(),
@@ -371,7 +372,7 @@ fn wither_rows() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "withUserInfo",
             params: vec![str_ty(), opt_str_ty()],
             ret: str_ty(),
@@ -394,7 +395,7 @@ fn wither_rows() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "withHost",
             params: vec![str_ty(), opt_str_ty()],
             ret: str_ty(),
@@ -420,7 +421,7 @@ fn wither_rows() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "withPort",
             params: vec![str_ty(), Ty::Optional(Box::new(Ty::Int))],
             ret: str_ty(),
@@ -449,7 +450,7 @@ fn wither_rows() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "withPath",
             params: vec![str_ty(), str_ty()],
             ret: str_ty(),
@@ -472,7 +473,7 @@ fn wither_rows() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "withQuery",
             params: vec![str_ty(), opt_str_ty()],
             ret: str_ty(),
@@ -495,7 +496,7 @@ fn wither_rows() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.UriSys",
+            module: "Core.Native.Uri",
             name: "withFragment",
             params: vec![str_ty(), opt_str_ty()],
             ret: str_ty(),

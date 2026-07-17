@@ -1,8 +1,8 @@
 // Compile-time dependency injection (DI v1) — `#[Injectable]` + the `inject` composition root.
 //
-// DI lives in `Core.DI` and follows the "nothing in the wind" import discipline: the bare surface
-// (`#[Injectable]`, `inject`) needs the member-imports below, or write it qualified as `#[DI.Injectable]`
-// / `DI.inject<T>()` with a single `import Core.DI;`.
+// DI lives in `Core.DependencyInjection` and follows the "nothing in the wind" import discipline: the bare surface
+// (`#[Injectable]`, `inject`) needs the member-imports below, or write it qualified as `#[DependencyInjection.Injectable]`
+// / `DependencyInjection.inject<T>()` with a single `import Core.DependencyInjection;`.
 //
 // `inject<App>()` resolves App's dependency graph BY TYPE at compile time and expands to plain `new`
 // construction before any backend (byte-identical run/runvm/PHP — there is no runtime DI machinery). The
@@ -16,8 +16,8 @@
 package Main;
 
 import Core.Output;
-import Core.DI.Injectable;
-import Core.DI.inject;
+import Core.DependencyInjection.Injectable;
+import Core.DependencyInjection.inject;
 
 interface Greeter {
     function greet(): string;

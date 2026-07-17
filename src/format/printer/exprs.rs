@@ -318,12 +318,16 @@ impl Printer<'_> {
             }
             // DI composition root — rendered faithfully so `phg format` (which parses without running
             // `desugar_di`) round-trips it. The parser only ever produces this node for the explicit
-            // turbofish surface (`inject<T>()` / `DI.inject<T>()`); the annotation forms are ordinary
-            // calls handled by the `Call` path. `qualified` restores the `DI.` prefix.
+            // turbofish surface (`inject<T>()` / `DependencyInjection.inject<T>()`); the annotation forms are ordinary
+            // calls handled by the `Call` path. `qualified` restores the `DependencyInjection.` prefix.
             Expr::Inject {
                 ty: t, qualified, ..
             } => {
-                let head = if *qualified { "DI.inject" } else { "inject" };
+                let head = if *qualified {
+                    "DependencyInjection.inject"
+                } else {
+                    "inject"
+                };
                 Ok(doc::text(match t {
                     Some(inner) => format!("{head}<{}>()", ty(inner)?),
                     None => format!("{head}()"),

@@ -77,7 +77,7 @@ mid-flight. (A second `Ctrl-C` while draining hard-kills.) This needs the `signa
 (on by default; off only for the WASM playground, which has no sockets).
 
 ```console
-$ phg serve examples/web/server.phg --addr 127.0.0.1:8080
+$ phg serve examples/web/server.phg --address 127.0.0.1:8080
 phg serve: listening on http://127.0.0.1:8080
 
 $ curl -i http://127.0.0.1:8080/

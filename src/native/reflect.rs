@@ -85,7 +85,7 @@ fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
             // helper. Mapped to "object" defensively so this arm stays total (the checker excludes
             // a channel/task from arithmetic/display; reflection over one is an edge, not a goal).
             Value::Channel(..) | Value::Task(_) => "object",
-            // A `Core.Db` handle (DEC-208) transpiles to a PDO/statement object; coarse kind "object"
+            // A `Core.DatabaseModule` handle (DEC-208) transpiles to a PDO/statement object; coarse kind "object"
             // keeps this arm total (a handle is excluded from arithmetic/display, so this is an edge).
             Value::Db(_) => "object",
             // `null` is its own kind; `unit` (void) never reaches here (uncapturable), but map it
@@ -141,7 +141,7 @@ fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {
             // from `typeName`'s UFCS and never transpiles, so this arm is effectively dead).
             Value::Channel(..) => "Channel",
             Value::Task(_) => "Task",
-            // A `Core.Db` handle's precise name is its kind ("db-connection"/"db-statement");
+            // A `Core.DatabaseModule` handle's precise name is its kind ("db-connection"/"db-statement");
             // defensive (a handle is excluded from `typeName`'s UFCS and its examples are quarantined).
             Value::Db(h) => h.kind(),
             Value::Null | Value::Unit => "null",

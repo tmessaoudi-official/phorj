@@ -300,9 +300,9 @@ fn main() {
             }
         }
     }
-    // `serve <file> [--addr ADDR]` runs the blocking HTTP server. The program is loaded
+    // `serve <file> [--address ADDR]` runs the blocking HTTP server. The program is loaded
     // project-aware (like `run`) and must define `respond(bytes): bytes`. The loop runs until the
-    // process is killed; only a bind/socket error returns (exit 1). Default addr 127.0.0.1:8080.
+    // process is killed; only a bind/socket error returns (exit 1). Default address 127.0.0.1:8080.
     if cmd == "serve" {
         let mut file: Option<&str> = None;
         let mut addr = "127.0.0.1:8080";
@@ -322,7 +322,9 @@ fn main() {
         let mut i = 2;
         while i < args.len() {
             match args[i].as_str() {
-                "--addr" => {
+                // `--addr` is a deprecated alias for `--address` (DEC-276 earned-shortcut rule:
+                // word truncations are not earned), silently accepted — remove in a future version.
+                "--address" | "--addr" => {
                     addr = args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
                         eprintln!("{USAGE}");
                         exit(2);
@@ -370,7 +372,7 @@ fn main() {
         }
         let file = file.unwrap_or_else(|| {
             eprintln!(
-                "usage: phg serve <file> [--addr 127.0.0.1:8080] [--timeout 30] [--workers N] [--tree-walker]"
+                "usage: phg serve <file> [--address 127.0.0.1:8080] [--timeout 30] [--workers N] [--tree-walker]"
             );
             exit(2);
         });

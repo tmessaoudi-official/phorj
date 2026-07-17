@@ -275,14 +275,14 @@ pub enum Expr {
     /// dependency graph is expanded into plain `new` construction (a synthesized `__di_T()` factory
     /// per root, so per-resolution-root sharing is byte-identical), so no backend ever sees this
     /// variant — the same "compile-time sugar, expanded out before every backend" discipline as
-    /// [`Expr::New`]/[`Expr::Html`]. `inject` is a `Core.DI` member (import-gated, NOT a keyword —
+    /// [`Expr::New`]/[`Expr::Html`]. `inject` is a `Core.DependencyInjection` member (import-gated, NOT a keyword —
     /// ruled 2026-07-10 §7): the parser emits this variant only for the explicit turbofish forms
-    /// (`inject<T>()`, `DI.inject<T>()`); the no-turbofish forms parse as ordinary calls and
-    /// [`crate::checker::desugar_di`] converts them to this variant only when `Core.DI` is imported.
+    /// (`inject<T>()`, `DependencyInjection.inject<T>()`); the no-turbofish forms parse as ordinary calls and
+    /// [`crate::checker::desugar_di`] converts them to this variant only when `Core.DependencyInjection` is imported.
     Inject {
         ty: Option<Type>,
-        /// `true` for the qualified surface `DI.inject…`; `false` for bare `inject…`. Determines which
-        /// import gates it (`import Core.DI;` vs member-import `import Core.DI.inject;`).
+        /// `true` for the qualified surface `DependencyInjection.inject…`; `false` for bare `inject…`. Determines which
+        /// import gates it (`import Core.DependencyInjection;` vs member-import `import Core.DependencyInjection.inject;`).
         qualified: bool,
         span: Span,
     },

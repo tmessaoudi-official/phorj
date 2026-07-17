@@ -138,7 +138,7 @@ pub(super) fn php_type_ref(name: &str) -> String {
 /// program stdout is unaffected. Distinct from [`php_variant_name`] (which mangles reserved *variant*
 /// names like `Int`); the enum *type* name and its variant names mangle independently.
 pub(super) fn php_class_name(name: &str) -> String {
-    // `Iterator` (DEC-257): the injected `Core.Iterator` interface collides with PHP's root
+    // `Iterator` (DEC-257): the injected `Core.IteratorModule` interface collides with PHP's root
     // builtin interface `Iterator` in the (un-namespaced) transpiled output — same mangle, same
     // rationale as `RoundingMode`. `run`/`runvm` never see a PHP class name, so stdout is
     // unaffected; META-7 disclosure lives in the CHANGELOG entry.

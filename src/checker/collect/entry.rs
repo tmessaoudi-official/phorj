@@ -134,7 +134,7 @@ impl Checker {
                 // class` is exempt by design: it BINDS to the existing PHP builtin (the
                 // whole point of interop) — nothing is redeclared.
                 let is_foreign_bind = matches!(item, Item::Class(c) if c.foreign);
-                // A compiler-INJECTED interface (`Core.Iterator`'s `Iterator`, DEC-257) is exempt:
+                // A compiler-INJECTED interface (`Core.IteratorModule`'s `Iterator`, DEC-257) is exempt:
                 // the name is compiler-owned (never a user-chosen symbol, the thing DEC-202
                 // protects against renaming invisibly) and the transpiled leg declares it inside
                 // `namespace Main`, which never redeclares the root PHP builtin (verified vs 8.5).

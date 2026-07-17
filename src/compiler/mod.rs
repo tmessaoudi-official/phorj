@@ -155,6 +155,10 @@ struct Compiler<'a> {
     enum_descs: &'a [EnumDesc],
     /// Class name → the index of its synthetic constructor function (for `ClassName(args)`).
     classes: &'a HashMap<String, usize>,
+    /// The program's import map (leaf or `as`-alias → dotted module) — qualified native calls
+    /// resolve through it first (`native::index_of_qualified`), so the DEC-277 aliased raw-native
+    /// imports resolve and a class name never leaf-captures a same-leaf native module.
+    imports: &'a HashMap<String, String>,
     /// `(class, field)` → `(static slot index, field CTy)` (M-mut.7). `ClassName.field` lowers to
     /// `Op::GetStatic(idx)` / `Op::SetStatic(idx)` via the index; the `CTy` lets `ctype` resolve a
     /// static used as an arithmetic operand (`C.total + 1` specializes — without it the VM would

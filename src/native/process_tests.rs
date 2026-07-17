@@ -37,7 +37,7 @@ fn every_other_native_is_pure() {
     // `Core.Log` is whole-module impure (DEC-220): every `Log.debug/info/warn/error` writes a
     // `[LEVEL]` line to the ambient process stderr, so an importing program is quarantined (its logs
     // are out-of-band from the compared stdout).
-    // `Core.DbSys` is whole-module impure (DEC-208): the internal natives behind the `Core.Db` prelude
+    // `Core.Native.Database` is whole-module impure (DEC-208): the internal natives behind the `Core.DatabaseModule` prelude
     // open/read/write a real SQLite database, so any importing program is quarantined (live DB I/O
     // can't be byte-identical across rusqlite and PHP PDO). Only compiled under `--features db`.
     let impure_modules = [
@@ -46,16 +46,16 @@ fn every_other_native_is_pure() {
         "Core.Time",
         "Core.Runtime",
         "Core.Log",
-        "Core.DbSys",
-        // `Core.MailSys` is whole-module impure (DEC-223): network/filesystem mail delivery — any
+        "Core.Native.Database",
+        // `Core.Native.Mail` is whole-module impure (DEC-223): network/filesystem mail delivery — any
         // importing program is quarantined. Only compiled under `--features mail`.
-        "Core.MailSys",
-        // `Core.HttpClientSys` is whole-module impure (W3-2): live network I/O. `--features http-client`.
-        "Core.HttpClientSys",
-        // `Core.FsSys` is whole-module impure (W3): ambient filesystem state.
-        "Core.FsSys",
-        // `Core.SessionSys` is whole-module impure (W3): process-wide session store + OS entropy.
-        "Core.SessionSys",
+        "Core.Native.Mail",
+        // `Core.Native.HttpClient` is whole-module impure (W3-2): live network I/O. `--features http-client`.
+        "Core.Native.HttpClient",
+        // `Core.Native.FileSystem` is whole-module impure (W3): ambient filesystem state.
+        "Core.Native.FileSystem",
+        // `Core.Native.Session` is whole-module impure (W3): process-wide session store + OS entropy.
+        "Core.Native.Session",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the

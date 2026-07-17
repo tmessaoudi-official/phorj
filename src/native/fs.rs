@@ -1,6 +1,6 @@
-//! `Core.Fs` (W3 — the FS/streams parity blocker, TOP-20 #5): the TYPED filesystem module, built on
-//! the `Core.Db`/`Mail`/`HttpClient` architecture (prelude-wrapper `FsResult<T>` + a `<<Kind>>`
-//! marker → typed catchable `FsError` taxonomy). It SUPERSEDES the older `Core.File` ERGONOMICS
+//! `Core.FileSystemModule` (W3 — the FS/streams parity blocker, TOP-20 #5): the TYPED filesystem module, built on
+//! the `Core.DatabaseModule`/`Mail`/`HttpClient` architecture (prelude-wrapper `FileSystemResult<T>` + a `<<Kind>>`
+//! marker → typed catchable `FileSystemError` taxonomy). It SUPERSEDES the older `Core.File` ERGONOMICS
 //! (whose write/delete failures are uncatchable hard faults and whose read maps every failure to
 //! `null` — the pre-taxonomy era); `Core.File` stays untouched (additive — its deprecation is a
 //! queued developer adjudication, never a silent break).
@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
-        ty: "FsResult".into(),
+        ty: "FileSystemResult".into(),
         variant: "Ok".into(),
         payload: vec![v],
     }))
@@ -26,7 +26,7 @@ fn success(v: Value) -> Value {
 
 fn failure(msg: String) -> Value {
     Value::Enum(Rc::new(EnumVal {
-        ty: "FsResult".into(),
+        ty: "FileSystemResult".into(),
         variant: "Err".into(),
         payload: vec![Value::Str(msg.into())],
     }))
@@ -39,7 +39,7 @@ fn wrap(inner: Result<Value, String>) -> Value {
     }
 }
 
-/// Classify a std::io error into the `FsError` taxonomy marker.
+/// Classify a std::io error into the `FileSystemError` taxonomy marker.
 fn classify(op: &str, path: &str, e: &std::io::Error) -> String {
     use std::io::ErrorKind as K;
     let kind = match e.kind() {
@@ -49,22 +49,26 @@ fn classify(op: &str, path: &str, e: &std::io::Error) -> String {
         K::NotADirectory => "NotADirectory",
         K::IsADirectory => "IsADirectory",
         K::DirectoryNotEmpty => "DirNotEmpty",
-        _ => "FsIo",
+        _ => "FileSystemIoError",
     };
-    format!("<<{kind}>>Core.Fs.{op}: `{path}`: {e}")
+    format!("<<{kind}>>Core.FileSystemModule.{op}: `{path}`: {e}")
 }
 
 fn one_path<'a>(args: &'a [Value], who: &str) -> Result<&'a str, String> {
     match args {
         [Value::Str(p)] => Ok(p.as_str()),
-        _ => Err(format!("Core.Fs.__{who} expects (string path)")),
+        _ => Err(format!(
+            "Core.FileSystemModule.__{who} expects (string path)"
+        )),
     }
 }
 
 fn two_paths<'a>(args: &'a [Value], who: &str) -> Result<(&'a str, &'a str), String> {
     match args {
         [Value::Str(a), Value::Str(b)] => Ok((a.as_str(), b.as_str())),
-        _ => Err(format!("Core.Fs.__{who} expects (string, string)")),
+        _ => Err(format!(
+            "Core.FileSystemModule.__{who} expects (string, string)"
+        )),
     }
 }
 
@@ -76,7 +80,7 @@ fn read_text_inner(args: &[Value]) -> Result<Value, String> {
         Ok(bytes) => match String::from_utf8(bytes) {
             Ok(s) => Ok(Value::Str(s.into())),
             Err(_) => Err(format!(
-                "<<FsIo>>Core.Fs.readText: `{p}` is not UTF-8 — use readBytes"
+                "<<FileSystemIoError>>Core.FileSystemModule.readText: `{p}` is not UTF-8 — use readBytes"
             )),
         },
         Err(e) => Err(classify("readText", p, &e)),
@@ -93,7 +97,7 @@ fn read_bytes_inner(args: &[Value]) -> Result<Value, String> {
 fn write_text_inner(args: &[Value]) -> Result<Value, String> {
     let (p, contents) = match args {
         [Value::Str(p), Value::Str(c)] => (p.as_str(), c.as_str()),
-        _ => return Err("Core.Fs.__writeText expects (string, string)".into()),
+        _ => return Err("Core.FileSystemModule.__writeText expects (string, string)".into()),
     };
     std::fs::write(p, contents)
         .map(|()| Value::Null)
@@ -103,7 +107,7 @@ fn write_text_inner(args: &[Value]) -> Result<Value, String> {
 fn write_bytes_inner(args: &[Value]) -> Result<Value, String> {
     let (p, contents) = match args {
         [Value::Str(p), Value::Bytes(b)] => (p.as_str(), b),
-        _ => return Err("Core.Fs.__writeBytes expects (string, bytes)".into()),
+        _ => return Err("Core.FileSystemModule.__writeBytes expects (string, bytes)".into()),
     };
     std::fs::write(p, &**contents)
         .map(|()| Value::Null)
@@ -114,7 +118,7 @@ fn append_text_inner(args: &[Value]) -> Result<Value, String> {
     use std::io::Write as _;
     let (p, contents) = match args {
         [Value::Str(p), Value::Str(c)] => (p.as_str(), c.as_str()),
-        _ => return Err("Core.Fs.__appendText expects (string, string)".into()),
+        _ => return Err("Core.FileSystemModule.__appendText expects (string, string)".into()),
     };
     std::fs::OpenOptions::new()
         .create(true)
@@ -190,7 +194,7 @@ fn remove_dir_all_inner(args: &[Value]) -> Result<Value, String> {
     let p = one_path(args, "removeDirAll")?;
     if matches!(p, "/" | "." | "..") || p.is_empty() {
         return Err(format!(
-            "<<PermissionDenied>>Core.Fs.removeDirAll: refusing `{p}` (protect-the-obvious net)"
+            "<<PermissionDenied>>Core.FileSystemModule.removeDirAll: refusing `{p}` (protect-the-obvious net)"
         ));
     }
     std::fs::remove_dir_all(p)
@@ -246,7 +250,7 @@ fn walk_inner(args: &[Value]) -> Result<Value, String> {
 
 fn temp_dir_inner(args: &[Value]) -> Result<Value, String> {
     if !args.is_empty() {
-        return Err("Core.Fs.__tempDir expects no arguments".into());
+        return Err("Core.FileSystemModule.__tempDir expects no arguments".into());
     }
     Ok(Value::Str(
         std::env::temp_dir().to_string_lossy().into_owned().into(),
@@ -279,16 +283,16 @@ fs_native!(fs_list_dir, list_dir_inner);
 fs_native!(fs_walk, walk_inner);
 fs_native!(fs_temp_dir, temp_dir_inner);
 
-/// The `Core.FsSys` registry entries (std-only — no new dependency; always compiled, no feature).
+/// The `Core.Native.FileSystem` registry entries (std-only — no new dependency; always compiled, no feature).
 pub fn fs_natives() -> Vec<NativeFn> {
-    let res = |t: Ty| Ty::Named("FsResult".into(), vec![t]);
+    let res = |t: Ty| Ty::Named("FileSystemResult".into(), vec![t]);
     let opt_null = || Ty::Optional(Box::new(Ty::String));
     let entry =
         |name: &'static str,
          params: Vec<Ty>,
          ret: Ty,
          eval: fn(&[Value], &mut String) -> Result<Value, String>| NativeFn {
-            module: "Core.FsSys",
+            module: "Core.Native.FileSystem",
             name,
             params,
             ret,

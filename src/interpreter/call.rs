@@ -11,13 +11,17 @@ impl<'c> Interp<'c> {
         {
             // Namespaced native call: `console.println(x)` — a member call whose head is an imported
             // module qualifier, not a value (M3 Wave 1). Locals-first: an identifier bound as a
-            // variable is a method receiver; only an *unbound* identifier can be a qualifier, and the
-            // checker has already enforced the import + native, so `index_of_by_leaf` is unambiguous.
+            // variable is a method receiver; only an *unbound* identifier can be a qualifier.
+            // Resolution is import-map-first with a Native-excluded leaf fallback
+            // (`native::index_of_qualified`): the DEC-277 preludes import their raw natives under
+            // an alias, and a prelude class (`Uri`, `Database`) must never leaf-capture its
+            // same-leaf `Core.Native.*` module.
             // The native's `eval` is shared verbatim with the VM (structural parity).
             if !*safe {
                 if let Expr::Ident(q, _) = &**object {
                     if self.frame.lookup(q).is_none() {
-                        if let Some(idx) = crate::native::index_of_by_leaf(q, name) {
+                        if let Some(idx) = crate::native::index_of_qualified(&self.imports, q, name)
+                        {
                             let argv = self.eval_args(args)?;
                             // The native reports failures as a plain `String` (the backend-shared
                             // contract); lift it into the interpreter's runtime `Signal`. A

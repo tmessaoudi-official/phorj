@@ -1,10 +1,10 @@
-// `Core.Db` — the MySQL/MariaDB driver (DEC-208 slice J) + credential Secret (slice G).
+// `Core.DatabaseModule` — the MySQL/MariaDB driver (DEC-208 slice J) + credential Secret (slice G).
 //
-// `Core.Db` is a MULTI-DRIVER primitive: `new Db(dsn)` dispatches on the DSN scheme behind a driver
+// `Core.DatabaseModule` is a MULTI-DRIVER primitive: `new Database(dsn)` dispatches on the DSN scheme behind a driver
 // trait — `sqlite:…` (bundled SQLite, the default `db` feature), `postgres://…` (`db-postgres`), and
 // `mysql://…` / `mariadb://…` (the sync `mysql` crate, the `db-mysql` feature). The whole surface is
 // identical across drivers — the SAME `prepare`/`bind`/`bindNamed`/`query`/`exec`/`execReturningId`/
-// `transaction`/typed-`DbError` API — so porting between backends is a one-line DSN change.
+// `transaction`/typed-`DatabaseError` API — so porting between backends is a one-line DSN change.
 //
 // ── RUNNING THIS EXAMPLE ─────────────────────────────────────────────────────────────────────────
 // Unlike the other `examples/db/*.phg` (which use in-memory SQLite and run headless), this one needs a
@@ -22,11 +22,11 @@
 package Main;
 
 import Core.Output;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Row;
-import Core.Db.DbError;
-import Core.Db.UniqueViolation;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
+import Core.DatabaseModule.UniqueViolation;
 import Core.Secret;
 
 function main(): void {
@@ -39,7 +39,7 @@ function main(): void {
     // error prints the host, never the password.
     Secret<string> password = new Secret("developer");
     try {
-        Db db = Db.withPassword(dsn, password);
+        Database db = Database.withPassword(dsn, password);
         discard db.prepare("DROP TABLE IF EXISTS phorj_my_demo").exec();
         discard db
             .prepare(
@@ -87,7 +87,7 @@ function main(): void {
         }
         discard db.prepare("DROP TABLE phorj_my_demo").exec();
         db.close();
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("DB error: {e.message}");
     }
 }

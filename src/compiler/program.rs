@@ -14,6 +14,9 @@ pub(super) fn compile_program_with(
     program: &Program,
     reified: &HashMap<usize, CTy>,
 ) -> Result<BytecodeProgram, String> {
+    // Import map (leaf/alias → dotted module) for qualified-native resolution — see the
+    // `Compiler::imports` field doc and `native::index_of_qualified`.
+    let imports = crate::native::import_map(&program.items);
     let mut order: Vec<&FunctionDecl> = Vec::new();
     let mut fns: HashMap<String, FnMeta> = HashMap::new();
     // M-RT overloading: name → every function index declared under it (declaration order). Names with
@@ -528,6 +531,7 @@ pub(super) fn compile_program_with(
             &variants,
             &enum_descs,
             &classes,
+            &imports,
             &statics_index,
             &consts_index,
             &class_descs,
@@ -589,6 +593,7 @@ pub(super) fn compile_program_with(
             &variants,
             &enum_descs,
             &classes,
+            &imports,
             &statics_index,
             &consts_index,
             &class_descs,
@@ -627,6 +632,7 @@ pub(super) fn compile_program_with(
             &variants,
             &enum_descs,
             &classes,
+            &imports,
             &statics_index,
             &consts_index,
             &class_descs,

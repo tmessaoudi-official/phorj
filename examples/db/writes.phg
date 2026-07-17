@@ -1,4 +1,4 @@
-// Writes & robustness with `Core.Db` (DEC-208 slice D) — the enhanced-PDO write surface.
+// Writes & robustness with `Core.DatabaseModule` (DEC-208 slice D) — the enhanced-PDO write surface.
 //
 //   * `.execReturningId()`  — run an INSERT and get the auto-generated PK back in one call.
 //   * `db.lastInsertId()`   — the PK of the most recent INSERT on the connection.
@@ -7,7 +7,7 @@
 //   * `db.timeout(ms)`      — bound the per-query lock-wait (a runaway lock fails with `Timeout`).
 //   * `db.onQuery(hook)`    — a per-query observability hook `(string sql, int ms) => void`.
 //
-// `Core.Db` opens a real SQLite database (bundled `rusqlite`), so an importing program is quarantined
+// `Core.DatabaseModule` opens a real SQLite database (bundled `rusqlite`), so an importing program is quarantined
 // from the byte-identity differential; it is validated by `tests/db.rs` on both backends (`run ≡ runvm`).
 // The hook's `ms` is wall-clock (non-deterministic), so it is NEVER printed here — only the SQL text is
 // logged, keeping the example byte-identical across backends. Built only under `--features db`.
@@ -15,14 +15,14 @@ package Main;
 
 import Core.Output;
 import Core.List;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Row;
-import Core.Db.DbError;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
 
 function main(): void {
     try {
-        Db db = new Db("sqlite::memory:");
+        Database db = new Database("sqlite::memory:");
         discard db
             .prepare("CREATE TABLE people(id INTEGER PRIMARY KEY, name TEXT, city TEXT)")
             .exec();
@@ -60,7 +60,7 @@ function main(): void {
             Output.printLine("in-list: {name}");
         }
         Output.printLine("in-list count {List.length(some)}");
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("DB error: {e.message}");
     }
 }

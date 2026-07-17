@@ -22,17 +22,17 @@
 //! (`E-DI-MISSING`/`E-DI-AMBIGUOUS`), and a dependency cycle (`E-DI-CYCLE`). A bare `inject()` in a
 //! position with no expected type (a `var` binding, a discard, a call argument) is `E-INJECT-NO-TYPE`.
 //!
-//! IMPORT DISCIPLINE (§7, 2026-07-10). `inject` is a `Core.DI` member, NOT a keyword — nothing in the
+//! IMPORT DISCIPLINE (§7, 2026-07-10). `inject` is a `Core.DependencyInjection` member, NOT a keyword — nothing in the
 //! wind ([[nothing-in-the-wind-import-discipline]]). Two surfaces feed ONE resolver:
-//! - bare `inject<T>()` / `inject()` — requires the member-import `import Core.DI.inject;`;
-//! - qualified `DI.inject<T>()` / `DI.inject()` — requires `import Core.DI;` (or any `Core.DI.*`).
+//! - bare `inject<T>()` / `inject()` — requires the member-import `import Core.DependencyInjection.inject;`;
+//! - qualified `DependencyInjection.inject<T>()` / `DependencyInjection.inject()` — requires `import Core.DependencyInjection;` (or any `Core.DependencyInjection.*`).
 //!
 //! The parser emits `Expr::Inject` only for the explicit turbofish forms; the no-turbofish forms arrive
-//! as ordinary `Call`s (`inject()` → `Call{Ident("inject")}`, `DI.inject()` → `Call{Member{DI,inject}}`)
+//! as ordinary `Call`s (`inject()` → `Call{Ident("inject")}`, `DependencyInjection.inject()` → `Call{Member{DependencyInjection,inject}}`)
 //! and are converted here ONLY when the matching import is present — so an un-imported `inject()` stays a
 //! plain call to a user function named `inject` (the identifier is freed). An explicit `inject<T>()`
 //! whose import is absent is `E-DI-NO-IMPORT` (a turbofish call cannot be anything but the composition
-//! root). The DI ATTRIBUTES (`#[Injectable]`, qualified `#[DI.Injectable]`) get the same discipline via
+//! root). The DI ATTRIBUTES (`#[Injectable]`, qualified `#[DependencyInjection.Injectable]`) get the same discipline via
 //! `enforce_injected_discipline` (`module_of("Injectable") == "DI"`) + `Attribute::is_di_builtin`.
 //!
 //! FIELD INJECTION (slice 3). Before the registry is built, [`fold_injected_fields`] folds each
@@ -133,7 +133,7 @@ pub fn desugar_di(program: Program) -> Result<Program, Vec<Diagnostic>> {
     let impls = collect_impls(&program, &injectable);
     let program = fold_injected_fields(program, &injectable, &impls);
     let reg = build_registry(&program);
-    let bare_inject_imported = imports_path(&program, &["Core", "DI", "inject"]);
+    let bare_inject_imported = imports_path(&program, &["Core", "DependencyInjection", "inject"]);
     let di_qualifier_imported = imports_di_module(&program);
     let Program {
         package,
@@ -394,10 +394,10 @@ struct Di<'a> {
     reg: &'a Registry,
     diags: Vec<Diagnostic>,
     resolved: BTreeMap<String, Option<Built>>,
-    /// `import Core.DI.inject;` is present → bare `inject…` is allowed (else a bare turbofish is
+    /// `import Core.DependencyInjection.inject;` is present → bare `inject…` is allowed (else a bare turbofish is
     /// `E-DI-NO-IMPORT` and a bare annotation `inject()` stays an ordinary call to a user function).
     bare_inject_imported: bool,
-    /// `import Core.DI;` (or any `Core.DI.*`) is present → qualified `DI.inject…` is allowed.
+    /// `import Core.DependencyInjection;` (or any `Core.DependencyInjection.*`) is present → qualified `DependencyInjection.inject…` is allowed.
     di_qualifier_imported: bool,
     /// The enclosing function/method/lambda return type — the annotation source for `return inject();`
     /// (slice 2). Saved/restored across `rfn` and every lambda so an inner scope never inherits an outer
@@ -413,12 +413,12 @@ fn imports_path(program: &Program, want: &[&str]) -> bool {
     })
 }
 
-/// True iff `Core.DI` is imported in any form — the module (`import Core.DI;`) or any member
-/// (`import Core.DI.inject;`, `import Core.DI.Injectable;`). Any of these binds the `DI` qualifier.
+/// True iff `Core.DependencyInjection` is imported in any form — the module (`import Core.DependencyInjection;`) or any member
+/// (`import Core.DependencyInjection.inject;`, `import Core.DependencyInjection.Injectable;`). Any of these binds the `DI` qualifier.
 fn imports_di_module(program: &Program) -> bool {
     program.items.iter().any(|it| {
         matches!(it, Item::Import { path, .. }
-            if path.len() >= 2 && path[0] == "Core" && path[1] == "DI")
+            if path.len() >= 2 && path[0] == "Core" && path[1] == "DependencyInjection")
     })
 }
 

@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — DEC-276/277/278/279: the naming mega-slice (breaking renames)
+
+Earned shortcuts expanded, everywhere: `Core.Db` → `Core.DatabaseModule` (class `Database`,
+`DatabaseError`/`DatabaseStream`/`DatabaseHandle`), `Core.Fs` → `Core.FileSystemModule` (class
+`FileSystem`; the error family takes the DEC-275 suffix: `FileSystemNotFoundError`,
+`FileSystemPermissionDeniedError`, …), `Core.Uri`/`Session`/`Debug`/`HttpClient`/`Iterator` →
+`*Module` (the namesake rule — `import Core.UriModule.Uri;` is fully explicit),
+`Core.DI` → `Core.DependencyInjection`, `Core.Reflect` surface unified on `Core.Reflection`,
+`HcHandle` → `HttpClientHandle`, CLI `--addr` → `--address` (old spelling = hidden alias).
+The seven raw-native `*Sys` modules nest under **`Core.Native.*`** (`Core.Native.Database`,
+`Core.Native.FileSystem`, …) and are **whole-module-import only** (`E-IMPORT-NATIVE-MEMBER` —
+developer-ratified: raw-layer usage stays qualified and greppable); the §14 ladder gate now also
+covers importing them directly (previously a silently-diverging-PHP hole). `Core.Url` merged
+into the Uri module as `Uri.encodeForm/encodeComponent/decodeForm/decodeComponent`; the old
+`Core.Url` paths are the first shipping `W-DEPRECATED` entries (removal 0.7.0; STABILITY.md).
+Backends resolve qualified natives **import-map-first** (import aliases now work on every
+backend — the transpiler ignored them before; a prelude class never leaf-captures its same-leaf
+Native module). No old→new hint table (developer-ruled: everything in-repo is migrated).
+
+### Deprecated
+
+The four `Core.Url` natives (use `Core.UriModule` — `Uri.encodeComponent` etc.); the CLI
+spelling `--addr` (use `--address`).
+
 ### Added — DEC-280: untyped foreach key/value bindings + the lift catch-up
 
 `foreach (m as k => v)` is now legal — both bindings inferred from the Map, exactly like the

@@ -1,12 +1,12 @@
-// Core.Iterator (DEC-257): THE pull-iteration protocol. Implement `hasNext()/next()` and your
+// Core.IteratorModule (DEC-257): THE pull-iteration protocol. Implement `hasNext()/next()` and your
 // type is foreach-able — the compiler lowers `for … in it` to a while-pull before any backend,
 // so all three legs run the identical loop. Nullable element types are fully sound (null is a
 // value, never a termination signal). Contract: calling `next()` past exhaustion is a fault
 // ("iterator exhausted") — foreach never does (it always asks hasNext first).
 package Main;
 
-import Core.Iterator;
-import Core.Iterator.Iterator;
+import Core.IteratorModule;
+import Core.IteratorModule.Iterator;
 import Core.Output;
 
 class Countdown implements Iterator<int> {

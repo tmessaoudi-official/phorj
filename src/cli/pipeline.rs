@@ -82,7 +82,7 @@ pub fn check_and_expand_reified(
     };
     let prog = &intrinsic_rewritten;
     // Feature-availability gate: an import of a Core module whose natives are compiled out of THIS
-    // build (e.g. `Core.Db` under `--no-default-features`) is ONE clean `E-MODULE-UNAVAILABLE` — never
+    // build (e.g. `Core.DatabaseModule` under `--no-default-features`) is ONE clean `E-MODULE-UNAVAILABLE` — never
     // the wall of prelude-internal `E-UNKNOWN-IDENT`s the injection below would otherwise produce.
     if let Some(d) = super::preludes::unavailable_core_module(prog) {
         return Err(d.render(diag_src));
@@ -120,12 +120,12 @@ pub fn check_and_expand_reified(
             return Err(lines.join("\n"));
         }
     };
-    // DEC-208 S2: lower the type-directed `Core.Db` hydration calls `stmt.queryInto()` /
+    // DEC-208 S2: lower the type-directed `Core.DatabaseModule` hydration calls `stmt.queryInto()` /
     // `stmt.queryOneInto()` into plain construction via synthesized per-class helpers, drawing the row
     // class from the binding's declared type OR an explicit call-site turbofish (slice A wired —
     // turbofish wins; arity checked in the pass, `E-TYPE-ARG-COUNT`). Pre-check, so the generated
     // `new T(row.getX(..)?)` graph type-checks like hand-written code and both backends run the one
-    // desugared AST (Inv-5; `run ≡ runvm` automatic). A no-op unless `Core.Db` is imported.
+    // desugared AST (Inv-5; `run ≡ runvm` automatic). A no-op unless `Core.DatabaseModule` is imported.
     let routed = match crate::checker::desugar_db(routed) {
         Ok(p) => p,
         Err(ds) => {
@@ -225,7 +225,7 @@ pub fn check_and_expand_reified(
 /// (the first failing pass's errors; else the checker's warnings) instead of rendered strings.
 ///
 /// DEC-252 (check ≡ LSP): the LSP diagnostics path MUST route through this, so an injected-type program
-/// (`import Core.Secret;`, `Core.Db`, `Core.Json`, …) is checked against the SAME prelude-injected world
+/// (`import Core.Secret;`, `Core.DatabaseModule`, `Core.Json`, …) is checked against the SAME prelude-injected world
 /// `phg check` sees — never the spurious `E-UNKNOWN-IDENT` wall the raw checker emits on the un-injected
 /// program. **STANDING RULE:** this mirrors `check_and_expand_reified`'s pass sequence exactly; any change
 /// to that sequence must be reflected here. Drift is guarded by `front_end_diagnostics_agrees_with_check`
@@ -546,7 +546,7 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
 
 /// `transpile` on an already-loaded program (emit PHP). Multi-namespace emission for a multi-package
 /// project is S2c; S2b emits the existing flat form (correct for `package Main` / single-package).
-/// THE LADDER RULE (MASTER-PLAN G-rules; first applications: concurrency, `Core.Db`, `Core.Mail`):
+/// THE LADDER RULE (MASTER-PLAN G-rules; first applications: concurrency, `Core.DatabaseModule`, `Core.Mail`):
 /// a native-only Core module — one whose semantics have no faithful PHP byte-identity mapping (live
 /// DB I/O, SMTP delivery) — HARD-ERRORS on transpile with a module-specific `E-TRANSPILE-<FEATURE>`
 /// code. Never a silent degrade, and never the wall of prelude-internal errors the check would
@@ -554,29 +554,59 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
 fn reject_native_only_transpile(prog: &Program) -> Result<(), String> {
     const NATIVE_ONLY: &[(&[&str], &str, &str)] = &[
         (
-            &["Core", "Db"],
+            &["Core", "DatabaseModule"],
             "E-TRANSPILE-DB",
-            "`Core.Db` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
+            "`Core.DatabaseModule` is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO, so transpiling it is refused rather than silently diverging (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
         ),
         (
-            &["Core", "Fs"],
+            &["Core", "FileSystemModule"],
             "E-TRANSPILE-FS",
-            "`Core.Fs` is native-only for now: its typed FsError protocol has no PHP emitter yet (PHP has faithful filesystem functions, so a real mapping is a recorded future lift — refusing beats emitting a silently-diverging program, THE LADDER RULE). Run this program with `phg run`, or use the transpilable `Core.File` subset.",
+            "`Core.FileSystemModule` is native-only for now: its typed FileSystemError protocol has no PHP emitter yet (PHP has faithful filesystem functions, so a real mapping is a recorded future lift — refusing beats emitting a silently-diverging program, THE LADDER RULE). Run this program with `phg run`, or use the transpilable `Core.File` subset.",
         ),
         (
-            &["Core", "Session"],
+            &["Core", "SessionModule"],
             "E-TRANSPILE-SESSION",
-            "`Core.Session` is native-only for now: its in-process session store matches phg serve's process model; PHP's per-request model needs a session_start() mapping — a recorded future lift (THE LADDER RULE: refusing beats silent divergence). Run session programs with `phg run` / `phg serve`.",
+            "`Core.SessionModule` is native-only for now: its in-process session store matches phg serve's process model; PHP's per-request model needs a session_start() mapping — a recorded future lift (THE LADDER RULE: refusing beats silent divergence). Run session programs with `phg run` / `phg serve`.",
         ),
         (
-            &["Core", "HttpClient"],
+            &["Core", "HttpClientModule"],
             "E-TRANSPILE-HTTPCLIENT",
-            "`Core.HttpClient` is native-only: live network I/O cannot be byte-identical across the phorj client and a PHP mapping, so transpiling it is refused rather than silently diverging (THE LADDER RULE). A faithful curl-mapping is a recorded future lift. Run this program with `phg run`.",
+            "`Core.HttpClientModule` is native-only: live network I/O cannot be byte-identical across the phorj client and a PHP mapping, so transpiling it is refused rather than silently diverging (THE LADDER RULE). A faithful curl-mapping is a recorded future lift. Run this program with `phg run`.",
         ),
         (
             &["Core", "Mail"],
             "E-TRANSPILE-MAIL",
             "`Core.Mail` is native-only (DEC-223): PHP's mail() has no SMTP auth, no TLS, and is header-injection-prone — any mapping would silently drop auth/TLS/attachments (THE LADDER RULE forbids the downgrade). Run this program with `phg run`.",
+        ),
+        // DEC-277: the RAW `Core.Native.*` twins of the native-only modules above. Importing the
+        // raw natives directly must not bypass the ladder gate — several of their `php` emitters
+        // are placeholders (e.g. `Core.Native.Database` close/transaction), so a transpile would
+        // silently diverge instead of refusing. (`Core.Native.Uri`/`Core.Native.Debug` stay
+        // transpilable — their emitters are real twins.)
+        (
+            &["Core", "Native", "Database"],
+            "E-TRANSPILE-DB",
+            "`Core.Native.Database` (the raw natives under `Core.DatabaseModule`) is native-only: live database I/O cannot be byte-identical across the phorj drivers and PHP PDO (THE LADDER RULE). Run this program with `phg run` / `phg runvm`.",
+        ),
+        (
+            &["Core", "Native", "FileSystem"],
+            "E-TRANSPILE-FS",
+            "`Core.Native.FileSystem` (the raw natives under `Core.FileSystemModule`) is native-only for now (THE LADDER RULE). Run this program with `phg run`, or use the transpilable `Core.File` subset.",
+        ),
+        (
+            &["Core", "Native", "Session"],
+            "E-TRANSPILE-SESSION",
+            "`Core.Native.Session` (the raw natives under `Core.SessionModule`) is native-only for now (THE LADDER RULE). Run session programs with `phg run` / `phg serve`.",
+        ),
+        (
+            &["Core", "Native", "HttpClient"],
+            "E-TRANSPILE-HTTPCLIENT",
+            "`Core.Native.HttpClient` (the raw natives under `Core.HttpClientModule`) is native-only: live network I/O cannot be byte-identical (THE LADDER RULE). Run this program with `phg run`.",
+        ),
+        (
+            &["Core", "Native", "Mail"],
+            "E-TRANSPILE-MAIL",
+            "`Core.Native.Mail` (the raw natives under `Core.Mail`) is native-only (DEC-223, THE LADDER RULE). Run this program with `phg run`.",
         ),
     ];
     use crate::ast::Item;

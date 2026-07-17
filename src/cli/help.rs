@@ -187,16 +187,16 @@ pub fn help_for(cmd: &str) -> String {
                     measured ~2.3x lower end-to-end latency on a representative handler, byte-identical\n\
                     output); --tree-walker selects the interpreter oracle instead (and is required to\n\
                     serve an overloaded `respond`, which the VM path rejects).\n\n\
-                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS] [--workers N] [--tree-walker]\n\n\
+                    usage:\n  phg serve <file> [--address 127.0.0.1:8080] [--timeout SECONDS] [--workers N] [--tree-walker]\n\n\
                     options:\n  \
-                    --addr ADDR        host:port to bind (default 127.0.0.1:8080)\n  \
+                    --address ADDR       host:port to bind (default 127.0.0.1:8080)\n  \
                     --timeout SECONDS  per-connection read/write timeout; 0 = none (default 30)\n  \
                     --workers N        request concurrency; 1 = single-threaded (default = CPU cores)\n  \
                     --tree-walker      run requests on the interpreter oracle, not the (default) VM\n  \
                     --dev              rich HTML error page on an uncaught fault (DEV ONLY; prod = bare 500)\n\n\
                     examples:\n  \
                     phg serve examples/web/server.phg\n  \
-                    phg serve app.phg --addr 0.0.0.0:3000 --timeout 15 --workers 8\n"
+                    phg serve app.phg --address 0.0.0.0:3000 --timeout 15 --workers 8\n"
         }
         "lsp" => {
             "lsp — run the Phorj language server over stdio (LSP for editors).\n\n\

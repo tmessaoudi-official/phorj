@@ -427,7 +427,7 @@ fn throwing_ctor_construction_propagated_without_declaration_is_unhandled() {
 fn ctor_body_discharges_against_declared_throws() {
     // The ctor BODY is checked with its declared throws in context (like `check_function`): a
     // throwing helper called under `?` propagates against the ctor's own `throws` — the DB_PRELUDE
-    // pattern (`DbError.fail(e)?` inside `constructor(...) throws DbError`). Clean.
+    // pattern (`DatabaseError.fail(e)?` inside `constructor(...) throws DatabaseError`). Clean.
     let ok = errors_of(&format!(
         "{ERRDEF} function boom() -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
              class Res {{ constructor() throws BadInput {{ var n = boom()?; }} }} \

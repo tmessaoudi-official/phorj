@@ -175,7 +175,8 @@ impl Compiler<'_> {
                 // the native's return operand type. Checked BEFORE `ctype(object)` — the qualifier is a
                 // bare module name (`List`), not a value, so `ctype(Ident("List"))` would error. Mirror
                 // the emit-path guard in `compiler/expr.rs`: a head that is not a local/match-binding,
-                // resolvable via `index_of_by_leaf`. Without this, `List.length(xs) - 1` compiles on
+                // resolvable via `index_of_qualified` (import-map-first, Native-excluded leaf
+                // fallback — same rule as the emit path). Without this, `List.length(xs) - 1` compiles on
                 // the interpreter but the VM rejects it ("undefined variable `List`") — a parity break.
                 Expr::Member {
                     object,
@@ -184,13 +185,14 @@ impl Compiler<'_> {
                     ..
                 } if matches!(&**object, Expr::Ident(q, _)
                     if self.resolve_local(q).is_none() && self.resolve_binding(q).is_none()
-                        && crate::native::index_of_by_leaf(q, name).is_some()) =>
+                        && crate::native::index_of_qualified(self.imports, q, name).is_some()) =>
                 {
                     let Expr::Ident(q, _) = &**object else {
                         unreachable!("guard above already matched `object` as `Expr::Ident`")
                     };
                     Ok(native_ret_cty(
-                        crate::native::index_of_by_leaf(q, name).unwrap(),
+                        crate::native::index_of_qualified(self.imports, q, name)
+                            .expect("guard above already resolved this qualified native"),
                     ))
                 }
                 // Static method call `ClassName.method(args)` (slice B0 / Statics): the head is a bare

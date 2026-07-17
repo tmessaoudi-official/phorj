@@ -9,16 +9,16 @@
 //
 // Everything is resolved at COMPILE TIME from each class's field layout and lowered to the shipped S1
 // `Row` accessors (`new Sale(row.getString("product")?, new Order(row.getInt("order.id")?, …), …)`),
-// so there is no runtime reflection and `run ≡ runvm` holds by construction. Like every `Core.Db`
+// so there is no runtime reflection and `run ≡ runvm` holds by construction. Like every `Core.DatabaseModule`
 // program it opens real bundled SQLite (`rusqlite`) → quarantined from the byte-identity differential;
 // validated by `tests/db.rs` on both backends. Built only under `--features db`.
 package Main;
 
 import Core.Output;
 import Core.Map;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.DbError;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.DatabaseError;
 
 // Every field is a PROMOTED constructor parameter, so its name IS its (possibly dotted) column name.
 class Country {
@@ -41,7 +41,7 @@ class Sale {
 // nested entity — `null` when the LEFT JOIN finds no shipping country.
 function main(): void {
     try {
-        Db db = new Db("sqlite::memory:");
+        Database db = new Database("sqlite::memory:");
         discard db.prepare("CREATE TABLE countries(code TEXT, name TEXT)").exec();
         discard db
             .prepare("CREATE TABLE customers(id INTEGER, name TEXT, country_code TEXT)")
@@ -80,7 +80,7 @@ function main(): void {
         Map<int, string> byId = db.prepare("SELECT id, product FROM sales ORDER BY id").queryMap();
         Output.printLine("100 -> {Map.get(byId, 100) ?? \"?\"}");
         Output.printLine("200 -> {Map.get(byId, 200) ?? \"?\"}");
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("DB error: {e.message}");
     }
 }

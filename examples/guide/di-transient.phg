@@ -13,9 +13,9 @@
 package Main;
 
 import Core.Output;
-import Core.DI.Injectable;
-import Core.DI.Transient;
-import Core.DI.inject;
+import Core.DependencyInjection.Injectable;
+import Core.DependencyInjection.Transient;
+import Core.DependencyInjection.inject;
 
 // SHARED (default) — mutable state makes the sharing observable.
 #[Injectable]

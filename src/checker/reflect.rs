@@ -1,13 +1,13 @@
 //! Core.Reflection — the precise `typeName` static-type pass (Tier 3 of
 //! `docs/specs/2026-06-25-core-reflect-design.md`).
 //!
-//! `Reflect.typeName(x)` cannot be both precise (distinguish `List`/`Map`/`Set`/`bytes`/enum) AND a
+//! `Reflection.typeName(x)` cannot be both precise (distinguish `List`/`Map`/`Set`/`bytes`/enum) AND a
 //! plain runtime native (PHP erases those distinctions — a `Map` is just a PHP `array`). The locked
 //! resolution: compute the answer from `x`'s **static type** at compile time, then erase the call to
 //! that answer before any backend — so all three backends emit the *same* result and PHP's erased
 //! runtime is never consulted. A value type → a baked string literal; an object → the runtime
-//! `Reflect.className(x)` (`get_class`, byte-identical); an optional → a single-eval `match`
-//! null-branch; an erased generic → the coarse `Reflect.kind(x)`.
+//! `Reflection.className(x)` (`get_class`, byte-identical); an optional → a single-eval `match`
+//! null-branch; an erased generic → the coarse `Reflection.kind(x)`.
 //!
 //! This is the same "erase front-end sugar before any backend" discipline as `type` aliases /
 //! generics / `html"…"` / UFCS: the checker records a span-keyed substitution; [`rewrite_ufcs`]
@@ -43,7 +43,7 @@ impl Checker {
             for a in args {
                 self.check_expr(a);
             }
-            return self.err(span, "Reflect.typeName expects exactly one argument");
+            return self.err(span, "Reflection.typeName expects exactly one argument");
         }
         let arg_ty = self.check_expr(&args[0]);
         // The argument already failed to type — it is reported; still surface `string` so a downstream

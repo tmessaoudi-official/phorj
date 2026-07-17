@@ -5,6 +5,9 @@ use super::*;
 
 impl<'c> Interp<'c> {
     pub(super) fn collect(&mut self, program: &Program) {
+        // Import map (leaf/alias → dotted module) for qualified-native resolution — see the
+        // `imports` field doc and `native::index_of_qualified`.
+        self.imports = crate::native::import_map(&program.items);
         for item in &program.items {
             match item {
                 Item::Function(f) => {

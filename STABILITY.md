@@ -57,8 +57,9 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 
 ### stable
 `Core.Output`, `Core.Math`, `Core.String`, `Core.Bytes`, `Core.Conversion`, `Core.Decimal`, `Core.List`,
-`Core.Map`, `Core.Set`, `Core.Json`, `Core.Hash`, `Core.Encoding`, `Core.Url`, `Core.Validation`,
-`Core.Csv`, `Core.Random`, `Core.File`.
+`Core.Map`, `Core.Set`, `Core.Json`, `Core.Hash`, `Core.Encoding`, `Core.Validation`,
+`Core.Csv`, `Core.Random`, `Core.File`. (`Core.Url` moved to the *deprecated* tier — DEC-279: merged
+into the Uri module as the `Uri.*` percent-encoding statics.)
 
 ### experimental
 `Core.Regex` (depends on the `regex` crate), `Core.Cryptography` (Argon2id; depends on `argon2`),
@@ -83,5 +84,13 @@ growing), `debug` (interactive debugger REPL + DAP transport).
 
 ## deprecated
 
-*None yet.* When a construct or stdlib symbol is deprecated it will be listed here with its replacement
-and the version in which it will be removed, and its use will emit `W-DEPRECATED`.
+| Symbol | Replacement | Removed in |
+|---|---|---|
+| `Core.Url.encodeForm` | `Core.UriModule` — `Uri.encodeForm` | 0.7.0 |
+| `Core.Url.encodeUriComponent` | `Core.UriModule` — `Uri.encodeComponent` | 0.7.0 |
+| `Core.Url.decodeForm` | `Core.UriModule` — `Uri.decodeForm` | 0.7.0 |
+| `Core.Url.decodeUriComponent` | `Core.UriModule` — `Uri.decodeComponent` | 0.7.0 |
+
+(DEC-279: the `Core.Url` module merged into the Uri module; the old paths keep working and emit
+`W-DEPRECATED` with the guidance above. The CLI flag `--addr` is a silently-accepted alias of
+`--address` slated for removal on the same schedule — DEC-276.)

@@ -1,4 +1,4 @@
-// `Core.Debug` (DEC-238) — the beautiful dumper: ONE function, BOTH products.
+// `Core.DebugModule` (DEC-238) — the beautiful dumper: ONE function, BOTH products.
 //
 //   Debug.dump(x)  renders x deeply, PRINTS it, and returns a Dumped<T>:
 //     .value()  — the pass-through (wrap any mid-expression value, flow unbroken)
@@ -7,13 +7,13 @@
 //   Runtime.exit(code)  clean deliberate termination (PHP's exit(), which phorj was missing)
 //
 // The format is deterministic (sorted instance fields, stable container layout) and versioned in
-// `src/native/debug.rs`. Nothing is in the wind: everything sits behind `import Core.Debug`.
+// `src/native/debug.rs`. Nothing is in the wind: everything sits behind `import Core.DebugModule`.
 package Main;
 
 import Core.Output;
 import Core.String;
-import Core.Debug;
-import Core.Debug.Debug;
+import Core.DebugModule;
+import Core.DebugModule.Debug;
 
 class Wallet {
     constructor(public string tier, public int cents) {}

@@ -1,4 +1,4 @@
-//! The RFC 3986 kernel for `Core.Uri` (DEC-240) — parse, per-component validation,
+//! The RFC 3986 kernel for `Core.UriModule` (DEC-240) — parse, per-component validation,
 //! normalization, recomposition, and reference resolution. Pure, deterministic, std-only.
 //!
 //! Every behavior here is pinned to PHP 8.5's `Uri\Rfc3986\Uri` (the transpile twin — built on

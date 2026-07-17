@@ -1,11 +1,18 @@
-//! `Core.Url` — URL percent-encoding (native-stdlib wave, Tier A).
+//! URL percent-encoding (native-stdlib wave, Tier A; merged into the Uri module by DEC-279).
 //!
-//! Pure, deterministic, std-only. `urlEncode`/`rawUrlEncode` (`string -> string`) and
-//! `decodeForm`/`decodeUriComponent` (`string -> string?`) are byte-identical to PHP `urlencode` /
-//! `rawurlencode` / `urldecode` / `rawurldecode`. The `encodeForm`/`decodeForm` pair is the `application/x-www-form-
-//! urlencoded` form (space ⇒ `+`, `~` encoded); the `encodeUriComponent`/`decodeUriComponent` pair is RFC 3986 (space ⇒ `%20`, `~`
-//! left as-is). Decoders return `string?` — `null` when the decoded bytes are not valid UTF-8 (a
-//! Phorj `string` is UTF-8; the PHP side mirrors with a `//u` check), so they stay byte-identical.
+//! Pure, deterministic, std-only. The CURRENT surface is the `Core.Native.Uri` rows here, wrapped
+//! by `Uri.encodeForm`/`encodeComponent`/`decodeForm`/`decodeComponent` statics in the
+//! `Core.UriModule` prelude. The old `Core.Url` module rows are KEPT REGISTERED as a deprecated
+//! twin (every `(Core.Url, *)` symbol has a `deprecation_of` row → `W-DEPRECATED` with the new
+//! path; the natives keep working for ≥1 minor release per `docs/DEPRECATION.md`).
+//!
+//! Encoders (`string -> string`) and decoders (`string -> string?`) are byte-identical to PHP
+//! `urlencode` / `rawurlencode` / `urldecode` / `rawurldecode`. The `encodeForm`/`decodeForm` pair
+//! is the `application/x-www-form-urlencoded` form (space ⇒ `+`, `~` encoded); the
+//! `encodeComponent`/`decodeComponent` pair (né `encodeUriComponent`/`decodeUriComponent` — the
+//! `Uri` qualifier makes the infix redundant) is RFC 3986 (space ⇒ `%20`, `~` left as-is).
+//! Decoders return `string?` — `null` when the decoded bytes are not valid UTF-8 (a Phorj
+//! `string` is UTF-8; the PHP side mirrors with a `//u` check), so they stay byte-identical.
 
 use super::*;
 use crate::types::Ty;
@@ -70,7 +77,7 @@ fn pct_decode(s: &str, raw: bool) -> Option<String> {
 fn encode_native(args: &[Value], raw: bool, who: &str) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(pct_encode(s, raw).into())),
-        _ => Err(format!("Url.{who} expects (string)")),
+        _ => Err(format!("Uri.{who} expects (string)")),
     }
 }
 fn decode_native(args: &[Value], raw: bool, who: &str) -> Result<Value, String> {
@@ -79,20 +86,20 @@ fn decode_native(args: &[Value], raw: bool, who: &str) -> Result<Value, String> 
             Some(d) => Value::Str(d.into()),
             None => Value::Null,
         }),
-        _ => Err(format!("Url.{who} expects (string)")),
+        _ => Err(format!("Uri.{who} expects (string)")),
     }
 }
 fn url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     encode_native(a, false, "encodeForm")
 }
 fn raw_url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
-    encode_native(a, true, "encodeUriComponent")
+    encode_native(a, true, "encodeComponent")
 }
 fn url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     decode_native(a, false, "decodeForm")
 }
 fn raw_url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
-    decode_native(a, true, "decodeUriComponent")
+    decode_native(a, true, "decodeComponent")
 }
 
 /// PHP emission for a decoder: decode, then return the string only if it is valid UTF-8 (matching the
@@ -102,45 +109,74 @@ fn php_decode(func: &str, arg: &str) -> String {
     format!("(preg_match('//u', ($__u = {func}({arg}))) === 1 ? $__u : null)")
 }
 
-/// The `Core.Url` registry entries.
+/// The percent-encoding registry entries: the current `Core.Native.Uri` rows (wrapped by the
+/// `Uri.*` prelude statics) + the deprecated `Core.Url` twin rows (DEC-279 — same eval/php bodies,
+/// flagged in [`super::deprecation_of`], removed after the deprecation window).
 pub(crate) fn url_natives() -> Vec<NativeFn> {
+    let row = |module, name, decode: bool, eval, php| NativeFn {
+        module,
+        name,
+        params: vec![Ty::String],
+        ret: if decode {
+            Ty::Optional(Box::new(Ty::String))
+        } else {
+            Ty::String
+        },
+        pure: true,
+        eval: NativeEval::Pure(eval),
+        php,
+    };
     vec![
-        NativeFn {
-            module: "Core.Url",
-            name: "encodeForm",
-            params: vec![Ty::String],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(url_encode_native),
-            php: |a| format!("urlencode({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.Url",
-            name: "encodeUriComponent",
-            params: vec![Ty::String],
-            ret: Ty::String,
-            pure: true,
-            eval: NativeEval::Pure(raw_url_encode_native),
-            php: |a| format!("rawurlencode({})", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.Url",
-            name: "decodeForm",
-            params: vec![Ty::String],
-            ret: Ty::Optional(Box::new(Ty::String)),
-            pure: true,
-            eval: NativeEval::Pure(url_decode_native),
-            php: |a| php_decode("urldecode", parg(a, 0)),
-        },
-        NativeFn {
-            module: "Core.Url",
-            name: "decodeUriComponent",
-            params: vec![Ty::String],
-            ret: Ty::Optional(Box::new(Ty::String)),
-            pure: true,
-            eval: NativeEval::Pure(raw_url_decode_native),
-            php: |a| php_decode("rawurldecode", parg(a, 0)),
-        },
+        // The current surface (DEC-279): percent-encoding lives in the Uri module.
+        row(
+            "Core.Native.Uri",
+            "encodeForm",
+            false,
+            url_encode_native,
+            |a| format!("urlencode({})", parg(a, 0)),
+        ),
+        row(
+            "Core.Native.Uri",
+            "encodeComponent",
+            false,
+            raw_url_encode_native,
+            |a| format!("rawurlencode({})", parg(a, 0)),
+        ),
+        row(
+            "Core.Native.Uri",
+            "decodeForm",
+            true,
+            url_decode_native,
+            |a| php_decode("urldecode", parg(a, 0)),
+        ),
+        row(
+            "Core.Native.Uri",
+            "decodeComponent",
+            true,
+            raw_url_decode_native,
+            |a| php_decode("rawurldecode", parg(a, 0)),
+        ),
+        // The deprecated `Core.Url` twin (kept working; W-DEPRECATED points at the new path).
+        row("Core.Url", "encodeForm", false, url_encode_native, |a| {
+            format!("urlencode({})", parg(a, 0))
+        }),
+        row(
+            "Core.Url",
+            "encodeUriComponent",
+            false,
+            raw_url_encode_native,
+            |a| format!("rawurlencode({})", parg(a, 0)),
+        ),
+        row("Core.Url", "decodeForm", true, url_decode_native, |a| {
+            php_decode("urldecode", parg(a, 0))
+        }),
+        row(
+            "Core.Url",
+            "decodeUriComponent",
+            true,
+            raw_url_decode_native,
+            |a| php_decode("rawurldecode", parg(a, 0)),
+        ),
     ]
 }
 

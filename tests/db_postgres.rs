@@ -1,5 +1,5 @@
 #![cfg(feature = "db-postgres")]
-//! `Core.Db` Postgres driver (DEC-208 slice I) — LIVE round-trip, gated on a reachable server.
+//! `Core.DatabaseModule` Postgres driver (DEC-208 slice I) — LIVE round-trip, gated on a reachable server.
 //!
 //! A real Postgres round-trip needs a live server, which the build environment does not always have. So
 //! this test is OPT-IN via the `PHORJ_PG_TEST_DSN` env var (the same discipline as the PHP oracle's
@@ -29,16 +29,16 @@ fn program(dsn: &str) -> String {
         r#"
 package Main;
 import Core.Output;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Statement;
-import Core.Db.Row;
-import Core.Db.DbError;
-import Core.Db.UniqueViolation;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Statement;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
+import Core.DatabaseModule.UniqueViolation;
 
 function main(): void {{
     try {{
-        Db db = new Db("{dsn}");
+        Database db = new Database("{dsn}");
         discard db.prepare("DROP TABLE IF EXISTS phorj_pg_it").exec();
         discard db.prepare("CREATE TABLE phorj_pg_it(id INT PRIMARY KEY, name TEXT, active BOOLEAN)").exec();
 
@@ -101,7 +101,7 @@ function main(): void {{
         discard db.prepare("DROP TABLE phorj_pg_arr").exec();
 
         // A closure transaction — BEGIN/COMMIT through the portable control SQL, returning a value.
-        int tx = db.transaction(function(): int throws DbError {{
+        int tx = db.transaction(function(): int throws DatabaseError {{
             Statement s = db.prepare("UPDATE phorj_pg_it SET name = 'upd' WHERE id = 1")?;
             discard s.exec()?;
             return 7;
@@ -110,7 +110,7 @@ function main(): void {{
 
         discard db.prepare("DROP TABLE phorj_pg_it").exec();
         db.close();
-    }} catch (DbError e) {{
+    }} catch (DatabaseError e) {{
         Output.printLine("unexpected: {{e.message}}");
     }}
 }}

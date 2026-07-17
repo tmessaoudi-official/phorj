@@ -870,7 +870,7 @@ impl Transpiler {
             self.line("}");
         }
         if self.uses_uri {
-            // `Core.Uri` (DEC-240) — thin wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri`
+            // `Core.UriModule` (DEC-240) — thin wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri`
             // (the transpile twin; the Rust kernel is pinned to it byte-for-byte). Fallible
             // operations catch `Uri\InvalidUriException` into the same `<<E>>`-sentinel messages
             // the Rust natives produce; the injected `Uri` prelude classifies them into the typed

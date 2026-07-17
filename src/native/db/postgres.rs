@@ -1,4 +1,4 @@
-//! The Postgres [`DriverConn`] backend for `Core.Db` (DEC-208 slice I), over the SYNC `postgres` crate.
+//! The Postgres [`DriverConn`] backend for `Core.DatabaseModule` (DEC-208 slice I), over the SYNC `postgres` crate.
 //!
 //! This is the driver behind a `postgres://…` / `postgresql://…` DSN. It plugs into the SAME
 //! [`DriverConn`] trait as the shipped SQLite driver ([`super::sqlite`]) — the multi-driver seam — so
@@ -11,7 +11,7 @@
 //! - **value mapping** — phorj [`Value`] ↔ Postgres binary types, dispatched on each column's type OID
 //!   ([`pg_params`] / [`pg_cell`]); the common scalar set (bool, int2/4/8, float4/8, text family, bytea)
 //!   is native, and richer types (numeric, json, timestamp, arrays) are read via a `::text` cast (a
-//!   clear DbError guides the caller) — matching slice E's "store decimal columns as TEXT" guidance;
+//!   clear DatabaseError guides the caller) — matching slice E's "store decimal columns as TEXT" guidance;
 //! - **error classification** — Postgres `SQLSTATE` → the DEC-208 [`super`] taxonomy ([`pg_err_kind`]);
 //! - **credential redaction** (slice G) — the DSN password is extracted into the connection [`Config`]
 //!   at connect and NEVER retained; only a [`redact_dsn_password`]-scrubbed DSN is stored, so every
@@ -35,7 +35,7 @@ use std::str::FromStr;
 /// `40001` serialization_failure / `40P01` deadlock_detected → `SerializationFailure` (the transient
 /// class retry targets); `57014` query_canceled (a fired `statement_timeout`) → `Timeout`; `08xxx`
 /// connection exceptions → `ConnectionError`; `42xxx` syntax/access → `SyntaxError`. Anything else stays
-/// generic (no marker → the base `DbError`). Mirrors [`super::sqlite`]'s extended-result-code mapping.
+/// generic (no marker → the base `DatabaseError`). Mirrors [`super::sqlite`]'s extended-result-code mapping.
 fn pg_err_kind(e: &postgres::Error) -> Option<&'static str> {
     let code = e.code()?.code();
     Some(match code {
@@ -49,12 +49,12 @@ fn pg_err_kind(e: &postgres::Error) -> Option<&'static str> {
     })
 }
 
-/// Render a `postgres` error as the `DbResult.Err` message the prelude throws on, prefixed with the
+/// Render a `postgres` error as the `DatabaseResult.Err` message the prelude throws on, prefixed with the
 /// `<<Kind>>` taxonomy marker (see [`pg_err_kind`]). `postgres::Error`'s `Display` is the server
 /// message / IO error text — it never contains the DSN or password, so it is safe to include verbatim.
 fn pg_sql_err(e: postgres::Error) -> String {
     let kind = pg_err_kind(&e);
-    let base = format!("Core.Db: {e}");
+    let base = format!("Core.DatabaseModule: {e}");
     match kind {
         Some(tag) => format!("<<{tag}>>{base}"),
         None => base,
@@ -82,17 +82,17 @@ impl std::fmt::Debug for PgConn {
 }
 
 /// Open a `postgres://` connection (DEC-208 slice I). Any password carried inline in the DSN (whether
-/// the user wrote it directly or the `Db.withPassword` factory injected a `Core.Secret`, slice G) is
+/// the user wrote it directly or the `Database.withPassword` factory injected a `Core.Secret`, slice G) is
 /// parsed OUT of the DSN into the [`Config`] by `Config::from_str` and NEVER retained on the handle —
 /// only a [`redact_dsn_password`]-scrubbed DSN is stored, so every error / diagnostic path is safe by
 /// construction (a connect error prints the host but never the password, unlike PDO).
 pub(super) fn open(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     let redacted = redact_dsn_password(dsn);
     let config = Config::from_str(dsn).map_err(|e| {
-        format!("<<ConnectionError>>Core.Db: invalid postgres DSN `{redacted}`: {e}")
+        format!("<<ConnectionError>>Core.DatabaseModule: invalid postgres DSN `{redacted}`: {e}")
     })?;
     let client = config.connect(NoTls).map_err(|e| {
-        let base = format!("Core.Db: cannot connect to `{redacted}`: {e}");
+        let base = format!("Core.DatabaseModule: cannot connect to `{redacted}`: {e}");
         match pg_err_kind(&e) {
             Some(tag) => format!("<<{tag}>>{base}"),
             None => format!("<<ConnectionError>>{base}"),
@@ -115,7 +115,8 @@ pub(super) fn open(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
 /// a clean, catchable DB error. The bindable scalar set matches the SQLite driver
 /// (int/float/string/bool/bytes/null); a non-scalar is a clean error, never a silent coercion.
 fn pg_param(v: &Value, expected: &Type) -> Result<Box<dyn ToSql + Sync>, String> {
-    let overflow = |n: i64, t: &str| format!("Core.Db: int {n} does not fit the {t} column");
+    let overflow =
+        |n: i64, t: &str| format!("Core.DatabaseModule: int {n} does not fit the {t} column");
     Ok(match v {
         Value::Int(n) => match *expected {
             Type::INT2 => Box::new(i16::try_from(*n).map_err(|_| overflow(*n, "int2"))?),
@@ -150,7 +151,7 @@ fn pg_param(v: &Value, expected: &Type) -> Result<Box<dyn ToSql + Sync>, String>
         },
         other => {
             return Err(format!(
-                "Core.Db: cannot bind a {} value (bind a decimal as text with a ::numeric cast)",
+                "Core.DatabaseModule: cannot bind a {} value (bind a decimal as text with a ::numeric cast)",
                 other.type_name()
             ))
         }
@@ -162,7 +163,7 @@ fn pg_param(v: &Value, expected: &Type) -> Result<Box<dyn ToSql + Sync>, String>
 fn pg_params(values: &[Value], expected: &[Type]) -> Result<Vec<Box<dyn ToSql + Sync>>, String> {
     if values.len() != expected.len() {
         return Err(format!(
-            "Core.Db: {} bound value(s) for {} placeholder(s) in the SQL",
+            "Core.DatabaseModule: {} bound value(s) for {} placeholder(s) in the SQL",
             values.len(),
             expected.len()
         ));
@@ -177,7 +178,7 @@ fn pg_params(values: &[Value], expected: &[Type]) -> Result<Vec<Box<dyn ToSql + 
 /// A fetched Postgres cell → phorj value, dispatched on the column's declared type. The common scalar
 /// set is read natively (via the binary protocol); a `NULL` in any of them yields `Value::Null` (the
 /// accessor layer then enforces optionality). A type outside the set (numeric, json/jsonb, timestamp,
-/// arrays, …) returns a clear DbError steering to a `::text` cast — matching slice E's "store decimal
+/// arrays, …) returns a clear DatabaseError steering to a `::text` cast — matching slice E's "store decimal
 /// columns as TEXT" guidance (a `SELECT amount::text` column reads as text, and `Row.getDecimal` parses
 /// it exactly).
 fn pg_cell(row: &Row, i: usize, ty: &Type, name: &str) -> Result<Value, String> {
@@ -236,7 +237,7 @@ fn pg_cell(row: &Row, i: usize, ty: &Type, name: &str) -> Result<Value, String> 
         }
         _ => {
             return Err(format!(
-                "Core.Db: column `{name}` has unsupported postgres type `{ty}` — select it with a \
+                "Core.DatabaseModule: column `{name}` has unsupported postgres type `{ty}` — select it with a \
                  `::text` cast (e.g. `SELECT {name}::text`) to read numeric/json/timestamp values"
             ))
         }
@@ -276,9 +277,9 @@ fn translate_positional(sql: &str, pbs: &[PosBind]) -> Result<(String, Vec<Value
                 out.push(c);
             }
             '?' if !in_s && !in_d => {
-                let b = pbs
-                    .get(consumed)
-                    .ok_or_else(|| "Core.Db: more ? placeholders than bound values".to_string())?;
+                let b = pbs.get(consumed).ok_or_else(|| {
+                    "Core.DatabaseModule: more ? placeholders than bound values".to_string()
+                })?;
                 consumed += 1;
                 match b {
                     PosBind::One(v) => {
@@ -304,7 +305,7 @@ fn translate_positional(sql: &str, pbs: &[PosBind]) -> Result<(String, Vec<Value
     }
     if consumed != pbs.len() {
         return Err(format!(
-            "Core.Db: {} bound value(s) but {} ? placeholder(s) in the SQL",
+            "Core.DatabaseModule: {} bound value(s) but {} ? placeholder(s) in the SQL",
             pbs.len(),
             consumed
         ));
@@ -366,7 +367,9 @@ fn translate_named(sql: &str, pairs: &[(String, Value)]) -> Result<(String, Vec<
                             .find(|(n, _)| *n == name)
                             .map(|(_, v)| v.clone())
                             .ok_or_else(|| {
-                                format!("Core.Db: named parameter `:{name}` was not bound")
+                                format!(
+                                    "Core.DatabaseModule: named parameter `:{name}` was not bound"
+                                )
                             })?;
                         params.push(v);
                         let k = params.len();
@@ -388,7 +391,7 @@ fn translate_named(sql: &str, pairs: &[(String, Value)]) -> Result<(String, Vec<
         .find(|(n, _)| !assigned.iter().any(|(a, _)| a == n))
     {
         return Err(format!(
-            "Core.Db: bound named parameter `:{n}` does not appear in the SQL"
+            "Core.DatabaseModule: bound named parameter `:{n}` does not appear in the SQL"
         ));
     }
     Ok((out, params))
@@ -500,15 +503,15 @@ impl DriverConn for PgConn {
             let refs = param_refs(&boxes);
             let rows = client.query(&stmt, &refs).map_err(pg_sql_err)?;
             let row = rows.first().ok_or_else(|| {
-                "<<ConstraintViolation>>Core.Db: RETURNING produced no row".to_string()
+                "<<ConstraintViolation>>Core.DatabaseModule: RETURNING produced no row".to_string()
             })?;
             if row.is_empty() {
-                return Err("Core.Db: RETURNING produced no column".to_string());
+                return Err("Core.DatabaseModule: RETURNING produced no column".to_string());
             }
             return match pg_cell(row, 0, row.columns()[0].type_(), row.columns()[0].name())? {
                 Value::Int(n) => Ok(n),
                 other => Err(format!(
-                    "Core.Db.execReturningId: RETURNING column is {}, not an int id",
+                    "Core.DatabaseModule.execReturningId: RETURNING column is {}, not an int id",
                     other.type_name()
                 )),
             };
@@ -525,7 +528,7 @@ impl DriverConn for PgConn {
             .map_err(pg_sql_err)?;
         match rows.first() {
             Some(r) => r.try_get::<_, i64>(0).map_err(pg_sql_err),
-            None => Err("Core.Db: lastval() returned no row".to_string()),
+            None => Err("Core.DatabaseModule: lastval() returned no row".to_string()),
         }
     }
 
@@ -566,7 +569,7 @@ impl DriverConn for PgConn {
                     Value::List(v) => v,
                     other => {
                         return Err(format!(
-                            "Core.Db.executeMany: each row must be a list, got {}",
+                            "Core.DatabaseModule.executeMany: each row must be a list, got {}",
                             other.type_name()
                         ))
                     }
@@ -770,6 +773,6 @@ mod tests {
         assert_eq!(kind_of("08006"), Some("ConnectionError"));
         assert_eq!(kind_of("42601"), Some("SyntaxError")); // syntax_error
         assert_eq!(kind_of("42P01"), Some("SyntaxError")); // undefined_table
-        assert_eq!(kind_of("22012"), None); // division_by_zero → base DbError
+        assert_eq!(kind_of("22012"), None); // division_by_zero → base DatabaseError
     }
 }

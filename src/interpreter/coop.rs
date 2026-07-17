@@ -49,6 +49,7 @@ impl<'c> Interp<'c> {
             cur_unchecked: false,
             parent_parents: std::collections::BTreeMap::new(),
             parent_mro: std::collections::BTreeMap::new(),
+            imports: HashMap::new(),
             out: String::new(),
             trace_stack: Vec::new(),
             depth: 0,

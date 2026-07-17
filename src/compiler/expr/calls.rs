@@ -92,13 +92,17 @@ impl Compiler<'_> {
             // Namespaced native call: `console.println(x)` — a member call whose head is an imported
             // module qualifier rather than a value (M3 Wave 1). Locals-first: only an identifier that
             // is *not* a bound local/match-binding can be a qualifier, and the checker has already
-            // enforced that it was imported and the native exists, so `index_of_by_leaf` is an
-            // unambiguous lower (every stdlib leaf is distinct). Lowers to `Op::CallNative`, which
-            // pushes the native's result — no separate `Const(Unit)` (the old `Print` path's pair).
+            // enforced that it was imported and the native exists. Resolution is import-map-first
+            // with a Native-excluded leaf fallback (`native::index_of_qualified`): the DEC-277
+            // preludes import their raw natives under an alias, and a prelude class (`Uri`,
+            // `Database`) must never leaf-capture its same-leaf `Core.Native.*` module. Lowers to
+            // `Op::CallNative`, which pushes the native's result — no separate `Const(Unit)` (the
+            // old `Print` path's pair).
             if !*safe {
                 if let Expr::Ident(q, _) = &**object {
                     if self.resolve_local(q).is_none() && self.resolve_binding(q).is_none() {
-                        if let Some(idx) = crate::native::index_of_by_leaf(q, name) {
+                        if let Some(idx) = crate::native::index_of_qualified(self.imports, q, name)
+                        {
                             for a in args {
                                 self.expr(a)?;
                             }
@@ -452,6 +456,7 @@ impl Compiler<'_> {
             self.variants,
             self.enum_descs,
             self.classes,
+            self.imports,
             self.statics_index,
             self.consts_index,
             self.class_descs,

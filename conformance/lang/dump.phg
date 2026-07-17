@@ -1,4 +1,4 @@
-// Conformance: `Core.Debug` dump (DEC-238) — the v1 rendering format is a THREE-BACKEND contract:
+// Conformance: `Core.DebugModule` dump (DEC-238) — the v1 rendering format is a THREE-BACKEND contract:
 // the interpreter, the VM, and the transpiled PHP (`__phorj_debug_render` + the enum-variant
 // table) must produce this golden byte-for-byte. Covers: scalar pass-through, deep instances
 // (sorted fields), nested containers (inline vs wrapped), qualified enum variants with payloads,
@@ -7,8 +7,8 @@ package Main;
 
 import Core.Output;
 import Core.String;
-import Core.Debug;
-import Core.Debug.Debug;
+import Core.DebugModule;
+import Core.DebugModule.Debug;
 
 enum Status { Active(int level), Dormant }
 

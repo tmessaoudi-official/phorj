@@ -55,13 +55,13 @@ pub(super) const RESULT_PRELUDE: &str = "enum Result<T, E> { Success(T value), F
 /// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.String` (so the prelude also
 /// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
 /// stdlib behind the static-method API (slice B0). Flows through every backend as ordinary classes.
-/// `Core.Debug` (DEC-238) — the beautiful dumper. ONE function carrying both products (developer-
+/// `Core.DebugModule` (DEC-238) — the beautiful dumper. ONE function carrying both products (developer-
 /// ruled): `Debug.dump(x)` renders deeply (the versioned v1 format in `native/debug.rs`), PRINTS,
 /// and returns `Dumped<T>` — `.value()` is the pass-through, `.text()` the captured rendering.
 /// `Debug.dd(x)` (dump + exit 1) and `Runtime.exit` land in slice 2. Nothing in the wind: only
-/// reachable through `import Core.Debug`.
+/// reachable through `import Core.DebugModule`.
 pub(super) const DEBUG_PRELUDE: &str = r#"
-import Core.DebugSys;
+import Core.Native.Debug as NativeDebug;
 import Core.Output;
 import Core.Runtime;
 
@@ -76,7 +76,7 @@ class Debug {
   // Render + PRINT + carry: `int t = Debug.dump(price).value() * qty;` flows on;
   // `string snap = Debug.dump(cfg).text();` captures (already printed).
   static function dump<T>(T v): Dumped<T> {
-    string s = DebugSys.render(v);
+    string s = NativeDebug.render(v);
     Output.printLine(s);
     return new Dumped(v, s);
   }
@@ -89,7 +89,7 @@ class Debug {
 }
 "#;
 
-/// `Core.Session` (W3, TOP-20 #3 blocker) — HTTP sessions for `phg serve`, on top of the
+/// `Core.SessionModule` (W3, TOP-20 #3 blocker) — HTTP sessions for `phg serve`, on top of the
 /// `Core.Http` `Request`/`Response` value types. THROW-FREE surface (in-memory store ops are
 /// total). Security defaults ON — better than PHP's opt-in ini flags: the cookie is
 /// `HttpOnly; SameSite=Lax; Path=/`; ids are 128-bit OS-entropy hex; an expired/unknown cookie id
@@ -97,7 +97,7 @@ class Debug {
 /// defense) is first-class. Values are strings (structured data goes through `Core.Json` — PHP's
 /// serialized `$_SESSION` does the same under the hood). Native-only (`E-TRANSPILE-SESSION`).
 pub(super) const SESSION_PRELUDE: &str = r#"
-import Core.SessionSys;
+import Core.Native.Session as NativeSession;
 import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
@@ -114,7 +114,7 @@ class Session {
   }
   static function startWithTtl(Request req, int ttlSeconds): Session {
     string cand = Session.cookieSid(req);
-    return new Session(SessionSys.acquire(cand, ttlSeconds));
+    return new Session(NativeSession.acquire(cand, ttlSeconds));
   }
   private static function cookieSid(Request req): string {
     string? cookies = req.header("Cookie");
@@ -128,16 +128,16 @@ class Session {
     return "";
   }
   function id(): string { return this.sid; }
-  function get(string key): string? { return SessionSys.get(this.sid, key); }
-  function set(string key, string value): void { discard SessionSys.set(this.sid, key, value); }
-  function remove(string key): void { discard SessionSys.remove(this.sid, key); }
+  function get(string key): string? { return NativeSession.get(this.sid, key); }
+  function set(string key, string value): void { discard NativeSession.set(this.sid, key, value); }
+  function remove(string key): void { discard NativeSession.remove(this.sid, key); }
   // Sorted (deterministic) key listing.
-  function keys(): List<string> { return SessionSys.keys(this.sid); }
-  function destroy(): void { discard SessionSys.destroy(this.sid); }
+  function keys(): List<string> { return NativeSession.keys(this.sid); }
+  function destroy(): void { discard NativeSession.destroy(this.sid); }
   // The session-fixation defense: a FRESH id carrying the same data; the old id is dead
   // immediately. Call it on every privilege change (login/logout).
   function regenerate(): Session {
-    this.sid = SessionSys.regenerate(this.sid);
+    this.sid = NativeSession.regenerate(this.sid);
     return this;
   }
   // Attach the session cookie to a response — HttpOnly + SameSite=Lax + Path=/ (secure defaults;
@@ -385,8 +385,8 @@ pub(super) const REGEX_PRELUDE: &str = "class Regex { constructor(public string 
 
 /// The `Secret<T>` opaque-wrapper type, injected when a program imports `Core.Secret` (Fork B,
 /// `docs/specs/2026-06-28-secret-type-design.md`). A `Secret<T>` value is constructed `new Secret(x)`
-/// `Core.Mail` (DEC-223) — the native mailer prelude, a TWIN of `Core.Db`: prelude classes wrap the
-/// `Core.MailSys` natives, errors flow through the prelude-local `MailResult<T>` + a `<<Kind>>`-parsing
+/// `Core.Mail` (DEC-223) — the native mailer prelude, a TWIN of `Core.DatabaseModule`: prelude classes wrap the
+/// `Core.Native.Mail` natives, errors flow through the prelude-local `MailResult<T>` + a `<<Kind>>`-parsing
 /// `MailError.fail`, and the transport credential is a `Core.Secret`. Native-only (`E-TRANSPILE-MAIL`
 /// — see the pipeline ladder gate); every symbol import-gated (nothing in the wind). Surface notes
 /// realized under bounded autonomy (developer to confirm, recorded in C-decisions DEC-230): the spec's
@@ -394,20 +394,20 @@ pub(super) const REGEX_PRELUDE: &str = "class Regex { constructor(public string 
 /// `SmtpConfig.withAuth(...)` (phorj has NO constructor default params / overloading — gap flagged in
 /// KNOWN_ISSUES), and `new SendmailTransport()` path override is `SendmailTransport.at(path)`.
 pub(super) const MAIL_PRELUDE: &str = r#"
-import Core.MailSys;
+import Core.Native.Mail as NativeMail;
 import Core.String;
 import Core.List;
-// `Core.Secret` provides the opaque credential wrapper for `SmtpConfig.withAuth` (the Db.withPassword
+// `Core.Secret` provides the opaque credential wrapper for `SmtpConfig.withAuth` (the Database.withPassword
 // discipline): the SMTP password never sits in plaintext in user code and is never retained by the
 // transport (only a redacted `smtp://host:port` description is stored).
 import Core.Secret;
 
-// Prelude-local result carrier (NOT Core.Result — see the Core.Db native docs on injection order).
+// Prelude-local result carrier (NOT Core.Result — see the Core.DatabaseModule native docs on injection order).
 enum MailResult<T> { Ok(T value), Err(string message) }
 
 open class MailError implements Error {
   constructor(public string message) {}
-  // The single classification point (the `DbError.fail` mechanism): natives tag failures with a
+  // The single classification point (the `DatabaseError.fail` mechanism): natives tag failures with a
   // `<<Kind>>` marker; this strips it and throws the matching TYPED subtype, so
   // `catch (AuthFailed e)` is precise while `catch (MailError e)` still catches everything.
   static function fail(string message): never throws MailError {
@@ -423,8 +423,8 @@ open class MailError implements Error {
   }
 }
 
-// Typed error taxonomy (spec §5, shaped like DbError's). `MailTimeout`/`MailIo` carry the Mail prefix
-// because bare `Timeout` already belongs to Core.Db's taxonomy (two injected classes may not collide).
+// Typed error taxonomy (spec §5, shaped like DatabaseError's). `MailTimeout`/`MailIo` carry the Mail prefix
+// because bare `Timeout` already belongs to Core.DatabaseModule's taxonomy (two injected classes may not collide).
 class ConnectionFailed extends MailError { constructor(string message) { parent.constructor(message); } }
 class AuthFailed extends MailError { constructor(string message) { parent.constructor(message); } }
 class RecipientRejected extends MailError { constructor(string message) { parent.constructor(message); } }
@@ -439,7 +439,7 @@ class MailIo extends MailError { constructor(string message) { parent.constructo
 // mail() footgun) is structurally impossible.
 class Address {
   constructor(public string email, public string name) throws MailError {
-    match (MailSys.addressCheck(email, name)) { MailResult.Ok(_) => Address.ok(), MailResult.Err(e) => MailError.fail(e)? };
+    match (NativeMail.addressCheck(email, name)) { MailResult.Ok(_) => Address.ok(), MailResult.Err(e) => MailError.fail(e)? };
   }
   // The name-less form (`Address.of("a@b.c")`) — phorj has no ctor default params.
   static function of(string email): Address throws MailError { return new Address(email, "")?; }
@@ -485,53 +485,53 @@ class NullTransport { constructor() {} }
 class Email {
   private mutable MailHandle raw;
   constructor() {
-    this.raw = MailSys.emailNew();
+    this.raw = NativeMail.emailNew();
   }
   function from(Address a): Email throws MailError {
-    this.raw = match (MailSys.from(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.from(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function replyTo(Address a): Email throws MailError {
-    this.raw = match (MailSys.replyTo(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.replyTo(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function to(Address a): Email throws MailError {
-    this.raw = match (MailSys.to(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.to(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function cc(Address a): Email throws MailError {
-    this.raw = match (MailSys.cc(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.cc(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function bcc(Address a): Email throws MailError {
-    this.raw = match (MailSys.bcc(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.bcc(this.raw, a.email, a.name)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function subject(string s): Email throws MailError {
-    this.raw = match (MailSys.subject(this.raw, s)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.subject(this.raw, s)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function text(string body): Email throws MailError {
-    this.raw = match (MailSys.text(this.raw, body)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.text(this.raw, body)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function html(string body): Email throws MailError {
-    this.raw = match (MailSys.html(this.raw, body)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    this.raw = match (NativeMail.html(this.raw, body)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function attach(Attachment a): Email throws MailError {
     if (var d = a.data) {
-      this.raw = match (MailSys.attachBytes(this.raw, a.name, a.mime, d)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+      this.raw = match (NativeMail.attachBytes(this.raw, a.name, a.mime, d)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     } else {
-      this.raw = match (MailSys.attachFile(this.raw, a.path, a.mime)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+      this.raw = match (NativeMail.attachFile(this.raw, a.path, a.mime)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     }
     return this;
   }
   function attachInline(string cid, Attachment a): Email throws MailError {
     if (var d = a.data) {
-      this.raw = match (MailSys.attachInlineBytes(this.raw, cid, a.mime, d)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+      this.raw = match (NativeMail.attachInlineBytes(this.raw, cid, a.mime, d)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     } else {
-      this.raw = match (MailSys.attachInline(this.raw, cid, a.path, a.mime)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+      this.raw = match (NativeMail.attachInline(this.raw, cid, a.path, a.mime)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
     }
     return this;
   }
@@ -546,154 +546,154 @@ class Mailer {
   constructor(SmtpConfig | SendmailTransport | FileTransport | NullTransport transport) throws MailError {
     this.raw = match (transport) {
       SmtpConfig s => Mailer.connectSmtp(s)?,
-      SendmailTransport s => match (MailSys.sendmail(s.path)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? },
-      FileTransport f => match (MailSys.fileTransport(f.dir)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? },
-      NullTransport n => match (MailSys.nullTransport()) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? }
+      SendmailTransport s => match (NativeMail.sendmail(s.path)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? },
+      FileTransport f => match (NativeMail.fileTransport(f.dir)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? },
+      NullTransport n => match (NativeMail.nullTransport()) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? }
     };
   }
   private static function connectSmtp(SmtpConfig cfg): MailHandle throws MailError {
     mutable string pw = "";
     if (var s = cfg.password) { pw = s.expose(); }
-    return match (MailSys.smtp(cfg.host, cfg.port, cfg.user, pw, cfg.tls, cfg.allowInsecureAuth)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
+    return match (NativeMail.smtp(cfg.host, cfg.port, cfg.user, pw, cfg.tls, cfg.allowInsecureAuth)) { MailResult.Ok(h) => h, MailResult.Err(e) => MailError.fail(e)? };
   }
   // Arm DKIM signing (RSA key PEM as a `Secret`) for every subsequent send on this mailer.
   function dkim(string domain, string selector, Secret<string> privateKeyPem): Mailer throws MailError {
-    match (MailSys.dkim(this.raw, domain, selector, privateKeyPem.expose())) { MailResult.Ok(_) => Mailer.ok(), MailResult.Err(e) => MailError.fail(e)? };
+    match (NativeMail.dkim(this.raw, domain, selector, privateKeyPem.expose())) { MailResult.Ok(_) => Mailer.ok(), MailResult.Err(e) => MailError.fail(e)? };
     return this;
   }
   function send(Email e): void throws MailError {
-    match (MailSys.send(this.raw, e.handle())) { MailResult.Ok(_) => Mailer.ok(), MailResult.Err(e2) => MailError.fail(e2)? };
+    match (NativeMail.send(this.raw, e.handle())) { MailResult.Ok(_) => Mailer.ok(), MailResult.Err(e2) => MailError.fail(e2)? };
   }
   // Batch over one reused transport connection. Fail-fast: the first failure aborts with that
   // message's typed error (the count already delivered is in the message). Returns the sent count.
   function sendAll(List<Email> emails): int throws MailError {
     mutable List<MailHandle> handles = new List<MailHandle>();
     for (Email e in emails) { handles = List.append(handles, e.handle()); }
-    return match (MailSys.sendAll(this.raw, handles)) { MailResult.Ok(n) => n, MailResult.Err(e) => MailError.fail(e)? };
+    return match (NativeMail.sendAll(this.raw, handles)) { MailResult.Ok(n) => n, MailResult.Err(e) => MailError.fail(e)? };
   }
   private static function ok(): void {}
 }
 "#;
 
-/// `Core.Fs` (W3, TOP-20 #5 blocker) — the TYPED filesystem prelude: every failure is a catchable
-/// `FsError` subtype (contrast the older `Core.File`, whose write/delete failures are uncatchable
+/// `Core.FileSystemModule` (W3, TOP-20 #5 blocker) — the TYPED filesystem prelude: every failure is a catchable
+/// `FileSystemError` subtype (contrast the older `Core.File`, whose write/delete failures are uncatchable
 /// hard faults — its deprecation is a queued adjudication; this module is purely additive).
 /// Listings are SORTED (determinism). Std-only, always compiled (no feature gate). The taxonomy is
-/// Fs-PREFIXED throughout (`FsNotFound`, not `NotFound` — a bare generic name would CAPTURE
+/// FileSystem-PREFIXED throughout (`FileSystemNotFoundError`, not `NotFound` — a bare generic name would CAPTURE
 /// user-space classes via the injected-type discipline; caught live when `examples/web/server.phg`'s
 /// own `NotFound` class collided).
 pub(super) const FS_PRELUDE: &str = r#"
-import Core.FsSys;
+import Core.Native.FileSystem as NativeFileSystem;
 import Core.String;
 import Core.List;
 
-// Prelude-local result carrier (NOT Core.Result — the Core.Db injection-order rationale).
-enum FsResult<T> { Ok(T value), Err(string message) }
+// Prelude-local result carrier (NOT Core.Result — the Core.DatabaseModule injection-order rationale).
+enum FileSystemResult<T> { Ok(T value), Err(string message) }
 
-open class FsError implements Error {
+open class FileSystemError implements Error {
   constructor(public string message) {}
-  static function fail(string message): never throws FsError {
-    if (String.startsWith(message, "<<NotFound>>")) { throw new FsNotFound(String.removePrefix(message, "<<NotFound>>")); }
-    if (String.startsWith(message, "<<PermissionDenied>>")) { throw new FsPermissionDenied(String.removePrefix(message, "<<PermissionDenied>>")); }
-    if (String.startsWith(message, "<<AlreadyExists>>")) { throw new FsAlreadyExists(String.removePrefix(message, "<<AlreadyExists>>")); }
-    if (String.startsWith(message, "<<NotADirectory>>")) { throw new FsNotADirectory(String.removePrefix(message, "<<NotADirectory>>")); }
-    if (String.startsWith(message, "<<IsADirectory>>")) { throw new FsIsADirectory(String.removePrefix(message, "<<IsADirectory>>")); }
-    if (String.startsWith(message, "<<DirNotEmpty>>")) { throw new FsDirNotEmpty(String.removePrefix(message, "<<DirNotEmpty>>")); }
-    if (String.startsWith(message, "<<FsIo>>")) { throw new FsIo(String.removePrefix(message, "<<FsIo>>")); }
-    throw new FsError(message);
+  static function fail(string message): never throws FileSystemError {
+    if (String.startsWith(message, "<<NotFound>>")) { throw new FileSystemNotFoundError(String.removePrefix(message, "<<NotFound>>")); }
+    if (String.startsWith(message, "<<PermissionDenied>>")) { throw new FileSystemPermissionDeniedError(String.removePrefix(message, "<<PermissionDenied>>")); }
+    if (String.startsWith(message, "<<AlreadyExists>>")) { throw new FileSystemAlreadyExistsError(String.removePrefix(message, "<<AlreadyExists>>")); }
+    if (String.startsWith(message, "<<NotADirectory>>")) { throw new FileSystemNotADirectoryError(String.removePrefix(message, "<<NotADirectory>>")); }
+    if (String.startsWith(message, "<<IsADirectory>>")) { throw new FileSystemIsADirectoryError(String.removePrefix(message, "<<IsADirectory>>")); }
+    if (String.startsWith(message, "<<DirNotEmpty>>")) { throw new FileSystemDirNotEmptyError(String.removePrefix(message, "<<DirNotEmpty>>")); }
+    if (String.startsWith(message, "<<FileSystemIoError>>")) { throw new FileSystemIoError(String.removePrefix(message, "<<FileSystemIoError>>")); }
+    throw new FileSystemError(message);
   }
 }
 
-class FsNotFound extends FsError { constructor(string message) { parent.constructor(message); } }
-class FsPermissionDenied extends FsError { constructor(string message) { parent.constructor(message); } }
-class FsAlreadyExists extends FsError { constructor(string message) { parent.constructor(message); } }
-class FsNotADirectory extends FsError { constructor(string message) { parent.constructor(message); } }
-class FsIsADirectory extends FsError { constructor(string message) { parent.constructor(message); } }
-class FsDirNotEmpty extends FsError { constructor(string message) { parent.constructor(message); } }
-class FsIo extends FsError { constructor(string message) { parent.constructor(message); } }
+class FileSystemNotFoundError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
+class FileSystemPermissionDeniedError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
+class FileSystemAlreadyExistsError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
+class FileSystemNotADirectoryError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
+class FileSystemIsADirectoryError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
+class FileSystemDirNotEmptyError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
+class FileSystemIoError extends FileSystemError { constructor(string message) { parent.constructor(message); } }
 
 // The typed filesystem surface (static module functions — filesystem state is ambient, so an
 // instance would carry nothing; the SORTED listings + typed errors are the value).
-class Fs {
-  static function readText(string path): string throws FsError {
-    return match (FsSys.readText(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+class FileSystem {
+  static function readText(string path): string throws FileSystemError {
+    return match (NativeFileSystem.readText(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function readBytes(string path): bytes throws FsError {
-    return match (FsSys.readBytes(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function readBytes(string path): bytes throws FileSystemError {
+    return match (NativeFileSystem.readBytes(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function writeText(string path, string contents): void throws FsError {
-    match (FsSys.writeText(path, contents)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function writeText(string path, string contents): void throws FileSystemError {
+    match (NativeFileSystem.writeText(path, contents)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function writeBytes(string path, bytes contents): void throws FsError {
-    match (FsSys.writeBytes(path, contents)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function writeBytes(string path, bytes contents): void throws FileSystemError {
+    match (NativeFileSystem.writeBytes(path, contents)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function appendText(string path, string contents): void throws FsError {
-    match (FsSys.appendText(path, contents)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function appendText(string path, string contents): void throws FileSystemError {
+    match (NativeFileSystem.appendText(path, contents)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function copy(string from, string to): void throws FsError {
-    match (FsSys.copy(from, to)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function copy(string from, string to): void throws FileSystemError {
+    match (NativeFileSystem.copy(from, to)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function move(string from, string to): void throws FsError {
-    match (FsSys.move(from, to)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function move(string from, string to): void throws FileSystemError {
+    match (NativeFileSystem.move(from, to)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function delete(string path): void throws FsError {
-    match (FsSys.delete(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function delete(string path): void throws FileSystemError {
+    match (NativeFileSystem.delete(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function size(string path): int throws FsError {
-    return match (FsSys.size(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function size(string path): int throws FileSystemError {
+    return match (NativeFileSystem.size(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function exists(string path): bool throws FsError {
-    return match (FsSys.exists(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function exists(string path): bool throws FileSystemError {
+    return match (NativeFileSystem.exists(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function isFile(string path): bool throws FsError {
-    return match (FsSys.isFile(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function isFile(string path): bool throws FileSystemError {
+    return match (NativeFileSystem.isFile(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function isDir(string path): bool throws FsError {
-    return match (FsSys.isDir(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function isDir(string path): bool throws FileSystemError {
+    return match (NativeFileSystem.isDir(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
   // Recursive create (mkdir -p semantics); removeDir removes ONE EMPTY dir; removeDirAll is the
   // loud recursive delete (refuses "/", "." and "..").
-  static function createDir(string path): void throws FsError {
-    match (FsSys.createDir(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function createDir(string path): void throws FileSystemError {
+    match (NativeFileSystem.createDir(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function removeDir(string path): void throws FsError {
-    match (FsSys.removeDir(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function removeDir(string path): void throws FileSystemError {
+    match (NativeFileSystem.removeDir(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function removeDirAll(string path): void throws FsError {
-    match (FsSys.removeDirAll(path)) { FsResult.Ok(_) => Fs.ok(), FsResult.Err(e) => FsError.fail(e)? };
+  static function removeDirAll(string path): void throws FileSystemError {
+    match (NativeFileSystem.removeDirAll(path)) { FileSystemResult.Ok(_) => FileSystem.ok(), FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
   // Entry NAMES of one directory, sorted; walk = every FILE under a root as sorted relative paths.
-  static function listDir(string path): List<string> throws FsError {
-    return match (FsSys.listDir(path)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function listDir(string path): List<string> throws FileSystemError {
+    return match (NativeFileSystem.listDir(path)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function walk(string root): List<string> throws FsError {
-    return match (FsSys.walk(root)) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function walk(string root): List<string> throws FileSystemError {
+    return match (NativeFileSystem.walk(root)) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
-  static function tempDir(): string throws FsError {
-    return match (FsSys.tempDir()) { FsResult.Ok(v) => v, FsResult.Err(e) => FsError.fail(e)? };
+  static function tempDir(): string throws FileSystemError {
+    return match (NativeFileSystem.tempDir()) { FileSystemResult.Ok(v) => v, FileSystemResult.Err(e) => FileSystemError.fail(e)? };
   }
   private static function ok(): void {}
 }
 "#;
 
-/// `Core.HttpClient` (W3-2, TOP-20 #2 blocker) — the sync HTTP client prelude (the Core.Db/Mail
+/// `Core.HttpClientModule` (W3-2, TOP-20 #2 blocker) — the sync HTTP client prelude (the Core.DatabaseModule/Mail
 /// architecture). Taxonomy names are prefixed where a bare name is already taken by another injected
 /// taxonomy (`HttpTimeout`/`HttpTlsError`/`HttpConnectionFailed` — `Timeout`/`TlsError`/
-/// `ConnectionFailed`/`ConnectionError` belong to Core.Db / Core.Mail; injected-class dedup would
+/// `ConnectionFailed`/`ConnectionError` belong to Core.DatabaseModule / Core.Mail; injected-class dedup would
 /// silently CAPTURE the other module's class — the cross-prelude collision smell recorded in
 /// KNOWN_ISSUES). Native-only (`E-TRANSPILE-HTTPCLIENT`).
 pub(super) const HTTP_CLIENT_PRELUDE: &str = r#"
-import Core.HttpClientSys;
+import Core.Native.HttpClient as NativeHttpClient;
 import Core.String;
 import Core.List;
 import Core.Bytes;
 
-// Prelude-local result carrier (NOT Core.Result — the Core.Db injection-order rationale).
+// Prelude-local result carrier (NOT Core.Result — the Core.DatabaseModule injection-order rationale).
 enum HcResult<T> { Ok(T value), Err(string message) }
 
 open class HttpClientError implements Error {
   constructor(public string message) {}
-  // The single classification point (the DbError.fail mechanism): `<<Kind>>` marker → typed subtype.
+  // The single classification point (the DatabaseError.fail mechanism): `<<Kind>>` marker → typed subtype.
   static function fail(string message): never throws HttpClientError {
     if (String.startsWith(message, "<<InvalidUrl>>")) { throw new InvalidUrl(String.removePrefix(message, "<<InvalidUrl>>")); }
     if (String.startsWith(message, "<<ConnectionFailed>>")) { throw new HttpConnectionFailed(String.removePrefix(message, "<<ConnectionFailed>>")); }
@@ -721,23 +721,23 @@ class BlockedAddress extends HttpClientError { constructor(string message) { par
 // A completed response: status, headers (names lowercased), body as text or bytes. Inert data
 // behind an opaque handle — reading it never re-touches the network.
 class HttpResponse {
-  constructor(private HcHandle raw) {}
+  constructor(private HttpClientHandle raw) {}
   function status(): int throws HttpClientError {
-    return match (HttpClientSys.status(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    return match (NativeHttpClient.status(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
   }
   // The named header's value, or null when absent (names are case-insensitive).
   function header(string name): string? throws HttpClientError {
-    return match (HttpClientSys.header(this.raw, name)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    return match (NativeHttpClient.header(this.raw, name)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
   }
   function headerNames(): List<string> throws HttpClientError {
-    return match (HttpClientSys.headerNames(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    return match (NativeHttpClient.headerNames(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
   }
   // The body as UTF-8 text (a non-UTF-8 body is a clean ProtocolError steering to bodyBytes()).
   function body(): string throws HttpClientError {
-    return match (HttpClientSys.bodyText(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    return match (NativeHttpClient.bodyText(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
   }
   function bodyBytes(): bytes throws HttpClientError {
-    return match (HttpClientSys.bodyBytes(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    return match (NativeHttpClient.bodyBytes(this.raw)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
   }
 }
 
@@ -774,7 +774,7 @@ class HttpClient {
   }
   // The general form: any method, parallel header name/value lists, a bytes body.
   function send(string method, string url, List<string> headerNames, List<string> headerValues, bytes body): HttpResponse throws HttpClientError {
-    HcHandle h = match (HttpClientSys.request(method, url, headerNames, headerValues, body, this.timeoutMs, this.maxRedirects, this.allowPrivate)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
+    HttpClientHandle h = match (NativeHttpClient.request(method, url, headerNames, headerValues, body, this.timeoutMs, this.maxRedirects, this.allowPrivate)) { HcResult.Ok(v) => v, HcResult.Err(e) => HttpClientError.fail(e)? };
     return new HttpResponse(h);
   }
 }
@@ -789,9 +789,9 @@ class HttpClient {
 pub(super) const SECRET_PRELUDE: &str =
     "class Secret<T> { constructor(private T value) {} function expose(): T { return this.value; } }";
 
-/// `Core.Uri` (DEC-240) — one immutable RFC 3986 `Uri` class with the typed `UriError` taxonomy.
+/// `Core.UriModule` (DEC-240) — one immutable RFC 3986 `Uri` class with the typed `UriError` taxonomy.
 /// The instance state is a single validated RAW string; every accessor/wither/operation calls a
-/// `Core.UriSys` native over it (`src/native/uri/`), whose Rust kernel is pinned byte-for-byte to
+/// `Core.Native.Uri` native over it (`src/native/uri/`), whose Rust kernel is pinned byte-for-byte to
 /// the transpile twin — PHP 8.5's always-on `Uri\Rfc3986\Uri` (probe record:
 /// `docs/research/2026-07-16-uri-twin-probes.md`) — so byte-identity holds with NO ladder
 /// quarantine. Fallible natives return the new raw form or a `<<E>>`-sentinel message (`<` is
@@ -800,7 +800,7 @@ pub(super) const SECRET_PRELUDE: &str =
 /// while the MESSAGES stay twin-identical). Getters are the NORMALIZED view (lowercased
 /// scheme/host, dot-segments removed, unreserved percent-escapes decoded); the `raw*` family
 /// returns the form as written.
-/// `Core.Iterator` (DEC-257) — the pull-iteration protocol interface. Implementors become
+/// `Core.IteratorModule` (DEC-257) — the pull-iteration protocol interface. Implementors become
 /// foreach-able (the checker desugars `for … in it` to a hasNext/next while-pull); the contract
 /// for `next()` past exhaustion is a fault ("iterator exhausted") — foreach never triggers it.
 pub(super) const ITERATOR_PRELUDE: &str = r#"
@@ -811,7 +811,7 @@ interface Iterator<T> {
 "#;
 
 pub(super) const URI_PRELUDE: &str = r#"
-import Core.UriSys;
+import Core.Native.Uri as NativeUri;
 import Core.String;
 
 open class UriError implements Error {
@@ -842,40 +842,49 @@ class UriBaseNotAbsolute extends UriError { constructor(string message) { parent
 
 class Uri {
   private constructor(public string raw) {}
-  static function parse(string s): Uri throws UriError { return Uri.wrap(UriSys.parse(s))?; }
+  static function parse(string s): Uri throws UriError { return Uri.wrap(NativeUri.parse(s))?; }
   static function wrap(string r): Uri throws UriError {
     if (String.startsWith(r, "<<E>>")) { return UriError.fail(String.removePrefix(r, "<<E>>"))?; }
     return new Uri(r);
   }
-  function scheme(): string? { return UriSys.scheme(this.raw); }
-  function rawScheme(): string? { return UriSys.rawScheme(this.raw); }
-  function userInfo(): string? { return UriSys.userInfo(this.raw); }
-  function rawUserInfo(): string? { return UriSys.rawUserInfo(this.raw); }
-  function username(): string? { return UriSys.username(this.raw); }
-  function rawUsername(): string? { return UriSys.rawUsername(this.raw); }
-  function password(): string? { return UriSys.password(this.raw); }
-  function rawPassword(): string? { return UriSys.rawPassword(this.raw); }
-  function host(): string? { return UriSys.host(this.raw); }
-  function rawHost(): string? { return UriSys.rawHost(this.raw); }
-  function port(): int? { return UriSys.port(this.raw); }
-  function path(): string { return UriSys.path(this.raw); }
-  function rawPath(): string { return UriSys.rawPath(this.raw); }
-  function query(): string? { return UriSys.query(this.raw); }
-  function rawQuery(): string? { return UriSys.rawQuery(this.raw); }
-  function fragment(): string? { return UriSys.fragment(this.raw); }
-  function rawFragment(): string? { return UriSys.rawFragment(this.raw); }
-  function withScheme(string? scheme): Uri throws UriError { return Uri.wrap(UriSys.withScheme(this.raw, scheme))?; }
-  function withUserInfo(string? userInfo): Uri throws UriError { return Uri.wrap(UriSys.withUserInfo(this.raw, userInfo))?; }
-  function withHost(string? host): Uri throws UriError { return Uri.wrap(UriSys.withHost(this.raw, host))?; }
-  function withPort(int? port): Uri throws UriError { return Uri.wrap(UriSys.withPort(this.raw, port))?; }
-  function withPath(string path): Uri throws UriError { return Uri.wrap(UriSys.withPath(this.raw, path))?; }
-  function withQuery(string? query): Uri throws UriError { return Uri.wrap(UriSys.withQuery(this.raw, query))?; }
-  function withFragment(string? fragment): Uri throws UriError { return Uri.wrap(UriSys.withFragment(this.raw, fragment))?; }
-  function resolve(string reference): Uri throws UriError { return Uri.wrap(UriSys.resolve(this.raw, reference))?; }
-  function equals(Uri other): bool { return UriSys.equals(this.raw, other.raw, false); }
-  function equalsIncludingFragment(Uri other): bool { return UriSys.equals(this.raw, other.raw, true); }
-  function toString(): string { return UriSys.toText(this.raw); }
+  function scheme(): string? { return NativeUri.scheme(this.raw); }
+  function rawScheme(): string? { return NativeUri.rawScheme(this.raw); }
+  function userInfo(): string? { return NativeUri.userInfo(this.raw); }
+  function rawUserInfo(): string? { return NativeUri.rawUserInfo(this.raw); }
+  function username(): string? { return NativeUri.username(this.raw); }
+  function rawUsername(): string? { return NativeUri.rawUsername(this.raw); }
+  function password(): string? { return NativeUri.password(this.raw); }
+  function rawPassword(): string? { return NativeUri.rawPassword(this.raw); }
+  function host(): string? { return NativeUri.host(this.raw); }
+  function rawHost(): string? { return NativeUri.rawHost(this.raw); }
+  function port(): int? { return NativeUri.port(this.raw); }
+  function path(): string { return NativeUri.path(this.raw); }
+  function rawPath(): string { return NativeUri.rawPath(this.raw); }
+  function query(): string? { return NativeUri.query(this.raw); }
+  function rawQuery(): string? { return NativeUri.rawQuery(this.raw); }
+  function fragment(): string? { return NativeUri.fragment(this.raw); }
+  function rawFragment(): string? { return NativeUri.rawFragment(this.raw); }
+  function withScheme(string? scheme): Uri throws UriError { return Uri.wrap(NativeUri.withScheme(this.raw, scheme))?; }
+  function withUserInfo(string? userInfo): Uri throws UriError { return Uri.wrap(NativeUri.withUserInfo(this.raw, userInfo))?; }
+  function withHost(string? host): Uri throws UriError { return Uri.wrap(NativeUri.withHost(this.raw, host))?; }
+  function withPort(int? port): Uri throws UriError { return Uri.wrap(NativeUri.withPort(this.raw, port))?; }
+  function withPath(string path): Uri throws UriError { return Uri.wrap(NativeUri.withPath(this.raw, path))?; }
+  function withQuery(string? query): Uri throws UriError { return Uri.wrap(NativeUri.withQuery(this.raw, query))?; }
+  function withFragment(string? fragment): Uri throws UriError { return Uri.wrap(NativeUri.withFragment(this.raw, fragment))?; }
+  function resolve(string reference): Uri throws UriError { return Uri.wrap(NativeUri.resolve(this.raw, reference))?; }
+  function equals(Uri other): bool { return NativeUri.equals(this.raw, other.raw, false); }
+  function equalsIncludingFragment(Uri other): bool { return NativeUri.equals(this.raw, other.raw, true); }
+  function toString(): string { return NativeUri.toText(this.raw); }
   function toRawString(): string { return this.raw; }
+  // Percent-encoding statics (DEC-279 — the former `Core.Url` module, merged here). Pure string
+  // transforms over the `Core.Native.Uri` percent-encoding natives; byte-identical to PHP
+  // `urlencode`/`rawurlencode`/`urldecode`/`rawurldecode`. Decoders yield `null` on invalid-UTF-8
+  // output. `encodeComponent`/`decodeComponent` (RFC 3986, space ⇒ `%20`) dropped the old
+  // `UriComponent` infix — the `Uri.` qualifier already says it.
+  static function encodeForm(string s): string { return NativeUri.encodeForm(s); }
+  static function encodeComponent(string s): string { return NativeUri.encodeComponent(s); }
+  static function decodeForm(string s): string? { return NativeUri.decodeForm(s); }
+  static function decodeComponent(string s): string? { return NativeUri.decodeComponent(s); }
 }
 "#;
 
@@ -1020,7 +1029,7 @@ class Instant {
 /// (whole-module-only vs also member-imports), and the injected member-type names that must be
 /// import-qualified (the `module_of` contribution). UA-L2 (registry-unification): the single source
 /// for BOTH the prelude-injection fold ([`inject_core_modules`]) AND the injected-type discipline
-/// ([`core_module_of`]) — so a new Core module (Db, HTTP expansions) is ONE row here, not edits in
+/// ([`core_module_of`]) — so a new Core module (Database, HTTP expansions) is ONE row here, not edits in
 /// the eight `inject_*_prelude` fns plus the hand-synced `module_of` match this replaced.
 pub(super) struct VirtualModule {
     /// The import path segments, e.g. `["Core", "Http"]`. Gates injection; also the qualifier root.
@@ -1029,7 +1038,7 @@ pub(super) struct VirtualModule {
     /// e.g. `"Http"`, `"Time"`, `"Runtime.Integer"`. Only meaningful when `bare_types` is non-empty.
     qualifier: &'static str,
     /// The prelude source to inject when the module is imported; `None` for attribute-only modules
-    /// (`Core.DI`/`Core.Runtime*`) that contribute to `module_of` but inject no enum/class prelude.
+    /// (`Core.DependencyInjection`/`Core.Runtime*`) that contribute to `module_of` but inject no enum/class prelude.
     src: Option<&'static str>,
     /// The conditionally-injected `respond` serve-bridge source (Http only) — appended when the
     /// program defines `handle` and no `respond`. The one honest residual special-case.
@@ -1045,183 +1054,183 @@ pub(super) struct VirtualModule {
     bare_types: &'static [&'static str],
 }
 
-/// `Core.Db` (DEC-208) — the enhanced-PDO surface: `Db`/`Statement`/`Row`/`DbError` phorj-source classes
-/// wrapping the opaque `DbHandle` and the internal `Core.DbSys` natives. Each method calls a
-/// `DbSys.*` native (which returns `Result<T, string>` — never a hard fault) and `match`es it, throwing
-/// a catchable `DbError` on `Failure` (DEC-208 error-mechanism = prelude-wrapper; a phorj-source `throw`
-/// is a real `Op::Throw`, byte-identical across both backends). `import Core.Db` transitively imports
-/// `Core.DbSys` (the natives) + `Core.Result` (the carrier), so this module runs BEFORE them.
+/// `Core.DatabaseModule` (DEC-208) — the enhanced-PDO surface: `Database`/`Statement`/`Row`/`DatabaseError` phorj-source classes
+/// wrapping the opaque `DatabaseHandle` and the internal `Core.Native.Database` natives. Each method calls a
+/// `NativeDatabase.*` native (which returns `Result<T, string>` — never a hard fault) and `match`es it, throwing
+/// a catchable `DatabaseError` on `Failure` (DEC-208 error-mechanism = prelude-wrapper; a phorj-source `throw`
+/// is a real `Op::Throw`, byte-identical across both backends). `import Core.DatabaseModule` transitively imports
+/// `Core.Native.Database` (the natives) + `Core.Result` (the carrier), so this module runs BEFORE them.
 pub(super) const DB_PRELUDE: &str = r#"
-import Core.DbSys;
+import Core.Native.Database as NativeDatabase;
 import Core.List;
 import Core.String;
-import Core.Iterator;
+import Core.IteratorModule;
 import Core.Abort.panic;
 // `Core.Map` is imported for the `queryMap<K,V>` hydration helpers the `desugar_db` pass generates
-// into a `Core.Db` program (they build the result `Map` via `Map.set`); like the `Core.List` import
+// into a `Core.DatabaseModule` program (they build the result `Map` via `Map.set`); like the `Core.List` import
 // above it makes the module's ops available to the generated helpers (and, as with `List`, to user
-// code under an `import Core.Db`).
+// code under an `import Core.DatabaseModule`).
 import Core.Map;
-// `Core.Secret` (Fork B) provides the opaque `Secret<T>` credential wrapper used by the `Db.withPassword`
+// `Core.Secret` (Fork B) provides the opaque `Secret<T>` credential wrapper used by the `Database.withPassword`
 // factory (DEC-208 slice G): a connection password is passed as a `Secret<string>` so it never sits in
 // plaintext in user code, and — because the driver parses it out of the DSN and retains only a redacted
-// DSN — is masked in every connect error / log. Secret is registered before Db (see CORE_MODULES order),
+// DSN — is masked in every connect error / log. Secret is registered before Database (see CORE_MODULES order),
 // so this transitive import injects the class here exactly as List/String/Map above.
 import Core.Secret;
 
 // Prelude-local result carrier (NOT Core.Result — see the native docs on injection order).
-enum DbResult<T> { Ok(T value), Err(string message) }
+enum DatabaseResult<T> { Ok(T value), Err(string message) }
 
 // Column NAMING STRATEGY (DEC-208 slice B2): the per-query mapping between DB column names and phorj
 // field names, passed to `Statement.namingStrategy(...)`. Zero-payload variants (construct with
-// `new Naming.SnakeToCamel()`, like `RoundingMode`). Member-gated (`import Core.Db.Naming;`) — nothing
+// `new Naming.SnakeToCamel()`, like `RoundingMode`). Member-gated (`import Core.DatabaseModule.Naming;`) — nothing
 // in the wind. The strategy is resolved AT COMPILE TIME by the `desugar_db` pass, so this type is only
 // ever an argument literal; it carries no runtime state.
 enum Naming { Exact(), SnakeToCamel() }
 
-open class DbError implements Error {
+open class DatabaseError implements Error {
   constructor(public string message) {}
   // `throw` is a statement, not an expression, so it cannot be a `match` arm value directly. This
-  // `never`-returning helper lets a `DbResult.Err(e)` arm raise a catchable exception as an expression
-  // (`DbResult.Err(e) => DbError.fail(e)`) — a call to a `never` function types as the bottom type,
+  // `never`-returning helper lets a `DatabaseResult.Err(e)` arm raise a catchable exception as an expression
+  // (`DatabaseResult.Err(e) => DatabaseError.fail(e)`) — a call to a `never` function types as the bottom type,
   // unifying with the success arm's value type.
   //
   // It is ALSO the single classification point (DEC-208 slice C, spec §6): the native tags a driver
   // error with a `<<Kind>>` marker prefix (`src/native/db.rs` `err_kind`), and `fail` strips the marker
-  // and throws the matching TYPED subtype. Because every Row/Statement/Db method — including the S2
-  // `queryInto` hydration helpers — funnels its `DbResult.Err` through here, they all yield the precise
+  // and throws the matching TYPED subtype. Because every Row/Statement/Database method — including the S2
+  // `queryInto` hydration helpers — funnels its `DatabaseResult.Err` through here, they all yield the precise
   // `catch (UniqueViolation e)` type with zero change at the call sites. An untagged message (a logic /
-  // usage error, e.g. mixed bind styles, or a plain SQLite failure) throws the base `DbError`.
-  static function fail(string message): never throws DbError {
+  // usage error, e.g. mixed bind styles, or a plain SQLite failure) throws the base `DatabaseError`.
+  static function fail(string message): never throws DatabaseError {
     if (String.startsWith(message, "<<UniqueViolation>>")) { throw new UniqueViolation(String.removePrefix(message, "<<UniqueViolation>>")); }
     if (String.startsWith(message, "<<ConstraintViolation>>")) { throw new ConstraintViolation(String.removePrefix(message, "<<ConstraintViolation>>")); }
     if (String.startsWith(message, "<<ConnectionError>>")) { throw new ConnectionError(String.removePrefix(message, "<<ConnectionError>>")); }
     if (String.startsWith(message, "<<SerializationFailure>>")) { throw new SerializationFailure(String.removePrefix(message, "<<SerializationFailure>>")); }
     if (String.startsWith(message, "<<Timeout>>")) { throw new Timeout(String.removePrefix(message, "<<Timeout>>")); }
     if (String.startsWith(message, "<<SyntaxError>>")) { throw new SyntaxError(String.removePrefix(message, "<<SyntaxError>>")); }
-    throw new DbError(message);
+    throw new DatabaseError(message);
   }
 }
 
-// Typed error taxonomy (DEC-208 slice C, spec §6). Each `extends DbError`, so `catch (DbError e)`
+// Typed error taxonomy (DEC-208 slice C, spec §6). Each `extends DatabaseError`, so `catch (DatabaseError e)`
 // still catches EVERY DB error while `catch (UniqueViolation e)` catches exactly one kind. The native
-// maps rusqlite (extended) result codes to the marker `DbError.fail` reads. `SerializationFailure` is
+// maps rusqlite (extended) result codes to the marker `DatabaseError.fail` reads. `SerializationFailure` is
 // the transient class `retry` targets (SQLite `SQLITE_BUSY`/`SQLITE_LOCKED`) — it is the spec's
 // `Deadlock` under a single name. `Timeout` is part of the taxonomy contract; SQLite has no source for
 // it yet (it arrives with query `.timeout(ms)`, slice D), so it is currently only ever caught, not thrown.
-class UniqueViolation extends DbError { constructor(string message) { parent.constructor(message); } }
-class ConstraintViolation extends DbError { constructor(string message) { parent.constructor(message); } }
-class ConnectionError extends DbError { constructor(string message) { parent.constructor(message); } }
-class SerializationFailure extends DbError { constructor(string message) { parent.constructor(message); } }
-class Timeout extends DbError { constructor(string message) { parent.constructor(message); } }
-class SyntaxError extends DbError { constructor(string message) { parent.constructor(message); } }
+class UniqueViolation extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class ConstraintViolation extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class ConnectionError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class SerializationFailure extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class Timeout extends DatabaseError { constructor(string message) { parent.constructor(message); } }
+class SyntaxError extends DatabaseError { constructor(string message) { parent.constructor(message); } }
 
 class Row {
-  constructor(private DbHandle raw) {}
-  function getInt(string column): int throws DbError {
-    return match (DbSys.getInt(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  constructor(private DatabaseHandle raw) {}
+  function getInt(string column): int throws DatabaseError {
+    return match (NativeDatabase.getInt(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getString(string column): string throws DbError {
-    return match (DbSys.getString(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getString(string column): string throws DatabaseError {
+    return match (NativeDatabase.getString(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getFloat(string column): float throws DbError {
-    return match (DbSys.getFloat(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getFloat(string column): float throws DatabaseError {
+    return match (NativeDatabase.getFloat(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getBool(string column): bool throws DbError {
-    return match (DbSys.getBool(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getBool(string column): bool throws DatabaseError {
+    return match (NativeDatabase.getBool(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Nullable accessors (DEC-208 S2): a SQL NULL yields `null` rather than throwing; a wrong non-null
   // storage type still throws. Used by the dynamic path and by the `queryInto` hydration of `T?` fields.
-  function getIntOrNull(string column): int? throws DbError {
-    return match (DbSys.getIntOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getIntOrNull(string column): int? throws DatabaseError {
+    return match (NativeDatabase.getIntOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getStringOrNull(string column): string? throws DbError {
-    return match (DbSys.getStringOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getStringOrNull(string column): string? throws DatabaseError {
+    return match (NativeDatabase.getStringOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getFloatOrNull(string column): float? throws DbError {
-    return match (DbSys.getFloatOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getFloatOrNull(string column): float? throws DatabaseError {
+    return match (NativeDatabase.getFloatOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getBoolOrNull(string column): bool? throws DbError {
-    return match (DbSys.getBoolOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getBoolOrNull(string column): bool? throws DatabaseError {
+    return match (NativeDatabase.getBoolOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Decimal accessors (DEC-208 slice E): a `decimal`/`decimal?` hydration field maps its column here —
   // exact money (a TEXT column is parsed exactly; never through float). Used by the dynamic path and by
   // the `queryInto` hydration of a `decimal` field (via `desugar_db`'s `accessor_for`).
-  function getDecimal(string column): decimal throws DbError {
-    return match (DbSys.getDecimal(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getDecimal(string column): decimal throws DatabaseError {
+    return match (NativeDatabase.getDecimal(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getDecimalOrNull(string column): decimal? throws DbError {
-    return match (DbSys.getDecimalOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getDecimalOrNull(string column): decimal? throws DatabaseError {
+    return match (NativeDatabase.getDecimalOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Typed ARRAY-column accessors (DEC-208 slice K) — a Postgres `int[]`/`text[]`/`float8[]`/`bool[]`
   // column reads as a typed `List<scalar>`. STRICT: a non-array column, a wrong element type, or a
-  // NULL element throws a catchable DbError (filter NULL elements in SQL: `array_remove(col, NULL)`);
+  // NULL element throws a catchable DatabaseError (filter NULL elements in SQL: `array_remove(col, NULL)`);
   // the `OrNull` forms admit a whole-array SQL NULL. Numeric/decimal arrays: select `col::text[]` and
   // read `getStringList` (the slice-E decimal-as-text discipline, element form).
-  function getIntList(string column): List<int> throws DbError {
-    return match (DbSys.getIntList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getIntList(string column): List<int> throws DatabaseError {
+    return match (NativeDatabase.getIntList(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getStringList(string column): List<string> throws DbError {
-    return match (DbSys.getStringList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getStringList(string column): List<string> throws DatabaseError {
+    return match (NativeDatabase.getStringList(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getFloatList(string column): List<float> throws DbError {
-    return match (DbSys.getFloatList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getFloatList(string column): List<float> throws DatabaseError {
+    return match (NativeDatabase.getFloatList(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getBoolList(string column): List<bool> throws DbError {
-    return match (DbSys.getBoolList(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getBoolList(string column): List<bool> throws DatabaseError {
+    return match (NativeDatabase.getBoolList(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getIntListOrNull(string column): List<int>? throws DbError {
-    return match (DbSys.getIntListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getIntListOrNull(string column): List<int>? throws DatabaseError {
+    return match (NativeDatabase.getIntListOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getStringListOrNull(string column): List<string>? throws DbError {
-    return match (DbSys.getStringListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getStringListOrNull(string column): List<string>? throws DatabaseError {
+    return match (NativeDatabase.getStringListOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getFloatListOrNull(string column): List<float>? throws DbError {
-    return match (DbSys.getFloatListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getFloatListOrNull(string column): List<float>? throws DatabaseError {
+    return match (NativeDatabase.getFloatListOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function getBoolListOrNull(string column): List<bool>? throws DbError {
-    return match (DbSys.getBoolListOrNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function getBoolListOrNull(string column): List<bool>? throws DatabaseError {
+    return match (NativeDatabase.getBoolListOrNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Column introspection (DEC-208 slice B) — the desugared `queryScalar`/`queryMap`/nested-hydration
   // helpers use these. `columnNames` is selection-ordered; `isNull` tests a column for SQL NULL.
-  function columnNames(): List<string> throws DbError {
-    return match (DbSys.columnNames(this.raw)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function columnNames(): List<string> throws DatabaseError {
+    return match (NativeDatabase.columnNames(this.raw)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function isNull(string column): bool throws DbError {
-    return match (DbSys.isNull(this.raw, column)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function isNull(string column): bool throws DatabaseError {
+    return match (NativeDatabase.isNull(this.raw, column)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
 }
 
 class Statement {
-  constructor(private DbHandle raw) {}
-  function bind(string | int | float | bool value): Statement throws DbError {
-    return match (DbSys.bind(this.raw, value)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  constructor(private DatabaseHandle raw) {}
+  function bind(string | int | float | bool value): Statement throws DatabaseError {
+    return match (NativeDatabase.bind(this.raw, value)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function bindNamed(string name, string | int | float | bool value): Statement throws DbError {
-    return match (DbSys.bindNamed(this.raw, name, value)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  function bindNamed(string name, string | int | float | bool value): Statement throws DatabaseError {
+    return match (NativeDatabase.bindNamed(this.raw, name, value)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Typed IN-list bind (DEC-208 slice D, spec §2): occupies one positional `?` slot (left-to-right
   // with bind()) that expands to `(?,?,…)` — one placeholder per value — at execute time; an empty list
   // becomes `(NULL)` (a never-true IN). Strictly safer than PDO (which cannot bind an array to IN).
   // Generic over the element type (a `List<int>`/`List<string>`/… all bind); a non-scalar element is a
-  // runtime DbError (an invariant `List<bindable>` union cannot accept a homogeneous list argument).
-  function bindList<T>(List<T> values): Statement throws DbError {
-    return match (DbSys.bindList(this.raw, values)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  // runtime DatabaseError (an invariant `List<bindable>` union cannot accept a homogeneous list argument).
+  function bindList<T>(List<T> values): Statement throws DatabaseError {
+    return match (NativeDatabase.bindList(this.raw, values)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function exec(): int throws DbError {
-    return match (DbSys.exec(this.raw)) { DbResult.Ok(n) => n, DbResult.Err(e) => DbError.fail(e)? };
+  function exec(): int throws DatabaseError {
+    return match (NativeDatabase.exec(this.raw)) { DatabaseResult.Ok(n) => n, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Bulk write (DEC-208 slice D, spec §4): prepare ONCE, execute for each row of positional binds,
   // inside one savepoint (atomic + far faster than a loop). `rows` carries ALL binds (do not also call
   // bind()/bindNamed()). Returns the total affected rows. Generic over the row element type (same
-  // reason as bindList); a non-scalar bind value is a runtime DbError.
-  function executeMany<T>(List<List<T>> rows): int throws DbError {
-    return match (DbSys.executeMany(this.raw, rows)) { DbResult.Ok(n) => n, DbResult.Err(e) => DbError.fail(e)? };
+  // reason as bindList); a non-scalar bind value is a runtime DatabaseError.
+  function executeMany<T>(List<List<T>> rows): int throws DatabaseError {
+    return match (NativeDatabase.executeMany(this.raw, rows)) { DatabaseResult.Ok(n) => n, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Exec an INSERT and return the auto-generated rowid / PK (DEC-208 slice D, spec §4) — exec + the
-  // connection's last insert id in one call. (Db.lastInsertId() reads the same value standalone.)
-  function execReturningId(): int throws DbError {
-    return match (DbSys.execReturningId(this.raw)) { DbResult.Ok(id) => id, DbResult.Err(e) => DbError.fail(e)? };
+  // connection's last insert id in one call. (Database.lastInsertId() reads the same value standalone.)
+  function execReturningId(): int throws DatabaseError {
+    return match (NativeDatabase.execReturningId(this.raw)) { DatabaseResult.Ok(id) => id, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Column naming strategy (DEC-208 slice B2, spec §3) — chainable, per query:
   // `stmt.namingStrategy(new Naming.SnakeToCamel()).queryInto()` maps a `userName` field from a
@@ -1236,18 +1245,18 @@ class Statement {
   // `Statement s = stmt.namingStrategy(...); s.queryInto();` and the query reverts to `Exact` (a missing
   // column then faults loudly at run time, never silently wrong).
   function namingStrategy(Naming strategy): Statement { return this; }
-  function query(): List<Row> throws DbError {
-    return match (DbSys.query(this.raw)) { DbResult.Ok(rows) => Statement.wrapRows(rows), DbResult.Err(e) => DbError.fail(e)? };
+  function query(): List<Row> throws DatabaseError {
+    return match (NativeDatabase.query(this.raw)) { DatabaseResult.Ok(rows) => Statement.wrapRows(rows), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Streaming (DEC-208 item H, DEC-257 reshape): run the query and deliver rows ONE AT A TIME via
   // the `Iterator<Row>` pull protocol (`hasNext()`/`next()` — foreach-able) instead of
   // materializing a `List<Row>` in user code. The typed form `stmt.streamInto<T>()` (desugar_db)
-  // wraps this in a `DbStream<T>` (an `Iterator<T>`) that hydrates each row only when pulled —
+  // wraps this in a `DatabaseStream<T>` (an `Iterator<T>`) that hydrates each row only when pulled —
   // early exit skips the remaining rows' hydration entirely.
-  function stream(): RowStream throws DbError {
-    return match (DbSys.stream(this.raw)) { DbResult.Ok(h) => new RowStream(h), DbResult.Err(e) => DbError.fail(e)? };
+  function stream(): RowStream throws DatabaseError {
+    return match (NativeDatabase.stream(this.raw)) { DatabaseResult.Ok(h) => new RowStream(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  private static function wrapRows(List<DbHandle> rows): List<Row> {
+  private static function wrapRows(List<DatabaseHandle> rows): List<Row> {
     mutable List<Row> out = new List<Row>();
     mutable int i = 0;
     int n = List.length(rows);
@@ -1265,18 +1274,18 @@ class Statement {
 // fail); `next()` hands over the cached row, or FAULTS "iterator exhausted" past the end (the
 // DEC-257 misuse contract — foreach never triggers it).
 class RowStream implements Iterator<Row> {
-  constructor(private DbHandle raw) {}
+  constructor(private DatabaseHandle raw) {}
   private mutable Row? ahead;
-  function hasNext(): bool throws DbError {
+  function hasNext(): bool throws DatabaseError {
     if (var cached = this.ahead) { return true; }
-    DbHandle? h = match (DbSys.streamNext(this.raw)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+    DatabaseHandle? h = match (NativeDatabase.streamNext(this.raw)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
     if (var handle = h) {
       this.ahead = new Row(handle);
       return true;
     }
     return false;
   }
-  function next(): Row throws DbError {
+  function next(): Row throws DatabaseError {
     bool has = this.hasNext()?;
     if (has) {
       if (var r = this.ahead) {
@@ -1294,27 +1303,27 @@ class RowStream implements Iterator<Row> {
 // works. Laziness is EXACT: `hasNext()` only asks the underlying cursor to pull a raw row ahead;
 // hydration happens solely in `next()` — rows never pulled via `next()` are never hydrated.
 // Past the end, `next()` FAULTS "iterator exhausted" (the DEC-257 misuse contract).
-class DbStream<T> implements Iterator<T> {
-  constructor(private RowStream rows, private (Row) => T throws DbError hydrate) {}
-  function hasNext(): bool throws DbError {
+class DatabaseStream<T> implements Iterator<T> {
+  constructor(private RowStream rows, private (Row) => T throws DatabaseError hydrate) {}
+  function hasNext(): bool throws DatabaseError {
     bool has = this.rows.hasNext()?;
     return has;
   }
-  function next(): T throws DbError {
+  function next(): T throws DatabaseError {
     Row row = this.rows.next()?;
-    (Row) => T throws DbError f = this.hydrate;
+    (Row) => T throws DatabaseError f = this.hydrate;
     T v = f(row)?;
     return v;
   }
 }
 
-class Db {
-  // DEC-221: opening a connection can fail, so the constructor itself declares `throws DbError` and
-  // opens directly — `new Db(dsn)` (fail-fast, exactly like PHP's `new PDO`). No static factory. The
+class Database {
+  // DEC-221: opening a connection can fail, so the constructor itself declares `throws DatabaseError` and
+  // opens directly — `new Database(dsn)` (fail-fast, exactly like PHP's `new PDO`). No static factory. The
   // handle is COMPUTED in the body (not a promoted param), so the field is `mutable` (set once here).
-  private mutable DbHandle raw;
-  constructor(string dsn) throws DbError {
-    this.raw = match (DbSys.connect(dsn)) { DbResult.Ok(h) => h, DbResult.Err(e) => DbError.fail(e)? };
+  private mutable DatabaseHandle raw;
+  constructor(string dsn) throws DatabaseError {
+    this.raw = match (NativeDatabase.connect(dsn)) { DatabaseResult.Ok(h) => h, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Credential-safe connect (DEC-208 slice G, spec §1). The password is supplied as a `Core.Secret` —
   // kept out of plaintext in user code — and injected into the DSN only at the connect boundary. It is
@@ -1322,36 +1331,36 @@ class Db {
   // DSN, so a connect error prints the host but never the password (unlike PDO, which leaks the DSN in
   // exceptions). Use for a `postgres://user@host/db` DSN (no inline password); SQLite has no password,
   // so the DSN is passed through unchanged. Example:
-  //   `Db db = Db.withPassword("postgres://app@db.host:5432/prod", new Secret(env));`
-  static function withPassword(string dsn, Secret<string> password): Db throws DbError {
-    return new Db(DbSys.dsnWithPassword(dsn, password.expose()))?;
+  //   `Database db = Database.withPassword("postgres://app@db.host:5432/prod", new Secret(env));`
+  static function withPassword(string dsn, Secret<string> password): Database throws DatabaseError {
+    return new Database(NativeDatabase.dsnWithPassword(dsn, password.expose()))?;
   }
-  function prepare(string sql): Statement throws DbError {
-    return match (DbSys.prepare(this.raw, sql)) { DbResult.Ok(h) => new Statement(h), DbResult.Err(e) => DbError.fail(e)? };
+  function prepare(string sql): Statement throws DatabaseError {
+    return match (NativeDatabase.prepare(this.raw, sql)) { DatabaseResult.Ok(h) => new Statement(h), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
 
   // --- Writes & robustness (DEC-208 slice D, spec §4/§7). ---
   // The auto-generated rowid / PK of the most recent INSERT on this connection.
-  function lastInsertId(): int throws DbError {
-    return match (DbSys.lastInsertId(this.raw)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+  function lastInsertId(): int throws DatabaseError {
+    return match (NativeDatabase.lastInsertId(this.raw)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Arm a query timeout (ms): a bounded lock-wait (SQLite busy_timeout). Once set, a busy/locked
   // failure surfaces as `Timeout` rather than `SerializationFailure`. Chainable (returns this).
-  function timeout(int ms): Db throws DbError {
-    match (DbSys.timeout(this.raw, ms)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+  function timeout(int ms): Database throws DatabaseError {
+    match (NativeDatabase.timeout(this.raw, ms)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
     return this;
   }
   // Register a per-query observability hook (logging / metrics / slow-query). The `(string sql, int
   // ms) => void` closure fires after each query/exec with the SQL text + elapsed ms. A logging hook is
   // `void` (cannot throw a checked error), so registration never fails. Chainable (returns this).
   // NOTE: `ms` is wall-clock (non-deterministic) — do not print it raw in a byte-identity example.
-  function onQuery((string, int) => void hook): Db {
-    match (DbSys.onQuery(this.raw, hook)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(_) => Db.ok() };
+  function onQuery((string, int) => void hook): Database {
+    match (NativeDatabase.onQuery(this.raw, hook)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(_) => Database.ok() };
     return this;
   }
 
   // A void no-op, used as the success arm of the `void`-returning transaction methods below — a `match`
-  // arm must be an EXPRESSION, so `DbResult.Ok(_) => Db.ok()` yields `void` cleanly (a bare `{}` block
+  // arm must be an EXPRESSION, so `DatabaseResult.Ok(_) => Database.ok()` yields `void` cleanly (a bare `{}` block
   // is not an expression here). The `?` in the error arm makes that arm `never`, unifying to `void`.
   private static function ok(): void {}
 
@@ -1361,46 +1370,46 @@ class Db {
   // so a secondary fault can never mask the original. The closure form `db.transaction(fn)` + retry are
   // BLOCKED on phorj lambdas being unable to propagate a checked exception (see docs/KNOWN_ISSUES) —
   // recorded as a PENDING adjudication; this manual surface is what the closure form would build on. ---
-  function begin(): void throws DbError {
-    match (DbSys.begin(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+  function begin(): void throws DatabaseError {
+    match (NativeDatabase.begin(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function commit(): void throws DbError {
-    match (DbSys.commit(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+  function commit(): void throws DatabaseError {
+    match (NativeDatabase.commit(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
-  function rollback(): void throws DbError {
-    match (DbSys.rollback(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(e) => DbError.fail(e)? };
+  function rollback(): void throws DatabaseError {
+    match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Best-effort rollback that NEVER throws — safe inside a `finally` (a throwing rollback there would
   // mask the original exception). The auto-rollback idiom is: `db.begin(); mutable bool ok = false;
   // try { …work…; db.commit(); ok = true; } finally { if (!ok) db.rollbackQuiet(); }` — demonstrated in
   // examples/db/transactions.phg.
   function rollbackQuiet(): void {
-    match (DbSys.rollback(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(_) => Db.ok() };
+    match (NativeDatabase.rollback(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(_) => Database.ok() };
   }
   // Closure-form transaction (DEC-208 slice C, spec §5 — unblocked by DEC-222 throwing closures). BEGIN,
   // run the closure, COMMIT on a normal return (returning its value), auto-ROLLBACK + re-throw the
-  // ORIGINAL typed error on a throw (`DbSys.transaction` preserves the thrown value through the rollback
-  // via the backend's `pending_throw`, so the caller catches the exact `DbError` the closure threw — not
+  // ORIGINAL typed error on a throw (`NativeDatabase.transaction` preserves the thrown value through the rollback
+  // via the backend's `pending_throw`, so the caller catches the exact `DatabaseError` the closure threw — not
   // a generic one). A NESTED `db.transaction(fn)` opens a SAVEPOINT (composable partial rollback), so
   // transactions compose. The closure is a THROWING function type — `db.transaction(function(): T throws
-  // DbError { … })` — since DB work raises a checked `DbError` (a non-throwing closure is also accepted:
+  // DatabaseError { … })` — since DB work raises a checked `DatabaseError` (a non-throwing closure is also accepted:
   // fewer-throws variance). BOTH this closure form AND the manual begin()/commit()/rollback() above are
   // supported (developer ruled BOTH).
   // DEC-249 resolved the recorded SURFACE PENDING the ambitious way: method default parameters
   // landed, so the spec's single-method shape is real — `db.transaction(fn)` runs once;
   // `db.transaction(fn, retries)` re-runs the WHOLE transaction up to `retries` extra times on the
   // transient `SerializationFailure` ONLY (SQLite SQLITE_BUSY/LOCKED — the class Serializable
-  // isolation needs); any OTHER `DbError` (and an exhausted retry budget) rolls back and
+  // isolation needs); any OTHER `DatabaseError` (and an exhausted retry budget) rolls back and
   // propagates immediately. The retry loop lives HERE, not in the native, because only phorj
   // source can `catch` the TYPED error (the thrown value is backend-side `pending_throw`,
   // invisible to a native). The former distinct `transactionRetry(fn, retries)` is RETIRED.
   // NOTE (timeout): with `db.timeout(ms)` armed a transient busy is reclassified `Timeout`, not
   // `SerializationFailure` (slice D) — so it is NOT retried; leave the timeout unset when relying on retry.
-  function transaction<T>(() => T throws DbError fn, int retries = 0): T throws DbError {
+  function transaction<T>(() => T throws DatabaseError fn, int retries = 0): T throws DatabaseError {
     mutable int attempt = 0;
     while (true) {
       try {
-        return match (DbSys.transaction(this.raw, fn)) { DbResult.Ok(v) => v, DbResult.Err(e) => DbError.fail(e)? };
+        return match (NativeDatabase.transaction(this.raw, fn)) { DatabaseResult.Ok(v) => v, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
       } catch (SerializationFailure e) {
         if (attempt >= retries) { throw e; }
         attempt = attempt + 1;
@@ -1412,7 +1421,7 @@ class Db {
   // sugar that would call this automatically at scope exit is DEC-203 — a separate language slice
   // (see KNOWN_ISSUES); until then, call close() explicitly (or rely on drop at program end).
   function close(): void {
-    match (DbSys.close(this.raw)) { DbResult.Ok(_) => Db.ok(), DbResult.Err(_) => Db.ok() };
+    match (NativeDatabase.close(this.raw)) { DatabaseResult.Ok(_) => Database.ok(), DatabaseResult.Err(_) => Database.ok() };
   }
 }
 "#;
@@ -1455,38 +1464,38 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &[],
     },
-    // `Core.Debug` (DEC-238) — the dumper prelude (std-only, always compiled).
+    // `Core.DebugModule` (DEC-238) — the dumper prelude (std-only, always compiled).
     VirtualModule {
-        module: &["Core", "Debug"],
-        qualifier: "Debug",
+        module: &["Core", "DebugModule"],
+        qualifier: "DebugModule",
         src: Some(DEBUG_PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Debug", "Dumped"],
     },
-    // `Core.DebugSys` — the INTERNAL renderer native.
+    // `Core.Native.Debug` — the INTERNAL renderer native.
     VirtualModule {
-        module: &["Core", "DebugSys"],
-        qualifier: "DebugSys",
+        module: &["Core", "Native", "Debug"],
+        qualifier: "Native.Debug",
         src: None,
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
-    // `Core.Session` (W3, TOP-20 #3) — HTTP sessions over the Core.Http value types. MUST precede
+    // `Core.SessionModule` (W3, TOP-20 #3) — HTTP sessions over the Core.Http value types. MUST precede
     // `Core.Http` (its `import Core.Http` transitively injects it — the forward-fold rule).
     VirtualModule {
-        module: &["Core", "Session"],
-        qualifier: "Session",
+        module: &["Core", "SessionModule"],
+        qualifier: "SessionModule",
         src: Some(SESSION_PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Session"],
     },
-    // `Core.SessionSys` — the INTERNAL session-store natives (std-only, always compiled).
+    // `Core.Native.Session` — the INTERNAL session-store natives (std-only, always compiled).
     VirtualModule {
-        module: &["Core", "SessionSys"],
-        qualifier: "SessionSys",
+        module: &["Core", "Native", "Session"],
+        qualifier: "Native.Session",
         src: None,
         respond_bridge: None,
         member_gated: false,
@@ -1516,10 +1525,10 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: true,
         bare_types: &["Duration", "Date", "Instant"],
     },
-    // `Core.Uri` (DEC-240) — the RFC 3986 `Uri` class + `UriError` taxonomy over `Core.UriSys`.
+    // `Core.UriModule` (DEC-240) — the RFC 3986 `Uri` class + `UriError` taxonomy over `Core.Native.Uri`.
     VirtualModule {
-        module: &["Core", "Uri"],
-        qualifier: "Uri",
+        module: &["Core", "UriModule"],
+        qualifier: "UriModule",
         src: Some(URI_PRELUDE),
         respond_bridge: None,
         member_gated: true,
@@ -1538,28 +1547,28 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "UriBaseNotAbsolute",
         ],
     },
-    // `Core.Db` (DEC-208) — the enhanced-PDO surface classes. MUST precede `Core.DbSys` (its natives)
-    // so its `import Core.DbSys` triggers the natives being in scope (the Http→Regex ordering rule).
+    // `Core.DatabaseModule` (DEC-208) — the enhanced-PDO surface classes. MUST precede `Core.Native.Database` (its natives)
+    // so its `import Core.Native.Database` triggers the natives being in scope (the Http→Regex ordering rule).
     VirtualModule {
-        module: &["Core", "Db"],
-        qualifier: "Db",
+        module: &["Core", "DatabaseModule"],
+        qualifier: "DatabaseModule",
         src: Some(DB_PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
-            "Db",
+            "Database",
             "Statement",
             "Row",
-            "DbError",
-            "DbHandle",
+            "DatabaseError",
+            "DatabaseHandle",
             // DEC-208 item H — the streaming surfaces (untyped row cursor + typed lazy stream).
             "RowStream",
-            "DbStream",
+            "DatabaseStream",
             // DEC-208 slice B2 — the column naming strategy enum, member-gated so
-            // `new Naming.SnakeToCamel()` resolves after `import Core.Db.Naming;` (nothing in the wind).
+            // `new Naming.SnakeToCamel()` resolves after `import Core.DatabaseModule.Naming;` (nothing in the wind).
             "Naming",
             // DEC-208 slice C typed taxonomy — member-gated so `catch (UniqueViolation e)` resolves
-            // in user code after `import Core.Db.UniqueViolation;` (nothing in the wind).
+            // in user code after `import Core.DatabaseModule.UniqueViolation;` (nothing in the wind).
             "UniqueViolation",
             "ConstraintViolation",
             "ConnectionError",
@@ -1568,24 +1577,24 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "SyntaxError",
         ],
     },
-    // `Core.Iterator` (DEC-257) — THE pull-iteration protocol: any implementor is foreach-able.
+    // `Core.IteratorModule` (DEC-257) — THE pull-iteration protocol: any implementor is foreach-able.
     // Shape developer-ruled 2026-07-16: `hasNext()/next()` (nullable element types are sound —
     // null is never a termination signal); calling `next()` past exhaustion is a documented
     // FAULT contract ("iterator exhausted") for stdlib implementors. ROW ORDER MATTERS: this
-    // row sits AFTER every prelude that itself imports Core.Iterator (Db's streams implement
+    // row sits AFTER every prelude that itself imports Core.IteratorModule (Database's streams implement
     // it) — the injection fold walks the registry once, so a dependency row must come LATER
-    // than its dependents (same rule as DbSys/Result after Db).
+    // than its dependents (same rule as DbSys/Result after Database).
     VirtualModule {
-        module: &["Core", "Iterator"],
-        qualifier: "Iterator",
+        module: &["Core", "IteratorModule"],
+        qualifier: "IteratorModule",
         src: Some(ITERATOR_PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Iterator"],
     },
-    // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.Db`). MUST precede `Core.Secret`
-    // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Db→Secret) and
-    // `Core.MailSys` (its natives).
+    // `Core.Mail` (DEC-223) — the native-mailer prelude (twin of `Core.DatabaseModule`). MUST precede `Core.Secret`
+    // (its `import Core.Secret` transitively injects it — the same forward-fold rule as Database→Secret) and
+    // `Core.Native.Mail` (its natives).
     VirtualModule {
         module: &["Core", "Mail"],
         qualifier: "Mail",
@@ -1615,39 +1624,39 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "MailIo",
         ],
     },
-    // `Core.Fs` (W3) — the typed filesystem prelude (std-only, always compiled). Taxonomy names are
-    // Fs-PREFIXED (a bare `NotFound` bare_type captured a user-space class — caught live).
+    // `Core.FileSystemModule` (W3) — the typed filesystem prelude (std-only, always compiled). Taxonomy names are
+    // FileSystem-PREFIXED (a bare `NotFound` bare_type captured a user-space class — caught live).
     VirtualModule {
-        module: &["Core", "Fs"],
-        qualifier: "Fs",
+        module: &["Core", "FileSystemModule"],
+        qualifier: "FileSystemModule",
         src: Some(FS_PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &[
-            "Fs",
-            "FsError",
-            "FsNotFound",
-            "FsPermissionDenied",
-            "FsAlreadyExists",
-            "FsNotADirectory",
-            "FsIsADirectory",
-            "FsDirNotEmpty",
-            "FsIo",
+            "FileSystem",
+            "FileSystemError",
+            "FileSystemNotFoundError",
+            "FileSystemPermissionDeniedError",
+            "FileSystemAlreadyExistsError",
+            "FileSystemNotADirectoryError",
+            "FileSystemIsADirectoryError",
+            "FileSystemDirNotEmptyError",
+            "FileSystemIoError",
         ],
     },
-    // `Core.FsSys` — the INTERNAL filesystem natives.
+    // `Core.Native.FileSystem` — the INTERNAL filesystem natives.
     VirtualModule {
-        module: &["Core", "FsSys"],
-        qualifier: "FsSys",
+        module: &["Core", "Native", "FileSystem"],
+        qualifier: "Native.FileSystem",
         src: None,
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
-    // `Core.HttpClient` (W3-2) — the sync HTTP client prelude (native-only, `http-client` feature).
+    // `Core.HttpClientModule` (W3-2) — the sync HTTP client prelude (native-only, `http-client` feature).
     VirtualModule {
-        module: &["Core", "HttpClient"],
-        qualifier: "HttpClient",
+        module: &["Core", "HttpClientModule"],
+        qualifier: "HttpClientModule",
         src: Some(HTTP_CLIENT_PRELUDE),
         respond_bridge: None,
         member_gated: true,
@@ -1655,7 +1664,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "HttpClient",
             "HttpResponse",
             "HttpClientError",
-            "HcHandle",
+            "HttpClientHandle",
             "InvalidUrl",
             "HttpConnectionFailed",
             "HttpTimeout",
@@ -1665,8 +1674,8 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
             "TooLarge",
         ],
     },
-    // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.Db` because
-    // `Core.Db`'s `import Core.Secret` (for the `Db.withPassword(dsn, Secret<string>)` factory, DEC-208
+    // `Core.Secret` (Fork B) — the opaque `Secret<T>` credential wrapper. Placed AFTER `Core.DatabaseModule` because
+    // `Core.DatabaseModule`'s `import Core.Secret` (for the `Database.withPassword(dsn, Secret<string>)` factory, DEC-208
     // slice G) transitively injects it, and transitive injection only reaches modules that appear LATER
     // in this list (the same forward-fold rule as Http→Regex — an EARLIER module is never pulled by a
     // later importer). A direct `import Core.Secret;` in user code works from any position (user imports
@@ -1680,31 +1689,31 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         member_gated: false,
         bare_types: &[],
     },
-    // `Core.DbSys` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.Db` prelude
-    // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Db` never collides with
+    // `Core.Native.Database` — the INTERNAL DB natives (open/prepare/bind/query/exec/get*) the `Core.DatabaseModule` prelude
+    // wraps. Native-only (no prelude); a distinct qualifier so a prelude `class Database` never collides with
     // the native leaf. Feature-gated (`db`): the natives only exist under `--features db`.
     VirtualModule {
-        module: &["Core", "DbSys"],
-        qualifier: "DbSys",
+        module: &["Core", "Native", "Database"],
+        qualifier: "Native.Database",
         src: None,
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
-    // `Core.HttpClientSys` — the INTERNAL HTTP-client natives (`http-client` feature).
+    // `Core.Native.HttpClient` — the INTERNAL HTTP-client natives (`http-client` feature).
     VirtualModule {
-        module: &["Core", "HttpClientSys"],
-        qualifier: "HttpClientSys",
+        module: &["Core", "Native", "HttpClient"],
+        qualifier: "Native.HttpClient",
         src: None,
         respond_bridge: None,
         member_gated: false,
         bare_types: &[],
     },
-    // `Core.MailSys` — the INTERNAL mailer natives the `Core.Mail` prelude wraps (the `Core.DbSys`
+    // `Core.Native.Mail` — the INTERNAL mailer natives the `Core.Mail` prelude wraps (the `Core.Native.Database`
     // twin, DEC-223). Feature-gated (`mail`): the natives only exist under `--features mail`.
     VirtualModule {
-        module: &["Core", "MailSys"],
-        qualifier: "MailSys",
+        module: &["Core", "Native", "Mail"],
+        qualifier: "Native.Mail",
         src: None,
         respond_bridge: None,
         member_gated: false,
@@ -1728,8 +1737,8 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         bare_types: &["Attribute"],
     },
     VirtualModule {
-        module: &["Core", "DI"],
-        qualifier: "DI",
+        module: &["Core", "DependencyInjection"],
+        qualifier: "DependencyInjection",
         src: None,
         respond_bridge: None,
         member_gated: false,
@@ -1754,17 +1763,17 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
 /// `E-UNKNOWN-IDENT`s (the prelude classes reference natives that do not exist in that build).
 /// New gated module (e.g. `Core.Mail`) = one row here.
 const GATED_CORE_MODULES: &[(&[&str], bool, &str)] = &[
-    (&["Core", "Db"], cfg!(feature = "db"), "db"),
-    (&["Core", "DbSys"], cfg!(feature = "db"), "db"),
+    (&["Core", "DatabaseModule"], cfg!(feature = "db"), "db"),
+    (&["Core", "Native", "Database"], cfg!(feature = "db"), "db"),
     (&["Core", "Mail"], cfg!(feature = "mail"), "mail"),
-    (&["Core", "MailSys"], cfg!(feature = "mail"), "mail"),
+    (&["Core", "Native", "Mail"], cfg!(feature = "mail"), "mail"),
     (
-        &["Core", "HttpClient"],
+        &["Core", "HttpClientModule"],
         cfg!(feature = "http-client"),
         "http-client",
     ),
     (
-        &["Core", "HttpClientSys"],
+        &["Core", "Native", "HttpClient"],
         cfg!(feature = "http-client"),
         "http-client",
     ),
@@ -1868,7 +1877,7 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
                     .items
                     .iter()
                     .any(|x| matches!(x, Item::Function(y) if y.name == f.name)),
-                // DEC-257: `Core.Iterator` injects an INTERFACE — same same-name-shadowing
+                // DEC-257: `Core.IteratorModule` injects an INTERFACE — same same-name-shadowing
                 // discipline as classes/enums (a user declaration wins over the injection).
                 Item::Interface(i) => !p
                     .items

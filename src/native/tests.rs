@@ -46,20 +46,24 @@ fn php_emission_is_echo_with_newline() {
 
 #[test]
 fn charter_module_names_are_core_pascalcase() {
+    let pascal = |seg: &str| {
+        let mut chars = seg.chars();
+        chars.next().is_some_and(|c| c.is_ascii_uppercase())
+            && chars.all(|c| c.is_ascii_alphanumeric())
+    };
     for n in registry() {
-        let leaf = n.module.strip_prefix("Core.").unwrap_or_else(|| {
+        let rest = n.module.strip_prefix("Core.").unwrap_or_else(|| {
             panic!(
                 "module {} must be under the reserved `Core.` root",
                 n.module
             )
         });
-        let mut chars = leaf.chars();
-        let ok = chars.next().is_some_and(|c| c.is_ascii_uppercase())
-            && chars.all(|c| c.is_ascii_alphanumeric())
-            && !leaf.contains('.');
+        // DEC-277: raw-native modules nest one level under `Core.Native.` (e.g.
+        // `Core.Native.Database`); everything else stays a single PascalCase leaf.
+        let leaf = rest.strip_prefix("Native.").unwrap_or(rest);
         assert!(
-            ok,
-            "module `{}` leaf must be a single PascalCase segment",
+            pascal(leaf) && !leaf.contains('.'),
+            "module `{}` leaf must be a single PascalCase segment (optionally under `Core.Native.`)",
             n.module
         );
     }

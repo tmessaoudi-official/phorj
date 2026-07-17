@@ -1,4 +1,4 @@
-//! `Core.Debug` (DEC-238) end-to-end fixture: dump's pass-through + capture + printing, dd's
+//! `Core.DebugModule` (DEC-238) end-to-end fixture: dump's pass-through + capture + printing, dd's
 //! dump-and-exit, and `Runtime.exit`'s clean-termination semantics — on BOTH backends, including
 //! the exit CODE via the Batch-1-B channel (`cmd_treewalk_exit` / `cmd_run_exit`). The rendering
 //! format itself is pinned by the `src/native/debug.rs` unit tests AND, across all THREE backends,
@@ -32,8 +32,8 @@ fn dump_prints_passes_through_and_captures() {
     let src = r#"package Main;
 import Core.Output;
 import Core.String;
-import Core.Debug;
-import Core.Debug.Debug;
+import Core.DebugModule;
+import Core.DebugModule.Debug;
 class User { constructor(public string name, public int age) {} }
 function main(): void {
   int doubled = Debug.dump(21).value() * 2;
@@ -68,8 +68,8 @@ function main(): void {
 fn dd_dumps_then_exits_one() {
     let src = r#"package Main;
 import Core.Output;
-import Core.Debug;
-import Core.Debug.Debug;
+import Core.DebugModule;
+import Core.DebugModule.Debug;
 function main(): void {
   Output.printLine("checking");
   Debug.dd([1, 2]);
@@ -93,18 +93,18 @@ function main(): void {
     both_exit(src, "done early\n", 0);
 }
 
-/// The gate is LIFTED: `Core.Debug` transpiles, emitting the `__phorj_debug_render` twin (+ the
+/// The gate is LIFTED: `Core.DebugModule` transpiles, emitting the `__phorj_debug_render` twin (+ the
 /// enum table). The three-backend BYTE-IDENTITY of the format is pinned by
 /// `conformance/lang/dump.phg` (interpreter + VM + real PHP against one golden).
 #[test]
 fn debug_transpiles_with_the_twin_renderer() {
     let src = r#"package Main;
 import Core.Output;
-import Core.Debug;
-import Core.Debug.Debug;
+import Core.DebugModule;
+import Core.DebugModule.Debug;
 function main(): void { discard Debug.dump([1, 2]); }
 "#;
-    let php = cmd_transpile(src).expect("Core.Debug transpiles now");
+    let php = cmd_transpile(src).expect("Core.DebugModule transpiles now");
     assert!(php.contains("__phorj_debug_render"), "twin missing:\n{php}");
     assert!(
         php.contains("__phorj_debug_enums"),

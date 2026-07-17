@@ -1,4 +1,4 @@
-// `Core.HttpClient` (W3-2) — the sync HTTP client: typed responses, typed failures, security
+// `Core.HttpClientModule` (W3-2) — the sync HTTP client: typed responses, typed failures, security
 // defaults PHP's curl does not have (response size cap, header-injection gate, URL-userinfo
 // rejection, explicit timeouts, bundled TLS roots).
 //
@@ -26,15 +26,15 @@
 //
 // The deterministic coverage lives in `src/native/http_client.rs` (URL/chunked/redirect/timeout
 // units) and `tests/http_client.rs` (both-backend round-trips against an in-process fixture
-// server). `Core.HttpClient` is NATIVE-ONLY: `phg transpile` → `E-TRANSPILE-HTTPCLIENT`.
+// server). `Core.HttpClientModule` is NATIVE-ONLY: `phg transpile` → `E-TRANSPILE-HTTPCLIENT`.
 package Main;
 
 import Core.Output;
-import Core.HttpClient;
-import Core.HttpClient.HttpClient;
-import Core.HttpClient.HttpResponse;
-import Core.HttpClient.HttpClientError;
-import Core.HttpClient.InvalidUrl;
+import Core.HttpClientModule;
+import Core.HttpClientModule.HttpClient;
+import Core.HttpClientModule.HttpResponse;
+import Core.HttpClientModule.HttpClientError;
+import Core.HttpClientModule.InvalidUrl;
 
 function main(): void {
     try {

@@ -601,7 +601,7 @@ impl Checker {
                     }
                     // DEC-257 generic interfaces: `implements Iterator<int>` must supply exactly the
                     // interface's declared arity; the arguments (resolved with the class's own type
-                    // parameters in scope, so `DbStream<T> implements Iterator<T>` works) substitute
+                    // parameters in scope, so `DatabaseStream<T> implements Iterator<T>` works) substitute
                     // into the interface's method signatures before conformance is compared.
                     let iface_tps = self.interfaces[iface].type_params.clone();
                     let arg_asts = c

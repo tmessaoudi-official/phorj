@@ -1,4 +1,4 @@
-//! `Core.HttpClient` unit tests (sibling file per Invariant 13): URL parsing, redirect resolution,
+//! `Core.HttpClientModule` unit tests (sibling file per Invariant 13): URL parsing, redirect resolution,
 //! chunked decoding, and full request/response round-trips against an in-process
 //! `std::net::TcpListener` fixture server — deterministic, no external network, no TLS (the https
 //! path is covered by the opt-in live test in `tests/http_client.rs`).

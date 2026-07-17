@@ -59,7 +59,7 @@ fn expand(src: &str) -> Result<(), String> {
 /// Member-imports that bring the bare DI surface (`#[Injectable]` + `inject`) into scope — §7 import
 /// discipline. Prepended to the clean-graph tests so they exercise the bare form.
 const DI_IMPORTS: &str =
-    "import Core.DI.Injectable;\nimport Core.DI.inject;\nimport Core.Output;\n";
+    "import Core.DependencyInjection.Injectable;\nimport Core.DependencyInjection.inject;\nimport Core.Output;\n";
 
 #[test]
 fn di_injectable_graph_expands_and_checks_clean() {
@@ -78,7 +78,7 @@ fn di_injectable_graph_expands_and_checks_clean() {
 
 #[test]
 fn di_non_injectable_target_is_missing() {
-    let src = "package Main;\nimport Core.DI.inject;\n\
+    let src = "package Main;\nimport Core.DependencyInjection.inject;\n\
         class Bare { constructor() {} }\n\
         function main(): void { Bare b = inject<Bare>(); }\n";
     let e = expand(src).unwrap_err();
@@ -136,9 +136,9 @@ fn di_injectable_attribute_bare_without_import_is_rejected() {
 
 #[test]
 fn di_inject_verb_bare_without_member_import_is_rejected() {
-    // `import Core.DI;` binds the qualifier (so `#[DI.Injectable]` is fine) but NOT the bare `inject`
-    // verb — a bare `inject<A>()` here is E-DI-NO-IMPORT (needs `import Core.DI.inject;`).
-    let src = "package Main;\nimport Core.DI;\n\
+    // `import Core.DependencyInjection;` binds the qualifier (so `#[DI.Injectable]` is fine) but NOT the bare `inject`
+    // verb — a bare `inject<A>()` here is E-DI-NO-IMPORT (needs `import Core.DependencyInjection.inject;`).
+    let src = "package Main;\nimport Core.DependencyInjection;\n\
         #[DI.Injectable] class A { constructor() {} }\n\
         function main(): void { A a = inject<A>(); }\n";
     let e = expand(src).unwrap_err();
@@ -147,11 +147,12 @@ fn di_inject_verb_bare_without_member_import_is_rejected() {
 
 #[test]
 fn di_qualified_surface_checks_clean() {
-    // `import Core.DI;` → `#[DI.Injectable]` + `DI.inject<T>()` / `DI.inject()`.
-    let src = "package Main;\nimport Core.DI;\nimport Core.Output;\n\
-        #[DI.Injectable] class A { constructor() {} function n(): int { return 1; } }\n\
-        function build(): A { return DI.inject(); }\n\
-        function main(): void { A a = DI.inject<A>(); Output.printLine(\"{a.n()}\"); Output.printLine(\"{build().n()}\"); }\n";
+    // `import Core.DependencyInjection;` → `#[DependencyInjection.Injectable]` +
+    // `DependencyInjection.inject<T>()` / `DependencyInjection.inject()`.
+    let src = "package Main;\nimport Core.DependencyInjection;\nimport Core.Output;\n\
+        #[DependencyInjection.Injectable] class A { constructor() {} function n(): int { return 1; } }\n\
+        function build(): A { return DependencyInjection.inject(); }\n\
+        function main(): void { A a = DependencyInjection.inject<A>(); Output.printLine(\"{a.n()}\"); Output.printLine(\"{build().n()}\"); }\n";
     assert!(
         expand(src).is_ok(),
         "expected clean qualified DI expansion, got: {:?}",
@@ -161,7 +162,7 @@ fn di_qualified_surface_checks_clean() {
 
 #[test]
 fn di_inject_is_a_free_identifier_without_import() {
-    // With no `Core.DI` import, `inject` is an ordinary user function — no DI machinery, no error.
+    // With no `Core.DependencyInjection` import, `inject` is an ordinary user function — no DI machinery, no error.
     let src = "package Main;\nimport Core.Output;\n\
         function inject(): int { return 7; }\n\
         function main(): void { Output.printLine(\"{inject()}\"); }\n";
@@ -273,7 +274,7 @@ fn di_field_injection_leaves_initialized_field_alone() {
 // --- slice 4a: #[Provides] factories -------------------------------------------------------------
 
 const DI_PROVIDES_IMPORTS: &str =
-    "import Core.DI.Injectable;\nimport Core.DI.Provides;\nimport Core.DI.inject;\nimport Core.Output;\n";
+    "import Core.DependencyInjection.Injectable;\nimport Core.DependencyInjection.Provides;\nimport Core.DependencyInjection.inject;\nimport Core.Output;\n";
 
 #[test]
 fn di_provides_factory_checks_clean() {
@@ -370,7 +371,7 @@ fn di_provides_bare_without_import_is_rejected() {
 
 #[test]
 fn di_transient_checks_clean() {
-    let src = "package Main;\nimport Core.DI.Injectable;\nimport Core.DI.Transient;\nimport Core.DI.inject;\nimport Core.Output;\n\
+    let src = "package Main;\nimport Core.DependencyInjection.Injectable;\nimport Core.DependencyInjection.Transient;\nimport Core.DependencyInjection.inject;\nimport Core.Output;\n\
         #[Injectable] class Db { constructor() {} }\n\
         #[Injectable] #[Transient] class Worker { constructor(private Db db) {} }\n\
         #[Injectable] class App { constructor(private Worker a, private Worker b) {} }\n\
@@ -385,7 +386,7 @@ fn di_transient_checks_clean() {
 #[test]
 fn di_transient_cycle_is_still_rejected() {
     // Transient does not skip cycle detection (the DFS path check is unchanged).
-    let src = "package Main;\nimport Core.DI.Injectable;\nimport Core.DI.Transient;\nimport Core.DI.inject;\nimport Core.Output;\n\
+    let src = "package Main;\nimport Core.DependencyInjection.Injectable;\nimport Core.DependencyInjection.Transient;\nimport Core.DependencyInjection.inject;\nimport Core.Output;\n\
         #[Injectable] #[Transient] class A { constructor(private B b) {} }\n\
         #[Injectable] #[Transient] class B { constructor(private A a) {} }\n\
         function main(): void { A x = inject<A>(); }\n";
@@ -396,7 +397,7 @@ fn di_transient_cycle_is_still_rejected() {
 #[test]
 fn di_transient_bare_without_import_is_rejected() {
     let src =
-        "package Main;\nimport Core.DI.Injectable;\nimport Core.DI.inject;\nimport Core.Output;\n\
+        "package Main;\nimport Core.DependencyInjection.Injectable;\nimport Core.DependencyInjection.inject;\nimport Core.Output;\n\
         #[Injectable] #[Transient] class W { constructor() {} }\n\
         function main(): void { W w = inject<W>(); Output.printLine(\"x\"); }\n";
     let e = expand(src).unwrap_err();

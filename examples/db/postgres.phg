@@ -1,9 +1,9 @@
-// `Core.Db` — the Postgres driver (DEC-208 slice I) + credential Secret (slice G).
+// `Core.DatabaseModule` — the Postgres driver (DEC-208 slice I) + credential Secret (slice G).
 //
-// `Core.Db` is a MULTI-DRIVER primitive: `new Db(dsn)` dispatches on the DSN scheme behind a driver
+// `Core.DatabaseModule` is a MULTI-DRIVER primitive: `new Database(dsn)` dispatches on the DSN scheme behind a driver
 // trait — `sqlite:…` (bundled SQLite, the default `db` feature) and `postgres://…` (the sync `postgres`
 // crate, the `db-postgres` feature). The whole surface is identical across drivers — the SAME
-// `prepare`/`bind`/`bindNamed`/`query`/`exec`/`execReturningId`/`transaction`/typed-`DbError` API — so
+// `prepare`/`bind`/`bindNamed`/`query`/`exec`/`execReturningId`/`transaction`/typed-`DatabaseError` API — so
 // porting between SQLite and Postgres is a one-line DSN change.
 //
 // ── RUNNING THIS EXAMPLE ─────────────────────────────────────────────────────────────────────────
@@ -21,11 +21,11 @@
 package Main;
 
 import Core.Output;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Row;
-import Core.Db.DbError;
-import Core.Db.UniqueViolation;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
+import Core.DatabaseModule.UniqueViolation;
 import Core.Secret;
 
 function main(): void {
@@ -35,11 +35,11 @@ function main(): void {
     // ── Credential safety (slice G) ──────────────────────────────────────────────────────────────
     // The password is a `Core.Secret`, so it never sits in plaintext in your code and — because the
     // driver parses it OUT of the DSN into its config and retains only a REDACTED DSN — it is masked in
-    // every connect error / log (unlike PDO, which leaks the DSN in exceptions). `Db.withPassword`
+    // every connect error / log (unlike PDO, which leaks the DSN in exceptions). `Database.withPassword`
     // injects the Secret into a password-less DSN at the connect boundary.
     Secret<string> password = new Secret("developer");
     try {
-        Db db = Db.withPassword(dsn, password);
+        Database db = Database.withPassword(dsn, password);
         discard db.prepare("DROP TABLE IF EXISTS phorj_pg_demo").exec();
         discard db
             .prepare("CREATE TABLE phorj_pg_demo(id INT PRIMARY KEY, name TEXT, active BOOLEAN)")
@@ -84,7 +84,7 @@ function main(): void {
         }
         discard db.prepare("DROP TABLE phorj_pg_demo").exec();
         db.close();
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         // A connect error prints the host but NEVER the password (redacted by the driver).
         Output.printLine("DB error: {e.message}");
     }

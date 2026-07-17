@@ -49,11 +49,11 @@ impl Parser {
             }
             TokenKind::Ident(name) => {
                 self.advance();
-                // DI composition root (§7 import discipline): `inject` is NOT a keyword — a `Core.DI`
+                // DI composition root (§7 import discipline): `inject` is NOT a keyword — a `Core.DependencyInjection`
                 // member freed as an ordinary identifier. Only the explicit turbofish surface
                 // `inject<T>()` is recognized here (otherwise unparseable — Phorj has no general
                 // turbofish). The no-turbofish `inject()` stays a plain call, converted to the
-                // composition root by `desugar_di` ONLY when `Core.DI.inject` is member-imported.
+                // composition root by `desugar_di` ONLY when `Core.DependencyInjection.inject` is member-imported.
                 if name == "inject" && matches!(self.peek(), TokenKind::Lt) {
                     return self.parse_inject_turbofish(false, sp);
                 }

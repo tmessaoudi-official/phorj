@@ -161,7 +161,7 @@ impl Checker {
                                 .is_some_and(|s| s.ret == Ty::Never)
                     }
                     // DEC-238: a QUALIFIED `never` call diverges too — a never-returning NATIVE
-                    // (`Runtime.exit(1)`) or a `never` STATIC method (`DbError.fail(e)`). Same
+                    // (`Runtime.exit(1)`) or a `never` STATIC method (`DatabaseError.fail(e)`). Same
                     // conservative direction: only a provable `Ty::Never` return counts.
                     Expr::Member {
                         object,

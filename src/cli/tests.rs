@@ -698,23 +698,23 @@ fn every_emitted_diagnostic_code_has_an_explanation() {
 
 #[test]
 fn qualified_injected_error_types_resolve_everywhere() {
-    // DEC-234 member-error namespacing: `catch (Uri.UriMalformed e)`, `throws Uri.UriError`, and
-    // `throw new Uri.UriMalformed(…)` — the module-qualified spelling for EVERY injected module's
+    // DEC-234 member-error namespacing: `catch (UriModule.UriMalformed e)`, `throws UriModule.UriError`, and
+    // `throw new UriModule.UriMalformed(…)` — the module-qualified spelling for EVERY injected module's
     // members (routed through the UA-L2 module_of registry; the old hardcoded collapse table knew
     // only Http/Time/Decimal). Bare member-imported names stay the alias.
     let src = wp(r#"import Core.Output;
-import Core.Uri.Uri;
-function boom(): never throws Uri.UriError { throw new Uri.UriMalformed("m"); }
+import Core.UriModule.Uri;
+function boom(): never throws UriModule.UriError { throw new UriModule.UriMalformed("m"); }
 function main(): void {
     try {
         Uri u = Uri.parse("http://exa mple/");
         Output.printLine(u.toString());
-    } catch (Uri.UriMalformed e) {
+    } catch (UriModule.UriMalformed e) {
         Output.printLine("caught: {e.message}");
-    } catch (Uri.UriError e) {
+    } catch (UriModule.UriError e) {
         Output.printLine("base: {e.message}");
     }
-    try { boom(); } catch (Uri.UriError e) { Output.printLine("boom: {e.message}"); }
+    try { boom(); } catch (UriModule.UriError e) { Output.printLine("boom: {e.message}"); }
 }"#);
     let expected = "caught: The specified URI is malformed\nboom: m\n";
     assert_eq!(cmd_run(&src).unwrap(), expected);
@@ -742,13 +742,31 @@ function main(): void {
 }
 
 #[test]
+fn bare_fn_import_survives_user_class_named_like_module_leaf() {
+    // Regression (DEC-277 build): the checker rewrites a bare member-imported native call to the
+    // leaf-qualified form (`sqrt(4.0)` → `Math.sqrt(4.0)`, no import item), which the backends
+    // resolve by leaf. A user class merely NAMED `Math` must not capture that fallback — an early
+    // class-name guard in `index_of_qualified` made both Rust backends reject this type-checked
+    // program ("class `Math` has no static method `sqrt`") while the PHP leg ran it. The guard is
+    // now scoped to `Core.Native.*` leaves only (whose leaf == a prelude class BY DESIGN).
+    let src = wp(r#"import Core.Output;
+import Core.Math.sqrt;
+class Math {}
+function main(): void { Output.printLine("{sqrt(4.0)}"); }"#);
+    // Float display is PHP-faithful: `2`, not `2.0`.
+    let expected = "2\n";
+    assert_eq!(cmd_run(&src).unwrap(), expected);
+    assert_eq!(cmd_treewalk(&src).unwrap(), expected);
+}
+
+#[test]
 fn foreach_over_iterator_implementor_runs_on_both_backends() {
-    // DEC-257: any `Core.Iterator<T>` implementor is foreach-able — the checker lowers the loop
+    // DEC-257: any `Core.IteratorModule<T>` implementor is foreach-able — the checker lowers the loop
     // to a hasNext/next while-pull before either backend runs. Also exercises the
     // interface-typed receiver (`Iterator<int> it`) and a nested lowered loop.
     let src = wp(r#"import Core.Output;
-import Core.Iterator;
-import Core.Iterator.Iterator;
+import Core.IteratorModule;
+import Core.IteratorModule.Iterator;
 class Countdown implements Iterator<int> {
     constructor(private mutable int n) {}
     function hasNext(): bool { return this.n > 0; }
@@ -775,7 +793,7 @@ fn foreach_over_throwing_iterator_requires_declare_or_catch() {
     // DEC-257 ruled auto-propagation: a throwing `next()` makes the loop legal only when the
     // fault is caught by an enclosing try OR declared by the enclosing function.
     let base = r#"import Core.Output;
-import Core.Iterator;
+import Core.IteratorModule;
 class FeedError implements Error { constructor(public string message) {} }
 class Feed implements Iterator<int> {
     constructor(private mutable int n) {}

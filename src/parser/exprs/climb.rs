@@ -319,8 +319,8 @@ impl Parser {
 
     /// Parse a primary, then apply any chain of postfix operators.
     /// Parse the explicit-turbofish tail of a DI composition root — the `<T>()` after a `inject` /
-    /// `DI.inject` head already consumed by the caller. `qualified` records whether the head was the
-    /// `DI.`-qualified surface (`import Core.DI;`) or bare (`import Core.DI.inject;`); the gate is
+    /// `DependencyInjection.inject` head already consumed by the caller. `qualified` records whether the head was the
+    /// `DI.`-qualified surface (`import Core.DependencyInjection;`) or bare (`import Core.DependencyInjection.inject;`); the gate is
     /// enforced later in [`crate::checker::desugar_di`]. `sp` spans the composition root.
     pub(in crate::parser) fn parse_inject_turbofish(
         &mut self,
@@ -496,14 +496,14 @@ impl Parser {
                             return Err(self.error("a field or method name after '.', '?.' or '::'"))
                         }
                     };
-                    // DI composition root, qualified turbofish surface `DI.inject<T>()` (§7). Recognized
-                    // only in this exact shape (`DI` head, `.inject`, `<`); any other `.inject` stays an
-                    // ordinary member access, and `DI.inject()` (no turbofish) is converted by
-                    // `desugar_di` when `Core.DI` is imported. `?.` is never a composition root.
+                    // DI composition root, qualified turbofish surface `DependencyInjection.inject<T>()` (§7). Recognized
+                    // only in this exact shape (`DependencyInjection` head, `.inject`, `<`); any other `.inject` stays an
+                    // ordinary member access, and `DependencyInjection.inject()` (no turbofish) is converted by
+                    // `desugar_di` when `Core.DependencyInjection` is imported. `?.` is never a composition root.
                     if !safe
                         && sep == crate::ast::MemberSep::Dot
                         && name == "inject"
-                        && matches!(&e, Expr::Ident(q, _) if q == "DI")
+                        && matches!(&e, Expr::Ident(q, _) if q == "DependencyInjection")
                         && matches!(self.peek(), TokenKind::Lt)
                     {
                         e = self.parse_inject_turbofish(true, sp)?;

@@ -1,8 +1,8 @@
-//! DEC-208 — typed-generic `Core.Db` result hydration. S2 shipped `queryInto`/`queryOneInto`; slice B
+//! DEC-208 — typed-generic `Core.DatabaseModule` result hydration. S2 shipped `queryInto`/`queryOneInto`; slice B
 //! adds NESTED hydration (a field that is itself an entity, from dotted `"order.total"` aliases, eager,
 //! optional-entity→null on all-NULL) + `queryScalar<T>` (one value) + `queryMap<K,V>` (keyed rows).
 //! Slice E adds VALUE MAPPING for a field's type: a phorj `enum` field (TEXT column → the variant whose
-//! NAME matches; zero-payload variants only; unknown value → `DbError`), a `decimal` field (exact money
+//! NAME matches; zero-payload variants only; unknown value → `DatabaseError`), a `decimal` field (exact money
 //! via `Row.getDecimal`), and a `Core.Json` field (TEXT column parsed via `Json.parse`). Each composes
 //! with nested hydration and admits NULL in its `?` form (timestamp→`DateTime` is deferred on DEC-206).
 //! Slice B2 adds the COLUMN NAMING STRATEGY: a `.namingStrategy(new Naming.SnakeToCamel())` call in the
@@ -27,7 +27,7 @@
 //! SURFACE (contextual OR explicit turbofish — DEC-208 slice A wired):
 //! ```text
 //!   List<User> users = stmt.queryInto();           // T inferred from the sink type
-//!   User? one       = stmt.queryOneInto();          // 0 rows → null, 1 → the object, >1 → DbError
+//!   User? one       = stmt.queryOneInto();          // 0 rows → null, 1 → the object, >1 → DatabaseError
 //!   var users       = stmt.queryInto<User>();       // T explicit at the call site (turbofish)
 //!   var byId        = stmt.queryMap<int, User>();   // K, V explicit
 //! ```
@@ -42,18 +42,18 @@
 //! **promoted** constructor parameter extracted from the row by its name via the typed S1 `Row` accessor
 //! matching its type (`int`→`getInt`, `string`→`getString`, `float`→`getFloat`, `bool`→`getBool`). The
 //! strict semantics are inherited for free from those accessors: a missing column, a type mismatch, or a
-//! SQL NULL into a non-optional field each throw `DbError` (row `db.rs` `row_cell`/`get_int`/…). Extra
+//! SQL NULL into a non-optional field each throw `DatabaseError` (row `db.rs` `row_cell`/`get_int`/…). Extra
 //! columns are ignored (only named columns are read). Requiring every ctor param to be a promoted field
 //! makes "param name == field name" structural, so mapping-by-field-name and construction coincide
 //! (`E-DB-HYDRATE-UNPROMOTED` / `E-DB-HYDRATE-NO-CTOR` / `E-DB-HYDRATE-FIELD-TYPE` otherwise).
 //!
-//! ERROR MECHANISM: the generated helpers are ordinary phorj functions declared `throws DbError`; they
-//! reuse the S1 `Statement.query()` + `Row` accessors (each already `throws DbError`) with `?`
+//! ERROR MECHANISM: the generated helpers are ordinary phorj functions declared `throws DatabaseError`; they
+//! reuse the S1 `Statement.query()` + `Row` accessors (each already `throws DatabaseError`) with `?`
 //! propagation — no new native, the same catchable model as S1.
 //!
-//! IMPORT DISCIPLINE (nothing in the wind): active only when `Core.Db` is imported. Under that import
+//! IMPORT DISCIPLINE (nothing in the wind): active only when `Core.DatabaseModule` is imported. Under that import
 //! `queryInto`/`queryOneInto`/`queryScalar`/`queryMap` are the reserved result method names (like
-//! `inject` under `Core.DI`); each generated helper takes a `Statement` parameter, so one of these on
+//! `inject` under `Core.DependencyInjection`); each generated helper takes a `Statement` parameter, so one of these on
 //! any other receiver is a clean argument-type error rather than silent misbehaviour. Disclosed in
 //! KNOWN_ISSUES.
 //!
@@ -76,18 +76,18 @@ use std::collections::BTreeMap;
 /// `usize::MAX` sentinel above, with room for far more nodes than any program could generate.
 const SYNTH_BASE: usize = usize::MAX / 2;
 
-/// The four type-directed `Core.Db` result calls this pass lowers (all nullary member calls).
+/// The four type-directed `Core.DatabaseModule` result calls this pass lowers (all nullary member calls).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Call {
     /// `List<T> = stmt.queryInto()` — one `T` per row.
     IntoList,
-    /// `T? = stmt.queryOneInto()` — 0 → null, 1 → the object, >1 → `DbError`.
+    /// `T? = stmt.queryOneInto()` — 0 → null, 1 → the object, >1 → `DatabaseError`.
     IntoOne,
     /// `T v = stmt.queryScalar()` — one typed value from a single-row, single-column result.
     Scalar,
     /// `Map<K, V> = stmt.queryMap()` — rows keyed by the first column (K), V from the rest.
     Map,
-    /// `DbStream<T> = stmt.streamInto()` (DEC-208 item H) — a lazy typed stream: one hydrated `T`
+    /// `DatabaseStream<T> = stmt.streamInto()` (DEC-208 item H) — a lazy typed stream: one hydrated `T`
     /// per PULLED row (`next(): T?`); rows never pulled are never hydrated.
     Stream,
 }
@@ -199,7 +199,7 @@ enum HelperSpec {
         val_ty: Type,
         naming: Naming,
     },
-    /// `phorjStreamInto<Class>[<Naming>]` (DEC-208 item H) — a `DbStream<Class>` whose per-row
+    /// `phorjStreamInto<Class>[<Naming>]` (DEC-208 item H) — a `DatabaseStream<Class>` whose per-row
     /// hydration closure reuses the SAME `build_class` machinery as `queryInto`, but runs it lazily
     /// per pulled row.
     Stream { class: String, naming: Naming },
@@ -264,7 +264,7 @@ enum FieldKind {
         optional: bool,
     },
     /// DEC-208 slice E: a phorj `enum` field, mapped from a TEXT column by matching the column value
-    /// against the variant NAME (zero-payload variants only — validated in [`Db::validate_class`]).
+    /// against the variant NAME (zero-payload variants only — validated in [`Database::validate_class`]).
     /// `optional` (`Status?`) admits a NULL column (→ `null`).
     Enum {
         name: String,
@@ -369,17 +369,17 @@ fn type_label(t: &Type) -> String {
     }
 }
 
-/// True iff the program imports `Core.Db` in any form (module or member) — the gate for the whole pass.
+/// True iff the program imports `Core.DatabaseModule` in any form (module or member) — the gate for the whole pass.
 fn imports_core_db(program: &Program) -> bool {
     program.items.iter().any(|it| {
         matches!(it, Item::Import { path, .. }
-            if path.len() >= 2 && path[0] == "Core" && path[1] == "Db")
+            if path.len() >= 2 && path[0] == "Core" && path[1] == "DatabaseModule")
     })
 }
 
 pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
-    // A no-op unless `Core.Db` is imported — so a program that never touches the DB is byte-for-byte
-    // unchanged and a user method named `queryInto` outside `Core.Db` is never hijacked.
+    // A no-op unless `Core.DatabaseModule` is imported — so a program that never touches the DB is byte-for-byte
+    // unchanged and a user method named `queryInto` outside `Core.DatabaseModule` is never hijacked.
     if !imports_core_db(&program) {
         return Ok(program);
     }
@@ -416,7 +416,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
         items,
         span,
     } = program;
-    let mut db = Db {
+    let mut db = Database {
         ctor_params: &ctor_params,
         enum_variants: &enum_variants,
         helpers: BTreeMap::new(),
@@ -443,7 +443,7 @@ pub fn desugar_db(program: Program) -> Result<Program, Vec<Diagnostic>> {
     })
 }
 
-struct Db<'a> {
+struct Database<'a> {
     ctor_params: &'a BTreeMap<String, Vec<CtorParam>>,
     /// enum name → `[(variant, payload-arity)]` for every declared/injected enum (DEC-208 slice E).
     enum_variants: &'a BTreeMap<String, Vec<(String, usize)>>,
@@ -460,13 +460,13 @@ struct Db<'a> {
     /// the fixed `phorjRows`/`phorjOut`/… locals and from every user field name.
     next_local: usize,
     /// The column naming strategy of the helper CURRENTLY being synthesized (DEC-208 slice B2). Set as
-    /// the first line of [`Db::synth_helper`] from the helper's spec, read by [`Db::col`]/[`Db::seg`]
+    /// the first line of [`Database::synth_helper`] from the helper's spec, read by [`Database::col`]/[`Database::seg`]
     /// while building that one helper's body. Synthesis is strictly sequential (one helper fully built
     /// before the next), so a transient field is sound — no interleaving.
     current_naming: Naming,
 }
 
-impl Db<'_> {
+impl Database<'_> {
     fn sp(&mut self) -> Span {
         let s = self.next_span;
         self.next_span += 1;
@@ -653,7 +653,7 @@ impl Db<'_> {
                 span,
             },
             Call::Stream => Type::Named {
-                name: "DbStream".into(),
+                name: "DatabaseStream".into(),
                 args: vec![type_args.remove(0)],
                 span,
             },
@@ -980,7 +980,7 @@ impl Db<'_> {
         }
     }
 
-    /// Resolve `streamInto<T>()` (DEC-208 item H): the sink type must be `DbStream<Class>`; validates
+    /// Resolve `streamInto<T>()` (DEC-208 item H): the sink type must be `DatabaseStream<Class>`; validates
     /// the class exactly like `queryInto` and registers a per-class stream helper.
     fn resolve_stream(
         &mut self,
@@ -993,21 +993,23 @@ impl Db<'_> {
                 span,
                 "`streamInto()` has no type to infer its row class from".into(),
                 "E-DB-INTO-NO-TYPE",
-                "bind it to a `DbStream<YourClass>` declaration, or write the class explicitly — `stmt.streamInto<YourClass>()`".into(),
+                "bind it to a `DatabaseStream<YourClass>` declaration, or write the class explicitly — `stmt.streamInto<YourClass>()`".into(),
             );
             return None;
         };
         let inner: &Type = match expected {
-            Type::Named { name, args, .. } if name == "DbStream" && args.len() == 1 => &args[0],
+            Type::Named { name, args, .. } if name == "DatabaseStream" && args.len() == 1 => {
+                &args[0]
+            }
             _ => {
                 self.diag(
                     span,
                     format!(
-                        "`streamInto()` produces a `DbStream<Row-class>`, but the binding's type is `{}`",
+                        "`streamInto()` produces a `DatabaseStream<Row-class>`, but the binding's type is `{}`",
                         type_label(expected)
                     ),
                     "E-DB-INTO-BAD-SINK",
-                    "declare the binding `DbStream<YourClass>` (or use the turbofish form)".into(),
+                    "declare the binding `DatabaseStream<YourClass>` (or use the turbofish form)".into(),
                 );
                 return None;
             }
@@ -1362,7 +1364,7 @@ impl Db<'_> {
         }
     }
 
-    /// `if (List.length(<list_var>) <op> <n>) { throw new DbError(<msg>); }` — an arity guard.
+    /// `if (List.length(<list_var>) <op> <n>) { throw new DatabaseError(<msg>); }` — an arity guard.
     fn len_guard(&mut self, list_var: &str, op: BinaryOp, n: i64, msg: &str) -> Stmt {
         let v = self.ident(list_var);
         let len = self.qual_call("List", "length", vec![v]);
@@ -1375,7 +1377,7 @@ impl Db<'_> {
             span: cmp_span,
         };
         let m = self.str_lit(msg);
-        let err = self.new_obj("DbError", vec![m]);
+        let err = self.new_obj("DatabaseError", vec![m]);
         let throw_span = self.sp();
         let throw = Stmt::Throw {
             value: err,
@@ -1447,10 +1449,10 @@ impl Db<'_> {
         }
     }
 
-    /// `match (<scrutinee_local>) { "V0" => new Enum.V0(), … default => DbError.fail(msg)? }` — the
+    /// `match (<scrutinee_local>) { "V0" => new Enum.V0(), … default => DatabaseError.fail(msg)? }` — the
     /// enum-column → variant match (DEC-208 slice E). `enum_name`'s variants are all zero-payload
     /// (validated), so each arm is a nullary construction; an unmatched value throws a catchable
-    /// `DbError` via the prelude's single `DbError.fail` classification point.
+    /// `DatabaseError` via the prelude's single `DatabaseError.fail` classification point.
     fn enum_match(&mut self, enum_name: &str, scrutinee_local: &str, col: &str) -> Expr {
         let variants = self
             .enum_variants
@@ -1470,9 +1472,11 @@ impl Db<'_> {
                 span: arm_span,
             });
         }
-        let msg = format!("Core.Db: column `{col}` value is not a variant of enum `{enum_name}`");
+        let msg = format!(
+            "Core.DatabaseModule: column `{col}` value is not a variant of enum `{enum_name}`"
+        );
         let m = self.str_lit(&msg);
-        let fail = self.qual_call("DbError", "fail", vec![m]);
+        let fail = self.qual_call("DatabaseError", "fail", vec![m]);
         let body = self.propagate(fail);
         let pat_span = self.sp();
         let arm_span = self.sp();
@@ -1491,18 +1495,18 @@ impl Db<'_> {
         }
     }
 
-    /// `Json.parse(<row_var>.getString("col")?) ?? DbError.fail(msg)?` — the JSON-column → `Json` parse
+    /// `Json.parse(<row_var>.getString("col")?) ?? DatabaseError.fail(msg)?` — the JSON-column → `Json` parse
     /// (DEC-208 slice E). Requires the program's own `import Core.Json` (nothing in the wind); an
-    /// invalid JSON string (`Json.parse` → null) throws a catchable `DbError`.
+    /// invalid JSON string (`Json.parse` → null) throws a catchable `DatabaseError`.
     fn json_parse_expr(&mut self, col: &str, row_var: &str) -> Expr {
         let row = self.ident(row_var);
         let col_e = self.str_lit(col);
         let getstr = self.member_call(row, "getString", vec![col_e]);
         let getstr_p = self.propagate(getstr);
         let parse = self.qual_call("Json", "parse", vec![getstr_p]);
-        let msg = format!("Core.Db: column `{col}` does not contain valid JSON");
+        let msg = format!("Core.DatabaseModule: column `{col}` does not contain valid JSON");
         let m = self.str_lit(&msg);
-        let fail = self.qual_call("DbError", "fail", vec![m]);
+        let fail = self.qual_call("DatabaseError", "fail", vec![m]);
         let fail_p = self.propagate(fail);
         let span = self.sp();
         Expr::Binary {
@@ -1586,7 +1590,7 @@ impl Db<'_> {
                 FieldKind::Json { optional } => {
                     if optional {
                         // mutable Json? local = null; if (!row.isNull("col")?) { local =
-                        // Json.parse(row.getString("col")?) ?? DbError.fail(…)?; }
+                        // Json.parse(row.getString("col")?) ?? DatabaseError.fail(…)?; }
                         let opt_ty = self.opt_ty("Json");
                         let null_init = self.placeholder();
                         let decl_span = self.sp();
@@ -1615,7 +1619,7 @@ impl Db<'_> {
                             span: if_span,
                         });
                     } else {
-                        // Json local = Json.parse(row.getString("col")?) ?? DbError.fail(…)?;
+                        // Json local = Json.parse(row.getString("col")?) ?? DatabaseError.fail(…)?;
                         let j = self.json_parse_expr(&col, row_var);
                         let ty = self.named("Json");
                         let span = self.sp();
@@ -1815,7 +1819,7 @@ impl Db<'_> {
                 let ct = self.named(&c);
                 let sp = self.sp();
                 let ret = Type::Named {
-                    name: "DbStream".into(),
+                    name: "DatabaseStream".into(),
                     args: vec![ct],
                     span: sp,
                 };
@@ -1823,7 +1827,7 @@ impl Db<'_> {
                 (ret, body)
             }
         };
-        let throws = vec![self.named("DbError")];
+        let throws = vec![self.named("DatabaseError")];
         let span = self.sp();
         Item::Function(FunctionDecl {
             modifiers: Vec::new(),
@@ -1913,11 +1917,11 @@ impl Db<'_> {
     /// The `phorjStreamInto<Class>` body (DEC-208 item H):
     /// ```text
     /// RowStream phorjRows = phorjStmt.stream()?;
-    /// return new DbStream(phorjRows, function(Row phorjRow): Class throws DbError {
+    /// return new DatabaseStream(phorjRows, function(Row phorjRow): Class throws DatabaseError {
     ///     <build_class locals>; return new Class(...);
     /// });
     /// ```
-    /// `T` of the generic `DbStream<T>` is inferred at construction from the closure's declared return
+    /// `T` of the generic `DatabaseStream<T>` is inferred at construction from the closure's declared return
     /// type; the per-row hydration is the SAME `build_class` output `queryInto` inlines into its loop,
     /// here wrapped in a throwing lambda (DEC-222) so hydration runs lazily per pulled row.
     fn stream_body(&mut self, class: &str) -> Vec<Stmt> {
@@ -1935,7 +1939,7 @@ impl Db<'_> {
             mutable: false,
             span,
         });
-        // The hydration lambda: function(Row phorjRow): Class throws DbError { …; return new Class(..); }
+        // The hydration lambda: function(Row phorjRow): Class throws DatabaseError { …; return new Class(..); }
         let mut lam_body = Vec::new();
         let newc = self.build_class(class, "", "phorjRow", &mut lam_body);
         let ret_span = self.sp();
@@ -1947,7 +1951,7 @@ impl Db<'_> {
         let psp = self.sp();
         let lam_span = self.sp();
         let ret_ty = self.named(class);
-        let err_ty = self.named("DbError");
+        let err_ty = self.named("DatabaseError");
         let lambda = Expr::Lambda {
             params: vec![Param {
                 ty: row_ty,
@@ -1960,9 +1964,9 @@ impl Db<'_> {
             body: LambdaBody::Block(lam_body),
             span: lam_span,
         };
-        // return new DbStream(phorjRows, <lambda>);
+        // return new DatabaseStream(phorjRows, <lambda>);
         let rows_ref = self.ident("phorjRows");
-        let stream = self.new_obj("DbStream", vec![rows_ref, lambda]);
+        let stream = self.new_obj("DatabaseStream", vec![rows_ref, lambda]);
         let rsp = self.sp();
         body.push(Stmt::Return {
             value: Some(stream),
@@ -2010,7 +2014,7 @@ impl Db<'_> {
             else_block: None,
             span: if0_span,
         });
-        // if (phorjN > 1) { throw new DbError("…"); }
+        // if (phorjN > 1) { throw new DatabaseError("…"); }
         let n1 = self.ident("phorjN");
         let one = self.int_lit(1);
         let gt_span = self.sp();
@@ -2021,9 +2025,9 @@ impl Db<'_> {
             span: gt_span,
         };
         let msg = self.str_lit(&format!(
-            "Core.Db.queryOneInto: expected at most one row for `{class}`"
+            "Core.DatabaseModule.queryOneInto: expected at most one row for `{class}`"
         ));
-        let dberr = self.new_obj("DbError", vec![msg]);
+        let dberr = self.new_obj("DatabaseError", vec![msg]);
         let throw_span = self.sp();
         let throw = Stmt::Throw {
             value: dberr,
@@ -2051,7 +2055,7 @@ impl Db<'_> {
         body
     }
 
-    /// `queryScalar` body: exactly one row AND exactly one column → the typed value; else `DbError`.
+    /// `queryScalar` body: exactly one row AND exactly one column → the typed value; else `DatabaseError`.
     /// The sole column name is unknown at compile time (`COUNT(*)`), so it is read via `columnNames`.
     fn scalar_body(&mut self, accessor: &str) -> Vec<Stmt> {
         let mut body = Vec::new();
@@ -2060,7 +2064,7 @@ impl Db<'_> {
             "phorjRows",
             BinaryOp::NotEq,
             1,
-            "Core.Db.queryScalar: expected exactly one row",
+            "Core.DatabaseModule.queryScalar: expected exactly one row",
         ));
         body.push(self.row0_local());
         // List<string> phorjCols = phorjRow.columnNames()?;
@@ -2080,7 +2084,7 @@ impl Db<'_> {
             "phorjCols",
             BinaryOp::NotEq,
             1,
-            "Core.Db.queryScalar: expected exactly one column",
+            "Core.DatabaseModule.queryScalar: expected exactly one column",
         ));
         // return phorjRow.accessor(phorjCols[0])?;
         let row2 = self.ident("phorjRow");
@@ -2154,7 +2158,7 @@ impl Db<'_> {
                     "phorjCols",
                     BinaryOp::Lt,
                     2,
-                    "Core.Db.queryMap: expected at least two columns for a scalar value",
+                    "Core.DatabaseModule.queryMap: expected at least two columns for a scalar value",
                 ));
                 let row3 = self.ident("phorjRow");
                 let cols1 = self.index_ident("phorjCols", 1);
@@ -2296,7 +2300,7 @@ impl Db<'_> {
             },
             // `List<User> u = stmt.queryInto()?;` — a `?`-propagation in annotation position: look
             // THROUGH the `?` so the sink type still reaches the recognizer, then keep the `?` on the
-            // rewritten throwing helper call (the idiomatic form inside a `throws DbError` function).
+            // rewritten throwing helper call (the idiomatic form inside a `throws DatabaseError` function).
             Expr::Propagate { inner, span } => match *inner {
                 Expr::Call {
                     callee,

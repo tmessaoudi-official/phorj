@@ -1,4 +1,4 @@
-//! `Core.Uri` kernel tests — every expectation below is PINNED to live php-8.5.8
+//! `Core.UriModule` kernel tests — every expectation below is PINNED to live php-8.5.8
 //! `Uri\Rfc3986\Uri` output (the transpile twin), captured in
 //! `docs/research/2026-07-16-uri-twin-probes.md`. A failure here means the kernel drifted from
 //! the twin, never that the twin is "wrong".

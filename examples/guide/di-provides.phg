@@ -4,13 +4,13 @@
 // `T`: it takes PRECEDENCE over `new T(…)`, its own parameters are autowired, and its result is shared
 // (or transient) exactly like a constructed instance. This is how you inject a type you don't own, or one
 // whose constructor needs a config value (a plain `string`/`int` the graph can't wire), or to bind an
-// interface to a chosen implementation. Follows the same `Core.DI` import discipline (nothing in the wind).
+// interface to a chosen implementation. Follows the same `Core.DependencyInjection` import discipline (nothing in the wind).
 package Main;
 
 import Core.Output;
-import Core.DI.Injectable;
-import Core.DI.Provides;
-import Core.DI.inject;
+import Core.DependencyInjection.Injectable;
+import Core.DependencyInjection.Provides;
+import Core.DependencyInjection.inject;
 
 // `Db` needs a connection string — a config value the graph cannot autowire, so `Db` is NOT injectable.
 class Db {

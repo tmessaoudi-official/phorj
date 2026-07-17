@@ -8,8 +8,8 @@ package Main;
 // namespacing bug — tracked in KNOWN_ISSUES F-029 — so it is deliberately kept out of this regression).
 import Core.Output;
 import Core.Secret;
-import Core.Debug;
-import Core.Debug.Debug;
+import Core.DebugModule;
+import Core.DebugModule.Debug;
 import Acme.Widget;
 
 function main(): void {

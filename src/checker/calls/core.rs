@@ -79,8 +79,8 @@ impl Checker {
                             .get(q)
                             .and_then(|m| crate::native::index_of(m, name))
                         {
-                            // `Reflect.typeName(x)` is resolved from `x`'s STATIC type and erased
-                            // before any backend (Core.Reflect, Tier 3) — never the generic-native
+                            // `Reflection.typeName(x)` is resolved from `x`'s STATIC type and erased
+                            // before any backend (Core.Reflection, Tier 3) — never the generic-native
                             // path. `q` is reused for the synthesized `className`/`kind` calls.
                             let n = &crate::native::registry()[idx];
                             if n.module == "Core.Reflection" && n.name == "typeName" {

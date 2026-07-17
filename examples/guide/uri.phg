@@ -1,4 +1,4 @@
-// Core.Uri (DEC-240) — one immutable RFC 3986 `Uri` with a typed `UriError` taxonomy.
+// Core.UriModule (DEC-240) — one immutable RFC 3986 `Uri` with a typed `UriError` taxonomy.
 // Transpile twin = PHP 8.5's always-on `Uri\Rfc3986\Uri`, so this runs byte-identically on the
 // interpreter, the VM, and real PHP. Getters are the NORMALIZED view (lowercased scheme/host,
 // dot-segments removed, unreserved percent-escapes decoded); the raw* family keeps the input as
@@ -6,10 +6,10 @@
 package Main;
 
 import Core.Output;
-import Core.Uri.Uri;
-import Core.Uri.UriError;
-import Core.Uri.UriMalformed;
-import Core.Uri.UriBadScheme;
+import Core.UriModule.Uri;
+import Core.UriModule.UriError;
+import Core.UriModule.UriMalformed;
+import Core.UriModule.UriBadScheme;
 
 function main(): void {
     try {

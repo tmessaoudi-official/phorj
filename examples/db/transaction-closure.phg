@@ -1,40 +1,40 @@
-// The CLOSURE form of transactions with `Core.Db` (DEC-208 slice C, spec §5) — unblocked by DEC-222
-// (throwing-closure function types). Like every `Core.Db` example this opens a real bundled-SQLite
+// The CLOSURE form of transactions with `Core.DatabaseModule` (DEC-208 slice C, spec §5) — unblocked by DEC-222
+// (throwing-closure function types). Like every `Core.DatabaseModule` example this opens a real bundled-SQLite
 // database, so it is quarantined from the byte-identity differential (live DB I/O is not byte-identical
 // rusqlite-vs-PDO) and is instead run on BOTH Rust backends by `tests/db.rs` (`run ≡ runvm`).
 //
 //   * `db.transaction(fn)` runs the closure inside a transaction: COMMIT on a normal return (returning
 //     the closure's value), auto-ROLLBACK + re-throw the ORIGINAL typed error on a throw. The closure is
-//     a THROWING function type (`function(): T throws DbError { … }`) because DB work raises a checked
-//     `DbError`. The manual `begin()/commit()/rollback()` (see `transactions.phg`) still exist too.
+//     a THROWING function type (`function(): T throws DatabaseError { … }`) because DB work raises a checked
+//     `DatabaseError`. The manual `begin()/commit()/rollback()` (see `transactions.phg`) still exist too.
 //   * A NESTED `db.transaction(fn)` opens a SAVEPOINT — an inner rollback leaves the outer transaction's
 //     work intact (composable partial rollback).
 //   * `db.transaction(fn, retries)` auto-retries ONLY the transient `SerializationFailure` (SQLite
-//     busy/locked); any other `DbError` propagates immediately.
+//     busy/locked); any other `DatabaseError` propagates immediately.
 package Main;
 
 import Core.Output;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Statement;
-import Core.Db.Row;
-import Core.Db.DbError;
-import Core.Db.UniqueViolation;
-import Core.Db.SerializationFailure;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Statement;
+import Core.DatabaseModule.Row;
+import Core.DatabaseModule.DatabaseError;
+import Core.DatabaseModule.UniqueViolation;
+import Core.DatabaseModule.SerializationFailure;
 
 // prepare + exec one write; both can throw, so each is `?`-propagated.
-function run(Db db, string sql): void throws DbError {
+function run(Database db, string sql): void throws DatabaseError {
     Statement s = db.prepare(sql)?;
     discard s.exec()?;
 }
 
-function balOf(Db db, int id): int throws DbError {
+function balOf(Database db, int id): int throws DatabaseError {
     Statement s = db.prepare("SELECT bal FROM acct WHERE id = {id}")?;
     List<Row> rows = s.query()?;
     return rows[0].getInt("bal")?;
 }
 
-function setup(Db db): void throws DbError {
+function setup(Database db): void throws DatabaseError {
     run(db, "CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)")?;
     run(db, "INSERT INTO acct(id, bal) VALUES(1, 100)")?;
     run(db, "INSERT INTO acct(id, bal) VALUES(2, 0)")?;
@@ -55,23 +55,23 @@ class Attempts {
 
 function main(): void {
     try {
-        Db db = new Db("sqlite::memory:");
+        Database db = new Database("sqlite::memory:");
         setup(db);
         // 1) A void closure that does two writes and returns normally -> COMMIT.
         db.transaction(
-            function(): void throws DbError { run(db, "UPDATE acct SET bal = bal - 30 WHERE id = 1")?; run(db, "UPDATE acct SET bal = bal + 30 WHERE id = 2")?; }
+            function(): void throws DatabaseError { run(db, "UPDATE acct SET bal = bal - 30 WHERE id = 1")?; run(db, "UPDATE acct SET bal = bal + 30 WHERE id = 2")?; }
         );
         Output.printLine("after commit: acct1={balOf(db, 1)} acct2={balOf(db, 2)}");
         // 2) A value-returning closure — the transaction returns the closure's value.
         int total = db.transaction(
-            function(): int throws DbError { return balOf(db, 1)? + balOf(db, 2)?; }
+            function(): int throws DatabaseError { return balOf(db, 1)? + balOf(db, 2)?; }
         );
         Output.printLine("total in tx: {total}");
         // 3) A closure that THROWS -> auto-rollback; the ORIGINAL typed error is caught OUTSIDE the
         //    transaction (not a generic one). The acct-1 debit is discarded.
         try {
             db.transaction(
-                function(): void throws DbError { run(db, "UPDATE acct SET bal = bal - 50 WHERE id = 1")?; run(db, "INSERT INTO acct(id, bal) VALUES(1, 999)")?; }
+                function(): void throws DatabaseError { run(db, "UPDATE acct SET bal = bal - 50 WHERE id = 1")?; run(db, "INSERT INTO acct(id, bal) VALUES(1, 999)")?; }
             );
         } catch (UniqueViolation e) {
             // duplicate PK -> UniqueViolation
@@ -81,7 +81,7 @@ function main(): void {
         // 4) NESTED transaction = SAVEPOINT: the outer change (acct 1) commits; the inner transaction
         //    throws and is rolled back to its savepoint, so acct 2 is left intact — the outer survives.
         db.transaction(
-            function(): void throws DbError { run(db, "UPDATE acct SET bal = 500 WHERE id = 1")?; try { db.transaction(function(): void throws DbError { run(db, "UPDATE acct SET bal = 777 WHERE id = 2")?; run(db, "INSERT INTO acct(id, bal) VALUES(2, 111)")?; }); } catch (DbError inner) { Output.printLine("inner savepoint rolled back: outer continues"); } }
+            function(): void throws DatabaseError { run(db, "UPDATE acct SET bal = 500 WHERE id = 1")?; try { db.transaction(function(): void throws DatabaseError { run(db, "UPDATE acct SET bal = 777 WHERE id = 2")?; run(db, "INSERT INTO acct(id, bal) VALUES(2, 111)")?; }); } catch (DatabaseError inner) { Output.printLine("inner savepoint rolled back: outer continues"); } }
         );
         // duplicate PK -> throws
         Output.printLine("after nested: acct1={balOf(db, 1)} acct2={balOf(db, 2)}");
@@ -89,12 +89,12 @@ function main(): void {
         //    succeeds. With retries=2 the transaction is re-run and the write lands.
         var tries = new Attempts();
         db.transaction(
-            function(): void throws DbError { int n = tries.bump(); if (n <= 1) { throw new SerializationFailure("simulated transient busy"); } run(db, "UPDATE acct SET bal = 42 WHERE id = 2")?; },
+            function(): void throws DatabaseError { int n = tries.bump(); if (n <= 1) { throw new SerializationFailure("simulated transient busy"); } run(db, "UPDATE acct SET bal = 42 WHERE id = 2")?; },
             2
         );
         Output.printLine("after retry: acct2={balOf(db, 2)} (succeeded on attempt {tries.n})");
         db.close();
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("unexpected: {e.message}");
     }
 }

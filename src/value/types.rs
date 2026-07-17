@@ -153,7 +153,7 @@ pub enum Value {
     /// `spawn` in the synchronous-degenerate path, or when the task's coroutine finishes in the
     /// cooperative path. `join` reads it by id. Opaque to the kernels; never transpiled.
     Task(TaskId),
-    /// An opaque native database resource handle (DEC-208 `Core.Db`) — a connection or a
+    /// An opaque native database resource handle (DEC-208 `Core.DatabaseModule`) — a connection or a
     /// lazily-executed prepared statement. Shared-mutable like [`Value::Channel`]/[`Value::Instance`]:
     /// cloning shares the same `Rc`, so a statement's accumulated binds are visible through every
     /// binding. **Opaque** to the arithmetic / compare / display kernels (the checker forbids using a

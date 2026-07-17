@@ -448,7 +448,7 @@ impl Checker {
         }
     }
 
-    /// DEC-257: is `name<cargs>` iterable via the `Core.Iterator` pull protocol? Returns the
+    /// DEC-257: is `name<cargs>` iterable via the `Core.IteratorModule` pull protocol? Returns the
     /// element type plus the union of the CONCRETE `hasNext`/`next` throws (to discharge at the
     /// loop site). Two shapes hit: the injected `Iterator<E>` interface itself (throws empty —
     /// interface-method throws are an existing documented deferral), and a class DIRECTLY

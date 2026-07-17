@@ -11,16 +11,16 @@
 //   * The strategy MUST be a `new Naming.X()` literal (a runtime value → `E-DB-NAMING-NOT-CONST`); the
 //     strict-exact default (no `namingStrategy`) is unchanged — the column name must equal the field.
 //
-// Like every Core.Db program this opens real bundled SQLite (rusqlite) → quarantined from the byte-
+// Like every Core.DatabaseModule program this opens real bundled SQLite (rusqlite) → quarantined from the byte-
 // identity differential; `run ≡ runvm` holds (a compile-time desugar produces ONE AST for both
 // backends). Built only under `--features db`; validated by tests/db.rs on both backends.
 package Main;
 
 import Core.Output;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.Naming;
-import Core.Db.DbError;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.Naming;
+import Core.DatabaseModule.DatabaseError;
 
 // camelCase phorj fields; the DB stores them snake_case (`user_name`, `first_name`, `street_name`, …).
 class Address {
@@ -33,7 +33,7 @@ class Member {
 
 function main(): void {
     try {
-        Db db = new Db("sqlite::memory:");
+        Database db = new Database("sqlite::memory:");
         discard db
             .prepare(
                 "CREATE TABLE members(id INTEGER, user_name TEXT, first_name TEXT, address_id INTEGER)"
@@ -60,7 +60,7 @@ function main(): void {
                 "{m.id}: {m.firstName} (@{m.userName}) lives on {m.homeAddress.streetName}, {m.homeAddress.postalCode}"
             );
         }
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("DB error: {e.message}");
     }
 }

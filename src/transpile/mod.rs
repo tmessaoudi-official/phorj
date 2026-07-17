@@ -199,12 +199,12 @@ struct Transpiler {
     /// usual host) is never emitted because every other hole's kind was resolved natively.
     uses_float: bool,
     uses_range: bool,
-    /// Set when `Reflect.kind(x)` is emitted — defines the `__phorj_kind` runtime helper once per
+    /// Set when `Reflection.kind(x)` is emitted — defines the `__phorj_kind` runtime helper once per
     /// file. A native's `php` closure can't set a `uses_*` flag (it has no `&mut self`), so
     /// `emit_member_call` special-cases this one native to set the flag before emitting (the
     /// established gated-helper pattern). The helper reproduces the coarse, erasure-stable type tag.
     uses_reflect_kind: bool,
-    /// Set when `Reflect.className(x)` is emitted — defines the `__phorj_class_name` helper once per
+    /// Set when `Reflection.className(x)` is emitted — defines the `__phorj_class_name` helper once per
     /// file (single-evaluates its argument; excludes closures). Same gated-helper rationale as
     /// `uses_reflect_kind`.
     uses_reflect_class_name: bool,
@@ -220,7 +220,7 @@ struct Transpiler {
     /// `__phorj_reflect_of` static table when `uses_reflect_tables` is set, byte-identical to the
     /// `ClassTables` the Rust backends read (M-Reflect Tier-2).
     class_tables: crate::native::ClassTables,
-    /// Set when a `Core.Reflect.interfaces`/`parents`/… call is emitted — defines the
+    /// Set when a `Core.Reflection.interfaces`/`parents`/… call is emitted — defines the
     /// `__phorj_reflect_of($v, $kind)` helper + its static table once per file.
     uses_reflect_tables: bool,
     /// Set when `Core.Json.stringify` / `stringifyPretty` / `parse` is emitted — each defines its
@@ -365,7 +365,7 @@ struct Transpiler {
     /// fault, `%%`→`%`, any other directive / count mismatch → a fault, byte-for-byte the same as the
     /// interpreter and VM.
     uses_string_format: bool,
-    /// DEC-238: a `Core.DebugSys.render` call was emitted → emit the `__phorj_debug_render` twin
+    /// DEC-238: a `Core.Native.Debug.render` call was emitted → emit the `__phorj_debug_render` twin
     /// (+ the enum-variant table it needs to render transpiled enums as `Ty.Variant(...)`).
     uses_debug_render: bool,
     /// DEC-255: a READ-context index (`xs[i]` / `m[k]`) was emitted → emit the `__phorj_index` helper
@@ -395,7 +395,7 @@ struct Transpiler {
     /// (so a seeded sequence matches `run`/`runvm`). `>>` is masked for logical shift; `GOLDEN` is the
     /// signed-i64 reinterpretation of the unsigned constant.
     uses_rng: bool,
-    /// Set when any `Core.UriSys` native is emitted (DEC-240) — defines the `__phorj_uri*`
+    /// Set when any `Core.Native.Uri` native is emitted (DEC-240) — defines the `__phorj_uri*`
     /// helpers: thin wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri` (the transpile twin),
     /// catching `Uri\InvalidUriException` into the `<<E>>`-sentinel messages the injected `Uri`
     /// prelude classifies into the typed `UriError` taxonomy.

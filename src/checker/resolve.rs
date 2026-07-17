@@ -277,24 +277,26 @@ impl Checker {
                 // `check_method_call`, `check_static_method_call`).
                 "Channel" => Ty::Named("Channel".into(), vec![self.one_arg(name, args, *span)]),
                 "Task" => Ty::Named("Task".into(), vec![self.one_arg(name, args, *span)]),
-                // `DbHandle` (DEC-208): the opaque native connection/statement/row handle the `Core.Db`
-                // prelude classes store in a field and thread to the `Core.DbSys` natives. Reserved +
+                // `DatabaseHandle` (DEC-208): the opaque native connection/statement/row handle the `Core.DatabaseModule`
+                // prelude classes store in a field and thread to the `Core.Native.Database` natives. Reserved +
                 // IMPORT-GATED (never ambient — the developer's "nothing in the wind" rule): it resolves
-                // only when `Core.DbSys` is in scope (the injected `Core.Db` prelude imports it), so a
-                // user cannot name `DbHandle` without importing `Core.Db`. Opaque: it never participates
+                // only when `Core.Native.Database` is in scope (the injected `Core.DatabaseModule` prelude imports it), so a
+                // user cannot name `DatabaseHandle` without importing `Core.DatabaseModule`. Opaque: it never participates
                 // in arithmetic/compare/display (like `Channel`/`Task`), so the value kernels are
                 // untouched; the natives downcast the underlying `Value::Db`/`Value::Map` at runtime.
-                "DbHandle" if self.imports.values().any(|m| m == "Core.DbSys") => {
-                    Ty::Named("DbHandle".into(), vec![])
+                "DatabaseHandle" if self.imports.values().any(|m| m == "Core.Native.Database") => {
+                    Ty::Named("DatabaseHandle".into(), vec![])
                 }
-                // `MailHandle` (DEC-223) — the `Core.Mail` twin of `DbHandle`: the opaque native
-                // mailer/draft handle, import-gated on `Core.MailSys` (nothing in the wind).
-                "MailHandle" if self.imports.values().any(|m| m == "Core.MailSys") => {
+                // `MailHandle` (DEC-223) — the `Core.Mail` twin of `DatabaseHandle`: the opaque native
+                // mailer/draft handle, import-gated on `Core.Native.Mail` (nothing in the wind).
+                "MailHandle" if self.imports.values().any(|m| m == "Core.Native.Mail") => {
                     Ty::Named("MailHandle".into(), vec![])
                 }
-                // `HcHandle` (W3-2) — the `Core.HttpClient` opaque handle, gated on `Core.HttpClientSys`.
-                "HcHandle" if self.imports.values().any(|m| m == "Core.HttpClientSys") => {
-                    Ty::Named("HcHandle".into(), vec![])
+                // `HttpClientHandle` (W3-2) — the `Core.HttpClientModule` opaque handle, gated on `Core.Native.HttpClient`.
+                "HttpClientHandle"
+                    if self.imports.values().any(|m| m == "Core.Native.HttpClient") =>
+                {
+                    Ty::Named("HttpClientHandle".into(), vec![])
                 }
                 "double" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => self.err(
                     *span,

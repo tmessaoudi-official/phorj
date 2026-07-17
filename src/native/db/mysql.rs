@@ -1,4 +1,4 @@
-//! The MySQL/MariaDB [`DriverConn`] backend for `Core.Db` (DEC-208 slice J), over the SYNC `mysql`
+//! The MySQL/MariaDB [`DriverConn`] backend for `Core.DatabaseModule` (DEC-208 slice J), over the SYNC `mysql`
 //! crate (`minimal-rust`: pure-Rust wire protocol, no libmysqlclient, no TLS/compression extras).
 //!
 //! This is the driver behind a `mysql://…` / `mariadb://…` DSN. It plugs into the SAME
@@ -15,7 +15,7 @@
 //!   yields an `int`, exactly like SQLite's storage classes, so `getBool` keeps working); `DECIMAL`
 //!   columns arrive as their exact decimal TEXT (feeding `Row.getDecimal` losslessly); `TEXT`-family
 //!   blobs map to `string` unless the column is genuinely binary (`BINARY_FLAG` on a blob type →
-//!   `bytes`); temporal types return a clear DbError steering to `CAST(col AS CHAR)` — matching the
+//!   `bytes`); temporal types return a clear DatabaseError steering to `CAST(col AS CHAR)` — matching the
 //!   Postgres driver's `::text` guidance;
 //! - **error classification** — MySQL error codes → the DEC-208 taxonomy ([`my_err_kind`]);
 //! - **credential redaction** (slice G) — the DSN password is parsed into [`Opts`] at connect and
@@ -59,12 +59,12 @@ fn my_err_kind(e: &mysql::Error) -> Option<&'static str> {
     }
 }
 
-/// Render a `mysql` error as the `DbResult.Err` message the prelude throws on, prefixed with the
+/// Render a `mysql` error as the `DatabaseResult.Err` message the prelude throws on, prefixed with the
 /// `<<Kind>>` taxonomy marker. The crate's `Display` is the server/client message — it never contains
 /// the DSN password (redacted at connect), so it is safe verbatim.
 fn my_sql_err(e: mysql::Error) -> String {
     let kind = my_err_kind(&e);
-    let base = format!("Core.Db: {e}");
+    let base = format!("Core.DatabaseModule: {e}");
     match kind {
         Some(tag) => format!("<<{tag}>>{base}"),
         None => base,
@@ -89,7 +89,7 @@ impl std::fmt::Debug for MyConn {
 
 /// Open a `mysql://` / `mariadb://` connection (DEC-208 slice J). A `mariadb://` scheme is normalized
 /// to `mysql://` (same wire protocol) before [`Opts`] parsing. Any inline password (hand-written or
-/// injected by the `Db.withPassword` factory, slice G) is parsed into [`Opts`] and never retained —
+/// injected by the `Database.withPassword` factory, slice G) is parsed into [`Opts`] and never retained —
 /// only the redacted DSN is stored, so a connect error prints the host but never the password.
 pub(super) fn open(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     let normalized = match dsn.strip_prefix("mariadb://") {
@@ -97,10 +97,11 @@ pub(super) fn open(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
         None => dsn.to_string(),
     };
     let redacted = redact_dsn_password(dsn);
-    let opts = Opts::from_url(&normalized)
-        .map_err(|e| format!("<<ConnectionError>>Core.Db: invalid mysql DSN `{redacted}`: {e}"))?;
+    let opts = Opts::from_url(&normalized).map_err(|e| {
+        format!("<<ConnectionError>>Core.DatabaseModule: invalid mysql DSN `{redacted}`: {e}")
+    })?;
     let conn = Conn::new(opts).map_err(|e| {
-        let base = format!("Core.Db: cannot connect to `{redacted}`: {e}");
+        let base = format!("Core.DatabaseModule: cannot connect to `{redacted}`: {e}");
         match my_err_kind(&e) {
             Some(tag) => format!("<<{tag}>>{base}"),
             None => format!("<<ConnectionError>>{base}"),
@@ -125,7 +126,7 @@ fn my_param(v: &Value) -> Result<mysql::Value, String> {
         Value::Null => mysql::Value::NULL,
         other => {
             return Err(format!(
-                "Core.Db: cannot bind a {} value (bind a decimal as text)",
+                "Core.DatabaseModule: cannot bind a {} value (bind a decimal as text)",
                 other.type_name()
             ))
         }
@@ -153,9 +154,9 @@ fn expand_positional(sql: &str, pbs: &[PosBind]) -> Result<(String, Vec<mysql::V
                 out.push(c);
             }
             '?' if !in_s && !in_d => {
-                let b = pbs
-                    .get(consumed)
-                    .ok_or_else(|| "Core.Db: more ? placeholders than bound values".to_string())?;
+                let b = pbs.get(consumed).ok_or_else(|| {
+                    "Core.DatabaseModule: more ? placeholders than bound values".to_string()
+                })?;
                 consumed += 1;
                 match b {
                     PosBind::One(v) => {
@@ -179,7 +180,7 @@ fn expand_positional(sql: &str, pbs: &[PosBind]) -> Result<(String, Vec<mysql::V
     }
     if consumed != pbs.len() {
         return Err(format!(
-            "Core.Db: {} bound value(s) but {} ? placeholder(s) in the SQL",
+            "Core.DatabaseModule: {} bound value(s) but {} ? placeholder(s) in the SQL",
             pbs.len(),
             consumed
         ));
@@ -234,7 +235,9 @@ fn translate_named(
                 .iter()
                 .find(|(n, _)| *n == name)
                 .map(|(_, v)| v.clone())
-                .ok_or_else(|| format!("Core.Db: named parameter `:{name}` was not bound"))?;
+                .ok_or_else(|| {
+                    format!("Core.DatabaseModule: named parameter `:{name}` was not bound")
+                })?;
             params.push(my_param(&v)?);
             if !used.contains(&name) {
                 used.push(name);
@@ -248,7 +251,7 @@ fn translate_named(
     }
     if let Some((n, _)) = pairs.iter().find(|(n, _)| !used.contains(n)) {
         return Err(format!(
-            "Core.Db: bound named parameter `:{n}` does not appear in the SQL"
+            "Core.DatabaseModule: bound named parameter `:{n}` does not appear in the SQL"
         ));
     }
     Ok((out, params))
@@ -281,7 +284,7 @@ fn is_binary_blob(ty: ColumnType, flags: ColumnFlags) -> bool {
 /// A fetched MySQL cell → phorj value, dispatched on the wire value with the column's declared type
 /// disambiguating byte payloads: `DECIMAL`/`NEWDECIMAL` bytes are the exact decimal TEXT (feeding
 /// `Row.getDecimal` losslessly); `TEXT`-family bytes are `string`; a `BINARY_FLAG` blob is `bytes`;
-/// temporal values return a clear DbError steering to `CAST(col AS CHAR)` (the Postgres `::text`
+/// temporal values return a clear DatabaseError steering to `CAST(col AS CHAR)` (the Postgres `::text`
 /// guidance, adapted).
 fn my_cell(
     v: mysql::Value,
@@ -296,8 +299,8 @@ fn my_cell(
             Ok(n) => Value::Int(n),
             Err(_) => {
                 return Err(format!(
-                    "Core.Db: column `{name}` holds unsigned value {u}, out of int range"
-                ))
+                "Core.DatabaseModule: column `{name}` holds unsigned value {u}, out of int range"
+            ))
             }
         },
         mysql::Value::Float(f) => Value::Float(f64::from(f)),
@@ -310,7 +313,7 @@ fn my_cell(
                     Ok(s) => Value::Str(s.into()),
                     Err(_) => {
                         return Err(format!(
-                            "Core.Db: column `{name}` holds non-UTF-8 text — read it as BLOB"
+                            "Core.DatabaseModule: column `{name}` holds non-UTF-8 text — read it as BLOB"
                         ))
                     }
                 }
@@ -318,9 +321,9 @@ fn my_cell(
         }
         mysql::Value::Date(..) | mysql::Value::Time(..) => {
             return Err(format!(
-                "Core.Db: column `{name}` has a temporal mysql type — select it as text \
+            "Core.DatabaseModule: column `{name}` has a temporal mysql type — select it as text \
                  (e.g. `SELECT CAST({name} AS CHAR)`) to read date/time values"
-            ))
+        ))
         }
     })
 }
@@ -396,7 +399,7 @@ impl DriverConn for MyConn {
                     Value::List(v) => v,
                     other => {
                         return Err(format!(
-                            "Core.Db.executeMany: each row must be a list, got {}",
+                            "Core.DatabaseModule.executeMany: each row must be a list, got {}",
                             other.type_name()
                         ))
                     }

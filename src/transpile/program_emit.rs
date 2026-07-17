@@ -177,9 +177,13 @@ impl Transpiler {
                         );
                     }
                 }
-                Item::Import { path, .. } => {
-                    if let Some(leaf) = path.last() {
-                        self.imports.insert(leaf.clone(), path.join("."));
+                Item::Import { path, alias, .. } => {
+                    // The bound qualifier is the alias when present (`import a.b as c;` ⇒ `c`),
+                    // else the path's last segment — the same rule as `native::import_map`.
+                    // Honoring the alias matters since DEC-277: the friendly preludes import
+                    // their raw natives as `import Core.Native.Debug as NativeDebug;`.
+                    if let Some(q) = alias.clone().or_else(|| path.last().cloned()) {
+                        self.imports.insert(q, path.join("."));
                     }
                     // DEC-197: a member import of a module FUNCTION (`import Core.Output.printLine;`)
                     // also binds the MODULE qualifier (`Output` → `Core.Output`), so the checker's

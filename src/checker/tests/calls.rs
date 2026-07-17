@@ -423,6 +423,61 @@ fn deprecated_native_emits_w_deprecated() {
 }
 
 #[test]
+fn deprecated_core_url_warns_with_uri_module_replacement() {
+    // DEC-279: `Core.Url` merged into the Uri module. The old paths KEEP WORKING (the twin rows in
+    // `native/url.rs`) but each call warns W-DEPRECATED, and the guidance names the new home.
+    let src =
+        r#"import Core.Url; function main() -> void { string s = Url.encodeUriComponent("a b"); }"#;
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    let w = warnings_of(src);
+    assert!(
+        w.iter().any(|d| d.code == Some("W-DEPRECATED")
+            && d.hint
+                .as_deref()
+                .is_some_and(|h| h.contains("Uri.encodeComponent"))),
+        "expected W-DEPRECATED hinting at Uri.encodeComponent, got {w:?}"
+    );
+}
+
+#[test]
+fn uri_module_percent_encoding_statics_do_not_warn() {
+    // The new home (DEC-279): the `Core.Native.Uri` percent-encoding rows carry no deprecation.
+    // (These checker tests run the RAW checker — no prelude injection — so the raw-native import
+    // stands in for the `Uri.encodeComponent` prelude static, which the differential's
+    // `guide/uri-encoding.phg` example gates end-to-end on all three backends.)
+    let src = r#"import Core.Native.Uri; function main() -> void { string s = Uri.encodeComponent("a b"); }"#;
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    let w = warnings_of(src);
+    assert!(
+        !w.iter().any(|d| d.code == Some("W-DEPRECATED")),
+        "the new Uri percent-encoding natives must not warn, got {w:?}"
+    );
+}
+
+#[test]
+fn native_member_fn_import_is_rejected_with_guidance() {
+    // DEC-277: raw `Core.Native.*` modules are whole-module-import only. A member fn-import would
+    // make the checker's bare→qualified rewrite emit `Uri.encodeForm(...)` with no import item —
+    // unresolvable on the backends (the Native-excluded leaf fallback) — so it is rejected loudly.
+    let src = r#"import Core.Native.Uri.encodeForm; function main() -> void { string s = encodeForm("a b"); }"#;
+    let errs = errors_of(src);
+    assert!(
+        errs.iter()
+            .any(|e| e.code == Some("E-IMPORT-NATIVE-MEMBER")),
+        "expected E-IMPORT-NATIVE-MEMBER, got {errs:?}"
+    );
+}
+
+#[test]
+fn native_whole_module_import_still_resolves_qualified() {
+    // The supported raw form: whole-module import + qualified call (the leaf binds in the import
+    // map, so checker AND backends resolve it identically).
+    let src =
+        r#"import Core.Native.Uri; function main() -> void { string s = Uri.encodeForm("a b"); }"#;
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
 fn non_deprecated_native_has_no_w_deprecated() {
     // A neighboring native that is NOT flagged must not warn (guards against an over-broad lint).
     let src = "import Core.Math; function main() -> void { int x = Math.max(1, 2); }";

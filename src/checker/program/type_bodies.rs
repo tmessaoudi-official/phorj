@@ -88,7 +88,7 @@ impl Checker {
                     // DEC-221: validate the ctor's declared throws (now the full hierarchy is built) and
                     // make it the active discharge context for the body, exactly as `check_function`
                     // does for a function — so a throwing call inside the ctor discharges/propagates
-                    // against the declared set (`DbError.fail(e)?` in `constructor(...) throws DbError`).
+                    // against the declared set (`DatabaseError.fail(e)?` in `constructor(...) throws DatabaseError`).
                     self.validate_throw_types(&ctor_throws, *span);
                     let was_ctor = std::mem::replace(&mut self.in_constructor, true);
                     let prev_throws = std::mem::replace(&mut self.cur_throws, ctor_throws);

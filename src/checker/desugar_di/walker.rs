@@ -261,7 +261,7 @@ impl Di<'_> {
         span: Span,
     ) -> Expr {
         // Import gate. Annotation forms reach here only when already imported (see `annotation_inject`),
-        // so this bites an explicit turbofish `inject<T>()`/`DI.inject<T>()` whose import is absent.
+        // so this bites an explicit turbofish `inject<T>()`/`DependencyInjection.inject<T>()` whose import is absent.
         let imported = if qualified {
             self.di_qualifier_imported
         } else {
@@ -269,12 +269,15 @@ impl Di<'_> {
         };
         if !imported {
             let (surface, fix) = if qualified {
-                ("DI.inject", "import Core.DI;")
+                (
+                    "DependencyInjection.inject",
+                    "import Core.DependencyInjection;",
+                )
             } else {
-                ("inject", "import Core.DI.inject;")
+                ("inject", "import Core.DependencyInjection.inject;")
             };
             self.diags.push(
-                err(format!("`{surface}` is used without importing `Core.DI`"), span)
+                err(format!("`{surface}` is used without importing `Core.DependencyInjection`"), span)
                     .with_code("E-DI-NO-IMPORT")
                     .with_hint(format!(
                         "add `{fix}` — the DI composition root must be imported, never used in the wind"
@@ -343,7 +346,7 @@ impl Di<'_> {
 
     /// Is this nullary call's `callee` an annotation-form composition root whose import is present?
     /// Returns `Some(qualified)` if so; `None` if it is an ordinary user call (a bare `inject()` with no
-    /// member-import, or `DI.inject()` on a user object when `Core.DI` is not imported — the freed-
+    /// member-import, or `DependencyInjection.inject()` on a user object when `Core.DependencyInjection` is not imported — the freed-
     /// identifier guarantee).
     pub(super) fn annotation_inject(&self, callee: &Expr) -> Option<bool> {
         match callee {
@@ -355,7 +358,7 @@ impl Di<'_> {
                 ..
             } if name == "inject"
                 && self.di_qualifier_imported
-                && matches!(object.as_ref(), Expr::Ident(q, _) if q == "DI") =>
+                && matches!(object.as_ref(), Expr::Ident(q, _) if q == "DependencyInjection") =>
             {
                 Some(true)
             }
@@ -394,7 +397,7 @@ impl Di<'_> {
 
     pub(super) fn rexpr(&mut self, e: Expr) -> Expr {
         match e {
-            // Explicit turbofish `inject<T>()` / `DI.inject<T>()` (parser-produced). Gate the import,
+            // Explicit turbofish `inject<T>()` / `DependencyInjection.inject<T>()` (parser-produced). Gate the import,
             // then resolve. In a non-annotation position, `ty: None` cannot arise from the parser; it
             // only reaches here via `annotation_inject` re-dispatch, so a `None` here means an annotation
             // `inject()` used where no expected type is available → `E-INJECT-NO-TYPE`.

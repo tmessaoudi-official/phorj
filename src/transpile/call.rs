@@ -133,7 +133,7 @@ impl Transpiler {
                         if nat.module == "Core.Output" && nat.name == "capture" {
                             self.uses_capture = true;
                         }
-                        if nat.module == "Core.DebugSys" && nat.name == "render" {
+                        if nat.module == "Core.Native.Debug" && nat.name == "render" {
                             self.uses_debug_render = true;
                             // Scalars render through the interpolation kernel twin.
                             self.uses_str = true;
@@ -275,10 +275,17 @@ impl Transpiler {
                         if nat.module == "Core.Random" {
                             self.uses_rng = true;
                         }
-                        // `Core.UriSys` erases to the gated `__phorj_uri*` helpers (DEC-240): thin
+                        // `Core.Native.Uri` erases to the gated `__phorj_uri*` helpers (DEC-240): thin
                         // wrappers over PHP 8.5's always-on `Uri\Rfc3986\Uri` — the extension IS
-                        // the implementation on this leg; the Rust kernel is pinned to it.
-                        if nat.module == "Core.UriSys" {
+                        // the implementation on this leg; the Rust kernel is pinned to it. The
+                        // DEC-279 percent-encoding rows (former `Core.Url`, now in this module) have
+                        // self-contained `urlencode`-family emitters and need no helper block.
+                        if nat.module == "Core.Native.Uri"
+                            && !matches!(
+                                nat.name,
+                                "encodeForm" | "encodeComponent" | "decodeForm" | "decodeComponent"
+                            )
+                        {
                             self.uses_uri = true;
                         }
                         // `Core.Regex` erases to gated `__phorj_regex_*` helpers (Fork A, 2026-06-28):

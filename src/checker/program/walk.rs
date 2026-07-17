@@ -377,6 +377,33 @@ impl Checker {
         &mut self,
         program: &crate::ast::Program,
     ) {
+        // DEC-277: a `Core.Native.*` raw-native module is whole-module-import only — a MEMBER
+        // fn-import is excluded from the binding set (see `function_import_bindings`), so reject
+        // it here with guidance instead of letting the bare call fail as an unknown function.
+        for it in &program.items {
+            let crate::ast::Item::Import { path, span, .. } = it else {
+                continue;
+            };
+            if path.len() >= 4 && path[0] == "Core" && path[1] == "Native" {
+                let module = path[..path.len() - 1].join(".");
+                let leaf = &path[path.len() - 1];
+                if crate::native::index_of(&module, leaf).is_some() {
+                    self.err_coded(
+                        *span,
+                        format!(
+                            "`{module}.{leaf}` cannot be member-imported — raw `Core.Native.*` \
+                             modules are whole-module imports only"
+                        ),
+                        "E-IMPORT-NATIVE-MEMBER",
+                        Some(format!(
+                            "write `import {module};` and call `{}.{leaf}(...)` qualified — or use \
+                             the friendly prelude module instead",
+                            path[path.len() - 2]
+                        )),
+                    );
+                }
+            }
+        }
         let bindings = super::function_imports::function_import_bindings(&program.items);
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         for (bound, _, _, span) in &bindings {

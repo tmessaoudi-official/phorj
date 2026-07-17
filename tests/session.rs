@@ -1,5 +1,5 @@
-//! `Core.Session` (W3, TOP-20 #3) end-to-end fixture — sessions over synthetic `Core.Http`
-//! requests on BOTH backends (the `tests/db.rs` pattern; `Core.SessionSys` is impure →
+//! `Core.SessionModule` (W3, TOP-20 #3) end-to-end fixture — sessions over synthetic `Core.Http`
+//! requests on BOTH backends (the `tests/db.rs` pattern; `Core.Native.Session` is impure →
 //! quarantined from the byte-identity differential). The store internals (open/reuse, idle
 //! expiry never resurrecting ids, regenerate moving data) are unit-tested in
 //! `src/native/session.rs`; THIS file proves the phorj-visible story: cookie round-trip,
@@ -27,8 +27,8 @@ fn session_cookie_round_trip_persistence_and_fixation_defense() {
 import Core.Output;
 import Core.String;
 import Core.Bytes;
-import Core.Session;
-import Core.Session.Session;
+import Core.SessionModule;
+import Core.SessionModule.Session;
 import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
@@ -86,8 +86,8 @@ fn session_unknown_cookie_id_gets_a_fresh_session() {
 import Core.Output;
 import Core.String;
 import Core.Bytes;
-import Core.Session;
-import Core.Session.Session;
+import Core.SessionModule;
+import Core.SessionModule.Session;
 import Core.Http;
 import Core.Http.Request;
 
@@ -104,12 +104,12 @@ function main(): void {
     both(src, "fresh false\nempty <absent>\n");
 }
 
-/// THE LADDER RULE (for-now form): `Core.Session` transpile is the clean E-TRANSPILE-SESSION.
+/// THE LADDER RULE (for-now form): `Core.SessionModule` transpile is the clean E-TRANSPILE-SESSION.
 #[test]
 fn session_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
 import Core.Output;
-import Core.Session;
+import Core.SessionModule;
 function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {

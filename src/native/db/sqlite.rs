@@ -1,13 +1,13 @@
-//! The SQLite [`DriverConn`] backend for `Core.Db` (DEC-208), over bundled `rusqlite`.
+//! The SQLite [`DriverConn`] backend for `Core.DatabaseModule` (DEC-208), over bundled `rusqlite`.
 //!
-//! This is the driver behind a `sqlite:…` / `:memory:` DSN — the ORIGINAL, shipped `Core.Db` runtime,
+//! This is the driver behind a `sqlite:…` / `:memory:` DSN — the ORIGINAL, shipped `Core.DatabaseModule` runtime,
 //! moved BEHIND the [`DriverConn`] trait unchanged (DEC-208 slice I, multi-driver refactor). Every value
 //! mapping, placeholder-expansion, error-classification and transaction rule here is byte-identical to
 //! the pre-refactor single-file implementation, so all shipped `db` tests pass unchanged — the refactor
 //! is a pure extraction. Postgres ([`super::postgres`]) plugs into the same trait.
 //!
 //! The generic layer ([`super`]) owns the opaque handles, the bind accumulator ([`Binds`]), the natives,
-//! the `DbResult` protocol, the row accessors, and the (portable) transaction-control SQL; this module
+//! the `DatabaseResult` protocol, the row accessors, and the (portable) transaction-control SQL; this module
 //! owns only what is genuinely SQLite-specific: the `rusqlite` connection, the storage-class value
 //! conversions, the `?`-placeholder expansion, and the extended-result-code taxonomy mapping.
 
@@ -29,7 +29,7 @@ fn to_sql(v: &Value) -> Result<rusqlite::types::Value, String> {
         Value::Bytes(b) => S::Blob((**b).clone()),
         other => {
             return Err(format!(
-                "Core.Db: cannot bind a {} value",
+                "Core.DatabaseModule: cannot bind a {} value",
                 other.type_name()
             ))
         }
@@ -49,13 +49,13 @@ fn from_sql(v: rusqlite::types::Value) -> Value {
     }
 }
 
-/// Classify a `rusqlite` error into the taxonomy marker the prelude's `DbError.fail` reads (DEC-208
+/// Classify a `rusqlite` error into the taxonomy marker the prelude's `DatabaseError.fail` reads (DEC-208
 /// slice C, spec §6). The mapping keys off SQLite's (extended) result codes: `SQLITE_CONSTRAINT_UNIQUE`
 /// / `_PRIMARYKEY` → `UniqueViolation`, generic `SQLITE_CONSTRAINT` → `ConstraintViolation`,
 /// `SQLITE_BUSY`/`SQLITE_LOCKED` → `SerializationFailure` (the transient class retry targets — the
 /// spec's `Deadlock` under one name), `SQLITE_CANTOPEN`/`SQLITE_NOTADB` → `ConnectionError`, generic
 /// `SQLITE_ERROR` (a mis-typed statement at prepare time) → `SyntaxError`. Anything else stays generic
-/// (no marker → the base `DbError`). `Timeout` has no SQLite source yet (it arrives with query
+/// (no marker → the base `DatabaseError`). `Timeout` has no SQLite source yet (it arrives with query
 /// `.timeout(ms)`, slice D); the subtype exists in the taxonomy and the classifier already reads its
 /// marker, so wiring it later is emit-only.
 fn err_kind(e: &rusqlite::Error) -> Option<&'static str> {
@@ -82,12 +82,12 @@ fn err_kind(e: &rusqlite::Error) -> Option<&'static str> {
     }
 }
 
-/// Render a `rusqlite` error as the `DbResult.Err` message the prelude throws on, PREFIXED with a
+/// Render a `rusqlite` error as the `DatabaseResult.Err` message the prelude throws on, PREFIXED with a
 /// `<<Kind>>` marker when the error classifies into the typed taxonomy (see [`err_kind`]). The prelude's
-/// single `DbError.fail` classification point strips the marker and throws the matching subtype.
+/// single `DatabaseError.fail` classification point strips the marker and throws the matching subtype.
 pub(super) fn sql_err(e: rusqlite::Error) -> String {
     let kind = err_kind(&e);
-    let base = format!("Core.Db: {e}");
+    let base = format!("Core.DatabaseModule: {e}");
     match kind {
         Some(tag) => format!("<<{tag}>>{base}"),
         None => base,
@@ -120,9 +120,9 @@ pub(super) fn expand_placeholders(
                 out.push(c);
             }
             '?' if !in_squote && !in_dquote => {
-                let b = binds
-                    .get(idx)
-                    .ok_or_else(|| "Core.Db: more ? placeholders than bound values".to_string())?;
+                let b = binds.get(idx).ok_or_else(|| {
+                    "Core.DatabaseModule: more ? placeholders than bound values".to_string()
+                })?;
                 idx += 1;
                 match b {
                     PosBind::One(v) => {
@@ -149,7 +149,7 @@ pub(super) fn expand_placeholders(
     }
     if idx != binds.len() {
         return Err(format!(
-            "Core.Db: {} bound value(s) but {} ? placeholder(s) in the SQL",
+            "Core.DatabaseModule: {} bound value(s) but {} ? placeholder(s) in the SQL",
             binds.len(),
             idx
         ));
@@ -300,7 +300,7 @@ impl DriverConn for SqliteConn {
                     Value::List(v) => v,
                     other => {
                         return Err(format!(
-                            "Core.Db.executeMany: each row must be a list, got {}",
+                            "Core.DatabaseModule.executeMany: each row must be a list, got {}",
                             other.type_name()
                         ))
                     }

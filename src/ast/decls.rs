@@ -111,25 +111,34 @@ impl Attribute {
     /// as `E-UNKNOWN-ATTRIBUTE` — it is consumed by [`crate::checker::desugar_di`] before any backend,
     /// then inert (like `#[Route]`). Slice 1 = `#[Injectable]` only; `#[Transient]`/`#[Provides]` join
     /// here in later slices. SINGLE SOURCE of the recognition. Matches BOTH the bare `Injectable`
-    /// (member-imported `import Core.DI.Injectable;`) and the qualified `DI.Injectable` (`import
-    /// Core.DI;`) surfaces — mirrors `desugar_router`'s `"Route" | "Http.Route"` (§7 import discipline).
+    /// (member-imported `import Core.DependencyInjection.Injectable;`) and the qualified `DI.Injectable` (`import
+    /// Core.DependencyInjection;`) surfaces — mirrors `desugar_router`'s `"Route" | "Http.Route"` (§7 import discipline).
     pub fn is_di_builtin(&self) -> bool {
-        matches!(self.name.as_str(), "Injectable" | "DI.Injectable")
+        matches!(
+            self.name.as_str(),
+            "Injectable" | "DependencyInjection.Injectable"
+        )
     }
 
     /// True iff this is the DI `#[Provides]` attribute (DI v1 slice 4) — marks a `static` method whose
     /// return type is a provided type: the DI graph constructs that type via the method instead of `new`.
-    /// Bare (`import Core.DI.Provides;`) or qualified (`import Core.DI;` → `#[DI.Provides]`), same
+    /// Bare (`import Core.DependencyInjection.Provides;`) or qualified (`import Core.DependencyInjection;` → `#[DI.Provides]`), same
     /// discipline as `#[Injectable]`. Single recognition source.
     pub fn is_di_provides(&self) -> bool {
-        matches!(self.name.as_str(), "Provides" | "DI.Provides")
+        matches!(
+            self.name.as_str(),
+            "Provides" | "DependencyInjection.Provides"
+        )
     }
 
     /// True iff this is the DI `#[Transient]` attribute (DI v1 slice 4b) — on a class, opts OUT of the
     /// default-shared lifetime: the DI graph builds a fresh instance at each injection point instead of
-    /// sharing one per resolution root. Bare (`import Core.DI.Transient;`) or qualified (`#[DI.Transient]`).
+    /// sharing one per resolution root. Bare (`import Core.DependencyInjection.Transient;`) or qualified (`#[DI.Transient]`).
     pub fn is_di_transient(&self) -> bool {
-        matches!(self.name.as_str(), "Transient" | "DI.Transient")
+        matches!(
+            self.name.as_str(),
+            "Transient" | "DependencyInjection.Transient"
+        )
     }
 
     /// True iff this is the built-in `#[Attribute]` marker (DEC-194) — a class carrying it IS a
@@ -373,7 +382,7 @@ pub struct InterfaceDecl {
     /// declared in the whole program, so a `match` over this interface type is exhaustive with no `_`
     /// (DEC-179). Compile-time-only — PHP emits a plain `interface` (no sealed concept).
     pub sealed: bool,
-    /// True for a compiler-INJECTED interface (`Iterator` — added by the `Core.Iterator` prelude
+    /// True for a compiler-INJECTED interface (`Iterator` — added by the `Core.IteratorModule` prelude
     /// when imported), false for a user declaration. Injected interfaces are exempt from the
     /// DEC-202 PHP-builtin-name rejection: the transpiled output is namespaced (`namespace Main;
     /// interface Iterator` never redeclares the root `\Iterator` — verified vs PHP 8.5), and the

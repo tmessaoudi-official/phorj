@@ -58,8 +58,8 @@ fn di_inject_in_field_initializer_runs_not_panics() {
     // walks all expression positions, so this runs and prints the injected value.
     let src = "package Main;\n\
         import Core.Output;\n\
-        import Core.DI.Injectable;\n\
-        import Core.DI.inject;\n\
+        import Core.DependencyInjection.Injectable;\n\
+        import Core.DependencyInjection.inject;\n\
         #[Injectable] class Db { constructor() {} function n(): int { return 7; } }\n\
         class Svc {\n\
             private Db db = inject<Db>();\n\
@@ -87,8 +87,8 @@ fn di_field_injection_synthesizes_constructor_when_absent() {
     // set at construction. Exercises the synthesis branch end-to-end (field actually reads back).
     let src = "package Main;\n\
         import Core.Output;\n\
-        import Core.DI.Injectable;\n\
-        import Core.DI.inject;\n\
+        import Core.DependencyInjection.Injectable;\n\
+        import Core.DependencyInjection.inject;\n\
         #[Injectable] class Clock { constructor() {} function n(): int { return 3; } }\n\
         #[Injectable] class Logger { private Clock clock; function m(): int { return this.clock.n(); } }\n\
         function main(): void { Logger l = inject<Logger>(); Output.printLine(\"{l.m()}\"); }\n";
@@ -108,9 +108,9 @@ fn di_transient_is_fresh_per_use_but_shares_its_dependency() {
     // transient → "… 1 1").
     let src = "package Main;\n\
         import Core.Output;\n\
-        import Core.DI.Injectable;\n\
-        import Core.DI.Transient;\n\
-        import Core.DI.inject;\n\
+        import Core.DependencyInjection.Injectable;\n\
+        import Core.DependencyInjection.Transient;\n\
+        import Core.DependencyInjection.inject;\n\
         #[Injectable] class Counter { private mutable int n; constructor() { this.n = 0; } function tick(): int { this.n = this.n + 1; return this.n; } }\n\
         #[Injectable] #[Transient] class Worker { private mutable int local; constructor(private Counter counter) { this.local = 0; } function own(): int { this.local = this.local + 1; return this.local; } function shared(): int { return this.counter.tick(); } }\n\
         #[Injectable] class App { constructor(private Worker w1, private Worker w2) {} function report(): string { return \"own {this.w1.own()} {this.w2.own()} shared {this.w1.shared()} {this.w2.shared()}\"; } }\n\
@@ -129,9 +129,9 @@ fn di_transient_root_inlines_construction() {
     // dangling `diWorker` var). Runs and reads the shared dep back.
     let src = "package Main;\n\
         import Core.Output;\n\
-        import Core.DI.Injectable;\n\
-        import Core.DI.Transient;\n\
-        import Core.DI.inject;\n\
+        import Core.DependencyInjection.Injectable;\n\
+        import Core.DependencyInjection.Transient;\n\
+        import Core.DependencyInjection.inject;\n\
         #[Injectable] class Db { constructor() {} function n(): int { return 9; } }\n\
         #[Injectable] #[Transient] class Worker { constructor(private Db db) {} function go(): int { return this.db.n(); } }\n\
         function main(): void { Worker w = inject<Worker>(); Output.printLine(\"{w.go()}\"); }\n";

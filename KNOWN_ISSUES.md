@@ -71,10 +71,10 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
 > recommended option and queued HERE for morning review. Reversing any entry = reopen the DEC row.
 
 - **DEC-227 · `db` is now a DEFAULT cargo feature** (+ `E-MODULE-UNAVAILABLE` on feature-less builds,
-  + `E-TRANSPILE-DB` ladder gate). Was: stock binary couldn't run any `Core.Db` program (unknown-ident
+  + `E-TRANSPILE-DB` ladder gate). Was: stock binary couldn't run any `Core.DatabaseModule` program (unknown-ident
   wall); transpile of Db programs emitted the same wall instead of a ladder error. Severity: P0 UX.
   Repro (pre-fix): `cargo build && ./target/debug/phg run examples/db/basic.phg`.
-- **DEC-228 · Db streaming (item H) shipped as `RowStream` + `DbStream<T>`** (hydrate-on-pull closure;
+- **DEC-228 · Db streaming (item H) shipped as `RowStream` + `DatabaseStream<T>`** (hydrate-on-pull closure;
   turbofish + contextual sinks). Disclosed limit: both drivers MATERIALIZE the result set at
   `stream()` (self-referential-lifetime constraint under `#![deny(unsafe_code)]`) — the surface is
   row-at-a-time delivery + lazy hydration; true incremental stepping is a driver-internal upgrade
@@ -94,7 +94,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   (`PHORJ_MYSQL_TEST_DSN=... --test db_mysql`); (b) LANGUAGE GAP: constructors take NO default
   params (functions do) — SmtpConfig needed a `withAuth` factory; consider ctor defaults in the
   sugar wave; (c) implicit-TLS/`Tls::Required` config knob on SmtpConfig = queued adjudication.
-- **DEC-238 · Core.Debug PHP twin SHIPPED — gate lifted, with the ERASED-SHAPE disclosure:** dump
+- **DEC-238 · Core.DebugModule PHP twin SHIPPED — gate lifted, with the ERASED-SHAPE disclosure:** dump
   output is three-backend byte-identical on the detectable domain (scalars/strings/lists/maps/
   instances/enums/closures — conformance-pinned). DISCLOSED divergences on the PHP leg (types that
   ERASE to indistinguishable PHP shapes): a dumped `Set` renders as its list shape; a dumped
@@ -102,7 +102,7 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   array-key coercion). Any example hitting these fails the differential loudly — nothing ships
   silently. Queued niceties: TTY-colorized rendering; `dd`/`exit` PHP semantics note (exit maps to
   PHP exit($code) — finally blocks skipped on both, matching).
-- **DEC-233 · Core.Session SHIPPED** (TOP-20 #3; secure-by-default cookies; fixation defense;
+- **DEC-233 · Core.SessionModule SHIPPED** (TOP-20 #3; secure-by-default cookies; fixation defense;
   worker-shared store). QUEUED: (a) SessionStore contract + swappable backends (file/external —
   layered-openness v2); (b) cookie-attribute config (incl. `; Secure` auto-when-TLS); (c) the
   session_start() transpile lift; (d) SESS parity rows flip at the NEXT §4 recompute (not re-run
@@ -110,12 +110,12 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   SILENT (inject_core_modules skips them → "unknown type" at use sites; a keyword-collision like
   the `open` native cost a debugging round) — consider a debug_assert/loud log on prelude parse
   failure.
-- **DEC-232 · Core.Fs SHIPPED** (typed filesystem; sorted listings; loud removeDirAll). QUEUED
+- **DEC-232 · Core.FileSystemModule SHIPPED** (typed filesystem; sorted listings; loud removeDirAll). QUEUED
   ADJUDICATIONS for you: (a) `Core.File` deprecation/migration (its write/delete failures are
-  UNCATCHABLE faults — the pre-taxonomy era; Core.Fs is the typed successor, additive for now);
+  UNCATCHABLE faults — the pre-taxonomy era; Core.FileSystemModule is the typed successor, additive for now);
   (b) a sandboxed `new Fs(root)` scoped-filesystem instance (security v2); (c) the E-TRANSPILE-FS
   lift (PHP mapping exists in principle — emitter work).
-- **DEC-231 · Core.HttpClient SHIPPED** (sync HTTP/1.1 + rustls; security defaults beyond PHP curl;
+- **DEC-231 · Core.HttpClientModule SHIPPED** (sync HTTP/1.1 + rustls; security defaults beyond PHP curl;
   native-only ladder). QUEUED ADJUDICATION for you: the cross-prelude ERROR-CLASS NAMESPACE smell —
   injected-class dedup means two preludes declaring the same error name silently share one class
   (wrong catch semantics); tonight's convention is name-prefixing (HttpTimeout/MailTimeout vs Db's
@@ -132,9 +132,9 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   path (kills tree churn for the common read) · JIT coverage of enum-match pipelines (the match
   micro is 7.4× — the loss is allocation, not dispatch).
   (2) `dbwork` **0.63×** — 50 insert/iter + aggregate read on identical embedded SQLite. Anatomy:
-  per-call prelude wrapping (DbResult match + throw plumbing) + per-op handle Rc churn + per-row
+  per-call prelude wrapping (DatabaseResult match + throw plumbing) + per-op handle Rc churn + per-row
   prepare; PDO's prepare/bindValue are thin C. Levers: statement-handle cache keyed by SQL ·
-  native fast-path for the bind→exec chain (skip DbResult boxing on the hot path) · JIT'ing the
+  native fast-path for the bind→exec chain (skip DatabaseResult boxing on the hot path) · JIT'ing the
   prelude wrapper bodies. All 21 original micros HOLD ≥1.0 (gate PASS, no flips, output-identical);
   baseline re-emitted with the 2 new pairs (LOSS baselines — a future improvement ratchets them).
 - **SWEEP BATCH 2 (spine 7, structure + gates)** —
@@ -155,15 +155,15 @@ is a plaintext/secret leak. Each deserves its own fresh-context slice.
   featured test run — the file-transport example writes cwd-relative). Removed; `outbox/`
   gitignored; `examples/mail/` excluded from the sweep glob like `examples/db/`.
   (2) P2 LATENT: `uses_impure_native` (tests/differential.rs) substring-matches `import <module>`
-  against NATIVE module names — an example importing only `Core.Db` (natives live in `Core.DbSys`)
-  or `Core.Mail` (`Core.MailSys`) is INVISIBLE to the impure check; today only the directory
+  against NATIVE module names — an example importing only `Core.DatabaseModule` (natives live in `Core.Native.Database`)
+  or `Core.Mail` (`Core.Native.Mail`) is INVISIBLE to the impure check; today only the directory
   exclusions mask this. Proposed fix: also map prelude modules → their Sys twins (or prefix-match).
   (3) P2: parser (~61) + lift (~42) `unwrap()`s on user-input paths — a malformed source could
   panic instead of erroring. Queued: targeted audit + a fuzz pass (`cargo-fuzz` is a new dep —
   adjudicate before adding).
   (4) P3: `var/phorj-app/` sits untracked in the repo (benchforge dogfood leftovers from a prior
   session) — developer to keep/relocate/delete.
-  (5) FIXED: FEATURES.md had NO Core.Db/Core.Mail rows (the flagship batteries absent from the
+  (5) FIXED: FEATURES.md had NO Core.DatabaseModule/Core.Mail rows (the flagship batteries absent from the
   surface SSOT); examples/README said "needs --features db" post-DEC-227. Both updated.
   (6) NOTE: with `db` default, `examples/db/` could enroll in the run≡runvm glob (deterministic
   in-memory SQLite) for extra coverage — blocked only by postgres/mysql server examples in the same
@@ -353,16 +353,16 @@ not a panic:
   class or a non-guarded reserved keyword (e.g. `Fn`/`Match`/`Static`/`Null`/`True`/`False`)
   (`examples/guide/core-result.phg` sidesteps it — `ParseFault`, not `ParseError`).
 
-- **`Core.Db` typed-generic hydration (DEC-208 S2) — shipped + disclosures.** `List<T> = stmt.queryInto()`
+- **`Core.DatabaseModule` typed-generic hydration (DEC-208 S2) — shipped + disclosures.** `List<T> = stmt.queryInto()`
   and `T? = stmt.queryOneInto()` map result rows into a class, by field NAME, STRICT (a missing column /
-  type mismatch / SQL-NULL-into-non-optional throws `DbError`; a `T?` field admits NULL; extra columns
+  type mismatch / SQL-NULL-into-non-optional throws `DatabaseError`; a `T?` field admits NULL; extra columns
   ignored). Lowered PRE-check to plain `new T(row.getX("col")?)` construction over the S1 primitives
   (`src/checker/desugar_db.rs`), so there is no runtime reflection and `run ≡ runvm` is automatic.
   **Surface deviation (developer-authorized):** contextual inference, NOT the `<T>` turbofish DEC-208/
   MASTER-PLAN wrote — `T` comes from the binding's declared type (a typed `var` decl, a `return`, or a
   lambda expr-body return), exactly like DEC-201 empty collections. A `queryInto()` with no inferable sink
-  type is `E-DB-INTO-NO-TYPE`. **Disclosures:** (1) under `import Core.Db`, `queryInto`/`queryOneInto` are
-  reserved method names (like `inject` under `Core.DI`) — a user method of either name on a non-`Statement`
+  type is `E-DB-INTO-NO-TYPE`. **Disclosures:** (1) under `import Core.DatabaseModule`, `queryInto`/`queryOneInto` are
+  reserved method names (like `inject` under `Core.DependencyInjection`) — a user method of either name on a non-`Statement`
   receiver is rewritten and then fails as an argument-type error (the generated helper takes a `Statement`).
   (2) The row class must have a promoted-field constructor (`E-DB-HYDRATE-UNPROMOTED`/`-NO-CTOR`); each
   hydrated field must be `int`/`string`/`float`/`bool` or their `?` forms (`E-DB-HYDRATE-FIELD-TYPE`).
@@ -371,28 +371,28 @@ not a panic:
   discloses). (4) A hand-written `phorjQueryIntoList…`/`phorjQueryOneInto…` free function could collide
   with a synthesized helper name (astronomically unlikely; matches the `phorjInject…` convention).
 
-- **`Core.Db` transactions & correctness (DEC-208 slice C) — shipped subset + one PENDING adjudication.**
+- **`Core.DatabaseModule` transactions & correctness (DEC-208 slice C) — shipped subset + one PENDING adjudication.**
   Shipped (`examples/db/transactions.phg`, `tests/db.rs`): manual PDO-faithful transaction control
   `db.begin()` / `db.commit()` / `db.rollback()` — **savepoint-aware** (a nested `begin()` opens
   `SAVEPOINT phorj_sp_<depth>`, so an inner rollback leaves the outer transaction intact), depth tracked
   in the native (`src/native/db.rs`, shared across handles); `db.rollbackQuiet()` (a rollback that never
   throws — the auto-rollback idiom `try { …; commit(); ok = true; } finally { if (!ok) rollbackQuiet(); }`
-  in a **named** function); a **typed error taxonomy** — `open class DbError` subtyped `UniqueViolation` /
+  in a **named** function); a **typed error taxonomy** — `open class DatabaseError` subtyped `UniqueViolation` /
   `ConstraintViolation` / `ConnectionError` / `SerializationFailure` / `Timeout` / `SyntaxError`, each
-  `extends DbError` so `catch (DbError e)` still catches all, mapped from SQLite (extended) result codes
-  at the native boundary and classified at the single `DbError.fail` throw-helper (every existing method —
+  `extends DatabaseError` so `catch (DatabaseError e)` still catches all, mapped from SQLite (extended) result codes
+  at the native boundary and classified at the single `DatabaseError.fail` throw-helper (every existing method —
   incl. the S2 `queryInto` helpers — auto-upgrades to the precise type with no call-site change); and
   deterministic idempotent `db.close()` (further use of the connection or a derived `Statement` faults
   with `ConnectionError`).
   - **SHIPPED (unblocked by DEC-222) — the closure form `db.transaction(fn)` + retry**
     (`examples/db/transaction-closure.phg`, `tests/db.rs`). DEC-222 (throwing-closure function types,
-    `() => T throws E`) lifted the block: `db.transaction(function(): T throws DbError { … })` runs the
+    `() => T throws E`) lifted the block: `db.transaction(function(): T throws DatabaseError { … })` runs the
     closure inside a transaction — COMMIT on a normal return (returning the closure's VALUE),
     auto-ROLLBACK + **re-throw the ORIGINAL typed error** on a throw. Mechanism: a `HigherOrder` native
-    (`DbSys.transaction`, `src/native/db.rs`) begins, invokes the closure re-entrantly on the calling
+    (`NativeDatabase.transaction`, `src/native/db.rs`) begins, invokes the closure re-entrantly on the calling
     backend, commits on `Ok`, and on the invoker's `Err` rolls back and re-propagates the *unchanged*
     error — `rollback_inner` is pure `rusqlite` and never re-enters the backend, so the thrown value in
-    `pending_throw` survives and the caller catches the exact `DbError` (not a generic one). A nested
+    `pending_throw` survives and the caller catches the exact `DatabaseError` (not a generic one). A nested
     `db.transaction` is a SAVEPOINT (composable partial rollback, reusing the slice-C depth). The manual
     `begin`/`commit`/`rollback`/`rollbackQuiet` stay (developer ruled BOTH). **Retry:**
     `db.transactionRetry(fn, retries)` re-runs the whole transaction on the transient
@@ -405,25 +405,25 @@ not a panic:
       to confirm the final name/shape. Isolation-level retry (`db.transaction(Isolation.Serializable, fn)`)
       still rides with the isolation slice below (deferred).
   - **Deferred (not blocked):** (1) **`using`/`Closable` auto-close (DEC-203)** — `db.close()` ships, but
-    the `using (Db db = …) { … }` sugar that would call it at scope exit is DEC-203, a separate ruled-but-
+    the `using (Database db = …) { … }` sugar that would call it at scope exit is DEC-203, a separate ruled-but-
     unbuilt language slice (lexer/parser/checker/backends); defining `Closable` here now would collide with
     that slice, so it is left to DEC-203. (2) **Isolation levels** (`Isolation` enum + `db.begin(Isolation)`)
     — SQLite has effectively one isolation, so it is minimally meaningful until the Postgres driver lands;
     deferred to keep the overload set arity-distinguished and the slice tight.
 
-- **`Core.Db` writes & robustness (DEC-208 slice D) — shipped + disclosures.** Shipped
+- **`Core.DatabaseModule` writes & robustness (DEC-208 slice D) — shipped + disclosures.** Shipped
   (`examples/db/writes.phg`, `tests/db.rs`): `db.lastInsertId(): int` + `stmt.execReturningId(): int`
   (SQLite `last_insert_rowid()`); `stmt.executeMany(rows): int` (prepare once, run all bind-sets inside
   one `phorj_bulk` savepoint → atomic + fast, returns total affected); `stmt.bindList(values): Statement`
   (the single `?` in `… IN (?)` expands in place to a comma placeholder list — empty → `IN (NULL)`,
   matches nothing; interleaves left-to-right with `bind()`; a `?` inside a string literal is not a
-  placeholder); `db.timeout(ms): Db`; `db.onQuery((string, int) => void): Db` (a per-query hook, invoked
+  placeholder); `db.timeout(ms): Database`; `db.onQuery((string, int) => void): Database` (a per-query hook, invoked
   after each query/exec — `query`/`exec`/`executeMany`/`execReturningId` are therefore `HigherOrder`
   natives that call back into the backend to run the stored closure).
   - **Disclosures / deviations:** (1) **`bindList<T>` / `executeMany<T>` are generic over the element
     type, not `List<bindable-union>`.** phorj generics are invariant, so a `List<int>` is not a
     `List<string | int | float | bool>`; bindability is therefore enforced at RUNTIME (`to_sql` → a
-    catchable `DbError` on a non-scalar), not at compile time. (2) **`executeMany` rows are homogeneously-
+    catchable `DatabaseError` on a non-scalar), not at compile time. (2) **`executeMany` rows are homogeneously-
     typed lists** — a phorj list literal must share one element type, so a mixed-column bulk row is written
     with a per-row typed binding (`List<string | int> r = [1, "x"]; …executeMany([r, …]);`) rather than a
     bare mixed literal `[1, "x"]`. (3) **`db.timeout(ms)` bounds LOCK-WAIT only** (SQLite `busy_timeout`),
@@ -434,18 +434,18 @@ not a panic:
     wall-clock and NON-deterministic across the two backends, so no byte-identity example/test prints it
     raw (only the SQL text, or `ms >= 0`).
 
-- **`Core.Db` typed hydration completion (DEC-208 slice B) — shipped + disclosures.** Three shape-directed
+- **`Core.DatabaseModule` typed hydration completion (DEC-208 slice B) — shipped + disclosures.** Three shape-directed
   extensions of the S2 desugar (`src/checker/desugar_db.rs`), same PRE-check lowering to S1 primitives, so
   `run ≡ runvm` stays automatic. (1) **Nested hydration:** a field that is itself an entity is hydrated
   eagerly (one query) from columns aliased with a DOTTED prefix (`"order.total"`, a quoted identifier),
   recursing to arbitrary depth; an OPTIONAL entity field (`Order? order`) is `null` when ALL its columns
   are NULL (a LEFT-JOIN miss, tested via the new `Row.isNull` accessor), else it hydrates strictly (a NULL
   in a *non*-optional subfield still throws). (2) **`queryScalar<T>()`** — one typed value; more than one
-  row OR more than one column throws `DbError` (the sole column name, e.g. `COUNT(*)`, is read via the new
+  row OR more than one column throws `DatabaseError` (the sole column name, e.g. `COUNT(*)`, is read via the new
   `Row.columnNames`). (3) **`queryMap<K, V>()`** — rows keyed by the FIRST selected column (`K`, `int` or
   `string` only); `V` is the SECOND column (scalar — a result of `<2` columns throws) or an entity hydrated
   by field name. **Disclosures:** (a) `queryScalar`/`queryMap` join `queryInto`/`queryOneInto` as reserved
-  method names under `import Core.Db`. (b) A self-referential row class (`class Employee { …, public
+  method names under `import Core.DatabaseModule`. (b) A self-referential row class (`class Employee { …, public
   Employee? manager; }`) is a compile error `E-DB-HYDRATE-CYCLE`, not a stack overflow — eager whole-graph
   hydration cannot bound a cycle; graph/recursive loading is deliberately ORM territory (DEC-208). (c) The
   synthesized helper names extend to `phorjQueryScalar<Label>` / `phorjQueryMap<KLabel><VLabel>` (same
@@ -454,18 +454,18 @@ not a panic:
   its surface (see `docs/plans/MASTER-PLAN.md` DEC-208 PENDING). The default (strict-exact by-name mapping)
   is unchanged.
 
-- **`Core.Db` value mapping (DEC-208 slice E) — shipped subset (enum/decimal/JSON) + `DateTime` deferred.**
+- **`Core.DatabaseModule` value mapping (DEC-208 slice E) — shipped subset (enum/decimal/JSON) + `DateTime` deferred.**
   Three column→type conversions the hydration desugar performs at compile time, composing with the
   flat/nested/optional shapes (`src/checker/desugar_db.rs`; `run ≡ runvm` stays automatic). (1) **enum** — a
   phorj-`enum` field maps from a TEXT column by matching the value against the variant NAME (case-sensitive,
   `'Active'` → `Status.Active()`), **zero-payload variants ONLY** (a data-carrying variant → the compile
-  error `E-DB-HYDRATE-ENUM-PAYLOAD`); an unknown value → catchable `DbError`; `enum?` admits NULL. (2)
+  error `E-DB-HYDRATE-ENUM-PAYLOAD`); an unknown value → catchable `DatabaseError`; `enum?` admits NULL. (2)
   **decimal** — a `decimal`/`decimal?` field maps via the new `Row.getDecimal`/`getDecimalOrNull` accessor:
   **exact money, never float** — a TEXT column is parsed with the exact `…d`-literal grammar (`'0.10'` is
   exactly `0.10`), an INTEGER is exact, a REAL is best-effort via its shortest round-trip string (store
   decimal columns as TEXT for guaranteed exactness); NULL-into-non-optional / a non-decimal value →
-  `DbError`. (3) **JSON** — a `Json`/`Json?` field parses a TEXT column via `Json.parse` (needs the
-  program's own `import Core.Json` — nothing in the wind); invalid JSON → `DbError`; `Json?` admits NULL.
+  `DatabaseError`. (3) **JSON** — a `Json`/`Json?` field parses a TEXT column via `Json.parse` (needs the
+  program's own `import Core.Json` — nothing in the wind); invalid JSON → `DatabaseError`; `Json?` admits NULL.
   **Disclosures / boundaries:** (a) **timestamp → `DateTime` is DEFERRED** — gated on DEC-206, which has not
   built `DateTime`; not implemented. (b) enum/Json are FIELD-level mappings, not scalar column accessors, so
   a *direct* `queryScalar<Status>()` / `queryMap<_, Status>()` (a bare enum/Json as the whole scalar/map
@@ -477,15 +477,15 @@ not a panic:
   routed to the JSON-parse path and fail loud (`Json.parse` unresolved) — pathological and non-silent.
   Example `examples/db/mapping.phg`; fixtures in `tests/db.rs`.
 
-- **`Core.Db` compile-time safety (DEC-208 slice F) — SQL-injection lint shipped; arity check DEFERRED.**
+- **`Core.DatabaseModule` compile-time safety (DEC-208 slice F) — SQL-injection lint shipped; arity check DEFERRED.**
   **Shipped:** the `W-SQL-INJECTION` compile-time lint (`src/checker/calls/methods.rs`,
   `lint_sql_injection`). It is TYPE-DIRECTED and import-gated ("nothing in the wind"): it fires only when
-  the receiver types to the `Core.Db` `Db` class AND the program imports `Core.Db` (module or member
+  the receiver types to the `Core.DatabaseModule` `Db` class AND the program imports `Core.DatabaseModule` (module or member
   form) AND the method is `prepare` AND the SQL argument is a string-INTERPOLATED literal with at least
   one NON-constant hole (a variable / field / call / index / … — anything but a literal scalar, or a
   string whose holes are all literal, recursively). A fully-constant interpolation and a plain
-  non-interpolated literal never warn; a coincidental user class named `Db` with a `prepare` method never
-  warns (no `Core.Db` import). It is a WARNING (rides the warning channel, never fails the build) so a
+  non-interpolated literal never warn; a coincidental user class named `Database` with a `prepare` method never
+  warns (no `Core.DatabaseModule` import). It is a WARNING (rides the warning channel, never fails the build) so a
   deliberately-built constant query still compiles. `phg explain W-SQL-INJECTION`; checker fixtures in
   `src/checker/tests/db_lint.rs`. (The shipped `examples/db/transactions.phg` was migrated from an
   interpolated `WHERE id = {id}` to a bound `WHERE id = ?` + `.bind(id)` — the correct fix the lint
@@ -511,33 +511,33 @@ not a panic:
     loops, `bindList` (one `?` → N), and `bindNamed` (`:name`) all defeat static counting. (3) **desugar
     interaction.** The check would hook after `desugar_db` rewrites `queryInto`/etc. into synthesized
     `query()` calls, so a terminal-walker risks misreading generated chains. The runtime ALREADY throws a
-    clean, catchable `DbError` on any `?`/bind mismatch (`expand_placeholders` and rusqlite both error),
+    clean, catchable `DatabaseError` on any `?`/bind mismatch (`expand_placeholders` and rusqlite both error),
     so this is a convenience lint, not a correctness gap — deferred until a schema-aware or turbofish
     (slice A) foundation makes a sound check cheap. See `docs/specs/archive/2026-07-14-core-db.md` slice F.
 
-- **`Core.Db` multi-driver + Postgres (DEC-208 slice I) + credential Secret (slice G) — shipped subset +
-  disclosures.** `new Db(dsn)` dispatches on the DSN scheme behind a `DriverConn` trait
+- **`Core.DatabaseModule` multi-driver + Postgres (DEC-208 slice I) + credential Secret (slice G) — shipped subset +
+  disclosures.** `new Database(dsn)` dispatches on the DSN scheme behind a `DriverConn` trait
   (`src/native/db/{mod,sqlite,postgres}.rs`): `sqlite:` → the unchanged rusqlite driver (byte-identical,
   all shipped `db` tests green); `postgres://`/`postgresql://` → the sync `postgres` crate under the new
-  non-default `db-postgres` feature (`db-all` = both). `Db.withPassword(dsn, Secret<string>)` (slice G)
+  non-default `db-postgres` feature (`db-all` = both). `Database.withPassword(dsn, Secret<string>)` (slice G)
   keeps the password out of plaintext user code and out of every error/log (the driver retains only a
   redacted DSN). Deterministic driver coverage (dispatch, `?`/`:name`→`$n` translation, SQLSTATE→taxonomy,
   redaction) is in `src/native/db/postgres.rs`; the LIVE round-trip is `tests/db_postgres.rs`, opt-in via
   `PHORJ_PG_TEST_DSN` (skip-loudly if unset — the standard gate never requires a server).
   - **Disclosures / boundaries:** (a) **No oracle.** There is no clean pure-Rust *synchronous* Postgres
-    driver to differential the PHP-PDO leg against, so Postgres (like all of `Core.Db`) is
+    driver to differential the PHP-PDO leg against, so Postgres (like all of `Core.DatabaseModule`) is
     spine-quarantined (`pure:false`); correctness rests on `run ≡ runvm` (shared eval) + the unit/gated
     tests. (b) **Value-mapping subset.** Fetched columns are read by the binary protocol on the column's
     type OID: bool, int2/int4/int8, float4/float8, text/varchar/bpchar/name, bytea. Richer types
     (`numeric`, `json`/`jsonb`, `timestamp`/`timestamptz`, arrays) are NOT read directly — select them
-    with a `::text` cast (a clear `DbError` guides you), which is also exactly slice E's "store decimal
+    with a `::text` cast (a clear `DatabaseError` guides you), which is also exactly slice E's "store decimal
     columns as TEXT for exact money" path (`Row.getDecimal` then parses the text). A `decimal` BIND is
     likewise written as text + a `::numeric` cast (no arbitrary-precision numeric dependency admitted).
     Postgres array → `List<T>` is slice K (not yet). (c) **`execReturningId` / `lastInsertId`.** Postgres
     has no `last_insert_rowid()`: `execReturningId` reads the FIRST column of a `RETURNING` clause (so you
     write `INSERT … RETURNING id`) and falls back to `lastval()` when the statement has no `RETURNING`;
     `lastInsertId` is `lastval()` (errors if no sequence was advanced on the session → a catchable
-    `DbError`). Never a silent assumption of `RETURNING id`. (d) **NULL bind** is sent as a text-typed
+    `DatabaseError`). Never a silent assumption of `RETURNING id`. (d) **NULL bind** is sent as a text-typed
     `NULL` (Postgres coerces it in context); an unusual context could need an explicit `$1::type` cast.
     (e) **tokio transitively.** The sync `postgres` crate wraps `tokio-postgres` (a single internal
     blocking runtime); this is the crate's impl detail (feature-gated behind `db-postgres`, non-default,
@@ -1799,18 +1799,18 @@ are byte-identical by construction — the helper throws the same string on both
   follow-ups; the hard guarantee — formatting never changes program meaning (`parse(fmt(x))`
   preserved) — holds today, gated by a dogfood test over the whole example corpus.
 
-- **Dependency injection (DI v1, `Core.DI`) — disclosed limitations.** (1) **`inject` is a freed
+- **Dependency injection (DI v1, `Core.DependencyInjection`) — disclosed limitations.** (1) **`inject` is a freed
   identifier**, so a user *variable* literally named `inject` cannot be the left operand of `<` in the
   exact shape `inject < Type >(…)` — the parser takes that as the explicit composition root
   (`inject<T>()`). Any other use of the name is unaffected, and the collision is impossible once
-  `Core.DI.inject` is member-imported (the name is then the verb). Astronomically unlikely; mirrors
+  `Core.DependencyInjection.inject` is member-imported (the name is then the verb). Astronomically unlikely; mirrors
   slice-1's synthetic-factory name (`phorjInject<T>`) collision disclosure. (2) **Annotation-driven
   `inject()` draws its target only from a typed `var` declaration, a `return`, or a lambda return
-  type** — a **call-argument** (`f(inject())`) or a **parameter default** (`f(Db d = inject())`) is not
-  an annotation source; name the type there (`inject<Db>()`). (3) An annotation position whose type is
+  type** — a **call-argument** (`f(inject())`) or a **parameter default** (`f(Database d = inject())`) is not
+  an annotation source; name the type there (`inject<Database>()`). (3) An annotation position whose type is
   **`Optional`/generic** (`App? a = inject();`, `Repo<User> r = inject();`) reports `E-DI-MISSING`
   (a concrete injectable class/interface is required) — matching the explicit form's strictness.
-  (4) A **bare `inject()` with no `Core.DI.inject` member-import** is an ordinary call to an undefined
+  (4) A **bare `inject()` with no `Core.DependencyInjection.inject` member-import** is an ordinary call to an undefined
   function `inject` (an unknown-function error), not a DI-specific diagnostic — the correct consequence
   of freeing the identifier; the explicit `inject<T>()` still gives the clean `E-DI-NO-IMPORT`.
   (5) **Field injection** (slice 3) folds an injectable-typed, no-initializer instance field into the

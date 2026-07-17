@@ -25,7 +25,7 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
     #[inline(never)]
     fn apply_repl(repl: &Expr, u: &Map) -> Expr {
         match repl {
-            // A resolved UFCS call, or a `Reflect.typeName` object-case `className` / erased-case
+            // A resolved UFCS call, or a `Reflection.typeName` object-case `className` / erased-case
             // `kind` call: re-walk the children. The call's own span is the original key or synthetic
             // (never re-matched — the root is reconstructed directly), and its args carry their own
             // distinct spans, so nested sugar in them resolves without looping.
@@ -65,7 +65,7 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
 
     fn rexpr(e: Expr, u: &Map) -> Expr {
         match e {
-            // A recorded call site (UFCS rewrite, or a `Reflect.typeName` substitution): apply the
+            // A recorded call site (UFCS rewrite, or a `Reflection.typeName` substitution): apply the
             // replacement via the out-of-line `apply_repl` — kept a SEPARATE function on purpose, so
             // its (larger) match over replacement shapes does not inflate `rexpr`'s own stack frame.
             // `rexpr` is the deeply-recursive walker (a nested expression recurses one `rexpr` frame

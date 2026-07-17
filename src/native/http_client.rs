@@ -1,6 +1,6 @@
-//! `Core.HttpClient` (W3-2 — the TOP-20 #2 parity blocker): a SYNC HTTP/1.1 client, std
-//! `TcpStream` + `rustls` for https. The `Core.Db`/`Core.Mail` architecture verbatim: natives under
-//! the disjoint `Core.HttpClientSys` qualifier return the prelude-local `HcResult<T>`; the prelude
+//! `Core.HttpClientModule` (W3-2 — the TOP-20 #2 parity blocker): a SYNC HTTP/1.1 client, std
+//! `TcpStream` + `rustls` for https. The `Core.DatabaseModule`/`Core.Mail` architecture verbatim: natives under
+//! the disjoint `Core.Native.HttpClient` qualifier return the prelude-local `HcResult<T>`; the prelude
 //! throws the typed `HttpClientError` taxonomy off `<<Kind>>` markers. Native-only
 //! (`E-TRANSPILE-HTTPCLIENT`, pipeline ladder gate): live network I/O cannot be byte-identical —
 //! a faithful PHP curl-mapping is a recorded future lift, never a silent one. All natives are
@@ -23,7 +23,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-// ── HcResult wrappers (the DbResult mechanism) ───────────────────────────────────────────────────────
+// ── HcResult wrappers (the DatabaseResult mechanism) ───────────────────────────────────────────────────────
 
 fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
@@ -63,7 +63,7 @@ pub(crate) struct Url {
 /// smuggling — pass credentials via headers, never the URL), and empty hosts — each a clean
 /// `<<InvalidUrl>>`. IPv6 literals in brackets are supported.
 pub(crate) fn parse_url(url: &str) -> Result<Url, String> {
-    let bad = |m: &str| format!("<<InvalidUrl>>Core.HttpClient: {m}: `{url}`");
+    let bad = |m: &str| format!("<<InvalidUrl>>Core.HttpClientModule: {m}: `{url}`");
     let (https, rest) = if let Some(r) = url.strip_prefix("https://") {
         (true, r)
     } else if let Some(r) = url.strip_prefix("http://") {
@@ -163,12 +163,14 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
             break i;
         }
         if buf.len() > 1024 * 1024 {
-            return Err("<<ProtocolError>>Core.HttpClient: response headers exceed 1 MB".into());
+            return Err(
+                "<<ProtocolError>>Core.HttpClientModule: response headers exceed 1 MB".into(),
+            );
         }
         let n = r.read(&mut chunk).map_err(io)?;
         if n == 0 {
             return Err(
-                "<<ConnectionFailed>>Core.HttpClient: connection closed before headers completed"
+                "<<ConnectionFailed>>Core.HttpClientModule: connection closed before headers completed"
                     .into(),
             );
         }
@@ -182,7 +184,7 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .ok_or_else(|| {
-            format!("<<ProtocolError>>Core.HttpClient: malformed status line `{status_line}`")
+            format!("<<ProtocolError>>Core.HttpClientModule: malformed status line `{status_line}`")
         })?;
     let mut headers = Vec::new();
     for line in lines {
@@ -209,7 +211,8 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
             let n = r.read(&mut chunk).map_err(io)?;
             if n == 0 {
                 return Err(
-                    "<<ProtocolError>>Core.HttpClient: connection closed mid-chunked-body".into(),
+                    "<<ProtocolError>>Core.HttpClientModule: connection closed mid-chunked-body"
+                        .into(),
                 );
             }
             body.extend_from_slice(&chunk[..n]);
@@ -217,7 +220,7 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
         body = decode_chunked(&body)?;
     } else if let Some(len) = header("content-length") {
         let len: usize = len.parse().map_err(|_| {
-            "<<ProtocolError>>Core.HttpClient: malformed Content-Length".to_string()
+            "<<ProtocolError>>Core.HttpClientModule: malformed Content-Length".to_string()
         })?;
         if len > MAX_RESPONSE {
             return Err(size_err());
@@ -225,7 +228,9 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
         while body.len() < len {
             let n = r.read(&mut chunk).map_err(io)?;
             if n == 0 {
-                return Err("<<ProtocolError>>Core.HttpClient: connection closed mid-body".into());
+                return Err(
+                    "<<ProtocolError>>Core.HttpClientModule: connection closed mid-body".into(),
+                );
             }
             body.extend_from_slice(&chunk[..n]);
         }
@@ -255,7 +260,7 @@ pub(crate) fn read_response(r: &mut impl Read) -> Result<RawResponse, String> {
 }
 
 fn size_err() -> String {
-    "<<TooLarge>>Core.HttpClient: response exceeds the 64 MB cap".into()
+    "<<TooLarge>>Core.HttpClientModule: response exceeds the 64 MB cap".into()
 }
 
 fn find_crlfcrlf(buf: &[u8]) -> Option<usize> {
@@ -271,7 +276,7 @@ fn has_final_chunk(buf: &[u8]) -> bool {
 
 /// Decode a complete chunked body (chunk-size lines in hex; trailers dropped).
 pub(crate) fn decode_chunked(mut buf: &[u8]) -> Result<Vec<u8>, String> {
-    let bad = || "<<ProtocolError>>Core.HttpClient: malformed chunked body".to_string();
+    let bad = || "<<ProtocolError>>Core.HttpClientModule: malformed chunked body".to_string();
     let mut out = Vec::with_capacity(buf.len());
     loop {
         let line_end = buf.windows(2).position(|w| w == b"\r\n").ok_or_else(bad)?;
@@ -302,7 +307,7 @@ fn classify_io(e: &std::io::Error) -> String {
         K::TimedOut | K::WouldBlock => "Timeout",
         _ => "ConnectionFailed",
     };
-    format!("<<{kind}>>Core.HttpClient: {e}")
+    format!("<<{kind}>>Core.HttpClientModule: {e}")
 }
 
 // ── The request engine ───────────────────────────────────────────────────────────────────────────────
@@ -355,16 +360,16 @@ fn exchange(
     // checked against `is_blocked_ip` unless `allow_private`; blocking here (before connect) covers
     // every redirect hop too, since each hop re-enters `exchange` with its own freshly-resolved host.
     let sock_addrs = std::net::ToSocketAddrs::to_socket_addrs(&addr)
-        .map_err(|e| format!("<<ConnectionFailed>>Core.HttpClient: resolve `{addr}`: {e}"))?
+        .map_err(|e| format!("<<ConnectionFailed>>Core.HttpClientModule: resolve `{addr}`: {e}"))?
         .next()
         .ok_or_else(|| {
-            format!("<<ConnectionFailed>>Core.HttpClient: `{addr}` resolved to no address")
+            format!("<<ConnectionFailed>>Core.HttpClientModule: `{addr}` resolved to no address")
         })?;
     if !allow_private && is_blocked_ip(sock_addrs.ip()) {
         // Name the REQUESTED host, not the resolved IP — echoing the specific private address it
         // resolved to would be a minor internal-DNS resolution oracle for an attacker-supplied URL.
         return Err(format!(
-            "<<BlockedAddress>>Core.HttpClient: refusing to connect to `{addr}` — it resolves to a \
+            "<<BlockedAddress>>Core.HttpClientModule: refusing to connect to `{addr}` — it resolves to a \
              private, link-local, or metadata address (SSRF guard); pass `.allowPrivateHosts(true)` to permit it"
         ));
     }
@@ -385,12 +390,12 @@ fn exchange(
         let name: rustls::pki_types::ServerName<'static> =
             url.host.clone().try_into().map_err(|_| {
                 format!(
-                    "<<TlsError>>Core.HttpClient: invalid TLS name `{}`",
+                    "<<TlsError>>Core.HttpClientModule: invalid TLS name `{}`",
                     url.host
                 )
             })?;
         let conn = rustls::ClientConnection::new(Arc::new(config), name)
-            .map_err(|e| format!("<<TlsError>>Core.HttpClient: {e}"))?;
+            .map_err(|e| format!("<<TlsError>>Core.HttpClientModule: {e}"))?;
         let mut tls = rustls::StreamOwned::new(conn, stream);
         write_request(&mut tls, method, url, headers, body)?;
         read_response(&mut tls).map_err(|e| {
@@ -558,7 +563,7 @@ pub(crate) fn run_request(
         }
         if hops >= max_redirects {
             return Err(format!(
-                "<<TooManyRedirects>>Core.HttpClient: exceeded {max_redirects} redirects"
+                "<<TooManyRedirects>>Core.HttpClientModule: exceeded {max_redirects} redirects"
             ));
         }
         let location = resp
@@ -568,7 +573,7 @@ pub(crate) fn run_request(
             .map(|(_, v)| v.clone())
             .ok_or_else(|| {
                 format!(
-                    "<<ProtocolError>>Core.HttpClient: {} redirect without a Location header",
+                    "<<ProtocolError>>Core.HttpClientModule: {} redirect without a Location header",
                     resp.status
                 )
             })?;
@@ -585,7 +590,7 @@ pub(crate) fn run_request(
 
 // ── Natives ──────────────────────────────────────────────────────────────────────────────────────────
 
-/// The response handle (`Value::Db`-opaque, the Core.Db pattern): inert data the typed accessor
+/// The response handle (`Value::Db`-opaque, the Core.DatabaseModule pattern): inert data the typed accessor
 /// natives below read; the prelude wraps it in the `HttpResponse` class.
 #[derive(Debug)]
 struct HttpRespObj {
@@ -606,9 +611,9 @@ fn as_resp(v: &Value) -> Result<&HttpRespObj, String> {
         Value::Db(h) => h
             .as_any()
             .downcast_ref::<HttpRespObj>()
-            .ok_or_else(|| "Core.HttpClient: expected a response handle".to_string()),
+            .ok_or_else(|| "Core.HttpClientModule: expected a response handle".to_string()),
         other => Err(format!(
-            "Core.HttpClient: expected a response handle, got {}",
+            "Core.HttpClientModule: expected a response handle, got {}",
             other.type_name()
         )),
     }
@@ -623,7 +628,7 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
         }
         _ => {
             return Err(
-                "Core.HttpClient.__request expects (string, string, List, List, bytes|string, int, int, bool)"
+                "Core.HttpClientModule.__request expects (string, string, List, List, bytes|string, int, int, bool)"
                     .into(),
             )
         }
@@ -634,11 +639,11 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
         "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS"
     ) {
         return Err(format!(
-            "<<InvalidUrl>>Core.HttpClient: unsupported method `{method}`"
+            "<<InvalidUrl>>Core.HttpClientModule: unsupported method `{method}`"
         ));
     }
     if hn.len() != hv.len() {
-        return Err("Core.HttpClient.__request: header name/value length mismatch".into());
+        return Err("Core.HttpClientModule.__request: header name/value length mismatch".into());
     }
     let mut headers = Vec::with_capacity(hn.len());
     for (n, v) in hn.iter().zip(hv.iter()) {
@@ -650,12 +655,12 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
                     || v.chars().any(|c| c == '\r' || c == '\n')
                 {
                     return Err(format!(
-                        "<<InvalidUrl>>Core.HttpClient: header `{n}` contains a forbidden character"
+                        "<<InvalidUrl>>Core.HttpClientModule: header `{n}` contains a forbidden character"
                     ));
                 }
                 headers.push((n.to_string(), v.to_string()));
             }
-            _ => return Err("Core.HttpClient.__request: headers must be strings".into()),
+            _ => return Err("Core.HttpClientModule.__request: headers must be strings".into()),
         }
     }
     let body_bytes: Vec<u8> = match body {
@@ -664,7 +669,7 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
         Value::Null => Vec::new(),
         other => {
             return Err(format!(
-                "Core.HttpClient.__request: body must be string/bytes/null, got {}",
+                "Core.HttpClientModule.__request: body must be string/bytes/null, got {}",
                 other.type_name()
             ))
         }
@@ -686,7 +691,7 @@ fn request_inner(args: &[Value]) -> Result<Value, String> {
 fn status_inner(args: &[Value]) -> Result<Value, String> {
     let r = match args {
         [h] => as_resp(h)?,
-        _ => return Err("Core.HttpClient.__status expects (handle)".into()),
+        _ => return Err("Core.HttpClientModule.__status expects (handle)".into()),
     };
     Ok(Value::Int(i64::from(r.resp.status)))
 }
@@ -694,7 +699,7 @@ fn status_inner(args: &[Value]) -> Result<Value, String> {
 fn header_inner(args: &[Value]) -> Result<Value, String> {
     let (r, name) = match args {
         [h, Value::Str(n)] => (as_resp(h)?, n.as_str().to_ascii_lowercase()),
-        _ => return Err("Core.HttpClient.__header expects (handle, string)".into()),
+        _ => return Err("Core.HttpClientModule.__header expects (handle, string)".into()),
     };
     Ok(r.resp
         .headers
@@ -707,7 +712,7 @@ fn header_inner(args: &[Value]) -> Result<Value, String> {
 fn header_names_inner(args: &[Value]) -> Result<Value, String> {
     let r = match args {
         [h] => as_resp(h)?,
-        _ => return Err("Core.HttpClient.__headerNames expects (handle)".into()),
+        _ => return Err("Core.HttpClientModule.__headerNames expects (handle)".into()),
     };
     Ok(Value::List(Rc::new(
         r.resp
@@ -721,7 +726,7 @@ fn header_names_inner(args: &[Value]) -> Result<Value, String> {
 fn body_bytes_inner(args: &[Value]) -> Result<Value, String> {
     let r = match args {
         [h] => as_resp(h)?,
-        _ => return Err("Core.HttpClient.__bodyBytes expects (handle)".into()),
+        _ => return Err("Core.HttpClientModule.__bodyBytes expects (handle)".into()),
     };
     Ok(Value::Bytes(Rc::new(r.resp.body.clone())))
 }
@@ -729,12 +734,12 @@ fn body_bytes_inner(args: &[Value]) -> Result<Value, String> {
 fn body_text_inner(args: &[Value]) -> Result<Value, String> {
     let r = match args {
         [h] => as_resp(h)?,
-        _ => return Err("Core.HttpClient.__bodyText expects (handle)".into()),
+        _ => return Err("Core.HttpClientModule.__bodyText expects (handle)".into()),
     };
     match String::from_utf8(r.resp.body.clone()) {
         Ok(s) => Ok(Value::Str(s.into())),
         Err(_) => Err(
-            "<<ProtocolError>>Core.HttpClient: response body is not UTF-8 — read bodyBytes()"
+            "<<ProtocolError>>Core.HttpClientModule: response body is not UTF-8 — read bodyBytes()"
                 .into(),
         ),
     }
@@ -755,14 +760,14 @@ hc_native!(hc_body_bytes, body_bytes_inner);
 hc_native!(hc_body_text, body_text_inner);
 
 pub fn http_client_natives() -> Vec<NativeFn> {
-    let handle = || Ty::Named("HcHandle".into(), vec![]);
+    let handle = || Ty::Named("HttpClientHandle".into(), vec![]);
     let res = |t: Ty| Ty::Named("HcResult".into(), vec![t]);
     let entry =
         |name: &'static str,
          params: Vec<Ty>,
          ret: Ty,
          eval: fn(&[Value], &mut String) -> Result<Value, String>| NativeFn {
-            module: "Core.HttpClientSys",
+            module: "Core.Native.HttpClient",
             name,
             params,
             ret,

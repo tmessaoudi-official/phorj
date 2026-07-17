@@ -1,4 +1,4 @@
-//! `Core.Session` (W3 — the SESS parity family, TOP-20 #3): HTTP sessions for `phg serve`.
+//! `Core.SessionModule` (W3 — the SESS parity family, TOP-20 #3): HTTP sessions for `phg serve`.
 //!
 //! ARCHITECTURE: the session STORE lives native-side in one process-wide `Mutex<HashMap>` (shared
 //! across `--workers N` threads — values are plain `String`s, so the store is `Send + Sync` without
@@ -51,7 +51,7 @@ fn fresh_sid(store: &HashMap<String, Entry>) -> Result<String, String> {
             return Ok(sid);
         }
     }
-    Err("Core.Session: could not allocate a fresh session id".into())
+    Err("Core.SessionModule: could not allocate a fresh session id".into())
 }
 
 /// OS entropy without a new dependency: `std::fs::read` from `/dev/urandom` on unix; elsewhere fall
@@ -62,9 +62,9 @@ fn getrandom_fill(buf: &mut [u8]) -> Result<(), String> {
     {
         use std::io::Read as _;
         let mut f = std::fs::File::open("/dev/urandom")
-            .map_err(|e| format!("Core.Session: cannot open /dev/urandom: {e}"))?;
+            .map_err(|e| format!("Core.SessionModule: cannot open /dev/urandom: {e}"))?;
         f.read_exact(buf)
-            .map_err(|e| format!("Core.Session: cannot read entropy: {e}"))?;
+            .map_err(|e| format!("Core.SessionModule: cannot read entropy: {e}"))?;
         Ok(())
     }
     #[cfg(not(unix))]
@@ -105,7 +105,7 @@ fn live<'a>(store: &'a mut HashMap<String, Entry>, sid: &str) -> Option<&'a mut 
 fn session_open(args: &[Value], _out: &mut String) -> Result<Value, String> {
     let (cand, ttl) = match args {
         [Value::Str(c), Value::Int(t)] => (c.as_str(), *t),
-        _ => return Err("Core.Session.__acquire expects (string, int)".into()),
+        _ => return Err("Core.SessionModule.__acquire expects (string, int)".into()),
     };
     let ttl = Duration::from_secs(u64::try_from(ttl.max(1)).unwrap_or(1800));
     with_store(|store| {
@@ -135,7 +135,7 @@ fn session_open(args: &[Value], _out: &mut String) -> Result<Value, String> {
 fn session_get(args: &[Value], _out: &mut String) -> Result<Value, String> {
     let (sid, key) = match args {
         [Value::Str(s), Value::Str(k)] => (s.as_str(), k.as_str()),
-        _ => return Err("Core.Session.__get expects (string, string)".into()),
+        _ => return Err("Core.SessionModule.__get expects (string, string)".into()),
     };
     with_store(|store| {
         Ok(match live(store, sid) {
@@ -154,7 +154,7 @@ fn session_get(args: &[Value], _out: &mut String) -> Result<Value, String> {
 fn session_set(args: &[Value], _out: &mut String) -> Result<Value, String> {
     let (sid, key, val) = match args {
         [Value::Str(s), Value::Str(k), Value::Str(v)] => (s.as_str(), k.as_str(), v.as_str()),
-        _ => return Err("Core.Session.__set expects (string, string, string)".into()),
+        _ => return Err("Core.SessionModule.__set expects (string, string, string)".into()),
     };
     with_store(|store| {
         if let Some(e) = live(store, sid) {
@@ -168,7 +168,7 @@ fn session_set(args: &[Value], _out: &mut String) -> Result<Value, String> {
 fn session_remove(args: &[Value], _out: &mut String) -> Result<Value, String> {
     let (sid, key) = match args {
         [Value::Str(s), Value::Str(k)] => (s.as_str(), k.as_str()),
-        _ => return Err("Core.Session.__remove expects (string, string)".into()),
+        _ => return Err("Core.SessionModule.__remove expects (string, string)".into()),
     };
     with_store(|store| {
         if let Some(e) = live(store, sid) {
@@ -183,7 +183,7 @@ fn session_remove(args: &[Value], _out: &mut String) -> Result<Value, String> {
 fn session_keys(args: &[Value], _out: &mut String) -> Result<Value, String> {
     let sid = match args {
         [Value::Str(s)] => s.as_str(),
-        _ => return Err("Core.Session.__keys expects (string)".into()),
+        _ => return Err("Core.SessionModule.__keys expects (string)".into()),
     };
     with_store(|store| {
         let mut keys: Vec<String> = match live(store, sid) {
@@ -200,7 +200,7 @@ fn session_keys(args: &[Value], _out: &mut String) -> Result<Value, String> {
 fn session_destroy(args: &[Value], _out: &mut String) -> Result<Value, String> {
     let sid = match args {
         [Value::Str(s)] => s.as_str(),
-        _ => return Err("Core.Session.__destroy expects (string)".into()),
+        _ => return Err("Core.SessionModule.__destroy expects (string)".into()),
     };
     with_store(|store| {
         store.remove(sid);
@@ -213,7 +213,7 @@ fn session_destroy(args: &[Value], _out: &mut String) -> Result<Value, String> {
 fn session_regenerate(args: &[Value], _out: &mut String) -> Result<Value, String> {
     let sid = match args {
         [Value::Str(s)] => s.as_str(),
-        _ => return Err("Core.Session.__regenerate expects (string)".into()),
+        _ => return Err("Core.SessionModule.__regenerate expects (string)".into()),
     };
     with_store(|store| {
         let entry = match store.remove(sid) {
@@ -243,7 +243,7 @@ pub fn session_natives() -> Vec<NativeFn> {
          params: Vec<Ty>,
          ret: Ty,
          eval: fn(&[Value], &mut String) -> Result<Value, String>| NativeFn {
-            module: "Core.SessionSys",
+            module: "Core.Native.Session",
             name,
             params,
             ret,

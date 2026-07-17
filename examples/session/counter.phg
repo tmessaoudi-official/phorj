@@ -1,4 +1,4 @@
-// `Core.Session` (W3) — HTTP sessions with security defaults ON, over the Core.Http value types.
+// `Core.SessionModule` (W3) — HTTP sessions with security defaults ON, over the Core.Http value types.
 //
 //   Session s = Session.start(req);         // resume from the phorjsid cookie, or a fresh session
 //   s.set("user", "ada"); s.get("user");     // string values (structured data via Core.Json)
@@ -17,8 +17,8 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.Bytes;
-import Core.Session;
-import Core.Session.Session;
+import Core.SessionModule;
+import Core.SessionModule.Session;
 import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;

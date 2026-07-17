@@ -1,30 +1,30 @@
-//! `Core.Db` — the enhanced-PDO database primitive (DEC-208), a MULTI-DRIVER runtime behind a scheme-
+//! `Core.DatabaseModule` — the enhanced-PDO database primitive (DEC-208), a MULTI-DRIVER runtime behind a scheme-
 //! dispatched [`DriverConn`] trait (DEC-208 slice I): `sqlite:…` → [`sqlite`] (bundled `rusqlite`),
 //! `postgres://…` → [`postgres`] (the sync `postgres` crate, `db-postgres` feature).
 //!
 //! Feature-gated (`db`) and native-only. This module owns the BACKEND-AGNOSTIC layer: the opaque
 //! connection / statement handles ([`DbConn`] / [`DbStmt`], carried by [`Value::Db`] via the
 //! [`DbObject`] trait, each holding a `Box<dyn DriverConn>`); the bind accumulator ([`Binds`]); the
-//! internal `Core.DbSys` native bodies for connect / prepare / bind / bindNamed / query / exec; the Row
+//! internal `Core.Native.Database` native bodies for connect / prepare / bind / bindNamed / query / exec; the Row
 //! accessors; and the (portable) transaction-control SQL (`BEGIN`/`COMMIT`/`SAVEPOINT`/`RELEASE`/
 //! `ROLLBACK TO`, which SQLite and Postgres both accept). Each concrete backend implements only its
 //! genuinely dialect-specific pieces (value mapping, placeholder syntax, error-code taxonomy) in its own
-//! submodule. The public `Core.Db` SURFACE (`Db`/`Statement`/`Row` + `new Db(dsn)`) is the phorj-source
+//! submodule. The public `Core.DatabaseModule` SURFACE (`Database`/`Statement`/`Row` + `new Database(dsn)`) is the phorj-source
 //! `DB_PRELUDE` (`src/cli/preludes.rs`) on top of these — the natives live under the `DbSys` qualifier so
-//! a prelude `class Db` never collides with them.
+//! a prelude `class Database` never collides with them.
 //!
 //! **Error mechanism (DEC-208 = prelude-wrapper).** phorj's native ABI has no throws channel: a native's
 //! `Err(String)` is an uncatchable HARD fault (`vm/exec.rs`), so it cannot express the ruled catchable
-//! `throws DbError` (Q6). Instead every native here returns a `DbResult<T>` VALUE (`DbResult.Ok(payload)`
-//! on success, `DbResult.Err(message)` on any DB error — it NEVER faults on a DB error); the phorj-source
-//! prelude `match`es it and `throw`s a catchable `DbError` (a real `Op::Throw`). `DbResult` is a
+//! `throws DatabaseError` (Q6). Instead every native here returns a `DatabaseResult<T>` VALUE (`DatabaseResult.Ok(payload)`
+//! on success, `DatabaseResult.Err(message)` on any DB error — it NEVER faults on a DB error); the phorj-source
+//! prelude `match`es it and `throw`s a catchable `DatabaseError` (a real `Op::Throw`). `DatabaseResult` is a
 //! prelude-LOCAL enum (not `Core.Result`, whose injection sits earlier in the module chain and so is not
-//! pulled in by `Core.Db`'s transitive import). Only a checker-unreachable arity/shape bug returns `Err`.
+//! pulled in by `Core.DatabaseModule`'s transitive import). Only a checker-unreachable arity/shape bug returns `Err`.
 //! Each driver prefixes a `<<Kind>>` taxonomy marker on a classified error; the prelude's single
-//! `DbError.fail` strips it and throws the matching typed subtype.
+//! `DatabaseError.fail` strips it and throws the matching typed subtype.
 //!
 //! **Spine treatment.** Every native is `pure: false`, so `uses_impure_native` auto-excludes any
-//! `import Core.Db` program from the byte-identity differential (live DB I/O can't be byte-identical
+//! `import Core.DatabaseModule` program from the byte-identity differential (live DB I/O can't be byte-identical
 //! across the drivers and PHP PDO). Correctness: the in-module unit tests + the `tests/db.rs` fixture.
 //! `run ≡ runvm` holds unconditionally (both backends call these one shared `eval` bodies). The `php`
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
@@ -47,7 +47,7 @@ use std::rc::Rc;
 /// and set to `None` on `close()`) and threads the accumulated [`Binds`] + portable transaction-control
 /// SQL through it, never touching a dialect detail. Methods take `&self` (a backend needing `&mut` — like
 /// the `postgres` client — wraps it in a `RefCell` internally); a DB error is a plain `Err(String)` with
-/// an optional leading `<<Kind>>` taxonomy marker (the generic layer wraps it into a `DbResult.Err`).
+/// an optional leading `<<Kind>>` taxonomy marker (the generic layer wraps it into a `DatabaseResult.Err`).
 trait DriverConn: std::fmt::Debug {
     /// Run a SELECT with the accumulated binds; returns `Ok(List<Row>)` (each Row a column→value `Map`).
     fn query(&self, sql: &str, binds: &Binds) -> Result<Value, String>;
@@ -90,7 +90,7 @@ fn open_mysql(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
 #[cfg(not(feature = "db-mysql"))]
 fn open_mysql(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     Err(
-        "<<ConnectionError>>Core.Db: the mysql driver is not compiled in \
+        "<<ConnectionError>>Core.DatabaseModule: the mysql driver is not compiled in \
          (build with --features db-mysql)"
             .to_string(),
     )
@@ -104,22 +104,22 @@ fn open_postgres(dsn: &str) -> Result<Box<dyn DriverConn>, String> {
 #[cfg(not(feature = "db-postgres"))]
 fn open_postgres(_dsn: &str) -> Result<Box<dyn DriverConn>, String> {
     Err(
-        "<<ConnectionError>>Core.Db: the postgres driver is not compiled in \
+        "<<ConnectionError>>Core.DatabaseModule: the postgres driver is not compiled in \
          (build with --features db-postgres)"
             .to_string(),
     )
 }
 
-/// Inject a password into a `postgres://` DSN's authority (DEC-208 slice G — the `Db.withPassword`
+/// Inject a password into a `postgres://` DSN's authority (DEC-208 slice G — the `Database.withPassword`
 /// factory). The password is percent-encoded and placed as the userinfo password
 /// (`postgres://user:PW@host/…`); an existing DSN password is replaced. This is a PURE string transform
-/// (no `postgres` dep), so the `Db.withPassword` surface type-checks under the plain `db` feature; the
-/// resulting DSN is consumed IMMEDIATELY by `new Db(...)` inside the factory (never surfaced to user
+/// (no `postgres` dep), so the `Database.withPassword` surface type-checks under the plain `db` feature; the
+/// resulting DSN is consumed IMMEDIATELY by `new Database(...)` inside the factory (never surfaced to user
 /// code), and the driver parses the password back OUT into its config and stores only a redacted DSN, so
 /// nothing retains the plaintext. A non-postgres DSN is returned unchanged (SQLite has no password).
 fn inject_pg_password(dsn: &str, pw: &str) -> String {
     // Every URL-authority DSN takes the injected credential: postgres AND mysql/mariadb (slice J) —
-    // a `Db.withPassword` on a mysql DSN must never silently no-op. SQLite has no password; a bare
+    // a `Database.withPassword` on a mysql DSN must never silently no-op. SQLite has no password; a bare
     // path / `sqlite:` DSN is returned unchanged.
     let url_scheme = ["postgres://", "postgresql://", "mysql://", "mariadb://"]
         .iter()
@@ -207,24 +207,24 @@ fn percent_encode(s: &str) -> String {
     out
 }
 
-/// Wrap a success payload as `DbResult.Ok(v)`. The natives here NEVER fault on a DB error (a native
-/// `Err(String)` is an uncatchable hard fault — `vm/exec.rs`); instead they return this `DbResult<T>`
-/// VALUE, and the phorj-source `Core.Db` prelude `match`es it and `throw`s a catchable `DbError`
-/// (DEC-208 error-mechanism = prelude-wrapper). `DbResult` is a PRELUDE-LOCAL enum (defined in
+/// Wrap a success payload as `DatabaseResult.Ok(v)`. The natives here NEVER fault on a DB error (a native
+/// `Err(String)` is an uncatchable hard fault — `vm/exec.rs`); instead they return this `DatabaseResult<T>`
+/// VALUE, and the phorj-source `Core.DatabaseModule` prelude `match`es it and `throw`s a catchable `DatabaseError`
+/// (DEC-208 error-mechanism = prelude-wrapper). `DatabaseResult` is a PRELUDE-LOCAL enum (defined in
 /// DB_PRELUDE, injected with it) — NOT `Core.Result`, whose injection sits earlier in the module chain
-/// and so is not pulled in by `Core.Db`'s transitive import (importer-after-imported doesn't inject).
+/// and so is not pulled in by `Core.DatabaseModule`'s transitive import (importer-after-imported doesn't inject).
 fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
-        ty: "DbResult".into(),
+        ty: "DatabaseResult".into(),
         variant: "Ok".into(),
         payload: vec![v],
     }))
 }
 
-/// Wrap a DB error message as `DbResult.Err(msg)` — the prelude turns this into `throw DbError`.
+/// Wrap a DB error message as `DatabaseResult.Err(msg)` — the prelude turns this into `throw DatabaseError`.
 fn failure(msg: String) -> Value {
     Value::Enum(Rc::new(EnumVal {
-        ty: "DbResult".into(),
+        ty: "DatabaseResult".into(),
         variant: "Err".into(),
         payload: vec![Value::Str(msg.into())],
     }))
@@ -354,9 +354,9 @@ fn as_cursor(v: &Value) -> Result<&DbCursor, String> {
         Value::Db(h) => h
             .as_any()
             .downcast_ref::<DbCursor>()
-            .ok_or_else(|| "Core.Db: expected a stream cursor".to_string()),
+            .ok_or_else(|| "Core.DatabaseModule: expected a stream cursor".to_string()),
         other => Err(format!(
-            "Core.Db: expected a stream cursor, got {}",
+            "Core.DatabaseModule: expected a stream cursor, got {}",
             other.type_name()
         )),
     }
@@ -369,9 +369,9 @@ fn as_conn(v: &Value) -> Result<&DbConn, String> {
         Value::Db(h) => h
             .as_any()
             .downcast_ref::<DbConn>()
-            .ok_or_else(|| "Core.Db: expected a connection".to_string()),
+            .ok_or_else(|| "Core.DatabaseModule: expected a connection".to_string()),
         other => Err(format!(
-            "Core.Db: expected a connection, got {}",
+            "Core.DatabaseModule: expected a connection, got {}",
             other.type_name()
         )),
     }
@@ -382,9 +382,9 @@ fn as_stmt(v: &Value) -> Result<&DbStmt, String> {
         Value::Db(h) => h
             .as_any()
             .downcast_ref::<DbStmt>()
-            .ok_or_else(|| "Core.Db: expected a statement".to_string()),
+            .ok_or_else(|| "Core.DatabaseModule: expected a statement".to_string()),
         other => Err(format!(
-            "Core.Db: expected a statement, got {}",
+            "Core.DatabaseModule: expected a statement, got {}",
             other.type_name()
         )),
     }
@@ -393,19 +393,19 @@ fn as_stmt(v: &Value) -> Result<&DbStmt, String> {
 /// The catchable message for using a connection (or a statement derived from it) after `close()`.
 /// Tagged `ConnectionError` so `catch (ConnectionError e)` is precise.
 fn conn_closed() -> String {
-    "<<ConnectionError>>Core.Db: the connection is closed".to_string()
+    "<<ConnectionError>>Core.DatabaseModule: the connection is closed".to_string()
 }
 
 // --- Internal bodies: `Ok(payload)` on success, `Err(db-error-message)` on a DB error. `wrap` maps
 // these onto the `Result<T, string>` VALUE the public `__`-natives return (Success | Failure). ---
 
-/// `new Db(dsn)` → open a connection, dispatching on the DSN scheme onto the right backend driver
+/// `new Database(dsn)` → open a connection, dispatching on the DSN scheme onto the right backend driver
 /// ([`open_driver`]): `sqlite:PATH` / `sqlite::memory:` / a bare path → SQLite; `postgres://…` →
 /// Postgres. The driver behind [`Value::Db`] is opaque to the generic layer.
 fn open_inner(args: &[Value]) -> Result<Value, String> {
     let dsn = match args {
         [Value::Str(s)] => s.as_str(),
-        _ => return Err("Core.Db.__open expects (string dsn)".into()),
+        _ => return Err("Core.DatabaseModule.__open expects (string dsn)".into()),
     };
     let driver = open_driver(dsn)?;
     Ok(Value::Db(Rc::new(DbConn {
@@ -417,13 +417,18 @@ fn open_inner(args: &[Value]) -> Result<Value, String> {
 }
 
 /// `DbSys.dsnWithPassword(dsn, password)` → the DSN with `password` injected as its credential (DEC-208
-/// slice G, the `Db.withPassword` factory). A pure string transform ([`inject_pg_password`]); the result
-/// is consumed immediately by `new Db(...)` and never retained in plaintext (the driver parses the
+/// slice G, the `Database.withPassword` factory). A pure string transform ([`inject_pg_password`]); the result
+/// is consumed immediately by `new Database(...)` and never retained in plaintext (the driver parses the
 /// password out and stores only a redacted DSN). A non-postgres DSN is returned unchanged.
 fn dsn_with_password_inner(args: &[Value]) -> Result<Value, String> {
     let (dsn, pw) = match args {
         [Value::Str(d), Value::Str(p)] => (d.as_str(), p.as_str()),
-        _ => return Err("Core.Db.__dsnWithPassword expects (string dsn, string password)".into()),
+        _ => {
+            return Err(
+                "Core.DatabaseModule.__dsnWithPassword expects (string dsn, string password)"
+                    .into(),
+            )
+        }
     };
     Ok(Value::Str(inject_pg_password(dsn, pw).into()))
 }
@@ -432,7 +437,7 @@ fn dsn_with_password_inner(args: &[Value]) -> Result<Value, String> {
 fn prepare_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, sql) = match args {
         [c, Value::Str(s)] => (as_conn(c)?, s.as_str().to_string()),
-        _ => return Err("Core.Db.__prepare expects (Db, string sql)".into()),
+        _ => return Err("Core.DatabaseModule.__prepare expects (Database, string sql)".into()),
     };
     // Reject preparing on a closed connection eagerly (the statement would otherwise fault only at
     // query/exec time).
@@ -453,14 +458,16 @@ fn prepare_inner(args: &[Value]) -> Result<Value, String> {
 fn bind_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, val) = match args {
         [s, v] => (as_stmt(s)?, v),
-        _ => return Err("Core.Db.__bind expects (Statement, value)".into()),
+        _ => return Err("Core.DatabaseModule.__bind expects (Statement, value)".into()),
     };
     let mut binds = stmt.binds.borrow_mut();
     match &mut *binds {
         Binds::None => *binds = Binds::Positional(vec![PosBind::One(val.clone())]),
         Binds::Positional(v) => v.push(PosBind::One(val.clone())),
         Binds::Named(_) => {
-            return Err("Core.Db: cannot mix positional bind() with named bindNamed()".into())
+            return Err(
+                "Core.DatabaseModule: cannot mix positional bind() with named bindNamed()".into(),
+            )
         }
     }
     drop(binds);
@@ -476,7 +483,7 @@ fn bind_inner(args: &[Value]) -> Result<Value, String> {
 fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, vals) = match args {
         [s, Value::List(vs)] => (as_stmt(s)?, vs),
-        _ => return Err("Core.Db.__bindList expects (Statement, List<value>)".into()),
+        _ => return Err("Core.DatabaseModule.__bindList expects (Statement, List<value>)".into()),
     };
     let entry = PosBind::List(vals.iter().cloned().collect());
     let mut binds = stmt.binds.borrow_mut();
@@ -484,7 +491,10 @@ fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
         Binds::None => *binds = Binds::Positional(vec![entry]),
         Binds::Positional(v) => v.push(entry),
         Binds::Named(_) => {
-            return Err("Core.Db: cannot mix positional bindList() with named bindNamed()".into())
+            return Err(
+                "Core.DatabaseModule: cannot mix positional bindList() with named bindNamed()"
+                    .into(),
+            )
         }
     }
     drop(binds);
@@ -495,14 +505,20 @@ fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
 fn bind_named_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, name, val) = match args {
         [s, Value::Str(n), v] => (as_stmt(s)?, n.as_str().to_string(), v),
-        _ => return Err("Core.Db.__bindNamed expects (Statement, string name, value)".into()),
+        _ => {
+            return Err(
+                "Core.DatabaseModule.__bindNamed expects (Statement, string name, value)".into(),
+            )
+        }
     };
     let mut binds = stmt.binds.borrow_mut();
     match &mut *binds {
         Binds::None => *binds = Binds::Named(vec![(name, val.clone())]),
         Binds::Named(v) => v.push((name, val.clone())),
         Binds::Positional(_) => {
-            return Err("Core.Db: cannot mix named bindNamed() with positional bind()".into())
+            return Err(
+                "Core.DatabaseModule: cannot mix named bindNamed() with positional bind()".into(),
+            )
         }
     }
     drop(binds);
@@ -524,7 +540,7 @@ fn stmt_driver(stmt: &DbStmt) -> Result<std::cell::Ref<'_, Option<Box<dyn Driver
 fn query_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.Db.__query expects (Statement)".into()),
+        _ => return Err("Core.DatabaseModule.__query expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -539,7 +555,7 @@ fn query_inner(args: &[Value]) -> Result<Value, String> {
 fn stream_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.Db.__stream expects (Statement)".into()),
+        _ => return Err("Core.DatabaseModule.__stream expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -548,7 +564,7 @@ fn stream_inner(args: &[Value]) -> Result<Value, String> {
         Value::List(rc) => Rc::try_unwrap(rc).unwrap_or_else(|rc| (*rc).clone()),
         other => {
             return Err(format!(
-                "Core.Db.__stream: driver returned {}, not a row list",
+                "Core.DatabaseModule.__stream: driver returned {}, not a row list",
                 other.type_name()
             ))
         }
@@ -562,7 +578,7 @@ fn stream_inner(args: &[Value]) -> Result<Value, String> {
 fn stream_next_inner(args: &[Value]) -> Result<Value, String> {
     let cursor = match args {
         [c] => as_cursor(c)?,
-        _ => return Err("Core.Db.__streamNext expects (cursor)".into()),
+        _ => return Err("Core.DatabaseModule.__streamNext expects (cursor)".into()),
     };
     let next = cursor.rows.borrow_mut().next();
     Ok(next.unwrap_or(Value::Null))
@@ -572,7 +588,7 @@ fn stream_next_inner(args: &[Value]) -> Result<Value, String> {
 fn exec_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.Db.__exec expects (Statement)".into()),
+        _ => return Err("Core.DatabaseModule.__exec expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -585,7 +601,7 @@ fn exec_inner(args: &[Value]) -> Result<Value, String> {
 fn exec_returning_id_inner(args: &[Value]) -> Result<Value, String> {
     let stmt = match args {
         [s] => as_stmt(s)?,
-        _ => return Err("Core.Db.__execReturningId expects (Statement)".into()),
+        _ => return Err("Core.DatabaseModule.__execReturningId expects (Statement)".into()),
     };
     let guard = stmt_driver(stmt)?;
     let driver = guard.as_ref().expect("driver liveness checked");
@@ -604,11 +620,15 @@ fn exec_returning_id_inner(args: &[Value]) -> Result<Value, String> {
 fn execute_many_inner(args: &[Value]) -> Result<Value, String> {
     let (stmt, rows) = match args {
         [s, Value::List(rows)] => (as_stmt(s)?, rows),
-        _ => return Err("Core.Db.__executeMany expects (Statement, List<List<value>>)".into()),
+        _ => {
+            return Err(
+                "Core.DatabaseModule.__executeMany expects (Statement, List<List<value>>)".into(),
+            )
+        }
     };
     if !matches!(&*stmt.binds.borrow(), Binds::None) {
         return Err(
-            "Core.Db.executeMany: pass all values via the rows argument, not bind()/bindNamed()"
+            "Core.DatabaseModule.executeMany: pass all values via the rows argument, not bind()/bindNamed()"
                 .into(),
         );
     }
@@ -627,7 +647,7 @@ fn execute_many_inner(args: &[Value]) -> Result<Value, String> {
 fn last_insert_id_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.Db.__lastInsertId expects (Db)".into()),
+        _ => return Err("Core.DatabaseModule.__lastInsertId expects (Database)".into()),
     };
     let guard = conn.driver.borrow();
     let driver = guard.as_ref().ok_or_else(conn_closed)?;
@@ -642,7 +662,7 @@ fn last_insert_id_inner(args: &[Value]) -> Result<Value, String> {
 fn timeout_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, ms) = match args {
         [c, Value::Int(ms)] => (as_conn(c)?, *ms),
-        _ => return Err("Core.Db.__timeout expects (Db, int ms)".into()),
+        _ => return Err("Core.DatabaseModule.__timeout expects (Database, int ms)".into()),
     };
     let clamped = ms.max(0);
     {
@@ -661,7 +681,7 @@ fn timeout_inner(args: &[Value]) -> Result<Value, String> {
 fn on_query_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, hook) = match args {
         [c, h] => (as_conn(c)?, h.clone()),
-        _ => return Err("Core.Db.__onQuery expects (Db, hook)".into()),
+        _ => return Err("Core.DatabaseModule.__onQuery expects (Database, hook)".into()),
     };
     *conn.hook.borrow_mut() = Some(hook);
     Ok(Value::Int(0))
@@ -733,7 +753,7 @@ fn control(conn: &DbConn, sql: &str) -> Result<(), String> {
 fn begin_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.Db.__begin expects (Db)".into()),
+        _ => return Err("Core.DatabaseModule.__begin expects (Database)".into()),
     };
     let depth = conn.tx_depth.get();
     let sql = if depth == 0 {
@@ -753,7 +773,7 @@ fn begin_inner(args: &[Value]) -> Result<Value, String> {
 fn commit_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.Db.__commit expects (Db)".into()),
+        _ => return Err("Core.DatabaseModule.__commit expects (Database)".into()),
     };
     let depth = conn.tx_depth.get();
     if depth == 0 {
@@ -778,7 +798,7 @@ fn commit_inner(args: &[Value]) -> Result<Value, String> {
 fn rollback_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.Db.__rollback expects (Db)".into()),
+        _ => return Err("Core.DatabaseModule.__rollback expects (Database)".into()),
     };
     let depth = conn.tx_depth.get();
     if depth == 0 {
@@ -801,7 +821,7 @@ fn rollback_inner(args: &[Value]) -> Result<Value, String> {
 fn close_inner(args: &[Value]) -> Result<Value, String> {
     let conn = match args {
         [c] => as_conn(c)?,
-        _ => return Err("Core.Db.__close expects (Db)".into()),
+        _ => return Err("Core.DatabaseModule.__close expects (Database)".into()),
     };
     *conn.driver.borrow_mut() = None;
     conn.tx_depth.set(0);
@@ -817,9 +837,11 @@ fn row_cell<'a>(args: &'a [Value], who: &str) -> Result<(&'a Value, &'a str), St
                 .iter()
                 .find(|(hk, _)| matches!(hk, HKey::Str(s) if s.as_str() == k))
                 .map(|(_, v)| (v, k))
-                .ok_or_else(|| format!("Core.Db.{who}: no column `{k}` in this row"))
+                .ok_or_else(|| format!("Core.DatabaseModule.{who}: no column `{k}` in this row"))
         }
-        _ => Err(format!("Core.Db.{who} expects (Row, string column)")),
+        _ => Err(format!(
+            "Core.DatabaseModule.{who} expects (Row, string column)"
+        )),
     }
 }
 
@@ -827,9 +849,11 @@ fn get_int_inner(args: &[Value]) -> Result<Value, String> {
     let (v, k) = row_cell(args, "getInt")?;
     match v {
         Value::Int(n) => Ok(Value::Int(*n)),
-        Value::Null => Err(format!("Core.Db.getInt: column `{k}` is NULL (use int?)")),
+        Value::Null => Err(format!(
+            "Core.DatabaseModule.getInt: column `{k}` is NULL (use int?)"
+        )),
         other => Err(format!(
-            "Core.Db.getInt: column `{k}` is {}, not int",
+            "Core.DatabaseModule.getInt: column `{k}` is {}, not int",
             other.type_name()
         )),
     }
@@ -840,10 +864,10 @@ fn get_string_inner(args: &[Value]) -> Result<Value, String> {
     match v {
         Value::Str(s) => Ok(Value::Str(s.clone())),
         Value::Null => Err(format!(
-            "Core.Db.getString: column `{k}` is NULL (use string?)"
+            "Core.DatabaseModule.getString: column `{k}` is NULL (use string?)"
         )),
         other => Err(format!(
-            "Core.Db.getString: column `{k}` is {}, not string",
+            "Core.DatabaseModule.getString: column `{k}` is {}, not string",
             other.type_name()
         )),
     }
@@ -856,10 +880,10 @@ fn get_float_inner(args: &[Value]) -> Result<Value, String> {
         // SQLite stores an integral REAL as INTEGER; widen int→float for a float column, matching PDO.
         Value::Int(n) => Ok(Value::Float(*n as f64)),
         Value::Null => Err(format!(
-            "Core.Db.getFloat: column `{k}` is NULL (use float?)"
+            "Core.DatabaseModule.getFloat: column `{k}` is NULL (use float?)"
         )),
         other => Err(format!(
-            "Core.Db.getFloat: column `{k}` is {}, not float",
+            "Core.DatabaseModule.getFloat: column `{k}` is {}, not float",
             other.type_name()
         )),
     }
@@ -872,9 +896,11 @@ fn get_bool_inner(args: &[Value]) -> Result<Value, String> {
         Value::Int(0) => Ok(Value::Bool(false)),
         Value::Int(_) => Ok(Value::Bool(true)),
         Value::Bool(b) => Ok(Value::Bool(*b)),
-        Value::Null => Err(format!("Core.Db.getBool: column `{k}` is NULL (use bool?)")),
+        Value::Null => Err(format!(
+            "Core.DatabaseModule.getBool: column `{k}` is NULL (use bool?)"
+        )),
         other => Err(format!(
-            "Core.Db.getBool: column `{k}` is {}, not bool",
+            "Core.DatabaseModule.getBool: column `{k}` is {}, not bool",
             other.type_name()
         )),
     }
@@ -891,7 +917,7 @@ fn get_int_or_null_inner(args: &[Value]) -> Result<Value, String> {
         Value::Int(n) => Ok(Value::Int(*n)),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.Db.getIntOrNull: column `{k}` is {}, not int",
+            "Core.DatabaseModule.getIntOrNull: column `{k}` is {}, not int",
             other.type_name()
         )),
     }
@@ -903,7 +929,7 @@ fn get_string_or_null_inner(args: &[Value]) -> Result<Value, String> {
         Value::Str(s) => Ok(Value::Str(s.clone())),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.Db.getStringOrNull: column `{k}` is {}, not string",
+            "Core.DatabaseModule.getStringOrNull: column `{k}` is {}, not string",
             other.type_name()
         )),
     }
@@ -917,7 +943,7 @@ fn get_float_or_null_inner(args: &[Value]) -> Result<Value, String> {
         Value::Int(n) => Ok(Value::Float(*n as f64)),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.Db.getFloatOrNull: column `{k}` is {}, not float",
+            "Core.DatabaseModule.getFloatOrNull: column `{k}` is {}, not float",
             other.type_name()
         )),
     }
@@ -932,7 +958,7 @@ fn get_bool_or_null_inner(args: &[Value]) -> Result<Value, String> {
         Value::Bool(b) => Ok(Value::Bool(*b)),
         Value::Null => Ok(Value::Null),
         other => Err(format!(
-            "Core.Db.getBoolOrNull: column `{k}` is {}, not bool",
+            "Core.DatabaseModule.getBoolOrNull: column `{k}` is {}, not bool",
             other.type_name()
         )),
     }
@@ -962,22 +988,22 @@ fn decimal_from_cell(v: &Value, k: &str, who: &str, null_ok: bool) -> Result<Val
         Value::Str(s) => match crate::value::decimal_of(s) {
             Some((unscaled, scale)) => Ok(Value::Decimal { unscaled, scale }),
             None => Err(format!(
-                "Core.Db.{who}: column `{k}` value `{s}` is not a valid decimal"
+                "Core.DatabaseModule.{who}: column `{k}` value `{s}` is not a valid decimal"
             )),
         },
         // Best-effort REAL → shortest round-trip decimal string → exact decimal of THAT string.
         Value::Float(f) => match crate::value::decimal_of(&format!("{f}")) {
             Some((unscaled, scale)) => Ok(Value::Decimal { unscaled, scale }),
             None => Err(format!(
-                "Core.Db.{who}: column `{k}` REAL value cannot be represented as a decimal"
+                "Core.DatabaseModule.{who}: column `{k}` REAL value cannot be represented as a decimal"
             )),
         },
         Value::Null if null_ok => Ok(Value::Null),
         Value::Null => Err(format!(
-            "Core.Db.{who}: column `{k}` is NULL (use decimal?)"
+            "Core.DatabaseModule.{who}: column `{k}` is NULL (use decimal?)"
         )),
         other => Err(format!(
-            "Core.Db.{who}: column `{k}` is {}, not decimal",
+            "Core.DatabaseModule.{who}: column `{k}` is {}, not decimal",
             other.type_name()
         )),
     }
@@ -996,7 +1022,7 @@ fn get_decimal_or_null_inner(args: &[Value]) -> Result<Value, String> {
 // --- Typed ARRAY-column accessors (DEC-208 slice K): a Postgres `int[]`/`text[]`/`float8[]`/`bool[]`
 // cell arrives as a `Value::List` (see `postgres::pg_cell`); these read it as a typed `List<scalar>`.
 // STRICT like the scalar accessors: a non-array column, a wrong element type, or a NULL ELEMENT is a
-// clean catchable DbError (Postgres arrays are nullable per element; phorj `List<int>` elements are
+// clean catchable DatabaseError (Postgres arrays are nullable per element; phorj `List<int>` elements are
 // not — the error steers to filtering NULLs in SQL, e.g. `array_remove(col, NULL)`). The `OrNull`
 // variants admit a whole-array SQL NULL (→ `null`), never NULL elements. SQLite/MySQL never produce
 // a list cell, so on those drivers the error reads "not an array" — the honest cross-driver story
@@ -1016,13 +1042,13 @@ fn list_from_cell(
             for (i, it) in items.iter().enumerate() {
                 if matches!(it, Value::Null) {
                     return Err(format!(
-                        "Core.Db.{who}: column `{k}` has a NULL element at [{i}] — filter them in \
+                        "Core.DatabaseModule.{who}: column `{k}` has a NULL element at [{i}] — filter them in \
                          SQL (e.g. array_remove({k}, NULL)) or select a non-null projection"
                     ));
                 }
                 if !check(it) {
                     return Err(format!(
-                        "Core.Db.{who}: column `{k}` element [{i}] is {}, not {elem}",
+                        "Core.DatabaseModule.{who}: column `{k}` element [{i}] is {}, not {elem}",
                         it.type_name()
                     ));
                 }
@@ -1031,10 +1057,10 @@ fn list_from_cell(
         }
         Value::Null if or_null => Ok(Value::Null),
         Value::Null => Err(format!(
-            "Core.Db.{who}: column `{k}` is NULL (use List<{elem}>? / the OrNull accessor)"
+            "Core.DatabaseModule.{who}: column `{k}` is NULL (use List<{elem}>? / the OrNull accessor)"
         )),
         other => Err(format!(
-            "Core.Db.{who}: column `{k}` is {}, not an array",
+            "Core.DatabaseModule.{who}: column `{k}` is {}, not an array",
             other.type_name()
         )),
     }
@@ -1106,7 +1132,7 @@ list_accessor_inner!(
 );
 
 // --- Column introspection (DEC-208 slice B): two capabilities the desugared `queryScalar` /
-// `queryMap` / nested-hydration helpers need, routed through the SAME `DbResult`/`wrap` protocol as
+// `queryMap` / nested-hydration helpers need, routed through the SAME `DatabaseResult`/`wrap` protocol as
 // the accessors (NOT a duplication of `getX` — genuinely new operations). `columnNames` gives the
 // ORDERED column names of a row (the row is an insertion-ordered `Map`, so selection order is
 // preserved) — `queryScalar` reads the sole column whose name is unpredictable (`COUNT(*)`), and
@@ -1131,7 +1157,7 @@ fn column_names_inner(args: &[Value]) -> Result<Value, String> {
                 .collect();
             Ok(Value::List(Rc::new(names)))
         }
-        _ => Err("Core.Db.columnNames expects (Row)".into()),
+        _ => Err("Core.DatabaseModule.columnNames expects (Row)".into()),
     }
 }
 
@@ -1153,7 +1179,7 @@ macro_rules! db_native {
     };
 }
 db_native!(db_open, open_inner);
-/// `dsnWithPassword` returns a plain `string` (the authenticated DSN), NOT a `DbResult` — it is a pure
+/// `dsnWithPassword` returns a plain `string` (the authenticated DSN), NOT a `DatabaseResult` — it is a pure
 /// string transform with no DB error, so it does not go through `wrap`.
 fn db_dsn_with_password(args: &[Value], _out: &mut String) -> Result<Value, String> {
     dsn_with_password_inner(args)
@@ -1193,7 +1219,7 @@ db_native!(row_is_null, is_null_inner);
 
 // HigherOrder natives (DEC-208 slice D): the statement-executing paths route through `with_hook` so
 // they can fire the `onQuery` closure and apply the timeout classification. `wrap` still turns a DB
-// error into a catchable `DbResult.Err`; the `Result<_, String>` a HigherOrder body returns is used
+// error into a catchable `DatabaseResult.Err`; the `Result<_, String>` a HigherOrder body returns is used
 // ONLY for the hook-invoke propagation (a hard fault / throw sentinel), never for a DB error.
 fn db_query(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
     with_hook(args, invoke, query_inner)
@@ -1225,20 +1251,20 @@ fn db_exec_returning_id(args: &[Value], invoke: &mut ClosureInvoker) -> Result<V
 /// [`rollback_inner`] runs pure `rusqlite` SQL ([`control`] → `execute_batch`) and NEVER re-enters the
 /// backend, so `pending_throw` stays intact; returning the SAME `Err(e)` unchanged lets the outer
 /// backend arm (interpreter `call.rs` / VM `exec.rs`, both keyed on the sentinel) rebuild the ORIGINAL
-/// typed `DbError` — the caller catches the exact error the closure threw, never a generic one.
+/// typed `DatabaseError` — the caller catches the exact error the closure threw, never a generic one.
 fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, String> {
     let (db, fnv) = match args {
         [db, fnv] => (db, fnv),
-        _ => return Err("Core.Db.__transaction expects (Db, fn)".into()),
+        _ => return Err("Core.DatabaseModule.__transaction expects (Database, fn)".into()),
     };
-    // BEGIN. A DB error opening the (save)point is a catchable `DbResult.Err`, never a hard fault.
+    // BEGIN. A DB error opening the (save)point is a catchable `DatabaseResult.Err`, never a hard fault.
     if let Err(msg) = begin_inner(std::slice::from_ref(db)) {
         return Ok(failure(msg));
     }
     match invoke(fnv, Vec::new()) {
         // Normal return: COMMIT and hand back the closure's value. If the COMMIT itself fails, roll
         // back best-effort (to reset the shared `tx_depth`) and surface the commit error as a
-        // catchable `DbResult.Err` — the closure's work is not returned.
+        // catchable `DatabaseResult.Err` — the closure's work is not returned.
         Ok(v) => match commit_inner(std::slice::from_ref(db)) {
             Ok(_) => Ok(success(v)),
             Err(msg) => {
@@ -1256,17 +1282,17 @@ fn db_transaction(args: &[Value], invoke: &mut ClosureInvoker) -> Result<Value, 
     }
 }
 
-/// The `Core.DbSys` registry entries — the INTERNAL natives the phorj-source `Core.Db` prelude wraps.
-/// They live under the `DbSys` qualifier (NOT `Db`) so a prelude `class Db` calling `DbSys.open(..)`
-/// never collides with the class. Every opaque connection / statement / row handle is typed `DbHandle`
+/// The `Core.Native.Database` registry entries — the INTERNAL natives the phorj-source `Core.DatabaseModule` prelude wraps.
+/// They live under the `DbSys` qualifier (NOT `Database`) so a prelude `class Database` calling `DbSys.open(..)`
+/// never collides with the class. Every opaque connection / statement / row handle is typed `DatabaseHandle`
 /// (a reserved opaque type backed by `Value::Db`/`Value::Map` — the prelude threads it, never inspects
-/// it). Every native is `pure: false` (opens/uses a real DB resource) so any `import Core.Db` program is
+/// it). Every native is `pure: false` (opens/uses a real DB resource) so any `import Core.DatabaseModule` program is
 /// auto-quarantined from the byte-identity differential, and every native returns `Result<T, string>`
-/// (Success | Failure) — never a hard fault on a DB error (the prelude throws a catchable `DbError`).
+/// (Success | Failure) — never a hard fault on a DB error (the prelude throws a catchable `DatabaseError`).
 /// The `php` emitters map to PDO (DEC-208 LADDER case 1); finalized in the transpile slice.
 pub fn db_natives() -> Vec<NativeFn> {
-    let handle = || Ty::Named("DbHandle".into(), vec![]);
-    let res = |t: Ty| Ty::Named("DbResult".into(), vec![t]);
+    let handle = || Ty::Named("DatabaseHandle".into(), vec![]);
+    let res = |t: Ty| Ty::Named("DatabaseResult".into(), vec![t]);
     // A bindable scalar. Built via `Ty::union_of` so members are in the checker's CANONICAL (sorted-by-
     // Display) order — load-bearing for the `List<bindable>` params (`bindList`/`executeMany`): a list
     // literal is contextually typed to `List<canonical-union>`, and generics are invariant, so a native
@@ -1274,7 +1300,7 @@ pub fn db_natives() -> Vec<NativeFn> {
     let bindable = || Ty::union_of(vec![Ty::String, Ty::Int, Ty::Float, Ty::Bool]);
     vec![
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "connect",
             params: vec![Ty::String],
             ret: res(handle()),
@@ -1283,12 +1309,12 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("new \\PDO({})", a.first().map_or("''", |s| s)),
         },
         // Credential-Secret DSN builder (DEC-208 slice G): inject a `Core.Secret` password into a
-        // `postgres://` DSN (`Db.withPassword`). Returns a plain `string` (the authenticated DSN),
-        // consumed immediately by `new Db(...)`; the driver parses the password out and retains only a
+        // `postgres://` DSN (`Database.withPassword`). Returns a plain `string` (the authenticated DSN),
+        // consumed immediately by `new Database(...)`; the driver parses the password out and retains only a
         // redacted DSN. A non-postgres DSN is returned unchanged. `pure:false` keeps the module
         // spine-quarantined (a program using it also connects). PHP: no faithful analog (quarantined).
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "dsnWithPassword",
             params: vec![Ty::String, Ty::String],
             ret: Ty::String,
@@ -1297,7 +1323,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a.first().cloned().unwrap_or_else(|| "''".to_string()),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "prepare",
             params: vec![handle(), Ty::String],
             ret: res(handle()),
@@ -1306,7 +1332,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("{}->prepare({})", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "bind",
             params: vec![handle(), bindable()],
             ret: res(handle()),
@@ -1317,7 +1343,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "bindNamed",
             params: vec![handle(), Ty::String, bindable()],
             ret: res(handle()),
@@ -1326,7 +1352,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "query",
             params: vec![handle()],
             ret: res(Ty::List(Box::new(handle()))),
@@ -1341,7 +1367,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "exec",
             params: vec![handle()],
             ret: res(Ty::Int),
@@ -1351,10 +1377,10 @@ pub fn db_natives() -> Vec<NativeFn> {
         },
         // Streaming (DEC-208 item H): `stream` runs the query (HigherOrder — fires `onQuery` exactly
         // like `query`) and returns a cursor handle; `streamNext` pulls one row handle at a time
-        // (`null` = exhausted). PHP emitters are placeholders like the rest of DbSys (Core.Db is
+        // (`null` = exhausted). PHP emitters are placeholders like the rest of DbSys (Core.DatabaseModule is
         // E-TRANSPILE-DB native-only — pipeline ladder gate).
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "stream",
             params: vec![handle()],
             ret: res(handle()),
@@ -1363,7 +1389,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "streamNext",
             params: vec![handle()],
             ret: res(Ty::Optional(Box::new(handle()))),
@@ -1374,14 +1400,14 @@ pub fn db_natives() -> Vec<NativeFn> {
         // --- Writes & robustness (DEC-208 slice D, spec §4/§7). `bindList` (IN-list) is Pure (records
         // a bind); `executeMany`/`execReturningId` are HigherOrder (they run SQL → fire `onQuery`);
         // `lastInsertId`/`timeout`/`onQuery` are connection-level Pure. All `pure:false` (real DB I/O →
-        // byte-identity quarantine). PHP emitters are placeholders (Core.Db transpile finalized later). ---
+        // byte-identity quarantine). PHP emitters are placeholders (Core.DatabaseModule transpile finalized later). ---
         // `bindList`/`executeMany` are GENERIC over the element type `T` (not `List<bindable>`): an
         // invariant `List<union>` param cannot accept a homogeneous list literal/variable (a `List<int>`
         // is not a `List<string | int | float | bool>`), so bindability is enforced at RUNTIME by
-        // `to_sql` (a non-scalar element → a catchable `DbError`) instead of at compile time. `T` is
+        // `to_sql` (a non-scalar element → a catchable `DatabaseError`) instead of at compile time. `T` is
         // inferred from the argument's element type (same as `List.firstOr<T>`).
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "bindList",
             params: vec![handle(), Ty::List(Box::new(Ty::Param("T".into())))],
             ret: res(handle()),
@@ -1390,7 +1416,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "executeMany",
             params: vec![
                 handle(),
@@ -1407,7 +1433,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "execReturningId",
             params: vec![handle()],
             ret: res(Ty::Int),
@@ -1416,7 +1442,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("{}->execute()", a[0]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "lastInsertId",
             params: vec![handle()],
             ret: res(Ty::Int),
@@ -1425,7 +1451,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("(int) {}->lastInsertId()", a[0]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "timeout",
             params: vec![handle(), Ty::Int],
             ret: res(Ty::Int),
@@ -1435,7 +1461,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "onQuery",
             params: vec![
                 handle(),
@@ -1451,7 +1477,7 @@ pub fn db_natives() -> Vec<NativeFn> {
         // (managed in the native, shared across handles). The `php` emitters map to PDO's transaction
         // methods (LADDER case 1); nested-savepoint PDO emission is finalized in the transpile slice. ---
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "begin",
             params: vec![handle()],
             ret: res(Ty::Int),
@@ -1460,7 +1486,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("{}->beginTransaction()", a[0]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "commit",
             params: vec![handle()],
             ret: res(Ty::Int),
@@ -1469,7 +1495,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("{}->commit()", a[0]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "rollback",
             params: vec![handle()],
             ret: res(Ty::Int),
@@ -1478,7 +1504,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("{}->rollBack()", a[0]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "close",
             params: vec![handle()],
             ret: res(Ty::Int),
@@ -1489,19 +1515,19 @@ pub fn db_natives() -> Vec<NativeFn> {
         },
         // Closure-form transaction (DEC-208 slice C, unblocked by DEC-222). GENERIC over the closure's
         // return type `T` (so `db.transaction(fn)` returns the closure's value); the closure param is a
-        // THROWING function type `() => T throws DbError` — the `throws DbError` set is REQUIRED so the
+        // THROWING function type `() => T throws DatabaseError` — the `throws DatabaseError` set is REQUIRED so the
         // user's throwing closure is accepted (variance rejects a throwing fn into a non-throwing slot).
         // HigherOrder: it invokes the closure re-entrantly on the calling backend. PHP is a placeholder
-        // (Core.Db is spine-quarantined; nested-savepoint PDO emission is finalized in the transpile slice).
+        // (Core.DatabaseModule is spine-quarantined; nested-savepoint PDO emission is finalized in the transpile slice).
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "transaction",
             params: vec![
                 handle(),
                 Ty::Function(
                     vec![],
                     Box::new(Ty::Param("T".into())),
-                    vec![Ty::Named("DbError".into(), vec![])],
+                    vec![Ty::Named("DatabaseError".into(), vec![])],
                 ),
             ],
             ret: res(Ty::Param("T".into())),
@@ -1510,7 +1536,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("/* db.transaction finalized in transpile slice */ {}", a[0]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getInt",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Int),
@@ -1520,9 +1546,9 @@ pub fn db_natives() -> Vec<NativeFn> {
         },
         // Typed ARRAY-column accessors (DEC-208 slice K): Postgres `int[]`/`text[]`/`float8[]`/
         // `bool[]` cells → typed `List<scalar>` (strict; NULL elements rejected; `OrNull` admits a
-        // whole-array NULL). PHP emitters are placeholders (Core.Db is E-TRANSPILE-DB native-only).
+        // whole-array NULL). PHP emitters are placeholders (Core.DatabaseModule is E-TRANSPILE-DB native-only).
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getIntList",
             params: vec![handle(), Ty::String],
             ret: res(Ty::List(Box::new(Ty::Int))),
@@ -1531,7 +1557,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getStringList",
             params: vec![handle(), Ty::String],
             ret: res(Ty::List(Box::new(Ty::String))),
@@ -1540,7 +1566,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getFloatList",
             params: vec![handle(), Ty::String],
             ret: res(Ty::List(Box::new(Ty::Float))),
@@ -1549,7 +1575,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getBoolList",
             params: vec![handle(), Ty::String],
             ret: res(Ty::List(Box::new(Ty::Bool))),
@@ -1558,7 +1584,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getIntListOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::Int))))),
@@ -1567,7 +1593,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getStringListOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::String))))),
@@ -1576,7 +1602,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getFloatListOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::Float))))),
@@ -1585,7 +1611,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getBoolListOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::List(Box::new(Ty::Bool))))),
@@ -1594,7 +1620,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| a[0].clone(),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getString",
             params: vec![handle(), Ty::String],
             ret: res(Ty::String),
@@ -1603,7 +1629,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("(string) {}[{}]", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getFloat",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Float),
@@ -1612,7 +1638,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("(float) {}[{}]", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getBool",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Bool),
@@ -1621,9 +1647,9 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("(bool) {}[{}]", a[0], a[1]),
         },
         // Nullable accessors (DEC-208 S2): a NULL column yields `null`; a wrong non-null type is still
-        // a DB error. `ret` is `DbResult<T?>` so the prelude method types as `T?`.
+        // a DB error. `ret` is `DatabaseResult<T?>` so the prelude method types as `T?`.
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getIntOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::Int))),
@@ -1632,7 +1658,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("(({0}[{1}] === null) ? null : (int) {0}[{1}])", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getStringOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::String))),
@@ -1646,7 +1672,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getFloatOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::Float))),
@@ -1660,7 +1686,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getBoolOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::Bool))),
@@ -1670,9 +1696,9 @@ pub fn db_natives() -> Vec<NativeFn> {
         },
         // Decimal accessor (DEC-208 slice E): a `decimal`-typed hydration field maps its column here
         // (exact money — TEXT parsed exactly, never through float). PHP emitters are placeholders
-        // (Core.Db is spine-quarantined; the transpile is finalized in a later slice).
+        // (Core.DatabaseModule is spine-quarantined; the transpile is finalized in a later slice).
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getDecimal",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Decimal),
@@ -1681,7 +1707,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_dec_of((string) {}[{}])", a[0], a[1]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "getDecimalOrNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Optional(Box::new(Ty::Decimal))),
@@ -1696,9 +1722,9 @@ pub fn db_natives() -> Vec<NativeFn> {
         },
         // Column introspection (DEC-208 slice B). `columnNames` → ordered `List<string>`; `isNull` →
         // `bool`. Used by the `queryScalar`/`queryMap`/nested-hydration desugar; PHP emitters are
-        // placeholders (Core.Db is spine-quarantined, transpile finalized in a later slice).
+        // placeholders (Core.DatabaseModule is spine-quarantined, transpile finalized in a later slice).
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "columnNames",
             params: vec![handle()],
             ret: res(Ty::List(Box::new(Ty::String))),
@@ -1707,7 +1733,7 @@ pub fn db_natives() -> Vec<NativeFn> {
             php: |a| format!("array_keys({})", a[0]),
         },
         NativeFn {
-            module: "Core.DbSys",
+            module: "Core.Native.Database",
             name: "isNull",
             params: vec![handle(), Ty::String],
             ret: res(Ty::Bool),
@@ -1738,7 +1764,7 @@ mod tests {
     fn ok_of(v: Value) -> Value {
         match v {
             Value::Enum(e) if e.variant.as_ref() == "Ok" => e.payload[0].clone(),
-            other => panic!("expected DbResult.Ok, got {other:?}"),
+            other => panic!("expected DatabaseResult.Ok, got {other:?}"),
         }
     }
 
@@ -1749,7 +1775,7 @@ mod tests {
                 Value::Str(s) => s.as_str().to_string(),
                 other => panic!("Failure payload not a string: {other:?}"),
             },
-            other => panic!("expected DbResult.Err, got {other:?}"),
+            other => panic!("expected DatabaseResult.Err, got {other:?}"),
         }
     }
 
@@ -2110,7 +2136,7 @@ mod tests {
     #[test]
     fn remap_timeout_only_when_armed() {
         let armed = remap_timeout(
-            Err("<<SerializationFailure>>Core.Db: database is locked".into()),
+            Err("<<SerializationFailure>>Core.DatabaseModule: database is locked".into()),
             true,
         );
         assert!(

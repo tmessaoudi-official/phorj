@@ -2,12 +2,12 @@
 // construction. The "synthesized-ctor" model: the field becomes a promoted constructor parameter, so it
 // is set once (stays immutable) and is SHARED across the graph exactly like a constructor dependency. A
 // field WITH an initializer is user-provided and left alone; only injectable-typed, no-initializer
-// instance fields auto-wire. Requires the same `Core.DI` imports as any DI (nothing in the wind).
+// instance fields auto-wire. Requires the same `Core.DependencyInjection` imports as any DI (nothing in the wind).
 package Main;
 
 import Core.Output;
-import Core.DI.Injectable;
-import Core.DI.inject;
+import Core.DependencyInjection.Injectable;
+import Core.DependencyInjection.inject;
 
 #[Injectable]
 class Clock {

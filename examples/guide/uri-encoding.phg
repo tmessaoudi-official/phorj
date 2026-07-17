@@ -1,0 +1,32 @@
+// Uri percent-encoding statics (DEC-279 — the former `Core.Url` module, merged into the Uri module).
+//
+// Two encoding flavours, each `string -> string`, byte-identical to PHP:
+//   * Uri.encodeForm / Uri.decodeForm           — form-encoded: space ⇒ `+`, `~` is encoded (PHP urlencode)
+//   * Uri.encodeComponent / Uri.decodeComponent — RFC 3986: space ⇒ `%20`, `~` left as-is (PHP rawurlencode)
+// Decoders return `string?` — `null` only when the decoded bytes aren't valid UTF-8 (a Phorj
+// `string` is UTF-8); on the common path `??` supplies the value. Decoding is lenient: a malformed
+// `%` escape is left literal, never a fault.
+// (The old `import Core.Url;` surface still works, warning `W-DEPRECATED` with this new path.)
+package Main;
+
+import Core.Output;
+import Core.UriModule.Uri;
+
+function main(): void {
+    var query = "name=Café & Co?";
+    var form = Uri.encodeForm(query);
+    var raw = Uri.encodeComponent(query);
+    Output.printLine("form: {form}");
+    Output.printLine("raw:  {raw}");
+    // Round-trip (the `+`/`%20` difference is invisible after decoding).
+    var backForm = Uri.decodeForm(form) ?? query;
+    var backRaw = Uri.decodeComponent(raw) ?? query;
+    Output.printLine("form round-trip: {backForm == query}");
+    Output.printLine("raw round-trip:  {backRaw == query}");
+    // The one behavioural difference between the two decoders: `+` is a space only in the form flavour.
+    var plus = "a+b";
+    var asForm = Uri.decodeForm(plus) ?? plus;
+    var asRaw = Uri.decodeComponent(plus) ?? plus;
+    Output.printLine("decodeForm(\"a+b\"):      {asForm}");
+    Output.printLine("decodeComponent(\"a+b\"): {asRaw}");
+}

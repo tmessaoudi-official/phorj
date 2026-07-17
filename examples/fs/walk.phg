@@ -1,4 +1,4 @@
-// `Core.Fs` (W3) — the TYPED filesystem module: every failure is a catchable `FsError` subtype
+// `Core.FileSystemModule` (W3) — the TYPED filesystem module: every failure is a catchable `FileSystemError` subtype
 // (NotFound / PermissionDenied / AlreadyExists / DirNotEmpty / …), listings are SORTED
 // (deterministic — never OS directory order), and the recursive delete is a separate, loudly-named
 // `removeDirAll` that refuses "/", "." and "..".
@@ -12,36 +12,36 @@
 package Main;
 
 import Core.Output;
-import Core.Fs;
-import Core.Fs.Fs;
-import Core.Fs.FsNotFound;
-import Core.Fs.FsError;
+import Core.FileSystemModule;
+import Core.FileSystemModule.FileSystem;
+import Core.FileSystemModule.FileSystemNotFoundError;
+import Core.FileSystemModule.FileSystemError;
 
 function main(): void {
     try {
-        string root = "{Fs.tempDir()}/phorj-fs-demo";
-        Fs.createDir("{root}/src/nested");
-        Fs.writeText("{root}/src/main.phg", "package Main;");
-        Fs.writeText("{root}/src/nested/util.phg", "// util");
-        Fs.appendText("{root}/src/main.phg", "\n// appended");
-        Output.printLine("main.phg is {Fs.size(\"{root\}/src/main.phg\")} bytes");
+        string root = "{FileSystem.tempDir()}/phorj-fs-demo";
+        FileSystem.createDir("{root}/src/nested");
+        FileSystem.writeText("{root}/src/main.phg", "package Main;");
+        FileSystem.writeText("{root}/src/nested/util.phg", "// util");
+        FileSystem.appendText("{root}/src/main.phg", "\n// appended");
+        Output.printLine("main.phg is {FileSystem.size(\"{root\}/src/main.phg\")} bytes");
         // Sorted, deterministic listings.
-        for (string name in Fs.listDir("{root}/src")) {
+        for (string name in FileSystem.listDir("{root}/src")) {
             Output.printLine("entry: {name}");
         }
         // walk: every FILE under the root, as sorted relative paths.
-        for (string f in Fs.walk(root)) {
+        for (string f in FileSystem.walk(root)) {
             Output.printLine("walk: {f}");
         }
         // Typed failures: a missing file is a catchable NotFound, not a null or a warning.
         try {
-            discard Fs.readText("{root}/absent.txt");
-        } catch (FsNotFound e) {
-            Output.printLine("caught FsNotFound (typed!)");
+            discard FileSystem.readText("{root}/absent.txt");
+        } catch (FileSystemNotFoundError e) {
+            Output.printLine("caught FileSystemNotFoundError (typed!)");
         }
-        Fs.removeDirAll(root);
-        Output.printLine("cleaned up: {Fs.exists(root)} remains");
-    } catch (FsError e) {
+        FileSystem.removeDirAll(root);
+        Output.printLine("cleaned up: {FileSystem.exists(root)} remains");
+    } catch (FileSystemError e) {
         Output.printLine("fs error: {e.message}");
     }
 }

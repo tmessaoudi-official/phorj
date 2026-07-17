@@ -228,7 +228,7 @@ pub struct BytecodeProgram {
     /// `Op::IsInstance` test is byte-identical across backends. A `BTreeMap`/sorted values keep it
     /// deterministic for `disasm`.
     pub class_implements: BTreeMap<String, Vec<String>>,
-    /// Static class hierarchy for the reflection enumeration natives (`Core.Reflect.interfaces`/…),
+    /// Static class hierarchy for the reflection enumeration natives (`Core.Reflection.interfaces`/…),
     /// built once via [`crate::native::ClassTables::from_program`] and shared verbatim with the
     /// interpreter + transpiler so reflection is byte-identical (M-Reflect Tier-2).
     pub class_tables: crate::native::ClassTables,

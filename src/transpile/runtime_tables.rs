@@ -1,4 +1,4 @@
-//! PHP transpiler — injected-`Json` helper hierarchy + the `Core.Reflect` table.
+//! PHP transpiler — injected-`Json` helper hierarchy + the `Core.Reflection` table.
 
 use super::*;
 

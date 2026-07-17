@@ -47,7 +47,7 @@ mod random;
 mod reflect;
 mod result;
 mod runtime;
-// `Core.Db` is crate-backed (`rusqlite`, bundled SQLite) — gated off by default and off for the WASM
+// `Core.DatabaseModule` is crate-backed (`rusqlite`, bundled SQLite) — gated off by default and off for the WASM
 // playground (no native SQLite). See docs/specs/UNIFIED-SPEC.md#external-dependency-policy + DEC-208.
 #[cfg(feature = "db")]
 mod db;
@@ -110,12 +110,12 @@ pub struct Deprecated {
     pub removed_in: &'static str,
 }
 
-/// Whether the stdlib native `(module, name)` is deprecated, with its replacement guidance. **Empty in
-/// the shipping build** — the mechanism is ready for the first real deprecation (the policy lives in
-/// `docs/DEPRECATION.md`; a deprecated symbol keeps working but emits `W-DEPRECATED` for ≥1 minor
-/// release before removal). Real entries are added here as the surface evolves, e.g.
-/// `("Core.Old", "thing") => Deprecated { replacement: "Core.New.thing", removed_in: "0.7.0" }`. A
-/// `#[cfg(test)]` sample exercises the lint end-to-end without a shipping deprecation.
+/// Whether the stdlib native `(module, name)` is deprecated, with its replacement guidance (the
+/// policy lives in `docs/DEPRECATION.md`; a deprecated symbol keeps working but emits
+/// `W-DEPRECATED` for ≥1 minor release before removal). First shipping entries: the `Core.Url`
+/// module merged into the Uri module (DEC-279) — its four natives stay registered as a twin of
+/// the `Core.Native.Uri` rows and warn here. A `#[cfg(test)]` sample additionally exercises the
+/// lint wiring against a never-shipping fixture.
 #[must_use]
 pub fn deprecation_of(module: &str, name: &str) -> Option<Deprecated> {
     #[cfg(test)]
@@ -126,7 +126,20 @@ pub fn deprecation_of(module: &str, name: &str) -> Option<Deprecated> {
             removed_in: "0.99.0",
         });
     }
-    let _ = (module, name);
+    // DEC-279: `Core.Url` merged into the Uri module (`import Core.UriModule;` → `Uri.<fn>`).
+    if module == "Core.Url" {
+        let replacement = match name {
+            "encodeForm" => "Core.UriModule — Uri.encodeForm",
+            "encodeUriComponent" => "Core.UriModule — Uri.encodeComponent",
+            "decodeForm" => "Core.UriModule — Uri.decodeForm",
+            "decodeUriComponent" => "Core.UriModule — Uri.decodeComponent",
+            _ => return None,
+        };
+        return Some(Deprecated {
+            replacement,
+            removed_in: "0.7.0",
+        });
+    }
     None
 }
 
@@ -164,7 +177,7 @@ pub enum NativeEval {
     /// directly — any side effect happens inside the invoked closure.
     HigherOrder(fn(&[Value], &mut ClosureInvoker) -> Result<Value, String>),
     /// `(args, tables) -> result` (M-Reflect Tier-2): a native that needs the program's static class
-    /// hierarchy, which a runtime `Value` doesn't carry (`Core.Reflect.interfaces`/`parents`/…). The
+    /// hierarchy, which a runtime `Value` doesn't carry (`Core.Reflection.interfaces`/`parents`/…). The
     /// backend supplies a [`ClassTables`] built once from the program. The transpiler emits the same
     /// table as a PHP static map, so the result is byte-identical by construction (both sides read the
     /// one `ClassTables`, never PHP's `class_*`/`get_class_methods` builtins with their own semantics).
@@ -497,6 +510,29 @@ pub fn index_of_by_leaf(leaf: &str, name: &str) -> Option<usize> {
     registry()
         .iter()
         .position(|n| n.name == name && n.module.rsplit('.').next() == Some(leaf))
+}
+
+/// Import-aware qualified-native resolution shared by the interpreter and the bytecode compiler
+/// (the transpiler applies the same rule inline over its own import map). Resolves `q.name(...)`:
+///
+/// 1. through the program's import map (leaf or `as`-alias → dotted module) — required since
+///    DEC-277: the `Core.Native.*` raw-native modules are imported UNDER AN ALIAS by the friendly
+///    preludes (`import Core.Native.Database as NativeDatabase;`), which pure leaf-matching cannot
+///    see;
+/// 2. else via the legacy leaf convention — kept for checker-SYNTHESIZED qualified calls that
+///    carry no import item (UFCS / bare-fn-import / as-cast rewrites emit `<leaf>.name(...)`) —
+///    EXCEPT that a `Core.Native.*` module is never leaf-matched: its leaf equals a prelude
+///    class name (`Core.Native.Uri` vs `class Uri`, DEC-277/278), so an import-less
+///    `Uri.parse(...)` must keep resolving as the class static the checker blessed, and reaching
+///    the natives without an import binding would be "in the wind" anyway. (A user class merely
+///    NAMED like a non-Native module leaf must NOT block this fallback — the checker resolves a
+///    member-imported bare call to `<leaf>.name(...)` regardless of such a class; guarding on
+///    declared class names here made the VM reject what the checker accepted.)
+pub fn index_of_qualified(imports: &HashMap<String, String>, q: &str, name: &str) -> Option<usize> {
+    if let Some(idx) = imports.get(q).and_then(|m| index_of(m, name)) {
+        return Some(idx);
+    }
+    index_of_by_leaf(q, name).filter(|&idx| !registry()[idx].module.starts_with("Core.Native."))
 }
 
 /// Build the active import map (leaf qualifier → full dotted module path) from a program's items:

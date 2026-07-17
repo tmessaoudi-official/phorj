@@ -1985,7 +1985,17 @@ The seven `*Sys` modules (raw Rust-implemented natives under the friendly prelud
 `Core.Native.Session`, `Core.Native.Debug`, `Core.Native.HttpClient` — visible, explicit opt-in,
 a hierarchy instead of a suffix ("Core. is enough — no suffix"). *Alternatives (offered):
 hide-as-internal-only (E-INTERNAL-MODULE; recommended, not chosen); visible `*Native` suffix;
-keep `Sys` (Rust *-sys precedent).*
+keep `Sys` (Rust *-sys precedent).* **AMENDMENT (2026-07-17, developer-ratified at build
+review): `Core.Native.*` modules are WHOLE-MODULE-IMPORT ONLY** — a member import
+(`import Core.Native.Uri.encodeForm;`) is `E-IMPORT-NATIVE-MEMBER` with guidance. Rationale
+ruled: raw-layer usage stays VISIBLE (qualified `Native.Uri.encodeForm(…)`, greppable, reviewable);
+the friendly wrappers' invariants (typed errors, Secret masking) aren't silently bypassed by
+innocuous-looking bare calls; and member imports would need new import-map plumbing in all three
+backends for an internal layer with no cherry-pick use-case. *Alternative (offered): widen the
+backends' import maps — rejected.* Also ruled at review: NO old→new module hint table
+("do nothing — all is migrated"); dead old paths (`import Core.Db;`) stay ordinary unknown
+imports. BUILT 2026-07-17 (agent worktree, 3 adversarial review rounds; the ladder gate now also
+covers direct raw-native imports — a pre-existing silently-diverging-PHP hole).
 
 ## DEC-278 — RULED (2026-07-16, developer, challenged + confirmed): namesake modules take the `Module` suffix
 

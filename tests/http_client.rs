@@ -1,5 +1,5 @@
 #![cfg(feature = "http-client")]
-//! `Core.HttpClient` (W3-2) end-to-end fixture — the `tests/db.rs`/`tests/mail.rs` pattern.
+//! `Core.HttpClientModule` (W3-2) end-to-end fixture — the `tests/db.rs`/`tests/mail.rs` pattern.
 //!
 //! The natives are `pure:false` (live network), so importing programs are quarantined from the
 //! byte-identity differential; THIS file gates the surface on BOTH backends (`run ≡ runvm`)
@@ -49,10 +49,10 @@ fn http_get_reads_status_headers_and_body_on_both_backends() {
     let src = format!(
         r#"package Main;
 import Core.Output;
-import Core.HttpClient;
-import Core.HttpClient.HttpClient;
-import Core.HttpClient.HttpResponse;
-import Core.HttpClient.HttpClientError;
+import Core.HttpClientModule;
+import Core.HttpClientModule.HttpClient;
+import Core.HttpClientModule.HttpResponse;
+import Core.HttpClientModule.HttpClientError;
 function main(): void {{
   try {{
     HttpClient c = new HttpClient();
@@ -90,11 +90,11 @@ fn http_post_sends_body_and_typed_timeout_fires() {
     let src = format!(
         r#"package Main;
 import Core.Output;
-import Core.HttpClient;
-import Core.HttpClient.HttpClient;
-import Core.HttpClient.HttpResponse;
-import Core.HttpClient.HttpTimeout;
-import Core.HttpClient.HttpClientError;
+import Core.HttpClientModule;
+import Core.HttpClientModule.HttpClient;
+import Core.HttpClientModule.HttpResponse;
+import Core.HttpClientModule.HttpTimeout;
+import Core.HttpClientModule.HttpClientError;
 function main(): void {{
   try {{
     HttpClient c = new HttpClient();
@@ -114,12 +114,12 @@ function main(): void {{
     both(&src, "created 201\ntimed out\n");
 }
 
-/// THE LADDER RULE: `Core.HttpClient` is native-only — transpile is the clean ladder error.
+/// THE LADDER RULE: `Core.HttpClientModule` is native-only — transpile is the clean ladder error.
 #[test]
 fn http_client_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
 import Core.Output;
-import Core.HttpClient;
+import Core.HttpClientModule;
 function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {

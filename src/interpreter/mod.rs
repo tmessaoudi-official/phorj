@@ -176,7 +176,7 @@ pub struct Interp<'c> {
     /// runtime test never diverges (M-RT S2). Interfaces themselves are erased: there are no
     /// interface values, only this lookup.
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
-    /// Static class hierarchy for the reflection enumeration natives (`Core.Reflect.interfaces`/…),
+    /// Static class hierarchy for the reflection enumeration natives (`Core.Reflection.interfaces`/…),
     /// built once from the program and shared verbatim with the VM + transpiler so reflection is
     /// byte-identical (M-Reflect Tier-2).
     class_tables: crate::native::ClassTables,
@@ -219,6 +219,11 @@ pub struct Interp<'c> {
     /// Inheritance tables for `parent`/super resolution, cached once at load (mirrors `method_origins`).
     parent_parents: std::collections::BTreeMap<String, Vec<String>>,
     parent_mro: std::collections::BTreeMap<String, Vec<String>>,
+    /// The program's import map (leaf or `as`-alias → dotted module), built once in `collect` —
+    /// qualified native calls resolve through it first (`native::index_of_qualified`), so the
+    /// DEC-277 aliased raw-native imports (`import Core.Native.Database as NativeDatabase;`)
+    /// resolve, and a class name never leaf-captures a same-leaf native module.
+    imports: HashMap<String, String>,
     out: String,
     /// Logical call stack for runtime stack traces (error-handling slice 1). A frame is pushed at each
     /// `run_call` entry (function name + current line) and popped **only on success** — an error path
@@ -311,6 +316,7 @@ fn run_program_main(
         cur_unchecked: false,
         parent_parents: std::collections::BTreeMap::new(),
         parent_mro: std::collections::BTreeMap::new(),
+        imports: HashMap::new(),
         out: String::new(),
         trace_stack: Vec::new(),
         depth: 0,
@@ -452,6 +458,7 @@ pub fn call_named(
         cur_unchecked: false,
         parent_parents: std::collections::BTreeMap::new(),
         parent_mro: std::collections::BTreeMap::new(),
+        imports: HashMap::new(),
         out: String::new(),
         trace_stack: Vec::new(),
         depth: 0,
