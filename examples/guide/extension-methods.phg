@@ -12,6 +12,7 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.List;
+import Core.Runtime.Entry;
 
 // "Extend" string — the receiver is just the first parameter.
 function shout(string s): string {

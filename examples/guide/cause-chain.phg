@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M-faults Slice 2c — exception cause chains. A higher-level error can carry the lower-level error
 // that triggered it, so context is preserved instead of lost. A conventional `cause` field of type

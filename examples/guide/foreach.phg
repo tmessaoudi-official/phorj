@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A-6 — PHP-familiar `foreach (xs as x)` iteration, kept alongside Phorj's typed `for (T x in xs)`.
 // The element type is INFERRED from the iterable (no `var`/type needed), and an optional

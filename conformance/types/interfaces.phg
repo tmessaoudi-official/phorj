@@ -2,6 +2,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 interface Speaker {
     function speak(): string;

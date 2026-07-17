@@ -11,6 +11,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Core.Map;
+import Core.Runtime.Entry;
 
 // The type argument supplies the element type directly — no expected-type context required.
 function emptyInts(): List<int> {

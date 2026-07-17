@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A-62 — `"""…"""` multi-line text blocks (Java/Swift/Kotlin style). The opening `"""` is followed
 // by a newline; the closing `"""` sits on its own line and its column sets the dedent baseline.

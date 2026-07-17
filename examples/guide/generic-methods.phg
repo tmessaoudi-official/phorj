@@ -9,6 +9,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A stateless utility — no fields, no constructor (instantiated as `Util()`).
 class Util {

@@ -143,7 +143,8 @@ class Session {
   // Attach the session cookie to a response — HttpOnly + SameSite=Lax + Path=/ (secure defaults;
   // add `; Secure` yourself when serving over TLS).
   function apply(Response r): Response {
-    return r.withHeader("Set-Cookie", "phorjsid={this.sid}; HttpOnly; SameSite=Lax; Path=/");
+    Cookie c = new Cookie("phorjsid", this.sid).secure(false);
+    return r.withCookie(c);
   }
 }
 "#;
@@ -192,6 +193,44 @@ class Request {
     return new Request(method, path, body, lines, new List<string>());
   }
 }
+// DEC-242 — the cookie VALUE type (developer-ruled: class ONLY, no flat twin). Immutable
+// builders (the Response precedent; named args don't exist, so the approved `partitioned = true`
+// spelling maps to `.partitioned(true)` — disclosed in the register). Secure defaults ON,
+// HttpOnly ON, SameSite Lax, Path "/" — the safe-by-default posture; `Partitioned` (CHIPS) is
+// the ruled opt-in.
+enum SameSite { Lax, Strict, NoValue }
+class Cookie {
+  constructor(
+    public string name,
+    public string value,
+    public string cookiePath = "/",
+    public bool isSecure = true,
+    public bool isHttpOnly = true,
+    public bool isPartitioned = false
+  ) {}
+  function path(string p): Cookie {
+    return new Cookie(this.name, this.value, p, this.isSecure, this.isHttpOnly, this.isPartitioned);
+  }
+  function secure(bool b): Cookie {
+    return new Cookie(this.name, this.value, this.cookiePath, b, this.isHttpOnly, this.isPartitioned);
+  }
+  function httpOnly(bool b): Cookie {
+    return new Cookie(this.name, this.value, this.cookiePath, this.isSecure, b, this.isPartitioned);
+  }
+  function partitioned(bool b): Cookie {
+    return new Cookie(this.name, this.value, this.cookiePath, this.isSecure, this.isHttpOnly, b);
+  }
+  // The Set-Cookie header VALUE, canonical attribute order: Path; Secure; HttpOnly; SameSite;
+  // Partitioned. (SameSite is fixed Lax this slice — a `sameSite(SameSite)` builder joins when
+  // a real Strict/None consumer lands; YAGNI over speculative surface.)
+  function render(): string {
+    string base = "{this.name}={this.value}; Path={this.cookiePath}";
+    string s1 = if (this.isSecure) { "{base}; Secure" } else { base };
+    string s2 = if (this.isHttpOnly) { "{s1}; HttpOnly" } else { s1 };
+    string s3 = "{s2}; SameSite=Lax";
+    return if (this.isPartitioned) { "{s3}; Partitioned" } else { s3 };
+  }
+}
 class Response {
   constructor(public int status, public bytes body, public List<string> headerLines) {}
   static function text(int status, string body): Response {
@@ -214,8 +253,16 @@ class Response {
   function withHeader(string name, string value): Response {
     return new Response(this.status, this.body, List.concat(this.headerLines, ["{name}: {value}"]));
   }
-  function withCookie(string name, string value): Response {
-    return new Response(this.status, this.body, List.concat(this.headerLines, ["Set-Cookie: {name}={value}"]));
+  function withCookie(Cookie c): Response {
+    string line = c.render();
+    return new Response(this.status, this.body, List.concat(this.headerLines, ["Set-Cookie: {line}"]));
+  }
+  function withCookies(List<Cookie> cs): Response {
+    mutable Response r = this;
+    for (Cookie c in cs) {
+      r = r.withCookie(c);
+    }
+    return r;
   }
   static function reason(int s): string {
     return if (s == 200) { "OK" }
@@ -1507,7 +1554,9 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         src: Some(HTTP_PRELUDE),
         respond_bridge: Some(HTTP_RESPOND_BRIDGE),
         member_gated: true,
-        bare_types: &["Request", "Response", "Route", "Router"],
+        bare_types: &[
+            "Cookie", "Request", "Response", "Route", "Router", "SameSite",
+        ],
     },
     VirtualModule {
         module: &["Core", "Regex"],
@@ -1734,7 +1783,9 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
         src: None,
         respond_bridge: None,
         member_gated: false,
-        bare_types: &["Attribute"],
+        // DEC-191 addendum: `#[Entry]` is import-gated (wind rule) — `import Core.Runtime.Entry;`
+        // exactly like the UncheckedOverflow precedent one row up.
+        bare_types: &["Attribute", "Entry"],
     },
     VirtualModule {
         module: &["Core", "DependencyInjection"],

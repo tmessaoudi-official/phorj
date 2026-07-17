@@ -19,6 +19,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
+import Core.Runtime.Entry;
 
 class User {
     constructor(public string name, public int age) {}

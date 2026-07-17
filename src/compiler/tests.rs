@@ -4,7 +4,7 @@ use crate::tokenizer::lex;
 use crate::vm::Vm;
 
 /// Compile + run a program on the VM, returning captured output. Auto-prepends the reserved
-/// `package Main;` (M5 S1, line-preserving) so existing test programs need no per-case edit.
+/// `package Main; import Core.Runtime.Entry;` (M5 S1, line-preserving) so existing test programs need no per-case edit.
 fn run(src: &str) -> Result<String, String> {
     let src = with_pkg(src);
     let tokens = lex(&src).expect("lex ok");
@@ -21,10 +21,18 @@ fn with_pkg(src: &str) -> String {
     } else {
         src.to_string()
     };
-    if src.trim_start().starts_with("package ") {
+    let src = if src.trim_start().starts_with("package ") {
         src
     } else {
         format!("package Main; {src}")
+    };
+    // DEC-191 addendum: import-gated attribute — inject the import AFTER the package segment
+    // (imports may not precede `package`); same-line, preserving line numbers.
+    if src.contains("#[Entry]") && !src.contains("Core.Runtime.Entry") {
+        let i = src.find(';').expect("package decl ends with ;");
+        format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
+    } else {
+        src
     }
 }
 

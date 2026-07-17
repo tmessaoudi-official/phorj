@@ -16,6 +16,7 @@ import Core.Output;
 import Core.String;
 import Core.Time.Instant;
 import Core.Time.Duration;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

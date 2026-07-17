@@ -172,7 +172,7 @@ mod tests {
     use serde_json::Value;
 
     const HELLO: &str =
-        "package Main;\nimport Core.Output;\n#[Entry] function main() -> void {\n    Output.printLine(\"hi\");\n}\n";
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry] function main() -> void {\n    Output.printLine(\"hi\");\n}\n";
 
     fn parse(s: &str) -> Value {
         serde_json::from_str(s).expect("wrapper must emit valid JSON")
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn check_type_error_is_not_ok_and_lists_a_diagnostic() {
         let bad =
-            "package Main;\n#[Entry] function main() -> void {\n    int x = \"not an int\";\n}\n";
+            "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void {\n    int x = \"not an int\";\n}\n";
         let v = parse(&check_json(bad));
         assert_eq!(v["ok"], json!(false));
         assert!(v["parseError"].is_null(), "type error is not a parse error");
@@ -202,7 +202,9 @@ mod tests {
 
     #[test]
     fn check_syntax_error_populates_parse_error() {
-        let v = parse(&check_json("package Main;\n#[Entry] function main( {\n}\n"));
+        let v = parse(&check_json(
+            "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main( {\n}\n",
+        ));
         assert_eq!(v["ok"], json!(false));
         assert!(
             v["parseError"].is_string(),
@@ -235,7 +237,7 @@ mod tests {
         // method-call result used as an arithmetic operand (`a.join() + b.join()`) makes the VM
         // compiler's `ctype` miss the side-table and fall through to `method_rets`, rejecting what the
         // interpreter accepts: a playground-only run≠runvm divergence the CLI differential never saw.
-        let src = "package Main;\nimport Core.Output;\n\
+        let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
             function sq(int n): int { return n * n; }\n\
             function f(): int { Task<int> a = spawn sq(2); Task<int> b = spawn sq(3); return a.join() + b.join(); }\n\
             #[Entry] function main() -> void { Output.printLine(\"{f()}\"); }\n";
@@ -256,7 +258,7 @@ mod tests {
 
     #[test]
     fn run_index_out_of_range_is_a_fault_not_a_panic() {
-        let oob = "package Main;\nimport Core.Output;\n#[Entry] function main() -> void {\n    List<int> xs = [1];\n    Output.printLine(\"{xs[5]}\");\n}\n";
+        let oob = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry] function main() -> void {\n    List<int> xs = [1];\n    Output.printLine(\"{xs[5]}\");\n}\n";
         let v = parse(&run_json(oob));
         assert_eq!(v["ok"], json!(false));
         assert!(
@@ -276,7 +278,7 @@ mod tests {
 
     #[test]
     fn transpile_type_error_reports_error_not_php() {
-        let bad = "package Main;\n#[Entry] function main() -> void {\n    int x = \"nope\";\n}\n";
+        let bad = "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void {\n    int x = \"nope\";\n}\n";
         let v = parse(&transpile_json(bad));
         assert_eq!(v["ok"], json!(false));
         assert!(v["php"].is_null());

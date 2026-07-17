@@ -12,6 +12,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Core.String;
+import Core.Runtime.Entry;
 
 function showInts(List<int> xs): string {
     mutable string out = "";

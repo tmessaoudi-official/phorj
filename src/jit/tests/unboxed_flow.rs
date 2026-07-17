@@ -27,7 +27,7 @@ fn unboxed_float_arith_leaf_matches_vm_oracle_bit_exact() {
     // A pure-float leaf: `a*b + a - b` (MulF/AddF/SubF) returning float. The JIT stores floats as bits
     // and bitcasts at each op; the result must be BIT-IDENTICAL to the VM oracle (same f64 ops, order).
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function calc(float a, float b) -> float { return a * b + a - b; }\n\
          #[Entry] function main() -> void {}",
     );
@@ -48,7 +48,7 @@ fn unboxed_float_div_by_zero_funnels_to_redo_but_nan_inf_do_not() {
     // Float div: a ZERO divisor faults (value::float_div) → code 5 = REDO_ON_VM. A NaN or inf divisor
     // does NOT fault (fcmp Equal is false for NaN; inf != 0) → a real f64 result, bit-matching the VM.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function div(float a, float b) -> float { return a / b; }\n\
          #[Entry] function main() -> void {}",
     );
@@ -80,7 +80,7 @@ fn unboxed_float_comparison_is_rejected_to_vm() {
     // Float comparisons (fcmp/NaN) are DEFERRED — a function comparing floats must fall back (Unsupported),
     // NOT icmp the raw bits. `less` returns int so the only disqualifier is the float compare itself.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function less(float a, float b) -> int { if (a < b) { return 1; } return 0; }\n\
          #[Entry] function main() -> void {}",
     );
@@ -103,7 +103,7 @@ fn unboxed_float_loop_mixes_int_and_float_at_shared_depths_bit_exact() {
     // depth (e.g. the counter as a float, or acc as an int-bit), the loop count or accumulation goes
     // wrong. Result must be BIT-IDENTICAL to the VM oracle across empty/one/many-iteration loops.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function accum(int n, float x) -> float {\n\
            mutable float acc = 0.0;\n\
            mutable int i = 0;\n\
@@ -129,7 +129,7 @@ fn unboxed_float_with_call_is_rejected_leaf_only() {
     // Float slice v1 is LEAF-only: a function that touches floats AND calls must fall back (the Call arm
     // models a callee return as Int, so a float flowing through a call would mis-decode).
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function twice(float x) -> float { return x + x; }\n\
          function useit(float x) -> float { return twice(x) + 1.0; }\n\
          #[Entry] function main() -> void {}",
@@ -149,7 +149,7 @@ fn floatmul_micro_jits_and_matches_the_oracle() {
     // The float slice's measurement target: the `floatmul` micro shape (IIR recurrence, pure MulF/AddF,
     // int loop) must JIT through the `Op::Call` hook AND match the interpreter oracle. Asserts the hot
     // fn is eligible + the hit counter fires (no false-green via a silent VM fallback).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.Conversion;\n\
         function bench(int iters, float r) -> float {\n\
@@ -193,7 +193,7 @@ fn unboxed_bool_local_not_returned_is_eligible() {
     // const, so the comparison has a known-Int operand — see the float-slice guard in
     // `unboxed_all_comparisons_and_not_match_vm_oracle`.)
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function f(int a) -> int { mutable bool flag = a < 4; if (flag) { return 1; } return 0; }\n\
          #[Entry] function main() -> void {}",
     );
@@ -214,7 +214,7 @@ fn unboxed_call_result_into_local_matches_vm() {
     // `r + g(x)` also places a Call directly after a GetLocal, exercising the arity-pop mid-expression.
     // Oracle-checked — the advisor's arity-pop desync catcher.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function g(int x) -> int { return x + 1; }\n\
          function f(int x) -> int { mutable int r = g(x); return r + g(x); }\n\
          #[Entry] function main() -> void {}",
@@ -238,7 +238,7 @@ fn unboxed_while_accumulator_matches_vm() {
     // phi'd with the body's `SetLocal` — the whole point of the loops slice. compile_unboxed MUST accept
     // it (not fall back) AND match the VM oracle.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function sumTo(int n) -> int {\n\
            mutable int s = 0;\n\
            mutable int i = 1;\n\
@@ -269,7 +269,7 @@ fn unboxed_loop_carried_bool_matches_vm() {
     // Variable phi'd across the back-edge AND the kind analysis keeping `go` non-Int (so it can never be
     // mis-returned) while `acc` stays Int. Oracle-checked (the advisor's loop-carried-Bool shape).
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function f(int n) -> int {\n\
            mutable int acc = 0;\n\
            mutable int i = 0;\n\
@@ -299,7 +299,7 @@ fn unboxed_overflow_mid_loop_faults_like_vm() {
     // iteration as the VM (the `smul_overflow` check fires per-iteration). `p = p * 2` overflows well
     // before i reaches 100.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function powish(int n) -> int {\n\
            mutable int p = 1;\n\
            mutable int i = 0;\n\
@@ -332,7 +332,7 @@ fn unboxed_div_zero_mid_loop_faults_like_vm() {
     // A divide-by-zero reached only on a specific loop iteration (when `n - i` hits 0) must fault with
     // the same kernel string as the VM — the fault is inside the back-edge body, not the straight line.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function acc(int n) -> int {\n\
            mutable int a = 0;\n\
            mutable int i = 0;\n\
@@ -369,7 +369,7 @@ fn unboxed_all_comparisons_and_not_match_vm_oracle() {
     // const `4` is that known-Int operand. Restoring param-vs-param int comparisons (and float compares)
     // needs param types threaded into the bytecode — a tracked follow-up.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function gt(int a) -> int { if (a > 4) { return 1; } return 0; }\n\
          function ge(int a) -> int { if (a >= 4) { return 1; } return 0; }\n\
          function le(int a) -> int { if (a <= 4) { return 1; } return 0; }\n\
@@ -395,7 +395,7 @@ fn unboxed_add_and_sub_overflow_fault_like_the_kernel() {
     // Independent overflow coverage for Add and Sub (Mul is covered separately) — a per-op `*_overflow`
     // wiring slip would else ship silently.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function add(int a, int b) -> int { return a + b; }\n\
          function sub(int a, int b) -> int { return a - b; }\n\
          #[Entry] function main() -> void {}",
@@ -423,7 +423,7 @@ fn unboxed_recursive_fib_matches_vm_oracle() {
     // `n` is proven int via `n - 1` (SubI) so the base-case `return n` types as Int. Checked vs the VM
     // oracle across the base-case edge and the recursion.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function fib(int n) -> int {\n\
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
@@ -447,7 +447,7 @@ fn unboxed_deep_recursion_caps_at_depth_and_funnels_to_redo() {
     // "stack overflow" string is covered end-to-end by `jit_stack_overflow_threshold_matches_the_oracle`
     // (countdown bracketing MAX_CALL_DEPTH through the real hook). Big stack (native frames); assert
     // INSIDE the closure (Value/JitRun hold Rc = not Send). If this segfaulted, the thread would abort.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         function forever(int n) -> int { return forever(n + 1); }\n\
         #[Entry] function main() -> void {}";
     let handle = std::thread::Builder::new()
@@ -480,7 +480,7 @@ fn measures_unboxed_fib_vs_vm_and_php() {
     // NOT the 5 ms spike (u2a adds a depth check + multi-return + code-check per call).
     use std::time::Instant;
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function fib(int n) -> int {\n\
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
@@ -543,7 +543,7 @@ fn unboxed_cross_function_calls_match_vm_oracle() {
     // A transitive call graph a → b → c (all int, non-self) compiled into one module; cross-`FuncId`
     // native calls with the (depth+1, args) → (value, code) ABI. Checked vs the VM oracle.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function c(int n) -> int { return n + n; }\n\
          function b(int n) -> int { return c(n) * 2; }\n\
          function a(int n) -> int { return b(n) + 1; }\n\
@@ -565,7 +565,7 @@ fn unboxed_cross_call_propagates_a_callee_fault() {
     // caller's post-call `code != 0` edge unchanged (code 2 = div-zero, not the depth code 4) — the
     // shared fault_exit carries the callee's exact code. Checked vs the VM oracle.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function bad(int a, int b) -> int { return a / b; }\n\
          function callbad(int n) -> int { return bad(n, 0); }\n\
          #[Entry] function main() -> void {}",
@@ -591,7 +591,7 @@ fn unboxed_ineligible_callee_sinks_the_whole_graph() {
     // returns a bare param `m` never used in an int-arith op → unprovable Int → ineligible; `top` is
     // fine alone but calls `leaf`.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function leaf(int n, int m) -> int { return m; }\n\
          function top(int n) -> int { return leaf(n, n); }\n\
          #[Entry] function main() -> void {}",
@@ -614,7 +614,7 @@ fn unboxed_ineligible_callee_sinks_the_whole_graph() {
 fn inline_conversions_match_the_oracle_and_hit_the_jit() {
     // P-2c: `Conversion.toFloat` (fcvt_from_sint) + `Conversion.truncate` (guarded fcvt_to_sint)
     // run fully inline — the exact floatarith shape must JIT and stay byte-identical.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.Conversion;\n\
         function bench(int iters): int {\n\
@@ -644,7 +644,7 @@ fn inline_conversions_match_the_oracle_and_hit_the_jit() {
 fn inline_truncate_range_fault_matches_the_vm() {
     // Out-of-range truncate (2^63 doubles) faults canonically on both paths; negatives and
     // fractional values truncate toward zero exactly like the kernel.
-    const OK: &str = "package Main;\n\
+    const OK: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.Conversion;\n\
         function bench(): int {\n\
@@ -656,7 +656,7 @@ fn inline_truncate_range_fault_matches_the_vm() {
     let oracle = crate::cli::cmd_treewalk(OK).expect("oracle ok");
     assert_eq!(jit_out, oracle, "negative/fractional truncate must match");
 
-    const OOR: &str = "package Main;\n\
+    const OOR: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.Conversion;\n\
         function bench(): int {\n\

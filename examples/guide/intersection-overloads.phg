@@ -5,6 +5,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 interface Renderer {
     function render(int n): string;

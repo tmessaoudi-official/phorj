@@ -8,6 +8,7 @@ package Main;
 
 import Core.Output;
 import Core.String;
+import Core.Runtime.Entry;
 
 function describe(string s): string {
     if (var n = String.parseInt(s)) {

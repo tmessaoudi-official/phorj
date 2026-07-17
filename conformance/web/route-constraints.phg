@@ -8,6 +8,7 @@ import Core.Bytes;
 import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
+import Core.Runtime.Entry;
 
 function byId(Request req): Response {
     return Response.text(200, "id " + (req.param("id") ?? "?"));

@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Math;
+import Core.Runtime.Entry;
 
 // The DEFAULT for integer overflow is FAIL-FAST: it is a fatal fault, never a silent wrong number (PHP
 // quietly promotes an overflowing int to float — Phorj refuses to). When you want to HANDLE overflow

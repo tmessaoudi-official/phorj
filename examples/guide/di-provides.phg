@@ -11,6 +11,7 @@ import Core.Output;
 import Core.DependencyInjection.Injectable;
 import Core.DependencyInjection.Provides;
 import Core.DependencyInjection.inject;
+import Core.Runtime.Entry;
 
 // `Db` needs a connection string — a config value the graph cannot autowire, so `Db` is NOT injectable.
 class Db {

@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Return-type overloading (M-RT Slice C): several functions may share a name AND parameter signature,
 // differing only in RETURN type. PHP has no overloading and cannot see the caller's expected type at

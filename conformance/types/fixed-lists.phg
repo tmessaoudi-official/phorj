@@ -5,6 +5,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A function over plain `List<T>` — a `[T; N]` flows in (a fixed list is a list).
 function total(List<int> xs): int {

@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Functions in Phorj: typed parameters and a return type.
 // A function with no `-> T` (like `main`) returns nothing.

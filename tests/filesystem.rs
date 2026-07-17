@@ -48,6 +48,7 @@ fn write_append_read_round_trip() {
     let p = d.path("a.txt");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.File;
 #[Entry] function main(): void {{
@@ -66,6 +67,7 @@ fn size_reflects_content_and_is_null_when_missing() {
     let missing = d.path("nope.txt");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.File;
 #[Entry] function main(): void {{
@@ -84,6 +86,7 @@ fn copy_returns_byte_count_and_duplicates() {
     let to = d.path("to.txt");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.File;
 #[Entry] function main(): void {{
@@ -103,6 +106,7 @@ fn rename_moves_the_file() {
     let to = d.path("new.txt");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.File;
 #[Entry] function main(): void {{
@@ -120,6 +124,7 @@ fn delete_removes_the_file() {
     let p = d.path("gone.txt");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.File;
 #[Entry] function main(): void {{

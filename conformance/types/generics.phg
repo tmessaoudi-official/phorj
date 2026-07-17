@@ -2,6 +2,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 function identity<T>(T x): T {
     return x;

@@ -10,6 +10,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Method reuse, including a `private` helper only other trait methods can call.
 trait Loud {

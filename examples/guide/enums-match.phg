@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Variant patterns (with bindings) over a payload + zero-payload enum.
 // Zero-payload variants use call form `JNull()` to construct AND to match —

@@ -9,7 +9,7 @@ use super::*;
 fn phg_run_hook_actually_hits_the_jit() {
     // A silent 100%-fallback to the VM would pass every byte-identity check identically and prove
     // nothing — so this asserts the hit counter is non-zero, i.e. the native path genuinely ran.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }
 \
@@ -46,7 +46,7 @@ fn phg_run_hook_hits_the_jit_on_an_int_loop() {
     // `bench/micro/intadd.phg` shape.) Byte-identity alone can't prove the flip — a silent VM fallback
     // false-greens it — so this asserts the hit counter fires, i.e. the widened subset genuinely runs
     // native at the CLI.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters) -> int {\n\
           mutable int acc = 0;\n\
@@ -83,7 +83,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_vertical() {
     // string consts, `MakeList`, varying `Index`, `Concat`, `String.length`, `Pop` — must JIT
     // through the `Op::Call` hook AND stay byte-identical to the interpreter oracle. 1000
     // iterations also exercise the `UbCtx` free-list steady state (temps are recycled, not grown).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -129,7 +129,7 @@ fn phg_run_hook_hits_the_jit_on_the_listappend_vertical() {
     // release ladder recycles the record, keeping its grown buffer). Must JIT through the
     // `Op::Call` hook AND stay byte-identical to the interpreter oracle. 2000 iterations
     // cross the 256 reset boundary several times, proving record recycling reaches steady state.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -179,7 +179,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapinsert_vertical() {
     // reset recycles the record (grown buffer kept). Must JIT through the `Op::Call` hook
     // AND stay byte-identical to the interpreter oracle. 2000 iterations cross the 64-step
     // reset boundary many times, proving record recycling reaches steady state.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<string> keys = [\"alpha\", \"beta\", \"gamma\", \"delta\", \"epsi\", \"zeta\", \"eta\", \"theta\"];\n\
@@ -228,7 +228,7 @@ fn phg_run_hook_hits_the_jit_on_the_hofpipe_vertical() {
     // `List.count` with a capture-free Bool predicate consuming that owned ACL (record
     // recycled at the release). The varying capture `k` proves the capture is live. Must JIT
     // through the `Op::Call` hook AND stay byte-identical to the interpreter oracle.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -274,7 +274,7 @@ fn phg_run_hook_hits_the_jit_on_the_forin_pointer_walk() {
     // header Lt one unsigned compare, `xs[j]` ONE load, `j+1` a `+64` bump. Must JIT through
     // the `Op::Call` hook AND stay byte-identical to the interpreter oracle (including the
     // empty-list edge: start == end skips the loop like `0 < 0`).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
@@ -317,7 +317,7 @@ fn phg_run_hook_hits_the_jit_on_general_list_append() {
     // does not apply and the clone helper carries full PHP value semantics: `xs` must stay
     // 3 elements forever while each `ys` is a fresh 4-element list (read back via the boxed
     // Index helper). Also exercises the str-list variant. hits > 0 + byte-identity.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -361,7 +361,7 @@ fn phg_run_hook_hits_the_jit_on_the_native_bridge2_and_str_eq() {
     // The generic pure-native bridge (join / contains / splitOnce / drop route through the
     // REGISTERED natives — single-sourced kernels) + string `==`/`!=` via the `eq_val` helper.
     // Every result folds into the checksum; hits > 0 + byte-identity.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -419,7 +419,7 @@ fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
     // const into a free fn; a str arg into a METHOD), and the builder-method return shape —
     // `this` (an Inst param) in, a FRESH Owned instance out (the relaxed transfer gate: an
     // Owned Inst provably comes from the callee's own MakeInstance). hits > 0 + byte-identity.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -472,7 +472,7 @@ fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
 fn phg_run_hook_hits_the_jit_on_bool_consts_and_to_string() {
     // Bool consts (`mutable bool flag = true`) + `Conversion.toString(int)` (the interpolation
     // renderer's exact bytes) in the unboxed subset. hits > 0 + byte-identity.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         import Core.Conversion;\n\
@@ -518,7 +518,7 @@ fn phg_run_hook_hits_the_jit_on_list_fields() {
     // W-slice: HANDLE-LIST instance fields — a List<string> ctor arg MOVES into the field
     // word; GetField borrows it (List.length over the borrow); the per-iteration reassignment
     // releases the instance AND its list field (steady state across 2000 fresh instances).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         class Row {\n\
@@ -567,7 +567,7 @@ fn phg_run_hook_hits_the_jit_on_wide_two_slot_instances() {
     // the B-slot index, 7..14 in B. Mixed int/str/list fields exercise routed loads/stores
     // AND the wide release (B recycled before A) across 2000 fresh instances. The high-index
     // fields (8, 9, 10) live in slot B — reading them proves the two-hop addressing.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -625,7 +625,7 @@ fn phg_run_hook_hits_the_jit_on_union_dyn_params() {
     // iterations — the sqlbuild builder shape end to end). No float arm here: a float
     // CONST in a calling function still trips the v1 "float subset is leaf-only" gate
     // (a separate lever); the Dyn float tag (1) is wired and waits on that gate.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         class Q {\n\
@@ -673,7 +673,7 @@ fn phg_run_hook_takes_list_fields_from_dying_temp_receivers() {
     // to exclude Str fields only, so the taken list word was freed under the reader:
     // recycled-slot reuse could hand the consumer a different live value — wrong bytes,
     // not just a redo). Steady state over 2000 temps proves take + skip + no leak.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\
@@ -719,7 +719,7 @@ fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
     // during iteration — the VM's for-in iterates a SNAPSHOT; a JIT ACL append/reseed would
     // mutate or recycle the record IN PLACE under the walker). The whole function must
     // decline (fall back to the VM) and stay byte-identical — snapshot semantics preserved.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         function bench(int iters): int {\n\
@@ -762,7 +762,7 @@ fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
 fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
     // The `Concat` helper routes through the single-sourced `PhStr::concat` kernel: exercise BOTH
     // representations (short → inline, long → heap) and multibyte UTF-8 through the jit-wired run.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -790,7 +790,7 @@ fn jit_string_vertical_index_fault_matches_the_vm() {
     // An out-of-range `Index` inside the JIT'd vertical returns the fault sentinel → code 5 → the
     // hook falls back to the VM, which renders the canonical fault. The jit-wired run must fail with
     // the SAME fault body as the interpreter (byte-identical failure behaviour, Invariant 1).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -823,7 +823,7 @@ fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
     // string keys → int values (seals FLAT), a flat key list, and a string-subscripted `Index`
     // (the inline hash-probe) — must JIT through the `Op::Call` hook AND stay byte-identical to
     // the interpreter oracle. 1000 iterations exercise the probe across all four keys.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"a\" => 10, \"b\" => 20, \"c\" => 30, \"d\" => 40];\n\
@@ -867,7 +867,7 @@ fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
     // while >22-byte totals (the MIN/MAX bodies) take the fused helper: BOTH paths exercise
     // in ONE loop. The `check` map probe makes `acc` depend on the EXACT rendered bytes (a
     // wrong render misses the key and faults on the JIT leg only → outputs diverge → caught).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -918,7 +918,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_accumulator() {
     // buffer reuse at each reset. `String.length(s)` reads the record len inline. The `check`
     // map probe pins the EXACT accumulated bytes early (byte-identity through the ACC path),
     // and the length-fold covers every append thereafter.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -972,7 +972,7 @@ fn phg_run_hook_hits_the_jit_on_the_chain_accumulator() {
     // the chain), and the length-fold covers every statement thereafter. Before the chain
     // arm this shape leaked one builder record per statement (the accumulator_site
     // positional hole) and re-boxed the WHOLE accumulated string per statement.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -1023,7 +1023,7 @@ fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
     // lookup routes through the helper into the canonical `map_index` kernel. Byte-identity must
     // hold on that path too (long AND short keys mixed — the short one also stays boxed here,
     // exercising the helper's slot-key + boxed-map combination).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"a-deliberately-long-key-over-22-bytes\" => 7, \"b\" => 20];\n\
@@ -1048,7 +1048,7 @@ fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
     // Duplicate literal keys are legal (checker only type-checks them): `build_map`'s PHP
     // semantics — FIRST position, LAST value — must survive the flat seal. `m[\"a\"]` must read 2,
     // never 1, on all backends.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           Map<string, int> m = [\"a\" => 1, \"b\" => 5, \"a\" => 2];\n\
@@ -1068,7 +1068,7 @@ fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
 fn jit_map_vertical_larger_map_walks_buckets_and_matches_the_oracle() {
     // 12 pairs → a 32-bucket table: exercises the open-addressed walk (collisions + wraparound)
     // across every key, byte-identical to the oracle.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"k0\" => 1, \"k1\" => 2, \"k2\" => 3, \"k3\" => 4,\n\
@@ -1100,7 +1100,7 @@ fn jit_map_vertical_missing_key_fault_matches_the_vm() {
     // A missing key in a FLAT map exhausts the inline probe → code 5 → the hook falls back to the
     // VM, which renders the canonical `\"map key not found\"` fault — byte-identical failure
     // behaviour (Invariant 1).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           Map<string, int> m = [\"a\" => 10];\n\
@@ -1124,7 +1124,7 @@ fn jit_map_vertical_concat_key_probes_through_the_helper() {
     // An inline-concat result carries hash 0 (\"unavailable\") — the inline probe must PUNT to the
     // helper (which compares bytes), never miss-fault a present key. `\"a\" + \"b\"` == \"ab\" is in
     // the map; the lookup must succeed with the right value on the jit-wired path.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"ab\" => 11, \"cd\" => 22];\n\
@@ -1158,7 +1158,7 @@ fn jit_stack_overflow_threshold_matches_the_oracle() {
     use crate::limits::MAX_CALL_DEPTH;
     for n in (MAX_CALL_DEPTH - 3)..=(MAX_CALL_DEPTH + 2) {
         let src = format!(
-            "package Main;\n\
+            "package Main; import Core.Runtime.Entry;\n\
              import Core.Output;\n\
              function countdown(int n) -> int {{ if (n <= 0) {{ return 0; }} return countdown(n - 1); }}\n\
              #[Entry] function main() -> void {{ Output.printLine(\"{{countdown({n})}}\"); }}"
@@ -1196,7 +1196,7 @@ fn range_analysis_proves_strict_lt_plus_one_counter() {
     // The canonical counted loop `while (i < n) { i = i + 1; }`: strict `<`, `+1`, single writer, guard
     // on the induction slot at the loop header → PROVEN (exactly one). Byte-identical to the VM oracle.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function count(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; } return i; }\n\
          #[Entry] function main() -> void {}",
     );
@@ -1225,7 +1225,7 @@ fn range_analysis_rejects_le_ne_and_wrong_slot_guards() {
     // so each keeps its overflow guard: `<=` (`+1` at `i64::MAX` would overflow), `!=` (not `<`), and a
     // guard on a DIFFERENT slot than the increment (`n < 100` guards `n`, not `i`). None may be proven.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function le(int n)    -> int { mutable int i = 0; while (i <= n)   { i = i + 1; } return i; }\n\
          function ne(int n)    -> int { mutable int i = 0; while (i != n)   { i = i + 1; } return i; }\n\
          function wrong(int n) -> int { mutable int i = 0; while (n < 100)  { i = i + 1; } return i; }\n\
@@ -1255,7 +1255,7 @@ fn range_analysis_rejects_double_write_and_nested_loop() {
     // guarded body contains an inner back-edge → condition (4) fails → outer not proven; the inner `!=`
     // counter is not proven either → zero proven total.
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function dbl(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; i = i + 1; } return i; }\n\
          function nest(int n) -> int {\n\
            mutable int i = 0;\n\
@@ -1290,7 +1290,7 @@ fn range_analysis_float_counted_loop_matches_vm_and_drops_guard() {
     // ONLY int-arith op → it is proven AND `needs_sticky` becomes false → all sticky machinery is gone.
     // Correctness = bit-exact float result vs the VM oracle (the WIN itself is measured separately).
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function bench(int iters, float r) -> float {\n\
            mutable float acc = 0.0;\n\
            mutable int i = 0;\n\
@@ -1332,7 +1332,7 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
     // multiply must STILL funnel to the VM redo — proving dropping the counter's guard did not drop the
     // accumulator's (3^40 > i64::MAX, so the VM faults overflow around i=39).
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          function f(int n) -> int { mutable int s = 1; mutable int i = 0; while (i < n) { s = s * 3; i = i + 1; } return s; }\n\
          #[Entry] function main() -> void {}",
     );
@@ -1370,7 +1370,7 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
 #[test]
 fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          import Core.Runtime.Integer.UncheckedOverflow;\n\
          #[UncheckedOverflow]\n\
          function wadd(int a, int b) -> int { return a + b; }\n\
@@ -1420,7 +1420,7 @@ fn qualified_unchecked_overflow_attribute_is_recognized_and_wraps_on_the_vm() {
     // faulting — the VM reads that same flag, so a wrap proves end-to-end recognition on the VM path (the
     // interpreter reads the same predicate via `attrs_unchecked`; the shipped example covers run≡runvm).
     let program = compile_source(
-        "package Main;\n\
+        "package Main; import Core.Runtime.Entry;\n\
          import Core.Runtime.Integer;\n\
          #[Integer.UncheckedOverflow]\n\
          function wadd(int a, int b) -> int { return a + b; }\n\
@@ -1447,7 +1447,7 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
 
     // (1) `#[UncheckedOverflow]` outer calling a CHECKED inner: the checked inner must STILL fault on overflow
     // even though the caller wraps — the callee's own flag governs, not the caller's.
-    const A: &str = "package Main;\n\
+    const A: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         function inner(int n) -> int { return n + 1; }\n\
@@ -1465,7 +1465,7 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
 
     // (2) reverse — a CHECKED outer calling an `#[UncheckedOverflow]` inner: the inner WRAPS (its own flag),
     // and re-entering the checked outer afterward must restore checking (the save/restore).
-    const B: &str = "package Main;\n\
+    const B: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         #[UncheckedOverflow] function inner(int n) -> int { return n + 1; }\n\
@@ -1488,7 +1488,7 @@ fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
     // P-2c DELIVERY-PATH proof: the exact `bench/micro/listindex.phg` shape — an all-int
     // `MakeList` (seals FLAT as raw i64 slots) with a data-dependent `Index` — must JIT through
     // the hook AND stay byte-identical to the interpreter oracle.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
@@ -1521,7 +1521,7 @@ fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
 #[test]
 fn jit_int_list_oob_fault_matches_the_vm() {
     // Out-of-range on a flat int list → code 5 → the VM redo renders the canonical bounds fault.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           List<int> xs = [10, 20];\n\
@@ -1540,7 +1540,7 @@ fn jit_int_list_oob_fault_matches_the_vm() {
 #[test]
 fn jit_int_list_negative_values_and_index_edges_match_the_oracle() {
     // Negative VALUES flow through the raw-i64 slots untouched; index 0 and len-1 both hit.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(): int {\n\
           List<int> xs = [0 - 5, 7, 0 - 9223372036854775807];\n\
@@ -1567,7 +1567,7 @@ fn acc_elision(program: &BytecodeProgram, name: &str) -> Option<super::AccElisio
 fn task9_proves_affine_accumulator_with_param_bound_guard() {
     // The intadd shape: `acc = acc + (i * 3 - 1)` — the site AddI, the affine MulI/SubI and
     // the counter AddI must ALL be proven; the runtime param bound needs ONE entry guard.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
@@ -1591,7 +1591,7 @@ fn task9_proves_affine_accumulator_with_param_bound_guard() {
 fn task9_proves_const_map_accumulator_and_expression_remi() {
     // The mapget/listindex shapes in one: a const-map value accumulator plus an
     // expression-dividend `% 8` (provably non-negative → the band lowering).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           Map<string, int> m = [\"a\" => 10, \"b\" => 20, \"c\" => 30, \"d\" => 40];\n\
@@ -1623,7 +1623,7 @@ fn task9_guard_decline_beyond_g_stays_byte_identical() {
     // and the output must be byte-identical. `acc = acc + 5e12` forces the ladder down to
     // G = 2^20 (5e12·2^31 and 5e12·2^24 overflow i64; 5e12·2^20 = 5.24e18 fits), so
     // iters = 2^20 + 1 crosses the guard while still running quickly on the VM leg.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 5000000000000; i = i + 1; }\n\
@@ -1649,7 +1649,7 @@ fn task9_rejects_unbounded_growth_and_overflow_faults_identically() {
     // `acc = acc + 20000000000000` (2e13): even G = 2^20 gives 2.1e19 > i64::MAX — the pass
     // must REJECT (checked emission stays), and a genuine overflow must fault identically on
     // both legs (the sticky redo → the VM's canonical fault).
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int { mutable int acc = 9000000000000000000; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 20000000000000; i = i + 1; }\n\
@@ -1673,7 +1673,7 @@ fn task9_rejects_unbounded_growth_and_overflow_faults_identically() {
 fn task9_rejects_computed_bound_and_body_branches() {
     // A COMPUTED loop bound (not a param, not a const) and an `if` inside the body are both
     // out of the v1 scope — the pass must fail closed on each.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function computed(int n): int { int lim = n * 2; mutable int acc = 0; mutable int i = 0;\n\
           while (i < lim) { acc = acc + 1; i = i + 1; } return acc; }\n\
@@ -1700,7 +1700,7 @@ fn phg_run_hook_hits_the_jit_on_for_in_iteration() {
     // `Len` — a BORROWED flat list handle IS its element snapshot (identity, zero
     // instructions) and `Len` reads the count from the handle bits. Covers int-list AND
     // str-list iteration, byte-identity, and hits>0.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.String;\n\
         function bench(int iters): int {\n\
@@ -1748,7 +1748,7 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
     // `Len(iter)` of a compile-time-known list. v2 must prove the accumulator sites, the
     // inner+outer counters AND the in-bounds `Index` (its bounds branch drops); byte
     // identity must hold, including at the entry-guard decline.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         function bench(int iters): int {\n\
           List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];\n\
@@ -1797,7 +1797,7 @@ fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
     // (`out = List.append(out, q)` where q is a fresh OWNED string) consumes each element
     // WORD into a str-word record (zero clones), materializes through List.drop + join,
     // and the record + its owned words release at steady state across 2000 iterations.
-    const SRC: &str = "package Main;\n\
+    const SRC: &str = "package Main; import Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.List;\n\
         import Core.String;\n\

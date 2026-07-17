@@ -14,6 +14,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 open class Account {
     constructor(private mutable int balance, protected string owner) {}

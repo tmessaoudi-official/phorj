@@ -2,6 +2,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 open class Money {
     constructor(public int cents) {}

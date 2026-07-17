@@ -5,6 +5,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class BadInputError implements Error {
     constructor(public string message) {}

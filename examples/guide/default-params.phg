@@ -6,6 +6,7 @@ package Main;
 
 import Core.Output;
 import Core.String;
+import Core.Runtime.Entry;
 
 // One default: `greeting` falls back to "Hello" when omitted.
 function greet(string name, string greeting = "Hello"): string {

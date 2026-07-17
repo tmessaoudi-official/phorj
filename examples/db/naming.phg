@@ -21,6 +21,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
+import Core.Runtime.Entry;
 
 // camelCase phorj fields; the DB stores them snake_case (`user_name`, `first_name`, `street_name`, …).
 class Address {

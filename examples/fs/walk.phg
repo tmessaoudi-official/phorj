@@ -16,6 +16,7 @@ import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
 import Core.FileSystemModule.FileSystemNotFoundError;
 import Core.FileSystemModule.FileSystemError;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

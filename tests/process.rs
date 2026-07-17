@@ -21,6 +21,7 @@ fn process_args_are_visible_to_the_program() {
     let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["hello".into(), "world".into()]);
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Process;
 import Core.List;
@@ -48,6 +49,7 @@ fn env_natives_under_controlled_environment() {
 
     // get → value | null (composes with `??`).
     let get_src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Environment;
 #[Entry] function main() -> void {
@@ -58,6 +60,7 @@ import Core.Environment;
 
     // all → a Map keyed by every env var; the set var is present, and keys come back sorted.
     let all_src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Environment;
 import Core.Map;
@@ -77,6 +80,7 @@ fn main_int_return_is_the_exit_code() {
     // `main(): int` — the returned int is the process exit code; stdout is unaffected, and both
     // backends agree on (stdout, exit).
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main(): int {
     Output.printLine("done");
@@ -89,6 +93,7 @@ import Core.Output;
 #[test]
 fn main_void_exits_zero() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main(): void { Output.printLine("hi"); }"#;
     assert_eq!(cmd_treewalk_exit(src).unwrap(), ("hi\n".to_string(), 0));
@@ -101,6 +106,7 @@ fn main_receives_argv_as_a_parameter() {
     let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["a".into(), "bb".into(), "ccc".into()]);
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.List;
 #[Entry] function main(List<string> args): int {

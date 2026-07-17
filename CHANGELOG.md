@@ -6,6 +6,40 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-256: the Unicode string tier on `Core.String`
+
+Two tiers, one module (developer override of the initial `Core.Unicode` split — everything
+stays under `Core.String`; the transpilability boundary is per-FUNCTION, not per-module):
+**transpilable** `String.codepointLength(s): int` + `String.codepoints(s): List<int>` (the
+Unicode scalar-value view; `String.length` stays byte-oriented, `strlen` parity — PHP legs are
+PCRE `/u` counting and a pure-PHP UTF-8 byte decode, no ini extensions); **native-only**
+`String.unicodeUpper`/`unicodeLower` (full Unicode case mapping, std `char` tables) +
+`String.graphemeLength`/`graphemes` (UAX #29 clusters via the vetted, feature-gated
+`unicode-segmentation` crate — the `unicode` cargo feature, on by default). Calling a
+native-only function transpiles to `E-TRANSPILE-UNICODE` (§14 LADDER — mbstring/intl are ini
+extensions, forbidden; importing `Core.String` stays transpilable). Examples:
+`guide/unicode-codepoints.phg` (three-leg) + `guide/unicode-native.phg` (run≡runvm).
+
+### Added — DEC-242: the `Cookie` value class (`Core.Http`)
+
+`new Cookie(name, value)` — an immutable, safe-by-default cookie value (Secure; HttpOnly;
+SameSite=Lax; Path=/) with chainable copy-builders `.path(p)`, `.secure(b)`, `.httpOnly(b)`,
+`.partitioned(b)` (CHIPS, opt-in) and a canonical `render()` (fixed attribute order).
+`Response.withCookie` now takes a `Cookie` (BREAKING: formerly `(name, value)` strings);
+`Response.withCookies(List<Cookie>)` folds a jar — one `Set-Cookie` header per entry.
+`Core.SessionModule` builds its sid cookie through `Cookie` internally (`.secure(false)` —
+local dev serve is plain http). `Cookie`/`SameSite` are import-gated (`import Core.Http.Cookie;`
+— nothing in the wind). Example: `web/response-builders.phg` (reworked, three-leg).
+
+### Changed — DEC-191 addendum: `#[Entry]` is import-gated
+
+`#[Entry]` now requires `import Core.Runtime.Entry;` like every other injected symbol
+("nothing in the wind" — the `#[UncheckedOverflow]` precedent; a bare `#[Entry]` is
+`E-INJECTED-TYPE-BARE` with the member-import hint). Compiler-synthesized entries
+(`phg test`, lifted drafts, web bridge) are zero-span-exempt; the lifter emits the import
+in its drafts. Also ruled: NO manual-function-run CLI affordance — subcommand dispatch is
+userland inside the one entry ("everything will be orchestrated by the Entry").
+
 ### Added — DEC-243: `String.levenshtein` + `String.similarText[Percent]`
 
 PHP-parity string-distance natives, byte-oriented exactly like PHP's `levenshtein()` and

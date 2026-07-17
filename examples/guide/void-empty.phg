@@ -15,6 +15,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // The common case: a side-effecting function returns `void` — nothing to capture.
 function note(string msg): void {

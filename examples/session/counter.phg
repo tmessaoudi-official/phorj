@@ -22,6 +22,7 @@ import Core.SessionModule.Session;
 import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
+import Core.Runtime.Entry;
 
 #[Entry]
 function handle(Request req): Response {

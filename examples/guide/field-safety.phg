@@ -10,6 +10,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class Account {
     constructor(public string owner, int opening) {

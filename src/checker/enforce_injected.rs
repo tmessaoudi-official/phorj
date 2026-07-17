@@ -50,6 +50,9 @@ pub fn enforce_injected_discipline(prog: &Program) -> Vec<Diagnostic> {
                 // Class-level `#[…]` attributes (DEC-194 2a/2b) obey the same nothing-in-the-wind rule
                 // as a function's: a bare injected attribute (e.g. `#[Attribute]`) must be imported.
                 for attr in &c.attrs {
+                    if attr.span.start == 0 && attr.span.len == 0 && attr.span.line == 0 {
+                        continue;
+                    }
                     ctx.check_name(&attr.name, attr.span, &mut errs);
                     for a in &attr.args {
                         ctx.walk_expr(a, &mut errs);
@@ -161,6 +164,11 @@ impl Ctx {
     fn walk_fn(&self, f: &crate::ast::FunctionDecl, errs: &mut Vec<Diagnostic>) {
         // `#[Route]` (and any future attribute naming an injected type) is subject to the same rule.
         for attr in &f.attrs {
+            // A compiler-SYNTHESIZED attribute (zero span — synth_empty_main, the test runner's
+            // synthetic entry) is exempt: no user wrote it, so there is nothing to import-gate.
+            if attr.span.start == 0 && attr.span.len == 0 && attr.span.line == 0 {
+                continue;
+            }
             self.check_name(&attr.name, attr.span, errs);
             for a in &attr.args {
                 self.walk_expr(a, errs);

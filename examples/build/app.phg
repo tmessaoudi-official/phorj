@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A self-contained program built into a standalone executable with `phg build`.
 // The produced binary embeds this source (in a CRC-guarded `.phorj` object-file

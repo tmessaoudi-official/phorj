@@ -8,6 +8,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // The classic: returns its argument unchanged, at whatever type it was called with.
 function identity<T>(T x): T {

@@ -16,6 +16,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Core.Process;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(List<string> args): int {

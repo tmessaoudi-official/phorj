@@ -5,6 +5,7 @@ package Main;
 
 import Core.Output;
 import Core.Math;
+import Core.Runtime.Entry;
 
 function inc(int x): int {
     return x + 1;

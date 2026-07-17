@@ -19,6 +19,7 @@ import Core.Output;
 import Core.Result;
 import Core.Option;
 import Core.String;
+import Core.Runtime.Entry;
 
 // Parse a tiny "small positive int" field; report *why* it failed as a typed `Failure<string>`.
 function parse(string s): Result<int, string> {

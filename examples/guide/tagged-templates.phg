@@ -11,6 +11,7 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.List;
+import Core.Runtime.Entry;
 
 // Function-mode tag: sees the split template as two lists.
 function joined(List<string> lits, List<string> holes): string {

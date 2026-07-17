@@ -19,6 +19,7 @@ import Core.Map;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
+import Core.Runtime.Entry;
 
 // Every field is a PROMOTED constructor parameter, so its name IS its (possibly dotted) column name.
 class Country {

@@ -13,6 +13,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Core.String;
+import Core.Runtime.Entry;
 
 // A user free function — UFCS lets it be called method-style on its first argument (`n.triple()`).
 function triple(int x): int {

@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Set;
 import Core.List;
+import Core.Runtime.Entry;
 
 // Iteration protocol (B1) — `for (x in iterable)` walks any collection, not just a `List`. A `Set<T>`
 // iterates its insertion-ordered, deduplicated elements; a `string` iterates its characters (each a

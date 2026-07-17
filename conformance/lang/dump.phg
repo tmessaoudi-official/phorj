@@ -9,6 +9,7 @@ import Core.Output;
 import Core.String;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
+import Core.Runtime.Entry;
 
 enum Status { Active(int level), Dormant }
 

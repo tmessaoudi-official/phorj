@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A focused profiling workload for `phg benchmark` and `phg disassemble`. It mixes the two cost
 // centers the M2 backends care about: CPU-bound recursion (large call volume) and heap allocation

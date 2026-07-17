@@ -4,6 +4,7 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 import Core.Set;
+import Core.Runtime.Entry;
 
 // More collection queries (M4 stdlib breadth) — emptiness tests, flattening, predicate counting, and a
 // set→list conversion. Each maps to an idiomatic PHP array operation, byte-identical on both backends and PHP.

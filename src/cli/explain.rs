@@ -75,7 +75,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-PKG-PATH" => {
             "E-PKG-PATH — a file's `package` does not match its location.\n\n\
              In a project, the directory under the source root IS the package (folder = path, Go's\n\
-             model): `src/app/util/*.phg` must declare `package app.util;`. `package Main;` is exempt\n\
+             model): `src/app/util/*.phg` must declare `package app.util;`. `package Main; import Core.Runtime.Entry;` is exempt\n\
              (runnable anywhere). Move the file, or fix its package to match the directory.\n"
         }
         "E-FILE-NAME" => {
@@ -1372,6 +1372,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              per-request model needs a `session_start()`/`$_SESSION` mapping — a recorded future\n\
              lift. Until it lands, transpile refuses rather than emitting a silently-diverging\n\
              program (§14 LADDER). Run session programs with `phg run` / `phg serve`.\n"
+        }
+        "E-TRANSPILE-UNICODE" => {
+            "E-TRANSPILE-UNICODE — a call to a native-only `Core.String` Unicode function cannot be transpiled to PHP.\n\n\
+             `String.unicodeUpper`/`unicodeLower`/`graphemeLength`/`graphemes` need PHP's\n\
+             mbstring/intl ini extensions, which the transpile rules forbid (no ini-dependent\n\
+             output) — refusing beats a silently-diverging mapping (THE LADDER RULE, DEC-256).\n\
+             The gate is per-FUNCTION: importing `Core.String` stays transpilable, and the\n\
+             codepoint tier (`String.codepointLength`/`codepoints`, PCRE/byte-decode based)\n\
+             transpiles. Run programs using the native-only tier with `phg run`.\n"
         }
         "E-TRANSPILE-FS" => {
             "E-TRANSPILE-FS — a program importing `Core.FileSystemModule` cannot be transpiled to PHP yet.\n\n\

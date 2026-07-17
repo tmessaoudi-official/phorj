@@ -21,6 +21,7 @@ import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 import Core.DatabaseModule.SerializationFailureError;
+import Core.Runtime.Entry;
 
 // prepare + exec one write; both can throw, so each is `?`-propagated.
 function run(Database db, string sql): void throws DatabaseError {

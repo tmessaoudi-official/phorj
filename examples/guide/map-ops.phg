@@ -12,6 +12,7 @@ package Main;
 
 import Core.Output;
 import Core.Map;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

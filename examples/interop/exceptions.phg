@@ -10,6 +10,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 declare function intdiv(int a, int b): int;
 

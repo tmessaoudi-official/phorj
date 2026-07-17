@@ -13,6 +13,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 open class Animal {
     open function name(): string {

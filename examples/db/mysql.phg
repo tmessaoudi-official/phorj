@@ -28,6 +28,7 @@ import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 import Core.Secret;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

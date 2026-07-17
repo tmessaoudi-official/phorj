@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M-mut.5 — value-type element set: `xs[i] = e` (list) and `m[k] = e` (map). Lists and maps are
 // COPY-ON-WRITE value types: assigning one to another binding copies it, so mutating the copy

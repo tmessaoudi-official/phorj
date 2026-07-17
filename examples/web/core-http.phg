@@ -17,6 +17,7 @@ import Core.Bytes;
 import Core.String;
 import Core.Http.Request;
 import Core.Http.Response;
+import Core.Runtime.Entry;
 
 // The whole application: greet by path, echoing the Host header.
 #[Entry]

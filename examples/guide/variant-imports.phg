@@ -19,6 +19,7 @@ import Core.Result.Success;
 import Core.Result.Failure as Fail;
 import Core.Option.Some;
 import Core.Option.None;
+import Core.Runtime.Entry;
 
 // `Result<int, string>` — construct with the bare `Success` / aliased `Fail`.
 function parse(string s): Result<int, string> {

@@ -230,6 +230,70 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.String",
+            name: "codepointLength",
+            params: vec![s()],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(text_codepoint_length),
+            // PCRE is always built into PHP — `/us` counts codepoints exactly.
+            php: |a| format!("preg_match_all('/./us', {})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.String",
+            name: "codepoints",
+            params: vec![s()],
+            ret: Ty::List(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(text_codepoints),
+            // Pure-PHP UTF-8 scalar decode (no mbstring): split codepoints via PCRE, decode bytes.
+            php: |a| {
+                format!(
+                    "array_map(function($c) {{ $b = array_values(unpack('C*', $c)); $n = count($b); if ($n === 1) {{ return $b[0]; }} if ($n === 2) {{ return (($b[0] & 0x1F) << 6) | ($b[1] & 0x3F); }} if ($n === 3) {{ return (($b[0] & 0x0F) << 12) | (($b[1] & 0x3F) << 6) | ($b[2] & 0x3F); }} return (($b[0] & 0x07) << 18) | (($b[1] & 0x3F) << 12) | (($b[2] & 0x3F) << 6) | ($b[3] & 0x3F); }}, preg_split('//u', {}, -1, PREG_SPLIT_NO_EMPTY))",
+                    parg(a, 0)
+                )
+            },
+        },
+        // DEC-256 native-only tier (per-function ladder: E-TRANSPILE-UNICODE when CALLED).
+        NativeFn {
+            module: "Core.String",
+            name: "unicodeUpper",
+            params: vec![s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_unicode_upper),
+            php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
+        },
+        NativeFn {
+            module: "Core.String",
+            name: "unicodeLower",
+            params: vec![s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_unicode_lower),
+            php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
+        },
+        #[cfg(feature = "unicode")]
+        NativeFn {
+            module: "Core.String",
+            name: "graphemeLength",
+            params: vec![s()],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(text_grapheme_length),
+            php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
+        },
+        #[cfg(feature = "unicode")]
+        NativeFn {
+            module: "Core.String",
+            name: "graphemes",
+            params: vec![s()],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            eval: NativeEval::Pure(text_graphemes),
+            php: |_| "__PHORJ_NATIVE_ONLY_UNICODE__".to_string(),
+        },
+        NativeFn {
+            module: "Core.String",
             name: "levenshtein",
             params: vec![s(), s()],
             ret: Ty::Int,

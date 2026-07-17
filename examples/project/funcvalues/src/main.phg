@@ -6,6 +6,7 @@ package Main;
 import Core.Output;
 import Core.List;
 import Acme.Calc;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

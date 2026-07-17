@@ -8,6 +8,7 @@ package Main;
 import Core.IteratorModule;
 import Core.IteratorModule.Iterator;
 import Core.Output;
+import Core.Runtime.Entry;
 
 class Countdown implements Iterator<int> {
     constructor(private mutable int n) {}

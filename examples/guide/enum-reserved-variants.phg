@@ -11,6 +11,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // `Int`, `Float`, `Bool`, `Null` would each be an illegal PHP class name without mangling.
 enum Node { Null, Bool(bool value), Int(int value), Float(float value), Str(string value) }

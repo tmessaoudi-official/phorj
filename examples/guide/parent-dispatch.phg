@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Super/parent dispatch (M-RT super/parent) — single inheritance, methods. An override can invoke the
 // implementation it shadows with `parent.m(…)` (the nearest ancestor that declares `m`), or jump to a

@@ -2,6 +2,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 function classify(int n): string {
     return if (n < 0) { "neg" } else { if (n == 0) { "zero" } else { "pos" } };

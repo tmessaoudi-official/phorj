@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M-faults Slice 2 — checked exceptions: `throws`, `throw`, `try`/`catch`/`finally`, and `?`-throws
 // propagation. A thrown type must implement the built-in `Error` marker (transpiles to a PHP class

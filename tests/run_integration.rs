@@ -56,7 +56,7 @@ fn di_inject_in_field_initializer_runs_not_panics() {
     // Regression (DI v1 6C): `inject<T>()` in a FIELD INITIALIZER (not a function body) must be
     // expanded by `desugar_di` — else it survives to the backend and panics `unreachable!`. `desugar_di`
     // walks all expression positions, so this runs and prints the injected value.
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.inject;\n\
@@ -85,7 +85,7 @@ fn di_field_injection_synthesizes_constructor_when_absent() {
     // Slice 3: an injectable with an injected field and NO explicit constructor — `fold_injected_fields`
     // must SYNTHESIZE a constructor (the `None` arm) with the promoted param, so the field is wired and
     // set at construction. Exercises the synthesis branch end-to-end (field actually reads back).
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.inject;\n\
@@ -106,7 +106,7 @@ fn di_transient_is_fresh_per_use_but_shares_its_dependency() {
     // one instance threaded to both (its `tick()` runs 1 then 2 → "1 2"). The exact output distinguishes
     // correct behavior from BOTH failure modes (transient wrongly shared → "1 2 …"; shared dep wrongly
     // transient → "… 1 1").
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.Transient;\n\
@@ -127,7 +127,7 @@ fn di_transient_root_inlines_construction() {
     // Slice 4b: `inject<Transient>()` where the ROOT is transient — exercises the `root.transient` emit
     // branch (the factory must inline `return new Worker(diDb)` with the shared `Db` hoisted, and NO
     // dangling `diWorker` var). Runs and reads the shared dep back.
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
         import Core.Output;\n\
         import Core.DependencyInjection.Injectable;\n\
         import Core.DependencyInjection.Transient;\n\

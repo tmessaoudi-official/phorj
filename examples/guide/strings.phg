@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 function greet(string who): string {
     return "Hello, {who}!";

@@ -8,6 +8,7 @@ package Main;
 
 import Core.Output;
 import Core.Validation;
+import Core.Runtime.Entry;
 
 function report(string label, bool ok): void {
     Output.printLine("{label}: {ok}");

@@ -13,6 +13,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A parent whose constructor is pure promotion (declares + stores `name`).
 open class Named {

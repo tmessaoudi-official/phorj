@@ -13,6 +13,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A sealed interface: exactly Circle / Square / Triangle implement it, program-wide.
 sealed interface Shape {

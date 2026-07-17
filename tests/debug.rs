@@ -30,6 +30,7 @@ fn both_exit(src: &str, expected_out: &str, expected_code: i64) {
 #[test]
 fn dump_prints_passes_through_and_captures() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.String;
 import Core.DebugModule;
@@ -53,6 +54,7 @@ class User { constructor(public string name, public int age) {} }
 #[test]
 fn runtime_exit_is_clean_and_carries_the_code() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Runtime;
 #[Entry] function main(): void {
@@ -67,6 +69,7 @@ import Core.Runtime;
 #[test]
 fn dd_dumps_then_exits_one() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
@@ -83,6 +86,7 @@ import Core.DebugModule.Debug;
 #[test]
 fn exit_zero_is_success() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Runtime;
 #[Entry] function main(): void {
@@ -99,6 +103,7 @@ import Core.Runtime;
 #[test]
 fn debug_transpiles_with_the_twin_renderer() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DebugModule;
 import Core.DebugModule.Debug;

@@ -178,6 +178,62 @@ pub(super) fn text_ends_with(args: &[Value], _: &mut String) -> Result<Value, St
 }
 /// DEC-243 — PHP-parity `levenshtein()`: classic Wagner–Fischer on BYTES (PHP's semantics —
 /// byte-oriented, unit costs). Two rows of the DP matrix; O(len(a)*len(b)).
+/// DEC-256 — codepoint count (transpilable tier: PHP leg is PCRE-`/us`).
+pub(super) fn text_codepoint_length(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Int(s.chars().count() as i64)),
+        _ => Err("String.codepointLength expects (string)".into()),
+    }
+}
+
+/// DEC-256 — the codepoints as their scalar values (transpilable via the gated PHP helper).
+pub(super) fn text_codepoints(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::List(std::rc::Rc::new(
+            s.chars().map(|c| Value::Int(c as i64)).collect(),
+        ))),
+        _ => Err("String.codepoints expects (string)".into()),
+    }
+}
+
+/// DEC-256 — FULL Unicode case mapping (native-only: one-to-many expansions like ß→SS).
+pub(super) fn text_unicode_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.to_uppercase().into())),
+        _ => Err("String.unicodeUpper expects (string)".into()),
+    }
+}
+
+pub(super) fn text_unicode_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.to_lowercase().into())),
+        _ => Err("String.unicodeLower expects (string)".into()),
+    }
+}
+
+/// DEC-256 — UAX #29 extended grapheme clusters (native-only; `unicode-segmentation`).
+#[cfg(feature = "unicode")]
+pub(super) fn text_grapheme_length(args: &[Value], _: &mut String) -> Result<Value, String> {
+    use unicode_segmentation::UnicodeSegmentation;
+    match args {
+        [Value::Str(s)] => Ok(Value::Int(s.graphemes(true).count() as i64)),
+        _ => Err("String.graphemeLength expects (string)".into()),
+    }
+}
+
+#[cfg(feature = "unicode")]
+pub(super) fn text_graphemes(args: &[Value], _: &mut String) -> Result<Value, String> {
+    use unicode_segmentation::UnicodeSegmentation;
+    match args {
+        [Value::Str(s)] => Ok(Value::List(std::rc::Rc::new(
+            s.graphemes(true)
+                .map(|g| Value::Str(g.to_string().into()))
+                .collect(),
+        ))),
+        _ => Err("String.graphemes expects (string)".into()),
+    }
+}
+
 pub(super) fn text_levenshtein(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(a), Value::Str(b)] => {

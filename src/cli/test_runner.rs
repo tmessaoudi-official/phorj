@@ -164,7 +164,13 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
         attrs: vec![crate::ast::Attribute {
             name: "Entry".to_string(),
             args: Vec::new(),
-            span,
+            // Zero span = the synthetic marker the import-gate exempts (no user wrote this).
+            span: crate::token::Span {
+                start: 0,
+                len: 0,
+                line: 0,
+                col: 0,
+            },
         }],
         vis: Visibility::Public,
         name: "main".into(),

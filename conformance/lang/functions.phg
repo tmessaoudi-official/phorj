@@ -2,6 +2,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 function fact(int n): int {
     return if (n <= 1) { 1 } else { n * fact(n - 1) };

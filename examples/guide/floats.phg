@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Math;
+import Core.Runtime.Entry;
 
 // Float stringification is byte-identical across all three backends. The Phorj interpreter and VM
 // render a `float` with Rust's shortest-round-trip formatting (always positional, never scientific;

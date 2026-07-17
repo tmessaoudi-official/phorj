@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 enum Grade { Pass(int score), Fail(int score) }
 

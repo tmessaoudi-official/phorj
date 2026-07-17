@@ -27,6 +27,7 @@ import Core.Assert;
 // Member imports — enable the BARE forms `panic(...)` and `unreachable(...)`.
 import Core.Abort.panic;
 import Core.Abort.unreachable;
+import Core.Runtime.Entry;
 
 // Qualified `assert` (whole-module import). Checked on every call; the invariant holds here.
 function half(int n): int {

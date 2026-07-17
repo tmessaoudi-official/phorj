@@ -13,6 +13,7 @@ use phorj::cli::{cmd_run, cmd_treewalk};
 /// A monotonic clock and memory counters used together — the manual-benchmark shape. Sanity booleans
 /// (not raw numbers) keep the assertion deterministic while proving the API is wired on both backends.
 const BENCH_SHAPE: &str = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Runtime;
 function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }

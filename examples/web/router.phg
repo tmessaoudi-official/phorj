@@ -22,6 +22,7 @@ import Core.Bytes;
 import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
+import Core.Runtime.Entry;
 
 // Handlers are plain `(Request) -> Response` functions — registered as first-class values below.
 function home(Request req): Response {

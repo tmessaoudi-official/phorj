@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over
 // `T?`. A non-optional `T` can never hold `null` — the checker enforces it (TypeScript

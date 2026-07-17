@@ -10,6 +10,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

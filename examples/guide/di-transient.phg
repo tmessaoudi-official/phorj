@@ -16,6 +16,7 @@ import Core.Output;
 import Core.DependencyInjection.Injectable;
 import Core.DependencyInjection.Transient;
 import Core.DependencyInjection.inject;
+import Core.Runtime.Entry;
 
 // SHARED (default) — mutable state makes the sharing observable.
 #[Injectable]

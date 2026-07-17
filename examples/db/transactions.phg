@@ -27,6 +27,7 @@ import Core.DatabaseModule.Statement;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
+import Core.Runtime.Entry;
 
 // A tiny helper: prepare + exec one write. Both `prepare` and `exec` can throw `DatabaseError`, so each is
 // propagated with `?` (and the function declares `throws DatabaseError`).

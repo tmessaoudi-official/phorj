@@ -8,6 +8,7 @@ import Catalog.Money;
 import Catalog.Product;
 import Ordering.OrderLine;
 import Ordering.Order;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

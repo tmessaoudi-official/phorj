@@ -64,6 +64,7 @@ fn db_typed_example_runs_on_both_backends() {
 fn typed_program(body: &str) -> String {
     format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -97,6 +98,7 @@ fn db_query_into_propagates_with_question_mark() {
     // The idiomatic `throws DatabaseError` helper: `queryInto()?` in a non-`try` propagating context —
     // the sink type is still inferred through the `?`.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -190,6 +192,7 @@ fn db_query_into_null_into_non_optional_throws() {
 fn db_query_into_optional_field_admits_null() {
     // A `string?` field: a NULL column maps to `null`, a present value maps through.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -228,6 +231,7 @@ fn db_nested_example_runs_on_both_backends() {
 fn nested_program(rows: &str, body: &str) -> String {
     format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Map;
 import Core.DatabaseModule;
@@ -292,6 +296,7 @@ fn db_nested_required_partial_null_throws() {
     // A REQUIRED nested `Order` with a NULL `order.total` column is NOT a null-parent — the strict
     // `getInt` on the non-optional subfield throws (this is what distinguishes required from optional).
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -319,6 +324,7 @@ fn db_hydrate_cycle_is_rejected() {
     // A self-referential row class cannot be eagerly whole-graph hydrated (unbounded) → compile error,
     // not a compiler stack overflow. The optional back-reference is still caught (cycle check on entry).
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -396,6 +402,7 @@ fn db_query_map_entity_value_hydrates_by_field_name() {
     // Map<int, User>: value is a hydrated entity (by field name from the whole row); key is the first
     // column. Extra columns (the id key) are ignored by the entity mapping.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Map;
 import Core.DatabaseModule;
@@ -433,6 +440,7 @@ fn db_naming_snake_to_camel_maps_camel_fields() {
     // `.namingStrategy(new Naming.SnakeToCamel())` makes a `userName` field read the `user_name`
     // column and `firstName` read `first_name` — the desugar bakes the snake_case column literal in.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -459,6 +467,7 @@ fn db_naming_default_exact_needs_exact_column() {
     // The strict-exact DEFAULT is unchanged: with no `namingStrategy`, a camelCase field looks up a
     // camelCase column, so a snake_case column is a runtime `no column` DatabaseError (not a naming bug).
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -485,6 +494,7 @@ fn db_naming_snake_to_camel_nested_entity() {
     // The transform applies PER dotted segment: a nested `homeAddress.streetName` reads the alias
     // `"home_address.street_name"` (segment `home_address` from the field, `.street_name` from the sub).
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -511,6 +521,7 @@ fn db_naming_query_map_entity_value_under_strategy() {
     // `queryMap` with an ENTITY value hydrates it by field name, so the strategy applies to the value
     // fields; the key (first column) and any scalar are read by position and are unaffected.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Map;
 import Core.DatabaseModule;
@@ -539,6 +550,7 @@ fn db_naming_non_literal_argument_is_rejected() {
     // The strategy must be a compile-time `new Naming.X()` literal — a variable cannot drive a
     // compile-time column rewrite, and silently falling back to `Exact` would be a forbidden downgrade.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -561,6 +573,7 @@ class U { constructor(public string userName) {} }
 fn db_naming_unknown_variant_is_rejected() {
     // An unrecognized `Naming` variant is not a valid compile-time strategy literal either.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -601,6 +614,7 @@ fn db_transactions_example_runs_on_both_backends() {
 fn tx_program(body: &str) -> String {
     format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -791,6 +805,7 @@ fn db_transaction_closure_nested_is_a_savepoint() {
 fn retry_program(body: &str) -> String {
     format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -899,6 +914,7 @@ fn db_writes_example_runs_on_both_backends() {
 fn writes_program(body: &str) -> String {
     format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.List;
 import Core.DatabaseModule;
@@ -944,6 +960,7 @@ fn db_execute_many_rolls_back_whole_batch_on_error() {
     // Rows are homogeneous (all string) — a phorj list literal must share one element type, so a
     // mixed-column bulk row needs per-row typed bindings; here a TEXT primary key gives the collision.
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.List;
 import Core.DatabaseModule;
@@ -1036,6 +1053,7 @@ fn db_mapping_example_runs_on_both_backends() {
 #[test]
 fn db_maps_enum_by_variant_name() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1061,6 +1079,7 @@ function label(Status s): string { return match (s) { Active() => "A", Suspended
 #[test]
 fn db_maps_enum_unknown_value_throws() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1087,6 +1106,7 @@ class Acct { constructor(public string name, public Status status) {} }
 #[test]
 fn db_maps_optional_enum_admits_null() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1113,6 +1133,7 @@ function show(Status? s): string { if (var x = s) { return "active"; } return "n
 #[test]
 fn db_maps_decimal_exactly() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1137,6 +1158,7 @@ class Money { constructor(public decimal a, public decimal b) {} }
 #[test]
 fn db_maps_decimal_from_integer_and_real_columns() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1159,6 +1181,7 @@ class Nums { constructor(public decimal i, public decimal half, public decimal t
 #[test]
 fn db_maps_decimal_null_into_non_optional_throws() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1184,6 +1207,7 @@ class Money { constructor(public decimal amount) {} }
 #[test]
 fn db_maps_decimal_invalid_text_throws() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1209,6 +1233,7 @@ class Money { constructor(public decimal amount) {} }
 #[test]
 fn db_maps_json_and_optional_admits_null() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Json;
 import Core.DatabaseModule;
@@ -1234,6 +1259,7 @@ function showNote(Json? j): string { if (var x = j) { return Json.stringify(x); 
 #[test]
 fn db_maps_invalid_json_throws() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Json;
 import Core.DatabaseModule;
@@ -1261,6 +1287,7 @@ class Doc { constructor(public Json body) {} }
 #[test]
 fn db_maps_enum_decimal_json_inside_nested_entity() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Json;
 import Core.DatabaseModule;
@@ -1288,6 +1315,7 @@ function tierName(Tier t): string { return match (t) { Gold() => "gold", Silver(
 #[test]
 fn db_maps_enum_with_payload_variant_is_rejected() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1351,6 +1379,7 @@ fn db_query_map_turbofish_with_var_binding() {
 #[test]
 fn db_query_into_turbofish_propagates_with_question_mark() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
@@ -1423,7 +1452,7 @@ fn db_program_transpile_is_a_clean_ladder_error() {
 /// transpile that slipped past would be a silently-diverging PHP program, not a refusal.
 #[test]
 fn raw_native_database_import_transpile_is_a_clean_ladder_error() {
-    let src = "package Main;\nimport Core.Output;\nimport Core.Native.Database;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Core.Native.Database;\n\
         #[Entry] function main(): void { Output.printLine(\"unreachable\"); }\n";
     match phorj::cli::cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-DB, but transpile succeeded: {php:?}"),
@@ -1576,6 +1605,7 @@ fn db_get_string_list_on_non_array_column_is_clean_error() {
 #[test]
 fn db_query_into_list_field_routes_to_array_accessor() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;

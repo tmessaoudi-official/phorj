@@ -9,7 +9,7 @@ pub fn lift_source(php_src: &str) -> Result<String, String> {
     print_program(&phorj)
 }
 
-/// Lift a parsed PHP program into a Phorj program (`package Main;`).
+/// Lift a parsed PHP program into a Phorj program (`package Main; import Core.Runtime.Entry;`).
 pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     let mut l = Lifter {
         needs_console: false,
@@ -74,6 +74,17 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
 
     // Prepend `import Core.Output;` if any `echo` was lifted.
     let mut final_items = Vec::new();
+    // DEC-191 addendum: the lifted draft's #[Entry] needs its import (wind rule).
+    let emitted_entry = items
+        .iter()
+        .any(|i| matches!(i, Item::Function(f) if f.attrs.iter().any(crate::ast::is_entry_attr)));
+    if emitted_entry {
+        final_items.push(Item::Import {
+            path: vec!["Core".into(), "Runtime".into(), "Entry".into()],
+            alias: None,
+            span: SP,
+        });
+    }
     if l.needs_console {
         final_items.push(Item::Import {
             path: vec!["Core".into(), "Output".into()],

@@ -39,20 +39,20 @@ fn runnable_programs_keep_their_behavior() {
     // A spread of real surface: classes+ctor promotion, enums+match+guards, generics, lambdas+pipe,
     // optionals, ranges, string interpolation.
     let samples = [
-        "package Main; import Core.Output;\n#[Entry] function main(): void { Output.printLine(\"hi\"); }",
-        "package Main; import Core.Output;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output;\n#[Entry] function main(): void { Output.printLine(\"hi\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Output;\n\
          function add<T>(T a, T b): T { return a; }\n\
          #[Entry] function main(): void { Output.printLine(\"{add(2, 3)}\"); }",
-        "package Main; import Core.Output;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output;\n\
          enum Shape { Circle(int r), Square(int s) }\n\
          function area(Shape s): int { return match (s) { Circle(r) => r * r, Square(x) => x * x }; }\n\
          #[Entry] function main(): void { Output.printLine(\"{area(new Circle(3))}\"); }",
-        "package Main; import Core.Output;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output;\n\
          class Point { constructor(public int x, public int y) {} function sum(): int { return this.x + this.y; } }\n\
          #[Entry] function main(): void { Point p = new Point(2, 5); Output.printLine(\"{p.sum()}\"); }",
-        "package Main; import Core.Output;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output;\n\
          #[Entry] function main(): void { var dbl = function(int x): int => x * 2; Output.printLine(\"{3 |> dbl}\"); }",
-        "package Main; import Core.Output;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output;\n\
          #[Entry] function main(): void { int? m = null; Output.printLine(\"{m ?? -1}\"); for (int i in 0..3) { Output.printLine(\"{i}\"); } }",
     ];
     for s in samples {
@@ -65,21 +65,21 @@ fn full_surface_is_idempotent() {
     // Non-runnable fragments (library shapes): proves the printer handles every construct and is
     // stable. Idempotence + clean parse is the gate where we can't run the program.
     let samples = [
-        "package Main;\ninterface Speaker { function speak(): string; }\n\
+        "package Main;\nimport Core.Runtime.Entry;\ninterface Speaker { function speak(): string; }\n\
          class Dog implements Speaker { function speak(): string { return \"woof\"; } }",
-        "package Main;\ntrait Greet { function hi(): string { return \"hi\"; } }\n\
+        "package Main;\nimport Core.Runtime.Entry;\ntrait Greet { function hi(): string { return \"hi\"; } }\n\
          class P { use Greet; }",
-        "package Main;\nclass Box<T> { constructor(public T value) {} }\n\
+        "package Main;\nimport Core.Runtime.Entry;\nclass Box<T> { constructor(public T value) {} }\n\
          function pick(int | string x): int { return 0; }",
-        "package Main;\ntype UserId = int;",
-        "package Main;\nclass C { int n { get => 1; } }",
-        "package Main;\n\
+        "package Main;\nimport Core.Runtime.Entry;\ntype UserId = int;",
+        "package Main;\nimport Core.Runtime.Entry;\nclass C { int n { get => 1; } }",
+        "package Main;\nimport Core.Runtime.Entry;\n\
          function f(): void { try { throw 1; } catch (Error e) { return; } finally { return; } }",
-        "package Main;\nclass Pt { constructor(public int x, public int y) {} }\n\
+        "package Main;\nimport Core.Runtime.Entry;\nclass Pt { constructor(public int x, public int y) {} }\n\
          function f(Pt p): void { var Pt { x, y } = p; }",
-        "package Main;\nfunction f(): void { var b = b\"\\x00ab\"; }",
+        "package Main;\nimport Core.Runtime.Entry;\nfunction f(): void { var b = b\"\\x00ab\"; }",
         "package Main; import Core.Test;\ntest \"x\" { Test.assertTrue(true); }",
-        "package Main;\nenum Opt<T> { Some(T v), None }\n\
+        "package Main;\nimport Core.Runtime.Entry;\nenum Opt<T> { Some(T v), None }\n\
          function f(Opt<int> o): int { return match (o) { Some(n) when n > 0 => n, Some(n) => 0, None() => -1 }; }",
     ];
     for s in samples {
@@ -90,14 +90,14 @@ fn full_surface_is_idempotent() {
 #[test]
 fn the_arrow_return_syntax_normalizes_to_colon() {
     // `-> T` is a transition alias for `: T`; fmt canonicalizes to `:` (both parse the same).
-    let out = fmt("package Main;\nfunction f() -> int { return 1; }");
+    let out = fmt("package Main;\nimport Core.Runtime.Entry;\nfunction f() -> int { return 1; }");
     assert!(out.contains("function f(): int"), "{out}");
     assert!(!out.contains("->"), "{out}");
 }
 
 #[test]
 fn comments_are_preserved() {
-    let src = "package Main;\n// a header comment\n#[Entry] function main(): void { /* body */ return; }\n";
+    let src = "package Main;\nimport Core.Runtime.Entry;\n// a header comment\n#[Entry] function main(): void { /* body */ return; }\n";
     let out = fmt(src);
     assert!(
         out.contains("// a header comment"),
@@ -112,7 +112,7 @@ fn comments_are_preserved() {
 /// A statement value that overflows the column budget wraps; a short one stays on one line.
 #[test]
 fn long_call_args_wrap_short_stay_flat() {
-    let src = "package Main;\n#[Entry] function main(): void {\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main(): void {\n\
         var s = f(1, 2);\n\
         var l = someHelperWithAVeryLongName(argumentOne, argumentTwo, argumentThree, argumentFour, argumentFive);\n\
         }";
@@ -133,7 +133,7 @@ fn long_call_args_wrap_short_stay_flat() {
 #[test]
 fn method_chains_wrap_by_width_not_author_breaks() {
     // Long chain → breaks before each dot.
-    let long = "package Main;\n#[Entry] function main(): void {\n\
+    let long = "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main(): void {\n\
         var r = source.mapEachValueWithCare(transformer).keepEveryMatching(predicate).collapseInto(combiner).done();\n\
         }";
     let out = fmt(long);
@@ -144,7 +144,7 @@ fn method_chains_wrap_by_width_not_author_breaks() {
     assert_idempotent(long);
 
     // Gratuitously hand-broken SHORT chain → collapses to one line.
-    let broken = "package Main;\n#[Entry] function main(): void {\n\
+    let broken = "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main(): void {\n\
         var x = obj\n.a()\n.b();\n}";
     let out = fmt(broken);
     assert!(
@@ -161,7 +161,7 @@ fn method_chains_wrap_by_width_not_author_breaks() {
 /// line (the hole is emitted as flat `Text`).
 #[test]
 fn interpolation_holes_never_break() {
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
         #[Entry] function main(): void {\n\
         var wide = \"value is {computeThing(alphaValue, betaValue, gammaValue, deltaValue, epsilonValue, zetaValue)}\";\n\
         }";
@@ -190,7 +190,7 @@ fn interpolation_holes_never_break() {
 /// A `match` expression that overflows wraps one arm per line; a short one stays inline.
 #[test]
 fn match_arms_wrap_by_width() {
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
         function classify(int x): string {\n\
         return match (x) { 0 => \"zero value here\", 1 => \"one value here\", 2 => \"two value here\", 3 => \"three\" };\n\
         }";
@@ -204,7 +204,7 @@ fn match_arms_wrap_by_width() {
 
 #[test]
 fn unparseable_source_is_refused_not_reformatted() {
-    assert!(format("package Main;\nfunction (").is_err());
+    assert!(format("package Main;\nimport Core.Runtime.Entry;\nfunction (").is_err());
     assert!(format("@@@ not phorj").is_err());
 }
 
@@ -213,7 +213,7 @@ fn declaration_visibility_survives_formatting() {
     // Regression: the printer used to drop top-level `internal`/`private` visibility on free functions
     // and types (only `Public` is the default and elided). Splitting public types across files relies
     // on these surviving, so assert they round-trip and the form is idempotent.
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
         internal function scale(int n): int { return n; }\n\
         private function clamp(int n): int { return n; }\n\
         internal class Helper { constructor() {} }\n\
@@ -244,7 +244,7 @@ fn declaration_visibility_survives_formatting() {
 /// the printer ever saw them). Chains and precedence-parenthesized operands round-trip too.
 #[test]
 fn pipe_operator_survives_formatting() {
-    let src = "package Main; import Core.Output;\n\
+    let src = "package Main; import Core.Runtime.Entry; import Core.Output;\n\
          function inc(int x): int { return x + 1; }\n\
          #[Entry] function main(): void { Output.printLine(\"{5 |> inc |> inc}\"); }";
     let out = fmt(src);
@@ -260,7 +260,7 @@ fn pipe_operator_survives_formatting() {
 /// (both spellings are the same type); a lone non-null remainder is just `T?`. Idempotent.
 #[test]
 fn nullable_union_spelling_canonicalizes() {
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
          class A { constructor(public int x) {} }\n\
          class B { constructor(public string s) {} }\n\
          function f(): A | B | null { return null; }\n\

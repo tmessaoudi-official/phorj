@@ -8,6 +8,7 @@ package Main;
 // backends and under real PHP. Before the fix, the SPL/date/json names slipped through the
 // transpiler's narrower list and the transpiled PHP threw "Cannot redeclare class RuntimeException".
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Variants: RuntimeException (SPL), ArrayObject (SPL container), Exception (engine-core),
 // DateInterval (date) all collide with PHP builtins and are mangled; Plain is ordinary.

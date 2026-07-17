@@ -16,6 +16,7 @@ import Core.Mail.FileTransport;
 import Core.Mail.NullTransport;
 import Core.Mail.InvalidAddressError;
 import Core.Mail.MailError;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

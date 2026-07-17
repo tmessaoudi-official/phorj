@@ -5,6 +5,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class Server {
     constructor(public string host, public int port = 8080, public bool tls = false) {}

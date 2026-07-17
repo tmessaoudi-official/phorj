@@ -5,6 +5,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class MathUtil {
     static function square(int n): int {

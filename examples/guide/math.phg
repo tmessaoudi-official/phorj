@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Math;
+import Core.Runtime.Entry;
 
 // M3 Track B Wave 2 — the `Core.Math` stdlib module. Each function erases to the PHP builtin of
 // the same name. Float ops (`sqrt`/`pow`/`floor`/`ceil`) return `float`; `abs`/`min`/`max` are

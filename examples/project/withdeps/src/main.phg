@@ -5,6 +5,7 @@ package Main;
 // consumed exactly like a first-party package: import it, then call through its leaf qualifier.
 import Core.Output;
 import Acme.Strutil;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

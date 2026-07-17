@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A tiny program used by ../cli/README.md to demonstrate the phorj CLI:
 // source forms (file / stdin / inline), inspection (check / parse / lex),

@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Feature B — expression field initializers. PHP restricts property defaults to *constant
 // expressions* (no calls, no `$this`, no other-property reads — "Constant expression contains

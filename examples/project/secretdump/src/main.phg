@@ -11,6 +11,7 @@ import Core.Secret;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
 import Acme.Widget;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

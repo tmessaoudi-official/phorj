@@ -25,6 +25,7 @@ fn fs_files_dirs_listings_and_walk_round_trip() {
     let root = scratch("main");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
@@ -64,6 +65,7 @@ fn fs_errors_are_typed_and_catchable() {
     let root = scratch("err");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
@@ -106,6 +108,7 @@ import Core.FileSystemModule.FileSystemError;
 #[test]
 fn fs_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.FileSystemModule;
 #[Entry] function main(): void { Output.printLine("x"); }

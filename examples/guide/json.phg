@@ -16,6 +16,7 @@ package Main;
 
 import Core.Output;
 import Core.Json;
+import Core.Runtime.Entry;
 
 // Render a parsed JSON value's top-level shape — demonstrates matching every variant.
 function shapeOf(Json j): string {

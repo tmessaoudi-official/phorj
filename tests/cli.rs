@@ -76,7 +76,7 @@ fn dump_on_fault_shows_redacted_locals_only_when_requested() {
 fn debug_repl_steps_inspects_and_continues() {
     use std::io::Write;
     use std::process::Stdio;
-    let prog = "package Main;\nimport Core.Output;\n\
+    let prog = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
                 function add(int a, int b) -> int {\n  int sum = a + b;\n  return sum;\n}\n\
                 #[Entry] function main() -> void {\n  int x = 3;\n  int y = add(x, 4);\n  Output.printLine(\"y = {y}\");\n}\n";
     let path = std::env::temp_dir().join(format!("phg_dbg_{}.phg", std::process::id()));
@@ -197,7 +197,7 @@ fn check_json_error_emits_diagnostic_array_exit_1_no_stderr() {
             "check",
             "--json",
             "-e",
-            "package Main; #[Entry] function main()-> void { var x = nope; }",
+            "package Main; import Core.Runtime.Entry; #[Entry] function main()-> void { var x = nope; }",
         ])
         .output()
         .expect("spawn phg");
@@ -261,6 +261,7 @@ fn run_reads_program_from_stdin() {
         .unwrap()
         .write_all(
             br#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main() -> void { Output.printLine("{1 + 2}"); }"#,
         )
@@ -278,6 +279,7 @@ fn run_eval_inline_code() {
                 "run",
                 flag,
                 r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main() -> void { Output.printLine("{2 * 3}"); }"#,
             ])
@@ -293,6 +295,7 @@ fn run_double_dash_then_path_is_a_file() {
     let path = write_temp(
         "dashdash",
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main() -> void { Output.printLine("ok"); }"#,
     );
@@ -336,7 +339,7 @@ fn lex_subcommand_dumps_tokens_exit_0() {
 fn transpile_ill_typed_exits_1_with_type_error() {
     let path = write_temp(
         "ill_typed",
-        r#"package Main; #[Entry] function main() -> void { int x = "no"; }"#,
+        r#"package Main; import Core.Runtime.Entry; #[Entry] function main() -> void { int x = "no"; }"#,
     );
     let out = Command::new(BIN)
         .args(["transpile", path.to_str().unwrap()])
@@ -352,6 +355,7 @@ fn run_runtime_error_exits_1() {
     let path = write_temp(
         "runtime_err",
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main() -> void { Output.printLine("{1 / 0}"); }"#,
     );
@@ -369,6 +373,7 @@ fn runvm_simple_program_exits_0() {
     let path = write_temp(
         "runvm_ok",
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main() -> void { Output.printLine("{1 + 1}"); }"#,
     );
@@ -386,6 +391,7 @@ fn runvm_runtime_error_exits_1() {
     let path = write_temp(
         "runvm_rt",
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 #[Entry] function main() -> void { Output.printLine("{1 / 0}"); }"#,
     );
@@ -455,7 +461,7 @@ fn mi_super_method_transpiles_to_a_trait_alias() {
     let path = std::env::temp_dir().join("phg_b2_mi_super.phg");
     std::fs::write(
         &path,
-        "package Main;\n\
+        "package Main;\nimport Core.Runtime.Entry;\n\
          import Core.Output;\n\
          open class A { open function m(): string { return \"A\"; } }\n\
          open class B { open function m(): string { return \"B\"; } }\n\
@@ -488,7 +494,7 @@ fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
     let path = std::env::temp_dir().join("phg_b2_mi_transitive.phg");
     std::fs::write(
         &path,
-        "package Main;\n\
+        "package Main;\nimport Core.Runtime.Entry;\n\
          import Core.Output;\n\
          open class G { open function m(): string { return \"G\"; } }\n\
          open class A extends G { open function m(): string { return \"A\"; } }\n\

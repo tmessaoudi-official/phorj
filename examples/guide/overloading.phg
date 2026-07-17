@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M-RT method & function overloading — DYNAMIC multiple dispatch. Several functions (or methods) may
 // share a name with distinct parameter signatures; the RUNTIME types of the arguments select the

@@ -33,6 +33,7 @@ fn mail_file_transport_round_trip_on_both_backends() {
     let dir = outbox("file");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;
@@ -82,6 +83,7 @@ import Core.Mail.MailError;
 #[test]
 fn mail_null_transport_and_send_all_count() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;
@@ -105,6 +107,7 @@ import Core.Mail.MailError;
 #[test]
 fn mail_invalid_address_is_typed_and_catchable_at_construction() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Address;
@@ -128,6 +131,7 @@ Bcc: victim@z.w", "");
 #[test]
 fn mail_missing_from_is_message_build_failed() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;
@@ -156,6 +160,7 @@ import Core.Mail.MailError;
 #[test]
 fn mail_program_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.NullTransport;
@@ -186,6 +191,7 @@ fn mail_smtp_round_trip_against_mailpit() {
         .expect("PHORJ_MAILPIT_SMTP must be host:port");
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Mail;
 import Core.Mail.Mailer;

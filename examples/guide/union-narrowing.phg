@@ -12,6 +12,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // One value, four possible shapes. `match` narrows each arm to its concrete type; leaving any arm
 // out is a compile error — the union is closed and the match must be total. Note `int` vs `float`

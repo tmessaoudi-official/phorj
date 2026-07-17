@@ -7,6 +7,7 @@ package Main;
 // the VM, and transpiled PHP (whereas PHP trim() would leave every one of them).
 import Core.Output;
 import Core.String;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

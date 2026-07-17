@@ -10,6 +10,7 @@ package Main;
 //   Wave 3  the `html"…"` literal sugar  html"<h1>{name}</h1>"
 import Core.Output;
 import Core.Html;
+import Core.Runtime.Entry;
 
 // Wave-1 style: hand-written markup wrapped with Html.raw; the dynamic value escaped.
 function field(string label, string value): Html {

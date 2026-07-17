@@ -7,7 +7,10 @@
 //   * `Response.json(body)`             — a 200 application/json response
 //   * `resp.status(n)`                  — a copy with a different status code
 //   * `resp.withHeader(name, value)`    — a copy with one header appended
-//   * `resp.withCookie(name, value)`    — a copy with a `Set-Cookie` header appended
+//   * `resp.withCookie(cookie)`         — a copy with a `Set-Cookie` header appended (DEC-242:
+//     `Cookie` is an immutable value class — Secure/HttpOnly/SameSite=Lax/Path=/ by default,
+//     with chainable `.path()`/`.secure()`/`.httpOnly()`/`.partitioned()` builders)
+//   * `resp.withCookies(list)`          — a copy with one `Set-Cookie` header per Cookie
 //   * `resp.serialize() -> bytes`       — render to the HTTP/1.1 wire form
 // Pure value construction → byte-identical across `run`, `runvm`, and real PHP.
 package Main;
@@ -16,6 +19,8 @@ import Core.Output;
 import Core.Bytes;
 import Core.String;
 import Core.Http.Response;
+import Core.Http.Cookie;
+import Core.Runtime.Entry;
 
 // Render a response's wire form as one clean ASCII line (CRLFs shown as " | ").
 function wireLine(Response resp): string {
@@ -40,12 +45,21 @@ function main(): void {
     Output.printLine("json:   {wireLine(j)}");
     // Chained, immutable builders: change the status and append headers + a cookie. Each step is a
     // fresh Response. `.status(n)` sets the code (404 → the known "Not Found" reason phrase).
+    // `Cookie` (DEC-242) is itself an immutable chainable value — safe defaults (Secure; HttpOnly;
+    // SameSite=Lax; Path=/), opt OUT explicitly where a demo needs to (`.secure(false)` here so the
+    // example works over plain http).
+    Cookie session = new Cookie("session", "s3cr3t").secure(false);
     Response chained = Response
         .html("<h1>Gone</h1>")
         .status(404)
         .withHeader("X-Request-Id", "abc123")
-        .withCookie("session", "s3cr3t");
+        .withCookie(session);
     Output.printLine("chain:  {wireLine(chained)}");
+    // Several cookies at once: `withCookies` folds a list — one Set-Cookie header per entry.
+    Response multi = Response
+        .text(200, "ok")
+        .withCookies([new Cookie("a", "1"), new Cookie("b", "2").path("/admin")]);
+    Output.printLine("multi:  {wireLine(multi)}");
     // The original json response is untouched (immutability): still 200, no extra headers.
     Output.printLine("orig:   {wireLine(j)}");
 }

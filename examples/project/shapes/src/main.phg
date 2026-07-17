@@ -10,6 +10,7 @@ import Core.Output;
 import Acme.Geometry.Shape;
 import Acme.Geometry.Rect;
 import Acme.Geometry.Paint;
+import Core.Runtime.Entry;
 
 // Typed by an imported INTERFACE — any implementer flows in (nominal subtyping, cross-package).
 function describe(Shape s): int {

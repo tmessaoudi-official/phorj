@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Method return-type overloading (M-RT S2.2): like free functions (see `return-overloading.phg`), a
 // class METHOD may overload on return type alone — several methods sharing a name AND parameter

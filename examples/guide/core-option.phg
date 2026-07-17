@@ -16,6 +16,7 @@ package Main;
 
 import Core.Output;
 import Core.Option;
+import Core.Runtime.Entry;
 
 // A variant that mentions no `T` (`None`) can't infer it — annotate the binding to fix `Option<int>`.
 function describe(Option<int> o): string {

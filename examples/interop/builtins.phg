@@ -8,6 +8,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Foreign PHP standard-library functions (their real PHP names — snake_case is fine here).
 declare function strtoupper(string s): string;

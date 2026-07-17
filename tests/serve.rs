@@ -33,6 +33,7 @@ fn vfac(src: &str) -> HandlerFactory {
 /// `package Main` entry, but the tests call `respond`/`serve`, never `main`.
 const SERVE_PROGRAM: &str = r#"
 package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Bytes;
 import Core.String;
@@ -111,6 +112,7 @@ function respond(bytes raw) -> bytes {
 /// bare handler is directly servable.
 const HTTP_HANDLE_PROGRAM: &str = r#"
 package Main;
+import Core.Runtime.Entry;
 import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
@@ -228,7 +230,7 @@ fn vm_serve_is_byte_identical_to_interpreter() {
     assert_eq!(vm[2], http("HTTP/1.1 400 Bad Request", "bad request"));
 
     // Production 500: a `respond` that faults degrades to the bare 500 on BOTH backends (dev = false).
-    let fault = "package Main;\n\
+    let fault = "package Main;\nimport Core.Runtime.Entry;\n\
          function respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n";
     let req = || vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()];
     let i500 = run(&ifac(&checked(fault)), req());
@@ -343,7 +345,7 @@ fn unrecoverable_listener_eventually_stops() {
 #[test]
 fn respond_fault_degrades_to_500_and_loop_continues() {
     let prog = checked(
-        "package Main;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
+        "package Main;\nimport Core.Runtime.Entry;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
     );
     let req = b"GET / HTTP/1.1\r\n\r\n".to_vec();
     let mut fx = FixtureTransport::new(vec![req.clone(), req]);
@@ -369,7 +371,7 @@ fn respond_fault_degrades_to_500_and_loop_continues() {
 fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
     use phorj::profile::Profile;
     let prog = checked(
-        "package Main;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
+        "package Main;\nimport Core.Runtime.Entry;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
     );
     let req = b"GET /boom HTTP/1.1\r\n\r\n".to_vec();
 
@@ -416,7 +418,7 @@ fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
 /// trusts the return type — it checks the actual value).
 #[test]
 fn respond_non_bytes_return_degrades_to_500() {
-    let prog = checked("package Main;\nfunction respond(bytes raw) -> int { return 7; }\n");
+    let prog = checked("package Main;\nimport Core.Runtime.Entry;\nfunction respond(bytes raw) -> int { return 7; }\n");
     let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()]);
     serve(&ifac(&prog), &mut fx, false).expect("loop completes");
     assert_eq!(fx.sent.len(), 1);

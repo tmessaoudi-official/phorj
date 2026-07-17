@@ -2,7 +2,7 @@ use super::*;
 // bench_report helpers moved to the bench submodule (M-Decomp W1.2); the timing tests call them.
 use super::benchmark::{bench_report, bench_report_opts};
 
-/// Prepend the reserved `package Main;` (M5 S1: every file is packaged, never inferred) unless
+/// Prepend the reserved `package Main; import Core.Runtime.Entry;` (M5 S1: every file is packaged, never inferred) unless
 /// already declared, so the CLI command tests need no per-case package boilerplate. The segment
 /// carries no newline, so line numbers in fault diagnostics are preserved.
 fn wp(src: &str) -> String {
@@ -14,14 +14,23 @@ fn wp(src: &str) -> String {
     } else {
         src.to_string()
     };
-    if src.trim_start().starts_with("package ") {
+    let src = if src.trim_start().starts_with("package ") {
         src
     } else {
         format!("package Main; {src}")
+    };
+    // DEC-191 addendum: the attribute is import-gated — inject its import once too, AFTER the
+    // package segment (imports may not precede `package`); same-line, preserving line numbers.
+    if src.contains("#[Entry]") && !src.contains("Core.Runtime.Entry") {
+        let i = src.find(';').expect("package decl ends with ;");
+        format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
+    } else {
+        src
     }
 }
 
 const SAMPLE: &str = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 
 enum Shape {

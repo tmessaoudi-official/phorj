@@ -10,6 +10,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A checked exception (implements the built-in `Error` marker so it is throwable/catchable).
 class RangeError implements Error {

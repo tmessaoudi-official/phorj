@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.String;
 import Core.Math;
+import Core.Runtime.Entry;
 
 // More text + numeric helpers (M4 stdlib breadth). Each maps to an idiomatic PHP builtin
 // (empty-string test, ltrim/rtrim, substr_count, % parity), byte-identical on both backends and PHP.

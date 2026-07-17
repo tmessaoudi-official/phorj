@@ -2051,3 +2051,87 @@ on the VM) into the AST post-check; formatter round-trips the new spelling (full
 two-binding keeps the `for (K k, V v in m)` canonical); lift emits the form Tier-1 + the ruled
 inline marker; `private(set)`/`protected(set)` lift landed in the same slice (Invariant-17 debt);
 differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred binding).
+
+## Surface rulings batch (2026-07-17, developer via AskUserQuestion — upfront-adjudication lever)
+
+- **DEC-256 surface:** NEW EXPLICIT functions — `String.length` stays byte-parity (strlen twin);
+  Unicode tier = `codepointLength`, `graphemeLength`, `codepoints(s): List<int>`,
+  `graphemes(s): List<string>`, `unicodeUpper`/`unicodeLower` (full case mapping).
+  *Alternative (offered): breaking length-becomes-codepoints — rejected.*
+- **DEC-242 surface (challenged + refined):** a first-class **`Cookie` VALUE class ONLY** (the
+  developer's instinct, confirmed against the tenets; flat `Response.cookie(...)` twin REJECTED
+  as two-ways): `new Cookie(name, value)` w/ DEC-249 defaults (path="/", secure=true,
+  httpOnly=true, sameSite=Lax — injected enum, partitioned=false, optional maxAge/domain);
+  `resp.withCookie(c)` (value-Response chaining free) + `withCookies(List<Cookie>)` for dynamic
+  jars; Session's cookie becomes a Cookie internally; Partitioned = CHIPS opt-in (Session
+  default OFF).
+- **DEC-258 surface:** CONSTRUCTOR option — `new Database(dsn, naming = new Naming.Exact())`
+  (DEC-249 default param; compile-time-literal rule like namingStrategy); per-statement
+  `stmt.namingStrategy(...)` still overrides. *Alternative (offered): withNaming builder —
+  rejected.*
+
+- **DEC-256 dependency ruling (2026-07-17):** `unicode-segmentation` ADMITTED (feature-gated,
+  vetted-exception list; graphemes only — codepoints/case are std). **AND: icu4x (DEC-271)
+  BROUGHT FORWARD** in the queue (developer: "bring icu4x forward I think") — the fuller Unicode
+  extension slice moves ahead of the remaining Tier-3 items once the DEC-256/242/258 batch lands.
+
+- **DEC-256 placement ruling (2026-07-17):** SPLIT — `String.codepointLength`/`String.codepoints`
+  stay on Core.String (transpilable; PCRE-`/u` PHP legs, always-in); Unicode CASE + GRAPHEMES =
+  new **`Core.Unicode`** native-only module (`Unicode.upper/lower/graphemeLength/graphemes`,
+  E-TRANSPILE-UNICODE ladder row — mbstring/intl are ini extensions, forbidden by the transpile
+  rule). The module boundary IS the transpilability boundary; Core.Unicode is the icu4x landing
+  zone (brought forward). *Alternative (offered): per-function ladder on String — rejected.*
+
+- **DEC-256 placement OVERRIDE (2026-07-17, developer mid-build): everything stays under
+  `Core.String`** ("keep unicode/string together") — the split into Core.Unicode is REVOKED.
+  Names per the original approved preview: `String.codepointLength/codepoints` (transpilable,
+  PCRE) + `String.unicodeUpper/unicodeLower/graphemeLength/graphemes` (native-only). The ladder
+  therefore goes PER-FUNCTION: the four native-only String functions carry a transpile marker;
+  the transpiler's native-emission chokepoint turns an actual CALL into E-TRANSPILE-UNICODE
+  (import alone stays fine — Core.String is otherwise transpilable).
+
+- **DEC-191 addenda (2026-07-17, developer):** (a) `#[Entry]` is IMPORT-GATED after all —
+  `import Core.Runtime.Entry;` (wind rule; UncheckedOverflow precedent; supersedes the earlier
+  no-import reading of the approved preview). (b) NO manual-function-run CLI affordance
+  ("everything will be orchestrated by the Entry") — subcommand dispatch is userland inside the
+  entry; --call/named-entries alternatives offered and rejected. (c) Confirmed semantics: an
+  un-attributed `main` is an ordinary function — direct calls (`main();`) work everywhere;
+  argv fills `(List<string>)` entries (verified live: `-- hello world` → ["hello","world"],
+  int return = exit status).
+
+- **DEC-258 REFINEMENT (2026-07-17, developer — "combine all three; naming is a promoted ctor
+  FIELD, visible from any scope"): the COMBINED naming model.** Three cooperating tiers:
+  (1) construction visible in the analyzed scope → compile-time BAKING (zero runtime cost,
+  today's mechanism); (2) connection NOT statically traceable (parameter / field / cross-function
+  flow) → the desugar emits BOTH baked helper variants (Exact + SnakeToCamel) and dispatches on
+  the runtime `db.naming` field — cost = one branch per hydration call, never per-row string
+  work; (3) per-statement `stmt.namingStrategy(<literal>)` overrides both. The developer's field
+  insight is what makes it sound: `naming` is a promoted constructor field, so it EXISTS on the
+  Database value at runtime and follows the value into any scope — the runtime dispatch tier is
+  reading a fact the value already carries, not re-deriving one. No silent downgrade anywhere;
+  Db is native-only (E-TRANSPILE-DB ladder), so there is no PHP-leg complexity. *Alternative
+  (offered): uniform always-dispatch-on-field (drop the baking tier) — rejected in favor of
+  zero-cost-where-traceable.*
+
+- **DEC-256 BUILT (2026-07-17):** the Unicode tier shipped under `Core.String` per the override —
+  transpilable `codepointLength`/`codepoints` (PCRE `/u` + pure-PHP UTF-8 decode legs) +
+  native-only `unicodeUpper`/`unicodeLower`/`graphemeLength`/`graphemes` (std case tables;
+  UAX #29 via feature-gated `unicode-segmentation`, default-on `unicode` feature). Per-function
+  ladder: the four native-only functions carry a transpile marker → the transpiler chokepoint
+  turns an actual CALL into `E-TRANSPILE-UNICODE` (import alone stays transpilable). Examples
+  `guide/unicode-codepoints.phg` (3-leg) + `guide/unicode-native.phg` (run≡runvm, ladder-gated).
+
+- **DEC-242 BUILT (2026-07-17):** `Cookie` value class + `SameSite` enum on `Core.Http`
+  (import-gated, wind rule). Immutable safe defaults (Secure; HttpOnly; SameSite=Lax; Path=/),
+  chainable `.path/.secure/.httpOnly/.partitioned` copy-builders, canonical `render()`.
+  BREAKING: `Response.withCookie(Cookie)` replaces `(name, value)`; new
+  `withCookies(List<Cookie>)`; Session's sid cookie now built through `Cookie` (`.secure(false)`).
+  Example: `web/response-builders.phg` reworked, 3-leg identical.
+
+- **DEC-191 addendum BUILT (2026-07-17):** `#[Entry]` import-gated via `Core.Runtime` registry
+  row (`bare_types` += `Entry`); zero-span synthetic exemption for compiler-injected entries
+  (`phg test`, web bridge, lifted drafts — the lifter also emits the import); the whole corpus
+  (examples/conformance/tests/embedded programs, ~160 insertion sites) migrated; the four inline
+  test helpers (`cli::wp`, compiler/interpreter/differential `with_pkg`) inject the import AFTER
+  the package segment (import-before-package was a parse error). DAP test breakpoint re-lined
+  (+1 from the injected import line).

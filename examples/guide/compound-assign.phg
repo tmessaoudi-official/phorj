@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M-mut.2 — compound assignment, increment/decrement, and null-coalesce-assign.
 // Every form below is pure SUGAR: `x op= e` lowers to `x = x op e`, `x++` to `x = x + 1`,

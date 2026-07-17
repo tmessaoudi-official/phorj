@@ -12,6 +12,7 @@ package Main;
 import Core.Output;
 import Core.Bytes;
 import Core.Json;
+import Core.Runtime.Entry;
 
 // Minimal request/response values (bodies are `bytes`, the HTTP octet contract from M6 W0).
 class Request {

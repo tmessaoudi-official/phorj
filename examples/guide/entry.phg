@@ -6,6 +6,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class App {
     #[Entry]

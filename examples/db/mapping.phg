@@ -25,6 +25,7 @@ import Core.Json;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
+import Core.Runtime.Entry;
 
 // A plain zero-payload enum — each variant maps from a text column value of the same name.
 enum Plan { Free, Pro, Enterprise }

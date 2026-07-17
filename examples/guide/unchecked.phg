@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime.Integer.UncheckedOverflow;
 import Core.Runtime.Integer;
+import Core.Runtime.Entry;
 
 // `#[UncheckedOverflow]` (import Core.Runtime.Integer.UncheckedOverflow) opts a WHOLE function into two's-complement WRAPPING integer
 // arithmetic: `+ - *` and unary `-` wrap on overflow (like C/Rust) instead of faulting. The DEFAULT —

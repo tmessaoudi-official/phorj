@@ -20,6 +20,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class Point {
     constructor(public int x, public int y) {}

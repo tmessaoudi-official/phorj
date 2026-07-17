@@ -5,6 +5,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 enum Status { Active, Suspended(string reason), Deleted(int daysAgo) }
 

@@ -18,6 +18,7 @@ static RNG_LOCK: Mutex<()> = Mutex::new(());
 fn seeded_random_is_deterministic_and_run_matches_runvm() {
     let _g = RNG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Random;
 #[Entry] function main() -> void {
@@ -53,6 +54,7 @@ fn distinct_seeds_diverge_across_backends_consistently() {
     let prog = |seed: i64| {
         format!(
             r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.Random;
 #[Entry] function main() -> void {{

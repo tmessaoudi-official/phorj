@@ -12,6 +12,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class Counter {
     constructor(private int n) {}

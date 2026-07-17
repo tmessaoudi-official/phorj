@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Set;
 import Core.Map;
+import Core.Runtime.Entry;
 
 // Stdlib breadth — Set + Map ergonomics (on top of Set algebra + Map query):
 //   * Core.Set:  add(s, x) / remove(s, x) -> Set<T> (immutable; no-op if present/absent),

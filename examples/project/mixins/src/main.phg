@@ -6,6 +6,7 @@ package Main;
 import Core.Output;
 import Acme.Mixins.Loud;
 import Acme.Mixins.Identified;
+import Core.Runtime.Entry;
 
 class Speaker {
     use Loud;

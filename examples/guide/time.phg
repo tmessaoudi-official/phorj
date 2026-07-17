@@ -10,6 +10,7 @@ import Core.Output;
 import Core.Time;
 import Core.Time.Duration;
 import Core.Time.Instant;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

@@ -19,6 +19,7 @@ import Core.Output;
 import Core.Bytes;
 import Core.String;
 import Core.Http.Response;
+import Core.Runtime.Entry;
 
 // Render a response's wire form as one clean ASCII line (CRLFs shown as " | ").
 function wireLine(Response resp): string {

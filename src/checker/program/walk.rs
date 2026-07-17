@@ -103,7 +103,9 @@ impl Checker {
                 program.span,
                 "every file must declare a package (e.g. `package Main;`) as its first line",
                 "E-NO-PACKAGE",
-                Some("add `package Main;` at the top of the file".into()),
+                Some(
+                    "add `package Main; import Core.Runtime.Entry;` at the top of the file".into(),
+                ),
             );
         } else if program.package[0] == "Core" {
             self.err_coded(

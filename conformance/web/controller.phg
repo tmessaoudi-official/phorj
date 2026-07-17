@@ -10,6 +10,7 @@ import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Route;
 import Core.Http.Router;
+import Core.Runtime.Entry;
 
 class Api {
     #[Route("GET", "/ping")]

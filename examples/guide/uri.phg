@@ -10,6 +10,7 @@ import Core.UriModule.Uri;
 import Core.UriModule.UriError;
 import Core.UriModule.UriMalformedError;
 import Core.UriModule.UriBadSchemeError;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

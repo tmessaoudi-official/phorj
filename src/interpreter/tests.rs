@@ -3,7 +3,7 @@ use crate::parser::Parser;
 use crate::tokenizer::lex;
 
 /// Lex + parse + interpret; return captured stdout or the runtime error. Auto-prepends the
-/// reserved `package Main;` (M5 S1) so existing test programs need no per-case edit; the
+/// reserved `package Main; import Core.Runtime.Entry;` (M5 S1) so existing test programs need no per-case edit; the
 /// segment carries no newline, preserving line numbers.
 fn run(src: &str) -> Result<String, Diagnostic> {
     let src = with_pkg(src);
@@ -31,10 +31,18 @@ fn with_pkg(src: &str) -> String {
     } else {
         src.to_string()
     };
-    if src.trim_start().starts_with("package ") {
+    let src = if src.trim_start().starts_with("package ") {
         src
     } else {
         format!("package Main; {src}")
+    };
+    // DEC-191 addendum: import-gated attribute — inject the import AFTER the package segment
+    // (imports may not precede `package`); same-line, preserving line numbers.
+    if src.contains("#[Entry]") && !src.contains("Core.Runtime.Entry") {
+        let i = src.find(';').expect("package decl ends with ;");
+        format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
+    } else {
+        src
     }
 }
 

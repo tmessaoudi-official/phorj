@@ -310,6 +310,15 @@ impl Transpiler {
                             }
                         }
                         let php = (nat.php)(&argv);
+                        // DEC-256 per-function ladder: a native-only String function (Unicode
+                        // case/graphemes — PHP needs forbidden ini extensions) hard-errors when
+                        // actually CALLED; the module import alone stays transpilable.
+                        if php.contains("__PHORJ_NATIVE_ONLY_UNICODE__") {
+                            return Err(format!(
+                                "E-TRANSPILE-UNICODE: `String.{}` is native-only — Unicode case/grapheme functions need PHP's mbstring/intl ini extensions, which the transpile rules forbid (THE LADDER RULE, DEC-256). Run this program with `phg run`; the codepoint tier (`String.codepointLength`/`codepoints`) transpiles.",
+                                nat.name
+                            ));
+                        }
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).
                         let php = if self.namespaced && looks_like_global_call(&php) {

@@ -9,6 +9,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // `open` so the subclass below can inherit the overloaded static factory.
 open class Color {

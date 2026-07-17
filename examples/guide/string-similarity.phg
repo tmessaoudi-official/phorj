@@ -5,6 +5,7 @@ package Main;
 
 import Core.Output;
 import Core.String;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

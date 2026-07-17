@@ -13,6 +13,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Absent-or-present. `Some` carries a `T`; `None` carries nothing.
 enum Option<T> { None, Some(T value) }

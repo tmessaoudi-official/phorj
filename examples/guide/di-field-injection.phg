@@ -8,6 +8,7 @@ package Main;
 import Core.Output;
 import Core.DependencyInjection.Injectable;
 import Core.DependencyInjection.inject;
+import Core.Runtime.Entry;
 
 #[Injectable]
 class Clock {

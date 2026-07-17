@@ -18,6 +18,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 class Circle {
     constructor(public int radius) {}

@@ -14,7 +14,7 @@ fn compile_source(src: &str) -> BytecodeProgram {
 #[test]
 fn vm_fault_carries_call_stack() {
     let program = compile_source(
-        "package Main;\n\
+        "package Main;\nimport Core.Runtime.Entry;\n\
              function f() -> int { var xs = [1]; return xs[5]; }\n\
              #[Entry] function main() -> void { var r = f(); }",
     );
@@ -28,10 +28,10 @@ fn vm_fault_carries_call_stack() {
 fn run_and_runvm_traces_match() {
     // The slice-1 invariant: a fault yields byte-identical trace text on both backends.
     for src in [
-        "package Main;\n\
+        "package Main;\nimport Core.Runtime.Entry;\n\
              function g() -> int { var xs = [1]; return xs[9]; }\n\
              #[Entry] function main() -> void { var r = g(); }",
-        "package Main;\n#[Entry] function main() -> void { var x = 1 / 0; }",
+        "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void { var x = 1 / 0; }",
     ] {
         let unit = crate::loader::load_loose_src(src).unwrap();
         let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();
@@ -51,7 +51,7 @@ fn run_and_runvm_traces_match() {
 /// serve path rides. Covers the `bytes -> bytes` shape serve uses, plus a stdout-emitting body.
 #[test]
 fn run_entry_matches_call_named() {
-    let src = "package Main;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\n\
          import Core.Output;\n\
          function twice(int x) -> int { Output.printLine(\"tick\"); return x * 2 + 1; }\n\
          function passthrough(bytes b) -> bytes { return b; }\n\

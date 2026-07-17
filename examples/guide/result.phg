@@ -16,6 +16,7 @@ import Core.Output;
 
 // `assert` is a fault intrinsic in `Core.Assert` (DEC-196 Q3); member-import it for the bare form.
 import Core.Assert.assert;
+import Core.Runtime.Entry;
 
 enum Result<T, E> { Success(T value), Failure(E error) }
 

@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Math;
+import Core.Runtime.Entry;
 
 // Arithmetic, comparison, logical, and unary operators.
 // Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).

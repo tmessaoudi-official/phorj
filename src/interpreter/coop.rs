@@ -221,6 +221,7 @@ mod tests {
     fn litmus_spawned_recver_succeeds_only_when_deferred() {
         let src = r#"
 package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 
 function consume(Channel<int> ch): int {
@@ -248,6 +249,7 @@ function consume(Channel<int> ch): int {
     fn main_recv_blocks_until_spawned_producer_sends() {
         let src = r#"
 package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 
 function produce(Channel<int> ch): int {
@@ -274,6 +276,7 @@ function produce(Channel<int> ch): int {
     fn fork_join_and_buffered_channels_match_eager_output() {
         let src = r#"
 package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 
 function square(int n): int { return n * n; }

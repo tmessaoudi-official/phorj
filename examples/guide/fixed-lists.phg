@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Fixed-length lists `[T; N]` (Phase 1 types slice). A `[T; N]` is a `List<T>` whose length is a
 // compile-time constant — distinct from `List<T>` only in the checker: the length is tracked, a

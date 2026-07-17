@@ -1,9 +1,71 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## CURRENT (2026-07-17)
+## CURRENT (2026-07-17, late — CONTINUOUS MODE, dev-mandated: stop only for questions)
+- **CENSUS CONVERGED 271→109→2→0**: the 191-addendum residue is FIXED — root causes were
+  (a) the four inline helpers (cli::wp + 3× with_pkg) prepending the Entry import BEFORE the
+  package check → `import; package X;` double-package parse error — fix = wrap package FIRST,
+  then insert the import after the package `;` (same-line, line-numbers preserved);
+  (b) ~160 embedded .rs program literals missing the import — segment-based python codemod
+  (split on `package Main;`, insert when segment has #[Entry] w/o the import) over src/ + tests/;
+  (c) marker string "E-TRANSPILE-UNICODE-MARKER" tripped the explain-coverage scanner →
+  RENAMED `__PHORJ_NATIVE_ONLY_UNICODE__` (registry ×4 + call.rs chokepoint);
+  (d) DAP test breakpoint line 5→6 (the injected import line shifted the program);
+  (e) `examples/web/response-builders.phg` reworked onto DEC-242 Cookie (old 2-arg withCookie
+  was a type error) + `phg format`ed (width-canonical sweep pins it).
+- **DEC-242 Cookie BUILT + example 3-leg-verified**; Cookie/SameSite added to Http bare_types
+  (wind rule). **DEC-256 examples built**: guide/unicode-codepoints.phg (3-leg) +
+  guide/unicode-native.phg (run≡runvm; E-TRANSPILE-UNICODE verified). Docs DONE:
+  CHANGELOG (256+242+191-addendum), FEATURES ×2 rows, examples/README ×3 rows, register BUILT
+  notes ×3. NEXT: full gate → commit slices → **DEC-258 COMBINED MODEL (ruled — register
+  "DEC-258 REFINEMENT"): baked-when-traceable + dual-bake+runtime-dispatch-on-db.naming when
+  not + per-stmt literal override; naming becomes a REAL promoted field on Database AND
+  threads onto Statement (prepare copies it; namingStrategy returns a real copy, retiring the
+  stored-statement-reverts-to-Exact footgun; E-DB-NAMING-NOT-CONST retires → dynamic dispatch)**.
+
+## PREVIOUS-CURRENT (2026-07-17, evening)
+- **DEC-256 BUILT under Core.String** (dev override ×2: split→String; register has the chain):
+  6 natives (codepointLength/codepoints PCRE-transpilable + unicodeUpper/unicodeLower/
+  graphemeLength/graphemes native-only via PER-FUNCTION ladder — marker string
+  "E-TRANSPILE-UNICODE-MARKER" in php: fields, detected at transpile/call.rs chokepoint →
+  E-TRANSPILE-UNICODE naming the function); unicode-segmentation dep admitted (feature
+  "unicode", default; graphemes cfg-gated); PROBED: all 6 + ladder fire correct. icu4x/DEC-271
+  BROUGHT FORWARD (after this batch). STILL OWED in batch: DEC-242 Cookie class + DEC-258
+  Database naming ctor param + Unicode docs/tests/examples + batch gate.
+- **DEC-191 addenda RULED+BUILT**: #[Entry] IMPORT-GATED (`import Core.Runtime.Entry;` —
+  registry bare_types row on Core.Runtime, UncheckedOverflow precedent); zero-span synthetic
+  exemption in enforce_injected (synth_empty_main + test_runner attrs use Span{0,0,0,0});
+  lifter prepends the import; 5 test helpers inject it; .phg codemod ran (import inserted
+  after last import line). NO manual-run CLI ("everything orchestrated by the Entry").
+  Un-attributed main() = ordinary callable ✓ verified; argv/exit-code filling ✓ verified live.
+  Census running (g1.txt) → fix residue → batch gate covers 191-addenda+256(+242+258 next).
+
+- ⚠ OWED: playground wasm pkg REBUILD (wasm-pack absent here) — examples.js regenerated with
+  #[Entry] (193 entries, hello ✓) but the prebuilt wasm predates DEC-191 → in-browser runs fail
+  until someone runs `wasm-pack build playground --target web --out-dir web/pkg` on a wasm-pack
+  machine. conformance/diagnostics stays UN-attributed BY DESIGN (check-only goldens).
+
+## PREVIOUS (2026-07-17)
 - ✅ **DEC-191 #[Entry] COMMITTED `7ffd550e`** (328 files; detail in the in-flight section below,
   now historical). Release rebuilt after.
-- **NOW: DEC-243 String.levenshtein + similarText** (inline; no adjudication needed — PHP-parity
+- ✅ **DEC-243 COMMITTED `995cfe59`** (kernels+registry+IIFE percent twin+tier1 allowlist+
+  guide example, three-leg oracle-identical). NOW: the upfront adjudication batch
+  (DEC-256/242/258 surfaces) → build them batch-gated. ✅ ALL THREE RULED (register:
+  "Surface rulings batch 2026-07-17"): DEC-256 = explicit fns (codepointLength/graphemeLength/
+  codepoints/graphemes/unicodeUpper/Lower; length stays bytes); DEC-242 = Cookie VALUE class
+  ONLY (ctor defaults path/secure/httpOnly/sameSite=Lax-enum/partitioned=false + maxAge/domain
+  opt; resp.withCookie + withCookies(List); Session internal Cookie; CHIPS opt-in); DEC-258 =
+  `new Database(dsn, naming = new Naming.Exact())` ctor default param, per-stmt override kept.
+  BUILD next (batch-gate all three). ✅ DEP RULED: unicode-segmentation ADMITTED (graphemes
+  only; codepoints/case = std char) + **icu4x/DEC-271 BROUGHT FORWARD** (after this batch).
+  BUILD ORDER: DEC-242 Cookie (prelude class + SameSite injected enum + Response.withCookie/
+  withCookies + Session internal + Partitioned attr emission) → DEC-258 (Database ctor
+  `naming = new Naming.Exact()` default param; desugar_db resolves the CONNECTION binding's
+  ctor literal for hydration naming, per-stmt namingStrategy overrides) → DEC-256 (dep +
+  codepointLength/graphemeLength/codepoints/graphemes/unicodeUpper/unicodeLower natives;
+  PHP legs: mb_* are NOT tier-1-safe? CHECK — mb_strlen needs ext-mbstring; grapheme_* needs
+  ext-intl — likely NATIVE-ONLY (§14 ladder, E-TRANSPILE-UNICODE) or gated helpers; SURFACE
+  the ladder trade in the register when built).
+- (historical) DEC-243 detail: (inline; no adjudication needed — PHP-parity
   natives: match PHP's levenshtein()/similar_text() semantics EXACTLY incl. the similar_text
   percent-by-reference twin question — surface: `String.levenshtein(a, b): int` +
   `String.similarText(a, b): int` (+ percent variant? check PHP's API and pick the honest

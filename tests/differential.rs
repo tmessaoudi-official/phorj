@@ -36,14 +36,23 @@ fn transpile_ok(src: &str) -> String {
 /// Assert the two backends agree on success output. Compares `Result` values structurally
 /// (never `.expect()`): in release builds an unchecked-arithmetic divergence surfaces as an
 /// `Err` rather than a panic, and a structural compare reports it as a clean mismatch.
-/// Prepend the reserved `package Main;` (M5 S1: every file is packaged, never inferred) to a test
+/// Prepend the reserved `package Main; import Core.Runtime.Entry;` (M5 S1: every file is packaged, never inferred) to a test
 /// program that doesn't already declare one. Done on a single leading segment with no newline so
 /// line numbers are preserved — fault diagnostics that assert a line stay valid.
 fn with_pkg(src: &str) -> String {
-    if src.trim_start().starts_with("package ") {
+    // DEC-191 addendum: #[Entry] is import-gated; inject its import for embedded programs.
+    let src = if src.trim_start().starts_with("package ") {
         src.to_string()
     } else {
         format!("package Main; {src}")
+    };
+    // DEC-191 addendum: import-gated attribute — inject the import AFTER the package segment
+    // (imports may not precede `package`); same-line, preserving line numbers.
+    if src.contains("#[Entry]") && !src.contains("Core.Runtime.Entry") {
+        let i = src.find(';').expect("package decl ends with ;");
+        format!("{} import Core.Runtime.Entry;{}", &src[..=i], &src[i + 1..])
+    } else {
+        src
     }
 }
 
@@ -242,15 +251,15 @@ fn interpolation_fault_line_matches_between_backends() {
     // (source, true line of the fault). Each faults inside a `"{…}"` on a line != 1.
     let cases: &[(&str, usize)] = &[
         (
-            "package Main;\nimport Core.Output;\n#[Entry] function main() -> void {\n    var xs = [1];\n    Output.printLine(\"v = {xs[9]}\");\n}",
+            "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry] function main() -> void {\n    var xs = [1];\n    Output.printLine(\"v = {xs[9]}\");\n}",
             5,
         ),
         (
-            "package Main;\nimport Core.Output;\n#[Entry] function main() -> void {\n    Output.printLine(\"v = {1 / 0}\");\n}",
+            "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry] function main() -> void {\n    Output.printLine(\"v = {1 / 0}\");\n}",
             4,
         ),
         (
-            "package Main;\nimport Core.Output;\n#[Entry] function main() -> void {\n    int? n = null;\n    Output.printLine(\"v = {n!}\");\n}",
+            "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry] function main() -> void {\n    int? n = null;\n    Output.printLine(\"v = {n!}\");\n}",
             5,
         ),
     ];
@@ -539,7 +548,7 @@ class Mid extends Left, Right {}"#,
 
 /// Assert both backends AND real PHP all produce exactly `expected` for `src`. A construction test
 /// needs this stronger check than `agree` — a shared *failure* (e.g. a checker rejection) makes a bare
-/// `agree` pass vacuously (both backends "agree" on the error). Auto-prepends `package Main;`.
+/// `agree` pass vacuously (both backends "agree" on the error). Auto-prepends `package Main; import Core.Runtime.Entry;`.
 fn agree_out_php(src: &str, expected: &str, label: &str) {
     let src = with_pkg(src);
     let tree = cmd_treewalk(&src);
@@ -1653,7 +1662,7 @@ fn statement_body_lambda_agrees() {
 #[test]
 fn statement_body_lambda_needs_return_type() {
     let errs = check_errs(
-        "package Main; #[Entry] function main()-> void { var f = function(int x) { return x; }; }",
+        "package Main; import Core.Runtime.Entry; #[Entry] function main()-> void { var f = function(int x) { return x; }; }",
     );
     assert!(
         errs.iter().any(|e| e.message.contains("explicit `-> T`")),
@@ -1663,7 +1672,7 @@ fn statement_body_lambda_needs_return_type() {
 
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
-    let php = transpile_ok("package Main; import Core.Output; #[Entry] function main()-> void { var base=100; var f = function(int x) -> int { return x + base; }; Output.printLine(\"{f(3)}\"); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Output; #[Entry] function main()-> void { var base=100; var f = function(int x) -> int { return x + base; }; Output.printLine(\"{f(3)}\"); }");
     // DEC-255: `x` (int param) + `base` (int local) → `__phorj_checked_add` (overflow faults).
     assert!(
         php.contains("function($x) use ($base)")
@@ -1865,7 +1874,7 @@ fn named_fn_ref_as_value_agrees() {
 
 #[test]
 fn transpiles_lambda_literal_call_target() {
-    let php = transpile_ok("package Main; import Core.Output; #[Entry] function main()-> void { Output.printLine(\"{3 |> function(int v) => v + 100}\"); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Output; #[Entry] function main()-> void { Output.printLine(\"{3 |> function(int v) => v + 100}\"); }");
     // DEC-255: `v` (int param) + `100` (int literal) → `__phorj_checked_add` (overflow faults).
     assert!(
         php.contains("(fn($v) => __phorj_checked_add($v, 100))(3)"),
@@ -1913,7 +1922,7 @@ fn higher_order_native_closure_fault_agrees() {
 
 #[test]
 fn transpiles_higher_order_natives() {
-    let php = transpile_ok("package Main; import Core.Output; import Core.List; #[Entry] function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); var e=List.filter(d, function(int x)=>x>2); Output.printLine(\"{List.reduce(e, 0, function(int a,int x)=>a+x)}\"); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; import Core.Output; import Core.List; #[Entry] function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); var e=List.filter(d, function(int x)=>x>2); Output.printLine(\"{List.reduce(e, 0, function(int a,int x)=>a+x)}\"); }");
     // DEC-255: `x*2` (int) → `__phorj_checked_mul`; `a+x` in reduce → `__phorj_checked_add`.
     assert!(
         php.contains("array_map(fn($x) => __phorj_checked_mul($x, 2),"),
@@ -2090,7 +2099,7 @@ fn generic_class_member_results_are_vm_operands() {
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.
-    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } #[Entry] function main()-> void { var u=new U(); var n = u.id(1); var m = u.applyTwice(2, function(int v)=>v+1); }");
+    let php = transpile_ok("package Main; import Core.Runtime.Entry; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } #[Entry] function main()-> void { var u=new U(); var n = u.id(1); var m = u.applyTwice(2, function(int v)=>v+1); }");
     assert!(php.contains("function id(mixed $x): mixed"), "{php}");
     assert!(
         php.contains("function applyTwice(mixed $x, \\Closure $f): mixed"),
@@ -2163,7 +2172,7 @@ fn transpiles_html_literal_to_kernel_calls() {
     // The desugaring targets only Wave-1/2 natives, so the PHP is the kernel emission: literal
     // chunks as strings, a string hole through htmlspecialchars(ENT_QUOTES), all joined by implode.
     let php = transpile_ok(
-        r#"package Main; import Core.Output; import Core.Html; #[Entry] function main()-> void { var n="x"; Output.printLine(Html.render(html"<h1>{n}</h1>")); }"#,
+        r#"package Main; import Core.Runtime.Entry; import Core.Output; import Core.Html; #[Entry] function main()-> void { var n="x"; Output.printLine(Html.render(html"<h1>{n}</h1>")); }"#,
     );
     assert!(php.contains("implode('', ["), "{php}");
     assert!(
@@ -2198,7 +2207,7 @@ fn named_tag_helpers_agree() {
 fn transpiles_named_tag_to_baked_php() {
     // A named tag erases to the same baked closure the kernel uses, with the tag compiled in (no $t).
     let php = transpile_ok(
-        r#"package Main; import Core.Output; import Core.Html; #[Entry] function main()-> void { Output.printLine(Html.render(Html.div(new List<Attr>(),[Html.text("x")]))); }"#,
+        r#"package Main; import Core.Runtime.Entry; import Core.Output; import Core.Html; #[Entry] function main()-> void { Output.printLine(Html.render(Html.div(new List<Attr>(),[Html.text("x")]))); }"#,
     );
     assert!(php.contains("'<div'"), "{php}");
     assert!(php.contains("'</div>'"), "{php}");
@@ -2307,7 +2316,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
 /// directly to read the non-zero status.
 #[test]
 fn main_exit_code_is_byte_identical_across_backends() {
-    let src = "package Main;\nimport Core.Output;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
                #[Entry] function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n}";
     let run = cmd_treewalk_exit(src).expect("run ok");
     let runvm = cmd_run_exit(src).expect("runvm ok");
@@ -2337,7 +2346,7 @@ fn main_exit_code_is_byte_identical_across_backends() {
 /// `\Main\main()`); `run_php` asserts exit-0, so php is driven directly to read the non-zero status.
 #[test]
 fn class_static_main_exit_code_is_byte_identical_across_backends() {
-    let src = "package Main;\nimport Core.Output;\n\
+    let src = "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
                class App {\n  #[Entry] static function main(): int {\n    Output.printLine(\"x\");\n    return 7;\n  }\n}";
     let run = cmd_treewalk_exit(src).expect("run ok");
     let runvm = cmd_run_exit(src).expect("runvm ok");
@@ -2585,6 +2594,8 @@ const TIER1_PHP: &[&str] = &[
     // DEC-243: PHP-parity string-distance builtins (both PHP ≥4, always present).
     "levenshtein",
     "similar_text",
+    // DEC-256: `String.codepoints`' pure-PHP UTF-8 byte decode (core, no extension).
+    "unpack",
     "str_replace",
     "str_split",
     "str_starts_with",
@@ -2894,7 +2905,7 @@ fn transpiled_examples_use_only_tier1_php_functions() {
 fn m7_emitter_uses_correctness_helpers() {
     // P0-1 (int `/` ⇒ `intdiv`, never bare `/`) + P0-4 (int `%` ⇒ native `%`) — both literal-int.
     let div = transpile_ok(
-        "package Main; import Core.Output; #[Entry] function main()-> void { Output.printLine(\"{7 / 2}\"); Output.printLine(\"{5 % 2}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry] function main()-> void { Output.printLine(\"{7 / 2}\"); Output.printLine(\"{5 % 2}\"); }",
     );
     assert!(div.contains("intdiv(7, 2)"), "{div}");
     assert!(div.contains("5 % 2"), "{div}");
@@ -2904,7 +2915,7 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-4 float path: float `%` ⇒ `fmod` (PHP's `%` int-casts — the divergence); float `/` ⇒ native.
     let fl = transpile_ok(
-        "package Main; import Core.Output; #[Entry] function main()-> void { float a=5.5; float b=2.0; Output.printLine(\"{a % b}\"); Output.printLine(\"{a / b}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry] function main()-> void { float a=5.5; float b=2.0; Output.printLine(\"{a % b}\"); Output.printLine(\"{a / b}\"); }",
     );
     assert!(fl.contains("fmod($a, $b)"), "{fl}");
     assert!(fl.contains("$a / $b"), "{fl}");
@@ -2913,7 +2924,7 @@ fn m7_emitter_uses_correctness_helpers() {
     // bare `/`. The helper branches on operand types at PHP-runtime, so it stays correct (intdiv for
     // ints). This guards that the safe fallback survives all the T6 specialization layers.
     let fb = transpile_ok(
-        "package Main; import Core.Output; function id<T>(T x) -> T { return x; } #[Entry] function main()-> void { Output.printLine(\"{id(7) / id(2)}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Output; function id<T>(T x) -> T { return x; } #[Entry] function main()-> void { Output.printLine(\"{id(7) / id(2)}\"); }",
     );
     assert!(
         fb.contains("__phorj_div(id(7), id(2))")
@@ -2923,14 +2934,14 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-3: a bool interpolation hole renders `"true"/"false"` inline (PHP's `(string)bool` ⇒ `1`/``).
     let b = transpile_ok(
-        "package Main; import Core.Output; #[Entry] function main()-> void { Output.printLine(\"{1 < 2}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry] function main()-> void { Output.printLine(\"{1 < 2}\"); }",
     );
     assert!(b.contains("\"true\" : \"false\""), "{b}");
     // P0-2: a compound operand keeps its grouping (no PHP re-association). DEC-255: int `-` is
     // `__phorj_checked_sub`, so `a - (b - c)` nests the calls — the nesting preserves grouping
     // inherently (no operator precedence to re-associate). The boolean `!(a < b)` is unchanged.
     let p = transpile_ok(
-        "package Main; import Core.Output; #[Entry] function main()-> void { int a=1; int b=2; int c=3; Output.printLine(\"{a - (b - c)}\"); Output.printLine(\"{!(a < b)}\"); }",
+        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry] function main()-> void { int a=1; int b=2; int c=3; Output.printLine(\"{a - (b - c)}\"); Output.printLine(\"{!(a < b)}\"); }",
     );
     assert!(
         p.contains("__phorj_checked_sub($a, __phorj_checked_sub($b, $c))"),
@@ -2939,7 +2950,7 @@ fn m7_emitter_uses_correctness_helpers() {
     assert!(p.contains("!($a < $b)"), "{p}");
     // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorj ⇒ []).
     let r = transpile_ok(
-        "package Main; import Core.Output; #[Entry] function main()-> void { for (int i in 5..2) { Output.printLine(\"{i}\"); } }",
+        "package Main; import Core.Runtime.Entry; import Core.Output; #[Entry] function main()-> void { for (int i in 5..2) { Output.printLine(\"{i}\"); } }",
     );
     assert!(r.contains("__phorj_range(5, 2, false)"), "{r}");
 }
@@ -3719,10 +3730,10 @@ fn s1_qualified_form_checks_and_runs_identically_to_member_import() {
     // The `Http.Router` QUALIFIED annotation (S1 collapse) and the member-imported bare `Router`
     // (S2) name the same type and must produce identical check + run + runvm output. Both are legal
     // under S2 enforcement; a plain `import Core.Http` + bare `Router` would now be E-INJECTED-TYPE-BARE.
-    let member = "package Main; import Core.Output; import Core.Http; import Core.Http.Router;\n\
+    let member = "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http; import Core.Http.Router;\n\
         function useRouter(Router rt): int { return 0; }\n\
         #[Entry] function main(): void { Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
-    let qualified = "package Main; import Core.Output; import Core.Http;\n\
+    let qualified = "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http;\n\
         function useRouter(Http.Router rt): int { return 0; }\n\
         #[Entry] function main(): void { Http.Router rt = Http.autoRouter(); Output.printLine(\"{useRouter(rt)}\"); }";
     assert!(
@@ -3802,7 +3813,8 @@ fn s2a_time_instant_member_import_is_self_contained() {
     // `Instant.now()` internally reads the clock via the module-native `Time.nowMilliseconds()`; a
     // member-import of just `Instant` must still make it work (self-contained, hidden internal). The
     // clock is non-deterministic, so assert only that it checks + runs identically on both backends.
-    let src = "package Main; import Core.Output; import Core.Time.Instant;\n\
+    let src =
+        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Time.Instant;\n\
         #[Entry] function main(): void { Instant n = Instant.now(); Output.printLine(\"ok\"); }";
     assert!(
         cli::cmd_check(src).is_ok(),
@@ -3820,7 +3832,7 @@ fn s2a_time_instant_member_import_is_self_contained() {
 #[test]
 fn s2c_bare_injected_type_annotation_is_rejected() {
     let e = cli::cmd_check(
-        "package Main; import Core.Output; import Core.Http;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http;\n\
          function f(Router rt): void { Output.printLine(\"x\"); }\n\
          #[Entry] function main(): void { Output.printLine(\"x\"); }",
     )
@@ -3832,7 +3844,7 @@ fn s2c_bare_injected_type_annotation_is_rejected() {
 #[test]
 fn s2c_bare_route_attribute_is_rejected() {
     let e = cli::cmd_check(
-        "package Main; import Core.Output; import Core.Http; import Core.Http.Request; import Core.Http.Response;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http; import Core.Http.Request; import Core.Http.Response;\n\
          #[Route(\"GET\", \"/\")] function home(Request req): Response { return Response.text(200, \"hi\"); }\n\
          #[Entry] function main(): void { Output.printLine(\"x\"); }",
     )
@@ -3846,7 +3858,7 @@ fn s2c_bare_route_attribute_is_rejected() {
 fn s2c_member_import_satisfies_enforcement() {
     // The migrated form: member-import makes the bare type legal.
     assert!(cli::cmd_check(
-        "package Main; import Core.Output; import Core.Http.Router;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http.Router;\n\
          function f(Router rt): void { Output.printLine(\"x\"); }\n\
          #[Entry] function main(): void { Output.printLine(\"x\"); }",
     )
@@ -3857,7 +3869,7 @@ fn s2c_member_import_satisfies_enforcement() {
 fn s2c_qualified_form_satisfies_enforcement() {
     // The qualified form (needs the module import for the `Http` qualifier) is also legal.
     assert!(cli::cmd_check(
-        "package Main; import Core.Output; import Core.Http;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output; import Core.Http;\n\
          function f(Http.Router rt): void { Output.printLine(\"x\"); }\n\
          #[Entry] function main(): void { Output.printLine(\"x\"); }",
     )
@@ -3868,7 +3880,7 @@ fn s2c_qualified_form_satisfies_enforcement() {
 fn s2c_user_type_shadows_injected_name() {
     // A user's own `Router` (no Core.Http import) is unaffected by the injected-type rule.
     assert!(cli::cmd_check(
-        "package Main; import Core.Output;\n\
+        "package Main; import Core.Runtime.Entry; import Core.Output;\n\
          class Router { constructor() {} }\n\
          function f(Router rt): void { Output.printLine(\"x\"); }\n\
          #[Entry] function main(): void { Router r = new Router(); f(r); }",

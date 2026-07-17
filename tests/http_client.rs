@@ -48,6 +48,7 @@ fn http_get_reads_status_headers_and_body_on_both_backends() {
     let port = fixture(vec![resp.clone(), resp]);
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.HttpClientModule;
 import Core.HttpClientModule.HttpClient;
@@ -89,6 +90,7 @@ fn http_post_sends_body_and_typed_timeout_fires() {
     });
     let src = format!(
         r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.HttpClientModule;
 import Core.HttpClientModule.HttpClient;
@@ -118,6 +120,7 @@ import Core.HttpClientModule.HttpClientError;
 #[test]
 fn http_client_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.HttpClientModule;
 #[Entry] function main(): void { Output.printLine("x"); }

@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.File;
 import Core.String;
+import Core.Runtime.Entry;
 
 // The `Core.File` stdlib module (std::fs ↔ PHP file builtins). `read` returns `string?`, so it
 // composes with the S2 null-safety operators (`??`, `if (var x = …)`).

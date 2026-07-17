@@ -24,6 +24,7 @@ fn both(src: &str, expected: &str) {
 #[test]
 fn session_cookie_round_trip_persistence_and_fixation_defense() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.String;
 import Core.Bytes;
@@ -83,6 +84,7 @@ function secondRequest(string sid): void {
 #[test]
 fn session_unknown_cookie_id_gets_a_fresh_session() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.String;
 import Core.Bytes;
@@ -108,6 +110,7 @@ import Core.Http.Request;
 #[test]
 fn session_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.SessionModule;
 #[Entry] function main(): void { Output.printLine("x"); }

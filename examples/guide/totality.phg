@@ -12,6 +12,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Every branch returns — total over all paths (an `if`/`else if`/`else` chain).
 function classify(int score): string {

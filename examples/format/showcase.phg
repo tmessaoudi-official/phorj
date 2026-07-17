@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // `phg format` lays out from the AST at a 100-column budget (DEC-187): a construct that fits stays on
 // one line; one that overflows breaks deterministically. The same source always canonicalises to the

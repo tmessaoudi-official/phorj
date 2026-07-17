@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Must-use returns (M-must-use Slice A): every non-`void`/`empty` result must be used — bound,
 // returned, or passed on. To keep only a side effect and drop the value, discard it explicitly with

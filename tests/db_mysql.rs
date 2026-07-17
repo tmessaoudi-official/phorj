@@ -32,6 +32,7 @@ fn program(dsn: &str) -> String {
     format!(
         r#"
 package Main;
+import Core.Runtime.Entry;
 import Core.Output;
 import Core.DatabaseModule;
 import Core.DatabaseModule.Database;

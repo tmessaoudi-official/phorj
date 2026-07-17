@@ -13,6 +13,7 @@ import Core.Bytes;
 import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Router;
+import Core.Runtime.Entry;
 
 function showUser(Request req): Response {
     return Response.text(200, "user #{req.param(\"id\") ?? \"?\"}");

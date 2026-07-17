@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // This program is also in the byte-identity sweep. `phg transpile` turns it into
 // runnable PHP 8.x — the only Phorj↔PHP-ecosystem path (output, not input).

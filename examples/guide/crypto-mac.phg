@@ -7,6 +7,7 @@ package Main;
 import Core.Output;
 import Core.Hash;
 import Core.Encoding;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

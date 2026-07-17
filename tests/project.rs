@@ -47,7 +47,7 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
          #[Entry] function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
@@ -67,7 +67,7 @@ fn import_alias_resolves_qualified_call() {
     // `import Acme.Util as U;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Util as U;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util as U;\n\
          #[Entry] function main() -> void {\n    Output.printLine(\"{U.compute(20)}\");\n}",
     );
     tmp.write(
@@ -88,7 +88,7 @@ fn same_package_cross_file_bare_call_resolves() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
          #[Entry] function main() -> void {\n    Output.printLine(\"{Util.outer(20)}\");\n}",
     );
     tmp.write(
@@ -112,7 +112,7 @@ fn unqualified_cross_package_call_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
          #[Entry] function main() -> void {\n    Output.printLine(\"{compute(20)}\");\n}",
     );
     tmp.write(
@@ -138,7 +138,7 @@ fn library_package_type_is_usable_cross_package() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Util.Shape;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util.Shape;\n\
          #[Entry] function main() -> void {\n    Shape s = new Shape(5);\n    Output.printLine(\"{s.w}\");\n}",
     );
     tmp.write(
@@ -160,7 +160,7 @@ fn import_type_unknown_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Acme.Util.Nope;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.Nope;\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/Shape.phg",
@@ -177,7 +177,7 @@ fn import_type_conflict_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Acme.A.Shape;\nimport Acme.B.Shape;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.A.Shape;\nimport Acme.B.Shape;\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/A/Shape.phg",
@@ -198,7 +198,7 @@ fn import_type_builtin_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Acme.Util.List;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util.List;\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
@@ -217,7 +217,7 @@ fn import_type_shadow_is_rejected() {
     // `Acme.Util` module-import leaf `Util`. The shadow guard keeps the two import kinds disjoint.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Acme.Util;\nimport Acme.Types.Util;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Acme.Util;\nimport Acme.Types.Util;\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
@@ -237,7 +237,7 @@ fn multi_package_transpiles_to_brace_namespaces() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
          #[Entry] function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
@@ -261,7 +261,7 @@ fn folder_path_violation_is_reported() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/x.phg",
@@ -291,7 +291,7 @@ fn cross_package_trait_composition_runs_byte_identically() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
          #[Entry] function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(\"{p.name}: {p.hello()}\");\n}",
     );
@@ -312,7 +312,7 @@ fn cross_package_trait_transpiles_to_namespaced_trait() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
          #[Entry] function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(p.hello());\n}",
     );
@@ -335,7 +335,7 @@ fn cross_package_trait_used_as_type_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Mix.Greet;\n\
          function f(Greet x) -> void { Output.printLine(\"no\"); }\n\
          #[Entry] function main() -> void { Output.printLine(\"hi\"); }",
     );
@@ -357,7 +357,7 @@ fn cross_package_call_inside_map_literal_resolves() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Util;\n\
          #[Entry] function main() -> void {\n  Map<string, int> m = [\"k\" => Util.compute(20)];\n  Output.printLine(\"{m[\\\"k\\\"]}\");\n}",
     );
     tmp.write(
@@ -378,7 +378,7 @@ fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
     tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return \"woof/\" + parent(Animal).speak(); }\n}\n\
          #[Entry] function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );
@@ -399,7 +399,7 @@ fn cross_package_inheritance_transpiles_to_qualified_extends() {
     tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return parent.speak(); }\n}\n\
          #[Entry] function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );
@@ -425,7 +425,7 @@ fn project_reserved_core_package_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Output;\n#[Entry] function main() -> void { Output.printLine(\"hi\"); }",
+        "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n#[Entry] function main() -> void { Output.printLine(\"hi\"); }",
     );
     // Lives at the folder that matches its (reserved) package, so E-PKG-PATH passes and the
     // reserved-root rule is what fires.
@@ -443,7 +443,7 @@ fn project_lowercase_package_decl_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\n#[Entry] function main() -> void {}",
+        "package Main;\nimport Core.Runtime.Entry;\n#[Entry] function main() -> void {}",
     );
     // Folder matches the (lowercase) package, so E-PKG-PATH passes and E-PKG-CASE is what fires.
     tmp.write(

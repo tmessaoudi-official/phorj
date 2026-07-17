@@ -35,6 +35,7 @@ import Core.HttpClientModule.HttpClient;
 import Core.HttpClientModule.HttpResponse;
 import Core.HttpClientModule.HttpClientError;
 import Core.HttpClientModule.InvalidUrlError;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

@@ -1,0 +1,29 @@
+// `String.unicodeUpper`/`unicodeLower` + `String.graphemeLength`/`graphemes` (DEC-256,
+// NATIVE-ONLY tier) — full Unicode case mapping (std `char` tables) and UAX #29 grapheme-cluster
+// segmentation (`unicode-segmentation`). These four are per-function ladder-gated: calling any
+// of them makes the program `phg run`-only (`E-TRANSPILE-UNICODE`) because faithful PHP needs
+// the mbstring/intl ini extensions, which the transpile rules forbid — a §14 LADDER exclusion,
+// refused loudly, never silently downgraded. The codepoint tier (see unicode-codepoints.phg)
+// stays fully transpilable.
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.List;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    // ASCII `String.upper` can't touch these; the Unicode tier maps the full tables.
+    Output.printLine(String.unicodeUpper("straße"));
+    Output.printLine(String.unicodeLower("İSTANBUL"));
+    // A family emoji is ONE grapheme (what a user calls "a character") built from SEVEN
+    // codepoints (four people + three zero-width joiners) — 25 bytes of UTF-8.
+    string family = "👨‍👩‍👧‍👦";
+    Output.printLine("bytes:      {String.length(family)}");
+    Output.printLine("codepoints: {String.codepointLength(family)}");
+    Output.printLine("graphemes:  {String.graphemeLength(family)}");
+    // Segmentation keeps combining marks glued to their base.
+    List<string> gs = String.graphemes("éx");
+    Output.printLine("clusters:   {List.length(gs)}");
+}

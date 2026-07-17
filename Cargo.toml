@@ -47,8 +47,10 @@ path = "src/main.rs"
 # playground, which builds with `default-features = false` (see playground/Cargo.toml) and whose
 # Cranelift deps are non-wasm target-gated anyway. Build without native codegen via
 # `--no-default-features` (re-add crypto/regex/signals/green as needed).
-default = ["crypto", "regex", "signals", "green", "jit", "db"]
+default = ["crypto", "regex", "signals", "green", "jit", "db", "unicode"]
 crypto = ["dep:argon2"]
+# DEC-256 Unicode tier: grapheme segmentation (UAX #29) only — codepoints/case are std `char`.
+unicode = ["dep:unicode-segmentation"]
 regex = ["dep:regex"]
 # `phg serve` graceful shutdown (M6 W4 / S4.2): SIGINT/SIGTERM → drain in-flight → exit 0. Off for the
 # WASM playground (no sockets, no signals). See docs/specs/UNIFIED-SPEC.md#external-dependency-policy (3rd domain).
@@ -106,6 +108,9 @@ db-all = ["db", "db-postgres", "db-mysql"]
 # a domain where rolling your own is the security anti-pattern and std has no equivalent. `std` enables
 # the OS RNG (`OsRng`) for salt generation; feature-gated off for the playground.
 argon2 = { version = "0.5", optional = true, features = ["std"] }
+# DEC-256 (developer-admitted 2026-07-17): UAX #29 grapheme clusters — pure data tables, zero
+# transitive deps, unicode-rs org. Graphemes ONLY; everything else Unicode is std.
+unicode-segmentation = { version = "1", optional = true }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
 webpki-roots = { version = "1.0.8", optional = true }
 # FOURTH external dependency (Amanieu d'Antras — author of hashbrown/parking_lot, in the Rust nursery;

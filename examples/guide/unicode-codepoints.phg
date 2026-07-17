@@ -1,0 +1,24 @@
+// `String.codepointLength` + `String.codepoints` (DEC-256, transpilable tier) — the Unicode
+// CODEPOINT view of a string. `String.length` stays byte-oriented (PHP `strlen` parity); these
+// two count and enumerate Unicode scalar values instead. Fully transpilable: the PHP legs use
+// PCRE `/u` counting and a pure-PHP UTF-8 byte decode — no mbstring/intl ini extensions.
+package Main;
+
+import Core.Output;
+import Core.String;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    string cafe = "café";
+    // 5 bytes (the é is 2 bytes of UTF-8) but 4 codepoints.
+    Output.printLine("bytes:      {String.length(cafe)}");
+    Output.printLine("codepoints: {String.codepointLength(cafe)}");
+    // The scalar values themselves (decimal) — 233 is U+00E9 (é).
+    List<int> cps = String.codepoints(cafe);
+    for (int cp in cps) {
+        Output.printLine("cp {cp}");
+    }
+    // The empty string has zero of both.
+    Output.printLine("{String.codepointLength(\"\")}");
+}

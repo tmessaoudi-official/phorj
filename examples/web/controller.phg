@@ -14,6 +14,7 @@ import Core.Http.Request;
 import Core.Http.Response;
 import Core.Http.Route;
 import Core.Http.Router;
+import Core.Runtime.Entry;
 
 // A controller: a class grouping related static route handlers.
 class UserController {

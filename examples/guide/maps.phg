@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M-RT S3 "Map foundation": `Map<K, V>` literals `[k => v]` and indexing `m[k]`.
 // Keys are the hashable subset (int / bool / string); a missing key faults cleanly.

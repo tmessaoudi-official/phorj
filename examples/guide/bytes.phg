@@ -4,6 +4,7 @@ package Main;
 // `b"…"` literals (with `\xHH`), and the `Core.Bytes` interop module.
 import Core.Output;
 import Core.Bytes;
+import Core.Runtime.Entry;
 
 #[Entry]
 function main(): void {

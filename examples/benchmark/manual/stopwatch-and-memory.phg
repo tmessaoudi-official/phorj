@@ -12,6 +12,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 class Stopwatch {
     private mutable int startNs = 0;

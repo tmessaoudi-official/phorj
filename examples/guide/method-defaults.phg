@@ -7,6 +7,7 @@ package Main;
 
 import Core.Output;
 import Core.List;
+import Core.Runtime.Entry;
 
 open class Greeter {
     constructor(public string name) {}

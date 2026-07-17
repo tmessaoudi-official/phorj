@@ -9,6 +9,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // `var` as a parameter name.
 function tagged(string var): string {

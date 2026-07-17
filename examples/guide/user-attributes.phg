@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime.Attribute;
+import Core.Runtime.Entry;
 
 // DEC-194: define your OWN attributes. A class marked `#[Attribute]` (import Core.Runtime.Attribute)
 // becomes a user-defined attribute — applied like `#[Tag("...")]`, it is checked at COMPILE time: the

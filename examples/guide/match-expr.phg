@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // `match` in EXPRESSION position (M11) — usable as a sub-expression, not only as a whole
 // `return`/`var =` statement. Transpile (Track 1): a *literal* match lowers to a native PHP

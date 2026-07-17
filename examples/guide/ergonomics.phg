@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // M3 S1 "core ergonomics": list indexing, integer ranges, and expression `if`.
 #[Entry]

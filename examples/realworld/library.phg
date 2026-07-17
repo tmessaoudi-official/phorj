@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A library catalogue. Note zero-payload variants (`Available`, `Lost`) are
 // *constructed* with call form — `Available()` — but matched bare.

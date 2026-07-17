@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // A turn-based RPG. Characters are immutable: `act` returns a new Character.
 enum Action { Attack(int dmg), Heal(int hp), Defend }

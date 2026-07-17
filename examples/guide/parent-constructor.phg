@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Parent-constructor forwarding (M-RT super/parent, B1b — single inheritance).
 //

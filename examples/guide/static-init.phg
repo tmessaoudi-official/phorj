@@ -1,6 +1,7 @@
 package Main;
 
 import Core.Output;
+import Core.Runtime.Entry;
 
 // Feature B-static — runtime static-field initializers. PHP static property defaults must be constant
 // expressions; Phorj lifts that: a `static` field may be initialized by ANY expression, evaluated

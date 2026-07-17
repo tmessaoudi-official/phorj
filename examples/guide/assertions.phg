@@ -19,6 +19,7 @@ import Core.Output;
 // unlocks the BARE call form used throughout this example (`assert(cond)`); alternatively
 // `import Core.Assert;` (the whole module) enables the qualified form `Assert.assert(cond)`.
 import Core.Assert.assert;
+import Core.Runtime.Entry;
 
 // Preconditions: guard the argument range, then use it. Both asserts hold for every call below.
 function percent(int n): int {

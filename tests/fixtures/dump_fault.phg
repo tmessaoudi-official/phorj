@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Secret;
+import Core.Runtime.Entry;
 
 function compute(int n): int {
     int doubled = n * 2;

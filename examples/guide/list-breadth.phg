@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.List;
+import Core.Runtime.Entry;
 
 // Stdlib breadth — `Core.List` query/aggregate ops (on top of map/filter/reduce/sort/slice/…):
 //   * `unique`         — dedupe, keeping first occurrence + order (by value equality).

@@ -16,6 +16,7 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 import Core.String;
+import Core.Runtime.Entry;
 
 // One narrowing helper, reused everywhere a union element is consumed — `match` binds each arm at
 // its concrete type (`n` is an `int`, `s` is a `string`).

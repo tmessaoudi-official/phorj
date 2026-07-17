@@ -385,14 +385,14 @@ mod tests {
     #[test]
     fn full_session_handshake_launch_stop_inspect_continue_terminate() {
         let unit = crate::loader::load_loose_src(
-            "package Main;\nimport Core.Output;\n\
+            "package Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\n\
              #[Entry] function main() -> void {\n  int n = 41;\n  int m = n + 1;\n  Output.printLine(\"{m}\");\n}\n",
         )
         .expect("load");
-        // A breakpoint at line 5; on stop, ask for stackTrace + variables, then continue.
+        // A breakpoint at line 6; on stop, ask for stackTrace + variables, then continue.
         let requests = framed(&[
             "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\"}",
-            "{\"seq\":2,\"type\":\"request\",\"command\":\"setBreakpoints\",\"arguments\":{\"breakpoints\":[{\"line\":5}]}}",
+            "{\"seq\":2,\"type\":\"request\",\"command\":\"setBreakpoints\",\"arguments\":{\"breakpoints\":[{\"line\":6}]}}",
             "{\"seq\":3,\"type\":\"request\",\"command\":\"configurationDone\"}",
             "{\"seq\":4,\"type\":\"request\",\"command\":\"launch\"}",
             // paused at line 5 now:
@@ -423,7 +423,7 @@ mod tests {
             s.contains("\"command\":\"stackTrace\"") && s.contains("\"name\":\"main\""),
             "{s}"
         );
-        // `n` is in scope at the line-5 breakpoint (declared line 4), rendered by the secure renderer.
+        // `n` is in scope at the line-6 breakpoint (declared line 5), rendered by the secure renderer.
         assert!(
             s.contains("\"command\":\"variables\"") && s.contains("\"name\":\"n\""),
             "vars: {s}"
