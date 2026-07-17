@@ -377,6 +377,9 @@ fn main() {
             exit(2);
         });
         let timeout = (timeout_secs > 0).then(|| std::time::Duration::from_secs(timeout_secs));
+        // DEC-281: web input is the `Request` — a worker blocking on the terminal's stdin would
+        // hang the server, so `Core.Input` reads behave as an exhausted pipe under serve.
+        phorj::native::set_stdin_disabled();
         // Resolve the worker count: explicit `--workers N` wins; otherwise auto = available CPU cores
         // (fall back to 1 if the platform can't report it).
         let workers = if workers >= 1 {

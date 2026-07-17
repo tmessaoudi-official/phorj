@@ -1155,6 +1155,7 @@ fn uses_impure_native(src: &str) -> bool {
         // namesake `Module` suffix; `Core.Mail` is not a namesake), so the map is explicit.
         let prelude_twin = match *m {
             "Core.Native.Database" => Some("Core.DatabaseModule"),
+            "Core.Native.Input" => Some("Core.Input"),
             "Core.Native.FileSystem" => Some("Core.FileSystemModule"),
             "Core.Native.Session" => Some("Core.SessionModule"),
             "Core.Native.HttpClient" => Some("Core.HttpClientModule"),
@@ -2596,6 +2597,13 @@ const TIER1_PHP: &[&str] = &[
     "similar_text",
     // DEC-256: `String.codepoints`' pure-PHP UTF-8 byte decode (core, no extension).
     "unpack",
+    // DEC-281 `Core.Input`: the stdin legs — all core/standard, no ini extension
+    // (`stream_isatty` is core since PHP 7.2; STDIN is the CLI SAPI constant).
+    "defined",
+    "fgets",
+    "function_exists",
+    "stream_get_contents",
+    "stream_isatty",
     "str_replace",
     "str_split",
     "str_starts_with",

@@ -89,6 +89,54 @@ class Debug {
 }
 "#;
 
+/// `Core.Input` (DEC-281) — the stdin module, `Core.Output`'s twin: piped/redirected data
+/// (`cat file | phg run s.phg`, `phg run s.phg < file`) becomes readable. Impure (quarantined
+/// from the byte-identity differential like `Core.Process`; validated by `tests/stdin.rs` on both
+/// backends under the override seam) but FULLY transpilable — the PHP legs read `php://stdin`
+/// via the CLI `STDIN` constant. Under `phg serve`, stdin is disabled before workers run (web
+/// input is the `Request`): reads behave as an already-exhausted pipe. `readLine` strips the
+/// trailing newline and returns `null` at EOF; `lines()` is a DEC-257 `Iterator<string>` —
+/// foreach-able, hydrating one line per pull.
+pub(super) const INPUT_PRELUDE: &str = r#"
+import Core.Native.Input as NativeInput;
+import Core.IteratorModule;
+
+class Input {
+  static function readAll(): string { return NativeInput.readAll(); }
+  static function readAllBytes(): bytes { return NativeInput.readAllBytes(); }
+  static function readLine(): string? { return NativeInput.readLine(); }
+  static function isInteractive(): bool { return NativeInput.isInteractive(); }
+  static function lines(): InputLines { return new InputLines(); }
+}
+
+// The pull-iterator over stdin lines (DEC-257 protocol): `hasNext()` reads one line ahead and
+// caches it; `next()` hands it over, or FAULTS "iterator exhausted" past the end (the misuse
+// contract — foreach never triggers it).
+class InputLines implements Iterator<string> {
+  private mutable string? ahead;
+  constructor() {}
+  function hasNext(): bool {
+    if (var cached = this.ahead) { return true; }
+    string? l = NativeInput.readLine();
+    if (var line = l) {
+      this.ahead = line;
+      return true;
+    }
+    return false;
+  }
+  function next(): string {
+    bool has = this.hasNext();
+    if (has) {
+      if (var l = this.ahead) {
+        this.ahead = null;
+        return l;
+      }
+    }
+    panic("iterator exhausted");
+  }
+}
+"#;
+
 /// `Core.SessionModule` (W3, TOP-20 #3 blocker) — HTTP sessions for `phg serve`, on top of the
 /// `Core.Http` `Request`/`Response` value types. THROW-FREE surface (in-memory store ops are
 /// total). Security defaults ON — better than PHP's opt-in ini flags: the cookie is
@@ -1553,6 +1601,24 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "Native", "Session"],
         qualifier: "Native.Session",
+        src: None,
+        respond_bridge: None,
+        member_gated: false,
+        bare_types: &[],
+    },
+    // `Core.Input` (DEC-281) — the stdin module (Output's twin); prelude over Core.Native.Input.
+    VirtualModule {
+        module: &["Core", "Input"],
+        qualifier: "Input",
+        src: Some(INPUT_PRELUDE),
+        respond_bridge: None,
+        member_gated: true,
+        bare_types: &["Input", "InputLines"],
+    },
+    // `Core.Native.Input` — the INTERNAL stdin natives (std-only, always compiled).
+    VirtualModule {
+        module: &["Core", "Native", "Input"],
+        qualifier: "Native.Input",
         src: None,
         respond_bridge: None,
         member_gated: false,

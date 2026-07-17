@@ -2162,3 +2162,57 @@ differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred bindi
   shapes; scalar shapes ignore naming). `E-DB-NAMING-NOT-CONST` RETIRED (explain entry rewritten
   as a retirement notice). 10 naming tests incl. the four new tiers; example `db/naming.phg`
   extended with the baked-vs-dispatched twin demo.
+
+- **DEC-282 — RULED (2026-07-17, developer, 3-round adjudication): THE UNIFIED MANIFEST-LESS
+  LOADER ("autoload") — CLI + web.** Supersedes project-vs-loose duality; phorj.toml, manifest.rs,
+  and the `phg vendor` network subcommand ALL RETIRE (dependency fetch/lock = a future
+  DEC-273-style EXTENSION that writes `vendor/`; the compiler/interpreter NEVER touches the
+  network — disk is truth, loud error otherwise).
+  (a) **Root rule**: CLI `phg run file.phg` → root = the file's directory, zero ceremony (a future
+  Symfony-console-like component routes subcommands inside ONE entry per DEC-191). Web
+  `phg serve DIR/` → DIR is the EXPLICIT root; docroot = DIR/public (the only web surface);
+  entry = DIR/public/index.phg (missing → clear startup error); `phg serve file.phg` survives as
+  handler-only dev mode (no docroot/static). `-`/`-e` (no directory) → Core.* only.
+  (b) **Loading**: IMPORT-DRIVEN lazy, DECLARATION-INDEXED (package-line peek of .phg under the
+  root; load files declaring the imported package + transitive imports; un-imported files never
+  read — the 162-same-dir-Mains constraint and broken-stranger isolation drove this). Same-package
+  multi-file MERGE (Go), duplicate public symbol = hard error naming both files
+  (E-DUP-CROSS-FILE). Whole-reachable-graph checking retained.
+  (c) **Layout laws**: folder=package (E-PKG-PATH, relative to the root — src/Model/Article.phg ⇒
+  `package Model;`) + file=type (E-FILE-NAME — Article.phg must contain type Article; other
+  members may accompany). Function-only files: FILENAME free, folder law still binds ("even
+  functions must have a package — not in the wind"). `package Main` = entry-only,
+  location/name-exempt, UNIMPORTABLE.
+  (d) **Wind-hole census (all verified live, all fixed Go-MAXIMAL)**: `import Main;` was silently
+  accepted → E-IMPORT-MAIN; `import Core.Bogus;` (nonexistent Core module!) was silently
+  accepted → folds into E-MODULE-NOT-FOUND (one error for every unresolvable import, listing the
+  searched paths verbatim + the extension hint); duplicate import → E-DUP-IMPORT (hard); unused
+  import → E-UNUSED-IMPORT (hard, Go-maximal — developer chose errors over warnings for both).
+  (e) **Vendor**: `vendor/<publisher>/<name>/` under the root; identity = folder path;
+  first-party wins over vendor with W-VENDOR-SHADOWED warning naming both paths when both exist;
+  vendored packages resolve own-tree-first then shared vendor/ (diamonds share one copy; version
+  conflicts = the extension's problem).
+  (f) **Static serving (in-slice, dev server)**: exact-file match under public/ (non-.phg) with
+  ~20-type MIME table (unknown → application/octet-stream) + ETag/Last-Modified conditional
+  caching (developer added option 2); everything else → the index.phg entry. Guard list:
+  canonicalize+prefix check (no ../ or symlink escape), *.phg source NEVER served, no dotfiles,
+  no directory listing/auto-index. OUT (later): Range, compression, Cache-Control config, custom
+  error pages, TLS.
+  (g) **LSP**: same slice — diagnostics_for gains the file URI and runs the SAME loader (the
+  text-only LSP is a live DEC-252 violation even for today's project mode, verified).
+  (h) **Migration**: 11 examples/project/* tomls retire (withdeps keeps vendor/ by folder
+  identity); tests/project.rs rewrites; loose-mode Main-only restriction lifts; transpile still
+  emits ONE PHP file (PHP-side autoloading stays structurally unnecessary).
+  **Order (developer: "Option 1 and 2 now")**: build DEC-281 Core.Input FIRST (small ruled
+  slice), then DEC-282 as one slice, all of it.
+
+- **DEC-281 BUILT (2026-07-17):** `Core.Input` shipped — `Core.Native.Input` natives (readAll
+  lossy-UTF-8 / readAllBytes exact / readLine null-at-EOF with EXACTLY-one-terminator strip /
+  isInteractive) + the `Core.Input` prelude twin (`Input` static surface + `InputLines`
+  Iterator<string>, DEC-257 lookahead protocol). Injectable-stdin test seam (`set_stdin_override`,
+  cursor-carrying) + serve-disable flag (`set_stdin_disabled`, wired into `phg serve` startup —
+  reads = exhausted pipe). PHP legs real (CLI `STDIN`; readLine strips via PCRE `\r?\n$` — the
+  naive `rtrim($l, "\r\n")` would eat every trailing CR, caught and fixed pre-commit; 3-leg
+  verified on a CR/LF-tricky corpus). Quarantine map: `Core.Native.Input` → `Core.Input` twin row
+  in `uses_impure_native`. 7 tests (`tests/stdin.rs`) incl. import-gating; example
+  `cli/stdin-filter.phg` (3-leg identical).

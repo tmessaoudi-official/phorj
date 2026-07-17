@@ -1,0 +1,34 @@
+// `Core.Input` (DEC-281) — the stdin module, `Core.Output`'s twin. Piped/redirected data is
+// readable: `cat access.log | phg run stdin-filter.phg` or `phg run stdin-filter.phg < file`.
+//   * `Input.lines()` — an `Iterator<string>` (DEC-257): foreach-able, one line per pull,
+//     terminators stripped (exactly one `\n`/`\r\n`).
+//   * `Input.readLine(): string?` — one line, `null` at EOF; `Input.readAll()`/`readAllBytes()`
+//     drain the rest (text lossy-UTF-8 / exact bytes).
+//   * `Input.isInteractive(): bool` — true on a terminal, false under a pipe/redirect — the
+//     classic "print usage instead of hanging" guard below.
+// Impure (`pure: false` natives — results depend on the process, not the program text), so this
+// file is QUARANTINED from the byte-identity differential like `Core.Process`; validated by
+// `tests/stdin.rs` on both backends instead. Fully transpilable (PHP `STDIN`, no ini extensions).
+// Under `phg serve`, stdin is disabled (web input is the Request): reads act as an exhausted pipe.
+package Main;
+
+import Core.Output;
+import Core.Input;
+import Core.String;
+import Core.Runtime.Entry;
+
+#[Entry]
+function main(): void {
+    if (Input.isInteractive()) {
+        Output.printLine("pipe me data:  cat file | phg run stdin-filter.phg");
+        return;
+    }
+    mutable int n = 0;
+    for (string line in Input.lines()) {
+        n = n + 1;
+        if (String.contains(line, "ERROR")) {
+            Output.printLine("{n}: {line}");
+        }
+    }
+    Output.printLine("scanned {n} line(s)");
+}

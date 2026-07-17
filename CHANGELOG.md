@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-281: `Core.Input` — the stdin module (Output's twin)
+
+Piped/redirected data is finally readable: `cat file | phg run s.phg` / `phg run s.phg < file`.
+Full surface (developer-ruled): `Input.readAll(): string` (lossy UTF-8) / `readAllBytes(): bytes`
+(exact) / `readLine(): string?` (exactly ONE `\n`/`\r\n` terminator stripped; `null` at EOF) /
+`lines(): InputLines` (a DEC-257 `Iterator<string>` — foreach-able, one line per pull) /
+`isInteractive(): bool` (terminal vs pipe — the "print usage instead of hanging" guard). Impure
+natives (`Core.Native.Input`, differential-quarantined like `Core.Process`; validated by
+`tests/stdin.rs` on both backends under an injectable-stdin seam) but FULLY transpilable — the
+PHP legs read the CLI `STDIN` (single-terminator strip via PCRE, byte-identical to the Rust leg;
+verified 3-leg on a CR/LF-tricky corpus). Under `phg serve`, stdin is disabled before workers
+run (web input is the `Request`): reads behave as an exhausted pipe. Import-gated
+(`import Core.Input;` — nothing in the wind). Example: `cli/stdin-filter.phg`.
+
 ### Added — DEC-258: the Db column-naming COMBINED model + variant default parameters
 
 The naming strategy is now a real VALUE fact. `naming` is a promoted field on `Database`

@@ -56,6 +56,8 @@ fn every_other_native_is_pure() {
         "Core.Native.FileSystem",
         // `Core.Native.Session` is whole-module impure (W3): process-wide session store + OS entropy.
         "Core.Native.Session",
+        // `Core.Native.Input` is whole-module impure (DEC-281): the process's stdin.
+        "Core.Native.Input",
     ];
     let mixed_impure_file = ["append", "delete", "rename", "copy"];
     // `Core.Random` is MIXED (W3-4): the seeded PRNG stays pure (byte-identical xorshift), but the

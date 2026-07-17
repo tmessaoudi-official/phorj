@@ -85,6 +85,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Sharp diagnostics: caret-underlined span, did-you-mean hints, stable codes | ✅ | front-end errors |
 | Diagnostic dictionary (look up a code) | ✅ | `phg explain <CODE>` |
 | Program from stdin / inline / `--` | ✅ | `run -`, `run -e '…'`, `run -- <file>` |
+| `Core.Input`: piped/redirected DATA on stdin — `readAll`/`readAllBytes`/`readLine` (`null` at EOF) + `lines()` `Iterator<string>` (foreach-able) + `isInteractive()` | ✅ | DEC-281; impure (quarantined, `tests/stdin.rs` gates both backends), fully transpilable (PHP `STDIN`); disabled under `phg serve` |
 | Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phg vendor` |
 | Test runner: `test "name" {}` blocks + `Core.Test` assertions (incl. `assertFaults`) | ✅ | `phg test [path…]` |
 | Formatter: canonical-form, comment-preserving, meaning-preserving, **width-canonical wrapping** (100-col; wraps call/`new` args, collection & map literals, `match` arms, `.`-chains; DEC-187) | ✅ | `phg format [--check] [path… \| -]` |

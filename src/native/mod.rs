@@ -54,6 +54,7 @@ mod db;
 mod fs;
 #[cfg(feature = "http-client")]
 mod http_client;
+mod input;
 #[cfg(feature = "mail")]
 mod mail;
 mod session;
@@ -72,6 +73,7 @@ mod uri;
 mod url;
 mod validate;
 
+pub use input::{set_stdin_disabled, set_stdin_override};
 pub use process::{process_args_value, set_process_args};
 
 /// One built-in function, addressed by `(module, name)`. See the module docs for the four facets.
@@ -450,6 +452,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(http_client::http_client_natives());
     registry.extend(fs::fs_natives());
     registry.extend(session::session_natives());
+    registry.extend(input::input_natives());
     registry.extend(debug::debug_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.

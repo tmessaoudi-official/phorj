@@ -1,6 +1,15 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
 ## CURRENT (2026-07-17, late — CONTINUOUS MODE, dev-mandated: stop only for questions)
+- **DEC-282 RULED (register — READ IT FIRST, full 3-round adjudication): unified manifest-less
+  loader.** phorj.toml/manifest.rs/`phg vendor` RETIRE; root = entry dir (CLI) / serve DIR (web:
+  public/ docroot + index.phg + static w/ MIME+ETag+guards); import-driven declaration-indexed
+  lazy loading; folder=package + file=type; Main unimportable; Go-MAXIMAL import hygiene
+  (E-IMPORT-MAIN, E-MODULE-NOT-FOUND w/ searched paths, E-DUP-IMPORT, E-UNUSED-IMPORT — all
+  HARD); vendor/<publisher>/<name> first-party-wins + W-VENDOR-SHADOWED; LSP same loader same
+  slice (DEC-252); one slice all of it. **BUILD ORDER (dev): DEC-281 Core.Input FIRST, then
+  DEC-282.**
+- **DEC-258 COMMITTED `996b2fee`** (combined naming model + variant defaults; gate 2297/2297).
 - **DEC-258 BUILT (gate pending → commit next)**: combined model per the register REFINEMENT +
   BUILT notes — variant-literal defaults (checker `variant_default_ty`, 3 tests + 3-leg probe),
   prelude naming field threading (Database→Statement, withPassword param, real copy-builder
