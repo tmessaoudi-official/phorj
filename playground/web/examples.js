@@ -2,7 +2,7 @@ window.PHORJ_EXAMPLES = [
   {
     "category": "start here",
     "name": "hello (default)",
-    "src": "package Main;\nimport Core.Output;\n\nfunction main(): void {\n    List<string> who = [\"world\", \"Phorj\"];\n    for (string w in who) {\n        Output.printLine(\"Hello, {w}!\");\n    }\n}\n"
+    "src": "package Main;\nimport Core.Output;\nimport Core.Runtime.Entry;\n\n#[Entry]\nfunction main(): void {\n    List<string> who = [\"world\", \"Phorj\"];\n    for (string w in who) {\n        Output.printLine(\"Hello, {w}!\");\n    }\n}\n"
   },
   {
     "category": "build",
