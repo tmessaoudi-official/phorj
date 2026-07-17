@@ -2390,3 +2390,13 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   the wave). Live-verified: no-default build rejects `import Core.SessionModule;` cleanly;
   affected suites 207/207. html NOT migrated (ruled core seam — the html"" literal desugars to
   its natives); di deferred (checker-desugar-coupled).
+
+- **DEC-273 WAVE 3 CERTIFIED (2026-07-17):** the woven four (db+drivers, mail, http-client,
+  session) committed `cb189d3b`; the round-3 prose-path finding swept in `21f8bfb1` (~20 live
+  src/native/ refs → src/ext/, stranded rusqlite comment removed, examples.js regenerated).
+  DEC-268: r1 2×P2 (session "always compiled" comment + release freshness) · r2 clean · r3
+  1×P2 (stale prose) + 1×P3 (stranded comment) · fresh A+B consecutively CLEAN. 16/23 registry
+  rows migrated. Panel process lessons banked: git-mv stages renames immediately (scoped commits
+  sweep them — split with reset --soft); piping git-diff through the RTK proxy can false-clean
+  (grep an on-disk file). Remaining extension migrations (di — checker-desugar-coupled; log/time/
+  runtime classification) = wave 4; html stays a core seam.

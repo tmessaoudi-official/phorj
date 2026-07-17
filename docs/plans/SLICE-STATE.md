@@ -31,8 +31,9 @@
   panel 4 rounds, r3+r4 consecutively clean; gate 2276/2276). 12/22 registry rows migrated.
   Session commits: 17c79ad6 · ebb7a123 · 996b2fee · 0b203827 · d42a2107 · 5670250e · 861cf0ab ·
   90aa34a1 · 7c840086 · 9aed1ce7 · e2090945 — ALL UNPUSHED.
-- **WAVE 3 COMMITTED `cb189d3` (+ DEC-191 playground catch-up `85dd1c09`), PANEL r3 (consecutive-
-  clean confirm) RUNNING** — r1 2×P2 (session "always compiled" comment; release freshness) fixed,
+- **WAVE 3 CERTIFIED + COMMITTED** (`cb189d3b` wave + `21f8bfb1` prose sweep + `85dd1c09`
+  playground DEC-191 catch-up). DEC-268 panel: r1 2×P2, r2 clean, r3 1×P2+1×P3 (stale prose paths
+  — swept), fresh rounds A+B consecutively CLEAN (1790/1790 lib, security posture intact, 23 rows). — r1 2×P2 (session "always compiled" comment; release freshness) fixed,
   r2 CLEAN. Commit is PROVISIONAL until 2 consecutive clean (amend if r3 finds anything; unpushed).
   ⚠ LESSON (git-mv): `git mv` stages the rename IMMEDIATELY, so a later scoped `git add other-file
   && commit` sweeps the pre-staged renames in — split with `git reset --soft` + `git restore
