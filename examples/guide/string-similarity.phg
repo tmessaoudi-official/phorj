@@ -1,0 +1,17 @@
+// `String.levenshtein` + `String.similarText[Percent]` (DEC-243) — PHP-parity string-distance
+// natives, byte-oriented exactly like PHP's `levenshtein()` / `similar_text()` (whose by-reference
+// `$percent` becomes the honest value-returning `similarTextPercent`).
+package Main;
+
+import Core.Output;
+import Core.String;
+
+#[Entry]
+function main(): void {
+    Output.printLine("{String.levenshtein(\"kitten\", \"sitting\")}");
+    Output.printLine("{String.levenshtein(\"\", \"abc\")}");
+    Output.printLine("{String.similarText(\"World\", \"Word\")}");
+    Output.printLine("{String.similarTextPercent(\"World\", \"Word\")}");
+    Output.printLine("{String.similarText(\"\", \"\")}");
+    Output.printLine("{String.similarTextPercent(\"\", \"\")}");
+}

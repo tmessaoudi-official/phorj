@@ -1,5 +1,21 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## CURRENT (2026-07-17)
+- ✅ **DEC-191 #[Entry] COMMITTED `7ffd550e`** (328 files; detail in the in-flight section below,
+  now historical). Release rebuilt after.
+- **NOW: DEC-243 String.levenshtein + similarText** (inline; no adjudication needed — PHP-parity
+  natives: match PHP's levenshtein()/similar_text() semantics EXACTLY incl. the similar_text
+  percent-by-reference twin question — surface: `String.levenshtein(a, b): int` +
+  `String.similarText(a, b): int` (+ percent variant? check PHP's API and pick the honest
+  mapping — similar_text returns count, percent via &$percent → phorj likely
+  `similarText(a,b): int` + `similarTextPercent(a,b): float`). Native module = Core.String
+  (text.rs/text_registry.rs); PHP erasure = the builtins themselves (Tier-1!); bench vs PHP
+  per DEC-259. Examples + FEATURES + README + register BUILT.
+- THEN (upfront-adjudication batch at DEC-243 close): DEC-256 Unicode FULL surface ·
+  DEC-242 partitioned-cookies surface · DEC-258 Db naming opt-in surface — then build those
+  (batch-gate) → DEC-273 ext migration → lift Uri Tier-2 → golden corpus → span-collision
+  re-basing slice → quiet-box microbench (owed pre-push).
+
 > Location developer-ruled 2026-07-16: lives IN THE REPO (tracked), committed alongside each
 > slice commit. High-churn detail stays here so MASTER-PLAN §0.2 stays clean.
 

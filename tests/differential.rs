@@ -2582,6 +2582,9 @@ const TIER1_PHP: &[&str] = &[
     "str_getcsv",
     "str_pad",
     "str_repeat",
+    // DEC-243: PHP-parity string-distance builtins (both PHP ≥4, always present).
+    "levenshtein",
+    "similar_text",
     "str_replace",
     "str_split",
     "str_starts_with",

@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-243: `String.levenshtein` + `String.similarText[Percent]`
+
+PHP-parity string-distance natives, byte-oriented exactly like PHP's `levenshtein()` and
+`similar_text()` (Wagner–Fischer / Oliver's algorithm). PHP's by-reference `$percent` out-param
+becomes the honest value-returning `similarTextPercent(a, b): float` (Phorj has no by-ref
+params; the PHP leg emits a pure Tier-1 IIFE — META-7 trade, disclosed). Three-leg
+byte-identical incl. float formatting (`88.88888888888889`); `examples/guide/string-similarity.phg`.
+
 ### Changed — DEC-191: `#[Entry]` — attribute-declared entry points (fully breaking)
 
 The magic `main` (CLI) and `handle` (web) names are RETIRED: a program's entries are declared by

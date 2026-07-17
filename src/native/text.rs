@@ -176,6 +176,76 @@ pub(super) fn text_ends_with(args: &[Value], _: &mut String) -> Result<Value, St
         _ => Err("String.endsWith expects (string, string)".into()),
     }
 }
+/// DEC-243 — PHP-parity `levenshtein()`: classic Wagner–Fischer on BYTES (PHP's semantics —
+/// byte-oriented, unit costs). Two rows of the DP matrix; O(len(a)*len(b)).
+pub(super) fn text_levenshtein(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(a), Value::Str(b)] => {
+            let (a, b) = (a.as_bytes(), b.as_bytes());
+            let mut prev: Vec<i64> = (0..=b.len() as i64).collect();
+            let mut cur = vec![0i64; b.len() + 1];
+            for (i, &ca) in a.iter().enumerate() {
+                cur[0] = i as i64 + 1;
+                for (j, &cb) in b.iter().enumerate() {
+                    let sub = prev[j] + i64::from(ca != cb);
+                    cur[j + 1] = sub.min(prev[j + 1] + 1).min(cur[j] + 1);
+                }
+                std::mem::swap(&mut prev, &mut cur);
+            }
+            Ok(Value::Int(prev[b.len()]))
+        }
+        _ => Err("String.levenshtein expects (string, string)".into()),
+    }
+}
+
+/// DEC-243 — PHP-parity `similar_text()` count: Oliver's algorithm on BYTES — find the longest
+/// common substring, recurse on both sides, sum the lengths (exactly PHP's php_similar_str).
+fn sim_count(a: &[u8], b: &[u8]) -> i64 {
+    if a.is_empty() || b.is_empty() {
+        return 0;
+    }
+    // Longest common substring positions (first-found on ties, matching PHP's scan order).
+    let (mut pos1, mut pos2, mut max) = (0usize, 0usize, 0usize);
+    for i in 0..a.len() {
+        for j in 0..b.len() {
+            let mut k = 0;
+            while i + k < a.len() && j + k < b.len() && a[i + k] == b[j + k] {
+                k += 1;
+            }
+            if k > max {
+                (pos1, pos2, max) = (i, j, k);
+            }
+        }
+    }
+    if max == 0 {
+        return 0;
+    }
+    max as i64 + sim_count(&a[..pos1], &b[..pos2]) + sim_count(&a[pos1 + max..], &b[pos2 + max..])
+}
+
+pub(super) fn text_similar(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(a), Value::Str(b)] => Ok(Value::Int(sim_count(a.as_bytes(), b.as_bytes()))),
+        _ => Err("String.similarText expects (string, string)".into()),
+    }
+}
+
+/// DEC-243 — PHP's by-reference `$percent` twin as an honest VALUE return:
+/// `sim * 200.0 / (len(a)+len(b))`, `0.0` when both are empty (PHP leaves the ref untouched at 0).
+pub(super) fn text_similar_percent(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(a), Value::Str(b)] => {
+            let total = (a.len() + b.len()) as f64;
+            if total == 0.0 {
+                return Ok(Value::Float(0.0));
+            }
+            let sim = sim_count(a.as_bytes(), b.as_bytes()) as f64;
+            Ok(Value::Float(sim * 200.0 / total))
+        }
+        _ => Err("String.similarTextPercent expects (string, string)".into()),
+    }
+}
+
 pub(super) fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // PHP `str_repeat` requires count >= 0 (a `ValueError` otherwise); a negative count faults

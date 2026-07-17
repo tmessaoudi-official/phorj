@@ -230,6 +230,43 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.String",
+            name: "levenshtein",
+            params: vec![s(), s()],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(text_levenshtein),
+            php: |a| format!("levenshtein({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // DEC-243: PHP-parity `similar_text()` count; the by-reference `$percent` twin is the
+        // separate VALUE-returning `similarTextPercent` below (no by-ref params in Phorj).
+        NativeFn {
+            module: "Core.String",
+            name: "similarText",
+            params: vec![s(), s()],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(text_similar),
+            php: |a| format!("similar_text({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.String",
+            name: "similarTextPercent",
+            params: vec![s(), s()],
+            ret: Ty::Float,
+            pure: true,
+            eval: NativeEval::Pure(text_similar_percent),
+            // PHP exposes the percent only via the by-ref third arg — an IIFE keeps this a pure
+            // Tier-1 expression (no gated helper needed; META-7 trade disclosed in the register).
+            php: |a| {
+                format!(
+                    "(function($a, $b) {{ $p = 0.0; if ($a !== '' || $b !== '') {{ similar_text($a, $b, $p); }} return $p; }})({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.String",
             name: "repeat",
             params: vec![s(), Ty::Int],
             ret: Ty::String,

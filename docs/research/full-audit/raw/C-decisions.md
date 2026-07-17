@@ -1467,6 +1467,10 @@ as PENDING (NOT re-ruled this session, per the developer's "just note all of thi
   `hasNext()/next()` implementing `Iterator<Row>`/`Iterator<T>` (internal one-row lookahead
   buffer; pre-1.0 unpushed = cheapest breaking moment; alternative keep-both-protocols rejected:
   dual API forever on the flagship streaming type).
+- **DEC-243 addendum — BUILT 2026-07-17 fable:** levenshtein (Wagner–Fischer, bytes) +
+  similarText (Oliver's algorithm, bytes) + similarTextPercent (value-returning twin of PHP's
+  by-ref `$percent`; PHP leg = pure Tier-1 IIFE — META-7 helper-trade disclosed here). Three-leg
+  oracle-identical incl. float formatting. WIN-OR-FLAG bench joins the quiet-box run (owed).
 - **DEC-258 — RULED (audit flag F-020): Db column naming = OPT-IN snake↔camel mapping** —
   default stays STRICT exact-name; an explicit opt-in (surface asked in its design round:
   `db.withNaming(Naming.SnakeToCamel)` shape) applies the deterministic mapping.
