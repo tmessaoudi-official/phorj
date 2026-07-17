@@ -682,3 +682,58 @@ fn pool_keepalive_serves_two_requests_on_one_socket() {
         assert_eq!(resp, expected, "pool response {i}");
     }
 }
+
+// ── DEC-282 site mode: the docroot static layer ──────────────────────────────────────────────────
+
+/// The static intercept (`respond_once` consults the process-global docroot) serves real files
+/// with MIME + ETag/Last-Modified, guards `.phg` bytes, and falls through to the program for
+/// everything else. Runs over the in-memory transport — nextest's process-per-test isolation
+/// makes the OnceLock docroot safe to set here.
+#[test]
+fn site_mode_statics_serve_guard_and_fall_through() {
+    let dir = std::env::temp_dir().join(format!("phorj_site_{}", std::process::id()));
+    let public = dir.join("public");
+    std::fs::create_dir_all(&public).expect("mkdir public");
+    std::fs::write(public.join("app.css"), "body{}").expect("css");
+    std::fs::write(public.join("secret.phg"), "package Main;\n").expect("phg");
+    phorj::serve::set_docroot(public.clone());
+
+    let get_css = b"GET /app.css HTTP/1.1\r\nHost: x\r\n\r\n".to_vec();
+    let get_phg = b"GET /secret.phg HTTP/1.1\r\nHost: x\r\n\r\n".to_vec();
+    let get_root = b"GET / HTTP/1.1\r\nHost: x\r\n\r\n".to_vec();
+    let mut fx = FixtureTransport::new(vec![get_css, get_phg, get_root]);
+    let factory: HandlerFactory = ifac(&program());
+    serve(&factory, &mut fx, false).expect("serve loop");
+
+    let css = String::from_utf8_lossy(&fx.sent[0]).to_string();
+    assert!(css.starts_with("HTTP/1.1 200 OK"), "css: {css}");
+    assert!(css.contains("Content-Type: text/css"), "css: {css}");
+    assert!(css.contains("ETag: "), "css: {css}");
+    assert!(css.contains("Last-Modified: "), "css: {css}");
+    assert!(css.ends_with("body{}"), "css: {css}");
+    // 304 on a matching If-None-Match.
+    let etag = css
+        .lines()
+        .find_map(|l| l.strip_prefix("ETag: "))
+        .expect("etag header")
+        .trim()
+        .to_string();
+    let conditional =
+        format!("GET /app.css HTTP/1.1\r\nHost: x\r\nIf-None-Match: {etag}\r\n\r\n").into_bytes();
+    let mut fx2 = FixtureTransport::new(vec![conditional]);
+    serve(&factory, &mut fx2, false).expect("serve loop 2");
+    assert!(
+        String::from_utf8_lossy(&fx2.sent[0]).starts_with("HTTP/1.1 304 Not Modified"),
+        "conditional: {}",
+        String::from_utf8_lossy(&fx2.sent[0])
+    );
+
+    let phg = String::from_utf8_lossy(&fx.sent[1]).to_string();
+    assert!(
+        phg.starts_with("HTTP/1.1 404"),
+        ".phg source must never be served: {phg}"
+    );
+    // `/` falls through to the program (the FixtureTransport program serves it 200).
+    let root = String::from_utf8_lossy(&fx.sent[2]).to_string();
+    assert!(root.starts_with("HTTP/1.1 200"), "fallthrough: {root}");
+}

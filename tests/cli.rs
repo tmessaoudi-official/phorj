@@ -552,3 +552,47 @@ fn disasm_and_bench_accept_reified_operand_program() {
         );
     }
 }
+
+// ── DEC-282: shebang + implicit run (executable entries) ────────────────────────────────────────
+
+#[test]
+fn shebang_line_is_skipped_and_bare_file_dispatches_to_run() {
+    // The Symfony-console shape: a byte-0 `#!/usr/bin/env phg` line lexes away, and a bare
+    // `phg <existing-file> args…` (no subcommand) dispatches to run with the args as the
+    // entry's argv — extensionless, exactly as the kernel invokes it via the shebang.
+    let path = std::env::temp_dir().join(format!("phorj_console_{}", std::process::id()));
+    std::fs::write(
+        &path,
+        "#!/usr/bin/env phg\npackage Main;\nimport Core.Runtime.Entry;\nimport Core.Output;\nimport Core.List;\n\
+         #[Entry]\nfunction main(List<string> args) -> int {\n\
+           Output.printLine(\"n={List.length(args)}\");\n\
+           for (string a in args) { Output.printLine(a); }\n\
+           return 0;\n}\n",
+    )
+    .expect("write console fixture");
+    let out = Command::new(BIN)
+        .args([path.to_str().unwrap(), "migrate", "--dry"])
+        .output()
+        .expect("spawn phg");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "n=2\nmigrate\n--dry\n"
+    );
+}
+
+#[test]
+fn bare_nonexistent_first_arg_still_prints_usage() {
+    let out = Command::new(BIN)
+        .args(["no-such-file-anywhere.phg"])
+        .output()
+        .expect("spawn phg");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("usage:"));
+}
