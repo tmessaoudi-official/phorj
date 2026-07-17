@@ -14,7 +14,7 @@
 //! Decoders return `string?` — `null` when the decoded bytes are not valid UTF-8 (a Phorj
 //! `string` is UTF-8; the PHP side mirrors with a `//u` check), so they stay byte-identical.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 
@@ -89,16 +89,16 @@ fn decode_native(args: &[Value], raw: bool, who: &str) -> Result<Value, String> 
         _ => Err(format!("Uri.{who} expects (string)")),
     }
 }
-fn url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     encode_native(a, false, "encodeForm")
 }
-fn raw_url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn raw_url_encode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     encode_native(a, true, "encodeComponent")
 }
-fn url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     decode_native(a, false, "decodeForm")
 }
-fn raw_url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn raw_url_decode_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     decode_native(a, true, "decodeComponent")
 }
 
@@ -111,8 +111,8 @@ fn php_decode(func: &str, arg: &str) -> String {
 
 /// The percent-encoding registry entries: the current `Core.Native.Uri` rows (wrapped by the
 /// `Uri.*` prelude statics) + the deprecated `Core.Url` twin rows (DEC-279 — same eval/php bodies,
-/// flagged in [`super::deprecation_of`], removed after the deprecation window).
-pub(crate) fn url_natives() -> Vec<NativeFn> {
+/// flagged in [`crate::native::deprecation_of`], removed after the deprecation window).
+pub fn url_natives() -> Vec<NativeFn> {
     let row = |module, name, decode: bool, eval, php| NativeFn {
         module,
         name,
@@ -179,7 +179,3 @@ pub(crate) fn url_natives() -> Vec<NativeFn> {
         ),
     ]
 }
-
-#[cfg(test)]
-#[path = "url_tests.rs"]
-mod tests;

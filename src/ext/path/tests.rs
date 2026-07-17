@@ -1,4 +1,4 @@
-use super::*;
+use super::natives::*;
 use crate::value::Value;
 
 fn s1(f: fn(&[Value], &mut String) -> Result<Value, String>, input: &str) -> String {

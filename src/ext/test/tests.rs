@@ -1,4 +1,7 @@
-use super::*;
+use super::natives::*;
+use crate::native::*;
+use crate::types::Ty;
+use crate::value::Value;
 
 #[test]
 fn assert_natives_pass_and_fail() {

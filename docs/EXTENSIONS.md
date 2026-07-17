@@ -15,12 +15,19 @@ keep the `Core.` import root.
 | crypto | default | `crypto` | Core.Cryptography | password hashing (Argon2id) — the one crate-backed crypto primitive |
 | csv | default | `csv` | Core.Csv | CSV parse/render (RFC-4180 quoting) — DEC-273 migration wave |
 | db | default | `db` | Core.DatabaseModule, Core.Native.Database | multi-driver SQL (bundled SQLite; Postgres/MySQL via their own flags), typed hydration, transactions |
+| debug | default | `debug` | Core.DebugModule, Core.Native.Debug | Debug.dump/dd value introspection (the walk-any-value SEAM stays core) |
+| decimal | default | `decimal` | Core.Decimal | exact fixed-point `decimal` MODULE natives (the `1.50d` primitive itself is kernel) |
 | encoding | default | `encoding` | Core.Encoding | base64/hex encode-decode — DEC-273 migration wave |
+| hash | default | `hash` | Core.Hash | MAC/KDF natives — hmac/equals/hkdf/pbkdf2 (std-only, RFC-KAT-gated) |
 | ini | default | `ini` | Core.Ini | INI config parsing (`Ini.parse`) — the DEC-273 pilot extension |
 | jit | default | `jit` | — | native codegen for hot int/float loops — CORE-classified (the kernel list); this row documents its BUILD FLAG for discoverability (DEC-273 addendum). `--no-jit` / artifact `PHG_NO_JIT=1` = the byte-identical escape hatches |
+| json | default | `json` | Core.Json | JSON parse/render + the injected `Json` enum |
+| path | default | `path` | Core.Path | pure path-string manipulation (join/normalize/…) |
 | regex | default | `regex` | Core.Regex | regular expressions (crate-backed; PCRE-compatible surface subset) |
 | signals | default | `signals` | — | SIGINT/SIGTERM graceful shutdown for `phg serve` (drain in-flight, exit 0) |
+| test | default | `test` | Core.Test | the `Core.Test` assertion natives behind `phg test` |
 | unicode | default | `unicode` | — | UAX #29 grapheme segmentation behind `String.graphemeLength`/`graphemes` (DEC-256 native-only tier) |
+| uri | default | `uri` | Core.UriModule, Core.Native.Uri, Core.Url | RFC 3986 URIs (DEC-240) — kernel + injected Uri class + the deprecated Core.Url compat twins |
 | db-mysql | opt-in | `db-mysql` | — | MySQL/MariaDB driver for the db extension |
 | db-postgres | opt-in | `db-postgres` | — | PostgreSQL driver for the db extension |
 | http-client | opt-in | `http-client` | Core.HttpClientModule, Core.Native.HttpClient | outbound HTTP(S) client (rustls; DEC-264 same-host redirect hygiene) |

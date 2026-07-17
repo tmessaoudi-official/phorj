@@ -425,7 +425,7 @@ fn deprecated_native_emits_w_deprecated() {
 #[test]
 fn deprecated_core_url_warns_with_uri_module_replacement() {
     // DEC-279: `Core.Url` merged into the Uri module. The old paths KEEP WORKING (the twin rows in
-    // `native/url.rs`) but each call warns W-DEPRECATED, and the guidance names the new home.
+    // `src/ext/uri/url_compat.rs`) but each call warns W-DEPRECATED, and the guidance names the new home.
     let src =
         r#"import Core.Url; function main() -> void { string s = Url.encodeUriComponent("a b"); }"#;
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));

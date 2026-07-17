@@ -1,4 +1,4 @@
-use super::*;
+use super::url_compat::*;
 use crate::value::Value;
 
 fn s(f: fn(&[Value], &mut String) -> Result<Value, String>, input: &str) -> Value {

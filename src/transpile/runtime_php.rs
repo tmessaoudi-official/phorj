@@ -604,7 +604,7 @@ impl Transpiler {
             self.line("}");
         }
         if self.uses_debug_render {
-            // DEC-238: the PHP TWIN of `native/debug.rs::render` — must mirror the pinned v1 format
+            // DEC-238: the PHP TWIN of `ext/debug/natives.rs::render` — must mirror the pinned v1 format
             // byte-for-byte on the DETECTABLE domain (null/bool/int/float/string/list/map/instance/
             // enum/closure). ERASED-SHAPE DISCLOSURE (KNOWN_ISSUES): phorj Set/decimal/bytes erase to
             // PHP array/string/string, so their dumps render as the erased shape on this leg — the

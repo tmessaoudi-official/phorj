@@ -2305,7 +2305,7 @@ differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred bindi
   `PHG_NO_JIT=1` (env — argv belongs to the embedded program) as the byte-identical pure-VM
   escape hatch, mirroring `phg run --no-jit`.
 
-- **DEC-273 WAVE 1 CERTIFIED + panel record (2026-07-18):** DEC-268 MAXIMAL ladder satisfied —
+- **DEC-273 WAVE 1 CERTIFIED + panel record (2026-07-17):** DEC-268 MAXIMAL ladder satisfied —
   round 2 (3 lenses: security CLEAN incl. PHG_NO_JIT de-escalation verdict + env-read enumeration;
   correctness 1×P2; completeness 3×P2+1×P3 — all fixed), round 3 (1 residual: a fix reported
   landed but NOT in tree — unasserted replace; fixed with grep-verified anchor), rounds 4 AND 5
@@ -2313,3 +2313,71 @@ differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred bindi
   byte-identical under the php-8.5.8 oracle. Panel by-catch (pre-existing, KNOWN_ISSUES'd):
   `phg test` whole-file validation uses the raw checker (injected-type files fail `<check>`);
   `Process.args()` doc drift.
+
+- **DEC-273 WAVE 2 BUILT (2026-07-17):** json/uri/path/hash/decimal/test/debug → `src/ext/<name>/`
+  behind seven new dep-free Default features; uri carries kernel + natives + Core.Url compat twins
+  + PRELUDE; debug carries its DebugModule PRELUDE (dissolution pattern = unconditional `#[path]`
+  prelude modules in the ext folders; CORE_MODULES rows re-pointed). Registry 22 rows (2 mandatory + 16 default + 4 opt-in),
+  alphabetical-asserted. PLAYGROUND FIX: wave 1 had silently dropped Ini/Csv/Encoding from the
+  wasm build (default-features=false, nothing re-added) — playground/Cargo.toml now re-adds all
+  dep-free Default extensions. Live probes: json/paths/decimals/hashing/uri guide examples +
+  conformance dump 2-leg identical; ext suite 96/96; gate 2276/2276 + clippy×2 + no-default check
+  + fmt. Decimal note: the MODULE is the extension; the `1.50d` primitive/arith stays kernel.
+
+## DEC-283 — RULED (2026-07-17, developer, 5-round refinement): THE TEMPLATE EXTENSION (.phgml)
+
+**Scope (developer's framing): "full support of phorj code inside HTML — {% %}, no more"; a
+simple PHP-like interleave engine, NOT a Twig-class dialect; anything higher-level = future
+extension packages. Build queued AFTER the DEC-273 migration waves.**
+
+1. **Minimal core surface**: `{% <phorj statements> %}` (real language statements — control flow
+   is phorj's own `if`/`for` with braces, HTML between markers becomes output inside the open
+   block, ERB-style) · `{{ <phorj expr> }}` emitted AUTO-ESCAPED BY TYPE (string escapes, Html
+   embeds — the html"…" rule; filters = the language's own `|>` pipe) · `{# comments #}` · ONE
+   typed header per file: `{% template name(params) %}`. NO template dialect: no {% set %}, no
+   {% include %} (call another template), no filter registry, no custom tags.
+2. **Imports**: explicit `{% import …; %}` lines in the header area — full .phg import grammar,
+   same three-root resolution, same HARD hygiene (E-MODULE-NOT-FOUND/E-DUP-IMPORT/
+   E-UNUSED-IMPORT). ZERO auto-imports (wind rule); only compiler-synthesized emission machinery
+   is zero-span-exempt (the #[Entry] precedent).
+3. **File laws**: a .phgml IS a phorj file wearing HTML clothes — name=file (Card.phgml ⇒
+   component `card`, E-FILE-NAME analog), folder=package (implied, never written), import-driven
+   discovery (`import Views.X;` loads the package's .phg AND .phgml together), compiled to an
+   ordinary `public function …(…): Html` BEFORE the checker (compile-time-sugar discipline —
+   backends/PHP output never see template syntax; transpile byte-identity free), diagnostics
+   carry the .phgml path + original line/col. FORBIDDEN: runtime template loading (never),
+   .phgml entries (`phg run x.phgml` = clear error, templates are libraries), `package Main`
+   templates, and the serve docroot guard EXTENDS to .phgml (never served).
+4. **THE GENERALIZED VIEWS LAW** (the explicitness fix — "no magic, the import must show the
+   origin"): a lowercase `views` folder (a ROLE folder like src/vendor/public) maps to the
+   package segment `Views` at ANY depth in ANY root — top-level views/Pages/ ⇒ `Views.Pages`;
+   src/views/Pages/ ⇒ `Views.Pages` (CONVERGENT — moving views between layouts never touches an
+   import); domain views src/Blog/views/ ⇒ `Blog.Views`; deep src/Shop/Cart/views/Widgets/ ⇒
+   `Shop.Cart.Views.Widgets`; vendor/Acme/Ui/views/ ⇒ `Acme.Ui.Views.…`. Top-level views/ = a
+   FULL package root (any source kind — uniformity over enforcement) + a walk-up app-root
+   marker. Search order: entry-dir → views/ → src/ → vendor/ (developer-ruled "views first";
+   inert for non-Views packages). PascalCase `Views/` twin stays legal (plain folder=package,
+   convergent names; W-SHADOWED on duplicates). views-inside-views REJECTED (E-PKG-PATH). Leaf
+   collisions (Blog.Views + Shop.Views both binding `Views`) resolve via the existing `as` alias
+   — E-IMPORT-CONFLICT already forces it, nothing silent.
+5. **Controller flow**: templates are typed functions — `import Views.Pages;` then
+   `Html page = Pages.home("Welcome", items); Response.html(Html.render(page))`. Data in as
+   typed args, Html out; a wrong argument is a COMPILE error in the controller. No render()
+   string dispatch, no context objects, no runtime engine.
+6. **Composition** = plain calls (a layout is a template taking Html params). Components+slots
+   recorded as the RECOMMENDED future direction (typed, explicit, what Blade/HEEx/Templ
+   converged on); extends/blocks rejected for the core (stringly block contracts = the silent-
+   downgrade class). Both remain buildable later as extension packages.
+
+*Alternatives rejected across the rounds: Twig/Jinja dialect (second language, own truthiness);
+extends+blocks in core; auto-imported "template stdlib" (wind); runtime template loading;
+`<?phg ?>` spelling; `import X from views;` grammar (second import spelling); views-strip
+(origin-hiding — the magic the developer refused); views restricted to fixed depths.*
+
+- **DEC-273 WAVE 2 CERTIFIED (2026-07-17):** DEC-268 panel — round 1 (consolidated 3-lens):
+  1×P2+3×P3 all doc-accuracy (22-not-19 rows; date slips; stale path comments; rustdoc link),
+  code verified clean incl. prelude BYTE-IDENTITY of the moved DEBUG/URI consts and crypto's
+  argon2 semantics; round 2: 2×P3 (one missed fix site — calls.rs; a misattached Http doc
+  paragraph carried from HEAD) — fixed, Http paragraph restored above HTTP_PRELUDE; rounds 3+4
+  consecutively CLEAN (round-4 fresh probes: 5 examples THREE-LEG identical vs php-8.5.8; hash
+  RFC KATs in the new home; zero panic!/unwrap in diff additions; 1790/1790 lib).

@@ -6,7 +6,7 @@ impl Transpiler {
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected
     /// `Json` enum's PHP class hierarchy — mangled variant classes `Null_`/`Bool_`/`Int_`/`Float_` and
     /// bare `Str`/`Arr`/`Obj` (the reserved-name mangle from this slice's prerequisite). Encoding
-    /// mirrors the Rust `native::json` kernels byte-for-byte: a string scalar uses native
+    /// mirrors the Rust `ext::json` kernels byte-for-byte: a string scalar uses native
     /// `json_encode` (authoritative escaping); a float uses `__phorj_float` (positional shortest
     /// round-trip — NOT json's scientific notation, so it matches `run`/`runvm`); structure is
     /// hand-walked. Decoding delegates to native `json_decode` (objects → `stdClass` so `{}` ≠ `[]`),

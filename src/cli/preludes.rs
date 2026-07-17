@@ -49,45 +49,7 @@ pub(super) const OPTION_PRELUDE: &str = "enum Option<T> { None, Some(T value) }"
 /// erased downstream. Matches the canonical shape in `examples/guide/generic-enums.phg`.
 pub(super) const RESULT_PRELUDE: &str = "enum Result<T, E> { Success(T value), Failure(E error) }";
 
-/// The canonical `Core.Http` types, injected (below) when a program imports `Core.Http` (M6 W1 →
-/// stdlib). The portable handler model — `handle(Request): Response` — at the value level: `Request`
-/// and `Response` are immutable values; `Request.parse(bytes) -> Request?` and `resp.serialize()`
-/// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.String` (so the prelude also
-/// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
-/// stdlib behind the static-method API (slice B0). Flows through every backend as ordinary classes.
-/// `Core.DebugModule` (DEC-238) — the beautiful dumper. ONE function carrying both products (developer-
-/// ruled): `Debug.dump(x)` renders deeply (the versioned v1 format in `native/debug.rs`), PRINTS,
-/// and returns `Dumped<T>` — `.value()` is the pass-through, `.text()` the captured rendering.
-/// `Debug.dd(x)` (dump + exit 1) and `Runtime.exit` land in slice 2. Nothing in the wind: only
-/// reachable through `import Core.DebugModule`.
-pub(super) const DEBUG_PRELUDE: &str = r#"
-import Core.Native.Debug as NativeDebug;
-import Core.Output;
-import Core.Runtime;
-
-// The dump result: BOTH the pass-through value and the rendering, explicitly.
-class Dumped<T> {
-  constructor(private T v, private string s) {}
-  function value(): T { return this.v; }
-  function text(): string { return this.s; }
-}
-
-class Debug {
-  // Render + PRINT + carry: `int t = Debug.dump(price).value() * qty;` flows on;
-  // `string snap = Debug.dump(cfg).text();` captures (already printed).
-  static function dump<T>(T v): Dumped<T> {
-    string s = NativeDebug.render(v);
-    Output.printLine(s);
-    return new Dumped(v, s);
-  }
-  // dump-and-die (the debugging convention): print the rendering, then a CLEAN exit 1 (deliberate
-  // abort — never a stack trace; that's `panic`'s job).
-  static function dd<T>(T v): never {
-    discard Debug.dump(v);
-    Runtime.exit(1);
-  }
-}
-"#;
+// DEC-273 wave 2: the debug prelude source moved to `crate::ext::debug_prelude` (colocation).
 
 /// `Core.Input` (DEC-281) — the stdin module, `Core.Output`'s twin: piped/redirected data
 /// (`cat file | phg run s.phg`, `phg run s.phg < file`) becomes readable. Impure (quarantined
@@ -197,6 +159,12 @@ class Session {
 }
 "#;
 
+/// The canonical `Core.Http` types, injected (below) when a program imports `Core.Http` (M6 W1 →
+/// stdlib). The portable handler model — `handle(Request): Response` — at the value level: `Request`
+/// and `Response` are immutable values; `Request.parse(bytes) -> Request?` and `resp.serialize()`
+/// round-trip the HTTP/1.1 wire form. The bodies reuse `Core.Bytes`/`Core.String` (so the prelude also
+/// imports them), so this is the same proven logic as `examples/web/handler.phg`, promoted to the
+/// stdlib behind the static-method API (slice B0). Flows through every backend as ordinary classes.
 pub(super) const HTTP_PRELUDE: &str = r#"
 import Core.Bytes;
 import Core.String;
@@ -885,7 +853,7 @@ pub(super) const SECRET_PRELUDE: &str =
 
 /// `Core.UriModule` (DEC-240) — one immutable RFC 3986 `Uri` class with the typed `UriError` taxonomy.
 /// The instance state is a single validated RAW string; every accessor/wither/operation calls a
-/// `Core.Native.Uri` native over it (`src/native/uri/`), whose Rust kernel is pinned byte-for-byte to
+/// `Core.Native.Uri` native over it (`src/ext/uri/`), whose Rust kernel is pinned byte-for-byte to
 /// the transpile twin — PHP 8.5's always-on `Uri\Rfc3986\Uri` (probe record:
 /// `docs/research/2026-07-16-uri-twin-probes.md`) — so byte-identity holds with NO ladder
 /// quarantine. Fallible natives return the new raw form or a `<<E>>`-sentinel message (`<` is
@@ -904,83 +872,7 @@ interface Iterator<T> {
 }
 "#;
 
-pub(super) const URI_PRELUDE: &str = r#"
-import Core.Native.Uri as NativeUri;
-import Core.String;
-
-open class UriError implements Error {
-  constructor(public string message) {}
-  static function fail(string message): never throws UriError {
-    if (message == "The port is out of range") { throw new UriPortOutOfRangeError(message); }
-    if (message == "The specified base URI must be absolute") { throw new UriBaseNotAbsoluteError(message); }
-    if (message == "The specified scheme is malformed") { throw new UriBadSchemeError(message); }
-    if (message == "The specified userinfo is malformed") { throw new UriBadUserInfoError(message); }
-    if (message == "The specified host is malformed") { throw new UriBadHostError(message); }
-    if (message == "The specified port is malformed") { throw new UriBadPortError(message); }
-    if (message == "The specified path is malformed") { throw new UriBadPathError(message); }
-    if (message == "The specified query is malformed") { throw new UriBadQueryError(message); }
-    if (message == "The specified fragment is malformed") { throw new UriBadFragmentError(message); }
-    throw new UriMalformedError(message);
-  }
-}
-class UriMalformedError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadSchemeError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadUserInfoError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadHostError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadPortError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriPortOutOfRangeError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadPathError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadQueryError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBadFragmentError extends UriError { constructor(string message) { parent.constructor(message); } }
-class UriBaseNotAbsoluteError extends UriError { constructor(string message) { parent.constructor(message); } }
-
-class Uri {
-  private constructor(public string raw) {}
-  static function parse(string s): Uri throws UriError { return Uri.wrap(NativeUri.parse(s))?; }
-  static function wrap(string r): Uri throws UriError {
-    if (String.startsWith(r, "<<E>>")) { return UriError.fail(String.removePrefix(r, "<<E>>"))?; }
-    return new Uri(r);
-  }
-  function scheme(): string? { return NativeUri.scheme(this.raw); }
-  function rawScheme(): string? { return NativeUri.rawScheme(this.raw); }
-  function userInfo(): string? { return NativeUri.userInfo(this.raw); }
-  function rawUserInfo(): string? { return NativeUri.rawUserInfo(this.raw); }
-  function username(): string? { return NativeUri.username(this.raw); }
-  function rawUsername(): string? { return NativeUri.rawUsername(this.raw); }
-  function password(): string? { return NativeUri.password(this.raw); }
-  function rawPassword(): string? { return NativeUri.rawPassword(this.raw); }
-  function host(): string? { return NativeUri.host(this.raw); }
-  function rawHost(): string? { return NativeUri.rawHost(this.raw); }
-  function port(): int? { return NativeUri.port(this.raw); }
-  function path(): string { return NativeUri.path(this.raw); }
-  function rawPath(): string { return NativeUri.rawPath(this.raw); }
-  function query(): string? { return NativeUri.query(this.raw); }
-  function rawQuery(): string? { return NativeUri.rawQuery(this.raw); }
-  function fragment(): string? { return NativeUri.fragment(this.raw); }
-  function rawFragment(): string? { return NativeUri.rawFragment(this.raw); }
-  function withScheme(string? scheme): Uri throws UriError { return Uri.wrap(NativeUri.withScheme(this.raw, scheme))?; }
-  function withUserInfo(string? userInfo): Uri throws UriError { return Uri.wrap(NativeUri.withUserInfo(this.raw, userInfo))?; }
-  function withHost(string? host): Uri throws UriError { return Uri.wrap(NativeUri.withHost(this.raw, host))?; }
-  function withPort(int? port): Uri throws UriError { return Uri.wrap(NativeUri.withPort(this.raw, port))?; }
-  function withPath(string path): Uri throws UriError { return Uri.wrap(NativeUri.withPath(this.raw, path))?; }
-  function withQuery(string? query): Uri throws UriError { return Uri.wrap(NativeUri.withQuery(this.raw, query))?; }
-  function withFragment(string? fragment): Uri throws UriError { return Uri.wrap(NativeUri.withFragment(this.raw, fragment))?; }
-  function resolve(string reference): Uri throws UriError { return Uri.wrap(NativeUri.resolve(this.raw, reference))?; }
-  function equals(Uri other): bool { return NativeUri.equals(this.raw, other.raw, false); }
-  function equalsIncludingFragment(Uri other): bool { return NativeUri.equals(this.raw, other.raw, true); }
-  function toString(): string { return NativeUri.toText(this.raw); }
-  function toRawString(): string { return this.raw; }
-  // Percent-encoding statics (DEC-279 — the former `Core.Url` module, merged here). Pure string
-  // transforms over the `Core.Native.Uri` percent-encoding natives; byte-identical to PHP
-  // `urlencode`/`rawurlencode`/`urldecode`/`rawurldecode`. Decoders yield `null` on invalid-UTF-8
-  // output. `encodeComponent`/`decodeComponent` (RFC 3986, space ⇒ `%20`) dropped the old
-  // `UriComponent` infix — the `Uri.` qualifier already says it.
-  static function encodeForm(string s): string { return NativeUri.encodeForm(s); }
-  static function encodeComponent(string s): string { return NativeUri.encodeComponent(s); }
-  static function decodeForm(string s): string? { return NativeUri.decodeForm(s); }
-  static function decodeComponent(string s): string? { return NativeUri.decodeComponent(s); }
-}
-"#;
+// DEC-273 wave 2: the uri prelude source moved to `crate::ext::uri_prelude` (colocation).
 
 /// The `Core.Time` value model (M-TIME, `docs/specs/2026-06-28-m-time-design.md`): the pure-Phorj
 /// `Instant`, `Duration`, `Date`, and `DateTime` classes. Because the prelude is run through the same
@@ -1590,7 +1482,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "DebugModule"],
         qualifier: "DebugModule",
-        src: Some(DEBUG_PRELUDE),
+        src: Some(crate::ext::debug_prelude::PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &["Debug", "Dumped"],
@@ -1671,7 +1563,7 @@ pub(super) const CORE_MODULES: &[VirtualModule] = &[
     VirtualModule {
         module: &["Core", "UriModule"],
         qualifier: "UriModule",
-        src: Some(URI_PRELUDE),
+        src: Some(crate::ext::uri_prelude::PRELUDE),
         respond_bridge: None,
         member_gated: true,
         bare_types: &[

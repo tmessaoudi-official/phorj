@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-273 wave 2: seven more extensions migrate; the preludes monolith starts dissolving
+
+`json`, `uri` (kernel + `Core.Native.Uri` natives + the deprecated `Core.Url` compat twins +
+its PRELUDE source, all colocated), `path`, `hash`, `decimal` (the MODULE natives — the `1.50d`
+primitive stays kernel), `test`, and `debug` (its DebugModule prelude colocated too; the
+walk-any-value introspection SEAM stays core) move to `src/ext/<name>/` behind seven new
+dep-free Default-tier features. The `DEBUG_PRELUDE`/`URI_PRELUDE` consts leave `cli/preludes.rs`
+(the dissolution pattern: unconditional `#[path]` prelude modules inside the extension folders).
+The playground's feature parity is RESTORED (wave 1 had silently cost it Ini/Csv/Encoding —
+its `default-features = false` dependency now re-adds every dep-free Default extension).
+12 of the ruled extensions are now physically migrated; `phg extensions` lists 22 rows
+(2 mandatory + 16 default + 4 opt-in).
+
 ### Added — DEC-273 wave 1: the extension architecture lands (registry + 5 migrations)
 
 The minimal-core/extension model gets its physical seam. `src/ext/registry.rs` is THE

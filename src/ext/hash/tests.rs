@@ -1,4 +1,4 @@
-use super::*;
+use super::natives::*;
 use crate::value::Value;
 use std::rc::Rc;
 

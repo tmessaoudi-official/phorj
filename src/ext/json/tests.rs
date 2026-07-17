@@ -1,4 +1,4 @@
-use super::*;
+use super::natives::*;
 use crate::value::Value;
 
 /// Encode a `Json` value to its compact string (the `stringify` kernel).

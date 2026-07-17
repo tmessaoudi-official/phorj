@@ -9,7 +9,7 @@
 //! exercises them. The `php` emission exists only for a future `--emit-phpunit` bridge (D4) and uses
 //! PHP 8's `throw` expression; it is **not** byte-identity-gated.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 
@@ -20,7 +20,7 @@ fn shown(v: &Value) -> String {
         .unwrap_or_else(|| format!("<{}>", v.type_name()))
 }
 
-fn test_assert(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn test_assert(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bool(c), Value::Str(msg)] => {
             if *c {
@@ -33,7 +33,7 @@ fn test_assert(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn test_assert_true(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn test_assert_true(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bool(true)] => Ok(Value::Unit),
         [Value::Bool(false)] => Err("assertion failed: expected true, got false".into()),
@@ -41,7 +41,7 @@ fn test_assert_true(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn test_assert_false(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn test_assert_false(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bool(false)] => Ok(Value::Unit),
         [Value::Bool(true)] => Err("assertion failed: expected false, got true".into()),
@@ -49,7 +49,7 @@ fn test_assert_false(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn test_assert_equals(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn test_assert_equals(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Value equality via the shared `eq_val` kernel (the same equality `==` uses), so the two
         // backends agree. The message names both operands without claiming which is "expected".
@@ -68,7 +68,7 @@ fn test_assert_equals(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn test_assert_not_equals(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn test_assert_not_equals(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [a, b] => {
             if a.eq_val(b) {
@@ -85,7 +85,7 @@ fn test_assert_not_equals(args: &[Value], _: &mut String) -> Result<Value, Strin
     }
 }
 
-fn test_assert_null(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn test_assert_null(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Null] => Ok(Value::Unit),
         [v] => Err(format!("assertion failed: expected null, got {}", shown(v))),
@@ -93,7 +93,7 @@ fn test_assert_null(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn test_assert_not_null(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn test_assert_not_null(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Null] => Err("assertion failed: expected non-null, got null".into()),
         [_] => Ok(Value::Unit),
@@ -105,7 +105,10 @@ fn test_assert_not_null(args: &[Value], _: &mut String) -> Result<Value, String>
 /// `HigherOrder` native: the backend supplies `call`, which runs a `Value::Closure` and returns
 /// `Err` for a fault (the dual of "must not fault" is just running the code directly — an uncaught
 /// fault fails the test). The closure's normal return value is discarded.
-fn test_assert_faults(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+pub(super) fn test_assert_faults(
+    args: &[Value],
+    call: &mut ClosureInvoker,
+) -> Result<Value, String> {
     match args {
         [f] => match call(f, Vec::new()) {
             Err(_fault) => Ok(Value::Unit),
@@ -119,7 +122,7 @@ fn test_assert_faults(args: &[Value], call: &mut ClosureInvoker) -> Result<Value
 
 /// The `Core.Test` registry entries (M-Test T2). All `pure` (deterministic) but only used by the
 /// `phg test` runner — never in a byte-identity example, so never seen by the PHP oracle.
-pub(crate) fn test_natives() -> Vec<NativeFn> {
+pub fn test_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Test",
@@ -248,7 +251,3 @@ pub(crate) fn test_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "test_tests.rs"]
-mod tests;

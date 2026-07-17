@@ -1,7 +1,7 @@
 //! `Core.DebugModule` (DEC-238) end-to-end fixture: dump's pass-through + capture + printing, dd's
 //! dump-and-exit, and `Runtime.exit`'s clean-termination semantics — on BOTH backends, including
 //! the exit CODE via the Batch-1-B channel (`cmd_treewalk_exit` / `cmd_run_exit`). The rendering
-//! format itself is pinned by the `src/native/debug.rs` unit tests AND, across all THREE backends,
+//! format itself is pinned by the `src/ext/debug/natives.rs` unit tests AND, across all THREE backends,
 //! by `conformance/lang/dump.phg` (the PHP twin `__phorj_debug_render` renders byte-identically).
 
 use phorj::cli::{cmd_run, cmd_run_exit, cmd_transpile, cmd_treewalk, cmd_treewalk_exit};

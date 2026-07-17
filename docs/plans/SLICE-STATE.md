@@ -1,6 +1,32 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## CURRENT (2026-07-18 — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
+## CURRENT (2026-07-17, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
+- **DEC-273 WAVE 1 COMMITTED `9aed1ce7`** — registry + 5 migrations + phg extensions +
+  E-EXTENSION-DISABLED + PHG_NO_JIT; DEC-268 panel: 5 rounds, rounds 4+5 consecutively CLEAN
+  (round-5 probes: all 5 migrated extensions 3-leg byte-identical vs php-8.5.8). Panel by-catch
+  → KNOWN_ISSUES: `phg test` raw-checker gap (injected-type files fail under phg test);
+  Process.args() doc drift. ⚠ LESSON (recurred): UNASSERTED python replaces silently no-op —
+  round 3 caught a "fixed" comment that never landed; ALWAYS assert anchors.
+- **DEC-283 RULED (register — the Template extension, .phgml): minimal phorj-in-HTML core;
+  generalized views law (lowercase `views` ⇒ `Views` segment at any depth; views/ = 4th root +
+  walk-up marker, searched entry-dir → views/ → src/ → vendor/); explicit {% import %}; templates
+  = typed Html functions. BUILD QUEUED after DEC-273 waves. NOTE: the loader gains the views/
+  root + role-folder normalization WHEN DEC-283 builds.**
+- **WAVE 2 BUILT (gate green 2276/2276+clippy×2+no-default-check+fmt+release; PANEL RUNNING —
+  consolidated 3-lens round 1).** json/uri/path/hash/decimal/test/debug → src/ext/ (uri: kernel+
+  natives+url_compat+url_tests+PRELUDE; debug: natives+tests+PRELUDE — dissolution pattern =
+  unconditional #[path] prelude modules, CORE_MODULES re-pointed); 7 new dep-free Default
+  features; registry 22 rows alphabetical-asserted (2 mandatory + 16 default + 4 opt-in); PLAYGROUND regression FIXED (wave 1 silently
+  dropped ini/csv/encoding from wasm — playground/Cargo.toml re-adds all dep-free Default
+  extensions). Live probes: json/paths/decimals/hashing/uri guide examples + conformance dump
+  2-leg OK; ext suite 96/96. After panel-clean×2 → commit → WAVE 3 (db/mail/http-client prelude
+  dissolution + session/html/di — the woven ones).
+- **(prior plan note)** — migrate json/uri/path/hash/decimal/test/debug to src/ext/ (uri+debug carry
+  Core.Native.* twins + preludes → proves the preludes-monolith dissolution pattern); new
+  features for each (default tier); ⚠ playground/Cargo.toml builds default-features=false +
+  re-adds — MUST add the new features there or the wasm playground loses Json etc; feature-dep
+  check db↔json (likely independent — desugar only names Json in generated code when the user
+  imports it). Then wave 3: db/mail/http-client prelude dissolution + session/html/di (woven).
 - **DEC-273 WAVE 1 (expanded per directive) — gate green 2276/2276+clippy×2+fmt+release,
   PANEL ROUND 2 RUNNING (round 1: lens2 CLEAN incl. bypass-question CLOSED; lens1 2P2+3P3,
   lens3 1P1+6P2+2P3 — ALL FIXED in-wave; DEC-268 needs 2 consecutive clean rounds).**
@@ -14,7 +40,7 @@
   features)**. After 2 clean panel rounds → ONE commit. Next wave: uri/path/json/debug/test/…
   migrations + preludes-monolith dissolution for db/mail/http-client twins.
 
-## PREV (2026-07-18, early — CONTINUOUS MODE)
+## PREV (2026-07-17, late — CONTINUOUS MODE)
 - **DEC-273 SLICE 1 BUILT, gate green 2275/2275 + clippy×2 + fmt + release, UNCOMMITTED —
   DEC-268 PANEL RUNNING (3 lenses on the live diff; commit blocked on 2 consecutive clean
   rounds).** Built: src/ext/registry.rs (Extension rows: name/feature/enabled/tier/modules/

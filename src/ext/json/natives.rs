@@ -10,7 +10,7 @@
 //! scientific notation), strings escape to match PHP `json_encode`'s default, objects keep Map
 //! insertion order, and number decoding distinguishes `Int` from `Float` exactly as `json_decode`.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::{build_map, EnumVal, HKey, Value};
 use std::rc::Rc;
@@ -18,7 +18,7 @@ use std::rc::Rc;
 /// Build a `Json` enum node. `variant` is the Phorj variant name (`Null`/`Bool`/`Int`/`Float`/
 /// `Str`/`Arr`/`Obj`); the transpiler mangles reserved ones to PHP class names, the backends use this
 /// string directly.
-fn jnode(variant: &str, payload: Vec<Value>) -> Value {
+pub(super) fn jnode(variant: &str, payload: Vec<Value>) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "Json".into(),
         variant: variant.into(),
@@ -43,7 +43,7 @@ fn json_stringify(args: &[Value], _: &mut String) -> Result<Value, String> {
 // any malformed line makes the whole parse fail (None), mirroring `parse`. `stringifyLines` encodes
 // each value and joins with `\n` (no trailing newline). Both backends and the transpiled-PHP
 // `__phorj_json_{parse,stringify}_lines` helpers split/join identically, so byte-identity holds.
-fn json_parse_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn json_parse_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => {
             let mut out: Vec<Value> = Vec::new();
@@ -66,7 +66,7 @@ fn json_parse_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-fn json_stringify_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn json_stringify_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {
             let mut lines: Vec<String> = Vec::with_capacity(xs.len());
@@ -108,7 +108,7 @@ fn key_str(k: &HKey) -> Result<&str, String> {
 }
 
 /// Compact encoding — matches `__phorj_json_encode` byte-for-byte.
-fn encode(v: &Value, out: &mut String) -> Result<(), String> {
+pub(super) fn encode(v: &Value, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
     match (e.variant.as_ref(), &e.payload[..]) {
         ("Null", []) => out.push_str("null"),
@@ -145,7 +145,7 @@ fn encode(v: &Value, out: &mut String) -> Result<(), String> {
 
 /// Pretty encoding (`JSON_PRETTY_PRINT` layout: 4-space indent, `": "` after a key, empty `[]`/`{}`
 /// inline). `indent` is the current leading-space count. Matches `__phorj_json_pretty`.
-fn encode_pretty(v: &Value, indent: usize, out: &mut String) -> Result<(), String> {
+pub(super) fn encode_pretty(v: &Value, indent: usize, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
     match (e.variant.as_ref(), &e.payload[..]) {
         ("Array", [Value::List(xs)]) if !xs.is_empty() => {
@@ -231,7 +231,7 @@ fn json_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// (including trailing non-whitespace). Mirrors `json_decode`: `{}`≠`[]`, integers without a
 /// `.`/`e` are `Int` (overflow falls back to `Float`), duplicate object keys keep first position /
 /// last value (via `build_map`).
-fn parse_json(s: &str) -> Option<Value> {
+pub(super) fn parse_json(s: &str) -> Option<Value> {
     let chars: Vec<char> = s.chars().collect();
     let mut p = JParser { c: &chars, i: 0 };
     p.ws();
@@ -457,7 +457,7 @@ impl JParser<'_> {
 /// The `Core.Json` registry entries. `Json` is the compiler-injected enum (`cli::inject_core_modules`)
 /// — referenced here as a bare `Ty::Named`; the type resolves because a *call* to one of these natives
 /// requires `import Core.Json;`, which triggers the injection before the checker runs.
-pub(crate) fn json_natives() -> Vec<NativeFn> {
+pub fn json_natives() -> Vec<NativeFn> {
     let json = || Ty::Named("Json".to_string(), vec![]);
     vec![
         NativeFn {
@@ -507,7 +507,3 @@ pub(crate) fn json_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "json_tests.rs"]
-mod tests;

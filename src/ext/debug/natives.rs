@@ -20,7 +20,7 @@
 //! renderer is PURE (same value → same string), but `dump` PRINTS, so the natives are registered
 //! under the import-gated `Core.Native.Debug` and the prelude does the printing via `Core.Output`.
 
-use super::{NativeEval, NativeFn};
+use crate::native::{NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::{HKey, Value};
 
@@ -29,7 +29,7 @@ const INLINE_MAX: usize = 60;
 const BYTES_MAX: usize = 32;
 
 /// Render any value (the format above). `seen` = container identity stack for cycle cutting.
-fn render(v: &Value, indent: usize, seen: &mut Vec<usize>) -> String {
+pub(super) fn render(v: &Value, indent: usize, seen: &mut Vec<usize>) -> String {
     match v {
         Value::Str(s) => quote(s.as_str()),
         Value::Null => "null".into(),
@@ -205,6 +205,3 @@ pub fn debug_natives() -> Vec<NativeFn> {
 }
 
 // Unit tests live in the sibling `debug_tests.rs` (Invariant 13 discipline).
-#[cfg(test)]
-#[path = "debug_tests.rs"]
-mod tests;

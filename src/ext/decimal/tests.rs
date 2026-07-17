@@ -1,6 +1,8 @@
 //! `Core.Decimal` native tests (M-NUM S1).
 
-use super::*;
+use super::natives::*;
+use crate::native::index_of;
+use crate::value::Value;
 
 #[test]
 fn decimal_of_parses_or_returns_null() {

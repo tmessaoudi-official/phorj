@@ -9,7 +9,7 @@
 //! Filesystem *access* (read/write/exists) lives in `Core.File`; this module is the path-arithmetic
 //! companion (the `basename`/`dirname`/`pathinfo` family), kept separate so it stays Tier 1.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 
@@ -79,31 +79,31 @@ fn path_join_str(a: &str, b: &str) -> String {
     format!("{}/{}", a.trim_end_matches('/'), b.trim_start_matches('/'))
 }
 
-fn path_basename(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn path_basename(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => Ok(Value::Str(php_basename(p).into())),
         _ => Err("Path.baseName expects (string)".into()),
     }
 }
-fn path_dirname(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn path_dirname(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => Ok(Value::Str(php_dirname(p).into())),
         _ => Err("Path.directoryName expects (string)".into()),
     }
 }
-fn path_extension(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn path_extension(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => Ok(Value::Str(php_extension(p).into())),
         _ => Err("Path.extension expects (string)".into()),
     }
 }
-fn path_stem(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn path_stem(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => Ok(Value::Str(php_stem(p).into())),
         _ => Err("Path.fileStem expects (string)".into()),
     }
 }
-fn path_join(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn path_join(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(a), Value::Str(b)] => Ok(Value::Str(path_join_str(a, b).into())),
         _ => Err("Path.join expects (string, string)".into()),
@@ -111,7 +111,7 @@ fn path_join(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// The `Core.Path` registry entries (subject-first; all Tier 1, pure).
-pub(crate) fn path_natives() -> Vec<NativeFn> {
+pub fn path_natives() -> Vec<NativeFn> {
     let s = || Ty::String;
     vec![
         NativeFn {
@@ -167,7 +167,3 @@ pub(crate) fn path_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "path_tests.rs"]
-mod tests;

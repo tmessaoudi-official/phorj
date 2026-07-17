@@ -1,7 +1,8 @@
 //! `Core.DebugModule` renderer unit tests (sibling file per Invariant 13): the v1 format is a versioned
 //! contract (the PHP twin renders byte-identically), so these tests PIN it.
 
-use super::*;
+use super::natives::*;
+use crate::value::Value;
 use crate::value::{ClassLayout, EnumVal, Instance};
 use std::rc::Rc;
 

@@ -174,7 +174,7 @@ fn php_obj(raw: &str) -> String {
     format!("__phorj_uri({raw})")
 }
 
-pub(crate) fn uri_natives() -> Vec<NativeFn> {
+pub fn uri_natives() -> Vec<NativeFn> {
     let str_ty = || Ty::String;
     let mut v = vec![
         NativeFn {

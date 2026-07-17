@@ -22,19 +22,14 @@ use std::sync::OnceLock;
 // ordering coordinator (the pinned-slot invariant). `Core.Console` stays here (slot 0, inlined).
 mod bytes;
 mod convert;
-mod debug;
-mod decimal;
 mod file;
-mod hash;
 mod html;
-mod json;
 mod list;
 mod list_registry;
 mod log;
 mod map;
 mod math;
 mod option;
-mod path;
 mod process;
 mod random;
 mod reflect;
@@ -52,14 +47,11 @@ mod input;
 mod mail;
 mod session;
 mod set;
-mod test;
 mod text;
 mod text_format;
 mod text_registry;
 pub(crate) use text_format::parse_format_directive;
 mod time;
-mod uri;
-mod url;
 mod validate;
 
 pub use input::{set_stdin_disabled, set_stdin_override};
@@ -410,27 +402,34 @@ fn build() -> Vec<NativeFn> {
     registry.extend(map::map_natives());
     registry.extend(set::set_natives());
     registry.extend(convert::convert_natives());
-    registry.extend(decimal::decimal_natives());
+    #[cfg(feature = "decimal")]
+    registry.extend(crate::ext::decimal::decimal_natives());
     #[cfg(feature = "encoding")]
     registry.extend(crate::ext::encoding::encoding_natives());
-    registry.extend(hash::hash_natives());
+    #[cfg(feature = "hash")]
+    registry.extend(crate::ext::hash::hash_natives());
     #[cfg(feature = "ini")]
     registry.extend(crate::ext::ini::ini_natives());
-    registry.extend(uri::uri_natives());
-    registry.extend(url::url_natives());
-    registry.extend(path::path_natives());
+    #[cfg(feature = "uri")]
+    registry.extend(crate::ext::uri::uri_natives());
+    #[cfg(feature = "uri")]
+    registry.extend(crate::ext::uri::url_natives());
+    #[cfg(feature = "path")]
+    registry.extend(crate::ext::path::path_natives());
     registry.extend(validate::validate_natives());
     #[cfg(feature = "csv")]
     registry.extend(crate::ext::csv::csv_natives());
     registry.extend(random::random_natives());
-    registry.extend(json::json_natives());
+    #[cfg(feature = "json")]
+    registry.extend(crate::ext::json::json_natives());
     registry.extend(option::option_natives());
     registry.extend(result::result_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
     registry.extend(runtime::runtime_natives());
     registry.extend(log::log_natives());
-    registry.extend(test::test_natives());
+    #[cfg(feature = "test")]
+    registry.extend(crate::ext::test::test_natives());
     registry.extend(time::time_natives());
     #[cfg(feature = "crypto")]
     registry.extend(crate::ext::crypto::crypto_natives());
@@ -445,7 +444,8 @@ fn build() -> Vec<NativeFn> {
     registry.extend(fs::fs_natives());
     registry.extend(session::session_natives());
     registry.extend(input::input_natives());
-    registry.extend(debug::debug_natives());
+    #[cfg(feature = "debug")]
+    registry.extend(crate::ext::debug::debug_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(

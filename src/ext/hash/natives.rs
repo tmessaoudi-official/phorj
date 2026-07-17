@@ -7,11 +7,11 @@
 //! KDF — out of scope and deliberately not hand-rolled). Parity is pinned by unit tests against real
 //! `php` output and by the differential PHP oracle.
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-fn to_hex(bytes: &[u8]) -> String {
+pub(super) fn to_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
     for &b in bytes {
@@ -109,7 +109,7 @@ const MD5_S: [u32; 64] = [
     21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
 ];
 
-fn md5(msg: &[u8]) -> [u8; 16] {
+pub(super) fn md5(msg: &[u8]) -> [u8; 16] {
     let (mut a0, mut b0, mut c0, mut d0) = (
         0x6745_2301u32,
         0xefcd_ab89u32,
@@ -163,7 +163,7 @@ fn md5(msg: &[u8]) -> [u8; 16] {
     out
 }
 
-fn sha1(msg: &[u8]) -> [u8; 20] {
+pub(super) fn sha1(msg: &[u8]) -> [u8; 20] {
     let mut h: [u32; 5] = [
         0x6745_2301,
         0xEFCD_AB89,
@@ -294,7 +294,7 @@ const SHA256_K: [u32; 64] = [
     0xc671_78f2,
 ];
 
-fn sha256(msg: &[u8]) -> [u8; 32] {
+pub(super) fn sha256(msg: &[u8]) -> [u8; 32] {
     let mut h: [u32; 8] = [
         0x6a09_e667,
         0xbb67_ae85,
@@ -374,16 +374,16 @@ fn hash_bytes(args: &[Value], digest: fn(&[u8]) -> String, who: &str) -> Result<
         _ => Err(format!("Hash.{who} expects (bytes)")),
     }
 }
-fn crc32_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn crc32_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     hash_bytes(a, |b| format!("{:08x}", crc32(b)), "crc32")
 }
-fn md5_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn md5_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     hash_bytes(a, |b| to_hex(&md5(b)), "md5")
 }
-fn sha1_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn sha1_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     hash_bytes(a, |b| to_hex(&sha1(b)), "sha1")
 }
-fn sha256_native(a: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn sha256_native(a: &[Value], _: &mut String) -> Result<Value, String> {
     hash_bytes(a, |b| to_hex(&sha256(b)), "sha256")
 }
 
@@ -394,7 +394,7 @@ fn sha256_native(a: &[Value], _: &mut String) -> Result<Value, String> {
 const SHA256_BLOCK: usize = 64;
 
 /// HMAC-SHA256 (RFC 2104).
-fn hmac_sha256(key: &[u8], msg: &[u8]) -> [u8; 32] {
+pub(super) fn hmac_sha256(key: &[u8], msg: &[u8]) -> [u8; 32] {
     // Keys longer than the block are hashed first; shorter keys are zero-padded to the block.
     let mut k = [0u8; SHA256_BLOCK];
     if key.len() > SHA256_BLOCK {
@@ -420,7 +420,12 @@ fn hmac_sha256(key: &[u8], msg: &[u8]) -> [u8; 32] {
 
 /// HKDF-SHA256 (RFC 5869): extract-then-expand. An empty `salt` is HMAC-equivalent to the RFC's
 /// HashLen-zeros default (HMAC zero-pads the key to the block either way), matching PHP `hash_hkdf`.
-fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8], length: usize) -> Result<Vec<u8>, String> {
+pub(super) fn hkdf_sha256(
+    ikm: &[u8],
+    salt: &[u8],
+    info: &[u8],
+    length: usize,
+) -> Result<Vec<u8>, String> {
     let n = length.div_ceil(32);
     if length == 0 || n > 255 {
         return Err("Hash.hkdf: length must be 1..=8160".to_string());
@@ -443,7 +448,12 @@ fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8], length: usize) -> Result<Ve
 /// PBKDF2-HMAC-SHA256 (RFC 8018 §5.2). `iterations` is `u64` (not `u32`): PHP's `hash_pbkdf2`
 /// takes the count as a native `int` (i64), so a `u32` cap would silently truncate a large
 /// iteration count and diverge from the PHP leg (UA-1.3). The RFC block counter stays `u32`.
-fn pbkdf2_sha256(password: &[u8], salt: &[u8], iterations: u64, length: usize) -> Vec<u8> {
+pub(super) fn pbkdf2_sha256(
+    password: &[u8],
+    salt: &[u8],
+    iterations: u64,
+    length: usize,
+) -> Vec<u8> {
     let mut out = Vec::with_capacity(length);
     let mut block_index: u32 = 1;
     while out.len() < length {
@@ -467,7 +477,7 @@ fn pbkdf2_sha256(password: &[u8], salt: &[u8], iterations: u64, length: usize) -
 
 /// Timing-safe byte equality. Matches PHP `hash_equals`: a length mismatch returns `false`
 /// immediately (that leak is intentional parity); equal-length inputs are compared in constant time.
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub(super) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -533,7 +543,7 @@ fn pbkdf2_native(a: &[Value], _: &mut String) -> Result<Value, String> {
 
 /// The `Core.Hash` registry entries. The plain digests are `(bytes) -> string` (lowercase hex), 1:1
 /// with a PHP core digest function; W3-4 adds the MAC/KDF facility (hmac/equals/hkdf/pbkdf2).
-pub(crate) fn hash_natives() -> Vec<NativeFn> {
+pub fn hash_natives() -> Vec<NativeFn> {
     fn entry(
         name: &'static str,
         eval: fn(&[Value], &mut String) -> Result<Value, String>,
@@ -616,7 +626,3 @@ pub(crate) fn hash_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "hash_tests.rs"]
-mod tests;

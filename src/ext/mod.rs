@@ -24,12 +24,33 @@ pub mod registry;
 pub mod crypto;
 #[cfg(feature = "csv")]
 pub mod csv;
+#[cfg(feature = "debug")]
+pub mod debug;
+/// The debug extension's prelude source — unconditional (see [`regex_prelude`]'s rationale),
+/// colocated in the extension folder via `#[path]`.
+#[path = "debug/prelude.rs"]
+pub mod debug_prelude;
+#[cfg(feature = "decimal")]
+pub mod decimal;
 #[cfg(feature = "encoding")]
 pub mod encoding;
+#[cfg(feature = "hash")]
+pub mod hash;
 #[cfg(feature = "ini")]
 pub mod ini;
+#[cfg(feature = "json")]
+pub mod json;
+#[cfg(feature = "path")]
+pub mod path;
 #[cfg(feature = "regex")]
 pub mod regex;
+#[cfg(feature = "test")]
+pub mod test;
+#[cfg(feature = "uri")]
+pub mod uri;
+/// The uri extension's prelude source — unconditional, colocated via `#[path]`.
+#[path = "uri/prelude.rs"]
+pub mod uri_prelude;
 /// The regex extension's PRELUDE source — compiled UNCONDITIONALLY (the `CORE_MODULES` const
 /// array references it on every build; on a no-`regex` build the disabled-import gate rejects
 /// `import Core.Regex;` long before the prelude could matter). Colocated with the extension in

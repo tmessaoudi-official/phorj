@@ -216,7 +216,7 @@ pub struct Instance {
 /// The class name of the injected `Core.Secret` opaque wrapper (`docs/specs` Fork B). Single-sourced
 /// here so every value-render surface (`Debug.dump`, the fault-frame `inspect` dump, the debugger REPL,
 /// the transpiled PHP twin) recognizes a secret identically — DEC-263. The DRY divergence that let
-/// `Debug.dump` leak a secret's plaintext (`src/native/debug.rs` had a *separate* renderer that missed
+/// `Debug.dump` leak a secret's plaintext (`src/ext/debug/natives.rs` had a *separate* renderer that missed
 /// the redaction `src/inspect.rs` already had) is closed by routing all of them through [`Instance::is_secret`].
 pub const SECRET_CLASS: &str = "Secret";
 

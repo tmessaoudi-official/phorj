@@ -4,14 +4,14 @@
 //! `null` (composes with S2 `??`). Parsing is single-sourced in `value::decimal_of`, mirrored by the
 //! PHP `__phorj_dec_of` PCRE helper (set in `transpile::emit_member_call`, the gated-helper pattern).
 
-use super::*;
+use crate::native::*;
 use crate::types::Ty;
 use crate::value::{decimal_div, decimal_round, RoundMode, Value};
 
 /// `Decimal.of(string) -> decimal?` — parse the same grammar as a `…d` literal (optional sign, digits
 /// with an optional single fractional part; NO exponent/underscore/whitespace), returning the decimal
 /// or `null` on malformed input / i128 overflow. Shared by the interpreter and the VM.
-fn decimal_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn decimal_of(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(match crate::value::decimal_of(s) {
             Some((unscaled, scale)) => Value::Decimal { unscaled, scale },
@@ -35,7 +35,7 @@ fn round_mode(v: &Value) -> Result<RoundMode, String> {
 /// `Decimal.div(decimal a, decimal b, int scale, RoundingMode mode) -> decimal` (M-NUM S2) — the exact
 /// rational `a / b`, rounded to `scale` fractional digits under `mode`. `b == 0` / `scale < 0` /
 /// overflow each fault cleanly (see `value::decimal_div`). Shared by both backends.
-fn decimal_div_native(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn decimal_div_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [a, b, Value::Int(scale), mode] => decimal_div(a, b, *scale, round_mode(mode)?),
         _ => Err("Decimal.divide expects (decimal, decimal, int, RoundingMode)".into()),
@@ -45,14 +45,14 @@ fn decimal_div_native(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// `Decimal.round(decimal d, int scale, RoundingMode mode) -> decimal` (M-NUM S2) — re-scale `d` to
 /// exactly `scale` fractional digits (rounding down-scale, exact up-scale). `scale < 0` / overflow
 /// fault cleanly. Shared by both backends.
-fn decimal_round_native(args: &[Value], _: &mut String) -> Result<Value, String> {
+pub(super) fn decimal_round_native(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [d, Value::Int(scale), mode] => decimal_round(d, *scale, round_mode(mode)?),
         _ => Err("Decimal.round expects (decimal, int, RoundingMode)".into()),
     }
 }
 
-pub(crate) fn decimal_natives() -> Vec<NativeFn> {
+pub fn decimal_natives() -> Vec<NativeFn> {
     // The injected `RoundingMode` enum (cli::inject_core_modules, Core.Decimal row) — referenced as a bare
     // `Ty::Named`; the type resolves because a call to `div`/`round` requires `import Core.Decimal;`,
     // which triggers the injection before the checker runs (mirrors `Json` in `json_natives`).
@@ -108,7 +108,3 @@ pub(crate) fn decimal_natives() -> Vec<NativeFn> {
         },
     ]
 }
-
-#[cfg(test)]
-#[path = "decimal_tests.rs"]
-mod tests;
