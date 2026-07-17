@@ -2253,3 +2253,13 @@ differential-pinned via examples/guide/foreach.phg (`v * 2` on an inferred bindi
   publisher/name shown in the ruled preview. Eager-validation semantics change: files no import
   reaches are INERT (the old whole-tree Core-hijack/lowercase-package rejections became
   unreachable-by-construction — tests flipped to assert inertness).
+
+- **DEC-282 addendum — PACKAGE-MANAGER EXTENSION: FULL RE-ADJUDICATION REQUIRED (2026-07-17,
+  developer, standing):** when the dependency-manager extension work starts, EVERY detail is
+  re-discussed from scratch — the developer explicitly dislikes the phorj.toml idea, so NO
+  toml-style manifest is presumed for the extension either (config format, dep declaration
+  surface, lockfile shape, registry model, CLI surface: all open). Research/brainstorm across
+  ecosystems (composer/cargo/go modules/npm/uv…) then re-ask, every detail interactively ruled.
+  Nothing about the retired manifest carries over by default; the only settled seam is the one
+  DEC-282 shipped: the extension WRITES `vendor/<Publisher>/<Name>/` (folder = package) and the
+  compiler only ever reads disk.

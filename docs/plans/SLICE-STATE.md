@@ -10,6 +10,9 @@
   vendor deviation disclosure (surface to dev at next question). Session commits so far:
   17c79ad6 (256+242+191-addendum) · ebb7a123 (bench Entry catch-up) · 996b2fee (DEC-258) ·
   0b203827 (DEC-281 Core.Input) · d42a2107 (DEC-282). ALL UNPUSHED (never push).
+- **⚠ STANDING (dev, 2026-07-17): the package-manager EXTENSION gets a FULL re-adjudication when
+  started — dev dislikes phorj.toml; NO toml presumed; config/lockfile/registry/CLI all open;
+  research ecosystems then re-ask everything (register: "PACKAGE-MANAGER EXTENSION" addendum).**
 - **NEXT QUEUE**: DEC-273 extensions migration (fresh-context recommended) → DEC-271 icu4x
   (brought forward) → DEC-247 DateTime + DEC-248-codemod (fresh-context) → MACRO/real-world
   benches (DEC-259; var/phorj-app) + lift Uri Tier-2 + golden corpus + span-collision re-basing.
