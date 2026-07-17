@@ -12,7 +12,14 @@
   vs match/build; the encoder likely churns Value allocs per node). SPINE-SENSITIVE (Json enum
   tree threads all 3 backends) — measure-before/after per Invariant 11, do NOT rush. dbwork second
   (Db native-only, PDO baseline). closurecall/floatmul marginal — likely quiet-box-pinned reruns
-  land them ≥1.0. ⚠ the census above is UNPINNED (this box swings 3-4×) — RE-RUN CORE-PINNED
+  **jsonround HOTSPOT LOCATED (pinned split, 200k iters): parse=808ms, stringify=451ms — PARSE
+  dominates.** Root cause = `parse_json` (src/ext/json/natives.rs:235) does
+  `let chars: Vec<char> = s.chars().collect();` — full-materializes the input to a Vec<char>
+  (heap alloc + 4×-mem) EVERY parse, plus a `Value` alloc per node (`jnode`). FIX (own slice):
+  byte-cursor rewrite (JSON structure is ASCII; only string CONTENTS need UTF-8 → slice-borrow
+  from the original &str), keeps the parse RESULT identical (json tests + differential + PHP
+  oracle guard it) → byte-identity trivially safe (Json.parse is a native; PHP leg already uses
+  json_decode). ~150 lines in one file; fresh-context per Invariant 11.   land them ≥1.0. ⚠ the census above is UNPINNED (this box swings 3-4×) — RE-RUN CORE-PINNED
   (taskset -c 7 + docker php --cpuset-cpus=7) before trusting any single number or claiming a fix.
 - **DEC-273 WAVE 1 COMMITTED `9aed1ce7`** — registry + 5 migrations + phg extensions +
   E-EXTENSION-DISABLED + PHG_NO_JIT; DEC-268 panel: 5 rounds, rounds 4+5 consecutively CLEAN
