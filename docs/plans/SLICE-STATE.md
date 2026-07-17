@@ -11,7 +11,14 @@
   panel 4 rounds, r3+r4 consecutively clean; gate 2276/2276). 12/22 registry rows migrated.
   Session commits: 17c79ad6 · ebb7a123 · 996b2fee · 0b203827 · d42a2107 · 5670250e · 861cf0ab ·
   90aa34a1 · 7c840086 · 9aed1ce7 · e2090945 — ALL UNPUSHED.
-- **WAVE 3 BUILT (gate green 2276/2276+clippy×2+fmt+release; PANEL RUNNING).** db (natives +
+- **WAVE 3 COMMITTED `cb189d3` (+ DEC-191 playground catch-up `85dd1c09`), PANEL r3 (consecutive-
+  clean confirm) RUNNING** — r1 2×P2 (session "always compiled" comment; release freshness) fixed,
+  r2 CLEAN. Commit is PROVISIONAL until 2 consecutive clean (amend if r3 finds anything; unpushed).
+  ⚠ LESSON (git-mv): `git mv` stages the rename IMMEDIATELY, so a later scoped `git add other-file
+  && commit` sweeps the pre-staged renames in — split with `git reset --soft` + `git restore
+  --staged .` then re-stage. ⚠ LESSON (panel r2): piping git-diff through grep can SILENTLY
+  false-clean via the RTK proxy — ALWAYS write git output to a file, then grep the file.
+- **(built)** WAVE 3: db (natives +
   sqlite/mysql/postgres driver files, #[path] mods), mail, http_client, session (new default
   `session` feature) → src/ext/; 4 preludes dissolved (DB/MAIL/HTTP_CLIENT/SESSION → colocated
   prelude.rs). Registry 23 rows / 16 migrated. ⚠ LESSON: moving a natives file OUT of its own
