@@ -20,6 +20,7 @@ class Adder {
     }
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(7));
     Output.printLine(describe("hi"));

@@ -29,6 +29,7 @@ function fee(float days): float {
     return days * 0.25;
 }
 
+#[Entry]
 function main(): void {
     List<Book> shelf = [
         new Book("The Rust Book", new Available()),

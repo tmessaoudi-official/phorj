@@ -28,6 +28,7 @@ import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 import Core.Secret;
 
+#[Entry]
 function main(): void {
     // Postgres-specific placeholders (`$1,$2`) are handled for you — you still write `?` / `:name`.
     // The dispatch is purely on the scheme: `postgres://` or `postgresql://` → the Postgres driver.

@@ -341,10 +341,10 @@ fn run_program_main(
     }
     // Batch-1 D: the entry is a top-level `function main` OR a class-static `main` method — the shared
     // `ast::entry_point` resolver picks the one (the checker's `E-MULTIPLE-MAIN` guarantees ≤1).
-    let (entry_class, main) = match crate::ast::entry_point(program, "main") {
+    let (entry_class, main) = match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some(e) => e,
         None => return Err(Diagnostic::runtime(
-            "no entry point: running needs a `main` function. A library or web file (no `main`) \
+            "no entry point: running needs an `#[Entry]` function with a CLI signature (DEC-191). A library or web file \
                  still type-checks and transpiles — use `phg check` / `phg transpile`",
         )),
     };
@@ -360,8 +360,8 @@ fn run_program_main(
     // A class-static entry has no receiver (`this = None`); the trace name mirrors the VM's
     // `Class::main` for a static method, or bare `main` for a top-level one.
     let call_name = match entry_class {
-        Some(c) => format!("{c}::main"),
-        None => "main".to_string(),
+        Some(c) => format!("{c}::{}", main.name),
+        None => main.name.clone(),
     };
     match interp.run_call(
         &call_name,

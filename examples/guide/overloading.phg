@@ -68,6 +68,7 @@ class Formatter {
     }
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(42));
     Output.printLine(describe("hi"));

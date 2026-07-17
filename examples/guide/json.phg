@@ -30,6 +30,7 @@ function shapeOf(Json j): string {
     };
 }
 
+#[Entry]
 function main(): void {
     // Build a JSON document with the enum constructors. `Json` is compiler-injected, so its variants
     // are reached QUALIFIED (`Json.Object`, never a bare `Object` — "nothing in the wind").

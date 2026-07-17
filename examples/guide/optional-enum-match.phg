@@ -41,6 +41,7 @@ function label(Status? s): string {
     return match (s) { Active() => "OK", default => "attention" };
 }
 
+#[Entry]
 function main(): void {
     for (int id in [0, 1, 2, 3]) {
         Output.printLine(

@@ -32,6 +32,7 @@ class Savings extends Account {
     }
 }
 
+#[Entry]
 function main(): void {
     Savings s = new Savings(100, "Ada");
     s.deposit(50);

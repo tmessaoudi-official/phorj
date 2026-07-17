@@ -12,6 +12,7 @@ package Main;
 import Core.Output;
 import Core.Path;
 
+#[Entry]
 function main(): void {
     var p = "/var/log/app.log";
     Output.printLine("path          = {p}");

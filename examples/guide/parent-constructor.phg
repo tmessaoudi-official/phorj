@@ -60,6 +60,7 @@ class Derived extends Base {
 }
 
 // `string kind = kind;` must read the OUTER `kind`
+#[Entry]
 function main(): void {
     Dog d = new Dog("husky");
     Output.printLine(d.describe());

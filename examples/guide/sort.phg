@@ -25,6 +25,7 @@ function showStrs(List<string> xs): string {
     return String.join(xs, " ");
 }
 
+#[Entry]
 function main(): void {
     List<int> nums = [3, 1, 4, 1, 5, 9, 2, 6];
     // Natural ascending — a new list; `nums` itself is unchanged.

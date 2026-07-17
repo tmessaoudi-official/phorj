@@ -24,6 +24,7 @@ function describe(int? o): string {
     return match (o) { null => "absent", v => "present {v}" };
 }
 
+#[Entry]
 function main(): void {
     // A `T?` holds a value or `null`; a non-optional `T` widens to `T?`.
     int? some = 7;

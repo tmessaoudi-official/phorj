@@ -10,6 +10,7 @@ import Core.Output;
 import Acme.Convert;
 import Acme.Label as Fmt;
 
+#[Entry]
 function main(): void {
     // `Convert.cToF` is a cross-package qualified call; `Fmt.tag` is a call on the *aliased* leaf.
     int freezing = Convert.cToF(0);

@@ -5,6 +5,7 @@ import Core.Output;
 import Core.Decimal;
 import Core.Decimal.RoundingMode;
 
+#[Entry]
 function main(): void {
     decimal price = 19.99d;
     decimal total = price * 3d;

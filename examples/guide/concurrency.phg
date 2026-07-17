@@ -51,6 +51,7 @@ function interleave(): int {
     return total;
 }
 
+#[Entry]
 function main(): void {
     // 1. spawn + join — start a task, then collect its value.
     Task<int> t = spawn square(9);

@@ -19,11 +19,13 @@ import Core.Http.Request;
 import Core.Http.Response;
 
 // The whole application: greet by path, echoing the Host header.
+#[Entry]
 function handle(Request req): Response {
     string host = req.header("Host") ?? "world";
     return Response.text(200, "Hello {req.path} (host {host})");
 }
 
+#[Entry]
 function main(): void {
     string nl = Bytes.toString(b"\x0d\x0a") ?? "";
     // A canonical raw request, built from a `b"…"` literal with explicit CRLFs (deterministic).

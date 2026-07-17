@@ -10,6 +10,7 @@ import Core.Output;
 import Core.Bytes;
 import Core.Hash;
 
+#[Entry]
 function main(): void {
     var data = Bytes.fromString("Hello, Phorj!");
     Output.printLine("crc32:  {Hash.crc32(data)}");

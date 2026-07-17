@@ -6,6 +6,7 @@ function greet(string who): string {
     return "Hello, {who}!";
 }
 
+#[Entry]
 function main(): void {
     string name = "Phorj";
     int n = 3;

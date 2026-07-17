@@ -90,7 +90,7 @@ pub fn vm_factory(
     // (its entry is `respond`). Inject an inert one so it compiles — never invoked, so byte-inert and
     // matching the interpreter's `call_named`, which never runs `main` either. Do it on the shared
     // program the factory captures, so every per-worker recompile sees the same entry.
-    let program = if crate::ast::entry_point(&program, "main").is_none() {
+    let program = if crate::ast::entry_for(&program, crate::ast::EntryRole::Cli).is_none() {
         let mut p = (*program).clone();
         p.items.push(crate::ast::synth_empty_main());
         std::sync::Arc::new(p)

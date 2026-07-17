@@ -39,6 +39,7 @@ function announce(Speaker s): string {
     return s.speak();
 }
 
+#[Entry]
 function main(): void {
     var d = new Dog("Rex");
     var r = new Robot();

@@ -5,6 +5,7 @@ import Core.Time;
 import Core.Time.Duration;
 import Core.Time.Instant;
 
+#[Entry]
 function main(): void {
     Time.freeze(1700000000000);
     Instant now = Instant.now();

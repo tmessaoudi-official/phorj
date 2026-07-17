@@ -69,6 +69,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class User {{ constructor(public string name, public int age) {{}} }}
+#[Entry]
 function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
@@ -106,7 +107,7 @@ function loadAll(Statement s): List<User> throws DatabaseError {
   List<User> u = s.queryInto()?;
   return u;
 }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
@@ -194,7 +195,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Row2 { constructor(public string name, public int? age) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, age INTEGER)").exec();
@@ -236,7 +237,7 @@ class Country {{ constructor(public string code, public string name) {{}} }}
 class Customer {{ constructor(public int id, public string name, public Country country) {{}} }}
 class Order {{ constructor(public int id, public int total, public Customer customer) {{}} }}
 class Sale {{ constructor(public string product, public Order order, public Country? shipTo) {{}} }}
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE countries(code TEXT, name TEXT)").exec();
@@ -297,7 +298,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Order { constructor(public int id, public int total) {} }
 class Sale { constructor(public string product, public Order order) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE sales(product TEXT, oid INTEGER, ototal INTEGER)").exec();
@@ -323,7 +324,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Employee { constructor(public string name, public Employee? manager) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     List<Employee> es = db.prepare("SELECT name FROM e").queryInto();
@@ -401,7 +402,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class User { constructor(public string name, public int age) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE users(id INTEGER, name TEXT, age INTEGER)").exec();
@@ -438,7 +439,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class Member { constructor(public string userName, public string firstName) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE members(user_name TEXT, first_name TEXT)").exec();
@@ -463,7 +464,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Member { constructor(public string userName) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE members(user_name TEXT)").exec();
@@ -491,7 +492,7 @@ import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class Address { constructor(public string streetName) {} }
 class Member { constructor(public string userName, public Address homeAddress) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(user_name TEXT, street_name TEXT)").exec();
@@ -517,7 +518,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class Member { constructor(public string userName, public string firstName) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(id INTEGER, user_name TEXT, first_name TEXT)").exec();
@@ -544,7 +545,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class U { constructor(public string userName) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     Naming n = new Naming.SnakeToCamel();
@@ -566,7 +567,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Naming;
 import Core.DatabaseModule.DatabaseError;
 class U { constructor(public string userName) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     List<U> us = db.prepare("SELECT 1 AS user_name").namingStrategy(new Naming.Bogus()).queryInto();
@@ -619,7 +620,7 @@ function run(Database db, string sql): void throws DatabaseError {{
 function act(Database db): void throws DatabaseError {{
   {body}
 }}
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)").exec();
@@ -808,7 +809,7 @@ function run(Database db, string sql): void throws DatabaseError {{ Statement s 
 function act(Database db, Tries tries): void throws DatabaseError {{
   {body}
 }}
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE acct(id INTEGER PRIMARY KEY, bal INTEGER)").exec();
@@ -904,7 +905,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE people(id INTEGER PRIMARY KEY, name TEXT, city TEXT)").exec();
@@ -949,7 +950,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(k TEXT PRIMARY KEY, v TEXT)").exec();
@@ -1042,7 +1043,7 @@ import Core.DatabaseModule.DatabaseError;
 enum Status { Active(), Suspended() }
 class Acct { constructor(public string name, public Status status) {} }
 function label(Status s): string { return match (s) { Active() => "A", Suspended() => "S" }; }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
@@ -1066,7 +1067,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 enum Status { Active(), Suspended() }
 class Acct { constructor(public string name, public Status status) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
@@ -1093,7 +1094,7 @@ import Core.DatabaseModule.DatabaseError;
 enum Status { Active() }
 class Acct { constructor(public string name, public Status? status) {} }
 function show(Status? s): string { if (var x = s) { return "active"; } return "none"; }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, status TEXT)").exec();
@@ -1117,7 +1118,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Money { constructor(public decimal a, public decimal b) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(a TEXT, b TEXT)").exec();
@@ -1141,7 +1142,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Nums { constructor(public decimal i, public decimal half, public decimal tenth) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(i INTEGER, half REAL, tenth REAL)").exec();
@@ -1163,7 +1164,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Money { constructor(public decimal amount) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(amount TEXT)").exec();
@@ -1188,7 +1189,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Money { constructor(public decimal amount) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE m(amount TEXT)").exec();
@@ -1215,7 +1216,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Doc { constructor(public Json body, public Json? note) {} }
 function showNote(Json? j): string { if (var x = j) { return Json.stringify(x); } return "-"; }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE d(body TEXT, note TEXT)").exec();
@@ -1239,7 +1240,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Doc { constructor(public Json body) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE d(body TEXT)").exec();
@@ -1269,7 +1270,7 @@ enum Tier { Gold(), Silver() }
 class Wallet { constructor(public Tier tier, public decimal balance, public Json flags) {} }
 class User { constructor(public string name, public Wallet wallet) {} }
 function tierName(Tier t): string { return match (t) { Gold() => "gold", Silver() => "silver" }; }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE u(name TEXT, tier TEXT, balance TEXT, flags TEXT)").exec();
@@ -1293,7 +1294,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 enum Shape { Circle(float radius), Square() }
 class Row4 { constructor(public string name, public Shape shape) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     List<Row4> rows = db.prepare("SELECT name, shape FROM t").queryInto();
@@ -1360,7 +1361,7 @@ function loadAll(Statement s): List<User> throws DatabaseError {
   var u = s.queryInto<User>()?;
   return u;
 }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE users(name TEXT, age INTEGER)").exec();
@@ -1423,7 +1424,7 @@ fn db_program_transpile_is_a_clean_ladder_error() {
 #[test]
 fn raw_native_database_import_transpile_is_a_clean_ladder_error() {
     let src = "package Main;\nimport Core.Output;\nimport Core.Native.Database;\n\
-        function main(): void { Output.printLine(\"unreachable\"); }\n";
+        #[Entry] function main(): void { Output.printLine(\"unreachable\"); }\n";
     match phorj::cli::cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-DB, but transpile succeeded: {php:?}"),
         Err(e) => assert!(
@@ -1580,7 +1581,7 @@ import Core.DatabaseModule;
 import Core.DatabaseModule.Database;
 import Core.DatabaseModule.DatabaseError;
 class Tagged { constructor(public string name, public List<string> tags) {} }
-function main(): void {
+#[Entry] function main(): void {
   try {
     Database db = new Database("sqlite::memory:");
     discard db.prepare("CREATE TABLE t(name TEXT, tags TEXT)").exec();

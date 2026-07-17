@@ -21,6 +21,7 @@ class Counter {
     }
 }
 
+#[Entry]
 function main(): void {
     var c = new Counter(5);
     var read = c.reader();

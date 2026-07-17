@@ -18,6 +18,7 @@ function swap(int a, int b): string {
     return "first={first} second={second}";
 }
 
+#[Entry]
 function main(): void {
     Point p = new Point(3, 4);
     Output.printLine(describe(p));

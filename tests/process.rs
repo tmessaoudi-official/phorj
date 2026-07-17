@@ -24,7 +24,7 @@ fn process_args_are_visible_to_the_program() {
 import Core.Output;
 import Core.Process;
 import Core.List;
-function main() -> void {
+#[Entry] function main() -> void {
     var a = Process.arguments();
     Output.printLine("n={List.length(a)}");
     for (string s in a) { Output.printLine(s); }
@@ -50,7 +50,7 @@ fn env_natives_under_controlled_environment() {
     let get_src = r#"package Main;
 import Core.Output;
 import Core.Environment;
-function main() -> void {
+#[Entry] function main() -> void {
     Output.printLine(Environment.get("PHORJ_IT_PRESENT") ?? "<unset>");
     Output.printLine(Environment.get("PHORJ_IT_DEFINITELY_UNSET_XYZ") ?? "<unset>");
 }"#;
@@ -61,7 +61,7 @@ function main() -> void {
 import Core.Output;
 import Core.Environment;
 import Core.Map;
-function main() -> void {
+#[Entry] function main() -> void {
     var e = Environment.all();
     Output.printLine("has={Map.has(e, \"PHORJ_IT_PRESENT\")}");
 }"#;
@@ -78,7 +78,7 @@ fn main_int_return_is_the_exit_code() {
     // backends agree on (stdout, exit).
     let src = r#"package Main;
 import Core.Output;
-function main(): int {
+#[Entry] function main(): int {
     Output.printLine("done");
     return 7;
 }"#;
@@ -90,7 +90,7 @@ function main(): int {
 fn main_void_exits_zero() {
     let src = r#"package Main;
 import Core.Output;
-function main(): void { Output.printLine("hi"); }"#;
+#[Entry] function main(): void { Output.printLine("hi"); }"#;
     assert_eq!(cmd_treewalk_exit(src).unwrap(), ("hi\n".to_string(), 0));
     assert_eq!(cmd_run_exit(src).unwrap(), ("hi\n".to_string(), 0));
 }
@@ -103,7 +103,7 @@ fn main_receives_argv_as_a_parameter() {
     let src = r#"package Main;
 import Core.Output;
 import Core.List;
-function main(List<string> args): int {
+#[Entry] function main(List<string> args): int {
     for (string s in args) { Output.printLine(s); }
     return List.length(args);
 }"#;

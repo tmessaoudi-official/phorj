@@ -21,6 +21,7 @@ function describe(Server s): string {
     return "{s.host}:{s.port} tls={s.tls}";
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(new Server("a.example")));
     Output.printLine(describe(new Server("b.example", 9090)));

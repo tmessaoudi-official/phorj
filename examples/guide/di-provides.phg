@@ -37,6 +37,7 @@ class Repo {
     }
 }
 
+#[Entry]
 function main(): void {
     Repo r = inject<Repo>();
     Output.printLine(r.status());

@@ -10,6 +10,7 @@ import Core.Output;
 import Core.Json;
 import Acme.Meta;
 
+#[Entry]
 function main(): void {
     Json doc = new Json.Object(
         [

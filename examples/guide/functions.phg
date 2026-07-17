@@ -29,6 +29,7 @@ function banner(string title): void {
     Output.printLine("== {title} ==");
 }
 
+#[Entry]
 function main(): void {
     banner("functions");
     Output.printLine("add(2, 3) = {add(2, 3)}");

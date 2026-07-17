@@ -152,13 +152,11 @@ pub fn run_cooperative_interp(program: &Program) -> Result<(String, i64), Diagno
     let t0 = coop.borrow_mut().sched.spawn(); // TaskId(0) — the entry/main task
 
     // Resolve `main` (top-level or class-static) exactly like the synchronous entry.
-    let (entry_class, main) = match crate::ast::entry_point(program, "main") {
+    let (entry_class, main) = match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some(e) => e,
-        None => {
-            return Err(Diagnostic::runtime(
-                "no entry point: running needs a `main` function",
-            ))
-        }
+        None => return Err(Diagnostic::runtime(
+            "no entry point: running needs an `#[Entry]` function with a CLI signature (DEC-191)",
+        )),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
     let args = if names.is_empty() {
@@ -167,8 +165,8 @@ pub fn run_cooperative_interp(program: &Program) -> Result<(String, i64), Diagno
         vec![crate::native::process_args_value()]
     };
     let call_name = match entry_class {
-        Some(c) => format!("{c}::main"),
-        None => "main".to_string(),
+        Some(c) => format!("{c}::{}", main.name),
+        None => main.name.clone(),
     };
     let body = main.body.clone();
 
@@ -231,7 +229,7 @@ function consume(Channel<int> ch): int {
     return v;
 }
 
-function main(): void {
+#[Entry] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> t = spawn consume(ch);
     ch.send(42);
@@ -257,7 +255,7 @@ function produce(Channel<int> ch): int {
     return 1;
 }
 
-function main(): void {
+#[Entry] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> p = spawn produce(ch);
     int v = ch.receive();
@@ -280,7 +278,7 @@ import Core.Output;
 
 function square(int n): int { return n * n; }
 
-function main(): void {
+#[Entry] function main(): void {
     Task<int> t = spawn square(9);
     Output.printLine("9 squared = {t.join()}");
     Channel<string> words = Channel.create();

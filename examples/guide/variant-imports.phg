@@ -39,6 +39,7 @@ function firstOne(string s): Option<int> {
     return match (s) { "1" => new Some(1), default => new None() };
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(parse("2")));
     // ok 2

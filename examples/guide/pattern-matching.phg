@@ -153,6 +153,7 @@ function action(Light l): string {
     return match (l) { Red() => "stop", Yellow() => "stop", Green() => "go" };
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(classify(new Code(503)));
     Output.printLine(classify(new Code(404)));

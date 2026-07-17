@@ -41,6 +41,7 @@ function wrapAtMaxQualified(int start): int {
 }
 
 // identical behaviour — the qualified form is the same attribute
+#[Entry]
 function main(): void {
     Output.printLine("{wrapAtMax(9223372036854775807)}");
     // -9223372036854775808 (wrapped, no fault)

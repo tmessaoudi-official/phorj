@@ -1,0 +1,17 @@
+// #[Entry] (DEC-191) — entries are declared by ATTRIBUTE, never by a magic name. The role is
+// inferred from the signature: `(): void`, `(): int`, `(List<string>): void|int` = the CLI entry
+// (`phg run`); `(Request): Response` = the web handler (`phg serve`). One of each may coexist.
+// An `int` return IS the process exit status (0–255); `void` exits 0 on a clean run. Entries may
+// declare `throws` — an escaped fault exits 1 (or answers HTTP 500 on the web role).
+package Main;
+
+import Core.Output;
+
+class App {
+    #[Entry]
+    static function run(): int {
+        // The entry can live on a class as a static method — the name is yours to choose.
+        Output.printLine("attributed entry, chosen name, int exit");
+        return 0;
+    }
+}

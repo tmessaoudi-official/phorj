@@ -9,6 +9,7 @@ import Core.List;
 import Core.Math;
 import Core.String;
 
+#[Entry]
 function main(): void {
     List<int> xs = [10, 20, 30, 40];
     // List.length(...) as the left operand of every arithmetic form.

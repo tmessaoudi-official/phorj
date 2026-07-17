@@ -20,6 +20,7 @@ package Main;
 import Core.Output;
 import Core.Conversion;
 
+#[Entry]
 function main(): void {
     // Stringify any scalar.
     Output.printLine(Conversion.toString(42));

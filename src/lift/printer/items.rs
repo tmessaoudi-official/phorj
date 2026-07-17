@@ -65,6 +65,11 @@ impl Printer {
     // ── declarations ──
 
     pub(super) fn function(&mut self, f: &FunctionDecl) -> Result<(), String> {
+        // DEC-191: print item attributes (the lifter emits `#[Entry]` on entries; it never
+        // produces attribute ARGUMENTS, so the bare form suffices — extend if that changes).
+        for attr in &f.attrs {
+            self.line(&format!("#[{}]", attr.name));
+        }
         let mods = modifiers_str(&f.modifiers);
         let generics = if f.type_params.is_empty() {
             String::new()

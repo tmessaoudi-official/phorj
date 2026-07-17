@@ -117,14 +117,13 @@ fn throw_in_main_is_uncaught() {
 }
 
 #[test]
-fn main_may_not_declare_throws() {
-    let bad = errors_of(&format!(
-        "{ERRDEF} function main() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }}"
+fn entries_may_declare_throws() {
+    // DEC-191 (supersedes the Batch-1 D restriction): a throwing entry is LEGAL — an escaped
+    // fault is the ruled behavior (exit 1 / HTTP 500), like any unhandled fault.
+    let ok = errors_of(&format!(
+        "{ERRDEF} #[Entry] function main() -> void throws BadInputError {{ throw new BadInputError(\"x\"); }}"
     ));
-    assert!(
-        bad.iter().any(|d| d.code == Some("E-UNCAUGHT-THROW")),
-        "expected E-UNCAUGHT-THROW, got {bad:?}"
-    );
+    assert!(ok.is_empty(), "throwing entry must be clean, got {ok:?}");
 }
 
 #[test]

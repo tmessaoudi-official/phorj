@@ -27,6 +27,7 @@ class Counter {
     }
 }
 
+#[Entry]
 function main(): void {
     var a = Counter.zero;
     var b = a.next().next();

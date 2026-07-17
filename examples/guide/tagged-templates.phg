@@ -30,6 +30,7 @@ class Bracket {
     }
 }
 
+#[Entry]
 function main(): void {
     string a = "one";
     string b = "two";

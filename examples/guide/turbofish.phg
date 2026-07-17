@@ -42,6 +42,7 @@ class Maker {
     }
 }
 
+#[Entry]
 function main(): void {
     // Explicit type arguments (turbofish):
     Output.printLine("{identity<int>(5)}");

@@ -23,6 +23,7 @@ class User {
     constructor(public string name, public int age, public List<string> tags, public Wallet wallet) {}
 }
 
+#[Entry]
 function main(): void {
     User u = new User("Ada", 36, ["math", "engines"], new Wallet("gold", 1250));
     // Pass-through: inspect a value MID-EXPRESSION without restructuring the code.

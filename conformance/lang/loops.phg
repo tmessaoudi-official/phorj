@@ -4,6 +4,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     // while: test before each iteration; compound-assign accumulates.
     mutable int i = 0;

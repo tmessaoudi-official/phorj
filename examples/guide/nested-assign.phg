@@ -10,6 +10,7 @@ import Core.Output;
 import Core.List;
 import Core.Map;
 
+#[Entry]
 function main(): void {
     // A 2-D grid (List<List<int>>) mutated in place at nested indices.
     mutable List<List<int>> grid = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];

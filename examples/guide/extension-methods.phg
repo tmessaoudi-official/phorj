@@ -37,6 +37,7 @@ function total(Basket b): int {
     return List.sum(b.items);
 }
 
+#[Entry]
 function main(): void {
     Output.printLine("abc".shout());
     Output.printLine("{5.doubled()}");

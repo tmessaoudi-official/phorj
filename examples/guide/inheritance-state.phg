@@ -37,6 +37,7 @@ class Employee extends Named, Paid {
     }
 }
 
+#[Entry]
 function main(): void {
     Employee e = new Employee("Ada", 1000);
     // Inherited state from BOTH parents is initialized: Named's promoted `name`, Paid's derived `annual`.

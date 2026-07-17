@@ -116,7 +116,7 @@ pub(super) fn validate_package_decl(prog: &Program, file: &Path) -> Result<(), S
 pub(super) fn validate_public_surface(prog: &Program, file: &Path) -> Result<(), String> {
     use crate::ast::Visibility;
     // Entry/program files mix freely under any name.
-    if crate::ast::entry_point(prog, "main").is_some() {
+    if crate::ast::entry_for(prog, crate::ast::EntryRole::Cli).is_some() {
         return Ok(());
     }
     let mut pub_types: Vec<&str> = Vec::new();

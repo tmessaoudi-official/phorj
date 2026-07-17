@@ -32,6 +32,7 @@ function firstPositive(List<int> xs): Option<int> {
     return new Option.None();
 }
 
+#[Entry]
 function main(): void {
     var some = new Option.Some(7);
     // Option<int> — T inferred from `7`

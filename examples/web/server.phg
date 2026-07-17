@@ -119,6 +119,7 @@ function badRequest(): Response {
 }
 
 // The portable handler — the value unit that also round-trips to PHP (server.php calls this).
+#[Entry]
 function handle(Request req): Response {
     Handler tag = matchRoute(req.method, req.path);
     return match (tag) {
@@ -149,6 +150,7 @@ function summarize(bytes raw): void {
     Output.printLine("{statusLine} ({len}B)");
 }
 
+#[Entry]
 function main(): void {
     // Exercise the served pipe on five canned requests: a hit per route, an unknown path (404), a
     // method mismatch (404), and a malformed buffer (400) — deterministic, no socket, no File.

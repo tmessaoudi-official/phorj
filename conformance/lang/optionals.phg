@@ -14,6 +14,7 @@ function pick(bool present): Box? {
     return null;
 }
 
+#[Entry]
 function main(): void {
     int a = pick(true)?.value ?? -1;
     int b = pick(false)?.value ?? -1;

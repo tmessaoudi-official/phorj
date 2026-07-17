@@ -6,6 +6,7 @@ import Core.Output;
 // and `private` helper `clamp` are NOT importable here — see README.md for the rejected cases.
 import Acme.Shapes.Rect;
 
+#[Entry]
 function main(): void {
     Rect r = new Rect(3, 4);
     // area() = scale(3 * 4) = scale(12) = 12 * factor() = 12 * clamp(1) = 12 * 1 = 12.

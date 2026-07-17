@@ -100,16 +100,38 @@ fn instance_method_named_main_is_not_an_entry() {
 }
 
 #[test]
-fn top_level_and_class_static_main_is_multiple() {
-    let src = "function main(): void { } class App { static function main(): void { } }";
-    assert!(has(src, "E-MULTIPLE-MAIN"), "{:?}", errors_of(src));
+fn top_level_and_class_static_entry_is_multiple() {
+    // DEC-191: multiplicity is per attributed ROLE, not per name — two CLI entries collide.
+    let src = "#[Entry] function main(): void { } class App { #[Entry] static function main(): void { } }";
+    assert!(has(src, "E-MULTIPLE-ENTRY"), "{:?}", errors_of(src));
 }
 
 #[test]
-fn two_class_static_mains_is_multiple() {
+fn two_class_static_entries_is_multiple() {
     let src =
-        "class A { static function main(): void { } } class B { static function main(): void { } }";
-    assert!(has(src, "E-MULTIPLE-MAIN"), "{:?}", errors_of(src));
+        "class A { #[Entry] static function main(): void { } } class B { #[Entry] static function main(): void { } }";
+    assert!(has(src, "E-MULTIPLE-ENTRY"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn cli_and_web_entries_may_coexist() {
+    // DEC-191: one CLI + one web entry in one program is legal — run/serve pick their role.
+    let src = "import Core.Http.Request; import Core.Http.Response; \
+               #[Entry] function cli(): void { } \
+               #[Entry] function web(Request r): Response { return Response.text(\"ok\"); }";
+    assert!(!has(src, "E-MULTIPLE-ENTRY"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn entry_on_instance_method_is_target_error() {
+    let src = "class App { #[Entry] function run(): void { } }";
+    assert!(has(src, "E-ENTRY-TARGET"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn entry_with_unmatched_signature_is_sig_error() {
+    let src = "#[Entry] function main(int x): void { }";
+    assert!(has(src, "E-ENTRY-SIG"), "{:?}", errors_of(src));
 }
 
 #[test]

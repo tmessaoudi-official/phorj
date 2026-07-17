@@ -1900,3 +1900,17 @@ counter/accumulator split. "Will matter when the counter is on the critical path
 
 Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.
 Please report it (see [SUPPORT.md](SUPPORT.md); for security, [SECURITY.md](SECURITY.md)).
+
+## §span-collision — LATENT: injected-prelude spans share the user file's span space (P1, 2026-07-17)
+
+Every checker rewrite map (`ufcs_resolutions`, `default_fills`, `for_iter_lowerings`, …) keys on
+`Span.start` byte offsets, and injected Core preludes are parsed with their OWN offsets — so a
+user-code span can numerically COLLIDE with a prelude-internal span, making a rewrite recorded
+for one site splice at the other. Reproduced 2026-07-17: adding one 9-byte line
+(`#[Entry]\n`, the DEC-191 codemod) to `examples/db/transaction-closure.phg` shifted a user call
+onto a prelude `transaction` span — the VM leg failed (`transaction` is not a function) while
+the interpreter ran (run≠runvm). ANY padding change escapes the collision, which is what makes
+it latent-and-random rather than deterministic. REAL FIX (owed, its own slice): re-base every
+injected module's `Span.start` into a per-module high offset window at injection time (line/col
+stay original for diagnostics), so prelude and user span keys can never meet. Until then the
+one known-colliding file carries a deliberate padding line + pointer here.

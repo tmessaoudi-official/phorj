@@ -27,6 +27,7 @@ function percent(int n): int {
     return n;
 }
 
+#[Entry]
 function main(): void {
     Output.printLine("percent = {percent(50)}");
     // Passing asserts are no-ops — execution continues past them.

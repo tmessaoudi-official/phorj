@@ -29,7 +29,7 @@ import Core.Output;
 import Core.FileSystemModule;
 import Core.FileSystemModule.FileSystem;
 import Core.FileSystemModule.FileSystemError;
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     FileSystem.createDir("{root}/a/b");
     FileSystem.writeText("{root}/a/one.txt", "hello");
@@ -71,7 +71,7 @@ import Core.FileSystemModule.FileSystemNotFoundError;
 import Core.FileSystemModule.FileSystemDirNotEmptyError;
 import Core.FileSystemModule.FileSystemPermissionDeniedError;
 import Core.FileSystemModule.FileSystemError;
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     try {{
       discard FileSystem.readText("{root}/absent.txt");
@@ -108,7 +108,7 @@ fn fs_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
 import Core.Output;
 import Core.FileSystemModule;
-function main(): void { Output.printLine("x"); }
+#[Entry] function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-FS, got PHP: {php:?}"),

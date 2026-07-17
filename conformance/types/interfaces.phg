@@ -23,6 +23,7 @@ function announce(Speaker s): string {
     return "says {s.speak()}";
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(announce(new Dog()));
     Output.printLine(announce(new Cat()));

@@ -12,6 +12,7 @@ import Core.DebugModule;
 import Core.DebugModule.Debug;
 import Acme.Widget;
 
+#[Entry]
 function main(): void {
     Widget w = new Widget(41);
     Output.printLine("widget: {w.bumped()}");

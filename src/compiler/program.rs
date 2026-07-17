@@ -113,12 +113,14 @@ pub(super) fn compile_program_with(
     // Batch-1 D: the entry is a top-level `function main` OR a class-static `main` method (the shared
     // `ast::entry_point` resolver, also consumed by the interpreter; `E-MULTIPLE-MAIN` guarantees ≤1).
     // The entry *index* needs the methods table, built below, so only the metadata is computed here.
-    let (entry_class, entry_decl) = crate::ast::entry_point(program, "main").ok_or_else(|| {
-        "no entry point: running needs a `main` function. A library or web file (no `main`) \
+    let (entry_class, entry_decl) = crate::ast::entry_for(program, crate::ast::EntryRole::Cli).ok_or_else(|| {
+        "no entry point: running needs an `#[Entry]` function with a CLI signature (DEC-191). A library or web file \
              still type-checks and transpiles — use `phg check` / `phg transpile`"
             .to_string()
     })?;
     let entry_class: Option<String> = entry_class.map(str::to_string);
+    // DEC-191: the entry is attribute-declared — its NAME is whatever the program chose.
+    let entry_name = entry_decl.name.clone();
     let main_is_static = entry_class.is_some();
     let main_params = entry_decl.params.len();
 
@@ -556,7 +558,7 @@ pub(super) fn compile_program_with(
         // (statics are class-level); the compiler context here has none.
         // Only a *top-level* `main` is the entry here; a class-static entry gets the same prelude in
         // its `compile_method` call below (Batch-1 D).
-        if f.name == "main" && entry_class.is_none() {
+        if f.name == entry_name && entry_class.is_none() {
             for (slot, init) in &static_runtime_inits {
                 c.expr(init)?; // [value]
                 c.emit(Op::SetStatic(*slot), last_line); // pop into the static slot
@@ -618,7 +620,7 @@ pub(super) fn compile_program_with(
         // (the same prelude a top-level `main` gets above); every other method gets none.
         let prelude: &[(usize, &Expr)] = if main_is_static
             && entry_class.as_deref() == Some(class_name.as_str())
-            && f.name == "main"
+            && f.name == entry_name
         {
             &static_runtime_inits
         } else {
@@ -656,12 +658,12 @@ pub(super) fn compile_program_with(
     // its free-function index; a class-static `main` is its `(class, "main")` entry.
     let main = match &entry_class {
         None => fns
-            .get("main")
+            .get(entry_name.as_str())
             .map(|m| m.index)
-            .expect("entry_point reported a top-level main"),
+            .expect("entry_for reported a top-level entry"),
         Some(class) => *methods
-            .get(&(class.clone(), "main".to_string()))
-            .expect("entry_point reported a class-static main"),
+            .get(&(class.clone(), entry_name.clone()))
+            .expect("entry_for reported a class-static entry"),
     };
 
     // Append the trailing lambda block. Named functions occupy `0..next_idx` (hoist order); every

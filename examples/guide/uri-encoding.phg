@@ -12,6 +12,7 @@ package Main;
 import Core.Output;
 import Core.UriModule.Uri;
 
+#[Entry]
 function main(): void {
     var query = "name=Café & Co?";
     var form = Uri.encodeForm(query);

@@ -60,6 +60,7 @@ function show(Router rt, bytes raw): void {
     }
 }
 
+#[Entry]
 function main(): void {
     // `Http.autoRouter()` lowers to the explicit registration of every `#[Route]` handler above.
     Router rt = Http.autoRouter();

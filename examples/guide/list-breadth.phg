@@ -10,6 +10,7 @@ import Core.List;
 //   * `find(p) -> T?`  — first element satisfying the predicate, or null.
 //   * `any(p)`/`all(p)`— short-circuiting existential / universal quantifiers (`bool`).
 // All pure Phorj over the higher-order-native machinery; byte-identical both backends and real PHP.
+#[Entry]
 function main(): void {
     List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6, 5];
     Output.printLine("unique: {List.length(List.unique(xs))} of {List.length(xs)}");

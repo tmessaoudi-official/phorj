@@ -5,6 +5,7 @@ package Main;
 import Core.Output;
 import Core.Bytes;
 
+#[Entry]
 function main(): void {
     // fromString + length (BYTE count) + toString round-trip.
     bytes hello = Bytes.fromString("hello");

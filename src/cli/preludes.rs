@@ -1896,15 +1896,23 @@ pub(super) fn inject_core_modules(prog: &Program) -> std::borrow::Cow<'_, Progra
                 prepend.push(it);
             }
         }
-        // Http serve bridge: synthesize `respond` wrapping a user `handle`, when no `respond` exists.
+        // Http serve bridge (DEC-191): synthesize `respond` wrapping the program's #[Entry]
+        // WEB handler (`(Request): Response`, resolved by ATTRIBUTE — the magic `handle` name is
+        // retired), when no `respond` exists. The wrapper calls the entry by its actual path
+        // (top-level name, or `Class.method` for a static entry).
         if let Some(bridge_src) = m.respond_bridge {
-            let has_fn = |n: &str| {
-                p.items
-                    .iter()
-                    .any(|x| matches!(x, Item::Function(f) if f.name == n))
-            };
-            if has_fn("handle") && !has_fn("respond") {
-                if let Ok(bridge) = lex_parse(bridge_src) {
+            let has_respond = p
+                .items
+                .iter()
+                .any(|x| matches!(x, Item::Function(f) if f.name == "respond"));
+            let web =
+                crate::ast::entry_for(p, crate::ast::EntryRole::Web).map(|(cls, f)| match cls {
+                    Some(c) => format!("{c}.{}", f.name),
+                    None => f.name.clone(),
+                });
+            if let (Some(callee), false) = (web, has_respond) {
+                let src = bridge_src.replace("handle(req)", &format!("{callee}(req)"));
+                if let Ok(bridge) = lex_parse(&src) {
                     prepend.extend(
                         bridge
                             .items

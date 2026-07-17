@@ -31,6 +31,7 @@ class Cat implements Speaker {
     }
 }
 
+#[Entry]
 function main(): void {
     mutable int acc = 0;
     mutable int i = 0;

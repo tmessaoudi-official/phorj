@@ -20,6 +20,7 @@ class Robot {
     use Taggable;
 }
 
+#[Entry]
 function main(): void {
     Robot r = new Robot();
     Output.printLine(r.hello());

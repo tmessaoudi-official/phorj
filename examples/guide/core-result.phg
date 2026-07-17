@@ -41,6 +41,7 @@ function report(Result<int, ParseFault> r): string {
     };
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(report(parsePositive("2")));
     // ok 2

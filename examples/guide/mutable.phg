@@ -4,6 +4,7 @@ import Core.Output;
 
 // M-mut.1 — mutable locals + reassignment.
 // Bindings are IMMUTABLE by default; only a `mutable` binding may be reassigned.
+#[Entry]
 function main(): void {
     // A mutable counter, reassigned twice.
     mutable int counter = 0;

@@ -15,6 +15,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): int {
     Output.printLine("starting up");
     Output.printLine("work done");

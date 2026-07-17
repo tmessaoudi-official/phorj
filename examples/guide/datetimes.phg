@@ -11,6 +11,7 @@ import Core.Time;
 import Core.Time.Duration;
 import Core.Time.Instant;
 
+#[Entry]
 function main(): void {
     // Build an instant from broken-down UTC fields.
     Instant dt = Instant.ofCivil(2023, 11, 14, 22, 13, 20);

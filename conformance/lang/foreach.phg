@@ -4,6 +4,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     List<string> langs = ["Phorj", "PHP", "TypeScript"];
     // Value form — `w` is inferred as `string` from the iterable.

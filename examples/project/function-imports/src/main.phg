@@ -11,6 +11,7 @@ import App.Text.banner;
 import App.Text.shout as yell;
 import App.Text.addUp;
 
+#[Entry]
 function main(): void {
     // Bare cross-package function calls (banner, and yell = App.Text.shout aliased).
     printLine(banner("Function imports"));

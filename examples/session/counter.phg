@@ -23,6 +23,7 @@ import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
 
+#[Entry]
 function handle(Request req): Response {
     Session s = Session.start(req);
     int visits = (String.parseInt(s.get("visits") ?? "0") ?? 0) + 1;
@@ -30,6 +31,7 @@ function handle(Request req): Response {
     return s.apply(Response.html("<p>visit #{visits}</p>"));
 }
 
+#[Entry]
 function main(): void {
     // Request #1: no cookie → fresh session.
     Request? r1 = Request.parse(Bytes.fromString("GET / HTTP/1.1\r\nHost: x\r\n\r\n"));

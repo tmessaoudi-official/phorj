@@ -41,6 +41,7 @@ class Duck extends Swimmer, Flyer {
     use Swimmer.move;
 }
 
+#[Entry]
 function main(): void {
     Duck d = new Duck();
     Output.printLine(d.move());

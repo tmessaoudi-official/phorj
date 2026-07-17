@@ -26,6 +26,7 @@ function note(string msg): void {
 function doNothing(): empty {
 }
 
+#[Entry]
 function main(): void {
     note("start");
     // Hold the empty value — the explicit escape from E-VOID-CAPTURE.

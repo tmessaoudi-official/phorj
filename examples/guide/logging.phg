@@ -16,6 +16,7 @@ package Main;
 import Core.Output;
 import Core.Log;
 
+#[Entry]
 function main(): void {
     Log.debug("starting up");
     // [DEBUG] starting up   -> stderr

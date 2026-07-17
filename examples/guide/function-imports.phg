@@ -21,6 +21,7 @@ import Core.Math.abs;
 import Core.Math.max;
 import Core.List;
 
+#[Entry]
 function main(): void {
     // Bare member-imported calls (printLine, and clean = String.trim aliased).
     printLine(clean("  hello  "));

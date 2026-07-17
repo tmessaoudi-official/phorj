@@ -37,6 +37,7 @@ function applyOr(int x, int fallback, (int) => int throws NegativeInputError op)
     }
 }
 
+#[Entry]
 function main(): void {
     // A THROWING lambda: it declares `throws NegativeInputError`, so the `throw` in its body discharges
     // against that clause. Its inferred type is `(int) => int throws NegativeInputError`.

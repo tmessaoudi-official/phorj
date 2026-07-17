@@ -29,6 +29,7 @@ function show(Renderer & Printer rp): void {
     Output.printLine(rp.render("hey"));
 }
 
+#[Entry]
 function main(): void {
     show(new Both());
 }

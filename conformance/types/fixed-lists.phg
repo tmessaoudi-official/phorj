@@ -15,6 +15,7 @@ function total(List<int> xs): int {
     return sum;
 }
 
+#[Entry]
 function main(): void {
     [int; 3] rgb = [255, 128, 0];
     Output.printLine("r={rgb[0]} g={rgb[1]} b={rgb[2]}");

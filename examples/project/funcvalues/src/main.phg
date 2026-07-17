@@ -7,6 +7,7 @@ import Core.Output;
 import Core.List;
 import Acme.Calc;
 
+#[Entry]
 function main(): void {
     var ys = Calc.doubleAll([1, 2, 3]);
     // [2, 4, 6]

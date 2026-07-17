@@ -22,6 +22,7 @@ declare function abs(int n): int;
 
 declare function max(int a, int b): int;
 
+#[Entry]
 function main(): void {
     Output.printLine(strtoupper("hello"));
     // HELLO

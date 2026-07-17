@@ -17,6 +17,7 @@ class App {
     function greet(): void {
         Output.printLine("Hello from {this.name}");
     }
+    #[Entry]
     static function main(): int {
         // The Java-style entry: no `this`, returns the exit code. It builds an instance and runs it.
         var app = new App("App.main");

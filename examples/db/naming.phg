@@ -31,6 +31,7 @@ class Member {
     constructor(public int id, public string userName, public string firstName, public Address homeAddress) {}
 }
 
+#[Entry]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

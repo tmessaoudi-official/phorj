@@ -23,6 +23,7 @@ class Counter {
     }
 }
 
+#[Entry]
 function main(): void {
     // `::` for class-level (static) access…
     int sq = MathUtil::square(6);

@@ -4,6 +4,7 @@ package Main;
 import Core.Output;
 import Core.Bytes;
 
+#[Entry]
 function main(): void {
     bytes hello = Bytes.fromString("hello");
     Output.printLine("len={Bytes.length(hello)}");

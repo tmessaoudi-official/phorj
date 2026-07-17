@@ -188,39 +188,85 @@ impl Checker {
         // classes + functions are collected, with no `this` — so an initializer may call a function or
         // read another static.
         self.check_static_inits(program);
-        // Batch-1 D: an entry point may be a top-level `function main` OR a class-static `main` method,
-        // but never more than one — an ambiguous entry is an error, never a silent pick.
-        if crate::ast::entry_point_count(program, "main") > 1 {
-            // Report at every entry after the first, so each duplicate is flagged.
-            let mut seen = false;
+        // DEC-191: entries are declared by `#[Entry]` (the magic `main`/`handle` names are
+        // retired — FULLY BREAKING, developer-ruled). Validate every attributed candidate here:
+        // an instance-method `#[Entry]` is a target error; a signature matching neither role is
+        // `E-ENTRY-SIG`; more than one entry OF THE SAME ROLE is `E-MULTIPLE-ENTRY` (one CLI +
+        // one web may coexist — `phg run` and `phg serve` each pick theirs).
+        {
+            let mut cli_seen = false;
+            let mut web_seen = false;
             for item in &program.items {
-                let dup_span = match item {
-                    Item::Function(f) if f.name == "main" => Some(f.span),
-                    Item::Class(c) => c.members.iter().find_map(|m| match m {
-                        crate::ast::ClassMember::Method(f)
-                            if f.name == "main"
-                                && f.modifiers.contains(&crate::ast::Modifier::Static) =>
-                        {
-                            Some(f.span)
-                        }
-                        _ => None,
-                    }),
-                    _ => None,
-                };
-                if let Some(span) = dup_span {
-                    if seen {
+                let mut check_entry = |f: &crate::ast::FunctionDecl, instance_method: bool| {
+                    let Some(attr) = f.attrs.iter().find(|a| crate::ast::is_entry_attr(a)) else {
+                        return;
+                    };
+                    if !attr.args.is_empty() {
                         self.err_coded(
-                            span,
-                            "multiple program entry points named `main`",
-                            "E-MULTIPLE-MAIN",
-                            Some(
-                                "a program has at most one entry: either a top-level `function main` \
-                                 or a single class `static function main` — remove the extras"
-                                    .into(),
-                            ),
+                            attr.span,
+                            "`#[Entry]` takes no arguments — the role is inferred from the signature"
+                                .to_string(),
+                            "E-ATTRIBUTE-ARGS",
+                            Some("write it bare: `#[Entry]`".into()),
                         );
                     }
-                    seen = true;
+                    if instance_method {
+                        self.err_coded(
+                            attr.span,
+                            "`#[Entry]` on an instance method — an entry runs without an instance"
+                                .to_string(),
+                            "E-ENTRY-TARGET",
+                            Some("make the method `static`, or move the entry to a top-level function".into()),
+                        );
+                        return;
+                    }
+                    match crate::ast::entry_role(f) {
+                        None => {
+                            self.err_coded(
+                                f.span,
+                                format!(
+                                    "`#[Entry]` function `{}` matches no entry role — CLI is `(): void`, `(): int`, `(List<string>): void|int`; web is `(Request): Response`",
+                                    f.name
+                                ),
+                                "E-ENTRY-SIG",
+                                Some("adjust the signature to one of the entry shapes".into()),
+                            );
+                        }
+                        Some(crate::ast::EntryRole::Cli) => {
+                            if cli_seen {
+                                self.err_coded(
+                                    f.span,
+                                    "multiple CLI entry points — more than one `#[Entry]` with a CLI signature".to_string(),
+                                    "E-MULTIPLE-ENTRY",
+                                    Some("a program has at most one CLI entry (and at most one web entry) — remove the extras".into()),
+                                );
+                            }
+                            cli_seen = true;
+                        }
+                        Some(crate::ast::EntryRole::Web) => {
+                            if web_seen {
+                                self.err_coded(
+                                    f.span,
+                                    "multiple web entry points — more than one `#[Entry]` with a `(Request): Response` signature".to_string(),
+                                    "E-MULTIPLE-ENTRY",
+                                    Some("a program has at most one web entry (and at most one CLI entry) — remove the extras".into()),
+                                );
+                            }
+                            web_seen = true;
+                        }
+                    }
+                };
+                match item {
+                    Item::Function(f) => check_entry(f, false),
+                    Item::Class(c) => {
+                        for m in &c.members {
+                            if let crate::ast::ClassMember::Method(f) = m {
+                                let is_static = f.modifiers.contains(&crate::ast::Modifier::Static);
+                                check_entry(f, !is_static);
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         }

@@ -45,6 +45,7 @@ function dbl(int n): int {
     return n * 2;
 }
 
+#[Entry]
 function main(): void {
     // Scalars report their PHP-visible kind.
     Output.printLine("int    -> {Reflection.kind(42)}");

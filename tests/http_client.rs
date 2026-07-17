@@ -53,7 +53,7 @@ import Core.HttpClientModule;
 import Core.HttpClientModule.HttpClient;
 import Core.HttpClientModule.HttpResponse;
 import Core.HttpClientModule.HttpClientError;
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     HttpClient c = new HttpClient();
     discard c.timeout(5000);
@@ -95,7 +95,7 @@ import Core.HttpClientModule.HttpClient;
 import Core.HttpClientModule.HttpResponse;
 import Core.HttpClientModule.HttpTimeoutError;
 import Core.HttpClientModule.HttpClientError;
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     HttpClient c = new HttpClient();
     HttpResponse r = c.post("http://127.0.0.1:{port}/make", "application/json", "\{{\"a\": 1\}}");
@@ -120,7 +120,7 @@ fn http_client_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
 import Core.Output;
 import Core.HttpClientModule;
-function main(): void { Output.printLine("x"); }
+#[Entry] function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-HTTPCLIENT, got PHP: {php:?}"),

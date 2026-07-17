@@ -49,6 +49,7 @@ function justDraw(Drawable d): string {
     return d.draw();
 }
 
+#[Entry]
 function main(): void {
     var badge = new Badge("ok");
     var sticker = new Sticker("hi");

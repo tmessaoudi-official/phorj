@@ -135,20 +135,10 @@ impl Checker {
     /// the bare `Error` root is too broad (`E-THROWS-TOO-BROAD` — declare the specific subtype so
     /// callers know what to catch). `throws` is resolved into `resolved` in declaration order.
     pub(super) fn validate_throws_decl(&mut self, f: &crate::ast::FunctionDecl, resolved: &[Ty]) {
-        // An entry `main` (top-level OR a class-static method, Batch-1 D) may not declare `throws`;
-        // an instance method named `main` is an ordinary method and is exempt.
-        let is_entry_main = f.name == "main" && (self.cur_class.is_none() || self.in_static_method);
-        if is_entry_main && !f.throws.is_empty() {
-            self.err_coded(
-                f.span,
-                "`main` is the program entry point and may not declare `throws`",
-                "E-UNCAUGHT-THROW",
-                Some(
-                    "handle every error inside `main` with `try`/`catch` — nothing may escape the entry point"
-                        .into(),
-                ),
-            );
-        }
+        // DEC-191 (supersedes the Batch-1 D main-may-not-throw rule): entries are attribute-
+        // declared and MAY declare `throws` — an escaped fault is the ruled behavior (process
+        // exit 1 for a CLI entry, HTTP 500 for a web handler), identical to any other unhandled
+        // fault. No name-keyed restriction survives; `main` is an ordinary function name now.
         self.validate_throw_types(resolved, f.span);
     }
 

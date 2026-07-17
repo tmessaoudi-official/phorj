@@ -14,6 +14,7 @@ function checked(int n): int throws BadInputError {
     return n * 2;
 }
 
+#[Entry]
 function main(): void {
     try {
         Output.printLine("ok {checked(5)}");

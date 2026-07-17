@@ -21,10 +21,18 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     for item in &prog.items {
         match item {
             php::PhpItem::Function(f) => {
+                let mut lifted = l.lift_function(f)?;
                 if f.name == "main" {
                     has_main = true;
+                    // DEC-191: a PHP `main` is the entry INTENT — the lifted draft attributes it
+                    // so it actually runs (entries are attribute-declared, never name-magic).
+                    lifted.attrs.push(crate::ast::Attribute {
+                        name: "Entry".to_string(),
+                        args: Vec::new(),
+                        span: SP,
+                    });
                 }
-                items.push(Item::Function(l.lift_function(f)?));
+                items.push(Item::Function(lifted));
             }
             php::PhpItem::Class(c) => items.push(Item::Class(l.lift_class(c)?)),
             php::PhpItem::Enum(e) => items.push(Item::Enum(lift_enum(e)?)),
@@ -44,7 +52,12 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         }
         items.push(Item::Function(FunctionDecl {
             modifiers: Vec::new(),
-            attrs: Vec::new(),
+            // DEC-191: the synthesized entry carries #[Entry] (attribute-declared, no name magic).
+            attrs: vec![crate::ast::Attribute {
+                name: "Entry".to_string(),
+                args: Vec::new(),
+                span: SP,
+            }],
             vis: crate::ast::Visibility::Public,
             name: "main".into(),
             type_params: Vec::new(),

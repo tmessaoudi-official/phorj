@@ -16,6 +16,7 @@ class Counter {
     }
 }
 
+#[Entry]
 function main(): void {
     // Each `new Counter()` bumps the shared static; we want only that side effect, so the instance
     // is explicitly `discard`-ed (must-use rule).

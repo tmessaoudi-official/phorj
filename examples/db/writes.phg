@@ -20,6 +20,7 @@ import Core.DatabaseModule.Database;
 import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 
+#[Entry]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

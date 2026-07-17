@@ -39,6 +39,7 @@ class Sale {
 
 // `order` is a REQUIRED nested entity (depth 4: order.customer.country.*); `shipTo` is an OPTIONAL
 // nested entity — `null` when the LEFT JOIN finds no shipping country.
+#[Entry]
 function main(): void {
     try {
         Database db = new Database("sqlite::memory:");

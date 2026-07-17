@@ -5,6 +5,7 @@ import Core.Time;
 import Core.Time.Date;
 import Core.Time.Instant;
 
+#[Entry]
 function main(): void {
     Date d = Date.of(2023, 11, 14);
     Output.printLine("{d.toString()}");

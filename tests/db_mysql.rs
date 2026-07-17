@@ -40,7 +40,7 @@ import Core.DatabaseModule.Row;
 import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 
-function main(): void {{
+#[Entry] function main(): void {{
     try {{
         Database db = new Database("{dsn}");
         discard db.prepare("DROP TABLE IF EXISTS phorj_my_it").exec();

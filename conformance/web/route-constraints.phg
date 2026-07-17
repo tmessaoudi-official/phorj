@@ -30,6 +30,7 @@ function show(Router rt, string path): void {
     Output.printLine("{path} -> {st} {body}");
 }
 
+#[Entry]
 function main(): void {
     Router rt = new Router(
         new List<Route>(),

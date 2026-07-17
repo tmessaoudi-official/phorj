@@ -19,6 +19,7 @@ class Counter {
     }
 }
 
+#[Entry]
 function main(): void {
     mutable Counter c = new Counter(10);
     // Direct field set.

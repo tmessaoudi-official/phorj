@@ -29,6 +29,7 @@ function wireLine(Response resp): string {
     return "({n}B) {oneLine}";
 }
 
+#[Entry]
 function main(): void {
     // A direct print — goes straight to STDOUT, as always.
     Output.printLine("before: direct to stdout");

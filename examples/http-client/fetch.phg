@@ -36,6 +36,7 @@ import Core.HttpClientModule.HttpResponse;
 import Core.HttpClientModule.HttpClientError;
 import Core.HttpClientModule.InvalidUrlError;
 
+#[Entry]
 function main(): void {
     try {
         // Chainable config; 30 s timeout + 5 redirects are the defaults.

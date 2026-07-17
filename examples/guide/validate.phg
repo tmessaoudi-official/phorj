@@ -13,6 +13,7 @@ function report(string label, bool ok): void {
     Output.printLine("{label}: {ok}");
 }
 
+#[Entry]
 function main(): void {
     report("isInt(-42)", Validation.isInt("-42"));
     report("isInt(3.14)", Validation.isInt("3.14"));

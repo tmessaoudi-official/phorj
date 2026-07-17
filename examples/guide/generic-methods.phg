@@ -32,6 +32,7 @@ class Util {
     }
 }
 
+#[Entry]
 function main(): void {
     var u = new Util();
     // `identity` reused at three different concrete types — one method definition, no duplication.

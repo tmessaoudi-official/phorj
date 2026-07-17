@@ -20,6 +20,7 @@ class User {
     constructor(public string name, public Status status, public List<string> tags, public Wallet wallet) {}
 }
 
+#[Entry]
 function main(): void {
     int doubled = Debug.dump(21).value() * 2;
     Output.printLine("doubled {doubled}");

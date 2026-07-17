@@ -12,6 +12,7 @@ package Main;
 import Core.Output;
 import Core.List;
 
+#[Entry]
 function main(): void {
     var nums = [1, 2, 3, 4, 5];
     // map: double each element.

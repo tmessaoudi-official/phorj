@@ -36,6 +36,7 @@ function loud(): int {
     return 4;
 }
 
+#[Entry]
 function main(): void {
     // Plain application and chains: `x |> f` is `f(x)`, left-associative.
     Output.printLine("{5 |> inc}");

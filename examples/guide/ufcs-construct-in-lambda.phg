@@ -18,6 +18,7 @@ class Point {
     }
 }
 
+#[Entry]
 function main(): void {
     // UFCS `.map` with a lambda that CONSTRUCTS a value in its body — the panicking shape.
     List<Point> pts = [1, 2, 3].map(function(int n) => new Point(n, n * 10));

@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.String;
 
+#[Entry]
 function main(): void {
     Output.printLine(String.reverse("phorj"));
     Output.printLine(String.reverse("abcABC123"));

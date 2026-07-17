@@ -6,6 +6,7 @@ import Core.Output;
 import Core.Set;
 import Core.Map;
 
+#[Entry]
 function main(): void {
     Set<int> base = Set.of([1, 2, 3]);
     Set<int> grown = Set.add(Set.add(base, 4), 2);

@@ -39,21 +39,21 @@ fn runnable_programs_keep_their_behavior() {
     // A spread of real surface: classes+ctor promotion, enums+match+guards, generics, lambdas+pipe,
     // optionals, ranges, string interpolation.
     let samples = [
-        "package Main; import Core.Output;\nfunction main(): void { Output.printLine(\"hi\"); }",
+        "package Main; import Core.Output;\n#[Entry] function main(): void { Output.printLine(\"hi\"); }",
         "package Main; import Core.Output;\n\
          function add<T>(T a, T b): T { return a; }\n\
-         function main(): void { Output.printLine(\"{add(2, 3)}\"); }",
+         #[Entry] function main(): void { Output.printLine(\"{add(2, 3)}\"); }",
         "package Main; import Core.Output;\n\
          enum Shape { Circle(int r), Square(int s) }\n\
          function area(Shape s): int { return match (s) { Circle(r) => r * r, Square(x) => x * x }; }\n\
-         function main(): void { Output.printLine(\"{area(new Circle(3))}\"); }",
+         #[Entry] function main(): void { Output.printLine(\"{area(new Circle(3))}\"); }",
         "package Main; import Core.Output;\n\
          class Point { constructor(public int x, public int y) {} function sum(): int { return this.x + this.y; } }\n\
-         function main(): void { Point p = new Point(2, 5); Output.printLine(\"{p.sum()}\"); }",
+         #[Entry] function main(): void { Point p = new Point(2, 5); Output.printLine(\"{p.sum()}\"); }",
         "package Main; import Core.Output;\n\
-         function main(): void { var dbl = function(int x): int => x * 2; Output.printLine(\"{3 |> dbl}\"); }",
+         #[Entry] function main(): void { var dbl = function(int x): int => x * 2; Output.printLine(\"{3 |> dbl}\"); }",
         "package Main; import Core.Output;\n\
-         function main(): void { int? m = null; Output.printLine(\"{m ?? -1}\"); for (int i in 0..3) { Output.printLine(\"{i}\"); } }",
+         #[Entry] function main(): void { int? m = null; Output.printLine(\"{m ?? -1}\"); for (int i in 0..3) { Output.printLine(\"{i}\"); } }",
     ];
     for s in samples {
         assert_meaning_preserved(s);
@@ -97,7 +97,7 @@ fn the_arrow_return_syntax_normalizes_to_colon() {
 
 #[test]
 fn comments_are_preserved() {
-    let src = "package Main;\n// a header comment\nfunction main(): void { /* body */ return; }\n";
+    let src = "package Main;\n// a header comment\n#[Entry] function main(): void { /* body */ return; }\n";
     let out = fmt(src);
     assert!(
         out.contains("// a header comment"),
@@ -112,7 +112,7 @@ fn comments_are_preserved() {
 /// A statement value that overflows the column budget wraps; a short one stays on one line.
 #[test]
 fn long_call_args_wrap_short_stay_flat() {
-    let src = "package Main;\nfunction main(): void {\n\
+    let src = "package Main;\n#[Entry] function main(): void {\n\
         var s = f(1, 2);\n\
         var l = someHelperWithAVeryLongName(argumentOne, argumentTwo, argumentThree, argumentFour, argumentFive);\n\
         }";
@@ -133,7 +133,7 @@ fn long_call_args_wrap_short_stay_flat() {
 #[test]
 fn method_chains_wrap_by_width_not_author_breaks() {
     // Long chain → breaks before each dot.
-    let long = "package Main;\nfunction main(): void {\n\
+    let long = "package Main;\n#[Entry] function main(): void {\n\
         var r = source.mapEachValueWithCare(transformer).keepEveryMatching(predicate).collapseInto(combiner).done();\n\
         }";
     let out = fmt(long);
@@ -144,7 +144,7 @@ fn method_chains_wrap_by_width_not_author_breaks() {
     assert_idempotent(long);
 
     // Gratuitously hand-broken SHORT chain → collapses to one line.
-    let broken = "package Main;\nfunction main(): void {\n\
+    let broken = "package Main;\n#[Entry] function main(): void {\n\
         var x = obj\n.a()\n.b();\n}";
     let out = fmt(broken);
     assert!(
@@ -162,7 +162,7 @@ fn method_chains_wrap_by_width_not_author_breaks() {
 #[test]
 fn interpolation_holes_never_break() {
     let src = "package Main;\n\
-        function main(): void {\n\
+        #[Entry] function main(): void {\n\
         var wide = \"value is {computeThing(alphaValue, betaValue, gammaValue, deltaValue, epsilonValue, zetaValue)}\";\n\
         }";
     let out = fmt(src);
@@ -218,7 +218,7 @@ fn declaration_visibility_survives_formatting() {
         private function clamp(int n): int { return n; }\n\
         internal class Helper { constructor() {} }\n\
         private enum Mode { On(), Off() }\n\
-        function main(): void {}";
+        #[Entry] function main(): void {}";
     let out = fmt(src);
     assert!(
         out.contains("internal function scale"),
@@ -246,7 +246,7 @@ fn declaration_visibility_survives_formatting() {
 fn pipe_operator_survives_formatting() {
     let src = "package Main; import Core.Output;\n\
          function inc(int x): int { return x + 1; }\n\
-         function main(): void { Output.printLine(\"{5 |> inc |> inc}\"); }";
+         #[Entry] function main(): void { Output.printLine(\"{5 |> inc |> inc}\"); }";
     let out = fmt(src);
     assert!(
         out.contains("5 |> inc |> inc"),
@@ -265,7 +265,7 @@ fn nullable_union_spelling_canonicalizes() {
          class B { constructor(public string s) {} }\n\
          function f(): A | B | null { return null; }\n\
          function g(): A | null { return null; }\n\
-         function main(): void {}";
+         #[Entry] function main(): void {}";
     let out = fmt(src);
     assert!(out.contains("function f(): (A | B)?"), "{out}");
     assert!(out.contains("function g(): A?"), "{out}");

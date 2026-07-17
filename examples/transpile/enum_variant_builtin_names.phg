@@ -23,6 +23,7 @@ function describe(Event e): string {
     };
 }
 
+#[Entry]
 function main(): void {
     List<Event> events = [
         new RuntimeException("boom"),

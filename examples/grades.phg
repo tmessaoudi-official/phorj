@@ -22,6 +22,7 @@ class Counter {
     }
 }
 
+#[Entry]
 function main(): void {
     Counter c = new Counter(100);
     int t = c.add(23);

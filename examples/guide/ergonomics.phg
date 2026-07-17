@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 
 // M3 S1 "core ergonomics": list indexing, integer ranges, and expression `if`.
+#[Entry]
 function main(): void {
     // Indexing: read elements out of a list by position.
     List<int> xs = [10, 20, 30];

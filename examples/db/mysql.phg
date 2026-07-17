@@ -29,6 +29,7 @@ import Core.DatabaseModule.DatabaseError;
 import Core.DatabaseModule.UniqueViolationError;
 import Core.Secret;
 
+#[Entry]
 function main(): void {
     // MySQL takes `?` natively; `:name` binds are translated for you. The dispatch is purely on the
     // scheme: `mysql://` or `mariadb://` → the MySQL driver.

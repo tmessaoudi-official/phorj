@@ -35,6 +35,7 @@ function show(Router rt, string method, string path): void {
     Output.printLine("{method} {path} -> {st} {body}");
 }
 
+#[Entry]
 function main(): void {
     Router rt = Http.autoRouter();
     show(rt, "GET", "/");

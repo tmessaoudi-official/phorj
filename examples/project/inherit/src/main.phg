@@ -21,6 +21,7 @@ class Puppy extends Dog {
     }
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(new Dog("rex").speak());
     Output.printLine(new Puppy("milo").speak());

@@ -193,6 +193,12 @@ impl Checker {
                 }
                 continue;
             }
+            // DEC-191: `#[Entry]` — the program-entry marker (roles inferred from the signature).
+            // Fully validated by the program-level pass in `walk.rs` (bare args, static-only on
+            // methods, role signature, one-per-role); here it just needs to be KNOWN.
+            if crate::ast::is_entry_attr(attr) {
+                continue;
+            }
             // DEC-194 2b-3: a user-defined attribute (`#[Tag]`, where `Tag` carries `#[Attribute]`) is a
             // legal use on a function/method (valid on all targets this slice); validated against its ctor.
             if self.check_user_attribute_use(attr) {

@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     Output.printLine("Hello, Phorj!");
 }

@@ -23,6 +23,7 @@ class Parcel {
     }
 }
 
+#[Entry]
 function main(): void {
     Parcel t = new Parcel("alpha");
     Output.printLine(t.summary());

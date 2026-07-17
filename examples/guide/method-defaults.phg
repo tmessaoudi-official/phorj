@@ -33,6 +33,7 @@ class LoudGreeter extends Greeter {
     }
 }
 
+#[Entry]
 function main(): void {
     Greeter g = new Greeter("g1");
     Output.printLine(g.greet());

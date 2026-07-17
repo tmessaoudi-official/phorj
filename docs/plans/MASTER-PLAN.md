@@ -1972,7 +1972,11 @@ SURFACE changes; several are BREAKING (migrate all examples + Core), so each is 
   Response; static-method form included); ONE program may declare BOTH one CLI and one web entry
   (roles independent — `phg run` vs `phg serve`); throwing entries legal (`throws X`, escaped fault =
   exit 1 / HTTP 500, today's behavior). **QUEUE POSITION: immediately after DEC-257** (developer:
-  "bring it forward"), before DEC-256/243/242/258.
+  "bring it forward"), before DEC-256/243/242/258. **SHIPPED 2026-07-17 fable** — attribute-keyed
+  resolution on every backend (entry NAME free), roles + E-MULTIPLE-ENTRY/E-ENTRY-SIG/
+  E-ENTRY-TARGET, throwing entries legal (supersedes main-no-throws), respond bridge wraps the
+  attributed web handler, corpus fully migrated (275 examples + all harnesses), lifter emits the
+  attribute; found+tracked the latent prelude/user span-collision P1 (KNOWN_ISSUES) en route.
 - **DEC-192 — mandatory `override function` keyword (the override enforcer).** Overriding a parent method
   REQUIRES `override function foo()` (E-MISSING-OVERRIDE if absent); marking a non-override is
   E-NOT-AN-OVERRIDE (typo/signature-drift guard). Keyword form (consistent with `open function`), the

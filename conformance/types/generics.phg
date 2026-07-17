@@ -14,6 +14,7 @@ class Box<T> {
     }
 }
 
+#[Entry]
 function main(): void {
     Output.printLine("{identity(42)}");
     Output.printLine(identity("hi"));

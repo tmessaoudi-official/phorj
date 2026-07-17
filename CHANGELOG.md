@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — DEC-191: `#[Entry]` — attribute-declared entry points (fully breaking)
+
+The magic `main` (CLI) and `handle` (web) names are RETIRED: a program's entries are declared by
+`#[Entry]`, on a top-level function or a class `static` method, with the ROLE inferred from the
+signature — `(): void`, `(): int`, `(List<string>): void|int` = the CLI entry (`phg run`);
+`(Request): Response` = the web handler (`phg serve`, the respond bridge now wraps the attributed
+handler by its actual path). An `int` return IS the process exit status; entries MAY declare
+`throws` (supersedes the old main-no-throws rule — an escaped fault exits 1 / answers 500). One
+CLI + one web entry may coexist; duplicates of a role are `E-MULTIPLE-ENTRY`; a non-role
+signature is `E-ENTRY-SIG`; an instance method is `E-ENTRY-TARGET` (all in `phg explain`). The
+entry's NAME is free — every backend (interpreter, VM incl. static-init preludes, transpiler
+bootstrap, DAP, test runner, lifter output) resolves the attribute, never a name. Migration:
+275 examples + the whole test corpus attributed (the name `main` kept for minimal diffs);
+`phg lift` emits `#[Entry]` on entries it produces. FOUND ALONG THE WAY (KNOWN_ISSUES
+§span-collision): a latent P1 — injected-prelude spans share the user file's span space, so
+span-keyed rewrite maps can collide (reproduced as an offset-sensitive run≠runvm on
+`examples/db/transaction-closure.phg`); the real fix (per-module span re-basing) is queued.
+
 ### Added — DEC-275: `E-ERROR-NAME` — throwable types must read as throwable
 
 Any class that implements `Error` — directly, via a parent class, or via interface extends —

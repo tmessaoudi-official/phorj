@@ -44,6 +44,7 @@ function show(Result<int, string> r): string {
 // crash with a stack trace); `assert(cond[, "msg"])` faults only when its condition is false. Because a
 // fault crashes, panics can't appear in a *runnable* example — but a *passing* `assert` runs cleanly and
 // is byte-identical, so we show that form here. (A failing `panic`/`assert` transpiles to a PHP `throw`.)
+#[Entry]
 function main(): void {
     assert(1 < 2, "arithmetic is intact");
     // passes — a no-op; a false condition would fault

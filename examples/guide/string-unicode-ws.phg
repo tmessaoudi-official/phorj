@@ -8,6 +8,7 @@ package Main;
 import Core.Output;
 import Core.String;
 
+#[Entry]
 function main(): void {
     string s = " 　x y　 ";
     Output.printLine("trim      = [{String.trim(s)}]");

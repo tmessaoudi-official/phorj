@@ -9,6 +9,7 @@ function describe(Option<int> o): string {
     return match (o) { Some(n) => "some {n}", None() => "none" };
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(new Some(7)));
     Option<int> z = new None();

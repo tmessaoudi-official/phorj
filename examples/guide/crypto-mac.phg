@@ -8,6 +8,7 @@ import Core.Output;
 import Core.Hash;
 import Core.Encoding;
 
+#[Entry]
 function main(): void {
     // HMAC-SHA256 — a keyed message authentication code, returned as raw `bytes` (hex-encode to show).
     bytes mac = Hash.hmac(b"secret-key", b"authenticated message");

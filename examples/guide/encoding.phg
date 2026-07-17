@@ -10,6 +10,7 @@ import Core.Output;
 import Core.Bytes;
 import Core.Encoding;
 
+#[Entry]
 function main(): void {
     var data = Bytes.fromString("Hello, Phorj!");
     // Encode to base64 and hex.

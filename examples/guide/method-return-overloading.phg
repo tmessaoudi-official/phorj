@@ -32,6 +32,7 @@ class Config {
     }
 }
 
+#[Entry]
 function main(): void {
     Config c = new Config("prod");
     // Each selector names which overload's return type the call must produce.

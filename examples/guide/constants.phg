@@ -21,6 +21,7 @@ open class Limits {
 class Sub extends Limits {
 }
 
+#[Entry]
 function main(): void {
     Output.printLine("{Limits.MAX}");
     // 100

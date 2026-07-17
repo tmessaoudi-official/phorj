@@ -44,6 +44,7 @@ function name(Shape s): string {
     return match (s) { Circle c => "circle", Square sq => "square", Triangle t => "triangle" };
 }
 
+#[Entry]
 function main(): void {
     Circle c = new Circle(4);
     Square sq = new Square(3);

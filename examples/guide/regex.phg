@@ -15,6 +15,7 @@ import Core.Output;
 import Core.String;
 import Core.Regex;
 
+#[Entry]
 function main(): void {
     // Compile once, reuse. `matches` tests for a match anywhere; `find` returns the first whole match.
     var date = Regex.compile("(?<year>\\d\{4\})-(?<month>\\d\{2\})-(?<day>\\d\{2\})");

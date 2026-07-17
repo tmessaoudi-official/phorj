@@ -7,6 +7,7 @@ import Core.Output;
 // `with int i` adds a 0-based position counter — the thing you'd otherwise hand-roll with a
 // separate `mutable int i = 0;`. Both forms desugar to the same for-in, so all three backends and
 // the transpiled PHP (`foreach ($xs as $x)`) stay byte-identical.
+#[Entry]
 function main(): void {
     List<string> langs = ["Phorj", "PHP", "TypeScript"];
     // Value form — `w` is inferred as `string` from `langs: List<string>`.

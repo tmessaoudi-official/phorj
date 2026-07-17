@@ -15,6 +15,7 @@ declare class DateTimeImmutable {
     static function createFromFormat(string fmt, string datetime): DateTimeImmutable;
 }
 
+#[Entry]
 function main(): void {
     // Construct + instance method.
     DateTimeImmutable d = new DateTimeImmutable("2023-11-14 22:13:20");

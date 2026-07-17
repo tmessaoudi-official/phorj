@@ -55,6 +55,7 @@ function describe(bool flag): string {
     unreachable();
 }
 
+#[Entry]
 function main(): void {
     Output.printLine("half(10)       = {half(10)}");
     Output.printLine("positive(7)    = {positive(7)}");

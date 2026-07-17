@@ -31,6 +31,7 @@ class LoudGreeter extends Greeter {
     }
 }
 
+#[Entry]
 function main(): void {
     LoudGreeter g = new LoudGreeter();
     Output.printLine(g.greet());

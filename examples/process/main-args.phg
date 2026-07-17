@@ -17,6 +17,7 @@ import Core.Output;
 import Core.List;
 import Core.Process;
 
+#[Entry]
 function main(List<string> args): int {
     Output.printLine("argc = {List.length(args)}");
     for (string s in args) {

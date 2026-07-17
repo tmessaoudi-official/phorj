@@ -28,7 +28,7 @@ class Greeter {
     }
 }
 
-function main() -> void {
+#[Entry] function main() -> void {
     Greeter g = new Greeter("Tak");
     Output.printLine(g.greet());
 
@@ -44,7 +44,7 @@ fn parses_full_sample_program() {
     let tokens = lex(SAMPLE).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
 
-    // import, enum, function area, class Greeter, function main
+    // import, enum, function area, class Greeter, #[Entry] function main
     assert_eq!(prog.items.len(), 5);
 
     assert!(matches!(prog.items[0], Item::Import { .. }));

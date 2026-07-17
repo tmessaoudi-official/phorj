@@ -15,7 +15,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Empty collection construction `new List<T>()` / `new Map<K,V>()` | ✅ | mandatory-`new`, self-typed from the type arguments (DEC-214); a bare empty `[]` is rejected with `E-EMPTY-LITERAL` (no contextual inference) — non-empty literals `[1, 2, 3]` / `["a" => 1]` are unchanged |
 | Generic lists: `List<T>` + list literals | ✅ | `[1, 2, 3]` |
 | Immutable-by-default bindings | ✅ | no reassignment; fresh binding instead |
-| Functions + recursion | ✅ | `function f(int n): int { … }`, `main()` entry point |
+| Functions + recursion | ✅ | `function f(int n): int { … }` |
+| `#[Entry]` entry points | ✅ | attribute-declared (no magic names, DEC-191): role from the signature — CLI `(): void\|int` / `(List<string>): void\|int` (int = exit status), web `(Request): Response`; top-level or class-static; one per role, CLI+web may coexist; throwing entries legal (escaped fault = exit 1 / HTTP 500) |
 | Classes + fields + methods (`this`) | ✅ | |
 | Constructor promotion | ✅ | `constructor(private int total) {}` |
 | Enums with payloads | ✅ | `enum Shape { Circle(float r), Rect(float w, float h) }` |

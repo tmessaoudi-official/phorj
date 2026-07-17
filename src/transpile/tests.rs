@@ -267,7 +267,8 @@ fn interpolation_operator_hole_falls_back_to_concat() {
 #[test]
 fn println_newline_uses_echo_comma() {
     // B-2: `Output.printLine` lowers to `echo X, "\n"` (comma list), not `echo X . "\n"`.
-    let out = php("import Core.Output; function main() -> void { Output.printLine(\"hi\"); }");
+    let out =
+        php("import Core.Output; #[Entry] function main() -> void { Output.printLine(\"hi\"); }");
     assert!(out.contains(r#"echo "hi", "\n""#), "comma list: {out}");
     assert!(!out.contains(r#". "\n""#), "no concat newline: {out}");
 }
@@ -388,13 +389,15 @@ fn expression_position_literal_match_emits_native_match() {
 
 #[test]
 fn println_becomes_echo() {
-    let out = php("import Core.Output; function main() -> void { Output.printLine(\"hi\"); }");
+    let out =
+        php("import Core.Output; #[Entry] function main() -> void { Output.printLine(\"hi\"); }");
     assert!(out.contains(r#"echo "hi", "\n";"#), "{out}");
 }
 
 #[test]
 fn main_is_invoked_when_present() {
-    let out = php("import Core.Output; function main() -> void { Output.printLine(\"hi\"); }");
+    let out =
+        php("import Core.Output; #[Entry] function main() -> void { Output.printLine(\"hi\"); }");
     assert!(out.trim_end().ends_with("main();"), "{out}");
     // no main -> no call
     let no_main = php("function helper() -> int { return 1; }");

@@ -4,6 +4,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     // Exclusive: 0,1,2,3 (4 elements, upper bound excluded).
     mutable int exc = 0;

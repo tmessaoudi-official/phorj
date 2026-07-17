@@ -10,6 +10,8 @@ function compute(int n): int {
     return xs[n] + doubled;
 }
 
+#[Entry]
+
 function main(): void {
     Output.printLine("{compute(5)}");
 }

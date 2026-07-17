@@ -19,6 +19,7 @@ open class Money {
 class Wallet extends Money {
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(Money.of(5).show());
     Output.printLine(Money.of(5, 25).show());

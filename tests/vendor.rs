@@ -112,7 +112,7 @@ fn vendor_fetches_and_loads_offline() {
     let entry = consumer.write(
         "src/main.phg",
         "package Main;\nimport Core.Output;\nimport Acme.Greet;\n\
-         function main() -> void { Output.printLine(Greet.hi(\"phorj\")); }\n",
+         #[Entry] function main() -> void { Output.printLine(Greet.hi(\"phorj\")); }\n",
     );
 
     // --- vendor (the network/git path, here over file://) ------------------
@@ -179,7 +179,7 @@ fn missing_vendor_is_rejected() {
     );
     let entry = consumer.write(
         "src/main.phg",
-        "package Main;\nfunction main() -> void {}\n",
+        "package Main;\n#[Entry] function main() -> void {}\n",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-VENDOR-MISSING"), "got: {err}");

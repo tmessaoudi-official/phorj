@@ -4,6 +4,7 @@ package Main;
 import Core.Output;
 import Core.List;
 
+#[Entry]
 function main(): void {
     List<int> xs = [1, 2, 3, 4];
     Output.printLine("first={xs[0]} last={xs[3]}");

@@ -24,8 +24,15 @@ fn interpreter_fault_carries_call_stack() {
 }
 
 fn with_pkg(src: &str) -> String {
-    if src.trim_start().starts_with("package ") {
+    // DEC-191: inject `#[Entry]` before a bare `function main` (same convenience as
+    // `cli::tests::wp`) so the interpreter unit programs need no per-case ceremony.
+    let src = if src.contains("function main") && !src.contains("#[Entry]") {
+        src.replacen("function main", "#[Entry] function main", 1)
+    } else {
         src.to_string()
+    };
+    if src.trim_start().starts_with("package ") {
+        src
     } else {
         format!("package Main; {src}")
     }
@@ -252,7 +259,7 @@ function main() -> void { Output.printLine("{9223372036854775807 + 1}"); }"#;
 #[test]
 fn missing_main_is_runtime_error() {
     let e = run(r#"function other() -> void {}"#).unwrap_err();
-    assert!(e.message.contains("main"), "{}", e.message);
+    assert!(e.message.contains("#[Entry]"), "{}", e.message);
 }
 
 // ---- lambda tests (M3 S3, Task 3 — interpreter-only) ----

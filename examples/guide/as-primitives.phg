@@ -12,6 +12,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     int n = 7;
     // lossless widening / stringify → total (no `?`)

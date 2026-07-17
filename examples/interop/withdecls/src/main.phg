@@ -8,6 +8,7 @@ package Main;
 import Core.Output;
 import Acme.Banner;
 
+#[Entry]
 function main(): void {
     string bar = Banner.rule(10);
     Output.printLine(bar);

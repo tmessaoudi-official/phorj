@@ -32,6 +32,7 @@ function describe((Circle | Square)? shape): string {
     };
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(lookup(0)));
     Output.printLine(describe(lookup(1)));

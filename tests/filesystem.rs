@@ -50,7 +50,7 @@ fn write_append_read_round_trip() {
         r#"package Main;
 import Core.Output;
 import Core.File;
-function main(): void {{
+#[Entry] function main(): void {{
     File.write("{p}", "hello");
     File.append("{p}", " world");
     Output.printLine(File.read("{p}") ?? "<none>");
@@ -68,7 +68,7 @@ fn size_reflects_content_and_is_null_when_missing() {
         r#"package Main;
 import Core.Output;
 import Core.File;
-function main(): void {{
+#[Entry] function main(): void {{
     File.write("{p}", "12345");
     Output.printLine("size={{File.size(\"{p}\") ?? -1}}");
     Output.printLine("missing={{File.size(\"{missing}\") ?? -1}}");
@@ -86,7 +86,7 @@ fn copy_returns_byte_count_and_duplicates() {
         r#"package Main;
 import Core.Output;
 import Core.File;
-function main(): void {{
+#[Entry] function main(): void {{
     File.write("{from}", "abcd");
     int n = File.copy("{from}", "{to}");
     Output.printLine("copied={{n}} both={{File.exists(\"{from}\")}}/{{File.exists(\"{to}\")}}");
@@ -105,7 +105,7 @@ fn rename_moves_the_file() {
         r#"package Main;
 import Core.Output;
 import Core.File;
-function main(): void {{
+#[Entry] function main(): void {{
     File.write("{from}", "x");
     File.rename("{from}", "{to}");
     Output.printLine("old={{File.exists(\"{from}\")}} new={{File.exists(\"{to}\")}}");
@@ -122,7 +122,7 @@ fn delete_removes_the_file() {
         r#"package Main;
 import Core.Output;
 import Core.File;
-function main(): void {{
+#[Entry] function main(): void {{
     File.write("{p}", "x");
     Output.printLine("before={{File.exists(\"{p}\")}}");
     File.delete("{p}");

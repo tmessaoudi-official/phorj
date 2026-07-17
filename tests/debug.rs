@@ -35,7 +35,7 @@ import Core.String;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
 class User { constructor(public string name, public int age) {} }
-function main(): void {
+#[Entry] function main(): void {
   int doubled = Debug.dump(21).value() * 2;
   Output.printLine("doubled {doubled}");
   string snap = Debug.dump(new User("Ada", 36)).text();
@@ -55,7 +55,7 @@ fn runtime_exit_is_clean_and_carries_the_code() {
     let src = r#"package Main;
 import Core.Output;
 import Core.Runtime;
-function main(): void {
+#[Entry] function main(): void {
   Output.printLine("before");
   Runtime.exit(3);
   Output.printLine("unreachable");
@@ -70,7 +70,7 @@ fn dd_dumps_then_exits_one() {
 import Core.Output;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
-function main(): void {
+#[Entry] function main(): void {
   Output.printLine("checking");
   Debug.dd([1, 2]);
   Output.printLine("unreachable");
@@ -85,7 +85,7 @@ fn exit_zero_is_success() {
     let src = r#"package Main;
 import Core.Output;
 import Core.Runtime;
-function main(): void {
+#[Entry] function main(): void {
   Output.printLine("done early");
   Runtime.exit(0);
 }
@@ -102,7 +102,7 @@ fn debug_transpiles_with_the_twin_renderer() {
 import Core.Output;
 import Core.DebugModule;
 import Core.DebugModule.Debug;
-function main(): void { discard Debug.dump([1, 2]); }
+#[Entry] function main(): void { discard Debug.dump([1, 2]); }
 "#;
     let php = cmd_transpile(src).expect("Core.DebugModule transpiles now");
     assert!(php.contains("__phorj_debug_render"), "twin missing:\n{php}");

@@ -6,6 +6,7 @@ package Main;
 import Core.Output;
 import Core.Decimal;
 
+#[Entry]
 function main(): void {
     // Literals preserve scale from the text: 19.99d => scale 2.
     decimal price = 19.99d;

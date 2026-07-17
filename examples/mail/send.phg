@@ -17,6 +17,7 @@ import Core.Mail.NullTransport;
 import Core.Mail.InvalidAddressError;
 import Core.Mail.MailError;
 
+#[Entry]
 function main(): void {
     try {
         // A file-transport mailer: every send writes outbox/phorj-mail-<n>.eml.

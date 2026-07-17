@@ -66,7 +66,7 @@ function secondRequest(string sid): void {
   }
 }
 
-function main(): void {
+#[Entry] function main(): void {
   string sid = firstRequest();
   Output.printLine("sid32 {String.length(sid) == 32}");
   secondRequest(sid);
@@ -91,7 +91,7 @@ import Core.SessionModule.Session;
 import Core.Http;
 import Core.Http.Request;
 
-function main(): void {
+#[Entry] function main(): void {
   string raw = "GET / HTTP/1.1\r\nHost: x\r\nCookie: phorjsid=deadbeefdeadbeefdeadbeefdeadbeef\r\n\r\n";
   Request? r = Request.parse(Bytes.fromString(raw));
   if (var req = r) {
@@ -110,7 +110,7 @@ fn session_transpile_is_a_clean_ladder_error() {
     let src = r#"package Main;
 import Core.Output;
 import Core.SessionModule;
-function main(): void { Output.printLine("x"); }
+#[Entry] function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-SESSION, got PHP: {php:?}"),

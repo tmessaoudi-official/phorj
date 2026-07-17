@@ -26,6 +26,7 @@ function wireLine(Response resp): string {
     return "({n}B) {oneLine}";
 }
 
+#[Entry]
 function main(): void {
     // A plain text/plain response with an explicit status.
     Response t = Response.text(200, "hello");

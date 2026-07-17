@@ -5,6 +5,7 @@ import Core.Math;
 
 // Arithmetic, comparison, logical, and unary operators.
 // Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).
+#[Entry]
 function main(): void {
     int a = 7;
     int b = 3;

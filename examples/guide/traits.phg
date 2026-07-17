@@ -57,6 +57,7 @@ class Employee {
     }
 }
 
+#[Entry]
 function main(): void {
     Employee e = new Employee(1000);
     // Paid's constructor runs: annual = 1000 * 12 = 12000

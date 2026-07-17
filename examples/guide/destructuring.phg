@@ -48,6 +48,7 @@ function swap(int a, int b): string {
     return "{first},{second}";
 }
 
+#[Entry]
 function main(): void {
     var p = new Point(3, 4);
     Output.printLine(describe(p));

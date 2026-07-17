@@ -12,6 +12,7 @@ function fib(int n): int {
     return fib(n - 1) + fib(n - 2);
 }
 
+#[Entry]
 function main(): void {
     Output.printLine("phorj standalone build");
     for (int i in 0..10) {

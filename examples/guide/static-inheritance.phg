@@ -30,6 +30,7 @@ class Widget {
     use Tagged;
 }
 
+#[Entry]
 function main(): void {
     // Called on the subclass — resolves Shape.describe.
     Output.printLine(Triangle.describe(3));

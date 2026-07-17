@@ -28,7 +28,7 @@ class Greeter {
     }
 }
 
-function main() -> void {
+#[Entry] function main() -> void {
     Greeter g = Greeter("Tak");
     Output.printLine(g.greet());
 
@@ -66,7 +66,7 @@ fn di_inject_in_field_initializer_runs_not_panics() {
             constructor() {}\n\
             function n(): int { return this.db.n(); }\n\
         }\n\
-        function main(): void {\n\
+        #[Entry] function main(): void {\n\
             Svc s = new Svc();\n\
             Output.printLine(\"{s.n()}\");\n\
         }\n";
@@ -91,7 +91,7 @@ fn di_field_injection_synthesizes_constructor_when_absent() {
         import Core.DependencyInjection.inject;\n\
         #[Injectable] class Clock { constructor() {} function n(): int { return 3; } }\n\
         #[Injectable] class Logger { private Clock clock; function m(): int { return this.clock.n(); } }\n\
-        function main(): void { Logger l = inject<Logger>(); Output.printLine(\"{l.m()}\"); }\n";
+        #[Entry] function main(): void { Logger l = inject<Logger>(); Output.printLine(\"{l.m()}\"); }\n";
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
@@ -114,7 +114,7 @@ fn di_transient_is_fresh_per_use_but_shares_its_dependency() {
         #[Injectable] class Counter { private mutable int n; constructor() { this.n = 0; } function tick(): int { this.n = this.n + 1; return this.n; } }\n\
         #[Injectable] #[Transient] class Worker { private mutable int local; constructor(private Counter counter) { this.local = 0; } function own(): int { this.local = this.local + 1; return this.local; } function shared(): int { return this.counter.tick(); } }\n\
         #[Injectable] class App { constructor(private Worker w1, private Worker w2) {} function report(): string { return \"own {this.w1.own()} {this.w2.own()} shared {this.w1.shared()} {this.w2.shared()}\"; } }\n\
-        function main(): void { App app = inject<App>(); Output.printLine(app.report()); }\n";
+        #[Entry] function main(): void { App app = inject<App>(); Output.printLine(app.report()); }\n";
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
@@ -134,7 +134,7 @@ fn di_transient_root_inlines_construction() {
         import Core.DependencyInjection.inject;\n\
         #[Injectable] class Db { constructor() {} function n(): int { return 9; } }\n\
         #[Injectable] #[Transient] class Worker { constructor(private Db db) {} function go(): int { return this.db.n(); } }\n\
-        function main(): void { Worker w = inject<Worker>(); Output.printLine(\"{w.go()}\"); }\n";
+        #[Entry] function main(): void { Worker w = inject<Worker>(); Output.printLine(\"{w.go()}\"); }\n";
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     let expanded = phorj::cli::check_and_expand(&prog, src).expect("expand ok");
@@ -145,13 +145,13 @@ fn di_transient_root_inlines_construction() {
 #[test]
 fn program_without_main_errors() {
     let e = run(r#"function helper() -> int { return 1; }"#).unwrap_err();
-    assert!(e.message.contains("main"), "{}", e.message);
+    assert!(e.message.contains("#[Entry]"), "{}", e.message);
 }
 
 #[test]
 fn division_by_zero_does_not_panic() {
     let e = run(r#"import Core.Output;
-function main() -> void { Output.printLine("{1 / 0}"); }"#)
+#[Entry] function main() -> void { Output.printLine("{1 / 0}"); }"#)
     .unwrap_err();
     assert!(e.message.contains("division by zero"), "{}", e.message);
 }

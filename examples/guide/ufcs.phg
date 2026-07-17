@@ -27,6 +27,7 @@ class Boxed {
     }
 }
 
+#[Entry]
 function main(): void {
     var nums = [1, 2, 3, 4, 5];
     // Native UFCS + chaining: keep the elements > 2, square them, then sum / count.

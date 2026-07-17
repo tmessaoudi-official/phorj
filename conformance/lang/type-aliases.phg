@@ -26,6 +26,7 @@ function total(Scores xs): int {
     return sum;
 }
 
+#[Entry]
 function main(): void {
     Celsius lo = freezing();
     Celsius hi = 100;

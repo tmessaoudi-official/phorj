@@ -11,6 +11,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     // The same value written four ways.
     int a = 255;

@@ -39,6 +39,7 @@ function render(Tok t): string {
     };
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(new Null()));
     // null

@@ -41,6 +41,7 @@ function spinForever(): never {
     }
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(classify(95));
     Output.printLine(classify(75));

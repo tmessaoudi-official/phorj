@@ -8,7 +8,7 @@ fn jits_int_arithmetic_and_matches_vm_oracle() {
     let program = compile_source(
         "package Main;\n\
          function calc(int a, int b) -> int { return a * b + a - b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "calc");
     let args = vec![Value::Int(6), Value::Int(7)];
@@ -32,7 +32,7 @@ fn jit_overflow_faults_with_the_shared_kernel_string() {
     let program = compile_source(
         "package Main;\n\
          function mul(int a, int b) -> int { return a * b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "mul");
     let args = vec![Value::Int(i64::MAX), Value::Int(2)];
@@ -52,7 +52,7 @@ fn jit_division_by_zero_faults_like_the_kernel() {
     let program = compile_source(
         "package Main;\n\
          function divi(int a, int b) -> int { return a / b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "divi");
 
@@ -84,7 +84,7 @@ fn jits_while_loop_matches_vm_oracle() {
            while (i <= n) { s = s + i; i = i + 1; }\n\
            return s;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "sumTo");
     for n in [0_i64, 1, 5, 10] {
@@ -104,7 +104,7 @@ fn jits_if_else_selects_the_correct_branch() {
     let program = compile_source(
         "package Main;\n\
          function pick(int a) -> int { if (a < 10) { return 111; } else { return 222; } }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "pick");
     for a in [3_i64, 9, 10, 42] {
@@ -134,7 +134,7 @@ fn jits_comparisons_and_not_match_the_vm_oracle() {
            if (!(a < b)) { r = r + 16; }\n\
            return r;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "cmps");
     for (a, b) in [(5_i64, 3_i64), (3, 5), (4, 4), (-1, -1), (7, -2)] {
@@ -154,7 +154,7 @@ fn jits_function_with_an_unused_param() {
     let program = compile_source(
         "package Main;\n\
          function firstArg(int a, int b) -> int { return a; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "firstArg");
     let jit = jit_int(&program, f, &[Value::Int(7), Value::Int(99)]);
@@ -172,7 +172,7 @@ fn jit_neg_overflow_faults_with_the_shared_kernel_string() {
     let program = compile_source(
         "package Main;\n\
          function neg(int a) -> int { return -a; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "neg");
     match compile_and_run(&program, f, &[Value::Int(i64::MIN)]).expect("neg is eligible") {
@@ -193,7 +193,7 @@ fn non_int_function_is_default_denied() {
         "package Main;\n\
          import Core.Output;\n\
          function greet() -> void { Output.printLine(\"hi\"); }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "greet");
     assert!(
@@ -218,7 +218,7 @@ fn jits_recursive_fib_matches_vm_oracle() {
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "fib");
     for n in [0_i64, 1, 2, 3, 5, 10, 15] {
@@ -240,7 +240,7 @@ fn jits_cross_function_call_matches_vm_oracle() {
         "package Main;\n\
          function add1(int x) -> int { return x + 1; }\n\
          function useAdd(int x) -> int { return add1(x) + add1(x); }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "useAdd");
     for x in [0_i64, 1, 7, -3] {
@@ -265,7 +265,7 @@ fn jits_self_recursive_and_cross_call_together() {
            if (n < 1) { return base(n); }\n\
            return rec(n - 1) + base(n);\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "rec");
     for n in [0_i64, 1, 2, 4, 8] {
@@ -287,7 +287,7 @@ fn jit_propagates_a_callee_fault() {
         "package Main;\n\
          function boom(int a, int b) -> int { return a / b; }\n\
          function callsBoom(int a) -> int { return boom(a, 0); }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "callsBoom");
     let vm_fault = crate::vm::Vm::new(&program)
@@ -325,7 +325,7 @@ fn measures_fib_native_jit_vs_vm() {
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "fib");
     const N: i64 = 30;
@@ -384,7 +384,7 @@ fn jit_deep_recursion_faults_like_the_vm_stack_overflow() {
     // against the VM (the string is a bare literal, not single-sourced, so drift must be caught here).
     const SRC: &str = "package Main;\n\
         function forever(int n) -> int { return forever(n + 1); }\n\
-        function main() -> void {}";
+        #[Entry] function main() -> void {}";
     let handle = std::thread::Builder::new()
         .stack_size(64 * 1024 * 1024)
         .spawn(|| {

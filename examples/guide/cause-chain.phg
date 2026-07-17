@@ -24,6 +24,7 @@ function readConfig(): int throws ConfigError {
     }
 }
 
+#[Entry]
 function main(): void {
     try {
         var n = readConfig();

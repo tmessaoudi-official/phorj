@@ -39,6 +39,7 @@ function describe(Producer<int> p): string {
     return "{p.label()}: {p.produce() + 1}";
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe(new Ints()));
     Output.printLine(describe(new Boxed(41)));

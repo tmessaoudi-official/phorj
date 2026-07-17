@@ -14,6 +14,7 @@ function safeSum(int a, int b): int {
     return Math.tryAdd(a, b) ?? 0;
 }
 
+#[Entry]
 function main(): void {
     Output.printLine("{Math.tryAdd(2, 3) ?? 0}");
     // 5

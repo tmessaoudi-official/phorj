@@ -40,6 +40,7 @@ function makeTokens(): List<int | string> {
     return [1, "two", 3];
 }
 
+#[Entry]
 function main(): void {
     for (int | string tok in makeTokens()) {
         Output.printLine("token " + describe(tok));

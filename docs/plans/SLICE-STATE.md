@@ -95,8 +95,145 @@ Updated: 2026-07-16 (evening)
   HttpConnectionFailed/HttpTimeout/InvalidUrl; Db: ConstraintViolation/SerializationFailure/
   Timeout/UniqueViolation; Uri: UriMalformed + UriBad* family + UriBaseNotAbsolute/
   UriPortOutOfRange — all stem+Error; sentinels <<X>> renamed in lockstep, 30 files). The rule
-  self-verifies the corpus on every suite run. On green: commit + release rebuild → NEXT = DEC-191
-  #[Entry] (gaps ruled; codemod-driven breaking migration).
+  self-verifies the corpus on every suite run — it caught TooManyRedirects/TooLarge (missed by
+  the initial map) + test/example fixtures (Boom-class fixtures → *Error) on the first gate
+  runs; final sweep = 27 stdlib renames. ✅ COMMITTED `284284e0` (44 files, gate 2288/2288).
+  **ENTIRE NAMING DOCTRINE (DEC-275…280) NOW LANDED.**
+- **DEC-191 #[Entry] IN FLIGHT — PROGRESS (uncommitted, compiles clean, probe green):**
+  ✅ (b1) ast/class_hierarchy.rs: `is_entry_attr` + `EntryRole{Cli,Web}` + `entry_role(f)`
+     (AST-shape classification; CLI=():void|int|(List<string>):void|int, WEB=(Request):Response)
+     + `entry_candidates(program)` + `entry_for(program, role)`. Old name-keyed `entry_point`
+     KEPT for now (8 callers still on it — flip pending).
+  ✅ (c1) checker/program/walk.rs: E-MULTIPLE-MAIN block REPLACED by the DEC-191 validation
+     (bare-args E-ATTRIBUTE-ARGS · instance-method E-ENTRY-TARGET · no-role E-ENTRY-SIG w/
+     shape list · per-role E-MULTIPLE-ENTRY; CLI+web may coexist).
+  ✅ checker/program/attributes.rs: Entry known in the fn-attr whitelist (validation lives in
+     walk.rs). PROBED: `#[Entry] function main(): void` checks + runs.
+  ✅ (b2) ALL 8 callers FLIPPED to `entry_for(program, EntryRole::Cli)` (transpile ×4,
+     compiler, interpreter ×2, loader, serve handlers' cli check); "no entry point" error
+     texts now name `#[Entry]`; `synth_empty_main` carries the attribute (Span uses len not
+     end!). PROBED: attributed entry runs; un-attributed magic `main` = clean no-entry error
+     (FULLY BREAKING confirmed live).
+  ⏳ REMAINING: serve Web-role resolution + respond_bridge rewire off name-magic "handle"
+     (serve/handlers.rs + preludes respond_bridge — currently keys off `handle` by name);
+     old `entry_point`/`entry_point_count` fns now likely dead → remove after codemod;
+  ✅ throws.rs main-no-throws restriction REMOVED (DEC-191 ruling supersedes Batch-1 D;
+     comment records the supersession).
+  ✅ wp() (src/cli/tests.rs) + typed_program (tests/db.rs) now inject `#[Entry] ` before a bare
+     `function main(` (replacen 1, skipped when already attributed) — covers most inline tests.
+  ✅ CODEMOD DONE: 275 example/conformance .phg files attributed (column-0 regex + the indented
+     static-main case for class-main.phg; differential GREEN post-codemod); compiler::tests
+     with_pkg helper injects (30/31 pass; missing_main assertion flipped to expect #[Entry]);
+     23 integration .rs files + tests/db.rs textually codemodded (`function main` →
+     `#[Entry] function main`, existing-attr protected); explain entries E-ENTRY-SIG/
+     E-ENTRY-TARGET/E-MULTIPLE-ENTRY added. Census r1 = 776 fails; census r2 RUNNING —
+     remaining expected: entry_point.rs E-MULTIPLE-MAIN flips ×2, throws
+     main_may_not_declare_throws (rule removed → flip/delete), run_executes_sample (SAMPLE
+     const direct call), library_file error-text assertion, format pipe test?, playground
+     runvm tests (its own fixtures), dap handshake fixture, vendor fixture, serve/handle
+     name-magic rewire still pending + old entry_point fns removal + exit codes + docs.
+  ✅ census r6 = **2291/2291 GREEN** (776→0 convergence). CLOSE-OUT DONE: respond bridge
+     rewired to the ATTRIBUTED web entry (textual callee substitution into HTTP_RESPOND_BRIDGE;
+     class-static paths supported); 7 handle fixtures attributed (user-attributes.phg was a
+     FALSE POSITIVE — its handle isn't a web handler, attr removed); NAMED-ENTRY generalization:
+     compiler program.rs ×4 sites (static-init preludes + index resolution — was panicking
+     "entry_point reported a class-static main" on a non-main-named entry!), interpreter
+     call_name ×2, transpiler bootstrap callee — all key on entry_decl.name now;
+     guide/entry.phg (class-static named entry + int exit) THREE-LEG green incl. php-exit=0;
+     docs done (CHANGELOG w/ span-collision disclosure, FEATURES row, README row, MASTER-PLAN
+     SHIPPED note). Old name-keyed entry_point/entry_point_count kept (pub, unreferenced by
+     backends — removal is cleanup for a later pass). FULL GATE running → commit + release.
+  ✅ census r5→r6 fixes: mtest ×6 = test_runner synthesize_main now attributes its synthetic
+     entry + strips #[Entry]-attributed fns (not name-main); format stdin = assertion restored
+     to plain form (fmt must NEVER insert attributes; MESSY has double-space so codemod missed
+     it — correct outcome); diagnostics goldens = attribute REVERTED in conformance/diagnostics/
+     (check-only corpus, entries not needed, preserves golden line numbers); loader+dap fixtures
+     codemodded. Census r6 RUNNING (expect ~0). THEN: serve web-role rewire (respond_bridge
+     name-magic `handle` → EntryRole::Web), guide/entry.phg example + docs (CHANGELOG/FEATURES/
+     register BUILT note incl. the DEC-191-ruling-supersedes-main-no-throws note), old
+     entry_point/entry_point_count removal if dead, full gate (raw-verified clippys), commit.
+  ⚠⚠ RESOLVED BUG (was census r4 residue, REPRODUCED + root-caused): examples/db/transaction-closure.phg —
+     interpreter leg RUNS CLEAN, VM leg = "compile error: `transaction` is not a function,
+     variant, or class" (run≠runvm divergence!). transaction = the DEC-249 default-param method
+     (fills machinery). Appeared between 284284e0 (green) and the DEC-191 work. Suspects, in
+     order: (1) apply_default_fills interplay with the reified chain rewrap I did for
+     materialize_for_binds/lower_foreach_iter (re-nested parens in pipeline.rs — check the arg
+     nesting is EXACTLY materialize_pipe_params(...inner..., &pipe_params) then
+     materialize_for_binds(·, &for_binds) then lower_foreach_iter(·, &for_iters)); (2) the
+     example has for-loops → for_bind_resolutions non-empty → materialize_for_binds mutates
+     For.ty in place — check ty_to_ast_type output for Row/entity types is benign on the
+     VM kind path; (3) fills+ufcs double-rewrite resurrection ([[rewrite-clone-staleness-class]]
+     — READ IT). DEBUG PLAN: minimal repro = default-param METHOD call + a for-in loop with
+     inferred binding + #[Entry] main; bisect by disabling materialize_for_binds (pass empty
+     map) then lower_foreach_iter. Others FIXED in r4→r5: format stdin assertion must expect
+     CANONICAL own-line `#[Entry]\nfunction main` (fmt splits the line — fix the assertion);
+     diagnostics goldens: conformance/diagnostics/*.phg got a +1 LINE SHIFT from the attr
+     insert — either same-line the attr in those files or bump golden line numbers; loader
+     tests + dap.rs fixtures codemodded ✓; lifter now EMITS #[Entry] (synth + php-main) and
+     the lift printer prints fn attrs (was dropping them) ✓; lift_roundtrip + all 6 mtest ✓.
+  ✅ census r3 = 125 → codemodded src/jit/tests/*.rs (4 files, ~90 tests) + ALL remaining .phg
+     under tests/+src/ (tests/fixtures/sample.phg, dump_fault.phg …). Census r4 RUNNING;
+     expected residue = SEMANTIC flips (~20): entry_point E-MULTIPLE-MAIN ×2 → E-MULTIPLE-ENTRY;
+     throws main_may_not_declare_throws → entries-may-throw; missing-main assertion texts
+     (interpreter, run_integration program_without_main, transpile main_is_invoked, cli
+     library_file + run_executes_sample/SAMPLE const); loader::tests ×2 (main-file exemption
+     keyed on entry presence — now attribute-keyed); diagnostics golden case (one case pins an
+     old code/message); mtest ×6 (the `phg test` runner path — check how it resolves/needs
+     entries); format stdin case; dap handshake fixture; db transaction-closure example;
+     lift_roundtrip; differential class_static_main_exit_code test (NOTE: an exit-code test
+     EXISTS — read it before implementing (): int exit codes, semantics may partially exist!).
+  ✅ census r2 = 157 fails → helper patches: src/interpreter/tests.rs with_pkg (injects),
+     src/interpreter/coop.rs fixtures (textual), src/vm/{coop,tests}.rs (textual). Census r3
+     RUNNING → iterate on its list (pattern: RUN-path fixture = add attr / helper-inject;
+     check-only tests need NOTHING; assertion texts mentioning old messages get flipped;
+     entry_point.rs E-MULTIPLE-MAIN tests + throws main_may_not_declare_throws = flip to the
+     new semantics). NOTE skip-list: checker tests (check-only, no entry needed), doc comments
+     (dap.rs/diagnostic.rs/lift decls/cli pipeline/bundle section), src/lsp/tests.rs
+     (diagnostics path). jit tests pass untouched (own runner).
+  ⏳ ORIGINAL grind list (superseded by above, kept for detail): (a) examples/**/*.phg + conformance/**/*.phg — insert
+     `#[Entry]\n` line above top-level `function main(` (218+ files; python codemod; then
+     playground `python3 playground/gen_examples.py` regen); (b) NON-wp test fixtures: raw
+     consts (cli/tests.rs SAMPLE) + per-file harnesses in tests/*.rs (http_client, fs, session,
+     mail, regex_and_more?, differential fixtures embedded) — run suite --no-fail-fast and fix
+     every 'no entry point' failure by adding the attribute; (c) E-MULTIPLE-MAIN tests in
+     checker/tests/entry_point.rs flip to E-MULTIPLE-ENTRY/#[Entry] forms; (d) remove dead
+     `entry_point`/`entry_point_count` + their "main" literals once nothing references them;
+     grep '"handle"' for serve name-magic (respond_bridge) → Web role. throws.rs
+     `validate_throws_decl` `is_entry_main` — DEC-191 ruling WINS over old main-no-throws
+     (throwing entries legal; escaped fault = exit 1/HTTP 500) → drop/replace the restriction;
+     (): int exit codes (interp+VM map returned Int → process exit 0-255; PHP emits
+     exit($code)); E-MULTIPLE-MAIN test flips in checker/tests/entry_point.rs; THE CODEMOD
+     (examples 218 + test inline strings ~1000+: `function main(` → `#[Entry] function main(`
+     top-level only — EXCLUDE instance-method-main fixtures + comment texts; conformance/;
+     playground regen; synth_empty_main in ast/decls.rs may need the attr!); explain entries
+     (E-ENTRY-SIG/E-ENTRY-TARGET/E-MULTIPLE-ENTRY); guide/entry.phg example; docs rows.
+  (all gaps ruled — MASTER-PLAN §13.1.1: static entries YES /
+  FULLY BREAKING no-main-fallback / (): int exit codes / web (Request): Response, CLI+web may
+  coexist / throwing entries legal). SETTLED DESIGN:
+  (a) The ruling kills the MAGIC NAME, not the name — programs keep `function main`, just
+      attributed: `#[Entry] function main(): void`. Codemod = insert `#[Entry] ` before
+      top-level/static `function main(` declarations (trivial diffs). Same for serve `handle`
+      → web role (respond_bridge in preludes keys off name-magic today — rewire to attribute).
+  (b) Resolver: current `ast::class_hierarchy::entry_point(program, name)` (name-keyed, already
+      handles static methods) → new attribute-keyed `entry_points(program)` returning
+      {cli, web} classified by signature; CLI = ():void | ():int | (List<string>):void|int,
+      WEB = (Request):Response. Grep ALL callers of entry_point/"main"/"handle" literals
+      (interpreter run, vm run_entry, compiler, cli serve, preludes respond_bridge,
+      entry-main-no-throws rule in throws.rs validate_throws_decl `is_entry_main`!).
+  (c) Checker validation pass (collect/attributes.rs): #[Entry] arg-less, only on top-level fns
+      + static methods; signature must match a role else E-ENTRY-SIG (hint lists shapes);
+      >1 per role = E-MULTIPLE-ENTRY; entries may throw (escaped fault = exit 1 / HTTP 500).
+  (d) (): int exit codes: interpreter + VM map returned Int → process exit (0-255); PHP leg
+      emits exit($code) wrapper around the entry call. `no entry point` error message updated.
+  (e) Codemod scope: examples/**.phg (~200, top-level main = safe blanket), tests' embedded
+      programs (~1000+ inline strings — regex `function main\(` → `#[Entry] function main(`
+      per file EXCEPT instance-method-main fixtures in entry_point.rs tests + explain/doc
+      texts); conformance/; playground gen_examples regen; docs snippets FEATURES/README.
+  (f) Docs+example (guide/entry.phg: named CLI entry w/ int exit + args; web coexist note),
+      explain entries, editors: NO grammar change (#[...] exists).
+  After DEC-191: DEC-256 Unicode FULL · DEC-243 levenshtein · DEC-242 cookies · DEC-258 Db
+  naming (batch-gate candidates) · lift Uri Tier-2 · golden-corpus harness · quiet-box
+  microbench (owed).
 - **LIFT CATCH-UP + DEC-280 (inline, uncommitted, gate running):** DEC-280 RULED+BUILT
   (untyped/mixed foreach k=>v; developer challenged→confirmed; lift marker inline comment form).
   Landed: parser bare/mixed bindings (parse_foreach — dropped both mandatory-type errors);

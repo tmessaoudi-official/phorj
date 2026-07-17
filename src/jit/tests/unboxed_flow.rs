@@ -29,7 +29,7 @@ fn unboxed_float_arith_leaf_matches_vm_oracle_bit_exact() {
     let program = compile_source(
         "package Main;\n\
          function calc(float a, float b) -> float { return a * b + a - b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "calc");
     for (a, b) in [(6.0_f64, 7.0_f64), (0.5, 0.25), (-3.5, 2.0), (1e300, 1e-8)] {
@@ -50,7 +50,7 @@ fn unboxed_float_div_by_zero_funnels_to_redo_but_nan_inf_do_not() {
     let program = compile_source(
         "package Main;\n\
          function div(float a, float b) -> float { return a / b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "div");
     // +0.0 and -0.0 both fault → redo.
@@ -82,7 +82,7 @@ fn unboxed_float_comparison_is_rejected_to_vm() {
     let program = compile_source(
         "package Main;\n\
          function less(float a, float b) -> int { if (a < b) { return 1; } return 0; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "less");
     assert!(
@@ -110,7 +110,7 @@ fn unboxed_float_loop_mixes_int_and_float_at_shared_depths_bit_exact() {
            while (i < n) { acc = acc * x + 0.5; i = i + 1; }\n\
            return acc;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "accum");
     for (n, x) in [(0_i64, 1.5_f64), (1, 2.0), (10, 1.0000001), (100, 0.999)] {
@@ -132,7 +132,7 @@ fn unboxed_float_with_call_is_rejected_leaf_only() {
         "package Main;\n\
          function twice(float x) -> float { return x + x; }\n\
          function useit(float x) -> float { return twice(x) + 1.0; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "useit");
     assert!(
@@ -158,7 +158,7 @@ fn floatmul_micro_jits_and_matches_the_oracle() {
           while (i < iters) { acc = acc * r + 0.5; i = i + 1; }\n\
           return acc;\n\
         }\n\
-        function main() -> void { Output.printLine(\"{Conversion.truncate(bench(5000, 1.0000001))}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{Conversion.truncate(bench(5000, 1.0000001))}\"); }";
     // `bench` must be unboxed-eligible so the JIT path is genuinely taken.
     let program = compile_source(SRC);
     let bench = func_index(&program, "bench");
@@ -195,7 +195,7 @@ fn unboxed_bool_local_not_returned_is_eligible() {
     let program = compile_source(
         "package Main;\n\
          function f(int a) -> int { mutable bool flag = a < 4; if (flag) { return 1; } return 0; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     for a in [1_i64, 2, 5, -3, 4] {
@@ -217,7 +217,7 @@ fn unboxed_call_result_into_local_matches_vm() {
         "package Main;\n\
          function g(int x) -> int { return x + 1; }\n\
          function f(int x) -> int { mutable int r = g(x); return r + g(x); }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     for x in [0_i64, 3, -5, 41] {
@@ -245,7 +245,7 @@ fn unboxed_while_accumulator_matches_vm() {
            while (i <= n) { s = s + i; i = i + 1; }\n\
            return s;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "sumTo");
     // Must be unboxed-eligible now (a silent VM fallback would pass the value assert but prove nothing).
@@ -277,7 +277,7 @@ fn unboxed_loop_carried_bool_matches_vm() {
            while (go) { acc = acc + i; i = i + 1; go = i < n; }\n\
            return acc;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     assert!(
@@ -306,7 +306,7 @@ fn unboxed_overflow_mid_loop_faults_like_vm() {
            while (i < n) { p = p * 2; i = i + 1; }\n\
            return p;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "powish");
     // ovf-spec: an in-loop overflow funnels to code 5 = REDO_ON_VM (the back-edge sticky guard trips on
@@ -339,7 +339,7 @@ fn unboxed_div_zero_mid_loop_faults_like_vm() {
            while (i <= n) { a = a + 100 / (n - i); i = i + 1; }\n\
            return a;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "acc");
     // ovf-spec: the in-loop divide-by-zero keeps its per-op branch (sdiv traps) but funnels to code 5 =
@@ -376,7 +376,7 @@ fn unboxed_all_comparisons_and_not_match_vm_oracle() {
          function eq(int a) -> int { if (a == 4) { return 1; } return 0; }\n\
          function ne(int a) -> int { if (a != 4) { return 1; } return 0; }\n\
          function nt(int a) -> int { if (!(a < 4)) { return 1; } return 0; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     for name in ["gt", "ge", "le", "eq", "ne", "nt"] {
         let f = func_index(&program, name);
@@ -398,7 +398,7 @@ fn unboxed_add_and_sub_overflow_fault_like_the_kernel() {
         "package Main;\n\
          function add(int a, int b) -> int { return a + b; }\n\
          function sub(int a, int b) -> int { return a - b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     for (name, args) in [
         ("add", [Value::Int(i64::MAX), Value::Int(1)]),
@@ -428,7 +428,7 @@ fn unboxed_recursive_fib_matches_vm_oracle() {
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "fib");
     for n in [0_i64, 1, 2, 3, 5, 10, 15, 20] {
@@ -449,7 +449,7 @@ fn unboxed_deep_recursion_caps_at_depth_and_funnels_to_redo() {
     // INSIDE the closure (Value/JitRun hold Rc = not Send). If this segfaulted, the thread would abort.
     const SRC: &str = "package Main;\n\
         function forever(int n) -> int { return forever(n + 1); }\n\
-        function main() -> void {}";
+        #[Entry] function main() -> void {}";
     let handle = std::thread::Builder::new()
         .stack_size(64 * 1024 * 1024)
         .spawn(|| {
@@ -485,7 +485,7 @@ fn measures_unboxed_fib_vs_vm_and_php() {
            if (n < 2) { return n; }\n\
            return fib(n - 1) + fib(n - 2);\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "fib");
     const N: i64 = 30;
@@ -547,7 +547,7 @@ fn unboxed_cross_function_calls_match_vm_oracle() {
          function c(int n) -> int { return n + n; }\n\
          function b(int n) -> int { return c(n) * 2; }\n\
          function a(int n) -> int { return b(n) + 1; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "a");
     for n in [0_i64, 1, 3, 7, -4] {
@@ -568,7 +568,7 @@ fn unboxed_cross_call_propagates_a_callee_fault() {
         "package Main;\n\
          function bad(int a, int b) -> int { return a / b; }\n\
          function callbad(int n) -> int { return bad(n, 0); }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "callbad");
     // ovf-spec: the callee `bad` faults (div-zero → code 5); `callbad` propagates the callee's non-zero
@@ -594,7 +594,7 @@ fn unboxed_ineligible_callee_sinks_the_whole_graph() {
         "package Main;\n\
          function leaf(int n, int m) -> int { return m; }\n\
          function top(int n) -> int { return leaf(n, n); }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     for name in ["leaf", "top"] {
         let f = func_index(&program, name);
@@ -626,7 +626,7 @@ fn inline_conversions_match_the_oracle_and_hit_the_jit() {
           }\n\
           return Conversion.truncate(acc);\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "conversion loop must match the oracle");
@@ -651,7 +651,7 @@ fn inline_truncate_range_fault_matches_the_vm() {
           mutable float f = 0.0 - 12345.678;\n\
           return Conversion.truncate(f) + Conversion.truncate(9.9);\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_out = crate::cli::cmd_run(OK).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(OK).expect("oracle ok");
     assert_eq!(jit_out, oracle, "negative/fractional truncate must match");
@@ -663,7 +663,7 @@ fn inline_truncate_range_fault_matches_the_vm() {
           mutable float f = 1.0e300;\n\
           return Conversion.truncate(f);\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_err = crate::cli::cmd_run(OOR).expect_err("must fault");
     let oracle_err = crate::cli::cmd_treewalk(OOR).expect_err("must fault");
     assert!(

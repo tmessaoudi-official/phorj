@@ -25,6 +25,7 @@ class Account {
     }
 }
 
+#[Entry]
 function main(): void {
     Account a = new Account(50);
     Output.printLine("balance {a.balance} empty {a.isEmpty}");

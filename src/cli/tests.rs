@@ -6,8 +6,16 @@ use super::benchmark::{bench_report, bench_report_opts};
 /// already declared, so the CLI command tests need no per-case package boilerplate. The segment
 /// carries no newline, so line numbers in fault diagnostics are preserved.
 fn wp(src: &str) -> String {
-    if src.trim_start().starts_with("package ") {
+    // DEC-191: the run-path tests need an attributed entry — inject `#[Entry]` before a bare
+    // `function main(` so the ~1000 inline programs don't each repeat the ceremony. A test that
+    // writes its own `#[Entry]` (or has no main) is passed through untouched.
+    let src = if src.contains("function main(") && !src.contains("#[Entry]") {
+        src.replacen("function main(", "#[Entry] function main(", 1)
+    } else {
         src.to_string()
+    };
+    if src.trim_start().starts_with("package ") {
+        src
     } else {
         format!("package Main; {src}")
     }
@@ -34,6 +42,7 @@ class Greeter {
     function greet(): string { return "Hello {this.name}"; }
 }
 
+#[Entry]
 function main(): void {
     Greeter g = new Greeter("Tak");
     Output.printLine(g.greet());
@@ -160,7 +169,7 @@ fn library_file_without_main_checks_and_transpiles_but_run_errors_clearly() {
     );
     let run_err = cmd_treewalk(&lib).unwrap_err();
     assert!(
-        run_err.contains("no entry point") && run_err.contains("main"),
+        run_err.contains("no entry point") && run_err.contains("#[Entry]"),
         "run error: {run_err}"
     );
     let vm_err = cmd_run(&lib).unwrap_err();

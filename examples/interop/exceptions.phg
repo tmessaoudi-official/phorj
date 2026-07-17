@@ -17,6 +17,7 @@ declare class DivisionByZeroError implements Error {
     function getMessage(): string;
 }
 
+#[Entry]
 function main(): void {
     // intdiv(10, 0) raises PHP's \DivisionByZeroError — caught by name.
     try {

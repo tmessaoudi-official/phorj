@@ -11,6 +11,7 @@ package Main;
 import Core.Output;
 import Core.Random;
 
+#[Entry]
 function main(): void {
     // A fixed seed makes the stream reproducible — the same seed always replays the same rolls.
     Random.seed(2026);

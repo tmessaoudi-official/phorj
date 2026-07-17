@@ -166,6 +166,24 @@ pub fn explain_text(code: &str) -> Option<String> {
              subclass assign a field it cannot read) — PHP rejects the same shape. Narrow the\n\
              `(set)` modifier or widen the read visibility (DEC-241).\n"
         }
+        "E-ENTRY-SIG" => {
+            "E-ENTRY-SIG — an `#[Entry]` function whose signature matches no entry role.\n\n\
+             The role is inferred from the signature (DEC-191): CLI entries are `(): void`,\n\
+             `(): int`, `(List<string>): void` or `(List<string>): int` (an `int` return is the\n\
+             process exit status); the web handler is `(Request): Response`. Adjust the signature\n\
+             to one of these shapes.\n"
+        }
+        "E-ENTRY-TARGET" => {
+            "E-ENTRY-TARGET — `#[Entry]` on an instance method.\n\n\
+             An entry runs before any instance exists. Put `#[Entry]` on a top-level function or a\n\
+             class `static` method (DEC-191): `class App { #[Entry] static function run(): void { … } }`.\n"
+        }
+        "E-MULTIPLE-ENTRY" => {
+            "E-MULTIPLE-ENTRY — more than one `#[Entry]` of the same role.\n\n\
+             A program declares at most ONE CLI entry and at most ONE web entry (they may\n\
+             coexist — `phg run` uses the CLI one, `phg serve` the web one). Remove the extra\n\
+             `#[Entry]` attributes of the duplicated role (DEC-191).\n"
+        }
         "E-ERROR-NAME" => {
             "E-ERROR-NAME — a throwable type whose name does not say it is one.\n\n\
              Any class that implements `Error` (directly, via a parent class, or via interface\n\

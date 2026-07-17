@@ -36,6 +36,7 @@ function sumSet(Set<int> s): int {
     return total;
 }
 
+#[Entry]
 function main(): void {
     // A plain list.
     Output.printLine("list sum = {sumList([10, 20, 30])}");

@@ -19,7 +19,7 @@ fn proven_rem_by_pow2_masks_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "masked rem must match the oracle");
@@ -48,7 +48,7 @@ fn negative_dividend_rem_is_unproven_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(9)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(9)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -70,7 +70,7 @@ fn non_pow2_rem_stays_checked_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(100)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(100)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "%3 must match the oracle");
@@ -83,7 +83,7 @@ fn unboxed_arithmetic_matches_vm_oracle() {
     let program = compile_source(
         "package Main;\n\
          function calc(int a, int b) -> int { return a * b + a - b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "calc");
     for (a, b) in [(6_i64, 7_i64), (0, 0), (-3, 5), (5, -3), (1000000, 1000000)] {
@@ -103,7 +103,7 @@ fn unboxed_if_else_and_comparison_match_vm_oracle() {
     let program = compile_source(
         "package Main;\n\
          function pick(int a) -> int { if (a < 10) { return 111; } else { return 222; } }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "pick");
     for a in [3_i64, 9, 10, 42, -1] {
@@ -122,7 +122,7 @@ fn unboxed_bool_param_is_handled_natively() {
     let program = compile_source(
         "package Main;\n\
          function choose(bool b, int n) -> int { if (b) { return n + 1; } return n + 2; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "choose");
     for (b, n) in [(true, 5_i64), (false, 5), (true, -1), (false, 100)] {
@@ -143,7 +143,7 @@ fn unboxed_overflow_funnels_to_vm_redo() {
     let program = compile_source(
         "package Main;\n\
          function mul(int a, int b) -> int { return a * b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "mul");
     match Compiled::compile_unboxed(&program, f)
@@ -165,7 +165,7 @@ fn unboxed_div_zero_and_mod_zero_both_funnel_to_redo() {
         "package Main;\n\
          function divi(int a, int b) -> int { return a / b; }\n\
          function modi(int a, int b) -> int { return a % b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     for name in ["divi", "modi"] {
         let f = func_index(&program, name);
@@ -193,7 +193,7 @@ fn unboxed_min_over_neg_one_and_neg_min_funnel_to_redo_without_trapping() {
          function divi(int a, int b) -> int { return a / b; }\n\
          function modi(int a, int b) -> int { return a % b; }\n\
          function neg(int a) -> int { return -a; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     for (name, args) in [
         ("divi", vec![Value::Int(i64::MIN), Value::Int(-1)]),
@@ -224,7 +224,7 @@ fn unboxed_rejects_non_int_return() {
          function isSmall(int n) -> bool { return n < 10; }\n\
          function identity(int n) -> int { return n; }\n\
          function retb(bool b, int n) -> bool { if (n > 0) { return b; } return b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     for name in ["identity", "retb"] {
         let f = func_index(&program, name);
@@ -259,7 +259,7 @@ fn unboxed_straightline_mutable_local_matches_vm() {
     let program = compile_source(
         "package Main;\n\
          function f(int x) -> int { mutable int a = x * 2; a = a + 3; return a; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     for x in [0_i64, 1, -4, 100, -100] {
@@ -287,7 +287,7 @@ fn jit_overflow_before_div_zero_faults_with_overflow_not_div_zero() {
     let program = compile_source(
         "package Main;\n\
          function f(int a, int b) -> int { return a * a / b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     let args = vec![Value::Int(4_000_000_000), Value::Int(0)]; // 4e9 * 4e9 = 1.6e19 > i64::MAX
@@ -323,7 +323,7 @@ fn jit_transient_cancelling_overflow_still_faults() {
     let program = compile_source(
         "package Main;\n\
          function f(int a, int b, int c) -> int { return a * b - a * c; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "f");
     let args = vec![
@@ -386,7 +386,7 @@ fn ovf_spec_overflow_in_loop_redoes_to_byte_identical_fault() {
     const SRC: &str = "package Main;\n\
         import Core.Output;\n\
         function spin() -> int { mutable int i = 1; while (i != 0) { i = i * 3; } return i; }\n\
-        function main() -> void { Output.printLine(\"{spin()}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{spin()}\"); }";
     assert_unboxed_eligible(SRC, "spin");
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
@@ -411,7 +411,7 @@ fn ovf_spec_overflow_before_div_zero_orders_correctly() {
     const SRC: &str = "package Main;\n\
         import Core.Output;\n\
         function f(int a, int b) -> int { return a * a / b; }\n\
-        function main() -> void { Output.printLine(\"{f(4000000000, 0)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{f(4000000000, 0)}\"); }";
     assert_unboxed_eligible(SRC, "f");
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
@@ -435,7 +435,7 @@ fn ovf_spec_transient_cancelling_overflow_still_faults() {
     const SRC: &str = "package Main;\n\
         import Core.Output;\n\
         function f(int a, int b, int c) -> int { return a * b - a * c; }\n\
-        function main() -> void { Output.printLine(\"{f(4000000000, 4000000000, 4000000000)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{f(4000000000, 4000000000, 4000000000)}\"); }";
     assert_unboxed_eligible(SRC, "f");
     let jit = crate::cli::cmd_run(SRC);
     let oracle = crate::cli::cmd_treewalk(SRC);
@@ -459,11 +459,11 @@ fn ovf_spec_div_zero_and_mod_zero_render_distinct_faults() {
     const DIV: &str = "package Main;\n\
         import Core.Output;\n\
         function dz(int a, int b) -> int { return a / b; }\n\
-        function main() -> void { Output.printLine(\"{dz(1, 0)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{dz(1, 0)}\"); }";
     const MOD: &str = "package Main;\n\
         import Core.Output;\n\
         function mz(int a, int b) -> int { return a % b; }\n\
-        function main() -> void { Output.printLine(\"{mz(1, 0)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{mz(1, 0)}\"); }";
     assert_unboxed_eligible(DIV, "dz");
     assert_unboxed_eligible(MOD, "mz");
     for (src, kernel, label) in [
@@ -492,7 +492,7 @@ fn ovf_spec_non_overflowing_loop_returns_the_checked_value() {
     const SRC: &str = "package Main;\n\
         import Core.Output;\n\
         function sumsq(int n) -> int { mutable int s = 0; mutable int i = 1; while (i <= n) { s = s + i * i; i = i + 1; } return s; }\n\
-        function main() -> void { Output.printLine(\"{sumsq(100)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{sumsq(100)}\"); }";
     assert_unboxed_eligible(SRC, "sumsq");
     let jit = crate::cli::cmd_run(SRC).expect("no-overflow loop must succeed under jit");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("oracle ok");

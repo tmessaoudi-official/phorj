@@ -21,6 +21,7 @@ function fullName(string first, string last): string {
     return first + " " + last;
 }
 
+#[Entry]
 function main(): void {
     // Concatenation — literals, a call result, and a bound variable all compose.
     string who = fullName("Ada", "Lovelace");

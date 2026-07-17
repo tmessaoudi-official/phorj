@@ -30,6 +30,7 @@ function resolve(Action a): string {
     };
 }
 
+#[Entry]
 function main(): void {
     Character hero = new Character("Hero", 30);
     Character hurt = hero.act(new Attack(12));

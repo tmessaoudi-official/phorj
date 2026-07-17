@@ -19,6 +19,7 @@ class Registry {
 // a computed default via a call → 42
 // reads an EARLIER static (declaration order) → 43
 // a literal static — still a plain PHP default
+#[Entry]
 function main(): void {
     Output.printLine("{Registry.answer}");
     // 42

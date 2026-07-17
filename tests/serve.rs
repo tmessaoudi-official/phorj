@@ -98,7 +98,7 @@ function respond(bytes raw) -> bytes {
   }
 }
 
-function main() -> void {
+#[Entry] function main() -> void {
   bytes raw = b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
   int len = Bytes.length(respond(raw));
   Output.printLine("served {len} bytes");
@@ -114,13 +114,13 @@ package Main;
 import Core.Http;
 import Core.Http.Request;
 import Core.Http.Response;
-function handle(Request req) -> Response {
+#[Entry] function handle(Request req) -> Response {
   if (req.path == "/") {
     return Response.text(200, "home");
   }
   return Response.text(404, "missing");
 }
-function main() -> void { }
+#[Entry] function main() -> void { }
 "#;
 
 /// Deterministic in-memory transport: `recv` pops a canned request; `send` records the response.

@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     string name = "Ada";
     int n = 42;

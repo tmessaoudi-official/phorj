@@ -44,6 +44,7 @@ function errorBody(string message): bytes {
 }
 
 // The endpoint: parse the JSON request body, branch on its shape, return a JSON response.
+#[Entry]
 function handle(Request req): Response {
     var parsed = Json.parse(Bytes.toString(req.body) ?? "");
     if (var doc = parsed) {
@@ -63,6 +64,7 @@ function show(Response resp): void {
     Output.printLine(Bytes.toString(resp.body) ?? "");
 }
 
+#[Entry]
 function main(): void {
     show(handle(new Request("/sum", Bytes.fromString("[1, 2, 3, 4]"))));
     // 200, count 4 / sum 10

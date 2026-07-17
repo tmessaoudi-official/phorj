@@ -10,6 +10,7 @@ package Main;
 import Core.Output;
 import Core.Set;
 
+#[Entry]
 function main(): void {
     var a = Set.of([1, 2, 3]);
     var b = Set.of([2, 3, 4]);

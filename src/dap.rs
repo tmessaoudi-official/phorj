@@ -386,7 +386,7 @@ mod tests {
     fn full_session_handshake_launch_stop_inspect_continue_terminate() {
         let unit = crate::loader::load_loose_src(
             "package Main;\nimport Core.Output;\n\
-             function main() -> void {\n  int n = 41;\n  int m = n + 1;\n  Output.printLine(\"{m}\");\n}\n",
+             #[Entry] function main() -> void {\n  int n = 41;\n  int m = n + 1;\n  Output.printLine(\"{m}\");\n}\n",
         )
         .expect("load");
         // A breakpoint at line 5; on stop, ask for stackTrace + variables, then continue.

@@ -3,6 +3,7 @@ package Main;
 
 import Core.Output;
 
+#[Entry]
 function main(): void {
     Output.printLine("{2 + 3 * 4}");
     Output.printLine("{(2 + 3) * 4}");

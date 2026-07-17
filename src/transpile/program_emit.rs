@@ -41,7 +41,7 @@ fn runtime_static_inits(program: &Program) -> Vec<(&str, &str, &Expr)> {
 /// and an `int`-returning `main` is wrapped in `exit(…)` so the return value becomes the process exit
 /// status. A `void` `main()` keeps the bare `main();` call (byte-identical to pre-Batch-1 B output).
 fn main_entry_shape(program: &Program) -> (bool, bool) {
-    match crate::ast::entry_point(program, "main") {
+    match crate::ast::entry_for(program, crate::ast::EntryRole::Cli) {
         Some((_, f)) => {
             let has_argv = !f.params.is_empty();
             let returns_int = matches!(&f.ret, Some(Type::Named { name, .. }) if name == "int");
@@ -56,13 +56,16 @@ fn main_entry_shape(program: &Program) -> (bool, bool) {
 /// (Batch-1 D) is `{prefix}App::main(...)`. Empty string when the program has no entry (a library/web
 /// file) — the caller guards on that too. Composes [`main_entry_shape`]'s argv + exit-code decisions.
 fn main_bootstrap_stmt(program: &Program, ns_prefix: &str) -> String {
-    let Some((entry_class, _)) = crate::ast::entry_point(program, "main") else {
+    let Some((entry_class, entry_decl)) =
+        crate::ast::entry_for(program, crate::ast::EntryRole::Cli)
+    else {
         return String::new();
     };
     let (has_argv, returns_int) = main_entry_shape(program);
+    // DEC-191: the entry's NAME is whatever the program chose — key on the resolved decl.
     let callee = match entry_class {
-        Some(c) => format!("{ns_prefix}{c}::main"),
-        None => format!("{ns_prefix}main"),
+        Some(c) => format!("{ns_prefix}{c}::{}", entry_decl.name),
+        None => format!("{ns_prefix}{}", entry_decl.name),
     };
     let call = if has_argv {
         format!("{callee}(array_slice($argv ?? [], 1))")
@@ -270,7 +273,7 @@ impl Transpiler {
         // is a runnable program, not just definitions.
         // Batch-1 D: the entry may be a top-level `main` OR a class-static `main` (so the guard is
         // `entry_point`, not `funcs.contains("main")` — a static entry isn't a free function).
-        if crate::ast::entry_point(program, "main").is_some() {
+        if crate::ast::entry_for(program, crate::ast::EntryRole::Cli).is_some() {
             if !rt_statics.is_empty() {
                 self.line("__phorj_init_statics();");
             }
@@ -365,7 +368,7 @@ impl Transpiler {
         }
         self.line("namespace {");
         self.indent += 1;
-        if crate::ast::entry_point(program, "main").is_some() {
+        if crate::ast::entry_for(program, crate::ast::EntryRole::Cli).is_some() {
             let stmt = main_bootstrap_stmt(program, "\\Main\\");
             self.line(&stmt);
         }

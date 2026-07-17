@@ -32,6 +32,7 @@ function card(string title, Html bodyHtml): Html {
     return html"<section>\n    <h2>{title}</h2>\n    {bodyHtml}\n  </section>";
 }
 
+#[Entry]
 function main(): void {
     string name = "Tom & \"Jerry\"";
     string bio = "<script>alert(1)</script>";

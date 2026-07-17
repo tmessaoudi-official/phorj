@@ -16,6 +16,7 @@ function describe(string s): string {
     return "{s} -> (not an int)";
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(describe("42"));
     // 42 -> 42

@@ -5,6 +5,7 @@ import Core.Output;
 import Core.Math;
 import Core.String;
 
+#[Entry]
 function main(): void {
     Output.printLine("abs={Math.abs(-5)} min={Math.min(3, 8)} max={Math.max(3, 8)}");
     Output.printLine("sqrt={Math.sqrt(16.0)} pow={Math.pow(2.0, 3.0)}");

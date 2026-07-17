@@ -68,6 +68,7 @@ function shout(string? name): string {
     return name + "!";
 }
 
+#[Entry]
 function main(): void {
     Output.printLine(classify(21));
     // int:42

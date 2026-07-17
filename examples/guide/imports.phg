@@ -17,6 +17,7 @@ import Core.String;
 import Core.Time.Instant;
 import Core.Time.Duration;
 
+#[Entry]
 function main(): void {
     // Functions: module-qualified calls.
     string shout = String.upperCase("phorj imports");

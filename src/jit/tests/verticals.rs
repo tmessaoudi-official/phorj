@@ -13,7 +13,7 @@ fn phg_run_hook_actually_hits_the_jit() {
         import Core.Output;\n\
         function fib(int n) -> int { if (n < 2) { return n; } return fib(n - 1) + fib(n - 2); }
 \
-        function main() -> void { Output.printLine(\"{fib(10)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{fib(10)}\"); }";
     // Byte-identity: the jit-wired run must match the interpreter oracle (Invariant 2).
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
@@ -54,7 +54,7 @@ fn phg_run_hook_hits_the_jit_on_an_int_loop() {
           while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
           return acc;\n\
         }\n\
-        function main() -> void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -97,7 +97,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -146,7 +146,7 @@ fn phg_run_hook_hits_the_jit_on_the_listappend_vertical() {
           }\n\
           return acc + List.length(xs);\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -197,7 +197,7 @@ fn phg_run_hook_hits_the_jit_on_the_mapinsert_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -243,7 +243,7 @@ fn phg_run_hook_hits_the_jit_on_the_hofpipe_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -288,7 +288,7 @@ fn phg_run_hook_hits_the_jit_on_the_forin_pointer_walk() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -333,7 +333,7 @@ fn phg_run_hook_hits_the_jit_on_general_list_append() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -390,7 +390,7 @@ fn phg_run_hook_hits_the_jit_on_the_native_bridge2_and_str_eq() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -445,7 +445,7 @@ fn phg_run_hook_hits_the_jit_on_handle_args_and_builder_returns() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -493,7 +493,7 @@ fn phg_run_hook_hits_the_jit_on_bool_consts_and_to_string() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -537,7 +537,7 @@ fn phg_run_hook_hits_the_jit_on_list_fields() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -591,7 +591,7 @@ fn phg_run_hook_hits_the_jit_on_wide_two_slot_instances() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -645,7 +645,7 @@ fn phg_run_hook_hits_the_jit_on_union_dyn_params() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -689,7 +689,7 @@ fn phg_run_hook_takes_list_fields_from_dying_temp_receivers() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -736,7 +736,7 @@ fn iterated_local_also_written_declines_to_the_vm_byte_identically() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(50)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(50)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -776,7 +776,7 @@ fn jit_string_vertical_long_and_multibyte_concat_match_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(64)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -804,7 +804,7 @@ fn jit_string_vertical_index_fault_matches_the_vm() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(5)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(5)}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
     let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
     assert!(
@@ -837,7 +837,7 @@ fn phg_run_hook_hits_the_jit_on_the_map_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -887,7 +887,7 @@ fn phg_run_hook_hits_the_jit_on_mixed_interpolation() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(600)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(600)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -939,7 +939,7 @@ fn phg_run_hook_hits_the_jit_on_the_string_accumulator() {
           }\n\
           return acc + String.length(s);\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -993,7 +993,7 @@ fn phg_run_hook_hits_the_jit_on_the_chain_accumulator() {
           }\n\
           return acc + String.length(s);\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1037,7 +1037,7 @@ fn jit_map_vertical_long_key_stays_boxed_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(64)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "boxed-map lookup must match the oracle");
@@ -1054,7 +1054,7 @@ fn jit_map_vertical_duplicate_keys_dedup_like_the_kernel() {
           Map<string, int> m = [\"a\" => 1, \"b\" => 5, \"a\" => 2];\n\
           return m[\"a\"] * 100 + m[\"b\"];\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "dedup semantics must match the oracle");
@@ -1085,7 +1085,7 @@ fn jit_map_vertical_larger_map_walks_buckets_and_matches_the_oracle() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(240)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(240)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "bucket-walk lookup must match the oracle");
@@ -1106,7 +1106,7 @@ fn jit_map_vertical_missing_key_fault_matches_the_vm() {
           Map<string, int> m = [\"a\" => 10];\n\
           return m[\"zzz\"];\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
     let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
     assert!(
@@ -1138,7 +1138,7 @@ fn jit_map_vertical_concat_key_probes_through_the_helper() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(64)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(64)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1161,7 +1161,7 @@ fn jit_stack_overflow_threshold_matches_the_oracle() {
             "package Main;\n\
              import Core.Output;\n\
              function countdown(int n) -> int {{ if (n <= 0) {{ return 0; }} return countdown(n - 1); }}\n\
-             function main() -> void {{ Output.printLine(\"{{countdown({n})}}\"); }}"
+             #[Entry] function main() -> void {{ Output.printLine(\"{{countdown({n})}}\"); }}"
         );
         let jit = crate::cli::cmd_run(&src);
         let oracle = crate::cli::cmd_treewalk(&src);
@@ -1198,7 +1198,7 @@ fn range_analysis_proves_strict_lt_plus_one_counter() {
     let program = compile_source(
         "package Main;\n\
          function count(int n) -> int { mutable int i = 0; while (i < n) { i = i + 1; } return i; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "count"),
@@ -1229,7 +1229,7 @@ fn range_analysis_rejects_le_ne_and_wrong_slot_guards() {
          function le(int n)    -> int { mutable int i = 0; while (i <= n)   { i = i + 1; } return i; }\n\
          function ne(int n)    -> int { mutable int i = 0; while (i != n)   { i = i + 1; } return i; }\n\
          function wrong(int n) -> int { mutable int i = 0; while (n < 100)  { i = i + 1; } return i; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     for name in ["le", "ne", "wrong"] {
         assert_eq!(
@@ -1266,7 +1266,7 @@ fn range_analysis_rejects_double_write_and_nested_loop() {
            }\n\
            return i;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     // The soundness-critical assertion is that NEITHER counter is proven (both keep their overflow
     // guards). `dbl`/`nest` are not necessarily unboxed-eligible (the block-local `j` / statement shape
@@ -1297,7 +1297,7 @@ fn range_analysis_float_counted_loop_matches_vm_and_drops_guard() {
            while (i < iters) { acc = acc * r + 0.5; i = i + 1; }\n\
            return acc;\n\
          }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "bench"),
@@ -1334,7 +1334,7 @@ fn range_analysis_proven_counter_coexists_with_unproven_op_that_still_faults() {
     let program = compile_source(
         "package Main;\n\
          function f(int n) -> int { mutable int s = 1; mutable int i = 0; while (i < n) { s = s * 3; i = i + 1; } return s; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     assert_eq!(
         proven_count(&program, "f"),
@@ -1378,7 +1378,7 @@ fn unchecked_function_wraps_add_sub_mul_without_faulting_and_matches_vm() {
          function wsub(int a, int b) -> int { return a - b; }\n\
          #[UncheckedOverflow]\n\
          function wmul(int a, int b) -> int { return a * b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     // The overflow edges that WOULD fault in a checked function must WRAP here (no redo, no fault).
     let cases: &[(&str, i64, i64, i64)] = &[
@@ -1424,7 +1424,7 @@ fn qualified_unchecked_overflow_attribute_is_recognized_and_wraps_on_the_vm() {
          import Core.Runtime.Integer;\n\
          #[Integer.UncheckedOverflow]\n\
          function wadd(int a, int b) -> int { return a + b; }\n\
-         function main() -> void {}",
+         #[Entry] function main() -> void {}",
     );
     let f = func_index(&program, "wadd");
     assert!(
@@ -1452,7 +1452,7 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         function inner(int n) -> int { return n + 1; }\n\
         #[UncheckedOverflow] function outer(int n) -> int { return inner(n); }\n\
-        function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let a_jit = crate::cli::cmd_run(A);
     let a_oracle = crate::cli::cmd_treewalk(A);
     match (&a_jit, &a_oracle) {
@@ -1470,7 +1470,7 @@ fn unchecked_checked_call_boundary_byte_identical_both_directions() {
         import Core.Runtime.Integer.UncheckedOverflow;\n\
         #[UncheckedOverflow] function inner(int n) -> int { return n + 1; }\n\
         function outer(int n) -> int { return inner(n); }\n\
-        function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
+        #[Entry] function main() -> void { Output.printLine(\"{outer(9223372036854775807)}\"); }";
     let b_jit = crate::cli::cmd_run(B).expect("wrapping inner returns a value");
     let b_oracle = crate::cli::cmd_treewalk(B).expect("wrapping inner returns a value");
     assert_eq!(
@@ -1501,7 +1501,7 @@ fn phg_run_hook_hits_the_jit_on_the_int_list_vertical() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(1000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(1000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "int-list vertical must match the oracle");
@@ -1527,7 +1527,7 @@ fn jit_int_list_oob_fault_matches_the_vm() {
           List<int> xs = [10, 20];\n\
           return xs[5];\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_err = crate::cli::cmd_run(SRC).expect_err("jit-wired run must fault");
     let oracle_err = crate::cli::cmd_treewalk(SRC).expect_err("interpreter must fault");
     assert!(
@@ -1546,7 +1546,7 @@ fn jit_int_list_negative_values_and_index_edges_match_the_oracle() {
           List<int> xs = [0 - 5, 7, 0 - 9223372036854775807];\n\
           return xs[0] + xs[1] + xs[2] % 1000;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench()}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench()}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(jit_out, oracle, "negative int-list values must match");
@@ -1572,7 +1572,7 @@ fn task9_proves_affine_accumulator_with_param_bound_guard() {
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + (i * 3 - 1); i = i + 1; }\n\
           return acc; }\n\
-        function main(): void { Output.printLine(\"{bench(4000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(4000)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("the intadd shape must be provable");
     let proven = acc.proven.iter().filter(|&&p| p).count();
@@ -1605,7 +1605,7 @@ fn task9_proves_const_map_accumulator_and_expression_remi() {
             i = i + 1;\n\
           }\n\
           return acc; }\n\
-        function main(): void { Output.printLine(\"{bench(3000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(3000)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("const-collection accumulator must prove");
     assert!(acc.proven.iter().filter(|&&p| p).count() >= 4);
@@ -1628,7 +1628,7 @@ fn task9_guard_decline_beyond_g_stays_byte_identical() {
         function bench(int iters): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 5000000000000; i = i + 1; }\n\
           return acc; }\n\
-        function main(): void { Output.printLine(\"{bench(1048577)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(1048577)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("const-growth accumulator must prove");
     assert_eq!(
@@ -1654,7 +1654,7 @@ fn task9_rejects_unbounded_growth_and_overflow_faults_identically() {
         function bench(int iters): int { mutable int acc = 9000000000000000000; mutable int i = 0;\n\
           while (i < iters) { acc = acc + 20000000000000; i = i + 1; }\n\
           return acc; }\n\
-        function main(): void { Output.printLine(\"{bench(20000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(20000)}\"); }";
     let program = compile_source(SRC);
     assert!(
         acc_elision(&program, "bench").is_none(),
@@ -1679,7 +1679,7 @@ fn task9_rejects_computed_bound_and_body_branches() {
           while (i < lim) { acc = acc + 1; i = i + 1; } return acc; }\n\
         function branchy(int n): int { mutable int acc = 0; mutable int i = 0;\n\
           while (i < n) { if (i > 2) { acc = acc + 2; } i = i + 1; } return acc; }\n\
-        function main(): void { Output.printLine(\"{computed(5)} {branchy(9)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{computed(5)} {branchy(9)}\"); }";
     let program = compile_source(SRC);
     assert!(
         acc_elision(&program, "computed").is_none(),
@@ -1719,7 +1719,7 @@ fn phg_run_hook_hits_the_jit_on_for_in_iteration() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(500)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(500)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(
@@ -1762,7 +1762,7 @@ fn task9_v2_proves_nested_for_in_accumulator_and_index_bounds() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(700)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(700)}\"); }";
     let program = compile_source(SRC);
     let acc = acc_elision(&program, "bench").expect("the nested for-in shape must prove (v2)");
     let proven = acc.proven.iter().filter(|&&p| p).count();
@@ -1822,7 +1822,7 @@ fn phg_run_hook_hits_the_jit_on_str_list_accumulators() {
           }\n\
           return acc;\n\
         }\n\
-        function main(): void { Output.printLine(\"{bench(2000)}\"); }";
+        #[Entry] function main(): void { Output.printLine(\"{bench(2000)}\"); }";
     let jit_out = crate::cli::cmd_run(SRC).expect("jit-wired run ok");
     let oracle = crate::cli::cmd_treewalk(SRC).expect("interpreter oracle ok");
     assert_eq!(

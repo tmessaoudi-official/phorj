@@ -109,6 +109,86 @@ pub fn class_supertypes(program: &Program) -> std::collections::BTreeMap<String,
     out
 }
 
+/// DEC-191: is this attribute the `#[Entry]` marker? Bare name, no import gate (the developer-
+/// approved surface shows `#[Entry]` with no ceremony); argument validation is the checker's job.
+pub fn is_entry_attr(a: &crate::ast::Attribute) -> bool {
+    a.name == "Entry"
+}
+
+/// DEC-191: the ROLE an `#[Entry]` function plays, inferred from its signature (never from its
+/// name — the magic `main`/`handle` names are retired).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EntryRole {
+    /// `(): void` / `(): int` / `(List<string>): void` / `(List<string>): int` — the `phg run`
+    /// entry. An `int` return is the process exit status (0–255); `void` exits 0 on clean.
+    Cli,
+    /// `(Request): Response` — the `phg serve` per-request handler.
+    Web,
+}
+
+/// Classify an `#[Entry]` function's signature into its role, or `None` when it matches neither
+/// (the checker turns that into `E-ENTRY-SIG`). AST-level shape matching — runs on the expanded
+/// program in every backend, so it stays checker-independent.
+pub fn entry_role(f: &FunctionDecl) -> Option<EntryRole> {
+    fn named_is(t: &crate::ast::Type, want: &str) -> bool {
+        matches!(t, crate::ast::Type::Named { name, args, .. } if name == want && args.is_empty())
+    }
+    let ret_cli = match &f.ret {
+        None => true, // no annotation on an entry is not valid Phorj anyway; checker rejects
+        Some(t) => named_is(t, "void") || named_is(t, "int"),
+    };
+    let params_cli = f.params.is_empty()
+        || (f.params.len() == 1
+            && matches!(&f.params[0].ty, crate::ast::Type::Named { name, args, .. }
+                if name == "List" && args.len() == 1
+                    && matches!(&args[0], crate::ast::Type::Named { name, args, .. }
+                        if name == "string" && args.is_empty())));
+    if params_cli && ret_cli {
+        return Some(EntryRole::Cli);
+    }
+    let web = f.params.len() == 1
+        && named_is(&f.params[0].ty, "Request")
+        && f.ret.as_ref().is_some_and(|t| named_is(t, "Response"));
+    if web {
+        return Some(EntryRole::Web);
+    }
+    None
+}
+
+/// DEC-191: every `#[Entry]`-attributed function in the program — top-level functions and class
+/// STATIC methods (an attributed instance method is invalid; the checker rejects it, and this
+/// resolver simply does not surface it). Returns `(class, decl)` pairs in declaration order; role
+/// classification and the one-per-role rule (`E-MULTIPLE-ENTRY`) live above this.
+pub fn entry_candidates(program: &Program) -> Vec<(Option<&str>, &FunctionDecl)> {
+    let mut out = Vec::new();
+    for item in &program.items {
+        match item {
+            Item::Function(f) if f.attrs.iter().any(is_entry_attr) => out.push((None, f)),
+            Item::Class(c) => {
+                for m in &c.members {
+                    if let ClassMember::Method(f) = m {
+                        if f.attrs.iter().any(is_entry_attr)
+                            && f.modifiers.contains(&Modifier::Static)
+                        {
+                            out.push((Some(c.name.as_str()), f));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// DEC-191: resolve the program's entry for one role — what the backends call. `None` when the
+/// program declares no entry of that role (a library file, or `phg run` on a web-only program).
+pub fn entry_for(program: &Program, role: EntryRole) -> Option<(Option<&str>, &FunctionDecl)> {
+    entry_candidates(program)
+        .into_iter()
+        .find(|(_, f)| entry_role(f) == Some(role))
+}
+
 /// Resolve a program **entry point** (`main` / `handle`) — the single source of truth all backends
 /// share so they invoke the same function (Batch-1 D, `docs/specs/2026-06-27-class-entry-points-design.md`).
 ///

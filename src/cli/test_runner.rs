@@ -150,13 +150,22 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
         .items
         .iter()
         .filter(|i| {
-            !matches!(i, Item::Test { .. }) && !matches!(i, Item::Function(f) if f.name == "main")
+            // DEC-191: strip any #[Entry]-attributed top-level function (entries are attribute-
+            // declared) so the synthetic test entry below is the program's ONLY CLI entry.
+            !matches!(i, Item::Test { .. })
+                && !matches!(i, Item::Function(f)
+                    if f.attrs.iter().any(crate::ast::is_entry_attr))
         })
         .cloned()
         .collect();
     items.push(Item::Function(FunctionDecl {
         modifiers: Vec::new(),
-        attrs: Vec::new(),
+        // DEC-191: the synthetic test entry is attribute-declared like every entry.
+        attrs: vec![crate::ast::Attribute {
+            name: "Entry".to_string(),
+            args: Vec::new(),
+            span,
+        }],
         vis: Visibility::Public,
         name: "main".into(),
         type_params: Vec::new(),

@@ -29,7 +29,7 @@ class Greeter {
     }
 }
 
-function main() -> void {
+#[Entry] function main() -> void {
     Greeter g = new Greeter("Tak");
     Output.printLine(g.greet());
 
@@ -67,7 +67,7 @@ fn di_injectable_graph_expands_and_checks_clean() {
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class Db {{ constructor() {{}} }}\n\
         #[Injectable] class Svc {{ constructor(private Db db) {{}} }}\n\
-        function main(): void {{ Svc s = inject<Svc>(); Output.printLine(\"ok\"); }}\n"
+        #[Entry] function main(): void {{ Svc s = inject<Svc>(); Output.printLine(\"ok\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -80,7 +80,7 @@ fn di_injectable_graph_expands_and_checks_clean() {
 fn di_non_injectable_target_is_missing() {
     let src = "package Main;\nimport Core.DependencyInjection.inject;\n\
         class Bare { constructor() {} }\n\
-        function main(): void { Bare b = inject<Bare>(); }\n";
+        #[Entry] function main(): void { Bare b = inject<Bare>(); }\n";
     let e = expand(src).unwrap_err();
     assert!(e.contains("E-DI-MISSING"), "{e}");
 }
@@ -92,7 +92,7 @@ fn di_multi_impl_interface_is_ambiguous() {
         interface I {{ function f(): int; }}\n\
         #[Injectable] class A implements I {{ constructor() {{}} function f(): int {{ return 1; }} }}\n\
         #[Injectable] class B implements I {{ constructor() {{}} function f(): int {{ return 2; }} }}\n\
-        function main(): void {{ I x = inject<I>(); }}\n"
+        #[Entry] function main(): void {{ I x = inject<I>(); }}\n"
     );
     let e = expand(&src).unwrap_err();
     assert!(e.contains("E-DI-AMBIGUOUS"), "{e}");
@@ -104,7 +104,7 @@ fn di_dependency_cycle_is_rejected() {
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class A {{ constructor(private B b) {{}} }}\n\
         #[Injectable] class B {{ constructor(private A a) {{}} }}\n\
-        function main(): void {{ A x = inject<A>(); }}\n"
+        #[Entry] function main(): void {{ A x = inject<A>(); }}\n"
     );
     let e = expand(&src).unwrap_err();
     assert!(e.contains("E-DI-CYCLE"), "{e}");
@@ -117,7 +117,7 @@ fn di_bare_inject_without_annotation_is_rejected() {
     let src = format!(
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class A {{ constructor() {{}} }}\n\
-        function main(): void {{ var x = inject(); }}\n"
+        #[Entry] function main(): void {{ var x = inject(); }}\n"
     );
     let e = expand(&src).unwrap_err();
     assert!(e.contains("E-INJECT-NO-TYPE"), "{e}");
@@ -129,7 +129,7 @@ fn di_bare_inject_without_annotation_is_rejected() {
 fn di_injectable_attribute_bare_without_import_is_rejected() {
     let src = "package Main;\n\
         #[Injectable] class A { constructor() {} }\n\
-        function main(): void {}\n";
+        #[Entry] function main(): void {}\n";
     let e = expand(src).unwrap_err();
     assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
 }
@@ -140,7 +140,7 @@ fn di_inject_verb_bare_without_member_import_is_rejected() {
     // verb — a bare `inject<A>()` here is E-DI-NO-IMPORT (needs `import Core.DependencyInjection.inject;`).
     let src = "package Main;\nimport Core.DependencyInjection;\n\
         #[DI.Injectable] class A { constructor() {} }\n\
-        function main(): void { A a = inject<A>(); }\n";
+        #[Entry] function main(): void { A a = inject<A>(); }\n";
     let e = expand(src).unwrap_err();
     assert!(e.contains("E-DI-NO-IMPORT"), "{e}");
 }
@@ -152,7 +152,7 @@ fn di_qualified_surface_checks_clean() {
     let src = "package Main;\nimport Core.DependencyInjection;\nimport Core.Output;\n\
         #[DependencyInjection.Injectable] class A { constructor() {} function n(): int { return 1; } }\n\
         function build(): A { return DependencyInjection.inject(); }\n\
-        function main(): void { A a = DependencyInjection.inject<A>(); Output.printLine(\"{a.n()}\"); Output.printLine(\"{build().n()}\"); }\n";
+        #[Entry] function main(): void { A a = DependencyInjection.inject<A>(); Output.printLine(\"{a.n()}\"); Output.printLine(\"{build().n()}\"); }\n";
     assert!(
         expand(src).is_ok(),
         "expected clean qualified DI expansion, got: {:?}",
@@ -165,7 +165,7 @@ fn di_inject_is_a_free_identifier_without_import() {
     // With no `Core.DependencyInjection` import, `inject` is an ordinary user function — no DI machinery, no error.
     let src = "package Main;\nimport Core.Output;\n\
         function inject(): int { return 7; }\n\
-        function main(): void { Output.printLine(\"{inject()}\"); }\n";
+        #[Entry] function main(): void { Output.printLine(\"{inject()}\"); }\n";
     assert!(
         expand(src).is_ok(),
         "expected `inject` usable as a plain function, got: {:?}",
@@ -181,7 +181,7 @@ fn di_annotation_from_var_decl_checks_clean() {
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class Db {{ constructor() {{}} }}\n\
         #[Injectable] class Svc {{ constructor(private Db db) {{}} }}\n\
-        function main(): void {{ Svc s = inject(); Output.printLine(\"ok\"); }}\n"
+        #[Entry] function main(): void {{ Svc s = inject(); Output.printLine(\"ok\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -196,7 +196,7 @@ fn di_annotation_from_return_checks_clean() {
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class A {{ constructor() {{}} function n(): int {{ return 1; }} }}\n\
         function build(): A {{ return inject(); }}\n\
-        function main(): void {{ A a = build(); Output.printLine(\"{{a.n()}}\"); }}\n"
+        #[Entry] function main(): void {{ A a = build(); Output.printLine(\"{{a.n()}}\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -211,7 +211,7 @@ fn di_annotation_single_impl_interface_checks_clean() {
         "package Main;\n{DI_IMPORTS}\
         interface Greeter {{ function greet(): string; }}\n\
         #[Injectable] class En implements Greeter {{ constructor() {{}} function greet(): string {{ return \"hi\"; }} }}\n\
-        function main(): void {{ Greeter g = inject(); Output.printLine(g.greet()); }}\n"
+        #[Entry] function main(): void {{ Greeter g = inject(); Output.printLine(g.greet()); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -231,7 +231,7 @@ fn di_field_injection_checks_clean() {
         #[Injectable] class Clock {{ constructor() {{}} function n(): int {{ return 1; }} }}\n\
         #[Injectable] class Logger {{ private Clock clock; constructor() {{}} function m(): int {{ return this.clock.n(); }} }}\n\
         #[Injectable] class App {{ private Logger logger; constructor(private Clock clock) {{}} function go(): int {{ return this.logger.m(); }} }}\n\
-        function main(): void {{ App a = inject<App>(); Output.printLine(\"{{a.go()}}\"); }}\n"
+        #[Entry] function main(): void {{ App a = inject<App>(); Output.printLine(\"{{a.go()}}\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -248,7 +248,7 @@ fn di_field_injection_cycle_is_rejected() {
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class A {{ private B b; constructor() {{}} }}\n\
         #[Injectable] class B {{ private A a; constructor() {{}} }}\n\
-        function main(): void {{ A x = inject<A>(); }}\n"
+        #[Entry] function main(): void {{ A x = inject<A>(); }}\n"
     );
     let e = expand(&src).unwrap_err();
     assert!(e.contains("E-DI-CYCLE"), "{e}");
@@ -262,7 +262,7 @@ fn di_field_injection_leaves_initialized_field_alone() {
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class Clock {{ constructor() {{}} }}\n\
         #[Injectable] class App {{ private Clock clock = new Clock(); constructor() {{}} }}\n\
-        function main(): void {{ App a = inject<App>(); Output.printLine(\"ok\"); }}\n"
+        #[Entry] function main(): void {{ App a = inject<App>(); Output.printLine(\"ok\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -285,7 +285,7 @@ fn di_provides_factory_checks_clean() {
         class Db {{ constructor(private string url) {{}} }}\n\
         class Providers {{ #[Provides] static function db(): Db {{ return new Db(\"x\"); }} }}\n\
         #[Injectable] class Repo {{ constructor(private Db db) {{}} }}\n\
-        function main(): void {{ Repo r = inject<Repo>(); Output.printLine(\"ok\"); }}\n"
+        #[Entry] function main(): void {{ Repo r = inject<Repo>(); Output.printLine(\"ok\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -304,7 +304,7 @@ fn di_provides_disambiguates_multi_impl_interface() {
         #[Injectable] class FileLog implements Logger {{ constructor() {{}} function log(): string {{ return \"f\"; }} }}\n\
         #[Injectable] class NetLog implements Logger {{ constructor() {{}} function log(): string {{ return \"n\"; }} }}\n\
         class Bind {{ #[Provides] static function logger(): Logger {{ return new FileLog(); }} }}\n\
-        function main(): void {{ Logger l = inject<Logger>(); Output.printLine(l.log()); }}\n"
+        #[Entry] function main(): void {{ Logger l = inject<Logger>(); Output.printLine(l.log()); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -322,7 +322,7 @@ fn di_provides_wins_over_injectable_class() {
         #[Injectable] class Db {{ constructor() {{}} }}\n\
         class Bind {{ #[Provides] static function db(): Db {{ return new Db(); }} }}\n\
         #[Injectable] class Repo {{ constructor(private Db db) {{}} }}\n\
-        function main(): void {{ Repo r = inject<Repo>(); Output.printLine(\"ok\"); }}\n"
+        #[Entry] function main(): void {{ Repo r = inject<Repo>(); Output.printLine(\"ok\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -339,7 +339,7 @@ fn di_provides_duplicate_is_ambiguous() {
         class P1 {{ #[Provides] static function a(): Db {{ return new Db(\"1\"); }} }}\n\
         class P2 {{ #[Provides] static function b(): Db {{ return new Db(\"2\"); }} }}\n\
         #[Injectable] class Repo {{ constructor(private Db db) {{}} }}\n\
-        function main(): void {{ Repo r = inject<Repo>(); }}\n"
+        #[Entry] function main(): void {{ Repo r = inject<Repo>(); }}\n"
     );
     let e = expand(&src).unwrap_err();
     assert!(e.contains("E-DI-AMBIGUOUS"), "{e}");
@@ -351,7 +351,7 @@ fn di_provides_on_non_static_method_is_rejected() {
         "package Main;\n{DI_PROVIDES_IMPORTS}\
         class Db {{ constructor() {{}} }}\n\
         class Providers {{ #[Provides] function db(): Db {{ return new Db(); }} }}\n\
-        function main(): void {{ Output.printLine(\"x\"); }}\n"
+        #[Entry] function main(): void {{ Output.printLine(\"x\"); }}\n"
     );
     let e = expand(&src).unwrap_err();
     assert!(e.contains("E-PROVIDES-TARGET"), "{e}");
@@ -362,7 +362,7 @@ fn di_provides_bare_without_import_is_rejected() {
     let src = "package Main;\nimport Core.Output;\n\
         class Db { constructor() {} }\n\
         class Providers { #[Provides] static function db(): Db { return new Db(); } }\n\
-        function main(): void { Output.printLine(\"x\"); }\n";
+        #[Entry] function main(): void { Output.printLine(\"x\"); }\n";
     let e = expand(src).unwrap_err();
     assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
 }
@@ -375,7 +375,7 @@ fn di_transient_checks_clean() {
         #[Injectable] class Db { constructor() {} }\n\
         #[Injectable] #[Transient] class Worker { constructor(private Db db) {} }\n\
         #[Injectable] class App { constructor(private Worker a, private Worker b) {} }\n\
-        function main(): void { App x = inject<App>(); Output.printLine(\"ok\"); }\n";
+        #[Entry] function main(): void { App x = inject<App>(); Output.printLine(\"ok\"); }\n";
     assert!(
         expand(src).is_ok(),
         "expected clean transient expansion, got: {:?}",
@@ -389,7 +389,7 @@ fn di_transient_cycle_is_still_rejected() {
     let src = "package Main;\nimport Core.DependencyInjection.Injectable;\nimport Core.DependencyInjection.Transient;\nimport Core.DependencyInjection.inject;\nimport Core.Output;\n\
         #[Injectable] #[Transient] class A { constructor(private B b) {} }\n\
         #[Injectable] #[Transient] class B { constructor(private A a) {} }\n\
-        function main(): void { A x = inject<A>(); }\n";
+        #[Entry] function main(): void { A x = inject<A>(); }\n";
     let e = expand(src).unwrap_err();
     assert!(e.contains("E-DI-CYCLE"), "{e}");
 }
@@ -399,7 +399,7 @@ fn di_transient_bare_without_import_is_rejected() {
     let src =
         "package Main;\nimport Core.DependencyInjection.Injectable;\nimport Core.DependencyInjection.inject;\nimport Core.Output;\n\
         #[Injectable] #[Transient] class W { constructor() {} }\n\
-        function main(): void { W w = inject<W>(); Output.printLine(\"x\"); }\n";
+        #[Entry] function main(): void { W w = inject<W>(); Output.printLine(\"x\"); }\n";
     let e = expand(src).unwrap_err();
     assert!(e.contains("E-INJECTED-TYPE-BARE"), "{e}");
 }
@@ -414,7 +414,7 @@ fn di_field_injection_inherited_from_parent() {
         #[Injectable] class Clock {{ constructor() {{}} function n(): int {{ return 1; }} }}\n\
         #[Injectable] open class Base {{ private Clock clock; constructor() {{}} function t(): int {{ return this.clock.n(); }} }}\n\
         #[Injectable] class Sub extends Base {{}}\n\
-        function main(): void {{ Sub s = inject<Sub>(); Output.printLine(\"{{s.t()}}\"); }}\n"
+        #[Entry] function main(): void {{ Sub s = inject<Sub>(); Output.printLine(\"{{s.t()}}\"); }}\n"
     );
     assert!(
         expand(&src).is_ok(),
@@ -433,7 +433,7 @@ fn di_annotation_in_lambda_inferred_return_is_rejected() {
         "package Main;\n{DI_IMPORTS}\
         #[Injectable] class App {{ constructor() {{}} }}\n\
         function make(): App {{ var f = function() => inject(); return inject(); }}\n\
-        function main(): void {{ discard make(); }}\n"
+        #[Entry] function main(): void {{ discard make(); }}\n"
     );
     let e = expand(&src).unwrap_err();
     assert!(e.contains("E-INJECT-NO-TYPE"), "{e}");
@@ -486,7 +486,7 @@ fn bare_return_overloaded_method_call_needs_selector() {
     // a `<Type>` selector at the call site (same rule free functions have without a sink).
     let src = "package Main;\n\
         class C { constructor() {} function f()->int { return 1; } function f()->bool { return true; } }\n\
-        function main() -> void { var c = new C(); discard c.f(); }\n";
+        #[Entry] function main() -> void { var c = new C(); discard c.f(); }\n";
     let errs = check_src(src).expect_err("bare return-overloaded method call");
     assert!(has_code(&errs, "E-OVERLOAD-NO-CONTEXT"), "{errs:?}");
 }
@@ -496,7 +496,7 @@ fn selector_picks_return_overloaded_method() {
     // The `<Type>` selector resolves the method overload by return type — clean check.
     let src = "package Main;\n\
         class C { constructor() {} function f()->int { return 1; } function f()->bool { return true; } }\n\
-        function main() -> void { var c = new C(); int n = <int>c.f(); bool b = <bool>c.f(); }\n";
+        #[Entry] function main() -> void { var c = new C(); int n = <int>c.f(); bool b = <bool>c.f(); }\n";
     assert!(check_src(src).is_ok(), "{:?}", check_src(src));
 }
 
@@ -507,7 +507,7 @@ fn static_methods_cannot_return_overload() {
     // Statics keep the classic shared-return rule → E-OVERLOAD-RETURN.
     let src = "package Main;\n\
         class C { static function f()->int { return 1; } static function f()->bool { return true; } }\n\
-        function main() -> void {}\n";
+        #[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("static return-overload");
     assert!(has_code(&errs, "E-OVERLOAD-RETURN"), "{errs:?}");
 }
@@ -517,7 +517,7 @@ fn selector_unknown_return_on_method_is_rejected() {
     // A selector naming a return type no overload has is E-OVERLOAD-SELECT-UNKNOWN.
     let src = "package Main;\n\
         class C { constructor() {} function f()->int { return 1; } function f()->bool { return true; } }\n\
-        function main() -> void { var c = new C(); string s = <string>c.f(); }\n";
+        #[Entry] function main() -> void { var c = new C(); string s = <string>c.f(); }\n";
     let errs = check_src(src).expect_err("unknown return selector");
     assert!(has_code(&errs, "E-OVERLOAD-SELECT-UNKNOWN"), "{errs:?}");
 }
@@ -528,34 +528,34 @@ fn route_attribute_well_formed_checks_clean() {
     // so this asserts only the attribute validation itself: a well-formed `#[Route]` (two string
     // literals, good path, one-param + return handler shape) produces no attribute diagnostics. The
     // end-to-end `Request`/`Response` typing is covered by the conformance + differential gates.
-    let src = "package Main;\n#[Route(\"GET\", \"/health\")]\nfunction h(int x) -> int { return x; }\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Route(\"GET\", \"/health\")]\nfunction h(int x) -> int { return x; }\n#[Entry] function main() -> void {}\n";
     assert!(check_src(src).is_ok(), "{:?}", check_src(src));
 }
 
 #[test]
 fn unknown_attribute_is_rejected() {
-    let src = "package Main;\n#[Cache(60)]\nfunction f() -> void {}\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Cache(60)]\nfunction f() -> void {}\n#[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("unknown attribute");
     assert!(has_code(&errs, "E-UNKNOWN-ATTRIBUTE"), "{errs:?}");
 }
 
 #[test]
 fn route_with_wrong_arg_count_is_rejected() {
-    let src = "package Main;\nimport Core.Http;\n#[Route(\"GET\")]\nfunction f(Request req) -> Response { return Response.text(200, \"x\"); }\nfunction main() -> void {}\n";
+    let src = "package Main;\nimport Core.Http;\n#[Route(\"GET\")]\nfunction f(Request req) -> Response { return Response.text(200, \"x\"); }\n#[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("bad route args");
     assert!(has_code(&errs, "E-ROUTE-ARGS"), "{errs:?}");
 }
 
 #[test]
 fn route_with_bad_path_is_rejected() {
-    let src = "package Main;\nimport Core.Http;\n#[Route(\"GET\", \"health\")]\nfunction f(Request req) -> Response { return Response.text(200, \"x\"); }\nfunction main() -> void {}\n";
+    let src = "package Main;\nimport Core.Http;\n#[Route(\"GET\", \"health\")]\nfunction f(Request req) -> Response { return Response.text(200, \"x\"); }\n#[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("bad route spec");
     assert!(has_code(&errs, "E-ROUTE-SPEC"), "{errs:?}");
 }
 
 #[test]
 fn route_handler_wrong_shape_is_rejected() {
-    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nfunction f(int a, int b) -> int { return a + b; }\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nfunction f(int a, int b) -> int { return a + b; }\n#[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("bad handler shape");
     assert!(has_code(&errs, "E-ROUTE-HANDLER"), "{errs:?}");
 }
@@ -565,13 +565,13 @@ fn route_on_static_method_checks_clean() {
     // `#[Route]` on a static method is valid; Request/Response need not resolve in the raw `check`
     // path (no Core.Http injection here), so use a non-Http handler shape — the attribute + static
     // checks are what this exercises.
-    let src = "package Main;\nclass C {\n  #[Route(\"GET\", \"/x\")]\n  static function h(int r) -> int { return r; }\n}\nfunction main() -> void {}\n";
+    let src = "package Main;\nclass C {\n  #[Route(\"GET\", \"/x\")]\n  static function h(int r) -> int { return r; }\n}\n#[Entry] function main() -> void {}\n";
     assert!(check_src(src).is_ok(), "{:?}", check_src(src));
 }
 
 #[test]
 fn route_on_instance_method_requires_static() {
-    let src = "package Main;\nclass C {\n  #[Route(\"GET\", \"/x\")]\n  function h(int r) -> int { return r; }\n}\nfunction main() -> void {}\n";
+    let src = "package Main;\nclass C {\n  #[Route(\"GET\", \"/x\")]\n  function h(int r) -> int { return r; }\n}\n#[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("instance #[Route] method must fail");
     assert!(has_code(&errs, "E-ROUTE-METHOD-STATIC"), "{errs:?}");
 }
@@ -581,7 +581,7 @@ fn attribute_on_a_class_parses_then_fails_at_check_as_a_target_error() {
     // DEC-194 slice 2a: attributes now PARSE on a class (the plumbing the user-attribute system builds
     // on), but no attribute *targets* a class yet, so the rejection moved from a parse-stage error to a
     // CHECK-stage `E-ATTR-TARGET` — the class attribute is validated, never silently accepted.
-    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nclass Foo {}\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nclass Foo {}\n#[Entry] function main() -> void {}\n";
     let tokens = lex(src).expect("lex ok");
     Parser::new(tokens)
         .parse_program()
@@ -598,7 +598,7 @@ fn attribute_marker_declares_a_class_attribute_and_checks_clean() {
     // A class carrying the bare `#[Attribute]` marker IS a user-defined attribute — accepted on a class
     // (the one class-target attribute so far), not `E-ATTR-TARGET`. (The raw `check` path does not
     // enforce the import; import-gating is asserted separately below.)
-    let src = "package Main;\n#[Attribute]\nclass Tag { constructor(public string label) {} }\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Attribute]\nclass Tag { constructor(public string label) {} }\n#[Entry] function main() -> void {}\n";
     assert!(check_src(src).is_ok(), "{:?}", check_src(src));
 }
 
@@ -606,7 +606,7 @@ fn attribute_marker_declares_a_class_attribute_and_checks_clean() {
 fn attribute_marker_with_arguments_is_not_yet_supported() {
     // 2b-1 accepts only the BARE marker; `targets`/`repeatable` arguments arrive in 2b-2, so a marker
     // with arguments is a clean, explicit `E-ATTRIBUTE-ARGS` rather than silent tolerance.
-    let src = "package Main;\n#[Attribute(repeatable)]\nclass Tag {}\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Attribute(repeatable)]\nclass Tag {}\n#[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("marker with args must fail (2b-1)");
     assert!(has_code(&errs, "E-ATTRIBUTE-ARGS"), "{errs:?}");
 }
@@ -616,7 +616,7 @@ fn attribute_marker_bare_without_import_is_rejected() {
     // The marker obeys "nothing in the wind": bare `#[Attribute]` needs `import Core.Runtime.Attribute;`.
     // Import-gating lives in `enforce_injected_discipline` (the `check_and_expand` path), so assert it
     // directly here.
-    let src = "package Main;\n#[Attribute]\nclass Tag {}\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Attribute]\nclass Tag {}\n#[Entry] function main() -> void {}\n";
     let prog = Parser::new(lex(src).expect("lex ok"))
         .parse_program()
         .expect("parse ok");
@@ -638,7 +638,7 @@ fn user_attribute_declared_and_applied_to_class_and_function_checks_clean() {
         class Widget {}\n\
         #[Tag(\"handler\")]\n\
         function process() -> void {}\n\
-        function main() -> void { process(); }\n";
+        #[Entry] function main() -> void { process(); }\n";
     assert!(check_src(src).is_ok(), "{:?}", check_src(src));
 }
 
@@ -651,7 +651,7 @@ fn user_attribute_wrong_argument_count_is_rejected() {
         class Tag { constructor(public string label) {} }\n\
         #[Tag()]\n\
         class Widget {}\n\
-        function main() -> void {}\n";
+        #[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("wrong attribute arity must fail");
     assert!(has_code(&errs, "E-ATTRIBUTE-ARITY"), "{errs:?}");
 }
@@ -665,7 +665,7 @@ fn user_attribute_wrong_argument_type_is_rejected() {
         class Tag { constructor(public string label) {} }\n\
         #[Tag(123)]\n\
         class Widget {}\n\
-        function main() -> void {}\n";
+        #[Entry] function main() -> void {}\n";
     let errs = check_src(src).expect_err("wrong attribute arg type must fail");
     assert!(has_code(&errs, "E-ATTRIBUTE-ARG-TYPE"), "{errs:?}");
 }
@@ -673,7 +673,7 @@ fn user_attribute_wrong_argument_type_is_rejected() {
 #[test]
 fn attribute_on_a_non_function_non_class_item_is_still_a_parse_error() {
     // enum/interface/trait/etc. keep the parse-stage rejection until their target slices land.
-    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nenum E { A }\nfunction main() -> void {}\n";
+    let src = "package Main;\n#[Route(\"GET\", \"/\")]\nenum E { A }\n#[Entry] function main() -> void {}\n";
     let tokens = lex(src).expect("lex ok");
     let err = Parser::new(tokens)
         .parse_program()

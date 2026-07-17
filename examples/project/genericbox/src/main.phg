@@ -7,6 +7,7 @@ import Core.Output;
 import Acme.Containers.Box;
 import Acme.Containers.Pair;
 
+#[Entry]
 function main(): void {
     var bi = new Box(7);
     // Box<int>  — T inferred from `7`

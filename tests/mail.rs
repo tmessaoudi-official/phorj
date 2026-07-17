@@ -40,7 +40,7 @@ import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.FileTransport;
 import Core.Mail.MailError;
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     Mailer m = new Mailer(new FileTransport("{dir}"));
     Email e = new Email()
@@ -89,7 +89,7 @@ import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.NullTransport;
 import Core.Mail.MailError;
-function main(): void {
+#[Entry] function main(): void {
   try {
     Mailer m = new Mailer(new NullTransport());
     Email a = new Email().from(Address.of("x@y.io")).to(Address.of("u@y.io")).subject("a").text("1");
@@ -110,7 +110,7 @@ import Core.Mail;
 import Core.Mail.Address;
 import Core.Mail.InvalidAddressError;
 import Core.Mail.MailError;
-function main(): void {
+#[Entry] function main(): void {
   try {
     Address bad = new Address("evil@x.y
 Bcc: victim@z.w", "");
@@ -136,7 +136,7 @@ import Core.Mail.Address;
 import Core.Mail.NullTransport;
 import Core.Mail.MessageBuildFailedError;
 import Core.Mail.MailError;
-function main(): void {
+#[Entry] function main(): void {
   try {
     Mailer m = new Mailer(new NullTransport());
     Email e = new Email().to(Address.of("u@y.io")).subject("s").text("b");
@@ -159,7 +159,7 @@ fn mail_program_transpile_is_a_clean_ladder_error() {
 import Core.Output;
 import Core.Mail;
 import Core.Mail.NullTransport;
-function main(): void { Output.printLine("x"); }
+#[Entry] function main(): void { Output.printLine("x"); }
 "#;
     match cmd_transpile(src) {
         Ok(php) => panic!("expected E-TRANSPILE-MAIL, got PHP: {php:?}"),
@@ -193,7 +193,7 @@ import Core.Mail.Email;
 import Core.Mail.Address;
 import Core.Mail.SmtpConfig;
 import Core.Mail.MailError;
-function main(): void {{
+#[Entry] function main(): void {{
   try {{
     Mailer m = new Mailer(new SmtpConfig("{host}", {port}));
     Email e = new Email()

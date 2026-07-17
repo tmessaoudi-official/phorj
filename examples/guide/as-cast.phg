@@ -48,6 +48,7 @@ function noisy(): Shape {
     return new Circle(7);
 }
 
+#[Entry]
 function main(): void {
     Shape c = new Circle(3);
     Shape sq = new Square(4);

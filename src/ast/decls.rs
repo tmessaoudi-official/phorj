@@ -61,7 +61,17 @@ pub struct FunctionDecl {
 pub fn synth_empty_main() -> Item {
     Item::Function(FunctionDecl {
         modifiers: Vec::new(),
-        attrs: Vec::new(),
+        // DEC-191: the synthetic entry carries #[Entry] — the compiler resolves by attribute now.
+        attrs: vec![Attribute {
+            name: "Entry".to_string(),
+            args: Vec::new(),
+            span: Span {
+                start: 0,
+                len: 0,
+                line: 0,
+                col: 0,
+            },
+        }],
         vis: Visibility::Public,
         name: "main".to_string(),
         type_params: Vec::new(),

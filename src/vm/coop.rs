@@ -141,7 +141,7 @@ function consume(Channel<int> ch): int {
     return v;
 }
 
-function main(): void {
+#[Entry] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> t = spawn consume(ch);
     ch.send(42);
@@ -165,7 +165,7 @@ function produce(Channel<int> ch): int {
     return 1;
 }
 
-function main(): void {
+#[Entry] function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> p = spawn produce(ch);
     int v = ch.receive();

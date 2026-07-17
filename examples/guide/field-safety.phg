@@ -30,6 +30,7 @@ class Account {
     }
 }
 
+#[Entry]
 function main(): void {
     var a = new Account("ada", 100);
     Output.printLine(a.describe());

@@ -14,8 +14,15 @@ fn run(src: &str) -> Result<String, String> {
 }
 
 fn with_pkg(src: &str) -> String {
-    if src.trim_start().starts_with("package ") {
+    // DEC-191: inject the `#[Entry]` attribute before a bare `function main(` (same convenience
+    // as `cli::tests::wp`) so the VM unit programs need no per-case ceremony.
+    let src = if src.contains("function main") && !src.contains("#[Entry]") {
+        src.replacen("function main", "#[Entry] function main", 1)
+    } else {
         src.to_string()
+    };
+    if src.trim_start().starts_with("package ") {
+        src
     } else {
         format!("package Main; {src}")
     }
@@ -86,7 +93,7 @@ function main() -> void { Output.printLine("{1 / 0}"); }"#)
 #[test]
 fn missing_main_is_compile_error() {
     let e = run(r#"function other() -> void {}"#).unwrap_err();
-    assert!(e.contains("main"), "{e}");
+    assert!(e.contains("#[Entry]"), "{e}");
 }
 
 #[test]

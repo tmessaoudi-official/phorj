@@ -14,6 +14,7 @@ open class Counter {
     }
 }
 
+#[Entry]
 function main(): void {
     mutable var c = new Counter(41);
     Output.print(greet("Phorj"));
