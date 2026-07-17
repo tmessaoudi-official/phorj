@@ -204,7 +204,7 @@ impl Checker {
             if self.check_user_attribute_use(attr) {
                 continue;
             }
-            if !matches!(attr.name.as_str(), "Route" | "Http.Route") {
+            if !attr.is_route() {
                 self.err_coded(
                     attr.span,
                     format!(

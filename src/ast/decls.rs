@@ -102,61 +102,73 @@ pub struct Attribute {
     pub span: Span,
 }
 
+/// Recognize a built-in attribute written in ANY "nothing in the wind" import form: the bare leaf,
+/// any trailing partial qualifier, or the full canonical dotted path. For canonical
+/// `Core.Runtime.Entry` this matches `Entry`, `Runtime.Entry`, AND `Core.Runtime.Entry` — the two
+/// forms the developer ruled must both work (import-to-leaf-then-bare, OR fully qualified). Matching
+/// is on segment boundaries (a `.` must precede the matched suffix), so `try` never matches `…Entry`.
+/// Import-gating of the bare/partial forms is enforced separately in `enforce_injected` (an unimported
+/// bare name is still `E-INJECTED-TYPE-BARE`); the fully-qualified dotted form is self-gating there.
+pub(crate) fn attr_path_matches(name: &str, canonical: &str) -> bool {
+    name == canonical
+        || (!name.is_empty()
+            && canonical.len() > name.len()
+            && canonical.ends_with(name)
+            && canonical.as_bytes()[canonical.len() - name.len() - 1] == b'.')
+}
+
 impl Attribute {
     /// True iff this is the `#[UncheckedOverflow]` opt-in — whole-function two's-complement WRAPPING
-    /// integer arithmetic (the perf escape hatch; `Core.Runtime.Integer.UncheckedOverflow`). Recognized
-    /// in both "nothing in the wind" import forms: **bare** `UncheckedOverflow` (leaf member-import
-    /// `import Core.Runtime.Integer.UncheckedOverflow;`) or **qualified** `Integer.UncheckedOverflow`
-    /// (module import `import Core.Runtime.Integer;`). SINGLE SOURCE of the recognition — the checker
-    /// gate, the compiler `unchecked` flag, the interpreter, and the transpile `E-TRANSPILE-UNCHECKED`
-    /// gate all consult this one predicate, so the four can never drift.
+    /// integer arithmetic (the perf escape hatch; canonical `Core.Runtime.Integer.UncheckedOverflow`).
+    /// Recognized in every "nothing in the wind" form (bare leaf / partial qualifier / full path) via
+    /// [`attr_path_matches`]. SINGLE SOURCE of the recognition — the checker gate, the compiler
+    /// `unchecked` flag, the interpreter, and the transpile `E-TRANSPILE-UNCHECKED` gate all consult
+    /// this one predicate, so the four can never drift.
     pub fn is_unchecked_overflow(&self) -> bool {
-        matches!(
-            self.name.as_str(),
-            "UncheckedOverflow" | "Integer.UncheckedOverflow"
-        )
+        attr_path_matches(&self.name, "Core.Runtime.Integer.UncheckedOverflow")
     }
 
     /// True iff this is a DI built-in attribute (DI v1). Recognized so the checker does not reject it
     /// as `E-UNKNOWN-ATTRIBUTE` — it is consumed by [`crate::checker::desugar_di`] before any backend,
-    /// then inert (like `#[Route]`). Slice 1 = `#[Injectable]` only; `#[Transient]`/`#[Provides]` join
-    /// here in later slices. SINGLE SOURCE of the recognition. Matches BOTH the bare `Injectable`
-    /// (member-imported `import Core.DependencyInjection.Injectable;`) and the qualified `DI.Injectable` (`import
-    /// Core.DependencyInjection;`) surfaces — mirrors `desugar_router`'s `"Route" | "Http.Route"` (§7 import discipline).
+    /// then inert (like `#[Route]`). SINGLE SOURCE of the recognition; canonical
+    /// `Core.DependencyInjection.Injectable`, matched in every import form via [`attr_path_matches`].
     pub fn is_di_builtin(&self) -> bool {
-        matches!(
-            self.name.as_str(),
-            "Injectable" | "DependencyInjection.Injectable"
-        )
+        attr_path_matches(&self.name, "Core.DependencyInjection.Injectable")
     }
 
     /// True iff this is the DI `#[Provides]` attribute (DI v1 slice 4) — marks a `static` method whose
     /// return type is a provided type: the DI graph constructs that type via the method instead of `new`.
-    /// Bare (`import Core.DependencyInjection.Provides;`) or qualified (`import Core.DependencyInjection;` → `#[DI.Provides]`), same
-    /// discipline as `#[Injectable]`. Single recognition source.
+    /// Canonical `Core.DependencyInjection.Provides`, every import form via [`attr_path_matches`].
     pub fn is_di_provides(&self) -> bool {
-        matches!(
-            self.name.as_str(),
-            "Provides" | "DependencyInjection.Provides"
-        )
+        attr_path_matches(&self.name, "Core.DependencyInjection.Provides")
     }
 
     /// True iff this is the DI `#[Transient]` attribute (DI v1 slice 4b) — on a class, opts OUT of the
     /// default-shared lifetime: the DI graph builds a fresh instance at each injection point instead of
-    /// sharing one per resolution root. Bare (`import Core.DependencyInjection.Transient;`) or qualified (`#[DI.Transient]`).
+    /// sharing one per resolution root. Canonical `Core.DependencyInjection.Transient`, every form.
     pub fn is_di_transient(&self) -> bool {
-        matches!(
-            self.name.as_str(),
-            "Transient" | "DependencyInjection.Transient"
-        )
+        attr_path_matches(&self.name, "Core.DependencyInjection.Transient")
     }
 
     /// True iff this is the built-in `#[Attribute]` marker (DEC-194) — a class carrying it IS a
-    /// user-defined attribute type. Recognized in both "nothing in the wind" forms: bare `Attribute`
-    /// (member-import `import Core.Runtime.Attribute;`) or qualified `Runtime.Attribute` (module import
-    /// `import Core.Runtime;`). Single source of the marker recognition.
+    /// user-defined attribute type. Canonical `Core.Runtime.Attribute`, every import form.
     pub fn is_attribute_marker(&self) -> bool {
-        matches!(self.name.as_str(), "Attribute" | "Runtime.Attribute")
+        attr_path_matches(&self.name, "Core.Runtime.Attribute")
+    }
+
+    /// True iff this is the `#[Entry]` program entry-point marker (DEC-191). Canonical
+    /// `Core.Runtime.Entry`, recognized in every import form via [`attr_path_matches`] — so
+    /// `#[Entry]` (after `import Core.Runtime.Entry;`) AND `#[Core.Runtime.Entry]` (fully qualified,
+    /// self-gating) both select the entry point. The single source is [`is_entry_attr`].
+    pub fn is_entry(&self) -> bool {
+        attr_path_matches(&self.name, "Core.Runtime.Entry")
+    }
+
+    /// True iff this is the `#[Route("METHOD", "/path")]` HTTP route handler marker (M6 W2). Canonical
+    /// `Core.Http.Route`, every import form via [`attr_path_matches`]. SINGLE SOURCE — the checker
+    /// validation and `desugar_router` both consult this, so they cannot drift.
+    pub fn is_route(&self) -> bool {
+        attr_path_matches(&self.name, "Core.Http.Route")
     }
 }
 

@@ -96,8 +96,7 @@ fn collect_routes(program: &Program) -> Vec<Route> {
         match it {
             Item::Function(f) => {
                 for attr in &f.attrs {
-                    if matches!(attr.name.as_str(), "Route" | "Http.Route") && attr.args.len() == 2
-                    {
+                    if attr.is_route() && attr.args.len() == 2 {
                         let handler = Expr::Ident(f.name.clone(), f.span);
                         out.push((attr.args[0].clone(), attr.args[1].clone(), handler));
                     }
@@ -110,9 +109,7 @@ fn collect_routes(program: &Program) -> Vec<Route> {
                         continue; // a non-static #[Route] method is an E-ROUTE-METHOD-STATIC error
                     }
                     for attr in &f.attrs {
-                        if matches!(attr.name.as_str(), "Route" | "Http.Route")
-                            && attr.args.len() == 2
-                        {
+                        if attr.is_route() && attr.args.len() == 2 {
                             let handler = method_handler_lambda(&c.name, &f.name, f.span);
                             out.push((attr.args[0].clone(), attr.args[1].clone(), handler));
                         }

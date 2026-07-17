@@ -16,7 +16,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Generic lists: `List<T>` + list literals | ✅ | `[1, 2, 3]` |
 | Immutable-by-default bindings | ✅ | no reassignment; fresh binding instead |
 | Functions + recursion | ✅ | `function f(int n): int { … }` |
-| `#[Entry]` entry points | ✅ | attribute-declared (no magic names, DEC-191): role from the signature — CLI `(): void\|int` / `(List<string>): void\|int` (int = exit status), web `(Request): Response`; top-level or class-static; one per role, CLI+web may coexist; throwing entries legal (escaped fault = exit 1 / HTTP 500) |
+| `#[Entry]` entry points | ✅ | attribute-declared (no magic names, DEC-191): role from the signature — CLI `(): void\|int` / `(List<string>): void\|int` (int = exit status), web `(Request): Response`; top-level or class-static; one per role, CLI+web may coexist; throwing entries legal (escaped fault = exit 1 / HTTP 500). Every built-in attribute resolves in BOTH import forms (DEC-285): member-import the leaf then use bare (`import Core.Runtime.Entry;` → `#[Entry]`, **preferred** — what the examples use) OR write it fully qualified (`#[Core.Runtime.Entry]`, self-gating, no import) |
 | Classes + fields + methods (`this`) | ✅ | |
 | Constructor promotion | ✅ | `constructor(private int total) {}` |
 | Enums with payloads | ✅ | `enum Shape { Circle(float r), Rect(float w, float h) }` |
