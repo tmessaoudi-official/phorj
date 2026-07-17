@@ -13,7 +13,13 @@
 - **⚠ STANDING (dev, 2026-07-17): the package-manager EXTENSION gets a FULL re-adjudication when
   started — dev dislikes phorj.toml; NO toml presumed; config/lockfile/registry/CLI all open;
   research ecosystems then re-ask everything (register: "PACKAGE-MANAGER EXTENSION" addendum).**
-- **NEXT QUEUE**: DEC-273 extensions migration (fresh-context recommended) → DEC-271 icu4x
+- **NEXT = DEC-273 extensions migration (fresh-context/START HERE)**: the ruling = register
+  "## DEC-273 — RULED (2026-07-16 evening)" (+ AMENDMENT 2 layout: `src/ext/<name>/`
+  self-contained folders, `src/ext/registry.rs` one-row list, cli/preludes.rs monolith dissolves
+  per-extension; E-EXTENSION-DISABLED naming the flag; batteries-included default build).
+  Suggested slice 1: the registry + ONE pilot extension folder (pick a small one, e.g. Csv or
+  Ini) migrated end-to-end (natives+prelude+tests colocated) proving the seam, THEN batch-migrate.
+  (fresh-context recommended) → DEC-271 icu4x
   (brought forward) → DEC-247 DateTime + DEC-248-codemod (fresh-context) → MACRO/real-world
   benches (DEC-259; var/phorj-app) + lift Uri Tier-2 + golden corpus + span-collision re-basing.
   ⚠ OWED before any push: quiet-box CORE-PINNED microbench rerun. ⚠ OWED: playground wasm pkg
