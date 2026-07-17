@@ -17,7 +17,7 @@
 //! both backends. Transpile = `E-TRANSPILE-SESSION` for now (PHP's per-request process model maps
 //! differently — a `session_start()` mapping is a recorded future lift).
 
-use super::{NativeEval, NativeFn};
+use crate::native::{NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::Value;
 use std::collections::HashMap;

@@ -30,12 +30,15 @@
 //! emitters (faithful PDO, DEC-208 LADDER case 1) are finalized in the DEC-208 transpile slice.
 
 #[cfg(feature = "db-mysql")]
+#[path = "mysql.rs"]
 mod mysql;
 #[cfg(feature = "db-postgres")]
+#[path = "postgres.rs"]
 mod postgres;
+#[path = "sqlite.rs"]
 mod sqlite;
 
-use super::{ClosureInvoker, NativeEval, NativeFn};
+use crate::native::{ClosureInvoker, NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::{DbObject, EnumVal, HKey, Value};
 use std::any::Any;

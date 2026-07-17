@@ -50,7 +50,7 @@ path = "src/main.rs"
 default = [
   "crypto", "regex", "signals", "green", "jit", "db", "unicode",
   "ini", "csv", "encoding",
-  "json", "uri", "path", "hash", "decimal", "test", "debug",
+  "json", "uri", "path", "hash", "decimal", "test", "debug", "session",
 ]
 # DEC-273 pilot extension (`src/ext/ini/`): Core.Ini config parsing. No deps — the flag gates
 # build inclusion only (Default tier, batteries-included).
@@ -66,6 +66,8 @@ hash = []
 decimal = []
 test = []
 debug = []
+# DEC-273 wave 3: the in-process HTTP session store (std-only).
+session = []
 crypto = ["dep:argon2"]
 # DEC-256 Unicode tier: grapheme segmentation (UAX #29) only — codepoints/case are std `char`.
 unicode = ["dep:unicode-segmentation"]

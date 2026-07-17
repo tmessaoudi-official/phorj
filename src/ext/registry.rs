@@ -102,7 +102,7 @@ pub const EXTENSIONS: &[Extension] = &[
         modules: &["Core.DatabaseModule", "Core.Native.Database"],
         summary: "multi-driver SQL (bundled SQLite; Postgres/MySQL via their own flags), typed \
                   hydration, transactions",
-        migrated: false,
+        migrated: true,
     },
     Extension {
         name: "debug",
@@ -189,6 +189,15 @@ pub const EXTENSIONS: &[Extension] = &[
         migrated: true,
     },
     Extension {
+        name: "session",
+        feature: "session",
+        enabled: cfg!(feature = "session"),
+        tier: Tier::Default,
+        modules: &["Core.SessionModule", "Core.Native.Session"],
+        summary: "in-process HTTP sessions for `phg serve` (secure-default cookie via Core.Http)",
+        migrated: true,
+    },
+    Extension {
         name: "signals",
         feature: "signals",
         enabled: cfg!(feature = "signals"),
@@ -250,7 +259,7 @@ pub const EXTENSIONS: &[Extension] = &[
         tier: Tier::OptIn,
         modules: &["Core.HttpClientModule", "Core.Native.HttpClient"],
         summary: "outbound HTTP(S) client (rustls; DEC-264 same-host redirect hygiene)",
-        migrated: false,
+        migrated: true,
     },
     Extension {
         name: "mail",
@@ -259,7 +268,7 @@ pub const EXTENSIONS: &[Extension] = &[
         tier: Tier::OptIn,
         modules: &["Core.Mail", "Core.Native.Mail"],
         summary: "SMTP mail (lettre; DEC-265 TLS-or-refuse)",
-        migrated: false,
+        migrated: true,
     },
 ];
 

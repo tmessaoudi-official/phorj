@@ -24,6 +24,11 @@ pub mod registry;
 pub mod crypto;
 #[cfg(feature = "csv")]
 pub mod csv;
+#[cfg(feature = "db")]
+pub mod db;
+/// The db extension's prelude source — unconditional (see [`regex_prelude`]), colocated via `#[path]`.
+#[path = "db/prelude.rs"]
+pub mod db_prelude;
 #[cfg(feature = "debug")]
 pub mod debug;
 /// The debug extension's prelude source — unconditional (see [`regex_prelude`]'s rationale),
@@ -36,14 +41,29 @@ pub mod decimal;
 pub mod encoding;
 #[cfg(feature = "hash")]
 pub mod hash;
+#[cfg(feature = "http-client")]
+pub mod http_client;
+/// The http_client extension's prelude source — unconditional, colocated via `#[path]`.
+#[path = "http_client/prelude.rs"]
+pub mod http_client_prelude;
 #[cfg(feature = "ini")]
 pub mod ini;
 #[cfg(feature = "json")]
 pub mod json;
+#[cfg(feature = "mail")]
+pub mod mail;
+/// The mail extension's prelude source — unconditional, colocated via `#[path]`.
+#[path = "mail/prelude.rs"]
+pub mod mail_prelude;
 #[cfg(feature = "path")]
 pub mod path;
 #[cfg(feature = "regex")]
 pub mod regex;
+#[cfg(feature = "session")]
+pub mod session;
+/// The session extension's prelude source — unconditional, colocated via `#[path]`.
+#[path = "session/prelude.rs"]
+pub mod session_prelude;
 #[cfg(feature = "test")]
 pub mod test;
 #[cfg(feature = "uri")]

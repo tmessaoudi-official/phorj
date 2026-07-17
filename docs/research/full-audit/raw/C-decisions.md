@@ -2381,3 +2381,12 @@ extends+blocks in core; auto-imported "template stdlib" (wind); runtime template
   paragraph carried from HEAD) — fixed, Http paragraph restored above HTTP_PRELUDE; rounds 3+4
   consecutively CLEAN (round-4 fresh probes: 5 examples THREE-LEG identical vs php-8.5.8; hash
   RFC KATs in the new home; zero panic!/unwrap in diff additions; 1790/1790 lib).
+
+- **DEC-273 WAVE 3 BUILT (2026-07-17):** db (natives + sqlite/mysql/postgres drivers colocated;
+  the driver `mod`s use `#[path]` siblings), mail, http-client, session (NEW default `session`
+  feature — SessionModule/Native.Session now gateable; playground parity added) → src/ext/;
+  their four preludes dissolved out of cli/preludes.rs into colocated prelude.rs files.
+  16/23 rows migrated. Session inline tests keep `use super::*` (the one inline-tests module in
+  the wave). Live-verified: no-default build rejects `import Core.SessionModule;` cleanly;
+  affected suites 207/207. html NOT migrated (ruled core seam — the html"" literal desugars to
+  its natives); di deferred (checker-desugar-coupled).

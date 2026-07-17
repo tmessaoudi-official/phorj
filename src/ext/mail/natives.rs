@@ -23,11 +23,11 @@
 //! an AUTHENTICATED connection REQUIRES TLS by default (implicit on 465, STARTTLS-required otherwise) so
 //! a MITM strip can't leak the password — the loud `allowInsecureAuth` opt-out is the only exception.
 
-use super::{NativeEval, NativeFn};
+use crate::native::{NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::{DbObject, EnumVal, Value};
 use lettre::message::header::ContentType;
-use lettre::message::{Attachment as MimeAttachment, Mailbox, MultiPart, SinglePart};
+pub(super) use lettre::message::{Attachment as MimeAttachment, Mailbox, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{Message, SendmailTransport, SmtpTransport, Transport};
@@ -65,7 +65,7 @@ fn wrap(inner: Result<Value, String>) -> Value {
 
 /// The transport behind a `Mailer` handle. SMTP holds the built blocking transport + a redacted
 /// description (host:port, never the password); `File` numbers its `.eml`s per mailer; `Null` counts.
-enum TransportKind {
+pub(super) enum TransportKind {
     Smtp {
         transport: SmtpTransport,
         desc: String,
@@ -80,7 +80,7 @@ enum TransportKind {
     },
 }
 
-struct MailerObj {
+pub(super) struct MailerObj {
     transport: TransportKind,
     /// DKIM signing config (domain, selector, RSA private key PEM), applied at `send` when set.
     dkim: RefCell<Option<lettre::message::dkim::DkimConfig>>,
@@ -112,24 +112,24 @@ impl DbObject for MailerObj {
 /// One attachment on a draft: `cid = Some(...)` → inline (multipart/related), else a regular file
 /// attachment (multipart/mixed).
 #[derive(Debug, Clone)]
-struct Att {
-    cid: Option<String>,
-    filename: String,
-    mime: String,
-    bytes: Vec<u8>,
+pub(super) struct Att {
+    pub(super) cid: Option<String>,
+    pub(super) filename: String,
+    pub(super) mime: String,
+    pub(super) bytes: Vec<u8>,
 }
 
 #[derive(Debug, Default, Clone)]
-struct Draft {
-    from: Option<Mailbox>,
-    reply_to: Option<Mailbox>,
-    to: Vec<Mailbox>,
-    cc: Vec<Mailbox>,
-    bcc: Vec<Mailbox>,
-    subject: Option<String>,
-    text: Option<String>,
-    html: Option<String>,
-    attachments: Vec<Att>,
+pub(super) struct Draft {
+    pub(super) from: Option<Mailbox>,
+    pub(super) reply_to: Option<Mailbox>,
+    pub(super) to: Vec<Mailbox>,
+    pub(super) cc: Vec<Mailbox>,
+    pub(super) bcc: Vec<Mailbox>,
+    pub(super) subject: Option<String>,
+    pub(super) text: Option<String>,
+    pub(super) html: Option<String>,
+    pub(super) attachments: Vec<Att>,
 }
 
 #[derive(Debug)]
@@ -146,7 +146,7 @@ impl DbObject for EmailObj {
     }
 }
 
-fn as_mailer(v: &Value) -> Result<&MailerObj, String> {
+pub(super) fn as_mailer(v: &Value) -> Result<&MailerObj, String> {
     match v {
         Value::Db(h) => h
             .as_any()
@@ -177,7 +177,7 @@ fn as_email(v: &Value) -> Result<&EmailObj, String> {
 /// Parse an address (+ optional display name) into a lettre [`Mailbox`]. This is the ONE gate every
 /// recipient/sender passes, so raw-header injection (`"a@b\r\nBcc: attacker"`) is structurally
 /// impossible — lettre rejects control characters and folds the display name per RFC 2047.
-fn parse_mailbox(email: &str, name: &str) -> Result<Mailbox, String> {
+pub(super) fn parse_mailbox(email: &str, name: &str) -> Result<Mailbox, String> {
     let addr: lettre::Address = email
         .parse()
         .map_err(|e| format!("<<InvalidAddressError>>Core.Mail: invalid address `{email}`: {e}"))?;
@@ -195,7 +195,7 @@ fn parse_mailbox(email: &str, name: &str) -> Result<Mailbox, String> {
 /// `.html(...)`. Deliberately simple + deterministic: tags are dropped (block-ish tags become
 /// newlines, `<li>` becomes a bullet), the common entities are decoded, whitespace runs collapse.
 /// A user needing better fidelity supplies `.text(...)` explicitly (which overrides this).
-fn html_to_text(html: &str) -> String {
+pub(super) fn html_to_text(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut chars = html.chars().peekable();
     while let Some(c) = chars.next() {
@@ -291,7 +291,7 @@ fn html_to_text(html: &str) -> String {
 /// Build the RFC-correct [`Message`] from a draft. Structure:
 /// `mixed( related( alternative(text, html) | text, inline* ) | body, attachment* )` — each level
 /// added only when needed, so a plain-text no-attachment mail is a plain singlepart.
-fn build_message(draft: &Draft) -> Result<Message, String> {
+pub(super) fn build_message(draft: &Draft) -> Result<Message, String> {
     let err = |m: String| format!("<<MessageBuildFailedError>>Core.Mail: {m}");
     let from = draft
         .from
@@ -406,7 +406,7 @@ fn smtp_err_kind(e: &lettre::transport::smtp::Error) -> &'static str {
 
 // ── Native bodies ────────────────────────────────────────────────────────────────────────────────────
 
-fn mailer(transport: TransportKind) -> Value {
+pub(super) fn mailer(transport: TransportKind) -> Value {
     Value::Db(Rc::new(MailerObj {
         transport,
         dkim: RefCell::new(None),
@@ -430,13 +430,18 @@ fn mailer(transport: TransportKind) -> Value {
 /// set the explicit, loud `allow_insecure` opt-out** — so a credential can never ride a channel that a
 /// MITM could have quietly downgraded to plaintext.
 #[derive(Debug, PartialEq, Eq)]
-enum SmtpTlsChoice {
+pub(super) enum SmtpTlsChoice {
     Wrapper,
     Required,
     Opportunistic,
 }
 
-fn smtp_tls_choice(has_creds: bool, allow_insecure: bool, mode: &str, port: u16) -> SmtpTlsChoice {
+pub(super) fn smtp_tls_choice(
+    has_creds: bool,
+    allow_insecure: bool,
+    mode: &str,
+    port: u16,
+) -> SmtpTlsChoice {
     if has_creds && !allow_insecure {
         match mode {
             "implicit" => SmtpTlsChoice::Wrapper,
@@ -507,7 +512,7 @@ fn sendmail_inner(args: &[Value]) -> Result<Value, String> {
 
 /// `MailSys.fileTransport(dir)` — writes each sent message as `phorj-mail-<n>.eml` under `dir`
 /// (created if absent). The deterministic offline test transport.
-fn file_transport_inner(args: &[Value]) -> Result<Value, String> {
+pub(super) fn file_transport_inner(args: &[Value]) -> Result<Value, String> {
     let dir = match args {
         [Value::Str(d)] => PathBuf::from(d.as_str()),
         _ => return Err("Core.Mail.__fileTransport expects (string dir)".into()),
@@ -756,7 +761,7 @@ fn email_attach_inline_inner(args: &[Value]) -> Result<Value, String> {
 }
 
 /// Deliver one built message over the mailer's transport.
-fn deliver(mailer: &MailerObj, msg: &Message) -> Result<(), String> {
+pub(super) fn deliver(mailer: &MailerObj, msg: &Message) -> Result<(), String> {
     match &mailer.transport {
         TransportKind::Smtp { transport, desc } => transport
             .send(msg)
@@ -993,6 +998,3 @@ pub fn mail_natives() -> Vec<NativeFn> {
 
 // Unit tests live in the sibling `mail_tests.rs` (file-size cap, Invariant 13), mounted as a child
 // module so they see this module's private items via `use super::*`.
-#[cfg(test)]
-#[path = "mail_tests.rs"]
-mod tests;

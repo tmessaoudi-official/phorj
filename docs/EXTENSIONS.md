@@ -24,6 +24,7 @@ keep the `Core.` import root.
 | json | default | `json` | Core.Json | JSON parse/render + the injected `Json` enum |
 | path | default | `path` | Core.Path | pure path-string manipulation (join/normalize/…) |
 | regex | default | `regex` | Core.Regex | regular expressions (crate-backed; PCRE-compatible surface subset) |
+| session | default | `session` | Core.SessionModule, Core.Native.Session | in-process HTTP sessions for `phg serve` (secure-default cookie via Core.Http) |
 | signals | default | `signals` | — | SIGINT/SIGTERM graceful shutdown for `phg serve` (drain in-flight, exit 0) |
 | test | default | `test` | Core.Test | the `Core.Test` assertion natives behind `phg test` |
 | unicode | default | `unicode` | — | UAX #29 grapheme segmentation behind `String.graphemeLength`/`graphemes` (DEC-256 native-only tier) |

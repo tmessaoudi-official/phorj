@@ -2,7 +2,8 @@
 //! the `src/native/*_tests.rs` sibling convention). Server-free and deterministic: MIME nesting,
 //! the address-injection gate, plaintext derivation, transports.
 
-use super::*;
+use super::natives::*;
+use crate::value::Value;
 
 fn draft_with(f: impl FnOnce(&mut Draft)) -> Draft {
     let mut d = Draft::default();

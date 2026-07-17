@@ -37,15 +37,8 @@ mod result;
 mod runtime;
 // `Core.DatabaseModule` is crate-backed (`rusqlite`, bundled SQLite) — gated off by default and off for the WASM
 // playground (no native SQLite). See docs/specs/UNIFIED-SPEC.md#external-dependency-policy + DEC-208.
-#[cfg(feature = "db")]
-mod db;
 mod fs;
-#[cfg(feature = "http-client")]
-mod http_client;
 mod input;
-#[cfg(feature = "mail")]
-mod mail;
-mod session;
 mod set;
 mod text;
 mod text_format;
@@ -436,13 +429,14 @@ fn build() -> Vec<NativeFn> {
     #[cfg(feature = "regex")]
     registry.extend(crate::ext::regex::regex_natives());
     #[cfg(feature = "db")]
-    registry.extend(db::db_natives());
+    registry.extend(crate::ext::db::db_natives());
     #[cfg(feature = "mail")]
-    registry.extend(mail::mail_natives());
+    registry.extend(crate::ext::mail::mail_natives());
     #[cfg(feature = "http-client")]
-    registry.extend(http_client::http_client_natives());
+    registry.extend(crate::ext::http_client::http_client_natives());
     registry.extend(fs::fs_natives());
-    registry.extend(session::session_natives());
+    #[cfg(feature = "session")]
+    registry.extend(crate::ext::session::session_natives());
     registry.extend(input::input_natives());
     #[cfg(feature = "debug")]
     registry.extend(crate::ext::debug::debug_natives());

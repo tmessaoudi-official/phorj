@@ -21,7 +21,7 @@ crate-type = ["cdylib", "rlib"]
 phorj = { path = "..", default-features = false, features = [
   # DEC-273: the dep-free Default-tier extensions — the playground keeps every module its
   # examples use (crates like argon2/regex/rusqlite stay out; those examples are quarantined).
-  "ini", "csv", "encoding", "json", "uri", "path", "hash", "decimal", "test", "debug",
+  "ini", "csv", "encoding", "json", "uri", "path", "hash", "decimal", "test", "debug", "session",
 ] }
 # JSON assembly for the wrapper return values. Pulled only into this member, never the core crate.
 serde_json = "1"

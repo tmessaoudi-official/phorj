@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — DEC-273 wave 3: the woven four migrate; the preludes monolith keeps dissolving
+
+`db` (the whole multi-driver tree — sqlite/mysql/postgres driver files colocated), `mail`,
+`http-client`, and `session` (new default-tier `session` feature — `Core.SessionModule` +
+`Core.Native.Session` are now cleanly gateable) move to `src/ext/<name>/`, and their FOUR
+prelude sources (`DB_PRELUDE`, `MAIL_PRELUDE`, `HTTP_CLIENT_PRELUDE`, `SESSION_PRELUDE`) leave
+`cli/preludes.rs` for colocated `prelude.rs` files (the unconditional-`#[path]` dissolution
+pattern). 16 of the 23 registry rows are now physically migrated; the playground gains the
+`session` feature for parity.
+
 ### Added — DEC-273 wave 2: seven more extensions migrate; the preludes monolith starts dissolving
 
 `json`, `uri` (kernel + `Core.Native.Uri` natives + the deprecated `Core.Url` compat twins +

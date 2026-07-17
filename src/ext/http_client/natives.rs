@@ -13,7 +13,7 @@
 //! identity` (no compression — honest, no silent gunzip). NOT in v1 (documented): HTTP/2,
 //! keep-alive pooling, proxies, cookies (userland or a later slice).
 
-use super::{NativeEval, NativeFn};
+use crate::native::{NativeEval, NativeFn};
 use crate::types::Ty;
 use crate::value::{DbObject, EnumVal, Value};
 use std::any::Any;
@@ -529,7 +529,11 @@ fn is_credential_header(name: &str) -> bool {
 
 /// The header set to send to `to`, given the headers sent to `from`: identical on a same-origin hop,
 /// credential-stripped on a cross-origin (or downgrading) one (DEC-264). Pure + unit-tested.
-fn headers_for_hop(from: &Url, to: &Url, headers: &[(String, String)]) -> Vec<(String, String)> {
+pub(super) fn headers_for_hop(
+    from: &Url,
+    to: &Url,
+    headers: &[(String, String)],
+) -> Vec<(String, String)> {
     if same_origin(from, to) {
         return headers.to_vec();
     }
@@ -751,7 +755,7 @@ fn body_text_inner(args: &[Value]) -> Result<Value, String> {
 
 macro_rules! hc_native {
     ($name:ident, $inner:ident) => {
-        fn $name(args: &[Value], _out: &mut String) -> Result<Value, String> {
+        pub(super) fn $name(args: &[Value], _out: &mut String) -> Result<Value, String> {
             Ok(wrap($inner(args)))
         }
     };
@@ -815,6 +819,3 @@ pub fn http_client_natives() -> Vec<NativeFn> {
 
 // Unit tests live in the sibling `http_client_tests.rs` (Invariant 13 sizing discipline), mounted
 // as a child module for private visibility.
-#[cfg(test)]
-#[path = "http_client_tests.rs"]
-mod tests;

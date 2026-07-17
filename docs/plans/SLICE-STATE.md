@@ -11,7 +11,18 @@
   panel 4 rounds, r3+r4 consecutively clean; gate 2276/2276). 12/22 registry rows migrated.
   Session commits: 17c79ad6 · ebb7a123 · 996b2fee · 0b203827 · d42a2107 · 5670250e · 861cf0ab ·
   90aa34a1 · 7c840086 · 9aed1ce7 · e2090945 — ALL UNPUSHED.
-- **NEXT: WAVE 3** — the woven ones: db/mail/http-client (prelude twins + drivers), session,
+- **WAVE 3 BUILT (gate green 2276/2276+clippy×2+fmt+release; PANEL RUNNING).** db (natives +
+  sqlite/mysql/postgres driver files, #[path] mods), mail, http_client, session (new default
+  `session` feature) → src/ext/; 4 preludes dissolved (DB/MAIL/HTTP_CLIENT/SESSION → colocated
+  prelude.rs). Registry 23 rows / 16 migrated. ⚠ LESSON: moving a natives file OUT of its own
+  module breaks its _tests.rs (was `use super::*` on the SAME file) — had to widen Draft/Att
+  fields + MailerObj/TransportKind/Message/Mailbox + hc_native macro fns to pub(super), and add
+  std trait imports (Read/Write) the old glob supplied. Playground gained session.
+- **NEXT AFTER WAVE 3 COMMIT: WAVE 4** — di (checker-desugar-coupled — CAREFUL), log/time/runtime
+  classification (check against CORE list — likely core seams, may get NO row or a documented
+  non-row), signals already rowed. Then transpile/lift MANDATORY structural seam. Then DEC-271
+  icu4x · DEC-247 DateTime · DEC-283 template build.
+- **(prior)** WAVE 3 — the woven ones: db/mail/http-client (prelude twins + drivers), session,
   html (kernel seam stays core), di (desugar-coupled), + log?/time?/runtime? classification
   check against the CORE list. Also queued: DEC-271 icu4x · DEC-247 DateTime · DEC-283 template
   build · benches/lift-Uri/golden-corpus · quiet-box microbench rerun (pre-push) · playground
