@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.List;
+import Core.Runtime.Entry;
 
 // Microbench: collection WRITE — the grow-a-list pattern (`List.append` in a loop: result
 // building, batching, buffering). Grows to 256 elements then resets so total memory stays
@@ -25,6 +26,7 @@ function bench(int iters): int {
     return acc + List.length(xs);
 }
 
+#[Entry]
 function main(): void {
     int iters = 1000000;
     int warm = bench(iters);

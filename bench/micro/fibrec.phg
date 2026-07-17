@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: recursive integer Fibonacci — the canonical exponential-call, pure-int workload. This
 // is the shape the unboxed JIT (slice b3b) actually accelerates: `fib` is self-recursive, every path
@@ -15,6 +16,7 @@ function fib(int n): int {
     return fib(n - 1) + fib(n - 2);
 }
 
+#[Entry]
 function main(): void {
     int n = 32;
     int warm = fib(n);

@@ -2,10 +2,11 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
-import Core.Db;
-import Core.Db.Db;
-import Core.Db.DbError;
-import Core.Db.Statement;
+import Core.DatabaseModule;
+import Core.DatabaseModule.Database;
+import Core.DatabaseModule.DatabaseError;
+import Core.DatabaseModule.Statement;
+import Core.Runtime.Entry;
 
 // MACRO bench: a database work slice — per outer iteration: one prepared parameterized INSERT
 // executed for 50 rows (statement reuse via executeMany's prepare-once path would hide the bind
@@ -13,7 +14,7 @@ import Core.Db.Statement;
 // SELECT read back through the typed scalar path. Paired against PHP PDO sqlite (both sides run
 // the SAME embedded C SQLite — the delta measured is the LANGUAGE-side binding/dispatch overhead,
 // which is exactly the fair fight). Connection opened once outside the loop (both sides).
-function bench(Db db, int iters): int throws DbError {
+function bench(Database db, int iters): int throws DatabaseError {
     mutable int acc = 0;
     mutable int i = 0;
     while (i < iters) {
@@ -35,9 +36,10 @@ function bench(Db db, int iters): int throws DbError {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     try {
-        Db db = new Db("sqlite::memory:");
+        Database db = new Database("sqlite::memory:");
         discard db.prepare("CREATE TABLE t(k INTEGER, v INTEGER)").exec();
         int iters = 400;
         int warm = bench(db, iters);
@@ -46,7 +48,7 @@ function main(): void {
         int acc = bench(db, iters);
         int d = Runtime.monotonicNanos() - t;
         Output.printLine("dbwork\t{d + guard}\t{acc}");
-    } catch (DbError e) {
+    } catch (DatabaseError e) {
         Output.printLine("dbwork\t0\tERROR {e.message}");
     }
 }

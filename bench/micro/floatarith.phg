@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.Conversion;
+import Core.Runtime.Entry;
 
 // Microbench: float arithmetic (add + multiply). Each iteration folds `i * 0.5` into a running float
 // accumulator; the checksum is the truncated int (folding a float into `{acc}` would risk backend
@@ -19,6 +20,7 @@ function bench(int iters): int {
     return Conversion.truncate(acc);
 }
 
+#[Entry]
 function main(): void {
     int iters = 2000000;
     int warm = bench(iters);

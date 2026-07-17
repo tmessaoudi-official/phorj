@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.Conversion;
+import Core.Runtime.Entry;
 
 // Microbench: a FLOAT-DRIVEN loop — float comparison in the branch condition + float
 // accumulation (numeric simulation / physics-step shape). Exercises fcmp (`>`), float
@@ -23,6 +24,7 @@ function bench(int iters): int {
     return acc + Conversion.truncate(x);
 }
 
+#[Entry]
 function main(): void {
     int iters = 5000000;
     int warm = bench(iters);

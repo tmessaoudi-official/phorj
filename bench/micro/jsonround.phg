@@ -5,6 +5,7 @@ import Core.Runtime;
 import Core.String;
 import Core.Json;
 import Core.Map;
+import Core.Runtime.Entry;
 
 // MACRO bench: a JSON round-trip slice (the serialization CPU of an API response) — parse a fixed
 // document, read two fields out of the tree by match, rebuild a response object, stringify it, and
@@ -55,6 +56,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 200000;
     int warm = bench(iters);

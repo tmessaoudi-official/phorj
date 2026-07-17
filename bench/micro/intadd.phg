@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: integer addition (the cheap, dispatch-dominated op). `bench` is called twice — the
 // first call warms the engine (crosses PHP's JIT hot-loop threshold), the second is timed. The op
@@ -16,6 +17,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 5000000;
     int warm = bench(iters);

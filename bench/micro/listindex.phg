@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: list index read with a DATA-DEPENDENT index (`(i + acc) % 8`), so neither backend can
 // precompute the periodic sum to a closed form — measuring the actual dynamic index-read cost.
@@ -17,6 +18,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 3000000;
     int warm = bench(iters);

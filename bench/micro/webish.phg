@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.String;
+import Core.Runtime.Entry;
 
 // Macro/realistic workload (NOT a single-feature microbench): a CPU-realistic slice of a web
 // response — route a path (map lookup), render a small templated string, fold the rendered length +
@@ -27,6 +28,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 2000000;
     int warm = bench(iters);

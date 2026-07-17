@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.Map;
+import Core.Runtime.Entry;
 
 // Microbench: map WRITE — `m[k] = v` over cycling string keys (session/context building,
 // counters, caches). The first 8 iterations of each cycle INSERT, the rest OVERWRITE (both
@@ -24,6 +25,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 1000000;
     int warm = bench(iters);

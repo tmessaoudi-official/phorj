@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.List;
+import Core.Runtime.Entry;
 
 // Microbench: higher-order PIPELINE — `List.map` with a CAPTURING lambda then a predicate
 // `List.count` (the transform-then-reduce shape of data processing). The multiplier `k`
@@ -21,6 +22,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 300000;
     int warm = bench(iters);

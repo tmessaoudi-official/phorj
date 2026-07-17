@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.Conversion;
+import Core.Runtime.Entry;
 
 // Microbench: float multiply+add as an IIR-style recurrence `acc = acc*r + 0.5` — a loop-carried f64
 // dependency (so neither backend can constant-fold it) that stays finite for these iters. Pure
@@ -20,6 +21,7 @@ function bench(int iters, float r): float {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 2000000;
     float r = 1.0000001;

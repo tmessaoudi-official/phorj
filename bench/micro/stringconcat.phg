@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.String;
+import Core.Runtime.Entry;
 
 // Microbench: string concatenation. Operands VARY with the loop index (`parts[i%4] + parts[(i+1)%4]`)
 // so neither backend can hoist the concat to a loop-invariant constant — measuring the actual per-op
@@ -19,6 +20,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 2000000;
     int warm = bench(iters);

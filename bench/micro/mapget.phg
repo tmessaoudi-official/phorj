@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: map lookup by key. A fixed map is built once; each iteration reads one of four keys
 // (chosen by `i % 4`) and folds the value into the checksum (hash-get cost, not map construction).
@@ -18,6 +19,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 3000000;
     int warm = bench(iters);

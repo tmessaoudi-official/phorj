@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: enum construct + `match` deconstruction. Each iteration builds one of three variants
 // (chosen by `i % 3`) and matches it back to an int, folding the result (variant alloc + tag dispatch).
@@ -23,6 +24,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 3000000;
     int warm = bench(iters);

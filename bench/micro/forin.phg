@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: ITERATION — `for (x in xs)` over a small list, repeated (the scan shape every
 // real program spends time in: summing, searching, rendering rows). The accumulator feeds
@@ -19,6 +20,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 1000000;
     int warm = bench(iters);

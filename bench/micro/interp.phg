@@ -3,6 +3,7 @@ package Main;
 import Core.Output;
 import Core.Runtime;
 import Core.String;
+import Core.Runtime.Entry;
 
 // Microbench: string interpolation. Each iteration builds `"v={i}"` and folds its length into the
 // checksum (interpolation cost: int->string + concat). Length is `2 + digits(i)`, identical on both
@@ -18,6 +19,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 2000000;
     int warm = bench(iters);

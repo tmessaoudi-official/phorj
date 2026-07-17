@@ -2,18 +2,19 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: try/catch/throw. `step` throws on odd inputs; `bench` wraps each call in try/catch, so
 // every iteration pays the try-block entry/exit and ~3-in-7 iterations pay a full throw+catch. The
 // caught payload (`e.n`) and the returned even values both fold into the checksum (defeats DCE AND
 // gates output-identity: the VM and release-PHP must agree before a timing is trusted).
-class Odd implements Error {
+class OddError implements Error {
     constructor(public string message, public int n) {}
 }
 
-function step(int x): int throws Odd {
+function step(int x): int throws OddError {
     if (x % 2 == 1) {
-        throw new Odd("odd", x);
+        throw new OddError("odd", x);
     }
     return x;
 }
@@ -24,7 +25,7 @@ function bench(int iters): int {
     while (i < iters) {
         try {
             acc = acc + step(i % 7);
-        } catch (Odd e) {
+        } catch (OddError e) {
             acc = acc + e.n;
         }
         i = i + 1;
@@ -32,6 +33,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 3000000;
     int warm = bench(iters);

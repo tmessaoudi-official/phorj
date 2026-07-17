@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.Runtime;
+import Core.Runtime.Entry;
 
 // Microbench: closure (lambda) call. A lambda is built once, then invoked each iteration; the result
 // is folded into the checksum (indirect-call cost).
@@ -16,6 +17,7 @@ function bench(int iters): int {
     return acc;
 }
 
+#[Entry]
 function main(): void {
     int iters = 3000000;
     int warm = bench(iters);
