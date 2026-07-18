@@ -76,4 +76,10 @@ function main(): void {
     List<int> evens = Map.get(parity, 0) ?? new List<int>();
     List<int> odds = Map.get(parity, 1) ?? new List<int>();
     Output.printLine("groupBy %2: {List.length(evens)} evens, {List.length(odds)} odds");
+    // difference / intersection — typed-strict SET ops (better than PHP's string-coercing
+    // array_diff/array_intersect), filter semantics: a's order + duplicates preserved.
+    List<int> diff = List.difference([1, 2, 2, 3, 4], [2, 4]);
+    List<int> isect = List.intersection([1, 2, 2, 3, 4], [2, 4]);
+    Output.printLine("difference: {List.length(diff)} elems sum={List.sum(diff)}");
+    Output.printLine("intersection: {List.length(isect)} elems sum={List.sum(isect)}");
 }

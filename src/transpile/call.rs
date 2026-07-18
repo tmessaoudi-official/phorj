@@ -225,6 +225,8 @@ impl Transpiler {
                                 "indexOf" => self.uses_list_index_of = true,
                                 "lastIndexOf" => self.uses_list_last_index_of = true,
                                 "unique" => self.uses_list_unique = true,
+                                "difference" => self.uses_list_difference = true,
+                                "intersection" => self.uses_list_intersection = true,
                                 "min" => self.uses_list_min = true,
                                 "max" => self.uses_list_max = true,
                                 "find" => self.uses_list_find = true,

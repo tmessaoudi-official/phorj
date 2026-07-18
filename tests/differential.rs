@@ -651,6 +651,26 @@ function greet(string name, string greeting = "Hello", bool loud = false) -> str
     );
 }
 
+/// Wave-B: `List.difference`/`intersection` (FN-ARR long-tail) — typed-strict set ops on lists,
+/// filter semantics (keep a's order + dups), byte-identical run≡runvm≡php via the strict
+/// `__phorj_list_difference`/`_intersection` helpers (NOT PHP `array_diff`/`array_intersect`).
+#[test]
+fn list_difference_intersection_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.List;
+import Core.String;
+#[Entry] function main() -> void {
+    List<string> a = ["a", "b", "b", "c", "d"];
+    List<string> b = ["b", "d", "e"];
+    Output.printLine(String.join(List.difference(a, b), ","));
+    Output.printLine(String.join(List.intersection(a, b), ","));
+}"#,
+        "a,c\nb,b,d\n",
+        "list_diff_isect",
+    );
+}
+
 /// Wave-B: the Core.Math tail (inverse trig / hyperbolics / hypot / log2 / log1p / expm1 / angle
 /// conversion) is byte-identical run≡runvm≡php — all delegate to the platform libm PHP also uses;
 /// `log2` deliberately computes `ln(x)/ln(2)` to match PHP's `log(x, 2)` (not a direct `log2` libm call).

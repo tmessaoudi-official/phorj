@@ -1171,6 +1171,27 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `List.difference(a, b)` — a's elements NOT in b, preserving a's order + duplicates, by STRICT
+        // value equality (`in_array(…, true)` ≡ Phorj eq_val; NOT PHP `array_diff`, which string-compares).
+        if self.uses_list_difference {
+            self.line("function __phorj_list_difference($a, $b) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("foreach ($a as $x) { if (!in_array($x, $b, true)) { $out[] = $x; } }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        // `List.intersection(a, b)` — a's elements ALSO in b, preserving a's order + duplicates, strict.
+        if self.uses_list_intersection {
+            self.line("function __phorj_list_intersection($a, $b) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("foreach ($a as $x) { if (in_array($x, $b, true)) { $out[] = $x; } }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
         // `List.min` / `List.max` — byte-order compare (string via `strcmp`, NOT PHP `min`/`max`'s
         // numeric-string juggling), null for an empty list. Same `cmp` as `__phorj_sort`.
         if self.uses_list_min {

@@ -362,6 +362,26 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_unique),
             php: |a| format!("__phorj_unique({})", parg(a, 0)),
         },
+        // Set-style ops on Lists (FN-ARR long-tail) — typed-strict (better than PHP array_diff/intersect
+        // string coercion); filter semantics (keep a's order + dups), compose with `unique` for a set.
+        NativeFn {
+            module: "Core.List",
+            name: "difference",
+            params: vec![list(t()), list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_difference),
+            php: |a| format!("__phorj_list_difference({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "intersection",
+            params: vec![list(t()), list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_intersection),
+            php: |a| format!("__phorj_list_intersection({}, {})", parg(a, 0), parg(a, 1)),
+        },
         // `min(List<T>) -> T?` / `max(List<T>) -> T?` — null for an empty list. Uses the `natural_cmp`
         // byte-order (strings via `strcmp`, not PHP's numeric-string-juggling `min`/`max`), so the
         // `__phorj_min`/`_max` helpers match the Rust backends exactly.
@@ -471,6 +491,37 @@ fn list_unique(args: &[Value], _: &mut String) -> Result<Value, String> {
             Ok(Value::List(std::rc::Rc::new(out)))
         }
         _ => Err("List.unique expects (List<T>)".into()),
+    }
+}
+
+/// `difference(a, b)` — a's elements NOT present in b, preserving a's order + duplicates, by STRICT
+/// value equality (`eq_val`, typed — NOT PHP `array_diff`'s string coercion; better than PHP).
+fn list_difference(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(a), Value::List(b)] => {
+            let out: Vec<Value> = a
+                .iter()
+                .filter(|x| !b.iter().any(|y| y.eq_val(x)))
+                .cloned()
+                .collect();
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.difference expects (List<T>, List<T>)".into()),
+    }
+}
+
+/// `intersection(a, b)` — a's elements ALSO present in b, preserving a's order + duplicates, strict.
+fn list_intersection(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(a), Value::List(b)] => {
+            let out: Vec<Value> = a
+                .iter()
+                .filter(|x| b.iter().any(|y| y.eq_val(x)))
+                .cloned()
+                .collect();
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.intersection expects (List<T>, List<T>)".into()),
     }
 }
 

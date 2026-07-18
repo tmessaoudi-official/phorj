@@ -281,6 +281,8 @@ struct Transpiler {
     /// `all` short-circuit (`foreach` + early `return`) to match the Rust short-circuit on a
     /// side-effecting predicate.
     uses_list_unique: bool,
+    uses_list_difference: bool,
+    uses_list_intersection: bool,
     uses_list_min: bool,
     uses_list_max: bool,
     uses_list_find: bool,
@@ -531,6 +533,8 @@ impl Transpiler {
             uses_list_drop_while: false,
             uses_list_group_by: false,
             uses_list_unique: false,
+            uses_list_difference: false,
+            uses_list_intersection: false,
             uses_list_min: false,
             uses_list_max: false,
             uses_list_find: false,
