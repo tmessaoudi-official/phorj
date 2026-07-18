@@ -61,7 +61,23 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
        group("a")==null run≡vm≡php; unit test; example; KNOWN_ISSUES note RegexMatch does NOT inherit the divergence.
    ⚠ Inherited caveat in KNOWN_ISSUES: findGroups/findAllGroups optional non-participating named groups
    diverge on PHP leg (Rust omits, PCRE fills "") — replaceCallback's RegexMatch FIXES this via UNMATCHED_AS_NULL.
-3. **Named args + variadics + spread** — SYN mover + unblocks lifter on PHP 8.0+. Design-heavy → adjudicate.
+3. **Named args + variadics + spread** — SYN mover + unblocks lifter on PHP 8.0+. ✅ **DESIGN FULLY RULED
+   2026-07-18 (DEC-297/298/299) — greenfield, largest spine slice; BUILD FRESH-CONTEXT, SPLIT in two:**
+   ── STATIC CORE (slice #3a, build first): ──
+   • **Named args** `f(name: value)` (DEC-297, PHP-8.0 colon spelling, 1:1 transpile; interacts w/ default
+     params — fill-by-name). Parser (call-arg `name:` form) + AST (named arg node) + checker (resolve
+     named→param, mixed positional+named, defaults) + 3 backends + transpile (1:1) + lift (PHP named→phorj).
+   • **Variadics** `function f(int ...nums)` → `nums: List<int>` (DEC-298). Parser (`...` param) + AST
+     (Param.variadic flag) + checker (collect trailing args into List<T>) + backends + transpile (`...$nums`) + lift.
+   • **Spread CORE** (DEC-299 a+b): (a) `f(...list)` List→positional (static, element+arity checked);
+     (b) `f(...["k": v])` Map-LITERAL→named = COMPILE-TIME desugar to named args (fully static). Parser
+     (`...` call-arg) + checker + backends + transpile (`...$x`) + lift.
+   ── RUNTIME LEG (slice #3b, follow-on): ──
+   • **Runtime union-Map→named spread** (DEC-299c): `Map<string,U>` spreads into named params when each
+     targeted param type ∈ U (static check); runtime per-value narrow + key-presence via typed **E-SPREAD-ARG**
+     fault; byte-identical PHP leg. ⚠ DEPENDS on `Map<K, union>` ergonomics being solid — VERIFY FIRST.
+   ⚠ Interactions to design carefully: named+positional mixing order; named args + defaults fill; variadic
+   + spread (`f(...xs)` into `...nums`); spread + named in one call. Byte-identity on every form + the fault.
 4. ~~**`match` expression**~~ — DROPPED 2026-07-18: **ALREADY BUILT + mature** (`TokenKind::Match`,
    `Expr::Match` w/ guards+patterns, used across examples). Rule-11 catch #3 this session (after
    Regex, Decimal). ⚠ VERIFY EVERY remaining "gap" by grep before treating as greenfield.
