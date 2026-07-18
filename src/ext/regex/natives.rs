@@ -147,6 +147,32 @@ pub(super) fn regex_find_groups(args: &[Value], _: &mut String) -> Result<Value,
     }
 }
 
+/// `Regex.findAllGroups(Regex, string) -> List<Map<string, string>>` — the **named** captures of
+/// EVERY match, one map per match (empty list if none). The grouped counterpart of `findAll` (whole
+/// matches) and the all-matches counterpart of `findGroups`; mirrors PHP `preg_match_all` with
+/// `PREG_SET_ORDER`, named-only (numbered captures omitted — named is the API, as in `findGroups`).
+pub(super) fn regex_find_all_groups(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [re, Value::Str(s)] => {
+            let pat = as_pattern(re)?;
+            let engine = compiled(&pat)?;
+            let names: Vec<&str> = engine.capture_names().flatten().collect();
+            let mut out: Vec<Value> = Vec::new();
+            for caps in engine.captures_iter(s) {
+                let mut pairs: Vec<(Value, Value)> = Vec::new();
+                for name in &names {
+                    if let Some(m) = caps.name(name) {
+                        pairs.push((Value::Str((*name).into()), Value::Str(m.as_str().into())));
+                    }
+                }
+                out.push(Value::Map(Rc::new(build_map(pairs)?)));
+            }
+            Ok(Value::List(Rc::new(out)))
+        }
+        _ => Err("Regex.findAllGroups expects (Regex, string)".into()),
+    }
+}
+
 /// `Regex.replace(Regex, string, string) -> string` — replace every match. The replacement uses the
 /// `$1` / `${name}` capture syntax shared by the `regex` crate and PHP `preg_replace`.
 pub(super) fn regex_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -242,6 +268,24 @@ pub fn regex_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(regex_find_groups),
             php: |a| format!("__phorj_regex_find_groups({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Regex",
+            name: "findAllGroups",
+            params: vec![regex_ty(), Ty::String],
+            ret: Ty::List(Box::new(Ty::Map(
+                Box::new(Ty::String),
+                Box::new(Ty::String),
+            ))),
+            pure: true,
+            eval: NativeEval::Pure(regex_find_all_groups),
+            php: |a| {
+                format!(
+                    "__phorj_regex_find_all_groups({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
         },
         NativeFn {
             module: "Core.Regex",

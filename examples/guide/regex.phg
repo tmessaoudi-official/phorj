@@ -35,6 +35,13 @@ function main(): void {
     var word = Regex.compile("\\w+");
     var words = String.join(Regex.findAll(word, "the quick brown fox"), ",");
     Output.printLine("words = {words}");
+    // findAllGroups → the named captures of EVERY match, one map per match (the grouped `findAll`).
+    var pair = Regex.compile("(?<k>\\w+)=(?<v>\\d+)");
+    for (Map<string, string> m in Regex.findAllGroups(pair, "a=1 b=22 c=333")) {
+        string k = m["k"];
+        string v = m["v"];
+        Output.printLine("pair {k} -> {v}");
+    }
     var comma = Regex.compile(",\\s*");
     var pieces = String.join(Regex.split(comma, "a, b,c,  d"), "|");
     Output.printLine("split = {pieces}");

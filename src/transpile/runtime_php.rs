@@ -1035,6 +1035,24 @@ impl Transpiler {
             self.line("return $out;");
             self.indent -= 1;
             self.line("}");
+            // All matches' named captures — one array per match (PREG_SET_ORDER), string-keyed only,
+            // mirroring `__phorj_regex_find_groups` per match so the crate/PCRE ordering agrees.
+            self.line("function __phorj_regex_find_all_groups($re, $s) {");
+            self.indent += 1;
+            self.line(
+                "preg_match_all(__phorj_regex_delim($re->pattern), $s, $ms, PREG_SET_ORDER);",
+            );
+            self.line("$out = [];");
+            self.line("foreach ($ms as $m) {");
+            self.indent += 1;
+            self.line("$g = [];");
+            self.line("foreach ($m as $k => $v) { if (is_string($k)) { $g[$k] = $v; } }");
+            self.line("$out[] = $g;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
             self.line("function __phorj_regex_replace($re, $s, $repl) {");
             self.indent += 1;
             self.line("return preg_replace(__phorj_regex_delim($re->pattern), $repl, $s);");

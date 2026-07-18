@@ -92,6 +92,36 @@ fn find_groups_named_only_and_null() {
 }
 
 #[test]
+fn find_all_groups_one_map_per_match() {
+    let mut o = String::new();
+    let pair = re(r"(?<k>\w+)=(?<v>\d+)");
+    match regex_find_all_groups(&[pair.clone(), Value::Str("a=1 b=22 c=333".into())], &mut o)
+        .unwrap()
+    {
+        Value::List(matches) => {
+            assert_eq!(matches.len(), 3);
+            // Each element is a named-group map in group-index order.
+            let map_at = |i: usize| match &matches[i] {
+                Value::Map(pairs) => pairs.clone(),
+                other => panic!("expected a map, got {other:?}"),
+            };
+            let m0 = map_at(0);
+            assert_eq!(m0[0].0, crate::value::HKey::Str("k".into()));
+            assert_eq!(text(&m0[0].1), "a");
+            assert_eq!(m0[1].0, crate::value::HKey::Str("v".into()));
+            assert_eq!(text(&m0[1].1), "1");
+            assert_eq!(text(&map_at(2)[1].1), "333");
+        }
+        other => panic!("findAllGroups returned {other:?}"),
+    }
+    // No match → empty list (not null — the all-matches contract).
+    match regex_find_all_groups(&[pair, Value::Str("nope".into())], &mut o).unwrap() {
+        Value::List(xs) => assert!(xs.is_empty()),
+        other => panic!("expected an empty list, got {other:?}"),
+    }
+}
+
+#[test]
 fn replace_all() {
     let mut o = String::new();
     assert!(matches!(
@@ -126,5 +156,9 @@ fn php_emission_shapes() {
     assert_eq!(
         emit("findGroups", &["$re", "$s"]),
         "__phorj_regex_find_groups($re, $s)"
+    );
+    assert_eq!(
+        emit("findAllGroups", &["$re", "$s"]),
+        "__phorj_regex_find_all_groups($re, $s)"
     );
 }

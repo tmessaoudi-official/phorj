@@ -1629,8 +1629,15 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
 - **`\d` / `\w` / `\s` are Unicode-aware on the Rust backends, ASCII-only in transpiled PCRE** (no
   `(*UCP)`). So a Unicode-digit subject would diverge between the backends and the PHP leg. Shipped
   examples keep **ASCII** subjects, where all three agree. (A future `(*UCP)` emission could align them.)
-- **Named captures only** — `findGroups` returns `Map<string,string>?` keyed by group name; numbered
-  groups are intentionally not exposed. A named group that does not participate in the match is omitted.
+- **Named captures only** — `findGroups`/`findAllGroups` return `Map<string,string>` keyed by group
+  name (the latter one map per match); numbered groups are intentionally not exposed. A named group
+  that does not participate in the match is omitted.
+  ⚠ **Optional non-participating named groups diverge on the PHP leg** (inherited, both APIs): the Rust
+  backends OMIT a non-matching named group, but transpiled PCRE fills a non-trailing unmatched group
+  as `""` — so `run`/`runvm` yield `{b:"bar"}` while transpiled PHP yields `{a:"",b:"bar"}` for
+  `(?<a>foo)?(?<b>bar)` on `"bar"` [Verified: `phg run` has_a=false vs `transpile|php` has_a=true].
+  Shipped examples use only mandatory named groups (all participate), where all three agree. A future
+  alignment would filter `""`-valued non-participating keys in the PHP helper.
 - **Always Unicode (`/u`), case-sensitive.** Inline flags / case-insensitivity (`Regex.compileWith`)
   are deferred — add when requested.
 - **`replace` replacement syntax** uses the `$1` / `${name}` form shared by the `regex` crate and PHP
