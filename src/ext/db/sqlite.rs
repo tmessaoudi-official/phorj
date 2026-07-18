@@ -184,21 +184,28 @@ fn col_names(prepared: &rusqlite::Statement) -> Vec<String> {
 
 /// Prepare `sql`, bind `binds`, and execute a write on `conn`, returning the affected-row count.
 /// Shared by `exec`, `exec_returning_id`, and the per-row loop of `execute_many`.
+///
+/// Uses rusqlite's `prepare_cached` (an LRU statement cache keyed by SQL text) rather than a fresh
+/// `prepare`: a naive request handler re-prepares the SAME statement per row (`db.prepare("INSERT
+/// …")` in a loop), and caching skips SQLite's re-compile of identical SQL on every hit — the DEC-266
+/// perf lever for `dbwork`. PDO does NOT cache prepares, so this is a genuine language-side advantage
+/// on identical code. Byte-identical: the cached statement is reset + re-bound per execute (rusqlite
+/// resets on return-to-cache), so results are unchanged; validated by `tests/db.rs` on both backends.
 fn exec_bound(conn: &rusqlite::Connection, sql: &str, binds: &Binds) -> Result<usize, String> {
     match binds {
         Binds::None => {
-            let mut prepared = conn.prepare(sql).map_err(sql_err)?;
+            let mut prepared = conn.prepare_cached(sql).map_err(sql_err)?;
             prepared.execute([]).map_err(sql_err)
         }
         Binds::Positional(pbs) => {
             let (esql, sv) = expand_placeholders(sql, pbs)?;
-            let mut prepared = conn.prepare(&esql).map_err(sql_err)?;
+            let mut prepared = conn.prepare_cached(&esql).map_err(sql_err)?;
             prepared
                 .execute(rusqlite::params_from_iter(sv.iter()))
                 .map_err(sql_err)
         }
         Binds::Named(pairs) => {
-            let mut prepared = conn.prepare(sql).map_err(sql_err)?;
+            let mut prepared = conn.prepare_cached(sql).map_err(sql_err)?;
             let sv: Vec<(String, rusqlite::types::Value)> = pairs
                 .iter()
                 .map(|(k, v)| Ok((format!(":{k}"), to_sql(v)?)))
@@ -237,14 +244,14 @@ impl DriverConn for SqliteConn {
     fn query(&self, sql: &str, binds: &Binds) -> Result<Value, String> {
         let rows = match binds {
             Binds::None => {
-                let mut prepared = self.conn.prepare(sql).map_err(sql_err)?;
+                let mut prepared = self.conn.prepare_cached(sql).map_err(sql_err)?;
                 let cols = col_names(&prepared);
                 let mut r = prepared.query([]).map_err(sql_err)?;
                 collect_rows(&mut r, &cols)?
             }
             Binds::Positional(pbs) => {
                 let (esql, sv) = expand_placeholders(sql, pbs)?;
-                let mut prepared = self.conn.prepare(&esql).map_err(sql_err)?;
+                let mut prepared = self.conn.prepare_cached(&esql).map_err(sql_err)?;
                 let cols = col_names(&prepared);
                 let mut r = prepared
                     .query(rusqlite::params_from_iter(sv.iter()))
@@ -252,7 +259,7 @@ impl DriverConn for SqliteConn {
                 collect_rows(&mut r, &cols)?
             }
             Binds::Named(pairs) => {
-                let mut prepared = self.conn.prepare(sql).map_err(sql_err)?;
+                let mut prepared = self.conn.prepare_cached(sql).map_err(sql_err)?;
                 let cols = col_names(&prepared);
                 let sv: Vec<(String, rusqlite::types::Value)> = pairs
                     .iter()
@@ -295,7 +302,7 @@ impl DriverConn for SqliteConn {
             .execute_batch("SAVEPOINT phorj_bulk")
             .map_err(sql_err)?;
         let run = || -> Result<i64, String> {
-            let mut prepared = self.conn.prepare(sql).map_err(sql_err)?;
+            let mut prepared = self.conn.prepare_cached(sql).map_err(sql_err)?;
             let mut total = 0i64;
             for row in rows.iter() {
                 let vals = match row {
