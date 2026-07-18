@@ -1,5 +1,24 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## ✅ DONE THIS SESSION (2026-07-18, HEAD `da3fc0c2`, ~33 commits UNPUSHED — READ FIRST)
+- **PERF ARC (certified):** dbwork FLIPPED to WIN [Verified idle-box, ratcheted in micro-baseline];
+  jsonround = documented structural FLAG (parse floor 205ms > PHP 153ms, arithmetic-proven);
+  **lazy/compact `Value::JsonLazy` SHIPPED** (materialize-on-deconstruct, memoized, corpus-guarded,
+  byte-identical) + new `bench/micro/deepjson` (deep/wide, 0.57→~0.95× — matches C json_decode);
+  micro-baseline re-emitted on a quiet box (phantom losses fibrec/floatmul/stringconcat = WINs).
+  Detail = [[perf-arc-2026-07-18-owed-idle-confirms]].
+- **DEC-288 TUPLES — FEATURE-COMPLETE (certified):** `(a,b)` literal + `(A,B)` type + erase-to-List;
+  `var (a,b)` + `(int a,string b)` destructure; `for ((k,v) in …)` (typed+inferred); `List.zip` /
+  `List.partition` / `Map.entries` producers. Byte-identical 3 backends; all 2280 green; Invariant-7
+  operand typing via dedicated `tuple_bind_resolutions`; formatter round-trips the sugar. ⚠ Map.entries
+  bool-KEY diverges on transpile leg (FLAGGED, use str/int keys). Detail = [[tuples-dec288-slice-status]].
+- ⚠ `check_resolutions` return is now a 10-field tuple (consider a named struct if an 11th is added).
+
+## NEXT (per MASTER-PLAN §0 THE QUEUE — CORE PARITY PUSH): §4 recompute → TOP-20 stdlib
+(FN leg 37→~70%: sprintf/printf family → array_* long tail → date/time breadth → subprocess →
+regex-breadth → math long-tail/BigInt → compression). Fs breadth ≈done (18 fns). Design-heavy —
+ask on user-visible forks (Invariant 15). Box bursty → byte-identity is the gate, defer perf verdicts.
+
 ## CURRENT (2026-07-17→18, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
 
 ### PARITY PUSH (2026-07-18, dev "keep going to 100%") — 4 List functions SHIPPED byte-identical + DEC-288..291 ruled
