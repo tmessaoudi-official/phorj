@@ -269,6 +269,9 @@ struct Transpiler {
     /// binds the list once, matching the native's stop-at-first-failing-element prefix/suffix).
     uses_list_take_while: bool,
     uses_list_drop_while: bool,
+    /// Set when `Core.List.groupBy` is emitted — gates `__phorj_group_by` (a `foreach` auto-vivifying
+    /// `$out[$f($x)][] = $x` in first-seen key order → the `Map<U, List<T>>` grouping).
+    uses_list_group_by: bool,
     /// Set when `Output.capture(fn)` is emitted (DEC-220-S3) — gates the once-per-file
     /// `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }` helper.
     uses_capture: bool,
@@ -526,6 +529,7 @@ impl Transpiler {
             uses_list_sort_with: false,
             uses_list_take_while: false,
             uses_list_drop_while: false,
+            uses_list_group_by: false,
             uses_list_unique: false,
             uses_list_min: false,
             uses_list_max: false,

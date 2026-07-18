@@ -422,6 +422,28 @@ fn list_higher_order_eval_and_emit() {
     let mut nb = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(1));
     assert!(list_take_while(&[nums.clone(), placeholder.clone()], &mut nb).is_err());
 
+    // groupBy: key = x % 2 over [1,2,3,4] → first-seen keys [1, 0]; groups [1,3] and [2,4].
+    let mut par = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+        [Value::Int(n)] => Ok(Value::Int(n % 2)),
+        _ => Err("bad arity".to_string()),
+    };
+    match list_group_by(&[nums.clone(), placeholder.clone()], &mut par).unwrap() {
+        Value::Map(m) => {
+            assert_eq!(m.len(), 2);
+            // first-seen key order: 1 (from element 1), then 0 (from element 2).
+            assert!(matches!(m[0].0, crate::value::HKey::Int(1)));
+            assert!(matches!(m[1].0, crate::value::HKey::Int(0)));
+            match &m[0].1 {
+                Value::List(g) => assert_eq!(g.len(), 2), // [1, 3]
+                o => panic!("group not a list: {o:?}"),
+            }
+        }
+        other => panic!("groupBy returned {other:?}"),
+    }
+    // groupBy: a non-hashable key is a clean fault, never a panic.
+    let mut nonhash = |_f: &Value, _a: Vec<Value>| Ok(Value::List(std::rc::Rc::new(vec![])));
+    assert!(list_group_by(&[nums.clone(), placeholder.clone()], &mut nonhash).is_err());
+
     // reduce: sum, seeded with 100.
     let mut add = |_f: &Value, a: Vec<Value>| match a.as_slice() {
         [Value::Int(acc), Value::Int(x)] => Ok(Value::Int(acc + x)),

@@ -1104,6 +1104,17 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `List.groupBy` — partition into groups keyed by `$f($x)`, first-seen key order, each group in
+        // element order (≡ the native's first-seen Vec + per-group push → Map<U, List<T>>).
+        if self.uses_list_group_by {
+            self.line("function __phorj_group_by($xs, $f) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("foreach ($xs as $x) { $out[$f($x)][] = $x; }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
         // `List.unique` — first-occurrence-order dedupe by strict equality (≡ Phorj value-equality;
         // NOT `array_unique`, which stringifies).
         if self.uses_list_unique {

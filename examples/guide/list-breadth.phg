@@ -2,6 +2,7 @@ package Main;
 
 import Core.Output;
 import Core.List;
+import Core.Map;
 import Core.Runtime.Entry;
 
 // Stdlib breadth — `Core.List` query/aggregate ops (on top of map/filter/reduce/sort/slice/…):
@@ -12,6 +13,7 @@ import Core.Runtime.Entry;
 //   * `any(p)`/`all(p)`— short-circuiting existential / universal quantifiers (`bool`).
 //   * `flatMap(f)`     — map each element to a list, then concatenate (map + one-level flatten).
 //   * `takeWhile(p)`/`dropWhile(p)` — the longest predicate-satisfying prefix, and the rest.
+//   * `groupBy(sel)`  — partition into `Map<U, List<T>>` keyed by the selector (first-seen order).
 // All pure Phorj over the higher-order-native machinery; byte-identical both backends and real PHP.
 #[Entry]
 function main(): void {
@@ -65,4 +67,10 @@ function main(): void {
     Output.printLine(
         "takeWhile <5: {List.length(pfx)} elems sum={List.sum(pfx)}; dropWhile: {List.length(sfx)} elems"
     );
+    // groupBy — partition into groups keyed by a selector (first-seen key order, each group in order).
+    // `x % 2` splits [3,1,4,1,5,9,2,6,5] into odds (key 1) and evens (key 0).
+    Map<int, List<int>> parity = xs.groupBy(function(int x) => x % 2);
+    List<int> evens = Map.get(parity, 0) ?? new List<int>();
+    List<int> odds = Map.get(parity, 1) ?? new List<int>();
+    Output.printLine("groupBy %2: {List.length(evens)} evens, {List.length(odds)} odds");
 }

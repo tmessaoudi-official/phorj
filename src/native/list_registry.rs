@@ -146,6 +146,20 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.List",
+            name: "groupBy",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(u()), Vec::new()),
+            ],
+            ret: Ty::Map(Box::new(u()), Box::new(list(t()))),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_group_by),
+            // Gated `__phorj_group_by`: `$out[$f($x)][] = $x` auto-vivifies groups in first-seen key
+            // order (≡ the native's first-seen Vec), matching the Map<U,List<T>> representation.
+            php: |a| format!("__phorj_group_by({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
             name: "reduce",
             params: vec![
                 list(t()),

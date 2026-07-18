@@ -1,5 +1,5 @@
 use super::*;
-use crate::value::Value;
+use crate::value::{HKey, Value};
 use std::cmp::Ordering;
 
 /// Natural total order over the scalar element types, matching the PHP `__phorj_sort` comparator
@@ -439,6 +439,35 @@ pub(super) fn list_drop_while(args: &[Value], call: &mut ClosureInvoker) -> Resu
             Ok(Value::List(std::rc::Rc::new(out)))
         }
         _ => Err("List.dropWhile expects (List<T>, (T) -> bool)".into()),
+    }
+}
+
+/// `List.groupBy(List<T>, (T) -> U) -> Map<U, List<T>>` — partition the list into groups keyed by the
+/// selector's result, preserving FIRST-SEEN key order and each group's element order (the universal
+/// Kotlin/Swift/LINQ `groupBy`). The selector runs on the calling backend via the re-entrant invoker;
+/// a non-hashable key faults cleanly (EV-7) — the checker constrains `U` to the hashable subset.
+pub(super) fn list_group_by(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut groups: Vec<(HKey, Vec<Value>)> = Vec::new();
+            for x in xs.iter() {
+                let kv = call(f, vec![x.clone()])?;
+                let key = HKey::from_value(&kv).ok_or_else(|| {
+                    format!("List.groupBy key must be hashable, got {}", kv.type_name())
+                })?;
+                if let Some(slot) = groups.iter_mut().find(|(gk, _)| *gk == key) {
+                    slot.1.push(x.clone());
+                } else {
+                    groups.push((key, vec![x.clone()]));
+                }
+            }
+            let entries: Vec<(HKey, Value)> = groups
+                .into_iter()
+                .map(|(k, vs)| (k, Value::List(std::rc::Rc::new(vs))))
+                .collect();
+            Ok(Value::Map(std::rc::Rc::new(entries)))
+        }
+        _ => Err("List.groupBy expects (List<T>, (T) -> U)".into()),
     }
 }
 
