@@ -232,6 +232,53 @@ fn php_builtin_class_names_are_rejected_at_class_positions() {
 }
 
 #[test]
+fn variadic_free_fn_ok_method_and_lambda_rejected() {
+    // DEC-298: variadics are free-function-only in v1.
+    // A free-function variadic type-checks with no variadic error.
+    let ok = errors_of_raw(
+        "package Main; function sum(int ...nums) -> int { return 0; } function main() -> void {}",
+    );
+    assert!(
+        !ok.iter()
+            .any(|d| d.code.is_some_and(|c| c.starts_with("E-VARIADIC"))),
+        "free-fn variadic must be clean — got {ok:?}"
+    );
+    // Method + lambda variadics are rejected (E-VARIADIC-UNSUPPORTED).
+    for src in [
+        "package Main; class C { function f(int ...nums) -> int { return 0; } } function main() -> void {}",
+        "package Main; function main() -> void { var g = function(int ...xs) -> int { return 0; }; }",
+    ] {
+        let e = errors_of_raw(src);
+        assert!(
+            e.iter().any(|d| d.code == Some("E-VARIADIC-UNSUPPORTED")),
+            "{src} → got {e:?}"
+        );
+    }
+    // A variadic that is not the last parameter is rejected.
+    let notlast = errors_of_raw(
+        "package Main; function f(int ...xs, int y) -> int { return 0; } function main() -> void {}",
+    );
+    assert!(
+        notlast
+            .iter()
+            .any(|d| d.code == Some("E-VARIADIC-NOT-LAST")),
+        "not-last variadic → got {notlast:?}"
+    );
+    // v1 only handles the non-generic single-signature call path, so a GENERIC or OVERLOADED variadic
+    // is rejected at the decl (accepted surface == working surface — no call-site arity surprise).
+    for src in [
+        "package Main; function mk<T>(T ...xs) -> int { return 0; } function main() -> void {}",
+        "package Main; function g(int ...xs) -> int { return 0; } function g(string s) -> int { return 1; } function main() -> void {}",
+    ] {
+        let e = errors_of_raw(src);
+        assert!(
+            e.iter().any(|d| d.code == Some("E-VARIADIC-UNSUPPORTED")),
+            "generic/overloaded variadic must be rejected — {src} → got {e:?}"
+        );
+    }
+}
+
+#[test]
 fn php8_reserved_keyword_names_are_rejected() {
     // Found building DEC-295 (RegexMatch): `match`/`enum`/`fn` are PHP-8 reserved keywords
     // (case-insensitive) — illegal as a class OR function name. phorj previously ACCEPTED

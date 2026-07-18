@@ -500,11 +500,20 @@ pub fn explain_text(code: &str) -> Option<String> {
              use `Decimal.of(s)` (returns `decimal?`, `null` on a bad string).\n"
         }
         "E-VARIADIC-UNSUPPORTED" => {
-            "E-VARIADIC-UNSUPPORTED — a variadic parameter (`...`) is not yet implemented.\n\n\
-             The `int ...nums` syntax is parsed and reserved (DEC-298), but its call-collection\n\
-             semantics (gathering trailing arguments into a `List<int>`) are a follow-on slice. Until\n\
-             they land, a variadic parameter is rejected cleanly rather than silently mis-typed. Use a\n\
-             `List<int>` parameter and pass an explicit list for now: `function sum(List<int> nums)`.\n"
+            "E-VARIADIC-UNSUPPORTED — a variadic parameter (`...`) on a method or lambda.\n\n\
+             Variadic parameters (`int ...nums`, DEC-298) are supported on FREE FUNCTIONS in v1; a\n\
+             call gathers the trailing arguments into a `List<int>`. Methods and lambdas are a\n\
+             follow-on slice — for them, declare an explicit `List<int>` parameter and pass a list.\n"
+        }
+        "E-VARIADIC-NOT-LAST" => {
+            "E-VARIADIC-NOT-LAST — a variadic parameter is not the last parameter.\n\n\
+             Only the FINAL parameter may be variadic (`...`), because it collects every remaining\n\
+             argument. Move it to the end: `function log(string tag, int ...codes)`.\n"
+        }
+        "E-VARIADIC-DEFAULT" => {
+            "E-VARIADIC-DEFAULT — a variadic parameter has a default value.\n\n\
+             A variadic parameter (`int ...nums`) already defaults to an empty list when no trailing\n\
+             arguments are passed, so an explicit `= …` default is redundant and not allowed.\n"
         }
         "E-DEFAULT-PARAM-ORDER" => {
             "E-DEFAULT-PARAM-ORDER — a required parameter follows a defaulted one.\n\n\

@@ -110,6 +110,7 @@ impl Checker {
                     // (a documented deferral); keep the set empty so no call site mis-discharges.
                     throws: Vec::new(),
                     is_static: false,
+                    variadic: false, // DEC-298: interface methods don't support variadics in v1
                 },
             );
         }

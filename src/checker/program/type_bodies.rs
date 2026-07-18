@@ -357,9 +357,15 @@ impl Checker {
         let prev_ret = std::mem::replace(&mut self.cur_ret, ret.clone());
         let prev_throws = std::mem::replace(&mut self.cur_throws, throws);
         let prev_main = std::mem::replace(&mut self.cur_is_main, is_entry_main);
+        // DEC-298: variadics are free-function-only in v1 — reject a variadic METHOD param (shared
+        // logic with the lambda path). Free functions (`cur_class` none) are handled by `collect_function`.
+        if self.cur_class.is_some() {
+            self.reject_nonfree_variadic(&f.params);
+        }
         self.push_scope();
         for p in &f.params {
-            let pty = self.resolve_type(&p.ty);
+            // Variadic param binds as its EFFECTIVE type `List<T>` (single-sourced with the signature).
+            let pty = self.effective_param_ty(p);
             self.declare(&p.name, pty, p.span);
         }
         self.check_body(&f.body);

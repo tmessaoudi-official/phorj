@@ -539,23 +539,23 @@ fn empty_import_group_is_a_parse_error() {
 }
 
 #[test]
-fn variadic_param_is_rejected_at_the_parse_chokepoint() {
-    // DEC-298: `...` tokenizes + `Param.variadic` is reserved, but the checker/call semantics are a
-    // follow-on (1b). Reject `...` at `parse_params` — the ONE chokepoint every param position flows
-    // through — so a variadic param can never silently mis-type in a free fn, method, OR lambda.
-    // Remove this reject when 1b lands. (SLICE-STATE §3-1b.)
-    for src in [
-        "package Main; function sum(int ...nums) -> int { return 0; }",
-        "package Main; class C { function f(int ...nums) -> int { return 0; } }",
-        "package Main; function main() -> void { var g = function(int ...xs) -> int { return 0; }; }",
-    ] {
-        let err = parser(src).parse_program().unwrap_err();
-        assert_eq!(
-            err.code,
-            Some("E-VARIADIC-UNSUPPORTED"),
-            "variadic must be rejected at parse for: {src} → {err:?}"
-        );
-    }
+fn variadic_param_parses_and_sets_the_flag() {
+    // DEC-298: `int ...nums` parses (the `...` sits between element type and name) and sets
+    // `Param.variadic`. Semantics (List<T> + call-collection) are the checker's job; the parser just
+    // records the flag. (Method/lambda variadics parse too but are rejected at check — free-fn only v1.)
+    use crate::ast::Item;
+    let prog = parser("package Main; function sum(int ...nums) -> int { return 0; }")
+        .parse_program()
+        .expect("parse ok");
+    let f = prog
+        .items
+        .iter()
+        .find_map(|it| match it {
+            Item::Function(f) if f.name == "sum" => Some(f),
+            _ => None,
+        })
+        .expect("sum function");
+    assert!(f.params.last().unwrap().variadic, "last param is variadic");
 }
 
 #[test]

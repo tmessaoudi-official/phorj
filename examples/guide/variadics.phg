@@ -1,0 +1,36 @@
+// DEC-298 — VARIADIC parameters. `int ...nums` collects a call's trailing arguments into a typed
+// `List<int>`: `sum(1, 2, 3)` gathers into `[1, 2, 3]`, and `sum()` gathers into `[]`. A fixed
+// parameter may precede the variadic (`countAfter(tag, ...codes)`) — it's matched positionally and
+// the rest collect. Free functions only (v1); a variadic method/lambda is `E-VARIADIC-UNSUPPORTED`.
+//
+// It's plain sugar: the checker rewrites the DECLARATION `int ...nums` to `List<int> nums` and the
+// CALL `sum(1, 2, 3)` to `sum([1, 2, 3])` before any backend — so `phg run`, `phg runvm`, and the
+// transpiled PHP (`function sum(array $nums)` + `sum([1, 2, 3])`) all agree byte-for-byte.
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+
+function sum(int ...nums): int {
+    mutable int total = 0;
+    for (int n in nums) {
+        total = total + n;
+    }
+    return total;
+}
+
+// A fixed parameter before the variadic: `tag` is positional, everything after collects into `codes`.
+function countAfter(string tag, int ...codes): int {
+    mutable int n = 0;
+    for (int c in codes) {
+        n = n + 1;
+    }
+    return n;
+}
+
+#[Entry]
+function main(): void {
+    Output.printLine("sum(1,2,3) = {sum(1, 2, 3)}");
+    Output.printLine("sum() = {sum()}");
+    Output.printLine("countAfter = {countAfter(\"a\", 7, 8, 9, 10)}");
+}

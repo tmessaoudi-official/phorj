@@ -19,10 +19,28 @@ impl Checker {
         }
         self.validate_type_params(&f.type_params, f.span);
         self.reject_dup_param_names(f.params.iter().map(|p| (p.name.as_str(), p.span)));
-        // (DEC-298 variadics are rejected at the parser chokepoint until 1b — see `parse_params`.)
+        // DEC-298: a variadic last param (`int ...nums`) — free functions only in v1. Validate it's
+        // last + un-defaulted; the effective type is `List<T>` (via `effective_param_ty`).
+        let variadic = self.validate_variadic_params(&f.params);
+        // v1 collection only handles the NON-GENERIC single-signature call path (`core.rs`); a generic
+        // (`check_generic_call`) or overloaded (`check_overload_call`) variadic would be accepted at the
+        // decl but never collected at the call — so reject those decls up front, keeping the accepted
+        // surface == the working surface (no confusing call-site arity error).
+        if variadic && !f.type_params.is_empty() {
+            self.err_coded(
+                f.span,
+                format!("variadic function `{}` cannot be generic (v1)", f.name),
+                "E-VARIADIC-UNSUPPORTED",
+                Some("v1 variadics require a non-generic, single-signature free function".into()),
+            );
+        }
         // Resolve the signature with the type parameters in scope so `T` becomes `Ty::Param("T")`.
         self.active_type_params = f.type_params.clone();
-        let params: Vec<Ty> = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+        let params: Vec<Ty> = f
+            .params
+            .iter()
+            .map(|p| self.effective_param_ty(p))
+            .collect();
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
             None => Ty::Void,
@@ -46,8 +64,20 @@ impl Checker {
             type_param_bounds: f.type_param_bounds.clone(),
             throws,
             is_static: false, // free functions are never static
+            variadic,
         };
         let existing = self.funcs.get(&f.name).cloned().unwrap_or_default();
+        // DEC-298: a variadic free function must be the SOLE signature of its name — an overloaded
+        // variadic routes through `check_overload_call` (no collection). Reject when this decl joins a
+        // set AND either side is variadic (a variadic joining others, OR a plain sig joining a variadic).
+        if !existing.is_empty() && (variadic || existing.iter().any(|s| s.variadic)) {
+            self.err_coded(
+                f.span,
+                format!("variadic function `{}` cannot be overloaded (v1)", f.name),
+                "E-VARIADIC-UNSUPPORTED",
+                Some("a variadic free function must be the only signature of its name".into()),
+            );
+        }
         // Free functions allow return-type overloading (M-RT Slice C1).
         self.validate_new_overload(&existing, &sig, &f.name, f.span, "function", true);
         // Record the declaration site so `finalize_overloads` can emit a per-decl mangled rename if
@@ -55,6 +85,76 @@ impl Checker {
         self.free_fn_decls
             .push((f.name.clone(), f.span, sig.params.clone(), sig.ret.clone()));
         self.funcs.entry(f.name.clone()).or_default().push(sig);
+    }
+
+    /// DEC-298: variadics are free-function-only in v1. Reject a variadic parameter in a NON-free-fn
+    /// position (method OR lambda) with `E-VARIADIC-UNSUPPORTED` — single-sourced so both the method
+    /// path (`check_function` when `cur_class` is set) and the lambda path (`check_lambda_with`) reject
+    /// with identical logic (the shared-chokepoint discipline; a per-site copy is what let a variadic
+    /// lambda slip through once).
+    pub(in crate::checker) fn reject_nonfree_variadic(&mut self, params: &[crate::ast::Param]) {
+        for p in params.iter().filter(|p| p.variadic) {
+            self.err_coded(
+                p.span,
+                format!(
+                    "variadic parameter `{}` is only supported on free functions (v1)",
+                    p.name
+                ),
+                "E-VARIADIC-UNSUPPORTED",
+                Some("use a `List<T>` parameter here, or declare a free function".into()),
+            );
+        }
+    }
+
+    /// DEC-298: the EFFECTIVE type of a parameter — `List<T>` for a variadic `T ...name`, else `T`
+    /// itself. Single-sourced so the free-fn signature (`collect_function`) and the body binding
+    /// (`check_function`) can never disagree on what a variadic param's type is (the shared-chokepoint
+    /// discipline). A non-variadic param is unchanged, so this is a drop-in for `resolve_type(&p.ty)`.
+    pub(in crate::checker) fn effective_param_ty(&mut self, p: &crate::ast::Param) -> Ty {
+        let t = self.resolve_type(&p.ty);
+        if p.variadic {
+            Ty::List(Box::new(t))
+        } else {
+            t
+        }
+    }
+
+    /// DEC-298: validate a free function's variadic parameter and report whether its LAST param is
+    /// variadic (→ `FnSig.variadic`, driving the call-site collection). A variadic param must be the
+    /// last one (`E-VARIADIC-NOT-LAST`) and carry no default (`E-VARIADIC-DEFAULT` — it already
+    /// defaults to an empty list). Errors only; returns the flag regardless so the sig is well-formed.
+    pub(in crate::checker) fn validate_variadic_params(
+        &mut self,
+        params: &[crate::ast::Param],
+    ) -> bool {
+        let mut last_is_variadic = false;
+        for (i, p) in params.iter().enumerate() {
+            if !p.variadic {
+                continue;
+            }
+            let is_last = i + 1 == params.len();
+            if !is_last {
+                self.err_coded(
+                    p.span,
+                    format!("variadic parameter `{}` must be the last parameter", p.name),
+                    "E-VARIADIC-NOT-LAST",
+                    Some("only the final parameter may be variadic (`...`)".into()),
+                );
+            }
+            if p.default.is_some() {
+                self.err_coded(
+                    p.span,
+                    format!(
+                        "variadic parameter `{}` cannot have a default value",
+                        p.name
+                    ),
+                    "E-VARIADIC-DEFAULT",
+                    Some("a variadic parameter already defaults to an empty list".into()),
+                );
+            }
+            last_is_variadic |= is_last;
+        }
+        last_is_variadic
     }
 
     /// M4 default parameters: build the per-parameter default list for a free function, validating

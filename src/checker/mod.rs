@@ -16,6 +16,7 @@ mod collapse_injected;
 mod desugar_db;
 mod desugar_di;
 mod desugar_router;
+mod desugar_variadics;
 mod enforce_injected;
 mod erase_tuples;
 mod function_imports;
@@ -35,6 +36,7 @@ pub use collapse_injected::collapse_injected_type_qualifiers;
 pub use desugar_db::desugar_db;
 pub use desugar_di::desugar_di;
 pub use desugar_router::desugar_auto_router;
+pub use desugar_variadics::desugar_variadic_params;
 pub use enforce_injected::enforce_injected_discipline;
 pub use erase_tuples::erase_tuples;
 pub use inline_parent_ctor::inline_parent_ctors;
@@ -99,6 +101,12 @@ struct FnSig {
     /// for free functions and natives. Every overload of one method name must agree on this
     /// (`E-OVERLOAD-STATIC-MIX`) so a static-call site resolves the same set on all backends.
     is_static: bool,
+    /// DEC-298: the LAST parameter is variadic (`int ...nums`). Its `params` entry already holds the
+    /// EFFECTIVE type `List<T>` (via `effective_param_ty`). At a call, `check_args_defaulted` collects
+    /// the trailing args into one `[..]` list literal and records a REPLACE fill — so every backend
+    /// sees a plain `f([a,b,c])` call with a `List<T>` param (byte-identity safe). Free functions only
+    /// in v1 (like defaults); methods/lambdas with `...` are rejected (`E-VARIADIC-UNSUPPORTED`).
+    variadic: bool,
 }
 
 struct EnumInfo {
@@ -527,6 +535,12 @@ pub struct Checker {
     /// arguments: the list of default expressions to append. [`check_call`] consumes it (it holds the
     /// original callee + args + span) to build the replacement `Call` recorded in `default_fills`.
     pending_fill: Option<Vec<crate::ast::Expr>>,
+    /// DEC-298: set by `check_args_defaulted` when a call resolves to a VARIADIC free function — holds
+    /// the FIXED param count. `record_pending_fill` (post-resolution, so overload-safe) consumes it to
+    /// build a REPLACE fill: `args[..fixed]` + one `[args[fixed..]]` list literal, so every backend
+    /// sees a plain `f([a,b,c])` call with a `List<T>` param. Distinct from `pending_fill` (which
+    /// APPENDS defaults) — variadic REPLACES the trailing args.
+    pending_variadic: Option<usize>,
     /// Type parameters in scope while resolving the signature/body of the generic function currently
     /// being checked (`["T", "U"]`). A bare type name in this set resolves to `Ty::Param` rather than
     /// being looked up as an alias/enum/class. Set around each generic function and cleared after;

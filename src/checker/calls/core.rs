@@ -346,7 +346,15 @@ impl Checker {
                 // M4: defaulted-arity check (a non-default function has all-`None` defaults, so this
                 // is exactly the old exact-arity `check_args`).
                 self.reject_turbofish(tf, name, span);
-                self.check_args_defaulted(name, &sig.params, &sig.defaults, args, span);
+                // DEC-298: a variadic free function (single sig) collects trailing args into a list.
+                self.check_args_defaulted_v(
+                    name,
+                    &sig.params,
+                    &sig.defaults,
+                    args,
+                    span,
+                    sig.variadic,
+                );
                 sig.ret.clone()
             } else {
                 // DEC-208 slice A: a generic free function accepts turbofish (`identity<int>(5)`),

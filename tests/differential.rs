@@ -632,6 +632,25 @@ import Core.String;
     );
 }
 
+/// DEC-298: a variadic free function `int ...nums` collects a call's trailing args into a `List<int>`.
+/// Proves run≡runvm≡php: the checker rewrites the call `sum(1,2,3)` → `sum([1,2,3])` and the param
+/// `int ...nums` → `List<int> nums` (PHP `array $nums`), so all three backends agree byte-for-byte,
+/// including the empty case `sum()` → `sum([])`.
+#[test]
+fn variadic_free_fn_collects_trailing_args() {
+    agree_out_php(
+        r#"import Core.Output;
+function sum(int ...nums) -> int { mutable int t = 0; for (int n in nums) { t = t + n; } return t; }
+#[Entry] function main() -> void {
+    Output.printLine("{sum(1, 2, 3)}");
+    Output.printLine("{sum()}");
+    Output.printLine("{sum(10, 20)}");
+}"#,
+        "6\n0\n30\n",
+        "variadic_free_fn",
+    );
+}
+
 /// M-RT S6c.2a — a parent constructor with a *body* (not just promotion) runs identically through the
 /// child, and the inheritance chains through multiple no-own-ctor levels.
 #[test]

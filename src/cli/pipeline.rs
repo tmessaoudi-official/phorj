@@ -195,9 +195,14 @@ pub fn check_and_expand_reified(
                                             crate::checker::resolve_html(
                                                 crate::checker::inject_optional_field_defaults(
                                                     crate::checker::expand_aliases(
-                                                        &crate::checker::apply_default_fills(
-                                                            prog.clone(),
-                                                            &fills,
+                                                        // DEC-298: rewrite variadic params `T ...name`
+                                                        // → `List<T> name` before aliases/generics, so
+                                                        // every backend sees a plain List param.
+                                                        &crate::checker::desugar_variadic_params(
+                                                            crate::checker::apply_default_fills(
+                                                                prog.clone(),
+                                                                &fills,
+                                                            ),
                                                         ),
                                                     ),
                                                 ),

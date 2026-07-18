@@ -98,10 +98,12 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
    `src/checker/calls/args.rs`). Backends/transpile/lift then see ONLY plain positional calls.
    BUILD ORDER (safest-first, each a green commit):
    1. **Variadics** (LOWEST risk — pure desugar, ZERO backend/Call-repr change):
-      ✅ **1a FOUNDATION DONE** (`d0705500`): `...`→`TokenKind::DotDotDot` (lexer+test); `Param.variadic:
-      bool` (15 sites); parser `T ...name`; **cleanly REJECTED for now** via `E-VARIADIC-UNSUPPORTED`
-      (guard in `collect/functions.rs` + explain + test) so `...` never silently mis-types. 2227 green.
-      ⏳ **1b SEMANTICS = NEXT (fresh-context, the actual byte-identity work):** REMOVE the guard →
+      ✅ **DONE (1a `d0705500` foundation + 1b semantics this session)** — free functions only v1,
+      byte-identical run≡runvm≡php, 2229 green, clippy both legs. Approach B (FnSig+check_args_defaulted,
+      advisor-ruled over name-based desugar which breaks on return-overloads). Method/lambda variadic
+      REJECTED via shared `reject_nonfree_variadic` (the ≥3-site trap bit the lambda once → fixed). See DEC-298.
+      (historical 1b plan below, now done:)
+      ⏳ ~~1b SEMANTICS~~ DONE: REMOVE the guard →
       free-fn signature (`collect/functions.rs:40` sig): variadic param effective type `List<T>` (add
       `variadic: bool` to `FnSig` {mod.rs:73}, 4 ctor sites; free-fn v1 like defaults) → body binds
       `nums: List<T>` → free-fn CALL check (`calls/core.rs:349`, currently `check_args_defaulted`): a

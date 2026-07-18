@@ -509,6 +509,7 @@ impl Checker {
                         type_param_bounds: f.type_param_bounds.clone(),
                         throws,
                         is_static: f.modifiers.contains(&Modifier::Static),
+                        variadic: false, // DEC-298: methods don't support variadics in v1 (rejected in check_function)
                     };
                     let existing = methods.get(&f.name).cloned().unwrap_or_default();
                     // M-RT S2.2: INSTANCE methods may return-overload (identical params, distinct

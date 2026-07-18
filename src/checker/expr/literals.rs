@@ -527,6 +527,9 @@ impl Checker {
                 Some("move the closure into the constructor body, or capture a specific value (`var v = this.x;`) instead".into()),
             );
         }
+        // DEC-298: variadics are free-function-only in v1 — a variadic lambda param is rejected
+        // (shared logic with the method path), never silently mis-typed.
+        self.reject_nonfree_variadic(params);
         let param_tys: Vec<Ty> = params
             .iter()
             .map(|p| self.resolve_lambda_param_ty(p, ctx_param))

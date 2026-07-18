@@ -140,6 +140,22 @@ impl Checker {
         args: &[crate::ast::Expr],
         span: Span,
     ) {
+        // DEC-298: a variadic call REPLACES the trailing args with one `[..]` list literal (vs
+        // defaults, which APPEND). Consumed here, post-resolution, so overload selection is done.
+        if let Some(fixed) = self.pending_variadic.take() {
+            let mut full: Vec<crate::ast::Expr> = args[..fixed].to_vec();
+            full.push(crate::ast::Expr::List(args[fixed..].to_vec(), span));
+            self.default_fills.insert(
+                span.start,
+                crate::ast::Expr::Call {
+                    callee: Box::new(callee.clone()),
+                    args: full,
+                    type_args: Vec::new(),
+                    span,
+                },
+            );
+            return;
+        }
         if let Some(defaults) = self.pending_fill.take() {
             let mut full: Vec<crate::ast::Expr> = args.to_vec();
             full.extend(defaults);
@@ -169,6 +185,71 @@ impl Checker {
         args: &[crate::ast::Expr],
         span: Span,
     ) {
+        self.check_args_defaulted_v(name, params, defaults, args, span, false)
+    }
+
+    /// DEC-298: as [`check_args_defaulted`], plus a `variadic` flag. When the callee's LAST param is
+    /// variadic (`FnSig.variadic`), `params.last()` is its EFFECTIVE `List<T>` type: the FIXED params
+    /// (`params[..len-1]`) are matched positionally and every remaining arg is checked against the
+    /// element type `T`, then collected into one `[..]` list literal via `pending_variadic`
+    /// (consumed by `record_pending_fill`, post-resolution → overload-safe).
+    pub(in crate::checker) fn check_args_defaulted_v(
+        &mut self,
+        name: &str,
+        params: &[Ty],
+        defaults: &[Option<crate::ast::Expr>],
+        args: &[crate::ast::Expr],
+        span: Span,
+        variadic: bool,
+    ) {
+        if variadic && !params.is_empty() {
+            let fixed = params.len() - 1;
+            let elem = match &params[fixed] {
+                Ty::List(inner) => (**inner).clone(),
+                other => other.clone(),
+            };
+            if args.len() < fixed {
+                self.err(
+                    span,
+                    format!(
+                        "`{name}` expects at least {fixed} argument(s), found {}",
+                        args.len()
+                    ),
+                );
+                for a in args {
+                    self.check_expr(a);
+                }
+                return;
+            }
+            // Fixed params matched positionally; trailing args each checked against the element type.
+            for (i, (param, arg)) in params[..fixed].iter().zip(&args[..fixed]).enumerate() {
+                let at = self.check_arg(arg, param);
+                if !self.ty_assignable(&at, param) {
+                    self.err(
+                        span,
+                        format!(
+                            "`{name}` argument {} expects `{param}`, found `{at}`",
+                            i + 1
+                        ),
+                    );
+                }
+            }
+            for (j, arg) in args[fixed..].iter().enumerate() {
+                let at = self.check_arg(arg, &elem);
+                if !self.ty_assignable(&at, &elem) {
+                    self.err(
+                        span,
+                        format!(
+                            "`{name}` variadic argument {} expects `{elem}`, found `{at}`",
+                            fixed + j + 1
+                        ),
+                    );
+                }
+            }
+            // Collect trailing args into a `[..]` list literal (REPLACE fill, recorded post-resolution).
+            self.pending_variadic = Some(fixed);
+            return;
+        }
         let required = defaults.iter().take_while(|d| d.is_none()).count();
         if args.len() < required || args.len() > params.len() {
             let detail = if required == params.len() {

@@ -412,7 +412,10 @@ impl Printer<'_> {
                 Some(e) => format!(" = {}", self.expr(e)?),
                 None => String::new(),
             };
-            out.push(format!("{} {}{default}", ty(&p.ty)?, p.name));
+            // DEC-298: a variadic param prints `...` between the element type and the name, so a
+            // format round-trip preserves `int ...nums` (else the formatter silently drops it).
+            let dots = if p.variadic { "..." } else { "" };
+            out.push(format!("{} {dots}{}{default}", ty(&p.ty)?, p.name));
         }
         Ok(out.join(", "))
     }
