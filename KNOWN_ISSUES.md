@@ -1512,8 +1512,12 @@ byte-identical on `run`/`runvm` and round-tripped through real PHP. These are de
   string early (the shared interpolation rule — see Core.Html). Bind the lookup to a local first:
   `var v = m["k"]; "{v}"`. An `int`/identifier index inside `{…}` is fine.
 - **Bool map keys: PHP coerces `true`/`false` to `1`/`0` as array keys; Phorj keeps them distinct.**
-  A `Map<bool, V>` works and is byte-identical *as long as you don't also use `0`/`1` int keys in the
-  same map* (PHP would collapse `true` and `1`). Prefer string/int keys when transpiling to PHP.
+  A `Map<bool, V>` is byte-identical for value-only access, but any op that RENDERS the *key* diverges
+  under PHP: `Map.entries` (DEC-288) yields `array_keys`-coerced int keys (`1`/`0`) where the Phorj
+  backends keep `true`/`false` — e.g. `for ((k, v) in Map.entries(boolMap))` prints `1=…` under PHP
+  vs `true=…` on run/runvm. This is the same PHP array-key coercion as `Map.keys`/`values`; PHP arrays
+  simply cannot hold a bool key. **Use string/int keys** for byte-identical PHP round-tripping (the
+  `run ≡ runvm` spine is always identical; this is a transpile-leg-only edge on a rare key type).
 
 ## Generic natives (M-RT S7b — `Core.List` / `Core.Map`)
 
@@ -1525,8 +1529,9 @@ caveats (the `run`/`runvm` spine is always byte-identical):
 - **`List.sum` faults on i64 overflow; PHP `array_sum` promotes to float instead.** The checked sum
   keeps EV-7 (never panics), so a sum exceeding `i64::MAX` is a clean Phorj fault, whereas PHP would
   silently widen to float. Keep sums within i64 range when transpiling (examples do).
-- **`Map.keys`/`values` key coercion** — see the *Maps* note above: PHP coerces integer-like string
-  keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping.
+- **`Map.keys`/`values`/`entries` key coercion** — see the *Maps* note above: PHP coerces integer-like
+  string keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping
+  (`entries` renders the key, so a bool-keyed map diverges on the transpile leg — DEC-288).
 
 `Core.Set` now ships too (M-RT S7b): `of(List<T>): Set<T>` (insertion-ordered dedupe),
 `contains(Set<T>, T): bool`, `size(Set<T>): int`. `Value::Set` is an insertion-ordered

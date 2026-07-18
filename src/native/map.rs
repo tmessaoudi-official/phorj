@@ -20,6 +20,8 @@ fn map_values(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 /// `entries(Map<K, V>) -> List<(K, V)>` (DEC-288) — the map's key→value pairs as tuples, in insertion
 /// order, for `for ((k, v) in Map.entries(m))`. Each pair is an erased 2-tuple (a runtime 2-list).
+/// Byte-identical for `int`/`string` keys; a `bool`-keyed map diverges on the transpile leg (PHP
+/// `array_keys` coerces `true`/`false` to `1`/`0`) — see KNOWN_ISSUES "Bool map keys". Use string/int keys.
 fn map_entries(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(m)] => Ok(Value::List(std::rc::Rc::new(
