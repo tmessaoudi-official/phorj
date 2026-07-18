@@ -569,11 +569,11 @@ exactly Ω-1's remainder, queued right after the sqlbuild ≥1.0 gate (META-1).
 | # | Gap | Class | Evidence / plan |
 |---|---|---|---|
 | 1 | **Database access** (PDO/mysqli/SQLite — all 10 FN-DB rows) | GAP-planned | ROADMAP M6 "Postgres connectivity"; nothing exists today. Blocks essentially every real app |
-| 2 | **HTTP client** (all 13 FN-CURL rows + url-capable file_get_contents) | GAP-planned | M6 determinism deferral; post-M-DX audited dev question. Second-most-universal capability |
-| 3 | **Sessions / cookies / auth** (10 FN-SESS rows) | GAP-planned (deferred) | K-auth-csrf-session (§3 M6). Every stateful web app |
+| 2 | ~~**HTTP client**~~ **→ SHIPPED (§4.9, DEC-273)** — Core.HttpClient: GET/POST/PUT/DELETE/HEAD/PATCH + headers + Bearer/Basic + cookies + timeout | ✅ 9 C + 3 P | Was the #2 blocker; now covered. Remaining GU: curl multi-handle / low-level SSL opts |
+| 3 | **Sessions / cookies / auth** (10 FN-SESS rows) **→ PARTIAL (§4.9, DEC-242)** — Core.Session + class Cookie shipped | 2 C + 3 P | K-auth-csrf-session (§3 M6). CSRF + full session-config still open |
 | 4 | **sprintf/printf format family** (7 FN-STR rows) | GAP-planned | A-sprintf (§3 M11). Ubiquitous in ported code; interpolation covers only simple cases |
-| 5 | **Filesystem breadth** (mkdir/scandir/glob/stat/perms/temp/streams — ~40 FN-FS rows) | GAP-planned/unplanned | G-dir/G-file-more (M-Batteries) covers part; stream handles unplanned |
-| 6 | **Unicode-correct strings** (byte `String.length` [Verified], mb_* replacement) | PARTIAL/inherited | M-text programme — the one *inherited* PHP defect (DEF-016); silently wrong today on non-ASCII |
+| 5 | **Filesystem breadth** (mkdir/scandir/glob/stat/perms/temp/streams — ~40 FN-FS rows) **→ PARTIAL (§4.9)** — Core.Fs 17 fns | +5 C +1 P | dir/create/list/walk/temp shipped; **stream handles + stat/perms + glob still GU** |
+| 6 | **Unicode-correct strings** (byte `String.length`, mb_* replacement) **→ PARTIAL (§4.9, DEC-256)** — Unicode tier addresses DEF-016 | +2 C +3 P | The one *inherited* PHP defect; full mb_* long tail + normalization/grapheme still open |
 | 7 | **Named arguments + variadics + spread** | GAP-planned | A-named-args/A-variadics (§3). Modern PHP idiom; also blocks the lifter on 8.0+ code |
 | 8 | **Generators/`yield` + iterator protocol** | GAP-planned | marathon A2 + A-iterators (§3 M11). Lazy pipelines, large-data loops, Traversable interop |
 | 9 | **Date/time breadth** (timezones, formatting, DatePeriod, parsing) | GAP-planned | N-tz-iana (M-TIME-2). Every business app touches tz |
@@ -610,9 +610,10 @@ Coverage:  language 79.8% · stdlib 27.5% row-weighted / 32.5% usage-weighted ·
 PHP-parity %  ≈ 58   (ccb2403 full-pass; domain-weighted; raw row-parity floor 38.8%)
 Vision %      ≈ 60   (ccb2403 full-pass; 70% parity + 30% roadmap-programme at 64.4%)
 
-  ⟶ CURRENT at HEAD af3aad3 (2026-07-10, §4.6):  PHP-parity ≈ 60%  ·  Vision ≈ 62%  ·  floor ≈ 41%
-     chain: 58% (ccb2403) → 59% (§11.2, 2026-07-03) → 60% (HEAD). 2 rows moved; marathon was
-     perf+polish not breadth — the DB/HTTP/sessions parity drag is untouched (see §4.6).
+  ⟶ CURRENT at HEAD da3fc0c2 (2026-07-18, §4.9):  PHP-parity ≈ 64%  ·  Vision ≈ 66%  ·  floor ≈ 47%
+     chain: 58% (ccb2403) → 59% (§11.2) → 60% (§4.6, af3aad3) → 61% (§4.7, bea7f61) →
+     62% (§4.8, DB+Mail) → 64% (§4.9, Web/Runtime spine: HTTP client #2 + FS #5 + Uri +
+     Unicode #6 + sessions #3). First span where stdlib breadth itself moved (+6pp FN leg).
 
 PASS 2: 35 beyond-PHP capabilities (no PHP counterpart)
 
@@ -666,3 +667,71 @@ delta on the ratified model, quoted with the 35/40/25 weights); programme scores
 FN-DB rows) fell this span and the headline moved +1 (61→62) — stdlib breadth remains the drag
 because the NEXT blockers are untouched: HTTP client (#2), sessions (#3), FS/streams (#5). Those
 are exactly the run's Web/Runtime pillar packs; §11.3's ≈65–66% projection needs all three.
+
+### 4.9 Recompute at HEAD `da3fc0c2` (2026-07-18 — the Web/Runtime spine catch-up + language mega-arc)
+
+**Scope of the span (§4.8 HEAD → `da3fc0c2`, ~108 commits, 2026-07-16→18):** the recompute §4.8
+CONSERVATIVELY deferred (it credited only DB/Mail/Log). Now folded in — all VERIFIED shipped +
+surface-checked by grep this pass (Rule-11 discipline; three "gaps" turned out already-built —
+Core.Regex/Core.Decimal/`match` — so every credit below was surface-confirmed, not memory-trusted):
+**Core.HttpClient** (GET/POST/PUT/DELETE/HEAD/PATCH + headers + Bearer/Basic auth + cookies + timeout,
+DEC-273 wave 3) · **Core.Fs** breadth (17 fns: readText/writeText/appendText/copy/move/delete/size/
+exists/isFile/isDir/createDir/removeDir/removeDirAll/listDir/walk/tempDir) · **Core.Uri** (RFC-3986:
+parse/scheme/host/path/query/fragment/port/userInfo + encodeForm, DEC-240) · **Unicode string tier**
+(DEC-256 — addresses the inherited DEF-016 byte-length defect) · **Core.Session + class Cookie**
+(DEC-242) · **Core.Iterator + generic interfaces** (DEC-257, foreach-over-implementor) · **String
+distance** (levenshtein/similarText, DEC-243) · **List breadth** (flatMap/takeWhile/dropWhile/groupBy/
+zip/partition, DEC-214/288/289) · **Date.parse/Instant.parse** (DEC-290) · **pipe `|>`** (PHP-8.5
+precedence slot, DEC-239) · **asymmetric visibility** `private(set)` (PHP 8.4, DEC-241) · plus the
+extension architecture (DEC-273), unified loader (DEC-282), Core.Input stdin (DEC-281), tuples
+(DEC-288), lazy-Json perf (DEC-294 — perf, no parity row).
+
+**Row flips [Verified: registry + ext/native surface grep this pass + shipped commits]:**
+
+| # | Group | Tier | Was (§4.8) | Now | Δ score | Evidence |
+|---|---|---|---|---|--|---|
+| 1 | FN-CURL (13, "no HTTP client", TOP-20 #2) | T2 | 13 GP | 9 C + 3 P | +10.5 | Core.HttpClient verbs+auth+cookies+timeout [Verified: `src/ext/http_client/`]; 1 GU (curl multi/low-level opts) |
+| 2 | FN-FS (55) | T1 | 8 C / 2 P | +5 C +1 P | +5.5 | Core.Fs createDir/removeDir/removeDirAll/listDir/walk/tempDir/isFile/isDir → mkdir/rmdir/scandir/opendir/tempnam; streams/stat/glob still GU |
+| 3 | FN-URL (10) | T1 | 3 C / 3 GP | +3 C | +3.0 | Core.Uri parse_url + http_build_query + 8.5 Uri objects — DEF-030 leapfrogged [Verified: `src/ext/uri/`] |
+| 4 | FN-MB (22) | T2 | 0 C / 2 P | +2 C +3 P | +3.5 | DEC-256 Unicode tier: codepoint-correct length/case; full mb_* family still partial |
+| 5 | FN-SESS (10) | T2 | 10 GP | +2 C +3 P | +3.5 | Core.Session + class Cookie [Verified: `src/cli/preludes.rs`]; CSRF/full session-config partial |
+| 6 | FN-SPL (39) | T2 | 2 C / 2 P | +1 C +1 P | +1.5 | DEC-257 Core.Iterator/Traversable protocol + generic interfaces; heaps/PQ/SplObjectStorage still GU |
+| 7 | FN-STR (93) | T1 | 30 C | +2 C | +2.0 | levenshtein + similarText (DEC-243) from GU |
+| 8 | FN-ARR (74) | T1 | 26 C / 2 GP | +1 C | +1.0 | zip lands (DEC-288); flatMap/groupBy/takeWhile/dropWhile are beyond-PHP enrichment (PASS-2) |
+| 9 | FN-DATE (27) | T1 | 5 C / 5 P | +1 C +1 P | +1.5 | Date.parse/Instant.parse (ISO) — date_parse from GU (DEC-290) |
+| 10 | SYN (pipe `\|>`, asymmetric visibility) | — | 103 C | +1.5 | SYN +1.5 | PHP-8.5 `\|>` + PHP-8.4 `private(set)` are parity SYN, now COVERED (DEC-239/241) |
+
+Explicitly checked-and-ruled-out (no NEW flip): **Core.Regex** — already COVERED in the §1.2 baseline
+(FN-PCRE 4 C / 2 P), NOT an uncounted mover; **`match` expression** — already built + mature
+(`Expr::Match`, guards, exhaustive), a §1.2 SYN row, not new; **Core.Decimal** — baseline (FN-MATH P);
+**extension architecture + unified loader (DEC-273/282)** — real ecosystem infra but map to RT-008
+(deferred watch-item) / autoload (§1.2 N/A "superior model"), conservatively UNCREDITED like DI/attrs;
+**tuples/lazy-Json/typed-foreach** — beyond-PHP or perf, no PHP-parity row.
+
+**Recomputed arithmetic (additive delta on §4.8 — T1 135.5/303, T2 30/140, T3 0/75; SYN 103/129; RT 13.5/18):**
+- T1 score 135.5 → 135.5 + (5.5+3+2+1+1.5) = **148.5 / 303**
+- T2 score 30 → 30 + (10.5+3.5+3.5+1.5) = **49 / 140**
+- FN usage-weighted = (3×148.5 + 2×49 + 1×0) / 1264 = (445.5 + 98) / 1264 = 543.5/1264 = **43.0%** (was 37.0%)
+- SYN: 103 → 104.5 / 129 = **81.0%** (was 79.8% — pipe + `private(set)`)
+- RT: unchanged **75.0%** (loader/extensions map to deferred RT-008 / N/A autoload)
+- **PHP-parity = 0.35×81.0 + 0.40×43.0 + 0.25×75.0 = 28.35 + 17.2 + 18.75 ≈ 64%** (was ≈62)
+- Raw row-parity floor: FN raw 166 (§4.8) + 26 C + (12 P ×0.5 = 6) = 198; (104.5 + 198 + 13.5)/665 = 316/665 ≈ **47%** (was ≈42 — the floor catching up to the weighted headline, gap 20pp→17pp, is exactly what high-row-count FN breadth should do)
+
+**Vision %** — programme deltas on §4.8 (mean 1108/16 = 69.3): **GA-M12 78→82** (Web/Runtime spine
+substantially in: HTTP client + Uri + sessions/cookies + Fs), **M-text 40→55** (DEC-256 Unicode tier —
+the one inherited PHP defect, DEF-016, finally addressed), **M-Batteries 50→62** (Fs breadth + Uri +
+the extension architecture + string distance), **M11+M4 70→75** (List/date breadth). **M-perf holds 70**
+(lazy-Json/dbwork are perf, honestly flagged, not milestone movers). Itemized bumps +4+15+12+5 = +36 →
+new mean = (1108 + 36)/16 = 1144/16 = 71.5. **Vision = 0.70×64.3 + 0.30×71.5 = 45.0 + 21.45 ≈ 66%** (was ≈64).
+
+**Grade:** row flips **[Verified]** (each surface grep-confirmed this pass); the per-group C/P split
+**[Inferred]** (conservative estimate against the §1.2 group counts, not a fresh per-row re-tally of all
+631 FN rows); headline **[Inferred]** (additive delta on the ratified 35/40/25 model); milestone-programme
+scores **[Speculative]** (judgment). Quote with the weights: ±10 stdlib-weight pts moves the headline ±~5.
+
+**The finding that matters:** this is the first span since the E-baseline where the **stdlib-breadth drag
+itself moved materially** (+6pp on the FN leg) — because the span shipped the actual TOP-20 blockers, not
+perf/polish: **#2 HTTP client** and **#5 FS breadth** fell, **#6 Unicode** and **#3 sessions** went
+partial. Parity +2 (62→64), Vision +2 (64→66). The remaining FN drag is now XML (#12), streams (FN-STREAM
+15 GU), intl (#19), SPL heaps/PQ, and the mb_* long tail — which is exactly what the confirmed programme's
+breadth slices (#9 collections, #10 TOP-20, #13 packs+XML+icu4x) target next.

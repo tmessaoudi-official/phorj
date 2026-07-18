@@ -14,20 +14,51 @@
   bool-KEY diverges on transpile leg (FLAGGED, use str/int keys). Detail = [[tuples-dec288-slice-status]].
 - ⚠ `check_resolutions` return is now a 10-field tuple (consider a named struct if an 11th is added).
 
-## NEXT — CONFIRMED PROGRAMME ORDER (dev via AskUserQuestion 2026-07-18; RESUME HERE post-compaction)
+## NEXT — CONFIRMED PROGRAMME ORDER v2 (dev via AskUserQuestion 2026-07-18 "big continuous session"; RESUME HERE)
 Rationale: measure → capability-before-breadth → data-driven breadth → capabilities → packs → ship.
-1. **§4 recompute** (START HERE) — re-run M-gap-matrix §4 arithmetic (824 rows, 35 SYN/40 FN/25 RT);
-   credit this session's uncounted work (DEC-288 tuples + zip/partition/entries + flatMap/takeWhile/
-   dropWhile/groupBy + Date.parse/Instant.parse + lazy-Json); update GA/Global % + §11 same commit.
-   Fork-free; establishes the TRUE gaps so #3 is data-driven.
-2. **Named args + variadics + spread** — SYN-leg mover + unblocks the lifter on PHP 8.0+ code
-   (capability). Design-heavy → surface syntax/semantics forks first (Invariant 15).
-3. **TOP-20 stdlib remaining gaps** (aimed by #1's §4) — FN-leg +13pp; proven native recipe.
-4. **Generators/`yield`** — capability gap (blocks iterator breadth); spine-sensitive.
-5. **Feature packs (Web/Data/Runtime) + icu4x/Intl + W4-10 XML fork** — larger, design-heavy.
-6. **Usability/GA** — lifter corpus + DEC-283 .phgml + GA freeze/docs + DEC-267 JIT-coverage metric.
-⚠ Box bursty → byte-identity is the gate; defer perf verdicts to a quiet window. Ask on every
-user-visible design fork (Invariant 15). Stdlib already mature (List 36/String 42/Math 34/Map 13).
+STANDING DIRECTIVES (dev, this session, ABSOLUTE):
+  • **Everything conceptually BETTER than PHP** — where PHP's implementation/naming/namespace/packaging
+    has flaws, FIX them; ADJUDICATE each divergence at implementation time (Invariant 15 + META-7). ASK.
+  • Respect ALL rules together: security (org C1/C2 + `#![deny(unsafe_code)]`), faster-than-PHP (perf
+    mandate), byte-identity spine, LADDER. If two rules contradict → FLAG + decide, don't self-resolve.
+  • Ask on EVERY user-visible design fork before implementing.
+1. ✅ **§4 recompute — DONE 2026-07-18** (§4.9 written; M-gap-matrix + MASTER-PLAN headlines updated).
+   Result: **parity ≈62→64% · vision ≈64→66% · floor ≈42→44%** — FIRST span where stdlib breadth
+   itself moved (+6pp FN leg): HTTP client (#2), FS (#5), Uri, Unicode (#6), sessions (#3) folded in.
+   3 phantom gaps found + dropped (Regex/Decimal/`match` already built). Next FN blockers = XML/streams/
+   intl/SPL-heaps/mb-tail. ← **START HERE = #2 Regex closer** (replaceCallback/matchAll/quoteMeta verified
+   still GU in FN-PCRE).
+2. **Regex closer** (SMALL) — `Core.Regex` ext ALREADY has find/findGroups/matches/named/replace/split/test;
+   genuine gaps = `replaceCallback` + `matchAll` + `quoteMeta`. 1-slice, proven recipe.
+3. **Named args + variadics + spread** — SYN mover + unblocks lifter on PHP 8.0+. Design-heavy → adjudicate.
+4. ~~**`match` expression**~~ — DROPPED 2026-07-18: **ALREADY BUILT + mature** (`TokenKind::Match`,
+   `Expr::Match` w/ guards+patterns, used across examples). Rule-11 catch #3 this session (after
+   Regex, Decimal). ⚠ VERIFY EVERY remaining "gap" by grep before treating as greenfield.
+5. **Exceptions maturity + BACKTRACE API** — core done (try/catch/finally, throw, custom throwables,
+   getMessage, getPrevious). VERIFIED GAP = getTrace/getTraceAsString/getFile/getLine on CAUGHT exceptions
+   (today only uncaught faults render a trace; caught ones expose no programmatic backtrace). RT + logging.
+6. **Backed enums + `cases()`/`from()`/`tryFrom()`** (PHP 8.1) — VERIFIED absent. SYN + real-code + lifter.
+7. **serialize/unserialize + var_export/print_r** — VERIFIED absent. FN + big lifter unblock.
+8. **Process/subprocess execution** — `Core.Process` has only args/env-get; add run/spawn/exec + pipes +
+   stdout/stderr capture + exit codes. RT/real-app.
+9. **Collections: Set / Deque / PriorityQueue** — List(36)/Map(13) exist, no Set/Deque/PQ (SPL parity). FN.
+10. **TOP-20 stdlib remaining gaps** (aimed by #1's §4) — FN-leg mover; proven native recipe.
+11. **Generators / `yield`** — capability gap (blocks iterator breadth); spine-sensitive.
+12. **REAL PARALLELISM — dev-ruled MODEL = Actor/isolate (TRUE parallel), research-first.**
+    State today: colorless cooperative async EXISTS (`src/green/`: spawn+channels, byte-identical, 1 OS
+    thread, `Rc` heap `!Send` ⇒ NOT parallel). RULING: **Option 1 = actor/isolate model** — OS-thread
+    workers, each a PRIVATE `Rc` heap, Send-only values deep-copied across channels ⇒ TRUE simultaneous
+    multi-core (max(A,B) not A+B), NO hot-path Arc tax, data races structurally IMPOSSIBLE. Security +
+    perf rules BOTH converge here; perf rule DISQUALIFIES the Arc/shared-heap model (atomic-refcount tax
+    on every sequential program). Extends the LADDER quarantine (`E-CONCURRENCY-NO-PHP`). **Do Option 4
+    FIRST**: write `docs/research/` parallelism design doc (full cross-lang matrix, perf model, syntax
+    sketch, quarantine analysis) to FLAG problems BEFORE any code; then adjudicate syntax + implement.
+    Possible later escape-hatch: opt-in `shared`/Arc region ONLY where a bench proves copy cost dominates.
+13. **Feature packs (Web/Data/Runtime) + icu4x/Intl + W4-10 XML fork** — larger, design-heavy.
+14. **Usability/GA** — lifter corpus + DEC-283 .phgml + GA freeze/docs + DEC-267 JIT-coverage metric.
+⚠ Box bursty → byte-identity is the gate; defer perf verdicts to a quiet window. Stdlib already mature
+(List 36/String 42/Math 34/Map 13). ⚠ Rule-11 discipline: several "gaps" this session were ALREADY built
+(Regex/Decimal/Fs/DateTime) — VERIFY the surface by grep BEFORE treating anything as greenfield.
 
 ## CURRENT (2026-07-17→18, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
 
