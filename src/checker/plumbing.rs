@@ -57,6 +57,7 @@ impl Checker {
             default_fills: HashMap::new(),
             for_iter_lowerings: std::collections::HashSet::new(),
             for_bind_resolutions: HashMap::new(),
+            tuple_bind_resolutions: HashMap::new(),
             cast_resolutions: HashMap::new(),
             pending_fill: None,
             reflect_resolutions: HashMap::new(),

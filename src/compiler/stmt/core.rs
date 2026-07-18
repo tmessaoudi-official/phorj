@@ -313,16 +313,11 @@ impl Compiler<'_> {
             // annotation, else `Other` for the inferred form), then read the erased list's element into
             // it. The typed slot is the CTy-operand carrier (Invariant 7): `int a` specializes `a + 1`.
             DestructurePat::Tuple { binders, .. } => {
-                for (ty_opt, name, bsp) in binders {
-                    // Explicit `(T a, …)` → the annotation; inferred `var (a, …)` → the checker's
-                    // per-position type from `reified_operands` (keyed by the binder span, Invariant 7);
-                    // else `Other`.
-                    let cty = ty_opt.as_ref().map(resolve_cty).unwrap_or_else(|| {
-                        self.reified_operands
-                            .get(&bsp.start)
-                            .cloned()
-                            .unwrap_or(CTy::Other)
-                    });
+                for (ty_opt, name, _) in binders {
+                    // `materialize_tuple_binds` filled every inferred binder's type from the checker's
+                    // per-position resolution (Invariant 7), so `ty_opt` is `Some` for both forms; a
+                    // stray `None` (materialize didn't run) safely falls back to `Other`.
+                    let cty = ty_opt.as_ref().map_or(CTy::Other, resolve_cty);
                     self.emit_const(Value::Null, line);
                     self.add_local(name, cty);
                 }

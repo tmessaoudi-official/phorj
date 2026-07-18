@@ -14,7 +14,8 @@
 //! variable is span-derived (`__for_it_<start>`), so nested lowered loops never collide.
 
 use crate::ast::{
-    CatchClause, ClassMember, Expr, Item, LambdaBody, MemberSep, Program, Stmt, Type,
+    CatchClause, ClassMember, DestructurePat, Expr, Item, LambdaBody, MemberSep, Program, Stmt,
+    Type,
 };
 use crate::token::Span;
 use crate::types::Ty;
@@ -41,6 +42,53 @@ pub fn materialize_for_binds(
                 }
                 if let (Some(vt), Some((vty, _))) = (rv, val.as_mut()) {
                     *vty = super::rewrite_pipe::materialize::ty_to_ast_type(vt, *span);
+                }
+            }
+        }
+    };
+    for item in &mut program.items {
+        match item {
+            Item::Function(f) => walk_stmts(&mut f.body, write),
+            Item::Class(c) => walk_member_stmts(&mut c.members, write),
+            Item::Trait(t) => walk_member_stmts(&mut t.members, write),
+            Item::Test { body, .. } => walk_stmts(body, write),
+            _ => {}
+        }
+    }
+    super::rewrite_pipe::walk::visit_exprs_mut(&mut program, &mut |e| {
+        if let Expr::Lambda {
+            body: LambdaBody::Block(stmts),
+            ..
+        } = e
+        {
+            walk_stmts(stmts, write);
+        }
+    });
+    program
+}
+
+/// DEC-288 / Invariant 7: write the checker-resolved per-position types of INFERRED tuple-destructure
+/// binders (`var (a, b) = …`) into the AST, so the VM compiler gives each local its concrete `CTy`
+/// (an inferred `id` stays a first-class arithmetic operand). Keyed by the `DestructurePat::Tuple`
+/// span (user-only — no prelude-span collision). Only fills a binder whose type is still `None` (the
+/// explicit `(T a, …)` form already carries it). In-place `Type` writes only.
+pub fn materialize_tuple_binds(mut program: Program, binds: &HashMap<usize, Vec<Ty>>) -> Program {
+    if binds.is_empty() {
+        return program;
+    }
+    let write = &mut |s: &mut Stmt| {
+        if let Stmt::Destructure {
+            pat: DestructurePat::Tuple { binders, span },
+            ..
+        } = s
+        {
+            if let Some(tys) = binds.get(&span.start) {
+                for (binder, ty) in binders.iter_mut().zip(tys.iter()) {
+                    if binder.0.is_none() {
+                        binder.0 = Some(super::rewrite_pipe::materialize::ty_to_ast_type(
+                            ty, binder.2,
+                        ));
+                    }
                 }
             }
         }

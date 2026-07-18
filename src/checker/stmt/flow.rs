@@ -141,6 +141,7 @@ impl Checker {
                 let arity_ok = matches!(&init_ty, Ty::Tuple(elems) if elems.len() == binders.len());
                 match &init_ty {
                     Ty::Tuple(elems) if arity_ok => {
+                        let mut resolved = Vec::with_capacity(binders.len());
                         for ((ty_opt, name, bsp), et) in binders.iter().zip(elems.iter()) {
                             let bind_ty = match ty_opt {
                                 Some(decl) => {
@@ -157,13 +158,16 @@ impl Checker {
                                 }
                                 None => et.clone(),
                             };
-                            // Invariant 7 (CTy-operand): record the binder's resolved type keyed by its
-                            // span so the VM compiler gives the local its concrete `CTy` — an inferred
-                            // `var (id, …)` binder stays a first-class arithmetic operand (`id + 1`),
-                            // matching the interpreter (else the VM rejects what the interpreter accepts).
-                            self.reified_operands.insert(bsp.start, bind_ty.clone());
+                            resolved.push(bind_ty.clone());
                             binds.push((name.clone(), *bsp, bind_ty));
                         }
+                        // Invariant 7 (CTy-operand): record the resolved per-position types in the
+                        // DEDICATED, user-only table (keyed by the pat span — never collides with a
+                        // prelude span, unlike `reified_operands`), so `materialize_tuple_binds` writes
+                        // each inferred binder's concrete type into the AST and the VM compiler gives
+                        // the local its real `CTy` (an inferred `var (id, …)` stays an int operand).
+                        self.tuple_bind_resolutions
+                            .insert(pat.span().start, resolved);
                     }
                     Ty::Tuple(elems) => {
                         self.err_coded(

@@ -43,7 +43,7 @@ pub use overloads::rename_overload_defs;
 pub use resolve_variant_imports::resolve_variant_imports;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_fills::apply_default_fills;
-pub use rewrite_foreach::{lower_foreach_iter, materialize_for_binds};
+pub use rewrite_foreach::{lower_foreach_iter, materialize_for_binds, materialize_tuple_binds};
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
 pub use rewrite_new::{inject_optional_field_defaults, unwrap_new};
@@ -508,6 +508,13 @@ pub struct Checker {
     /// compiler's `resolve_cty` (and the transpiler's kind analysis) see the concrete types the
     /// checker proved — an inferred `v` stays a first-class arithmetic operand.
     for_bind_resolutions: HashMap<usize, (Option<Ty>, Option<Ty>)>,
+    /// DEC-288 / Invariant 7 (CTy-operand): resolved per-position types for a tuple destructuring,
+    /// keyed by the `DestructurePat::Tuple` span start. A DEDICATED, user-only map (destructure pat
+    /// spans never collide with a prelude's 0-based spans — unlike `reified_operands`, which is
+    /// prelude+user and would clobber, the [[span-collision-prelude-user]] hazard). `materialize_tuple_binds`
+    /// writes each inferred binder's type into the AST so the VM compiler gives the local its concrete
+    /// `CTy` (an inferred `var (id, …)` binder stays a first-class arithmetic operand).
+    tuple_bind_resolutions: HashMap<usize, Vec<Ty>>,
     /// Span-keyed substitutions for a primitive `as`-cast that is a value CONVERSION (M4 as-matrix),
     /// keyed by the `Cast` node's `Span.start` (the `as` token offset — distinct from any wrapped
     /// call's span). The replacement is a leaf-qualified native call (`Convert.toFloat(v)` etc.) the
@@ -664,6 +671,7 @@ pub fn check_resolutions(
         HashMap<usize, crate::ast::Expr>,
         std::collections::HashSet<usize>,
         HashMap<usize, (Option<Ty>, Option<Ty>)>,
+        HashMap<usize, Vec<Ty>>,
     ),
     Vec<Diagnostic>,
 > {
@@ -705,6 +713,8 @@ pub fn check_resolutions(
             c.for_iter_lowerings,
             // DEC-280: inferred foreach-binding types, written into the AST by `materialize_for_binds`.
             c.for_bind_resolutions,
+            // DEC-288: inferred tuple-destructure binder types, written by `materialize_tuple_binds`.
+            c.tuple_bind_resolutions,
         ))
     } else {
         Err(c.errors)

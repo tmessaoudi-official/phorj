@@ -145,6 +145,7 @@ pub fn check_and_expand_reified(
             fills,
             for_iters,
             for_binds,
+            tuple_binds,
         )) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
@@ -178,9 +179,11 @@ pub fn check_and_expand_reified(
             // independent of every expression rewrite above; its generated hasNext/next pulls
             // are plain method calls needing no further pass on any backend.
             Ok((
-                // DEC-288: erase tuple literals to list literals LAST (an independent expr rewrite),
-                // so no backend sees `Expr::Tuple`.
-                crate::checker::erase_tuples(crate::checker::lower_foreach_iter(
+                // DEC-288: write inferred tuple-destructure binder types into the AST (Invariant 7),
+                // then erase tuple literals to list literals LAST (both independent rewrites), so no
+                // backend sees `Expr::Tuple` and every tuple binder carries its concrete type.
+                crate::checker::erase_tuples(crate::checker::materialize_tuple_binds(
+                    crate::checker::lower_foreach_iter(
                     // DEC-280 / Invariant 7: inferred foreach-binding types written into the AST
                     // (after erasure, before the Iterator lowering consumes the For's `ty`).
                     crate::checker::materialize_for_binds(
@@ -210,7 +213,9 @@ pub fn check_and_expand_reified(
                         ),
                         &for_binds,
                     ),
-                    &for_iters,
+                        &for_iters,
+                    ),
+                    &tuple_binds,
                 )),
                 reified,
             ))
@@ -539,9 +544,18 @@ pub fn check_json_program(prog: &Program) -> (String, bool) {
     // (or already-lowered) programs.
     let prog = &crate::checker::lower_pipes(prog.clone());
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html, _ufcs, _ovl, _reified, _pipes, _fills, _for_iters, _for_binds)) => {
-            (crate::diagnostic::diagnostics_json(&[], &warnings), false)
-        }
+        Ok((
+            warnings,
+            _html,
+            _ufcs,
+            _ovl,
+            _reified,
+            _pipes,
+            _fills,
+            _for_iters,
+            _for_binds,
+            _tuple_binds,
+        )) => (crate::diagnostic::diagnostics_json(&[], &warnings), false),
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),
     })
 }
