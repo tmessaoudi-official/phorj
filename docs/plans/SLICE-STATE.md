@@ -28,8 +28,14 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
    3 phantom gaps found + dropped (Regex/Decimal/`match` already built). Next FN blockers = XML/streams/
    intl/SPL-heaps/mb-tail. ← **START HERE = #2 Regex closer** (replaceCallback/matchAll/quoteMeta verified
    still GU in FN-PCRE).
-2. **Regex closer** (SMALL) — `Core.Regex` ext ALREADY has find/findGroups/matches/named/replace/split/test;
-   genuine gaps = `replaceCallback` + `matchAll` + `quoteMeta`. 1-slice, proven recipe.
+2. **Regex closer** — ✅ **findAllGroups** (`999c3701`, matchAll/preg_match_all parity, byte-identical)
+   + ✅ **quoteMeta** (`353ba92a`, DEC-296 regex::escape oracle + mirrored addcslashes helper). BOTH
+   committed, advisor-6C-certified, gate green. ⚠ **replaceCallback = DEC-295 STILL PENDING** (dev-ruled:
+   typed `Match` object callback — `m.full()` + `m.group(name)->string?`, PREG_UNMATCHED_AS_NULL fixes
+   the optional-group divergence BY DESIGN). SPINE-TOUCHING (new injected `Match` type + higher-order
+   re-entrant native + PHP twin) → needs a FRESH 3C before building; NOT a small edit. START HERE next.
+   ⚠ Inherited caveat documented in KNOWN_ISSUES: findGroups/findAllGroups optional non-participating
+   named groups diverge on PHP leg (Rust omits, PCRE fills "") — replaceCallback FIXES this for its Match.
 3. **Named args + variadics + spread** — SYN mover + unblocks lifter on PHP 8.0+. Design-heavy → adjudicate.
 4. ~~**`match` expression**~~ — DROPPED 2026-07-18: **ALREADY BUILT + mature** (`TokenKind::Match`,
    `Expr::Match` w/ guards+patterns, used across examples). Rule-11 catch #3 this session (after
