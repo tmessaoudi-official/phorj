@@ -593,6 +593,11 @@ impl Checker {
             (Ty::Named(dn, da), Ty::Named(an, aa)) if dn == an && da.len() == aa.len() => {
                 da.iter().zip(aa).all(|(d, a)| self.unify(d, a, theta))
             }
+            // Same-arity tuples unify element-wise (DEC-288) — a generic `f<A, B>((A, B) p)` binds
+            // `A`/`B` from an `(int, string)` argument.
+            (Ty::Tuple(dts), Ty::Tuple(ats)) if dts.len() == ats.len() => {
+                dts.iter().zip(ats).all(|(d, a)| self.unify(d, a, theta))
+            }
             // No type parameter at this position — ordinary assignability (actual → declared).
             (d, a) => self.ty_assignable(a, d),
         }

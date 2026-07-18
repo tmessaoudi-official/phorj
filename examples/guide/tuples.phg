@@ -8,6 +8,8 @@
 package Main;
 
 import Core.Output;
+import Core.List;
+import Core.Map;
 import Core.Runtime.Entry;
 
 // A function can return a tuple: its type is written `(A, B)`.
@@ -31,4 +33,18 @@ function main(): void {
     // A tuple literal destructured directly.
     var (x, y, z) = (2, 3, 4);
     Output.printLine("product={x * y * z}");
+    // The headline use: iterate PAIRS with `for ((a, b) in …)`. `List.zip` pairs two lists
+    // positionally (length = the shorter one); `Map.entries` yields each key→value as a tuple.
+    List<int> ids = [1, 2, 3];
+    List<string> names = ["ada", "bob", "cy"];
+    for ((id, name) in List.zip(ids, names)) {
+        Output.printLine("user {id} = {name}");
+    }
+    Map<string, int> scores = ["math" => 90, "art" => 75];
+    for ((subject, score) in Map.entries(scores)) {
+        Output.printLine("{subject}: {score}");
+    }
+    // `List.partition` returns a tuple of (matching, non-matching), destructured in one binding.
+    var (evens, odds) = List.partition([1, 2, 3, 4, 5, 6], function(int n): bool { return n % 2 == 0; });
+    Output.printLine("evens={List.length(evens)} odds={List.length(odds)}");
 }

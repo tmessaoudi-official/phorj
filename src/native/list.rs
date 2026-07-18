@@ -72,6 +72,49 @@ pub(super) fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, Stri
         _ => Err("List.reverse expects (List<T>)".into()),
     }
 }
+/// `zip(a, b) -> List<(A, B)>` (DEC-288) — pair up elements positionally, length = `min(|a|, |b|)`
+/// (the extra tail of the longer list is dropped). Each pair is an erased 2-tuple (a runtime 2-list),
+/// ready for `for ((x, y) in List.zip(a, b))`.
+pub(super) fn list_zip(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(a), Value::List(b)] => {
+            let n = a.len().min(b.len());
+            let out: Vec<Value> = (0..n)
+                .map(|i| Value::List(std::rc::Rc::new(vec![a[i].clone(), b[i].clone()])))
+                .collect();
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.zip expects (List<A>, List<B>)".into()),
+    }
+}
+/// `partition(xs, pred) -> (List<T>, List<T>)` (DEC-288) — split into `(matching, non-matching)`,
+/// each preserving order. Returns an erased 2-tuple (a runtime 2-list of the two sublists), destructured
+/// as `var (yes, no) = List.partition(xs, pred)`.
+pub(super) fn list_partition(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut yes = Vec::new();
+            let mut no = Vec::new();
+            for x in xs.iter() {
+                match call(f, vec![x.clone()])? {
+                    Value::Bool(true) => yes.push(x.clone()),
+                    Value::Bool(false) => no.push(x.clone()),
+                    other => {
+                        return Err(format!(
+                            "List.partition predicate must return bool, got {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::List(std::rc::Rc::new(vec![
+                Value::List(std::rc::Rc::new(yes)),
+                Value::List(std::rc::Rc::new(no)),
+            ])))
+        }
+        _ => Err("List.partition expects (List<T>, (T) -> bool)".into()),
+    }
+}
 /// `enumerate(xs) -> Map<int, T>` — pair each element with its 0-based index, ready for the
 /// two-binding `for (int i, T x in List.enumerate(xs))` form (B1). Insertion-ordered, so iteration
 /// is index order. A PHP list array is already 0-keyed, so this erases to `array_values` (identity).

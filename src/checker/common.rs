@@ -165,6 +165,9 @@ pub(super) fn apply_subst(ty: &Ty, theta: &HashMap<String, Ty>) -> Ty {
             n.clone(),
             args.iter().map(|a| apply_subst(a, theta)).collect(),
         ),
+        // A tuple substitutes through each position (DEC-288) — `zip`'s `List<(T, U)>` return resolves
+        // to `List<(int, string)>` at the call site.
+        Ty::Tuple(ts) => Ty::Tuple(ts.iter().map(|t| apply_subst(t, theta)).collect()),
         other => other.clone(),
     }
 }
@@ -181,6 +184,7 @@ pub(super) fn ty_has_param(ty: &Ty) -> bool {
             ps.iter().any(ty_has_param) || ty_has_param(r) || es.iter().any(ty_has_param)
         }
         Ty::Named(_, args) => args.iter().any(ty_has_param),
+        Ty::Tuple(ts) => ts.iter().any(ty_has_param),
         _ => false,
     }
 }

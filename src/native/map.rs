@@ -18,6 +18,18 @@ fn map_values(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Map.values expects (Map<K, V>)".into()),
     }
 }
+/// `entries(Map<K, V>) -> List<(K, V)>` (DEC-288) — the map's key→value pairs as tuples, in insertion
+/// order, for `for ((k, v) in Map.entries(m))`. Each pair is an erased 2-tuple (a runtime 2-list).
+fn map_entries(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m)] => Ok(Value::List(std::rc::Rc::new(
+            m.iter()
+                .map(|(k, v)| Value::List(std::rc::Rc::new(vec![k.to_value(), v.clone()])))
+                .collect(),
+        ))),
+        _ => Err("Map.entries expects (Map<K, V>)".into()),
+    }
+}
 fn map_has(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(m), key] => {
@@ -188,6 +200,22 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(map_values),
             php: |a| format!("array_values({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "entries",
+            params: vec![map()],
+            ret: Ty::List(Box::new(Ty::Tuple(vec![k(), v()]))),
+            pure: true,
+            eval: NativeEval::Pure(map_entries),
+            // keys + values are equal-length, so `array_map(null, …)` pairs them (no padding) into
+            // `[[k, v], …]` — byte-identical to the Rust list-of-2-lists (erased tuples), insertion order.
+            php: |a| {
+                format!(
+                    "array_map(null, array_keys({0}), array_values({0}))",
+                    parg(a, 0)
+                )
+            },
         },
         NativeFn {
             module: "Core.Map",

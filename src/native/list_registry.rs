@@ -19,6 +19,24 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
             php: |a| format!("array_reverse({})", parg(a, 0)),
         },
+        // `zip(a, b) -> List<(A, B)>` (DEC-288) — positional pairs, length = min(|a|, |b|).
+        NativeFn {
+            module: "Core.List",
+            name: "zip",
+            params: vec![list(t()), list(u())],
+            ret: list(Ty::Tuple(vec![t(), u()])),
+            pure: true,
+            eval: NativeEval::Pure(list_zip),
+            // An IIFE binds both args ONCE (no double-eval) and truncates to the shorter length —
+            // `array_map(null, …)` would pad the shorter with null (length = max), so it can't be used.
+            php: |a| {
+                format!(
+                    "(function($__za, $__zb) {{ $__zn = min(count($__za), count($__zb)); $__zr = []; for ($__zi = 0; $__zi < $__zn; $__zi++) {{ $__zr[] = [$__za[$__zi], $__zb[$__zi]]; }} return $__zr; }})({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
         // `enumerate(xs) -> Map<int, T>` — index→element pairs for `for (int i, T x in …)` (B1).
         NativeFn {
             module: "Core.List",
@@ -96,6 +114,27 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::HigherOrder(list_filter),
             // array_filter preserves original keys; array_values re-indexes to a sequential list.
             php: |a| format!("array_values(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
+        },
+        // `partition(xs, pred) -> (List<T>, List<T>)` (DEC-288) — (matching, non-matching).
+        NativeFn {
+            module: "Core.List",
+            name: "partition",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
+            ret: Ty::Tuple(vec![list(t()), list(t())]),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_partition),
+            // An IIFE binds the list + predicate ONCE, splits in one pass, and returns the erased
+            // 2-tuple `[matching, non-matching]` — both re-indexed sequentially (`[]` append).
+            php: |a| {
+                format!(
+                    "(function($__pl, $__pf) {{ $__py = []; $__pn = []; foreach ($__pl as $__px) {{ if ($__pf($__px)) {{ $__py[] = $__px; }} else {{ $__pn[] = $__px; }} }} return [$__py, $__pn]; }})({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
         },
         NativeFn {
             module: "Core.List",

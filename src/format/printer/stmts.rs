@@ -92,6 +92,29 @@ impl Printer<'_> {
                 body,
                 ..
             } => {
+                // DEC-288: re-collapse a parser-lowered tuple loop — `for (var __fortup_N in iter) {
+                // var (a, b) = __fortup_N; <rest> }` — back to its `for ((a, b) in iter) { <rest> }`
+                // surface, so the sugar round-trips through the formatter (and the synthetic binder
+                // never leaks). Meaning-preserving: the collapsed form re-lowers to the same AST.
+                if val.is_none() && matches!(t, Type::Infer(_)) && name.starts_with("__fortup_") {
+                    if let Some((
+                        Stmt::Destructure {
+                            pat: DestructurePat::Tuple { binders, .. },
+                            init: Expr::Ident(dn, _),
+                            ..
+                        },
+                        rest,
+                    )) = body.split_first()
+                    {
+                        if dn == name {
+                            let names: Vec<String> =
+                                binders.iter().map(|(_, n, _)| n.clone()).collect();
+                            let head =
+                                format!("for (({}) in {})", names.join(", "), self.expr(iter)?);
+                            return self.block_stmt(&head, rest);
+                        }
+                    }
+                }
                 // An inferred-element for-in prints as the idiomatic `foreach (iter as name)`
                 // (A-6); an explicit element type keeps the typed `for (T name in iter)` form; a
                 // fully-typed two-binding Map form prints `for (K k, V v in iter)` (B1).
