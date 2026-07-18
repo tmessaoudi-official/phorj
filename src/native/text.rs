@@ -125,6 +125,57 @@ pub(super) fn text_capitalize(args: &[Value], _: &mut String) -> Result<Value, S
         _ => Err("String.capitalize expects (string)".into()),
     }
 }
+
+// `capitalizeWords(string) -> string` — uppercase the first ASCII letter of each word (a word starts at
+// string start or after a whitespace byte ` \t\r\n\f\v`). Byte-for-byte PHP `ucwords` (ASCII-scoped,
+// like `capitalize`/`upper` — documented; no mbstring under `php -n`).
+pub(super) fn text_capitalize_words(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => {
+            let mut v = s.as_bytes().to_vec();
+            let mut prev_delim = true; // string start counts as a word boundary
+            for b in v.iter_mut() {
+                if prev_delim && b.is_ascii_lowercase() {
+                    *b -= 32;
+                }
+                prev_delim = matches!(*b, b' ' | b'\t' | b'\r' | b'\n' | 0x0c | 0x0b);
+            }
+            Ok(Value::Str(
+                String::from_utf8(v)
+                    .expect("only ASCII letters were changed")
+                    .into(),
+            ))
+        }
+        _ => Err("String.capitalizeWords expects (string)".into()),
+    }
+}
+
+// `translate(string, from, to) -> string` — replace each byte present in `from` with the byte at the
+// same index in `to` (the shorter of from/to bounds the pairing; a from-byte's FIRST pairing wins, like
+// PHP). Byte-for-byte PHP `strtr($s, $from, $to)` (byte-level; ASCII/bytes-scoped).
+pub(super) fn text_translate(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(from), Value::Str(to)] => {
+            let from = from.as_bytes();
+            let to = to.as_bytes();
+            let n = from.len().min(to.len());
+            let mut map: [u8; 256] = std::array::from_fn(|i| i as u8);
+            let mut set = [false; 256]; // first pairing wins (matches PHP strtr)
+            for i in 0..n {
+                let k = from[i] as usize;
+                if !set[k] {
+                    map[k] = to[i];
+                    set[k] = true;
+                }
+            }
+            let out: Vec<u8> = s.as_bytes().iter().map(|&b| map[b as usize]).collect();
+            Ok(Value::Str(
+                String::from_utf8_lossy(&out).into_owned().into(),
+            ))
+        }
+        _ => Err("String.translate expects (string, string, string)".into()),
+    }
+}
 // `lines(string) -> List<string>` — split on `\n` (an embedded `\r` is left in the line, matching PHP
 // `explode("\n", s)`). An empty string → `[""]`; a trailing `\n` → a trailing `""` (explode semantics).
 pub(super) fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {

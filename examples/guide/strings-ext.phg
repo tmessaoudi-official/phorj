@@ -42,4 +42,7 @@ function main(): void {
     // braces/backslashes verbatim — ideal for a JSON or regex literal.
     string json = "\{\"unit\": \"px\", \"pattern\": \"\\d\{2,3\}\"\}";
     Output.printLine(json);
+    // `capitalizeWords` (PHP ucwords) + `translate` (PHP strtr char-map) — ASCII, byte-identical.
+    Output.printLine(String.capitalizeWords("the quick brown fox"));
+    Output.printLine(String.translate("hello world", "lo", "LO"));
 }

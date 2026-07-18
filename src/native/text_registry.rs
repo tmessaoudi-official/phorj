@@ -163,6 +163,26 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_capitalize),
             php: |a| format!("ucfirst({})", parg(a, 0)),
         },
+        // `capitalizeWords(string) -> string` — PHP `ucwords` (ASCII, first letter of each word).
+        NativeFn {
+            module: "Core.String",
+            name: "capitalizeWords",
+            params: vec![s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_capitalize_words),
+            php: |a| format!("ucwords({})", parg(a, 0)),
+        },
+        // `translate(string, from, to) -> string` — PHP `strtr($s, $from, $to)` (byte char-map).
+        NativeFn {
+            module: "Core.String",
+            name: "translate",
+            params: vec![s(), s(), s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_translate),
+            php: |a| format!("strtr({}, {}, {})", parg(a, 0), parg(a, 1), parg(a, 2)),
+        },
         // `lines(string) -> List<string>` — split on `\n` (charter §2 subject-first; Tier-1).
         NativeFn {
             module: "Core.String",

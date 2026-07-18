@@ -651,6 +651,23 @@ function greet(string name, string greeting = "Hello", bool loud = false) -> str
     );
 }
 
+/// Wave-B: `String.capitalizeWords` (ucwords) + `String.translate` (strtr) — ASCII byte-identical
+/// run≡runvm≡php (like the existing `capitalize`/`upperCase`; multibyte is the documented ASCII caveat).
+#[test]
+fn string_capitalize_words_and_translate_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.String;
+#[Entry] function main() -> void {
+    Output.printLine(String.capitalizeWords("hello world  foo-bar baz"));
+    Output.printLine(String.translate("hello", "el", "ip"));
+    Output.printLine(String.translate("aabbcc", "abc", "xyz"));
+}"#,
+        "Hello World  Foo-bar Baz\nhippo\nxxyyzz\n",
+        "string_ucwords_strtr",
+    );
+}
+
 /// Wave-B: `List.difference`/`intersection` (FN-ARR long-tail) — typed-strict set ops on lists,
 /// filter semantics (keep a's order + dups), byte-identical run≡runvm≡php via the strict
 /// `__phorj_list_difference`/`_intersection` helpers (NOT PHP `array_diff`/`array_intersect`).

@@ -30,10 +30,12 @@ FINDINGS (owed to next recompute + review):
      OR consolidate into Core.Cryptography (breaking rename) — dev decides at review. NOT moved silently.
   3. **§4.9 UNDERCOUNT:** FN-HASH (hmac/hkdf/pbkdf2 were GP) + FN-RAND (CSPRNG was P) are BUILT but uncredited →
      real parity is HIGHER than 64%. Recompute owed (also credit the Math tail + named-args SYN row).
-  **DONE this overnight:** slice#3 named args FULL SCOPE (`998e370b`); variadics (`59bf4158`); Wave-B Math tail
-  (asin/acos/atan/atan2/hypot/sinh/cosh/tanh/log2/log1p/expm1/degToRad/radToDeg — genuine gap, byte-identical).
-  Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork). NEXT: grep-verify String GU tail + Array long-tail + FS
-  breadth (glob/stat/mtime/perms/tempFile — verified genuine gaps) before building each.
+  **DONE this overnight (all committed, green, UNPUSHED — dev pushes AM):** slice#3 named args FULL SCOPE
+  (`998e370b`); variadics (`59bf4158`); Wave-B **Math tail** (`841864e7`); Wave-B **List.difference/intersection**
+  (`81cbd331`, typed-strict set ops). Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork).
+  ⚠ ALREADY-BUILT (grep-verified, DO NOT rebuild): crypto/CSPRNG/HMAC/KDF; Core.String is rich (42 fns);
+  Core.List rich (38 now). NEXT verified-genuine: FS breadth (glob/stat/mtime/tempFile — impure, quarantined) →
+  String tail (capitalizeWords/translate/wordWrap — pure, Unicode-ASCII caveat) → keep grep-verifying each.
 
 
 ## ✅ DONE — CONTINUOUS SESSION 2 (2026-07-18, HEAD `3a8f1b7f`, +12 commits, ALL UNPUSHED — READ FIRST)
