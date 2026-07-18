@@ -2,6 +2,26 @@
 
 ## CURRENT (2026-07-17→18, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
 
+### PARITY PUSH (2026-07-18, dev "keep going to 100%") — 4 List functions SHIPPED byte-identical + DEC-288..291 ruled
+- ✅ **List.flatMap** `617b9666` · **List.takeWhile/dropWhile** `e4f60129` · **List.groupBy→Map<U,List<T>>** `03867547`
+  (DEC-289). All byte-identical run≡interp≡php-8.5.8 (list-breadth.phg 3-way) + unit tests + examples/README.
+  Recipe proven incl. the gated-helper mechanism (4-place: mod.rs flag / call.rs set / registry php / runtime_php def).
+- ⚠ **DEC-291 (Fs breadth) — LARGELY ALREADY BUILT** (my Q under-verified the surface, Rule 11 miss): Core.Fs already
+  has readText/writeText/appendText/copy/move/delete/size/exists/isFile/isDir/createDir/removeDir/removeDirAll/
+  listDir/walk/tempDir (18 fns). Genuine remaining gaps: **mtime, glob, tempFile** (minor; Fs-transpile mechanism
+  needs a look — the native `php:` is a passthrough placeholder). DEC-291 ≈satisfied; mtime/glob deferred.
+- ⚠ **DEC-290 (native DateTime) — DATE/TIME LARGELY ALREADY BUILT, userland-style** (Q under-verified): `Core.Time`
+  (clock) + `class Duration` (complete) + `class Date` (civil calendar: year/month/day/addDays/dayOfWeek/isLeapYear/
+  compareTo/toString/of) + `class Instant` (now/epoch/plus/minus). This is the USERLAND-on-Core.Time model — NOT the
+  "native DateTimeImmutable" the dev picked. Genuine gaps: **Date.parse** (string→Date), **custom format patterns**,
+  a **combined date+time-of-day** type. NEEDS RE-ADJUDICATION (extend existing Date/Instant vs redundant native
+  DateTime) — re-surfacing. DEC-290 ruling was on incomplete info.
+- **GENUINE remaining gap from the batch = DEC-288 tuples** (built-in `(A,B)` + destructuring) — the real big feature;
+  unblocks zip/partition/Map.entries. Spine-wide (parser+type+destructuring+backends), advisor-certified, multi-slice.
+- LESSON (banked): inventory the EXISTING stdlib surface BEFORE asking design questions (bidirectionality) — 2 of 4
+  batch questions (FS, date/time) turned out largely-already-built.
+
+
 ### DEC-285 attribute-import-form fix COMMITTED `d63e255a` + jsonround perf (2 commits) — UNPUSHED
 - **DEC-285** (`d63e255a`): built-in attributes (`Entry`/`Route`/`UncheckedOverflow`/`Attribute`/DI) resolve in
   EVERY import form — `#[Core.Runtime.Entry]` (qualified, was E-UNKNOWN-ATTRIBUTE) now works, bare-after-import
