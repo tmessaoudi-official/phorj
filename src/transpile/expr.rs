@@ -248,6 +248,11 @@ impl Transpiler {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
                 Ok(format!("[{}]", parts?.join(", ")))
             }
+            // A tuple literal is desugared to a `List` before any backend (DEC-288b, Invariant 5) —
+            // the transpiler never sees one.
+            Expr::Tuple(..) => {
+                unreachable!("Expr::Tuple is erased to a List before backends (DEC-288b)")
+            }
             // `new List<T>()` / `new Map<K,V>()` (DEC-214) — an empty PHP array `[]` (List and Map both
             // erase to a PHP array; the empty form is identical).
             Expr::NewColl { .. } => Ok("[]".into()),

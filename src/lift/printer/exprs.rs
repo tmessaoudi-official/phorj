@@ -44,6 +44,12 @@ impl Printer {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
                 Ok(format!("[{}]", xs?.join(", ")))
             }
+            // A tuple literal `(a, b)` (DEC-288). The lifter never synthesizes this today, but print
+            // it faithfully for completeness.
+            Expr::Tuple(items, _) => {
+                let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
+                Ok(format!("({})", xs?.join(", ")))
+            }
             // `new List<T>()` / `new Map<K,V>()` (DEC-214). The lifter never synthesizes this today, but
             // print it faithfully for completeness.
             Expr::NewColl { kind, args, .. } => {

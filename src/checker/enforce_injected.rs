@@ -376,7 +376,7 @@ impl Ctx {
                     self.walk_expr(a, errs);
                 }
             }
-            Expr::List(items, _) => {
+            Expr::List(items, _) | Expr::Tuple(items, _) => {
                 for i in items {
                     self.walk_expr(i, errs);
                 }

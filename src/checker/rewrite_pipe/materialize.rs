@@ -74,6 +74,8 @@ pub(in crate::checker) fn ty_to_ast_type(t: &Ty, sp: Span) -> Type {
             throws: throws.iter().map(|e| ty_to_ast_type(e, sp)).collect(),
             span: sp,
         },
-        Ty::Param(_) | Ty::Null | Ty::Error => Type::Erased(sp),
+        // A tuple erases to a List before any backend (DEC-288b); it never reaches a specialized pipe
+        // operand, so materializing it as `Erased` is safe (same as a generic param).
+        Ty::Tuple(_) | Ty::Param(_) | Ty::Null | Ty::Error => Type::Erased(sp),
     }
 }

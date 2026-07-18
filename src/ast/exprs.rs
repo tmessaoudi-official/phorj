@@ -63,6 +63,11 @@ pub enum Expr {
     This(Span),
     /// `[a, b, c]`
     List(Vec<Expr>, Span),
+    /// `(a, b[, …])` — a fixed-arity heterogeneous **tuple** literal (DEC-288/288b). At least two
+    /// elements (a single `(e)` is grouping). A compile-time sugar: the checker types it as a
+    /// `Ty::Tuple`, then the desugar rewrites it to a `List` literal before any backend, so no backend
+    /// ever sees `Expr::Tuple` (the "expand out before backends" discipline).
+    Tuple(Vec<Expr>, Span),
     /// `[k => v, k2 => v2]` — a map literal (M-RT S3). Distinguished from `List` by the `=>` after the
     /// first element; at least one pair (an empty map literal is deferred — `[]` is the empty *list*).
     /// Keys must be `int`/`bool`/`string` (`E-MAP-KEY`); transpiles to a PHP `[k => v]` array.

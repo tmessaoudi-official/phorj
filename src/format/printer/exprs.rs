@@ -42,6 +42,12 @@ impl Printer<'_> {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
                 Ok(bracketed("[", xs?, "]"))
             }
+            // A tuple literal `(a, b)` — parens, not brackets (DEC-288). Formatted on the raw AST,
+            // before the desugar-to-List erasure, so the surface syntax round-trips.
+            Expr::Tuple(items, _) => {
+                let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
+                Ok(bracketed("(", xs?, ")"))
+            }
             // `new List<T>()` / `new Map<K,V>()` (DEC-214) — always inline (no elements to wrap).
             Expr::NewColl { kind, args, .. } => {
                 let rendered: Result<Vec<_>, _> = args.iter().map(ty).collect();

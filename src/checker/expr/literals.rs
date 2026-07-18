@@ -225,6 +225,7 @@ impl Checker {
             | Expr::Bytes(_, s)
             | Expr::Ident(_, s)
             | Expr::List(_, s)
+            | Expr::Tuple(_, s)
             | Expr::Map(_, s) => *s,
             Expr::Null(s) | Expr::This(s) => *s,
             Expr::Decimal { span, .. }
@@ -315,6 +316,18 @@ impl Checker {
             }
         }
         Ty::List(Box::new(first))
+    }
+
+    /// `(a, b[, …])` (DEC-288): a fixed-arity heterogeneous tuple. Unlike a list, elements do NOT
+    /// share one type — each position keeps its own. The parser guarantees ≥2 elements (a single
+    /// `(e)` is grouping). Result: `Ty::Tuple([T0, T1, …])`, erased to a `List` before any backend.
+    pub(in crate::checker) fn check_tuple(
+        &mut self,
+        elems: &[crate::ast::Expr],
+        _span: Span,
+    ) -> Ty {
+        let tys = elems.iter().map(|e| self.check_expr(e)).collect();
+        Ty::Tuple(tys)
     }
 
     /// `[k => v, …]` (M-RT S3): infer the key type `K` and value type `V`, unifying across pairs

@@ -118,6 +118,11 @@ impl Compiler<'_> {
                 }
                 self.emit(Op::MakeList(items.len()), sp.line);
             }
+            // A tuple literal is desugared to a `List` before any backend (DEC-288b, Invariant 5) —
+            // the compiler never sees one.
+            Expr::Tuple(..) => {
+                unreachable!("Expr::Tuple is erased to a List before backends (DEC-288b)")
+            }
             // `new List<T>()` / `new Map<K,V>()` (DEC-214) — emit an empty collection (no elements
             // pushed); reuses the existing MakeList/MakeMap ops, so no new `Op`.
             Expr::NewColl { kind, span, .. } => match kind {

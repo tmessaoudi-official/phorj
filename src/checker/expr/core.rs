@@ -149,6 +149,7 @@ impl Checker {
                 None => self.err(*span, "`this` is only valid inside a method"),
             },
             Expr::List(elems, span) => self.check_list(elems, *span), // Task 5
+            Expr::Tuple(elems, span) => self.check_tuple(elems, *span), // DEC-288
             Expr::Map(pairs, span) => self.check_map(pairs, *span),   // M-RT S3
             Expr::NewColl { kind, args, span } => self.check_new_coll(*kind, args, *span), // DEC-214
 

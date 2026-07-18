@@ -46,6 +46,11 @@ impl<'c> Interp<'c> {
                 }
                 Ok(Value::List(Rc::new(out)))
             }
+            // A tuple literal is desugared to a `List` before any backend (DEC-288b, Invariant 5) —
+            // the interpreter never sees one.
+            Expr::Tuple(..) => {
+                unreachable!("Expr::Tuple is erased to a List before backends (DEC-288b)")
+            }
             // `new List<T>()` / `new Map<K,V>()` (DEC-214) — an empty collection (self-typed by the
             // checker; the runtime value carries no element type).
             Expr::NewColl { kind, .. } => Ok(match kind {

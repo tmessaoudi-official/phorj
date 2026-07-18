@@ -280,7 +280,7 @@ impl Checker {
                     }
                 }
             }
-            Expr::List(items, _) => {
+            Expr::List(items, _) | Expr::Tuple(items, _) => {
                 for it in items {
                     self.check_expr_casing(it);
                 }

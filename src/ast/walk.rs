@@ -57,7 +57,7 @@ fn collect_free_expr(
                 }
             }
         }
-        Expr::List(items, _) => {
+        Expr::List(items, _) | Expr::Tuple(items, _) => {
             for it in items {
                 collect_free_expr(it, bound, found);
             }
@@ -305,7 +305,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
                     _ => false,
                 })
             }
-            Expr::List(items, _) => items.iter().any(in_expr),
+            Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(in_expr),
             Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
             Expr::Unary { expr, .. } => in_expr(expr),
             Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
@@ -436,7 +436,7 @@ pub fn uses_concurrency(program: &Program) -> bool {
                     _ => false,
                 })
             }
-            Expr::List(items, _) => items.iter().any(in_expr),
+            Expr::List(items, _) | Expr::Tuple(items, _) => items.iter().any(in_expr),
             Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
             Expr::Unary { expr, .. } => in_expr(expr),
             Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
@@ -587,7 +587,7 @@ pub fn push_subexprs<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
             out.push(object);
             out.push(index);
         }
-        Expr::List(xs, _) => out.extend(xs.iter()),
+        Expr::List(xs, _) | Expr::Tuple(xs, _) => out.extend(xs.iter()),
         Expr::Map(ps, _) => {
             for (k, v) in ps {
                 out.push(k);

@@ -66,6 +66,12 @@ pub enum Ty {
     FixedList(Box<Ty>, usize),
     Map(Box<Ty>, Box<Ty>),
     Set(Box<Ty>),
+    /// `(A, B[, …])` — a fixed-arity heterogeneous **tuple** (DEC-288/288b). A compile-time-only sugar:
+    /// checked here for arity + per-position types + destructuring, then **erased to a `List`** before
+    /// any backend (like generics/`FixedList` — the "expand out before backends" discipline). The
+    /// runtime rep is a plain list, so a tuple prints/behaves as a list; the backends never see
+    /// `Ty::Tuple`. Assignable only to a same-arity tuple with element-wise assignable positions.
+    Tuple(Vec<Ty>),
     /// `T?` — an optional: holds a `T` or `null`. The non-null guarantee lives in
     /// `assignable` (a non-optional `T` can never hold `null`).
     Optional(Box<Ty>),
@@ -312,6 +318,16 @@ impl fmt::Display for Ty {
             Ty::FixedList(e, n) => write!(f, "[{e}; {n}]"),
             Ty::Map(k, v) => write!(f, "Map<{k}, {v}>"),
             Ty::Set(e) => write!(f, "Set<{e}>"),
+            Ty::Tuple(ts) => {
+                write!(f, "(")?;
+                for (i, t) in ts.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{t}")?;
+                }
+                write!(f, ")")
+            }
             // A union inner needs parens — `(A | B)?` — or the rendered form re-reads as
             // `A | (B?)` (`?` binds to its immediate member in the grammar). DEC-253.
             Ty::Optional(e) if matches!(**e, Ty::Union(_)) => write!(f, "({e})?"),
