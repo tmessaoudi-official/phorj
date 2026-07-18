@@ -1,0 +1,104 @@
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+import Core.String;
+import Core.Json;
+import Core.Map;
+import Core.List;
+import Core.Runtime.Entry;
+
+// MACRO bench: a DEEP/WIDE JSON slice — the shape a real API handler actually parses: a paginated
+// response with a nested `meta` object and a `data` array of many multi-field records, of which the
+// handler reads only a FEW fields (status + the first record's id/name). This is the workload where a
+// lazy/compact Json representation pays off (the ~unread records/fields never allocate), and the
+// counterpoint to `jsonround` (whose shallow doc + read-most-fields shape cannot benefit — DEC-294).
+// Paired against PHP's C-native `json_decode`, which always materializes the WHOLE nested array.
+
+// Read a top-level string field by key (returns "" if absent/other-typed).
+function topString(Json j, string key): string {
+    return match (j) {
+        Json.Object(es) => match (Map.get(es, key) ?? new Json.Null()) {
+            Json.String(s) => s,
+            Json.Null() => "",
+            Json.Bool(b) => "",
+            Json.Int(n) => "",
+            Json.Float(f) => "",
+            Json.Array(xs) => "",
+            Json.Object(inner) => ""
+        },
+        Json.Null() => "",
+        Json.Bool(b2) => "",
+        Json.Int(n2) => "",
+        Json.Float(f2) => "",
+        Json.String(s2) => "",
+        Json.Array(xs2) => ""
+    };
+}
+
+// Pull `data[0]` (the first record) out of the response, or a Null node if not shaped that way.
+function firstRecord(Json j): Json {
+    return match (j) {
+        Json.Object(es) => match (Map.get(es, "data") ?? new Json.Null()) {
+            Json.Array(xs) => if (List.length(xs) > 0) { xs[0] } else { new Json.Null() },
+            Json.Null() => new Json.Null(),
+            Json.Bool(b) => new Json.Null(),
+            Json.Int(n) => new Json.Null(),
+            Json.Float(f) => new Json.Null(),
+            Json.String(s) => new Json.Null(),
+            Json.Object(inner) => new Json.Null()
+        },
+        Json.Null() => new Json.Null(),
+        Json.Bool(b2) => new Json.Null(),
+        Json.Int(n2) => new Json.Null(),
+        Json.Float(f2) => new Json.Null(),
+        Json.String(s2) => new Json.Null(),
+        Json.Array(xs2) => new Json.Null()
+    };
+}
+
+function bench(string doc, int iters): int {
+    mutable int acc = 0;
+    mutable int i = 0;
+    while (i < iters) {
+        Json? parsed = Json.parse(doc);
+        if (var j = parsed) {
+            // A real handler reads only a handful of fields — status + the first record's name/email —
+            // and never touches the other records or the nested meta block.
+            string status = topString(j, "status");
+            Json rec0 = firstRecord(j);
+            string name = topString(rec0, "name");
+            string email = topString(rec0, "email");
+            acc = acc + String.length(status) + String.length(name) + String.length(email);
+        }
+        i = i + 1;
+    }
+    return acc;
+}
+
+#[Entry]
+function main(): void {
+    // A paginated user-list response: status + meta + a `data` array of 12 six-field records. The
+    // handler reads ~4 fields; the other ~80 leaf values are parsed-but-unread (the lazy win surface).
+    string doc = "\{\"status\": \"ok\", \"page\": 1, \"total\": 12, \"meta\": \{\"requestId\": \"abc-123\", \"tookMs\": 4, \"cached\": false, \"region\": \"eu-west\"\}, \"data\": ["
+        + "\{\"id\": 1, \"name\": \"Ada\", \"email\": \"ada@x.io\", \"active\": true, \"age\": 36, \"city\": \"London\"\},"
+        + "\{\"id\": 2, \"name\": \"Bob\", \"email\": \"bob@x.io\", \"active\": false, \"age\": 41, \"city\": \"Paris\"\},"
+        + "\{\"id\": 3, \"name\": \"Cy\", \"email\": \"cy@x.io\", \"active\": true, \"age\": 29, \"city\": \"Berlin\"\},"
+        + "\{\"id\": 4, \"name\": \"Di\", \"email\": \"di@x.io\", \"active\": true, \"age\": 52, \"city\": \"Madrid\"\},"
+        + "\{\"id\": 5, \"name\": \"Ed\", \"email\": \"ed@x.io\", \"active\": false, \"age\": 33, \"city\": \"Rome\"\},"
+        + "\{\"id\": 6, \"name\": \"Fi\", \"email\": \"fi@x.io\", \"active\": true, \"age\": 47, \"city\": \"Oslo\"\},"
+        + "\{\"id\": 7, \"name\": \"Gu\", \"email\": \"gu@x.io\", \"active\": true, \"age\": 38, \"city\": \"Lyon\"\},"
+        + "\{\"id\": 8, \"name\": \"Ha\", \"email\": \"ha@x.io\", \"active\": false, \"age\": 25, \"city\": \"Kyiv\"\},"
+        + "\{\"id\": 9, \"name\": \"Ir\", \"email\": \"ir@x.io\", \"active\": true, \"age\": 61, \"city\": \"Porto\"\},"
+        + "\{\"id\": 10, \"name\": \"Jo\", \"email\": \"jo@x.io\", \"active\": true, \"age\": 44, \"city\": \"Delft\"\},"
+        + "\{\"id\": 11, \"name\": \"Ka\", \"email\": \"ka@x.io\", \"active\": false, \"age\": 30, \"city\": \"Gent\"\},"
+        + "\{\"id\": 12, \"name\": \"Li\", \"email\": \"li@x.io\", \"active\": true, \"age\": 55, \"city\": \"Bonn\"\}"
+        + "]\}";
+    int iters = 100000;
+    int warm = bench(doc, iters);
+    int guard = warm - warm;
+    int t = Runtime.monotonicNanos();
+    int acc = bench(doc, iters);
+    int d = Runtime.monotonicNanos() - t;
+    Output.printLine("deepjson\t{d + guard}\t{acc}");
+}
