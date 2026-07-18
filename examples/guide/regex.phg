@@ -48,4 +48,8 @@ function main(): void {
     // replace — every match replaced (literal replacement here).
     var redacted = Regex.replace(date, "from 2026-06-28 to 2027-01-01", "<date>");
     Output.printLine("redact = {redacted}");
+    // quoteMeta — escape metacharacters so untrusted text matches LITERALLY (not as a pattern).
+    var literal = Regex.compile(Regex.quoteMeta("a.b+c"));
+    Output.printLine("quote hit = {Regex.matches(literal, "x a.b+c y")}");
+    Output.printLine("quote miss = {Regex.matches(literal, "xabbbcx")}");
 }

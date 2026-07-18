@@ -134,6 +134,30 @@ fn replace_all() {
 }
 
 #[test]
+fn quote_meta_escapes_the_crate_meta_set_and_round_trips() {
+    let mut o = String::new();
+    // regex::escape's exact meta-set is escaped; non-meta bytes (letters, spaces) pass through.
+    assert!(matches!(
+        regex_quote_meta(&[Value::Str(r"a.b (c) [d]".into())], &mut o),
+        Ok(Value::Str(s)) if s == r"a\.b \(c\) \[d\]"
+    ));
+    // Round-trip: a quoted string compiles and matches itself literally, not as a pattern.
+    let quoted = match regex_quote_meta(&[Value::Str("a.b+c".into())], &mut o).unwrap() {
+        Value::Str(s) => s.as_str().to_string(),
+        other => panic!("quoteMeta returned {other:?}"),
+    };
+    let lit = re(&quoted);
+    assert!(matches!(
+        regex_matches(&[lit.clone(), Value::Str("a.b+c".into())], &mut o),
+        Ok(Value::Bool(true))
+    ));
+    assert!(matches!(
+        regex_matches(&[lit, Value::Str("aXbbbc".into())], &mut o),
+        Ok(Value::Bool(false))
+    ));
+}
+
+#[test]
 fn non_regex_first_arg_is_a_clean_fault() {
     let mut o = String::new();
     // A value that isn't a Regex instance → fault, never a panic (EV-7).
@@ -161,4 +185,5 @@ fn php_emission_shapes() {
         emit("findAllGroups", &["$re", "$s"]),
         "__phorj_regex_find_all_groups($re, $s)"
     );
+    assert_eq!(emit("quoteMeta", &["$s"]), "__phorj_regex_quote_meta($s)");
 }

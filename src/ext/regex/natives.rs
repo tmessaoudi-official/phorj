@@ -205,6 +205,18 @@ pub(super) fn regex_split(args: &[Value], _: &mut String) -> Result<Value, Strin
     }
 }
 
+/// `Regex.quoteMeta(string) -> string` — escape every regex metacharacter so the text matches
+/// literally (PHP `preg_quote`, but see DEC-296). Uses the `regex` crate's own [`::regex::escape`]
+/// as the oracle; the PHP twin reproduces its exact meta-set (`__phorj_regex_quote_meta`), NOT
+/// `preg_quote` (whose set differs), so all three backends agree byte-for-byte. Takes a bare string,
+/// not a `Regex` — you quote text *before* building a pattern from it.
+pub(super) fn regex_quote_meta(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(::regex::escape(s).into())),
+        _ => Err("Regex.quoteMeta expects (string)".into()),
+    }
+}
+
 // ---- registry -----------------------------------------------------------------------------------
 
 /// The `Core.Regex` registry entries. `Regex` is the compiler-injected class
@@ -311,6 +323,15 @@ pub fn regex_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(regex_split),
             php: |a| format!("__phorj_regex_split({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Regex",
+            name: "quoteMeta",
+            params: vec![Ty::String],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(regex_quote_meta),
+            php: |a| format!("__phorj_regex_quote_meta({})", parg(a, 0)),
         },
     ]
 }

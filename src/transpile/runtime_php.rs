@@ -1063,6 +1063,15 @@ impl Transpiler {
             self.line("return preg_split(__phorj_regex_delim($re->pattern), $s);");
             self.indent -= 1;
             self.line("}");
+            // `quoteMeta` mirrors the `regex` crate's `escape` (DEC-296) — its EXACT meta-set
+            // `\ . + * ? ( ) | [ ] { } ^ $ # & - ~` (NOT PHP `preg_quote`, whose set differs).
+            // `addcslashes` prepends a `\` to each listed byte; the list uses single `-` (literal —
+            // addcslashes ranges are `..`, not `-`), so all three backends emit identical output.
+            self.line("function __phorj_regex_quote_meta($s) {");
+            self.indent += 1;
+            self.line("return addcslashes($s, '\\\\.+*?()|[]{}^$#&-~');");
+            self.indent -= 1;
+            self.line("}");
         }
         // `Output.capture(fn)` (DEC-220-S3): run the closure with output buffering on and return the
         // captured bytes. `ob_start`/`ob_get_clean` are the exact PHP analogue of the backends'

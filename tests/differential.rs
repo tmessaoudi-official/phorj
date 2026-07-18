@@ -588,6 +588,23 @@ class Greeter extends Named {}
     );
 }
 
+/// DEC-296 regression: `Regex.quoteMeta` is the first Core.Regex native taking a `string` (no `Regex`
+/// value). A quoteMeta-ONLY program must still flip `uses_regex` so `__phorj_regex_quote_meta` is
+/// emitted — else transpiled php fatals on an undefined function (run ≠ php). Pins the isolated path
+/// the `guide/regex.phg` example can't (that example also calls `compile`, which sets the flag anyway).
+#[test]
+fn quote_meta_only_program_emits_its_php_helper() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Regex;
+#[Entry] function main() -> void {
+    Output.printLine(Regex.quoteMeta("a.b+c"));
+}"#,
+        "a\\.b\\+c\n",
+        "quote_meta_only",
+    );
+}
+
 /// M-RT S6c.2a — a parent constructor with a *body* (not just promotion) runs identically through the
 /// child, and the inheritance chains through multiple no-own-ctor levels.
 #[test]
@@ -2605,6 +2622,7 @@ const TIER1_PHP: &[&str] = &[
     "function_exists",
     "stream_get_contents",
     "stream_isatty",
+    "addcslashes",
     "str_replace",
     "str_split",
     "str_starts_with",
