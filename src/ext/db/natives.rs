@@ -39,6 +39,7 @@ mod postgres;
 mod sqlite;
 
 use crate::native::{ClosureInvoker, NativeEval, NativeFn};
+use crate::phstr::PhStr;
 use crate::types::Ty;
 use crate::value::{DbObject, EnumVal, HKey, Value};
 use std::any::Any;
@@ -309,7 +310,11 @@ enum Binds {
 #[derive(Debug)]
 struct DbStmt {
     driver: Rc<RefCell<Option<Box<dyn DriverConn>>>>,
-    sql: String,
+    /// The statement SQL, held as the shared `PhStr` from the `prepare(sql)` argument — a clone is an
+    /// Rc bump (heap variant) or a small inline copy (≤22 bytes), never a fresh `String` heap alloc per
+    /// prepare (DEC-266 dbwork lever). Derefs to `&str` for the driver, so the exec/query sites are
+    /// unchanged.
+    sql: PhStr,
     binds: RefCell<Binds>,
     /// The originating connection's `onQuery` hook and query timeout, shared by `Rc` (see [`DbConn`]).
     /// A statement carries these (not the whole `DbConn`) so `query`/`exec` can fire the hook and apply
@@ -439,7 +444,7 @@ fn dsn_with_password_inner(args: &[Value]) -> Result<Value, String> {
 /// `db.prepare(sql)` → a lazily-executed statement handle carrying the connection driver + SQL.
 fn prepare_inner(args: &[Value]) -> Result<Value, String> {
     let (conn, sql) = match args {
-        [c, Value::Str(s)] => (as_conn(c)?, s.as_str().to_string()),
+        [c, Value::Str(s)] => (as_conn(c)?, s.clone()),
         _ => return Err("Core.DatabaseModule.__prepare expects (Database, string sql)".into()),
     };
     // Reject preparing on a closed connection eagerly (the statement would otherwise fault only at
