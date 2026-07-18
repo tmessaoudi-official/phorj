@@ -25,7 +25,7 @@ same source forms work for `check`, `parse`, `lex`, and `transpile`.
 
 ```bash
 phg check demo.phg     # lex + parse + type-check, no execution
-phg lex   demo.phg     # the token stream
+phg tokenize   demo.phg     # the token stream
 phg parse demo.phg     # the AST
 ```
 
@@ -33,7 +33,7 @@ phg parse demo.phg     # the AST
 $ phg check demo.phg
 OK (type-checks clean)
 
-$ phg lex demo.phg
+$ phg tokenize demo.phg
 Package @ 1:1
 Ident("main") @ 1:9
 Semicolon @ 1:13

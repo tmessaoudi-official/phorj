@@ -2,7 +2,7 @@
 
 Phorj gives you two ways to benchmark:
 
-- **Automated** — `phg bench --vs-php your.phg` measures the interpreter, the VM, and (transpiled)
+- **Automated** — `phg benchmark --vs-php your.phg` measures the interpreter, the VM, and (transpiled)
   real PHP for you, median-of-N, output-identity gated. Use this for a quick 3-way comparison.
 - **Manual** — `Core.Runtime` lets you time and measure memory *from inside* your program, so you
   can build your own harness (per-phase timings, custom reporting, warmup loops). This directory

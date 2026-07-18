@@ -31,7 +31,7 @@ seconds — that's the sampling cost, not the program's runtime.
 
 ## `--vs-php` — who's the winner?
 
-`phg bench --vs-php <file>` adds a head-to-head against the **PHP backend**: it transpiles the
+`phg benchmark --vs-php <file>` adds a head-to-head against the **PHP backend**: it transpiles the
 program to PHP, runs it once to **gate output identity** (a transpile divergence aborts the
 comparison — it's a bug report, not a timing result), then median-times `php <file>` the same way.
 The report gains a `vs PHP` section naming the faster of the Phorj VM and PHP. Requires `php` on

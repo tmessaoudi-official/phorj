@@ -4,7 +4,7 @@
 // and live resident-memory counters. These read the running process, so they are NON-DETERMINISTIC
 // and `pure: false` — a program that imports `Core.Runtime` is QUARANTINED from the byte-identity
 // differential (its output varies per run, so it is NOT a gated example). This complements the
-// automated `phg bench --vs-php`, which measures the same thing from outside.
+// automated `phg benchmark --vs-php`, which measures the same thing from outside.
 //
 // The `Stopwatch` below is plain Phorj — copy it into your own code. It is built on
 // `Runtime.monotonicNanos()` (monotonic, immune to wall-clock jumps — unlike `Core.Time`).
