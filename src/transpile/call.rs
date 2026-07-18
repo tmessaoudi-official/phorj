@@ -219,6 +219,8 @@ impl Transpiler {
                             match nat.name {
                                 "sort" => self.uses_list_sort = true,
                                 "sortWith" => self.uses_list_sort_with = true,
+                                "takeWhile" => self.uses_list_take_while = true,
+                                "dropWhile" => self.uses_list_drop_while = true,
                                 "indexOf" => self.uses_list_index_of = true,
                                 "lastIndexOf" => self.uses_list_last_index_of = true,
                                 "unique" => self.uses_list_unique = true,

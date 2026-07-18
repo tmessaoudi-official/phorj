@@ -120,6 +120,32 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.List",
+            name: "takeWhile",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_take_while),
+            // Gated `__phorj_take_while` (binds the list once; a `foreach` + early `break` matches the
+            // native's stop-at-first-false — an inline expression would re-evaluate the list arg).
+            php: |a| format!("__phorj_take_while({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "dropWhile",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(Ty::Bool), Vec::new()),
+            ],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_drop_while),
+            php: |a| format!("__phorj_drop_while({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
             name: "reduce",
             params: vec![
                 list(t()),

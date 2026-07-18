@@ -1081,6 +1081,29 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `List.takeWhile` — the longest PREFIX all satisfying the predicate; stops at the first
+        // failing element (≡ the native's `break`), re-indexed sequential.
+        if self.uses_list_take_while {
+            self.line("function __phorj_take_while($xs, $f) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("foreach ($xs as $x) { if (!$f($x)) { break; } $out[] = $x; }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        // `List.dropWhile` — the SUFFIX after that prefix; once an element fails the predicate, it and
+        // all after it are kept verbatim (the predicate stops running), matching the native.
+        if self.uses_list_drop_while {
+            self.line("function __phorj_drop_while($xs, $f) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("$dropping = true;");
+            self.line("foreach ($xs as $x) { if ($dropping && $f($x)) { continue; } $dropping = false; $out[] = $x; }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
         // `List.unique` — first-occurrence-order dedupe by strict equality (≡ Phorj value-equality;
         // NOT `array_unique`, which stringifies).
         if self.uses_list_unique {

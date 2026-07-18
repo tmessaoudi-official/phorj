@@ -397,6 +397,31 @@ fn list_higher_order_eval_and_emit() {
     let mut notlist = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(7));
     assert!(list_flat_map(&[nums.clone(), placeholder.clone()], &mut notlist).is_err());
 
+    // takeWhile / dropWhile: predicate `x < 3` over [1,2,3,4] → prefix [1,2], suffix [3,4].
+    let mut lt3 = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+        [Value::Int(n)] => Ok(Value::Bool(*n < 3)),
+        _ => Err("bad arity".to_string()),
+    };
+    match list_take_while(&[nums.clone(), placeholder.clone()], &mut lt3).unwrap() {
+        Value::List(xs) => {
+            assert_eq!(xs.len(), 2); // [1, 2] — stops at 3
+            assert!(matches!(xs[0], Value::Int(1)));
+            assert!(matches!(xs[1], Value::Int(2)));
+        }
+        other => panic!("takeWhile returned {other:?}"),
+    }
+    match list_drop_while(&[nums.clone(), placeholder.clone()], &mut lt3).unwrap() {
+        Value::List(xs) => {
+            assert_eq!(xs.len(), 2); // [3, 4] — keeps from the first failing element on
+            assert!(matches!(xs[0], Value::Int(3)));
+            assert!(matches!(xs[1], Value::Int(4)));
+        }
+        other => panic!("dropWhile returned {other:?}"),
+    }
+    // takeWhile: a non-bool predicate result is a clean fault, never a panic.
+    let mut nb = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(1));
+    assert!(list_take_while(&[nums.clone(), placeholder.clone()], &mut nb).is_err());
+
     // reduce: sum, seeded with 100.
     let mut add = |_f: &Value, a: Vec<Value>| match a.as_slice() {
         [Value::Int(acc), Value::Int(x)] => Ok(Value::Int(acc + x)),

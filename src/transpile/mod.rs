@@ -264,6 +264,11 @@ struct Transpiler {
     /// `<=>`) to match Rust's natural order, `sortWith` defers to the user closure.
     uses_list_sort: bool,
     uses_list_sort_with: bool,
+    /// Set when `Core.List.takeWhile` / `dropWhile` is emitted — gates the matching
+    /// `__phorj_take_while` / `__phorj_drop_while` helper (a `foreach` + early `break`/`continue` that
+    /// binds the list once, matching the native's stop-at-first-failing-element prefix/suffix).
+    uses_list_take_while: bool,
+    uses_list_drop_while: bool,
     /// Set when `Output.capture(fn)` is emitted (DEC-220-S3) — gates the once-per-file
     /// `__phorj_capture($fn){ ob_start(); $fn(); return ob_get_clean(); }` helper.
     uses_capture: bool,
@@ -519,6 +524,8 @@ impl Transpiler {
             uses_list_sort: false,
             uses_capture: false,
             uses_list_sort_with: false,
+            uses_list_take_while: false,
+            uses_list_drop_while: false,
             uses_list_unique: false,
             uses_list_min: false,
             uses_list_max: false,

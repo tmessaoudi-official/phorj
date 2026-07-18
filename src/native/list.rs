@@ -388,6 +388,60 @@ pub(super) fn list_flat_map(args: &[Value], call: &mut ClosureInvoker) -> Result
     }
 }
 
+/// `List.takeWhile(List<T>, (T) -> bool) -> List<T>` — the longest PREFIX whose elements all satisfy
+/// the predicate; stops (does not scan further) at the first element that fails. The predicate runs on
+/// the calling backend via the re-entrant invoker; a non-bool result faults cleanly (EV-7).
+pub(super) fn list_take_while(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut out = Vec::new();
+            for x in xs.iter() {
+                match call(f, vec![x.clone()])? {
+                    Value::Bool(true) => out.push(x.clone()),
+                    Value::Bool(false) => break,
+                    other => {
+                        return Err(format!(
+                            "List.takeWhile predicate must return bool, got {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.takeWhile expects (List<T>, (T) -> bool)".into()),
+    }
+}
+
+/// `List.dropWhile(List<T>, (T) -> bool) -> List<T>` — the SUFFIX after the longest prefix whose
+/// elements all satisfy the predicate; the predicate stops running once the first failing element is
+/// seen (that element and all after it are kept verbatim). A non-bool result faults cleanly (EV-7).
+pub(super) fn list_drop_while(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut out = Vec::new();
+            let mut dropping = true;
+            for x in xs.iter() {
+                if dropping {
+                    match call(f, vec![x.clone()])? {
+                        Value::Bool(true) => continue,
+                        Value::Bool(false) => dropping = false,
+                        other => {
+                            return Err(format!(
+                                "List.dropWhile predicate must return bool, got {}",
+                                other.type_name()
+                            ))
+                        }
+                    }
+                }
+                out.push(x.clone());
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.dropWhile expects (List<T>, (T) -> bool)".into()),
+    }
+}
+
 /// `List.count(List<T>, (T) -> bool) -> int` — how many elements satisfy the predicate. The predicate
 /// runs on the calling backend via the re-entrant invoker; a fault (or non-bool result) is propagated.
 pub(super) fn list_count(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {

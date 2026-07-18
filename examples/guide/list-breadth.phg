@@ -11,6 +11,7 @@ import Core.Runtime.Entry;
 //   * `find(p) -> T?`  — first element satisfying the predicate, or null.
 //   * `any(p)`/`all(p)`— short-circuiting existential / universal quantifiers (`bool`).
 //   * `flatMap(f)`     — map each element to a list, then concatenate (map + one-level flatten).
+//   * `takeWhile(p)`/`dropWhile(p)` — the longest predicate-satisfying prefix, and the rest.
 // All pure Phorj over the higher-order-native machinery; byte-identical both backends and real PHP.
 #[Entry]
 function main(): void {
@@ -57,4 +58,11 @@ function main(): void {
     // results yield `[]`.
     List<int> expanded = List.flatMap([1, 2, 3], function(int n): List<int> { return [n, n * 10]; });
     Output.printLine("flatMap: {List.length(expanded)} elems, sum={List.sum(expanded)}");
+    // takeWhile / dropWhile — the longest leading run all satisfying the predicate, and the rest.
+    // Over [3,1,4,1,5,9,2,6,5]: `< 5` holds for the prefix [3,1,4,1] then stops at 5.
+    List<int> pfx = List.takeWhile(xs, function(int x) => x < 5);
+    List<int> sfx = List.dropWhile(xs, function(int x) => x < 5);
+    Output.printLine(
+        "takeWhile <5: {List.length(pfx)} elems sum={List.sum(pfx)}; dropWhile: {List.length(sfx)} elems"
+    );
 }
