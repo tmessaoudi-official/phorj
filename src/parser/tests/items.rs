@@ -539,6 +539,26 @@ fn empty_import_group_is_a_parse_error() {
 }
 
 #[test]
+fn variadic_param_is_rejected_at_the_parse_chokepoint() {
+    // DEC-298: `...` tokenizes + `Param.variadic` is reserved, but the checker/call semantics are a
+    // follow-on (1b). Reject `...` at `parse_params` — the ONE chokepoint every param position flows
+    // through — so a variadic param can never silently mis-type in a free fn, method, OR lambda.
+    // Remove this reject when 1b lands. (SLICE-STATE §3-1b.)
+    for src in [
+        "package Main; function sum(int ...nums) -> int { return 0; }",
+        "package Main; class C { function f(int ...nums) -> int { return 0; } }",
+        "package Main; function main() -> void { var g = function(int ...xs) -> int { return 0; }; }",
+    ] {
+        let err = parser(src).parse_program().unwrap_err();
+        assert_eq!(
+            err.code,
+            Some("E-VARIADIC-UNSUPPORTED"),
+            "variadic must be rejected at parse for: {src} → {err:?}"
+        );
+    }
+}
+
+#[test]
 fn parses_package_declaration() {
     // `package a.b;` is captured on the Program, not as an Item (M5 S1).
     let prog = parser("package app.util; function main() -> void {}")

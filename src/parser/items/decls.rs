@@ -574,9 +574,16 @@ impl Parser {
             let sp = self.peek_span();
             let ty = self.parse_type()?;
             // Variadic marker (DEC-298): `int ...nums`. The `...` sits between the element type and
-            // the name. The checker gives `nums` the effective type `List<int>` and enforces
-            // last-param-only + no-default. Mutually exclusive with a default value below.
+            // the name. The checker (1b) will give `nums` the effective type `List<int>`. For now the
+            // SEMANTICS are unwired, so reject `...` HERE — the single param chokepoint every position
+            // (free fn, method, lambda, ctor) flows through — so it can never silently mis-type. When
+            // 1b lands, drop this reject and keep `variadic` flowing to the Param. (SLICE-STATE §3-1b.)
             let variadic = self.eat(&TokenKind::DotDotDot);
+            if variadic {
+                return Err(self
+                    .error("a non-variadic parameter — `...` variadics are not implemented yet (DEC-298)")
+                    .with_code("E-VARIADIC-UNSUPPORTED"));
+            }
             let name = self.expect_ident("a parameter name")?;
             // Optional default value (M4 default parameters): `bool b = false`. The checker restricts
             // the expression to a literal and enforces trailing-only ordering.
