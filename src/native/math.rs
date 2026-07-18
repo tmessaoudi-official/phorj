@@ -253,6 +253,51 @@ fn math_tan(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Math.tan expects (float)".into()),
     }
 }
+// DEC-299/Wave-B: the trig/hyperbolic/log tail (G-math-breadth, FN-MATH GP). All pure `f64` kernels
+// delegating to the platform libm — the same source PHP's `asin`/`atan2`/`hypot`/… use, so the three
+// backends agree bit-for-bit (like the existing `sin`/`cos`). Naming is camelCase-consistent; the two
+// angle conversions get the clearer `degToRad`/`radToDeg` (better than PHP's `deg2rad`/`rad2deg` —
+// DEC-Wave-B-math AUTO), transpiled to the PHP names.
+macro_rules! math_unary {
+    ($name:ident, $method:ident, $label:literal) => {
+        fn $name(args: &[Value], _: &mut String) -> Result<Value, String> {
+            match args {
+                [Value::Float(x)] => Ok(Value::Float(x.$method())),
+                _ => Err(concat!("Math.", $label, " expects (float)").into()),
+            }
+        }
+    };
+}
+math_unary!(math_asin, asin, "asin");
+math_unary!(math_acos, acos, "acos");
+math_unary!(math_atan, atan, "atan");
+math_unary!(math_sinh, sinh, "sinh");
+math_unary!(math_cosh, cosh, "cosh");
+math_unary!(math_tanh, tanh, "tanh");
+math_unary!(math_log1p, ln_1p, "log1p");
+math_unary!(math_expm1, exp_m1, "expm1");
+math_unary!(math_deg_to_rad, to_radians, "degToRad");
+math_unary!(math_rad_to_deg, to_degrees, "radToDeg");
+// `log2` uses `x.log(2.0)` (= ln(x)/ln(2)) — the SAME formula as the PHP emitter `log($x, 2)` — so the
+// three backends agree bit-for-bit. `x.log2()` (a direct libm call) could differ by a ULP from PHP.
+fn math_log2(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(x)] => Ok(Value::Float(x.log(2.0))),
+        _ => Err("Math.log2 expects (float)".into()),
+    }
+}
+fn math_atan2(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(y), Value::Float(x)] => Ok(Value::Float(y.atan2(*x))),
+        _ => Err("Math.atan2 expects (float, float)".into()),
+    }
+}
+fn math_hypot(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(x), Value::Float(y)] => Ok(Value::Float(x.hypot(*y))),
+        _ => Err("Math.hypot expects (float, float)".into()),
+    }
+}
 fn math_pi(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [] => Ok(Value::Float(std::f64::consts::PI)),
@@ -287,6 +332,24 @@ fn math_is_odd(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(n)] => Ok(Value::Bool(n % 2 != 0)),
         _ => Err("Math.isOdd expects (int)".into()),
+    }
+}
+
+/// Build a `Core.Math` unary `float -> float` native (Wave-B tail helper) — shares the fixed shape so
+/// each entry is one line (name + eval kernel + PHP emitter).
+fn unary_float(
+    name: &'static str,
+    eval: fn(&[Value], &mut String) -> Result<Value, String>,
+    php: fn(&[String]) -> String,
+) -> NativeFn {
+    NativeFn {
+        module: "Core.Math",
+        name,
+        params: vec![Ty::Float],
+        ret: Ty::Float,
+        pure: true,
+        eval: NativeEval::Pure(eval),
+        php,
     }
 }
 
@@ -608,6 +671,41 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(math_tan),
             php: |a| format!("tan({})", parg(a, 0)),
+        },
+        // Wave-B math tail (G-math-breadth). Unary f64 → f64 (phorj name == PHP name for these).
+        unary_float("asin", math_asin, |a| format!("asin({})", parg(a, 0))),
+        unary_float("acos", math_acos, |a| format!("acos({})", parg(a, 0))),
+        unary_float("atan", math_atan, |a| format!("atan({})", parg(a, 0))),
+        unary_float("sinh", math_sinh, |a| format!("sinh({})", parg(a, 0))),
+        unary_float("cosh", math_cosh, |a| format!("cosh({})", parg(a, 0))),
+        unary_float("tanh", math_tanh, |a| format!("tanh({})", parg(a, 0))),
+        unary_float("log2", math_log2, |a| format!("log({}, 2)", parg(a, 0))),
+        unary_float("log1p", math_log1p, |a| format!("log1p({})", parg(a, 0))),
+        unary_float("expm1", math_expm1, |a| format!("expm1({})", parg(a, 0))),
+        // Angle conversion — clearer camelCase than PHP `deg2rad`/`rad2deg` (transpiled to those).
+        unary_float("degToRad", math_deg_to_rad, |a| {
+            format!("deg2rad({})", parg(a, 0))
+        }),
+        unary_float("radToDeg", math_rad_to_deg, |a| {
+            format!("rad2deg({})", parg(a, 0))
+        }),
+        NativeFn {
+            module: "Core.Math",
+            name: "atan2",
+            params: vec![Ty::Float, Ty::Float],
+            ret: Ty::Float,
+            pure: true,
+            eval: NativeEval::Pure(math_atan2),
+            php: |a| format!("atan2({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "hypot",
+            params: vec![Ty::Float, Ty::Float],
+            ret: Ty::Float,
+            pure: true,
+            eval: NativeEval::Pure(math_hypot),
+            php: |a| format!("hypot({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Math",

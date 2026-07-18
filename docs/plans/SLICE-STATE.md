@@ -18,6 +18,22 @@ and record it as an **AUTO decision** (status `✅ AUTO — REVIEW`) in C-decisi
 pre-push perf gate flagged losses = load-contaminated box, dev re-checks quiet). **Perf work DEFERRED entirely.**
 **Discipline:** accepted surface == working surface (reject every unhandled path — the recurring trap); heavy
 cargo runs need Bash timeout ≥560000ms (2m default SIGKILLs + corrupts incremental → `cargo clean -p phorj`).
+**⚠⚠ WAVE-B REALITY (2026-07-19): the codebase is FAR more complete than the gap-matrix says — GREP-VERIFY
+EVERY candidate before building** (5 phantom gaps this session: Regex/Decimal/match/Fs + #5 CRYPTO). CRYPTO
+FINDINGS (owed to next recompute + review):
+  1. **Phantom-gap #5:** TOP-20 #10 (CSPRNG + HMAC/HKDF/PBKDF2 + timing-safe) is ALREADY BUILT —
+     `Core.Random.secureBytes/secureInt` (src/native/random.rs, /dev/urandom, pure:false) + `Core.Hash.hmac/
+     equals/hkdf/pbkdf2` (src/ext/hash/natives.rs, std-only, byte-identical). Example: `guide/crypto-mac.phg`.
+     I reverted a duplicate Core.Cryptography.randomBytes/randomInt/timingSafeEqual I'd started (caught via crypto-mac.phg).
+  2. **🚩 PLACEMENT MISMATCH (flag-already-done rule):** dev ruled TONIGHT crypto→Core.Cryptography, but CSPRNG
+     lives in Core.Random + HMAC/KDF in Core.Hash (shipped, byte-identical). AUTO/PENDING: keep shipped placement
+     OR consolidate into Core.Cryptography (breaking rename) — dev decides at review. NOT moved silently.
+  3. **§4.9 UNDERCOUNT:** FN-HASH (hmac/hkdf/pbkdf2 were GP) + FN-RAND (CSPRNG was P) are BUILT but uncredited →
+     real parity is HIGHER than 64%. Recompute owed (also credit the Math tail + named-args SYN row).
+  **DONE this overnight:** slice#3 named args FULL SCOPE (`998e370b`); variadics (`59bf4158`); Wave-B Math tail
+  (asin/acos/atan/atan2/hypot/sinh/cosh/tanh/log2/log1p/expm1/degToRad/radToDeg — genuine gap, byte-identical).
+  Spread DEC-299 AUTO-DEFERRED (VM runtime-arity fork). NEXT: grep-verify String GU tail + Array long-tail + FS
+  breadth (glob/stat/mtime/perms/tempFile — verified genuine gaps) before building each.
 
 
 ## ✅ DONE — CONTINUOUS SESSION 2 (2026-07-18, HEAD `3a8f1b7f`, +12 commits, ALL UNPUSHED — READ FIRST)

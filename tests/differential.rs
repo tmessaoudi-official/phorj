@@ -651,6 +651,45 @@ function greet(string name, string greeting = "Hello", bool loud = false) -> str
     );
 }
 
+/// Wave-B: the Core.Math tail (inverse trig / hyperbolics / hypot / log2 / log1p / expm1 / angle
+/// conversion) is byte-identical run≡runvm≡php — all delegate to the platform libm PHP also uses;
+/// `log2` deliberately computes `ln(x)/ln(2)` to match PHP's `log(x, 2)` (not a direct `log2` libm call).
+#[test]
+fn math_tail_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Math;
+#[Entry] function main() -> void {
+    Output.printLine("{Math.hypot(3.0, 4.0)}");
+    Output.printLine("{Math.log2(8.0)}");
+    Output.printLine("{Math.asin(0.5)}");
+    Output.printLine("{Math.atan2(1.0, 2.0)}");
+    Output.printLine("{Math.sinh(1.0)}");
+    Output.printLine("{Math.expm1(0.001)}");
+    Output.printLine("{Math.degToRad(180.0)}");
+}"#,
+        "5\n3\n0.5235987755982989\n0.4636476090008061\n1.1752011936438014\n0.0010005001667083417\n3.141592653589793\n",
+        "math_tail",
+    );
+}
+
+/// Wave-B: the Math tail's NaN/inf/domain-error results are byte-identical too (phorj's `__phorj_float`
+/// normalizes `NaN`/`-inf` to PHP's `NAN`/`-INF` display), not just the finite happy path.
+#[test]
+fn math_tail_nan_inf_is_byte_identical() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Math;
+#[Entry] function main() -> void {
+    Output.printLine("{Math.asin(2.0)}");
+    Output.printLine("{Math.log2(0.0)}");
+    Output.printLine("{Math.log1p(-1.0)}");
+}"#,
+        "NaN\n-inf\n-inf\n",
+        "math_tail_nan_inf",
+    );
+}
+
 /// DEC-297 part 2: named arguments on a CONSTRUCTOR (`new Point(y: 9, x: 2)`) — reordered + defaults
 /// filled to positional before any backend, byte-identical run≡runvm≡php.
 #[test]
@@ -2671,22 +2710,34 @@ const TIER1_PHP: &[&str] = &[
     "usort",
     // math / numeric
     "abs",
+    "acos",
+    "asin",
+    "atan",
+    "atan2",
     "ceil",
     "cos",
+    "cosh",
+    "deg2rad",
     "exp",
+    "expm1",
     "fdiv",
     "floor",
     "fmod",
+    "hypot",
     "intdiv",
     "log",
     "log10",
+    "log1p",
     "max",
     "min",
     "pow",
+    "rad2deg",
     "range",
     "round",
     "sin",
+    "sinh",
     "sqrt",
+    "tanh",
     "tan",
     // bcmath (sanctioned, -d-loaded)
     "bcadd",

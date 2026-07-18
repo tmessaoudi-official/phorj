@@ -58,6 +58,22 @@ function main(): void {
     Output.printLine(
         "exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}"
     );
+    // --- Wave-B math tail: inverse trig, hyperbolics, hypot, log2/log1p/expm1, angle conversion.
+    // All erase to the PHP libm builtins (`log2` uses `log(x, 2)`; `degToRad`/`radToDeg` to
+    // `deg2rad`/`rad2deg`), byte-identical across the three backends. Exact-result values shown.
+    float h = Math.hypot(3.0, 4.0);
+    float lg = Math.log2(8.0);
+    float a2 = Math.atan2(0.0, 1.0);
+    float d = Math.degToRad(0.0);
+    float r = Math.radToDeg(0.0);
+    Output.printLine(
+        "hypot(3,4)={h}, log2(8)={lg}, atan2(0,1)={a2}, degToRad(0)={d}, radToDeg(0)={r}"
+    );
+    // Irrational results printed via `numberFormat` (collapses any last-ULP noise to a stable string).
+    string asf = Math.numberFormat(Math.asin(0.5), 6);
+    string shf = Math.numberFormat(Math.sinh(1.0), 6);
+    string thf = Math.numberFormat(Math.tanh(0.5), 6);
+    Output.printLine("asin(0.5)~{asf}, sinh(1)~{shf}, tanh(0.5)~{thf}");
     // --- `numberFormat(value, decimals)` → a grouped string, rounded half-away-from-zero. It erases
     // to a `__phorj_number_format` helper (identical string-building on both legs), so it is the safe
     // way to *print* a real transcendental: formatting to a few decimals collapses any last-ULP noise. ---
