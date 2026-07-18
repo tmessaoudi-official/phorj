@@ -614,11 +614,14 @@ impl<'a> Vm<'a> {
             Op::MatchTag(idx) => {
                 let want = self.program.enum_descs[idx].variant.clone();
                 // Pop the scrutinee copy the compiler pushed for this test (it reloads `$match`
-                // per arm), leaving just the bool for the following `JumpIfFalse`.
-                let matched = matches!(self.pop(), Value::Enum(ev) if ev.variant == want);
+                // per arm), leaving just the bool for the following `JumpIfFalse`. A lazy Json node
+                // (DEC-294) materializes one level here first (memoized, so the paired GetEnumField
+                // reload is a cache hit).
+                let scrut = crate::value::materialize_if_lazy(self.pop());
+                let matched = matches!(scrut, Value::Enum(ev) if ev.variant == want);
                 self.stack.push(Value::Bool(matched));
             }
-            Op::GetEnumField(i) => match self.pop() {
+            Op::GetEnumField(i) => match crate::value::materialize_if_lazy(self.pop()) {
                 Value::Enum(ev) => {
                     // Clone the element out of the shared payload (can't move out of an `Rc`); the
                     // element is itself `Rc`-shared if compound, so this stays an O(1) bump (P5a).

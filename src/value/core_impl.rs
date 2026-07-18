@@ -2,6 +2,19 @@
 
 use super::*;
 
+/// If `v` is a lazy `Json` node (DEC-294), materialize one level to a `Value::Enum`; otherwise return
+/// it unchanged. Always compiled (the VM's `MatchTag`/`GetEnumField` call it unconditionally): with the
+/// `json` feature off there is no `JsonLazy` variant, so this is the identity.
+#[cfg(feature = "json")]
+pub fn materialize_if_lazy(v: Value) -> Value {
+    crate::ext::json::materialize_if_lazy(v)
+}
+#[cfg(not(feature = "json"))]
+#[inline]
+pub fn materialize_if_lazy(v: Value) -> Value {
+    v
+}
+
 impl Value {
     /// Short name for diagnostics. Composite types fold to a constant so the
     /// return can stay `&'static str`.
@@ -20,6 +33,8 @@ impl Value {
             Value::Set(_) => "set",
             Value::Instance(_) => "instance",
             Value::Enum(_) => "enum",
+            #[cfg(feature = "json")]
+            Value::JsonLazy(_) => "enum", // a lazy Json node IS an enum (DEC-294) — no materialize needed
             Value::Closure(_) => "function",
             Value::Channel(..) => "channel",
             Value::Task(_) => "task",
@@ -70,6 +85,17 @@ impl Value {
         other: &Value,
         visited: &mut Vec<(*const Instance, *const Instance)>,
     ) -> bool {
+        // A lazy Json node (DEC-294) compares as the enum it materializes to — one level here, then
+        // recurse (children materialize as they are compared). Keeps `==` byte-identical to eager Json.
+        #[cfg(feature = "json")]
+        {
+            if let Value::JsonLazy(l) = self {
+                return crate::ext::json::materialize_lazy(l).eq_val_rec(other, visited);
+            }
+            if let Value::JsonLazy(l) = other {
+                return self.eq_val_rec(&crate::ext::json::materialize_lazy(l), visited);
+            }
+        }
         use Value::*;
         match (self, other) {
             (Int(a), Int(b)) => a == b,

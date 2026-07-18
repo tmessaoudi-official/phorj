@@ -7,3 +7,4 @@ pub mod natives;
 mod tests;
 
 pub use natives::json_natives;
+pub use natives::{materialize_if_lazy, materialize_lazy};

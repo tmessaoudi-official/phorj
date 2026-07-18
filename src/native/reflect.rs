@@ -81,6 +81,8 @@ fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
             // A closure is `is_callable` in PHP; instances and enum variants are plain objects.
             Value::Closure(_) => "callable",
             Value::Instance(_) | Value::Enum(_) => "object",
+            #[cfg(feature = "json")]
+            Value::JsonLazy(_) => "object", // a lazy Json node's kind = enum's kind (DEC-294)
             // Green-thread handles (M6 W4) are not transpilable — they never reach the PHP `kind`
             // helper. Mapped to "object" defensively so this arm stays total (the checker excludes
             // a channel/task from arithmetic/display; reflection over one is an edge, not a goal).
@@ -136,6 +138,9 @@ fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {
             Value::Instance(i) => &i.class,
             // The static type is the *enum*, so the precise name is the enum's name (not the variant).
             Value::Enum(e) => &e.ty,
+            // A lazy Json node's type is always the `Json` enum (DEC-294) — no materialize needed.
+            #[cfg(feature = "json")]
+            Value::JsonLazy(_) => "Json",
             Value::Closure(_) => "function",
             // Green-thread handles (M6 W4) — precise names; defensive (a channel/task is excluded
             // from `typeName`'s UFCS and never transpiles, so this arm is effectively dead).

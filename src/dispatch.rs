@@ -81,6 +81,9 @@ fn kind_matches(k: &ParamKind, v: &Value, oracle: &BTreeMap<String, Vec<String>>
         (ParamKind::Fn, Value::Closure(_)) => true,
         (ParamKind::Named(n), Value::Instance(inst)) => is_subtype(&inst.class, n, oracle),
         (ParamKind::Named(n), Value::Enum(e)) => e.ty.as_ref() == n.as_str(),
+        // A lazy Json node's type is always the `Json` enum (DEC-294) — match without materializing.
+        #[cfg(feature = "json")]
+        (ParamKind::Named(n), Value::JsonLazy(_)) => n.as_str() == "Json",
         _ => false,
     }
 }

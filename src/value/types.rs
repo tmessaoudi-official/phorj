@@ -96,6 +96,22 @@ impl ClassLayout {
     }
 }
 
+/// A lazily-parsed `Json` node's backing (DEC-294): the whole parsed document's bytes (shared by every
+/// lazy node of one `Json.parse`) plus the byte offset where THIS node begins (at a validated value).
+/// `crate::ext::json` owns the parse/materialize logic (`materialize_lazy`); this struct is pure data.
+/// Gated on the `json` feature (the only producer is `Core.Json` parse) — with `json` off there is no
+/// lazy node and the [`Value::JsonLazy`] variant does not exist.
+#[cfg(feature = "json")]
+#[derive(Debug)]
+pub struct LazyJson {
+    pub src: Rc<str>,
+    pub start: usize,
+    /// Memoizes this node's one-level materialization (DEC-294). Shared via the enclosing `Rc<LazyJson>`
+    /// (cloning the `Value::JsonLazy` shares this cache), so the VM's separate `MatchTag` + `GetEnumField`
+    /// reloads of the same scrutinee — and repeated matches — build the node ONCE, then Rc-clone it.
+    pub cached: std::cell::OnceCell<Value>,
+}
+
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
@@ -135,6 +151,14 @@ pub enum Value {
     Set(Rc<Vec<HKey>>),
     Instance(Rc<Instance>),
     Enum(Rc<EnumVal>),
+    /// A lazily-parsed `Json` node (DEC-294): the shared parsed source bytes + this node's byte offset.
+    /// It materializes to a `Value::Enum` (`Json.*`) ONE LEVEL at a time when a `match`/encode/compare
+    /// deconstructs it (via `crate::ext::json::materialize_lazy`), so `Json.parse` never eagerly
+    /// allocates the subtrees a program does not read. Behaves EXACTLY like the eager `Value::Enum` it
+    /// materializes to — the Json ADT is immutable, and every deconstruction site materializes before
+    /// inspecting, so byte-identity holds. Only ever produced by `Core.Json` parse (`json` feature).
+    #[cfg(feature = "json")]
+    JsonLazy(Rc<LazyJson>),
     /// A first-class function value: either a tree-walking closure (interpreter),
     /// a bare named-function reference, or a VM bytecode closure (Task 4).
     Closure(Rc<ClosureData>),

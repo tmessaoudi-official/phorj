@@ -169,6 +169,12 @@ pub(super) fn match_pattern(
         Pattern::Bool(b, _) => matches!(value, Value::Bool(v) if v == b),
         Pattern::Null(_) => matches!(value, Value::Null), // M3 S2.6: `null` arm over a `T?`
         Pattern::Variant { name, fields, .. } => {
+            // A lazy Json node (DEC-294) materializes one level here, before the variant test.
+            #[cfg(feature = "json")]
+            if let Value::JsonLazy(l) = value {
+                let m = crate::ext::json::materialize_lazy(l);
+                return match_pattern(pat, &m, implements, out);
+            }
             if let Value::Enum(ev) = value {
                 if ev.variant.as_ref() == name.as_str() && ev.payload.len() == fields.len() {
                     return fields

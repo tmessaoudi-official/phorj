@@ -106,6 +106,11 @@ fn render_into(value: &Value, caps: &RenderCaps, depth: usize, out: &mut String)
                 });
             }
         }
+        // A lazy Json node (DEC-294) materializes one level, then renders like the enum it is.
+        #[cfg(feature = "json")]
+        Value::JsonLazy(l) => {
+            render_into(&crate::ext::json::materialize_lazy(l), caps, depth, out);
+        }
         // Opaque handles — never carry inspectable structure, and rendering an address/id would
         // break determinism. A stable type tag is the whole safe surface.
         Value::Closure(_) => out.push_str("<function>"),
