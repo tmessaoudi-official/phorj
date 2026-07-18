@@ -13,8 +13,19 @@
   IMPROVED — broad alloc win across ALL enums). **jsonround STILL 0.29× LOSS** (507ms vs C-json 145ms, 3.4× gap):
   ~65% of allocs = the `Rc<EnumVal>` BOX itself; flipping needs a **value-model rebuild (arena)** = ⚠ **PENDING
   Invariant-15 developer decision, NOT autonomously attempted** (DEC-286). jsonround finished to the autonomous limit.
-- **NEXT = dbwork (0.64× LOSS)** — the census's winnable "better bet" (PDO/Db dispatch overhead, beatable). Perf-flip
-  mission continues on a movable target; jsonround's wall documented (DEC-286) for developer review.
+- **dbwork DONE — 0.64× → ~0.98× (AT PARITY with C PDO-sqlite), 3 byte-identical levers committed:**
+  `a90c4f8c` prepare_cached (rusqlite LRU stmt cache — 0.64→0.85, PDO doesn't cache) · `80e5d9b3` chainable
+  bind returns `this` not `new Statement` (0.85→~0.95, kills per-bind instance alloc ×40k/run) · `e8dd5dd3`
+  DbStmt.sql String→PhStr (0.95→~0.98, no per-prepare String alloc). Residual sub-1% = the per-op
+  DatabaseResult enum (the CATCHABLE DatabaseError protocol — semantically required, a Chesterton fence, NOT
+  removed). Per the refined mandate (MATCH-not-beat on C-tuned targets), ~0.98× vs C PDO = success. Each lever
+  byte-identical (115 db tests both backends + sqlite units). ⚠ measured under load ~8; a quiet-box `--emit`
+  re-baseline (OWED, deferred pre-push) would record the new numbers (likely ≥1.0 clean). microbench-gate
+  baseline NOT yet updated (do on quiet box).
+- **NEXT (perf mission substantially complete — both losses addressed):** per the confirmed programme, the
+  CORE PARITY PUSH (the big %-movers: FN parity is the 40%-weighted drag at ~37%) — TOP-20 stdlib breadth
+  (FS breadth → sprintf → array-tail → date/time → subprocess → regex-breadth). jsonround arena = PENDING
+  developer decision (DEC-286).
 
 
 ### ✅ DEC-284 EXTENSION/FEATURE RENAME COMMITTED `e1eb3781` (2026-07-18) — UNPUSHED
