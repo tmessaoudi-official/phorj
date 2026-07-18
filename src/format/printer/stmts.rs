@@ -2,6 +2,13 @@
 
 use super::*;
 
+/// Whether a destructure pat is the EXPLICIT-type tuple form `(T a, U b)` — every binder typed. It
+/// prints WITHOUT a `var` prefix (`(int a, string b) = …`), unlike every other destructure form
+/// (`var [a,b]`, `var Type{…}`, inferred `var (a,b)`), which keep `var` (DEC-288).
+pub(crate) fn explicit_tuple_pat(p: &DestructurePat) -> bool {
+    matches!(p, DestructurePat::Tuple { binders, .. } if binders.iter().all(|(t, _, _)| t.is_some()))
+}
+
 impl Printer<'_> {
     pub(super) fn stmt(&mut self, s: &Stmt) -> Result<(), String> {
         // Flush any comments that appear before this statement in source (own-line placement). v1
@@ -107,10 +114,17 @@ impl Printer<'_> {
                     )) = body.split_first()
                     {
                         if dn == name {
-                            let names: Vec<String> =
-                                binders.iter().map(|(_, n, _)| n.clone()).collect();
+                            // Preserve each binder's surface — `int n` (explicit) or `n` (inferred) —
+                            // so both `for ((int n, …))` and `for ((n, …))` round-trip.
+                            let parts: Result<Vec<String>, String> = binders
+                                .iter()
+                                .map(|(ty_opt, n, _)| match ty_opt {
+                                    Some(t) => Ok(format!("{} {n}", ty(t)?)),
+                                    None => Ok(n.clone()),
+                                })
+                                .collect();
                             let head =
-                                format!("for (({}) in {})", names.join(", "), self.expr(iter)?);
+                                format!("for (({}) in {})", parts?.join(", "), self.expr(iter)?);
                             return self.block_stmt(&head, rest);
                         }
                     }
@@ -184,7 +198,10 @@ impl Printer<'_> {
                 else_block,
                 ..
             } => {
-                let head = format!("var {} = {}", self.destructure_pat(pat)?, self.expr(init)?);
+                // The explicit-type tuple form `(int a, string b) = …` has NO `var`; every other
+                // destructure (`var [a,b]`, `var Type{…}`, inferred `var (a,b)`) keeps it (DEC-288).
+                let kw = if explicit_tuple_pat(pat) { "" } else { "var " };
+                let head = format!("{kw}{} = {}", self.destructure_pat(pat)?, self.expr(init)?);
                 match else_block {
                     None => {
                         self.line(&format!("{head};"));

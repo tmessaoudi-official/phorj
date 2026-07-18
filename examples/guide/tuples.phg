@@ -33,6 +33,10 @@ function main(): void {
     // A tuple literal destructured directly.
     var (x, y, z) = (2, 3, 4);
     Output.printLine("product={x * y * z}");
+    // Explicit-type form (no `var`): spell each binder's type. Equivalent to the inferred `var (…)`
+    // — use it when you want the types documented at the binding site.
+    (int lo2, int hi2) = minMax(8, 2);
+    Output.printLine("lo2={lo2} hi2={hi2}");
     // The headline use: iterate PAIRS with `for ((a, b) in …)`. `List.zip` pairs two lists
     // positionally (length = the shorter one); `Map.entries` yields each key→value as a tuple.
     List<int> ids = [1, 2, 3];

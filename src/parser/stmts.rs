@@ -178,6 +178,40 @@ impl Parser {
         self.finish_destructure(pat, sp)
     }
 
+    /// `(T a, U b) = expr;` — EXPLICIT-type tuple destructuring, no `var` (DEC-288). Tried at a
+    /// statement-leading `(`; backtracks cleanly (returns `None`, cursor restored) when the shape is
+    /// NOT `(Type name, Type name, …) =` — so a typed tuple-VarDecl `(int, string) p = …`, a grouped
+    /// expression, or a tuple-literal expr-stmt all fall through untouched. Every element MUST be a
+    /// `Type name` pair (that is what distinguishes it from a bare tuple expression / a tuple type).
+    fn try_explicit_tuple_destructure(&mut self, sp: Span) -> Result<Option<Stmt>, Diagnostic> {
+        let start = self.pos;
+        self.expect(&TokenKind::LParen, "'('")?;
+        let mut binders: Vec<(Option<Type>, String, Span)> = Vec::new();
+        loop {
+            let bsp = self.peek_span();
+            let Some((ty, name)) = self.try_typed_binding() else {
+                self.pos = start;
+                return Ok(None);
+            };
+            binders.push((Some(ty), name, bsp));
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        // Commit only on `) =` binding 2+ elements — else restore and let the normal parse take over.
+        if binders.len() < 2 || !self.check(&TokenKind::RParen) {
+            self.pos = start;
+            return Ok(None);
+        }
+        self.advance(); // ')'
+        if !self.check(&TokenKind::Eq) {
+            self.pos = start;
+            return Ok(None);
+        }
+        let pat = crate::ast::DestructurePat::Tuple { binders, span: sp };
+        Ok(Some(self.finish_destructure(pat, sp)?))
+    }
+
     /// `Type { field [: binding], … } = expr [else { … }];` — the `var`, type ident, and `{` have been
     /// peeked but not consumed.
     fn parse_struct_destructure(&mut self, sp: Span) -> Result<Stmt, Diagnostic> {
@@ -423,8 +457,15 @@ impl Parser {
         let mut binders: Vec<(Option<Type>, String, Span)> = Vec::new();
         loop {
             let bsp = self.peek_span();
-            let name = self.expect_ident("a binding name in the tuple loop pattern")?;
-            binders.push((None, name, bsp));
+            // Each binder is `name` (inferred) or `Type name` (explicit) — DEC-288 both forms.
+            let (ty_opt, name) = match self.try_typed_binding() {
+                Some((ty, n)) => (Some(ty), n),
+                None => (
+                    None,
+                    self.expect_ident("a binding name in the tuple loop pattern")?,
+                ),
+            };
+            binders.push((ty_opt, name, bsp));
             if !self.eat(&TokenKind::Comma) {
                 break;
             }
@@ -796,6 +837,13 @@ impl Parser {
     /// anything short of that rewinds the cursor and re-parses as an expression.
     pub(super) fn parse_var_decl_or_expr_stmt(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
+        // DEC-288: an explicit-type tuple destructure `(T a, U b) = …` (no `var`). Tried first at a
+        // leading `(`; backtracks cleanly to the typed-VarDecl / expr paths below when it doesn't match.
+        if self.check(&TokenKind::LParen) {
+            if let Some(stmt) = self.try_explicit_tuple_destructure(sp)? {
+                return Ok(stmt);
+            }
+        }
         if let Some((ty, name)) = self.try_var_decl_header() {
             let init = self.parse_expr()?;
             self.expect(&TokenKind::Semicolon, "';' after variable declaration")?;

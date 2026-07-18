@@ -507,7 +507,12 @@ impl Printer<'_> {
                 else_block,
                 ..
             } => {
-                let head = format!("var {} = {}", self.destructure_pat(pat)?, self.expr(init)?);
+                let kw = if crate::format::printer::stmts::explicit_tuple_pat(pat) {
+                    ""
+                } else {
+                    "var "
+                };
+                let head = format!("{kw}{} = {}", self.destructure_pat(pat)?, self.expr(init)?);
                 match else_block {
                     None => Ok(format!("{head};")),
                     Some(eb) => Ok(format!("{head} else {{ {} }}", self.inline_block(eb)?)),
