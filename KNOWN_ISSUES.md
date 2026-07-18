@@ -39,6 +39,21 @@
 > Invariant-2 tension: the interpreter is normally the oracle, but here its "runtime error" prefix is
 > the less-correct one. Not autonomously changed (error-presentation is dev-adjudicated, Invariant 15).
 
+> **⚠ DEC-282 (manifest-less loader) DOC-DRIFT flagged 2026-07-18 (dev review — governing/policy docs).**
+> DEC-282 retired `phorj.toml`, `[require]`, `phorj.lock`, and the `phg vendor` command (fetching is now
+> a future package-manager extension; the compiler never touches the network). Living FEATURES.md was
+> internally contradictory and is FIXED (row 70). Remaining stale refs to fix in a coordinated dev pass
+> (governing/policy docs — not autonomously rewritten, Invariant 15): `SECURITY.md` (calls `phg vendor`
+> "the only command that touches the network" — now NONE do, a STRONGER stance); `CLAUDE.md` Invariant 10
+> ("`phg vendor` is the only network command"); this file's own "Transitive dependencies / `phg vendor`
+> fetches" row (moot — vendor retired); `conformance/README.md` ("a `phorj.toml` is treated as a project"
+> — now src/-root walk-up); `docs/adr/0005-offline-only-vendor.md` (mark superseded by DEC-282). NOTE: this
+> is one instance of a broader pattern — recent DECs (282 manifest retirement, 113 CLI renames
+> fmt/bench/lex/disasm→format/benchmark/tokenize/disassemble, the run/runvm labels above) left stale
+> command/feature refs across docs; a focused doc-drift sweep (grep the retired names, on a healthy box) is
+> OWED. Safe living-showcase/example/comment instances were fixed 2026-07-18 (main.rs, example READMEs,
+> FEATURES row 70).
+
 Phorj is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
 **deliberate scope boundaries** — features that are *planned* (see [ROADMAP.md](ROADMAP.md)) rather
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
