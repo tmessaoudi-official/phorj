@@ -75,7 +75,17 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
        group("a")==null run≡vm≡php; unit test; example; KNOWN_ISSUES note RegexMatch does NOT inherit the divergence.
    ⚠ Inherited caveat in KNOWN_ISSUES: findGroups/findAllGroups optional non-participating named groups
    diverge on PHP leg (Rust omits, PCRE fills "") — replaceCallback's RegexMatch FIXES this via UNMATCHED_AS_NULL.
-3. **Named args + variadics + spread** — SYN mover + unblocks lifter on PHP 8.0+. ✅ **DESIGN FULLY RULED
+3. **Named args + variadics + spread** — SYN mover + unblocks lifter on PHP 8.0+.
+   ✅ **VARIADICS DONE v1** (`59bf4158`, free-fn, byte-identical). ✅ **NAMED ARGS part 1/3 DONE**
+   (`89526a84`, FREE FUNCTIONS — `Expr::NamedArg` variant mirroring Tuple + `FnSig.param_names` +
+   `normalize_named_args` front-normalize + `pending_named` REPLACE fill + 8 rejects + 6 explain codes).
+   ⏳ **NAMED ARGS part 2/3 = CONSTRUCTORS, part 3/3 = METHODS** (dev ruled FULL scope) — interim they
+   report E-NAMED-ARG-MISPLACED. Ctor path = construction resolution (CtorParam names, not FnSig);
+   method path = methods.rs (has FnSig.param_names already → reuse normalize_named_args). ⏳ **SPREAD**
+   (DEC-299: List→positional + Map-literal→named static core; runtime union-Map→named leg) STILL PENDING.
+   ⚠ recurring trap all session: accepted surface must == working surface (reject at every unhandled path).
+   (historical full-design + build-approach below:)
+   ✅ **DESIGN FULLY RULED
    2026-07-18 (DEC-297/298/299) — greenfield, largest spine slice; BUILD FRESH-CONTEXT, SPLIT in two:**
    ── STATIC CORE (slice #3a, build first): ──
    • **Named args** `f(name: value)` (DEC-297, PHP-8.0 colon spelling, 1:1 transpile; interacts w/ default
