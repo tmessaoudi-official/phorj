@@ -570,6 +570,12 @@ impl JParser<'_> {
     // ACCEPTANCE with `value()` (mirrors its grammar exactly), but alloc-free. Used both by the
     // parse-time whole-doc validation (to preserve null-on-malformed) and by `materialize_*` to
     // delimit a child's byte range.
+    //
+    // ⚠ INVARIANT (guarded by the `lazy_matches_eager_on_corpus` test): the `skip_*` family must
+    // accept EXACTLY what the eager builders (`value`/`string`/`number`) accept. If they ever diverge,
+    // `validate_json` accepts a doc whose child then fails the real builder in `materialize_lazy` →
+    // its `.expect("re-parse cannot fail")` PANICS. Touch `value`/`string`/`number` ⇒ touch `skip_*`
+    // (and vice versa) and re-run that corpus test.
 
     fn skip_value(&mut self) -> Option<()> {
         self.ws();
