@@ -230,3 +230,25 @@ fn php_builtin_class_names_are_rejected_at_class_positions() {
         "a free function named like a builtin CLASS is legal PHP — got {e:?}"
     );
 }
+
+#[test]
+fn php8_reserved_keyword_names_are_rejected() {
+    // Found building DEC-295 (RegexMatch): `match`/`enum`/`fn` are PHP-8 reserved keywords
+    // (case-insensitive) — illegal as a class OR function name. phorj previously ACCEPTED
+    // `class Match` and would emit `class Match {}`, a PHP parse error. Reject with E-RESERVED-NAME.
+    for src in [
+        "package Main; class Match {}",
+        "package Main; class Enum {}",
+        "package Main; interface Fn {}",
+        // case-insensitive, like PHP's own keyword matching
+        "package Main; class MATCH {}",
+        // keywords are illegal as free FUNCTION names too (unlike builtin CLASS names above)
+        "package Main; function fn() -> int { return 1; }",
+    ] {
+        let e = errors_of_raw(src);
+        assert!(
+            e.iter().any(|d| d.code == Some("E-RESERVED-NAME")),
+            "{src} → got {e:?}"
+        );
+    }
+}

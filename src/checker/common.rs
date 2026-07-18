@@ -385,6 +385,12 @@ pub(super) fn is_php_reserved_symbol_name(name: &str, kind: &str) -> bool {
         "or",
         "xor",
         "yield",
+        // PHP-8 reserved keywords illegal as a class/function name (case-insensitive) — a phorj
+        // `class Match`/`Enum`/`Fn` (any case) would transpile to a PHP parse error. `readonly` is in
+        // CLASS_EXTRA; these three were missing (found building DEC-295's RegexMatch type).
+        "match",
+        "enum",
+        "fn",
         "declare",
         "namespace",
         "use",

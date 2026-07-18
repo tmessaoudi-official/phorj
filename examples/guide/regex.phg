@@ -50,6 +50,6 @@ function main(): void {
     Output.printLine("redact = {redacted}");
     // quoteMeta — escape metacharacters so untrusted text matches LITERALLY (not as a pattern).
     var literal = Regex.compile(Regex.quoteMeta("a.b+c"));
-    Output.printLine("quote hit = {Regex.matches(literal, "x a.b+c y")}");
-    Output.printLine("quote miss = {Regex.matches(literal, "xabbbcx")}");
+    Output.printLine("quote hit = {Regex.matches(literal, \"x a.b+c y\")}");
+    Output.printLine("quote miss = {Regex.matches(literal, \"xabbbcx\")}");
 }
