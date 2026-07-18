@@ -30,12 +30,32 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
    still GU in FN-PCRE).
 2. **Regex closer** — ✅ **findAllGroups** (`999c3701`, matchAll/preg_match_all parity, byte-identical)
    + ✅ **quoteMeta** (`353ba92a`, DEC-296 regex::escape oracle + mirrored addcslashes helper). BOTH
-   committed, advisor-6C-certified, gate green. ⚠ **replaceCallback = DEC-295 STILL PENDING** (dev-ruled:
-   typed `Match` object callback — `m.full()` + `m.group(name)->string?`, PREG_UNMATCHED_AS_NULL fixes
-   the optional-group divergence BY DESIGN). SPINE-TOUCHING (new injected `Match` type + higher-order
-   re-entrant native + PHP twin) → needs a FRESH 3C before building; NOT a small edit. START HERE next.
-   ⚠ Inherited caveat documented in KNOWN_ISSUES: findGroups/findAllGroups optional non-participating
-   named groups diverge on PHP leg (Rust omits, PCRE fills "") — replaceCallback FIXES this for its Match.
+   committed, advisor-6C-certified, gate green. ✅ **reserved-name prerequisite DONE** (`3da89d12`):
+   match/enum/fn added to FN_RESERVED (phorj wrongly accepted `class Match`→invalid PHP; found here).
+   Type name RULED = **RegexMatch** (dev; `Match` is a PHP-8 keyword, illegal as a class name).
+   ⚠ **replaceCallback CORE = DEC-295 PENDING — BUILD-READY DESIGN LOCKED (build FRESH-context, spine-novel):**
+     • Prelude (extend `src/ext/mod.rs::regex_prelude::PRELUDE`, currently the 1-line Regex class):
+       `class RegexMatch { constructor(public string matched, public Map<string,string> groups) {}`
+       `  function full(): string { return this.matched; }`
+       `  function group(string name): string? { return Map.get(this.groups, name); } }`
+       ⚠ RESOLVE FIRST: prelude now references Core.Map (`Map<>` type + `Map.get` -> V?) — check how
+       HTTP/INPUT preludes declare cross-Core deps ("reuse Core.Bytes/String"); regex prelude is dep-free today.
+     • Native: `NativeEval::HigherOrder(regex_replace_callback)`, params `[Regex, string,
+       Ty::Function(vec![Ty::Named("RegexMatch",vec![])], Box::new(Ty::String), vec![])]`, ret String. Body:
+       `captures_iter`, build a RegexMatch `Value::Instance` (class "RegexMatch",
+       `ClassLayout::from_sorted_names(&["groups","matched"])`, matched=whole match, groups=participating
+       named captures like `regex_find_groups`), `call(cb, vec![m])?` → replacement, splice by byte offsets
+       (track last_end; gap+replacement; tail). ⚠ SPINE-NOVEL: FIRST native-built instance whose METHODS get
+       dispatched — validate `m.full()`/`m.group()` on BOTH backends with a run-only probe BEFORE the PHP twin.
+     • PHP twin `__phorj_regex_replace_callback($re,$s,$cb)`: `preg_replace_callback(delim, function($m) use($cb){`
+       `$g=[]; foreach($m as $k=>$v){ if(is_string($k)&&$v!==null){$g[$k]=$v;} } return $cb(new RegexMatch($m[0],$g)); },`
+       `$s, -1, $count, PREG_UNMATCHED_AS_NULL)`. UNMATCHED_AS_NULL + omit-null ⇒ group() null for
+       non-participating on ALL backends (FIXES the findGroups/findAllGroups divergence). Add `preg_replace_callback`
+       to TIER1_PHP if absent.
+     • Tests: differential case with a NON-PARTICIPATING named group (`(?<a>x)?(?<b>y)` on "y") proving
+       group("a")==null run≡vm≡php; unit test; example; KNOWN_ISSUES note RegexMatch does NOT inherit the divergence.
+   ⚠ Inherited caveat in KNOWN_ISSUES: findGroups/findAllGroups optional non-participating named groups
+   diverge on PHP leg (Rust omits, PCRE fills "") — replaceCallback's RegexMatch FIXES this via UNMATCHED_AS_NULL.
 3. **Named args + variadics + spread** — SYN mover + unblocks lifter on PHP 8.0+. Design-heavy → adjudicate.
 4. ~~**`match` expression**~~ — DROPPED 2026-07-18: **ALREADY BUILT + mature** (`TokenKind::Match`,
    `Expr::Match` w/ guards+patterns, used across examples). Rule-11 catch #3 this session (after
