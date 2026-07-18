@@ -76,5 +76,16 @@ pub mod uri_prelude;
 /// `import Core.Regex;` long before the prelude could matter). Colocated with the extension in
 /// spirit; unconditional in letter because a const array cannot be feature-spliced.
 pub mod regex_prelude {
-    pub const PRELUDE: &str = "class Regex { constructor(public string pattern) {} }";
+    // `RegexMatch` (DEC-295) is the typed value handed to a `Regex.replaceCallback` callback — beats
+    // PHP's untyped `$matches` array: `full()` is the whole match, `group(name)` is a named capture or
+    // `null` (never a silent `""`). The native builds instances directly (hand-built value, like the
+    // `Regex` carrier); these methods dispatch on both backends and transpile to a PHP `RegexMatch`
+    // class. `import Core.Map;` mirrors HTTP_PRELUDE's cross-Core pattern (needed for `Map.get`).
+    pub const PRELUDE: &str = r#"import Core.Map;
+class Regex { constructor(public string pattern) {} }
+class RegexMatch {
+    constructor(public string matched, public Map<string, string> groups) {}
+    function full(): string { return this.matched; }
+    function group(string name): string? { return Map.get(this.groups, name); }
+}"#;
 }

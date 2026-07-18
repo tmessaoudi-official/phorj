@@ -605,6 +605,33 @@ import Core.Regex;
     );
 }
 
+/// DEC-295: `Regex.replaceCallback` hands the closure a typed `RegexMatch` (`full()` = whole match,
+/// `group(name)` = a named capture or null). Proves (1) a native-built `RegexMatch` instance's methods
+/// dispatch identically on run≡runvm≡php, and (2) the API FIXES the optional-group divergence that
+/// findGroups/findAllGroups still carry: a NON-PARTICIPATING named group (`(?<a>x)?` on "y") yields
+/// `group("a") == null` on ALL three legs (the PHP twin's PREG_UNMATCHED_AS_NULL + null-filter) —
+/// where findGroups diverges (Rust omits → null vs PCRE fills "").
+#[test]
+fn regex_replace_callback_typed_match_and_null_group() {
+    agree_out_php(
+        r#"import Core.Output;
+import Core.Regex;
+import Core.String;
+#[Entry] function main() -> void {
+    var re = Regex.compile("(?<k>\\w+)=(?<v>\\d+)");
+    Output.printLine(Regex.replaceCallback(re, "a=1 b=22", function(RegexMatch m): string {
+        return "{String.upperCase(m.group("k") ?? "?")}:{m.group("v") ?? "?"}";
+    }));
+    var opt = Regex.compile("(?<a>x)?(?<b>y)");
+    Output.printLine(Regex.replaceCallback(opt, "y", function(RegexMatch m): string {
+        return "a={m.group("a") ?? "NULL"} full={m.full()}";
+    }));
+}"#,
+        "A:1 B:22\na=NULL full=y\n",
+        "regex_replace_callback",
+    );
+}
+
 /// M-RT S6c.2a — a parent constructor with a *body* (not just promotion) runs identically through the
 /// child, and the inheritance chains through multiple no-own-ctor levels.
 #[test]
@@ -2676,6 +2703,7 @@ const TIER1_PHP: &[&str] = &[
     "preg_match_all",
     "preg_quote",
     "preg_replace",
+    "preg_replace_callback",
     "preg_split",
     // JSON (core since 8.0)
     "json_decode",

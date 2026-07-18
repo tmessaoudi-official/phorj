@@ -52,4 +52,14 @@ function main(): void {
     var literal = Regex.compile(Regex.quoteMeta("a.b+c"));
     Output.printLine("quote hit = {Regex.matches(literal, \"x a.b+c y\")}");
     Output.printLine("quote miss = {Regex.matches(literal, \"xabbbcx\")}");
+    // replaceCallback — replace each match with the result of a callback. The callback gets a typed
+    // `RegexMatch`: `full()` is the whole match, `group(name)` is a named capture or `null` (never a
+    // silent ""). Here: upper-case every key in a `key=value` list.
+    var kv = Regex.compile("(?<key>\\w+)=(?<val>\\d+)");
+    var upped = Regex.replaceCallback(
+        kv,
+        "a=1 b=22 c=333",
+        function(RegexMatch m): string { return "{String.upperCase(m.group(\"key\") ?? \"?\")}={m.group(\"val\") ?? \"?\"}"; }
+    );
+    Output.printLine("callback = {upped}");
 }

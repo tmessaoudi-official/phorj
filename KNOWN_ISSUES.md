@@ -1638,10 +1638,21 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   `(?<a>foo)?(?<b>bar)` on `"bar"` [Verified: `phg run` has_a=false vs `transpile|php` has_a=true].
   Shipped examples use only mandatory named groups (all participate), where all three agree. A future
   alignment would filter `""`-valued non-participating keys in the PHP helper.
+  ✅ **`replaceCallback`'s `RegexMatch` does NOT have this divergence** (DEC-295): its PHP twin uses
+  `PREG_UNMATCHED_AS_NULL` + a null-filter, so a non-participating group is omitted on every backend and
+  `RegexMatch.group(name)` returns `null` identically on run≡runvm≡php. The same fix could be back-ported
+  to `findGroups`/`findAllGroups` (they predate it) if/when it's worth a change.
 - **Always Unicode (`/u`), case-sensitive.** Inline flags / case-insensitivity (`Regex.compileWith`)
   are deferred — add when requested.
 - **`replace` replacement syntax** uses the `$1` / `${name}` form shared by the `regex` crate and PHP
   `preg_replace`; PCRE-only `\1` backslash references are not portable (use `$1`).
+- ⚠ **Empty/zero-width matches diverge between the `regex` crate and PCRE** (affects every
+  match-iterating API: `replace`, `replaceCallback`, `findAll`, `split`). For an empty-matchable pattern
+  like `\d*`, the two engines disagree on where empty matches land: `replaceCallback(compile("\\d*"),
+  "a1b22c", …)` yields `[]a[1]b[22]c[]` on the Rust backends but `[]a[1][]b[22][]c[]` under transpiled
+  PCRE [Verified: `phg run` vs `transpile|php`]. This is an engine-level difference, not a Phorj bug.
+  Shipped examples use **non-empty** matches, where all three backends agree. Prefer `+` over `*` at a
+  pattern's top level when byte-identity across the transpile leg matters.
 - **Patterns must use raw strings** `r"..."`: a normal `"\d{4}"` parses `{4}` as `{expr}` string
   interpolation (silently yielding `\d4`) — both backends agree, but the pattern is wrong. Not a bug in
   Regex; a consequence of interpolation. The guide example and docs use raw strings throughout.

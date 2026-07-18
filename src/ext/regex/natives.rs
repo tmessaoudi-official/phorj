@@ -217,6 +217,66 @@ pub(super) fn regex_quote_meta(args: &[Value], _: &mut String) -> Result<Value, 
     }
 }
 
+/// Build the injected `RegexMatch` value (DEC-295) — the typed carrier a `replaceCallback` closure
+/// receives. Hand-built like [`regex_value`]: class `RegexMatch`, a two-slot layout (`groups`,
+/// `matched`) matching the prelude's promoted constructor fields. `groups` holds ONLY participating
+/// named captures (like `regex_find_groups`), so `group()` returns `null` for a non-participating one
+/// — the same contract the PHP twin gets via `PREG_UNMATCHED_AS_NULL` + a null-filter.
+fn regex_match_value(matched: &str, groups: Vec<(Value, Value)>) -> Result<Value, String> {
+    let inst = Instance::new(
+        "RegexMatch".into(),
+        crate::value::ClassLayout::from_sorted_names(&["groups", "matched"]),
+    );
+    inst.set_field("matched", Value::Str(matched.into()));
+    inst.set_field("groups", Value::Map(Rc::new(build_map(groups)?)));
+    Ok(Value::Instance(Rc::new(inst)))
+}
+
+/// `Regex.replaceCallback(Regex, string, (RegexMatch) -> string) -> string` — replace every match with
+/// the callback's result (PHP `preg_replace_callback`, DEC-295). Higher-order: the backend invoker
+/// runs the closure per match. Matches are non-overlapping, left-to-right — the gap before each match
+/// is copied verbatim, the match is replaced by the closure's returned string, and the tail after the
+/// last match is appended. Mirrors `preg_replace_callback`'s assembly for the regular (non-zero-width)
+/// subset the engine shares with PCRE.
+pub(super) fn regex_replace_callback(
+    args: &[Value],
+    call: &mut ClosureInvoker,
+) -> Result<Value, String> {
+    match args {
+        [re, Value::Str(s), cb] => {
+            let pat = as_pattern(re)?;
+            let engine = compiled(&pat)?;
+            let names: Vec<&str> = engine.capture_names().flatten().collect();
+            let mut out = String::new();
+            let mut last_end = 0;
+            for caps in engine.captures_iter(s) {
+                let whole = caps.get(0).expect("group 0 always exists in a match");
+                out.push_str(&s[last_end..whole.start()]);
+                let mut pairs: Vec<(Value, Value)> = Vec::new();
+                for name in &names {
+                    if let Some(m) = caps.name(name) {
+                        pairs.push((Value::Str((*name).into()), Value::Str(m.as_str().into())));
+                    }
+                }
+                let m_val = regex_match_value(whole.as_str(), pairs)?;
+                match call(cb, vec![m_val])? {
+                    Value::Str(r) => out.push_str(&r),
+                    other => {
+                        return Err(format!(
+                            "Regex.replaceCallback callback must return string, got {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+                last_end = whole.end();
+            }
+            out.push_str(&s[last_end..]);
+            Ok(Value::Str(out.into()))
+        }
+        _ => Err("Regex.replaceCallback expects (Regex, string, (RegexMatch) -> string)".into()),
+    }
+}
+
 // ---- registry -----------------------------------------------------------------------------------
 
 /// The `Core.Regex` registry entries. `Regex` is the compiler-injected class
@@ -332,6 +392,30 @@ pub fn regex_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(regex_quote_meta),
             php: |a| format!("__phorj_regex_quote_meta({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Regex",
+            name: "replaceCallback",
+            params: vec![
+                regex_ty(),
+                Ty::String,
+                Ty::Function(
+                    vec![Ty::Named("RegexMatch".to_string(), vec![])],
+                    Box::new(Ty::String),
+                    Vec::new(),
+                ),
+            ],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::HigherOrder(regex_replace_callback),
+            php: |a| {
+                format!(
+                    "__phorj_regex_replace_callback({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
         },
     ]
 }

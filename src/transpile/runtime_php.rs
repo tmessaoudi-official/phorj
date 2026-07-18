@@ -1072,6 +1072,24 @@ impl Transpiler {
             self.line("return addcslashes($s, '\\\\.+*?()|[]{}^$#&-~');");
             self.indent -= 1;
             self.line("}");
+            // `replaceCallback` (DEC-295): wrap each PCRE match into a `RegexMatch` and call the user
+            // closure. `PREG_UNMATCHED_AS_NULL` makes non-participating groups `null` (not `""`), and
+            // the `$v !== null` filter OMITS them — so the built `groups` map holds only participating
+            // named captures, exactly like the Rust native, so `group()` returns `null` identically on
+            // all three backends (this is the API that FIXES the findGroups/findAllGroups divergence).
+            self.line("function __phorj_regex_replace_callback($re, $s, $cb) {");
+            self.indent += 1;
+            self.line("return preg_replace_callback(__phorj_regex_delim($re->pattern), function ($m) use ($cb) {");
+            self.indent += 1;
+            self.line("$g = [];");
+            self.line(
+                "foreach ($m as $k => $v) { if (is_string($k) && $v !== null) { $g[$k] = $v; } }",
+            );
+            self.line("return $cb(new RegexMatch($m[0], $g));");
+            self.indent -= 1;
+            self.line("}, $s, -1, $count, PREG_UNMATCHED_AS_NULL);");
+            self.indent -= 1;
+            self.line("}");
         }
         // `Output.capture(fn)` (DEC-220-S3): run the closure with output buffering on and return the
         // captured bytes. `ob_start`/`ob_get_clean` are the exact PHP analogue of the backends'

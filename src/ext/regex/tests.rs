@@ -186,4 +186,8 @@ fn php_emission_shapes() {
         "__phorj_regex_find_all_groups($re, $s)"
     );
     assert_eq!(emit("quoteMeta", &["$s"]), "__phorj_regex_quote_meta($s)");
+    assert_eq!(
+        emit("replaceCallback", &["$re", "$s", "$cb"]),
+        "__phorj_regex_replace_callback($re, $s, $cb)"
+    );
 }
