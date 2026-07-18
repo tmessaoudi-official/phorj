@@ -23,6 +23,22 @@
 > literal `phg runvm` with `phg run`, and re-label `phg run` as the VM / `phg run --tree-walker` as
 > the interpreter oracle.
 
+> **⚠ RUN≠RUN--TREE-WALKER divergence flagged 2026-07-18 (dev review) — "no entry point" error.**
+> Running a file with NO `#[Entry]` (e.g. a project library sub-file directly, `phg run
+> examples/project/shapes/src/Acme/Geometry/Paint.phg`) is classified differently per backend: the VM
+> (`phg run`) renders **`compile error: no entry point…`**, the interpreter (`phg run --tree-walker`)
+> renders **`runtime error: no entry point…`** — identical message, different STAGE prefix (Invariant 1
+> "identical failure behaviour"). The differential harness misses it (it runs project ENTRIES, not
+> leaf sub-files). TWO defects: (1) the message is DUPLICATED in `src/compiler/program.rs:117`,
+> `src/interpreter/mod.rs:347`, and `src/interpreter/coop.rs:158` — and the coop copy is a SHORTER
+> variant (Invariant 4 "canonical fault strings single-sourced" violation); (2) the stage differs.
+> Recommended fix (dev call — the classification is a judgment): single-source the string into one
+> constant, and classify "no entry point" CONSISTENTLY — it is a pre-execution LOAD/invocation
+> condition (the program compiles + type-checks fine; nothing runs), so a distinct load-error stage or
+> "compile error" on BOTH backends is more accurate than the interpreter's "runtime error". Note the
+> Invariant-2 tension: the interpreter is normally the oracle, but here its "runtime error" prefix is
+> the less-correct one. Not autonomously changed (error-presentation is dev-adjudicated, Invariant 15).
+
 Phorj is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
 **deliberate scope boundaries** — features that are *planned* (see [ROADMAP.md](ROADMAP.md)) rather
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
