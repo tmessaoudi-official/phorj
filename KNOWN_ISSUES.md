@@ -8,51 +8,38 @@
 > below are corrected as their build slices land; until then, cross-check against the audit report.
 
 
-> **⚠ DOC-DRIFT flagged 2026-07-18 (dev review — the `run`/`runvm` CLI labels are stale/inverted).**
-> The CLI merged the two Rust backends into ONE subcommand: **`phg run` = the bytecode VM** (default),
-> and **`phg run --tree-walker` = the tree-walking interpreter (the correctness oracle)**. There is
-> **no `phg runvm` subcommand** (`phg -h` confirms). But many docs still (a) name a literal `phg
-> runvm` command and (b) label `phg run` as "the interpreter" — both wrong. The pervasive shorthand
-> "`run ≡ runvm ≡ PHP`" (the byte-identity spine's *name*, ~800 refs) is benign terminology and NOT
-> the target. The genuinely-misleading literal-command / inverted-label instances a reader would
-> follow live in: `docs/INVARIANTS.md` (§ intro + the built-binary row), `CONTRIBUTING.md`,
-> `CLAUDE.md` (Invariant 1), the `.github/ISSUE_TEMPLATE/bug_report.md` (`phg runvm -e …`), and
-> `KNOWN_ISSUES.md` (`phg runvm --dump-on-fault`). The invariant *wording* is developer-owned
-> (Invariant 15), so these are flagged for a coordinated dev pass rather than an autonomous sweep;
-> the stale INTERNAL code comments in `src/main.rs` were corrected 2026-07-18. Fix = replace the
-> literal `phg runvm` with `phg run`, and re-label `phg run` as the VM / `phg run --tree-walker` as
-> the interpreter oracle.
-
-> **⚠ RUN≠RUN--TREE-WALKER divergence flagged 2026-07-18 (dev review) — "no entry point" error.**
-> Running a file with NO `#[Entry]` (e.g. a project library sub-file directly, `phg run
-> examples/project/shapes/src/Acme/Geometry/Paint.phg`) is classified differently per backend: the VM
-> (`phg run`) renders **`compile error: no entry point…`**, the interpreter (`phg run --tree-walker`)
-> renders **`runtime error: no entry point…`** — identical message, different STAGE prefix (Invariant 1
-> "identical failure behaviour"). The differential harness misses it (it runs project ENTRIES, not
-> leaf sub-files). TWO defects: (1) the message is DUPLICATED in `src/compiler/program.rs:117`,
-> `src/interpreter/mod.rs:347`, and `src/interpreter/coop.rs:158` — and the coop copy is a SHORTER
-> variant (Invariant 4 "canonical fault strings single-sourced" violation); (2) the stage differs.
-> Recommended fix (dev call — the classification is a judgment): single-source the string into one
-> constant, and classify "no entry point" CONSISTENTLY — it is a pre-execution LOAD/invocation
-> condition (the program compiles + type-checks fine; nothing runs), so a distinct load-error stage or
-> "compile error" on BOTH backends is more accurate than the interpreter's "runtime error". Note the
-> Invariant-2 tension: the interpreter is normally the oracle, but here its "runtime error" prefix is
-> the less-correct one. Not autonomously changed (error-presentation is dev-adjudicated, Invariant 15).
-
-> **⚠ DEC-282 (manifest-less loader) DOC-DRIFT flagged 2026-07-18 (dev review — governing/policy docs).**
-> DEC-282 retired `phorj.toml`, `[require]`, `phorj.lock`, and the `phg vendor` command (fetching is now
-> a future package-manager extension; the compiler never touches the network). Living FEATURES.md was
-> internally contradictory and is FIXED (row 70). Remaining stale refs to fix in a coordinated dev pass
-> (governing/policy docs — not autonomously rewritten, Invariant 15): `SECURITY.md` (calls `phg vendor`
-> "the only command that touches the network" — now NONE do, a STRONGER stance); `CLAUDE.md` Invariant 10
-> ("`phg vendor` is the only network command"); this file's own "Transitive dependencies / `phg vendor`
-> fetches" row (moot — vendor retired); `conformance/README.md` ("a `phorj.toml` is treated as a project"
-> — now src/-root walk-up); `docs/adr/0005-offline-only-vendor.md` (mark superseded by DEC-282). NOTE: this
-> is one instance of a broader pattern — recent DECs (282 manifest retirement, 113 CLI renames
-> fmt/bench/lex/disasm→format/benchmark/tokenize/disassemble, the run/runvm labels above) left stale
-> command/feature refs across docs; a focused doc-drift sweep (grep the retired names, on a healthy box) is
-> OWED. Safe living-showcase/example/comment instances were fixed 2026-07-18 (main.rs, example READMEs,
-> FEATURES row 70).
+> **⚠ 2026-07-18 — recent-DEC doc-drift + a run≠tree-walker divergence (DEV SWEEP OWED).** Autonomous
+> session findings; safe living-showcase/example/comment instances were FIXED (2026-07-18: `src/main.rs`
+> comments, example READMEs, `FEATURES.md` rows 70/94). The remaining items touch governing/policy docs
+> or need a design call, so they are flagged for a coordinated dev pass (Invariant 15), not autonomously
+> rewritten. One consolidated punch-list — grep the retired names on a healthy box:
+>
+> 1. **CLI command renames left stale refs (DEC-113).** `fmt→format`, `bench→benchmark`, `lex→tokenize`,
+>    `disasm→disassemble` — the old names are dead verbs (`phg -h` confirms; they print usage). Fixed in
+>    the example docs; sweep the rest.
+> 2. **`run`/`runvm` labels stale/inverted.** The CLI merged the backends: **`phg run` = the bytecode VM**,
+>    **`phg run --tree-walker` = the interpreter (oracle)**; there is **no `phg runvm` subcommand**. Docs
+>    still name a literal `phg runvm` and/or label `phg run` as "the interpreter". The shorthand
+>    "`run ≡ runvm ≡ PHP`" (the spine's *name*, ~800 refs) is benign — NOT the target. Misleading literal /
+>    inverted instances: `docs/INVARIANTS.md` (intro + built-binary row), `CONTRIBUTING.md`, `CLAUDE.md`
+>    (Invariant 1), `.github/ISSUE_TEMPLATE/bug_report.md` (`phg runvm -e`), `KNOWN_ISSUES.md`
+>    (`phg runvm --dump-on-fault`). Fixed the internal `src/main.rs` comments already.
+> 3. **DEC-282 manifest retirement left stale refs.** Retired: `phorj.toml`, `[require]`, `phorj.lock`,
+>    `phg vendor` (compiler never touches the network now). Fixed `FEATURES.md` (was self-contradictory,
+>    rows 70 vs 94). Remaining: `SECURITY.md` (calls `phg vendor` "the only command that touches the
+>    network" — now NONE do, a STRONGER stance), `CLAUDE.md` Invariant 10 (same), the "Transitive deps /
+>    `phg vendor` fetches" row below (moot), `conformance/README.md` ("a `phorj.toml` is a project" — now
+>    src/-root walk-up), `docs/adr/0005-offline-only-vendor.md` (mark superseded by DEC-282).
+> 4. **`run ≠ run --tree-walker` divergence — "no entry point".** Running a no-`#[Entry]` file (e.g. a
+>    project library leaf) renders `compile error: …` on the VM vs `runtime error: …` on the interpreter —
+>    identical message, different STAGE prefix (Invariant 1 "identical failure behaviour"). The differential
+>    misses it (runs project ENTRIES, not leaf sub-files). Two defects: (a) the message is DUPLICATED in
+>    `src/compiler/program.rs:117`, `src/interpreter/mod.rs:347`, `src/interpreter/coop.rs:158` (the coop
+>    copy is SHORTER — Invariant 4 single-source violation); (b) the stage differs. Recommended (dev call —
+>    classification is a judgment): single-source the string; classify "no entry point" consistently — it
+>    is a pre-execution LOAD condition (the program compiles + type-checks; nothing runs), so a distinct
+>    load-error stage or "compile error" on BOTH is more accurate than the interpreter's "runtime error"
+>    (an Invariant-2 tension: the oracle's prefix is the less-correct one here). Not autonomously changed.
 
 Phorj is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
 **deliberate scope boundaries** — features that are *planned* (see [ROADMAP.md](ROADMAP.md)) rather
