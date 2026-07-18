@@ -161,10 +161,14 @@ class Statement {
   // run time. Public — the desugar's dynamic dispatcher reads it.
   constructor(private DatabaseHandle raw, public Naming naming = new Naming.Exact()) {}
   function bind(string | int | float | bool value): Statement throws DatabaseError {
-    return match (NativeDatabase.bind(this.raw, value)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    // The native binds onto the SHARED raw handle in place (interior-mutable accumulator) and returns
+    // that same handle, so `this` already reflects the bind — return it (an Rc bump) instead of
+    // allocating a fresh `new Statement(...)` per chained bind (DEC-266 dbwork alloc lever). Byte-
+    // identical: same raw handle + same naming; validated by tests/db.rs on both backends.
+    return match (NativeDatabase.bind(this.raw, value)) { DatabaseResult.Ok(_) => this, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   function bindNamed(string name, string | int | float | bool value): Statement throws DatabaseError {
-    return match (NativeDatabase.bindNamed(this.raw, name, value)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    return match (NativeDatabase.bindNamed(this.raw, name, value)) { DatabaseResult.Ok(_) => this, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   // Typed IN-list bind (DEC-208 slice D, spec §2): occupies one positional `?` slot (left-to-right
   // with bind()) that expands to `(?,?,…)` — one placeholder per value — at execute time; an empty list
@@ -172,7 +176,7 @@ class Statement {
   // Generic over the element type (a `List<int>`/`List<string>`/… all bind); a non-scalar element is a
   // runtime DatabaseError (an invariant `List<bindable>` union cannot accept a homogeneous list argument).
   function bindList<T>(List<T> values): Statement throws DatabaseError {
-    return match (NativeDatabase.bindList(this.raw, values)) { DatabaseResult.Ok(h) => new Statement(h, this.naming), DatabaseResult.Err(e) => DatabaseError.fail(e)? };
+    return match (NativeDatabase.bindList(this.raw, values)) { DatabaseResult.Ok(_) => this, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
   }
   function exec(): int throws DatabaseError {
     return match (NativeDatabase.exec(this.raw)) { DatabaseResult.Ok(n) => n, DatabaseResult.Err(e) => DatabaseError.fail(e)? };
