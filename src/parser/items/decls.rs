@@ -573,6 +573,10 @@ impl Parser {
         loop {
             let sp = self.peek_span();
             let ty = self.parse_type()?;
+            // Variadic marker (DEC-298): `int ...nums`. The `...` sits between the element type and
+            // the name. The checker gives `nums` the effective type `List<int>` and enforces
+            // last-param-only + no-default. Mutually exclusive with a default value below.
+            let variadic = self.eat(&TokenKind::DotDotDot);
             let name = self.expect_ident("a parameter name")?;
             // Optional default value (M4 default parameters): `bool b = false`. The checker restricts
             // the expression to a literal and enforces trailing-only ordering.
@@ -585,6 +589,7 @@ impl Parser {
                 ty,
                 name,
                 default,
+                variadic,
                 span: sp,
             });
             if !self.eat(&TokenKind::Comma) {

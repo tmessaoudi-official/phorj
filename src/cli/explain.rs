@@ -499,6 +499,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              i128 range is a compile-time error (not a runtime fault). For dynamic/string input,\n\
              use `Decimal.of(s)` (returns `decimal?`, `null` on a bad string).\n"
         }
+        "E-VARIADIC-UNSUPPORTED" => {
+            "E-VARIADIC-UNSUPPORTED — a variadic parameter (`...`) is not yet implemented.\n\n\
+             The `int ...nums` syntax is parsed and reserved (DEC-298), but its call-collection\n\
+             semantics (gathering trailing arguments into a `List<int>`) are a follow-on slice. Until\n\
+             they land, a variadic parameter is rejected cleanly rather than silently mis-typed. Use a\n\
+             `List<int>` parameter and pass an explicit list for now: `function sum(List<int> nums)`.\n"
+        }
         "E-DEFAULT-PARAM-ORDER" => {
             "E-DEFAULT-PARAM-ORDER — a required parameter follows a defaulted one.\n\n\
              A parameter with a default value (`int y = 10`) makes that argument optional, so every\n\

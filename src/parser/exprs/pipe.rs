@@ -53,6 +53,7 @@ impl Parser {
                 ty: Type::Infer(psp),
                 name,
                 default: None,
+                variadic: false,
                 span: psp,
             }],
             ret: None,

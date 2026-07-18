@@ -409,6 +409,8 @@ impl Checker {
                             ty: p.ty.clone(),
                             name: p.name.clone(),
                             default: p.default.clone(),
+                            // Constructor params are never variadic (no `...` promotion form).
+                            variadic: false,
                             span: p.span,
                         })
                         .collect();

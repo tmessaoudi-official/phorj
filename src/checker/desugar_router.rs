@@ -147,6 +147,7 @@ fn method_handler_lambda(class: &str, method: &str, sp: Span) -> Expr {
             ty: named("Request"),
             name: "req".to_string(),
             default: None,
+            variadic: false,
             span: sp,
         }],
         ret: Some(named("Response")),

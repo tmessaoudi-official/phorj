@@ -136,8 +136,9 @@ pub enum TokenKind {
     Throws,
     // punctuation / operators
     Dot,
-    DotDot,   // `..` exclusive range
-    DotDotEq, // `..=` inclusive range
+    DotDot,    // `..` exclusive range
+    DotDotEq,  // `..=` inclusive range
+    DotDotDot, // `...` variadic param (`int ...nums`) + spread call-arg (`f(...list)`) — DEC-298/299
     Semicolon,
     Comma,
     Colon,

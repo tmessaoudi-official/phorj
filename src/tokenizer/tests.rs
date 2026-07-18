@@ -99,6 +99,8 @@ fn range_operators_lex_longest_match() {
     // `..=` (3) beats `..` (2) beats `.` (1); `0` stays an Int (no digit after the dot).
     assert_eq!(kinds("0..3"), vec![Int(0), DotDot, Int(3), Eof]);
     assert_eq!(kinds("0..=3"), vec![Int(0), DotDotEq, Int(3), Eof]);
+    // `...` (3) is the variadic/spread token (DEC-298/299) — longest-match ahead of `..=`/`..`.
+    assert_eq!(kinds("...x"), vec![DotDotDot, Ident("x".into()), Eof]);
     // a lone `.` is still a member-access Dot — `..` handling doesn't swallow it
     assert_eq!(
         kinds("a.b"),

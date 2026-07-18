@@ -79,6 +79,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             name: p.name.clone(),
             // A default is a literal — no alias-bearing types inside — so carry it verbatim.
             default: p.default.clone(),
+            variadic: p.variadic,
             span: p.span,
         }
     }
@@ -281,6 +282,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                             ty: rt(&p.ty, a, 0),
                             name: p.name.clone(),
                             default: p.default.clone(),
+                            variadic: p.variadic,
                             span: p.span,
                         },
                         b.iter().map(|s| rstmt(s, a)).collect(),

@@ -113,6 +113,7 @@ fn lower_one_pipe(lhs: Expr, rhs: Expr, sp: Span) -> Expr {
                         ty: crate::ast::Type::Infer(sp),
                         name: fresh,
                         default: None,
+                        variadic: false,
                         span: sp,
                     }],
                     ret: None,

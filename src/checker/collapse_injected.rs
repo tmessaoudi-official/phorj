@@ -84,6 +84,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
             ty: rt(&p.ty),
             name: p.name.clone(),
             default: p.default.clone(),
+            variadic: p.variadic,
             span: p.span,
         }
     }
@@ -269,6 +270,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                             ty: rt(&p.ty),
                             name: p.name.clone(),
                             default: p.default.clone(),
+                            variadic: p.variadic,
                             span: p.span,
                         },
                         b.iter().map(rstmt).collect(),

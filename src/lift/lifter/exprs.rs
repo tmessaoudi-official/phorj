@@ -249,6 +249,8 @@ pub(super) fn lift_params(params: &[php::PhpParam]) -> Result<Vec<Param>, String
             name: p.name.clone(),
             // Lifting a PHP default parameter is a Tier-2 follow-up; Tier-1 params have no default.
             default: None,
+            // Lifting PHP `...$x` variadics is a Tier-2 follow-up (DEC-298 lift leg).
+            variadic: false,
             span: SP,
         });
     }

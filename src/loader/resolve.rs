@@ -203,6 +203,7 @@ pub(super) fn resolve_members(members: &mut [ClassMember], ctx: &ResolveCtx) {
                             ty: pty,
                             name: p.name,
                             default: p.default,
+                            variadic: p.variadic,
                             span: p.span,
                         },
                         resolve_block(body, ctx),

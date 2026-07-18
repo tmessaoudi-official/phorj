@@ -2100,6 +2100,7 @@ impl Database<'_> {
             ty: stmt_ty,
             name: "phorjStmt".into(),
             default: None,
+            variadic: false,
             span: psp,
         };
         let (ret, body) = match spec {
@@ -2370,6 +2371,7 @@ impl Database<'_> {
                 ty: row_ty,
                 name: "phorjRow".into(),
                 default: None,
+                variadic: false,
                 span: psp,
             }],
             ret: Some(ret_ty),
@@ -2684,6 +2686,7 @@ impl Database<'_> {
                         ty: Type::Erased(p.span),
                         name: p.name.clone(),
                         default: None,
+                        variadic: false,
                         span: p.span,
                     })
                     .collect();

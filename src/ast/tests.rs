@@ -81,6 +81,7 @@ fn builds_function_item() {
             },
             name: "s".into(),
             default: None,
+            variadic: false,
             span: sp(),
         }],
         ret: Some(Type::Named {
@@ -121,6 +122,7 @@ fn int_param(name: &str) -> Param {
         },
         name: name.to_string(),
         default: None,
+        variadic: false,
         span: sp(),
     }
 }

@@ -103,6 +103,7 @@ pub fn erase_generics(program: Program) -> Program {
             name: p.name.clone(),
             // A default is a literal (no type params inside) — carry it verbatim.
             default: p.default.clone(),
+            variadic: p.variadic,
             span: p.span,
         }
     }

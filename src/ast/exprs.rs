@@ -333,6 +333,12 @@ pub struct Param {
     /// Defaults must be trailing (`E-DEFAULT-PARAM-ORDER`). **Boxed** so the rare-and-large default
     /// expression does not bloat every `Param` (which is embedded in `ClassMember::Hook`).
     pub default: Option<Box<Expr>>,
+    /// A **variadic** trailing parameter (DEC-298): `int ...nums`. The written `ty` is the ELEMENT
+    /// type (`int`); the checker gives the param the effective type `List<T>` for body- and call-arg
+    /// checking, and the post-check fill pass collects a call's trailing args into a `[..]` list
+    /// literal — so every backend sees a plain `List<T>` param and a full-arity call (byte-identity
+    /// safe, exactly like `default`). Must be the last param; mutually exclusive with `default`.
+    pub variadic: bool,
     pub span: Span,
 }
 

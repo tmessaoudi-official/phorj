@@ -291,7 +291,9 @@ fn lex_inner(src: &str, comments: &mut Vec<Comment>) -> Result<Vec<Token>, Diagn
                 // like `0..3` already lexes `0` as `Int(0)` — `scan_number`'s float branch needs a
                 // *digit* after the dot, and here the next char is another `.`.
                 if b == b'.' && lx.peek2() == Some(b'.') {
-                    let (kind, len) = if lx.peek3() == Some(b'=') {
+                    let (kind, len) = if lx.peek3() == Some(b'.') {
+                        (TokenKind::DotDotDot, 3) // `...` variadic/spread (DEC-298/299)
+                    } else if lx.peek3() == Some(b'=') {
                         (TokenKind::DotDotEq, 3)
                     } else {
                         (TokenKind::DotDot, 2)

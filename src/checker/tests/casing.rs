@@ -232,6 +232,18 @@ fn php_builtin_class_names_are_rejected_at_class_positions() {
 }
 
 #[test]
+fn variadic_param_is_rejected_until_semantics_land() {
+    // DEC-298: the `...` syntax + AST + parser are wired (foundation banked), but the checker/call
+    // semantics are a fresh-context follow-on. A variadic param must parse then error CLEANLY
+    // (E-VARIADIC-UNSUPPORTED), never silently mis-type. Remove this test when the semantics land.
+    let e = errors_of_raw("package Main; function sum(int ...nums) -> int { return 0; }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-VARIADIC-UNSUPPORTED")),
+        "variadic param must be cleanly rejected for now — got {e:?}"
+    );
+}
+
+#[test]
 fn php8_reserved_keyword_names_are_rejected() {
     // Found building DEC-295 (RegexMatch): `match`/`enum`/`fn` are PHP-8 reserved keywords
     // (case-insensitive) — illegal as a class OR function name. phorj previously ACCEPTED

@@ -19,6 +19,22 @@ impl Checker {
         }
         self.validate_type_params(&f.type_params, f.span);
         self.reject_dup_param_names(f.params.iter().map(|p| (p.name.as_str(), p.span)));
+        // DEC-298 variadics: the `...` token, AST `Param.variadic`, and parser are wired, but the
+        // byte-identity-critical checker/call-collection semantics are a fresh-context follow-on (see
+        // SLICE-STATE §3). Reject a variadic param CLEANLY for now so `...nums` never silently
+        // mis-types (it would otherwise resolve to the element type + fail arity confusingly). Remove
+        // this guard when the signature-effective-type + call-collection fill land.
+        if let Some(p) = f.params.iter().find(|p| p.variadic) {
+            self.err_coded(
+                p.span,
+                "variadic parameters (`...`) are parsed but not yet implemented".to_string(),
+                "E-VARIADIC-UNSUPPORTED",
+                Some(
+                    "DEC-298 in progress — call-collection semantics land in a follow-on slice"
+                        .into(),
+                ),
+            );
+        }
         // Resolve the signature with the type parameters in scope so `T` becomes `Ty::Param("T")`.
         self.active_type_params = f.type_params.clone();
         let params: Vec<Ty> = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
