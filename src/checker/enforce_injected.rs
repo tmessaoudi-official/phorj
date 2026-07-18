@@ -381,6 +381,7 @@ impl Ctx {
                     self.walk_expr(i, errs);
                 }
             }
+            Expr::NamedArg { value, .. } => self.walk_expr(value, errs),
             // `new List<T>()` — built-in collection kinds; type args are resolved (and injected-import
             // discipline enforced) during type resolution, not in this expr walk.
             Expr::NewColl { .. } => {}

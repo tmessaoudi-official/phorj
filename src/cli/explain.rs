@@ -515,6 +515,37 @@ pub fn explain_text(code: &str) -> Option<String> {
              A variadic parameter (`int ...nums`) already defaults to an empty list when no trailing\n\
              arguments are passed, so an explicit `= …` default is redundant and not allowed.\n"
         }
+        "E-NAMED-ARG-UNKNOWN" => {
+            "E-NAMED-ARG-UNKNOWN — a named argument names no parameter (DEC-297).\n\n\
+             `f(colour: …)` requires `f` to declare a parameter `colour`. Check the spelling against\n\
+             the function/constructor's parameter names.\n"
+        }
+        "E-NAMED-ARG-DUPLICATE" => {
+            "E-NAMED-ARG-DUPLICATE — a parameter is supplied twice (DEC-297).\n\n\
+             Each parameter may be given once — either positionally or by name, not both, and not by\n\
+             two `name:` arguments. Remove the duplicate.\n"
+        }
+        "E-NAMED-ARG-POSITIONAL-AFTER" => {
+            "E-NAMED-ARG-POSITIONAL-AFTER — a positional argument follows a named one (DEC-297).\n\n\
+             Once you start naming arguments, the rest must be named too (a trailing positional has no\n\
+             unambiguous slot). Put all positional arguments before every `name:` argument.\n"
+        }
+        "E-NAMED-ARG-MISSING" => {
+            "E-NAMED-ARG-MISSING — a required parameter got no value (DEC-297).\n\n\
+             A named call must still supply every required (non-defaulted) parameter, positionally or\n\
+             by name. Add the missing one.\n"
+        }
+        "E-NAMED-ARG-MISPLACED" => {
+            "E-NAMED-ARG-MISPLACED — `name: value` outside a call's argument list (DEC-297).\n\n\
+             Named arguments are only meaningful in a function/constructor/method call. Write just the\n\
+             value in other positions.\n"
+        }
+        "E-NAMED-ARG-UNSUPPORTED" => {
+            "E-NAMED-ARG-UNSUPPORTED — named arguments in an unsupported position (DEC-297).\n\n\
+             v1 supports named arguments on non-generic, non-overloaded free functions, constructors,\n\
+             and methods. They are not yet supported on stdlib natives, generic/overloaded calls, or\n\
+             together with a variadic parameter — call those positionally.\n"
+        }
         "E-DEFAULT-PARAM-ORDER" => {
             "E-DEFAULT-PARAM-ORDER — a required parameter follows a defaulted one.\n\n\
              A parameter with a default value (`int y = 10`) makes that argument optional, so every\n\

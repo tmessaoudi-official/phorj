@@ -251,6 +251,7 @@ impl Checker {
             | Expr::NewColl { span, .. }
             | Expr::TaggedTemplate { span, .. }
             | Expr::Pipe { span, .. }
+            | Expr::NamedArg { span, .. }
             | Expr::Html(_, span) => *span,
             Expr::PipePlaceholder(s) => *s,
         }

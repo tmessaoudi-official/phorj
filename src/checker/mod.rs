@@ -107,6 +107,11 @@ struct FnSig {
     /// sees a plain `f([a,b,c])` call with a `List<T>` param (byte-identity safe). Free functions only
     /// in v1 (like defaults); methods/lambdas with `...` are rejected (`E-VARIADIC-UNSUPPORTED`).
     variadic: bool,
+    /// DEC-297: the parameter NAMES, parallel to `params` — needed to resolve a named call argument
+    /// (`f(x: 1)`) to its positional slot. `FnSig` otherwise stores only types; `normalize_named_args`
+    /// reads this to reorder named args into positional order (filling omitted defaults) before the
+    /// positional arity/type check. Empty is treated as "no names available" (named args rejected).
+    param_names: Vec<String>,
 }
 
 struct EnumInfo {
@@ -541,6 +546,11 @@ pub struct Checker {
     /// sees a plain `f([a,b,c])` call with a `List<T>` param. Distinct from `pending_fill` (which
     /// APPENDS defaults) — variadic REPLACES the trailing args.
     pending_variadic: Option<usize>,
+    /// DEC-297: set by a call checker after `normalize_named_args` reorders a mixed named/positional
+    /// call into a full positional `Vec<Expr>`. `record_pending_fill` (post-resolution, with the
+    /// callee in hand) records it as a REPLACE fill in `default_fills`, so every backend sees an
+    /// ordinary positional call — no backend ever sees `Expr::NamedArg`.
+    pending_named: Option<Vec<crate::ast::Expr>>,
     /// Type parameters in scope while resolving the signature/body of the generic function currently
     /// being checked (`["T", "U"]`). A bare type name in this set resolves to `Ty::Param` rather than
     /// being looked up as an alias/enum/class. Set around each generic function and cleared after;

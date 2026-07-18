@@ -50,6 +50,9 @@ impl Printer {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr(x)).collect();
                 Ok(format!("({})", xs?.join(", ")))
             }
+            // DEC-297: a named call argument `name: value` (the lifter may emit these when a future
+            // slice lifts PHP named args; harmless otherwise — it prints the phorj surface form).
+            Expr::NamedArg { name, value, .. } => Ok(format!("{name}: {}", self.expr(value)?)),
             // `new List<T>()` / `new Map<K,V>()` (DEC-214). The lifter never synthesizes this today, but
             // print it faithfully for completeness.
             Expr::NewColl { kind, args, .. } => {

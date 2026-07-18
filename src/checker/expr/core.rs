@@ -150,6 +150,20 @@ impl Checker {
             },
             Expr::List(elems, span) => self.check_list(elems, *span), // Task 5
             Expr::Tuple(elems, span) => self.check_tuple(elems, *span), // DEC-288
+            // DEC-297: a named argument is only legal inside a call/`new`/method-call arg list, where
+            // `normalize_named_args` consumes it before this point. Reaching `check_expr` means it's
+            // misplaced (outside a call). Check the value to surface its errors, then flag it.
+            Expr::NamedArg { value, span, .. } => {
+                let vt = self.check_expr(value);
+                self.err_coded(
+                    *span,
+                    "a named argument (`name: value`) is only allowed in a call's argument list"
+                        .to_string(),
+                    "E-NAMED-ARG-MISPLACED",
+                    Some("write just the value here, or move `name:` into a function/constructor call".into()),
+                );
+                vt
+            }
             Expr::Map(pairs, span) => self.check_map(pairs, *span),   // M-RT S3
             Expr::NewColl { kind, args, span } => self.check_new_coll(*kind, args, *span), // DEC-214
 

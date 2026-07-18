@@ -1,0 +1,27 @@
+// DEC-297 — NAMED ARGUMENTS. `f(name: value)` supplies an argument by parameter name, so call sites
+// read clearly and optional (defaulted) parameters can be skipped in any order. Named and positional
+// may mix, but every positional must come BEFORE the first named one.
+//
+// It's compile-time sugar: the checker reorders named args into their declared slots and fills any
+// omitted defaults BEFORE any backend, so `phg run`, `phg runvm`, and the transpiled PHP (which gets
+// a plain positional call) all agree byte-for-byte. v1 supports free functions (constructors + methods
+// are a follow-on); generic/overloaded/native calls and variadics take positional args only.
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+
+function greet(string name, string greeting = "Hello", bool loud = false): string {
+    string base = "{greeting}, {name}";
+    return match (loud) { true => "{base}!", default => base };
+}
+
+#[Entry]
+function main(): void {
+    // Only the required arg by name; both defaults apply.
+    Output.printLine(greet(name: "Ada"));
+    // Positional first, then a named one that skips over `greeting`'s neighbour.
+    Output.printLine(greet("Bob", loud: true));
+    // All named, in any order — reordered to the declared slots.
+    Output.printLine(greet(greeting: "Hey", name: "Cy", loud: true));
+}

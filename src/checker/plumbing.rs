@@ -61,6 +61,7 @@ impl Checker {
             cast_resolutions: HashMap::new(),
             pending_fill: None,
             pending_variadic: None,
+            pending_named: None,
             reflect_resolutions: HashMap::new(),
             active_type_params: Vec::new(),
             active_type_param_bounds: Vec::new(),

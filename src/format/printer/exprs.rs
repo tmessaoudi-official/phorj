@@ -48,6 +48,12 @@ impl Printer<'_> {
                 let xs: Result<Vec<_>, _> = items.iter().map(|x| self.expr_doc(x)).collect();
                 Ok(bracketed("(", xs?, ")"))
             }
+            // DEC-297: a named call argument `name: value` — renders the label then the value doc, so a
+            // format round-trip preserves `f(x: 1)` (before the checker normalizes it to positional).
+            Expr::NamedArg { name, value, .. } => Ok(doc::concat(vec![
+                doc::text(format!("{name}: ")),
+                self.expr_doc(value)?,
+            ])),
             // `new List<T>()` / `new Map<K,V>()` (DEC-214) — always inline (no elements to wrap).
             Expr::NewColl { kind, args, .. } => {
                 let rendered: Result<Vec<_>, _> = args.iter().map(ty).collect();

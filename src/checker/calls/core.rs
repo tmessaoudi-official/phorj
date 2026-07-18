@@ -346,17 +346,46 @@ impl Checker {
                 // M4: defaulted-arity check (a non-default function has all-`None` defaults, so this
                 // is exactly the old exact-arity `check_args`).
                 self.reject_turbofish(tf, name, span);
-                // DEC-298: a variadic free function (single sig) collects trailing args into a list.
-                self.check_args_defaulted_v(
-                    name,
-                    &sig.params,
-                    &sig.defaults,
-                    args,
-                    span,
-                    sig.variadic,
-                );
+                // DEC-297: a named/positional-mixed call is front-normalized to positional (defaults
+                // filled) then checked + recorded as a REPLACE fill; named + variadic is rejected in v1.
+                if crate::checker::calls::args::has_named_args(args) {
+                    if sig.variadic {
+                        self.err_coded(
+                            span,
+                            format!("`{name}`: named arguments are not supported with a variadic parameter (v1)"),
+                            "E-NAMED-ARG-UNSUPPORTED",
+                            Some("call a variadic function positionally".into()),
+                        );
+                    } else if let Some(pos) =
+                        self.normalize_named_args(name, &sig.param_names, &sig.defaults, args, span)
+                    {
+                        self.check_args(name, &sig.params, &pos, span);
+                        self.pending_named = Some(pos);
+                    }
+                } else {
+                    // DEC-298: a variadic free function (single sig) collects trailing args into a list.
+                    self.check_args_defaulted_v(
+                        name,
+                        &sig.params,
+                        &sig.defaults,
+                        args,
+                        span,
+                        sig.variadic,
+                    );
+                }
                 sig.ret.clone()
             } else {
+                // DEC-297: named args on a generic call are rejected in v1 (inference + reorder combo).
+                if crate::checker::calls::args::has_named_args(args) {
+                    self.err_coded(
+                        span,
+                        format!(
+                            "`{name}`: named arguments are not supported on a generic call (v1)"
+                        ),
+                        "E-NAMED-ARG-UNSUPPORTED",
+                        Some("call the generic function with positional arguments".into()),
+                    );
+                }
                 // DEC-208 slice A: a generic free function accepts turbofish (`identity<int>(5)`),
                 // consumed by `check_generic_call` to pre-seed the substitution.
                 self.check_generic_call(
@@ -370,6 +399,16 @@ impl Checker {
                     span,
                 )
             };
+        }
+        // DEC-297: named args on an overloaded call are rejected in v1 (name-based slot resolution
+        // would have to pick the overload first — deferred).
+        if crate::checker::calls::args::has_named_args(args) {
+            self.err_coded(
+                span,
+                format!("`{name}`: named arguments are not supported on an overloaded call (v1)"),
+                "E-NAMED-ARG-UNSUPPORTED",
+                Some("call an overloaded function with positional arguments".into()),
+            );
         }
         // Overload set (M-RT): generic members were rejected at collection, so every overload is
         // monomorphic. The call's result is the shared return type (`E-OVERLOAD-RETURN`); resolution

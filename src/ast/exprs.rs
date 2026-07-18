@@ -68,6 +68,16 @@ pub enum Expr {
     /// `Ty::Tuple`, then the desugar rewrites it to a `List` literal before any backend, so no backend
     /// ever sees `Expr::Tuple` (the "expand out before backends" discipline).
     Tuple(Vec<Expr>, Span),
+    /// `name: value` — a NAMED CALL ARGUMENT (DEC-297). Appears ONLY inside a call/`new`/method-call
+    /// argument list; the checker's front-normalization reorders named args into their positional slots
+    /// (filling omitted defaults) BEFORE any backend, so no backend ever sees `Expr::NamedArg` (the
+    /// "expand out before backends" discipline, exactly like `Expr::Tuple`). Backend match arms are
+    /// `unreachable!`; a `NamedArg` reaching `check_expr` outside a call is `E-NAMED-ARG-MISPLACED`.
+    NamedArg {
+        name: String,
+        value: Box<Expr>,
+        span: Span,
+    },
     /// `[k => v, k2 => v2]` — a map literal (M-RT S3). Distinguished from `List` by the `=>` after the
     /// first element; at least one pair (an empty map literal is deferred — `[]` is the empty *list*).
     /// Keys must be `int`/`bool`/`string` (`E-MAP-KEY`); transpiles to a PHP `[k => v]` array.

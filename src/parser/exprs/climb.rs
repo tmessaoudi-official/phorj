@@ -631,7 +631,21 @@ impl Parser {
             return Ok(args);
         }
         loop {
-            args.push(self.parse_expr()?);
+            // DEC-297: a NAMED argument `name: value` — an Ident immediately followed by `:`. This is
+            // unambiguous at arg-start (`:` is not a binary operator there; map literals use `=>`, and
+            // a ternary's `:` never follows the bare arg-head ident directly). The checker normalizes
+            // named args into positional slots before any backend.
+            if matches!(self.peek(), TokenKind::Ident(_))
+                && matches!(self.peek2(), TokenKind::Colon)
+            {
+                let span = self.peek_span();
+                let name = self.expect_ident("a named-argument name")?;
+                self.expect(&TokenKind::Colon, "':' after the named-argument name")?;
+                let value = Box::new(self.parse_expr()?);
+                args.push(Expr::NamedArg { name, value, span });
+            } else {
+                args.push(self.parse_expr()?);
+            }
             if !self.eat(&TokenKind::Comma) {
                 break;
             }

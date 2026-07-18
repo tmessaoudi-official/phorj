@@ -285,6 +285,7 @@ impl Checker {
                     self.check_expr_casing(it);
                 }
             }
+            Expr::NamedArg { value, .. } => self.check_expr_casing(value),
             // `new List<T>()` etc. — the type args' casing is checked during type resolution, not here.
             Expr::NewColl { .. } => {}
             Expr::Map(pairs, _) => {

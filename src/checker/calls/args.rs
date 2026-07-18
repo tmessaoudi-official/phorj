@@ -2,7 +2,114 @@
 
 use super::*;
 
+/// DEC-297: does this argument list contain any named argument (`name: value`)?
+pub(in crate::checker) fn has_named_args(args: &[crate::ast::Expr]) -> bool {
+    args.iter()
+        .any(|a| matches!(a, crate::ast::Expr::NamedArg { .. }))
+}
+
 impl Checker {
+    /// DEC-297: front-normalize a mixed positional/named argument list into a plain **positional**
+    /// `Vec<Expr>` (leading positionals in order, named args placed in their declared slots, omitted
+    /// defaulted slots filled with the default literal) — so the existing positional arity/type check
+    /// and the backends see an ordinary full-arity call (Invariant #5). Returns `None` (after emitting
+    /// the diagnostic) on any error: positional-after-named, unknown name, duplicate/slot collision, or
+    /// a required slot left unfilled. `param_names`/`defaults` are parallel to the callee's params.
+    pub(in crate::checker) fn normalize_named_args(
+        &mut self,
+        label: &str,
+        param_names: &[String],
+        defaults: &[Option<crate::ast::Expr>],
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Option<Vec<crate::ast::Expr>> {
+        use crate::ast::Expr;
+        let n = param_names.len();
+        let mut slots: Vec<Option<Expr>> = vec![None; n];
+        let mut seen_named = false;
+        for (i, arg) in args.iter().enumerate() {
+            match arg {
+                Expr::NamedArg {
+                    name,
+                    value,
+                    span: asp,
+                } => {
+                    seen_named = true;
+                    match param_names.iter().position(|p| p == name) {
+                        None => {
+                            self.err_coded(
+                                *asp,
+                                format!("`{label}` has no parameter named `{name}`"),
+                                "E-NAMED-ARG-UNKNOWN",
+                                Some(format!("parameters are: {}", param_names.join(", "))),
+                            );
+                            return None;
+                        }
+                        Some(slot) => {
+                            if slots[slot].is_some() {
+                                self.err_coded(
+                                    *asp,
+                                    format!("argument `{name}` is already supplied for `{label}`"),
+                                    "E-NAMED-ARG-DUPLICATE",
+                                    Some(
+                                        "a parameter may be given once (positionally OR by name)"
+                                            .into(),
+                                    ),
+                                );
+                                return None;
+                            }
+                            slots[slot] = Some((**value).clone());
+                        }
+                    }
+                }
+                other => {
+                    if seen_named {
+                        self.err_coded(
+                            Self::expr_span(other),
+                            format!("`{label}`: a positional argument cannot follow a named one"),
+                            "E-NAMED-ARG-POSITIONAL-AFTER",
+                            Some("move positional arguments before every `name:` argument".into()),
+                        );
+                        return None;
+                    }
+                    if i >= n {
+                        self.err_coded(
+                            span,
+                            format!("`{label}` expects {n} argument(s), found more"),
+                            "E-NAMED-ARG-UNKNOWN",
+                            None,
+                        );
+                        return None;
+                    }
+                    slots[i] = Some(other.clone());
+                }
+            }
+        }
+        // Fill omitted slots from defaults; a required (non-default) hole is an error.
+        let mut out = Vec::with_capacity(n);
+        for (i, slot) in slots.into_iter().enumerate() {
+            match slot {
+                Some(e) => out.push(e),
+                None => match defaults.get(i).and_then(|d| d.clone()) {
+                    Some(def) => out.push(def),
+                    None => {
+                        self.err_coded(
+                            span,
+                            format!(
+                                "`{label}` is missing a value for required parameter `{}`",
+                                param_names[i]
+                            ),
+                            "E-NAMED-ARG-MISSING",
+                            Some("supply it positionally or by name".into()),
+                        );
+                        return None;
+                    }
+                },
+            }
+        }
+        Some(out)
+    }
+
     /// `console.println(args)` — a namespaced native call resolved through the import map (M3
     /// Wave 1). The native single-sources its signature, so checking is the same arg/arity pass as a
     /// free function; the leaf-qualified label (`console.println`) drives the error messages.
@@ -15,6 +122,18 @@ impl Checker {
         let n = &crate::native::registry()[idx];
         let leaf = n.module.rsplit('.').next().unwrap_or(n.module);
         let label = format!("{leaf}.{}", n.name);
+        // DEC-297: native stdlib functions carry no ordered parameter-name list, so named arguments
+        // can't be resolved to slots — reject cleanly (v1) rather than let a `NamedArg` reach the arg
+        // check as a confusing E-NAMED-ARG-MISPLACED.
+        if has_named_args(args) {
+            self.err_coded(
+                span,
+                format!("`{label}`: named arguments are not supported on a stdlib native (v1)"),
+                "E-NAMED-ARG-UNSUPPORTED",
+                Some("call the native with positional arguments".into()),
+            );
+            return n.ret.clone();
+        }
         // W-DEPRECATED (rock 3): a deprecated stdlib symbol keeps working but warns, naming its
         // replacement + removal version (a non-fatal lint on the warning channel). The flag lives in
         // the `deprecation_of` side table — empty in a release build — so this is a no-op for every
@@ -140,6 +259,20 @@ impl Checker {
         args: &[crate::ast::Expr],
         span: Span,
     ) {
+        // DEC-297: a named call was front-normalized to a full positional list — REPLACE the args
+        // with it (a NamedArg must never reach a backend). Consumed post-resolution with the callee.
+        if let Some(positional) = self.pending_named.take() {
+            self.default_fills.insert(
+                span.start,
+                crate::ast::Expr::Call {
+                    callee: Box::new(callee.clone()),
+                    args: positional,
+                    type_args: Vec::new(),
+                    span,
+                },
+            );
+            return;
+        }
         // DEC-298: a variadic call REPLACES the trailing args with one `[..]` list literal (vs
         // defaults, which APPEND). Consumed here, post-resolution, so overload selection is done.
         if let Some(fixed) = self.pending_variadic.take() {

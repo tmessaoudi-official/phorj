@@ -632,6 +632,25 @@ import Core.String;
     );
 }
 
+/// DEC-297: named arguments on a free function. The checker front-normalizes a mixed positional/named
+/// call into positional order (filling omitted defaults) before any backend, so run≡runvm≡php: the
+/// reordered `greet(greeting: "Hey", name: "Cy")` and the default-filled `greet(name: "Ada")` both
+/// erase to plain positional calls (`greet("Cy", "Hey", false)` / `greet("Ada", "Hello", false)`).
+#[test]
+fn named_args_free_fn_reorder_and_defaults() {
+    agree_out_php(
+        r#"import Core.Output;
+function greet(string name, string greeting = "Hello", bool loud = false) -> string { return "{greeting}, {name}"; }
+#[Entry] function main() -> void {
+    Output.printLine(greet(name: "Ada"));
+    Output.printLine(greet("Bob", greeting: "Hi"));
+    Output.printLine(greet(greeting: "Hey", name: "Cy"));
+}"#,
+        "Hello, Ada\nHi, Bob\nHey, Cy\n",
+        "named_args_free_fn",
+    );
+}
+
 /// DEC-298: a variadic free function `int ...nums` collects a call's trailing args into a `List<int>`.
 /// Proves run≡runvm≡php: the checker rewrites the call `sum(1,2,3)` → `sum([1,2,3])` and the param
 /// `int ...nums` → `List<int> nums` (PHP `array $nums`), so all three backends agree byte-for-byte,

@@ -120,6 +120,9 @@ impl Compiler<'_> {
             }
             // A tuple literal is desugared to a `List` before any backend (DEC-288b, Invariant 5) —
             // the compiler never sees one.
+            Expr::NamedArg { .. } => {
+                unreachable!("Expr::NamedArg is normalized to positional before backends (DEC-297)")
+            }
             Expr::Tuple(..) => {
                 unreachable!("Expr::Tuple is erased to a List before backends (DEC-288b)")
             }

@@ -111,6 +111,7 @@ impl Checker {
                     throws: Vec::new(),
                     is_static: false,
                     variadic: false, // DEC-298: interface methods don't support variadics in v1
+                    param_names: m.params.iter().map(|p| p.name.clone()).collect(), // DEC-297
                 },
             );
         }
