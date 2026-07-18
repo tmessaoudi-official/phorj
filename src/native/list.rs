@@ -363,6 +363,31 @@ pub(super) fn list_flatten(args: &[Value], _: &mut String) -> Result<Value, Stri
     }
 }
 
+/// `List.flatMap(List<T>, (T) -> List<U>) -> List<U>` — map each element to a list, then concatenate
+/// the results (map + one-level flatten, the universal `flatMap`/`concatMap`). The mapper runs on the
+/// calling backend via the re-entrant invoker; a non-list result is checker-unreachable (the callback's
+/// declared return type is `List<U>`) but faults cleanly rather than panicking (EV-7).
+pub(super) fn list_flat_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut out = Vec::new();
+            for x in xs.iter() {
+                match call(f, vec![x.clone()])? {
+                    Value::List(inner) => out.extend(inner.iter().cloned()),
+                    other => {
+                        return Err(format!(
+                            "List.flatMap mapper must return List, got {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.flatMap expects (List<T>, (T) -> List<U>)".into()),
+    }
+}
+
 /// `List.count(List<T>, (T) -> bool) -> int` — how many elements satisfy the predicate. The predicate
 /// runs on the calling backend via the re-entrant invoker; a fault (or non-bool result) is propagated.
 pub(super) fn list_count(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {

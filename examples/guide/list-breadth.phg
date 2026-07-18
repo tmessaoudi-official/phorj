@@ -10,6 +10,7 @@ import Core.Runtime.Entry;
 //                        (so `"10" < "9"`, matching the Rust backends — NOT PHP's numeric juggling).
 //   * `find(p) -> T?`  — first element satisfying the predicate, or null.
 //   * `any(p)`/`all(p)`— short-circuiting existential / universal quantifiers (`bool`).
+//   * `flatMap(f)`     — map each element to a list, then concatenate (map + one-level flatten).
 // All pure Phorj over the higher-order-native machinery; byte-identical both backends and real PHP.
 #[Entry]
 function main(): void {
@@ -51,4 +52,9 @@ function main(): void {
     Output.printLine(
         "last 5={List.lastIndexOf(xs, 5) ?? -1}, last 7={List.lastIndexOf(xs, 7) ?? -1}"
     );
+    // flatMap — map each element to a list, then concatenate (map + one-level flatten, the universal
+    // `flatMap`/`concatMap`). Each number expands to itself and its double; an empty input or all-empty
+    // results yield `[]`.
+    List<int> expanded = List.flatMap([1, 2, 3], function(int n): List<int> { return [n, n * 10]; });
+    Output.printLine("flatMap: {List.length(expanded)} elems, sum={List.sum(expanded)}");
 }

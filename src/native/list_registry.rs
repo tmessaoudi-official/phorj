@@ -99,6 +99,27 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.List",
+            name: "flatMap",
+            params: vec![
+                list(t()),
+                Ty::Function(vec![t()], Box::new(list(u())), Vec::new()),
+            ],
+            ret: list(u()),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_flat_map),
+            // map each element to a list, then concatenate. `[]` seeds array_merge so an empty input
+            // (or all-empty results) yields `[]`, never array_merge()'s no-argument error; the spread
+            // re-indexes exactly like the native's sequential extend.
+            php: |a| {
+                format!(
+                    "array_merge([], ...array_map({}, {}))",
+                    parg(a, 1),
+                    parg(a, 0)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.List",
             name: "reduce",
             params: vec![
                 list(t()),

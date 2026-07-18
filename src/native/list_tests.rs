@@ -376,6 +376,27 @@ fn list_higher_order_eval_and_emit() {
     let mut bad = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(7));
     assert!(list_filter(&[nums.clone(), placeholder.clone()], &mut bad).is_err());
 
+    // flatMap: expand each n to [n, n*10], then concatenate (map + one-level flatten).
+    let mut expand = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+        [Value::Int(n)] => Ok(Value::List(std::rc::Rc::new(vec![
+            Value::Int(*n),
+            Value::Int(n * 10),
+        ]))),
+        _ => Err("bad arity".to_string()),
+    };
+    match list_flat_map(&[nums.clone(), placeholder.clone()], &mut expand).unwrap() {
+        Value::List(xs) => {
+            assert_eq!(xs.len(), 8); // 4 elements, each → 2
+            assert!(matches!(xs[0], Value::Int(1)));
+            assert!(matches!(xs[1], Value::Int(10)));
+            assert!(matches!(xs[7], Value::Int(40)));
+        }
+        other => panic!("flatMap returned {other:?}"),
+    }
+    // flatMap: a non-list mapper result is a clean fault, never a panic.
+    let mut notlist = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(7));
+    assert!(list_flat_map(&[nums.clone(), placeholder.clone()], &mut notlist).is_err());
+
     // reduce: sum, seeded with 100.
     let mut add = |_f: &Value, a: Vec<Value>| match a.as_slice() {
         [Value::Int(acc), Value::Int(x)] => Ok(Value::Int(acc + x)),
