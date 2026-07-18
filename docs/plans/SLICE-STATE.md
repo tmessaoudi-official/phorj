@@ -1,5 +1,25 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
+## 🌙 OVERNIGHT AUTONOMOUS RUN (dev asleep, 2026-07-19 — READ FIRST, governs until dev returns)
+**Mode:** full autonomous, continuous, all night. **Dev directive:** work through the night; stop ONLY if
+truly wedged (a blocker preventing ALL progress), never for a design fork.
+**ORDER:** (1) named args CONSTRUCTORS [part 2/3] → (2) named args METHODS [part 3/3] → (3) SPREAD (DEC-299:
+List→positional + Map-literal→named static core; runtime union-Map→named leg if Map<union> is solid, else
+record PENDING + skip) → (4) **WAVE B — FN stdlib breadth** (the +4-6pp % mover): crypto/security →
+**Core.Cryptography** (CSPRNG randomInt/randomBytes, hmac, timing-safe equals, hkdf, pbkdf2 — TOP-20 #10);
+**non-stream FS breadth** into Core.Fs (glob/stat/perms/mtime/tempFile/scandir — DEFER file-handle streams);
+String GU tail (ucwords/wordwrap/strtr/pad/strpbrk/strspn/strtok…); Math tail (asin/acos/atan/atan2/hyperbolics/
+hypot/log2/log1p/expm1/deg2rad/rad2deg); array long-tail → (5) generators/yield → (6) onward per programme.
+**FORK RULE (dev-ruled):** on ANY design fork, make the BEST decision by the full rule set — *better than PHP
+conceptually + theoretically + practically; more secure, faster, more OOP, more organized, cleaner* — BUILD it,
+and record it as an **AUTO decision** (status `✅ AUTO — REVIEW`) in C-decisions.md for morning review. NEVER block.
+**DoD each slice:** byte-identity run≡runvm≡php + example (Inv-9) + tests + clippy --all-features AND
+--no-default-features + fmt + advisor 6C → autonomous `git commit` green. **NEVER push** (dev pushes AM; note:
+pre-push perf gate flagged losses = load-contaminated box, dev re-checks quiet). **Perf work DEFERRED entirely.**
+**Discipline:** accepted surface == working surface (reject every unhandled path — the recurring trap); heavy
+cargo runs need Bash timeout ≥560000ms (2m default SIGKILLs + corrupts incremental → `cargo clean -p phorj`).
+
+
 ## ✅ DONE — CONTINUOUS SESSION 2 (2026-07-18, HEAD `3a8f1b7f`, +12 commits, ALL UNPUSHED — READ FIRST)
 - **Slice #1 §4.9 recompute** (`437ffd32`): parity **62→64%** · vision **64→66%** · floor **42→47%** (Web/Runtime
   spine folded in — HTTP client/FS/Uri/Unicode/sessions). First span where the FN stdlib leg moved (+6pp).
