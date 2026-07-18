@@ -28,6 +28,24 @@
 - **Batch status: DEC-289 ✅ · DEC-290 ✅ · DEC-291 ≈satisfied (18 Fs fns exist; mtime/glob minor deferred) · DEC-288
   (tuples) = the one remaining big slice.** Parity functions shipped this push: flatMap, takeWhile, dropWhile,
   groupBy, Date.parse, Instant.parse (6), all byte-identical.
+
+### DEC-288/288b TUPLES — SCOPED IMPLEMENTATION PLAN (erased-to-List sugar, ready for a focused slice)
+Ruled: compile-time sugar, no value-model/backend change (Invariant 5). Entry points found (2026-07-18):
+1. **`Ty::Tuple(Vec<Ty>)`** — new checker-only variant in `src/types.rs` (enum at :6; near List/Map at :60-71).
+2. **Type parse** — `src/parser/types.rs:100-132` ALREADY parses `(` for function-type param-lists / grouping;
+   extend: `(T1, T2, …)` with NO trailing `=>` → `Ty::Tuple` (today it's a parse error / grouping-of-one).
+3. **Literal parse** — `src/parser/exprs/primary.rs` `(` handling: `(e1, e2, …)` → a new `Expr::Tuple` (vs
+   grouping a single `(e)`).
+4. **Destructuring** — `src/parser/patterns.rs` (has `parse_pattern` + LParen at :66/:87): `(T1 x, T2 y)` binding
+   in `for`/let/assign; heterogeneous → each position bound with its own type (this is the PRIMARY typed-access
+   path — indexing a heterogeneous tuple would need special-casing, so destructuring is how values come out).
+5. **Checker** — type `Expr::Tuple` against `Ty::Tuple` (arity + per-position); destructuring binds each element.
+6. **Desugar** — `src/cli/pipeline.rs:42 check_and_expand` chokepoint (like `erase_generics`): `Expr::Tuple`→List
+   literal, `Ty::Tuple`→erased, destructuring→indexed binds. Backends + transpile UNTOUCHED (tuple = List at runtime).
+7. THEN build on tuples: `List.zip → List<(A,B)>`, `List.partition → (List<T>,List<T>)`, `Map.entries → List<(K,V)>`.
+⚠ Multi-slice, parser-grammar-careful (ambiguity: `(a)` grouping vs `(a,)` — decide 1-tuples), advisor-certify.
+Validatable on THIS box via targeted parser/checker tests + 3-way example (no value-model change → no kill-prone
+full-gate needed). NOT started — the clear next major slice.
 - LESSON (banked): inventory the EXISTING stdlib surface BEFORE asking design questions (bidirectionality) — 2 of 4
   batch questions (FS, date/time) turned out largely-already-built.
 
