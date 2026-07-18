@@ -13,6 +13,7 @@
 use crate::native::*;
 use crate::types::Ty;
 use crate::value::{build_map, EnumVal, HKey, Payload, Value};
+use std::fmt::Write as _;
 use std::rc::Rc;
 
 thread_local! {
@@ -39,6 +40,40 @@ thread_local! {
 /// backends use this string directly. Interned `Rc<str>` (see [`JSON_VARIANTS`]) — a refcount
 /// clone, not a fresh allocation.
 pub(super) fn jnode(variant: &str, payload: Payload) -> Value {
+    // Intern the immutable scalar nodes — `Json.Null`, `Json.Bool(true/false)`, and small
+    // `Json.Int(n)` — so `parse` clones a cached node (an Rc bump) instead of allocating a fresh
+    // `Rc<EnumVal>` per occurrence (the Json ADT is immutable, so a shared node is byte-identical:
+    // match/encode/eq_val all read ty+variant+payload content, never node identity). DEC-292 parse
+    // alloc lever. Small ints (ids, counts, HTTP codes) dominate real JSON payloads.
+    match (variant, &payload) {
+        ("Null", _) => return JSON_NULL.with(Value::clone),
+        ("Bool", Payload::One(Value::Bool(true))) => return JSON_TRUE.with(Value::clone),
+        ("Bool", Payload::One(Value::Bool(false))) => return JSON_FALSE.with(Value::clone),
+        ("Int", Payload::One(Value::Int(n))) if (SMALL_INT_MIN..=SMALL_INT_MAX).contains(n) => {
+            return JSON_SMALL_INTS
+                .with(|c| c[usize::try_from(*n - SMALL_INT_MIN).unwrap()].clone())
+        }
+        _ => {}
+    }
+    jnode_fresh(variant, payload)
+}
+
+const SMALL_INT_MIN: i64 = -16;
+const SMALL_INT_MAX: i64 = 256;
+
+thread_local! {
+    static JSON_NULL: Value = jnode_fresh("Null", Payload::Zero);
+    static JSON_TRUE: Value = jnode_fresh("Bool", Payload::One(Value::Bool(true)));
+    static JSON_FALSE: Value = jnode_fresh("Bool", Payload::One(Value::Bool(false)));
+    /// Cached `Json.Int(n)` for `n` in `[SMALL_INT_MIN, SMALL_INT_MAX]`, indexed by `n - MIN`.
+    static JSON_SMALL_INTS: Vec<Value> = (SMALL_INT_MIN..=SMALL_INT_MAX)
+        .map(|n| jnode_fresh("Int", Payload::One(Value::Int(n))))
+        .collect();
+}
+
+/// Always-allocating node constructor (the pre-DEC-292 `jnode` body). Used directly to build the
+/// interned singletons above, and for every non-cacheable node (containers, floats, strings, large ints).
+fn jnode_fresh(variant: &str, payload: Payload) -> Value {
     let ty = JSON_TY.with(Rc::clone);
     let variant = JSON_VARIANTS.with(|vs| {
         vs.iter()
@@ -58,7 +93,7 @@ pub(super) fn jnode(variant: &str, payload: Payload) -> Value {
 fn json_stringify(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [j] => {
-            let mut s = String::new();
+            let mut s = String::with_capacity(64);
             encode(j, &mut s)?;
             Ok(Value::Str(s.into()))
         }
@@ -140,8 +175,13 @@ pub(super) fn encode(v: &Value, out: &mut String) -> Result<(), String> {
     match (e.variant.as_ref(), e.payload.as_slice()) {
         ("Null", []) => out.push_str("null"),
         ("Bool", [Value::Bool(b)]) => out.push_str(if *b { "true" } else { "false" }),
-        ("Int", [Value::Int(n)]) => out.push_str(&n.to_string()),
-        ("Float", [Value::Float(f)]) => out.push_str(&format!("{f}")),
+        // Write integers/floats straight into the buffer (no throwaway `to_string()`/`format!` alloc).
+        ("Int", [Value::Int(n)]) => {
+            let _ = write!(out, "{n}");
+        }
+        ("Float", [Value::Float(f)]) => {
+            let _ = write!(out, "{f}");
+        }
         ("String", [Value::Str(s)]) => encode_str(s, out),
         ("Array", [Value::List(xs)]) => {
             out.push('[');
