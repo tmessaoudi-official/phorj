@@ -16,8 +16,18 @@
   "native DateTimeImmutable" the dev picked. Genuine gaps: **Date.parse** (string→Date), **custom format patterns**,
   a **combined date+time-of-day** type. NEEDS RE-ADJUDICATION (extend existing Date/Instant vs redundant native
   DateTime) — re-surfacing. DEC-290 ruling was on incomplete info.
+- ✅ **DEC-290 (date/time) COMPLETE** — added **Date.parse** `f13c0495` + **Instant.parse** `c0c9e928` (the real
+  gaps; ISO parse, round-trip, malformed→null, 3-way byte-identical). The "DateTime class" is deliberately
+  `Instant` (PHP name collision) + "custom format" is deliberately interpolation — both design non-gaps, NOT built.
+  Userland extension per the corrected ruling (no native DateTime). TIME_PRELUDE now imports Core.String/List.
 - **GENUINE remaining gap from the batch = DEC-288 tuples** (built-in `(A,B)` + destructuring) — the real big feature;
-  unblocks zip/partition/Map.entries. Spine-wide (parser+type+destructuring+backends), advisor-certified, multi-slice.
+  unblocks zip/partition/Map.entries. Spine-wide (parser + type system + destructuring patterns + all 3 backends +
+  transpile), advisor-flagged spine-critical + multi-slice. ⚠ Needs a FOCUSED FRESH slice on a HEALTHY box: a new
+  value-model type MUST be validated by the full `--all-features` suite + differential + all backends — exactly the
+  gate-heavy runs this degraded box SIGKILLs. NOT started (starting it here risks a broken/unvalidated spine change).
+- **Batch status: DEC-289 ✅ · DEC-290 ✅ · DEC-291 ≈satisfied (18 Fs fns exist; mtime/glob minor deferred) · DEC-288
+  (tuples) = the one remaining big slice.** Parity functions shipped this push: flatMap, takeWhile, dropWhile,
+  groupBy, Date.parse, Instant.parse (6), all byte-identical.
 - LESSON (banked): inventory the EXISTING stdlib surface BEFORE asking design questions (bidirectionality) — 2 of 4
   batch questions (FS, date/time) turned out largely-already-built.
 
