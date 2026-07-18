@@ -22,10 +22,20 @@
   byte-identical (115 db tests both backends + sqlite units). ⚠ measured under load ~8; a quiet-box `--emit`
   re-baseline (OWED, deferred pre-push) would record the new numbers (likely ≥1.0 clean). microbench-gate
   baseline NOT yet updated (do on quiet box).
+- **✅ BYTE-IDENTITY SPINE VALIDATED ON CURRENT HEAD (2026-07-18, targeted sweeps — no full cargo gate needed):**
+  202/202 entry examples VM≡interpreter (`phg run` vs `phg run --tree-walker`), 0 divergences; 177/177 pure
+  examples interpreter≡PHP (transpile→php-8.5.8 vs run), 0 real divergences (the 4 flagged were all correctly
+  quarantined: `unchecked`=E-TRANSPILE-UNCHECKED, `unicode-native`=E-TRANSPILE-UNICODE native-only, `fs/walk`=impure
+  FS, `null-safety`=stderr W-FORCE-UNWRAP artifact — stdout identical). This substantially closes the DEC-287
+  "full --all-features gate not run on final HEAD since gate4" caveat FOR THE SPINE (the core contract); still
+  OWED on the dev's first pre-push: the two heavy sweeps + clippy on final HEAD. Also found+logged 2 pre-existing
+  drift/divergence issues (KNOWN_ISSUES top): run/runvm CLI doc-drift + the "no entry point" run≠tree-walker
+  prefix divergence; fixed safe living-doc/example/comment instances (main.rs, example CLI cmds, FEATURES row 70).
 - **NEXT (perf mission substantially complete — both losses addressed):** per the confirmed programme, the
   CORE PARITY PUSH (the big %-movers: FN parity is the 40%-weighted drag at ~37%) — TOP-20 stdlib breadth
-  (FS breadth → sprintf → array-tail → date/time → subprocess → regex-breadth). jsonround arena = PENDING
-  developer decision (DEC-286).
+  (FS breadth → sprintf → array-tail → date/time → subprocess → regex-breadth). DESIGN-HEAVY (dev-adjudicated,
+  Invariant 15) + GATE-HEAVY (kill-prone on this box) — hold for dev / a healthy box. jsonround arena = PENDING
+  developer decision (DEC-286). Recent-DEC doc-drift sweep OWED (KNOWN_ISSUES top).
 
 
 ### ✅ DEC-284 EXTENSION/FEATURE RENAME COMMITTED `e1eb3781` (2026-07-18) — UNPUSHED
