@@ -14,10 +14,20 @@
   bool-KEY diverges on transpile leg (FLAGGED, use str/int keys). Detail = [[tuples-dec288-slice-status]].
 - ⚠ `check_resolutions` return is now a 10-field tuple (consider a named struct if an 11th is added).
 
-## NEXT (per MASTER-PLAN §0 THE QUEUE — CORE PARITY PUSH): §4 recompute → TOP-20 stdlib
-(FN leg 37→~70%: sprintf/printf family → array_* long tail → date/time breadth → subprocess →
-regex-breadth → math long-tail/BigInt → compression). Fs breadth ≈done (18 fns). Design-heavy —
-ask on user-visible forks (Invariant 15). Box bursty → byte-identity is the gate, defer perf verdicts.
+## NEXT — CONFIRMED PROGRAMME ORDER (dev via AskUserQuestion 2026-07-18; RESUME HERE post-compaction)
+Rationale: measure → capability-before-breadth → data-driven breadth → capabilities → packs → ship.
+1. **§4 recompute** (START HERE) — re-run M-gap-matrix §4 arithmetic (824 rows, 35 SYN/40 FN/25 RT);
+   credit this session's uncounted work (DEC-288 tuples + zip/partition/entries + flatMap/takeWhile/
+   dropWhile/groupBy + Date.parse/Instant.parse + lazy-Json); update GA/Global % + §11 same commit.
+   Fork-free; establishes the TRUE gaps so #3 is data-driven.
+2. **Named args + variadics + spread** — SYN-leg mover + unblocks the lifter on PHP 8.0+ code
+   (capability). Design-heavy → surface syntax/semantics forks first (Invariant 15).
+3. **TOP-20 stdlib remaining gaps** (aimed by #1's §4) — FN-leg +13pp; proven native recipe.
+4. **Generators/`yield`** — capability gap (blocks iterator breadth); spine-sensitive.
+5. **Feature packs (Web/Data/Runtime) + icu4x/Intl + W4-10 XML fork** — larger, design-heavy.
+6. **Usability/GA** — lifter corpus + DEC-283 .phgml + GA freeze/docs + DEC-267 JIT-coverage metric.
+⚠ Box bursty → byte-identity is the gate; defer perf verdicts to a quiet window. Ask on every
+user-visible design fork (Invariant 15). Stdlib already mature (List 36/String 42/Math 34/Map 13).
 
 ## CURRENT (2026-07-17→18, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
 
