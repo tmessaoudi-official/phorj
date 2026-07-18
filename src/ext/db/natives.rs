@@ -234,6 +234,35 @@ fn failure(msg: String) -> Value {
     }))
 }
 
+thread_local! {
+    /// One cached `DatabaseResult.Ok(null)` carrier, reused (Rc bump, no alloc) by every op whose Ok
+    /// payload the prelude discards — `bind`/`bindNamed`/`bindList` (`Ok(_) => this`) and
+    /// `begin`/`commit`/`rollback`/`timeout`/`onQuery` (`Ok(_) => Database.ok()`). `bind` alone runs
+    /// ~40k times in the dbwork macro-bench; skipping its per-call carrier allocation (and the
+    /// discarded handle clone in `bind_inner`) is the dbwork alloc lever (DEC-291). Never dropped to
+    /// zero (the thread-local holds one ref), so cloning it is a pure refcount bump.
+    static OK_UNIT: Value = Value::Enum(Rc::new(EnumVal {
+        ty: "DatabaseResult".into(),
+        variant: "Ok".into(),
+        payload: crate::value::Payload::One(Value::Null),
+    }));
+}
+
+/// The cached unit success carrier (see [`OK_UNIT`]) — an Rc bump, not an allocation.
+fn success_unit() -> Value {
+    OK_UNIT.with(|v| v.clone())
+}
+
+/// Like [`wrap`], but for ops whose Ok payload the prelude ignores: the success arm returns the
+/// cached [`success_unit`] carrier instead of allocating a fresh one, and the inner body's Ok value
+/// (if any) is discarded. The Err path is unchanged (a real message the prelude throws on).
+fn wrap_unit(inner: Result<Value, String>) -> Value {
+    match inner {
+        Ok(_) => success_unit(),
+        Err(msg) => failure(msg),
+    }
+}
+
 /// Map an inner body's `Result<payload, db-error-message>` onto the returned `Result<T, string>` VALUE:
 /// `Ok(v) → Success(v)`, `Err(msg) → Failure(msg)`. A DB error thus becomes a value the prelude throws
 /// on, never an uncatchable native fault. (An arity/shape bug the checker forbids stays an `Err` — a
@@ -479,7 +508,9 @@ fn bind_inner(args: &[Value]) -> Result<Value, String> {
         }
     }
     drop(binds);
-    Ok(args[0].clone())
+    // The prelude discards this payload (`Ok(_) => this`), so return a cheap unit rather than cloning
+    // the handle — routed through `wrap_unit` to the cached carrier (DEC-291 dbwork alloc lever).
+    Ok(Value::Null)
 }
 
 /// `stmt.bindList(values)` → record a list-valued positional bind (DEC-208 slice D, spec §2). It
@@ -506,7 +537,7 @@ fn bind_list_inner(args: &[Value]) -> Result<Value, String> {
         }
     }
     drop(binds);
-    Ok(args[0].clone())
+    Ok(Value::Null) // payload discarded by the prelude (see bind_inner)
 }
 
 /// `stmt.bindNamed(name, value)` → append a named bind; returns the same shared handle (chainable).
@@ -530,7 +561,7 @@ fn bind_named_inner(args: &[Value]) -> Result<Value, String> {
         }
     }
     drop(binds);
-    Ok(args[0].clone())
+    Ok(Value::Null) // payload discarded by the prelude (see bind_inner)
 }
 
 /// Borrow the live driver behind a statement, or a clean `<<ConnectionError>>` if the connection was
@@ -727,6 +758,14 @@ fn with_hook(
     inner: fn(&[Value]) -> Result<Value, String>,
 ) -> Result<Value, String> {
     let stmt = args.first().and_then(|v| as_stmt(v).ok());
+    // Fast path: with no `onQuery` hook and no armed timeout there is nothing to instrument, so skip
+    // the two `Instant::now()` clock reads (the elapsed ms only ever feeds the hook) and the
+    // take/restore plumbing. dbwork runs ~20k execs/queries with neither set — this is the common
+    // case (DEC-291 dbwork lever).
+    let instrument = stmt.is_some_and(|s| s.timeout_ms.get() > 0 || s.hook.borrow().is_some());
+    if !instrument {
+        return Ok(wrap(inner(args)));
+    }
     let start = std::time::Instant::now();
     let mut result = inner(args);
     if let Some(s) = stmt {
@@ -1186,6 +1225,15 @@ macro_rules! db_native {
         }
     };
 }
+/// Same as [`db_native!`] but for ops whose Ok payload the prelude discards — routes through
+/// [`wrap_unit`] so the hot success path is a cached-carrier Rc bump, not an allocation (DEC-291).
+macro_rules! db_native_unit {
+    ($name:ident, $inner:ident) => {
+        fn $name(args: &[Value], _out: &mut String) -> Result<Value, String> {
+            Ok(wrap_unit($inner(args)))
+        }
+    };
+}
 db_native!(db_open, open_inner);
 /// `dsnWithPassword` returns a plain `string` (the authenticated DSN), NOT a `DatabaseResult` — it is a pure
 /// string transform with no DB error, so it does not go through `wrap`.
@@ -1194,15 +1242,16 @@ fn db_dsn_with_password(args: &[Value], _out: &mut String) -> Result<Value, Stri
 }
 db_native!(db_prepare, prepare_inner);
 db_native!(db_stream_next, stream_next_inner);
-db_native!(db_bind, bind_inner);
-db_native!(db_bind_named, bind_named_inner);
-db_native!(db_bind_list, bind_list_inner);
+// Payload-discarded ops (prelude arm `Ok(_) => this` / `Ok(_) => Database.ok()`) — cached-carrier path.
+db_native_unit!(db_bind, bind_inner);
+db_native_unit!(db_bind_named, bind_named_inner);
+db_native_unit!(db_bind_list, bind_list_inner);
 db_native!(db_last_insert_id, last_insert_id_inner);
-db_native!(db_timeout, timeout_inner);
-db_native!(db_on_query, on_query_inner);
-db_native!(db_begin, begin_inner);
-db_native!(db_commit, commit_inner);
-db_native!(db_rollback, rollback_inner);
+db_native_unit!(db_timeout, timeout_inner);
+db_native_unit!(db_on_query, on_query_inner);
+db_native_unit!(db_begin, begin_inner);
+db_native_unit!(db_commit, commit_inner);
+db_native_unit!(db_rollback, rollback_inner);
 db_native!(db_close, close_inner);
 db_native!(row_get_int, get_int_inner);
 db_native!(row_get_string, get_string_inner);
@@ -1819,8 +1868,10 @@ mod tests {
             )
             .unwrap(),
         );
-        let ins = ok_of(db_bind(&[ins, Value::Str("Ada".into())], &mut out).unwrap());
-        let ins = ok_of(db_bind(&[ins, Value::Int(36)], &mut out).unwrap());
+        // bind() mutates the shared handle in place and returns a discarded unit carrier (DEC-291),
+        // so chain via the SAME handle — exactly what the prelude does with `this`.
+        ok_of(db_bind(&[ins.clone(), Value::Str("Ada".into())], &mut out).unwrap());
+        ok_of(db_bind(&[ins.clone(), Value::Int(36)], &mut out).unwrap());
         assert!(ok_of(x(&[ins], &mut out).unwrap()).eq_val(&Value::Int(1)));
 
         // INSERT with named binds.
@@ -1834,15 +1885,23 @@ mod tests {
             )
             .unwrap(),
         );
-        let ins2 = ok_of(
+        ok_of(
             db_bind_named(
-                &[ins2, Value::Str("n".into()), Value::Str("Grace".into())],
+                &[
+                    ins2.clone(),
+                    Value::Str("n".into()),
+                    Value::Str("Grace".into()),
+                ],
                 &mut out,
             )
             .unwrap(),
         );
-        let ins2 = ok_of(
-            db_bind_named(&[ins2, Value::Str("a".into()), Value::Int(45)], &mut out).unwrap(),
+        ok_of(
+            db_bind_named(
+                &[ins2.clone(), Value::Str("a".into()), Value::Int(45)],
+                &mut out,
+            )
+            .unwrap(),
         );
         assert!(ok_of(x(&[ins2], &mut out).unwrap()).eq_val(&Value::Int(1)));
 
@@ -1857,7 +1916,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let sel = ok_of(db_bind(&[sel, Value::Int(30)], &mut out).unwrap());
+        ok_of(db_bind(&[sel.clone(), Value::Int(30)], &mut out).unwrap());
         let rows = ok_of(q(&[sel], &mut out).unwrap());
         let Value::List(rows) = rows else {
             panic!("query must return a list")
@@ -1885,7 +1944,7 @@ mod tests {
         let mut out = String::new();
         let db = ok_of(db_open(&[Value::Str(":memory:".into())], &mut out).unwrap());
         let s = ok_of(db_prepare(&[db, Value::Str("SELECT ?, :x".into())], &mut out).unwrap());
-        let s = ok_of(db_bind(&[s, Value::Int(1)], &mut out).unwrap());
+        ok_of(db_bind(&[s.clone(), Value::Int(1)], &mut out).unwrap());
         // A DB usage error is a catchable Result.Failure, NOT a hard fault.
         let msg =
             err_of(db_bind_named(&[s, Value::Str("x".into()), Value::Int(2)], &mut out).unwrap());
