@@ -173,7 +173,7 @@ pub(super) fn match_pattern(
                 if ev.variant.as_ref() == name.as_str() && ev.payload.len() == fields.len() {
                     return fields
                         .iter()
-                        .zip(&ev.payload)
+                        .zip(ev.payload.iter())
                         .all(|(fp, fv)| match_pattern(fp, fv, implements, out));
                 }
             }

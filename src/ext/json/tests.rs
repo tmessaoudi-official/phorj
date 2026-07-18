@@ -20,19 +20,54 @@ fn roundtrip(src: &str) -> Option<String> {
 
 #[test]
 fn encode_scalars() {
-    assert_eq!(enc(&jnode("Null", vec![])), "null");
-    assert_eq!(enc(&jnode("Bool", vec![Value::Bool(true)])), "true");
-    assert_eq!(enc(&jnode("Bool", vec![Value::Bool(false)])), "false");
-    assert_eq!(enc(&jnode("Int", vec![Value::Int(42)])), "42");
-    assert_eq!(enc(&jnode("Int", vec![Value::Int(-7)])), "-7");
+    assert_eq!(enc(&jnode("Null", crate::value::Payload::Zero)), "null");
+    assert_eq!(
+        enc(&jnode(
+            "Bool",
+            crate::value::Payload::One(Value::Bool(true))
+        )),
+        "true"
+    );
+    assert_eq!(
+        enc(&jnode(
+            "Bool",
+            crate::value::Payload::One(Value::Bool(false))
+        )),
+        "false"
+    );
+    assert_eq!(
+        enc(&jnode("Int", crate::value::Payload::One(Value::Int(42)))),
+        "42"
+    );
+    assert_eq!(
+        enc(&jnode("Int", crate::value::Payload::One(Value::Int(-7)))),
+        "-7"
+    );
     // Integral float renders without a trailing `.0` (Rust `{}` / __phorj_float).
-    assert_eq!(enc(&jnode("Float", vec![Value::Float(42.0)])), "42");
-    assert_eq!(enc(&jnode("Float", vec![Value::Float(3.5)])), "3.5");
+    assert_eq!(
+        enc(&jnode(
+            "Float",
+            crate::value::Payload::One(Value::Float(42.0))
+        )),
+        "42"
+    );
+    assert_eq!(
+        enc(&jnode(
+            "Float",
+            crate::value::Payload::One(Value::Float(3.5))
+        )),
+        "3.5"
+    );
 }
 
 #[test]
 fn encode_strings_match_php_json_encode_default() {
-    let s = |t: &str| enc(&jnode("String", vec![Value::Str(t.into())]));
+    let s = |t: &str| {
+        enc(&jnode(
+            "String",
+            crate::value::Payload::One(Value::Str(t.into())),
+        ))
+    };
     assert_eq!(s("hi"), "\"hi\"");
     assert_eq!(s("a/b"), "\"a\\/b\""); // forward slash escaped (PHP default)
     assert_eq!(s("café"), "\"caf\\u00e9\""); // non-ASCII → lowercase \u
@@ -116,10 +151,16 @@ fn pretty_matches_json_pretty_print_layout() {
 #[test]
 fn pretty_empty_and_scalar() {
     assert_eq!(
-        pretty(&jnode("Array", vec![Value::List(std::rc::Rc::new(vec![]))])),
+        pretty(&jnode(
+            "Array",
+            crate::value::Payload::One(Value::List(std::rc::Rc::new(vec![]))),
+        )),
         "[]"
     );
-    assert_eq!(pretty(&jnode("Int", vec![Value::Int(7)])), "7");
+    assert_eq!(
+        pretty(&jnode("Int", crate::value::Payload::One(Value::Int(7)))),
+        "7"
+    );
 }
 
 #[test]
@@ -141,9 +182,9 @@ fn ndjson_registered() {
 fn ndjson_stringify_lines_joins_with_newline() {
     let mut out = String::new();
     let xs = Value::List(std::rc::Rc::new(vec![
-        jnode("Int", vec![Value::Int(1)]),
-        jnode("Bool", vec![Value::Bool(true)]),
-        jnode("Null", vec![]),
+        jnode("Int", crate::value::Payload::One(Value::Int(1))),
+        jnode("Bool", crate::value::Payload::One(Value::Bool(true))),
+        jnode("Null", crate::value::Payload::Zero),
     ]));
     let s = json_stringify_lines(&[xs], &mut out).unwrap();
     assert!(

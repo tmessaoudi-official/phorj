@@ -604,7 +604,7 @@ impl<'a> Vm<'a> {
                 // Clone the small descriptor (two `String`s) so the `&self.program` borrow ends
                 // before `split_off` takes `&mut self`.
                 let desc = self.program.enum_descs[idx].clone();
-                let payload = self.split_off(desc.arity);
+                let payload = crate::value::Payload::from_vec(self.split_off(desc.arity));
                 self.stack.push(Value::Enum(Rc::new(EnumVal {
                     ty: desc.ty,
                     variant: desc.variant,
@@ -624,6 +624,7 @@ impl<'a> Vm<'a> {
                     // element is itself `Rc`-shared if compound, so this stays an O(1) bump (P5a).
                     let v = ev
                         .payload
+                        .as_slice()
                         .get(i)
                         .cloned()
                         .ok_or_else(|| format!("enum payload index {i} out of range"))?;

@@ -29,7 +29,7 @@ fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "HcResult".into(),
         variant: "Ok".into(),
-        payload: vec![v],
+        payload: crate::value::Payload::One(v),
     }))
 }
 
@@ -37,7 +37,7 @@ fn failure(msg: String) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "HcResult".into(),
         variant: "Err".into(),
-        payload: vec![Value::Str(msg.into())],
+        payload: crate::value::Payload::One(Value::Str(msg.into())),
     }))
 }
 

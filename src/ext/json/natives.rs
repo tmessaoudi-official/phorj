@@ -12,7 +12,7 @@
 
 use crate::native::*;
 use crate::types::Ty;
-use crate::value::{build_map, EnumVal, HKey, Value};
+use crate::value::{build_map, EnumVal, HKey, Payload, Value};
 use std::rc::Rc;
 
 thread_local! {
@@ -38,7 +38,7 @@ thread_local! {
 /// `String`/`Array`/`Object`); the transpiler mangles reserved ones to PHP class names, the
 /// backends use this string directly. Interned `Rc<str>` (see [`JSON_VARIANTS`]) — a refcount
 /// clone, not a fresh allocation.
-pub(super) fn jnode(variant: &str, payload: Vec<Value>) -> Value {
+pub(super) fn jnode(variant: &str, payload: Payload) -> Value {
     let ty = JSON_TY.with(Rc::clone);
     let variant = JSON_VARIANTS.with(|vs| {
         vs.iter()
@@ -137,7 +137,7 @@ fn key_str(k: &HKey) -> Result<&str, String> {
 /// Compact encoding — matches `__phorj_json_encode` byte-for-byte.
 pub(super) fn encode(v: &Value, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
-    match (e.variant.as_ref(), &e.payload[..]) {
+    match (e.variant.as_ref(), e.payload.as_slice()) {
         ("Null", []) => out.push_str("null"),
         ("Bool", [Value::Bool(b)]) => out.push_str(if *b { "true" } else { "false" }),
         ("Int", [Value::Int(n)]) => out.push_str(&n.to_string()),
@@ -174,7 +174,7 @@ pub(super) fn encode(v: &Value, out: &mut String) -> Result<(), String> {
 /// inline). `indent` is the current leading-space count. Matches `__phorj_json_pretty`.
 pub(super) fn encode_pretty(v: &Value, indent: usize, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
-    match (e.variant.as_ref(), &e.payload[..]) {
+    match (e.variant.as_ref(), e.payload.as_slice()) {
         ("Array", [Value::List(xs)]) if !xs.is_empty() => {
             let inner = indent + 4;
             out.push_str("[\n");
@@ -303,12 +303,12 @@ impl JParser<'_> {
     fn value(&mut self) -> Option<Value> {
         self.ws();
         match self.peek()? {
-            b'n' => self.lit(b"null", jnode("Null", vec![])),
-            b't' => self.lit(b"true", jnode("Bool", vec![Value::Bool(true)])),
-            b'f' => self.lit(b"false", jnode("Bool", vec![Value::Bool(false)])),
+            b'n' => self.lit(b"null", jnode("Null", Payload::Zero)),
+            b't' => self.lit(b"true", jnode("Bool", Payload::One(Value::Bool(true)))),
+            b'f' => self.lit(b"false", jnode("Bool", Payload::One(Value::Bool(false)))),
             b'"' => {
                 let s = self.string()?;
-                Some(jnode("String", vec![Value::Str(s.into())]))
+                Some(jnode("String", Payload::One(Value::Str(s.into()))))
             }
             b'[' => self.array(),
             b'{' => self.object(),
@@ -367,12 +367,18 @@ impl JParser<'_> {
         // The number token is pure ASCII, so the byte range is a valid str slice (no alloc).
         let tok = &self.src[start..self.i];
         if is_float {
-            Some(jnode("Float", vec![Value::Float(tok.parse::<f64>().ok()?)]))
+            Some(jnode(
+                "Float",
+                Payload::One(Value::Float(tok.parse::<f64>().ok()?)),
+            ))
         } else {
             // Integer; an i64 overflow falls back to Float, matching `json_decode`.
             match tok.parse::<i64>() {
-                Ok(n) => Some(jnode("Int", vec![Value::Int(n)])),
-                Err(_) => Some(jnode("Float", vec![Value::Float(tok.parse::<f64>().ok()?)])),
+                Ok(n) => Some(jnode("Int", Payload::One(Value::Int(n)))),
+                Err(_) => Some(jnode(
+                    "Float",
+                    Payload::One(Value::Float(tok.parse::<f64>().ok()?)),
+                )),
             }
         }
     }
@@ -455,14 +461,14 @@ impl JParser<'_> {
         let mut xs = Vec::new();
         if self.peek() == Some(b']') {
             self.bump();
-            return Some(jnode("Array", vec![Value::List(Rc::new(xs))]));
+            return Some(jnode("Array", Payload::One(Value::List(Rc::new(xs)))));
         }
         loop {
             xs.push(self.value()?);
             self.ws();
             match self.bump()? {
                 b',' => self.ws(),
-                b']' => return Some(jnode("Array", vec![Value::List(Rc::new(xs))])),
+                b']' => return Some(jnode("Array", Payload::One(Value::List(Rc::new(xs))))),
                 _ => return None,
             }
         }
@@ -500,7 +506,7 @@ impl JParser<'_> {
     fn make_obj(&self, pairs: Vec<(Value, Value)>) -> Option<Value> {
         // String keys ⇒ `build_map` never rejects; it dedups first-position/last-value (PHP assoc).
         let entries = build_map(pairs).ok()?;
-        Some(jnode("Object", vec![Value::Map(Rc::new(entries))]))
+        Some(jnode("Object", Payload::One(Value::Map(Rc::new(entries)))))
     }
 }
 

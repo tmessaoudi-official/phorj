@@ -628,7 +628,7 @@ mod tests {
         let a = Value::Enum(Rc::new(EnumVal {
             ty: "Shape".into(),
             variant: "Circle".into(),
-            payload: vec![Value::Float(2.0)],
+            payload: crate::value::Payload::One(Value::Float(2.0)),
         }));
         let b = a.clone();
         assert!(a.eq_val(&b));

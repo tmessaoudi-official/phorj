@@ -253,7 +253,7 @@ mod tests {
         let e = Value::Enum(Rc::new(EnumVal {
             ty: "Shape".into(),
             variant: "Circle".into(),
-            payload: vec![Value::Float(2.0)],
+            payload: crate::value::Payload::One(Value::Float(2.0)),
         }));
         assert_eq!(render(&e), "Circle(2)");
     }

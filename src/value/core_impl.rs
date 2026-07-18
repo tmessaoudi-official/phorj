@@ -115,7 +115,7 @@ impl Value {
                     && a.payload.len() == b.payload.len()
                     && a.payload
                         .iter()
-                        .zip(&b.payload)
+                        .zip(b.payload.iter())
                         .all(|(x, y)| x.eq_val_rec(y, visited))
             }
             (Instance(a), Instance(b)) => {

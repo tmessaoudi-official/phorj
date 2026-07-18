@@ -55,7 +55,7 @@ fn reflect_class_name_returns_runtime_class_for_objects_null_otherwise() {
     let ev = Value::Enum(Rc::new(EnumVal {
         ty: "Color".into(),
         variant: "Red".into(),
-        payload: vec![],
+        payload: crate::value::Payload::Zero,
     }));
     assert!(matches!(reflect_class_name(&[ev], &mut out), Ok(Value::Str(s)) if s == "Red"));
     // A non-object (scalar / collection / closure) is not a class → null.

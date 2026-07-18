@@ -51,7 +51,7 @@ fn mode(variant: &str) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "RoundingMode".into(),
         variant: variant.into(),
-        payload: vec![],
+        payload: crate::value::Payload::Zero,
     }))
 }
 

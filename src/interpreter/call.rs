@@ -175,7 +175,7 @@ impl<'c> Interp<'c> {
                 return Ok(Value::Enum(Rc::new(EnumVal {
                     ty: enum_name.as_str().into(),
                     variant: name.as_str().into(),
-                    payload: argv,
+                    payload: crate::value::Payload::from_vec(argv),
                 })));
             }
             if self.classes.contains_key(name) {

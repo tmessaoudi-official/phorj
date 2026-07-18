@@ -78,13 +78,13 @@ fn enums_render_qualified_with_payload() {
     let bare = Value::Enum(Rc::new(EnumVal {
         ty: "Color".into(),
         variant: "Red".into(),
-        payload: vec![],
+        payload: crate::value::Payload::Zero,
     }));
     assert_eq!(r(&bare), "Color.Red");
     let with = Value::Enum(Rc::new(EnumVal {
         ty: "Json".into(),
         variant: "Int".into(),
-        payload: vec![Value::Int(7)],
+        payload: crate::value::Payload::One(Value::Int(7)),
     }));
     assert_eq!(r(&with), "Json.Int(7)");
 }

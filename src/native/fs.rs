@@ -13,14 +13,14 @@
 
 use super::{NativeEval, NativeFn};
 use crate::types::Ty;
-use crate::value::{EnumVal, Value};
+use crate::value::{EnumVal, Payload, Value};
 use std::rc::Rc;
 
 fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "FileSystemResult".into(),
         variant: "Ok".into(),
-        payload: vec![v],
+        payload: Payload::One(v),
     }))
 }
 
@@ -28,7 +28,7 @@ fn failure(msg: String) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "FileSystemResult".into(),
         variant: "Err".into(),
-        payload: vec![Value::Str(msg.into())],
+        payload: Payload::One(Value::Str(msg.into())),
     }))
 }
 

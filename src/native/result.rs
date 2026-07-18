@@ -17,21 +17,21 @@
 //! synthesize on a `false` predicate (Rust omits `Result::filter` for the same reason).
 use super::*;
 use crate::types::Ty;
-use crate::value::{EnumVal, Value};
+use crate::value::{EnumVal, Payload, Value};
 use std::rc::Rc;
 
 fn success(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "Result".into(),
         variant: "Success".into(),
-        payload: vec![v],
+        payload: Payload::One(v),
     }))
 }
 fn failure(e: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "Result".into(),
         variant: "Failure".into(),
-        payload: vec![e],
+        payload: Payload::One(e),
     }))
 }
 /// A `Core.Option` value — used only by `toOption` (the Result→Option bridge). Requires the program to
@@ -41,14 +41,14 @@ fn some(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "Option".into(),
         variant: "Some".into(),
-        payload: vec![v],
+        payload: Payload::One(v),
     }))
 }
 fn none() -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "Option".into(),
         variant: "None".into(),
-        payload: vec![],
+        payload: Payload::Zero,
     }))
 }
 

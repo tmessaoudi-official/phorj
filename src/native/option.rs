@@ -13,21 +13,21 @@
 //! one (its prelude is skipped), so their values never reach these `Core.Option` natives.
 use super::*;
 use crate::types::Ty;
-use crate::value::{EnumVal, Value};
+use crate::value::{EnumVal, Payload, Value};
 use std::rc::Rc;
 
 fn some(v: Value) -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "Option".into(),
         variant: "Some".into(),
-        payload: vec![v],
+        payload: Payload::One(v),
     }))
 }
 fn none() -> Value {
     Value::Enum(Rc::new(EnumVal {
         ty: "Option".into(),
         variant: "None".into(),
-        payload: vec![],
+        payload: Payload::Zero,
     }))
 }
 

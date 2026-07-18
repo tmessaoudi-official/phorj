@@ -2,6 +2,21 @@
 
 ## CURRENT (2026-07-17→18, cont. — CONTINUOUS MODE; dev directive: BIGGER WAVES to amortize gate time)
 
+### DEC-285 attribute-import-form fix COMMITTED `d63e255a` + jsonround perf (2 commits) — UNPUSHED
+- **DEC-285** (`d63e255a`): built-in attributes (`Entry`/`Route`/`UncheckedOverflow`/`Attribute`/DI) resolve in
+  EVERY import form — `#[Core.Runtime.Entry]` (qualified, was E-UNKNOWN-ATTRIBUTE) now works, bare-after-import
+  preferred. `ast::attr_path_matches` suffix-matcher; import-gating unchanged (enforce_injected self-gates dotted).
+  Byte-identical run≡runvm≡php-8.5.8. advisor-certified. tests/attribute_paths.rs (3 tests).
+- **jsonround perf (DEC-266 line):** byte-cursor parse `79a1f4fb` (Vec<char>→&[u8], byte-identical, no flip) +
+  **inline-payload `EnumVal.payload`→`Payload{Zero,One,Many}`** (this slice, advisor-certified, byte-identical:
+  2279 tests + differential + oracle + all-micro output-identity; microbench-gate PASS no flips; enum/match benches
+  IMPROVED — broad alloc win across ALL enums). **jsonround STILL 0.29× LOSS** (507ms vs C-json 145ms, 3.4× gap):
+  ~65% of allocs = the `Rc<EnumVal>` BOX itself; flipping needs a **value-model rebuild (arena)** = ⚠ **PENDING
+  Invariant-15 developer decision, NOT autonomously attempted** (DEC-286). jsonround finished to the autonomous limit.
+- **NEXT = dbwork (0.64× LOSS)** — the census's winnable "better bet" (PDO/Db dispatch overhead, beatable). Perf-flip
+  mission continues on a movable target; jsonround's wall documented (DEC-286) for developer review.
+
+
 ### ✅ DEC-284 EXTENSION/FEATURE RENAME COMMITTED `e1eb3781` (2026-07-18) — UNPUSHED
 Cargo features + registry names now track their real Core module (dev-directed "names reflect module"):
 `crypto`→`cryptography` (Core.Cryptography), `db`→`database` (Core.DatabaseModule),

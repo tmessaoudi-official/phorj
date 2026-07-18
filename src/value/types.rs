@@ -268,6 +268,73 @@ impl Instance {
     }
 }
 
+/// The associated data of an enum variant. Most variants carry ZERO or ONE value — every `Json` node,
+/// `Option`/`Result`, and the common user-enum case — so those are stored INLINE, paying no heap `Vec`
+/// allocation. Only a genuine multi-field variant (`Circle(x, y, r)`) spills to a heap `Vec`. This
+/// removes one allocation per enum node vs the old `Vec<Value>` (the jsonround alloc-bound hot path;
+/// benefits EVERY enum construction — user variants, Option/Result, Json). Content-identical to the
+/// old `Vec<Value>`: [`Payload::as_slice`] presents the same `&[Value]` the value kernels, the
+/// backends, and match lowering read, so eq / display / hash and byte-identity are unchanged.
+#[derive(Debug, Clone)]
+pub enum Payload {
+    /// No associated data (`Json.Null`, `Option.None`, a bare user variant).
+    Zero,
+    /// Exactly one value, inline (`Json.Int(n)`, `Option.Some(v)`, a single-field variant).
+    One(Value),
+    /// Two or more values — a heap `Vec` (a genuine multi-field variant).
+    Many(Vec<Value>),
+}
+
+impl Payload {
+    /// Build from an owned `Vec` — the general enum-construction path (the interpreter/VM variant
+    /// constructors, which arrive with a `Vec` of evaluated args). Collapses to the inline forms so a
+    /// 0/1-field variant pays no allocation; a 2+-field variant keeps its `Vec`.
+    #[must_use]
+    pub fn from_vec(mut v: Vec<Value>) -> Self {
+        match v.len() {
+            0 => Payload::Zero,
+            1 => Payload::One(v.pop().expect("len checked == 1")),
+            _ => Payload::Many(v),
+        }
+    }
+    /// The payload as a slice — the single read view the kernels, backends, and match lowering use.
+    #[must_use]
+    pub fn as_slice(&self) -> &[Value] {
+        match self {
+            Payload::Zero => &[],
+            Payload::One(v) => std::slice::from_ref(v),
+            Payload::Many(v) => v.as_slice(),
+        }
+    }
+    #[must_use]
+    pub fn len(&self) -> usize {
+        match self {
+            Payload::Zero => 0,
+            Payload::One(_) => 1,
+            Payload::Many(v) => v.len(),
+        }
+    }
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Payload::Zero)
+    }
+    #[must_use]
+    pub fn first(&self) -> Option<&Value> {
+        self.as_slice().first()
+    }
+    /// Iterate the payload values (`= self.as_slice().iter()`).
+    pub fn iter(&self) -> std::slice::Iter<'_, Value> {
+        self.as_slice().iter()
+    }
+}
+
+impl std::ops::Index<usize> for Payload {
+    type Output = Value;
+    fn index(&self, i: usize) -> &Value {
+        &self.as_slice()[i]
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct EnumVal {
     /// Enum type + variant names, shared as `Rc<str>` (built once in `EnumDesc`, cloned as a refcount
@@ -275,7 +342,8 @@ pub struct EnumVal {
     /// `String` — eq/hash/Display byte-identical.
     pub ty: Rc<str>,
     pub variant: Rc<str>,
-    pub payload: Vec<Value>,
+    /// Associated data — inline for the 0/1-payload common case (no per-node `Vec`); see [`Payload`].
+    pub payload: Payload,
 }
 
 /// Hashable key subset for `Map`/`Set` (`Value` can't derive `Hash`/`Eq`: it
