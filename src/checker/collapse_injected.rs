@@ -66,6 +66,7 @@ pub fn collapse_injected_type_qualifiers(program: Program) -> Program {
                 span: *span,
             },
             Type::Union(members, span) => Type::Union(members.iter().map(rt).collect(), *span),
+            Type::Tuple(members, span) => Type::Tuple(members.iter().map(rt).collect(), *span),
             Type::Intersection(members, span) => {
                 Type::Intersection(members.iter().map(rt).collect(), *span)
             }

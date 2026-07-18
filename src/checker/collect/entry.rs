@@ -287,7 +287,7 @@ pub(in crate::checker) fn collect_alias_refs(
             }
         }
         Type::Optional { inner, .. } => collect_alias_refs(inner, aliases, out),
-        Type::Union(members, _) | Type::Intersection(members, _) => {
+        Type::Union(members, _) | Type::Intersection(members, _) | Type::Tuple(members, _) => {
             for m in members {
                 collect_alias_refs(m, aliases, out);
             }

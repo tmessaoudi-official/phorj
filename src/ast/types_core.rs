@@ -48,6 +48,12 @@ pub enum Type {
         len: usize,
         span: Span,
     },
+    /// `(A, B[, …])` — a fixed-arity heterogeneous **tuple** type (DEC-288). Parsed from `(A, B)`
+    /// WITHOUT a trailing `=>` (2+ members; `(T)` is grouping, `()` needs `=> R`). A compile-time-only
+    /// sugar: the checker resolves it to [`crate::types::Ty::Tuple`], then the tuple-erasure pass
+    /// rewrites it OUT (to a plain `List` view) before any backend — the same "expanded out before
+    /// backends" discipline as generics / `FixedList`. Members are in source order.
+    Tuple(Vec<Type>, Span),
     /// An **erased** generic type parameter (M-RT S7). Produced *only* by `checker::erase_generics`,
     /// which rewrites every `Type::Named` that refers to an in-scope type parameter (`T`) into this
     /// after type-checking. No parser ever emits it and no checker pass before erasure sees it; the

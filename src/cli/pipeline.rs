@@ -178,7 +178,9 @@ pub fn check_and_expand_reified(
             // independent of every expression rewrite above; its generated hasNext/next pulls
             // are plain method calls needing no further pass on any backend.
             Ok((
-                crate::checker::lower_foreach_iter(
+                // DEC-288: erase tuple literals to list literals LAST (an independent expr rewrite),
+                // so no backend sees `Expr::Tuple`.
+                crate::checker::erase_tuples(crate::checker::lower_foreach_iter(
                     // DEC-280 / Invariant 7: inferred foreach-binding types written into the AST
                     // (after erasure, before the Iterator lowering consumes the For's `ty`).
                     crate::checker::materialize_for_binds(
@@ -209,7 +211,7 @@ pub fn check_and_expand_reified(
                         &for_binds,
                     ),
                     &for_iters,
-                ),
+                )),
                 reified,
             ))
         }

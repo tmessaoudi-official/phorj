@@ -78,6 +78,9 @@ pub fn erase_generics(program: Program) -> Program {
             Type::Union(members, span) => {
                 Type::Union(members.iter().map(|m| rty(m, params)).collect(), *span)
             }
+            Type::Tuple(members, span) => {
+                Type::Tuple(members.iter().map(|m| rty(m, params)).collect(), *span)
+            }
             // An intersection erases each member (a type-param member becomes `Type::Erased`); the
             // intersection itself is structural and survives to the backend (M-RT S5).
             Type::Intersection(members, span) => {

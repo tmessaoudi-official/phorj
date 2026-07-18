@@ -129,20 +129,16 @@ impl Parser {
                     span: sp,
                 }
             } else {
-                // No `=>`: the parens were grouping, not a parameter list. Exactly one inner type is
-                // `(T)` ≡ `T`; `()` / `(A, B)` without a `=>` are invalid (Phorj has no unit-paren
-                // or tuple types — a multi-element list must be a function-type parameter list).
+                // No `=>`: the parens were grouping or a tuple type (DEC-288). `(T)` ≡ `T`;
+                // `(A, B[, …])` (2+ members) is a tuple type; `()` still needs a `=> R` (an empty
+                // paren list is only valid as a function-type parameter list).
                 match params.len() {
                     1 => params.pop().expect("one grouped type"),
                     0 => {
                         return Err(self
                             .error("a `=>` return type after `()` (an empty `()` is a function-type parameter list)"))
                     }
-                    _ => {
-                        return Err(self.error(
-                            "a `=>` return type (Phorj has no tuple types — `(A, B)` is a function-type parameter list and needs `=> R`)",
-                        ))
-                    }
+                    _ => Type::Tuple(params, sp),
                 }
             };
             while self.eat(&TokenKind::Question) {

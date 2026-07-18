@@ -9,6 +9,15 @@ impl Checker {
         use crate::ast::Type;
         match ty {
             Type::Optional { inner, .. } => Ty::Optional(Box::new(self.resolve_type(inner))),
+            Type::Tuple(members, _) => {
+                // DEC-288: a tuple resolves each member type (heterogeneous — no shared-type rule).
+                // Erased to a `List` view before any backend by the tuple-erasure pass.
+                let mut tys = Vec::with_capacity(members.len());
+                for m in members {
+                    tys.push(self.resolve_type(m));
+                }
+                Ty::Tuple(tys)
+            }
             Type::Union(members, span) => {
                 // DEC-253: `A | B | null` — the PHP-familiar nullable-union spelling. Strip the
                 // `null` member(s) and wrap the remaining union in `Optional`, so both spellings

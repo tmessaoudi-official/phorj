@@ -67,6 +67,11 @@ pub(super) fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
             members.iter().map(|m| resolve_type(m, ctx)).collect(),
             *span,
         ),
+        // A tuple resolves each member type likewise (DEC-288).
+        Type::Tuple(members, span) => Type::Tuple(
+            members.iter().map(|m| resolve_type(m, ctx)).collect(),
+            *span,
+        ),
         // `[T; N]`: resolve the element's type name (a cross-package `[Point; 2]` mangles its element).
         Type::FixedList { elem, len, span } => Type::FixedList {
             elem: Box::new(resolve_type(elem, ctx)),

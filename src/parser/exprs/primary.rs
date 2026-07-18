@@ -90,9 +90,31 @@ impl Parser {
             TokenKind::If => self.parse_if_expr(sp),
             TokenKind::LParen => {
                 self.advance();
-                let inner = self.parse_expr()?;
-                self.expect(&TokenKind::RParen, "')'")?;
-                Ok(inner)
+                let first = self.parse_expr()?;
+                if !self.eat(&TokenKind::Comma) {
+                    // `(e)` — grouping.
+                    self.expect(&TokenKind::RParen, "')'")?;
+                    return Ok(first);
+                }
+                // A comma → a tuple literal `(a, b[, …])` (DEC-288). Reject the 1-tuple `(e,)`
+                // (Phorj has no 1-tuples — `(e)` is grouping).
+                if self.check(&TokenKind::RParen) {
+                    return Err(self.error(
+                        "a second tuple element (`(e,)` is not a 1-tuple — use `(e)` to group)",
+                    ));
+                }
+                let mut elems = vec![first];
+                loop {
+                    elems.push(self.parse_expr()?);
+                    if !self.eat(&TokenKind::Comma) {
+                        break;
+                    }
+                    if self.check(&TokenKind::RParen) {
+                        break; // trailing comma OK for a 2+-element tuple
+                    }
+                }
+                self.expect(&TokenKind::RParen, "')' to close a tuple")?;
+                Ok(Expr::Tuple(elems, sp))
             }
             TokenKind::LBracket => {
                 self.advance();

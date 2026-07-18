@@ -151,7 +151,7 @@ impl Ctx {
                     self.walk_type(t, errs);
                 }
             }
-            Type::Union(members, _) | Type::Intersection(members, _) => {
+            Type::Union(members, _) | Type::Intersection(members, _) | Type::Tuple(members, _) => {
                 for m in members {
                     self.walk_type(m, errs);
                 }
