@@ -237,6 +237,11 @@ impl Checker {
                 child
                     .ctor_defaults
                     .extend(parent_info.ctor_defaults.iter().cloned());
+                // DEC-297: param names travel in lockstep too, so a named `new Child(x: …)` on an
+                // inherited ctor resolves to the right slot.
+                child
+                    .ctor_param_names
+                    .extend(parent_info.ctor_param_names.iter().cloned());
                 // DEC-221: inherit the parent ctor's declared throws alongside its param signature, so
                 // `new Child(args)` propagates whatever the inherited constructor can throw.
                 child

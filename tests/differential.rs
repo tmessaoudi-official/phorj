@@ -651,6 +651,43 @@ function greet(string name, string greeting = "Hello", bool loud = false) -> str
     );
 }
 
+/// DEC-297 part 2: named arguments on a CONSTRUCTOR (`new Point(y: 9, x: 2)`) — reordered + defaults
+/// filled to positional before any backend, byte-identical run≡runvm≡php.
+#[test]
+fn named_args_constructor_reorder_and_defaults() {
+    agree_out_php(
+        r#"import Core.Output;
+class Point { constructor(public int x, public int y = 0, public string label = "p") {}
+             function show() -> string { return "{this.label}({this.x},{this.y})"; } }
+#[Entry] function main() -> void {
+    Output.printLine(new Point(x: 1).show());
+    Output.printLine(new Point(3, label: "q").show());
+    Output.printLine(new Point(y: 9, x: 2, label: "r").show());
+}"#,
+        "p(1,0)\nq(3,0)\nr(2,9)\n",
+        "named_args_ctor",
+    );
+}
+
+/// DEC-297 part 3: named arguments on an instance + static METHOD — reordered + defaults filled,
+/// byte-identical run≡runvm≡php.
+#[test]
+fn named_args_method_reorder_and_defaults() {
+    agree_out_php(
+        r#"import Core.Output;
+class Calc { function add(int a, int b = 10, int c = 100) -> int { return a + b + c; }
+             static function make(string tag = "d") -> string { return tag; } }
+#[Entry] function main() -> void {
+    Calc k = new Calc();
+    Output.printLine("{k.add(a: 1)}");
+    Output.printLine("{k.add(c: 3, a: 1, b: 2)}");
+    Output.printLine("{Calc.make(tag: \"z\")}");
+}"#,
+        "111\n6\nz\n",
+        "named_args_method",
+    );
+}
+
 /// DEC-298: a variadic free function `int ...nums` collects a call's trailing args into a `List<int>`.
 /// Proves run≡runvm≡php: the checker rewrites the call `sum(1,2,3)` → `sum([1,2,3])` and the param
 /// `int ...nums` → `List<int> nums` (PHP `array $nums`), so all three backends agree byte-for-byte,

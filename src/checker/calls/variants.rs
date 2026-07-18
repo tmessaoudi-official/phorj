@@ -50,6 +50,7 @@ impl Checker {
         if let Some(info) = self.classes.get(name) {
             let ctor = info.ctor.clone();
             let ctor_defaults = info.ctor_defaults.clone();
+            let ctor_param_names = info.ctor_param_names.clone(); // DEC-297
             let ctor_throws = info.ctor_throws.clone();
             let type_params = info.type_params.clone();
             let is_abstract = info.is_abstract;
@@ -73,15 +74,41 @@ impl Checker {
                 );
             }
             if type_params.is_empty() {
-                // DEC-236: a ctor with defaulted trailing params accepts the shorter arities; the
-                // omitted defaults are recorded via `pending_fill` (consumed by the generic
-                // `record_pending_fill` in `check_call`), so every backend sees a full-arity `new`.
-                if ctor_defaults.iter().any(Option::is_some) {
+                // DEC-297: a named/positional-mixed construction is front-normalized to positional
+                // (reorder + fill omitted defaults), recorded as a REPLACE fill via `pending_named`
+                // (consumed by `record_pending_fill` in `check_call`) so every backend sees a plain
+                // positional `new`. Falls through to the default/exact path when no arg is named.
+                if crate::checker::calls::args::has_named_args(args) {
+                    if let Some(pos) = self.normalize_named_args(
+                        name,
+                        &ctor_param_names,
+                        &ctor_defaults,
+                        args,
+                        span,
+                    ) {
+                        self.check_args(name, &ctor, &pos, span);
+                        self.pending_named = Some(pos);
+                    }
+                } else if ctor_defaults.iter().any(Option::is_some) {
+                    // DEC-236: a ctor with defaulted trailing params accepts the shorter arities; the
+                    // omitted defaults are recorded via `pending_fill` (consumed by the generic
+                    // `record_pending_fill` in `check_call`), so every backend sees a full-arity `new`.
                     self.check_args_defaulted(name, &ctor, &ctor_defaults, args, span);
                 } else {
                     self.check_args(name, &ctor, args, span);
                 }
                 return Some(Ty::Named(name.to_string(), Vec::new()));
+            }
+            // DEC-297: named args on a GENERIC constructor are rejected in v1 (inference + reorder combo).
+            if crate::checker::calls::args::has_named_args(args) {
+                self.err_coded(
+                    span,
+                    format!(
+                        "`{name}`: named arguments are not supported on a generic constructor (v1)"
+                    ),
+                    "E-NAMED-ARG-UNSUPPORTED",
+                    Some("construct the generic class with positional arguments".into()),
+                );
             }
             // A generic class: infer its type arguments from the constructor call (M-RT generics-all),
             // the same first-binding-wins unifier as a generic function. A parameter the constructor

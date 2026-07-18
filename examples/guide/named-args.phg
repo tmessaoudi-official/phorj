@@ -4,8 +4,8 @@
 //
 // It's compile-time sugar: the checker reorders named args into their declared slots and fills any
 // omitted defaults BEFORE any backend, so `phg run`, `phg runvm`, and the transpiled PHP (which gets
-// a plain positional call) all agree byte-for-byte. v1 supports free functions (constructors + methods
-// are a follow-on); generic/overloaded/native calls and variadics take positional args only.
+// a plain positional call) all agree byte-for-byte. Works on free functions, CONSTRUCTORS, and
+// METHODS (instance + static); generic/overloaded/native calls and variadics take positional args only.
 package Main;
 
 import Core.Output;
@@ -16,12 +16,23 @@ function greet(string name, string greeting = "Hello", bool loud = false): strin
     return match (loud) { true => "{base}!", default => base };
 }
 
+class Box {
+    constructor(public string label, public int width = 1, public int height = 1) {}
+    function area(): int {
+        return this.width * this.height;
+    }
+}
+
 #[Entry]
 function main(): void {
-    // Only the required arg by name; both defaults apply.
+    // FREE FUNCTION — only the required arg by name; both defaults apply.
     Output.printLine(greet(name: "Ada"));
-    // Positional first, then a named one that skips over `greeting`'s neighbour.
+    // Positional first, then a named one that skips over `greeting`.
     Output.printLine(greet("Bob", loud: true));
     // All named, in any order — reordered to the declared slots.
     Output.printLine(greet(greeting: "Hey", name: "Cy", loud: true));
+    // CONSTRUCTOR — skip a middle default, name the ones you set (in any order).
+    var b = new Box(label: "crate", height: 4);
+    // METHOD — a named arg on an instance method.
+    Output.printLine("{b.label} area = {b.area()}");
 }

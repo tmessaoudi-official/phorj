@@ -176,6 +176,10 @@ struct ClassInfo {
     /// construction check via the M4 fill (every backend sees a full-arity `new`). Inherited
     /// alongside `ctor`.
     ctor_defaults: Vec<Option<crate::ast::Expr>>,
+    /// DEC-297: the constructor's parameter NAMES, parallel to [`Self::ctor`] — for resolving a named
+    /// construction argument (`new Cookie(name: "sid")`) to its positional slot. Inherited alongside
+    /// `ctor`. Empty when unknown (named construction then rejected).
+    ctor_param_names: Vec<String>,
     /// DEC-221: the constructor's declared checked-exception set (resolved + flattened), read at the
     /// construction site (`new X(args)` routes each through `route_call_throw`, so the caller must
     /// `try`/`catch` or `?`-propagate) and to seed `cur_throws` while checking the ctor body. Inherited
@@ -311,6 +315,7 @@ impl ClassInfo {
             hooks: HashMap::new(),
             ctor: Vec::new(),
             ctor_defaults: Vec::new(),
+            ctor_param_names: Vec::new(),
             ctor_throws: Vec::new(),
             has_ctor: false,
             is_user_attribute: false, // placeholder; overwritten by `collect_class`

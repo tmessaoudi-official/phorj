@@ -134,6 +134,7 @@ impl Checker {
                 hooks: HashMap::new(),
                 ctor: Vec::new(),
                 ctor_defaults: Vec::new(),
+                ctor_param_names: Vec::new(),
                 ctor_throws: Vec::new(),
                 has_ctor: false,
                 is_user_attribute: c.attrs.iter().any(|a| a.is_attribute_marker()),
@@ -219,6 +220,7 @@ impl Checker {
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
         let mut ctor_defaults: Vec<Option<crate::ast::Expr>> = Vec::new();
+        let mut ctor_param_names: Vec<String> = Vec::new(); // DEC-297: for named construction args
         let mut ctor_throws = Vec::new();
         let mut ctor_vis = MemberVis::Public;
         // The class's type parameters are in scope while resolving every member signature (fields,
@@ -415,6 +417,7 @@ impl Checker {
                         })
                         .collect();
                     ctor_defaults = self.collect_param_defaults(&as_params, &ctor);
+                    ctor_param_names = params.iter().map(|p| p.name.clone()).collect(); // DEC-297
                     if !class_tp.is_empty() && ctor_defaults.iter().any(Option::is_some) {
                         self.err_coded(
                             *span,
@@ -618,6 +621,7 @@ impl Checker {
             .any(|m| matches!(m, ClassMember::Constructor { .. }));
         info.ctor = ctor;
         info.ctor_defaults = ctor_defaults;
+        info.ctor_param_names = ctor_param_names; // DEC-297
         info.ctor_throws = ctor_throws;
         info.ctor_vis = ctor_vis;
         // `ctor_owner` was initialized to the class's own name; an own ctor keeps it. An inherited

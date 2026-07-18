@@ -5,7 +5,14 @@ use super::*;
 /// A resolved method-overload signature for call checking (Batch C): `(params, ret, throws)`, with
 /// the class type-argument substitution already applied. The `throws` set is discharged at the call
 /// site exactly like a free-function call.
-pub(in crate::checker) type MethodSig = (Vec<Ty>, Ty, Vec<Ty>, Vec<Option<crate::ast::Expr>>);
+// (params, ret, throws, defaults, param_names) — `param_names` (DEC-297) resolves named method args.
+pub(in crate::checker) type MethodSig = (
+    Vec<Ty>,
+    Ty,
+    Vec<Ty>,
+    Vec<Option<crate::ast::Expr>>,
+    Vec<String>,
+);
 
 impl Checker {
     /// Check a `parent`/super dispatch call (M-RT super/parent). Validates the context (an instance
@@ -304,9 +311,23 @@ impl Checker {
         // documented `free_call_throws` deferral (a method throw must be caught in a `try`).
         let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
         if applied.len() == 1 {
-            let (params, ret, throws, defaults) = &applied[0];
+            let (params, ret, throws, defaults, param_names) = &applied[0];
             for e in throws.clone() {
                 self.route_call_throw(skip_throws, name, &e, span);
+            }
+            // DEC-297: named args on a GENERIC method are rejected in v1 (inference + reorder combo) —
+            // give the clean unsupported error, not the confusing MISPLACED a NamedArg would trigger
+            // inside `check_generic_call`.
+            if (params.iter().any(ty_has_param) || ty_has_param(ret))
+                && crate::checker::calls::args::has_named_args(args)
+            {
+                self.err_coded(
+                    span,
+                    format!("`{name}`: named arguments are not supported on a generic method (v1)"),
+                    "E-NAMED-ARG-UNSUPPORTED",
+                    Some("call the generic method with positional arguments".into()),
+                );
+                return ret.clone();
             }
             return if params.iter().any(ty_has_param) || ty_has_param(ret) {
                 // Bounds on an OVERLOADED generic function are a documented deferral (the `applied`
@@ -362,6 +383,46 @@ impl Checker {
                 self.check_generic_call(name, type_params, params, ret, &[], tf, args, span)
             } else {
                 self.reject_turbofish(tf, name, span);
+                // DEC-297: a named/positional-mixed METHOD call is front-normalized to positional
+                // (reorder + fill omitted defaults) and recorded as a REPLACE fill via `pending_named`,
+                // so every backend sees a plain positional method call. Falls through to the
+                // default/exact path when no arg is named. A `?.` call with named args is rejected
+                // (no fill target) below via the same `None` guard that catches omitted defaults.
+                if crate::checker::calls::args::has_named_args(args) {
+                    // No param names available (e.g. an interface-typed receiver's flattened sig) →
+                    // can't resolve slots; reject cleanly rather than mis-report unknown names.
+                    if param_names.is_empty() {
+                        self.err_coded(
+                            span,
+                            format!("`{name}`: named arguments are not supported here (no parameter names available) (v1)"),
+                            "E-NAMED-ARG-UNSUPPORTED",
+                            Some("call with positional arguments".into()),
+                        );
+                        return ret.clone();
+                    }
+                    if let Some(pos) =
+                        self.normalize_named_args(name, param_names, defaults, args, span)
+                    {
+                        self.check_args(name, params, &pos, span);
+                        match callee {
+                            // Record the REPLACE fill against the method-call callee, so `rewrite_ufcs`
+                            // splices the positional form (no `NamedArg` reaches a backend).
+                            Some(c) => {
+                                self.pending_named = Some(pos);
+                                self.record_pending_fill(c, args, span);
+                            }
+                            None => {
+                                self.err_coded(
+                                    span,
+                                    format!("named arguments on a null-safe `?.{name}(…)` call are not supported yet"),
+                                    "E-NAMED-ARG-UNSUPPORTED",
+                                    Some("pass every argument positionally on `?.` calls".into()),
+                                );
+                            }
+                        }
+                    }
+                    return ret.clone();
+                }
                 // DEC-249: a single-signature method call may omit trailing defaulted arguments —
                 // the same `check_args_defaulted` + `pending_fill` machinery as free functions;
                 // `record_pending_fill` rebuilds the full-arity call (applied by `rewrite_ufcs`),
@@ -388,12 +449,22 @@ impl Checker {
         // A multi-overload method set is monomorphic (overloaded generics are rejected at collection),
         // so it takes no turbofish (DEC-208 slice A).
         self.reject_turbofish(tf, name, span);
+        // DEC-297: named args on an OVERLOADED method are rejected in v1 (slot resolution would have to
+        // pick the overload first) — the clean unsupported error, not MISPLACED from the arg walk below.
+        if crate::checker::calls::args::has_named_args(args) {
+            self.err_coded(
+                span,
+                format!("`{name}`: named arguments are not supported on an overloaded method (v1)"),
+                "E-NAMED-ARG-UNSUPPORTED",
+                Some("call an overloaded method with positional arguments".into()),
+            );
+        }
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
         // Discharge the union of every statically-matching overload's throws — runtime dispatch may
         // pick any of them (mirrors `check_overload_call`).
         {
             let mut discharged: Vec<Ty> = Vec::new();
-            for (params, _, throws, _) in applied {
+            for (params, _, throws, _, _) in applied {
                 let matches = params.len() == arg_tys.len()
                     && params
                         .iter()
@@ -409,7 +480,7 @@ impl Checker {
                 }
             }
         }
-        let matched = applied.iter().find(|(params, _, _, _)| {
+        let matched = applied.iter().find(|(params, _, _, _, _)| {
             params.len() == arg_tys.len()
                 && params
                     .iter()
@@ -417,7 +488,7 @@ impl Checker {
                     .all(|(p, a)| self.ty_assignable(a, p))
         });
         match matched {
-            Some((_, ret, _, _)) => ret.clone(),
+            Some((_, ret, _, _, _)) => ret.clone(),
             None => {
                 let got = arg_tys
                     .iter()

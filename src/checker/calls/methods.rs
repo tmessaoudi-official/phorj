@@ -98,6 +98,7 @@ impl Checker {
                                     s.ret.clone(),
                                     s.throws.clone(),
                                     s.defaults.clone(),
+                                    s.param_names.clone(),
                                 )
                             })
                             .collect::<Vec<_>>()
@@ -112,7 +113,9 @@ impl Checker {
                                 .find(|(m, _)| m == name)
                                 .map(|(_, sig)| {
                                     let arity = sig.0.len();
-                                    vec![(sig.0, sig.1, Vec::new(), vec![None; arity])]
+                                    // Interface-flattened sigs carry no param names → named args on an
+                                    // interface-typed receiver reject cleanly (DEC-297, v1 follow-up).
+                                    vec![(sig.0, sig.1, Vec::new(), vec![None; arity], Vec::new())]
                                 })
                         } else {
                             None
@@ -180,12 +183,13 @@ impl Checker {
                             .unwrap_or_default();
                         let applied: Vec<MethodSig> = sigs
                             .iter()
-                            .map(|(ps, r, th, ds)| {
+                            .map(|(ps, r, th, ds, pn)| {
                                 (
                                     ps.iter().map(|p| apply_subst(p, &theta)).collect(),
                                     apply_subst(r, &theta),
                                     th.iter().map(|t| apply_subst(t, &theta)).collect(),
                                     ds.clone(),
+                                    pn.clone(),
                                 )
                             })
                             .collect();
@@ -248,6 +252,7 @@ impl Checker {
                                             s.ret.clone(),
                                             s.throws.clone(),
                                             s.defaults.clone(),
+                                            s.param_names.clone(),
                                         )
                                     })
                                     .collect::<Vec<_>>()
@@ -259,7 +264,13 @@ impl Checker {
                                         .find(|(mm, _)| mm == name)
                                         .map(|(_, sig)| {
                                             let arity = sig.0.len();
-                                            vec![(sig.0, sig.1, Vec::new(), vec![None; arity])]
+                                            vec![(
+                                                sig.0,
+                                                sig.1,
+                                                Vec::new(),
+                                                vec![None; arity],
+                                                Vec::new(),
+                                            )]
                                         })
                                 } else {
                                     None
@@ -280,12 +291,13 @@ impl Checker {
                             let theta = self.class_subst(mn, margs);
                             let applied: Vec<MethodSig> = sigs
                                 .iter()
-                                .map(|(ps, r, th, ds)| {
+                                .map(|(ps, r, th, ds, pn)| {
                                     (
                                         ps.iter().map(|p| apply_subst(p, &theta)).collect(),
                                         apply_subst(r, &theta),
                                         th.iter().map(|t| apply_subst(t, &theta)).collect(),
                                         ds.clone(),
+                                        pn.clone(),
                                     )
                                 })
                                 .collect();
@@ -295,7 +307,7 @@ impl Checker {
                                 // may differ between an interface's empty view and the class's
                                 // real one; the FIRST occurrence wins, matching the old
                                 // first-found behavior for the agree case).
-                                if !set.iter().any(|(ps, r, _, _)| *ps == s.0 && *r == s.1) {
+                                if !set.iter().any(|(ps, r, _, _, _)| *ps == s.0 && *r == s.1) {
                                     set.push(s);
                                 }
                             }
@@ -413,6 +425,7 @@ impl Checker {
                             s.ret.clone(),
                             s.throws.clone(),
                             s.defaults.clone(),
+                            s.param_names.clone(),
                         )
                     })
                     .collect()
