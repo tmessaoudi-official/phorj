@@ -239,7 +239,7 @@ thread_local! {
     /// payload the prelude discards — `bind`/`bindNamed`/`bindList` (`Ok(_) => this`) and
     /// `begin`/`commit`/`rollback`/`timeout`/`onQuery` (`Ok(_) => Database.ok()`). `bind` alone runs
     /// ~40k times in the dbwork macro-bench; skipping its per-call carrier allocation (and the
-    /// discarded handle clone in `bind_inner`) is the dbwork alloc lever (DEC-291). Never dropped to
+    /// discarded handle clone in `bind_inner`) is the dbwork alloc lever (DEC-292). Never dropped to
     /// zero (the thread-local holds one ref), so cloning it is a pure refcount bump.
     static OK_UNIT: Value = Value::Enum(Rc::new(EnumVal {
         ty: "DatabaseResult".into(),
@@ -509,7 +509,7 @@ fn bind_inner(args: &[Value]) -> Result<Value, String> {
     }
     drop(binds);
     // The prelude discards this payload (`Ok(_) => this`), so return a cheap unit rather than cloning
-    // the handle — routed through `wrap_unit` to the cached carrier (DEC-291 dbwork alloc lever).
+    // the handle — routed through `wrap_unit` to the cached carrier (DEC-292 dbwork alloc lever).
     Ok(Value::Null)
 }
 
@@ -761,7 +761,7 @@ fn with_hook(
     // Fast path: with no `onQuery` hook and no armed timeout there is nothing to instrument, so skip
     // the two `Instant::now()` clock reads (the elapsed ms only ever feeds the hook) and the
     // take/restore plumbing. dbwork runs ~20k execs/queries with neither set — this is the common
-    // case (DEC-291 dbwork lever).
+    // case (DEC-292 dbwork lever).
     let instrument = stmt.is_some_and(|s| s.timeout_ms.get() > 0 || s.hook.borrow().is_some());
     if !instrument {
         return Ok(wrap(inner(args)));
@@ -1226,7 +1226,7 @@ macro_rules! db_native {
     };
 }
 /// Same as [`db_native!`] but for ops whose Ok payload the prelude discards — routes through
-/// [`wrap_unit`] so the hot success path is a cached-carrier Rc bump, not an allocation (DEC-291).
+/// [`wrap_unit`] so the hot success path is a cached-carrier Rc bump, not an allocation (DEC-292).
 macro_rules! db_native_unit {
     ($name:ident, $inner:ident) => {
         fn $name(args: &[Value], _out: &mut String) -> Result<Value, String> {
@@ -1868,7 +1868,7 @@ mod tests {
             )
             .unwrap(),
         );
-        // bind() mutates the shared handle in place and returns a discarded unit carrier (DEC-291),
+        // bind() mutates the shared handle in place and returns a discarded unit carrier (DEC-292),
         // so chain via the SAME handle — exactly what the prelude does with `this`.
         ok_of(db_bind(&[ins.clone(), Value::Str("Ada".into())], &mut out).unwrap());
         ok_of(db_bind(&[ins.clone(), Value::Int(36)], &mut out).unwrap());

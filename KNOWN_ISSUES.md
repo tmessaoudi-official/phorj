@@ -61,6 +61,21 @@ case — the actual intersection-bypass enabler — is fully closed; intersectio
 covers the `I & C` path). Full fix = track per-overload visibility so the conforming overload's
 visibility is the one enforced. Low priority (overloaded + interface + reduced-visibility is rare).
 
+## PERF-jsonround — structural perf loss vs C `json_decode`/`json_encode` (FLAGGED 2026-07-18, DEC-294)
+
+The `jsonround` macro-bench is a **documented, arithmetic-backed structural loss** (~0.3–0.4× vs
+PHP), and it is the ONLY micro/macro-bench that is a genuine loss (every other is WIN or parity as
+of 2026-07-18). Cause: Phorj's `Json` is a **typed ADT** — `Json.parse` allocates one `Rc<EnumVal>`
+per JSON node — whereas PHP's `json_decode($doc, true)` yields a **bare nested array** with zero
+per-node objects. Measured: parse ALONE = ~205ms (allocation-bound — proven proportional to node
+count: a 1-node doc = 74ms, the 9-node doc = 205ms), which already exceeds PHP's ENTIRE round-trip
+(~153ms). So no amount of match/build/stringify optimization can flip it — the floor is the parse
+allocation. Within-representation wins already taken (DEC-293: scalar-node interning + alloc-free
+encode) moved it 0.28×→0.32× but cannot cross the floor. **The flip requires a lazy/compact Json
+value** (materialize ADT nodes only on `match`); that is GREENLIT (DEC-294) as a fresh-context,
+spine-sensitive slice (~15 runtime deconstruction touch-points + a new `Value` variant — byte-identity
+is invariant #1, so it is not rushed). Not a correctness issue; run≡runvm≡PHP output is byte-identical.
+
 ## F-029 — namespaced (multi-package) transpile byte-identity gaps (FLAGGED 2026-07-16, DEC-263 build; PRE-EXISTING, not introduced by DEC-263)
 
 Surfaced while building DEC-263: two distinct **transpile-leg-only** divergences that break the

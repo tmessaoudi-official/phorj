@@ -43,7 +43,7 @@ pub(super) fn jnode(variant: &str, payload: Payload) -> Value {
     // Intern the immutable scalar nodes — `Json.Null`, `Json.Bool(true/false)`, and small
     // `Json.Int(n)` — so `parse` clones a cached node (an Rc bump) instead of allocating a fresh
     // `Rc<EnumVal>` per occurrence (the Json ADT is immutable, so a shared node is byte-identical:
-    // match/encode/eq_val all read ty+variant+payload content, never node identity). DEC-292 parse
+    // match/encode/eq_val all read ty+variant+payload content, never node identity). DEC-293 parse
     // alloc lever. Small ints (ids, counts, HTTP codes) dominate real JSON payloads.
     match (variant, &payload) {
         ("Null", _) => return JSON_NULL.with(Value::clone),
@@ -71,7 +71,7 @@ thread_local! {
         .collect();
 }
 
-/// Always-allocating node constructor (the pre-DEC-292 `jnode` body). Used directly to build the
+/// Always-allocating node constructor (the pre-DEC-293 `jnode` body). Used directly to build the
 /// interned singletons above, and for every non-cacheable node (containers, floats, strings, large ints).
 fn jnode_fresh(variant: &str, payload: Payload) -> Value {
     let ty = JSON_TY.with(Rc::clone);
