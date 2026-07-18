@@ -151,7 +151,7 @@ fn lazy_matches_eager_on_corpus() {
     fn parse_lazy(s: &str) -> Option<Value> {
         validate_json(s).map(|start| {
             Value::JsonLazy(std::rc::Rc::new(crate::value::LazyJson {
-                src: std::rc::Rc::from(s),
+                src: s.into(),
                 start,
                 cached: std::cell::OnceCell::new(),
             }))

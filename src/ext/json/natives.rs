@@ -11,6 +11,7 @@
 //! insertion order, and number decoding distinguishes `Int` from `Float` exactly as `json_decode`.
 
 use crate::native::*;
+use crate::phstr::PhStr;
 use crate::types::Ty;
 use crate::value::{build_map, EnumVal, HKey, LazyJson, Payload, Value};
 use std::fmt::Write as _;
@@ -299,8 +300,9 @@ fn json_parse(args: &[Value], _: &mut String) -> Result<Value, String> {
         // `Value::Enum` one level at a time on deconstruction, so unread subtrees never allocate. A
         // malformed doc is `Value::Null` (byte-identical acceptance to the eager `parse_json`).
         [Value::Str(s)] => Ok(match validate_json(s) {
+            // Share the input `PhStr` (Rc bump for a heap doc — no full-doc copy) as the lazy backing.
             Some(root) => Value::JsonLazy(Rc::new(LazyJson {
-                src: Rc::from(s.as_str()),
+                src: s.clone(),
                 start: root,
                 cached: std::cell::OnceCell::new(),
             })),
@@ -741,7 +743,7 @@ impl JParser<'_> {
     // `Value::JsonLazy` over the child's byte range), so unread subtrees never allocate. Byte-identical
     // to `value()` except the container payload elements are lazy until deconstructed.
 
-    fn materialize_one(&mut self, src: &Rc<str>) -> Option<Value> {
+    fn materialize_one(&mut self, src: &PhStr) -> Option<Value> {
         self.ws();
         match self.peek()? {
             b'n' => self.lit(b"null", jnode("Null", Payload::Zero)),
@@ -758,15 +760,15 @@ impl JParser<'_> {
         }
     }
 
-    fn lazy_child(&self, src: &Rc<str>, start: usize) -> Value {
+    fn lazy_child(&self, src: &PhStr, start: usize) -> Value {
         Value::JsonLazy(Rc::new(LazyJson {
-            src: Rc::clone(src),
+            src: src.clone(),
             start,
             cached: std::cell::OnceCell::new(),
         }))
     }
 
-    fn materialize_array(&mut self, src: &Rc<str>) -> Option<Value> {
+    fn materialize_array(&mut self, src: &PhStr) -> Option<Value> {
         self.bump(); // '['
         self.ws();
         let mut xs = Vec::new();
@@ -787,7 +789,7 @@ impl JParser<'_> {
         }
     }
 
-    fn materialize_object(&mut self, src: &Rc<str>) -> Option<Value> {
+    fn materialize_object(&mut self, src: &PhStr) -> Option<Value> {
         self.bump(); // '{'
         self.ws();
         let mut pairs: Vec<(Value, Value)> = Vec::new();
@@ -844,7 +846,7 @@ pub(super) fn validate_json(s: &str) -> Option<usize> {
 pub fn materialize_lazy(lazy: &LazyJson) -> Value {
     lazy.cached
         .get_or_init(|| {
-            let s: &str = &lazy.src;
+            let s: &str = lazy.src.as_str();
             let mut p = JParser {
                 src: s,
                 b: s.as_bytes(),

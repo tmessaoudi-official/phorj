@@ -104,7 +104,9 @@ impl ClassLayout {
 #[cfg(feature = "json")]
 #[derive(Debug)]
 pub struct LazyJson {
-    pub src: Rc<str>,
+    /// The parsed document, shared by every lazy node of one parse. Stored as the input [`PhStr`]
+    /// itself so a heap-backed doc is an Rc bump (no per-parse full-doc copy) — DEC-294 residual fix.
+    pub src: PhStr,
     pub start: usize,
     /// Memoizes this node's one-level materialization (DEC-294). Shared via the enclosing `Rc<LazyJson>`
     /// (cloning the `Value::JsonLazy` shares this cache), so the VM's separate `MatchTag` + `GetEnumField`
