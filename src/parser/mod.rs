@@ -173,7 +173,13 @@ impl Parser {
     /// destructure). `var` followed by anything else (`=`, `.`, `(`, an operator, `;`) is an ordinary
     /// identifier — a reassignment or expression — so the same word is a usable value name.
     fn at_var_decl(&self) -> bool {
-        self.at_kw("var") && matches!(self.peek2(), TokenKind::Ident(_) | TokenKind::LBracket)
+        // `var IDENT …` (binding / struct destructure), `var [a, b] …` (list destructure), or
+        // `var (a, b) …` (tuple destructure, DEC-288).
+        self.at_kw("var")
+            && matches!(
+                self.peek2(),
+                TokenKind::Ident(_) | TokenKind::LBracket | TokenKind::LParen
+            )
     }
 
     /// `discard` is a contextual statement keyword (M-must-use): it opens `discard <expr>;` only when

@@ -238,6 +238,18 @@ impl Printer<'_> {
                 let bs: Vec<String> = binders.iter().map(|(n, _)| n.clone()).collect();
                 Ok(format!("[{}]", bs.join(", ")))
             }
+            // DEC-288: `(a, b)` — inferred binders (the `var` prefix is added by the caller). The
+            // explicit `(T a, …)` form (no `var`) is a separate surface, not yet parsed.
+            DestructurePat::Tuple { binders, .. } => {
+                let bs: Result<Vec<String>, String> = binders
+                    .iter()
+                    .map(|(ty_opt, n, _)| match ty_opt {
+                        Some(t) => Ok(format!("{} {n}", ty(t)?)),
+                        None => Ok(n.clone()),
+                    })
+                    .collect();
+                Ok(format!("({})", bs?.join(", ")))
+            }
         }
     }
 

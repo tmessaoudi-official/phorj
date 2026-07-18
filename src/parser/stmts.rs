@@ -115,6 +115,10 @@ impl Parser {
         if self.check(&TokenKind::LBracket) {
             return self.parse_list_destructure(sp);
         }
+        // `var (a, b) = …` — tuple destructuring, inferred per-position types (DEC-288).
+        if self.check(&TokenKind::LParen) {
+            return self.parse_tuple_destructure_inferred(sp);
+        }
         if matches!(self.peek(), TokenKind::Ident(_)) && matches!(self.peek2(), TokenKind::LBrace) {
             return self.parse_struct_destructure(sp);
         }
@@ -147,6 +151,30 @@ impl Parser {
         }
         self.expect(&TokenKind::RBracket, "']' to close the list destructuring")?;
         let pat = crate::ast::DestructurePat::List { binders, span: sp };
+        self.finish_destructure(pat, sp)
+    }
+
+    /// `(a, b) = expr;` — inferred tuple destructuring (DEC-288). The `var` is consumed; the `(` is
+    /// peeked but not consumed. Bare binder names (no types) — each element's type is inferred from the
+    /// tuple's position type by the checker. Irrefutable (a tuple's arity is statically known).
+    fn parse_tuple_destructure_inferred(&mut self, sp: Span) -> Result<Stmt, Diagnostic> {
+        self.expect(&TokenKind::LParen, "'(' to open a tuple destructuring")?;
+        let mut binders = Vec::new();
+        loop {
+            let bsp = self.peek_span();
+            let name = self.expect_ident("a binding name in the tuple destructuring")?;
+            binders.push((None, name, bsp));
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RParen, "')' to close the tuple destructuring")?;
+        if binders.len() < 2 {
+            return Err(
+                self.error("a tuple destructuring needs 2+ binders (use `var x = …` for one)")
+            );
+        }
+        let pat = crate::ast::DestructurePat::Tuple { binders, span: sp };
         self.finish_destructure(pat, sp)
     }
 

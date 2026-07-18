@@ -358,6 +358,18 @@ impl Transpiler {
                             .collect();
                         self.line(&format!("[{}] = ${tmp};", targets.join(", ")));
                     }
+                    // DEC-288: tuple destructuring — irrefutable positional reads over the erased
+                    // runtime array (PHP list assignment), no length-check / `else`.
+                    DestructurePat::Tuple { binders, .. } => {
+                        let targets: Vec<String> = binders
+                            .iter()
+                            .map(|(_, name, _)| {
+                                self.declare(name);
+                                format!("${name}")
+                            })
+                            .collect();
+                        self.line(&format!("[{}] = ${tmp};", targets.join(", ")));
+                    }
                 }
             }
         }

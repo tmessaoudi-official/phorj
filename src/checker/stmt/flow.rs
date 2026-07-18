@@ -134,6 +134,68 @@ impl Checker {
                     binds.push((name.clone(), *bsp, elem.clone()));
                 }
             }
+            // DEC-288: tuple destructuring — irrefutable (arity is static). Init must be a same-arity
+            // `Ty::Tuple`; each binder's type is the tuple's position type (inferred `var (a,b)`) or a
+            // declared type checked assignable-from it (explicit `(T a, …)`).
+            DestructurePat::Tuple { binders, .. } => {
+                let arity_ok = matches!(&init_ty, Ty::Tuple(elems) if elems.len() == binders.len());
+                match &init_ty {
+                    Ty::Tuple(elems) if arity_ok => {
+                        for ((ty_opt, name, bsp), et) in binders.iter().zip(elems.iter()) {
+                            let bind_ty = match ty_opt {
+                                Some(decl) => {
+                                    let dt = self.resolve_type(decl);
+                                    if !self.ty_assignable(et, &dt) {
+                                        self.err(
+                                            *bsp,
+                                            format!(
+                                                "tuple element is `{et}` but the binding is typed `{dt}`"
+                                            ),
+                                        );
+                                    }
+                                    dt
+                                }
+                                None => et.clone(),
+                            };
+                            // Invariant 7 (CTy-operand): record the binder's resolved type keyed by its
+                            // span so the VM compiler gives the local its concrete `CTy` — an inferred
+                            // `var (id, …)` binder stays a first-class arithmetic operand (`id + 1`),
+                            // matching the interpreter (else the VM rejects what the interpreter accepts).
+                            self.reified_operands.insert(bsp.start, bind_ty.clone());
+                            binds.push((name.clone(), *bsp, bind_ty));
+                        }
+                    }
+                    Ty::Tuple(elems) => {
+                        self.err_coded(
+                            span,
+                            format!(
+                                "tuple destructuring binds {} element(s) but the value is a {}-tuple",
+                                binders.len(),
+                                elems.len()
+                            ),
+                            "E-TUPLE-DESTRUCTURE-LEN",
+                            None,
+                        );
+                        for (_, name, bsp) in binders {
+                            binds.push((name.clone(), *bsp, Ty::Error));
+                        }
+                    }
+                    other => {
+                        // A poisoned init already reported its own error — don't cascade.
+                        if !matches!(other, Ty::Error) {
+                            self.err_coded(
+                                span,
+                                format!("cannot tuple-destructure `{other}` — expected a tuple"),
+                                "E-DESTRUCTURE-NOT-TUPLE",
+                                Some("the value on the right must be a tuple `(a, b)`".into()),
+                            );
+                        }
+                        for (_, name, bsp) in binders {
+                            binds.push((name.clone(), *bsp, Ty::Error));
+                        }
+                    }
+                }
+            }
         }
         // `else` rules: required iff refutable; forbidden otherwise; and a present `else` must diverge.
         match (refutable, else_block) {

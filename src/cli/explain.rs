@@ -1381,6 +1381,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              `N` elements: `var [a, b] = pair;` needs `pair: [T; 2]`. Bind exactly `N` elements, or\n\
              destructure a `List<T>` with an `else` if the length is not statically known.\n"
         }
+        "E-TUPLE-DESTRUCTURE-LEN" => {
+            "E-TUPLE-DESTRUCTURE-LEN — a tuple destructuring binds a different number of elements than the tuple has.\n\n\
+             A tuple's arity is statically known, so `var (a, b) = t;` requires `t` to be a 2-tuple.\n\
+             Bind exactly one name per tuple position — add or remove binders so the count matches the\n\
+             tuple type `(A, B, …)` on the right (DEC-288).\n"
+        }
+        "E-DESTRUCTURE-NOT-TUPLE" => {
+            "E-DESTRUCTURE-NOT-TUPLE — a tuple destructuring's value is not a tuple.\n\n\
+             `var (a, b) = …` requires the right-hand side to be a tuple `(A, B)`. Destructure a list\n\
+             with `var [a, b] = …` (mandatory `else` on a `List<T>`), or a class with\n\
+             `var Type { x, y } = …` (DEC-288).\n"
+        }
         "E-CONCURRENCY-NO-PHP" => {
             "E-CONCURRENCY-NO-PHP — green threads (`spawn` / channels) cannot be transpiled to PHP.\n\n\
              PHP has no green threads, and a synchronous lowering would make a concurrent program\n\

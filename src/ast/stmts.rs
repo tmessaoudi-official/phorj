@@ -133,6 +133,15 @@ pub enum DestructurePat {
         binders: Vec<(String, Span)>,
         span: Span,
     },
+    /// `(a, b)` / `(int a, string b)` — bind TUPLE elements positionally (DEC-288). Irrefutable (a
+    /// tuple's arity is statically known). Each binder carries an OPTIONAL type: `None` for the
+    /// inferred `var (a, b)` form (the checker fills each from the tuple's position type), `Some(T)`
+    /// for the explicit `(T a, …)` form (checked assignable-from the tuple's position type). Lowered
+    /// by the backends to indexed reads over the erased runtime list (like [`Self::List`]).
+    Tuple {
+        binders: Vec<(Option<Type>, String, Span)>,
+        span: Span,
+    },
 }
 
 /// One `field` / `field: binding` entry of a struct [`DestructurePat`] (Phase 1 slice 5). Shorthand
@@ -153,12 +162,17 @@ impl DestructurePat {
                 fields.iter().map(|f| (f.binding.clone(), f.span)).collect()
             }
             DestructurePat::List { binders, .. } => binders.clone(),
+            DestructurePat::Tuple { binders, .. } => {
+                binders.iter().map(|(_, n, s)| (n.clone(), *s)).collect()
+            }
         }
     }
 
     pub fn span(&self) -> Span {
         match self {
-            DestructurePat::Struct { span, .. } | DestructurePat::List { span, .. } => *span,
+            DestructurePat::Struct { span, .. }
+            | DestructurePat::List { span, .. }
+            | DestructurePat::Tuple { span, .. } => *span,
         }
     }
 }

@@ -337,6 +337,17 @@ impl<'c> Interp<'c> {
                 }
                 other => rt(format!("cannot list-destructure {}", other.type_name())),
             },
+            // DEC-288: tuple destructuring is irrefutable (the checker guaranteed arity) — read each
+            // element out of the erased runtime list, no length-check / `else`.
+            DestructurePat::Tuple { binders, .. } => match v {
+                Value::List(items) => {
+                    for ((_, name, _), item) in binders.iter().zip(items.iter()) {
+                        self.frame.declare(name, item.clone());
+                    }
+                    Ok(())
+                }
+                other => rt(format!("cannot tuple-destructure {}", other.type_name())),
+            },
         }
     }
 

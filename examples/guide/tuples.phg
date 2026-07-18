@@ -1,0 +1,34 @@
+// Tuples (DEC-288) — a fixed-arity, heterogeneous group of values, written `(a, b)`. A compile-time
+// sugar: the checker tracks each position's type, then a tuple erases to a plain list before every
+// backend, so `phg run` ≡ `phg run --tree-walker` ≡ transpiled PHP by construction.
+//
+// Use a tuple to return (or pass) a few related values without declaring a class. Pull them back out
+// with `var (a, b) = …` — each binder's type is inferred from the tuple's position (so `id + 1` below
+// is real integer arithmetic, not a boxed fallback).
+package Main;
+
+import Core.Output;
+import Core.Runtime.Entry;
+
+// A function can return a tuple: its type is written `(A, B)`.
+function minMax(int a, int b): (int, int) {
+    return if (a < b) { (a, b) } else { (b, a) };
+}
+
+// Tuples nest and mix types freely.
+function labelled(int n): (int, string) {
+    return (n, if (n == 1) { "one" } else { "many" });
+}
+
+#[Entry]
+function main(): void {
+    // Construct + destructure. `lo`/`hi` are `int` (from the tuple positions), so they add as ints.
+    var (lo, hi) = minMax(9, 4);
+    Output.printLine("min={lo} max={hi} span={hi - lo}");
+    // Heterogeneous tuple: the binders take their positions' types (`int` and `string`).
+    var (count, word) = labelled(1);
+    Output.printLine("count={count + 1} word={word}");
+    // A tuple literal destructured directly.
+    var (x, y, z) = (2, 3, 4);
+    Output.printLine("product={x * y * z}");
+}

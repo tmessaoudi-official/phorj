@@ -308,6 +308,35 @@ impl Compiler<'_> {
                 self.patch_jump(end_jump);
                 Ok(())
             }
+            // DEC-288: tuple destructuring is irrefutable (checker-guaranteed arity), so no length-
+            // check / `else`. Reserve each binder slot with its per-position `CTy` (from the explicit
+            // annotation, else `Other` for the inferred form), then read the erased list's element into
+            // it. The typed slot is the CTy-operand carrier (Invariant 7): `int a` specializes `a + 1`.
+            DestructurePat::Tuple { binders, .. } => {
+                for (ty_opt, name, bsp) in binders {
+                    // Explicit `(T a, …)` → the annotation; inferred `var (a, …)` → the checker's
+                    // per-position type from `reified_operands` (keyed by the binder span, Invariant 7);
+                    // else `Other`.
+                    let cty = ty_opt.as_ref().map(resolve_cty).unwrap_or_else(|| {
+                        self.reified_operands
+                            .get(&bsp.start)
+                            .cloned()
+                            .unwrap_or(CTy::Other)
+                    });
+                    self.emit_const(Value::Null, line);
+                    self.add_local(name, cty);
+                }
+                for (i, (_, name, _)) in binders.iter().enumerate() {
+                    let slot = self
+                        .resolve_local(name)
+                        .ok_or_else(|| format!("unresolved tuple binder: {name}"))?;
+                    self.emit(Op::GetLocal(d), line);
+                    self.emit_const(Value::Int(i as i64), line);
+                    self.emit(Op::Index, line);
+                    self.emit(Op::SetLocal(slot), line);
+                }
+                Ok(())
+            }
         }
     }
 
