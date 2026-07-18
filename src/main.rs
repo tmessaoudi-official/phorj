@@ -476,7 +476,7 @@ fn main() {
     let check_json = cmd == "check" && args[2..].iter().any(|a| a == "--json");
     // `benchmark --json` emits the measurements as a machine-readable object (M-DOGFOOD W9).
     let bench_json = cmd == "benchmark" && args[2..].iter().any(|a| a == "--json");
-    // `run`/`runvm --dump-on-fault` (M-DX S3): on an uncaught fault, dump the faulting frame's locals
+    // `run --dump-on-fault` (M-DX S3): on an uncaught fault, dump the faulting frame's locals
     // to stderr. Dev-only + opt-in; the interpreter produces the rich dump (see `crate::dump`).
     let dump_on_fault = cmd == "run" && args[2..].iter().any(|a| a == "--dump-on-fault");
     // `phg run` executes on the bytecode VM by default (the runtime); `--tree-walker` selects the
@@ -498,13 +498,14 @@ fn main() {
         })
         .cloned()
         .collect();
-    // run/runvm/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
-    // project loader — a phorj.toml walk-up triggers multi-file merge + folder=path validation;
-    // otherwise loose mode (single file, `package Main` only). `-e`/stdin are always loose. parse,
-    // lex, disasm, and bench keep the single-file string path (they dump/measure one source).
+    // run/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
+    // manifest-less project loader (DEC-282) — walking up from the entry to its `src/` roots triggers
+    // multi-file merge + folder=path validation; a lone file loads loose (`package Main` only).
+    // `-e`/stdin are always loose. parse, tokenize, disasm, and bench keep the single-file string
+    // path (they dump/measure one source).
     let result = if matches!(cmd, "run" | "check" | "transpile") {
         // Resolve the source AND the program argv (`-- a b c`); the argv feeds `Core.Process.args()`
-        // and is only meaningful for run/runvm (check/transpile ignore it).
+        // and is only meaningful for run (check/transpile ignore it).
         let (spec, prog_args) = match cli::resolve_source_and_args(&rest) {
             Some(pair) => pair,
             None => {
@@ -531,7 +532,7 @@ fn main() {
                 exit(1);
             }
         };
-        // run/runvm carry an exit code (Batch-1 B): `main`'s `int` return becomes the process exit
+        // run carries an exit code (Batch-1 B): `main`'s `int` return becomes the process exit
         // status. Print stdout, then exit with the code (errors already exit 1 above/below).
         if cmd == "run" {
             // Default backend = the VM (the runtime); `--tree-walker` selects the interpreter oracle.

@@ -8,6 +8,21 @@
 > below are corrected as their build slices land; until then, cross-check against the audit report.
 
 
+> **⚠ DOC-DRIFT flagged 2026-07-18 (dev review — the `run`/`runvm` CLI labels are stale/inverted).**
+> The CLI merged the two Rust backends into ONE subcommand: **`phg run` = the bytecode VM** (default),
+> and **`phg run --tree-walker` = the tree-walking interpreter (the correctness oracle)**. There is
+> **no `phg runvm` subcommand** (`phg -h` confirms). But many docs still (a) name a literal `phg
+> runvm` command and (b) label `phg run` as "the interpreter" — both wrong. The pervasive shorthand
+> "`run ≡ runvm ≡ PHP`" (the byte-identity spine's *name*, ~800 refs) is benign terminology and NOT
+> the target. The genuinely-misleading literal-command / inverted-label instances a reader would
+> follow live in: `docs/INVARIANTS.md` (§ intro + the built-binary row), `CONTRIBUTING.md`,
+> `CLAUDE.md` (Invariant 1), the `.github/ISSUE_TEMPLATE/bug_report.md` (`phg runvm -e …`), and
+> `KNOWN_ISSUES.md` (`phg runvm --dump-on-fault`). The invariant *wording* is developer-owned
+> (Invariant 15), so these are flagged for a coordinated dev pass rather than an autonomous sweep;
+> the stale INTERNAL code comments in `src/main.rs` were corrected 2026-07-18. Fix = replace the
+> literal `phg runvm` with `phg run`, and re-label `phg run` as the VM / `phg run --tree-walker` as
+> the interpreter oracle.
+
 Phorj is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
 **deliberate scope boundaries** — features that are *planned* (see [ROADMAP.md](ROADMAP.md)) rather
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
