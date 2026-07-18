@@ -119,6 +119,9 @@ pub(super) fn render(v: &Value, indent: usize, seen: &mut Vec<usize>) -> String 
             seen.pop();
             out
         }
+        // A lazy Json node (DEC-294) materializes one level, then renders like the enum it is.
+        #[cfg(feature = "json")]
+        Value::JsonLazy(l) => render(&crate::ext::json::materialize_lazy(l), indent, seen),
         Value::Closure(_) => "<function>".into(),
         Value::Channel(..) => "<channel>".into(),
         Value::Task(_) => "<task>".into(),

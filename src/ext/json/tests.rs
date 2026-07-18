@@ -139,6 +139,91 @@ fn parse_malformed_is_none() {
     assert!(parse_json("\"\\ud83d\"").is_none()); // lone surrogate
 }
 
+/// DEC-294 lazy/eager equivalence guard. The lazy skip-scanner (`validate_json` + the `skip_*`
+/// family) must accept EXACTLY what the eager builder (`parse_json` / `value`/`string`/`number`)
+/// accepts, and a lazily-parsed doc must MATERIALIZE (deeply) to byte-identical output. This guards
+/// `materialize_lazy`'s `.expect("re-parse cannot fail")` against a skip-vs-build divergence on
+/// adversarial input — the "two hand-written parsers must agree" risk. The per-example differential
+/// only exercises well-formed inputs, so this corpus is the real coverage.
+#[test]
+fn lazy_matches_eager_on_corpus() {
+    // Build a lazy value exactly as `Json.parse` does (validate → top `JsonLazy` over the source).
+    fn parse_lazy(s: &str) -> Option<Value> {
+        validate_json(s).map(|start| {
+            Value::JsonLazy(std::rc::Rc::new(crate::value::LazyJson {
+                src: std::rc::Rc::from(s),
+                start,
+                cached: std::cell::OnceCell::new(),
+            }))
+        })
+    }
+    let valid = [
+        r#"{"id":7,"qty":3,"name":"widget","tags":["a","b"],"price":9.5}"#,
+        r#"[1,2,3,[4,[5,[6]]],{"x":{"y":{"z":true}}}]"#,
+        "{}",
+        "[]",
+        "null",
+        "true",
+        "false",
+        r#""hi""#,
+        "0",
+        "-0",
+        "123456789012345678",
+        "1e400",       // overflow -> f64 inf (both legs identical)
+        "3.14159e-10", // exponent
+        "99999999999999999999999999999999999999999", // i64 overflow -> Float
+        r#""éA😀\n\t\\\/""#, // escapes + valid surrogate pair
+        r#"{"a":1,"a":2,"a":3}"#, // duplicate keys (last wins)
+        "  {  \"k\" : [ 1 , 2 ]  }  ", // whitespace everywhere
+        r#"{"deep":[[[[[[[[[[1]]]]]]]]]]}"#, // deep nesting
+    ];
+    for s in valid {
+        let eager = parse_json(s).unwrap_or_else(|| panic!("eager rejected a valid doc: {s}"));
+        let lazy = parse_lazy(s).unwrap_or_else(|| panic!("validate rejected a valid doc: {s}"));
+        // `enc` recurses + fully materializes the lazy tree — proves deep equivalence AND that no
+        // node panics inside `materialize_lazy`.
+        assert_eq!(
+            enc(&lazy),
+            enc(&eager),
+            "lazy vs eager encode mismatch for: {s}"
+        );
+    }
+    // Acceptance must AGREE exactly (both accept or both reject) — the panic-avoidance invariant.
+    let corpus = [
+        "",
+        "nul",
+        "[1,2",
+        "{\"a\":}",
+        "01",
+        "1.",
+        "42 junk",
+        "\"\\ud83d\"",
+        "\"\\udc00\"",
+        "\"\\uZZZZ\"",
+        "tru",
+        "123abc",
+        "   ",
+        "{\"a\":1,}",
+        "[1 2]",
+        "1e",
+        "-",
+        "{\"a\" 1}",
+        "\u{1}",
+        "\"\u{1}\"",
+        "{}",
+        "[[]]",
+        "3.14",
+        "\"ok\"",
+    ];
+    for s in corpus {
+        assert_eq!(
+            validate_json(s).is_some(),
+            parse_json(s).is_some(),
+            "lazy/eager acceptance disagreement for: {s:?}"
+        );
+    }
+}
+
 #[test]
 fn pretty_matches_json_pretty_print_layout() {
     // {"name":"phorj","nums":[1,2],"meta":{"ok":true,"empty":[]}} pretty-printed (verified vs PHP).
