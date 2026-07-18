@@ -1,6 +1,20 @@
 # SLICE-STATE (live cursor — updated as work progresses; read FIRST after any compaction)
 
-## ✅ DONE THIS SESSION (2026-07-18, HEAD `da3fc0c2`, ~33 commits UNPUSHED — READ FIRST)
+## ✅ DONE — CONTINUOUS SESSION 2 (2026-07-18, HEAD `3a8f1b7f`, +12 commits, ALL UNPUSHED — READ FIRST)
+- **Slice #1 §4.9 recompute** (`437ffd32`): parity **62→64%** · vision **64→66%** · floor **42→47%** (Web/Runtime
+  spine folded in — HTTP client/FS/Uri/Unicode/sessions). First span where the FN stdlib leg moved (+6pp).
+- **Slice #2 Regex closer COMPLETE**: findAllGroups (`999c3701`) · quoteMeta (`353ba92a`, DEC-296) ·
+  replaceCallback (`af26efaa`, DEC-295 — typed `RegexMatch`, FIRST native-built instance w/ dispatched
+  methods on both backends; PREG_UNMATCHED_AS_NULL fixes optional-group divergence). Prereq reserved-name
+  fix (`3da89d12`, match/enum/fn — latent invalid-PHP-transpile bug found+closed).
+- **Slice #3 DESIGN fully ruled** (`3a8f1b7f`, DEC-297/298/299) — named args `f(name:v)` + variadics
+  `...nums→List<int>` + spread (List→positional & Map-literal→named STATIC core #3a; runtime union-Map→named
+  w/ E-SPREAD-ARG fault = leg #3b). BUILD PENDING, fresh-context (largest slice, call-resolution core). See item 3.
+- ⚠ 4 PHANTOM GAPS caught this session (Regex/Decimal/`match`/Fs-DateTime already built) — Rule-11 lesson:
+  VERIFY every "gap" by grep before treating as greenfield (§1.2 baseline already credits many).
+- **NEXT ON RESUME:** build slice #3a (static core) per item 3's locked design. All 12 commits green + UNPUSHED.
+
+## ✅ DONE — SESSION 1 (2026-07-18, HEAD `da3fc0c2`, ~33 commits UNPUSHED)
 - **PERF ARC (certified):** dbwork FLIPPED to WIN [Verified idle-box, ratcheted in micro-baseline];
   jsonround = documented structural FLAG (parse floor 205ms > PHP 153ms, arithmetic-proven);
   **lazy/compact `Value::JsonLazy` SHIPPED** (materialize-on-deconstruct, memoized, corpus-guarded,
@@ -78,6 +92,32 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
      fault; byte-identical PHP leg. ⚠ DEPENDS on `Map<K, union>` ergonomics being solid — VERIFY FIRST.
    ⚠ Interactions to design carefully: named+positional mixing order; named args + defaults fill; variadic
    + spread (`f(...xs)` into `...nums`); spread + named in one call. Byte-identity on every form + the fault.
+   ── ✅ BUILD APPROACH CONFIRMED (3C investigation 2026-07-18) — TURNKEY, minimizes blast radius: ──
+   KEY: use the `check_and_expand` DESUGAR chokepoint (Invariant #5 — expand sugar OUT before backends),
+   modelled on the existing `fill_defaults` post-check pass (`Param.default` doc; `pending_fill` in
+   `src/checker/calls/args.rs`). Backends/transpile/lift then see ONLY plain positional calls.
+   BUILD ORDER (safest-first, each a green commit):
+   1. **Variadics** (LOWEST risk — pure desugar, ZERO backend/Call-repr change): add `variadic: bool` to
+      `Param` (src/ast/exprs.rs:326 — ⚠ 32 `Param {` sites need `variadic: false`, mechanical) → parser
+      `T ...name` sets it → checker builds the param's effective type as `List<T>` (body + call-arg checks)
+      → desugar: a call to a variadic fn collects trailing args into a `[..]` list literal + the param
+      becomes `List<T>`, so backends see `f([a,b,c])` w/ `List<T>` param = byte-identical to PHP
+      `f([a,b,c])`/`function f(array $nums)`. Lift PHP `...$nums`→`...nums`.
+   2. **Named args** (needs Call to CARRY names till desugar — add PARALLEL field `arg_names:
+      Vec<Option<String>>` to `Expr::Call` {exprs.rs:120}/ParentCall/method/`new`, defaulting empty so
+      existing `Call{args,..}` matchers are UNAFFECTED) → parser `name: value` call-arg → checker desugar
+      reorders named→positional slots + fills defaults (extend `pending_fill`) → clears arg_names → backends
+      see positional. Transpile CAN emit PHP `name:` 1:1 (DEC-297) OR just positional (either byte-identical).
+      Lift PHP named→phorj named.
+   3. **List→positional spread** (DEC-299a): parser `...expr` call-arg (reuse the arg_names/spread parallel
+      field, add `arg_spread: Vec<bool>`) → NOT pure sugar (runtime length): interpreter/VM splat the List at
+      call-eval; transpile emits PHP `...$list` (1:1). Element-type+arity checked statically.
+   4. **Map-literal→named spread** (DEC-299b): a `...["k": v]` LITERAL desugars at compile time to named args
+      (then flows through #2). Fully static.
+   5. **Runtime union-Map→named spread** = leg #3b (DEC-299c) — SEPARATE later slice; VERIFY `Map<K,union>`
+      ergonomics first; needs runtime narrow + E-SPREAD-ARG fault + PHP byte-identity.
+   ⚠ Item 2's `arg_names` field on Call is the ONE higher-blast-radius touch (every Call consumer) — but
+   parallel-field-with-`..` keeps ripple near-zero; the desugar clears it so post-expand backends are pure.
 4. ~~**`match` expression**~~ — DROPPED 2026-07-18: **ALREADY BUILT + mature** (`TokenKind::Match`,
    `Expr::Match` w/ guards+patterns, used across examples). Rule-11 catch #3 this session (after
    Regex, Decimal). ⚠ VERIFY EVERY remaining "gap" by grep before treating as greenfield.
