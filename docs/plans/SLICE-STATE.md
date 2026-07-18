@@ -28,9 +28,14 @@ STANDING DIRECTIVES (dev, this session, ABSOLUTE):
    3 phantom gaps found + dropped (Regex/Decimal/`match` already built). Next FN blockers = XML/streams/
    intl/SPL-heaps/mb-tail. ← **START HERE = #2 Regex closer** (replaceCallback/matchAll/quoteMeta verified
    still GU in FN-PCRE).
-2. **Regex closer** — ✅ **findAllGroups** (`999c3701`, matchAll/preg_match_all parity, byte-identical)
-   + ✅ **quoteMeta** (`353ba92a`, DEC-296 regex::escape oracle + mirrored addcslashes helper). BOTH
-   committed, advisor-6C-certified, gate green. ✅ **reserved-name prerequisite DONE** (`3da89d12`):
+2. ✅ **Regex closer — COMPLETE** (all 3 natives shipped, advisor-6C-certified, gate green):
+   **findAllGroups** (`999c3701`) · **quoteMeta** (`353ba92a`, DEC-296) · **replaceCallback**
+   (`af26efaa`, DEC-295 — typed `RegexMatch`, first native-built instance w/ dispatched methods on both
+   backends; PREG_UNMATCHED_AS_NULL fixes the optional-group divergence by design). Prereq: reserved-name
+   fix (`3da89d12`). ⚠ KNOWN_ISSUES: empty/zero-width matches diverge regex-crate↔PCRE (all match-iterating
+   APIs; examples use non-empty). ← **NEXT = slice #3 named args/variadics/spread.**
+   ————— (historical detail below) —————
+   ✅ **reserved-name prerequisite DONE** (`3da89d12`):
    match/enum/fn added to FN_RESERVED (phorj wrongly accepted `class Match`→invalid PHP; found here).
    Type name RULED = **RegexMatch** (dev; `Match` is a PHP-8 keyword, illegal as a class name).
    ⚠ **replaceCallback CORE = DEC-295 PENDING — BUILD-READY DESIGN LOCKED (build FRESH-context, spine-novel):**
