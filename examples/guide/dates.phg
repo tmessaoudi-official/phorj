@@ -32,6 +32,15 @@ function main(): void {
     );
     Output.printLine("before?  = {d.isBefore(leap)}");
     Output.printLine("compare  = {d.compareTo(leap)}");
+    // parse — the inverse of `toString` (ISO `YYYY-MM-DD`); round-trips, rejects malformed input → null.
+    if (var p = Date.parse("2023-11-14")) {
+        Output.printLine("parsed   = {p.toString()} roundtrip={p.compareTo(d)}");
+    }
+    if (var g = Date.parse("2023-13-99")) {
+        Output.printLine("bad parse= UNEXPECTED {g.toString()}");
+    } else {
+        Output.printLine("bad parse= rejected");
+    }
     // Far past — the algorithm is exact across centuries (Gregorian proleptic).
     Date past = Date.of(1900, 1, 1);
     Output.printLine("1900-01-01 dow = {past.dayOfWeek()} leap? = {past.isLeapYear()}");

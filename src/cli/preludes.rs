@@ -532,6 +532,8 @@ interface Iterator<T> {
 /// spine. Calendar math uses Hinnant's truncating-division-safe civil/day conversions, which port
 /// verbatim since Phorj int division truncates toward zero (PHP `intdiv`).
 pub(super) const TIME_PRELUDE: &str = r#"
+import Core.String;
+import Core.List;
 class Duration {
   constructor(public int ms) {}
   static function milliseconds(int n) -> Duration { return new Duration(n); }
@@ -582,6 +584,21 @@ class Date {
   }
   static function of(int y, int m, int d) -> Date { return new Date(Date.daysFromCivil(y, m, d)); }
   static function ofEpochDay(int d) -> Date { return new Date(d); }
+  // Parse an ISO `YYYY-MM-DD` date (the inverse of `toString`; `Date.parse(d.toString())` round-trips).
+  // Returns null on a malformed input — wrong shape (not three `-`-separated parts), a non-numeric
+  // part, or an out-of-range month/day. Pure Phorj over `String.split`/`parseInt` → byte-identical.
+  static function parse(string s) -> Date? {
+    List<string> parts = String.split(s, "-");
+    if (List.length(parts) != 3) { return null; }
+    if (var y = String.parseInt(parts[0])) {
+      if (var m = String.parseInt(parts[1])) {
+        if (var d = String.parseInt(parts[2])) {
+          if (m >= 1 && m <= 12 && d >= 1 && d <= 31) { return Date.of(y, m, d); }
+        }
+      }
+    }
+    return null;
+  }
   function year() -> int { return Date.civil(this.epochDay)[0]; }
   function month() -> int { return Date.civil(this.epochDay)[1]; }
   function day() -> int { return Date.civil(this.epochDay)[2]; }
