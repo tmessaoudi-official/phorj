@@ -28,6 +28,15 @@ function main(): void {
     // Round-trip: epoch → ISO.
     Instant epoch = Instant.ofEpochSeconds(0);
     Output.printLine("epoch  = {epoch.toIso()}");
+    // parse — the inverse of `toIso` (ISO `YYYY-MM-DDTHH:MM:SSZ` → Instant); round-trips, rejects bad → null.
+    if (var p = Instant.parse("2023-11-14T22:13:20Z")) {
+        Output.printLine("parsed = {p.toIso()} same={p.compareTo(dt)}");
+    }
+    if (var g = Instant.parse("not-a-time")) {
+        Output.printLine("bad    = UNEXPECTED");
+    } else {
+        Output.printLine("bad    = rejected");
+    }
     // Add a duration, re-read the civil view.
     Instant inOneHour = dt
         .plus(Duration.hours(1))

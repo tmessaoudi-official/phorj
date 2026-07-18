@@ -629,6 +629,33 @@ class Instant {
   static function ofEpochMilliseconds(int m) -> Instant { return new Instant(m); }
   static function ofEpochSeconds(int s) -> Instant { return new Instant(s * 1000); }
   static function now() -> Instant { return new Instant(Time.nowMilliseconds()); }
+  // Parse an ISO-8601 UTC `YYYY-MM-DDTHH:MM:SSZ` (the inverse of `toIso`; round-trips). A trailing `Z`
+  // is optional; second-resolution (sub-second dropped). Returns null on a malformed / out-of-range
+  // input. Pure Phorj over String ops + `ofCivil` → byte-identical.
+  static function parse(string s) -> Instant? {
+    string clean = if (String.endsWith(s, "Z")) { String.substring(s, 0, String.length(s) - 1) } else { s };
+    List<string> dt = String.split(clean, "T");
+    if (List.length(dt) != 2) { return null; }
+    List<string> dp = String.split(dt[0], "-");
+    List<string> tp = String.split(dt[1], ":");
+    if (List.length(dp) != 3 || List.length(tp) != 3) { return null; }
+    if (var y = String.parseInt(dp[0])) {
+      if (var mo = String.parseInt(dp[1])) {
+        if (var d = String.parseInt(dp[2])) {
+          if (var h = String.parseInt(tp[0])) {
+            if (var mi = String.parseInt(tp[1])) {
+              if (var sec = String.parseInt(tp[2])) {
+                if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && h >= 0 && h <= 23 && mi >= 0 && mi <= 59 && sec >= 0 && sec <= 59) {
+                  return Instant.ofCivil(y, mo, d, h, mi, sec);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
   function epochMilliseconds() -> int { return this.ms; }
   function epochSeconds() -> int { return this.ms / 1000; }
   function plus(Duration d) -> Instant { return new Instant(this.ms + d.ms); }
